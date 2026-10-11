@@ -322,15 +322,27 @@ describe('AIService', () => {
 
       vi.mocked(MemoryManager.getRelevantMemories).mockResolvedValue([]);
       vi.mocked(ContextBuilder.build).mockResolvedValue('Build prompt');
-      vi.mocked(llmApiClient.generateText).mockResolvedValue('AI RAW Response');
+      const canonicalId = '44444444-4444-4444-8444-444444444444';
+      vi.mocked(llmApiClient.generateText).mockImplementationOnce(async (params) => {
+        params.onResponseMetadata?.({
+          provider: 'openrouter',
+          model: 'test/model',
+          dmReplyMessageId: canonicalId,
+        });
+        return 'AI RAW Response';
+      });
       vi.mocked(processDMResponse).mockResolvedValue({ text: 'Parsed response' } as any);
       vi.mocked(runDeferredDMResponseWork).mockImplementation(async () => {
         events.push('deferred work');
       });
 
-      await AIService.chatWithDM(mockParams);
+      const reply = await AIService.chatWithDM(mockParams);
       await Promise.resolve();
 
+      expect(reply.dmMessageId).toBe(canonicalId);
+      expect(mockParams.onTextReady).toHaveBeenCalledWith(
+        expect.objectContaining({ dmMessageId: canonicalId }),
+      );
       expect(events).toEqual(['text shown', 'deferred work']);
       expect(processDMResponse).toHaveBeenCalledWith(
         expect.objectContaining({ deferSideEffects: true }),

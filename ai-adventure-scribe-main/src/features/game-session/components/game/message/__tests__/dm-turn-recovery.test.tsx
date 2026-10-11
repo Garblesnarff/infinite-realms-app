@@ -338,4 +338,85 @@ describe('DM turn recovery (#2480)', () => {
       'The DM could not finish this turn. Your message is still here. Retry to continue.',
     );
   });
+
+  // #216 FIX round 3: the first call times out, the user clicks Retry, then the first call
+  // resolves late. Only the retry's turn is applied — one DM message, no duplicate.
+  it('applies only the retry turn when the first call resolves after the timeout', async () => {
+    let resolveLate!: (value: { text: string; rollRequests: never[] }) => void;
+    mockGetAIResponse.mockImplementationOnce(
+      () => new Promise((resolve) => (resolveLate = resolve)),
+    );
+    renderHandler();
+
+    let firstSend!: Promise<void>;
+    await act(async () => {
+      firstSend = send('Do not duplicate this late turn');
+      await Promise.resolve();
+    });
+    void firstSend.catch(() => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DM_TURN_TIMEOUT_MS);
+    });
+    await expect(firstSend).rejects.toMatchObject({ name: 'AbortError' });
+    expect(state.sendError).toBe(DM_TIMEOUT_MESSAGE);
+
+    // Retry starts the second attempt; it resolves with the DM answer.
+    mockMessages.push({ text: 'Do not duplicate this late turn', sender: 'player' });
+    mockGetAIResponse.mockResolvedValueOnce({ text: 'The retry answer.', rollRequests: [] });
+    await act(async () => {
+      await state.onRetry('Do not duplicate this late turn');
+    });
+    expect(mockGetAIResponse).toHaveBeenCalledTimes(2);
+    expect(state.sendError).toBe(null);
+
+    // The first call resolves late — it must not create a second DM message or turn.
+    resolveLate({ text: 'Late answer from first call', rollRequests: [] });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(mockSendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'The retry answer.' }),
+    );
+    expect(mockSendMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'Late answer from first call' }),
+    );
+    // Clear any pending timers from the retry turn.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DM_TURN_TIMEOUT_MS);
+    });
+  });
+
+  // #216 FIX round 3: a 409 "Another turn is in progress" keeps Retry available, creates no
+  // duplicate turn, and does not count as a failed turn.
+  it('keeps retry available on 409 without a duplicate turn or failed-turn count', async () => {
+    const conflictError = Object.assign(
+      new Error('API 409: Another turn is in progress. Retry to pick up its result.'),
+      { status: 409 },
+    );
+    mockGetAIResponse.mockRejectedValueOnce(conflictError);
+    renderHandler();
+
+    await act(async () => {
+      await expect(send('Try while another turn runs')).rejects.toMatchObject({
+        message: expect.stringContaining('409'),
+      });
+    });
+
+    // Retry stays available (not a terminal failure).
+    expect(state.isProcessing).toBe(false);
+    expect(state.sendError).not.toBe(null);
+    // No duplicate player turn: the player message was sent once, and the only other
+    // sendMessage call is the system error notice (not a second player turn or DM reply).
+    const playerSends = mockSendMessage.mock.calls.filter(
+      (call) => (call[0] as { sender?: string }).sender === 'player',
+    );
+    expect(playerSends).toHaveLength(1);
+    // The turn count was not advanced for a turn the server never started.
+    expect(mockGetAIResponse).toHaveBeenCalledTimes(1);
+    // Clear the pending turn-timeout timers so they don't leak into the next test.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DM_TURN_TIMEOUT_MS);
+    });
+  });
 });

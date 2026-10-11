@@ -61,6 +61,14 @@ mock.module('../../../services/llm-provider-service.js', () => ({
 }));
 mock.module('../../../services/session/session-message-service.js', () => ({
   SessionMessageService: {
+    withRollTurn: async (
+      _sessionId: string,
+      _userId: string,
+      _playerInput: string | undefined,
+      _rollId: string | undefined,
+      _replyId: string | undefined,
+      generate: () => Promise<unknown>,
+    ) => generate(),
     addMessage: async (data: Record<string, unknown>, userId: string) => {
       addMessageCalls.push({ data, userId });
       return { id: data.id };

@@ -10,6 +10,7 @@
 
 import { Elysia, t } from 'elysia';
 
+import { deferUntilCommit } from '../../../../db/transaction-context';
 import { authenticateRequest, type AuthUser } from '../../lib/auth.js';
 import { logger } from '../../lib/logger.js';
 import { isAdmin } from '../../middleware/admin.js';
@@ -373,8 +374,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         combatEntry,
         sessionId,
         player_input: requestedPlayerInput,
-        dmReply,
+        dmReply: requestedDmReply,
       } = body || {};
+      let dmReply = requestedDmReply;
       const safeModel = allowlistedModel(model);
       const safeMaxTokens = clampMaxTokens(maxTokens, 1000, MAX_GENERATE_TOKENS);
       warnIfClientInputReplaced(
@@ -389,241 +391,271 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         return { error: 'Missing prompt' };
       }
 
-      // Phase 0.6 (#1688): per-section prompt token telemetry, log-only. No storage --
-      // one structured log line per turn, WARN instead of INFO when the total estimate
-      // is large enough to matter for the Phase 4 bounded-prompt work. Absent `metrics`
-      // (old clients, or client-side computation failure) is a no-op, by design.
-      // #2450: the record also carries `canon_cut` / `history_below_floor` 0/1 guard
-      // flags; they log as counts only (never prompt text or player text) and get
-      // their own WARN lines when set.
-      if (metrics && typeof metrics === 'object') {
-        try {
-          const metricsRecord = metrics as Record<string, unknown>;
-          // #2427: only the allowlisted keys go into the log, with numeric values.
-          const loggedMetrics: Record<string, number> = {};
-          for (const key of PROMPT_METRIC_KEYS) {
-            const value = metricsRecord[key];
-            if (typeof value === 'number' && Number.isFinite(value)) loggedMetrics[key] = value;
+      const generateTurn = async (canonicalMessageId?: string) => {
+        // Phase 0.6 (#1688): per-section prompt token telemetry, log-only. No storage --
+        // one structured log line per turn, WARN instead of INFO when the total estimate
+        // is large enough to matter for the Phase 4 bounded-prompt work. Absent `metrics`
+        // (old clients, or client-side computation failure) is a no-op, by design.
+        // #2450: the record also carries `canon_cut` / `history_below_floor` 0/1 guard
+        // flags; they log as counts only (never prompt text or player text) and get
+        // their own WARN lines when set.
+        if (metrics && typeof metrics === 'object') {
+          try {
+            const metricsRecord = metrics as Record<string, unknown>;
+            // #2427: only the allowlisted keys go into the log, with numeric values.
+            const loggedMetrics: Record<string, number> = {};
+            for (const key of PROMPT_METRIC_KEYS) {
+              const value = metricsRecord[key];
+              if (typeof value === 'number' && Number.isFinite(value)) loggedMetrics[key] = value;
+            }
+            // The #2450 guard flags are counts, not section token estimates, so they
+            // must not be summed into the total.
+            const total =
+              typeof metricsRecord.total === 'number'
+                ? metricsRecord.total
+                : (Object.entries(loggedMetrics) as [string, number][])
+                    .filter(([key]) => key !== 'canon_cut' && key !== 'history_below_floor')
+                    .reduce<number>((sum, [, value]) => sum + value, 0);
+            const line = `[PromptMetrics] ${JSON.stringify({ ...loggedMetrics, total })}`;
+            if (total > 30_000) {
+              logger.warn(line);
+            } else {
+              logger.info(line);
+            }
+            if (loggedMetrics.canon_cut === 1) {
+              logger.warn(
+                `[PromptMetrics] canon cut to fit prompt budget ${JSON.stringify({
+                  sessionId,
+                  canon_cut: loggedMetrics.canon_cut,
+                })}`,
+              );
+            }
+            if (loggedMetrics.history_below_floor === 1) {
+              logger.warn(
+                `[PromptMetrics] history below floor ${JSON.stringify({
+                  sessionId,
+                  history_below_floor: loggedMetrics.history_below_floor,
+                })}`,
+              );
+            }
+          } catch (metricsError) {
+            logger.warn({ msg: 'PROMPT_METRICS_LOG_FAILED', error: metricsError });
           }
-          // The #2450 guard flags are counts, not section token estimates, so they
-          // must not be summed into the total.
-          const total =
-            typeof metricsRecord.total === 'number'
-              ? metricsRecord.total
-              : (Object.entries(loggedMetrics) as [string, number][])
-                  .filter(([key]) => key !== 'canon_cut' && key !== 'history_below_floor')
-                  .reduce<number>((sum, [, value]) => sum + value, 0);
-          const line = `[PromptMetrics] ${JSON.stringify({ ...loggedMetrics, total })}`;
-          if (total > 30_000) {
-            logger.warn(line);
-          } else {
-            logger.info(line);
-          }
-          if (loggedMetrics.canon_cut === 1) {
-            logger.warn(
-              `[PromptMetrics] canon cut to fit prompt budget ${JSON.stringify({
-                sessionId,
-                canon_cut: loggedMetrics.canon_cut,
-              })}`,
-            );
-          }
-          if (loggedMetrics.history_below_floor === 1) {
-            logger.warn(
-              `[PromptMetrics] history below floor ${JSON.stringify({
-                sessionId,
-                history_below_floor: loggedMetrics.history_below_floor,
-              })}`,
-            );
-          }
-        } catch (metricsError) {
-          logger.warn({ msg: 'PROMPT_METRICS_LOG_FAILED', error: metricsError });
         }
-      }
 
-      // 🛡️ Sentinel: Restrict 'system' requests to admins to prevent quota bypass.
-      const isAdminUser = isAdmin(user as AuthUser);
-      const requestType = rawRequestType === 'system' && isAdminUser ? 'system' : 'user';
+        // 🛡️ Sentinel: Restrict 'system' requests to admins to prevent quota bypass.
+        const isAdminUser = isAdmin(user as AuthUser);
+        const requestType = rawRequestType === 'system' && isAdminUser ? 'system' : 'user';
 
-      const userId = user.userId;
-      const plan = user.plan;
+        const userId = user.userId;
+        const plan = user.plan;
 
-      // #2456: a message sent after the party was defeated must not run
-      // ordinary generation. The encounter is concluded, so it no longer
-      // appears as active — check the latest concluded encounter and return a
-      // handled terminal state (before quota is consumed) so the client can
-      // render the death screen instead of erroring and wedging on the
-      // "Checking whose turn it is… / Resuming…" loop.
-      // The check is wrapped in try/catch: if the encounter lookup fails
-      // (e.g. database unavailable), fall through to ordinary generation
-      // rather than breaking the chat route.
-      const terminalCheckSessionId =
-        typeof sessionId === 'string' && sessionId.length > 0
-          ? sessionId
-          : typeof combatEntry?.sessionId === 'string'
-            ? combatEntry.sessionId
-            : null;
-      if (terminalCheckSessionId) {
-        try {
-          // Dynamic import: CombatEncounterService pulls in the database
-          // client at import time. Loading it lazily keeps the route
-          // importable in tests that don't mock the database.
-          const { CombatEncounterService } =
-            await import('../../services/combat/combat-encounter-service.js');
-          const latestConcluded = await CombatEncounterService.getLatestConcludedEncounter(
-            terminalCheckSessionId,
-            userId,
-          );
-          if (latestConcluded?.endedReason === 'party_defeated') {
-            const stillActive = await CombatEncounterService.getActiveEncounter(
+        // #2456: a message sent after the party was defeated must not run
+        // ordinary generation. The encounter is concluded, so it no longer
+        // appears as active — check the latest concluded encounter and return a
+        // handled terminal state (before quota is consumed) so the client can
+        // render the death screen instead of erroring and wedging on the
+        // "Checking whose turn it is… / Resuming…" loop.
+        // The check is wrapped in try/catch: if the encounter lookup fails
+        // (e.g. database unavailable), fall through to ordinary generation
+        // rather than breaking the chat route.
+        const terminalCheckSessionId =
+          typeof sessionId === 'string' && sessionId.length > 0
+            ? sessionId
+            : typeof combatEntry?.sessionId === 'string'
+              ? combatEntry.sessionId
+              : null;
+        if (terminalCheckSessionId) {
+          try {
+            // Dynamic import: CombatEncounterService pulls in the database
+            // client at import time. Loading it lazily keeps the route
+            // importable in tests that don't mock the database.
+            const { CombatEncounterService } =
+              await import('../../services/combat/combat-encounter-service.js');
+            const latestConcluded = await CombatEncounterService.getLatestConcludedEncounter(
               terminalCheckSessionId,
               userId,
             );
-            if (!stillActive) {
-              logger.info({
-                msg: 'LLM_GENERATE_PARTY_DEFEATED_TERMINAL',
-                sessionId: terminalCheckSessionId,
-                encounterId: latestConcluded.id,
-              });
-              set.status = 200;
-              return {
-                terminalState: 'party_defeated',
-                encounterId: latestConcluded.id,
-                text: '',
-              };
+            if (latestConcluded?.endedReason === 'party_defeated') {
+              const stillActive = await CombatEncounterService.getActiveEncounter(
+                terminalCheckSessionId,
+                userId,
+              );
+              if (!stillActive) {
+                logger.info({
+                  msg: 'LLM_GENERATE_PARTY_DEFEATED_TERMINAL',
+                  sessionId: terminalCheckSessionId,
+                  encounterId: latestConcluded.id,
+                });
+                set.status = 200;
+                return {
+                  terminalState: 'party_defeated',
+                  encounterId: latestConcluded.id,
+                  text: '',
+                };
+              }
             }
+          } catch (terminalCheckError) {
+            logger.warn({
+              msg: 'LLM_GENERATE_TERMINAL_CHECK_FAILED',
+              sessionId: terminalCheckSessionId,
+              error:
+                terminalCheckError instanceof Error
+                  ? terminalCheckError.message
+                  : String(terminalCheckError),
+            });
           }
-        } catch (terminalCheckError) {
-          logger.warn({
-            msg: 'LLM_GENERATE_TERMINAL_CHECK_FAILED',
-            sessionId: terminalCheckSessionId,
-            error:
-              terminalCheckError instanceof Error
-                ? terminalCheckError.message
-                : String(terminalCheckError),
-          });
         }
-      }
 
-      // Quota check
-      const quotaType: UsageType = requestType === 'system' ? 'llm_system' : 'llm';
-      const quota = await AIUsageService.checkQuotaAndConsume({
-        userId,
-        plan,
-        type: quotaType,
-        units: 1,
-      });
-      if (!quota.allowed) {
-        set.status = 402;
-        set.headers['Retry-After'] = String(
-          Math.max(1, Math.ceil((new Date(quota.resetAt).getTime() - Date.now()) / 1000)),
-        );
-        return { error: 'AI quota exceeded', remaining: quota.remaining, resetAt: quota.resetAt };
-      }
-
-      // #2533: server-counted prompt sections, one line per generate. Below
-      // the quota consume (and the party-defeated terminal return above it)
-      // so requests that never reach a provider call are not logged as turns.
-      logPromptSections(prompt, history, sessionId ?? combatEntry?.sessionId, Boolean(dmReply));
-
-      const playerInput =
-        typeof requestedPlayerInput === 'string'
-          ? requestedPlayerInput
-          : extractPlayerInputFromPrompt(prompt);
-      const combatIntentPrefilterMatched =
-        typeof playerInput === 'string' && looksLikeCombatIntent(playerInput);
-      let declaredAttack: Awaited<ReturnType<typeof detectDeclaredAttack>> = null;
-      let untargetedSpellRoster: Awaited<ReturnType<typeof loadCombatIntentActorRoster>> | null =
-        null;
-      if (
-        combatEntry?.sessionId &&
-        typeof playerInput === 'string' &&
-        combatIntentPrefilterMatched
-      ) {
-        const actors = await loadCombatIntentActorRoster(combatEntry.sessionId, userId);
-        declaredAttack = detectDeclaredAttack(playerInput, actors);
-        // "At him" points at a creature the DM may have just introduced; only a cast that names
-        // nothing (the sheet's) is checked against the roster.
-        const untargetedSpell = declaredAttack ? null : detectUntargetedAttackSpell(playerInput);
-        if (untargetedSpell && !untargetedSpell.pronoun) untargetedSpellRoster = actors;
-      }
-      if (combatEntry?.sessionId && !declaredAttack) {
-        logger.info({
-          msg: 'COMBAT_INTENT_NO_DECLARATION',
-          sessionId: combatEntry.sessionId,
-          prefilter: combatIntentPrefilterMatched,
-          detector: declaredAttack,
+        // Quota check
+        const quotaType: UsageType = requestType === 'system' ? 'llm_system' : 'llm';
+        const quota = await AIUsageService.checkQuotaAndConsume({
+          userId,
+          plan,
+          type: quotaType,
+          units: 1,
         });
-      }
-      // #262: a defensive declaration in plain text ("I dodge", "I yield") — the DM's
-      // inline options send the option text as chat, and without this the engine never
-      // sees the intent. Direct the DM to emit the structured combat_action.
-      // The in-combat signal is a live encounter for this session: the combatEntry the
-      // client sends is only present when combat is NOT active, so gating on it means
-      // the directive never fires mid-fight.
-      const defenseSessionId =
-        typeof sessionId === 'string' && sessionId.length > 0
-          ? sessionId
-          : typeof combatEntry?.sessionId === 'string'
-            ? combatEntry.sessionId
-            : null;
-      let declaredDefense: DefensiveDeclaration | null = null;
-      if (defenseSessionId && typeof playerInput === 'string' && !declaredAttack) {
-        try {
-          // Dynamic import: CombatEncounterService pulls in the database client at
-          // import time. Loading it lazily keeps the route importable in tests that
-          // don't mock the database (same pattern as the party-defeated check above).
-          const { CombatEncounterService } = await import(
-            '../../services/combat/combat-encounter-service.js'
+        if (!quota.allowed) {
+          set.status = 402;
+          set.headers['Retry-After'] = String(
+            Math.max(1, Math.ceil((new Date(quota.resetAt).getTime() - Date.now()) / 1000)),
           );
-          const activeEncounter = await CombatEncounterService.getActiveEncounter(
-            defenseSessionId,
-            userId,
-          );
-          if (activeEncounter) declaredDefense = detectDeclaredDefense(playerInput);
-        } catch {
-          declaredDefense = null;
+          return { error: 'AI quota exceeded', remaining: quota.remaining, resetAt: quota.resetAt };
         }
-      }
-      // #2514: the DM prompt receives the engine-decided creature count and
-      // names BEFORE it narrates the approach. For a declared attack the
-      // target is known before generation, so sizing runs here and the
-      // directive carries the count into the prose prompt; the gate and
-      // `startCombat` then seat exactly that sized encounter. A sizing
-      // failure must not block the turn: the directive falls back to the
-      // single named creature, as before #2514.
-      let encounterDirective = '';
-      if (declaredAttack && combatEntry?.sessionId) {
-        try {
-          const context = await loadSessionEncounterContext(combatEntry.sessionId, userId);
-          if (context.difficulty) {
-            const sized = expandDerivedCombatants(
-              [
-                {
-                  name: declaredAttack.actorName,
-                  ...(declaredAttack.monsterId ? { monsterId: declaredAttack.monsterId } : {}),
-                  count: 1,
-                },
-              ],
-              context,
-            );
-            encounterDirective = buildEncounterSizeDirective(sized);
-          }
-        } catch (sizingError) {
-          logger.warn({
-            msg: 'LLM_ENCOUNTER_SIZING_UNAVAILABLE',
+
+        // #2533: server-counted prompt sections, one line per generate. Below
+        // the quota consume (and the party-defeated terminal return above it)
+        // so requests that never reach a provider call are not logged as turns.
+        logPromptSections(prompt, history, sessionId ?? combatEntry?.sessionId, Boolean(dmReply));
+
+        const playerInput =
+          typeof requestedPlayerInput === 'string'
+            ? requestedPlayerInput
+            : extractPlayerInputFromPrompt(prompt);
+        const combatIntentPrefilterMatched =
+          typeof playerInput === 'string' && looksLikeCombatIntent(playerInput);
+        let declaredAttack: Awaited<ReturnType<typeof detectDeclaredAttack>> = null;
+        let untargetedSpellRoster: Awaited<ReturnType<typeof loadCombatIntentActorRoster>> | null =
+          null;
+        if (
+          combatEntry?.sessionId &&
+          typeof playerInput === 'string' &&
+          combatIntentPrefilterMatched
+        ) {
+          const actors = await loadCombatIntentActorRoster(combatEntry.sessionId, userId);
+          declaredAttack = detectDeclaredAttack(playerInput, actors);
+          // "At him" points at a creature the DM may have just introduced; only a cast that names
+          // nothing (the sheet's) is checked against the roster.
+          const untargetedSpell = declaredAttack ? null : detectUntargetedAttackSpell(playerInput);
+          if (untargetedSpell && !untargetedSpell.pronoun) untargetedSpellRoster = actors;
+        }
+        if (combatEntry?.sessionId && !declaredAttack) {
+          logger.info({
+            msg: 'COMBAT_INTENT_NO_DECLARATION',
             sessionId: combatEntry.sessionId,
-            error: sizingError,
+            prefilter: combatIntentPrefilterMatched,
+            detector: declaredAttack,
           });
         }
-      }
-      const llmPrompt = declaredAttack
-        ? appendDeclaredAttackDirective(prompt, declaredAttack.actorName, encounterDirective)
-        : declaredDefense
-          ? appendDeclaredDefenseDirective(prompt, declaredDefense)
-          : prompt;
+        // #262: a defensive declaration in plain text ("I dodge", "I yield") — the DM's
+        // inline options send the option text as chat, and without this the engine never
+        // sees the intent. Direct the DM to emit the structured combat_action.
+        // The in-combat signal is a live encounter for this session: the combatEntry the
+        // client sends is only present when combat is NOT active, so gating on it means
+        // the directive never fires mid-fight.
+        const defenseSessionId =
+          typeof sessionId === 'string' && sessionId.length > 0
+            ? sessionId
+            : typeof combatEntry?.sessionId === 'string'
+              ? combatEntry.sessionId
+              : null;
+        let declaredDefense: DefensiveDeclaration | null = null;
+        if (defenseSessionId && typeof playerInput === 'string' && !declaredAttack) {
+          try {
+            // Dynamic import: CombatEncounterService pulls in the database client at
+            // import time. Loading it lazily keeps the route importable in tests that
+            // don't mock the database (same pattern as the party-defeated check above).
+            const { CombatEncounterService } = await import(
+              '../../services/combat/combat-encounter-service.js'
+            );
+            const activeEncounter = await CombatEncounterService.getActiveEncounter(
+              defenseSessionId,
+              userId,
+            );
+            if (activeEncounter) declaredDefense = detectDeclaredDefense(playerInput);
+          } catch {
+            declaredDefense = null;
+          }
+        }
+        // #2514: the DM prompt receives the engine-decided creature count and
+        // names BEFORE it narrates the approach. For a declared attack the
+        // target is known before generation, so sizing runs here and the
+        // directive carries the count into the prose prompt; the gate and
+        // `startCombat` then seat exactly that sized encounter. A sizing
+        // failure must not block the turn: the directive falls back to the
+        // single named creature, as before #2514.
+        let encounterDirective = '';
+        if (declaredAttack && combatEntry?.sessionId) {
+          try {
+            const context = await loadSessionEncounterContext(combatEntry.sessionId, userId);
+            if (context.difficulty) {
+              const sized = expandDerivedCombatants(
+                [
+                  {
+                    name: declaredAttack.actorName,
+                    ...(declaredAttack.monsterId ? { monsterId: declaredAttack.monsterId } : {}),
+                    count: 1,
+                  },
+                ],
+                context,
+              );
+              encounterDirective = buildEncounterSizeDirective(sized);
+            }
+          } catch (sizingError) {
+            logger.warn({
+              msg: 'LLM_ENCOUNTER_SIZING_UNAVAILABLE',
+              sessionId: combatEntry.sessionId,
+              error: sizingError,
+            });
+          }
+        }
+        const llmPrompt = declaredAttack
+          ? appendDeclaredAttackDirective(prompt, declaredAttack.actorName, encounterDirective)
+          : declaredDefense
+            ? appendDeclaredDefenseDirective(prompt, declaredDefense)
+            : prompt;
 
-      const generateOnce = (): Promise<LLMResponse> =>
-        LLMProviderService.generate({
+        const generateOnce = (): Promise<LLMResponse> =>
+          LLMProviderService.generate({
+            prompt: llmPrompt,
+            model: safeModel,
+            maxTokens: safeMaxTokens,
+            temperature,
+            history,
+            provider,
+            responseSchema,
+          });
+        let result = await generateOnce();
+        // #312: one bounded retry on a retryable storyteller failure before the turn degrades.
+        // A single transient timeout on the turn that ends a fight (or resolves a check) used to
+        // lose the reply, the XP award and the persisted DM row with no recovery — the client was
+        // told to "try your action again" after the moment had passed (GP-069).
+        if (isRetryableGenerateResult(result)) {
+          const waitMs = Math.min(5_000, Math.max(0, Math.round((result.retryAfter ?? 1) * 1000)));
+          logger.warn({
+            msg: 'LLM_GENERATE_RETRY',
+            sessionId: sessionId ?? combatEntry?.sessionId ?? null,
+            provider: result.provider ?? provider,
+            status: result.status ?? null,
+            waitMs,
+          });
+          if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
+          result = await generateOnce();
+        }
+        result = stripUntargetedInitiativeRollRequests(result, declaredAttack);
+        const factSessionId = sessionId ?? combatEntry?.sessionId;
+        result = await enforceCombatTransitionContract({
+          result,
           prompt: llmPrompt,
           model: safeModel,
           maxTokens: safeMaxTokens,
@@ -631,241 +663,241 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           history,
           provider,
           responseSchema,
+          playerInput,
+          // #2563: a scene end deferred at generation time writes the refusal fact the
+          // end route writes on a 409, so the DM's next read knows the fight is not over.
+          // Loaded lazily: the tactical-action graph reaches the db client, and this
+          // route's module graph must stay loadable without DATABASE_URL.
+          recordTacticalFact: factSessionId
+            ? async (fact) => {
+                const { recordDmTacticalFact } =
+                  await import('../../services/combat/tactical-action-service.js');
+                await recordDmTacticalFact(factSessionId, fact);
+              }
+            : undefined,
         });
-      let result = await generateOnce();
-      // #312: one bounded retry on a retryable storyteller failure before the turn degrades.
-      // A single transient timeout on the turn that ends a fight (or resolves a check) used to
-      // lose the reply, the XP award and the persisted DM row with no recovery — the client was
-      // told to "try your action again" after the moment had passed (GP-069).
-      if (isRetryableGenerateResult(result)) {
-        const waitMs = Math.min(5_000, Math.max(0, Math.round((result.retryAfter ?? 1) * 1000)));
-        logger.warn({
-          msg: 'LLM_GENERATE_RETRY',
-          sessionId: sessionId ?? combatEntry?.sessionId ?? null,
-          provider: result.provider ?? provider,
-          status: result.status ?? null,
-          waitMs,
-        });
-        if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
-        result = await generateOnce();
-      }
-      result = stripUntargetedInitiativeRollRequests(result, declaredAttack);
-      const factSessionId = sessionId ?? combatEntry?.sessionId;
-      result = await enforceCombatTransitionContract({
-        result,
-        prompt: llmPrompt,
-        model: safeModel,
-        maxTokens: safeMaxTokens,
-        temperature,
-        history,
-        provider,
-        responseSchema,
-        playerInput,
-        // #2563: a scene end deferred at generation time writes the refusal fact the
-        // end route writes on a 409, so the DM's next read knows the fight is not over.
-        // Loaded lazily: the tactical-action graph reaches the db client, and this
-        // route's module graph must stay loadable without DATABASE_URL.
-        recordTacticalFact: factSessionId
-          ? async (fact) => {
-              const { recordDmTacticalFact } =
-                await import('../../services/combat/tactical-action-service.js');
-              await recordDmTacticalFact(factSessionId, fact);
-            }
-          : undefined,
-      });
-      result = stripUntargetedInitiativeRollRequests(result, declaredAttack);
-      // #1907 PR1: deterministic entry detection. It runs after contract enforcement so it
-      // judges the accepted dialect, and returns a pending handoff without seating. The explicit
-      // combat entry endpoint owns the encounter, initiative, map, telemetry, and publication.
-      result = await applyCombatEntryGate({
-        result,
-        userId,
-        combatEntry: combatEntry as CombatEntryContext | undefined,
-        declaredAttack,
-        untargetedSpellRoster,
-        liveEncounter: async (sessionId, ownerId) => {
-          const { combatEntryGateDeps } =
-            await import('../../services/combat/combat-entry-gate-deps.js');
-          return combatEntryGateDeps.getActiveEncounter(sessionId, ownerId);
-        },
-      });
-      // #2718: a feature or spell the player claims and their character lacks is refused here,
-      // before the reply is persisted or returned, so it applies nothing and spends nothing.
-      let allowedCasts: AllowedCasts | null = null;
-      if (dmReply) {
-        result = await refuseFeaturesCharacterLacks({
+        result = stripUntargetedInitiativeRollRequests(result, declaredAttack);
+        // #1907 PR1: deterministic entry detection. It runs after contract enforcement so it
+        // judges the accepted dialect, and returns a pending handoff without seating. The explicit
+        // combat entry endpoint owns the encounter, initiative, map, telemetry, and publication.
+        result = await applyCombatEntryGate({
           result,
           userId,
-          sessionId: sessionId ?? combatEntry?.sessionId,
-          playerInput,
-          inCombat: dmReply.inCombat === true,
-          clientCharacterId: combatEntry?.player?.characterId ?? null,
-          onCastsAllowed: (casts) => {
-            allowedCasts = casts;
+          combatEntry: combatEntry as CombatEntryContext | undefined,
+          declaredAttack,
+          untargetedSpellRoster,
+          liveEncounter: async (sessionId, ownerId) => {
+            const { combatEntryGateDeps } =
+              await import('../../services/combat/combat-entry-gate-deps.js');
+            return combatEntryGateDeps.getActiveEncounter(sessionId, ownerId);
           },
         });
-      }
-
-      if (result.error) {
-        logger.error({
-          msg: 'LLM_GENERATE_DEGRADED',
-          error: result.error,
-          status: result.status,
-          provider: result.provider,
-          model: result.model,
-        });
-        const degradedEnvelope = degradedGenerateEnvelope();
-        logEnvelopeShape(null, degradedEnvelope.text, sessionId ?? combatEntry?.sessionId, true);
-        set.status = 200;
-        return degradedEnvelope;
-      }
-
-      if (result.usage && result.provider) {
-        await AIUsageService.recordProviderUsage({
-          userId,
-          plan,
-          type: quotaType,
-          provider: result.provider,
-          model: result.model,
-          inputTokens: result.usage.inputTokens,
-          outputTokens: result.usage.outputTokens,
-          // #2218: only DM turns carry dmReply; other generations stay session-less.
-          sessionId: dmReply ? (sessionId ?? combatEntry?.sessionId) : undefined,
-        });
-      }
-
-      // One parse, shared by the log line and the narration rewrite. (#2050 G)
-      const envelope = parseLlmEnvelope(result.text);
-      // #218 step 1: a cast the gate allowed spends its slot, server-side, once per player
-      // message. Not when combat is opening: the engine spends for the opening cast. Not when the
-      // body carries no `combatEntry` out of combat: the player declined a held entry (#2341) and
-      // nothing was cast. A spend that fails is logged; it never costs the player their turn.
-      const castsToSpend = allowedCasts as AllowedCasts | null;
-      const castSessionId = sessionId ?? combatEntry?.sessionId;
-      if (castsToSpend && castSessionId && combatEntry && !envelope?.combat_entry_pending) {
-        try {
-          const { spendStorySpellSlots } = await import('../../services/dm/story-spell-slots.js');
-          await spendStorySpellSlots({
+        // #2718: a feature or spell the player claims and their character lacks is refused here,
+        // before the reply is persisted or returned, so it applies nothing and spends nothing.
+        let allowedCasts: AllowedCasts | null = null;
+        if (dmReply) {
+          result = await refuseFeaturesCharacterLacks({
+            result,
             userId,
-            sessionId: castSessionId,
-            playerInput: playerInput ?? '',
-            casts: castsToSpend,
+            sessionId: sessionId ?? combatEntry?.sessionId,
+            playerInput,
+            inCombat: dmReply.inCombat === true,
+            clientCharacterId: combatEntry?.player?.characterId ?? null,
+            onCastsAllowed: (casts) => {
+              allowedCasts = casts;
+            },
           });
-        } catch (error) {
-          logger.warn({ msg: 'DM_STORY_SLOT_SPEND_FAILED', sessionId: castSessionId, error });
         }
-      }
-      // #218 step 2: XP the story awards reaches the sheet, server-side, once per player message.
-      // Out of combat only, with the same skips as the slot spend above, and never on a turn that
-      // asks for a roll. A refused turn carries no `xp_award`: the gate's refusal envelope drops it.
-      // Steps 3+4 below share the same guards: items the story grants/takes and conditions it
-      // applies/removes reach the sheet the same way.
-      const rollRequests = envelope?.roll_requests;
-      const rollRequested = Array.isArray(rollRequests) && rollRequests.length > 0;
-      if (
-        envelope?.xp_award &&
-        dmReply &&
-        dmReply.inCombat !== true &&
-        castSessionId &&
-        combatEntry &&
-        !envelope.combat_entry_pending
-      ) {
-        try {
-          const { awardStoryXp } = await import('../../services/dm/story-xp.js');
-          await awardStoryXp({
+
+        if (result.error) {
+          logger.error({
+            msg: 'LLM_GENERATE_DEGRADED',
+            error: result.error,
+            status: result.status,
+            provider: result.provider,
+            model: result.model,
+          });
+          const degradedEnvelope = degradedGenerateEnvelope();
+          logEnvelopeShape(null, degradedEnvelope.text, sessionId ?? combatEntry?.sessionId, true);
+          set.status = 200;
+          return degradedEnvelope;
+        }
+
+        if (result.usage && result.provider) {
+          await AIUsageService.recordProviderUsage({
             userId,
-            sessionId: castSessionId,
-            xpAward: envelope.xp_award,
-            rollRequested,
+            plan,
+            type: quotaType,
+            provider: result.provider,
+            model: result.model,
+            inputTokens: result.usage.inputTokens,
+            outputTokens: result.usage.outputTokens,
+            // #2218: only DM turns carry dmReply; other generations stay session-less.
+            sessionId: dmReply ? (sessionId ?? combatEntry?.sessionId) : undefined,
           });
-        } catch (error) {
-          logger.warn({ msg: 'DM_STORY_XP_AWARD_FAILED', sessionId: castSessionId, error });
         }
-      }
-      // #218 steps 3+4: items the story grants or takes, and conditions it applies or removes
-      // out of combat, reach the sheet, server-side, once per player message. A failed write
-      // is logged; it never costs the player their turn.
-      if (
-        (envelope?.items || envelope?.conditions) &&
-        dmReply &&
-        dmReply.inCombat !== true &&
-        castSessionId &&
-        combatEntry &&
-        !envelope.combat_entry_pending
-      ) {
-        try {
-          if (envelope.items) {
-            const { applyStoryItems } = await import('../../services/dm/story-items.js');
-            await applyStoryItems({
+
+        // One parse, shared by the log line and the narration rewrite. (#2050 G)
+        const envelope = parseLlmEnvelope(result.text);
+        // #218 step 1: a cast the gate allowed spends its slot, server-side, once per player
+        // message. Not when combat is opening: the engine spends for the opening cast. Not when the
+        // body carries no `combatEntry` out of combat: the player declined a held entry (#2341) and
+        // nothing was cast. A spend that fails is logged; it never costs the player their turn.
+        const castsToSpend = allowedCasts as AllowedCasts | null;
+        const castSessionId = sessionId ?? combatEntry?.sessionId;
+        if (castsToSpend && castSessionId && combatEntry && !envelope?.combat_entry_pending) {
+          try {
+            const { spendStorySpellSlots } = await import('../../services/dm/story-spell-slots.js');
+            await spendStorySpellSlots({
               userId,
               sessionId: castSessionId,
-              items: envelope.items,
-              rollRequested,
+              playerInput: playerInput ?? '',
+              casts: castsToSpend,
             });
+          } catch (error) {
+            logger.warn({ msg: 'DM_STORY_SLOT_SPEND_FAILED', sessionId: castSessionId, error });
           }
-          if (envelope.conditions) {
-            const { applyStoryConditions } = await import('../../services/dm/story-conditions.js');
-            await applyStoryConditions({
+        }
+        // #218 step 2: XP the story awards reaches the sheet, server-side, once per player message.
+        // Out of combat only, with the same skips as the slot spend above, and never on a turn that
+        // asks for a roll. A refused turn carries no `xp_award`: the gate's refusal envelope drops it.
+        // Steps 3+4 below share the same guards: items the story grants/takes and conditions it
+        // applies/removes reach the sheet the same way.
+        const rollRequests = envelope?.roll_requests;
+        const rollRequested = Array.isArray(rollRequests) && rollRequests.length > 0;
+        if (
+          envelope?.xp_award &&
+          dmReply &&
+          dmReply.inCombat !== true &&
+          castSessionId &&
+          combatEntry &&
+          !envelope.combat_entry_pending
+        ) {
+          try {
+            const { awardStoryXp } = await import('../../services/dm/story-xp.js');
+            await awardStoryXp({
               userId,
               sessionId: castSessionId,
-              conditions: envelope.conditions,
+              xpAward: envelope.xp_award,
               rollRequested,
             });
+          } catch (error) {
+            logger.warn({ msg: 'DM_STORY_XP_AWARD_FAILED', sessionId: castSessionId, error });
           }
-        } catch (error) {
-          logger.warn({ msg: 'DM_STORY_STATE_APPLY_FAILED', sessionId: castSessionId, error });
         }
-      }
-      // sessionId must not come from combatEntry: that is only sent when combat
-      // is NOT already active, so in-combat turns logged `sessionId: null` --
-      // precisely the turns being debugged. (#2050 C)
-      logEnvelopeShape(envelope, result.text, sessionId ?? combatEntry?.sessionId);
+        // #218 steps 3+4: items the story grants or takes, and conditions it applies or removes
+        // out of combat, reach the sheet, server-side, once per player message. A failed write
+        // is logged; it never costs the player their turn.
+        if (
+          (envelope?.items || envelope?.conditions) &&
+          dmReply &&
+          dmReply.inCombat !== true &&
+          castSessionId &&
+          combatEntry &&
+          !envelope.combat_entry_pending
+        ) {
+          try {
+            if (envelope.items) {
+              const { applyStoryItems } = await import('../../services/dm/story-items.js');
+              await applyStoryItems({
+                userId,
+                sessionId: castSessionId,
+                items: envelope.items,
+                rollRequested,
+              });
+            }
+            if (envelope.conditions) {
+              const { applyStoryConditions } = await import('../../services/dm/story-conditions.js');
+              await applyStoryConditions({
+                userId,
+                sessionId: castSessionId,
+                conditions: envelope.conditions,
+                rollRequested,
+              });
+            }
+          } catch (error) {
+            logger.warn({ msg: 'DM_STORY_STATE_APPLY_FAILED', sessionId: castSessionId, error });
+          }
+        }
+        // sessionId must not come from combatEntry: that is only sent when combat
+        // is NOT already active, so in-combat turns logged `sessionId: null` --
+        // precisely the turns being debugged. (#2050 C)
+        logEnvelopeShape(envelope, result.text, sessionId ?? combatEntry?.sessionId);
 
-      // #2218: the engine keeps the DM reply it generated. Written before the response leaves,
-      // so a tab that dies after this point cannot take the reply with it; the client saves
-      // the same id and replaces this row in place. A turn the server may not persist (roll,
-      // combat) is watched instead, and reported if no DM row follows.
-      let dmReplyPersisted = false;
-      const dmSessionId = sessionId ?? combatEntry?.sessionId;
-      if (dmReply && dmSessionId) {
-        const generatedAt = new Date();
-        const persistence = await persistGeneratedDmReply({
-          userId,
-          sessionId: dmSessionId,
-          messageId: dmReply.messageId,
-          envelope,
-          clientInCombat: dmReply.inCombat === true,
-          narrationGated: dmReply.narrationGated,
-        });
-        dmReplyPersisted = persistence.persisted;
-        logger.info({
-          msg: 'DM_REPLY_PERSISTENCE',
-          sessionId: dmSessionId,
-          messageId: dmReply.messageId,
-          persisted: persistence.persisted,
-          reason: persistence.reason ?? null,
-          // #2530: D1's two held replies could not be told apart afterwards; the request's type
-          // says whether the player was owed an attack, a check or a save. Types only.
-          ...(persistence.reason === 'roll_requests'
-            ? { rollRequestTypes: rollRequestTypesOf(envelope) }
-            : {}),
-        });
-        if (!persistence.persisted) {
-          void scheduleDmReplyWatchdog({
+        // #2218: the engine keeps the DM reply it generated. Written before the response leaves,
+        // so a tab that dies after this point cannot take the reply with it; the client saves
+        // the same id and replaces this row in place. A turn the server may not persist (roll,
+        // combat) is watched instead, and reported if no DM row follows.
+        let dmReplyPersisted = false;
+        const dmSessionId = sessionId ?? combatEntry?.sessionId;
+        if (dmReply && dmSessionId) {
+          const generatedAt = new Date();
+          const persistence = await persistGeneratedDmReply({
+            userId,
             sessionId: dmSessionId,
             messageId: dmReply.messageId,
-            reason: persistence.reason ?? 'unknown',
-            generatedAt,
+            envelope,
+            clientInCombat: dmReply.inCombat === true,
+            narrationGated: dmReply.narrationGated,
           });
+          dmReplyPersisted = persistence.persisted;
+          logger.info({
+            msg: 'DM_REPLY_PERSISTENCE',
+            sessionId: dmSessionId,
+            messageId: dmReply.messageId,
+            persisted: persistence.persisted,
+            reason: persistence.reason ?? null,
+            // #2530: D1's two held replies could not be told apart afterwards; the request's type
+            // says whether the player was owed an attack, a check or a save. Types only.
+            ...(persistence.reason === 'roll_requests'
+              ? { rollRequestTypes: rollRequestTypesOf(envelope) }
+              : {}),
+          });
+          if (!persistence.persisted) {
+            const watchdog = {
+              sessionId: dmSessionId,
+              messageId: dmReply.messageId,
+              reason: persistence.reason ?? 'unknown',
+              generatedAt,
+            };
+            const schedule = () => {
+              void scheduleDmReplyWatchdog(watchdog);
+            };
+            if (!deferUntilCommit(schedule)) schedule();
+          }
+        }
+
+        return {
+          text: rewriteNarrationSegmentsFromEnvelope(envelope, result.text),
+          provider: result.provider,
+          model: result.model,
+          ...(dmReply ? { dmReplyPersisted } : {}),
+          ...(canonicalMessageId ? { dmReplyMessageId: canonicalMessageId } : {}),
+        };
+      };
+      if (sessionId && (dmReply || requestedPlayerInput || extractPlayerInputFromPrompt(prompt))) {
+        const { SessionMessageService } =
+          await import('../../services/session/session-message-service.js');
+        try {
+          return await SessionMessageService.withRollTurn(
+            sessionId,
+            user.userId,
+            requestedPlayerInput?.trim() || extractPlayerInputFromPrompt(prompt),
+            dmReply?.rollRequestId,
+            dmReply?.messageId,
+            (replyId) => {
+              if (replyId) dmReply = { ...dmReply, messageId: replyId };
+              return generateTurn(replyId);
+            },
+          );
+        } catch (error) {
+          const { AppError } = await import('../../lib/errors.js');
+          if (!(error instanceof AppError)) throw error;
+          set.status = error.statusCode;
+          return { error: error.message };
         }
       }
-
-      return {
-        text: rewriteNarrationSegmentsFromEnvelope(envelope, result.text),
-        provider: result.provider,
-        model: result.model,
-        ...(dmReply ? { dmReplyPersisted } : {}),
-      };
+      return generateTurn();
     },
     {
       body: t.Object({
@@ -882,6 +914,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
               pattern:
                 '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
             }),
+            rollRequestId: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
             inCombat: t.Optional(t.Boolean()),
             narrationGated: t.Optional(t.Boolean()),
           }),

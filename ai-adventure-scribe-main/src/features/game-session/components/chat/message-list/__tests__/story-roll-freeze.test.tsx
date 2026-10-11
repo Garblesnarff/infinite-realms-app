@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,7 +9,7 @@ import {
   storyDmBody,
   storySaveAnswerBody,
 } from '../../../../../../../shared/test-fixtures/story-rolls';
-import { useMessageDiceRolls } from '../use-message-dice-rolls';
+import { ROLL_SUBMISSION_TIMEOUT_MS, useMessageDiceRolls } from '../use-message-dice-rolls';
 import { usePendingDmRollRecovery } from '../use-pending-dm-roll-recovery';
 
 import type { ChatMessage } from '@/types/game';
@@ -179,7 +179,10 @@ describe('story roll recovery (#216)', () => {
       }),
     );
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
 
   it('a rejected send closes the tray, enables the composer and shows an error', async () => {
     mount([readRow(dmBody)]);
@@ -263,6 +266,38 @@ describe('story roll recovery (#216)', () => {
     expect(saved[1].context).toMatchObject({
       rollRequestId: `${STORY_SAVE_ROLL.dmMessageId}:roll:1`,
     });
+  });
+
+  it('a never-settling intermediate save times out to Retry and preserves the next die', async () => {
+    vi.useFakeTimers();
+    heldSave = new Promise(() => {});
+    const request = STORY_SAVE_ROLL.rollRequests[0];
+    const body = storyDmBody(STORY_SAVE_ROLL);
+    body.context.rollRequests = [request, { ...request, dc: 15 }];
+    mount([readRow(body)]);
+    await vi.waitFor(() => expect(screen.getByTestId('dice-roll-request')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /manual/i }));
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '8' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Submit$/ }));
+    await vi.waitFor(() => expect(saved).toHaveLength(1));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ROLL_SUBMISSION_TIMEOUT_MS);
+    });
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled();
+    expect(screen.queryByText('Rolling…')).not.toBeInTheDocument();
+    dmStatus = 200;
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await vi.waitFor(() => expect(saved).toHaveLength(2));
+    expect(saved[1]).toEqual(saved[0]);
+    await vi.waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: /manual/i }));
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '8' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Submit$/ }));
+    await vi.waitFor(() =>
+      expect(
+        vi.mocked(fetch).mock.calls.filter(([url]) => String(url) === '/story-dm-turn'),
+      ).toHaveLength(1),
+    );
   });
 
   it('a failed intermediate save retries the same result and id before advancing the batch', async () => {

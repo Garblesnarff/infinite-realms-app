@@ -98,6 +98,29 @@ describe('LlmApiClient', () => {
   });
 
   describe('generateText', () => {
+    it('reports the canonical DM reply id returned by a deduped roll turn', async () => {
+      const onResponseMetadata = vi.fn();
+      const dmReplyMessageId = '33333333-3333-4333-8333-333333333333';
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            text: 'The charm fails.',
+            provider: 'openrouter',
+            model: 'test/model',
+            dmReplyMessageId,
+            dmReplyPersisted: true,
+          }),
+      });
+      await llmApiClient.generateText({ prompt: 'Continue after the save.', onResponseMetadata });
+      expect(onResponseMetadata).toHaveBeenCalledWith({
+        provider: 'openrouter',
+        model: 'test/model',
+        dmReplyMessageId,
+      });
+    });
+
     it('retains the generate request id for turn-phase correlation', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -205,12 +228,17 @@ describe('LlmApiClient', () => {
       await llmApiClient.generateText({
         prompt: 'Hello',
         sessionId: 'session-1',
-        dmReply: { messageId: '0b7e4f5a-2c9d-4e1b-8a3f-6d5c4b3a2e1f', inCombat: false },
+        dmReply: {
+          messageId: '0b7e4f5a-2c9d-4e1b-8a3f-6d5c4b3a2e1f',
+          inCombat: false,
+          rollRequestId: '22222222-2222-4222-8222-222222222222:roll:0',
+        },
       });
 
       expect(JSON.parse(mockFetch.mock.calls[0][1].body).dmReply).toEqual({
         messageId: '0b7e4f5a-2c9d-4e1b-8a3f-6d5c4b3a2e1f',
         inCombat: false,
+        rollRequestId: '22222222-2222-4222-8222-222222222222:roll:0',
       });
     });
 
