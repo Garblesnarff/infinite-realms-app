@@ -25,7 +25,8 @@ add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
 
 # Content-Security-Policy, report-only first (#225). Mirrors the Elysia
-# API/SEO policy. Violations show only in the browser console for now
-# (no report-uri; the strategist will file a report collector as a follow-up).
-# Graduate to the enforcing header only after that collector exists.
-add_header Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss:; frame-ancestors 'none'" always;
+# API/SEO policy. `report-uri /csp-report` sends violations to the backend
+# collector (#283; nginx proxies /csp-report to the backend — see the location
+# block in nginx.conf.example). Graduate to the enforcing header only after
+# the collector has proven itself in prod.
+add_header Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss:; frame-ancestors 'none'; report-uri /csp-report" always;

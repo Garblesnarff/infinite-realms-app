@@ -55,6 +55,7 @@ import { blogApiRoutes } from './routes/v1/blog';
 import { llmsRoutes } from './routes/llms.js';
 import { buildHealthPayload } from './lib/health-payload.js';
 import { versionRoutes } from './routes/version.js';
+import { cspReportRoutes } from './routes/csp-report.js';
 
 export function createApp() {
   if (
@@ -159,6 +160,8 @@ export function createApp() {
     })
     // Deployed commit + live client bundle; public, no secrets (#2293)
     .use(versionRoutes)
+    // CSP violation report collector; public, no auth (#283)
+    .use(cspReportRoutes)
     // Prometheus metrics endpoint
     .get(
       '/metrics',

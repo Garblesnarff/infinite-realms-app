@@ -175,6 +175,23 @@ class MemoryStore {
 const memoryStore = new MemoryStore();
 
 /**
+ * Last warn-log timestamp per rate-limit bucket, for warn throttling
+ * (`warnThrottleMs` in createSimpleRateLimit). Bounds log volume on chatty
+ * public endpoints without changing rejection behavior. Same lifecycle as
+ * the buckets map above (in-memory, per process).
+ */
+const lastRateLimitWarnAt = new Map<string, number>();
+
+function shouldWarnRateLimit(bucketKey: string, throttleMs: number): boolean {
+  if (throttleMs <= 0) return true;
+  const now = Date.now();
+  const last = lastRateLimitWarnAt.get(bucketKey);
+  if (last !== undefined && now - last < throttleMs) return false;
+  lastRateLimitWarnAt.set(bucketKey, now);
+  return true;
+}
+
+/**
  * Extract client IP from request
  */
 function getClientIp(request: Request): string {
@@ -328,10 +345,23 @@ export function planRateLimit(configOrKey?: Partial<PlanRateConfig> | string) {
  * Simple per-IP rate limiter (backward compatible)
  * Single limit for all users, no plan awareness
  *
- * @param options - windowMs and max requests
+ * @param options - windowMs and max requests; key namespaces the buckets;
+ * warnThrottleMs throttles the rejection warn log per bucket (default 0 =
+ * warn on every rejection, the historical behavior).
  */
-export function createSimpleRateLimit(options: { windowMs: number; max: number; key?: string }) {
-  const { windowMs, max, key = 'simple' } = options;
+export function createSimpleRateLimit(options: {
+  windowMs: number;
+  max: number;
+  key?: string;
+  /**
+   * Minimum milliseconds between rate-limit warn logs for the same bucket
+   * (IP). Default 0 preserves the historical behavior (warn on every
+   * rejection). Pass e.g. 60_000 for at most one warn per IP per minute
+   * on chatty public endpoints (#302).
+   */
+  warnThrottleMs?: number;
+}) {
+  const { windowMs, max, key = 'simple', warnThrottleMs = 0 } = options;
 
   return (
     new Elysia({ name: `simple-rate-limit-${key}` })
@@ -347,7 +377,9 @@ export function createSimpleRateLimit(options: { windowMs: number; max: number; 
             set.status = 429;
             set.headers['Retry-After'] = String(Math.max(retryAfterSec, 1));
 
-            logger.warn(`Simple rate limit exceeded for IP ${ip}: ${result.count}/${max}`);
+            if (shouldWarnRateLimit(bucketKey, warnThrottleMs)) {
+              logger.warn(`Simple rate limit exceeded for IP ${ip}: ${result.count}/${max}`);
+            }
 
             return {
               error: {

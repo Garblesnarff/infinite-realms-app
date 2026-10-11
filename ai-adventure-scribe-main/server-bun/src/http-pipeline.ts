@@ -229,6 +229,8 @@ export function setSecurityHeaders({
   set.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin';
 
   // Content Security Policy - report-only first (#225)
+  // report-uri collects violations at POST /csp-report (#283); the policy
+  // itself is not tightened here.
   set.headers['Content-Security-Policy-Report-Only'] = [
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com",
@@ -237,6 +239,7 @@ export function setSecurityHeaders({
     "img-src 'self' data: blob: https:",
     "connect-src 'self' https: wss:",
     "frame-ancestors 'none'",
+    'report-uri /csp-report',
   ].join('; ');
 
   // HTTPS enforcement (Strict Transport Security)
