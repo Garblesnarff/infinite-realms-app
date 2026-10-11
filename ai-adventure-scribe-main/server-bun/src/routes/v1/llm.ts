@@ -44,11 +44,15 @@ import {
   parseLlmEnvelope,
   rewriteNarrationSegmentsFromEnvelope,
 } from '../../services/dm/dm-response-schema.js';
+import { isRetryableUpstreamStatus } from '../../services/llm-errors.js';
 import {
   getConfiguredGeminiModels,
   getConfiguredOpenRouterModels,
 } from '../../services/llm-model-config.js';
-import { LLMProviderService } from '../../services/llm-provider-service.js';
+import {
+  LLMProviderService,
+  type LLMResponse,
+} from '../../services/llm-provider-service.js';
 import { countPromptSections } from '../../services/prompt-section-counter.js';
 
 /**
@@ -160,6 +164,18 @@ const degradedGenerateEnvelope = (): {
   reason: LLM_GENERATE_DEGRADED_REASON,
   text: LLM_GENERATE_DEGRADED_TEXT,
 });
+
+/**
+ * #312: whether a failed storyteller call is worth one retry before the turn degrades.
+ * Retryable means the provider said so (`retryable: true`, e.g. a 429 with `retry_after`)
+ * or the status is in the retryable set (408/409/425/429/5xx — including the 60 s provider
+ * timeout, which surfaces as a 503). Anything else (400s, auth, quota) degrades at once.
+ */
+const isRetryableGenerateResult = (result: LLMResponse): boolean => {
+  if (!result.error) return false;
+  if (result.retryable === true) return true;
+  return typeof result.status === 'number' && isRetryableUpstreamStatus(result.status);
+};
 
 // #2533: one structured, numbers-only log line per generate with the token
 // count of each prompt section, counted server-side from the prompt the
@@ -532,15 +548,33 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         ? appendDeclaredAttackDirective(prompt, declaredAttack.actorName, encounterDirective)
         : prompt;
 
-      let result = await LLMProviderService.generate({
-        prompt: llmPrompt,
-        model: safeModel,
-        maxTokens: safeMaxTokens,
-        temperature,
-        history,
-        provider,
-        responseSchema,
-      });
+      const generateOnce = (): Promise<LLMResponse> =>
+        LLMProviderService.generate({
+          prompt: llmPrompt,
+          model: safeModel,
+          maxTokens: safeMaxTokens,
+          temperature,
+          history,
+          provider,
+          responseSchema,
+        });
+      let result = await generateOnce();
+      // #312: one bounded retry on a retryable storyteller failure before the turn degrades.
+      // A single transient timeout on the turn that ends a fight (or resolves a check) used to
+      // lose the reply, the XP award and the persisted DM row with no recovery — the client was
+      // told to "try your action again" after the moment had passed (GP-069).
+      if (isRetryableGenerateResult(result)) {
+        const waitMs = Math.min(5_000, Math.max(0, Math.round((result.retryAfter ?? 1) * 1000)));
+        logger.warn({
+          msg: 'LLM_GENERATE_RETRY',
+          sessionId: sessionId ?? combatEntry?.sessionId ?? null,
+          provider: result.provider ?? provider,
+          status: result.status ?? null,
+          waitMs,
+        });
+        if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
+        result = await generateOnce();
+      }
       result = stripUntargetedInitiativeRollRequests(result, declaredAttack);
       const factSessionId = sessionId ?? combatEntry?.sessionId;
       result = await enforceCombatTransitionContract({
