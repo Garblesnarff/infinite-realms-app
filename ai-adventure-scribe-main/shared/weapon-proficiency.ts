@@ -192,3 +192,17 @@ export function isWeaponProficient(weaponId: string, subject: WeaponProficiencyS
   if (!weaponType) return false;
   return proficienciesFor(subject).some((entry) => coversWeapon(entry, key, weaponType));
 }
+
+/**
+ * True when this character is proficient with any of these weapons.
+ *
+ * Magic weapons whose own text grants proficiency by alternate weapon (Sun Blade,
+ * 2014 DMG: "proficient with shortswords or longswords") carry the alternates on
+ * the item row next to baseWeaponId; proficiency holds if any of them does.
+ */
+export function isWeaponProficientWithAny(
+  weaponIds: readonly string[],
+  subject: WeaponProficiencySubject,
+): boolean {
+  return weaponIds.some((weaponId) => isWeaponProficient(weaponId, subject));
+}
