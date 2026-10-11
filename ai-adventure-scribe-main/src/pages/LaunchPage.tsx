@@ -72,7 +72,7 @@ const LaunchPage: React.FC = () => {
           content="Be among the first to experience Infinite Realms, where every choice shapes destiny and legends are forged in the fires of imagination."
         />
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://infiniterealms.app/launch" />
+        <meta property="og:url" content="https://infiniterealms.app/" />
         <meta property="og:image" content="https://infiniterealms.app/og-launch-image.jpg" />
 
         {/* Twitter Card Tags */}
@@ -84,8 +84,8 @@ const LaunchPage: React.FC = () => {
         />
         <meta name="twitter:image" content="https://infiniterealms.app/twitter-launch-card.jpg" />
 
-        {/* Canonical URL */}
-        <link rel="canonical" href="https://infiniterealms.app/launch" />
+        {/* Canonical URL (#355): / renders this page; /launch is not a route. */}
+        <link rel="canonical" href="https://infiniterealms.app/" />
       </Helmet>
 
       <div className="min-h-screen bg-gradient-to-b from-gray-900 via-purple-900 to-gray-900 overflow-x-hidden">

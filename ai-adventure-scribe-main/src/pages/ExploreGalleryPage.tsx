@@ -26,6 +26,18 @@ export const ExploreGalleryPage: React.FC = () => {
           name="description"
           content="Browse our collection of professionally crafted D&D campaigns. Pick a character and start your adventure immediately."
         />
+        <meta
+          property="og:title"
+          content="Explore Adventures | InfiniteRealms"
+        />
+        <meta
+          property="og:description"
+          content="Browse our collection of professionally crafted D&D campaigns. Pick a character and start your adventure immediately."
+        />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://infiniterealms.app/explore" />
+        {/* Canonical URL (#355) */}
+        <link rel="canonical" href="https://infiniterealms.app/explore" />
       </Helmet>
 
       <div className="ir-app min-h-screen max-w-full overflow-x-hidden bg-background text-foreground">
