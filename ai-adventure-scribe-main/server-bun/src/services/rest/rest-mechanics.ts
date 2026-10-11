@@ -128,7 +128,9 @@ export class RestMechanics {
     // Calculate how many to restore
     const totalDice = allHitDice.reduce((sum, hd) => sum + hd.totalDice, 0);
     const usedDice = allHitDice.reduce((sum, hd) => sum + hd.usedDice, 0);
-    const maxRestore = Math.max(1, Math.ceil(totalDice / 2));
+    // 2014 PHB: regain half the total, rounded down (the PHB "round down"
+    // rule), minimum 1.
+    const maxRestore = Math.max(1, Math.floor(totalDice / 2));
     const toRestore =
       count !== undefined ? Math.min(count, usedDice, maxRestore) : Math.min(usedDice, maxRestore);
 

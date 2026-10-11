@@ -8,7 +8,7 @@
  */
 
 /* eslint-disable max-lines */
-import { and, desc, eq, exists, or } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, or, sql } from 'drizzle-orm';
 
 import { CharacterVitalsService } from './character-vitals-service.js';
 import { ClassFeaturesService } from './class-features-service.js';
@@ -17,15 +17,18 @@ import { ExhaustionService } from './exhaustion-service.js';
 import { RestHitDiceService } from './rest/rest-hit-dice-service.js';
 import { db } from '../../../db/client';
 import {
+  characterConditions,
   characters,
+  combatParticipantConditions,
   combatParticipants,
+  conditionsLibrary,
   restEvents,
   type Character,
   type CharacterHitDice,
   type CharacterStats,
   type RestEvent,
 } from '../../../db/schema/index';
-import { NotFoundError } from '../lib/errors.js';
+import { BusinessLogicError, NotFoundError } from '../lib/errors.js';
 import { RestMechanics } from './rest/rest-mechanics.js';
 import { SpellSlotsService } from './spell-slots-service.js';
 
@@ -63,6 +66,78 @@ function toRestSpellSlots(
  * Rest Service
  */
 export class RestService {
+  /**
+   * #180 (2014 PHB): a character needs at least 1 hit point at the start of a
+   * long rest to gain its benefits, and a dying or dead character cannot take
+   * either rest. A stable character at 0 HP may still short rest (spending hit
+   * dice can heal), but a long rest grants them nothing, so it is refused
+   * outright rather than recorded as a rest that did nothing. Characters with
+   * no stats row predate the vitals system; without hit points to read, the
+   * guard cannot fire and the legacy behavior stands.
+   */
+  private static assertRestAllowed(
+    stats: CharacterStats | null,
+    restType: RestType,
+  ): void {
+    if (!stats) return;
+    if (stats.vitalState === 'dead') {
+      throw new BusinessLogicError(`Cannot take a ${restType} rest while dead.`);
+    }
+    if (stats.vitalState === 'dying') {
+      throw new BusinessLogicError(`Cannot take a ${restType} rest while dying.`);
+    }
+    if (restType === 'long' && stats.currentHitPoints < 1) {
+      throw new BusinessLogicError(
+        'A long rest requires at least 1 hit point to grant its benefits.',
+      );
+    }
+  }
+
+  /**
+   * #170: the conditions a long rest ends, cleared server-side so the sheet
+   * path and the combat path share one ruleset. Mirrors the client's
+   * `applyLongRestSemantics` name set (unconscious ends when hit points are
+   * restored; prone is not carried through eight hours of rest). Deactivates
+   * the character's own rows and the rows of participants in active
+   * encounters; ended encounters keep their state, the same rule the healing
+   * below follows.
+   */
+  private static async clearLongRestConditions(
+    characterId: string,
+    participantIds: string[],
+  ): Promise<void> {
+    const clearable = await db
+      .select({ id: conditionsLibrary.id })
+      .from(conditionsLibrary)
+      .where(inArray(sql`lower(${conditionsLibrary.name})`, ['unconscious', 'prone']));
+    const clearableIds = clearable.map((row) => row.id);
+    if (clearableIds.length === 0) return;
+
+    await db
+      .update(characterConditions)
+      .set({ isActive: false })
+      .where(
+        and(
+          eq(characterConditions.characterId, characterId),
+          eq(characterConditions.isActive, true),
+          inArray(characterConditions.conditionId, clearableIds),
+        ),
+      );
+
+    if (participantIds.length > 0) {
+      await db
+        .update(combatParticipantConditions)
+        .set({ isActive: false })
+        .where(
+          and(
+            inArray(combatParticipantConditions.participantId, participantIds),
+            eq(combatParticipantConditions.isActive, true),
+            inArray(combatParticipantConditions.conditionId, clearableIds),
+          ),
+        );
+    }
+  }
+
   /**
    * Calculate Constitution modifier from ability score
    */
@@ -202,6 +277,9 @@ export class RestService {
       throw new NotFoundError('Character', characterId);
     }
 
+    // #180: refuse before anything is spent or written.
+    this.assertRestAllowed(character.stats, 'short');
+
     const hitDice = character.hitDice || [];
 
     // Spend hit dice if requested
@@ -317,6 +395,9 @@ export class RestService {
       throw new NotFoundError('Character', characterId);
     }
 
+    // #180: refuse before anything is healed, restored, or recorded.
+    this.assertRestAllowed(character.stats, 'long');
+
     const hitDice = character.hitDice || [];
 
     const hpRestored = character.stats
@@ -359,6 +440,9 @@ export class RestService {
       .set({
         pactSlots: updatedPactSlots,
         classFeatures: updatedClassFeatures,
+        // #170: a long rest ends concentration, server-side, so the sheet path
+        // and the combat path end it persistently — not just in local state.
+        activeConcentration: null,
         updatedAt: new Date(),
       })
       .where(eq(characters.id, characterId));
@@ -390,6 +474,12 @@ export class RestService {
     // The sheet is the source of truth for ended encounters.
     const activeParticipants = participants.filter(
       (participant) => participant.encounter?.status === 'active',
+    );
+    // #170: clear the conditions a long rest clears, server-side, so both
+    // rest paths clear the same conditions.
+    await this.clearLongRestConditions(
+      characterId,
+      activeParticipants.map((participant) => participant.id),
     );
     await Promise.all(
       activeParticipants.map((participant) =>
