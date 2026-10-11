@@ -245,6 +245,90 @@ describe('POST /v1/llm/generate HTTP contract', () => {
     }
   });
 
+  it('#312: retries the storyteller once on a timeout instead of degrading immediately', async () => {
+    generatedInputs = [];
+    generatedQueue = [
+      {
+        text: '',
+        error: 'Provider timed out; retry the request',
+        status: 503,
+        retryAfter: 1,
+      },
+      {
+        text: 'The last darkness dissolves into mist. The campsite is quiet again.',
+        provider: 'openrouter',
+        model: 'test/model',
+      },
+    ];
+    try {
+      const response = await postLlm('generate', clientBody({}));
+      const body = (await response.json()) as Record<string, unknown>;
+
+      expect(response.status).toBe(200);
+      // One bounded retry: the turn recovers with the real narration instead of
+      // the degraded "storyteller did not answer" envelope (GP-069).
+      expect(generatedInputs).toHaveLength(2);
+      expect(body.text).toContain('The last darkness dissolves');
+      expect(body.degraded).toBeUndefined();
+    } finally {
+      generatedQueue = [];
+    }
+  });
+
+  it('#312: degrades after the retry when the storyteller keeps failing', async () => {
+    generatedInputs = [];
+    generatedQueue = [
+      {
+        text: '',
+        error: 'Provider timed out; retry the request',
+        status: 503,
+        retryAfter: 1,
+      },
+      {
+        text: '',
+        error: 'Provider timed out; retry the request',
+        status: 503,
+        retryAfter: 1,
+      },
+    ];
+    try {
+      const response = await postLlm('generate', clientBody({}));
+      const body = (await response.json()) as Record<string, unknown>;
+
+      expect(response.status).toBe(200);
+      expect(generatedInputs).toHaveLength(2);
+      expect(body).toEqual({
+        parsed: false,
+        degraded: true,
+        reason: 'llm_generate_unavailable',
+        text: 'The Dungeon Master pauses. The storyteller service did not answer; try your action again.',
+      });
+    } finally {
+      generatedQueue = [];
+    }
+  });
+
+  it('#312: does not retry a non-retryable provider error', async () => {
+    generatedInputs = [];
+    generatedQueue = [
+      {
+        text: '',
+        error: 'LLM request failed',
+        status: 400,
+      },
+    ];
+    try {
+      const response = await postLlm('generate', clientBody({}));
+      const body = (await response.json()) as Record<string, unknown>;
+
+      expect(response.status).toBe(200);
+      expect(generatedInputs).toHaveLength(1);
+      expect(body.degraded).toBe(true);
+    } finally {
+      generatedQueue = [];
+    }
+  });
+
   it('emits the envelope shape log with the fallback session and prose length', async () => {
     loggedInfoEntries = [];
     generatedResult = {
