@@ -139,7 +139,7 @@ describeWithDb('character JSON export and import (#319)', () => {
       current_hit_points: 15,
     },
     equipment: [{ item_name: 'Shortsword', item_type: 'weapon', quantity: 1, equipped: true }],
-    inventory_items: [{ name: 'Rope', item_type: 'gear', quantity: 2, weight: 5 }],
+    inventory_items: [{ name: 'Rope', item_type: 'equipment', quantity: 2, weight: 5 }],
   };
 
   const makeCharacter = async (): Promise<string> => {

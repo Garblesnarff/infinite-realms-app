@@ -30,6 +30,8 @@ mock.module('../../../../../db/schema/index', () => ({
   // characters.ts now also loads spell-slot-data-access, which imports these.
   characters: {},
   characterSpells: {},
+  characterEquipment: {},
+  inventoryItems: {},
   characterSpellSlots: {},
   spellSlotUsageLog: {},
 }));
