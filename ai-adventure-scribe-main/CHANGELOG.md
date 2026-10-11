@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.35.1](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.35.0...v0.35.1) (2026-10-11)
+
+
+### Bug Fixes
+
+* **combat:** refuse unknown spell as 'not on your sheet' before combat-spell assessment ([#313](https://github.com/Garblesnarff/infinite-realms-app/issues/313)) ([#337](https://github.com/Garblesnarff/infinite-realms-app/issues/337)) ([5b685c8](https://github.com/Garblesnarff/infinite-realms-app/commit/5b685c81d9d8e9f2a44a8f4c83a13bd601214505))
+
 ## [0.35.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.34.0...v0.35.0) (2026-10-11)
 
 
