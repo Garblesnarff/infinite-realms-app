@@ -127,6 +127,13 @@
       "when": 1790913294162,
       "tag": "0017_create_feedback_table",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791612984402,
+      "tag": "0018_add_character_enhancement_selections",
+      "breakpoints": true
     }
   ]
 }

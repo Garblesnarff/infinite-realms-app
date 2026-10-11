@@ -502,4 +502,78 @@ describeWithDb('sheet feature uses and rests persist (#224)', () => {
     await db.delete(characters).where(eq(characters.id, thpCharId));
     await db.delete(campaigns).where(eq(campaigns.id, thpCampId));
   });
+
+  it('#204: personality and quirks persist — create with 2 traits, ideal, bond, flaw, 2 quirks', async () => {
+    // The issue's proving test: the wizard's wire body goes through POST
+    // /v1/characters, lands in the row, and comes back on GET for the sheet
+    // loader. Traits/ideals/bonds/flaws travel in the personality_notes
+    // envelope; quirks travel in enhancement_selections.
+    const envelope = JSON.stringify({
+      traits: ['Brave in battle', 'Loyal to a fault'],
+      ideals: ['Protect the innocent'],
+      bonds: ['My sister Mara'],
+      flaws: ['Quick to anger'],
+      inspiration: false,
+      lastInspiration: null,
+      inspirationHistory: [],
+    });
+    const quirks = [
+      { optionId: 'quirk-1', value: 'Scarred knuckles' },
+      { optionId: 'quirk-2', value: 'Whistles when nervous' },
+    ];
+
+    const created = (await (
+      await request('/v1/characters', 'POST', {
+        name: testId('personality-hero'),
+        race: 'Human',
+        class: 'Fighter',
+        level: 1,
+        personality_notes: envelope,
+        enhancement_selections: quirks,
+      })
+    ).json()) as { id: string };
+    expect(created.id).toBeTruthy();
+    saveCharacterId = created.id;
+
+    // DB readback: the values landed in the columns.
+    const [row] = await db.select().from(characters).where(eq(characters.id, created.id));
+    const stored = JSON.parse(row.personalityNotes as string);
+    expect(stored.traits).toEqual(['Brave in battle', 'Loyal to a fault']);
+    expect(stored.ideals).toEqual(['Protect the innocent']);
+    expect(stored.bonds).toEqual(['My sister Mara']);
+    expect(stored.flaws).toEqual(['Quick to anger']);
+    expect(row.enhancementSelections).toEqual(quirks);
+
+    // GET serves them back for the sheet loader (transformCharacterData reads
+    // these two fields).
+    const got = (await (await request(`/v1/characters/${created.id}`, 'GET')).json()) as {
+      personality_notes: string;
+      enhancement_selections: Array<{ optionId: string; value: string }>;
+    };
+    const served = JSON.parse(got.personality_notes);
+    expect(served.traits).toHaveLength(2);
+    expect(served.ideals).toEqual(['Protect the innocent']);
+    expect(got.enhancement_selections).toEqual(quirks);
+
+    // PUT round-trip: the sheet-save path writes enhancement_selections too.
+    const newQuirks = [{ optionId: 'quirk-3', value: 'Counts coins twice' }];
+    const put = await request(`/v1/characters/${created.id}`, 'PUT', {
+      enhancement_selections: newQuirks,
+    });
+    expect(put.status).toBe(200);
+    const [afterPut] = await db
+      .select()
+      .from(characters)
+      .where(eq(characters.id, created.id));
+    expect(afterPut.enhancementSelections).toEqual(newQuirks);
+    const gotAfterPut = (await (
+      await request(`/v1/characters/${created.id}`, 'GET')
+    ).json()) as {
+      enhancement_selections: Array<{ optionId: string; value: string }>;
+    };
+    expect(gotAfterPut.enhancement_selections).toEqual(newQuirks);
+
+    await db.delete(characters).where(eq(characters.id, created.id));
+    saveCharacterId = '';
+  });
 });

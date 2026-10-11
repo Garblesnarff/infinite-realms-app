@@ -81,9 +81,19 @@ const EnhancementDetails: React.FC<EnhancementDetailsProps> = ({ character }) =>
     );
   };
 
-  // Don't render if no enhancement data exists
+  // #204: empty state when the character has no enhancements.
   if (!enhancementSelections && !enhancementEffects) {
-    return null;
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <div className="text-center text-muted-foreground">
+            <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">No enhancements selected</p>
+            <p className="text-xs mt-1">Quirks picked during character creation will appear here.</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
