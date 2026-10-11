@@ -121,6 +121,12 @@ const PREMADES: Array<{ campaign: string; name: string; class: string; scores: S
     class: 'Sorcerer',
     scores: scores(8, 12, 14, 10, 10, 16),
   },
+  {
+    campaign: 'academy-of-arcane-gastronomy',
+    name: 'The Oathbound',
+    class: 'Paladin',
+    scores: scores(16, 10, 14, 10, 12, 14),
+  },
 ];
 
 function premadeSpellIds(premade: (typeof PREMADES)[number]): string[] {
@@ -134,8 +140,8 @@ function premadeSpellIds(premade: (typeof PREMADES)[number]): string[] {
 }
 
 describe('premade spells through the combat resolver (#2233)', () => {
-  it('covers all 15 premades of the 3 pre-built campaigns', () => {
-    expect(PREMADES).toHaveLength(15);
+  it('covers all 16 premades of the 3 pre-built campaigns', () => {
+    expect(PREMADES).toHaveLength(16);
     expect(new Set(PREMADES.map((premade) => premade.campaign)).size).toBe(3);
   });
 

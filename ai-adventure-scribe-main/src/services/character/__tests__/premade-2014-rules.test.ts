@@ -176,8 +176,8 @@ function sheetFor(row: TemplateRow): {
 }
 
 describe('premade starter templates follow 2014 rules (#2483)', () => {
-  it('reads all 30 seeded premades', () => {
-    expect(seeded).toHaveLength(30);
+  it('reads all 31 seeded premades', () => {
+    expect(seeded).toHaveLength(31);
   });
 
   describe('level 1 Ranger', () => {
@@ -220,6 +220,37 @@ describe('premade starter templates follow 2014 rules (#2483)', () => {
         expect(sheet.spells).toEqual({ cantrips: [], known: [], prepared: [] });
       },
     );
+  });
+
+  describe('level 1 Paladin', () => {
+    const row = premade('the-oathbound');
+
+    it('is the Academy Paladin premade (#317)', () => {
+      expect(row.starter_campaign_id).toBe('academy-of-arcane-gastronomy');
+      expect(row.class).toBe('Paladin');
+      expect(row.level).toBe(1);
+    });
+
+    it('is seeded with no slots and no spells', () => {
+      const { seed } = sheetFor(row);
+
+      expect(seed).not.toHaveProperty('spell_slots');
+      expect(seed.cantrips).toBe('');
+      expect(seed.known_spells).toBe('');
+      expect(seed.prepared_spells).toBe('');
+    });
+
+    it('sheet shows no spellcasting, no slots, no attack or DC', () => {
+      const { character, sheet } = sheetFor(row);
+      const stats = calculateAllCharacterStats(character);
+
+      expect(stats.spellcastingAbility).toBeUndefined();
+      expect(stats.spellSlots).toBeUndefined();
+      expect(stats.spellAttackBonus).toBeUndefined();
+      expect(stats.spellSaveDC).toBeUndefined();
+      expect(sheet.spellcasting).toBeNull();
+      expect(sheet.spells).toEqual({ cantrips: [], known: [], prepared: [] });
+    });
   });
 
   describe('a caster premade is unchanged', () => {
