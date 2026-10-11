@@ -19,6 +19,13 @@ const PricingPage: React.FC = () => (
       <meta property="og:description" content={launchPageContent.pricing.subtitle} />
       <meta property="og:type" content="website" />
       <meta property="og:url" content="https://infiniterealms.app/pricing" />
+      {/* #355: every Helmet page redeclares the full tag set — react-helmet-async
+          deletes managed (data-rh) tags it is not told to keep. */}
+      <meta property="og:image" content="https://infiniterealms.app/og-image.png" />
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content="Pricing | Infinite Realms" />
+      <meta name="twitter:description" content={launchPageContent.pricing.subtitle} />
+      <meta name="twitter:image" content="https://infiniterealms.app/og-image.png" />
       <link rel="canonical" href="https://infiniterealms.app/pricing" />
     </Helmet>
     <header className="px-6 py-4 border-b border-white/10">

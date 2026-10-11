@@ -21,6 +21,28 @@ const AppNotFound: React.FC<{ homeTo?: string; homeLabel?: string }> = ({
     <div className="container mx-auto px-4 py-16">
       <Helmet>
         <meta name="robots" content="noindex, nofollow" />
+        {/* #355: declare the full tag set — react-helmet-async deletes managed
+            (data-rh) tags a page does not redeclare. */}
+        <title>Page not found | InfiniteRealms</title>
+        <meta
+          name="description"
+          content="Create persistent worlds that evolve across generations. Build campaigns, characters, and stories that live forever in your own personal universe."
+        />
+        <meta property="og:title" content="Page not found | InfiniteRealms" />
+        <meta
+          property="og:description"
+          content="Create persistent worlds that evolve across generations. Build campaigns, characters, and stories that live forever in your own personal universe."
+        />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://infiniterealms.app/" />
+        <meta property="og:image" content="https://infiniterealms.app/og-image.png" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Page not found | InfiniteRealms" />
+        <meta
+          name="twitter:description"
+          content="Create persistent worlds that evolve across generations. Build campaigns, characters, and stories that live forever in your own personal universe."
+        />
+        <meta name="twitter:image" content="https://infiniterealms.app/og-image.png" />
       </Helmet>
       <IRPanel className="mx-auto max-w-lg p-8 text-center">
         <h1 className="text-2xl font-semibold text-infinite-gold mb-2">Page not found</h1>

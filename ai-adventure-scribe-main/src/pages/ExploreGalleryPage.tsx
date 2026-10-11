@@ -36,6 +36,17 @@ export const ExploreGalleryPage: React.FC = () => {
         />
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://infiniterealms.app/explore" />
+        {/* #355: every Helmet page redeclares the full tag set — react-helmet-async
+            deletes managed (data-rh) tags it is not told to keep, so a partial set
+            would wipe og:image / twitter cards set by index.html. */}
+        <meta property="og:image" content="https://infiniterealms.app/og-image.png" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Explore Adventures | InfiniteRealms" />
+        <meta
+          name="twitter:description"
+          content="Browse our collection of professionally crafted D&D campaigns. Pick a character and start your adventure immediately."
+        />
+        <meta name="twitter:image" content="https://infiniterealms.app/og-image.png" />
         {/* Canonical URL (#355) */}
         <link rel="canonical" href="https://infiniterealms.app/explore" />
       </Helmet>

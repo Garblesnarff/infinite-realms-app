@@ -14,6 +14,27 @@ export const LegalLayout: React.FC<LegalLayoutProps> = ({ title, path, lastUpdat
   <div className="ir-app min-h-screen">
     <Helmet>
       <title>{`${title} | Infinite Realms`}</title>
+      {/* #355: declare the full tag set — react-helmet-async deletes managed
+          (data-rh) tags a page does not redeclare. */}
+      <meta
+        name="description"
+        content={`${title} — Infinite Realms. Create persistent worlds that evolve across generations.`}
+      />
+      <meta property="og:title" content={`${title} | Infinite Realms`} />
+      <meta
+        property="og:description"
+        content={`${title} — Infinite Realms. Create persistent worlds that evolve across generations.`}
+      />
+      <meta property="og:type" content="website" />
+      <meta property="og:url" content={`https://infiniterealms.app${path}`} />
+      <meta property="og:image" content="https://infiniterealms.app/og-image.png" />
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content={`${title} | Infinite Realms`} />
+      <meta
+        name="twitter:description"
+        content={`${title} — Infinite Realms. Create persistent worlds that evolve across generations.`}
+      />
+      <meta name="twitter:image" content="https://infiniterealms.app/og-image.png" />
       <link rel="canonical" href={`https://infiniterealms.app${path}`} />
     </Helmet>
     <header className="border-b border-white/10 px-6 py-4">
