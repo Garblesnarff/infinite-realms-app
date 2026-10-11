@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
+import { HelmetProvider } from 'react-helmet-async';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { describe, it, expect, vi } from 'vitest';
 
@@ -63,19 +64,23 @@ const LocationProbe = (): React.JSX.Element => {
 
 const renderAt = (path: string): ReturnType<typeof render> =>
   render(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route
-          path="/app/*"
-          element={
-            <>
-              <ProtectedAppRoutes />
-              <LocationProbe />
-            </>
-          }
-        />
-      </Routes>
-    </MemoryRouter>,
+    // #355: ProtectedAppRoutes renders a fallback Helmet, so it needs the
+    // provider App.tsx supplies in production.
+    <HelmetProvider>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route
+            path="/app/*"
+            element={
+              <>
+                <ProtectedAppRoutes />
+                <LocationProbe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    </HelmetProvider>,
   );
 
 describe('custom campaign wizard flag (#2192)', () => {

@@ -150,6 +150,36 @@ const StarterCharacterSelectionPage: React.FC = () => {
     <>
       <Helmet>
         <title>Choose Your Character | {campaign.title} | Infinite Realms</title>
+        {/* #355: declare the full tag set — react-helmet-async deletes managed
+            (data-rh) tags a page does not redeclare. */}
+        <meta
+          name="description"
+          content={`Select a pre-built character for ${campaign.title}, or create your own hero.`}
+        />
+        <meta
+          property="og:title"
+          content={`Choose Your Character | ${campaign.title} | Infinite Realms`}
+        />
+        <meta
+          property="og:description"
+          content={`Select a pre-built character for ${campaign.title}, or create your own hero.`}
+        />
+        <meta property="og:type" content="website" />
+        <meta
+          property="og:url"
+          content={`https://infiniterealms.app/explore/${slug}/choose-character`}
+        />
+        <meta property="og:image" content="https://infiniterealms.app/og-image.png" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta
+          name="twitter:title"
+          content={`Choose Your Character | ${campaign.title} | Infinite Realms`}
+        />
+        <meta
+          name="twitter:description"
+          content={`Select a pre-built character for ${campaign.title}, or create your own hero.`}
+        />
+        <meta name="twitter:image" content="https://infiniterealms.app/og-image.png" />
       </Helmet>
 
       <div className="min-h-screen bg-background">

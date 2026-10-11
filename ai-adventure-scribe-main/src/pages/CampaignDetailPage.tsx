@@ -132,7 +132,22 @@ const CampaignDetailPage: React.FC = () => {
         <meta name="description" content={campaign.premise} />
         <meta property="og:title" content={`${campaign.title} | Infinite Realms`} />
         <meta property="og:description" content={campaign.premise} />
-        {campaign.coverImageUrl && <meta property="og:image" content={campaign.coverImageUrl} />}
+        {/* #355: declare the full tag set — react-helmet-async deletes managed
+            (data-rh) tags a page does not redeclare, so a partial set would wipe
+            the static og:image / twitter cards from index.html. */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={`https://infiniterealms.app/explore/${slug}`} />
+        <meta
+          property="og:image"
+          content={campaign.coverImageUrl ?? 'https://infiniterealms.app/og-image.png'}
+        />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={`${campaign.title} | Infinite Realms`} />
+        <meta name="twitter:description" content={campaign.premise} />
+        <meta
+          name="twitter:image"
+          content={campaign.coverImageUrl ?? 'https://infiniterealms.app/og-image.png'}
+        />
       </Helmet>
 
       <div className="min-h-screen bg-gradient-to-b from-gray-900 via-purple-900 to-gray-900">
