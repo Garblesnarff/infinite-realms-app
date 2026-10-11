@@ -166,6 +166,7 @@ mock.module('../../../../services/combat/combat-attack-service.js', () => ({
 }));
 mock.module('../../../../services/combat/data-access.js', () => ({
   listEquippedWeaponProfiles: async () => [],
+  listCarriedWeaponProfiles: async () => [],
   getEquippedWeaponProfile: async () => null,
   getParticipantAbilityProfile: async () => ({ scores: {}, level: 1, spellIds: ['chill-touch'] }),
   getActiveConditionNames: async () => [],

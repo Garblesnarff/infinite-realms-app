@@ -134,6 +134,7 @@ mock.module('../../../services/combat/data-access.js', () => ({
   getParticipantAbilityProfile: async (entity: { id: string }) => profile(entity),
   getActiveConditionNames: async () => [],
   listEquippedWeaponProfiles: async () => [],
+  listCarriedWeaponProfiles: async () => [],
   getEquippedWeaponProfile: async () => null,
   getWeaponAttack: async () => null,
   getCharacterWeapons: async () => [],
