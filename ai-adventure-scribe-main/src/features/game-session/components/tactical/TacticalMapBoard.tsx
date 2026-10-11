@@ -2,7 +2,7 @@ import { Maximize2, Minimize2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
-import { type Point, type TacticalEntity } from './tactical-map-state';
+import { entityFootprint, type Point, type TacticalEntity } from './tactical-map-state';
 import { TacticalMapCanvas } from './TacticalMapCanvas';
 import { useTacticalMapContext, type TacticalMapState } from './TacticalMapProvider';
 
@@ -67,13 +67,9 @@ function TacticalMapBoardView({
     const occupant = map.entities.find(
       (entity) =>
         point.x >= entity.x &&
-        point.x <
-          entity.x +
-            { tiny: 1, small: 1, medium: 1, large: 2, huge: 3, gargantuan: 4 }[entity.size] &&
+        point.x < entity.x + entityFootprint(entity.size) &&
         point.y >= entity.y &&
-        point.y <
-          entity.y +
-            { tiny: 1, small: 1, medium: 1, large: 2, huge: 3, gargantuan: 4 }[entity.size],
+        point.y < entity.y + entityFootprint(entity.size),
     );
     if (occupant && occupant.id === activePlayer?.id) {
       const response = await request<{ moves: Point[] }>(
