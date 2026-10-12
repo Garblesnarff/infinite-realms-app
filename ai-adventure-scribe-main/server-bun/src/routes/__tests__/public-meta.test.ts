@@ -26,16 +26,33 @@ describe('injectPublicMeta (#227 AU-06)', () => {
     const siteUrl = getSiteConfig().url;
     const html = injectPublicMeta(REPO_INDEX, PUBLIC_PAGE_METAS[0], siteUrl);
 
+    // Since #371 index.html marks these tags data-rh="true" so the client
+    // Helmet replaces them; the server keeps that marker on its replacement.
     expect(html).toContain('<title>Pricing | Infinite Realms</title>');
     expect(html).toContain(
-      '<meta name="description" content="No credit card to start. Cancel Legend any time.">',
+      '<meta data-rh="true" name="description" content="No credit card to start. Cancel Legend any time.">',
     );
-    expect(html).toContain('<meta property="og:title" content="Pricing | Infinite Realms">');
-    expect(html).toContain(`<meta property="og:url" content="${siteUrl}/pricing">`);
+    expect(html).toContain(
+      '<meta data-rh="true" property="og:title" content="Pricing | Infinite Realms">',
+    );
+    expect(html).toContain(
+      `<meta data-rh="true" property="og:url" content="${siteUrl}/pricing">`,
+    );
     expect(html).toContain(`<link rel="canonical" href="${siteUrl}/pricing">`);
-    // The landing page's own tags are gone.
+    // Exactly one description tag, and none of the landing page's own tags.
+    expect(html.match(/name="description"/g)).toHaveLength(1);
+    expect(html).not.toContain('Create persistent worlds that evolve across generations');
     expect(html).not.toContain('<title>InfiniteRealms - Your World, Your Story, Forever</title>');
     expect(html).not.toContain('content="https://infiniterealms.app/"');
+  });
+
+  it('also replaces tags that carry no data-rh marker', () => {
+    const plain = '<head><title>x</title><meta name="description" content="old" /></head>';
+    const html = injectPublicMeta(plain, PUBLIC_PAGE_METAS[1], getSiteConfig().url);
+    expect(html).toContain(
+      `<meta name="description" content="${PUBLIC_PAGE_METAS[1].description}">`,
+    );
+    expect(html).not.toContain('content="old"');
   });
 
   it('leaves an existing canonical link alone', () => {
