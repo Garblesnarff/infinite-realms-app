@@ -1,3 +1,5 @@
+import { expect } from 'vitest';
+
 import type { Character, CharacterClass, CharacterRace, Subrace, Spell } from '@/types/character';
 
 /**
