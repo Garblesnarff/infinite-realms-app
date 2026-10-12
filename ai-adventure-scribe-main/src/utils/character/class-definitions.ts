@@ -6,6 +6,7 @@
  */
 
 import type { ClassFeature, CharacterResources } from '@/types/combat';
+import type { ClassFeatureName } from '@/types/combat-features';
 
 /**
  * Get class features for a given class and level
@@ -24,12 +25,14 @@ export const CLASS_FEATURES_MAP: Record<string, (level: number) => ClassFeature[
         level: 1,
         type: 'bonus_action',
         usesPerRest: 'long',
-        maxUses: level >= 20 ? 999 : level < 3 ? 2 : level < 6 ? 3 : level < 12 ? 4 : level < 17 ? 5 : 6,
-        currentUses: level >= 20 ? 999 : level < 3 ? 2 : level < 6 ? 3 : level < 12 ? 4 : level < 17 ? 5 : 6,
+        maxUses:
+          level >= 20 ? 999 : level < 3 ? 2 : level < 6 ? 3 : level < 12 ? 4 : level < 17 ? 5 : 6,
+        currentUses:
+          level >= 20 ? 999 : level < 3 ? 2 : level < 6 ? 3 : level < 12 ? 4 : level < 17 ? 5 : 6,
       });
 
       features.push({
-        name: 'unarmored_defense',
+        name: 'unarmored_defense' as ClassFeatureName,
         displayName: 'Unarmored Defense',
         description:
           'While you are not wearing any armor, your Armor Class equals 10 + your Dexterity modifier + your Constitution modifier. You can use a shield and still gain this benefit.',
@@ -175,7 +178,7 @@ export const CLASS_FEATURES_MAP: Record<string, (level: number) => ClassFeature[
       });
 
       features.push({
-        name: 'unarmored_defense',
+        name: 'unarmored_defense' as ClassFeatureName,
         displayName: 'Unarmored Defense',
         description:
           'While you are wearing no armor and not wielding a shield, your AC equals 10 + your Dexterity modifier + your Wisdom modifier.',
@@ -248,7 +251,7 @@ export const CLASS_FEATURES_MAP: Record<string, (level: number) => ClassFeature[
 
     if (level >= 2) {
       features.push({
-        name: 'wild_shape',
+        name: 'wild_shape' as ClassFeatureName,
         displayName: 'Wild Shape',
         description:
           'You can use your action to magically assume the shape of a beast that you have seen before.',
@@ -288,10 +291,21 @@ export function getHitDie(className: string): number {
 }
 
 /**
+ * Character resources plus the druid Wild Shape pool that `CharacterResources`
+ * does not model.
+ */
+export interface InitialCharacterResources extends CharacterResources {
+  wildShape?: { max: number; current: number };
+}
+
+/**
  * Initialize character resources based on class and level
  */
-export function getInitialCharacterResources(className: string, level: number): CharacterResources {
-  const resources: CharacterResources = {
+export function getInitialCharacterResources(
+  className: string,
+  level: number,
+): InitialCharacterResources {
+  const resources: InitialCharacterResources = {
     hitDice: {
       [`d${getHitDie(className)}`]: { max: level, current: level },
     },
@@ -300,8 +314,10 @@ export function getInitialCharacterResources(className: string, level: number): 
   switch (className.toLowerCase()) {
     case 'barbarian':
       resources.rages = {
-        max: level >= 20 ? 999 : level < 3 ? 2 : level < 6 ? 3 : level < 12 ? 4 : level < 17 ? 5 : 6,
-        current: level >= 20 ? 999 : level < 3 ? 2 : level < 6 ? 3 : level < 12 ? 4 : level < 17 ? 5 : 6,
+        max:
+          level >= 20 ? 999 : level < 3 ? 2 : level < 6 ? 3 : level < 12 ? 4 : level < 17 ? 5 : 6,
+        current:
+          level >= 20 ? 999 : level < 3 ? 2 : level < 6 ? 3 : level < 12 ? 4 : level < 17 ? 5 : 6,
       };
       break;
 

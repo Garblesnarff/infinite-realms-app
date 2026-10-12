@@ -279,8 +279,7 @@ const readStoredEnhancementSelections = (
   raw: CharacterRow['enhancement_selections'],
 ): Character['enhancementSelections'] | undefined => {
   if (raw == null) return undefined;
-  const parsed =
-    typeof raw === 'string' ? parseJsonField<unknown>(raw, undefined) : raw;
+  const parsed = typeof raw === 'string' ? parseJsonField<unknown>(raw, undefined) : raw;
   return Array.isArray(parsed) && parsed.length > 0
     ? (parsed as Character['enhancementSelections'])
     : undefined;
@@ -399,7 +398,7 @@ export const transformCharacterData = (
     id: characterData.id,
     user_id: characterData.user_id,
     name: characterData.name,
-    description: characterData.description,
+    description: characterData.description as string | undefined,
     race,
     subrace: resolveSubrace(race, characterData.subrace),
     class: resolveClass(characterData.class),
@@ -419,9 +418,9 @@ export const transformCharacterData = (
           intelligence: statsData.intelligence,
           wisdom: statsData.wisdom,
           charisma: statsData.charisma,
-          armor_class: statsData.armor_class,
-          max_hit_points: statsData.max_hit_points,
-          current_hit_points: statsData.current_hit_points,
+          armor_class: statsData.armor_class as number | undefined,
+          max_hit_points: statsData.max_hit_points as number | undefined,
+          current_hit_points: statsData.current_hit_points as number | undefined,
           // #2517: carried through so the sheet can show the end state.
           vital_state: statsData.vital_state ?? undefined,
           died_at: statsData.died_at ?? undefined,
@@ -453,33 +452,32 @@ export const transformCharacterData = (
     isHidden: characterData.is_hidden || false,
     stealthCheckBonus: characterData.stealth_check_bonus || 0,
     // Magic Items
-    inventory:
-      equipmentData?.map((item) => ({
-        itemId: item.id,
-        // #205: the row id is the React key / toggle target; the name renders and saves from here.
-        // Corrupted rows (UUID in item_name) resolve to the catalog name or "Unknown item".
-        itemName: resolveStoredItemName(item.item_name),
-        itemType: item.item_type,
-        description: item.description || undefined,
-        quantity: item.quantity || 1,
-        equipped: item.equipped || false,
-        // Magic item properties
-        isMagic: item.is_magic || false,
-        magicBonus: item.magic_bonus || 0,
-        magicProperties: parseJsonField<string[]>(item.magic_properties, []),
-        requiresAttunement: item.requires_attunement || false,
-        isAttuned: item.is_attuned || false,
-        attunementRequirements: item.attunement_requirements || '',
-        magicItemType: item.magic_item_type || '',
-        magicItemRarity: item.magic_item_rarity || 'common',
-        magicEffects: parseJsonField<Record<string, unknown>>(item.magic_effects, {}),
-      })) || [],
+    inventory: (equipmentData?.map((item) => ({
+      itemId: item.id,
+      // #205: the row id is the React key / toggle target; the name renders and saves from here.
+      // Corrupted rows (UUID in item_name) resolve to the catalog name or "Unknown item".
+      itemName: resolveStoredItemName(item.item_name),
+      itemType: item.item_type,
+      description: item.description || undefined,
+      quantity: item.quantity || 1,
+      equipped: item.equipped || false,
+      // Magic item properties
+      isMagic: item.is_magic || false,
+      magicBonus: item.magic_bonus || 0,
+      magicProperties: parseJsonField<string[]>(item.magic_properties, []),
+      requiresAttunement: item.requires_attunement || false,
+      isAttuned: item.is_attuned || false,
+      attunementRequirements: item.attunement_requirements || '',
+      magicItemType: item.magic_item_type || '',
+      magicItemRarity: item.magic_item_rarity || 'common',
+      magicEffects: parseJsonField<Record<string, unknown>>(item.magic_effects, {}),
+    })) || []) as NonNullable<Character['inventory']>,
     // AI-generated fields
-    avatar_url: characterData.avatar_url,
-    image_url: characterData.image_url,
-    appearance: characterData.appearance,
-    personality_traits: characterData.personality_traits,
-    backstory_elements: characterData.backstory_elements,
+    avatar_url: characterData.avatar_url as string | undefined,
+    image_url: characterData.image_url as string | undefined,
+    appearance: characterData.appearance as string | undefined,
+    personality_traits: characterData.personality_traits as string | undefined,
+    backstory_elements: characterData.backstory_elements as string | undefined,
     // #2701: without this, a successful save followed by the silent refresh
     // replaced freshly saved notes with undefined.
     sessionNotes: characterData.session_notes ?? undefined,
@@ -512,9 +510,7 @@ export const transformCharacterData = (
     preparedSpells: parseSpellListField(characterData.prepared_spells),
     ritualSpells: parseSpellListField(characterData.ritual_spells),
     classFeatures: readStoredClassFeatures(characterData.class_features),
-    enhancementSelections: readStoredEnhancementSelections(
-      characterData.enhancement_selections,
-    ),
+    enhancementSelections: readStoredEnhancementSelections(characterData.enhancement_selections),
     // #218 step 4: the story writer applies conditions server-side; the sheet only renders
     // what the server serves. A missing or malformed entry is dropped, never rendered.
     conditions: Array.isArray(characterData.conditions)

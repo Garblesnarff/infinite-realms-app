@@ -1,12 +1,12 @@
 import { SRD_CLASS_TABLE } from '../../shared/srd-class-data';
 
-import type { Character } from '@/types/character';
+import type { AbilityScores } from '@/types/character';
 
 /**
  * ⚡ Bolt: Static map of spellcasting abilities for each class.
  * Moved outside to avoid redundant re-allocation on every call.
  */
-export const SPELLCASTING_ABILITY_MAP: Record<string, keyof Character['abilityScores']> = {
+export const SPELLCASTING_ABILITY_MAP: Record<string, keyof AbilityScores> = {
   Wizard: 'intelligence',
   Sorcerer: 'charisma',
   Warlock: 'charisma',

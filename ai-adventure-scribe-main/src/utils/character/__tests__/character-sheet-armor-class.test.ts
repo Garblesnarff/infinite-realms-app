@@ -79,7 +79,7 @@ describe('character sheet armor class', () => {
     const character = {
       id: 'missing-ac',
       character_stats: { armor_class: null },
-    } as Character;
+    } as unknown as Character;
 
     expect(getCharacterSheetArmorClass(character)).toBeNull();
     expect(warn).toHaveBeenCalledWith('SHEET_STAT_MISSING', {

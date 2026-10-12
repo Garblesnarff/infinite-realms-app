@@ -185,21 +185,21 @@ describe('data-transformers', () => {
       expect(character.race?.name).toBe('Forest Giant');
       expect(character.class?.name).toBe('Barbarian');
       expect(character.level).toBe(5);
-      expect(character.abilityScores.strength.score).toBe(18);
-      expect(character.abilityScores.strength.modifier).toBe(4);
+      expect(character.abilityScores!.strength.score).toBe(18);
+      expect(character.abilityScores!.strength.modifier).toBe(4);
       expect(character.equipment).toContain('Greatsword');
       expect(character.equipment).toContain('Ring of Protection');
 
       // Check inventory mapping
       expect(character.inventory).toHaveLength(3);
-      const ring = character.inventory.find((i) => i.itemId === 'item-2');
+      const ring = character.inventory!.find((i) => i.itemId === 'item-2');
       expect(ring?.isMagic).toBe(true);
       expect(ring?.magicBonus).toBe(1);
       expect(ring?.magicProperties).toEqual(['warding']);
       expect(ring?.magicEffects).toEqual({ ac: 1 });
       expect(ring?.isAttuned).toBe(true);
 
-      const dagger = character.inventory.find((i) => i.itemId === 'item-3');
+      const dagger = character.inventory!.find((i) => i.itemId === 'item-3');
       expect(dagger?.quantity).toBe(1);
       expect(dagger?.equipped).toBe(false);
 
@@ -487,7 +487,7 @@ describe('data-transformers', () => {
 
       const character = transformCharacterData(minimalRow, null, null);
 
-      expect(character.abilityScores.strength.score).toBe(10);
+      expect(character.abilityScores!.strength.score).toBe(10);
       expect(character.equipment).toEqual([]);
       expect(character.inventory).toEqual([]);
       expect(character.cantrips).toEqual([]);
@@ -569,7 +569,7 @@ describe('data-transformers', () => {
         });
 
         it('reads absent or empty picks as undefined so the empty state renders', () => {
-          for (const empty of [null, undefined, '[]', []] as const) {
+          for (const empty of [null, undefined, '[]', []]) {
             const character = transformCharacterData(
               { ...mockCharacterRow, enhancement_selections: empty },
               mockStats,
