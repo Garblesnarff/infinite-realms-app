@@ -72,8 +72,15 @@ process.on('SIGINT', () => void shutdown('SIGINT'));
 // are surfaced as degraded when they lack the required capability flags.
 await validateConfiguredModels();
 
+// A deploy hands :PORT off to a standby copy of the new code while this process
+// restarts (#422), so the socket is opened with SO_REUSEPORT: two processes can
+// listen on the port at once and the kernel spreads new connections between
+// them. The standby (IR_STANDBY=1) only serves requests; it starts none of the
+// background sweeps below, so the handoff never runs a sweep twice.
+const IS_STANDBY = process.env.IR_STANDBY === '1';
+
 // Start server
-app.listen(PORT, () => {
+app.listen({ port: PORT, reusePort: true }, () => {
   logger.info({
     msg: `InfiniteRealms Elysia server listening on http://localhost:${PORT}`,
     port: PORT,
@@ -83,6 +90,10 @@ app.listen(PORT, () => {
     msg: `Swagger documentation available at http://localhost:${PORT}/swagger`,
   });
   logAlertingConfiguration();
+  if (IS_STANDBY) {
+    logger.info({ msg: 'Standby process (deploy handoff): background sweeps not started' });
+    return;
+  }
   startModelHealthChecks();
   // The server's existing scheduled path, same as the model health checks above: hourly in
   // this process rather than a crontab entry, so it needs no host change (#2556).

@@ -48,32 +48,48 @@ function readEnvFile(filePath) {
   return parsed;
 }
 
+const LIVE_APP = {
+  name: 'infiniterealms-bun',
+  script: 'bun',
+  args: 'run src/index.ts',
+  cwd: '/var/www/infiniterealms/ai-adventure-scribe-main/server-bun',
+  instances: 1,
+  exec_mode: 'fork',
+  env: {
+    // Spread first so the explicit settings below always win over the file.
+    ...readEnvFile(ALERTS_ENV_PATH),
+    NODE_ENV: 'production',
+    TRUST_PROXY_HEADERS: 'true',
+    PORT: 8888,
+    VITE_MANIFEST_PATH: '/var/www/infiniterealms/ai-adventure-scribe-main/dist/.vite/manifest.json',
+  },
+  error_file: '/var/log/infiniterealms/bun-error.log',
+  out_file: '/var/log/infiniterealms/bun-out.log',
+  log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+  merge_logs: true,
+  autorestart: true,
+  kill_timeout: 8000,
+  max_memory_restart: '1G',
+  watch: false,
+};
+
+/**
+ * Deploy handoff standby (#422). ops/auto-deploy.sh starts it with
+ * `IR_INCLUDE_STANDBY=1 pm2 start <this file> --only infiniterealms-bun-standby`,
+ * so it serves :8888 (SO_REUSEPORT) while the live app restarts, then deletes
+ * it. It is listed only when IR_INCLUDE_STANDBY=1, so a plain
+ * `pm2 start ecosystem.production.config.cjs` still starts the live app alone.
+ * Same config as the live app, but it never restarts itself and runs no
+ * background sweeps (IR_STANDBY=1, see server-bun/src/index.ts).
+ */
+const STANDBY_APP = {
+  ...LIVE_APP,
+  name: 'infiniterealms-bun-standby',
+  env: { ...LIVE_APP.env, IR_STANDBY: '1' },
+  autorestart: false,
+  max_memory_restart: undefined,
+};
+
 module.exports = {
-  apps: [
-    {
-      name: 'infiniterealms-bun',
-      script: 'bun',
-      args: 'run src/index.ts',
-      cwd: '/var/www/infiniterealms/ai-adventure-scribe-main/server-bun',
-      instances: 1,
-      exec_mode: 'fork',
-      env: {
-        // Spread first so the explicit settings below always win over the file.
-        ...readEnvFile(ALERTS_ENV_PATH),
-        NODE_ENV: 'production',
-        TRUST_PROXY_HEADERS: 'true',
-        PORT: 8888,
-        VITE_MANIFEST_PATH:
-          '/var/www/infiniterealms/ai-adventure-scribe-main/dist/.vite/manifest.json',
-      },
-      error_file: '/var/log/infiniterealms/bun-error.log',
-      out_file: '/var/log/infiniterealms/bun-out.log',
-      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
-      merge_logs: true,
-      autorestart: true,
-      kill_timeout: 8000,
-      max_memory_restart: '1G',
-      watch: false,
-    },
-  ],
+  apps: process.env.IR_INCLUDE_STANDBY === '1' ? [LIVE_APP, STANDBY_APP] : [LIVE_APP],
 };
