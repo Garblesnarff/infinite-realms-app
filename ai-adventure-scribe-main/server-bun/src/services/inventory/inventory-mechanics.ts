@@ -8,18 +8,13 @@
  * @module server/services/inventory/inventory-mechanics
  */
 
+import { carryingCapacityForStrength } from '../../../../shared/carrying-capacity';
 import { ENCUMBRANCE_THRESHOLDS, SPEED_PENALTIES } from '../../types/inventory.js';
 
 import type { EncumbranceLevel, EncumbranceStatus } from '../../types/inventory.js';
 
 export class InventoryMechanics {
-  /**
-   * Calculate carrying capacity (STR * 15)
-   * (PHB pg. 176)
-   */
-  static calculateCarryingCapacity(strength: number): number {
-    return strength * 15;
-  }
+  static readonly calculateCarryingCapacity = carryingCapacityForStrength;
 
   /**
    * Determine encumbrance status based on strength and current weight

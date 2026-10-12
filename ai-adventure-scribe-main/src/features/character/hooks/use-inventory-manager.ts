@@ -1,5 +1,7 @@
 import { useState } from 'react';
 
+import { carryingCapacityForStrength } from '../../../../shared/carrying-capacity';
+
 import type { Equipment } from '@/data/equipmentOptions';
 import type { Character } from '@/types/character';
 
@@ -103,7 +105,9 @@ export const useInventoryManager = (
     (total, item) => total + (item.weight || 0) * item.quantity,
     0,
   );
-  const carryingCapacity = (character?.abilityScores?.strength?.score || 10) * 15; // STR x 15 lbs
+  const carryingCapacity = carryingCapacityForStrength(
+    character?.abilityScores?.strength?.score || 10,
+  );
 
   /**
    * Add item to inventory
