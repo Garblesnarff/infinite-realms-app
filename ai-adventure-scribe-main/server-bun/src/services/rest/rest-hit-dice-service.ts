@@ -80,11 +80,14 @@ export class RestHitDiceService {
    * tracked per class) — baking a single `class × total level` row would
    * permanently give e.g. a Fighter 2 / Wizard 2 four d10s instead of 2d10+2d6.
    *
-   * Race guard (strategist round 2): the route resolve hook calls getById on
+   * Race guard (strategist round 3): the route resolve hook calls getById on
    * every /v1/characters/:id/* request and the sheet fires several GETs in
-   * parallel, so concurrent first-GETs used to double-insert (a Fighter 3
-   * could get 6d10). Each class row is created by one atomic
-   * INSERT ... WHERE NOT EXISTS — no unique constraint or migration needed.
+   * parallel. A bare INSERT ... WHERE NOT EXISTS is not atomic under READ
+   * COMMITTED (both transactions can pass the NOT EXISTS check before either
+   * inserts), and there is no unique index — so the whole check-and-insert
+   * runs inside a transaction holding a pg advisory lock keyed on the
+   * character id. The lock is xact-scoped: the second caller blocks until the
+   * first commits, then sees its rows in the existence check.
    */
   static async ensureHitDice(
     characterId: string,
@@ -94,32 +97,41 @@ export class RestHitDiceService {
     classLevels?: unknown,
   ): Promise<CharacterHitDice[]> {
     await this.verifyCharacterOwnership(characterId, userId);
-    const existing = await this.getHitDice(characterId, userId);
-    if (existing.length > 0) return existing;
-    const parsed = parseClassLevels(classLevels);
-    const toCreate =
-      parsed.length > 1
-        ? parsed.map((entry) => ({ name: entry.className, dice: entry.level }))
-        : [
-            {
-              name: (className ?? '').trim() || 'Unknown',
-              dice: Math.max(1, Math.trunc(level) || 1),
-            },
-          ];
-    for (const row of toCreate) {
-      // The pg driver sends parameters untyped, so the casts are explicit —
-      // same class of bug as the #170/#264 CASE-expression casts.
-      await db.execute(sql`
-        INSERT INTO character_hit_dice (character_id, class_name, die_type, total_dice, used_dice)
-        SELECT ${characterId}::uuid, ${row.name}, ${this.getHitDieType(row.name)}, ${row.dice}::integer, 0
-        WHERE NOT EXISTS (
-          SELECT 1 FROM character_hit_dice
-          WHERE character_id = ${characterId}::uuid AND class_name = ${row.name}
-        )
-      `);
-    }
-    // Re-read: a concurrent caller may have won the insert for a class.
-    return this.getHitDice(characterId, userId);
+    return db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${characterId}::text, 0))`,
+      );
+      const existing = await tx.query.characterHitDice.findMany({
+        where: eq(characterHitDice.characterId, characterId),
+        orderBy: characterHitDice.className,
+      });
+      if (existing.length > 0) return existing;
+      const parsed = parseClassLevels(classLevels);
+      const toCreate =
+        parsed.length > 1
+          ? parsed.map((entry) => ({ name: entry.className, dice: entry.level }))
+          : [
+              {
+                name: (className ?? '').trim() || 'Unknown',
+                dice: Math.max(1, Math.trunc(level) || 1),
+              },
+            ];
+      for (const row of toCreate) {
+        await tx.insert(characterHitDice).values({
+          characterId,
+          className: row.name,
+          dieType: this.getHitDieType(row.name),
+          totalDice: row.dice,
+          usedDice: 0,
+        });
+      }
+      // Re-read inside the same transaction: deterministic class-name order,
+      // matching getHitDice.
+      return tx.query.characterHitDice.findMany({
+        where: eq(characterHitDice.characterId, characterId),
+        orderBy: characterHitDice.className,
+      });
+    });
   }
 
   /**

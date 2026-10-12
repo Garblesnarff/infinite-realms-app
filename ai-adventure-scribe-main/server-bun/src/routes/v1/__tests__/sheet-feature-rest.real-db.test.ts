@@ -1420,4 +1420,49 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
     await db.delete(characters).where(eq(characters.id, charId));
     await db.delete(campaigns).where(eq(campaigns.id, campId));
   });
+
+  it('#264: five concurrent ensureHitDice calls create exactly one hit-dice row set', async () => {
+    if (!hasRealDb) return;
+    const { RestHitDiceService } = await import(
+      '../../../services/rest/rest-hit-dice-service.js'
+    );
+
+    const [{ id: campId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('264-race-direct-camp') })
+      .returning({ id: campaigns.id });
+    const [{ id: charId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId: campId,
+        name: testId('264-race-direct-hero'),
+        level: 3,
+        class: 'Fighter',
+      })
+      .returning({ id: characters.id });
+
+    // Tighter race than the GET test above: the service calls run with no
+    // route machinery between them, so all five hit the check-and-insert
+    // together. The advisory lock serializes them; every caller sees one row.
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        RestHitDiceService.ensureHitDice(charId, userId, 'Fighter', 3, null),
+      ),
+    );
+    for (const created of results) {
+      expect(created).toHaveLength(1);
+      expect(created[0].totalDice).toBe(3);
+      expect(created[0].usedDice).toBe(0);
+    }
+    const stored = await db
+      .select()
+      .from(characterHitDice)
+      .where(eq(characterHitDice.characterId, charId));
+    expect(stored).toHaveLength(1);
+
+    await db.delete(characterHitDice).where(eq(characterHitDice.characterId, charId));
+    await db.delete(characters).where(eq(characters.id, charId));
+    await db.delete(campaigns).where(eq(campaigns.id, campId));
+  });
 });
