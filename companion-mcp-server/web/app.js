@@ -117,7 +117,7 @@ function needIds() {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Scripted demo: join → scene → speak → roll. */
-async function runDemo() {
+export async function runDemo() {
   if (state.running) return;
   if (needIds()) return;
   state.running = true;
@@ -184,7 +184,7 @@ async function runDemo() {
 }
 
 /** Map free text to the companion tools. */
-async function handleInput(text) {
+export async function handleInput(text) {
   const lower = text.toLowerCase().trim();
   if (!lower) return;
   logInfo(`you: ${text}`);
@@ -301,7 +301,7 @@ function setupMic() {
   });
 }
 
-async function main() {
+export async function main(mcpUrl = '/mcp') {
   $('#send').addEventListener('click', () => {
     const text = $('#input').value;
     $('#input').value = '';
@@ -318,7 +318,7 @@ async function main() {
   setupMic();
 
   try {
-    state.client = new McpHttpClient('/mcp');
+    state.client = new McpHttpClient(mcpUrl);
     await state.client.connect();
     const tools = await state.client.listTools();
     $('#status').textContent = `connected · ${tools.length} tools: ${tools.map((t) => t.name).join(', ')}`;
@@ -331,5 +331,3 @@ async function main() {
     logInfo('failed to connect to /mcp — is the server running?');
   }
 }
-
-void main();

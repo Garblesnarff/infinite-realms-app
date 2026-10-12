@@ -70,12 +70,16 @@ for local demo use; do not expose it to the internet.
   definitions, then a real MCP client that lists the tools and runs
   `join → get_scene → speak → roll` over Streamable HTTP, plus the
   error-path and DNS-rebinding-guard tests.
-- `web-client.test.ts` — headless Chromium (CDP) drives the real simulated
-  Alexa+ page against the stub API: the scripted demo performs
-  `join_party → get_scene → speak_as_companion → roll_for_companion` in
-  order, and free text input maps to the right tool. (This Chromium build
-  blocks loopback navigations, so the test injects the page and relays its
-  MCP fetches through CDP Fetch interception.)
+- `web-client.test.ts` — imports the page's real client/demo code under Bun,
+  renders the served HTML with the app's existing jsdom dependency, and runs
+  against the real MCP HTTP server and stub API. It asserts all four calls
+  in order, the short final reply, and free text mapping. No Chrome required.
+
+Manual browser check: start the server, open the local page, enter valid
+session/character ids, and run the scripted demo. Confirm the four tool log
+entries, the final Perception reply and spoken audio. Send `look around`
+and confirm a scene reply. If speech recognition is available, check the
+microphone button too. These browser/audio checks are manual, not CI gates.
 
 `bun run typecheck` typechecks.
 

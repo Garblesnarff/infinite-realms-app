@@ -9,16 +9,17 @@
  * layer.
  */
 
-import { createServer, type IncomingMessage, type Server as HttpServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
+import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from 'node:http';
 import { dirname, extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
-import { CompanionApiClient } from './ir-client.js';
 import { tools } from './tools.js';
+
+import type { CompanionApiClient } from './ir-client.js';
 
 export const SERVER_NAME = 'infinite-realms-companion';
 export const SERVER_VERSION = '1.0.0';
@@ -104,7 +105,7 @@ const STATIC_CONTENT_TYPES: Record<string, string> = {
  */
 async function serveWebClient(
   req: IncomingMessage,
-  res: import('node:http').ServerResponse,
+  res: ServerResponse,
 ): Promise<boolean> {
   if (req.method !== 'GET' && req.method !== 'HEAD') return false;
   const urlPath = (req.url ?? '/').split('?')[0].split('#')[0];

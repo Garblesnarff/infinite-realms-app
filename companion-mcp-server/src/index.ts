@@ -9,9 +9,10 @@
  * see .env.example.
  */
 
-import { config } from 'dotenv';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { config } from 'dotenv';
 
 import { loadConfig } from './config.js';
 import { CompanionApiClient } from './ir-client.js';
