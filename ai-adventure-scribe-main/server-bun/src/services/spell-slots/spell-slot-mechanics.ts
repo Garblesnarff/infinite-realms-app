@@ -104,7 +104,73 @@ export const CLASS_SPELLCASTING: Record<ClassName, ClassSpellcasting> = {
   Monk: { className: 'Monk', casterType: 'none', spellcastingAbility: null, spellsKnownOrPrepared: null },
 };
 
+/**
+ * Case-insensitive class-name lookup against the class table, mirroring
+ * `SpellSlotsService.normalizeClassName`. Kept here so the pure row builder
+ * above stays in the single-slot-source module.
+ */
+function normalizeClassName(raw: string | null | undefined): ClassName | null {
+  const normalized = (raw ?? '').trim().toLowerCase();
+  if (!normalized) return null;
+  const match = (Object.keys(CLASS_SPELLCASTING) as ClassName[]).find(
+    (name) => name.toLowerCase() === normalized,
+  );
+  return match ?? null;
+}
+
 export class SpellSlotMechanics {
+  /**
+   * #270: rows to seed `character_spell_slots` for a character, from the single
+   * slot source (the 2014 5e tables above). Used at creation and at level-up.
+   *
+   * Non-casters, pact casters (warlock — pact magic is a separate pool the
+   * slot rows do not track, #217) and unrecognized class names yield no rows;
+   * multiclass characters use the PHB combined progression, the same rule
+   * `ensureSpellSlotRow` applies on a first cast.
+   */
+  static seedRowsForCharacter(
+    className: string | null | undefined,
+    level: number,
+    classLevels: unknown,
+  ): Array<{ spellLevel: number; totalSlots: number }> {
+    if (!Number.isInteger(level) || level < 1 || level > 20) {
+      return [];
+    }
+
+    const parsedLevels = Array.isArray(classLevels)
+      ? classLevels
+          .map((entry) => {
+            const raw = entry as { className?: unknown; level?: unknown };
+            const name =
+              typeof raw.className === 'string' ? normalizeClassName(raw.className) : null;
+            const entryLevel = typeof raw.level === 'number' && raw.level > 0 ? raw.level : 0;
+            return name && entryLevel > 0 ? { className: name, level: entryLevel } : null;
+          })
+          .filter((entry): entry is { className: ClassName; level: number } => entry !== null)
+      : [];
+
+    const slots: Record<number, number> =
+      parsedLevels.length > 1
+        ? SpellSlotMechanics.calculateMulticlassSpellSlots(parsedLevels).slots
+        : (() => {
+            const name = normalizeClassName(className);
+            if (!name) return {};
+            return SpellSlotMechanics.calculateSpellSlots(name, level).slots;
+          })();
+
+    return Object.entries(slots)
+      .map(([slotLevel, total]) => ({ spellLevel: Number(slotLevel), totalSlots: total }))
+      .filter(
+        ({ spellLevel, totalSlots }) =>
+          Number.isInteger(spellLevel) &&
+          spellLevel >= 1 &&
+          spellLevel <= 9 &&
+          Number.isInteger(totalSlots) &&
+          totalSlots > 0,
+      )
+      .sort((a, b) => a.spellLevel - b.spellLevel);
+  }
+
   /**
    * Calculate spell slots for a single class (D&D 5E PHB tables)
    * @param className - D&D 5E class name
@@ -130,11 +196,17 @@ export class SpellSlotMechanics {
     if (casterType === 'full') {
       casterLevel = level;
     } else if (casterType === 'half') {
-      // Half casters start at level 2, use half level rounded down
-      casterLevel = Math.floor(level / 2);
+      // PHB single-class half casters (Paladin, Ranger): spellcasting begins at
+      // class level 2, and slots follow the multiclass table at ceil(level/2)
+      // (L3 -> 3 first-level slots; L5 -> 4 first + 2 second). The multiclass
+      // rule's floor(level/2) applies only when combining classes — see
+      // calculateMulticlassSpellSlots.
+      casterLevel = level < 2 ? 0 : Math.ceil(level / 2);
     } else if (casterType === 'third') {
-      // Third casters use third level rounded down, max 4th level slots
-      casterLevel = Math.floor(level / 3);
+      // PHB single-class third casters (Eldritch Knight, Arcane Trickster):
+      // spellcasting begins at class level 3, slots follow the multiclass
+      // table at ceil(level/3) (L7 -> 4 first + 2 second), max 4th-level slots.
+      casterLevel = level < 3 ? 0 : Math.ceil(level / 3);
     } else if (casterType === 'pact') {
       // Warlock uses Pact Magic - separate system
       return {

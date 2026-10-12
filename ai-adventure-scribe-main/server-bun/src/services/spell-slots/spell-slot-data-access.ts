@@ -11,7 +11,7 @@
  * @module server/services/spell-slots/spell-slot-data-access
  */
 
-import { and, eq, exists, or, desc, sql } from 'drizzle-orm';
+import { and, eq, exists, notInArray, or, desc, sql } from 'drizzle-orm';
 
 import { parseBoundedSpellLevel } from './spell-level-parser.js';
 import { SpellSlotMechanics } from './spell-slot-mechanics.js';
@@ -249,5 +249,74 @@ export class SpellSlotDataAccess {
 
     // Return the initialized slots
     return this.getCharacterSpellSlots(characterId, userId);
+  }
+
+  /**
+   * #270: re-sync a character's slot totals with the single slot source after
+   * their level changes. Totals come from the 2014 5e progression tables;
+   * already-spent slots survive (a level-up is not a rest), clamped to the new
+   * total so a de-levelled character can never hold more used than granted.
+   * Slot levels the new level no longer grants are pruned. Characters with no
+   * slots at the new level (non-casters, warlocks, level-1 half-casters) keep
+   * no rows.
+   */
+  static async syncSpellSlotTotals(characterId: string, userId: string): Promise<void> {
+    const [character] = await db
+      .select({
+        class: characters.class,
+        level: characters.level,
+        classLevels: characters.classLevels,
+      })
+      .from(characters)
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      )
+      .limit(1);
+
+    if (!character) {
+      throw new NotFoundError('Character', characterId);
+    }
+
+    const rows = SpellSlotMechanics.seedRowsForCharacter(
+      character.class,
+      character.level ?? 1,
+      character.classLevels,
+    );
+    const grantedLevels = rows.map((row) => row.spellLevel);
+
+    if (rows.length > 0) {
+      await db
+        .insert(characterSpellSlots)
+        .values(
+          rows.map((row) => ({
+            characterId,
+            spellLevel: row.spellLevel,
+            totalSlots: row.totalSlots,
+            usedSlots: 0,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: [characterSpellSlots.characterId, characterSpellSlots.spellLevel],
+          set: {
+            totalSlots: sql`excluded.total_slots`,
+            usedSlots: sql`least(${characterSpellSlots.usedSlots}, excluded.total_slots)`,
+            updatedAt: new Date(),
+          },
+        });
+    }
+
+    await db
+      .delete(characterSpellSlots)
+      .where(
+        and(
+          eq(characterSpellSlots.characterId, characterId),
+          grantedLevels.length > 0
+            ? notInArray(characterSpellSlots.spellLevel, grantedLevels)
+            : undefined,
+        ),
+      );
   }
 }
