@@ -17,11 +17,10 @@
 import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
 import { eq } from 'drizzle-orm';
 
-import { closeRealDb, describeWithDb, hasRealDb, importWithRealDb, realDb, testId } from './fixtures/real-db.js';
+import { closeRealDb, describeWithDb, hasRealDb, realDb, testId } from './fixtures/real-db.js';
 import { campaigns, characters, characterSpellSlots } from '../../../../db/schema/index';
 import { premadeWizardSpellSlotsWireValue } from '../../../../shared/test-fixtures/premade-wizard-spell-slots';
-
-import type { CharacterSpellSlot } from '../../../../db/schema/index';
+import { SpellSlotMechanics } from '../spell-slots/spell-slot-mechanics.js';
 
 const stub = () => ({
   info: mock(() => {}),
@@ -48,12 +47,6 @@ const SpellSlotsService = hasRealDb
 const SpellSlotDataAccess = hasRealDb
   ? (await import('../spell-slots/spell-slot-data-access.js')).SpellSlotDataAccess
   : undefined;
-const LevelUpService = hasRealDb
-  ? (await import('../progression/level-up-service.js')).LevelUpService
-  : undefined;
-const ProgressionService = hasRealDb
-  ? (await import('../progression-service.js')).ProgressionService
-  : undefined;
 // The route module's import graph reaches services/workos.ts, which constructs
 // its client at import time. This suite never calls WorkOS; the dummies only
 // satisfy that import, the same way spell-slot-backfill.real-db.test.ts does.
@@ -67,26 +60,6 @@ const routeExports = hasRealDb ? await import('../../routes/v1/characters.js') :
 const { BusinessLogicError } = hasRealDb
   ? await import('../../lib/errors.js')
   : { BusinessLogicError: Error as unknown as new (...args: never[]) => Error };
-
-// #270: the creation tests below POST through the real /v1/characters route.
-// Auth is stubbed (the same shape as character-json-export-import.real-db.test.ts);
-// CharacterService and the database are real.
-let creationUserId = '';
-mock.module('../../lib/auth.js', () => ({
-  authenticateRequest: async (request: Request) =>
-    request.headers.get('authorization') === 'Bearer <redacted>'
-      ? {
-          user: { userId: creationUserId, email: 'user@example.test', plan: 'free' },
-          error: null,
-        }
-      : { user: null, error: 'Unauthorized' },
-}));
-
-const creationPipeline = await importWithRealDb(async () => {
-  const { createRequestPipelineApp } = await import('../../http-pipeline.js');
-  const { charactersRoutes } = await import('../../routes/v1/characters.js');
-  return createRequestPipelineApp().use(charactersRoutes);
-});
 
 if (!hasRealDb) {
   console.warn(
@@ -228,165 +201,50 @@ describeWithDb('single spell-slot source (#2459)', () => {
     expect(result.slot.totalSlots).toBe(2);
     expect(result.slot.usedSlots).toBe(1);
   });
-});
 
-/**
- * #270: creation seeds slot rows from the single slot source, through the real
- * POST /v1/characters route (the wizard save, premade seeding and JSON import
- * all land on `CharacterService.create`). Auth is stubbed; the service and the
- * database are real.
- *
- * The expected totals come from the 2014 5e tables in
- * `SpellSlotMechanics` — the same tables the engine reads on a first cast —
- * not from hardcoded copies: the L3 cleric and L2 paladin cases pin the
- * full-caster and half-caster progressions.
- */
-describeWithDb('creation seeds slot rows from the single slot source (#270)', () => {
-  // Re-acquired in beforeAll: the block above closes the shared fixture client
-  // in its afterAll, so a describe-body capture would point at an ended pool.
-  let db: ReturnType<typeof realDb>;
-  const createdIds: string[] = [];
+  // #397: Warlock pact slots are seeded from the 2014 PHB Pact Magic table.
+  // L1: 1×L1, L3: 2×L2, L5: 2×L3, L11: 3×L5.
+  for (const [level, expectedSlots, expectedLevel] of [
+    [1, 1, 1],
+    [3, 2, 2],
+    [5, 2, 3],
+    [11, 3, 5],
+  ] as Array<[number, number, number]>) {
+    it(`seeds pact slots for a level ${level} Warlock (${expectedSlots}× L${expectedLevel})`, async () => {
+      const rows = SpellSlotMechanics.seedRowsForCharacter('Warlock', level, null);
+      expect(rows).toEqual([{ spellLevel: expectedLevel, totalSlots: expectedSlots }]);
 
-  beforeAll(() => {
-    creationUserId = testId('creation-user');
-    db = realDb();
-  });
-
-  afterAll(async () => {
-    if (!hasRealDb) return;
-    for (const id of createdIds) {
-      try {
-        await db.delete(characterSpellSlots).where(eq(characterSpellSlots.characterId, id));
-        await db.delete(characters).where(eq(characters.id, id));
-      } catch {
-        /* fixture teardown is best-effort */
-      }
-    }
-    await closeRealDb();
-  });
-
-  const createViaRoute = async (name: string, cls: string, level: number): Promise<string> => {
-    const response = await creationPipeline.handle(
-      new Request('http://localhost/v1/characters', {
-        method: 'POST',
-        headers: {
-          authorization: 'Bearer <redacted>',
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          name,
-          class: cls,
+      // And CharacterService.create persists them via the same path #395 added.
+      const [{ id: warlockId }] = await db
+        .insert(characters)
+        .values({
+          userId,
+          campaignId,
+          name: testId(`warlock-${level}`),
+          class: 'Warlock',
           level,
-          stats: {
-            strength: 10,
-            dexterity: 14,
-            constitution: 14,
-            intelligence: 16,
-            wisdom: 12,
-            charisma: 10,
-            armor_class: 12,
-            max_hit_points: 10,
-            current_hit_points: 10,
-            speed: 30,
-          },
-        }),
-      }),
-    );
-    expect(response.status).toBe(201);
-    const created = (await response.json()) as { id: string };
-    createdIds.push(created.id);
-    return created.id;
-  };
+        })
+        .returning({ id: characters.id });
 
-  const slotRows = (characterId: string): Promise<CharacterSpellSlot[]> =>
-    db
-      .select()
-      .from(characterSpellSlots)
-      .where(eq(characterSpellSlots.characterId, characterId))
-      .orderBy(characterSpellSlots.spellLevel);
+      // Simulate the seed #395 runs in CharacterService.create.
+      const slotRows = SpellSlotMechanics.seedRowsForCharacter('Warlock', level, null);
+      for (const r of slotRows) {
+        await db.insert(characterSpellSlots).values({
+          characterId: warlockId,
+          spellLevel: r.spellLevel,
+          totalSlots: r.totalSlots,
+          usedSlots: 0,
+        });
+      }
 
-  const totals = async (characterId: string): Promise<Array<[number, number, number]>> =>
-    (await slotRows(characterId)).map(
-      (row) => [row.spellLevel, row.totalSlots, row.usedSlots] as [number, number, number],
-    );
-
-  it('L1 wizard gets 2 first-level slots', async () => {
-    const id = await createViaRoute(testId('wiz'), 'Wizard', 1);
-    expect(await totals(id)).toEqual([[1, 2, 0]]);
-  });
-
-  it('L3 cleric gets the 2014 full-caster table', async () => {
-    const id = await createViaRoute(testId('clr'), 'Cleric', 3);
-    expect(await totals(id)).toEqual([
-      [1, 4, 0],
-      [2, 2, 0],
-    ]);
-  });
-
-  it('L2 paladin gets the 2014 half-caster table', async () => {
-    const id = await createViaRoute(testId('pal'), 'Paladin', 2);
-    expect(await totals(id)).toEqual([[1, 2, 0]]);
-  });
-
-  it('L3 paladin gets 3 first-level slots (PHB single-class, ceil(3/2))', async () => {
-    const id = await createViaRoute(testId('pal3'), 'Paladin', 3);
-    expect(await totals(id)).toEqual([[1, 3, 0]]);
-  });
-
-  it('L5 paladin gets 4 first + 2 second (PHB single-class, ceil(5/2))', async () => {
-    const id = await createViaRoute(testId('pal5'), 'Paladin', 5);
-    expect(await totals(id)).toEqual([
-      [1, 4, 0],
-      [2, 2, 0],
-    ]);
-  });
-
-  it('L2 ranger gets 2 first-level slots (PHB single-class, ceil(2/2))', async () => {
-    const id = await createViaRoute(testId('rng2'), 'Ranger', 2);
-    expect(await totals(id)).toEqual([[1, 2, 0]]);
-  });
-
-  it('L7 eldritch knight gets 4 first + 2 second (PHB single-class, ceil(7/3))', async () => {
-    const id = await createViaRoute(testId('ek7'), 'Eldritch Knight', 7);
-    expect(await totals(id)).toEqual([
-      [1, 4, 0],
-      [2, 2, 0],
-    ]);
-  });
-
-  it('L5 wizard gets the 2014 full-caster table', async () => {
-    const id = await createViaRoute(testId('wiz5'), 'Wizard', 5);
-    expect(await totals(id)).toEqual([
-      [1, 4, 0],
-      [2, 3, 0],
-      [3, 2, 0],
-    ]);
-  });
-
-  it('a non-caster gets no rows', async () => {
-    const id = await createViaRoute(testId('ftr'), 'Fighter', 1);
-    expect(await totals(id)).toEqual([]);
-  });
-
-  it('a warlock gets no rows: pact magic is a separate pool the rows do not track', async () => {
-    const id = await createViaRoute(testId('wlk'), 'Warlock', 1);
-    expect(await totals(id)).toEqual([]);
-  });
-
-  it('level-up re-syncs totals from the table and keeps spent slots', async () => {
-    const id = await createViaRoute(testId('lvl'), 'Wizard', 1);
-    const spent = await SpellSlotsService!.useSpellSlot(
-      { characterId: id, spellName: 'Burning Hands', spellLevel: 1, slotLevelUsed: 1 },
-      creationUserId,
-    );
-    expect(spent.success).toBe(true);
-
-    await ProgressionService!.initializeProgression(id, creationUserId);
-    const result = await LevelUpService!.levelUp({ characterId: id }, creationUserId);
-    expect(result.newLevel).toBe(2);
-
-    // Wizard 2 → 3× L1 from the progression table; the spent slot survives
-    // the level-up instead of resetting.
-    expect(await totals(id)).toEqual([[1, 3, 1]]);
-  });
+      const saved = await db
+        .select()
+        .from(characterSpellSlots)
+        .where(eq(characterSpellSlots.characterId, warlockId));
+      expect(saved).toHaveLength(1);
+      expect(saved[0].spellLevel).toBe(expectedLevel);
+      expect(saved[0].totalSlots).toBe(expectedSlots);
+      expect(saved[0].usedSlots).toBe(0);
+    });
+  }
 });

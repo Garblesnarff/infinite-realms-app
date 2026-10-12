@@ -155,6 +155,13 @@ export class SpellSlotMechanics {
         : (() => {
             const name = normalizeClassName(className);
             if (!name) return {};
+            // #397: Warlock Pact Magic is a separate pool — calculateSpellSlots
+            // returns empty slots for pact casters. Seed from WARLOCK_PACT_MAGIC.
+            if (name === 'Warlock') {
+              const pact = WARLOCK_PACT_MAGIC[level];
+              if (!pact) return {};
+              return { [pact.level]: pact.slots };
+            }
             return SpellSlotMechanics.calculateSpellSlots(name, level).slots;
           })();
 
