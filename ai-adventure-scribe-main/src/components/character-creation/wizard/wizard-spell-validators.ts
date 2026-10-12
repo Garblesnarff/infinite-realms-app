@@ -30,7 +30,7 @@ export function validateSpells(character: Character): ValidationResult {
     return VALID;
   }
 
-  const racialSpells = getRacialSpells(character.race?.name || '', character.subrace);
+  const racialSpells = getRacialSpells(character.race?.name || '', character.subrace ?? undefined);
 
   if (spellcastingInfo.cantripsKnown > 0) {
     const expectedCantrips =

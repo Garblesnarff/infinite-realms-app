@@ -91,7 +91,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
     const instructionsId = useId();
 
     // Show options after delay
-    useEffect(() => {
+    useEffect((): (() => void) | void => {
       if (options.length > 0) {
         let mounted = true;
         const timer = setTimeout(() => {
@@ -174,7 +174,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
                             variant="outline"
                             size="sm"
                             onClick={() => handleOptionClick(option)}
-                            disabled={isDisabled}
+                            disabled={isDisabled as boolean}
                             aria-pressed={isSelected}
                             aria-label={
                               isSelected

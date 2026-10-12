@@ -3,13 +3,7 @@ import React from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,7 +19,7 @@ interface SceneData {
   width: number;
   height: number;
   gridSize: number;
-  gridType: string;
+  gridType: 'square' | 'hexagonal_horizontal' | 'hexagonal_vertical' | 'gridless';
   gridColor?: string | null;
   backgroundImageUrl?: string | null;
   thumbnailUrl?: string | null;
@@ -76,13 +70,15 @@ export const SceneCard: React.FC<SceneCardProps> = ({
       <div className="relative h-48 bg-gradient-to-br from-slate-100 to-slate-200 overflow-hidden">
         {scene.thumbnailUrl || scene.backgroundImageUrl ? (
           <img
-            src={scene.thumbnailUrl || scene.backgroundImageUrl}
+            src={(scene.thumbnailUrl || scene.backgroundImageUrl) as string}
             alt={scene.name}
             className="w-full h-full object-cover"
           />
         ) : (
           <div className="flex items-center justify-center h-full text-6xl text-slate-400">
-            <span role="img" aria-label="No thumbnail available">🗺️</span>
+            <span role="img" aria-label="No thumbnail available">
+              🗺️
+            </span>
           </div>
         )}
         {scene.isActive && (
@@ -97,9 +93,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <CardTitle className="text-lg truncate cursor-default">
-              {scene.name}
-            </CardTitle>
+            <CardTitle className="text-lg truncate cursor-default">{scene.name}</CardTitle>
             <CardDescription className="text-xs mt-1">
               {scene.width} × {scene.height} squares
             </CardDescription>

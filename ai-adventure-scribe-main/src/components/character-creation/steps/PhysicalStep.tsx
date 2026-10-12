@@ -54,7 +54,8 @@ const PhysicalStep: React.FC = () => {
     dispatch({ type: 'SET_HAIR', payload: e.target.value });
   };
 
-  const { race } = state.character;
+  const character = state.character!;
+  const { race } = character;
   const heightRange = race?.heightRange || [48, 84];
   const weightRange = race?.weightRange || [80, 300];
 
@@ -139,7 +140,7 @@ const PhysicalStep: React.FC = () => {
                 Gender
               </Label>
               <RadioGroup
-                defaultValue={state.character.gender}
+                defaultValue={character.gender}
                 onValueChange={handleGenderChange}
                 className="flex space-x-4"
                 aria-labelledby={genderLabelId}
@@ -169,7 +170,7 @@ const PhysicalStep: React.FC = () => {
                 min={MIN_CHARACTER_AGE}
                 max={MAX_CHARACTER_AGE}
                 step={1}
-                value={state.character.age || ''}
+                value={character.age || ''}
                 onChange={handleAgeChange}
                 className="text-lg"
                 placeholder="Enter age"
@@ -187,7 +188,7 @@ const PhysicalStep: React.FC = () => {
                 Height
               </div>
               <Badge variant="secondary" className="text-lg font-bold">
-                {formatHeight(state.character.height || heightRange[0])}
+                {formatHeight(character.height || heightRange[0])}
               </Badge>
             </CardTitle>
           </CardHeader>
@@ -196,7 +197,7 @@ const PhysicalStep: React.FC = () => {
               min={heightRange[0]}
               max={heightRange[1]}
               step={1}
-              value={[state.character.height || heightRange[0]]}
+              value={[character.height || heightRange[0]]}
               onValueChange={handleHeightChange}
               className="py-4"
               aria-label="Height"
@@ -218,7 +219,7 @@ const PhysicalStep: React.FC = () => {
                 Weight
               </div>
               <Badge variant="secondary" className="text-lg font-bold">
-                {formatWeight(state.character.weight || weightRange[0])}
+                {formatWeight(character.weight || weightRange[0])}
               </Badge>
             </CardTitle>
           </CardHeader>
@@ -227,7 +228,7 @@ const PhysicalStep: React.FC = () => {
               min={weightRange[0]}
               max={weightRange[1]}
               step={1}
-              value={[state.character.weight || weightRange[0]]}
+              value={[character.weight || weightRange[0]]}
               onValueChange={handleWeightChange}
               className="py-4"
               aria-label="Weight"
@@ -256,7 +257,7 @@ const PhysicalStep: React.FC = () => {
               </Label>
               <Input
                 id={eyesId}
-                value={state.character.eyes || ''}
+                value={character.eyes || ''}
                 onChange={handleEyesChange}
                 placeholder="e.g., Blue, Green, Brown"
                 className="transition-all focus:ring-2"
@@ -269,7 +270,7 @@ const PhysicalStep: React.FC = () => {
               </Label>
               <Input
                 id={skinId}
-                value={state.character.skin || ''}
+                value={character.skin || ''}
                 onChange={handleSkinChange}
                 placeholder="e.g., Pale, Tan, Dark"
                 className="transition-all focus:ring-2"
@@ -282,7 +283,7 @@ const PhysicalStep: React.FC = () => {
               </Label>
               <Input
                 id={hairId}
-                value={state.character.hair || ''}
+                value={character.hair || ''}
                 onChange={handleHairChange}
                 placeholder="e.g., Black, Blonde, Red"
                 className="transition-all focus:ring-2"

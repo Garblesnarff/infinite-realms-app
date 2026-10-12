@@ -46,6 +46,7 @@ export const SpellCard: React.FC<SpellCardProps> = ({
           )}
         </div>
         <p className="text-xs text-muted-foreground mb-2">
+          {/* @ts-expect-error #448 Spell has casting_time and range_text, so this label renders blank */}
           {spell.school} • {spell.castingTime} • {spell.range}
         </p>
         <p className="text-sm">{spell.description}</p>

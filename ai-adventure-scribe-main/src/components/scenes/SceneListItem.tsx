@@ -19,7 +19,7 @@ interface SceneData {
   width: number;
   height: number;
   gridSize: number;
-  gridType: string;
+  gridType: 'square' | 'hexagonal_horizontal' | 'hexagonal_vertical' | 'gridless';
   gridColor?: string | null;
   backgroundImageUrl?: string | null;
   thumbnailUrl?: string | null;
@@ -71,13 +71,15 @@ export const SceneListItem: React.FC<SceneListItemProps> = ({
         <div className="relative w-24 h-24 bg-gradient-to-br from-slate-100 to-slate-200 rounded overflow-hidden flex-shrink-0">
           {scene.thumbnailUrl || scene.backgroundImageUrl ? (
             <img
-              src={scene.thumbnailUrl || scene.backgroundImageUrl}
+              src={(scene.thumbnailUrl || scene.backgroundImageUrl) as string}
               alt={scene.name}
               className="w-full h-full object-cover"
             />
           ) : (
             <div className="flex items-center justify-center h-full text-4xl text-slate-400">
-              <span role="img" aria-label="No thumbnail available">🗺️</span>
+              <span role="img" aria-label="No thumbnail available">
+                🗺️
+              </span>
             </div>
           )}
         </div>
@@ -85,9 +87,7 @@ export const SceneListItem: React.FC<SceneListItemProps> = ({
         {/* Details */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-lg font-semibold truncate cursor-default">
-              {scene.name}
-            </h3>
+            <h3 className="text-lg font-semibold truncate cursor-default">{scene.name}</h3>
             {scene.isActive && (
               <Badge className="bg-electricCyan text-white">
                 <Eye className="mr-1 h-3 w-3" aria-hidden="true" />
@@ -99,9 +99,7 @@ export const SceneListItem: React.FC<SceneListItemProps> = ({
             {scene.width} × {scene.height} squares • {scene.gridType}
           </p>
           {scene.description && (
-            <p className="text-sm text-muted-foreground line-clamp-1">
-              {scene.description}
-            </p>
+            <p className="text-sm text-muted-foreground line-clamp-1">{scene.description}</p>
           )}
         </div>
 

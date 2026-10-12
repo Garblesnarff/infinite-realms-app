@@ -73,7 +73,7 @@ describe('SceneManager Refactored', () => {
       data: mockScenes,
       isLoading: false,
       refetch: mockRefetch,
-    });
+    } as unknown as ReturnType<typeof trpc.scenes.list.useQuery>);
 
     render(<SceneManager campaignId="test-campaign" />, { wrapper });
 
@@ -89,7 +89,7 @@ describe('SceneManager Refactored', () => {
       data: mockScenes,
       isLoading: false,
       refetch: mockRefetch,
-    });
+    } as unknown as ReturnType<typeof trpc.scenes.list.useQuery>);
 
     render(<SceneManager campaignId="test-campaign" />, { wrapper });
 
@@ -108,7 +108,7 @@ describe('SceneManager Refactored', () => {
       data: mockScenes,
       isLoading: false,
       refetch: mockRefetch,
-    });
+    } as unknown as ReturnType<typeof trpc.scenes.list.useQuery>);
 
     render(<SceneManager campaignId="test-campaign" onViewScene={onViewScene} />, { wrapper });
 

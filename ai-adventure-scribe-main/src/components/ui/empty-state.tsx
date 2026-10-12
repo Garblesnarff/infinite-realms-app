@@ -14,7 +14,7 @@
  */
 
 import { cva, type VariantProps } from 'class-variance-authority';
-import { motion } from 'framer-motion';
+import { motion, type HTMLMotionProps, type Variants } from 'framer-motion';
 import { Scroll, Users, Swords, BookOpen, Sparkles, Dice6, Map } from 'lucide-react';
 import * as React from 'react';
 
@@ -97,7 +97,7 @@ const EmptyState = React.forwardRef<HTMLDivElement, EmptyStateProps>(
       lg: 'max-w-lg',
     }[maxWidth];
 
-    const containerVariants = {
+    const containerVariants: Variants = {
       hidden: { opacity: 0, y: 20 },
       visible: {
         opacity: 1,
@@ -189,7 +189,7 @@ const EmptyState = React.forwardRef<HTMLDivElement, EmptyStateProps>(
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          {...props}
+          {...(props as Omit<HTMLMotionProps<'div'>, 'ref'>)}
         >
           {Content}
         </motion.div>
