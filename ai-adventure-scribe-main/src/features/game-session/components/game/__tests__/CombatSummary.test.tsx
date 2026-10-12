@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { render, screen } from '@testing-library/react';
-import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { CombatSummary } from '../CombatSummary';
@@ -185,6 +184,8 @@ describe('CombatSummary', () => {
     render(<CombatSummary />);
 
     expect(screen.getByText('Current: Hero')).toBeInTheDocument();
-    expect(screen.getByText(/Action: Used \| Bonus: Available \| Reaction: Used/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Action: Used \| Bonus: Available \| Reaction: Used/),
+    ).toBeInTheDocument();
   });
 });

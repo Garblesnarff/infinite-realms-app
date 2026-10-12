@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react';
-import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 
 import { SidebarProvider, SidebarTrigger, SidebarRail } from '../sidebar';
@@ -14,7 +13,7 @@ describe('Sidebar Accessibility', () => {
     render(
       <SidebarProvider defaultOpen={true}>
         <SidebarTrigger />
-      </SidebarProvider>
+      </SidebarProvider>,
     );
 
     const trigger = screen.getByRole('button', { name: /Toggle Sidebar \(Ctrl\+B\)/i });
@@ -29,7 +28,7 @@ describe('Sidebar Accessibility', () => {
     render(
       <SidebarProvider defaultOpen={false}>
         <SidebarRail />
-      </SidebarProvider>
+      </SidebarProvider>,
     );
 
     const rail = screen.getByRole('button', { name: /Toggle Sidebar \(Ctrl\+B\)/i });

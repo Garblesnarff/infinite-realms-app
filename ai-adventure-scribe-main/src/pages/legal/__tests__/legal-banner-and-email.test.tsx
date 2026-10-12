@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react';
-import React from 'react';
 import { HelmetProvider } from 'react-helmet-async';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

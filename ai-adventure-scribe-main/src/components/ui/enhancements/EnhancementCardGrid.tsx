@@ -1,5 +1,3 @@
-import React from 'react';
-
 import type { EnhancementOption, OptionSelection } from '@/types/enhancement-options';
 
 import { Badge } from '@/components/ui/badge';

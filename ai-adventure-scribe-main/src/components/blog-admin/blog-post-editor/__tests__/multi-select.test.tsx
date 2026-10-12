@@ -1,5 +1,4 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 
 import { MultiSelect } from '../multi-select';
@@ -82,7 +81,14 @@ describe('MultiSelect Accessibility', () => {
   });
 
   it('renders placeholder when empty', () => {
-    render(<MultiSelect options={options} value={[]} onChange={() => {}} placeholder="Test Placeholder" />);
+    render(
+      <MultiSelect
+        options={options}
+        value={[]}
+        onChange={() => {}}
+        placeholder="Test Placeholder"
+      />,
+    );
     expect(screen.getByText('Test Placeholder')).toBeInTheDocument();
   });
 });

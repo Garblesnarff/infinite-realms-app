@@ -18,7 +18,6 @@
  * The loader, the view model and the right sheet are the real ones.
  */
 import { render, screen } from '@testing-library/react';
-import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { readSeededPremadeTemplates } from './seeded-premade-templates';

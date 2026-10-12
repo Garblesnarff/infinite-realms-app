@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react';
-import React from 'react';
 import { expect, describe, it, vi } from 'vitest';
 
 import InitiativeTracker from '../InitiativeTracker';
@@ -38,7 +37,7 @@ vi.mock('@/contexts/CombatContext', () => ({
             participantType: 'monster',
             conditions: [],
             deathSaves: { successes: 0, failures: 0 },
-          }
+          },
         ],
       },
       isInCombat: true,
@@ -60,7 +59,7 @@ describe('InitiativeTracker Accessibility', () => {
     render(
       <TooltipProvider>
         <InitiativeTracker />
-      </TooltipProvider>
+      </TooltipProvider>,
     );
 
     expect(screen.getByLabelText(/Initiative: 15/i)).toBeDefined();
@@ -71,7 +70,7 @@ describe('InitiativeTracker Accessibility', () => {
     render(
       <TooltipProvider>
         <InitiativeTracker />
-      </TooltipProvider>
+      </TooltipProvider>,
     );
 
     const playerIcon = screen.getByLabelText('Player');
@@ -85,7 +84,7 @@ describe('InitiativeTracker Accessibility', () => {
     render(
       <TooltipProvider>
         <InitiativeTracker />
-      </TooltipProvider>
+      </TooltipProvider>,
     );
 
     expect(screen.getByLabelText(/Armor Class: 18/i)).toBeDefined();
@@ -96,7 +95,7 @@ describe('InitiativeTracker Accessibility', () => {
     render(
       <TooltipProvider>
         <InitiativeTracker />
-      </TooltipProvider>
+      </TooltipProvider>,
     );
 
     expect(

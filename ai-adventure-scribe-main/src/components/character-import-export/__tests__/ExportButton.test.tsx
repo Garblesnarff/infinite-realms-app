@@ -1,5 +1,4 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import React from 'react';
 import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 
 import { ExportButton, SimpleExportButton } from '../ExportButton';
@@ -43,12 +42,7 @@ describe('ExportButton Components Accessibility and UX', () => {
   });
 
   test('ExportButton with default props (showing labels)', () => {
-    render(
-      <ExportButton
-        characterId="test-character-id"
-        characterName="Garrick"
-      />
-    );
+    render(<ExportButton characterId="test-character-id" characterName="Garrick" />);
 
     // Should render button with text "Export"
     const button = screen.getByRole('button', { name: /export/i });
@@ -58,13 +52,7 @@ describe('ExportButton Components Accessibility and UX', () => {
   });
 
   test('ExportButton in icon-only mode has proper ARIA label and Tooltip', () => {
-    render(
-      <ExportButton
-        characterId="test-character-id"
-        characterName="Garrick"
-        size="icon"
-      />
-    );
+    render(<ExportButton characterId="test-character-id" characterName="Garrick" size="icon" />);
 
     // In icon-only mode, the button should have explicit aria-label
     const button = screen.getByRole('button', { name: /export options for garrick/i });
@@ -73,12 +61,7 @@ describe('ExportButton Components Accessibility and UX', () => {
   });
 
   test('SimpleExportButton in default mode (showing labels)', () => {
-    render(
-      <SimpleExportButton
-        characterId="test-character-id"
-        characterName="Garrick"
-      />
-    );
+    render(<SimpleExportButton characterId="test-character-id" characterName="Garrick" />);
 
     // Should render simple export button with text "Export"
     const button = screen.getByRole('button', { name: /export/i });
@@ -88,11 +71,7 @@ describe('ExportButton Components Accessibility and UX', () => {
 
   test('SimpleExportButton in icon-only mode has proper ARIA label and Tooltip', () => {
     render(
-      <SimpleExportButton
-        characterId="test-character-id"
-        characterName="Garrick"
-        size="icon"
-      />
+      <SimpleExportButton characterId="test-character-id" characterName="Garrick" size="icon" />,
     );
 
     // In icon-only mode, the button should have explicit aria-label
@@ -109,12 +88,7 @@ describe('ExportButton Components Accessibility and UX', () => {
     };
     mockQuery.mockResolvedValueOnce(mockCharacterData);
 
-    render(
-      <SimpleExportButton
-        characterId="test-character-id"
-        characterName="Garrick"
-      />
-    );
+    render(<SimpleExportButton characterId="test-character-id" characterName="Garrick" />);
 
     const button = screen.getByRole('button', { name: /export/i });
     await act(async () => {
@@ -130,7 +104,7 @@ describe('ExportButton Components Accessibility and UX', () => {
         expect.objectContaining({
           title: 'Export Successful',
           description: expect.stringContaining('Garrick'),
-        })
+        }),
       );
     });
   });
@@ -138,12 +112,7 @@ describe('ExportButton Components Accessibility and UX', () => {
   test('SimpleExportButton click handles query error gracefully', async () => {
     mockQuery.mockRejectedValueOnce(new Error('Network error'));
 
-    render(
-      <SimpleExportButton
-        characterId="test-character-id"
-        characterName="Garrick"
-      />
-    );
+    render(<SimpleExportButton characterId="test-character-id" characterName="Garrick" />);
 
     const button = screen.getByRole('button', { name: /export/i });
     await act(async () => {
@@ -156,7 +125,7 @@ describe('ExportButton Components Accessibility and UX', () => {
           title: 'Export Failed',
           description: 'Network error',
           variant: 'destructive',
-        })
+        }),
       );
     });
   });

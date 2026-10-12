@@ -1,5 +1,4 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 
 import { DiceRollActionButtons } from '../DiceRollActionButtons';
@@ -18,11 +17,15 @@ describe('DiceRollActionButtons', () => {
         onAutoRoll={mockAutoRoll}
         onEnterManually={mockEnterManually}
         onCancel={mockCancel}
-      />
+      />,
     );
 
-    expect(screen.getByRole('button', { name: /Roll 1d20\+5 for Test Check/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Roll physical dice and enter result manually/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Roll 1d20\+5 for Test Check/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Roll physical dice and enter result manually/i }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Dismiss roll request/i })).toBeInTheDocument();
   });
 
@@ -35,14 +38,16 @@ describe('DiceRollActionButtons', () => {
         onAutoRoll={mockAutoRoll}
         onEnterManually={mockEnterManually}
         onCancel={mockCancel}
-      />
+      />,
     );
 
     const rollButton = screen.getByRole('button', { name: /Roll 1d20\+5 for Test Check/i });
     expect(rollButton).toBeDisabled();
     expect(rollButton).toHaveTextContent(/Rolling\.\.\./i);
 
-    expect(screen.getByRole('button', { name: /Roll physical dice and enter result manually/i })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /Roll physical dice and enter result manually/i }),
+    ).toBeDisabled();
     expect(screen.getByRole('button', { name: /Dismiss roll request/i })).toBeDisabled();
   });
 
@@ -55,13 +60,15 @@ describe('DiceRollActionButtons', () => {
         onAutoRoll={mockAutoRoll}
         onEnterManually={mockEnterManually}
         onCancel={mockCancel}
-      />
+      />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Roll 1d20\+5 for Test Check/i }));
     expect(mockAutoRoll).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: /Roll physical dice and enter result manually/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /Roll physical dice and enter result manually/i }),
+    );
     expect(mockEnterManually).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole('button', { name: /Dismiss roll request/i }));
@@ -76,7 +83,7 @@ describe('DiceRollActionButtons', () => {
         isRolling={false}
         onAutoRoll={mockAutoRoll}
         onEnterManually={mockEnterManually}
-      />
+      />,
     );
 
     expect(screen.queryByRole('button', { name: /Dismiss roll request/i })).not.toBeInTheDocument();

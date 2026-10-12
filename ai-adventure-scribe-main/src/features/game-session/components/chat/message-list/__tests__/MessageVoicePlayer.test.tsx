@@ -1,5 +1,4 @@
 import { render } from '@testing-library/react';
-import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 
 import { MessageVoicePlayer } from '../MessageVoicePlayer';
@@ -17,10 +16,7 @@ describe('MessageVoicePlayer', () => {
 
   it('renders correctly', () => {
     const { getByTestId, getByText } = render(
-      <MessageVoicePlayer
-        messageId={mockMessageId}
-        messageText={mockMessageText}
-      />,
+      <MessageVoicePlayer messageId={mockMessageId} messageText={mockMessageText} />,
     );
 
     expect(getByTestId('voice-controls')).toBeDefined();
@@ -29,18 +25,10 @@ describe('MessageVoicePlayer', () => {
 
   it('is memoized', () => {
     const { rerender, getByText } = render(
-      <MessageVoicePlayer
-        messageId={mockMessageId}
-        messageText={mockMessageText}
-      />,
+      <MessageVoicePlayer messageId={mockMessageId} messageText={mockMessageText} />,
     );
 
-    rerender(
-      <MessageVoicePlayer
-        messageId={mockMessageId}
-        messageText={mockMessageText}
-      />,
-    );
+    rerender(<MessageVoicePlayer messageId={mockMessageId} messageText={mockMessageText} />);
 
     expect(getByText(`Controls for ${mockMessageId}`)).toBeDefined();
   });

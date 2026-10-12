@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react';
-import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 
 import { StepNameDescription } from '../scene-creation-wizard/StepNameDescription';
@@ -8,11 +7,7 @@ describe('StepNameDescription Accessibility', () => {
   it('renders with unique IDs and correctly linked labels', () => {
     const onUpdate = vi.fn();
     const { rerender: _rerender } = render(
-      <StepNameDescription
-        name=""
-        description=""
-        onUpdate={onUpdate}
-      />
+      <StepNameDescription name="" description="" onUpdate={onUpdate} />,
     );
 
     // Check Scene Name input
@@ -38,11 +33,7 @@ describe('StepNameDescription Accessibility', () => {
 
     // Rerender should keep IDs stable if component is same, but different instances get different IDs
     const { container: container2 } = render(
-      <StepNameDescription
-        name=""
-        description=""
-        onUpdate={onUpdate}
-      />
+      <StepNameDescription name="" description="" onUpdate={onUpdate} />,
     );
     const nameInput2 = container2.querySelector('input');
     expect(nameInput2?.id).not.toBe(nameInput.id);

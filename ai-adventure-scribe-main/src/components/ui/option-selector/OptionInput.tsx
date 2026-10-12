@@ -1,5 +1,4 @@
 import { Sparkles, Loader2 } from 'lucide-react';
-import React from 'react';
 
 import type { EnhancementOption, OptionSelection, OptionType } from '@/types/enhancement-options';
 

@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react';
-import React from 'react';
 import { expect, test, vi } from 'vitest';
 
 import { CreateFolderDialog } from '../CreateFolderDialog';
@@ -128,5 +127,7 @@ test('DeleteFolderDialog has accessible Cancel and Delete Folder buttons with WC
 
   const deleteButton = screen.getByRole('button', { name: /delete folder/i });
   expect(deleteButton).toBeDefined();
-  expect(deleteButton.getAttribute('aria-label')).toBe('Delete Folder - Confirm deleting NPCs folder');
+  expect(deleteButton.getAttribute('aria-label')).toBe(
+    'Delete Folder - Confirm deleting NPCs folder',
+  );
 });

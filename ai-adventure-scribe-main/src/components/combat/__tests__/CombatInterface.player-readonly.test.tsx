@@ -4,7 +4,6 @@
  * data hooks are stubbed) so a control added to any of them shows up here.
  */
 import { fireEvent, render, screen, within, type RenderResult } from '@testing-library/react';
-import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import CombatInterface from '../CombatInterface';

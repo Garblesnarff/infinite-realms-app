@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { render, screen } from '@testing-library/react';
-import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { CombatStatus } from '../CombatStatus';
@@ -64,7 +63,7 @@ describe('CombatStatus', () => {
 
     phases.forEach(({ phase, label }) => {
       vi.mocked(useGame).mockReturnValue({
-        state: { ...mockGameState, currentPhase: phase }
+        state: { ...mockGameState, currentPhase: phase },
       } as any);
       vi.mocked(useCombat).mockReturnValue({ state: mockCombatState } as any);
 
@@ -81,21 +80,21 @@ describe('CombatStatus', () => {
           id: 'p1',
           name: 'Hero',
           initiative: { value: 15 },
-          hitPoints: { current: 20, maximum: 20 }
-        }
+          hitPoints: { current: 20, maximum: 20 },
+        },
       ],
       currentTurnParticipantId: 'p1',
-      currentRound: 1
+      currentRound: 1,
     };
 
     vi.mocked(useGame).mockReturnValue({
-      state: { ...mockGameState, currentPhase: 'combat' }
+      state: { ...mockGameState, currentPhase: 'combat' },
     } as any);
     vi.mocked(useCombat).mockReturnValue({
       state: {
         isInCombat: true,
-        activeEncounter: combatEncounter
-      }
+        activeEncounter: combatEncounter,
+      },
     } as any);
 
     render(<CombatStatus />);
@@ -139,7 +138,7 @@ describe('CombatStatus', () => {
 
   it('handles unknown phase', () => {
     vi.mocked(useGame).mockReturnValue({
-      state: { ...mockGameState, currentPhase: 'unknown' }
+      state: { ...mockGameState, currentPhase: 'unknown' },
     } as any);
     vi.mocked(useCombat).mockReturnValue({ state: mockCombatState } as any);
 

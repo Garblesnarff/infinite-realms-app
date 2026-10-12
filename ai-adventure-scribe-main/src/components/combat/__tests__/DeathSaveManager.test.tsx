@@ -1,5 +1,4 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 
 import DeathSaveManager from '../DeathSaveManager';
@@ -19,12 +18,7 @@ describe('DeathSaveManager', () => {
   const mockOnDeathSave = vi.fn();
 
   it('renders participant name and current death saves state correctly', () => {
-    render(
-      <DeathSaveManager
-        participant={mockParticipant}
-        onDeathSave={mockOnDeathSave}
-      />
-    );
+    render(<DeathSaveManager participant={mockParticipant} onDeathSave={mockOnDeathSave} />);
 
     // Verify name rendering
     expect(screen.getByText('Dying: Valerius')).toBeInTheDocument();
@@ -37,12 +31,7 @@ describe('DeathSaveManager', () => {
   });
 
   it('contains the correct accessibility attributes for live state updates', () => {
-    render(
-      <DeathSaveManager
-        participant={mockParticipant}
-        onDeathSave={mockOnDeathSave}
-      />
-    );
+    render(<DeathSaveManager participant={mockParticipant} onDeathSave={mockOnDeathSave} />);
 
     // Verify the status container has the correct ARIA attributes
     const statusContainer = screen.getByRole('status');
@@ -50,17 +39,12 @@ describe('DeathSaveManager', () => {
     expect(statusContainer).toHaveAttribute('aria-live', 'polite');
     expect(statusContainer).toHaveAttribute(
       'aria-label',
-      'Death saving throws for Valerius: 1 successes, 2 failures'
+      'Death saving throws for Valerius: 1 successes, 2 failures',
     );
   });
 
   it('triggers onDeathSave callback when clicking the roll button', () => {
-    render(
-      <DeathSaveManager
-        participant={mockParticipant}
-        onDeathSave={mockOnDeathSave}
-      />
-    );
+    render(<DeathSaveManager participant={mockParticipant} onDeathSave={mockOnDeathSave} />);
 
     const rollButton = screen.getByRole('button', {
       name: 'Roll a d20 death saving throw for Valerius',

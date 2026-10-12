@@ -1,5 +1,4 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 
 import { DiceRollManualEntrySection } from '../DiceRollManualEntrySection';
@@ -20,7 +19,7 @@ describe('DiceRollManualEntrySection', () => {
         onSubmit={mockOnSubmit}
         onBackToRoll={mockOnBackToRoll}
         onCancel={mockOnCancel}
-      />
+      />,
     );
 
     expect(screen.getByLabelText(/Enter your roll result:/i)).toBeInTheDocument();
@@ -39,7 +38,7 @@ describe('DiceRollManualEntrySection', () => {
         onSubmit={mockOnSubmit}
         onBackToRoll={mockOnBackToRoll}
         onCancel={mockOnCancel}
-      />
+      />,
     );
 
     expect(screen.getByLabelText(/Roll formula could not be resolved/i)).toBeInTheDocument();
@@ -56,7 +55,7 @@ describe('DiceRollManualEntrySection', () => {
         onManualResultChange={mockOnManualResultChange}
         onSubmit={mockOnSubmit}
         onBackToRoll={mockOnBackToRoll}
-      />
+      />,
     );
 
     expect(screen.getByRole('button', { name: /Submit/i })).toBeDisabled();
@@ -69,7 +68,7 @@ describe('DiceRollManualEntrySection', () => {
         onManualResultChange={mockOnManualResultChange}
         onSubmit={mockOnSubmit}
         onBackToRoll={mockOnBackToRoll}
-      />
+      />,
     );
     expect(screen.getByRole('button', { name: /Submit/i })).toBeDisabled();
 
@@ -81,7 +80,7 @@ describe('DiceRollManualEntrySection', () => {
         onManualResultChange={mockOnManualResultChange}
         onSubmit={mockOnSubmit}
         onBackToRoll={mockOnBackToRoll}
-      />
+      />,
     );
     expect(screen.getByRole('button', { name: /Submit/i })).not.toBeDisabled();
   });
@@ -95,7 +94,7 @@ describe('DiceRollManualEntrySection', () => {
         onManualResultChange={mockOnManualResultChange}
         onSubmit={mockOnSubmit}
         onBackToRoll={mockOnBackToRoll}
-      />
+      />,
     );
 
     const input = screen.getByPlaceholderText(/Enter total result\.\.\./i);
@@ -112,7 +111,7 @@ describe('DiceRollManualEntrySection', () => {
         onManualResultChange={mockOnManualResultChange}
         onSubmit={mockOnSubmit}
         onBackToRoll={mockOnBackToRoll}
-      />
+      />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Submit/i }));
