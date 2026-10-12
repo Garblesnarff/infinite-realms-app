@@ -256,8 +256,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       }
       return {
         ...state,
-        // @ts-expect-error #446 callback param shadows action; pending actions are never removed
-        pendingActions: state.pendingActions.filter((action) => action !== action.payload),
+        pendingActions: state.pendingActions.filter((a) => a !== action.payload),
       };
 
     default:
