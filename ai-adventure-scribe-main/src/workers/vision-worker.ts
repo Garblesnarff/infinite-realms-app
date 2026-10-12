@@ -12,10 +12,7 @@ import type { Point2D, VisionBlocker } from '@/types/scene';
 import type { Token } from '@/types/token';
 import type { VisionPolygon } from '@/utils/vision-polygon';
 
-import {
-  getAllRayIntersections,
-  clipPolygonToCone,
-} from '@/workers/vision-raycasting';
+import { getAllRayIntersections, clipPolygonToCone } from '@/workers/vision-raycasting';
 
 // ===========================
 // Message Types
@@ -407,7 +404,6 @@ function filterWallsByVisionType(token: Token, walls: VisionBlocker[]): VisionBl
 
   return walls.filter((wall) => wall.blocksLight);
 }
-
 
 /**
  * Remove duplicate points
