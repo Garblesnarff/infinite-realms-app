@@ -47,12 +47,7 @@ function withinRateLimit(kind: string, now: number, windowMs: number): boolean {
  * is caught internally and voided so a slow or failing webhook can never delay or throw into
  * whatever called `alert()`.
  */
-function postToWebhook(
-  kind: string,
-  detail: AlertDetail,
-  line: string,
-  windowMs: number,
-): void {
+function postToWebhook(kind: string, detail: AlertDetail, line: string, windowMs: number): void {
   const webhookUrl = process.env.SLACK_ALERT_WEBHOOK_URL;
   if (!webhookUrl) return;
   if (!withinRateLimit(kind, Date.now(), windowMs)) return;
