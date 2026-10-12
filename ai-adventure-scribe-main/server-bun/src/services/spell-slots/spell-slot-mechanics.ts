@@ -465,7 +465,7 @@ export class SpellSlotMechanics {
    * @param targetLevel - Target level to upcast to
    * @returns Upcasting validation result
    */
-  static canUpcast(spellName: string, baseLevel: number, targetLevel: number): UpcastValidation {
+  static canUpcast(_spellName: string, baseLevel: number, targetLevel: number): UpcastValidation {
     // Cantrips cannot be upcast
     if (baseLevel === 0) {
       return {
