@@ -2,7 +2,14 @@ import { renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { InventoryMechanics } from '../server-bun/src/services/inventory/inventory-mechanics';
-import { carryingCapacityForStrength } from '../shared/carrying-capacity';
+import {
+  CARRYING_CAPACITY_MULTIPLIERS,
+  ENCUMBRANCE_THRESHOLDS,
+  PUSH_DRAG_LIFT_CAPACITY_MULTIPLIER,
+  carryingCapacityForStrength,
+  carryingCapacityForStrengthAndSize,
+  pushDragLiftCapacityForStrength,
+} from '../shared/carrying-capacity';
 import { useInventoryManager } from '../src/features/character/hooks/use-inventory-manager';
 import { calculateCarryingCapacity } from '../src/utils/character/basic-math';
 import { transformCharacterData } from '../src/utils/character/data-transformers';
@@ -25,6 +32,46 @@ const characterForStrength = (strength: number): ReturnType<typeof transformChar
   );
 
 describe('shared carrying capacity', () => {
+  it('owns the PHB size and push/drag/lift rules', () => {
+    expect(CARRYING_CAPACITY_MULTIPLIERS).toEqual({
+      TINY: 0.5,
+      SMALL: 1,
+      MEDIUM: 1,
+      LARGE: 2,
+      HUGE: 4,
+      GARGANTUAN: 8,
+    });
+    expect(carryingCapacityForStrengthAndSize(10, 'TINY')).toBe(75);
+    expect(carryingCapacityForStrengthAndSize(10, 'LARGE')).toBe(300);
+    expect(carryingCapacityForStrengthAndSize(10, 'HUGE')).toBe(600);
+    expect(carryingCapacityForStrengthAndSize(10, 'GARGANTUAN')).toBe(1200);
+    expect(PUSH_DRAG_LIFT_CAPACITY_MULTIPLIER).toBe(2);
+    expect(pushDragLiftCapacityForStrength(10)).toBe(300);
+  });
+
+  it('shares variant encumbrance thresholds with client and server consumers', () => {
+    const character = characterForStrength(10);
+    const clientSummary = calculateEncumbrance(character);
+
+    expect(ENCUMBRANCE_THRESHOLDS).toEqual({ NORMAL: 1, ENCUMBERED: 5, HEAVILY_ENCUMBERED: 10 });
+    expect(clientSummary.encumberedThreshold).toBe(10 * ENCUMBRANCE_THRESHOLDS.ENCUMBERED);
+    expect(clientSummary.heavilyEncumberedThreshold).toBe(
+      10 * ENCUMBRANCE_THRESHOLDS.HEAVILY_ENCUMBERED,
+    );
+    for (const weight of [50, 100, 101]) {
+      const clientAtWeight = calculateEncumbrance({
+        ...character,
+        inventory: [{ itemId: `weight-${weight}`, quantity: 1, weight, equipped: false }],
+      });
+      const serverAtWeight = InventoryMechanics.calculateEncumbrance(10, weight);
+      expect(clientAtWeight.encumbranceLevel).toBe(
+        serverAtWeight.encumbranceLevel === 'heavily_encumbered'
+          ? 'heavily-encumbered'
+          : serverAtWeight.encumbranceLevel,
+      );
+    }
+  });
+
   it.each([
     [1, 15],
     [8, 120],

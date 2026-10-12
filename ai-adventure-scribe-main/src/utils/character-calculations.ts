@@ -8,6 +8,7 @@ import {
   type SkillModifiers,
   type SavingThrowModifiers,
 } from './character-proficiency-calculations';
+import { ENCUMBRANCE_THRESHOLDS } from '../../shared/carrying-capacity';
 import { findSrdClass } from '../../shared/srd-class-data';
 
 import type { Character, CharacterClass } from '@/types/character';
@@ -244,8 +245,8 @@ export const calculateEncumbrance = (
   const currencyWeight = calculateCurrencyWeight(currency);
   const totalWeight = currentWeight + currencyWeight;
   const carryingCapacity = calculateCarryingCapacity(character);
-  const encumberedThreshold = strengthScore * 5;
-  const heavilyEncumberedThreshold = strengthScore * 10;
+  const encumberedThreshold = strengthScore * ENCUMBRANCE_THRESHOLDS.ENCUMBERED;
+  const heavilyEncumberedThreshold = strengthScore * ENCUMBRANCE_THRESHOLDS.HEAVILY_ENCUMBERED;
   const baseSpeed = getBaseSpeed(character);
 
   let encumbranceLevel: EncumbranceLevel = 'normal';
@@ -254,10 +255,10 @@ export const calculateEncumbrance = (
   if (totalWeight >= carryingCapacity) {
     encumbranceLevel = 'overloaded';
     speedPenalty = baseSpeed;
-  } else if (totalWeight >= heavilyEncumberedThreshold) {
+  } else if (totalWeight > heavilyEncumberedThreshold) {
     encumbranceLevel = 'heavily-encumbered';
     speedPenalty = 20;
-  } else if (totalWeight >= encumberedThreshold) {
+  } else if (totalWeight > encumberedThreshold) {
     encumbranceLevel = 'encumbered';
     speedPenalty = 10;
   }
