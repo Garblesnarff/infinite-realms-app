@@ -11,7 +11,7 @@ import { restApi } from '@/services/rest-api';
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock('@/lib/logger', () => ({ default: { info: vi.fn(), error: vi.fn(), warn: vi.fn() } }));
 vi.mock('@/services/rest-api', async (importOriginal) => {
-  const mod = await importOriginal<Record<string, unknown>>();
+  const mod = await importOriginal<{ restApi: typeof restApi }>();
   return {
     ...mod,
     restApi: {
