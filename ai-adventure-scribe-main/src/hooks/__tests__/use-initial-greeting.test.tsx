@@ -66,7 +66,7 @@ vi.mock('@/infrastructure/api', async (importOriginal) => {
 });
 
 // Mock global fetch
-global.fetch = vi.fn();
+global.fetch = vi.fn() as unknown as typeof fetch;
 
 describe('useInitialGreeting', () => {
   const sessionId = 'test-session-id';

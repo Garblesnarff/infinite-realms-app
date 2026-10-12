@@ -69,7 +69,7 @@ describe('useCombatMechanics', () => {
   const mockTakeAction = vi.fn();
   const mockUpdateParticipant = vi.fn();
 
-  const mockActiveEncounter = {
+  const mockActiveEncounter: any = {
     id: 'enc-1',
     participants: [
       {
@@ -92,7 +92,7 @@ describe('useCombatMechanics', () => {
     ],
   };
 
-  const defaultProps = {
+  const defaultProps: any = {
     activeEncounter: mockActiveEncounter,
     handleCombatAction: mockHandleCombatAction,
     takeAction: mockTakeAction,

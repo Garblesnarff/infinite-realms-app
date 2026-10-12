@@ -100,7 +100,7 @@ describe('AIService system prompt stability (#352)', () => {
     const { enforceNarrationContract } = await import('../ai/narration-contract-check');
     vi.mocked(CampaignContextPrompts.fetchStarterCampaignLore).mockResolvedValue(null);
     vi.mocked(CampaignContextPrompts.extractSceneEntityNames).mockReturnValue([]);
-    vi.mocked(resolveStarterCampaignId).mockReturnValue(null);
+    vi.mocked(resolveStarterCampaignId).mockReturnValue(null as any);
     vi.mocked(processDMResponse).mockResolvedValue({ text: 'Processed Text' } as any);
     vi.mocked(enforceNarrationContract).mockImplementation(async (raw: string) => raw);
 
@@ -135,12 +135,12 @@ describe('AIService system prompt stability (#352)', () => {
     expect(systemPrompt2).toBe(systemPrompt1);
   });
 
-  it("reports missing_starter_campaign_id once on a steady-state starter turn without an id", async () => {
+  it('reports missing_starter_campaign_id once on a steady-state starter turn without an id', async () => {
     const sessionId = 'missing-starter-id-1';
     const { resolveStarterCampaignId } = await import('../ai/prompts/game-context-prompts');
     const { processDMResponse } = await import('../ai/dm-response-processor');
     const { enforceNarrationContract } = await import('../ai/narration-contract-check');
-    vi.mocked(resolveStarterCampaignId).mockReturnValue(null);
+    vi.mocked(resolveStarterCampaignId).mockReturnValue(null as any);
     vi.mocked(processDMResponse).mockResolvedValue({ text: 'Processed Text' } as any);
     vi.mocked(enforceNarrationContract).mockImplementation(async (raw: string) => raw);
 

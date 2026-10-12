@@ -276,7 +276,7 @@ describe('useAIResponse: an entry-gate encounter shows its engine lines (#2378)'
             ? 'initiative'
             : 'deathSave' in spec
               ? 'death save'
-              : `attack ${spec.weaponName}`;
+              : `attack ${(spec as { weaponName: string }).weaponName}`;
         order.push(`prompt: ${kind}`);
         queueMicrotask(() => settle({ d20: 'initiativeModifier' in spec ? 2 : 7 }));
         return { rollId: `roll-${kind}`, dismiss: () => {} };

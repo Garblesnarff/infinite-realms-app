@@ -119,7 +119,7 @@ describe('useSessionInitialization', () => {
   });
 
   it('should resume an active session if found and not expired', async () => {
-    const mockSession = { id: 'active-session', status: 'active' };
+    const mockSession = { id: 'active-session', status: 'active' } as any;
     vi.mocked(userDataApi.listSessions).mockResolvedValueOnce([mockSession]);
     vi.mocked(isSessionExpired).mockReturnValue(false);
 
@@ -137,12 +137,12 @@ describe('useSessionInitialization', () => {
   });
 
   it('should cleanup an expired session and continue from it, not resume it', async () => {
-    const mockSession = { id: 'expired-session', status: 'active' };
+    const mockSession = { id: 'expired-session', status: 'active' } as any;
     vi.mocked(userDataApi.listSessions).mockResolvedValueOnce([mockSession]);
     vi.mocked(isSessionExpired).mockReturnValue(true);
     // The cleanup completes the expired session, so it becomes the
     // continuation source (#2517: the in-memory row still says active).
-    const mockContinuation = { id: 'next-session', status: 'active' };
+    const mockContinuation = { id: 'next-session', status: 'active' } as any;
     vi.mocked(userDataApi.createSession).mockResolvedValueOnce(mockContinuation);
 
     renderHook(() => useSessionInitialization(defaultProps));
@@ -164,8 +164,8 @@ describe('useSessionInitialization', () => {
       status: 'completed',
       session_number: 1,
       current_scene_description: 'forest',
-    };
-    const mockNewSession = { id: 'new-continuation', status: 'active' };
+    } as any;
+    const mockNewSession = { id: 'new-continuation', status: 'active' } as any;
 
     // First call: find recent sessions
     vi.mocked(userDataApi.listSessions).mockResolvedValueOnce([mockCompletedSession]);

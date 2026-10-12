@@ -565,7 +565,7 @@ describe('useCombatActions', () => {
           name: 'Scimitar',
           attackBonus: 4,
           damageRoll: '1d6+2',
-        });
+        } as any);
       });
 
       expect(mockTakeAction).toHaveBeenCalled();
@@ -585,7 +585,7 @@ describe('useCombatActions', () => {
       });
 
       await act(async () => {
-        await result.current.handleEnemyAttack({ name: 'Glare', attackBonus: 4 });
+        await result.current.handleEnemyAttack({ name: 'Glare', attackBonus: 4 } as any);
       });
 
       expect(mockTakeAction).toHaveBeenCalled();

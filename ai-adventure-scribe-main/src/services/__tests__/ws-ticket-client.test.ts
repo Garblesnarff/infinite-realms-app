@@ -44,7 +44,7 @@ describe('ws ticket client URL builder', () => {
 
   it('mints a ticket over the authenticated POST, not a query string', async () => {
     const fetchSpy = vi.fn();
-    global.fetch = fetchSpy;
+    global.fetch = fetchSpy as unknown as typeof fetch;
     vi.mocked(fetchWithAuth).mockResolvedValue({
       ok: true,
       json: async () => ({ ticket: 'minted-ticket', expiresInMs: 30_000 }),

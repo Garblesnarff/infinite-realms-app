@@ -76,7 +76,7 @@ describe('rest API state application', () => {
 
   it('routes combat short rests through the server API and applies returned state', async () => {
     const shortRest = vi.spyOn(restApi, 'shortRest').mockResolvedValue(serverShortRest);
-    const participant: CombatParticipant = {
+    const participant: any = {
       id: 'participant-1',
       characterId: 'char-1',
       name: 'Mira',
@@ -102,7 +102,7 @@ describe('rest API state application', () => {
       spellSlots: {
         1: { max: 2, current: 2 },
         2: { max: 1, current: 0 },
-      },
+      } as any,
     };
 
     const result = await handleShortRest(participant, 1);
@@ -110,7 +110,7 @@ describe('rest API state application', () => {
     expect(shortRest).toHaveBeenCalledWith('char-1', 1);
     expect(result.success).toBe(true);
     expect(result.participantUpdates.currentHitPoints).toBe(17);
-    expect(result.participantUpdates.hitDice).toEqual({ max: 5, current: 3 });
+    expect((result.participantUpdates as any).hitDice).toEqual({ max: 5, current: 3 });
     expect(result.participantUpdates.spellSlots).toEqual({
       1: { max: 2, current: 0 },
       2: { max: 1, current: 1 },
@@ -155,7 +155,9 @@ describe('rest API state application', () => {
     expect(updated.actionTaken).toBe(false);
     // #2600: the allow-list ends only rest-resolved conditions — a timed
     // poisoned survives the rest.
-    expect(updated.conditions).toEqual([{ name: 'poisoned', description: 'Poisoned', duration: 1 }]);
+    expect(updated.conditions).toEqual([
+      { name: 'poisoned', description: 'Poisoned', duration: 1 },
+    ]);
     expect(updated.spellSlots?.[2]).toEqual({ max: 1, current: 1 });
   });
 

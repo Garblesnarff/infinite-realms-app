@@ -96,8 +96,8 @@ describe('AIService', () => {
     // #2463: starter-campaign lore fetch (mocked to avoid network)
     vi.mocked(CampaignContextPrompts.fetchStarterCampaignLore).mockResolvedValue(null);
     vi.mocked(CampaignContextPrompts.extractSceneEntityNames).mockReturnValue([]);
-    vi.mocked(CampaignContextPrompts.renderStarterCampaignLore).mockReturnValue('');
-    vi.mocked(resolveStarterCampaignId).mockReturnValue(null);
+    vi.mocked(CampaignContextPrompts.renderStarterCampaignLore).mockReturnValue('' as any);
+    vi.mocked(resolveStarterCampaignId).mockReturnValue(null as any);
   });
 
   describe('generateCampaignDescription', () => {
@@ -635,7 +635,7 @@ describe('AIService', () => {
 
       await AIService.chatWithDM({
         message: 'What should happen next after the companion speaks?',
-        context: { sessionId: 'companion-prompt-session', gameState: { isInCombat: false } },
+        context: { sessionId: 'companion-prompt-session', gameState: { isInCombat: false } } as any,
         conversationHistory: [
           {
             id: 'companion-history-1',
@@ -678,7 +678,7 @@ describe('AIService', () => {
     const promptFor = async (message: string, history: any[]): Promise<string> => {
       await AIService.chatWithDM({
         message,
-        context: { sessionId: 'stale-options-session', gameState: { isInCombat: false } },
+        context: { sessionId: 'stale-options-session', gameState: { isInCombat: false } } as any,
         conversationHistory: history as any,
       });
       return vi.mocked(llmApiClient.generateText).mock.calls.at(-1)?.[0]?.prompt as string;
@@ -780,7 +780,9 @@ describe('AIService', () => {
     };
 
     it('opening turn contains every legacy section', async () => {
-      vi.mocked(ContextBuilder.build).mockResolvedValue('<persona>P</persona><game_context>G</game_context>');
+      vi.mocked(ContextBuilder.build).mockResolvedValue(
+        '<persona>P</persona><game_context>G</game_context>',
+      );
       vi.mocked(fetchSceneState).mockResolvedValue('<scene_state>S</scene_state>' as any);
       const { bound } = await captureBoundPrompt({
         message: '',

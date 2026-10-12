@@ -174,7 +174,7 @@ describe('session-utils', () => {
     });
 
     it('should fetch existing sessions', async () => {
-      const mockSessions = [{ id: 's1' }, { id: 's2' }];
+      const mockSessions = [{ id: 's1' }, { id: 's2' }] as any;
       vi.mocked(userDataApi.listSessions).mockResolvedValueOnce(mockSessions);
 
       const result = await fetchExistingSessions('c1', 'ch1');
