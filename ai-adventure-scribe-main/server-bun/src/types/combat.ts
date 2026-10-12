@@ -366,6 +366,10 @@ export interface CombatParticipant {
   provoked?: boolean;
   /** Authored disposition copied onto the server combat view for NPC turn decisions. */
   disposition?: string;
+  /** #374: the monster's XP, persisted at seating for exact 2014 awards (NULL for players/NPCs). */
+  xpValue?: number | null;
+  /** #374: which rung supplied the XP (SRD catalog id or bible key), for auditing. */
+  monsterRef?: string | null;
 }
 
 /**

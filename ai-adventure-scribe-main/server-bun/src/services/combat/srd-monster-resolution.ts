@@ -28,6 +28,8 @@ type CatalogEntry = {
   immunities?: string[];
   vulnerabilities?: string[];
   actions?: SrdActionEntry[];
+  /** #374: the catalog's printed XP award, persisted at seating for exact 2014 awards. */
+  xp?: number;
 };
 
 export interface ResolvedMonsterStats {
@@ -53,6 +55,12 @@ export interface ResolvedMonsterStats {
    * the catalog entry; the caller stores the result on the participant.
    */
   attacks: SrdActionParse;
+  /**
+   * #374: the XP value to persist at seating, from the authored stat block's XP field
+   * (campaign bibles), else the SRD catalog entry it resolved to, else NULL. Never
+   * re-derived from the display name.
+   */
+  xp?: number | null;
 }
 
 /** Stat line used when no SRD id was supplied — a deliberate generic NPC, not a lie. */
@@ -274,6 +282,8 @@ export function resolveSrdMonsterStats(
     damageResistances: entry.resistances ?? [],
     damageImmunities: entry.immunities ?? [],
     damageVulnerabilities: entry.vulnerabilities ?? [],
+    // #374: the catalog's printed XP; the seating step persists it on the participant.
+    xp: typeof entry.xp === 'number' && Number.isFinite(entry.xp) ? entry.xp : null,
     ...(entry.abilities ? { abilityScores: srdAbilityScores(entry.abilities) } : {}),
     attacks: parseSrdActions(entry.actions),
   };

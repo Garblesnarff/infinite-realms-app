@@ -90,6 +90,9 @@ describe('retired client HP contracts on CombatHPService', () => {
     damageImmunities: [],
     damageResistances: [],
     damageVulnerabilities: [],
+    // #374: new nullable columns on combat_participants.
+    xpValue: null,
+    monsterRef: null,
   };
 
   const mockStatus: CombatParticipantStatus = {

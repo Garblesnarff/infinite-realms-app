@@ -625,3 +625,220 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
     await db.delete(characters).where(eq(characters.id, epicId));
   });
 });
+
+/**
+ * #374: the exact 2014 XP award. Each monster's XP is persisted at seating
+ * (`combat_participants.xp_value`); on last_hostile_defeated the award is the
+ * seated sum split evenly among the player characters. Any monster without a
+ * seated value falls back to the difficulty-threshold method with a
+ * COMBAT_XP_FALLBACK log.
+ */
+const { combatVictoryXp } = await importWithRealDb(
+  () => import('../combat/combat-xp-mechanics.js'),
+);
+const loggerModule = await importWithRealDb(() => import('../../lib/logger.js'));
+
+describeWithDb('combat victory XP uses the XP seated on each monster (#374)', () => {
+  const getDb = () => realDb();
+  const userId = testId('seated-xp-user');
+  const createdSessionIds: string[] = [];
+  const createdCharacterIds: string[] = [];
+  let campaignId: string;
+
+  const sheetXp = async (characterId: string) => {
+    const [row] = await getDb()
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    return row.xp ?? 0;
+  };
+
+  /** Stands up campaign -> characters -> session -> encounter -> board, then wins it. */
+  const seatAndWin = async (opts: {
+    playerCount: number;
+    monsterXp: Array<number | null>;
+    level?: number;
+    difficulty?: string | null;
+    /** Neutral NPC allies seated alongside the monsters (xp_value NULL). */
+    npcAllies?: number;
+  }) => {
+    const level = opts.level ?? 3;
+    if (!campaignId) {
+      [{ id: campaignId }] = await getDb()
+        .insert(campaigns)
+        .values({ userId, name: testId('seated-xp-camp') })
+        .returning({ id: campaigns.id });
+    }
+    const characterIds: string[] = [];
+    for (let i = 0; i < opts.playerCount; i++) {
+      const [{ id }] = await getDb()
+        .insert(characters)
+        .values({ userId, campaignId, name: testId('seated-xp-hero'), level, class: 'Fighter' })
+        .returning({ id: characters.id });
+      characterIds.push(id);
+      createdCharacterIds.push(id);
+    }
+    const [{ id: sessionId }] = await getDb()
+      .insert(gameSessions)
+      .values({ campaignId, characterId: characterIds[0], sessionNumber: 1, status: 'active' })
+      .returning({ id: gameSessions.id });
+    createdSessionIds.push(sessionId);
+    const [{ id: encounterId }] = await getDb()
+      .insert(combatEncounters)
+      .values({
+        sessionId,
+        status: 'active',
+        currentRound: 1,
+        currentTurnOrder: 0,
+        version: 1,
+        difficulty: opts.difficulty ?? null,
+      })
+      .returning({ id: combatEncounters.id });
+    const values: Array<Record<string, unknown>> = [];
+    characterIds.forEach((characterId, i) => {
+      values.push({
+        encounterId,
+        characterId,
+        name: `Seated Hero ${i}`,
+        participantType: 'player',
+        turnOrder: i,
+        initiative: 20 - i,
+        armorClass: 15,
+        maxHp: 40,
+        speed: 30,
+      });
+    });
+    opts.monsterXp.forEach((xp, i) => {
+      values.push({
+        encounterId,
+        name: `Seated Monster ${i}`,
+        participantType: 'monster',
+        turnOrder: opts.playerCount + i,
+        initiative: 10 - i,
+        armorClass: 12,
+        maxHp: 11,
+        speed: 30,
+        // #374: what the seating step persists — authored XP, the SRD catalog value, or NULL.
+        xpValue: xp,
+        monsterRef: xp == null ? null : `srd:test-monster-${i}`,
+      });
+    });
+    // Neutral NPC allies: seated as 'npc', never carrying xp_value. They must not
+    // force the threshold fallback or pollute the award.
+    for (let i = 0; i < (opts.npcAllies ?? 0); i++) {
+      values.push({
+        encounterId,
+        name: `Seated Ally ${i}`,
+        participantType: 'npc',
+        turnOrder: opts.playerCount + opts.monsterXp.length + i,
+        initiative: 5 - i,
+        armorClass: 12,
+        maxHp: 20,
+        speed: 30,
+        xpValue: null,
+        monsterRef: null,
+      });
+    }
+    const parts = await getDb()
+      .insert(combatParticipants)
+      .values(values as never)
+      .returning({ id: combatParticipants.id, turnOrder: combatParticipants.turnOrder });
+    await getDb().insert(combatParticipantStatus).values(
+      parts.map((part) => ({
+        participantId: part.id,
+        currentHp: 40,
+        maxHp: 40,
+        isConscious: true,
+      })),
+    );
+
+    await concludeEncounter(encounterId, sessionId, userId, 'last_hostile_defeated');
+    return { sessionId, encounterId, characterIds };
+  };
+
+  afterAll(async () => {
+    if (!hasRealDb) return;
+    await getDb()
+      .delete(experienceEvents)
+      .where(inArray(experienceEvents.characterId, createdCharacterIds));
+    const rows = await getDb()
+      .select({ id: combatParticipants.id })
+      .from(combatParticipants)
+      .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
+      .where(inArray(combatEncounters.sessionId, createdSessionIds));
+    await getDb().delete(combatParticipantStatus).where(
+      inArray(
+        combatParticipantStatus.participantId,
+        rows.map((row) => row.id),
+      ),
+    );
+    for (const row of await getDb()
+      .select({ id: combatEncounters.id })
+      .from(combatEncounters)
+      .where(inArray(combatEncounters.sessionId, createdSessionIds))) {
+      await getDb().delete(combatParticipants).where(eq(combatParticipants.encounterId, row.id));
+    }
+    await getDb().delete(combatEncounters).where(inArray(combatEncounters.sessionId, createdSessionIds));
+    await getDb().delete(gameSessions).where(inArray(gameSessions.id, createdSessionIds));
+    await getDb().delete(characters).where(inArray(characters.id, createdCharacterIds));
+    await getDb().delete(campaigns).where(eq(campaigns.id, campaignId));
+    await closeRealDb();
+  });
+
+  test('two seated XP values award their exact sum to a party of one', async () => {
+    const { characterIds, encounterId } = await seatAndWin({
+      playerCount: 1,
+      monsterXp: [50, 100],
+    });
+
+    // 50 + 100, one character: the whole sum. The threshold method would have paid 150
+    // here too (level 3 medium), so this test pins the mechanism, not the number — the
+    // three-way split below is where the numbers diverge.
+    expect(await sheetXp(characterIds[0])).toBe(150);
+    const [encounter] = await getDb()
+      .select({ awarded: combatEncounters.experienceAwarded })
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, encounterId));
+    expect(encounter.awarded).toBe(150);
+  });
+
+  test('a party of three splits the seated sum evenly', async () => {
+    const { characterIds } = await seatAndWin({ playerCount: 3, monsterXp: [50, 100] });
+
+    // 150 / 3 = 50 each. The threshold fallback would have paid 150 each (level 3
+    // medium), so an even split is only reachable through the seated-XP path.
+    for (const characterId of characterIds) {
+      expect(await sheetXp(characterId)).toBe(50);
+    }
+  });
+
+  test('seated NPC allies do not force the fallback or pollute the award', async () => {
+    const { characterIds } = await seatAndWin({ playerCount: 1, monsterXp: [50, 100], npcAllies: 2 });
+
+    // 50 + 100 = 150 to the one hero. The two 'npc' allies carry NULL xp_value; if the
+    // award counted non-player seats as hostiles it would have fallen back to the
+    // threshold method instead.
+    expect(await sheetXp(characterIds[0])).toBe(150);
+  });
+
+  test('one monster without seated XP falls back to the threshold award and logs it', async () => {
+    const infoCalls: Array<Record<string, unknown>> = [];
+    const info = loggerModule.logger.info;
+    loggerModule.logger.info = ((obj: unknown, ...rest: unknown[]) => {
+      infoCalls.push(obj as Record<string, unknown>);
+      return (info as (...args: unknown[]) => unknown).call(loggerModule.logger, obj, ...rest);
+    }) as typeof info;
+    try {
+      const { characterIds } = await seatAndWin({ playerCount: 1, monsterXp: [50, null] });
+
+      // The threshold method for level 3, no difficulty (reads as medium): 150. The exact
+      // path is unreachable with a NULL seated value.
+      expect(combatVictoryXp(3, null)).toBe(150);
+      expect(await sheetXp(characterIds[0])).toBe(150);
+      const fallback = infoCalls.find((call) => call.msg === 'COMBAT_XP_FALLBACK');
+      expect(fallback).toMatchObject({ defeatedHostiles: 2, missingXpCount: 1 });
+    } finally {
+      loggerModule.logger.info = info;
+    }
+  });
+});

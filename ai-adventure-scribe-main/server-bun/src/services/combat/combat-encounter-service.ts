@@ -607,6 +607,13 @@ export class CombatEncounterService {
             attackProfile && monster?.abilityScores
               ? { ...attackProfile, abilityScores: monster.abilityScores }
               : attackProfile,
+          // #374: the monster's XP, persisted at seating for exact 2014 awards on
+          // last_hostile_defeated. From the authored stat block's XP field, else the SRD
+          // catalog entry it resolved to, else NULL. Never re-derived from the display name.
+          xpValue: monster?.xp ?? null,
+          // Which rung of the resolution ladder the XP came from (SRD catalog id or bible
+          // key), for auditing.
+          monsterRef: monster?.monsterId ?? input.monsterId ?? null,
           bestiaryName: monster?.source === 'campaign' ? bestiaryName : null,
           tacticalSize: monster?.size ?? GENERIC_NPC_STATS.size,
         };

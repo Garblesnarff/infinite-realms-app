@@ -148,6 +148,13 @@
       "when": 1791758554272,
       "tag": "0020_ai_usage_id_pk",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1791774621945,
+      "tag": "0021_combat_participants_xp",
+      "breakpoints": true
     }
   ]
 }

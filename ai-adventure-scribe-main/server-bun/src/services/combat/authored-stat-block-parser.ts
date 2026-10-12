@@ -24,6 +24,7 @@ export type AuthoredStatField =
   | 'size'
   | 'initiativeModifier'
   | 'challengeRating'
+  | 'xp'
   | 'attackBonus'
   | 'damageDice'
   | 'damageType'
@@ -38,6 +39,7 @@ export interface ParsedStatBlock {
   size?: string;
   initiativeModifier?: number;
   challengeRating?: string;
+  xp?: number;
   attackBonus?: number;
   damageDice?: string;
   damageType?: string;
@@ -264,6 +266,17 @@ export function parseAuthoredStatBlock(rawContent: string): ParsedStatBlock {
   attempt('challengeRating', CR_LABELS, '\\d{1,2}(?:\\s*/\\s*\\d{1,2})?', ([raw]) =>
     raw.replace(/\s+/g, ''),
   );
+
+  // #374: XP is an explicit integer (e.g. "XP: 100" or "Experience: 450").
+  // Thousands separators are accepted ("XP: 1,800" -> 1800). The trailing guard
+  // refuses malformed separators ("XP: 1,80" must not silently become 1 XP):
+  // a label whose value is malformed produces NO match and is reported as an
+  // unparsed label instead.
+  // A missing XP is a content error for new campaigns, not a parser loosening.
+  attempt('xp', ['XP', 'Experience'], '\\d+(?:,\\d{3})*(?![\\d,])', ([raw]) => {
+    const n = Number(raw.replace(/,/g, ''));
+    return Number.isInteger(n) && n >= 0 ? n : undefined;
+  });
 
   attempt(
     'attackBonus',

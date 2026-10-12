@@ -294,3 +294,54 @@ describe('unsupported speed text', () => {
     expect(parsed.warnings).toEqual([]);
   });
 });
+
+describe('authored XP (#374)', () => {
+  test('reads an explicit XP integer', () => {
+    const parsed = parseAuthoredStatBlock('**HP:** 45 **AC:** 13\n**XP:** 100');
+    expect(parsed.xp).toBe(100);
+  });
+
+  test('reads the "Experience" label variant', () => {
+    const parsed = parseAuthoredStatBlock('**HP:** 45\nExperience: 450');
+    expect(parsed.xp).toBe(450);
+  });
+
+  test('a missing XP is undefined, not zero: the award falls back rather than halving', () => {
+    const parsed = parseAuthoredStatBlock('**HP:** 45 **AC:** 13');
+    expect(parsed.xp).toBeUndefined();
+  });
+
+  test('an attack line reading "Attack: slam" does not become an XP of 0', () => {
+    const parsed = parseAuthoredStatBlock('**Attack:** slam');
+    expect(parsed.xp).toBeUndefined();
+  });
+
+  test('accepts thousands separators: "XP: 1,800" parses as 1800', () => {
+    const parsed = parseAuthoredStatBlock('**HP:** 45 **AC:** 13\n**XP:** 1,800');
+    expect(parsed.xp).toBe(1800);
+  });
+
+  test('accepts larger thousands separators: "Experience: 11,000"', () => {
+    const parsed = parseAuthoredStatBlock('**HP:** 45\nExperience: 11,000');
+    expect(parsed.xp).toBe(11000);
+  });
+
+  test('a plain four-digit XP still parses without a separator', () => {
+    const parsed = parseAuthoredStatBlock('**XP:** 1800');
+    expect(parsed.xp).toBe(1800);
+  });
+
+  test('a non-numeric XP is refused, not zero', () => {
+    const parsed = parseAuthoredStatBlock('**HP:** 45 **AC:** 13\n**XP:** lots');
+    expect(parsed.xp).toBeUndefined();
+    expect(parsed.unparsedLabels).toContain('XP');
+  });
+
+  test('malformed thousands separators are refused, not truncated', () => {
+    for (const bad of ['**XP:** 1,80', '**XP:** 1,8000', '**XP:** 1,80,000']) {
+      const parsed = parseAuthoredStatBlock(`**HP:** 45\n${bad}`);
+      expect(parsed.xp).toBeUndefined();
+      expect(parsed.unparsedLabels).toContain('XP');
+    }
+  });
+});
