@@ -97,7 +97,10 @@ describe('ExportButton Components Accessibility and UX', () => {
     });
 
     // Should trigger query
-    expect(mockQuery).toHaveBeenCalledWith({ characterId: 'test-character-id' });
+    expect(mockQuery).toHaveBeenCalledWith(
+      { characterId: 'test-character-id' },
+      expect.objectContaining({ staleTime: 0 }),
+    );
 
     // Since the call is asynchronous, we wait or let the promises resolve
     await vi.waitFor(() => {

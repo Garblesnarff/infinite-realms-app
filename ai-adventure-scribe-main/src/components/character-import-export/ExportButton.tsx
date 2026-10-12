@@ -64,7 +64,7 @@ export const ExportButton: React.FC<ExportButtonProps> = ({
     }
     setIsExporting(true);
     try {
-      const characterData = await utils.characters.export.fetch({ characterId });
+      const characterData = await utils.characters.export.fetch({ characterId }, { staleTime: 0 });
       if (!characterData) throw new Error('No character data received');
       const filename = generateFilename(characterName);
       downloadJSON(characterData, filename);
@@ -157,7 +157,7 @@ export const SimpleExportButton: React.FC<Omit<ExportButtonProps, 'showLabel'>> 
   const handleExport = async (): Promise<void> => {
     setIsExporting(true);
     try {
-      const characterData = await utils.characters.export.fetch({ characterId });
+      const characterData = await utils.characters.export.fetch({ characterId }, { staleTime: 0 });
       if (!characterData) throw new Error('No character data received');
       const filename = generateFilename(characterName);
       downloadJSON(characterData, filename);
