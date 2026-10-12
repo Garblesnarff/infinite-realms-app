@@ -69,7 +69,9 @@ const SessionCard: React.FC<SessionCardProps> = ({
   onGenerateChronicle,
   userPlan,
 }) => {
-  const statusKey = session.status ?? 'completed';
+  // QA-011: an expired active session must not read Active (the overview hides Resume for it).
+  const statusKey =
+    session.status === 'active' && expired ? 'expired' : (session.status ?? 'completed');
   const badgeClass = statusStyles[statusKey] ?? statusStyles.completed;
   const badgeLabel = statusLabels[statusKey] ?? 'Completed';
 
