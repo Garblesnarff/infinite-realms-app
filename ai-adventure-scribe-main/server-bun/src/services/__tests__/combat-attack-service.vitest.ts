@@ -320,7 +320,7 @@ describe('CombatAttackService', () => {
                 id: mockTargetId,
                 name: 'The Professor',
                 armorClass: 15,
-                participantType: 'npc',
+                participantType: 'player',
                 damageImmunities: [],
                 damageResistances: [],
                 damageVulnerabilities: [],
@@ -376,6 +376,94 @@ describe('CombatAttackService', () => {
       expect(result.hit).toBe(true);
       expect(result.deathSaveFailuresAdded).toBe(2);
       expect(result.deathSavesFailures).toBe(2);
+    });
+
+    it('omits the death-save failure fields for an NPC target even when failures were added (#314 CB-075)', async () => {
+      // Producer: HPMechanics.calculateDamageResult sets deathSaveFailuresAdded and
+      // newDeathSavesFailures when a hit lands on a target at 0 HP. The player-only
+      // gate in deathSaveFailureFields must strip those fields for NPC targets, so a
+      // monster's kill line is just "DEAD", never "FAILED 3 of 3 failures".
+      vi.mocked(CombatHPService.applyDamage).mockResolvedValue({
+        damageDealt: 6,
+        newCurrentHp: 0,
+        isConscious: false,
+        isDead: false,
+        deathSaveFailuresAdded: 2,
+        newDeathSavesFailures: 2,
+      } as any);
+
+      const mockEncounterId = 'enc-123';
+      const mockTargetId = 'target-123';
+      const mockAttackerId = 'attacker-123';
+
+      (db.select as any)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          leftJoin: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([
+            {
+              participant: {
+                id: mockTargetId,
+                name: 'Vitruvian Spider',
+                armorClass: 15,
+                participantType: 'npc',
+                damageImmunities: [],
+                damageResistances: [],
+                damageVulnerabilities: [],
+              },
+              stats: { armorClass: 15 },
+              status: {
+                currentHp: 0,
+                maxHp: 10,
+                tempHp: 0,
+                isConscious: false,
+                deathSavesFailures: 0,
+              },
+              encounter: { currentRound: 1, sessionId: 'session-123' },
+            },
+            {
+              participant: { id: mockAttackerId, armorClass: 10, participantType: 'player' },
+              stats: null,
+              status: null,
+              encounter: {},
+            },
+          ]),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([]),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([]),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          orderBy: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue([]),
+        })
+        .mockReturnValueOnce(statusRead(true)) // attacker: getActiveConditionNames reads its status row
+        .mockReturnValueOnce(statusRead(false)); // target
+
+      const result = await service.resolveAttack(
+        mockEncounterId,
+        {
+          attackerId: mockAttackerId,
+          expectedVersion: 1,
+          targetId: mockTargetId,
+          attackType: 'melee',
+        },
+        mockUserId,
+      );
+
+      expect(result.hit).toBe(true);
+      // The gate: even with 2 failures added, an NPC target must not carry the fields.
+      expect(result).not.toHaveProperty('deathSaveFailuresAdded');
+      expect(result).not.toHaveProperty('deathSavesFailures');
     });
 
     it('omits the death-save failure fields when no failures were added (#2457)', async () => {
