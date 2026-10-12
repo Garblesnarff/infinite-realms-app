@@ -186,8 +186,24 @@ export class CharacterService {
       }
 
       if (equipment?.length) {
+        // #388: starting kits list some items twice (the Fighter kit's two
+        // handaxes), but character_equipment has UNIQUE(character_id, item_name).
+        // Merge duplicates into one row with summed quantity before insert.
+        const merged = new Map<string, Record<string, unknown>>();
+        for (const item of equipment) {
+          const key = String(item.item_name || '');
+          const prior = merged.get(key);
+          if (prior) {
+            merged.set(key, {
+              ...prior,
+              quantity: Number(prior.quantity || 1) + Number(item.quantity || 1),
+            });
+          } else {
+            merged.set(key, { ...item });
+          }
+        }
         await tx.insert(characterEquipment).values(
-          equipment.map((item) => ({
+          [...merged.values()].map((item) => ({
             characterId: character.id,
             itemName: String(item.item_name || ''),
             itemType: String(item.item_type || 'equipment'),
