@@ -13,6 +13,7 @@ import {
   settleCombatDeathSaveRoll,
   settleCombatInitiativeRoll,
 } from '@/hooks/combat/use-player-roll-host';
+import { markDeathSavePromptDismissed } from '@/services/combat/player-roll-bridge';
 
 const { game } = vi.hoisted(() => ({
   game: {
@@ -35,7 +36,10 @@ vi.mock('@/hooks/combat/use-player-roll-host', () => ({
   settleCombatCheckRoll: vi.fn(() => false),
   settleCombatDeathSaveRoll: vi.fn(() => false),
 }));
-vi.mock('@/services/combat/player-roll-bridge', () => ({ hasPendingPlayerRoll: () => false }));
+vi.mock('@/services/combat/player-roll-bridge', () => ({
+  hasPendingPlayerRoll: () => false,
+  markDeathSavePromptDismissed: vi.fn(),
+}));
 vi.mock('@/lib/logger', () => ({ default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock('@/utils/error-handler', () => ({ handleAsyncError: vi.fn() }));
 
@@ -176,6 +180,9 @@ describe('Cancel on a roll prompt (#2291)', () => {
     expect(settleCombatInitiativeRoll).not.toHaveBeenCalled();
     expect(settleCombatCheckRoll).not.toHaveBeenCalled();
     expect(settleCombatDeathSaveRoll).not.toHaveBeenCalled();
+    // …and the dismiss is recorded so the composer slot can keep its Roll button —
+    // dismiss bookkeeping, not a settle.
+    expect(markDeathSavePromptDismissed).toHaveBeenCalledTimes(1);
     // …and no declined-roll line is written: the turn is not declined, only the panel.
     await Promise.resolve();
     expect(onSendMessage).not.toHaveBeenCalled();

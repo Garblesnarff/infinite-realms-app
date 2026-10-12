@@ -56,7 +56,7 @@ describe('the clock on an engine roll prompt (#2530)', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(PLAYER_ATTACK_ROLL_TIMEOUT_MS - 10_000);
     });
-    await expect(outcome).resolves.toEqual({ d20: null });
+    await expect(outcome).resolves.toEqual({ d20: null, timedOut: true });
   });
 
   it('disappears when the player commits to the die, since nothing will auto-roll it now', async () => {

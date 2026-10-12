@@ -353,6 +353,7 @@ describe('usePlayerRollHost: the death saving throw prompt (#2518)', () => {
     act(() => {
       expect(settleCombatAttackRoll('death-roll-1', 14)).toBe(true);
     });
-    await expect(pending).resolves.toEqual({ d20: 14 });
+    // The player's own die: autoRolled is false (only the 45 s timer reads as engine-rolled).
+    await expect(pending).resolves.toEqual({ d20: 14, autoRolled: false });
   });
 });
