@@ -7,6 +7,12 @@
 
 import type { InventoryItem, ConsumableUsageLog } from '../../../db/schema/index';
 
+export {
+  CARRYING_CAPACITY_MULTIPLIERS,
+  ENCUMBRANCE_THRESHOLDS,
+  PUSH_DRAG_LIFT_CAPACITY_MULTIPLIER,
+} from '../../../shared/carrying-capacity';
+
 /**
  * Item type discriminator
  */
@@ -181,30 +187,9 @@ export const HEALING_POTIONS = {
 } as const;
 
 /**
- * Carrying capacity multipliers by size (PHB pg. 176)
- */
-export const CARRYING_CAPACITY_MULTIPLIERS = {
-  TINY: 0.5,
-  SMALL: 1,
-  MEDIUM: 1,
-  LARGE: 2,
-  HUGE: 4,
-  GARGANTUAN: 8,
-} as const;
-
-/**
  * Maximum attuned items (DMG pg. 136)
  */
 export const MAX_ATTUNED_ITEMS = 3;
-
-/**
- * Encumbrance variant rule thresholds (PHB pg. 176)
- */
-export const ENCUMBRANCE_THRESHOLDS = {
-  NORMAL: 1,
-  ENCUMBERED: 5,
-  HEAVILY_ENCUMBERED: 10,
-} as const;
 
 /**
  * Speed penalties for encumbrance (PHB pg. 176)

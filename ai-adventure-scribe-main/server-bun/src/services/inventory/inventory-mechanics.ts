@@ -8,8 +8,11 @@
  * @module server/services/inventory/inventory-mechanics
  */
 
-import { carryingCapacityForStrength } from '../../../../shared/carrying-capacity';
-import { ENCUMBRANCE_THRESHOLDS, SPEED_PENALTIES } from '../../types/inventory.js';
+import {
+  ENCUMBRANCE_THRESHOLDS,
+  carryingCapacityForStrength,
+} from '../../../../shared/carrying-capacity';
+import { SPEED_PENALTIES } from '../../types/inventory.js';
 
 import type { EncumbranceLevel, EncumbranceStatus } from '../../types/inventory.js';
 
