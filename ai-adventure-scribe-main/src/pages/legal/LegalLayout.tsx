@@ -1,6 +1,7 @@
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
 
+import { LaunchHeader } from '@/components/launch/LaunchHeader';
 import { SHOW_LEGAL_DRAFT_BANNER } from '@/config/legal';
 
 interface LegalLayoutProps {
@@ -37,14 +38,8 @@ export const LegalLayout: React.FC<LegalLayoutProps> = ({ title, path, lastUpdat
       <meta name="twitter:image" content="https://infiniterealms.app/og-image.png" />
       <link rel="canonical" href={`https://infiniterealms.app${path}`} />
     </Helmet>
-    <header className="border-b border-white/10 px-6 py-4">
-      <a
-        href="/"
-        className="ir-display text-lg font-bold tracking-wide text-infinite-gold hover:text-infinite-gold-light"
-      >
-        ✦ INFINITE REALMS
-      </a>
-    </header>
+    {/* #210 QA-002: same wordmark and top nav as the launch page. */}
+    <LaunchHeader />
     <main id="main-content" tabIndex={-1} className="mx-auto max-w-3xl px-6 py-12">
       {SHOW_LEGAL_DRAFT_BANNER && (
         <div
