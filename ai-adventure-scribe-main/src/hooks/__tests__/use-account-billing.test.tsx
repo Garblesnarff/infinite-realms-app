@@ -42,10 +42,18 @@ describe('useAccountBilling', () => {
     const store: any = {};
     const localStorageMock = {
       getItem: vi.fn((key) => store[key] || null),
-      setItem: vi.fn((key, value) => { store[key] = value.toString(); }),
-      clear: vi.fn(() => { for (const key in store) delete store[key]; }),
+      setItem: vi.fn((key, value) => {
+        store[key] = value.toString();
+      }),
+      clear: vi.fn(() => {
+        for (const key in store) delete store[key];
+      }),
     };
-    Object.defineProperty(window, 'localStorage', { value: localStorageMock, writable: true, configurable: true });
+    Object.defineProperty(window, 'localStorage', {
+      value: localStorageMock,
+      writable: true,
+      configurable: true,
+    });
 
     // Mock window.location
     delete (window as any).location;
@@ -56,7 +64,7 @@ describe('useAccountBilling', () => {
   });
 
   afterEach(() => {
-    window.location = originalLocation;
+    window.location = originalLocation as any;
     mockSearchParams.delete('success');
     mockSearchParams.delete('canceled');
   });
@@ -66,7 +74,9 @@ describe('useAccountBilling', () => {
     renderHook(() => useAccountBilling('free', refreshUserPlan));
 
     expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('Welcome to Legend tier'));
-    expect(analytics.track).toHaveBeenCalledWith('checkout_completed', { source: 'stripe_redirect' });
+    expect(analytics.track).toHaveBeenCalledWith('checkout_completed', {
+      source: 'stripe_redirect',
+    });
     expect(refreshUserPlan).toHaveBeenCalled();
   });
 
@@ -75,7 +85,9 @@ describe('useAccountBilling', () => {
     renderHook(() => useAccountBilling('free', refreshUserPlan));
 
     expect(toast.info).toHaveBeenCalledWith(expect.stringContaining('canceled'));
-    expect(analytics.track).toHaveBeenCalledWith('checkout_canceled', { source: 'stripe_redirect' });
+    expect(analytics.track).toHaveBeenCalledWith('checkout_canceled', {
+      source: 'stripe_redirect',
+    });
   });
 
   it('should fetch subscription and quota on mount', async () => {
@@ -143,15 +155,24 @@ describe('useAccountBilling', () => {
       json: () => Promise.resolve({}),
     });
 
-    const { rerender } = renderHook(({ userPlan }) => useAccountBilling(userPlan, refreshUserPlan), {
-      initialProps: { userPlan: 'free' as any },
-    });
+    const { rerender } = renderHook(
+      ({ userPlan }) => useAccountBilling(userPlan, refreshUserPlan),
+      {
+        initialProps: { userPlan: 'free' as any },
+      },
+    );
 
-    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/v1/billing/subscription'), expect.any(Object));
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/v1/billing/subscription'),
+      expect.any(Object),
+    );
     vi.clearAllMocks();
 
     rerender({ userPlan: 'legend' as any });
-    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/v1/billing/subscription'), expect.any(Object));
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/v1/billing/subscription'),
+      expect.any(Object),
+    );
   });
 
   it('should handle handleUpgrade successfully', async () => {
@@ -170,10 +191,13 @@ describe('useAccountBilling', () => {
     });
 
     expect(analytics.track).toHaveBeenCalledWith('upgrade_clicked', expect.any(Object));
-    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/v1/billing/create-checkout-session'), expect.objectContaining({
-      method: 'POST',
-      body: JSON.stringify({ priceId: ACCOUNT_UPGRADE_PRICE.priceId }),
-    }));
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/v1/billing/create-checkout-session'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ priceId: ACCOUNT_UPGRADE_PRICE.priceId }),
+      }),
+    );
     expect(window.location.href).toBe(checkoutUrl);
   });
 
@@ -203,9 +227,12 @@ describe('useAccountBilling', () => {
     });
 
     expect(analytics.track).toHaveBeenCalledWith('manage_subscription_clicked');
-    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/v1/billing/portal-session'), expect.objectContaining({
-      method: 'POST',
-    }));
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/v1/billing/portal-session'),
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    );
     expect(window.location.href).toBe(portalUrl);
   });
 

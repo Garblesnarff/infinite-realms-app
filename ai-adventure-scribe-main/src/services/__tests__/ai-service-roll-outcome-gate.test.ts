@@ -146,6 +146,7 @@ describe('AIService chatWithDM roll-outcome gate (#2609)', () => {
       canonCut: false,
       keptEntities: 0,
       droppedEntities: 0,
+      keptEntityNames: [],
     });
     vi.mocked(resolveStarterCampaignId).mockReturnValue(undefined);
     vi.mocked(MemoryManager.getRelevantMemories).mockResolvedValue([]);

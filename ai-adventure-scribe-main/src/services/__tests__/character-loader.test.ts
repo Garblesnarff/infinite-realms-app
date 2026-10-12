@@ -117,8 +117,8 @@ describe('CharacterLoaderService', () => {
       expect(result?.knownSpells).toEqual(['magic-missile', 'shield']);
       expect(result?.preparedSpells).toEqual(['magic-missile']);
       expect(result?.ritualSpells).toEqual(['identify']);
-      expect(result?.abilityScores.intelligence.score).toBe(18);
-      expect(result?.abilityScores.intelligence.modifier).toBe(4);
+      expect(result?.abilityScores!.intelligence.score).toBe(18);
+      expect(result?.abilityScores!.intelligence.modifier).toBe(4);
     });
 
     // TODO(vitest-config-audit, 2026-07-14): same stale supabase mock as above.
@@ -181,8 +181,8 @@ describe('CharacterLoaderService', () => {
       const result = await characterLoaderService.loadCharacterWithSpells('char-123');
 
       // Assert
-      expect(result?.abilityScores.strength.score).toBe(10);
-      expect(result?.abilityScores.strength.modifier).toBe(0);
+      expect(result?.abilityScores!.strength.score).toBe(10);
+      expect(result?.abilityScores!.strength.modifier).toBe(0);
     });
 
     // TODO(vitest-config-audit, 2026-07-14): same stale supabase mock as above.

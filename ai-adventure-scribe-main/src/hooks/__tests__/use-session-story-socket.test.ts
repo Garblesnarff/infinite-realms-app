@@ -23,7 +23,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 vi.mock('@/services/ws-ticket-client', async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = (await importOriginal()) as Record<string, unknown>;
   return { ...actual, mintWsTicket: mocks.mintWsTicket };
 });
 

@@ -164,9 +164,11 @@ describe('LlmApiClient', () => {
       reportTurnPhase('composer enabled');
 
       const phases = logger.info.mock.calls
-        .filter(([event]) => event === 'TURN_PHASE')
-        .map(([, payload]) => payload as { phase: string; ms: number; requestId: string | null });
-      expect(phases.map(({ phase }) => phase)).toEqual([
+        .filter(([event]: any) => event === 'TURN_PHASE')
+        .map(
+          ([, payload]: any) => payload as { phase: string; ms: number; requestId: string | null },
+        );
+      expect(phases.map(({ phase }: any) => phase)).toEqual([
         'submit',
         'preflight',
         'generate start',
@@ -178,21 +180,27 @@ describe('LlmApiClient', () => {
         'composer enabled',
       ]);
 
-      const persistPhase = phases.find(({ phase }) => phase === 'persist');
+      const persistPhase = phases.find(({ phase }: any) => phase === 'persist');
       expect(persistPhase).toMatchObject({
         phase: 'persist',
         requestId: 'generate-req-2',
       });
       expect(persistPhase?.ms).toBeGreaterThanOrEqual(0);
 
-      const cumulativeMs = phases.reduce<number[]>((totals, { ms }) => {
+      const cumulativeMs = (
+        phases as Array<{ phase: string; ms: number; requestId: string | null }>
+      ).reduce<number[]>((totals: number[], { ms }: any) => {
         totals.push((totals.at(-1) ?? 0) + ms);
         return totals;
       }, []);
       expect(
-        cumulativeMs.every((value, index) => index === 0 || value > cumulativeMs[index - 1]),
+        cumulativeMs.every(
+          (value: number, index: number) => index === 0 || value > cumulativeMs[index - 1],
+        ),
       ).toBe(true);
-      expect(phases.slice(3).every(({ requestId }) => requestId === 'generate-req-2')).toBe(true);
+      expect(phases.slice(3).every(({ requestId }: any) => requestId === 'generate-req-2')).toBe(
+        true,
+      );
     });
 
     it('should successfully generate text using the preferred provider', async () => {

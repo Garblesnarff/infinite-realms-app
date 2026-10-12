@@ -306,7 +306,7 @@ describe('useSpellSelection Hook', () => {
 
     // Mock spell API to return test data
     const mockGetClassSpells = vi.mocked(spellApi.getClassSpells);
-    mockGetClassSpells.mockImplementation(async (className: string) => {
+    mockGetClassSpells.mockImplementation((async (className: string) => {
       // Normalize className to match our mock data keys
       const normalizedClassName =
         className.charAt(0).toUpperCase() + className.slice(1).toLowerCase();
@@ -316,7 +316,7 @@ describe('useSpellSelection Hook', () => {
           spells: [],
         }
       );
-    });
+    }) as any);
 
     // Mock character classes
     mockWizard = {
@@ -338,6 +338,7 @@ describe('useSpellSelection Hook', () => {
       classFeatures: [],
       armorProficiencies: [],
       weaponProficiencies: [],
+      subclasses: [],
     };
 
     _mockCleric = {
@@ -357,7 +358,9 @@ describe('useSpellSelection Hook', () => {
       classFeatures: [],
       armorProficiencies: [],
       weaponProficiencies: [],
+      subclasses: [],
     };
+    void _mockCleric;
 
     mockFighter = {
       id: 'fighter',
@@ -371,6 +374,7 @@ describe('useSpellSelection Hook', () => {
       classFeatures: [],
       armorProficiencies: [],
       weaponProficiencies: [],
+      subclasses: [],
     };
 
     mockRace = {
@@ -765,11 +769,11 @@ describe('useSpellSelection Hook', () => {
       });
 
       result.current.filteredCantrips.forEach((spell) => {
-        expect(spell.verbal).toBe(true);
+        expect((spell as any).verbal).toBe(true);
       });
 
       result.current.filteredSpells.forEach((spell) => {
-        expect(spell.verbal).toBe(true);
+        expect((spell as any).verbal).toBe(true);
       });
     });
 
@@ -830,7 +834,7 @@ describe('useSpellSelection Hook', () => {
             spell.description.toLowerCase().includes('magic'),
         ).toBe(true);
         expect(spell.school).toBe('Evocation');
-        expect(spell.verbal).toBe(true);
+        expect((spell as any).verbal).toBe(true);
       });
     });
   });

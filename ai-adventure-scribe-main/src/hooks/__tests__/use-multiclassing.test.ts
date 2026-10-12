@@ -63,7 +63,7 @@ describe('useMulticlassing', () => {
 
       const { result } = renderHook(() => useMulticlassing(mockCharacter, onCharacterUpdate));
 
-      let validation;
+      let validation: any;
       await act(async () => {
         validation = await result.current.validateNewClass(mockNewClass);
       });
@@ -81,7 +81,7 @@ describe('useMulticlassing', () => {
 
       const { result } = renderHook(() => useMulticlassing(mockCharacter, onCharacterUpdate));
 
-      let validation;
+      let validation: any;
       await act(async () => {
         validation = await result.current.validateNewClass(mockNewClass);
       });
@@ -107,7 +107,7 @@ describe('useMulticlassing', () => {
 
       const { result } = renderHook(() => useMulticlassing(mockCharacter, onCharacterUpdate));
 
-      let addResult;
+      let addResult: any;
       await act(async () => {
         addResult = await result.current.addNewClass(mockNewClass, 1);
       });
@@ -131,7 +131,7 @@ describe('useMulticlassing', () => {
 
       const { result } = renderHook(() => useMulticlassing(mockCharacter, onCharacterUpdate));
 
-      let addResult;
+      let addResult: any;
       await act(async () => {
         addResult = await result.current.addNewClass(mockNewClass, 1);
       });
@@ -150,7 +150,7 @@ describe('useMulticlassing', () => {
 
       const { result } = renderHook(() => useMulticlassing(mockCharacter, onCharacterUpdate));
 
-      let addResult;
+      let addResult: any;
       await act(async () => {
         addResult = await result.current.addNewClass(mockNewClass, 1);
       });
@@ -173,7 +173,7 @@ describe('useMulticlassing', () => {
 
       const { result } = renderHook(() => useMulticlassing(mockCharacter, onCharacterUpdate));
 
-      let levelUpResult;
+      let levelUpResult: any;
       await act(async () => {
         levelUpResult = await result.current.levelUpSpecificClass('fighter-id');
       });
@@ -193,7 +193,7 @@ describe('useMulticlassing', () => {
 
       const { result } = renderHook(() => useMulticlassing(mockCharacter, onCharacterUpdate));
 
-      let levelUpResult;
+      let levelUpResult: any;
       await act(async () => {
         levelUpResult = await result.current.levelUpSpecificClass('some-id');
       });
@@ -208,7 +208,7 @@ describe('useMulticlassing', () => {
 
       const { result } = renderHook(() => useMulticlassing(mockCharacter, onCharacterUpdate));
 
-      let levelUpResult;
+      let levelUpResult: any;
       await act(async () => {
         levelUpResult = await result.current.levelUpSpecificClass('fighter-id');
       });

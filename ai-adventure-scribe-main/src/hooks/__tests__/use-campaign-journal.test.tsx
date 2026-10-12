@@ -56,7 +56,7 @@ describe('useCampaignJournal', () => {
       ],
     };
 
-    vi.mocked(userDataApi.getSessionJournal).mockResolvedValue(mockJournalData);
+    vi.mocked(userDataApi.getSessionJournal).mockResolvedValue(mockJournalData as any);
 
     const { result } = renderHook(() => useCampaignJournal('test-session-id'), { wrapper });
 
@@ -70,7 +70,7 @@ describe('useCampaignJournal', () => {
 
   it('should invalidate campaign journal queries when campaign-journal-updated event is dispatched', async () => {
     const mockJournalData = { entries: [] };
-    vi.mocked(userDataApi.getSessionJournal).mockResolvedValue(mockJournalData);
+    vi.mocked(userDataApi.getSessionJournal).mockResolvedValue(mockJournalData as any);
 
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
 
@@ -89,7 +89,7 @@ describe('useCampaignJournal', () => {
 
   it('should clean up the window event listener when the hook is unmounted', async () => {
     const mockJournalData = { entries: [] };
-    vi.mocked(userDataApi.getSessionJournal).mockResolvedValue(mockJournalData);
+    vi.mocked(userDataApi.getSessionJournal).mockResolvedValue(mockJournalData as any);
 
     const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
 
@@ -99,7 +99,7 @@ describe('useCampaignJournal', () => {
 
     expect(removeEventListenerSpy).toHaveBeenCalledWith(
       'campaign-journal-updated',
-      expect.any(Function)
+      expect.any(Function),
     );
   });
 });

@@ -2,6 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, act } from '@testing-library/react';
 import React from 'react';
+// @ts-expect-error: uuid ships without its own types in this repo
 import { v4 as uuidv4 } from 'uuid';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -158,7 +159,7 @@ describe('useMessageQueue', () => {
       },
     };
 
-    let persistedMessage;
+    let persistedMessage: any;
     await act(async () => {
       persistedMessage = await result.current.messageMutation.mutateAsync(message);
     });
@@ -237,7 +238,7 @@ describe('useMessageQueue', () => {
     const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
     const rollRequests = [
       { type: 'skill_check', formula: '1d20+5', purpose: 'Stealth check', dc: 13 },
-    ];
+    ] as any;
 
     await act(async () => {
       await result.current.messageMutation.mutateAsync({
@@ -285,7 +286,7 @@ describe('useMessageQueue', () => {
     const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
     const message: any = { text: 'Retry me', sender: 'player' };
 
-    let persistedMessage;
+    let persistedMessage: any;
     await act(async () => {
       const mutationPromise = result.current.messageMutation.mutateAsync(message);
 

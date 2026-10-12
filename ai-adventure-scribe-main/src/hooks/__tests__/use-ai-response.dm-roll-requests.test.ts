@@ -487,7 +487,7 @@ describe('useAIResponse: DM roll requests and the player’s turn (#2530)', () =
     });
 
     it('two attacks while the first narration is still pending each get their own prompt (run 19 T7)', async () => {
-      let releaseFirstNarration!: (value: unknown) => void;
+      let releaseFirstNarration!: (value: any) => void;
       vi.mocked(AIService.chatWithDM)
         // Turn 1: declaration, then a narration that does not come back until released.
         .mockResolvedValueOnce(

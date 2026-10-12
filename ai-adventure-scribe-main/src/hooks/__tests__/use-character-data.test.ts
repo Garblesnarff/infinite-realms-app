@@ -114,13 +114,13 @@ describe('useCharacterData', () => {
 
     expect(result.current.character).not.toBeNull();
     expect(result.current.character?.name).toBe('Test Hero');
-    expect(result.current.character?.abilityScores.strength.score).toBe(15);
-    expect(result.current.character?.abilityScores.strength.modifier).toBe(2);
+    expect(result.current.character?.abilityScores!.strength.score).toBe(15);
+    expect(result.current.character?.abilityScores!.strength.modifier).toBe(2);
     expect(result.current.character?.cantrips).toEqual(['mage-hand', 'light']);
     expect(result.current.character?.knownSpells).toEqual(['magic-missile', 'shield']);
     expect(result.current.character?.equipment).toContain('Longsword');
-    expect(result.current.character?.inventory[0].itemId).toBe('item-1');
-    expect(result.current.character?.inventory[0].equipped).toBe(true);
+    expect(result.current.character?.inventory![0].itemId).toBe('item-1');
+    expect(result.current.character?.inventory![0].equipped).toBe(true);
 
     expect(userDataApi.getCharacter).toHaveBeenCalledWith(mockCharacterId);
     expect(issue1784Api.getCharacterEquipment).toHaveBeenCalledWith(mockCharacterId);
@@ -314,7 +314,7 @@ describe('useCharacterData', () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.character?.name).toBe('Minimal Hero');
-    expect(result.current.character?.abilityScores.strength.score).toBe(10);
+    expect(result.current.character?.abilityScores!.strength.score).toBe(10);
     expect(result.current.character?.equipment).toEqual([]);
   });
 

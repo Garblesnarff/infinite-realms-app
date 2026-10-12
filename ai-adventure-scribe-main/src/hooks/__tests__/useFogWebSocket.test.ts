@@ -22,7 +22,7 @@ vi.mock('@/services/user-data-api', () => ({
 }));
 
 vi.mock('@/services/ws-ticket-client', async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = (await importOriginal()) as Record<string, unknown>;
   return { ...actual, mintWsTicket: mocks.mintWsTicket };
 });
 

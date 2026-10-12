@@ -39,6 +39,7 @@ describe('useSpellSelectionValidation', () => {
       classFeatures: [],
       armorProficiencies: [],
       weaponProficiencies: [],
+      subclasses: [],
     },
     race: {
       id: 'human',
@@ -60,10 +61,30 @@ describe('useSpellSelectionValidation', () => {
   };
 
   const mockAvailableCantrips: Spell[] = [
-    { id: 'cantrip-1', name: 'Cantrip 1', level: 0, school: 'Evocation', description: 'desc' },
+    {
+      id: 'cantrip-1',
+      name: 'Cantrip 1',
+      level: 0,
+      school: 'Evocation',
+      description: 'desc',
+      casting_time: '1 action',
+      range_text: '60 ft',
+      components: 'V, S',
+      duration: 'Instantaneous',
+    },
   ];
   const mockAvailableSpells: Spell[] = [
-    { id: 'spell-1', name: 'Spell 1', level: 1, school: 'Evocation', description: 'desc' },
+    {
+      id: 'spell-1',
+      name: 'Spell 1',
+      level: 1,
+      school: 'Evocation',
+      description: 'desc',
+      casting_time: '1 action',
+      range_text: '60 ft',
+      components: 'V, S',
+      duration: 'Instantaneous',
+    },
   ];
 
   const stableSelectedCantrips = ['cantrip-1'];
@@ -161,7 +182,10 @@ describe('useSpellSelectionValidation', () => {
 
     expect(result.current.validation).toEqual(syncResult);
     expect(result.current.canProceed).toBe(true);
-    expect(mockLoggerError).toHaveBeenCalledWith('Async spell validation failed:', expect.any(Error));
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      'Async spell validation failed:',
+      expect.any(Error),
+    );
     expect(mockValidateSpellSelection).toHaveBeenCalledWith(
       mockCharacter,
       stableSelectedCantrips,
