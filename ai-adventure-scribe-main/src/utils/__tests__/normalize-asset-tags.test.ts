@@ -218,6 +218,27 @@ describe('normalize-asset-tags', () => {
       expect(result.match(/Chef/g)).toHaveLength(1);
     });
 
+    it('does not prepend a second name when the prose uses a different name form after the tag (#267 GP-036)', () => {
+      // Hark GP-036 verbatim shape: the tag derives "The Grand Kitchen" but the
+      // prose names the place "The Academy Dining Hall". Prepending would print
+      // the glued "The Grand Kitchen The Academy Dining Hall".
+      const input =
+        'Together, you cross the threshold into [ASSET:location:the-grand-kitchen] The Academy Dining Hall.';
+      const result = normalizeAssetTagKeysInContent(input);
+      expect(result).toBe(input);
+      expect(result.match(/Academy Dining Hall/g)).toHaveLength(1);
+      expect(result).not.toContain('The Grand Kitchen');
+    });
+
+    it('does not prepend a second name when the prose uses a different name form before the tag (#267 GP-036)', () => {
+      const input =
+        'Together, you cross the threshold into The Grand Kitchen [ASSET:location:the-academy-dining-hall].';
+      const result = normalizeAssetTagKeysInContent(input);
+      expect(result).toBe(input);
+      expect(result.match(/Grand Kitchen/g)).toHaveLength(1);
+      expect(result).not.toContain('The Academy Dining Hall');
+    });
+
     it('does not prepend when the model emits an old-style key without the possessive strip (#267)', () => {
       // The model may emit "the-bland-ones-disciple" (apostrophe dropped, s kept) even
       // though generateAssetKey now produces "the-bland-one-disciple". Both forms are the
