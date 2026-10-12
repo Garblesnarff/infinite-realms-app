@@ -14,8 +14,6 @@ type Props = {
  * Matches the character creation wizard styling
  */
 const WizardHeader: React.FC<Props> = ({
-  _step = 1,
-  _totalSteps = 4,
   autosaveKey = 'campaign-wizard-draft',
   formSnapshot = {},
 }) => {

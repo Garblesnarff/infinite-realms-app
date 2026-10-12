@@ -2,7 +2,7 @@ import { Play, Loader2 } from 'lucide-react';
 import React from 'react';
 
 import type { StarterTemplate } from '@/features/campaign/hooks/use-character-selection';
-import type { AbilityScores } from '@/types/character';
+import type { Ability } from '@/types/character';
 import type { AbilityScoreName } from '@/utils/racialAbilityBonuses';
 
 import { resolveCampaignArtwork } from '@/components/campaigns/campaign-artwork';
@@ -69,7 +69,7 @@ export const StarterTemplateCard: React.FC<StarterTemplateCardProps> = ({
         savingThrow: false,
       },
     ]),
-  ) as AbilityScores;
+  ) as Record<AbilityScoreName, Ability>;
   const effectiveScores = getEffectiveAbilityScores(baseScores, race, subrace);
   const resolvedScores = Object.fromEntries(
     abilities.map((ability) => [ability, effectiveScores[ability].score]),

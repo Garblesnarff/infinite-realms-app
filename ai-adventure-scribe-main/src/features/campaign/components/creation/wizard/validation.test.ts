@@ -95,8 +95,8 @@ describe('Campaign Validation Functions', () => {
     // Parameters are expected directly on the campaign object by the validation function
     const validCampaignWithParams = {
       difficulty_level: 'Easy',
-      campaign_length: 'Short',
-      tone: 'Serious',
+      campaign_length: 'short',
+      tone: 'serious',
     } as Partial<Campaign>;
 
     it('should return true if all parameters are provided', () => {
@@ -146,7 +146,7 @@ describe('Campaign Validation Functions', () => {
         key: 'tone',
         title: 'Missing Campaign Tone', // Corrected title
         description: 'Please select a campaign tone for your campaign.',
-        validPrevious: { difficulty_level: 'Easy', campaign_length: 'Short' },
+        validPrevious: { difficulty_level: 'Easy', campaign_length: 'short' },
       },
     ];
 
@@ -169,26 +169,27 @@ describe('Campaign Validation Functions', () => {
     // Adjusted fullValidCampaign to have parameters at the top level
     const fullValidCampaign: Campaign = {
       id: 'test-id',
-      user_id: 'user-123',
       name: 'Test Campaign Alpha',
       description: 'A test campaign.',
       genre: 'Sci-Fi',
       // Parameters now at top level
       difficulty_level: 'Medium',
-      campaign_length: 'Medium',
-      tone: 'Epic',
+      campaign_length: 'short',
+      tone: 'serious',
       setting: {
-        // Other settings can remain nested if not validated by these specific functions
-        custom_rules: 'None',
-        player_level: 1,
-        starting_gold: 100,
-        monster_variety: 'Standard',
-        encounter_frequency: 'Normal',
+        era: 'Modern',
+        location: 'New Erebo',
+        atmosphere: 'Hopeful',
+      },
+      thematic_elements: {
+        mainThemes: [],
+        recurringMotifs: [],
+        keyLocations: [],
+        importantNPCs: [],
       },
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       status: 'Draft',
-      world_anvil_id: null,
     };
 
     it('should return false and call toast if campaign data is null', () => {
