@@ -24,6 +24,8 @@ const chatWithDM = vi.fn();
 const executeStructuredCombatActionWithBoundary = vi.fn();
 const executeAuthoritativeCombatIntent = vi.fn();
 const proposeAuthoritativeAttack = vi.fn();
+/** Observes the narration gate so the terminal short-circuit test can assert it never ran. */
+const enforceNarrationGate = vi.fn();
 
 vi.mock('@/services/ai-service', () => ({
   AIService: { chatWithDM: (...args: any[]) => chatWithDM(...args) },
@@ -43,6 +45,9 @@ vi.mock('@/services/combat/combat-attack-proposal', () => ({
 }));
 vi.mock('@/services/combat/spell-target-save-bridge', () => ({
   requestSpellTargetSave: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('../narration-gate', () => ({
+  enforceNarrationGate: (...args: any[]) => enforceNarrationGate(...args),
 }));
 
 const { resolveDeclaredCombatActions } = await import('../combat-resolution-step');
@@ -240,5 +245,19 @@ describe('a dismissed engine attack prompt (#2234)', () => {
     expect(present).not.toHaveBeenCalled();
     expect(hasPendingPlayerRoll()).toBe(false);
     expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledTimes(1);
+  });
+
+  it('a party_defeated narration short-circuits before the narration gate (#261 CB-027)', async () => {
+    setPlayerRollHost(hostThatAnswers({ d20: 15 }));
+    chatWithDM.mockResolvedValue({ text: '', terminalState: 'party_defeated' });
+
+    const result = await resolve();
+
+    // The terminal flag comes straight from the resolution's narrate(): the gate that
+    // would rewrite the empty-text envelope into a "Processing Error" never runs, and
+    // the engine blocks ride along for the transcript.
+    expect(result.terminalState).toBe('party_defeated');
+    expect(result.combatEngineBlocks).toBeDefined();
+    expect(enforceNarrationGate).not.toHaveBeenCalled();
   });
 });

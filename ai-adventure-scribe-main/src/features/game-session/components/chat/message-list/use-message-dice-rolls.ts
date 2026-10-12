@@ -20,7 +20,7 @@ import {
   settleCombatInitiativeRoll,
 } from '@/hooks/combat/use-player-roll-host';
 import logger from '@/lib/logger';
-import { hasPendingPlayerRoll } from '@/services/combat/player-roll-bridge';
+import { hasPendingPlayerRoll, markDeathSavePromptDismissed } from '@/services/combat/player-roll-bridge';
 import { declinedRollMessage } from '@/utils/dm-roll-recovery';
 import { handleAsyncError } from '@/utils/error-handler';
 import { isEngineChannelRollType } from '@/utils/roll-request/engine-channel';
@@ -215,6 +215,9 @@ export function useMessageDiceRolls({
           );
       }
     } else {
+      // The prompt stays dismissible but the 45 s timer still runs; the composer slot keeps
+      // its Roll button so the player can re-open the prompt and roll when ready.
+      markDeathSavePromptDismissed();
       cancelDiceRoll(currentRoll.id);
     }
     if (pendingRollIdRef.current === currentRoll.id) {

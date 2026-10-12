@@ -239,7 +239,7 @@ const spiderRow = (() => {
 describe('useAIResponse: the dying player’s turn (#2518)', () => {
   let order: string[];
   let intentBodies: Array<Record<string, any>>;
-  let rollAnswer: { d20: number | null; cancelled?: boolean };
+  let rollAnswer: { d20: number | null; cancelled?: boolean; timedOut?: boolean };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -400,7 +400,9 @@ describe('useAIResponse: the dying player’s turn (#2518)', () => {
   });
 
   it('an unanswered prompt (45 s) or a dismissed one is rolled by the engine, and the line says so', async () => {
-    rollAnswer = { d20: null };
+    // The 45 s timer fired: the bridge settles { d20: null, timedOut: true }, which is the
+    // only path that reads as "the engine rolls it" (RG-019).
+    rollAnswer = { d20: null, timedOut: true };
     await playDyingTurn(() => {});
 
     const { dmStartedAt: _clock, ...sent } = intentBodies[0];
@@ -564,7 +566,8 @@ describe('useAIResponse: the dying player’s turn (#2518)', () => {
     expect(userDataApi.fetchSessionFallenState).not.toHaveBeenCalled();
   });
 
-  it('three failures: the DEAD line is printed, the screen comes from the resolution, and the killing round is narrated', async () => {    const fatal = HPMechanics.resolveDeathSave(
+  it('three failures: the DEAD line is printed, the screen comes from the resolution, and the killing round is narrated', async () => {
+    const fatal = HPMechanics.resolveDeathSave(
       SCHOLAR.id,
       {
         currentHp: 0,

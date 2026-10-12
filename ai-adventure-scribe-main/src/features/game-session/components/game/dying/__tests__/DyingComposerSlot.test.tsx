@@ -9,6 +9,12 @@ import { DEATH_SAVE_TURN_TEXT, DyingComposerSlot } from '../DyingComposerSlot';
 
 import { mapAuthoritativeCombat } from '@/contexts/combat/authoritative-combat-state';
 import { useOptionalCombat } from '@/contexts/CombatContext';
+import {
+  markDeathSavePromptDismissed,
+  requestPlayerDeathSaveRoll,
+  setPlayerRollHost,
+  settlePendingPlayerRoll,
+} from '@/services/combat/player-roll-bridge';
 
 vi.mock('@/contexts/CombatContext', () => ({ useOptionalCombat: vi.fn() }));
 
@@ -70,7 +76,11 @@ const renderSlot = (props: Partial<React.ComponentProps<typeof DyingComposerSlot
 };
 
 describe('DyingComposerSlot (#2518)', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    settlePendingPlayerRoll({ d20: null });
+    setPlayerRollHost(null);
+  });
 
   it('replaces the composer with the dying panel: there is nothing to type into', () => {
     useCombatNow(board({ holder: 'spider' }));
@@ -166,6 +176,33 @@ describe('DyingComposerSlot (#2518)', () => {
     expect(failingSend).toHaveBeenCalledTimes(2);
     // The retry succeeded: the button is gone again, not a second roller.
     expect(screen.queryByTestId('dying-panel-roll')).toBeNull();
+  });
+
+  it('after the death-save prompt is dismissed the Roll button stays so the player can roll when ready', async () => {
+    // The bridge holds the waiting death-save prompt with its 45 s timer running; the
+    // player dismissed the popup (RG-019: dismiss alone never rolls).
+    const present = vi.fn(() => ({ rollId: 'death-roll-1', dismiss: vi.fn() }));
+    setPlayerRollHost({ present });
+    const pendingRoll = requestPlayerDeathSaveRoll({ actorLabel: 'The Scholar' });
+    markDeathSavePromptDismissed();
+
+    useCombatNow(board({ holder: 'scholar' }));
+    const { onSendMessage } = renderSlot({ promptOpen: false });
+
+    // The auto-send still went out once for the turn; the button is not a second send.
+    expect(onSendMessage).toHaveBeenCalledTimes(1);
+    const rollButton = await screen.findByTestId('dying-panel-roll');
+    expect(rollButton).toBeTruthy();
+
+    // Clicking it re-opens the waiting prompt; the turn is not sent again.
+    await act(async () => {
+      fireEvent.click(rollButton);
+    });
+    expect(present).toHaveBeenCalledTimes(2);
+    expect(onSendMessage).toHaveBeenCalledTimes(1);
+
+    settlePendingPlayerRoll({ d20: 10 });
+    await pendingRoll;
   });
 
   it('a player on their feet keeps the composer and sends nothing', () => {

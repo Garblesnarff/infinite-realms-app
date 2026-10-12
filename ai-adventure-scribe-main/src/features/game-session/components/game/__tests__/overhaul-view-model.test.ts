@@ -137,6 +137,38 @@ describe('game-session character sheet view model', () => {
     } as unknown as Character);
     expect(standing.conditions).toEqual([]);
   });
+
+  it('falls back to Unconscious (dying) at 0 HP when vital_state is missing (RG-018)', () => {
+    const base = {
+      id: 'char-no-vital',
+      name: 'The Scholar',
+      level: 1,
+      race: { name: 'Tiefling', speed: 30, traits: [], languages: [] },
+      class: { name: 'Sorcerer', hitDie: 6 },
+      abilityScores: {
+        strength: { score: 8, modifier: -1, savingThrow: false },
+        dexterity: { score: 14, modifier: 2, savingThrow: false },
+        constitution: { score: 12, modifier: 1, savingThrow: false },
+        intelligence: { score: 10, modifier: 0, savingThrow: false },
+        wisdom: { score: 10, modifier: 0, savingThrow: false },
+        charisma: { score: 16, modifier: 3, savingThrow: true },
+      },
+    } as unknown as Character;
+
+    // The engine mirror has not written vital_state yet: 0 HP still means unconscious.
+    const missing = buildCharacterSheet({
+      ...base,
+      character_stats: { current_hit_points: 0, max_hit_points: 8 },
+    } as unknown as Character);
+    expect(missing.conditions.map((c) => c.name)).toContain('Unconscious (dying)');
+
+    // Above 0 HP with no vital_state: no vital condition is invented.
+    const hurt = buildCharacterSheet({
+      ...base,
+      character_stats: { current_hit_points: 5, max_hit_points: 8 },
+    } as unknown as Character);
+    expect(hurt.conditions).toEqual([]);
+  });
 });
 
 describe('game-session party view model', () => {

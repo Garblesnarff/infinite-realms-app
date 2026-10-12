@@ -778,6 +778,18 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         if (part.card.kind === 'spell') reportSheetCastResult(part.card);
       }
     }
+    // The 45 s timer is the stall guard for a dismissed death-save prompt: when it fires the
+    // engine rolls the save, and the transcript says so first (strategist decision, #261).
+    if (action.action_type === 'death_save' && autoRolled) {
+      appendEngineBlock({
+        source: 'player',
+        actorId: action.actor_id,
+        lines: ['Death save auto-rolled after 45 s.'],
+        cards: [],
+        round: combatRoundFrom(execution.result, playerRound ?? 1),
+        serverSequence: combatSequenceFrom(execution.result),
+      });
+    }
     appendEngineBlock({
       source: isPlayerActor(action.actor_id, participants) ? 'player' : 'npc',
       actorId: action.actor_id,
