@@ -14,9 +14,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // vi.hoisted ensures these are initialised before the vi.mock() factories run
 const { mockSaveNPC, mockSaveLocation, mockSaveQuest, mockLogger } = vi.hoisted(() => ({
-  mockSaveNPC: vi.fn<[], Promise<boolean>>(),
-  mockSaveLocation: vi.fn<[], Promise<boolean>>(),
-  mockSaveQuest: vi.fn<[], Promise<boolean>>(),
+  mockSaveNPC: vi.fn<(...args: any[]) => Promise<boolean>>(),
+  mockSaveLocation: vi.fn<(...args: any[]) => Promise<boolean>>(),
+  mockSaveQuest: vi.fn<(...args: any[]) => Promise<boolean>>(),
   mockLogger: {
     info: vi.fn(),
     warn: vi.fn(),

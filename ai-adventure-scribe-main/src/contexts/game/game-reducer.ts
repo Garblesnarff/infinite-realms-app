@@ -256,7 +256,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       }
       return {
         ...state,
-        pendingActions: state.pendingActions.filter((action) => action !== action.payload),
+        pendingActions: state.pendingActions.filter((a) => a !== action.payload),
       };
 
     default:

@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock dependencies BEFORE importing the module under test
 const mockSetLocalStorage = vi.fn();
 vi.mock('@/hooks/use-local-storage', () => ({
-  useLocalStorage: vi.fn((key, initialValue) => {
+  useLocalStorage: vi.fn((_key, initialValue) => {
     return [initialValue, mockSetLocalStorage];
   }),
 }));
@@ -19,7 +19,7 @@ describe('usePanelResize', () => {
     vi.clearAllMocks();
 
     // Default mock implementation
-    vi.mocked(useLocalStorage).mockImplementation((key, initialValue) => {
+    vi.mocked(useLocalStorage).mockImplementation((_key, initialValue) => {
       return [initialValue, mockSetLocalStorage];
     });
   });
@@ -164,7 +164,7 @@ describe('usePanelResize', () => {
 
     expect(mockSetLocalStorage).toHaveBeenCalled();
 
-    const updaters = mockSetLocalStorage.mock.calls.map(call => call[0]);
+    const updaters = mockSetLocalStorage.mock.calls.map((call) => call[0]);
     let foundCorrectUpdate = false;
 
     for (const updater of updaters) {
@@ -195,7 +195,7 @@ describe('usePanelResize', () => {
       // result.current.setIsExpanded(true); // already true
     });
 
-    const updaters = mockSetLocalStorage.mock.calls.map(call => call[0]);
+    const updaters = mockSetLocalStorage.mock.calls.map((call) => call[0]);
     for (const updater of updaters) {
       if (typeof updater === 'function') {
         const initialState = {
