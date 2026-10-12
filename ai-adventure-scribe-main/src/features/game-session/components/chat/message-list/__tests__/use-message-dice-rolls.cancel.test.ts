@@ -7,8 +7,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useMessageDiceRolls } from '../use-message-dice-rolls';
 
-import { settleCombatAttackRoll } from '@/hooks/combat/use-player-roll-host';
 import {
+  settleCombatAttackRoll,
   settleCombatCheckRoll,
   settleCombatDeathSaveRoll,
   settleCombatInitiativeRoll,
