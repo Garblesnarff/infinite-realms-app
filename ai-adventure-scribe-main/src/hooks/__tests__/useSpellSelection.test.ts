@@ -769,11 +769,11 @@ describe('useSpellSelection Hook', () => {
       });
 
       result.current.filteredCantrips.forEach((spell) => {
-        expect((spell as any).verbal).toBe(true);
+        expect(spell.components_verbal).toBe(true);
       });
 
       result.current.filteredSpells.forEach((spell) => {
-        expect((spell as any).verbal).toBe(true);
+        expect(spell.components_verbal).toBe(true);
       });
     });
 
@@ -834,7 +834,7 @@ describe('useSpellSelection Hook', () => {
             spell.description.toLowerCase().includes('magic'),
         ).toBe(true);
         expect(spell.school).toBe('Evocation');
-        expect((spell as any).verbal).toBe(true);
+        expect(spell.components_verbal).toBe(true);
       });
     });
   });

@@ -102,10 +102,13 @@ describe('SpellApiService', () => {
       expect(result[0]).toMatchObject({
         id: 's1',
         name: 'Fireball',
-        materialComponents: '',
-        damage: false,
-        attackSave: '',
-        damageEffect: '',
+        casting_time: '1 action',
+        range_text: '150 feet',
+        components_verbal: true,
+        components_somatic: true,
+        components_material: true,
+        material_components: '',
+        damage: '',
       });
     });
 

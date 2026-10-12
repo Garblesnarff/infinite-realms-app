@@ -1,24 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import {
-  cantrips as rawCantrips,
-  firstLevelSpells as rawFirstLevelSpells,
-  allSpells as rawAllSpells,
-} from '@/data/spellOptions';
-
-type NormalizedSpell = (typeof rawAllSpells)[number] & {
-  castingTime: string;
-  range: string;
-  verbal?: boolean;
-  somatic?: boolean;
-  material?: boolean;
-  materialDescription?: string;
-  materialCost?: number;
-};
-
-const allSpells = rawAllSpells as unknown as NormalizedSpell[];
-const cantrips = rawCantrips as unknown as NormalizedSpell[];
-const firstLevelSpells = rawFirstLevelSpells as unknown as NormalizedSpell[];
+import { cantrips, firstLevelSpells, allSpells } from '@/data/spellOptions';
 
 /**
  * Spell Data Integrity Tests
@@ -52,8 +34,8 @@ describe('Spell Data Integrity', () => {
         expect(spell).toHaveProperty('name');
         expect(spell).toHaveProperty('level');
         expect(spell).toHaveProperty('school');
-        expect(spell).toHaveProperty('castingTime');
-        expect(spell).toHaveProperty('range');
+        expect(spell).toHaveProperty('casting_time');
+        expect(spell).toHaveProperty('range_text');
         expect(spell).toHaveProperty('components');
         expect(spell).toHaveProperty('duration');
         expect(spell).toHaveProperty('description');
@@ -62,8 +44,8 @@ describe('Spell Data Integrity', () => {
         expect(spell.id).toBeTruthy();
         expect(spell.name).toBeTruthy();
         expect(spell.school).toBeTruthy();
-        expect(spell.castingTime).toBeTruthy();
-        expect(spell.range).toBeTruthy();
+        expect(spell.casting_time).toBeTruthy();
+        expect(spell.range_text).toBeTruthy();
         expect(spell.components).toBeTruthy();
         expect(spell.duration).toBeTruthy();
         expect(spell.description).toBeTruthy();
@@ -119,13 +101,13 @@ describe('Spell Data Integrity', () => {
         const hasS = spell.components.includes('S');
         const hasM = spell.components.includes('M');
 
-        expect(spell.verbal || false).toBe(hasV);
-        expect(spell.somatic || false).toBe(hasS);
-        expect(spell.material || false).toBe(hasM);
+        expect(spell.components_verbal || false).toBe(hasV);
+        expect(spell.components_somatic || false).toBe(hasS);
+        expect(spell.components_material || false).toBe(hasM);
 
         // If material is true, should have material description
-        if (spell.material) {
-          expect(spell.materialDescription).toBeTruthy();
+        if (spell.components_material) {
+          expect(spell.material_components).toBeTruthy();
         }
       });
     });
@@ -145,9 +127,9 @@ describe('Spell Data Integrity', () => {
       allSpells.forEach((spell) => {
         const isValidCastingTime = validCastingTimes.some(
           (time) =>
-            spell.castingTime.includes(time) ||
-            spell.castingTime.match(/^\d+ (action|minute|hour)s?$/) ||
-            spell.castingTime.includes('reaction'),
+            spell.casting_time.includes(time) ||
+            spell.casting_time.match(/^\d+ (action|minute|hour)s?$/) ||
+            spell.casting_time.includes('reaction'),
         );
         expect(isValidCastingTime).toBe(true);
       });
@@ -155,7 +137,7 @@ describe('Spell Data Integrity', () => {
 
     it('should have valid ranges', () => {
       allSpells.forEach((spell) => {
-        const range = spell.range.toLowerCase();
+        const range = spell.range_text.toLowerCase();
         const isValidRange =
           range === 'self' ||
           range === 'touch' ||
@@ -165,7 +147,7 @@ describe('Spell Data Integrity', () => {
           range.includes('unlimited') ||
           range.includes('special') ||
           range.includes('self (') || // For "Self (15-foot cone)" etc
-          /^\d+\s*feet$/i.test(spell.range); // For basic foot ranges
+          /^\d+\s*feet$/i.test(spell.range_text); // For basic foot ranges
 
         expect(isValidRange).toBe(true);
       });
@@ -212,9 +194,9 @@ describe('Spell Data Integrity', () => {
 
     it('should have valid material costs when present', () => {
       allSpells.forEach((spell) => {
-        if (spell.materialCost) {
-          expect(spell.materialCost).toBeGreaterThan(0);
-          expect(typeof spell.materialCost).toBe('number');
+        if (spell.material_cost_gp) {
+          expect(spell.material_cost_gp).toBeGreaterThan(0);
+          expect(typeof spell.material_cost_gp).toBe('number');
         }
       });
     });

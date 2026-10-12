@@ -123,15 +123,7 @@ export const useSpells = (character: Character, onUpdate?: () => void): UseSpell
             });
 
             // Merge API data with character data
-            const enhancedSpells = apiSpells.map((apiSpell) => ({
-              ...apiSpell,
-              castingTime: apiSpell.casting_time,
-              range: apiSpell.range_text,
-              verbal: apiSpell.components_verbal,
-              somatic: apiSpell.components_somatic,
-              material: apiSpell.components_material,
-              materialDescription: apiSpell.material_components,
-            })) as CharacterSpellDisplay[];
+            const enhancedSpells: CharacterSpellDisplay[] = [...apiSpells];
 
             setSpells(enhancedSpells);
           }

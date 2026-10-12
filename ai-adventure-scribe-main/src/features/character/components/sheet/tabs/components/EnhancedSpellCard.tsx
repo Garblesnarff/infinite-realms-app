@@ -61,8 +61,8 @@ const EnhancedSpellCard: React.FC<EnhancedSpellCardProps> = ({
             )}
           </div>
           <p className="text-xs text-muted-foreground mb-2">
-            {spell.school} • {spell.castingTime}
-            {isRitualDisplay && ' (+10 min as ritual)'} • {spell.range}
+            {spell.school} • {spell.casting_time}
+            {isRitualDisplay && ' (+10 min as ritual)'} • {spell.range_text}
           </p>
           <p className="text-sm">{spell.description}</p>
         </div>
