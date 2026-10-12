@@ -7,7 +7,13 @@ import { toast } from 'sonner';
 import { BlogPostsMobileList } from './blog-posts-mobile-list';
 import { BlogPostsTable } from './blog-posts-table';
 
-import type { BlogPost, BlogPostStatus, BlogPostListFilters, SortField } from '@/types/blog';
+import type {
+  BlogCategory,
+  BlogPost,
+  BlogPostStatus,
+  BlogPostListFilters,
+  SortField,
+} from '@/types/blog';
 
 import {
   AlertDialog,
@@ -51,6 +57,11 @@ const safeFormatDate = (value?: string | null) => {
   return format(date, 'MMM d, yyyy');
 };
 
+/** #456: categories carry title or name (both optional); fall back to the slug. */
+export const blogCategoryLabel = (
+  category: Pick<BlogCategory, 'title' | 'name' | 'slug'>,
+): string => category.title ?? category.name ?? category.slug;
+
 export const BlogPostsList: React.FC = () => {
   const navigate = useNavigate();
   const [filters, setFilters] = useState<BlogPostListFilters>({
@@ -72,8 +83,7 @@ export const BlogPostsList: React.FC = () => {
   const categoryLookup = useMemo(() => {
     const lookup = new Map<string, string>();
     categories.forEach((category) => {
-      // @ts-expect-error #456 category.title can be undefined; lookup stores it as string
-      lookup.set(category.id, category.title);
+      lookup.set(category.id, blogCategoryLabel(category));
     });
     return lookup;
   }, [categories]);
@@ -265,7 +275,7 @@ export const BlogPostsList: React.FC = () => {
                     <SelectItem value="all">All Categories</SelectItem>
                     {categories.map((category) => (
                       <SelectItem key={category.id} value={category.id}>
-                        {category.title}
+                        {blogCategoryLabel(category)}
                       </SelectItem>
                     ))}
                   </SelectContent>

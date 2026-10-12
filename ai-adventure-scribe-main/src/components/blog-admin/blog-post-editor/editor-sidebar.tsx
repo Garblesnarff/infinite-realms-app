@@ -63,8 +63,10 @@ export const EditorSidebar: React.FC<EditorSidebarProps> = ({
                   </FormControl>
                   <SelectContent>
                     <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="review">In review</SelectItem>
                     <SelectItem value="scheduled">Scheduled</SelectItem>
                     <SelectItem value="published">Published</SelectItem>
+                    <SelectItem value="archived">Archived</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
