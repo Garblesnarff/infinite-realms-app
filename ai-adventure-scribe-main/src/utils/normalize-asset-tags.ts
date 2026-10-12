@@ -159,6 +159,45 @@ export function isAssetNamePresentAroundTag(
 }
 
 /**
+ * Length of the capitalized run at the start of `words` (punctuation around a
+ * word is ignored, so "One's" and "Wall-Mouth" count as capitalized).
+ */
+function leadingCapitalizedRun(words: string[]): number {
+  let run = 0;
+  for (const word of words) {
+    const clean = word.replace(/^[^a-zA-Z]+|[^a-zA-Z]+$/g, '');
+    if (/^[A-Z]/.test(clean)) run += 1;
+    else break;
+  }
+  return run;
+}
+
+/**
+ * Whether the prose immediately beside a tag already gives the entity a proper
+ * name — just not the key-derived one ("The Academy Dining Hall" beside a
+ * the-grand-kitchen tag, #267 GP-036). Two or more consecutive capitalized words
+ * at the tag's edge read as a name; a single capitalized word is sentence case
+ * ("See", "Behold") or a partial name the whole-name checks already handle.
+ * The phrase never crosses a sentence terminator: "You see [TAG]. Captain Rhea
+ * waves." names Rhea in the next sentence, not the tagged entity (#267 FIX).
+ * Prepending the derived display name here would glue a second name onto the
+ * sentence, so the tag is left bare instead; the asset guard then drops a tag
+ * whose derived name never appears, leaving one clean name.
+ */
+function hasAdjacentProperName(content: string, tagStart: number, tagLength: number): boolean {
+  const beforeSentences = content.slice(0, tagStart).split(/[.!?]/);
+  const beforeTag = (beforeSentences.pop() ?? '').replace(/[\s"'`*_\],;:!?…—–-]+$/, '');
+  const afterTag = content
+    .slice(tagStart + tagLength)
+    .split(/[.!?]/, 1)[0]
+    .replace(/^[^a-zA-Z]+/, '')
+    .replace(LEADING_ARTICLE_PATTERN, '');
+  const trailing = beforeTag.split(/\s+/).filter(Boolean).slice(-4).reverse();
+  const leading = afterTag.split(/\s+/).filter(Boolean).slice(0, 4);
+  return leadingCapitalizedRun(trailing) >= 2 || leadingCapitalizedRun(leading) >= 2;
+}
+
+/**
  * Normalize asset tags that the model may format incorrectly.
  * Fixes malformed keys, strips markdown emphasis wrapped around bare tags,
  * and restores a visible display name when the model emits only a tag.
@@ -188,7 +227,11 @@ export function normalizeAssetTagKeysInContent(content: string): string {
     const nameAlreadyPresent =
       isAssetNamePresentAroundTag(wholeString, offset, fullMatch.length, derivedName) ||
       (strippedDerivedName !== derivedName &&
-        isAssetNamePresentAroundTag(wholeString, offset, fullMatch.length, strippedDerivedName));
+        isAssetNamePresentAroundTag(wholeString, offset, fullMatch.length, strippedDerivedName)) ||
+      // #267 GP-036: the prose may name the entity in a different form than the
+      // key derives. A proper-name phrase beside the tag means the entity is
+      // already named — prepending would print a second, glued-on name.
+      hasAdjacentProperName(wholeString, offset, fullMatch.length);
     const isStandaloneTag = beforeTag.length === 0 && afterTag.length === 0;
 
     if (!nameAlreadyPresent && !isStandaloneTag) {
