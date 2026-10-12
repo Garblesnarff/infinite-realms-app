@@ -6,7 +6,7 @@ import { getSiteConfig } from '../config/site.js';
  * Generate llms.txt content - documentation index for AI agents
  * Following the llms.txt specification: https://llmstxt.org
  */
-function generateLlmsTxt(siteUrl: string): string {
+function generateLlmsTxt(siteUrl: string, blogUrl: string): string {
   return `# Infinite Realms
 
 > AI-powered D&D game master for solo tabletop RPG adventures
@@ -17,7 +17,7 @@ Infinite Realms is an AI-powered Dungeons & Dragons game master that enables sol
 
 ## Documentation
 
-- [Blog](${siteUrl}/blog) - Game tips, updates, D&D guides
+- [Blog](${blogUrl}) - Game tips, updates, D&D guides
 - [API Docs](${siteUrl}/swagger) - REST API documentation
 - [RSS Feed](${siteUrl}/rss.xml) - Latest blog posts
 - [Sitemap](${siteUrl}/sitemap.xml) - All pages index
@@ -49,8 +49,8 @@ Infinite Realms is an AI-powered Dungeons & Dragons game master that enables sol
  * Generate llms-full.txt content - expanded documentation index
  * Includes more detailed API information
  */
-function generateLlmsFullTxt(siteUrl: string): string {
-  const baseTxt = generateLlmsTxt(siteUrl);
+function generateLlmsFullTxt(siteUrl: string, blogUrl: string): string {
+  const baseTxt = generateLlmsTxt(siteUrl, blogUrl);
 
   return `${baseTxt}
 ## API Overview
@@ -111,7 +111,7 @@ export const llmsRoutes = new Elysia()
   // Main llms.txt - concise documentation index
   .get('/llms.txt', ({ set }) => {
     const site = getSiteConfig();
-    const content = generateLlmsTxt(site.url);
+    const content = generateLlmsTxt(site.url, site.blogUrl);
 
     set.headers['Content-Type'] = 'text/plain; charset=utf-8';
     set.headers['Cache-Control'] = 'public, max-age=3600, stale-while-revalidate=86400';
@@ -123,7 +123,7 @@ export const llmsRoutes = new Elysia()
   // Expanded llms-full.txt - includes API details
   .get('/llms-full.txt', ({ set }) => {
     const site = getSiteConfig();
-    const content = generateLlmsFullTxt(site.url);
+    const content = generateLlmsFullTxt(site.url, site.blogUrl);
 
     set.headers['Content-Type'] = 'text/plain; charset=utf-8';
     set.headers['Cache-Control'] = 'public, max-age=3600, stale-while-revalidate=86400';

@@ -40,16 +40,18 @@ function renderSitemapUrl(loc: string, lastMod?: string, priority?: string): str
 }
 
 /**
- * Build RSS 2.0 feed from blog posts
+ * Build RSS 2.0 feed from blog posts.
+ * Links use the blog's final URL (#355), not the redirecting /blog path.
  */
 function buildRssFeed(
   siteUrl: string,
+  blogUrl: string,
   siteName: string,
   siteDescription: string,
   posts: BlogPosts,
 ): string {
   const items = posts.map((post) => {
-    const link = `${siteUrl}/blog/${post.slug}`;
+    const link = `${blogUrl}/${post.slug}`;
     const description = post.summary ?? post.excerpt ?? '';
     return `<item>
 <title>${escapeXml(post.title)}</title>
@@ -65,7 +67,7 @@ function buildRssFeed(
 <rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>${escapeXml(siteName)} Blog</title>
-    <link>${escapeXml(`${siteUrl}/blog`)}</link>
+    <link>${escapeXml(blogUrl)}</link>
     <description>${escapeXml(siteDescription)}</description>
     <language>en-us</language>
     <generator>Infinite Realms SSR</generator>
@@ -114,7 +116,7 @@ export const seoRoutes = new Elysia()
     try {
       const site = getSiteConfig();
       const posts = await BlogService.fetchPublishedBlogPosts();
-      const rss = buildRssFeed(site.url, site.name, site.description, posts);
+      const rss = buildRssFeed(site.url, site.blogUrl, site.name, site.description, posts);
 
       set.headers['Content-Type'] = 'application/rss+xml; charset=utf-8';
       set.headers['Cache-Control'] = 'public, max-age=1800, stale-while-revalidate=43200';

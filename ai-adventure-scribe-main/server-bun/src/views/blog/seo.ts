@@ -33,7 +33,7 @@ export function createBlogSchema(site: SiteConfig, canonicalUrl: string, posts: 
     return {
       '@type': 'BlogPosting',
       headline: post.title,
-      url: `${site.url}/blog/${post.slug}`,
+      url: `${site.blogUrl}/${post.slug}`,
       datePublished: post.publishedAt,
       dateModified: post.updatedAt ?? post.publishedAt,
       image: post.coverImageUrl ? [post.coverImageUrl] : undefined,
