@@ -342,9 +342,10 @@ QUOTA_LEFT=$(jq -r '.remaining // empty' < "$WORK/res" 2> /dev/null || true)
 case "$QUOTA_LEFT" in ''|*[!0-9]*) fail "$S5B" 200 "quota response has no numeric remaining" ;; esac
 [ "$QUOTA_LEFT" -ge 2 ] || fail "$S5B" 200 \
   "smoke account quota nearly exhausted (remaining=$QUOTA_LEFT): the probe would 402 — top up the smoke account or wait for the daily reset"
-jq -n '{prompt: "Reply with exactly these three words: smoke test ok",
-        player_input: "smoke test", maxTokens: 64, temperature: 0,
-        provider: "openrouter", requestType: "user"}' > "$WORK/generate.json"
+jq -n --arg prompt 'You are the Dungeon Master for a single InfiniteRealms turn. The player just said: smoke test. Reply with ONLY the JSON object for this DM turn: no prose before or after, no markdown, no code fence. Use exactly these ten keys and these values, inventing nothing: {"text": "smoke test ok", "options": [], "narration_segments": [], "roll_requests": [], "combat_transition": "none", "scene_spec": null, "map_actions": [], "handout_actions": [], "combatants": [], "combat_actions": []}' \
+  '{prompt: $prompt,
+    player_input: "smoke test", maxTokens: 256, temperature: 0,
+    provider: "openrouter", requestType: "user"}' > "$WORK/generate.json"
 api POST /v1/llm/generate "$WORK/generate.json"
 expect_status "$S5B" 200
 if ! jq -e '.parsed == true and ((.degraded // false) == false) and ((.text // "") | length > 0)' \
