@@ -146,7 +146,7 @@ export IR_API_BASE_URL
 read -r -s IR_DEMO_TOKEN
 export IR_DEMO_TOKEN
 bun start
-````
+```
 
 At the first prompt enter the supplied API base URL; at the silent prompt
 enter the supplied credential. Open http://127.0.0.1:8893/, enter the supplied
@@ -209,7 +209,7 @@ git diff --cached --binary | gitleaks stdin --redact
 git commit -m 'feat: publish companion MCP server and simulated Alexa client'
 git remote add origin https://github.com/Garblesnarff/infinite-realms-alexa-companion.git
 git push -u origin main
-````
+```
 
 Rob routes repository creation/publication and privately supplies judge
 access. No hosted endpoint is provisioned by these steps. The local MCP
