@@ -354,6 +354,14 @@ async function endCombatIfResolved(
     )
   )
     return null;
+  // #310: a fight with no enemies was never a fight. Without this, the check below reads
+  // "no hostiles standing" on an encounter whose monsters haven't been seated yet (or a
+  // malformed encounter) and concludes it as 'last_hostile_defeated' — awarding victory XP
+  // the moment combat starts, with no message.
+  const everHadHostiles = state.participants.some((participant) =>
+    isHostile(participant.participantType as string),
+  );
+  if (!everHadHostiles) return null;
   const active = state.participants.filter((participant) => participant.isActive);
   const vitals = active.map((participant) => ({
     participant,
