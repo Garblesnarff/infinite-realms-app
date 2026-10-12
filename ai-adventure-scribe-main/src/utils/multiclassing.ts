@@ -21,11 +21,7 @@ export type {
   MulticlassProficiencyResult,
   MulticlassValidationResult,
 };
-export {
-  calculateMulticlassSpellcasting,
-  calculateMulticlassProficiencies,
-  validateMulticlass,
-};
+export { calculateMulticlassSpellcasting, calculateMulticlassProficiencies, validateMulticlass };
 
 // ===========================
 // Hit Points Calculation

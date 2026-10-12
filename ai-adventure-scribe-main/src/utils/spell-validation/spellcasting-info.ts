@@ -86,7 +86,7 @@ export function getSpellcastingInfo(
     hasSpellbook: classBase?.hasSpellbook || false,
     isPactMagic: classBase?.isPactMagic || false,
     ritualCasting: classBase?.ritualCasting || false,
-    spellcastingAbility: classBase?.spellcastingAbility || (spellcasting?.ability || 'intelligence'),
+    spellcastingAbility: classBase?.spellcastingAbility || spellcasting?.ability || 'intelligence',
   };
 
   // Wizard cantrip scaling: 3 at lvl 1, 4 at lvl 4, 5 at lvl 10
@@ -99,14 +99,18 @@ export function getSpellcastingInfo(
   if (normalizedClassName === 'Sorcerer') {
     result.cantripsKnown = level >= 10 ? 6 : level >= 4 ? 5 : 4;
     // Sorcerer spells known table
-    const sorcererSpells = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 13, 13, 14, 14, 15, 15, 15, 15];
+    const sorcererSpells = [
+      0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 13, 13, 14, 14, 15, 15, 15, 15,
+    ];
     result.spellsKnown = sorcererSpells[Math.min(level, 20)];
   }
 
   // Bard cantrip scaling: 2 at lvl 1, 3 at lvl 4, 4 at lvl 10
   if (normalizedClassName === 'Bard') {
     result.cantripsKnown = level >= 10 ? 4 : level >= 4 ? 3 : 2;
-    const bardSpells = [0, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 15, 16, 18, 19, 19, 20, 22, 22, 22];
+    const bardSpells = [
+      0, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 15, 16, 18, 19, 19, 20, 22, 22, 22,
+    ];
     result.spellsKnown = bardSpells[Math.min(level, 20)];
   }
 
@@ -123,7 +127,9 @@ export function getSpellcastingInfo(
   // Warlock cantrip scaling: 2 at lvl 1, 3 at lvl 4, 4 at lvl 10
   if (normalizedClassName === 'Warlock') {
     result.cantripsKnown = level >= 10 ? 4 : level >= 4 ? 3 : 2;
-    const warlockSpells = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15];
+    const warlockSpells = [
+      0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15,
+    ];
     result.spellsKnown = warlockSpells[Math.min(level, 20)];
   }
 

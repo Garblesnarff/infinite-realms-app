@@ -15,8 +15,6 @@ import type * as SpellOptionsModule from '@/data/spellOptions';
 import type { Character, CharacterClass } from '@/types/character';
 import type * as SpellcastingInfoModule from '@/utils/spell-validation/spellcasting-info';
 
-
-
 import { getClassSpells } from '@/data/spellOptions';
 import logger from '@/lib/logger';
 import { spellApi } from '@/services/spellApi';
@@ -74,38 +72,56 @@ describe('Spell Validation Utils', () => {
     });
 
     it('should return zeros for Paladin at level 1 (as they do not have spellcasting at level 1)', () => {
-      const mockClass: CharacterClass = { name: 'Paladin', spellcasting: { ability: 'charisma' } } as any;
+      const mockClass: CharacterClass = {
+        name: 'Paladin',
+        spellcasting: { ability: 'charisma' },
+      } as any;
       const counts = getMaxSpellCounts(mockClass, 1);
       expect(counts).toEqual({ cantrips: 0, spells: 0 });
     });
 
     it('should return correct counts using spellsKnown for class like Bard', () => {
-      const mockClass: CharacterClass = { name: 'Bard', spellcasting: { ability: 'charisma' } } as any;
+      const mockClass: CharacterClass = {
+        name: 'Bard',
+        spellcasting: { ability: 'charisma' },
+      } as any;
       const counts = getMaxSpellCounts(mockClass, 1);
       expect(counts).toEqual({ cantrips: 2, spells: 4 });
     });
 
     it('should return correct counts using spellsPrepared for class like Cleric', () => {
-      const mockClass: CharacterClass = { name: 'Cleric', spellcasting: { ability: 'wisdom' } } as any;
+      const mockClass: CharacterClass = {
+        name: 'Cleric',
+        spellcasting: { ability: 'wisdom' },
+      } as any;
       const counts = getMaxSpellCounts(mockClass, 1);
       expect(counts).toEqual({ cantrips: 3, spells: 1 });
     });
 
     it('should handle level parameter defaulting to 1', () => {
-      const mockClass: CharacterClass = { name: 'Bard', spellcasting: { ability: 'charisma' } } as any;
+      const mockClass: CharacterClass = {
+        name: 'Bard',
+        spellcasting: { ability: 'charisma' },
+      } as any;
       const counts = getMaxSpellCounts(mockClass);
       expect(counts).toEqual({ cantrips: 2, spells: 4 });
     });
 
     it('should correctly scale Druid spell counts based on level', () => {
-      const mockClass: CharacterClass = { name: 'Druid', spellcasting: { ability: 'wisdom' } } as any;
+      const mockClass: CharacterClass = {
+        name: 'Druid',
+        spellcasting: { ability: 'wisdom' },
+      } as any;
       expect(getMaxSpellCounts(mockClass, 1)).toEqual({ cantrips: 2, spells: 1 });
       expect(getMaxSpellCounts(mockClass, 5)).toEqual({ cantrips: 3, spells: 5 });
       expect(getMaxSpellCounts(mockClass, 11)).toEqual({ cantrips: 4, spells: 11 });
     });
 
     it('should correctly scale Ranger spell counts based on level', () => {
-      const mockClass: CharacterClass = { name: 'Ranger', spellcasting: { ability: 'wisdom' } } as any;
+      const mockClass: CharacterClass = {
+        name: 'Ranger',
+        spellcasting: { ability: 'wisdom' },
+      } as any;
       expect(getMaxSpellCounts(mockClass, 1)).toEqual({ cantrips: 0, spells: 0 });
       expect(getMaxSpellCounts(mockClass, 2)).toEqual({ cantrips: 0, spells: 2 });
       expect(getMaxSpellCounts(mockClass, 5)).toEqual({ cantrips: 0, spells: 5 });
@@ -123,7 +139,10 @@ describe('Spell Validation Utils', () => {
     it('should accept characterClass as a string', () => {
       const mockCantrips = [{ id: 'mage-hand' }];
       const mockSpells = [{ id: 'magic-missile' }];
-      vi.mocked(getClassSpells).mockReturnValue({ cantrips: mockCantrips, spells: mockSpells } as any);
+      vi.mocked(getClassSpells).mockReturnValue({
+        cantrips: mockCantrips,
+        spells: mockSpells,
+      } as any);
 
       const isValid = isSpellValidForClass('mage-hand', 'Wizard');
       expect(getClassSpells).toHaveBeenCalledWith('Wizard');
@@ -133,7 +152,10 @@ describe('Spell Validation Utils', () => {
     it('should accept characterClass as a CharacterClass object', () => {
       const mockCantrips = [{ id: 'mage-hand' }];
       const mockSpells = [{ id: 'magic-missile' }];
-      vi.mocked(getClassSpells).mockReturnValue({ cantrips: mockCantrips, spells: mockSpells } as any);
+      vi.mocked(getClassSpells).mockReturnValue({
+        cantrips: mockCantrips,
+        spells: mockSpells,
+      } as any);
 
       const isValid = isSpellValidForClass('mage-hand', { name: 'Wizard' } as any);
       expect(getClassSpells).toHaveBeenCalledWith('Wizard');
@@ -143,7 +165,10 @@ describe('Spell Validation Utils', () => {
     it('should filter by isCantrip = true', () => {
       const mockCantrips = [{ id: 'mage-hand' }];
       const mockSpells = [{ id: 'magic-missile' }];
-      vi.mocked(getClassSpells).mockReturnValue({ cantrips: mockCantrips, spells: mockSpells } as any);
+      vi.mocked(getClassSpells).mockReturnValue({
+        cantrips: mockCantrips,
+        spells: mockSpells,
+      } as any);
 
       // exists in cantrips
       expect(isSpellValidForClass('mage-hand', 'Wizard', true)).toBe(true);
@@ -154,7 +179,10 @@ describe('Spell Validation Utils', () => {
     it('should filter by isCantrip = false', () => {
       const mockCantrips = [{ id: 'mage-hand' }];
       const mockSpells = [{ id: 'magic-missile' }];
-      vi.mocked(getClassSpells).mockReturnValue({ cantrips: mockCantrips, spells: mockSpells } as any);
+      vi.mocked(getClassSpells).mockReturnValue({
+        cantrips: mockCantrips,
+        spells: mockSpells,
+      } as any);
 
       // exists in spells
       expect(isSpellValidForClass('magic-missile', 'Wizard', false)).toBe(true);
@@ -165,7 +193,10 @@ describe('Spell Validation Utils', () => {
     it('should check both cantrips and spells if isCantrip is not specified', () => {
       const mockCantrips = [{ id: 'mage-hand' }];
       const mockSpells = [{ id: 'magic-missile' }];
-      vi.mocked(getClassSpells).mockReturnValue({ cantrips: mockCantrips, spells: mockSpells } as any);
+      vi.mocked(getClassSpells).mockReturnValue({
+        cantrips: mockCantrips,
+        spells: mockSpells,
+      } as any);
 
       expect(isSpellValidForClass('mage-hand', 'Wizard')).toBe(true);
       expect(isSpellValidForClass('magic-missile', 'Wizard')).toBe(true);
@@ -261,7 +292,10 @@ describe('Spell Validation Utils', () => {
       };
       vi.mocked(spellApi.calculateMulticlassCasterLevel).mockResolvedValue(mockResult as any);
 
-      const classLevels = [{ className: 'Wizard', level: 2 }, { className: 'Cleric', level: 1 }];
+      const classLevels = [
+        { className: 'Wizard', level: 2 },
+        { className: 'Cleric', level: 1 },
+      ];
       const result = await calculateMulticlassCasterLevel(classLevels);
 
       expect(spellApi.calculateMulticlassCasterLevel).toHaveBeenCalledWith(classLevels);
@@ -269,7 +303,9 @@ describe('Spell Validation Utils', () => {
     });
 
     it('should catch errors, log them, and return default values', async () => {
-      vi.mocked(spellApi.calculateMulticlassCasterLevel).mockRejectedValue(new Error('RPC failure'));
+      vi.mocked(spellApi.calculateMulticlassCasterLevel).mockRejectedValue(
+        new Error('RPC failure'),
+      );
 
       const result = await calculateMulticlassCasterLevel([]);
       expect(result).toEqual({
@@ -335,7 +371,9 @@ describe('Spell Validation Utils', () => {
         spellSlots: [4, 2],
         pactMagicSlots: null,
       };
-      vi.mocked(spellApi.calculateMulticlassCasterLevel).mockResolvedValue(mockMulticlassInfo as any);
+      vi.mocked(spellApi.calculateMulticlassCasterLevel).mockResolvedValue(
+        mockMulticlassInfo as any,
+      );
 
       const result = await getEnhancedSpellcastingInfo(mockCharacter);
       expect(result).not.toBeNull();

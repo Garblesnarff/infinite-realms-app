@@ -47,7 +47,7 @@ describe('validateMulticlassSpellSelection', () => {
     const result = await validateMulticlassSpellSelection(
       mockCharacter as Character,
       ['cantrip1'],
-      ['spell1']
+      ['spell1'],
     );
 
     expect(validateSpellSelection).toHaveBeenCalledWith(mockCharacter, ['cantrip1'], ['spell1']);
@@ -87,7 +87,9 @@ describe('validateMulticlassSpellSelection', () => {
 
     expect(result.valid).toBe(true);
     expect(result.warnings).toContain('Multiclass caster level: 2');
-    expect(result.warnings).not.toContain('Pact Magic slots are separate from regular spell slots.');
+    expect(result.warnings).not.toContain(
+      'Pact Magic slots are separate from regular spell slots.',
+    );
   });
 
   it('should add Pact Magic warning if character has pact magic slots', async () => {
@@ -129,7 +131,7 @@ describe('validateMulticlassSpellSelection', () => {
       expect.objectContaining({
         type: 'LEVEL_REQUIREMENT',
         message: 'Failed to calculate multiclass spell requirements',
-      })
+      }),
     );
   });
 
@@ -153,7 +155,7 @@ describe('validateMulticlassSpellSelection', () => {
     expect(result.errors).toContainEqual(
       expect.objectContaining({
         type: 'LEVEL_REQUIREMENT',
-      })
+      }),
     );
   });
 });

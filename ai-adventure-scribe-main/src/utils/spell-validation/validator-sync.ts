@@ -40,9 +40,10 @@ export function validateSpellSelection(
 
   // Early return for non-spellcasters - but check racial spells first
   if (!character.class?.spellcasting) {
-    const hasRacialSpells = racialSpells.cantrips.length > 0 ||
-                            racialSpells.bonusCantrips > 0 ||
-                            racialSpells.spells.length > 0;
+    const hasRacialSpells =
+      racialSpells.cantrips.length > 0 ||
+      racialSpells.bonusCantrips > 0 ||
+      racialSpells.spells.length > 0;
 
     if (!hasRacialSpells && (cantrips.length > 0 || spells.length > 0)) {
       errors.push({
@@ -69,7 +70,7 @@ export function validateSpellSelection(
 
         if (racialSpells.bonusCantrips > 0 && racialSpells.bonusCantripSource) {
           if (racialSpells.bonusCantripSource === 'wizard') {
-            isValidBonusCantrip = getClassSpells('Wizard').cantrips.some(s => s.id === cantripId);
+            isValidBonusCantrip = getClassSpells('Wizard').cantrips.some((s) => s.id === cantripId);
           }
         }
 
@@ -112,25 +113,30 @@ export function validateSpellSelection(
   if (
     !spellcastingInfo ||
     (spellcastingInfo.cantripsKnown === 0 &&
-     spellcastingInfo.spellsKnown === 0 &&
-     (spellcastingInfo.spellsPrepared === undefined || spellcastingInfo.spellsPrepared === 0))
+      spellcastingInfo.spellsKnown === 0 &&
+      (spellcastingInfo.spellsPrepared === undefined || spellcastingInfo.spellsPrepared === 0))
   ) {
     // If they have racial spells, they still need to be validated
-    const hasRacialSpells = racialSpells.cantrips.length > 0 ||
-                            racialSpells.bonusCantrips > 0 ||
-                            racialSpells.spells.length > 0;
+    const hasRacialSpells =
+      racialSpells.cantrips.length > 0 ||
+      racialSpells.bonusCantrips > 0 ||
+      racialSpells.spells.length > 0;
 
     if (hasRacialSpells) {
-        // Fall back to same racial-only validation logic as above
-        // We'll repeat it here for clarity in this branch
-        const expectedCantrips = racialSpells.cantrips.length + racialSpells.bonusCantrips;
-        if (cantrips.length !== expectedCantrips) {
-            errors.push({ type: 'COUNT_MISMATCH', expected: expectedCantrips, actual: cantrips.length });
-        }
-        const expectedSpells = racialSpells.spells.length;
-        if (spells.length !== expectedSpells) {
-            errors.push({ type: 'COUNT_MISMATCH', expected: expectedSpells, actual: spells.length });
-        }
+      // Fall back to same racial-only validation logic as above
+      // We'll repeat it here for clarity in this branch
+      const expectedCantrips = racialSpells.cantrips.length + racialSpells.bonusCantrips;
+      if (cantrips.length !== expectedCantrips) {
+        errors.push({
+          type: 'COUNT_MISMATCH',
+          expected: expectedCantrips,
+          actual: cantrips.length,
+        });
+      }
+      const expectedSpells = racialSpells.spells.length;
+      if (spells.length !== expectedSpells) {
+        errors.push({ type: 'COUNT_MISMATCH', expected: expectedSpells, actual: spells.length });
+      }
     } else if (cantrips.length > 0 || spells.length > 0) {
       errors.push({
         type: 'LEVEL_REQUIREMENT',

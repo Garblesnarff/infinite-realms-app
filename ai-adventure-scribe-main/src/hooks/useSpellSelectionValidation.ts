@@ -4,10 +4,7 @@ import type { Spell, Character } from '@/types/character';
 import type { SpellValidationResult } from '@/utils/spell-validation';
 
 import logger from '@/lib/logger';
-import {
-  validateSpellSelection,
-  validateSpellSelectionAsync,
-} from '@/utils/spell-validation';
+import { validateSpellSelection, validateSpellSelectionAsync } from '@/utils/spell-validation';
 
 export interface UseSpellSelectionValidationProps {
   character: Character | null;
