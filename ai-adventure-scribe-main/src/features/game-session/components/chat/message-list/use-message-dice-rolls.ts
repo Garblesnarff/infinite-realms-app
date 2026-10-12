@@ -16,6 +16,7 @@ import {
 import {
   settleCombatAttackRoll,
   settleCombatCheckRoll,
+  settleCombatDeathSaveRoll,
   settleCombatInitiativeRoll,
 } from '@/hooks/combat/use-player-roll-host';
 import logger from '@/lib/logger';
@@ -180,33 +181,41 @@ export function useMessageDiceRolls({
     // re-renders; the second call must not write a second declined-roll line (#2291).
     if (cancelledRollIdRef.current === currentRoll.id) return;
     cancelledRollIdRef.current = currentRoll.id;
-    // Dismissing a combat attack prompt withdraws the attack: the resolution waiting on it skips
-    // that action instead of rolling it for the player (#2234). Only a timeout lets the engine
-    // roll. A dismissed initiative prompt still seats the encounter, with the engine's die.
-    const attackSettled = settleCombatAttackRoll(currentRoll.id, null, { cancelled: true });
-    const initiativeSettled = settleCombatInitiativeRoll(currentRoll.id, null);
-    // A dismissed check prompt withdraws the check, like a dismissed attack (#2420).
-    const checkSettled = settleCombatCheckRoll(currentRoll.id, null, { cancelled: true });
-    cancelDiceRoll(currentRoll.id);
-    // A cancelled narrative check is an answer too, so it goes in the transcript (#2291): the
-    // DM's withheld reply shows, a reload does not re-open the popup, and the next DM turn
-    // sees the choice. Engine-owned attack and initiative prompts keep #2237's behavior.
-    const engineOwned =
-      attackSettled ||
-      initiativeSettled ||
-      checkSettled ||
-      isEngineTaggedRoll(currentRoll) ||
-      isEngineChannelRollType(currentRoll.requestType);
-    if (!engineOwned) {
-      const declined = declinedRollMessage(currentRoll.description, currentRoll.rollRequestId);
-      Promise.resolve()
-        .then(() => onSendMessage(declined))
-        .catch((error: unknown) =>
-          logger.warn('[useMessageDiceRolls] declined-roll line not saved', {
-            rollId: currentRoll.id,
-            error,
-          }),
-        );
+    // RG-019: dismissing a death-save prompt must NEVER roll the save — it can kill the
+    // character. Close the panel without settling; the bridge's bounded timer is the backstop
+    // that resolves the turn. Every other prompt type keeps its dismiss semantics.
+    const isDeathSave = currentRoll.requestType === 'death_save';
+    if (!isDeathSave) {
+      // Dismissing a combat attack prompt withdraws the attack: the resolution waiting on it skips
+      // that action instead of rolling it for the player (#2234). Only a timeout lets the engine
+      // roll. A dismissed initiative prompt still seats the encounter, with the engine's die.
+      const attackSettled = settleCombatAttackRoll(currentRoll.id, null, { cancelled: true });
+      const initiativeSettled = settleCombatInitiativeRoll(currentRoll.id, null);
+      // A dismissed check prompt withdraws the check, like a dismissed attack (#2420).
+      const checkSettled = settleCombatCheckRoll(currentRoll.id, null, { cancelled: true });
+      cancelDiceRoll(currentRoll.id);
+      // A cancelled narrative check is an answer too, so it goes in the transcript (#2291): the
+      // DM's withheld reply shows, a reload does not re-open the popup, and the next DM turn
+      // sees the choice. Engine-owned attack and initiative prompts keep #2237's behavior.
+      const engineOwned =
+        attackSettled ||
+        initiativeSettled ||
+        checkSettled ||
+        isEngineTaggedRoll(currentRoll) ||
+        isEngineChannelRollType(currentRoll.requestType);
+      if (!engineOwned) {
+        const declined = declinedRollMessage(currentRoll.description, currentRoll.rollRequestId);
+        Promise.resolve()
+          .then(() => onSendMessage(declined))
+          .catch((error: unknown) =>
+            logger.warn('[useMessageDiceRolls] declined-roll line not saved', {
+              rollId: currentRoll.id,
+              error,
+            }),
+          );
+      }
+    } else {
+      cancelDiceRoll(currentRoll.id);
     }
     if (pendingRollIdRef.current === currentRoll.id) {
       pendingRollIdRef.current = null;
@@ -336,6 +345,15 @@ export function useMessageDiceRolls({
 
         // The popup's die is the player's die for an attack already mid-resolution, and must
         // not reach the DM as a message.
+        // A manually-rolled death save goes back to the death-save resolution waiting on it
+        // (RG-019): it must not fall through to the attack settler by accident.
+        if (roll.requestType === 'death_save') {
+          if (settleCombatDeathSaveRoll(roll.id, naturalFace)) {
+            completeDiceRoll(roll.id, settledResult);
+            logger.info('[useMessageDiceRolls] manual death save die returned to the engine');
+            return;
+          }
+        }
         if (settleCombatAttackRoll(roll.id, naturalFace)) {
           completeDiceRoll(roll.id, settledResult);
           logger.info('[useMessageDiceRolls] manual combat attack die returned to the engine');

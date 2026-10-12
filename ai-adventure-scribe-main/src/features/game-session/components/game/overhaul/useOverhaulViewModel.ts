@@ -309,12 +309,17 @@ export function buildCharacterSheet(character: Character | null): CharacterSheet
     ? character.character_stats[0]
     : character.character_stats;
   const vitalState = storedStats?.vital_state;
+  // RG-018: if the mirror has not written vital_state yet (or the client has not refreshed
+  // it), a hero at 0 HP is still unconscious per the 5e rules — derive it from the HP line
+  // rather than showing "None".
+  const effectiveVitalState =
+    vitalState ?? (hpCurrent === 0 && hpMax > 0 ? 'dying' : undefined);
   const vitalCondition: ConditionVM | null =
-    vitalState === 'dying'
+    effectiveVitalState === 'dying'
       ? { id: 'vital-dying', name: 'Unconscious (dying)' }
-      : vitalState === 'stabilized'
+      : effectiveVitalState === 'stabilized'
         ? { id: 'vital-stabilized', name: 'Unconscious (stable)' }
-        : vitalState === 'dead'
+        : effectiveVitalState === 'dead'
           ? { id: 'vital-dead', name: 'Dead' }
           : null;
   const conditions: ConditionVM[] = [

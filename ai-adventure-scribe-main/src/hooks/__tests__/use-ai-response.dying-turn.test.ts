@@ -523,8 +523,48 @@ describe('useAIResponse: the dying player’s turn (#2518)', () => {
     await waitFor(() => expect(result.current.terminalDeathState).toBeNull());
   });
 
-  it('three failures: the DEAD line is printed, the screen comes from the resolution, and the killing round is narrated', async () => {
-    const fatal = HPMechanics.resolveDeathSave(
+  it('a terminalState on the resolution narration takes the terminal path directly (#261 CB-027)', async () => {
+    // The party fell during this turn's resolution: the resolution's own narrate() returns
+    // the handled terminal state. The death screen must come from that flag — not from the
+    // race-prone fetchSessionFallenState fallback, and not as an empty "Processing Error".
+    vi.mocked(AIService.chatWithDM).mockImplementation((async () => ({
+      text: '',
+      terminalState: 'party_defeated',
+      terminalEncounterId: 'enc-1',
+    })) as any);
+    vi.mocked(userDataApi.fetchSessionFallenState).mockResolvedValue(null);
+
+    const { result } = renderHook(() => useAIResponse());
+    const response = await result.current.getAIResponse(
+      [
+        {
+          text: 'Death saving throw.',
+          sender: 'player',
+          timestamp: new Date().toISOString(),
+          context: { intent: 'death_save_turn' },
+        },
+      ] as any,
+      SESSION_ID,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      () => {},
+    );
+
+    expect(response.context?.intent).toBe('terminal');
+    expect(response.context?.terminalState).toBe('party_defeated');
+    await waitFor(() =>
+      expect(result.current.terminalDeathState).toMatchObject({
+        state: 'party_defeated',
+        encounterId: 'enc-1',
+      }),
+    );
+    // The fallback was never consulted: the flag, not the race, produced the screen.
+    expect(userDataApi.fetchSessionFallenState).not.toHaveBeenCalled();
+  });
+
+  it('three failures: the DEAD line is printed, the screen comes from the resolution, and the killing round is narrated', async () => {    const fatal = HPMechanics.resolveDeathSave(
       SCHOLAR.id,
       {
         currentHp: 0,

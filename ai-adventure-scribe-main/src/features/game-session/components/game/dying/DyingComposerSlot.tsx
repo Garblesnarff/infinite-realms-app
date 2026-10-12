@@ -49,7 +49,7 @@ export const DyingComposerSlot: React.FC<DyingComposerSlotProps> = ({
   const isOwnTurn = Boolean(player && encounter?.currentTurnParticipantId === player.id);
 
   const turnKey =
-    encounter && player && vital === 'dying'
+    encounter && player && vital === 'dying' && isOwnTurn
       ? [
           encounter.id,
           encounter.currentRound,
@@ -59,20 +59,36 @@ export const DyingComposerSlot: React.FC<DyingComposerSlotProps> = ({
         ].join(':')
       : null;
   const sentKeyRef = React.useRef<string | null>(null);
-
-  const sendDyingTurn = React.useCallback(() => {
-    void onSendMessage(DEATH_SAVE_TURN_TEXT, { intent: 'death_save_turn' }).catch(() => {
-      // The send queue reports its own failure; the panel's Roll button stays for a retry.
-    });
-  }, [onSendMessage]);
+  // #261 CB-025: the panel's Roll button is a retry path only. While the auto-send for the
+  // current turn is in flight the button must not render at all — a click in that window
+  // dispatched a duplicate turn the server's compare-and-set then refused. A send that
+  // actually failed records its turn key here so the button comes back as the retry.
+  const [failedKey, setFailedKey] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!turnKey || isProcessing || promptOpen || sentKeyRef.current === turnKey) return;
     sentKeyRef.current = turnKey;
-    sendDyingTurn();
-  }, [turnKey, isProcessing, promptOpen, sendDyingTurn]);
+    setFailedKey(null);
+    void onSendMessage(DEATH_SAVE_TURN_TEXT, { intent: 'death_save_turn' }).catch(() => {
+      // The send queue reports its own failure; the panel's Roll button stays for a retry.
+      setFailedKey(turnKey);
+    });
+  }, [turnKey, isProcessing, promptOpen, onSendMessage]);
+
+  /** The panel button's retry: the one send allowed after the auto-send failed. */
+  const retryDyingTurn = React.useCallback(() => {
+    if (!turnKey || failedKey !== turnKey) return;
+    setFailedKey(null);
+    void onSendMessage(DEATH_SAVE_TURN_TEXT, { intent: 'death_save_turn' }).catch(() => {
+      setFailedKey(turnKey);
+    });
+  }, [onSendMessage, turnKey, failedKey]);
 
   if (!player || (vital !== 'dying' && vital !== 'stable')) return <>{children}</>;
+
+  // The Roll button is the retry for a failed send, not a second way to roll: it renders
+  // only when this turn's auto-send actually failed.
+  const retryFailedSend = turnKey !== null && failedKey === turnKey;
 
   return (
     <DyingPanel
@@ -82,7 +98,7 @@ export const DyingComposerSlot: React.FC<DyingComposerSlotProps> = ({
       failures={player.deathSaves.failures}
       isOwnTurn={isOwnTurn}
       promptOpen={promptOpen}
-      onRoll={sendDyingTurn}
+      onRoll={retryFailedSend ? retryDyingTurn : undefined}
     />
   );
 };

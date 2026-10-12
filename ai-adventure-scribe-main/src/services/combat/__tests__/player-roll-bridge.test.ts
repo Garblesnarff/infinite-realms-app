@@ -12,6 +12,7 @@ import {
   PLAYER_DEATH_SAVE_ROLL_TIMEOUT_MS,
   PLAYER_INITIATIVE_ROLL_TIMEOUT_MS,
   setPlayerRollHost,
+  settleDeathSaveRoll,
   settlePendingPlayerRoll,
   releasePlayerRollHost,
   trackPlayerRollDismissal,
@@ -450,5 +451,28 @@ describe('the death saving throw prompt (#2518)', () => {
     await expect(requestPlayerDeathSaveRoll({ actorLabel: 'The Scholar' })).resolves.toEqual({
       d20: null,
     });
+  });
+
+  it('settleDeathSaveRoll settles a waiting death-save prompt through its own named path (#261)', async () => {
+    setPlayerRollHost({ present: () => hostHandle('death-roll-1') });
+    const pending = requestPlayerDeathSaveRoll({ actorLabel: 'The Scholar' });
+
+    expect(settleDeathSaveRoll({ d20: null })).toBe(true);
+    await expect(pending).resolves.toEqual({ d20: null });
+    expect(hasPendingPlayerRoll()).toBe(false);
+  });
+
+  it('settleDeathSaveRoll refuses a pending attack prompt: the generic path must not claim a death save by accident (#261)', async () => {
+    setPlayerRollHost({ present: () => hostHandle('attack-roll-1') });
+    const pending = requestPlayerAttackRoll(SPEC);
+
+    expect(settleDeathSaveRoll({ d20: null })).toBe(false);
+    expect(hasPendingPlayerRoll()).toBe(true);
+    expect(settlePendingPlayerRoll({ d20: null })).toBe(true);
+    await expect(pending).resolves.toEqual({ d20: null });
+  });
+
+  it('settleDeathSaveRoll with nothing pending returns false', () => {
+    expect(settleDeathSaveRoll({ d20: null })).toBe(false);
   });
 });

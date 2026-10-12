@@ -190,6 +190,19 @@ export function settleCombatInitiativeRoll(rollId: string, d20: number | null): 
 }
 
 /**
+ * Hands a manually-rolled death save die back to the resolution waiting on it.
+ * Returns false when this roll was not one of ours.
+ *
+ * A dismissed death-save prompt is never settled through here: dismissing must close the
+ * panel without rolling the save (RG-019 — a dismiss that rolls can kill the character).
+ * The bridge's bounded timer is the backstop that resolves the turn, so the dying
+ * character's turn always ends even when the prompt is dismissed.
+ */
+export function settleCombatDeathSaveRoll(rollId: string, d20: number | null): boolean {
+  return settleCombatPlayerRoll(rollId, { d20 });
+}
+
+/**
  * Hands a mid-combat check's d20 back to the engine instead of sending it to the DM (#2420).
  *
  * A dismissed check prompt withdraws the check, exactly as a dismissed attack withdraws the
