@@ -22,7 +22,8 @@ const VALID_TYPES = ['traits', 'ideals', 'bonds', 'flaws'] as const;
 type PersonalityType = (typeof VALID_TYPES)[number];
 
 /**
- * Interface for a single personality element row
+ * Interface for a single personality element row as returned by the random
+ * endpoints (#465: the select is narrowed to id, content column, source).
  */
 interface PersonalityRow {
   id: string;
@@ -30,10 +31,10 @@ interface PersonalityRow {
   ideal?: string;
   bond?: string;
   flaw?: string;
-  background: string | null;
+  background?: string | null;
   source: string;
   alignment?: string;
-  created_at: string;
+  created_at?: string;
 }
 
 // Map type to table name
@@ -45,11 +46,16 @@ const TABLE_MAP: Record<PersonalityType, string> = {
 };
 
 // ⚡ Bolt: Define explicit column lists for each table to avoid over-fetching and improve query performance.
+// #465: select only the columns the API contract serves. The sole consumer
+// (character-creation Step 8) reads only the text content columns; selecting
+// background/alignment/created_at coupled this read path to DDL that no
+// migration tree owns, and a missing `alignment` column on personality_ideals
+// 500'd every ideals randomize while traits kept working.
 const COLUMN_MAP: Record<PersonalityType, string> = {
-  traits: 'id, text, background, source, created_at',
-  ideals: 'id, ideal, background, alignment, source, created_at',
-  bonds: 'id, bond, background, source, created_at',
-  flaws: 'id, flaw, background, source, created_at',
+  traits: 'id, text, source',
+  ideals: 'id, ideal, source',
+  bonds: 'id, bond, source',
+  flaws: 'id, flaw, source',
 };
 
 export const personalityRoutes = new Elysia({ prefix: '/v1/personality' })
