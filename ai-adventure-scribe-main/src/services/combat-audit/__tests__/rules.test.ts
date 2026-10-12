@@ -14,8 +14,9 @@ describe('combat-audit rules', () => {
     actorId: 'p1',
     actorName: 'Player 1',
     actionType: 'attack_roll',
+    // @ts-expect-error #480 'combat' is not a valid CombatAction phase
     phase: 'combat',
-    data: {},
+    data: { description: '' },
     ...overrides,
   });
 
@@ -32,13 +33,17 @@ describe('combat-audit rules', () => {
     it('should not flag if initiative was already rolled', () => {
       const initAction = createMockAction({ actionType: 'initiative', id: 'init-1' });
       // Include targetAC to avoid missing_ac violation
-      const attackAction = createMockAction({ actionType: 'attack_roll', data: { targetAC: 15 } });
+      const attackAction = createMockAction({
+        actionType: 'attack_roll',
+        data: { targetAC: 15, description: '' },
+      });
       const violations = validateAction(attackAction, [initAction]);
 
       expect(violations.some((v) => v.violationType === 'missing_initiative')).toBe(false);
     });
 
     it('should not flag if action is pre-combat', () => {
+      // @ts-expect-error #480 'setup' is not a valid CombatAction actionType
       const action = createMockAction({ actionType: 'setup', phase: 'pre-combat' });
       const violations = validateAction(action, []);
       expect(violations.some((v) => v.violationType === 'missing_initiative')).toBe(false);
@@ -59,7 +64,7 @@ describe('combat-audit rules', () => {
         id: 'attack-1',
         actionType: 'attack_roll',
         actorId: 'p1',
-        data: { success: false },
+        data: { success: false, description: '' },
       });
       const damage = createMockAction({ actionType: 'damage_roll', actorId: 'p1' });
 
@@ -73,12 +78,12 @@ describe('combat-audit rules', () => {
         id: 'attack-1',
         actionType: 'attack_roll',
         actorId: 'p1',
-        data: { success: true },
+        data: { success: true, description: '' },
       });
       const damage = createMockAction({
         actionType: 'damage_roll',
         actorId: 'p1',
-        data: { formula: '1d8+3' },
+        data: { formula: '1d8+3', description: '' },
       });
 
       const violations = validateAction(damage, [init, hit]);
@@ -89,7 +94,7 @@ describe('combat-audit rules', () => {
   describe('Rule 3: Attack rolls must specify target AC', () => {
     it('should flag missing target AC', () => {
       const init = createMockAction({ actionType: 'initiative', id: 'init-1' });
-      const attack = createMockAction({ actionType: 'attack_roll', data: {} });
+      const attack = createMockAction({ actionType: 'attack_roll', data: { description: '' } });
 
       const violations = validateAction(attack, [init]);
       expect(violations.some((v) => v.violationType === 'missing_ac')).toBe(true);
@@ -99,7 +104,7 @@ describe('combat-audit rules', () => {
   describe('Rule 4: Saving throws must specify DC', () => {
     it('should flag missing DC', () => {
       const init = createMockAction({ actionType: 'initiative', id: 'init-1' });
-      const save = createMockAction({ actionType: 'save', data: {} });
+      const save = createMockAction({ actionType: 'save', data: { description: '' } });
 
       const violations = validateAction(save, [init]);
       expect(violations.some((v) => v.violationType === 'missing_dc')).toBe(true);
@@ -111,7 +116,7 @@ describe('combat-audit rules', () => {
       const init = createMockAction({ actionType: 'initiative', id: 'init-1' });
       const attack = createMockAction({
         actionType: 'attack_roll',
-        data: { formula: 'invalid', targetAC: 15 },
+        data: { formula: 'invalid', targetAC: 15, description: '' },
       });
 
       const violations = validateAction(attack, [init]);
@@ -122,7 +127,7 @@ describe('combat-audit rules', () => {
       const init = createMockAction({ actionType: 'initiative', id: 'init-1' });
       const attack = createMockAction({
         actionType: 'attack_roll',
-        data: { formula: '1d20', targetAC: 15 },
+        data: { formula: '1d20', targetAC: 15, description: '' },
       });
 
       const violations = validateAction(attack, [init]);
@@ -133,14 +138,14 @@ describe('combat-audit rules', () => {
       const init = createMockAction({ actionType: 'initiative', id: 'init-1' });
       const damage = createMockAction({
         actionType: 'damage_roll',
-        data: { formula: '2d6+1d4+3' },
+        data: { formula: '2d6+1d4+3', description: '' },
         actorId: 'p1',
       });
       const hit = createMockAction({
         id: 'attack-1',
         actionType: 'attack_roll',
         actorId: 'p1',
-        data: { success: true },
+        data: { success: true, description: '' },
       });
 
       const violations = validateAction(damage, [init, hit]);

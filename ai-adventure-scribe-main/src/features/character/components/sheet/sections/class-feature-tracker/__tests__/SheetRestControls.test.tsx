@@ -10,8 +10,8 @@ import { restApi } from '@/services/rest-api';
 
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock('@/lib/logger', () => ({ default: { info: vi.fn(), error: vi.fn(), warn: vi.fn() } }));
-vi.mock('@/services/rest-api', async (orig) => {
-  const mod = await orig();
+vi.mock('@/services/rest-api', async (importOriginal) => {
+  const mod = await importOriginal<Record<string, unknown>>();
   return {
     ...mod,
     restApi: {
@@ -52,7 +52,7 @@ const characterWithDice = {
 } as Character;
 
 describe('SheetRestControls (#264)', () => {
-  const onUpdate = vi.fn(async () => true);
+  const onUpdate = vi.fn(async (_character: Character) => true);
   const onUpdateProp = onUpdate as unknown as CharacterSheetUpdateFn;
 
   beforeEach(() => {

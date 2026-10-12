@@ -45,8 +45,9 @@ describe('CombatAuditSystem', () => {
         actorId: 'p1',
         actorName: 'Hero',
         actionType: 'attack_roll',
+        // @ts-expect-error #480 'combat' is not a valid CombatAction phase
         phase: 'combat',
-        data: { targetAC: 15, formula: '1d20+5' },
+        data: { targetAC: 15, formula: '1d20+5', description: '' },
       });
 
       expect(actionId).toBeDefined();
@@ -69,7 +70,7 @@ describe('CombatAuditSystem', () => {
         actorName: 'Hero',
         actionType: 'initiative',
         phase: 'pre-combat',
-        data: { formula: '1d20+2' },
+        data: { formula: '1d20+2', description: '' },
       });
 
       const violations = auditSystem.getViolations(combatId);
@@ -88,7 +89,7 @@ describe('CombatAuditSystem', () => {
         actorName: 'Hero',
         actionType: 'initiative',
         phase: 'pre-combat',
-        data: { formula: '1d20+2' },
+        data: { formula: '1d20+2', description: '' },
       });
 
       // Record attack (Valid)
@@ -97,8 +98,9 @@ describe('CombatAuditSystem', () => {
         actorId: 'p1',
         actorName: 'Hero',
         actionType: 'attack_roll',
+        // @ts-expect-error #480 'combat' is not a valid CombatAction phase
         phase: 'combat',
-        data: { targetAC: 15, formula: '1d20+5', success: true },
+        data: { targetAC: 15, formula: '1d20+5', success: true, description: '' },
       });
 
       const report = auditSystem.generateAuditReport(combatId);
@@ -117,8 +119,9 @@ describe('CombatAuditSystem', () => {
         actorId: 'p1',
         actorName: 'Hero',
         actionType: 'attack_roll',
+        // @ts-expect-error #480 'combat' is not a valid CombatAction phase
         phase: 'combat',
-        data: { targetAC: 15, formula: '1d20+5' },
+        data: { targetAC: 15, formula: '1d20+5', description: '' },
       });
 
       const report = auditSystem.generateAuditReport(combatId);
