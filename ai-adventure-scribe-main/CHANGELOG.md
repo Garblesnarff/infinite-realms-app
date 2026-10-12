@@ -2,6 +2,55 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.36.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.35.2...v0.36.0) (2026-10-12)
+
+
+### Features
+
+* **characters:** export and import a character as JSON ([#319](https://github.com/Garblesnarff/infinite-realms-app/issues/319)) ([#359](https://github.com/Garblesnarff/infinite-realms-app/issues/359)) ([2b77641](https://github.com/Garblesnarff/infinite-realms-app/commit/2b77641407f3ed3f20b10150e9c724199847eb6f))
+* **data:** dry-run racial-bonus backfill counter ([#253](https://github.com/Garblesnarff/infinite-realms-app/issues/253)) ([#431](https://github.com/Garblesnarff/infinite-realms-app/issues/431)) ([8a7e187](https://github.com/Garblesnarff/infinite-realms-app/commit/8a7e187befd90d68e9cdc8d003b98c28bf34ee3e))
+
+
+### Bug Fixes
+
+* **a11y:** roll-required lock points to the Roll Dice button ([#315](https://github.com/Garblesnarff/infinite-realms-app/issues/315)) ([#372](https://github.com/Garblesnarff/infinite-realms-app/issues/372)) ([2e07f54](https://github.com/Garblesnarff/infinite-realms-app/commit/2e07f54aef2c92dd0089d8809b1a60164768ba93))
+* **character:** list subrace traits on the sheet Features tab ([#389](https://github.com/Garblesnarff/infinite-realms-app/issues/389)) ([#410](https://github.com/Garblesnarff/infinite-realms-app/issues/410)) ([29908ce](https://github.com/Garblesnarff/infinite-realms-app/commit/29908ce0b68071d9289ecce3b582c9e371591014))
+* **characters:** add JSON import and export controls ([#319](https://github.com/Garblesnarff/infinite-realms-app/issues/319)) ([#408](https://github.com/Garblesnarff/infinite-realms-app/issues/408)) ([f43483d](https://github.com/Garblesnarff/infinite-realms-app/commit/f43483d672f9ea5bccdf167e71ff391d248aba10))
+* **combat:** award XP with a visible message on combat victory ([#310](https://github.com/Garblesnarff/infinite-realms-app/issues/310)) ([#343](https://github.com/Garblesnarff/infinite-realms-app/issues/343)) ([942bb5f](https://github.com/Garblesnarff/infinite-realms-app/commit/942bb5fc1dc3edb551c35bca815ecdb57ea1fb41))
+* **combat:** dead targets excluded, monsters skip death-save lines ([#314](https://github.com/Garblesnarff/infinite-realms-app/issues/314)) ([#369](https://github.com/Garblesnarff/infinite-realms-app/issues/369)) ([40a8f4c](https://github.com/Garblesnarff/infinite-realms-app/commit/40a8f4c17acf45643820c8027282f6306431735e))
+* **combat:** enemy d20 independence, dead-enemy tracker state ([#223](https://github.com/Garblesnarff/infinite-realms-app/issues/223)) ([#366](https://github.com/Garblesnarff/infinite-realms-app/issues/366)) ([d1722d4](https://github.com/Garblesnarff/infinite-realms-app/commit/d1722d43b05785af6f159d499d856b39a49f9b0f))
+* **combat:** untargeted damaging spell starts combat and resolves the cast ([#313](https://github.com/Garblesnarff/infinite-realms-app/issues/313)) ([#383](https://github.com/Garblesnarff/infinite-realms-app/issues/383)) ([e6cde5f](https://github.com/Garblesnarff/infinite-realms-app/commit/e6cde5f2e48e6f2ab81d13ecf2ff5dac07d70fa4))
+* **dm:** repair narration that contradicts the engine roll outcome ([#266](https://github.com/Garblesnarff/infinite-realms-app/issues/266)) ([#345](https://github.com/Garblesnarff/infinite-realms-app/issues/345)) ([39ec618](https://github.com/Garblesnarff/infinite-realms-app/commit/39ec61831c92f65d64a193c1d63397c99650d74f))
+* **game-session:** say why a narration turn has no action choices ([#219](https://github.com/Garblesnarff/infinite-realms-app/issues/219)) ([#384](https://github.com/Garblesnarff/infinite-realms-app/issues/384)) ([0e82ec7](https://github.com/Garblesnarff/infinite-realms-app/commit/0e82ec78186b9421ca772678ed217f140d54e2be))
+* **llm:** provider key-limit alert, maintenance message and quota refund ([#350](https://github.com/Garblesnarff/infinite-realms-app/issues/350)) ([#360](https://github.com/Garblesnarff/infinite-realms-app/issues/360)) ([84410c0](https://github.com/Garblesnarff/infinite-realms-app/commit/84410c0da9fdb50043733b586a2890ef46696cab))
+* **memory:** verbatim-quote extraction guard, items field prompt, retrieval re-rank ([#353](https://github.com/Garblesnarff/infinite-realms-app/issues/353)) ([#370](https://github.com/Garblesnarff/infinite-realms-app/issues/370)) ([c65d6bd](https://github.com/Garblesnarff/infinite-realms-app/commit/c65d6bd73cac898ccb0baaca3825749cf6421f4a))
+* **narration:** don't glue a second name onto tagged entities ([#267](https://github.com/Garblesnarff/infinite-realms-app/issues/267)) ([#435](https://github.com/Garblesnarff/infinite-realms-app/issues/435)) ([57752a5](https://github.com/Garblesnarff/infinite-realms-app/commit/57752a5243b46364a307696c44959aeb4e7cf460))
+* **nav:** go to / after sign out ([#210](https://github.com/Garblesnarff/infinite-realms-app/issues/210) QA-018) ([#430](https://github.com/Garblesnarff/infinite-realms-app/issues/430)) ([55ec08d](https://github.com/Garblesnarff/infinite-realms-app/commit/55ec08dffcee88c91c4eb2991d59bcc363139a2f))
+* **prompt:** stable-first DM prompt for provider prefix caching ([#352](https://github.com/Garblesnarff/infinite-realms-app/issues/352)) ([#364](https://github.com/Garblesnarff/infinite-realms-app/issues/364)) ([3faf409](https://github.com/Garblesnarff/infinite-realms-app/commit/3faf4097cbef9aa18abf147640033815559dd035))
+* **seo:** blog canonical points at the final blog URL ([#355](https://github.com/Garblesnarff/infinite-realms-app/issues/355)) ([#392](https://github.com/Garblesnarff/infinite-realms-app/issues/392)) ([c1602f5](https://github.com/Garblesnarff/infinite-realms-app/commit/c1602f54fff6e08e22815035d26c4dd93c346981))
+* **seo:** page Helmet replaces static index.html meta tags ([#355](https://github.com/Garblesnarff/infinite-realms-app/issues/355)) ([#371](https://github.com/Garblesnarff/infinite-realms-app/issues/371)) ([8784c0b](https://github.com/Garblesnarff/infinite-realms-app/commit/8784c0b6e3862239d245bf188fb9f7c67b729701))
+* **seo:** server public meta after data-rh tags ([#355](https://github.com/Garblesnarff/infinite-realms-app/issues/355)) ([#377](https://github.com/Garblesnarff/infinite-realms-app/issues/377)) ([3180ece](https://github.com/Garblesnarff/infinite-realms-app/commit/3180ece24c5a99696bea60d47039c79f91282522))
+* **sheet:** offer Short Rest and Long Rest on the Main tab vitals ([#214](https://github.com/Garblesnarff/infinite-realms-app/issues/214)) ([#373](https://github.com/Garblesnarff/infinite-realms-app/issues/373)) ([bf9ff2c](https://github.com/Garblesnarff/infinite-realms-app/commit/bf9ff2cd9cbc0fc0010dafed15c325ef445dc473))
+* **spells:** eldritch knight / arcane trickster subclass slots ([#420](https://github.com/Garblesnarff/infinite-realms-app/issues/420)) ([#442](https://github.com/Garblesnarff/infinite-realms-app/issues/442)) ([46be322](https://github.com/Garblesnarff/infinite-realms-app/commit/46be322d0953ce0c5ad3819ac527879ab436a3d0))
+* **spells:** read material_cost_gp for the cast action material cost ([#416](https://github.com/Garblesnarff/infinite-realms-app/issues/416)) ([#443](https://github.com/Garblesnarff/infinite-realms-app/issues/443)) ([ee83b15](https://github.com/Garblesnarff/infinite-realms-app/commit/ee83b15a19fd864a80505542ce9c66dc653d9d0d))
+* **spells:** seed spell slots on character creation ([#270](https://github.com/Garblesnarff/infinite-realms-app/issues/270)) ([#395](https://github.com/Garblesnarff/infinite-realms-app/issues/395)) ([6cf7a04](https://github.com/Garblesnarff/infinite-realms-app/commit/6cf7a0413d15671778c75d35b2c7d7eaacac3703))
+* **spells:** warlock pact slot rows ([#397](https://github.com/Garblesnarff/infinite-realms-app/issues/397)) ([#436](https://github.com/Garblesnarff/infinite-realms-app/issues/436)) ([d39302b](https://github.com/Garblesnarff/infinite-realms-app/commit/d39302bdea20eaf1ae84809c2b0da006f7872d97))
+
+
+### Refactoring
+
+* **map:** board moves through the combat intent route ([#199](https://github.com/Garblesnarff/infinite-realms-app/issues/199)) ([#379](https://github.com/Garblesnarff/infinite-realms-app/issues/379)) ([2f37598](https://github.com/Garblesnarff/infinite-realms-app/commit/2f375987448d634521357dfde2914eee2a11ad09))
+* **rules:** centralize carrying capacity variants ([#200](https://github.com/Garblesnarff/infinite-realms-app/issues/200)) ([#403](https://github.com/Garblesnarff/infinite-realms-app/issues/403)) ([b4159e2](https://github.com/Garblesnarff/infinite-realms-app/commit/b4159e2eb86867f14111ff7b0b43ee98b8d18a7c))
+* **rules:** share carrying capacity across client and server ([#200](https://github.com/Garblesnarff/infinite-realms-app/issues/200)) ([#398](https://github.com/Garblesnarff/infinite-realms-app/issues/398)) ([ee8f0d3](https://github.com/Garblesnarff/infinite-realms-app/commit/ee8f0d39b104d4414cd5649657df62818749c093))
+
+
+### Tests
+
+* **client:** CampaignSelectionModal session start uses the exact character id ([#311](https://github.com/Garblesnarff/infinite-realms-app/issues/311)) ([#412](https://github.com/Garblesnarff/infinite-realms-app/issues/412)) ([5f6b7c3](https://github.com/Garblesnarff/infinite-realms-app/commit/5f6b7c38491658cffb0233044f072bf4dbecbd72))
+* **cors:** OPTIONS preflight returns 204 on the [#422](https://github.com/Garblesnarff/infinite-realms-app/issues/422) alarm paths ([#427](https://github.com/Garblesnarff/infinite-realms-app/issues/427)) ([642a3c3](https://github.com/Garblesnarff/infinite-realms-app/commit/642a3c36c876acf05774bd680c80cbb7b4fdbf76))
+* **sessions:** roster Play links the actual character, no hidden copies ([#311](https://github.com/Garblesnarff/infinite-realms-app/issues/311)) ([#385](https://github.com/Garblesnarff/infinite-realms-app/issues/385)) ([023eb4c](https://github.com/Garblesnarff/infinite-realms-app/commit/023eb4cfc99ef0d75deb8dacc1a4440dcfddc149))
+* **types:** import vitest globals explicitly for the client typecheck ([#192](https://github.com/Garblesnarff/infinite-realms-app/issues/192)) ([#386](https://github.com/Garblesnarff/infinite-realms-app/issues/386)) ([186c76a](https://github.com/Garblesnarff/infinite-realms-app/commit/186c76a709fc394a3f5393b9d1a04bdde2604c4f))
+
 ## [0.35.2](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.35.1...v0.35.2) (2026-10-11)
 
 
