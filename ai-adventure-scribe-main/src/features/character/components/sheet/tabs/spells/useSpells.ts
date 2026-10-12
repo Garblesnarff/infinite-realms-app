@@ -56,9 +56,7 @@ export function toTabSpellSlots(slots: Character['spellSlots']): SpellSlots {
  * spellcasting info) — the tab shows a non-caster state instead of falling back
  * to Intelligence and displaying a DC/attack bonus as if real.
  */
-export function resolveSpellcastingAbility(
-  character: Character,
-): keyof AbilityScores | null {
+export function resolveSpellcastingAbility(character: Character): keyof AbilityScores | null {
   if (character.class) {
     const info = getSpellcastingInfo(character.class, character.level ?? 1);
     if (info?.spellcastingAbility) return info.spellcastingAbility;

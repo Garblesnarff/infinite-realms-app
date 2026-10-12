@@ -8,7 +8,6 @@ import { getAuthHeaders } from '@/services/auth/TokenService';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
-
 interface SpellProgression {
   character_level: number;
   cantrips_known: number;

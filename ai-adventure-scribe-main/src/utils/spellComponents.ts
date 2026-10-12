@@ -6,7 +6,6 @@
 
 import type { Spell, Character } from '@/types/character';
 
-
 /**
  * Check if a character has the required components for a spell
  */

@@ -120,7 +120,7 @@ describe('SpellApiService', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/v1/spells?level=1&school=Abjuration'),
-        expect.anything()
+        expect.anything(),
       );
     });
 
@@ -131,7 +131,10 @@ describe('SpellApiService', () => {
 
       const result = await spellApi.getAllSpells();
 
-      expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('API call failed'), expect.anything());
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('API call failed'),
+        expect.anything(),
+      );
       expect(localSpellService.getAllSpells).toHaveBeenCalled();
       expect(result).toEqual(mockLocalSpells);
     });
@@ -156,8 +159,36 @@ describe('SpellApiService', () => {
   describe('getClassSpells', () => {
     it('should fetch class spells from API', async () => {
       const mockResponse = [
-        { id: 'c1', name: 'Light', level: 0, school: 'Evocation', castingTime: '1 action', range: 'Touch', duration: '1 hour', description: '...', verbal: true, somatic: false, material: true, concentration: false, ritual: false },
-        { id: 's1', name: 'Bless', level: 1, school: 'Enchantment', castingTime: '1 action', range: '30 feet', duration: '1 minute', description: '...', verbal: true, somatic: true, material: true, concentration: true, ritual: false }
+        {
+          id: 'c1',
+          name: 'Light',
+          level: 0,
+          school: 'Evocation',
+          castingTime: '1 action',
+          range: 'Touch',
+          duration: '1 hour',
+          description: '...',
+          verbal: true,
+          somatic: false,
+          material: true,
+          concentration: false,
+          ritual: false,
+        },
+        {
+          id: 's1',
+          name: 'Bless',
+          level: 1,
+          school: 'Enchantment',
+          castingTime: '1 action',
+          range: '30 feet',
+          duration: '1 minute',
+          description: '...',
+          verbal: true,
+          somatic: true,
+          material: true,
+          concentration: true,
+          ritual: false,
+        },
       ];
 
       mockFetch.mockResolvedValueOnce({
@@ -170,7 +201,7 @@ describe('SpellApiService', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/v1/spells/class/Cleric/level/1'),
-        expect.anything()
+        expect.anything(),
       );
       expect(result.cantrips).toHaveLength(1);
       expect(result.spells).toHaveLength(1);
@@ -239,7 +270,10 @@ describe('SpellApiService', () => {
         json: async () => mockResult,
       });
 
-      const input = [{ className: 'Wizard', level: 1 }, { className: 'Cleric', level: 1 }];
+      const input = [
+        { className: 'Wizard', level: 1 },
+        { className: 'Cleric', level: 1 },
+      ];
       const result = await spellApi.calculateMulticlassCasterLevel(input);
 
       expect(mockFetch).toHaveBeenCalledWith(
@@ -247,7 +281,7 @@ describe('SpellApiService', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ classLevels: input }),
-        })
+        }),
       );
       expect(result).toEqual(mockResult);
     });
@@ -255,7 +289,21 @@ describe('SpellApiService', () => {
 
   describe('getSpellById', () => {
     it('should fetch a single spell by ID', async () => {
-      const mockSpell = { id: 'fireball', name: 'Fireball', level: 3, school: 'Evocation', castingTime: '1 action', range: '150 feet', duration: 'Instantaneous', description: '...', verbal: true, somatic: true, material: true, concentration: false, ritual: false };
+      const mockSpell = {
+        id: 'fireball',
+        name: 'Fireball',
+        level: 3,
+        school: 'Evocation',
+        castingTime: '1 action',
+        range: '150 feet',
+        duration: 'Instantaneous',
+        description: '...',
+        verbal: true,
+        somatic: true,
+        material: true,
+        concentration: false,
+        ritual: false,
+      };
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
@@ -264,7 +312,10 @@ describe('SpellApiService', () => {
 
       const result = await spellApi.getSpellById('fireball');
       expect(result.id).toBe('fireball');
-      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/v1/spells/fireball'), expect.anything());
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/spells/fireball'),
+        expect.anything(),
+      );
     });
 
     it('should throw error when both API and local fallback fail', async () => {
