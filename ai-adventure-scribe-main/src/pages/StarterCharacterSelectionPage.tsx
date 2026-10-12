@@ -10,7 +10,7 @@
  */
 
 import { Sparkles, User, ChevronRight } from 'lucide-react';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -56,6 +56,12 @@ const StarterCharacterSelectionPage: React.FC = () => {
   const creatingRef = useRef(false);
 
   const isLoading = campaignLoading || templatesLoading;
+
+  // #469: opened directly without ?campaignId (no campaign instance yet).
+  // Send the player back to the campaign page, which creates one and returns here.
+  useEffect(() => {
+    if (slug && !campaignId) navigate(`/explore/${slug}`, { replace: true });
+  }, [slug, campaignId, navigate]);
 
   /**
    * Create character from template and start game
@@ -232,7 +238,9 @@ const StarterCharacterSelectionPage: React.FC = () => {
               {templates.length === 0 ? (
                 <div className="text-center py-12 bg-card/30 rounded-xl border border-border">
                   <User className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground mb-4">No pre-built characters available yet.</p>
+                  <p className="text-muted-foreground mb-4">
+                    No pre-built characters available yet.
+                  </p>
                   <Button onClick={handleCreateCustom} variant="outline" className="bg-transparent">
                     Create Custom Character
                   </Button>
