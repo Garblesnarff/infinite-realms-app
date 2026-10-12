@@ -14,12 +14,10 @@ import {
 } from '../../services/combat/aoe-cast-service.js';
 import { CombatEncounterService } from '../../services/combat/combat-encounter-service.js';
 import { concludeEncounter } from '../../services/combat/combat-ending.js';
-import { executeCombatIntent } from '../../services/combat/combat-intent-service.js';
 import {
   buildNarrationContract,
   sceneAnchorForActor,
 } from '../../services/combat/narration-contract.js';
-import { resolveSessionEntityId } from '../../services/combat/session-entity-index.js';
 import {
   applyDmTacticalActions,
   consumeTacticalMapContext,
@@ -211,35 +209,6 @@ export function createTacticalMapRoutes({
             })),
         };
       })
-      .post(
-        '/:id/tactical-map/move',
-        async ({ params, body, user, set }) => {
-          const access = await sessionOwnership(params.id, user.userId);
-          if (!access.success) {
-            set.status = access.error!.status;
-            return { error: access.error!.message };
-          }
-          const encounter = await CombatEncounterService.getActiveEncounter(params.id, user.userId);
-          if (!encounter) {
-            set.status = 404;
-            return { error: 'No active combat encounter' };
-          }
-          try {
-            const actorId = await resolveSessionEntityId(params.id, body.entityId);
-            const result = await executeCombatIntent(
-              encounter.id,
-              { type: 'move', actorId, x: body.x, y: body.y },
-              user.userId,
-              'player',
-            );
-            return { result };
-          } catch (error) {
-            set.status = 422;
-            return { error: error instanceof Error ? error.message : 'Movement refused' };
-          }
-        },
-        { body: t.Object({ entityId: t.String(), x: t.Number(), y: t.Number() }) },
-      )
       .post(
         '/:id/tactical-map/dm-actions',
         async ({ params, body, user, set }) => {

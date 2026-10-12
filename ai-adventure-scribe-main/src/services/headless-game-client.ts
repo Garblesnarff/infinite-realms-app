@@ -364,19 +364,15 @@ export class HeadlessGameClient {
   }
 
   async move(entityId: string, x: number, y: number): Promise<unknown> {
-    const response = await fetch(
-      `${(import.meta.env.VITE_API_URL || 'http://localhost:8888').replace(/\/$/, '')}/v1/sessions/${encodeURIComponent(this.sessionId)}/tactical-map/move`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(await import('@/services/auth/TokenService')).getAuthHeaders(),
-        },
-        body: JSON.stringify({ entityId, x, y }),
-      },
+    const { encounterId } = await this.combatSnapshot();
+    if (!encounterId) throw new Error('Move failed: no active combat encounter');
+    return executeAuthoritativeCombatIntent(
+      encounterId,
+      { type: 'move', actorId: entityId, x, y },
+      'player',
+      Date.now(),
+      'action_bar',
     );
-    if (!response.ok) throw new Error(`Move failed (${response.status})`);
-    return response.json();
   }
 
   /** The whole order, monsters included; an unavailable encounter degrades to an empty list. */

@@ -672,7 +672,20 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
       expect(await persistedCombat()).toEqual(before);
     });
 
-    test('live /move refuses an off-turn player without writes and persists a legal move (#2685 step 1)', async () => {
+    test('removed /tactical-map/move returns 404 through the real pipeline without DB changes (#2685 step 6)', async () => {
+      const before = await persistedCombat();
+      const response = await app.handle(
+        new Request(`http://localhost/v1/sessions/${sessionId}/tactical-map/move`, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${userId}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ entityId: heroId, x: 4, y: 3 }),
+        }),
+      );
+      expect(response.status).toBe(404);
+      expect(await persistedCombat()).toEqual(before);
+    });
+
+    test('the board move body through the real intent route refuses an off-turn player without writes and persists a legal move (#2685 step 6)', async () => {
       const [offTurn] = await database
         .insert(combatParticipants)
         .values({
@@ -692,24 +705,21 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
         .set({ currentTurnOrder: 1 })
         .where(eq(combatEncounters.id, encounterId));
       const before = await persistedCombat();
-      const refused = await call('POST', `/v1/sessions/${sessionId}/tactical-map/move`, {
-        entityId: offTurn.id,
-        x: 4,
-        y: 3,
+      // TacticalMapBoard's exact body: a player-sourced move intent with the action_bar origin.
+      const boardBody = (actorId: string) => ({
+        intent: { type: 'move', actorId, x: 4, y: 3 },
+        source: 'player',
+        dmStartedAt: Date.now(),
+        origin: 'action_bar',
       });
-      expect(refused).toEqual({
-        status: 422,
-        json: { error: 'Actor is not the current-turn participant' },
-      });
+      const refused = await call('POST', `/v1/combat/${encounterId}/intent`, boardBody(offTurn.id));
+      expect(refused.status).toBe(422);
+      expect(refused.json.error).toBe('Actor is not the current-turn participant');
       expect(await persistedCombat()).toEqual(before);
 
-      const accepted = await call('POST', `/v1/sessions/${sessionId}/tactical-map/move`, {
-        entityId: heroId,
-        x: 4,
-        y: 3,
-      });
+      const accepted = await call('POST', `/v1/combat/${encounterId}/intent`, boardBody(heroId));
       expect(accepted.status).toBe(200);
-      expect(accepted.json.result).toMatchObject({ applied: true });
+      expect(accepted.json.accepted).toBe(true);
       const after = await persistedCombat();
       expect(
         (after.map.state as TacticalMap).entities.find(

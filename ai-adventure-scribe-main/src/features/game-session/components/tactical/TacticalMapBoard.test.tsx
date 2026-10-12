@@ -22,7 +22,9 @@ vi.mock('./TacticalMapCanvas', () => ({
   ),
 }));
 vi.mock('@/contexts/CombatContext', () => ({
-  useCombat: () => ({ state: { activeEncounter: { currentTurnParticipantId: 'pc' } } }),
+  useCombat: () => ({
+    state: { activeEncounter: { id: 'enc-1', currentTurnParticipantId: 'pc' } },
+  }),
 }));
 
 const map = (): TacticalMap => ({
@@ -82,28 +84,25 @@ describe('tactical map combat flow', () => {
   });
   it('mounts, moves/refuses, receives deltas, and unmounts', async () => {
     let moveRequests = 0;
-    const fetchMock = vi.fn((url: string) => {
-      const isMove = url.includes('/move');
-      if (isMove) moveRequests += 1;
-      let data: unknown = {
-        result: {
-          applied: true,
-          path: [
-            { x: 0, y: 0 },
-            { x: 1, y: 1 },
-          ],
-        },
-      };
+    let intentBody: unknown;
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      const isMove = url.includes('/v1/combat/enc-1/intent');
+      if (isMove) {
+        moveRequests += 1;
+        intentBody = JSON.parse(String(init?.body));
+      }
+      let data: unknown = { accepted: true, result: { applied: true } };
+      if (url.includes('/status')) data = { encounter: { version: 3 } };
       if (url.includes('valid-moves')) data = { moves: [{ x: 1, y: 1 }] };
       if (isMove && moveRequests === 1)
         data = {
-          result: {
-            applied: false,
-            refusal: { reason: 'insufficient_movement', needsFeet: 10, hasFeet: 5 },
-          },
+          error: 'Movement refused',
+          details: { reason: 'insufficient_movement', needsFeet: 10, hasFeet: 5 },
         };
       return Promise.resolve({
         ok: url.endsWith('/tactical-map') ? false : !isMove || moveRequests > 1,
+        status: isMove && moveRequests === 1 ? 422 : 200,
+        headers: new Headers(),
         json: async () => data,
       });
     });
@@ -128,12 +127,20 @@ describe('tactical map combat flow', () => {
     );
     fireEvent.click(screen.getByText('destination'));
     await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/move'), expect.anything()),
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/combat/enc-1/intent'),
+        expect.anything(),
+      ),
     );
     fireEvent.click(screen.getByText('own'));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
     fireEvent.click(screen.getByText('destination'));
     await waitFor(() => expect(moveRequests).toBe(2));
+    expect(intentBody).toMatchObject({
+      intent: { type: 'move', actorId: 'pc', x: 1, y: 1 },
+      source: 'player',
+      origin: 'action_bar',
+    });
     await act(async () =>
       window.dispatchEvent(
         new CustomEvent('tactical-map-delta', {
