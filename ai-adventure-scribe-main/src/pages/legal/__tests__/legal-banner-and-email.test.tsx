@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { HelmetProvider } from 'react-helmet-async';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const flag = vi.hoisted(() => ({ show: true }));
@@ -15,7 +16,9 @@ import ContactPage from '../ContactPage';
 const renderContact = () =>
   render(
     <HelmetProvider>
-      <ContactPage />
+      <MemoryRouter>
+        <ContactPage />
+      </MemoryRouter>
     </HelmetProvider>,
   );
 
@@ -38,6 +41,12 @@ describe('legal draft banner flag and support email (#2258)', () => {
       'href',
       'mailto:help@example.test',
     );
+  });
+
+  it('#210 QA-002: uses the shared launch wordmark and top nav', () => {
+    renderContact();
+    expect(screen.getByRole('link', { name: 'Infinite Realms home' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/app');
   });
 
   it('says so when VITE_SUPPORT_EMAIL is unset', () => {
