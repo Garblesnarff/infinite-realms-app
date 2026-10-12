@@ -248,16 +248,103 @@ describe('a dismissed engine attack prompt (#2234)', () => {
   });
 
   it('a party_defeated narration short-circuits before the narration gate (#261 CB-027)', async () => {
-    setPlayerRollHost(hostThatAnswers({ d20: 15 }));
+    // A silent player turn with nothing resolved: no engine lines, so without the
+    // short-circuit the narration gate would run on this envelope (narrationGated is
+    // true here) and rewrite the empty-text terminal envelope into a "Processing Error".
+    enforceNarrationGate.mockResolvedValueOnce({ narration: { text: 'Processing Error' } });
     chatWithDM.mockResolvedValue({ text: '', terminalState: 'party_defeated' });
 
-    const result = await resolve();
+    const result = await resolveDeclaredCombatActions({
+      encounterId: 'encounter-1',
+      sessionId: 'session-1',
+      combatActions: [],
+      declarationText: '',
+      aiContext: { gameState: {} },
+      conversationHistory: [],
+      participants: PARTICIPANTS,
+      combatRound: 2,
+      silentPlayerTurn: { playerMessage: 'You hold your ground.' },
+    });
 
     // The terminal flag comes straight from the resolution's narrate(): the gate that
-    // would rewrite the empty-text envelope into a "Processing Error" never runs, and
-    // the engine blocks ride along for the transcript.
+    // would rewrite the empty-text envelope into a "Processing Error" never runs.
     expect(result.terminalState).toBe('party_defeated');
-    expect(result.combatEngineBlocks).toBeDefined();
     expect(enforceNarrationGate).not.toHaveBeenCalled();
+  });
+});
+
+describe('death-save 45 s timer engine line (#261)', () => {
+  const DEATH_SAVE = {
+    actor_id: PLAYER_ID,
+    action_type: 'death_save',
+    target_ids: [],
+    weapon_id: null,
+    spell_id: null,
+    slot_level: null,
+    movement_feet: 0,
+  };
+  // The engine's save result: one successful save. The real producer is the combat
+  // endpoint's death-save settlement; the shape here is what formatDeathSaveParts reads
+  // (result.deathSaves).
+  const SAVE_RESULT = {
+    boundary: null,
+    outcomes: [],
+    result: {
+      deathSaves: [
+        {
+          participantId: PLAYER_ID,
+          roll: 14,
+          isSuccess: true,
+          isCritical: false,
+          successes: 1,
+          failures: 0,
+        },
+      ],
+    },
+  };
+
+  const resolveDeathSave = (
+    overrides: Record<string, unknown> = {},
+  ): Promise<{ combatEngineBlocks?: Array<{ lines?: string[] }> }> =>
+    resolveDeclaredCombatActions({
+      encounterId: 'encounter-1',
+      sessionId: 'session-1',
+      combatActions: [DEATH_SAVE],
+      declarationText: 'The Apprentice fights to stay alive.',
+      aiContext: { gameState: {} },
+      conversationHistory: [],
+      participants: PARTICIPANTS,
+      combatRound: 2,
+      ...overrides,
+    });
+
+  const flatLines = (result: { combatEngineBlocks?: Array<{ lines?: string[] }> }): string[] =>
+    (result.combatEngineBlocks ?? []).flatMap((block) => block.lines ?? []);
+
+  beforeEach(() => {
+    executeStructuredCombatActionWithBoundary.mockResolvedValue(SAVE_RESULT);
+  });
+
+  it('prints "Death save auto-rolled after 45 s." ahead of the save lines when the timer fires', async () => {
+    setPlayerRollHost(hostThatAnswers({ d20: null, timedOut: true }));
+
+    const result = await resolveDeathSave();
+    const lines = flatLines(result);
+
+    const autoIdx = lines.findIndex((line) => line.includes('Death save auto-rolled after 45 s.'));
+    const saveIdx = lines.findIndex((line) => line.includes('death saving throw'));
+    expect(autoIdx).toBeGreaterThanOrEqual(0);
+    expect(saveIdx).toBeGreaterThanOrEqual(0);
+    expect(autoIdx).toBeLessThan(saveIdx);
+  });
+
+  it('prints no auto-rolled line when the player rolls their own die', async () => {
+    setPlayerRollHost(hostThatAnswers({ d20: 15 }));
+
+    const result = await resolveDeathSave();
+    const lines = flatLines(result);
+
+    expect(lines.some((line) => line.includes('Death save auto-rolled after 45 s.'))).toBe(false);
+    expect(lines.some((line) => line.includes('death saving throw'))).toBe(true);
   });
 });

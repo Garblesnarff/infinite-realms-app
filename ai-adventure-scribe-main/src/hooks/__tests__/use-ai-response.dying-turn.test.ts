@@ -399,7 +399,7 @@ describe('useAIResponse: the dying player’s turn (#2518)', () => {
     expect(JSON.stringify(asked.conversationHistory)).toContain('death saving throw');
   });
 
-  it('an unanswered prompt (45 s) or a dismissed one is rolled by the engine, and the line says so', async () => {
+  it('an unanswered prompt (45 s) is rolled by the engine, and the line says so', async () => {
     // The 45 s timer fired: the bridge settles { d20: null, timedOut: true }, which is the
     // only path that reads as "the engine rolls it" (RG-019).
     rollAnswer = { d20: null, timedOut: true };
