@@ -23,6 +23,8 @@ const createMockChain = (initialValue: any = []) => {
     // For Drizzle-style .returning() which is often awaited
     [Symbol.iterator]: [][Symbol.iterator],
   };
+  // #270: LevelUpService.setLevel re-syncs spell-slot rows, which deletes.
+  mock.delete = vi.fn(() => mock);
   return mock;
 };
 
@@ -40,6 +42,7 @@ vi.mock('../../../../db/client', () => {
     select: vi.fn(),
     insert: vi.fn(),
     update: vi.fn(),
+    delete: vi.fn(),
     execute: vi.fn(),
   };
   return { db: mockDb };
@@ -64,6 +67,7 @@ describe('ProgressionService Security', () => {
     (db.select as any).mockImplementation(() => createMockChain());
     (db.insert as any).mockImplementation(() => createMockChain());
     (db.update as any).mockImplementation(() => createMockChain());
+    (db.delete as any).mockImplementation(() => createMockChain());
   });
 
   describe('initializeProgression', () => {

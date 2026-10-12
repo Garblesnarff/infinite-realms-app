@@ -20,6 +20,7 @@ import { db } from '../../../db/client';
 import {
   characterPermissions,
   characterEquipment,
+  characterSpellSlots,
   inventoryItems,
   characterStats,
   characters,
@@ -30,6 +31,7 @@ import {
   type ArmorClassEquipmentItem,
 } from '../../../shared/armor-class';
 import { InternalServerError } from '../lib/errors.js';
+import { SpellSlotMechanics } from './spell-slots/spell-slot-mechanics.js';
 
 import type { Character, NewCharacter, NewCharacterStats } from '../../../db/schema/index';
 
@@ -163,6 +165,27 @@ export class CharacterService {
         .returning();
 
       if (!character) throw new InternalServerError('Failed to create character');
+
+      // #270: seed the engine's spell-slot table from the single slot source
+      // (the 2014 5e tables) at creation, in the same transaction. Non-casters,
+      // warlocks (pact magic is a separate pool the rows do not track) and
+      // unrecognized classes correctly get no rows. The client-sent JSONB copy
+      // is left exactly as sent; the rows are the engine's source of truth.
+      const slotRows = SpellSlotMechanics.seedRowsForCharacter(
+        data.class ?? null,
+        character.level ?? 1,
+        data.classLevels,
+      );
+      if (slotRows.length > 0) {
+        await tx.insert(characterSpellSlots).values(
+          slotRows.map((row) => ({
+            characterId: character.id,
+            spellLevel: row.spellLevel,
+            totalSlots: row.totalSlots,
+            usedSlots: 0,
+          })),
+        );
+      }
 
       if (stats) {
         await tx.insert(characterStats).values({
@@ -663,6 +686,25 @@ export class CharacterService {
         wisdom: characterData.stats.wisdom || 10,
         charisma: characterData.stats.charisma || 10,
       });
+    }
+
+    // #270: same seed as CharacterService.create — an imported caster gets
+    // slot rows from the single slot source. The export carries no slot
+    // state, so the rows start unspent.
+    const importSlotRows = SpellSlotMechanics.seedRowsForCharacter(
+      charData.class ?? null,
+      character.level ?? 1,
+      charData.classLevels,
+    );
+    if (importSlotRows.length > 0) {
+      await db.insert(characterSpellSlots).values(
+        importSlotRows.map((row) => ({
+          characterId: character.id,
+          spellLevel: row.spellLevel,
+          totalSlots: row.totalSlots,
+          usedSlots: 0,
+        })),
+      );
     }
 
     return character;

@@ -85,8 +85,9 @@ describe('SpellSlotsService', () => {
 
     it('should calculate slots for a level 5 Paladin (half caster)', () => {
       const result = SpellSlotsService.calculateSpellSlots('Paladin', 5);
-      expect(result.casterLevel).toBe(2);
-      expect(result.slots[1]).toBe(3);
+      expect(result.casterLevel).toBe(3);
+      expect(result.slots[1]).toBe(4);
+      expect(result.slots[2]).toBe(2);
     });
 
     it('should throw ValidationError for invalid level', () => {

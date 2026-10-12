@@ -19,6 +19,7 @@ import {
 import { NotFoundError, ValidationError, BusinessLogicError } from '../../lib/errors.js';
 import { ProgressionService } from '../progression-service.js';
 import { ProgressionMechanics } from './progression-mechanics.js';
+import { SpellSlotDataAccess } from '../spell-slots/spell-slot-data-access.js';
 
 import type {
   LevelUpOptions,
@@ -306,6 +307,10 @@ export class LevelUpService {
       await Promise.all([charUpdate, progressionUpdate]);
     }
 
+    // #270: the new level may grant more (or fewer) slots. Totals come from
+    // the single slot source; spent slots survive, clamped to the new total.
+    await SpellSlotDataAccess.syncSpellSlotTotals(characterId, userId);
+
     // Get class features for this level (placeholder)
     const newClassFeatures: ClassFeature[] = [];
     if (ProgressionMechanics.grantsAbilityScoreImprovement(newLevel)) {
@@ -429,6 +434,10 @@ export class LevelUpService {
       source: 'milestone',
       description: reason || `Milestone level set to ${level}`,
     });
+
+    // #270: same re-sync as levelUp — a milestone set can raise or lower the
+    // granted slot totals.
+    await SpellSlotDataAccess.syncSpellSlotTotals(characterId, userId);
 
     return { oldLevel, newLevel: level };
   }
