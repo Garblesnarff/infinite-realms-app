@@ -1,6 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import type { CampaignPayload } from '@/services/user-data-payload-helpers';
+
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { campaignImageGenerator } from '@/services/campaign-image-generator';
@@ -43,13 +45,15 @@ export const useCampaignSave = () => {
         ...campaignDataWithoutImage
       } = campaignData;
 
-      const data = await userDataApi.createCampaign({
+      const payload = {
         ...campaignDataWithoutImage,
         status: 'active',
         setting_details: campaignData.setting_details || {},
         enhancement_selections: enhancementSelections || [],
         enhancement_effects: enhancementEffects || {},
-      });
+      } as CampaignPayload;
+
+      const data = await userDataApi.createCampaign(payload);
 
       if (!data) {
         throw new Error('No data returned from insert');

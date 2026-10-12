@@ -71,8 +71,13 @@ const WizardContent: React.FC = () => {
         return;
       }
 
+      const campaign = state.campaign;
+      if (!campaign) {
+        return;
+      }
+
       try {
-        const campaignId = await saveCampaign(state.campaign);
+        const campaignId = await saveCampaign({ ...campaign });
         toast({
           title: 'Campaign Created Successfully!',
           description:
