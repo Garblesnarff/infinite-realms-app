@@ -93,11 +93,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 
   const bodyText = await response.text().catch(() => '');
-  let payload: { error?: string | { message?: string }; message?: string; code?: string } | null =
-    null;
+  type ErrorPayload = { error?: string | { message?: string }; message?: string; code?: string };
+  let payload: ErrorPayload | null = null;
   if (typeof bodyText === 'string' && bodyText) {
     try {
-      payload = parseJsonIfString(bodyText) as typeof payload;
+      payload = parseJsonIfString(bodyText) as ErrorPayload;
     } catch {
       payload = null;
     }

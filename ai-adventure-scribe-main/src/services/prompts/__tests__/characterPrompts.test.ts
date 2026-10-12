@@ -84,6 +84,7 @@ describe('characterPrompts', () => {
         classFeatures: [],
         armorProficiencies: [],
         weaponProficiencies: [],
+        subclasses: [],
       },
       background: null,
       level: 4,

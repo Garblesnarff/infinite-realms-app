@@ -218,8 +218,8 @@ export class QuestGenerator {
    * Generate a quest hook from current game state
    */
   static async generateQuestHook(
-    campaignId: string,
-    sessionId: string,
+    _campaignId: string,
+    _sessionId: string,
     contextMessage: string,
   ): Promise<{ title: string; hook: string; questType: string }> {
     try {

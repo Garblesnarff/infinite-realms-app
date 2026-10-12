@@ -137,7 +137,7 @@ export class WorldBuilderService {
     sessionId: string,
     characterId: string,
     playerMessage: string,
-    aiResponse: string,
+    _aiResponse: string,
     userId: string,
   ): Promise<WorldExpansionResult | null> {
     if (!isWorldBuilderEnabled()) {
@@ -198,9 +198,9 @@ export class WorldBuilderService {
     characterId: string;
     userId: string;
     specifications?: Partial<{
-      locationType: string;
-      size: string;
-      atmosphere: string;
+      locationType: LocationRequest['type'];
+      size: LocationRequest['size'];
+      atmosphere: LocationRequest['atmosphere'];
       genre: string;
       role: NPCRequest['role'];
       importance: NPCRequest['importance'];
@@ -275,5 +275,4 @@ export class WorldBuilderService {
       throw error;
     }
   }
-
 }

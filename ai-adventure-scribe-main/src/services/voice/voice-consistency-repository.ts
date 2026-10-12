@@ -63,6 +63,7 @@ export class VoiceConsistencyRepository {
       }
 
       // Transform to the expected format
+      // @ts-expect-error #438 voice_category is string|null but the return type declares voiceCategory: string
       return data.map((mapping) => ({
         id: mapping.id,
         characterName: mapping.character_name,

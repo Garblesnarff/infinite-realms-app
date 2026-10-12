@@ -113,8 +113,8 @@ export class LocationGenerator {
     campaignId: string,
     sessionId: string,
     playerAction: string,
-    currentLocationId?: string,
-    userId: string,
+    _currentLocationId?: string,
+    userId?: string,
   ): Promise<GeneratedLocation> {
     try {
       // RLS cannot scope this WorkOS-authenticated Supabase client. Fail closed
