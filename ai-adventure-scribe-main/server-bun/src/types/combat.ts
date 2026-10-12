@@ -297,6 +297,12 @@ export type CombatEndReason =
   /** A client abandoned this encounter. */
   | 'abandoned'
   /**
+   * The player yielded: the party surrendered on the player's own declaration (#262).
+   * The fight ends on the player's terms — not a defeat, not a flight. Distinct from
+   * `abandoned` so the end line can name the surrender instead of a breaking-off.
+   */
+  | 'player_surrendered'
+  /**
    * Nobody came back. The session saw no player or DM event for `IDLE_ENCOUNTER_HOURS`, so the
    * hourly sweep (#2556) closed the fight rather than leaving it `active` forever.
    */

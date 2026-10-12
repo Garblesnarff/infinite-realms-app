@@ -93,6 +93,13 @@ export function describeCombatEnd(reason: CombatEndReason): string {
         'narrate a victory that did not happen, and do not start a new encounter in the same ' +
         'breath.'
       );
+    case 'player_surrendered':
+      return (
+        'THE FIGHT IS OVER: the party has surrendered. The fighting stops on the player\'s ' +
+        'terms — narrate the surrender itself, what the other side does with a party that ' +
+        'yielded, and what becomes of everyone still standing. Do not narrate a defeat that ' +
+        'did not happen, and do not start a new encounter in the same breath.'
+      );
     case 'ended_idle':
       return (
         'THE FIGHT IS OVER: this encounter sat unfinished and untouched for so long that it was ' +
@@ -131,7 +138,10 @@ export function describeStableWake(wake: WakeOutcome[]): string {
 const isResolution = (reason: CombatEndReason): boolean =>
   reason === 'last_hostile_defeated' ||
   reason === 'party_defeated' ||
-  reason === 'player_down_stable';
+  reason === 'player_down_stable' ||
+  // A surrender is the player's own decisive ending, named on the end line: not a fight that
+  // stopped for reasons nobody recorded (#262).
+  reason === 'player_surrendered';
 
 /**
  * Persist only facts the combat engine can prove. Ledger failures are deliberately non-fatal:

@@ -47,6 +47,7 @@ import {
   recordPlayerExit,
   selectOpportunityAttacker,
   type OpportunityAttacker,
+  type PlayerExitResult,
 } from './player-exit-service.js';
 import { loadSessionEntityIndex, type SessionEntityIndex } from './session-entity-index.js';
 import { showTargetNumbersForSession } from './session-target-numbers.js';
@@ -915,7 +916,7 @@ async function resolvePlayerExit(params: {
   state: CombatState;
   actorId: string;
   intent: 'flee' | 'yield';
-}): Promise<unknown> {
+}): Promise<PlayerExitResult> {
   const { encounterId, sessionId, userId, state, actorId, intent } = params;
   const map = await loadActiveTacticalMap(sessionId);
   const roster = rosterFrom(state.participants);
@@ -1097,6 +1098,10 @@ export async function executeCombatIntent(
     }
     const intent = resolveExpectedVersion(resolved, source, encounter.version);
     let result: unknown;
+    // #262: a recorded yield ends the fight right here. The DM never reliably ends the scene
+    // after the exit (NT-036/NT-113), so waiting for its `dm_ended_scene` leaves the turn
+    // stalled with the player out of the order and nothing left to act.
+    let yieldEndedCombat = false;
     if (intent.type === 'move') {
       result = await applyTacticalMapAction(encounter.sessionId, {
         action: 'move',
@@ -1418,8 +1423,9 @@ export async function executeCombatIntent(
       // #2580: the player's own exit. Fleeing is movement and yielding is a declaration, so it
       // claims the turn and the encounter version but NOT the Action: "Disengage, then Flee" has
       // to work, and so does leaving with the Action already spent. It provokes one opportunity
-      // attack on the way out (flee only), then marks the player exited so the DM's next
-      // `dm_ended_scene` is judged against a roster with nobody left to be fought.
+      // attack on the way out (flee only), then marks the player exited. A flee leaves the
+      // DM's next `dm_ended_scene` to be judged against a roster with nobody left to be fought;
+      // a yield ends the fight itself below (#262).
       // A dying character is not choosing to leave: the death-save flow owns them.
       const exiting = state.participants.find((participant) => participant.id === intent.actorId);
       if (vitalStateOf(exiting as unknown as VitalsInput) !== 'standing')
@@ -1427,7 +1433,7 @@ export async function executeCombatIntent(
           actorId: intent.actorId,
         });
       await claimTurnVersion(intent.actorId, encounterId, intent.expectedVersion);
-      result = await resolvePlayerExit({
+      const exitResult = await resolvePlayerExit({
         encounterId,
         sessionId: encounter.sessionId,
         userId,
@@ -1435,8 +1441,16 @@ export async function executeCombatIntent(
         actorId: intent.actorId,
         intent: intent.type,
       });
+      result = exitResult;
       // No discrete-action fact here: `describePlayerExit` is the engine line, and a second
       // "dashed" line under it would tell the DM the player ran and then dashed.
+      if (intent.type === 'yield' && exitResult.exit !== null) {
+        // #262: the surrender is the ending, with its own reason — the engine end line names
+        // it, so a typed or clicked yield can never again read as "Combat has ended." with no
+        // reason. Flee keeps the #2580 design: the player leaves and the DM ends the scene.
+        await concludeEncounter(encounterId, encounter.sessionId, userId, 'player_surrendered');
+        yieldEndedCombat = true;
+      }
     } else if (intent.type === 'dash') {
       result = await claimTurnActionAndResolve(
         intent.actorId,
@@ -1538,10 +1552,12 @@ export async function executeCombatIntent(
     // `end_turn` joins damage as a trigger because a character can now die without any damage
     // being dealt: three failed death saving throws end a campaign, and the check that ends
     // the encounter has to run on the turn that produced the third failure.
-    let ending =
-      damage > 0 || intent.type === 'end_turn' || intent.type === 'death_save'
-        ? await endCombatIfResolved(encounterId, userId)
-        : null;
+    let ending: CombatEnding | null =
+      yieldEndedCombat
+        ? { reason: 'player_surrendered', wake: [] }
+        : damage > 0 || intent.type === 'end_turn' || intent.type === 'death_save'
+          ? await endCombatIfResolved(encounterId, userId)
+          : null;
     let combatBoundary = ending !== null;
     if (!ending) {
       // After the end check, never before: a killing blow ends the fight, and there is no next

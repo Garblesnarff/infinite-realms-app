@@ -534,6 +534,7 @@ export function formatCombatEndLine(reason: string | null | undefined): string |
     last_hostile_defeated: 'the last hostile was defeated',
     party_defeated: 'the party was defeated',
     death_save_failed: 'a death save ended the fight',
+    player_surrendered: 'the party surrendered',
   };
   return `⚙️ Engine: Combat ended — ${explanation[reason] ?? reason} (reason: ${reason}).`;
 }
