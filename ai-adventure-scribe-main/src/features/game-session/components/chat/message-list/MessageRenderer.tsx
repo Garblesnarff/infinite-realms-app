@@ -195,16 +195,21 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
           />
         )}
 
-        {/* Action Options - render inline for DM bubbles on last message */}
+        {/* Action Options - render inline for DM bubbles on last message.
+            GP-015 (#219): a narration turn with no action choices still
+            renders, so it can say why there are none. */}
         {isLastInGroup &&
           (isDM || combatOptionsVisible) &&
-          (parsedMessage?.hasOptions || combatOptionsVisible) && (
+          (parsedMessage?.hasOptions ||
+            combatOptionsVisible ||
+            message.context?.noActionOptions === true) && (
             <DynamicOptionsSection
               options={parsedMessage?.options ?? []}
               onOptionSelect={onOptionSelect}
               onSendMessage={onSendMessage}
               hasDynamicOverlay={false}
               isLatest={isLatestMessage}
+              showNoOptionsNotice={message.context?.noActionOptions === true}
             />
           )}
       </div>

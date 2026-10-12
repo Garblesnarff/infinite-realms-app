@@ -42,6 +42,11 @@ interface DynamicOptionsSectionProps {
   onSendMessage?: (message: ChatMessage) => Promise<void>;
   /** False for a past message: it keeps its own options and never turns into the combat menu. */
   isLatest?: boolean;
+  /**
+   * GP-015 (#219): the DM's narration turn carried no action choices. Say why
+   * instead of rendering nothing — but only on the latest message.
+   */
+  showNoOptionsNotice?: boolean;
 }
 
 type EngineNotice = {
@@ -81,7 +86,14 @@ async function sendEngineNotice(
  * section when unrelated message list state changes.
  */
 export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React.memo(
-  ({ options, onOptionSelect, hasDynamicOverlay, onSendMessage, isLatest = true }) => {
+  ({
+    options,
+    onOptionSelect,
+    hasDynamicOverlay,
+    onSendMessage,
+    isLatest = true,
+    showNoOptionsNotice = false,
+  }) => {
     const { state: combatState, refreshCombatState } = useCombat();
     const showCombatMenu = isLatest && combatState.isInCombat;
     const [error, setError] = useState<string | null>(null);
@@ -140,6 +152,21 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
     }, [showCombatMenu, legalState.actions, legalState.actorId, encounter?.participants, options]);
 
     if (!renderedOptions || renderedOptions.length === 0) {
+      // GP-015 (#219): a narration turn with no suggested actions says why,
+      // explicitly, on the latest message only — past turns stay quiet. Never
+      // while the combat menu owns this slot (legal actions loading, or
+      // another participant's turn): the "story is open" copy would be wrong
+      // in a fight.
+      if (showNoOptionsNotice && isLatest && !showCombatMenu) {
+        return (
+          <div
+            data-testid="no-action-options-notice"
+            className="mt-2 text-sm text-muted-foreground italic"
+          >
+            No suggested actions for this beat — the story is open, so tell the DM what you do.
+          </div>
+        );
+      }
       return null;
     }
 

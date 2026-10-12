@@ -169,7 +169,9 @@ describe('useInitialGreeting', () => {
         sender: 'dm',
         text: expect.stringContaining(greetingText),
         // #2379: the server keeps one message with this mark per session.
-        context: { initialGreeting: true },
+        // GP-015 (#219): a string response carries no options, so the greeting
+        // is marked for the no-choices notice.
+        context: { initialGreeting: true, noActionOptions: true },
       }),
     );
 
@@ -206,6 +208,8 @@ describe('useInitialGreeting', () => {
         expect.objectContaining({
           sender: 'dm',
           text: `${greetingText}\n\n${options.join('\n')}`,
+          // GP-015 (#219): options present, so no no-choices notice.
+          context: { initialGreeting: true, noActionOptions: false },
         }),
       ),
     );
