@@ -1,4 +1,5 @@
 import { CharacterContext, PassiveScores } from './types.ts';
+import { proficiencyBonus } from '../../../shared/proficiency-bonus.ts';
 
 /**
  * PassiveSkillsEvaluator
@@ -9,24 +10,12 @@ import { CharacterContext, PassiveScores } from './types.ts';
  */
 
 /**
- * D&D 5E Proficiency Bonus by Level
- * Inline table for Deno compatibility (no external imports)
- */
-const PROFICIENCY_BONUS_TABLE: Record<number, number> = {
-  1: 2, 2: 2, 3: 2, 4: 2,
-  5: 3, 6: 3, 7: 3, 8: 3,
-  9: 4, 10: 4, 11: 4, 12: 4,
-  13: 5, 14: 5, 15: 5, 16: 5,
-  17: 6, 18: 6, 19: 6, 20: 6,
-};
-
-/**
  * Get proficiency bonus for a given character level
  * @param level - Character level (1-20)
  * @returns Proficiency bonus (+2 to +6)
  */
 function getProficiencyBonus(level: number): number {
-  return PROFICIENCY_BONUS_TABLE[Math.min(20, Math.max(1, level))] || 2;
+  return proficiencyBonus(level);
 }
 
 /**

@@ -73,9 +73,7 @@ describe('CharacterPreviewAbilityScores (#389)', () => {
 
   it('shows base scores when no race is selected', () => {
     render(
-      <CharacterPreviewAbilityScores
-        character={buildCharacter({ race: null, subrace: null })}
-      />,
+      <CharacterPreviewAbilityScores character={buildCharacter({ race: null, subrace: null })} />,
     );
 
     // CON stays 13, WIS stays 10.
@@ -102,7 +100,7 @@ function SeedPreview(): React.ReactElement {
         race: dwarf,
         subrace: hillDwarf,
         class: fighter,
-        level: 1,
+        level: 5,
         abilityScores: {
           strength: { score: 15, modifier: 2, savingThrow: false },
           dexterity: { score: 14, modifier: 2, savingThrow: false },
@@ -143,5 +141,8 @@ describe('CharacterPreview in provider (#389)', () => {
     expect(within(wisRow).getByText('11')).toBeInTheDocument();
     expect(within(wisRow).getByText('+0')).toBeInTheDocument();
     expect(within(wisRow).queryByText('10')).not.toBeInTheDocument();
+
+    // Level 5 uses the shared 2014 proficiency boundary (+3).
+    expect(screen.getByText('+3')).toBeInTheDocument();
   });
 });

@@ -1,3 +1,5 @@
+import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
+
 /**
  * Progression Mechanics
  *
@@ -32,17 +34,6 @@ export const XP_THRESHOLDS: Record<number, number> = {
 };
 
 /**
- * Proficiency bonus by level (PHB pg. 15)
- */
-export const PROFICIENCY_BONUSES: Record<number, number> = {
-  1: 2, 2: 2, 3: 2, 4: 2,
-  5: 3, 6: 3, 7: 3, 8: 3,
-  9: 4, 10: 4, 11: 4, 12: 4,
-  13: 5, 14: 5, 15: 5, 16: 5,
-  17: 6, 18: 6, 19: 6, 20: 6,
-};
-
-/**
  * Levels that grant Ability Score Improvement (PHB pg. 12)
  */
 export const ASI_LEVEL_LIST = [4, 8, 12, 16, 19];
@@ -51,18 +42,18 @@ export const ASI_LEVEL_LIST = [4, 8, 12, 16, 19];
  * Hit dice by class
  */
 export const HIT_DICE_BY_CLASS: Record<string, string> = {
-  'Barbarian': 'd12',
-  'Fighter': 'd10',
-  'Paladin': 'd10',
-  'Ranger': 'd10',
-  'Bard': 'd8',
-  'Cleric': 'd8',
-  'Druid': 'd8',
-  'Monk': 'd8',
-  'Rogue': 'd8',
-  'Warlock': 'd8',
-  'Sorcerer': 'd6',
-  'Wizard': 'd6',
+  Barbarian: 'd12',
+  Fighter: 'd10',
+  Paladin: 'd10',
+  Ranger: 'd10',
+  Bard: 'd8',
+  Cleric: 'd8',
+  Druid: 'd8',
+  Monk: 'd8',
+  Rogue: 'd8',
+  Warlock: 'd8',
+  Sorcerer: 'd6',
+  Wizard: 'd6',
 };
 
 export class ProgressionMechanics {
@@ -71,13 +62,7 @@ export class ProgressionMechanics {
    * PHB pg. 15: +2 (levels 1-4), +3 (5-8), +4 (9-12), +5 (13-16), +6 (17-20)
    */
   static calculateProficiencyBonus(level: number): number {
-    if (level < 1) {
-      return 2;
-    }
-    if (level > 20) {
-      return 6;
-    }
-    return PROFICIENCY_BONUSES[level] || 2;
+    return proficiencyBonus(level);
   }
 
   /**

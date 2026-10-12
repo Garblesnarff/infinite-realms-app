@@ -4,6 +4,7 @@ import React from 'react';
 import { CharacterPreviewAbilityScores } from './CharacterPreviewAbilityScores';
 import { CharacterPreviewHeader } from './CharacterPreviewHeader';
 import { findSrdClass } from '../../../../shared/srd-class-data';
+import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
 
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -50,7 +51,7 @@ const CharacterPreview: React.FC = () => {
   };
 
   const totalLevel = character.level || 1;
-  const proficiencyBonus = Math.ceil(totalLevel / 4) + 1;
+  const characterProficiencyBonus = proficiencyBonus(totalLevel);
 
   // #389: the creation summary must show a labeled HP that matches what the
   // save will store. Mirror transformAbilityScoresForStorage's level-1 HP
@@ -100,7 +101,7 @@ const CharacterPreview: React.FC = () => {
               <div className="text-xs text-muted-foreground">Hit Die</div>
             </div>
             <div className="text-center p-2 bg-card rounded-lg border border-border">
-              <div className="text-lg font-bold text-emerald-400">+{proficiencyBonus}</div>
+              <div className="text-lg font-bold text-emerald-400">+{characterProficiencyBonus}</div>
               <div className="text-xs text-muted-foreground">Proficiency</div>
             </div>
           </div>
@@ -122,10 +123,7 @@ const CharacterPreview: React.FC = () => {
                 </Badge>
               )}
               {character.personalityTraits?.slice(0, 2).map((trait, index) => (
-                <div
-                  key={index}
-                  className="text-xs p-2 bg-card rounded border border-border"
-                >
+                <div key={index} className="text-xs p-2 bg-card rounded border border-border">
                   {trait}
                 </div>
               ))}

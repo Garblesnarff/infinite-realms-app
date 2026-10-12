@@ -1,6 +1,5 @@
 import {
   experienceTable,
-  proficiencyBonusTable,
   multiclassRequirements,
   classProgressions,
   multiclassProficiencies,
@@ -12,13 +11,7 @@ import type { AbilityScores } from '@/types/character';
 import { calculateProficiencyBonus } from '@/utils/character/basic-math';
 
 // Re-export constants and types for backward compatibility
-export {
-  experienceTable,
-  proficiencyBonusTable,
-  multiclassRequirements,
-  classProgressions,
-  multiclassProficiencies,
-};
+export { experienceTable, multiclassRequirements, classProgressions, multiclassProficiencies };
 
 export type { LevelFeature };
 
