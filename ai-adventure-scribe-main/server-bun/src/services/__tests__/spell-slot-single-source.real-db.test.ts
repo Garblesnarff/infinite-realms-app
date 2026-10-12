@@ -18,7 +18,7 @@ import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
 import { eq } from 'drizzle-orm';
 
 import { closeRealDb, describeWithDb, hasRealDb, importWithRealDb, realDb, testId } from './fixtures/real-db.js';
-import { campaigns, characters, characterSpellSlots } from '../../../../db/schema/index';
+import { campaigns, characters, characterSpellSlots, characterSubclasses } from '../../../../db/schema/index';
 import { premadeWizardSpellSlotsWireValue } from '../../../../shared/test-fixtures/premade-wizard-spell-slots';
 
 import type { CharacterSpellSlot } from '../../../../db/schema/index';
@@ -57,6 +57,9 @@ const ProgressionService = hasRealDb
 const RestService = hasRealDb
   ? (await import('../rest-service.js')).RestService
   : undefined;
+const SubclassService = hasRealDb
+  ? (await import('../subclass-service.js')).SubclassService
+  : undefined;
 // The route module's import graph reaches services/workos.ts, which constructs
 // its client at import time. This suite never calls WorkOS; the dummies only
 // satisfy that import, the same way spell-slot-backfill.real-db.test.ts does.
@@ -89,6 +92,14 @@ const creationPipeline = await importWithRealDb(async () => {
   const { createRequestPipelineApp } = await import('../../http-pipeline.js');
   const { charactersRoutes } = await import('../../routes/v1/characters.js');
   return createRequestPipelineApp().use(charactersRoutes);
+});
+
+// #420 FIX round: the subclass route must grant slots at once, so the test
+// goes through the real POST /v1/class-features/characters/:id/subclass.
+const subclassPipeline = await importWithRealDb(async () => {
+  const { createRequestPipelineApp } = await import('../../http-pipeline.js');
+  const { classFeaturesRoutes } = await import('../../routes/v1/class-features.js');
+  return createRequestPipelineApp().use(classFeaturesRoutes);
 });
 
 if (!hasRealDb) {
@@ -418,6 +429,98 @@ describeWithDb('creation seeds slot rows from the single slot source (#270)', ()
     expect(second.newLevel).toBe(3);
     // Warlock 3: 2 pact slots at slot level 2; the level-1 row is pruned.
     expect(await totals(id)).toEqual([[2, 2, 0]]);
+  });
+
+  // #420: the app sends Fighter/Rogue with a subclass; the slot calculation
+  // reads the subclass for third casters. The subclass row is written by the
+  // real SubclassService (its producer), and setSubclass itself now runs the
+  // re-sync — no hand-sync here, so these tests prove slots are granted at
+  // subclass-pick time.
+  const grantThirdCasterRows = async (
+    name: string,
+    cls: string,
+    subclass: string,
+    level: number,
+  ): Promise<string> => {
+    const id = await createViaRoute(testId(name), cls, level);
+    await SubclassService!.setSubclass({
+      characterId: id,
+      className: cls,
+      subclassName: subclass,
+      level,
+      userId: creationUserId,
+    });
+    return id;
+  };
+
+  it('Fighter + Eldritch Knight L3 gets 2 first-level slots (#420)', async () => {
+    const id = await grantThirdCasterRows('ek3', 'Fighter', 'Eldritch Knight', 3);
+    expect(await totals(id)).toEqual([[1, 2, 0]]);
+  });
+
+  it('Fighter + Eldritch Knight L7 gets 4 first + 2 second (#420)', async () => {
+    const id = await grantThirdCasterRows('ek7', 'Fighter', 'Eldritch Knight', 7);
+    expect(await totals(id)).toEqual([
+      [1, 4, 0],
+      [2, 2, 0],
+    ]);
+  });
+
+  it('Rogue + Arcane Trickster L3 gets 2 first-level slots (#420)', async () => {
+    const id = await grantThirdCasterRows('at3', 'Rogue', 'Arcane Trickster', 3);
+    expect(await totals(id)).toEqual([[1, 2, 0]]);
+  });
+
+  it('the subclass route grants EK slots at once, no hand-sync (#420)', async () => {
+    const id = await createViaRoute(testId('ekRoute'), 'Fighter', 3);
+    const response = await subclassPipeline.handle(
+      new Request(`http://localhost/v1/class-features/characters/${id}/subclass`, {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer <redacted>',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          className: 'Fighter',
+          subclassName: 'Eldritch Knight',
+          level: 3,
+        }),
+      }),
+    );
+    expect(response.status).toBe(201);
+    // setSubclass ran the re-sync itself: the rows are there with no extra call.
+    expect(await totals(id)).toEqual([[1, 2, 0]]);
+  });
+
+  it('Fighter without a subclass still gets no rows at L3 (#420)', async () => {
+    const id = await createViaRoute(testId('ftr3'), 'Fighter', 3);
+    await SpellSlotDataAccess!.syncSpellSlotTotals(id, creationUserId);
+    expect(await totals(id)).toEqual([]);
+  });
+
+  it('a mismatched subclass grants no slots (#420)', async () => {
+    // setSubclass would refuse this pairing, so the row is written directly:
+    // the slot code must not trust a bad pairing.
+    const id = await createViaRoute(testId('ekX'), 'Rogue', 3);
+    await db
+      .insert(characterSubclasses)
+      .values({ characterId: id, className: 'Rogue', subclassName: 'Eldritch Knight', chosenAtLevel: 3 });
+    await SpellSlotDataAccess!.syncSpellSlotTotals(id, creationUserId);
+    expect(await totals(id)).toEqual([]);
+  });
+
+  it('a first cast with no rows still grants EK slots via the subclass (#420)', async () => {
+    const id = await grantThirdCasterRows('ekEnsure', 'Fighter', 'Eldritch Knight', 3);
+    // Simulate a character whose rows are missing: ensureSpellSlotRow must
+    // read the subclass from character_subclasses instead of refusing.
+    await db.delete(characterSpellSlots).where(eq(characterSpellSlots.characterId, id));
+    expect(await totals(id)).toEqual([]);
+    const cast = await SpellSlotsService!.useSpellSlot(
+      { characterId: id, spellName: 'Booming Blade', spellLevel: 1, slotLevelUsed: 1 },
+      creationUserId,
+    );
+    expect(cast.success).toBe(true);
+    expect(await totals(id)).toEqual([[1, 2, 1]]);
   });
 
   it('level-up re-syncs totals from the table and keeps spent slots', async () => {

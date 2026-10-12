@@ -14,7 +14,7 @@
 import { and, eq, exists, gte, lt, or, inArray, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
-import { characters, characterSpellSlots, spellSlotUsageLog } from '../../../db/schema/index';
+import { characters, characterSpellSlots, characterSubclasses, spellSlotUsageLog } from '../../../db/schema/index';
 import {
   NotFoundError,
   ValidationError,
@@ -435,6 +435,36 @@ export class SpellSlotsService {
           character.classLevels,
         ).map((row) => [row.spellLevel, row.totalSlots]),
       );
+    } else if (!multiclass && (className === 'Fighter' || className === 'Rogue')) {
+      // #420: third-caster status lives in character_subclasses, not on the
+      // character row. A first cast before any re-sync must grant the
+      // subclass rows instead of refusing. A mismatched or missing subclass
+      // seeds no rows, leaving the refusal below intact. The lookup mirrors
+      // syncSpellSlotTotals: raw character.class, the value setSubclass
+      // stored.
+      const subclassRows = character.class
+        ? await db
+            .select({ subclassName: characterSubclasses.subclassName })
+            .from(characterSubclasses)
+            .where(
+              and(
+                eq(characterSubclasses.characterId, characterId),
+                eq(characterSubclasses.className, character.class),
+              ),
+            )
+            .limit(1)
+        : [];
+      const seeded = SpellSlotMechanics.seedRowsForCharacter(
+        character.class,
+        level,
+        character.classLevels,
+        subclassRows[0]?.subclassName ?? null,
+      );
+      if (seeded.length > 0) {
+        grantedSlots = Object.fromEntries(
+          seeded.map((row) => [row.spellLevel, row.totalSlots]),
+        );
+      }
     }
     const granted = grantedSlots[slotLevelUsed] ?? 0;
     if (granted <= 0) {

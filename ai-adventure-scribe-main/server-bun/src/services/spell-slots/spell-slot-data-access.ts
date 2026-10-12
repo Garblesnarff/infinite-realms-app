@@ -16,7 +16,7 @@ import { and, eq, exists, notInArray, or, desc, sql } from 'drizzle-orm';
 import { parseBoundedSpellLevel } from './spell-level-parser.js';
 import { SpellSlotMechanics } from './spell-slot-mechanics.js';
 import { db } from '../../../../db/client';
-import { characters, characterSpellSlots, spellSlotUsageLog } from '../../../../db/schema/index';
+import { characters, characterSpellSlots, characterSubclasses, spellSlotUsageLog } from '../../../../db/schema/index';
 import { NotFoundError } from '../../lib/errors.js';
 
 import type {
@@ -280,10 +280,28 @@ export class SpellSlotDataAccess {
       throw new NotFoundError('Character', characterId);
     }
 
+    // #420: third-caster subclasses (Eldritch Knight, Arcane Trickster) are
+    // stored in character_subclasses, not on the character row. Read the
+    // character's subclass for their class so the re-sync grants
+    // third-caster rows. (Ownership was proven by the character select above.)
+    const subclassRows = character.class
+      ? await db
+          .select({ subclassName: characterSubclasses.subclassName })
+          .from(characterSubclasses)
+          .where(
+            and(
+              eq(characterSubclasses.characterId, characterId),
+              eq(characterSubclasses.className, character.class),
+            ),
+          )
+          .limit(1)
+      : [];
+
     const rows = SpellSlotMechanics.seedRowsForCharacter(
       character.class,
       character.level ?? 1,
       character.classLevels,
+      subclassRows[0]?.subclassName ?? null,
     );
     const grantedLevels = rows.map((row) => row.spellLevel);
 
