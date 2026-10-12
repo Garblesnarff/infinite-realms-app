@@ -142,8 +142,7 @@ that file is installed the cron path is byte-for-byte unchanged (the test cuts
 every `post-deploy smoke` block out and diffs log, exit status, commands and
 state files).
 
-As a **dedicated smoke account** (never a tester's or player's), with no LLM
-call, it:
+As a **dedicated smoke account** (never a tester's or player's), it:
 
 1. polls `GET /version` (up to 120 s while pm2 starts) until it reports the
    deployed commit;
@@ -156,6 +155,22 @@ call, it:
    tests share one source;
 4. saves the roll-result message;
 5. reads the history back: 3 rows, in order, text intact, `rollRequests` kept;
+5b. posts one real `POST /v1/llm/generate` turn (#350) and fails unless it
+   answers with `parsed=true` and not degraded. Steps 1-6 never caught
+   #350's outage (provider key spend cap): none of them calls the provider
+   chain. This is the run's only LLM call — one real turn and one daily quota
+   unit of the smoke account per deploy. It first reads `GET /v1/llm/quota`
+   and fails fast with a clear message if fewer than 2 units remain (a probe
+   that would 402 is a self-inflicted deploy hold). A bare generate (no
+   `dmReply`), so the only rows it writes are the smoke account's own
+   `ai_usage` metering rows; no campaign/session/message rows are created and
+   step 6 sweeps nothing extra. After a successful turn it deletes the
+   `ai_usage` rows the turn created, by the `usageIds` the generate response
+   carries back (`DELETE /v1/llm/usage`, authorized by the `SMOKE_CLEANUP_SECRET`
+   shared secret in `smoke.env` — deleting usage rows restores quota, so the
+   endpoint is secret-gated), then re-reads the quota and fails unless it is
+   back where the probe found it. Without this cleanup every deploy would
+   accumulate metering rows for the smoke account;
 6. deletes the campaign (which cascades to the session and its messages) and
    checks the session is gone.
 
@@ -174,7 +189,10 @@ the file clears it to RECOVERED. If `smoke.env` exists but `smoke.sh` does not,
 or `smoke.sh` fails without writing the hold (it could not run at all), the
 deploy is not held and a `smoke_setup` alert fires instead.
 
-The env file holds only `SMOKE_EMAIL` and `SMOKE_PASSWORD` (root, 0600). The
+The env file holds only `SMOKE_EMAIL`, `SMOKE_PASSWORD` and `SMOKE_CLEANUP_SECRET`
+(root, 0600). The cleanup secret authorizes `DELETE /v1/llm/usage` (the step 5b
+usage-row cleanup); the server requires the same value in its own
+`SMOKE_CLEANUP_SECRET` env var. The
 script never prints them or the access token, never puts them on a command line
 (the login body and the `Authorization` header go to curl as 0600 files in a
 temp dir removed on exit), and never echoes the sign-in response. Requests carry
@@ -215,8 +233,9 @@ blind. Overrides: `HTTP_ALARM_LOGS`, `HTTP_ALARM_WINDOW_SECONDS`,
 Nothing here is installed by merging. On Rob's install line:
 
 1. Create the smoke account once, by signing up in the app with a dedicated
-   address, and write `/etc/infiniterealms/smoke.env` (`SMOKE_EMAIL=…`,
-   `SMOKE_PASSWORD=…`, `chmod 600`, root-owned).
+   address, and write `/etc/infiniterealms/smoke.env` (`SMOKE_EMAIL=...`,
+   `SMOKE_PASSWORD=...`, `SMOKE_CLEANUP_SECRET=...` — a long random value, also set as
+   the server's `SMOKE_CLEANUP_SECRET` env var).
 2. Put `smoke.sh` and `http-alarm.sh` next to the `auto-deploy.sh` that cron
    runs, and install that `auto-deploy.sh` too.
 3. Check on the box, with nothing changed: `head -1 /var/log/nginx/api-access.log`

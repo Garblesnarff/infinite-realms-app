@@ -192,6 +192,8 @@ describe('image and voice dollar costs', () => {
 
   it('resolves when the usage insert fails', async () => {
     failWrites = true;
+    // #350 FIX round 2: recordProviderUsage now returns the row id (or null
+    // when there is none) instead of void; a failed insert still resolves.
     await expect(
       AIUsageService.recordProviderUsage({
         userId: 'failed-cost-user',
@@ -203,7 +205,7 @@ describe('image and voice dollar costs', () => {
         outputTokens: 1,
         sessionId: 'session-fail',
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBeNull();
     failWrites = false;
   });
 });

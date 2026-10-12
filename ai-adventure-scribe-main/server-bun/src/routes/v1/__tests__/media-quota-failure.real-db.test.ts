@@ -68,8 +68,12 @@ const { createRequestPipelineApp } = await importWithRealDb(
 );
 const { imageRoutes } = await importWithRealDb(() => import('../images.js'));
 const { createTtsRoutes } = await importWithRealDb(() => import('../tts.js'));
+const { llmRoutes } = await importWithRealDb(() => import('../llm.js'));
 const { resetCircuitBreakersForTests } = await importWithRealDb(
   () => import('../../../utils/circuit-breaker.js'),
+);
+const { resetProviderKeyLimitForTests } = await importWithRealDb(
+  () => import('../../../services/llm-provider-service.js'),
 );
 
 /** Stands in for requireAuth (which verifies a WorkOS JWT) so the voice route sees a user. */
@@ -88,6 +92,9 @@ const voiceApp = hasRealDb
   ? createRequestPipelineApp().use(
       createTtsRoutes({ auth: voiceAuth as unknown as TtsRouteOptions['auth'] }),
     )
+  : (null as unknown as ReturnType<typeof createRequestPipelineApp>);
+const llmApp = hasRealDb
+  ? createRequestPipelineApp().use(llmRoutes)
   : (null as unknown as ReturnType<typeof createRequestPipelineApp>);
 
 type Handler = { handle: (request: Request) => Promise<Response> | Response };
@@ -117,6 +124,24 @@ function stubbedFetch(input: string | URL | Request, init?: RequestInit): Promis
   if (!isOpenRouter && !isElevenLabs) return originalFetch(input, init);
 
   providerCalls.push(isOpenRouter ? 'openrouter' : 'elevenlabs');
+  // #350 FIX round 2: the LLM chat-completions endpoint gets a real chat
+  // shape (JSON envelope text + token usage). Image generation also uses
+  // /chat/completions (with modalities:['image','text']); those calls keep
+  // IMAGE_OK so the #2676 image tests still see images.
+  if (isOpenRouter && url.includes('/chat/completions')) {
+    const bodyText = typeof init?.body === 'string' ? init.body : '';
+    if (!bodyText.includes('"modalities"')) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: '{"text": "smoke ok"}' } }],
+            usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+    }
+  }
   if (providerMode === 'networkThrow')
     return Promise.reject(new TypeError('stubbed network failure'));
   if (providerMode === 'http502') {
@@ -513,3 +538,129 @@ describeWithDb(
     });
   },
 );
+
+/** #350 FIX round 2: a successful turn carries its ai_usage row ids back, and
+ * DELETE /v1/llm/usage removes exactly those rows (the deploy smoke's cleanup).
+ * Real routes, real ai_usage table; the provider fetch is stubbed. */
+async function postGenerate(token: string): Promise<Response> {
+  return (llmApp as unknown as Handler).handle(
+    new Request('http://localhost/v1/llm/generate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        prompt: 'Reply with exactly these three words: smoke test ok',
+        player_input: 'smoke test',
+        maxTokens: 64,
+        temperature: 0,
+        provider: 'openrouter',
+        requestType: 'user',
+      }),
+    }),
+  );
+}
+
+async function deleteUsage(token: string, ids: unknown, secret?: string): Promise<Response> {
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+    authorization: `Bearer ${token}`,
+  };
+  if (secret !== undefined) headers['x-smoke-cleanup-secret'] = secret;
+  return (llmApp as unknown as Handler).handle(
+    new Request('http://localhost/v1/llm/usage', {
+      method: 'DELETE',
+      headers,
+      body: JSON.stringify({ ids }),
+    }),
+  );
+}
+
+// The deploy smoke's cleanup secret; the route requires it because deleting
+// usage rows restores quota (quota = limit - SUM(units)).
+const CLEANUP_SECRET = 'test-cleanup-secret-not-real';
+
+describeWithDb('fix #350 round 2: usageIds and the usage-row cleanup (real routes, real ai_usage)', () => {
+  const OLD_SECRET = process.env.SMOKE_CLEANUP_SECRET;
+  beforeAll(() => {
+    globalThis.fetch = stubbedFetch as unknown as typeof fetch;
+    process.env.SMOKE_CLEANUP_SECRET = CLEANUP_SECRET;
+  });
+
+  beforeEach(() => {
+    providerCalls = [];
+    resetCircuitBreakersForTests();
+    resetProviderKeyLimitForTests();
+  });
+
+  afterAll(async () => {
+    globalThis.fetch = originalFetch;
+    if (OLD_SECRET === undefined) delete process.env.SMOKE_CLEANUP_SECRET;
+    else process.env.SMOKE_CLEANUP_SECRET = OLD_SECRET;
+    const database = realDb();
+    for (const id of createdUserIds) {
+      await database.execute(sql`DELETE FROM ai_usage WHERE user_id = ${id}`);
+    }
+  });
+
+  test('a successful turn returns usageIds; deleting them leaves no rows', async () => {
+    const user = userFor('free');
+
+    const res = await postGenerate(user);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.parsed).toBe(true);
+    expect(body.degraded ?? false).toBe(false);
+    const ids = body.usageIds as number[];
+    expect(Array.isArray(ids)).toBe(true);
+    expect(ids).toHaveLength(2);
+    // One quota row (units 1) and one provider-usage row (units 0).
+    expect(await usageRowCount(user)).toBe(2);
+
+    const del = await deleteUsage(user, ids, CLEANUP_SECRET);
+    expect(del.status).toBe(200);
+    expect(((await del.json()) as Record<string, unknown>).deleted).toBe(2);
+    expect(await usageRowCount(user)).toBe(0);
+  });
+
+  test('deleting usage rows without the cleanup secret is refused (403)', async () => {
+    const user = userFor('free');
+
+    const res = await postGenerate(user);
+    const ids = ((await res.json()) as Record<string, unknown>).usageIds as number[];
+    expect(ids).toHaveLength(2);
+
+    // No secret header: refused, rows untouched — otherwise this endpoint
+    // would be a self-service quota reset (quota = limit - SUM(units)).
+    const del = await deleteUsage(user, ids);
+    expect(del.status).toBe(403);
+    expect(await usageRowCount(user)).toBe(2);
+
+    // Wrong secret: likewise refused.
+    const delWrong = await deleteUsage(user, ids, 'wrong-secret');
+    expect(delWrong.status).toBe(403);
+    expect(await usageRowCount(user)).toBe(2);
+
+    // With the secret the smoke's cleanup works.
+    const delOk = await deleteUsage(user, ids, CLEANUP_SECRET);
+    expect(((await delOk.json()) as Record<string, unknown>).deleted).toBe(2);
+    expect(await usageRowCount(user)).toBe(0);
+  });
+
+  test("a caller cannot delete another user's usage rows", async () => {
+    const a = userFor('free');
+    const b = userFor('free');
+
+    const res = await postGenerate(a);
+    const ids = ((await res.json()) as Record<string, unknown>).usageIds as number[];
+    expect(ids).toHaveLength(2);
+
+    const del = await deleteUsage(b, ids, CLEANUP_SECRET);
+    expect(del.status).toBe(200);
+    expect(((await del.json()) as Record<string, unknown>).deleted).toBe(0);
+    expect(await usageRowCount(a)).toBe(2);
+
+    // Cleanup of a's rows still works for a.
+    const delA = await deleteUsage(a, ids, CLEANUP_SECRET);
+    expect(((await delA.json()) as Record<string, unknown>).deleted).toBe(2);
+    expect(await usageRowCount(a)).toBe(0);
+  });
+});

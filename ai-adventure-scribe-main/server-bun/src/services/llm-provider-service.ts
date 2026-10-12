@@ -1,4 +1,5 @@
 import { isRetryableUpstreamStatus, LLMUpstreamError } from './llm-errors.js';
+import { alertProviderKeyLimit, isProviderKeyLimitError } from './llm-key-limit.js';
 import {
   DEFAULT_GEMINI_TEXT_MODEL,
   DEFAULT_OPENROUTER_TEXT_MODEL,
@@ -62,6 +63,13 @@ export interface LLMResponse {
   retryAfter?: number;
   upstreamStatus?: number;
   retryable?: boolean;
+  /**
+   * #350: the key-limit verdict, computed once per chain-exhausted event from
+   * the raw upstream status + body (OR'd across every model attempt) and
+   * carried on the result. The alert and the route both honor this single
+   * verdict, so they can never disagree about what happened.
+   */
+  providerKeyLimit?: boolean;
 }
 
 const GEMINI_MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -86,6 +94,35 @@ const retryAfterSeconds = (response: Response): number | undefined => {
   const seconds = Number(value);
   return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : undefined;
 };
+
+// #350 B1: the circuit breaker opens after 3 consecutive failures, so during
+// a key-limit outage most degraded turns fail fast with CircuitOpenError and
+// never reach the chain-exhausted block below. This records whether the latest
+// terminal failure for each provider was key-limit-shaped, so the
+// breaker-open path can still carry the signal to the route (maintenance
+// message + quota refund instead of the generic failure).
+const providerKeyLimitActive = new Map<string, boolean>();
+
+const setProviderKeyLimitActive = (provider: string, active: boolean): void => {
+  providerKeyLimitActive.set(provider, active);
+};
+
+const isProviderKeyLimitActive = (provider: string): boolean =>
+  providerKeyLimitActive.get(provider) === true;
+
+/** Test hook: drop the key-limit signal alongside the breakers. */
+export const resetProviderKeyLimitForTests = (): void => {
+  providerKeyLimitActive.clear();
+};
+
+// #350 N2: the chain-exhausted verdict ORs the key-limit signal across every
+// model attempt — the first 403 "Key limit exceeded" proves the key dead even
+// if a later attempt fails differently.
+const orKeyLimitSignal = (
+  seen: boolean,
+  status?: number,
+  details?: string,
+): boolean => seen || isProviderKeyLimitError({ upstreamStatus: status, details });
 
 export const validateStructuredResponseText = (
   text: string,
@@ -236,10 +273,20 @@ export class LLMProviderService {
     } catch (e) {
       logger.error({ msg: 'LLM_PROVIDER_ERROR', error: e });
       if (e instanceof CircuitOpenError) {
+        // #350 B1: the breaker opens after 3 consecutive failures. During a
+        // key-limit outage most degraded turns take this path, not the
+        // chain-exhausted one below — carry the signal so the route still
+        // shows the maintenance message and refunds the quota unit.
+        const keyLimit = isProviderKeyLimitActive(provider);
+        if (keyLimit) {
+          logger.error({ msg: 'LLM_PROVIDER_KEY_LIMIT_CIRCUIT_OPEN', provider });
+        }
         return {
           error: 'Provider temporarily unavailable',
           status: 503,
+          provider: provider === 'gemini' ? 'gemini' : 'openrouter',
           retryAfter: e.retryAfterSec,
+          ...(keyLimit ? { upstreamStatus: 403, providerKeyLimit: true } : {}),
           text: '',
         };
       }
@@ -335,6 +382,8 @@ export class LLMProviderService {
     };
     const attempts: string[] = [];
     let lastFailure: { status: number; details: string; retryAfter?: number } | null = null;
+    // #350 N2: OR the key-limit signal across attempts (see orKeyLimitSignal).
+    let keyLimitSeen = false;
 
     for (let index = 0; index < candidateModels.length; index += 1) {
       const candidate = candidateModels[index];
@@ -385,6 +434,10 @@ export class LLMProviderService {
                       ? validationError.message
                       : String(validationError),
                 };
+                // #350 FIX round 2: validation text is local, not upstream —
+                // never feed it into the key-limit verdict (a model reply
+                // containing "limit" must not page). The 502 status also gates
+                // message matching in isProviderKeyLimitError.
                 logger.warn({
                   msg: 'LLM_OPENROUTER_STRUCTURED_RESPONSE_INVALID',
                   model: candidate,
@@ -395,6 +448,9 @@ export class LLMProviderService {
               }
             }
             breaker.onSuccess();
+            // #350 B1: the key works again — drop the key-limit signal so a
+            // later breaker-open (from unrelated failures) is not misread.
+            setProviderKeyLimitActive('openrouter', false);
             const inputTokens = data.usage?.prompt_tokens ?? 0;
             const outputTokens = data.usage?.completion_tokens ?? 0;
             // #352: prompt-cache accounting. Absent details mean no cache
@@ -421,9 +477,11 @@ export class LLMProviderService {
             details: errText,
             retryAfter: retryAfterSeconds(response),
           };
+          keyLimitSeen = orKeyLimitSignal(keyLimitSeen, lastFailure.status, lastFailure.details);
         } catch (error) {
           const details = error instanceof Error ? error.message : String(error);
           lastFailure = { status: 503, details, retryAfter: 1 };
+          keyLimitSeen = orKeyLimitSignal(keyLimitSeen, lastFailure.status, lastFailure.details);
         }
         if (retry === 0 && responseSchema) continue;
       }
@@ -434,6 +492,11 @@ export class LLMProviderService {
     breaker.onFailure();
     const upstreamStatus = lastFailure?.status ?? 503;
     const retryable = isRetryableUpstreamStatus(upstreamStatus);
+    // #350 B2: compute the key-limit verdict once — OR'd across every model
+    // attempt (N2) — and carry it on the result, so the alert and the route
+    // honor the same determination.
+    const keyLimit = orKeyLimitSignal(keyLimitSeen, upstreamStatus, lastFailure?.details);
+    setProviderKeyLimitActive('openrouter', keyLimit);
     logger.error({
       msg: 'LLM_OPENROUTER_CHAIN_EXHAUSTED',
       provider: 'openrouter',
@@ -441,8 +504,13 @@ export class LLMProviderService {
       upstreamStatus,
       retryable,
       attempts,
+      keyLimit,
       details: lastFailure?.details,
     });
+    // #350: a dead provider key degrades every turn silently; page once per 15 min.
+    if (keyLimit) {
+      alertProviderKeyLimit({ provider: 'openrouter', upstreamStatus });
+    }
     return {
       error: 'LLM request failed',
       status: upstreamStatus,
@@ -450,6 +518,7 @@ export class LLMProviderService {
       model: textModel,
       upstreamStatus,
       retryable,
+      providerKeyLimit: keyLimit,
       details: process.env.NODE_ENV !== 'production' ? lastFailure?.details : undefined,
       attempts: process.env.NODE_ENV !== 'production' ? attempts : undefined,
       retryAfter: lastFailure?.retryAfter ?? (retryable ? 2 : undefined),
@@ -518,6 +587,8 @@ export class LLMProviderService {
     let successPayload: any = null;
     let successModel: string | null = null;
     let lastFailure: { status: number; details: string; retryAfter?: number } | null = null;
+    // #350 N2: OR the key-limit signal across attempts (see orKeyLimitSignal).
+    let keyLimitSeen = false;
     let availableModels: Set<string> | null = null;
 
     for (let index = 0; index < candidateModels.length; index += 1) {
@@ -542,6 +613,7 @@ export class LLMProviderService {
             details: error instanceof Error ? error.message : String(error),
             retryAfter: 1,
           };
+          keyLimitSeen = orKeyLimitSignal(keyLimitSeen, lastFailure.status, lastFailure.details);
           break;
         }
 
@@ -562,6 +634,10 @@ export class LLMProviderService {
                     ? validationError.message
                     : String(validationError),
               };
+              // #350 FIX round 2: validation text is local, not upstream —
+              // never feed it into the key-limit verdict (a model reply
+              // containing "limit" must not page). The 502 status also gates
+              // message matching in isProviderKeyLimitError.
               logger.warn({
                 msg: 'LLM_GEMINI_STRUCTURED_RESPONSE_INVALID',
                 model: candidate,
@@ -582,6 +658,7 @@ export class LLMProviderService {
           details: errText,
           retryAfter: retryAfterSeconds(response),
         };
+        keyLimitSeen = orKeyLimitSignal(keyLimitSeen, lastFailure.status, lastFailure.details);
 
         if (isModelUnavailableError(response.status, errText)) {
           if (!availableModels) {
@@ -622,6 +699,11 @@ export class LLMProviderService {
       const details =
         lastFailure?.details || `All Gemini model attempts failed. Tried: ${attempts.join(', ')}`;
       const retryable = isRetryableUpstreamStatus(status);
+      // #350 B2: compute the key-limit verdict once — OR'd across every model
+      // attempt (N2) — and carry it on the result, so the alert and the route
+      // honor the same determination.
+      const keyLimit = orKeyLimitSignal(keyLimitSeen, status, lastFailure?.details);
+      setProviderKeyLimitActive('gemini', keyLimit);
       logger.error({
         msg: 'LLM_GEMINI_CHAIN_EXHAUSTED',
         provider: 'gemini',
@@ -629,8 +711,13 @@ export class LLMProviderService {
         upstreamStatus: status,
         retryable,
         attempts,
+        keyLimit,
         details,
       });
+      // #350: a dead provider key degrades every turn silently; page once per 15 min.
+      if (keyLimit) {
+        alertProviderKeyLimit({ provider: 'gemini', upstreamStatus: status });
+      }
       return {
         error: 'LLM request failed',
         status,
@@ -638,6 +725,7 @@ export class LLMProviderService {
         model: preferredModel,
         upstreamStatus: status,
         retryable,
+        providerKeyLimit: keyLimit,
         details: process.env.NODE_ENV !== 'production' ? details : undefined,
         attempts: process.env.NODE_ENV !== 'production' ? attempts : undefined,
         retryAfter: lastFailure?.retryAfter ?? (retryable ? 2 : undefined),
@@ -655,6 +743,9 @@ export class LLMProviderService {
     }
 
     breaker.onSuccess();
+    // #350 B1: the key works again — drop the key-limit signal so a
+    // later breaker-open (from unrelated failures) is not misread.
+    setProviderKeyLimitActive('gemini', false);
     const data = successPayload as any;
     const candidates = data?.candidates || [];
     const first = candidates[0];

@@ -21,6 +21,7 @@ trap 'rm -rf "$TMP"' EXIT
 SHA=3fa7eefe0c1d2b3a4f5e6d7c8b9a0f1e2d3c4b5a
 FAKE_PW=pw-not-a-real-secret-7f3a
 TOKEN=tok-not-a-real-token-91c2
+CLEANUP_SECRET=cleanup-not-a-real-secret-44b1
 
 # RUN_11_INSIGHT as `bun -e` prints it (shape of #2286's fixture).
 cat > "$TMP/fixture.json" <<'JSON'
@@ -53,13 +54,13 @@ export DM_422_BODY='{"error":"Validation failed","issues":[{"path":"/message","m
 cat > "$TMP/bin/curl" <<'STUB'
 #!/usr/bin/env bash
 echo "ARGV: $*" >> "$CURL_LOG"
-out="" method=GET data="" hdr="" url=""
+out="" method=GET data="" hdr="" hdrs="" url=""
 while [ $# -gt 0 ]; do
   case "$1" in
     -o) out=$2; shift ;;
     -X) method=$2; shift ;;
     --data-binary) data=${2#@}; shift ;;
-    -H) case "$2" in @*) hdr=${2#@} ;; esac; shift ;;
+    -H) case "$2" in @*) hdr=${2#@}; hdrs="$hdrs $hdr" ;; esac; shift ;;
     -w | -A | -m) shift ;;
     -*) ;;
     *) url=$1 ;;
@@ -67,7 +68,10 @@ while [ $# -gt 0 ]; do
   shift
 done
 path=/${url#*://*/}
-authed=no; [ -n "$hdr" ] && grep -q "Bearer $EXPECT_TOKEN" "$hdr" && authed=yes
+authed=no
+for hf in $hdrs; do
+  [ -n "$hf" ] && grep -q "Bearer $EXPECT_TOKEN" "$hf" 2> /dev/null && authed=yes
+done
 echo "$method $path auth=$authed" >> "$CALLS"
 reply() { printf '%s' "$2" > "$out"; printf '%s' "$1"; exit 0; }
 case "$method $path" in
@@ -95,11 +99,25 @@ case "$method $path" in
   "GET /v1/sessions/s-new/messages?limit=1")
     [ -e "$STUB_DIR/deleted" ] && reply 404 '{"error":"Session not found"}'
     reply 200 '{"messages":[]}' ;;
+  "POST /v1/llm/generate")
+    [ -n "${FAIL_GENERATE_BODY:-}" ] && reply 200 "$FAIL_GENERATE_BODY"
+    reply 200 '{"parsed":true,"text":"smoke test ok","provider":"openrouter","model":"test/model","usageIds":[101,102]}' ;;
+  "DELETE /v1/llm/usage")
+    if [ -n "$hdr" ] && grep -q "x-smoke-cleanup-secret: ${CLEANUP_SECRET:-__unset__}" "$hdr" 2>/dev/null; then
+      cp "$hdr" "$STUB_DIR/usage-delete-hdr" 2>/dev/null || true
+    else
+      reply 403 '{"error":"Forbidden"}'
+    fi
+    n=$(jq '[.ids // [] | .[] | select(type == "number")] | length' "$data" 2> /dev/null || echo 0)
+    jq -c . "$data" >> "$STUB_DIR/usage-delete-bodies" 2> /dev/null
+    reply 200 "{\"deleted\": $n}" ;;
+  "GET /v1/llm/quota")
+    reply 200 "{\"remaining\": ${FAIL_QUOTA_REMAINING:-25}, \"plan\": \"tester\"}" ;;
 esac
 reply 404 '{"error":"Not Found"}'
 STUB
 chmod +x "$TMP/bin"/*
-printf 'SMOKE_EMAIL=smoke@example.test\nSMOKE_PASSWORD=%s\n' "$FAKE_PW" > "$TMP/smoke.env"
+printf 'SMOKE_EMAIL=smoke@example.test\nSMOKE_PASSWORD=%s\nSMOKE_CLEANUP_SECRET=%s\n' "$FAKE_PW" "$CLEANUP_SECRET" > "$TMP/smoke.env"
 : > "$TMP/none.env"
 
 # smoke <dir> [args…]: run the real script with everything pointed into <dir>.
@@ -109,7 +127,7 @@ smoke() {
   mkdir -p "$d/state"
   RC=0
   STUB_DIR="$d" CALLS="$d/calls" CURL_LOG="$d/curl.log" GH_LOG="$d/gh.log" \
-    FIXTURE_JSON="$TMP/fixture.json" EXPECT_TOKEN="$TOKEN" \
+    FIXTURE_JSON="$TMP/fixture.json" EXPECT_TOKEN="$TOKEN" CLEANUP_SECRET="$CLEANUP_SECRET" \
     VERSION_COMMIT="${VERSION_COMMIT:-$SHA}" \
     SMOKE_CURL="$TMP/bin/curl" SMOKE_BUN="$TMP/bin/bun" SMOKE_FIXTURE="$TMP/fixture.ts" \
     SMOKE_ENV_FILE="$TMP/smoke.env" SMOKE_API_BASE=https://api.test \
@@ -150,6 +168,17 @@ expect "pass: every call after sign-in is authenticated" \
   bash -c "! grep -v -e '^GET /version' -e '^POST /v1/auth/password-login' '$D/calls' | grep -q 'auth=no'"
 expect "pass: campaign deleted and session checked gone" \
   grep -q "GET /v1/sessions/s-new/messages?limit=1 auth=yes" "$D/calls"
+expect "pass: one real generate turn was posted" \
+  grep -q "POST /v1/llm/generate auth=yes" "$D/calls"
+expect "pass: usage rows deleted by id after the turn" \
+  grep -q "DELETE /v1/llm/usage auth=yes" "$D/calls"
+expect "pass: delete body carries the generate response's usageIds" \
+  jq -es '.[0].ids == [101,102]' "$D/usage-delete-bodies"
+expect "pass: delete carried the cleanup secret" \
+  grep -q "x-smoke-cleanup-secret: $CLEANUP_SECRET" "$D/usage-delete-hdr"
+expect "pass: quota re-read after cleanup (twice total)" \
+  test "$(grep -c 'GET /v1/llm/quota' "$D/calls")" = 2
+expect "pass: cleanup announced" has "2 usage rows cleaned up"
 expect "pass: sign-in body built from the env file" \
   jq -e --arg p "$FAKE_PW" '.email == "smoke@example.test" and .password == $p' "$D/login-body.json"
 expect "pass: password and token never printed or on a command line" nowhere "$FAKE_PW" "$D"
@@ -184,6 +213,33 @@ FAIL_DM_STATUS=422 smoke "$D" "$SHA"
 expect "already held: exit 1" test "$RC" = 1
 expect "already held: no second alert" test "$(wc -l < "$D/alerts.log")" -eq 1
 expect "already held: no second comment" test "$(grep -c '^ARGS:' "$D/gh.log")" = 1
+
+# 2b. A degraded /v1/llm/generate turn (#350): hold file + alert naming step 5b.
+D="$TMP/degraded"; FAIL_GENERATE_BODY='{"parsed":false,"degraded":true,"reason":"llm_generate_unavailable","text":"The Dungeon Master pauses."}' smoke "$D" "$SHA"
+expect "degraded generate: exit 1" test "$RC" = 1
+expect "degraded generate: hold file names step 5b" in_file "step 5b (one real /v1/llm/generate turn" "$D/state/SMOKE_FAILED"
+expect "degraded generate: alert names step 5b and the reason" \
+  in_file "step 5b (one real /v1/llm/generate turn: parsed=true, not degraded): HTTP 200 — no live turn (reason: llm_generate_unavailable)" "$D/alerts.log"
+expect "degraded generate: stopped before step 6" test ! -e "$D/deleted"
+expect "degraded generate: no secrets anywhere" nowhere "$FAKE_PW" "$D"
+
+# 2c. A key-limit degraded turn (#350): the maintenance reason reaches the alert.
+D="$TMP/keylimit"; FAIL_GENERATE_BODY='{"parsed":false,"degraded":true,"reason":"llm_provider_key_limit","text":"The storyteller is offline for maintenance. Your turn was not used."}' smoke "$D" "$SHA"
+expect "key-limit generate: exit 1" test "$RC" = 1
+expect "key-limit generate: hold file names step 5b" in_file "step 5b (one real /v1/llm/generate turn" "$D/state/SMOKE_FAILED"
+expect "key-limit generate: alert carries the key-limit reason" \
+  in_file "no live turn (reason: llm_provider_key_limit)" "$D/alerts.log"
+expect "key-limit generate: no secrets anywhere" nowhere "$FAKE_PW" "$D"
+
+# 2d. Smoke-account quota nearly exhausted (#350 B3): fail fast with a clear
+# message instead of letting the probe 402 for self-inflicted reasons.
+D="$TMP/quota"; FAIL_QUOTA_REMAINING=1 smoke "$D" "$SHA"
+expect "quota guard: exit 1" test "$RC" = 1
+expect "quota guard: alert names the quota" \
+  in_file "smoke account quota nearly exhausted (remaining=1)" "$D/alerts.log"
+expect "quota guard: probe never posted" \
+  bash -c "! grep -q 'POST /v1/llm/generate' '$D/calls'"
+expect "quota guard: no secrets anywhere" nowhere "$FAKE_PW" "$D"
 
 # 3. /version still reports the old commit: a hold naming step 1.
 D="$TMP/mismatch"; VERSION_COMMIT=00000000aaaabbbbccccddddeeeeffff00001111 smoke "$D" "$SHA"
@@ -226,10 +282,28 @@ OUT=$(<"$D/out")
 expect "no env file: exit 1 + hold" test "$RC" = 1 -a -e "$D/state/SMOKE_FAILED"
 expect "no env file: says which file" has "cannot read $D/missing.env"
 
+# 7b. Env file without SMOKE_CLEANUP_SECRET: a hold naming the missing secret
+# (the usage-delete endpoint is secret-gated; without it the smoke must not run).
+D="$TMP/nosecret"
+mkdir -p "$D/state"
+printf 'SMOKE_EMAIL=smoke@example.test\nSMOKE_PASSWORD=%s\n' "$FAKE_PW" > "$D/nosecret.env"
+RC=0
+STUB_DIR="$D" CALLS="$D/calls" CURL_LOG="$D/curl.log" GH_LOG="$D/gh.log" FIXTURE_JSON="$TMP/fixture.json" \
+  EXPECT_TOKEN="$TOKEN" CLEANUP_SECRET="$CLEANUP_SECRET" VERSION_COMMIT="$SHA" \
+  SMOKE_CURL="$TMP/bin/curl" SMOKE_BUN="$TMP/bin/bun" \
+  SMOKE_FIXTURE="$TMP/fixture.ts" SMOKE_ENV_FILE="$D/nosecret.env" SMOKE_VERSION_WAIT_SECONDS=0 \
+  DEPLOY_STATE_DIR="$D/state" DEPLOY_ALERT_FILE="$D/alerts.log" DEPLOY_ALERTS_ENV="$TMP/none.env" \
+  DEPLOY_GH_BIN="$TMP/bin/gh" DEPLOY_RUN_REPO=test/repo DEPLOY_RUN_ISSUE=2093 \
+  bash "$SMOKE" "$SHA" > "$D/out" 2>&1 || RC=$?
+OUT=$(<"$D/out")
+expect "missing cleanup secret: exit 1 + hold" test "$RC" = 1 -a -e "$D/state/SMOKE_FAILED"
+expect "missing cleanup secret: says what is missing" has "SMOKE_CLEANUP_SECRET"
+
 # 8. The real fixture, when #2286 is on this branch and bun is installed.
 if [ -r "$REAL_FIXTURE" ] && command -v bun > /dev/null; then
   D="$TMP/real"; mkdir -p "$D/state"; RC=0
   STUB_DIR="$D" CALLS="$D/calls" CURL_LOG="$D/curl.log" GH_LOG="$D/gh.log" EXPECT_TOKEN="$TOKEN" \
+    CLEANUP_SECRET="$CLEANUP_SECRET" \
     VERSION_COMMIT="$SHA" SMOKE_CURL="$TMP/bin/curl" SMOKE_FIXTURE="$REAL_FIXTURE" \
     SMOKE_ENV_FILE="$TMP/smoke.env" SMOKE_VERSION_WAIT_SECONDS=0 \
     DEPLOY_STATE_DIR="$D/state" DEPLOY_ALERT_FILE="$D/alerts.log" DEPLOY_ALERTS_ENV="$TMP/none.env" \
