@@ -97,6 +97,19 @@ describe('the whole in-combat prompt (#2400)', () => {
 describe('the prompt outside combat (#2400)', () => {
   afterEach(() => vi.restoreAllMocks());
 
+  it('tells the DM to populate the items field when the story grants or takes items (#353)', () => {
+    // The thimble never reached Inventory because nothing in the prompt told
+    // the DM to populate the `items` JSON field. The story_items_field is the
+    // fix; the server write-through (applyStoryItems) already exists.
+    const section = ContextBuilderPrompts.buildResponseStructureSection({ inCombat: false });
+    expect(section).toContain('<story_items_field>');
+    expect(section).toContain('`items` JSON field');
+    // Out of combat only, like the xp_award field.
+    expect(
+      ContextBuilderPrompts.buildResponseStructureSection({ inCombat: true }),
+    ).not.toContain('<story_items_field>');
+  });
+
   it('sends the out-of-combat variants when no combat was detected', async () => {
     vi.spyOn(ContextBuilderPrompts, 'buildGameContextSection').mockResolvedValue('<game_context/>');
     const prompt = await ContextBuilder.build({
@@ -138,7 +151,7 @@ describe('the prompt outside combat (#2400)', () => {
       'f119ee187786252d48e7ebc27edce36870089a10e3297bcd55584c703cfb0797',
     );
     expect(sha256(ContextBuilderPrompts.buildResponseStructureSection())).toBe(
-      'd112f2568596861db30f4c3a7db07293539c76fb9cb1ca813d9dda638558a5ad',
+      '8623fb1a15b367350a8e42bf0f8cf0dc8a5131438fb4f5382cc81c4705b3fff9',
     );
     expect(sha256(ContextBuilderPrompts.buildFinalRemindersSection())).toBe(
       'f73f18110ce03c6aca6e4a04932ba834ce476d71c27392f86d1b4b81221fada2',

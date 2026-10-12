@@ -79,7 +79,9 @@ const job = (overrides: Partial<Parameters<typeof runMemoryExtractionJob>[1]> = 
   campaignId: CAMPAIGN,
   characterId: 'char-1',
   kind: 'memories' as const,
-  prompt: 'extract',
+  // #353: a quote must be verbatim from the prompt, so the test prompt contains
+  // every phrase the fixtures quote (production prompts contain the exchange).
+  prompt: 'extract: Sergeant Vance guards the gate. The bridge is out. memory',
   maxTokens: 1000,
   ...overrides,
 });
@@ -98,8 +100,8 @@ describe('runMemoryExtractionJob (#2148)', () => {
       usage: { inputTokens: 100, outputTokens: 50 },
       text: `Here you go:
 {"memories":[
-  {"session_id":"someone-elses-session","type":"npc|location","category":"people","content":"Sergeant Vance guards the gate [ASSET:npc-vance]","importance":9,"emotional_tone":"foreboding"},
-  {"type":"not-a-type","content":"The bridge is out","importance":"high"},
+  {"session_id":"someone-elses-session","type":"npc|location","category":"people","content":"Sergeant Vance guards the gate [ASSET:npc-vance]","importance":9,"emotional_tone":"foreboding","quote":"Sergeant Vance guards the gate"},
+  {"type":"not-a-type","content":"The bridge is out","importance":"high","quote":"The bridge is out"},
   {"type":"event","content":"   "}
 ]}`,
     };
@@ -178,7 +180,7 @@ describe('runMemoryExtractionJob (#2148)', () => {
 
   it('caps a rambling model at ten memories', () => {
     const many = {
-      memories: Array.from({ length: 30 }, (_, i) => ({ type: 'event', content: `m${i}` })),
+      memories: Array.from({ length: 30 }, (_, i) => ({ type: 'event', content: `m${i}`, quote: 'memory' })),
     };
     expect(parseExtractionText(JSON.stringify(many), job(), 'job-6')).toHaveLength(10);
   });
@@ -188,6 +190,7 @@ describe('runMemoryExtractionJob (#2148)', () => {
       memories: [14, 0, -3, 7.6, 10, 1].map((importance, i) => ({
         content: `memory ${i}`,
         importance,
+        quote: 'memory',
       })),
     });
     const rows = parseExtractionText(text, job(), 'job-7');

@@ -76,13 +76,41 @@ function clampImportance(value: unknown): number {
 }
 
 /**
+ * #353: normalize text for verbatim-quote verification. The model is asked to
+ * copy the quote verbatim from the exchange; normalization tolerates only
+ * case and whitespace differences, not paraphrase.
+ */
+function normalizeForQuoteMatch(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * #353: verify the model's `quote` actually appears in the extraction prompt
+ * (which contains the exchange verbatim). A quote that isn't in the prompt is
+ * a hallucinated grounding — the memory is dropped. Returns true when the
+ * memory may be kept.
+ */
+function isQuoteGrounded(quote: unknown, prompt: string): boolean {
+  // #353 FIX: a missing quote is not grounding — letting it pass would let the
+  // model bypass the guard by omitting quotes. A ≤3-char quote grounds nothing
+  // either (same bypass class). Fail closed: drop both like a hallucinated one.
+  if (typeof quote !== 'string') return false;
+  const normalized = normalizeForQuoteMatch(quote);
+  if (normalized.length < 4) return false;
+  return normalizeForQuoteMatch(prompt).includes(normalized);
+}
+
+/**
  * Turn the model's text into memory rows. The session and campaign come from the job, never
  * from the model's output: the prompt echoes a session id back, and trusting it would let the
  * model write into whatever session it names.
  */
 export function parseExtractionText(
   text: string,
-  job: Pick<MemoryExtractionJobInput, 'sessionId' | 'campaignId' | 'characterId' | 'kind' | 'turn'>,
+  job: Pick<
+    MemoryExtractionJobInput,
+    'sessionId' | 'campaignId' | 'characterId' | 'kind' | 'turn' | 'prompt'
+  >,
   jobId: string,
 ): NewMemory[] {
   const base = { sessionId: job.sessionId, campaignId: job.campaignId };
@@ -120,6 +148,18 @@ export function parseExtractionText(
     const raw = item as Record<string, unknown>;
     const content = typeof raw.content === 'string' ? stripAssetTags(raw.content) : '';
     if (!content) continue;
+    // #353: drop memories whose grounding quote isn't in the prompt. A fake
+    // quote means the model hallucinated the names/dates in the content.
+    if (!isQuoteGrounded(raw.quote, job.prompt ?? '')) {
+      logger.warn({
+        msg: 'memory_extraction.ungrounded_dropped',
+        jobId,
+        sessionId: job.sessionId,
+        content: content.slice(0, 120),
+        quote: typeof raw.quote === 'string' ? raw.quote.slice(0, 120) : null,
+      });
+      continue;
+    }
     const modelMetadata =
       raw.metadata && typeof raw.metadata === 'object' && !Array.isArray(raw.metadata)
         ? (raw.metadata as Record<string, unknown>)
@@ -133,6 +173,7 @@ export function parseExtractionText(
       metadata: {
         ...modelMetadata,
         ...(typeof raw.category === 'string' ? { category: raw.category } : {}),
+        ...(typeof raw.quote === 'string' ? { quote: raw.quote } : {}),
         source: 'llm_extraction',
         jobId,
         ...(job.characterId ? { characterId: job.characterId } : {}),

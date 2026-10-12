@@ -130,6 +130,21 @@ it to the character sheet; do not state an XP gain in \`text\` without setting t
 
 `;
 
+    // #353: the server writes these to the character's Inventory (once per player
+    // message, out of combat). The story engine never sees an item the DM only
+    // narrates — it must be in the `items` field.
+    const storyItemsField = `<story_items_field>
+<title>STORY ITEMS</title>
+When the story gives the player's character an item (found, gifted, looted, purchased) or takes
+one away (spent, lost, stolen, broken), set the \`items\` JSON field to an array of
+\`{"name": "<exact item name>", "quantity": <whole number>, "change": "gain"|"lose"}\`.
+Use the item's full canonical name as the story established it (e.g. "brass thimble etched with
+a heron", not "thimble"). Otherwise set it to \`null\`. The game updates the character's
+Inventory; do not narrate receiving an item without setting the field.
+</story_items_field>
+
+`;
+
     const principlesRules = inCombat
       ? `- Use D&D 5e mechanics when appropriate. The engine resolves attacks, spells and saves during
   combat: declare the player's attack in \`combat_actions\` and do not request rolls.`
@@ -162,7 +177,7 @@ field. Use an empty array when resolving a specific combat action${inCombat ? ''
 choice is appropriate.
 </options_field>
 
-${inCombat ? '' : xpAwardField}<visual_prompt_rule>
+${inCombat ? '' : xpAwardField}${inCombat ? '' : storyItemsField}<visual_prompt_rule>
 **OPTIONAL** - At the very end, if the scene would benefit from an illustration:
 VISUAL PROMPT: <short art prompt focusing on key visual elements>
 </visual_prompt_rule>

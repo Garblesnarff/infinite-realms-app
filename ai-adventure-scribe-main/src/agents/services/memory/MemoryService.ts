@@ -123,10 +123,16 @@ Extract 1-4 key memories in this JSON format:
       "content": "concise memory description",
       "importance": 1-10,
       "emotional_tone": "peaceful|mysterious|foreboding|intense|triumphant|humorous|melancholy|neutral",
+      "quote": "exact phrase from the CONVERSATION above that contains the names/dates in this memory",
       "metadata": {}
     }
   ]
-}`;
+}
+
+GROUNDING RULE (#353): Every proper name (NPC, place, item), date, and deadline in a memory's
+"content" MUST be copied verbatim from the CONVERSATION above. Put the exact supporting phrase
+in the "quote" field. NEVER invent, shorten, or "correct" a name — a wrong name is worse than no
+memory. If you are unsure of the exact wording, do not create the memory.`;
 
     const job = {
       sessionId: context.sessionId,
