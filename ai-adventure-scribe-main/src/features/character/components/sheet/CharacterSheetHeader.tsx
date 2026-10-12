@@ -2,6 +2,8 @@ import { Heart, Shield, Sword, Trash2 } from 'lucide-react';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { ExportCharacterButton } from './ExportCharacterButton';
+
 import type { Character } from '@/types/character';
 
 import {
@@ -101,6 +103,8 @@ export const CharacterSheetHeader: React.FC<CharacterSheetHeaderProps> = ({ char
           </p>
         </div>
 
+        {character.id && <ExportCharacterButton characterId={character.id} />}
+
         {/* Quick Stats */}
         <div className="hidden md:flex items-center gap-4 text-sm">
           <div className="text-center">
@@ -156,8 +160,8 @@ export const CharacterSheetHeader: React.FC<CharacterSheetHeaderProps> = ({ char
                 Are you sure you want to delete{' '}
                 <span className="font-semibold text-foreground">
                   "{character.name || 'Unnamed Character'}"
-                </span>?{' '}
-                <span className="text-destructive font-medium">This action cannot be undone</span>{' '}
+                </span>
+                ? <span className="text-destructive font-medium">This action cannot be undone</span>{' '}
                 and will permanently remove the character from your account.
               </AlertDialogDescription>
             </AlertDialogHeader>
