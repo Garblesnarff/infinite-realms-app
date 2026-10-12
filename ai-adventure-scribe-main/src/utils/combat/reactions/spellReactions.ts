@@ -10,6 +10,7 @@ import type {
   ReactionOpportunity,
   CombatParticipant,
   CombatEncounter,
+  SpellSlotLevel,
 } from '@/types/combat';
 
 /**
@@ -50,7 +51,7 @@ export function canCastShieldSpell(participant: CombatParticipant): boolean {
 
   // Check for available spell slots (shield is a 1st level spell)
   for (let level = 1; level <= 9; level++) {
-    if (participant.spellSlots[level]?.current > 0) {
+    if (participant.spellSlots[level as SpellSlotLevel]?.current > 0) {
       return true;
     }
   }
@@ -91,7 +92,10 @@ export function checkAbsorbElementsOpportunities(
 /**
  * Check if a participant can cast absorb elements
  */
-export function canCastAbsorbElements(participant: CombatParticipant, _damageType: string): boolean {
+export function canCastAbsorbElements(
+  participant: CombatParticipant,
+  _damageType: string,
+): boolean {
   // Check if they have absorb elements spell prepared and available spell slots
   if (!participant.spellSlots || !participant.preparedSpells) return false;
 
@@ -101,7 +105,7 @@ export function canCastAbsorbElements(participant: CombatParticipant, _damageTyp
 
   // Check for available spell slots (absorb elements is a 1st level spell)
   for (let level = 1; level <= 9; level++) {
-    if (participant.spellSlots[level]?.current > 0) {
+    if (participant.spellSlots[level as SpellSlotLevel]?.current > 0) {
       return true;
     }
   }
@@ -148,7 +152,7 @@ export function canCastHellishRebuke(participant: CombatParticipant): boolean {
 
   // Check for available spell slots (hellish rebuke is a 1st level spell)
   for (let level = 1; level <= 9; level++) {
-    if (participant.spellSlots[level]?.current > 0) {
+    if (participant.spellSlots[level as SpellSlotLevel]?.current > 0) {
       return true;
     }
   }

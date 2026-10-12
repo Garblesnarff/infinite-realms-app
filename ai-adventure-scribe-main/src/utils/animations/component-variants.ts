@@ -31,7 +31,7 @@ export const cardItem: Variants = {
     scale: 1,
     transition: {
       duration: duration.normal,
-      ease: easing.easeOut,
+      ease: easing.easeOut as [number, number, number, number],
     },
   },
 };
@@ -46,7 +46,7 @@ export const cardItemFast: Variants = {
     y: 0,
     transition: {
       duration: duration.fast,
-      ease: easing.ease,
+      ease: easing.ease as [number, number, number, number],
     },
   },
 };
@@ -77,7 +77,7 @@ export const listItem: Variants = {
     x: 0,
     transition: {
       duration: duration.fast,
-      ease: easing.ease,
+      ease: easing.ease as [number, number, number, number],
     },
   },
 };
@@ -98,7 +98,7 @@ export const tooltip: Variants = {
     y: 0,
     transition: {
       duration: duration.fast,
-      ease: easing.ease,
+      ease: easing.ease as [number, number, number, number],
     },
   },
 };
@@ -119,7 +119,7 @@ export const characterEntrance: Variants = {
     y: 0,
     transition: {
       duration: duration.slow,
-      ease: easing.easeOut,
+      ease: easing.easeOut as [number, number, number, number],
     },
   },
 };

@@ -2,6 +2,13 @@ import { describe, it, expect, vi } from 'vitest';
 
 import { createStagger, createFade, respectReducedMotion } from '../utilities';
 
+import type { TargetAndTransition } from 'framer-motion';
+
+type ConcreteVariants = {
+  hidden: TargetAndTransition;
+  visible: TargetAndTransition;
+};
+
 describe('animation utilities', () => {
   describe('createStagger', () => {
     it('should create stagger variants with default values', () => {
@@ -17,7 +24,7 @@ describe('animation utilities', () => {
     });
 
     it('should create stagger variants with custom values', () => {
-      const variants = createStagger(0.2, 0.5);
+      const variants = createStagger(0.2, 0.5) as ConcreteVariants;
       expect(variants.visible.transition).toEqual({
         staggerChildren: 0.2,
         delayChildren: 0.5,
@@ -27,32 +34,32 @@ describe('animation utilities', () => {
 
   describe('createFade', () => {
     it('should create fade variants with no direction', () => {
-      const variants = createFade('none');
+      const variants = createFade('none') as ConcreteVariants;
       expect(variants.hidden).toEqual({ opacity: 0, y: 0 });
       expect(variants.visible.opacity).toBe(1);
       expect(variants.visible.y).toBe(0);
     });
 
     it('should create fade up variants', () => {
-      const variants = createFade('up', 50);
+      const variants = createFade('up', 50) as ConcreteVariants;
       expect(variants.hidden).toEqual({ opacity: 0, y: 50 });
       expect(variants.visible.y).toBe(0);
     });
 
     it('should create fade down variants', () => {
-      const variants = createFade('down', 50);
+      const variants = createFade('down', 50) as ConcreteVariants;
       expect(variants.hidden).toEqual({ opacity: 0, y: -50 });
       expect(variants.visible.y).toBe(0);
     });
 
     it('should create fade left variants', () => {
-      const variants = createFade('left', 30);
+      const variants = createFade('left', 30) as ConcreteVariants;
       expect(variants.hidden).toEqual({ opacity: 0, x: 30 });
       expect(variants.visible.x).toBe(0);
     });
 
     it('should create fade right variants', () => {
-      const variants = createFade('right', 30);
+      const variants = createFade('right', 30) as ConcreteVariants;
       expect(variants.hidden).toEqual({ opacity: 0, x: -30 });
       expect(variants.visible.x).toBe(0);
     });
@@ -75,7 +82,7 @@ describe('animation utilities', () => {
       });
 
       const variants = { hidden: { opacity: 0, x: 100 }, visible: { opacity: 1, x: 0 } };
-      const result = respectReducedMotion(variants);
+      const result = respectReducedMotion(variants) as ConcreteVariants;
       expect(result.hidden).toEqual({ opacity: 0 });
       expect(result.visible.opacity).toBe(1);
       expect(result.visible.transition).toEqual({ duration: 0.01 });

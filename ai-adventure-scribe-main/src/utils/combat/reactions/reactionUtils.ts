@@ -9,6 +9,7 @@ import type {
   ReactionTrigger,
   ActionType,
   CombatParticipant,
+  SpellSlotLevel,
 } from '@/types/combat';
 
 /**
@@ -68,7 +69,7 @@ export function canCastCounterspell(participant: CombatParticipant): boolean {
 
   // Need at least a 3rd level spell slot for counterspell
   for (let level = 3; level <= 9; level++) {
-    if (participant.spellSlots[level]?.current > 0) {
+    if (participant.spellSlots[level as SpellSlotLevel]?.current > 0) {
       return true;
     }
   }
@@ -101,15 +102,15 @@ export function hasProtectionFightingStyle(participant: CombatParticipant): bool
  * Check if a participant has polearm master feat
  */
 export function hasPolearmMaster(participant: CombatParticipant): boolean {
-  return participant.classFeatures?.some((f) => f.name === 'polearm_master') || false;
+  return participant.classFeatures?.some((f) => (f.name as string) === 'polearm_master') || false;
 }
 
 /**
  * Simple range check (in a real implementation, you'd have proper positioning)
  */
 export function isWithinReach(
-  participant: CombatParticipant,
-  target: CombatParticipant,
+  _participant: CombatParticipant,
+  _target: CombatParticipant,
   position: string,
 ): boolean {
   // Simplified - assume all melee combatants are within reach unless specified otherwise

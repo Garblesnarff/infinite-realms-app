@@ -69,7 +69,10 @@ export function createCombatParticipantsFromDetection(
       movementRemaining: playerCharacter.speed || 30,
       temporaryHitPoints: 0,
       conditions: [],
-      deathSaves: { successes: 0, failures: 0, isStable: false },
+      deathSaves: { successes: 0, failures: 0, isStable: false } as {
+        successes: number;
+        failures: number;
+      },
       actionTaken: false,
       bonusActionTaken: false,
       reactionTaken: false,
@@ -95,7 +98,7 @@ export function createCombatParticipantsFromDetection(
 
     participants.push({
       id: `enemy-${enemy.name.toLowerCase()}-${i}`,
-      participantType: 'monster',
+      participantType: 'monster' as CombatParticipant['participantType'],
       name: `${enemy.name} ${i > 0 ? i + 1 : ''}`.trim(),
       initiative: initiativeModifier, // This will be added to d20 roll in startCombat
       armorClass: monster?.armorClass ?? enemy.suggestedAC,
@@ -103,7 +106,10 @@ export function createCombatParticipantsFromDetection(
       currentHitPoints: monster?.hitPoints ?? enemy.suggestedHP,
       temporaryHitPoints: 0,
       conditions: [],
-      deathSaves: { successes: 0, failures: 0, isStable: false },
+      deathSaves: { successes: 0, failures: 0, isStable: false } as {
+        successes: number;
+        failures: number;
+      },
       actionTaken: false,
       bonusActionTaken: false,
       reactionTaken: false,

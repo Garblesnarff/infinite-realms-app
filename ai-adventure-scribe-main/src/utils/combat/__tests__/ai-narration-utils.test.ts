@@ -6,12 +6,11 @@ import {
   createActionDescription,
   shouldTriggerDMNarration,
   formatCombatEventForDM,
-  combatActionPrompts
+  combatActionPrompts,
 } from '../ai-narration-utils';
 
-import type { CombatEvent } from '@/types/combat';
+import type { CombatEvent, DiceRoll } from '@/types/combat';
 import type { DetectedCombatAction } from '@/utils/combatDetection';
-import type { DiceRoll } from '@/utils/diceUtils';
 
 describe('ai-narration-utils', () => {
   describe('getDamageRollForWeapon', () => {
@@ -40,7 +39,7 @@ describe('ai-narration-utils', () => {
       results: [15],
       keptResults: [15],
       total: 20,
-      naturalRoll: 15
+      naturalRoll: 15,
     };
 
     it('should format attack hit', () => {
@@ -50,9 +49,11 @@ describe('ai-narration-utils', () => {
         target: 'Goblin',
         weapon: 'sword',
         rollNeeded: true,
-        rollType: 'attack'
+        rollType: 'attack',
       };
-      expect(createActionDescription(action, mockRoll, true)).toBe('Aragorn hits against Goblin with sword');
+      expect(createActionDescription(action, mockRoll, true)).toBe(
+        'Aragorn hits against Goblin with sword',
+      );
     });
 
     it('should format attack miss', () => {
@@ -62,9 +63,11 @@ describe('ai-narration-utils', () => {
         target: 'Goblin',
         weapon: 'sword',
         rollNeeded: true,
-        rollType: 'attack'
+        rollType: 'attack',
       };
-      expect(createActionDescription(action, mockRoll, false)).toBe('Aragorn misses against Goblin with sword');
+      expect(createActionDescription(action, mockRoll, false)).toBe(
+        'Aragorn misses against Goblin with sword',
+      );
     });
 
     it('should format critical hit', () => {
@@ -74,9 +77,11 @@ describe('ai-narration-utils', () => {
         target: 'Goblin',
         weapon: 'sword',
         rollNeeded: true,
-        rollType: 'attack'
+        rollType: 'attack',
       };
-      expect(createActionDescription(action, mockRoll, true, true)).toBe('Aragorn scores a critical hit against Goblin with sword!');
+      expect(createActionDescription(action, mockRoll, true, true)).toBe(
+        'Aragorn scores a critical hit against Goblin with sword!',
+      );
     });
 
     it('should format damage action', () => {
@@ -86,9 +91,11 @@ describe('ai-narration-utils', () => {
         target: 'Goblin',
         weapon: 'sword',
         rollNeeded: false,
-        rollType: 'damage'
+        rollType: 'damage',
       };
-      expect(createActionDescription(action, mockRoll)).toBe('Aragorn deals damage against Goblin with sword');
+      expect(createActionDescription(action, mockRoll)).toBe(
+        'Aragorn deals damage against Goblin with sword',
+      );
     });
 
     it('should format save action', () => {
@@ -96,7 +103,7 @@ describe('ai-narration-utils', () => {
         actor: 'Aragorn',
         action: 'save',
         rollNeeded: true,
-        rollType: 'save'
+        rollType: 'save',
       };
       expect(createActionDescription(action, mockRoll)).toBe('Aragorn makes a saving throw');
     });
@@ -106,7 +113,7 @@ describe('ai-narration-utils', () => {
         actor: 'Aragorn',
         action: 'skill',
         rollNeeded: true,
-        rollType: 'skill'
+        rollType: 'skill',
       };
       expect(createActionDescription(action, mockRoll)).toBe('Aragorn attempts a skill check');
     });
@@ -116,7 +123,7 @@ describe('ai-narration-utils', () => {
         actor: 'Aragorn',
         action: 'jump',
         rollNeeded: true,
-        rollType: 'other' as any
+        rollType: 'other' as any,
       };
       expect(createActionDescription(action, mockRoll)).toBe('Aragorn performs jump');
     });
@@ -130,10 +137,10 @@ describe('ai-narration-utils', () => {
         'ROUND_START',
         'ACTION_TAKEN',
         'PARTICIPANT_UNCONSCIOUS',
-        'PARTICIPANT_DEAD'
+        'PARTICIPANT_DEAD',
       ];
 
-      events.forEach(type => {
+      events.forEach((type) => {
         expect(shouldTriggerDMNarration({ type } as any, {})).toBe(true);
       });
     });
@@ -146,46 +153,47 @@ describe('ai-narration-utils', () => {
 
   describe('formatCombatEventForDM', () => {
     it('should format COMBAT_START', () => {
-      expect(formatCombatEventForDM({ type: 'COMBAT_START' } as any))
-        .toContain('Combat has begun');
+      expect(formatCombatEventForDM({ type: 'COMBAT_START' } as any)).toContain('Combat has begun');
     });
 
     it('should format COMBAT_END', () => {
-      expect(formatCombatEventForDM({ type: 'COMBAT_END' } as any))
-        .toContain('Combat has ended');
+      expect(formatCombatEventForDM({ type: 'COMBAT_END' } as any)).toContain('Combat has ended');
     });
 
     it('should format ROUND_START', () => {
-      expect(formatCombatEventForDM({ type: 'ROUND_START', roundNumber: 2 } as any))
-        .toContain('Round 2');
+      expect(formatCombatEventForDM({ type: 'ROUND_START', roundNumber: 2 } as any)).toContain(
+        'Round 2',
+      );
     });
 
     it('should format ACTION_TAKEN with action description', () => {
       const event = {
         type: 'ACTION_TAKEN',
-        action: { description: 'Aragorn hits Goblin' }
+        action: { description: 'Aragorn hits Goblin' },
       };
       expect(formatCombatEventForDM(event as any)).toContain('Aragorn hits Goblin');
     });
 
     it('should format ACTION_TAKEN without action description', () => {
-      expect(formatCombatEventForDM({ type: 'ACTION_TAKEN' } as any))
-        .toContain('An action was taken');
+      expect(formatCombatEventForDM({ type: 'ACTION_TAKEN' } as any)).toContain(
+        'An action was taken',
+      );
     });
 
     it('should format PARTICIPANT_UNCONSCIOUS', () => {
-      expect(formatCombatEventForDM({ type: 'PARTICIPANT_UNCONSCIOUS' } as any))
-        .toContain('fallen unconscious');
+      expect(formatCombatEventForDM({ type: 'PARTICIPANT_UNCONSCIOUS' } as any)).toContain(
+        'fallen unconscious',
+      );
     });
 
     it('should format PARTICIPANT_DEAD', () => {
-      expect(formatCombatEventForDM({ type: 'PARTICIPANT_DEAD' } as any))
-        .toContain('has died');
+      expect(formatCombatEventForDM({ type: 'PARTICIPANT_DEAD' } as any)).toContain('has died');
     });
 
     it('should return default message for unknown event', () => {
-      expect(formatCombatEventForDM({ type: 'TURN_START' } as any))
-        .toContain('Something significant happened');
+      expect(formatCombatEventForDM({ type: 'TURN_START' } as any)).toContain(
+        'Something significant happened',
+      );
     });
   });
 

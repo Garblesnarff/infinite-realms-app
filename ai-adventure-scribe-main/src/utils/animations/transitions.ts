@@ -16,7 +16,7 @@ export const fadeInUp: Variants = {
     y: 0,
     transition: {
       duration: duration.normal,
-      ease: easing.ease,
+      ease: easing.ease as [number, number, number, number],
     },
   },
   exit: {
@@ -24,7 +24,7 @@ export const fadeInUp: Variants = {
     y: -20,
     transition: {
       duration: duration.fast,
-      ease: easing.ease,
+      ease: easing.ease as [number, number, number, number],
     },
   },
 };
@@ -39,7 +39,7 @@ export const fadeInDown: Variants = {
     y: 0,
     transition: {
       duration: duration.normal,
-      ease: easing.ease,
+      ease: easing.ease as [number, number, number, number],
     },
   },
 };
@@ -52,14 +52,14 @@ export const fadeIn: Variants = {
     opacity: 1,
     transition: {
       duration: duration.normal,
-      ease: easing.ease,
+      ease: easing.ease as [number, number, number, number],
     },
   },
   exit: {
     opacity: 0,
     transition: {
       duration: duration.fast,
-      ease: easing.ease,
+      ease: easing.ease as [number, number, number, number],
     },
   },
 };
@@ -74,7 +74,7 @@ export const slideInLeft: Variants = {
     x: 0,
     transition: {
       duration: duration.normal,
-      ease: easing.ease,
+      ease: easing.ease as [number, number, number, number],
     },
   },
 };
@@ -89,7 +89,7 @@ export const slideInRight: Variants = {
     x: 0,
     transition: {
       duration: duration.normal,
-      ease: easing.ease,
+      ease: easing.ease as [number, number, number, number],
     },
   },
 };
@@ -106,14 +106,14 @@ export const modalBackdrop: Variants = {
     opacity: 1,
     transition: {
       duration: duration.normal,
-      ease: easing.ease,
+      ease: easing.ease as [number, number, number, number],
     },
   },
   exit: {
     opacity: 0,
     transition: {
       duration: duration.fast,
-      ease: easing.ease,
+      ease: easing.ease as [number, number, number, number],
     },
   },
 };
@@ -130,7 +130,7 @@ export const modalContent: Variants = {
     y: 0,
     transition: {
       duration: duration.normal,
-      ease: easing.easeOut,
+      ease: easing.easeOut as [number, number, number, number],
     },
   },
   exit: {
@@ -139,7 +139,7 @@ export const modalContent: Variants = {
     y: 20,
     transition: {
       duration: duration.fast,
-      ease: easing.ease,
+      ease: easing.ease as [number, number, number, number],
     },
   },
 };
@@ -158,7 +158,7 @@ export const tabContent: Variants = {
     x: 0,
     transition: {
       duration: duration.normal,
-      ease: easing.ease,
+      ease: easing.ease as [number, number, number, number],
     },
   },
   exit: {
@@ -166,7 +166,7 @@ export const tabContent: Variants = {
     x: -10,
     transition: {
       duration: duration.fast,
-      ease: easing.ease,
+      ease: easing.ease as [number, number, number, number],
     },
   },
 };
@@ -181,7 +181,7 @@ export const collapse: Variants = {
     opacity: 0,
     transition: {
       duration: duration.normal,
-      ease: easing.ease,
+      ease: easing.ease as [number, number, number, number],
     },
   },
   expanded: {
@@ -189,7 +189,7 @@ export const collapse: Variants = {
     opacity: 1,
     transition: {
       duration: duration.normal,
-      ease: easing.ease,
+      ease: easing.ease as [number, number, number, number],
     },
   },
 };

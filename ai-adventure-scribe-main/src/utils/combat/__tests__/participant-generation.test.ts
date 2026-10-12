@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 
-import { createCombatParticipantsFromDetection, parseMultiattackSequence } from '../participant-generation';
+import {
+  createCombatParticipantsFromDetection,
+  parseMultiattackSequence,
+} from '../participant-generation';
 
 import type { DetectedEnemy } from '@/utils/combatDetection';
 
@@ -48,7 +51,6 @@ describe('createCombatParticipantsFromDetection', () => {
   });
 
   it('handles missing player character attributes', () => {
-    // @ts-expect-error - testing missing attributes
     const participants = createCombatParticipantsFromDetection([], { id: 'p2', name: 'NoAttr' });
     expect(participants[0].initiative).toBe(0);
     expect(participants[0].armorClass).toBe(10);
@@ -56,10 +58,7 @@ describe('createCombatParticipantsFromDetection', () => {
   });
 
   it('handles multiple enemies with indexing', () => {
-    const multiEnemies: DetectedEnemy[] = [
-      enemies[0],
-      { ...enemies[0], name: 'Goblin' },
-    ];
+    const multiEnemies: DetectedEnemy[] = [enemies[0], { ...enemies[0], name: 'Goblin' }];
     const participants = createCombatParticipantsFromDetection(multiEnemies, null);
 
     expect(participants).toHaveLength(2);
@@ -70,21 +69,35 @@ describe('createCombatParticipantsFromDetection', () => {
   it('uses real monster ability scores and attacks instead of CR guesses', () => {
     const participant = createCombatParticipantsFromDetection(enemies, null)[0];
     expect(participant.initiative).toBe(2);
-    expect(participant.monsterData?.attacks[0]).toMatchObject({ name: 'Scimitar', attackBonus: 4, damageRoll: '1d6+2' });
+    expect(participant.monsterData?.attacks[0]).toMatchObject({
+      name: 'Scimitar',
+      attackBonus: 4,
+      damageRoll: '1d6+2',
+    });
   });
 
   it('handles numeric and missing CR', () => {
     // @ts-expect-error - testing invalid input
-    const participants1 = createCombatParticipantsFromDetection([{ ...enemies[0], estimatedCR: 5 }], null);
+    const participants1 = createCombatParticipantsFromDetection(
+      [{ ...enemies[0], estimatedCR: 5 }],
+      null,
+    );
     expect(participants1[0].initiative).toBe(2);
 
     // @ts-expect-error - testing invalid input
-    const participants2 = createCombatParticipantsFromDetection([{ ...enemies[0], estimatedCR: undefined }], null);
+    const participants2 = createCombatParticipantsFromDetection(
+      [{ ...enemies[0], estimatedCR: undefined }],
+      null,
+    );
     expect(participants2[0].initiative).toBe(2);
   });
 
   it('parses ordered multiattack sequences', () => {
-    expect(parseMultiattackSequence('The dragon makes three attacks: one with its bite and two with its claws.', ['Bite', 'Claw']))
-      .toEqual(['Bite', 'Claw', 'Claw']);
+    expect(
+      parseMultiattackSequence(
+        'The dragon makes three attacks: one with its bite and two with its claws.',
+        ['Bite', 'Claw'],
+      ),
+    ).toEqual(['Bite', 'Claw', 'Claw']);
   });
 });

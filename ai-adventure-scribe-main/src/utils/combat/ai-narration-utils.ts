@@ -1,6 +1,5 @@
-import type { CombatEvent, ActionType } from '@/types/combat';
+import type { CombatEvent, ActionType, DiceRoll } from '@/types/combat';
 import type { DetectedCombatAction } from '@/utils/combatDetection';
-import type { DiceRoll } from '@/utils/diceUtils';
 
 /**
  * Extracted from use-combat-ai-integration.ts
@@ -47,7 +46,7 @@ export const getDamageRollForWeapon = (
 // Create descriptive text for combat actions
 export const createActionDescription = (
   action: DetectedCombatAction,
-  roll: DiceRoll,
+  _roll: DiceRoll,
   success?: boolean,
   critical?: boolean,
 ): string => {
@@ -118,7 +117,7 @@ export function formatCombatEventForDM(event: CombatEvent): string {
 }
 
 // Enhanced combat action types for better AI integration
-export const combatActionPrompts: Record<ActionType, string> = {
+export const combatActionPrompts: Partial<Record<ActionType | 'use_racial_trait', string>> = {
   attack: 'Execute an attack with your weapon or natural ability',
   cast_spell: 'Cast a spell, considering components and spell slots',
   dash: 'Move additional distance, potentially changing battlefield position',
