@@ -33,15 +33,7 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('../session-utils', () => ({
   isValidSession: vi.fn((s) => !!s && !!s.id),
   sanitizeSessionPatch: vi.fn((p) => {
-    const {
-      id,
-      campaign_id,
-      character_id,
-      created_at,
-      updated_at,
-      sequence_number,
-      ...rest
-    } = p;
+    const { id, campaign_id, character_id, created_at, updated_at, sequence_number, ...rest } = p;
     const removed = [];
     if (id) removed.push('id');
     if (campaign_id) removed.push('campaign_id');
@@ -168,7 +160,9 @@ describe('useSessionManagement', () => {
       expect(mockSetSessionState).toHaveBeenCalledWith('expired');
 
       // Test the functional update in setSessionData
-      const dataUpdater = mockSetSessionData.mock.calls.find(call => typeof call[0] === 'function')[0];
+      const dataUpdater = mockSetSessionData.mock.calls.find(
+        (call) => typeof call[0] === 'function',
+      )![0];
       const prevData = { id: 'sess-1', status: 'active' };
       const nextData = dataUpdater(prevData);
       expect(nextData.status).toBe('completed');
@@ -359,7 +353,7 @@ describe('useSessionManagement', () => {
     });
 
     it('should not update if session id is missing', async () => {
-       mockSetSessionData.mockImplementation((updater) => {
+      mockSetSessionData.mockImplementation((updater) => {
         if (typeof updater === 'function') {
           return updater({}); // No id
         }

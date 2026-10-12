@@ -61,6 +61,7 @@ export const IMMUTABLE_SESSION_FIELDS = new Set<keyof ExtendedGameSession | stri
  * Validates that a session object has required properties.
  */
 export function isValidSession(session: unknown): session is ExtendedGameSession {
+  // @ts-expect-error #192 `session` is only narrowed to `object` here; `id` exists on the runtime value but not on `object`.
   return !!(session && typeof session === 'object' && typeof session.id === 'string');
 }
 
@@ -81,8 +82,7 @@ export function sanitizeSessionPatch(patch: Partial<ExtendedGameSession>): {
       continue;
     }
 
-    sanitized[key as keyof ExtendedGameSession] =
-      value as ExtendedGameSession[keyof ExtendedGameSession];
+    (sanitized as Record<string, unknown>)[key] = value;
   }
 
   return { sanitized, removed };
