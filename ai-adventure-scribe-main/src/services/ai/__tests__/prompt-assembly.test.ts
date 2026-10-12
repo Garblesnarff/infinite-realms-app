@@ -148,6 +148,16 @@ describe('buildTurnFlagsLine', () => {
     expect(system).not.toContain('Do not narrate the stew.');
     expect(flags).not.toBe('');
   });
+
+  it('a declined entry keeps the hostile in the scene (#400)', () => {
+    const line = buildTurnFlagsLine({
+      resolutionOnly: false,
+      combatEntryDeclined: 'an attack against the goblin',
+      narrationViolation: null,
+    });
+    expect(line).toContain('chose not to strike');
+    expect(line).toContain('still in the scene');
+  });
 });
 
 describe('assembleUserPrompt', () => {

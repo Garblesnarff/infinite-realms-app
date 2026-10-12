@@ -106,6 +106,9 @@ vi.mock('@/services/combat/combat-zero-action-guard', async (importOriginal) => 
 }));
 vi.mock('@/services/combat/combat-entry-confirmation-bridge', () => ({
   settlePendingCombatEntryConfirmation: () => {},
+  hasPendingCombatEntryConfirmation: () => false,
+  markCombatEntryTypedAnswer: () => {},
+  onCombatEntryConfirmationPendingChange: () => () => {},
 }));
 vi.mock('@/services/combat/player-roll-bridge', async (importOriginal) => ({
   // Real bridge (no popup host is mounted, so nothing is ever pending); only the settle that the

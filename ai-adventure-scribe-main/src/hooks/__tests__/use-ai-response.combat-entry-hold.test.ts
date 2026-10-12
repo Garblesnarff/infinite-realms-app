@@ -27,6 +27,7 @@ import {
 import { handleDmActionsAndTransitions } from '@/hooks/ai/dm-actions-handler';
 import { AIService } from '@/services/ai-service';
 import {
+  consumeCombatEntryTypedAnswer,
   requestCombatEntryAnswer,
   requestCombatEntryConfirmation,
 } from '@/services/combat/combat-entry-confirmation-bridge';
@@ -56,6 +57,7 @@ vi.mock('@/services/ai-service', () => ({ AIService: { chatWithDM: vi.fn() } }))
 vi.mock('@/services/combat/combat-entry-confirmation-bridge', () => ({
   requestCombatEntryConfirmation: vi.fn(),
   requestCombatEntryAnswer: vi.fn(),
+  consumeCombatEntryTypedAnswer: vi.fn().mockReturnValue(false),
 }));
 vi.mock('@/hooks/ai/dm-actions-handler', () => ({ handleDmActionsAndTransitions: vi.fn() }));
 vi.mock('@/services/memory-manager', () => ({
@@ -129,6 +131,7 @@ describe('useAIResponse: the combat-entry popup comes before the DM (#2341)', ()
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(consumeCombatEntryTypedAnswer).mockReturnValue(false);
     order = [];
     vi.mocked(useCombat).mockReturnValue({
       state: { isInCombat: false, activeEncounter: null },
@@ -408,6 +411,17 @@ describe('useAIResponse: the combat-entry popup comes before the DM (#2341)', ()
     expect(vi.mocked(AIService.chatWithDM).mock.calls[0][0].context.gameState).not.toHaveProperty(
       'combatEntryDeclined',
     );
+  });
+
+  it('skips the hold when the message was typed while the card was up (#400)', async () => {
+    vi.mocked(consumeCombatEntryTypedAnswer).mockReturnValue(true);
+
+    await play();
+
+    // The typed action is the player's answer: no card, straight to the DM/engine.
+    expect(requestCombatEntryConfirmation).not.toHaveBeenCalled();
+    expect(requestCombatEntryAnswer).not.toHaveBeenCalled();
+    expect(AIService.chatWithDM).toHaveBeenCalledTimes(1);
   });
 
   it('does not check a message during a fight or a submitted dice result', async () => {

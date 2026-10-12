@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   CombatEntryConfirmationUnavailableError,
+  consumeCombatEntryTypedAnswer,
+  markCombatEntryTypedAnswer,
+  onCombatEntryConfirmationPendingChange,
   requestCombatEntryAnswer,
   requestCombatEntryConfirmation,
   setCombatEntryConfirmationHost,
@@ -45,5 +48,38 @@ describe('combat-entry-confirmation-bridge', () => {
     const strike = requestCombatEntryConfirmation({ ...spec, targetChoices: undefined });
     settlePendingCombatEntryConfirmation(true);
     await expect(strike).resolves.toBe(true);
+  });
+
+  it('notifies pending-change listeners on present and on settle (#400)', async () => {
+    setCombatEntryConfirmationHost({ present: () => () => {} });
+    const seen: boolean[] = [];
+    const unsubscribe = onCombatEntryConfirmationPendingChange((isPending) => {
+      seen.push(isPending);
+    });
+    const spec = {
+      actorLabel: 'The Scholar',
+      combatantLabels: ['Valerius'],
+      initiativeRoll: null,
+      initiativeModifier: 1,
+    };
+
+    const pending = requestCombatEntryAnswer(spec);
+    expect(seen).toEqual([true]);
+    settlePendingCombatEntryConfirmation(false);
+    expect(seen).toEqual([true, false]);
+    await expect(pending).resolves.toEqual({ confirmed: false });
+
+    unsubscribe();
+    const pending2 = requestCombatEntryAnswer(spec);
+    settlePendingCombatEntryConfirmation(true);
+    await expect(pending2).resolves.toEqual({ confirmed: true });
+    expect(seen).toEqual([true, false]);
+  });
+
+  it('arms a one-shot typed answer so the next hold is not re-prompted (#400)', () => {
+    expect(consumeCombatEntryTypedAnswer()).toBe(false);
+    markCombatEntryTypedAnswer();
+    expect(consumeCombatEntryTypedAnswer()).toBe(true);
+    expect(consumeCombatEntryTypedAnswer()).toBe(false);
   });
 });

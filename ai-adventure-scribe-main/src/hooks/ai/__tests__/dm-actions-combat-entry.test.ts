@@ -1040,13 +1040,17 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     expect(outcome.activeEncounter).toBeNull();
     expect(outcome.isInCombat).toBe(false);
     expect(outcome.result.combat_actions).toEqual([]);
-    expect(outcome.responseText).toBe('');
+    // #400: the decline keeps the DM's telegraph prose (it is already on screen and it is the
+    // answer to the player's message) and only strips the combat machinery. Blanking the text
+    // dropped the player's action and let a later DM turn narrate the hostile away.
+    expect(outcome.responseText).toBe('Vance catches your arm before the punch lands.');
+    expect(outcome.result.text).toBe('Vance catches your arm before the punch lands.');
     expect(outcome.localNotice).toBe(
-      'Combat entry declined. No encounter was seated; your action was not resolved.',
+      'No encounter was seated; the hostile is still in the scene.',
     );
     expect(outcome.localNotices).toEqual([
       {
-        text: 'Combat entry declined. No encounter was seated; your action was not resolved.',
+        text: 'No encounter was seated; the hostile is still in the scene.',
         persist: true,
       },
     ]);

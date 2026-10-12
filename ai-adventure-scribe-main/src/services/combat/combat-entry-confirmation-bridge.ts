@@ -52,6 +52,53 @@ let pending: {
   dismiss: () => void;
 } | null = null;
 
+type PendingChangeListener = (isPending: boolean) => void;
+const pendingChangeListeners = new Set<PendingChangeListener>();
+
+/**
+ * Subscribe to entry-confirmation pending state. #400: the card is a question the player may
+ * answer by typing, so the composer stays live while it is up — unlike a dice-roll prompt,
+ * which owns the single dice slot and keeps the composer blocked.
+ */
+export function onCombatEntryConfirmationPendingChange(
+  listener: PendingChangeListener,
+): () => void {
+  pendingChangeListeners.add(listener);
+  return () => {
+    pendingChangeListeners.delete(listener);
+  };
+}
+
+function notifyPendingChange(): void {
+  const isPending = pending !== null;
+  for (const listener of [...pendingChangeListeners]) {
+    try {
+      listener(isPending);
+    } catch (error) {
+      logger.warn('[CombatEntry] pending-change listener threw', error);
+    }
+  }
+}
+
+/**
+ * #400: the player answered the card by typing instead of clicking. The typed message runs as
+ * a new turn, and that turn must not be re-prompted with another card — the typed action is
+ * the answer, and it starts combat through the engine.
+ */
+let typedAnswerArmed = false;
+
+/** Arm the typed-answer flag when a typed message settles the card. */
+export function markCombatEntryTypedAnswer(): void {
+  typedAnswerArmed = true;
+}
+
+/** Consume the typed-answer flag; true once, for the next turn's entry hold. */
+export function consumeCombatEntryTypedAnswer(): boolean {
+  const armed = typedAnswerArmed;
+  typedAnswerArmed = false;
+  return armed;
+}
+
 /** Registered by the message list while the entry confirmation surface is mounted. */
 export function setCombatEntryConfirmationHost(
   next: CombatEntryConfirmationHost | null,
@@ -95,6 +142,7 @@ export function settlePendingCombatEntryConfirmation(confirmed: boolean, target?
   if (!pending) return false;
   const settled = pending;
   pending = null;
+  notifyPendingChange();
   settled.dismiss();
   settled.settle(confirmed, target);
   return true;
@@ -134,8 +182,12 @@ export function requestCombatEntryAnswer(
     };
 
     pending = { spec, ownerKey: activeOwnerKey, settle, dismiss: () => dismissPopup() };
+    notifyPendingChange();
     const hostDismiss = activeHost.present(spec, (confirmed, target) => {
-      if (pending?.settle === settle) pending = null;
+      if (pending?.settle === settle) {
+        pending = null;
+        notifyPendingChange();
+      }
       settle(confirmed, target);
     });
     dismissPopup = hostDismiss;

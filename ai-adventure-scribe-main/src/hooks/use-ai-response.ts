@@ -47,6 +47,7 @@ import { suspectsFabricatedOutcome } from '@/hooks/ai/silent-player-turn';
 import logger from '@/lib/logger';
 import { AIService, isRollOutcomeStale } from '@/services/ai-service';
 import { playerInputOriginOf } from '@/services/combat/combat-action-origin';
+import { consumeCombatEntryTypedAnswer } from '@/services/combat/combat-entry-confirmation-bridge';
 import { participantVital } from '@/services/combat/participant-vital';
 import {
   hasPendingPlayerRoll,
@@ -365,6 +366,10 @@ export const useAIResponse = (): {
         let timingCheckpoint = performance.now();
         logger.info('Getting AI response for session:', sessionId);
 
+        // #400: consume eagerly at turn start, so a turn that fails before the entry hold
+        // does not leak the flag to a later unrelated turn.
+        const typedEntryAnswer = consumeCombatEntryTypedAnswer();
+
         const latestMessage = messages[messages.length - 1];
         const turnSignal = signal as TurnAbortSignal | undefined;
         const awaitPlayerInput = async <T>(promise: Promise<T>): Promise<T> => {
@@ -660,8 +665,11 @@ export const useAIResponse = (): {
         // player before the DM is called. The DM answering first is how a Chill Touch got
         // narrated as a miss with no roll (run 14). Strike goes to the engine below with no
         // DM text yet; "Do something else" calls the DM with a note that nothing happened.
+        // #400: a message typed while the card was up already answered it — the typed action
+        // is the player's combat declaration, so the hold is skipped and the engine resolves it.
+        // (typedEntryAnswer was consumed at turn start.)
         const heldEntry =
-          !activeEncounter && !isDiceRollMessage
+          !activeEncounter && !isDiceRollMessage && !typedEntryAnswer
             ? await awaitPlayerInput(
                 holdCombatEntryBeforeDm({
                   sessionId,
