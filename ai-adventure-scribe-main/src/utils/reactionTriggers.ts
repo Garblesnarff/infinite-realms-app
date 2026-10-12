@@ -5,7 +5,6 @@
  * Extracted from reactionSystem.ts
  */
 
-
 import {
   createReactionOpportunity,
   canMakeOpportunityAttack,

@@ -105,9 +105,9 @@ describe('the prompt outside combat (#2400)', () => {
     expect(section).toContain('<story_items_field>');
     expect(section).toContain('`items` JSON field');
     // Out of combat only, like the xp_award field.
-    expect(
-      ContextBuilderPrompts.buildResponseStructureSection({ inCombat: true }),
-    ).not.toContain('<story_items_field>');
+    expect(ContextBuilderPrompts.buildResponseStructureSection({ inCombat: true })).not.toContain(
+      '<story_items_field>',
+    );
   });
 
   it('sends the out-of-combat variants when no combat was detected', async () => {

@@ -116,9 +116,7 @@ function getSpellSlots(
   // parser, so premade casters silently fell back to computed slots (#2459).
   return Object.fromEntries(
     slots
-      .map(
-        (slot, index) => [String(index + 1), { max: slot, current: slot }] as const,
-      )
+      .map((slot, index) => [String(index + 1), { max: slot, current: slot }] as const)
       .filter(([, slot]) => slot.max > 0),
   );
 }
