@@ -178,14 +178,18 @@ function leadingCapitalizedRun(words: string[]): number {
  * the-grand-kitchen tag, #267 GP-036). Two or more consecutive capitalized words
  * at the tag's edge read as a name; a single capitalized word is sentence case
  * ("See", "Behold") or a partial name the whole-name checks already handle.
+ * The phrase never crosses a sentence terminator: "You see [TAG]. Captain Rhea
+ * waves." names Rhea in the next sentence, not the tagged entity (#267 FIX).
  * Prepending the derived display name here would glue a second name onto the
  * sentence, so the tag is left bare instead; the asset guard then drops a tag
  * whose derived name never appears, leaving one clean name.
  */
 function hasAdjacentProperName(content: string, tagStart: number, tagLength: number): boolean {
-  const beforeTag = content.slice(0, tagStart).replace(/[\s"'`*_\],;:!?…—–-]+$/, '');
+  const beforeSentences = content.slice(0, tagStart).split(/[.!?]/);
+  const beforeTag = (beforeSentences.pop() ?? '').replace(/[\s"'`*_\],;:!?…—–-]+$/, '');
   const afterTag = content
     .slice(tagStart + tagLength)
+    .split(/[.!?]/, 1)[0]
     .replace(/^[^a-zA-Z]+/, '')
     .replace(LEADING_ARTICLE_PATTERN, '');
   const trailing = beforeTag.split(/\s+/).filter(Boolean).slice(-4).reverse();

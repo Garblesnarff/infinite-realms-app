@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
+import { parseAssetTags } from '../../features/game-session/utils/parse-asset-tags';
+import { insertAssetTags } from '../../services/ai/asset-processor';
 import {
   normalizeAssetTagKeysInContent,
   normalizeAssetTagsInContent,
@@ -237,6 +239,56 @@ describe('normalize-asset-tags', () => {
       expect(result).toBe(input);
       expect(result.match(/Grand Kitchen/g)).toHaveLength(1);
       expect(result).not.toContain('The Academy Dining Hall');
+    });
+
+    it('does not read the name phrase past a sentence terminator after the tag (#267 FIX)', () => {
+      // Regression: the proper-name check must not look into the next sentence.
+      // "Captain Rhea" belongs to the following sentence, so the bare tag still
+      // gets its derived name instead of being dropped by the asset guard.
+      const input = 'You see [ASSET:npc:elara]. Captain Rhea waves.';
+      const result = normalizeAssetTagKeysInContent(input);
+      expect(result).toBe('You see Elara [ASSET:npc:elara]. Captain Rhea waves.');
+    });
+
+    it('does not read the name phrase past a sentence terminator before the tag (#267 FIX)', () => {
+      const input = 'You see Captain Rhea. [ASSET:npc:elara] waves.';
+      const result = normalizeAssetTagKeysInContent(input);
+      expect(result).toBe('You see Captain Rhea. Elara [ASSET:npc:elara] waves.');
+    });
+
+    it('renders one clean name end to end with no stray punctuation (#267 FIX)', () => {
+      // Through the real pipeline entry points: insertAssetTags runs the tag
+      // normalization plus the asset guard (the DM-response post-processing),
+      // and parseAssetTags produces the player-visible text exactly as
+      // DMMessage renders it (tags stripped, spacing normalized).
+      const elara = [{ type: 'npc', key: 'elara', name: 'Elara' }];
+      const rendered = (
+        text: string,
+        assets: { type: string; key: string; name: string }[],
+      ): string => parseAssetTags(insertAssetTags(text, assets)).cleanContent;
+
+      expect(rendered('You see [ASSET:npc:elara]. Captain Rhea waves.', elara)).toBe(
+        'You see Elara. Captain Rhea waves.',
+      );
+
+      const kitchen = [{ type: 'location', key: 'the-grand-kitchen', name: 'The Grand Kitchen' }];
+      expect(
+        rendered(
+          'Together, you cross the threshold into [ASSET:location:the-grand-kitchen] The Academy Dining Hall.',
+          kitchen,
+        ),
+      ).toBe('Together, you cross the threshold into The Academy Dining Hall.');
+
+      for (const out of [
+        rendered('You see [ASSET:npc:elara]. Captain Rhea waves.', elara),
+        rendered(
+          'Together, you cross the threshold into [ASSET:location:the-grand-kitchen] The Academy Dining Hall.',
+          kitchen,
+        ),
+      ]) {
+        expect(out).not.toContain(' .');
+        expect(out).not.toContain('  ');
+      }
     });
 
     it('does not prepend when the model emits an old-style key without the possessive strip (#267)', () => {
