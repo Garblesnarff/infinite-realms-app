@@ -405,7 +405,86 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
 
     expect(await heroRow()).toMatchObject({ isActive: false });
     expect(await heroHp()).toBe(5);
-    expect(await consumeDmTacticalFacts(sessionId)).toEqual(['The Scholar yields.']);
+    // #262: the yield ends the fight with the surrender reason, so the surrender line is
+    // followed by the engine end line — never a bare "Combat has ended." with no reason.
+    expect(await consumeDmTacticalFacts(sessionId)).toEqual([
+      'The Scholar yields.',
+      expect.stringContaining('THE FIGHT IS OVER: the party has surrendered.'),
+    ]);
+    expect(await encounterRow()).toMatchObject({
+      status: 'completed',
+      endedReason: 'player_surrendered',
+    });
+  });
+
+  test('#262: yielding ends the combat and the result tells the client', async () => {
+    const result = (await flee('yield')) as {
+      exit?: unknown;
+      combatEnded?: boolean;
+      endedReason?: string;
+    };
+
+    // The exit is recorded with the surrender slug ...
+    expect(result.exit).toBe('surrendered');
+    // ... and the fight is over on the player's terms: the row carries the reason, and the
+    // client is told the action crossed combat's end — no stall, no phantom turn, no DM
+    // end needed (NT-036/NT-113).
+    expect(await encounterRow()).toMatchObject({
+      status: 'completed',
+      endedReason: 'player_surrendered',
+    });
+    expect(result.combatEnded).toBe(true);
+    expect(result.endedReason).toBe('player_surrendered');
+    // The ledger keeps the surrender slug, not a generic flight.
+    expect(await partyLedgerState()).toMatchObject({ state: 'surrendered', encounterId });
+    // The engine end line names the surrender — never a bare "Combat has ended." (CB-032).
+    const facts = await consumeDmTacticalFacts(sessionId);
+    expect(facts).toContain('The Scholar yields.');
+    expect(
+      facts.some(
+        (fact) =>
+          fact.includes('THE FIGHT IS OVER') && fact.toLowerCase().includes('surrender'),
+      ),
+    ).toBe(true);
+  });
+
+  test('#262: attacks against a dodging hero are rolled at disadvantage', async () => {
+    const { CombatAttackService } = await importWithRealDb(
+      () => import('../combat/combat-attack-service.js'),
+    );
+
+    // The Dodge chip, exactly as the client sends it: the condition lands, the Action is spent.
+    await executeCombatIntent(
+      encounterId,
+      { type: 'dodge', actorId: heroId, expectedVersion: 1 },
+      userId,
+      'player',
+      Date.now(),
+      'action_bar',
+    );
+    expect(await heroRow()).toMatchObject({ isDodging: true });
+
+    // End the hero's turn so the Swarm holds it: the dodge must survive the turn boundary —
+    // it lasts until the start of the hero's next turn, not until the action resolves.
+    await executeCombatIntent(
+      encounterId,
+      { type: 'end_turn', actorId: heroId },
+      userId,
+      'player',
+      Date.now(),
+      'action_bar',
+    );
+
+    // The Swarm's attack against the dodging Scholar, proposed exactly as the engine would
+    // resolve it: the disadvantage comes from the dodge, not from a supplied flag (CB-038/044).
+    const attackService = new CombatAttackService();
+    const proposal = await attackService.proposeAttack(
+      encounterId,
+      { attackerId: swarmId, targetId: heroId, attackType: 'melee', expectedVersion: 2 },
+      userId,
+    );
+    expect(proposal.legal).toBe(true);
+    expect(proposal.disadvantage).toBe(true);
   });
 
   test('the exit fact reaches the DM prompt the way a combat_exits fact does', async () => {
