@@ -41,6 +41,30 @@ export interface LoreRenderOptions {
    * Which entities exist is unchanged: LoreKeeper stays the source of every card.
    */
   turnScope?: TurnCanonScope;
+  /**
+   * #352: entity names (lower-cased) to leave out of this render. The
+   * per-turn input-matched tail block passes the scene section's kept names so
+   * it only carries entities the scene section does not already have.
+   */
+  excludeEntityNames?: string[];
+  /**
+   * #352: list the entities this render did not keep, by name, even without a
+   * turnScope. The scene-stable section uses this so the DM always sees the
+   * full canon name roster.
+   */
+  includeRoster?: boolean;
+  /**
+   * #352: return only the `<canonical_entities>` block (cards + roster), no
+   * setting head, adherence tail or assets. For the small per-turn
+   * input-matched tail block.
+   */
+  entitiesOnly?: boolean;
+  /**
+   * #352: keep only the scene's entities (plus their handouts) and roster the
+   * rest — skip the relevance-ranked fill. For the scene-stable lore section,
+   * which must stay small and byte-stable per scene.
+   */
+  sceneOnly?: boolean;
 }
 
 /**
@@ -62,6 +86,8 @@ export interface LoreRenderResult {
   canonCut: boolean;
   keptEntities: number;
   droppedEntities: number;
+  /** #352: lower-cased names of the entities whose cards this section kept. */
+  keptEntityNames: string[];
 }
 
 // Wrapper overhead the greedy fill must leave room for: the
@@ -525,8 +551,14 @@ export class CampaignContextPrompts {
     const tail = renderLoreTail();
 
     const units: { entity: CampaignChunk; sectionType: LoreSectionType; order: number }[] = [];
+    // #352: entities already carried by the scene-stable section are left out
+    // of the per-turn tail render.
+    const excludedNames = new Set(
+      (options.excludeEntityNames || []).map((name) => name.toLowerCase()),
+    );
     for (const sectionType of LORE_SECTION_ORDER) {
       for (const entity of lore.entitiesByType[sectionType]) {
+        if (excludedNames.has((entity.entityName || '').toLowerCase())) continue;
         units.push({ entity, sectionType, order: units.length });
       }
     }
@@ -598,7 +630,12 @@ export class CampaignContextPrompts {
         score: scoreEntity(unit.entity, recentLower, recentWords, activeNames),
       }));
       scored.sort((a, b) => b.score - a.score || a.order - b.order);
-      const headTokens = approximateTokens(head + tail + lore.assetsSection);
+      // #352 (self-review): when entitiesOnly, the head/tail/assets are not
+      // emitted (see below), so don't charge them against the budget — only
+      // the <canonical_entities> wrapper allowance.
+      const headTokens = options.entitiesOnly
+        ? 0
+        : approximateTokens(head + tail + lore.assetsSection);
       let remaining = Math.max(0, options.tokenBudget - headTokens - WRAPPER_TOKEN_ALLOWANCE);
       kept = [];
       // Active scene entities are always kept (#2450): reserve them before the
@@ -613,21 +650,58 @@ export class CampaignContextPrompts {
           remaining - approximateTokens(renderEntityBlock(unit.sectionType, unit.entity)),
         );
       }
-      for (const unit of scored.filter((unit) => !isActive(unit))) {
-        const cost = approximateTokens(renderEntityBlock(unit.sectionType, unit.entity));
-        if (cost <= remaining) {
-          kept.push(unit);
-          remaining -= cost;
+      // #352 sceneOnly: the scene-stable section carries the scene's entities
+      // (and their handouts) plus the name roster — never the relevance-ranked
+      // fill. Per-turn input-matched extras ride the tail block instead.
+      if (options.sceneOnly) {
+        const keptNameSet = new Set(
+          kept.map((unit) => (unit.entity.entityName || '').toLowerCase()),
+        );
+        for (const unit of scored) {
+          if (unit.sectionType !== 'handouts' || kept.includes(unit)) continue;
+          const giver = String(
+            (unit.entity.metadata as any)?.giver || '',
+          ).toLowerCase();
+          const cost = approximateTokens(renderEntityBlock(unit.sectionType, unit.entity));
+          if (giver && keptNameSet.has(giver) && cost <= remaining) {
+            kept.push(unit);
+            remaining -= cost;
+          }
+        }
+      } else {
+        for (const unit of scored.filter((unit) => !isActive(unit))) {
+          const cost = approximateTokens(renderEntityBlock(unit.sectionType, unit.entity));
+          if (cost <= remaining) {
+            kept.push(unit);
+            remaining -= cost;
+          }
         }
       }
       // Restore canonical section order for rendering; relevance order only
       // decided which entities survived.
       kept.sort((a, b) => a.order - b.order);
-      canonCut = kept.length < units.length;
+      // #352: in sceneOnly mode the non-scene entities are rostered by design,
+      // not cut by the budget — only a dropped scene entity counts as a cut.
+      canonCut = options.sceneOnly
+        ? units.some((unit) => {
+            const name = (unit.entity.entityName || '').toLowerCase();
+            return (
+              activeNames.has(name) &&
+              !kept.some((k) => (k.entity.entityName || '').toLowerCase() === name)
+            );
+          })
+        : kept.length < units.length;
     }
 
-    const notKept = options.turnScope ? units.filter((unit) => !kept.includes(unit)) : [];
-    const roster = options.turnScope ? renderCanonRoster(notKept) : '';
+    const notKept = units.filter((unit) => !kept.includes(unit));
+    // #352: the roster also serves the scene-stable section (includeRoster),
+    // whose instruction text already describes this exact arrangement. The
+    // per-turn tail (entitiesOnly) skips it — the scene section carries the
+    // full roster, so the tail only adds the extra cards.
+    const roster =
+      (options.turnScope || options.includeRoster) && !options.entitiesOnly
+        ? renderCanonRoster(notKept)
+        : '';
     const handoutIndex = notKept
       .filter((unit) => unit.sectionType === 'handouts')
       .map((unit) => unit.entity);
@@ -661,7 +735,11 @@ export class CampaignContextPrompts {
         ? filterAssetsSection(lore.assetsSection, droppedNames)
         : lore.assetsSection;
 
-    const section = head + entitiesSection + tail + assetsSection;
+    // #352: the per-turn tail block wants only the entity cards, not the
+    // setting head, adherence tail or assets (those live in the scene section).
+    const section = options.entitiesOnly
+      ? entitiesSection
+      : head + entitiesSection + tail + assetsSection;
     const sectionTokens = approximateTokens(section);
     return {
       section,
@@ -669,6 +747,7 @@ export class CampaignContextPrompts {
       canonCut,
       keptEntities: kept.length,
       droppedEntities: units.length - kept.length,
+      keptEntityNames: kept.map((unit) => (unit.entity.entityName || '').toLowerCase()),
     };
   }
 

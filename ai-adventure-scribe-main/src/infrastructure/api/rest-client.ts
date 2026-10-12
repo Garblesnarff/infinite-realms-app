@@ -324,6 +324,12 @@ export interface LLMHistoryMessage {
 
 export interface GenerateTextParams {
   prompt: string;
+  /**
+   * #352: the stable system block, sent as the `system` message so the
+   * provider can cache on the prompt prefix. Omitted on the opening turn and
+   * by non-DM generations.
+   */
+  systemPrompt?: string;
   /** The player's raw turn input, kept separate from the assembled prompt for server-side intent detection. */
   player_input?: string;
   model?: string;
@@ -542,6 +548,9 @@ class LlmApiClient {
         ...(params.signal ? { signal: params.signal } : {}),
         body: JSON.stringify({
           prompt: params.prompt,
+          // #352: the stable system block; the server prepends it as the
+          // `system` message before history and the user prompt.
+          ...(params.systemPrompt ? { systemPrompt: params.systemPrompt } : {}),
           player_input: params.player_input,
           model: model || params.model,
           maxTokens: params.maxTokens,

@@ -227,6 +227,13 @@ const PROMPT_METRIC_KEYS = [
   'history',
   'player_input',
   'scene',
+  // #352: the split lore sections (scene-stable + per-turn tail).
+  'lore_scene',
+  'lore_tail',
+  // #352 (self-review): the game-state envelope and turn-flags line are real
+  // prompt sections, so they get keys instead of riding unmeasured in `total`.
+  'game_state',
+  'turn_flags',
   'canon_cut',
   'history_below_floor',
 ] as const;
@@ -363,6 +370,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
 
       const {
         prompt,
+        // #352: the stable system block; prepended as the `system` message so
+        // the provider caches on the prompt prefix.
+        systemPrompt,
         model,
         maxTokens = 1000,
         temperature = 0.8,
@@ -628,6 +638,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         const generateOnce = (): Promise<LLMResponse> =>
           LLMProviderService.generate({
             prompt: llmPrompt,
+            // #352: the stable system block, as the `system` message.
+            systemPrompt: typeof systemPrompt === 'string' ? systemPrompt : undefined,
             model: safeModel,
             maxTokens: safeMaxTokens,
             temperature,
@@ -735,6 +747,25 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             // #2218: only DM turns carry dmReply; other generations stay session-less.
             sessionId: dmReply ? (sessionId ?? combatEntry?.sessionId) : undefined,
           });
+          // #352: per-turn prompt-cache accounting, log-only (no storage).
+          // `cachedTokens` > 0 means the stable system prefix was served from
+          // the provider's cache this turn. Only requests that carried a
+          // `systemPrompt` (the DM turn) emit the line, so non-DM generations
+          // (narration regen, memory extraction) don't dilute the hit rate.
+          // The hit rate over these lines is the number #352's "done when"
+          // asks for after deploy.
+          if (systemPrompt) {
+            const cachedTokens = result.usage.cachedInputTokens ?? 0;
+            logger.info({
+              msg: 'LLM_CACHE_TOKENS',
+              sessionId: sessionId ?? combatEntry?.sessionId ?? null,
+              provider: result.provider,
+              model: result.model ?? safeModel ?? null,
+              inputTokens: result.usage.inputTokens,
+              cachedTokens,
+              cacheWriteTokens: result.usage.cacheWriteTokens ?? 0,
+            });
+          }
         }
 
         // One parse, shared by the log line and the narration rewrite. (#2050 G)
@@ -931,6 +962,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
     {
       body: t.Object({
         prompt: t.String(),
+        // #352: the stable system block for provider prompt caching. Optional
+        // so older clients keep working; absent means the previous behavior.
+        systemPrompt: t.Optional(t.String()),
         // #2050 C: correlate the envelope log line to a session on every
         // generate, not only on the combat-entry path.
         sessionId: t.Optional(t.String({ maxLength: 255 })),

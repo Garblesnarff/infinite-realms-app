@@ -10,7 +10,7 @@ import {
   runDeferredDMResponseWork,
 } from '../ai/dm-response-processor';
 import { CampaignContextPrompts } from '../ai/prompts/campaign-context-prompts';
-import { resolveStarterCampaignId } from '../ai/prompts/game-context-prompts';
+import { GameContextPrompts, resolveStarterCampaignId } from '../ai/prompts/game-context-prompts';
 import { AIService } from '../ai-service';
 import { MemoryManager } from '../memory-manager';
 import { fetchSceneState } from '../narrative/scene-state-client';
@@ -63,6 +63,10 @@ vi.mock('../ai/prompts/campaign-context-prompts', () => ({
 
 vi.mock('../ai/prompts/game-context-prompts', () => ({
   resolveStarterCampaignId: vi.fn(),
+  // #352: the steady-state turn builds the volatile user context through this.
+  GameContextPrompts: {
+    buildUserContextSection: vi.fn(async () => '<game_context/>'),
+  },
 }));
 
 vi.mock('../narrative/scene-state-client', () => ({
@@ -134,9 +138,6 @@ describe('AIService', () => {
       const mockMemories = [{ content: 'memory 1' }];
       vi.mocked(MemoryManager.getRelevantMemories).mockResolvedValue(mockMemories as any);
 
-      const mockPrompt = 'Build prompt';
-      vi.mocked(ContextBuilder.build).mockResolvedValue(mockPrompt);
-
       vi.mocked(llmApiClient.generateText).mockResolvedValue('AI RAW Response');
 
       const mockProcessedResponse = { text: 'Processed Text' };
@@ -151,17 +152,16 @@ describe('AIService', () => {
         'Hello DM',
         8,
       );
-      expect(ContextBuilder.build).toHaveBeenCalledWith(
-        expect.objectContaining({
-          context: mockContext,
-          message: 'Hello DM',
-          relevantMemories: mockMemories,
-          isFirstMessage: false, // Message is not empty
-        }),
+      // #352: the steady-state turn builds the volatile user context through
+      // GameContextPrompts (ContextBuilder.build only serves the opening).
+      expect(GameContextPrompts.buildUserContextSection).toHaveBeenCalledWith(
+        mockContext,
+        mockMemories,
       );
       expect(llmApiClient.generateText).toHaveBeenCalledWith(
         expect.objectContaining({
-          prompt: expect.stringContaining(mockPrompt),
+          prompt: expect.stringContaining('<game_context/>'),
+          systemPrompt: expect.any(String),
         }),
       );
       expect(processDMResponse).toHaveBeenCalledWith(
@@ -231,10 +231,11 @@ describe('AIService', () => {
       await AIService.chatWithDM(paramsWithMemories);
 
       expect(MemoryManager.getRelevantMemories).not.toHaveBeenCalled();
-      expect(ContextBuilder.build).toHaveBeenCalledWith(
-        expect.objectContaining({
-          relevantMemories: providedMemories,
-        }),
+      // #352: the steady-state turn builds the volatile user context through
+      // GameContextPrompts (ContextBuilder.build only serves the opening).
+      expect(GameContextPrompts.buildUserContextSection).toHaveBeenCalledWith(
+        mockContext,
+        providedMemories,
       );
     });
 
@@ -539,8 +540,14 @@ describe('AIService', () => {
       vi.mocked(processDMResponse).mockResolvedValue({ text: 'processed' } as any);
     });
 
-    const lastPrompt = (): string =>
-      vi.mocked(llmApiClient.generateText).mock.calls.at(-1)?.[0]?.prompt as string;
+    // #352: what the model sees is the system message + the user message.
+    const lastPrompt = (): string => {
+      const call = vi.mocked(llmApiClient.generateText).mock.calls.at(-1)?.[0] as {
+        prompt?: string;
+        systemPrompt?: string;
+      };
+      return `${call.systemPrompt ?? ''}\n${call.prompt ?? ''}`;
+    };
 
     it('places the block after conversation history and immediately before player input', async () => {
       vi.mocked(fetchSceneState).mockResolvedValue(SCENE_STATE);
@@ -742,6 +749,80 @@ describe('AIService', () => {
       const result = await AIService.generateOpeningMessage({ context: mockContext });
 
       expect(result).toEqual({ text: 'Opening scene' });
+    });
+  });
+
+  describe('#352 prompt section guard', () => {
+    const guardContext: any = { sessionId: 'session-guard', campaignId: 'campaign-guard' };
+    // Captured at collection time, before any test installs its spy: the
+    // generateOpeningMessage tests spyOn chatWithDM and never restore it, so
+    // calling AIService.chatWithDM here would hit their stub.
+    const realChatWithDM = AIService.chatWithDM.bind(AIService);
+    const OLD_SECTIONS = [
+      '<persona>',
+      '<game_context',
+      '<current_scene>',
+      '<tactical_context>',
+      '<immutable_game_state>',
+      '<security_rules>',
+      '<scene_state>',
+      '<player_input>',
+    ];
+
+    const captureBoundPrompt = async (params: any): Promise<{ bound: string; system: string }> => {
+      vi.mocked(llmApiClient.generateText).mockResolvedValue('AI RAW Response');
+      vi.mocked(processDMResponse).mockResolvedValue({ text: 'Processed Text' } as any);
+      const result: any = await realChatWithDM(params);
+      expect(result).toBeDefined();
+      const call = vi.mocked(llmApiClient.generateText).mock.calls.at(-1)?.[0] as any;
+      const system = String(call.systemPrompt ?? '');
+      return { bound: `${system}\n${String(call.prompt ?? '')}`, system };
+    };
+
+    it('opening turn contains every legacy section', async () => {
+      vi.mocked(ContextBuilder.build).mockResolvedValue('<persona>P</persona><game_context>G</game_context>');
+      vi.mocked(fetchSceneState).mockResolvedValue('<scene_state>S</scene_state>' as any);
+      const { bound } = await captureBoundPrompt({
+        message: '',
+        context: {
+          ...guardContext,
+          currentSceneDescription: 'A tavern',
+          gameState: { isInCombat: false, tacticalContext: 'tac' },
+        },
+        conversationHistory: [],
+      });
+      for (const tag of OLD_SECTIONS) {
+        expect(bound).toContain(tag);
+      }
+    });
+
+    it('in-combat turn contains every section and both flags ride <turn_flags>', async () => {
+      vi.mocked(fetchSceneState).mockResolvedValue('<scene_state>S</scene_state>' as any);
+      const { bound, system } = await captureBoundPrompt({
+        message: 'I attack the goblin',
+        narrationViolation: 'Do not narrate the hit.',
+        context: {
+          ...guardContext,
+          currentSceneDescription: 'A tavern',
+          gameState: {
+            isInCombat: true,
+            tacticalContext: 'tac',
+            combatEntryDeclined: 'the crimson otyugh',
+          },
+        },
+        conversationHistory: [
+          { id: '1', role: 'user', content: 'hi', timestamp: new Date(), speakerType: 'player' },
+        ],
+      });
+      for (const tag of [...OLD_SECTIONS, '<conversation_history>']) {
+        expect(bound).toContain(tag);
+      }
+      expect(bound).toContain('<turn_flags>');
+      expect(bound).toContain('the crimson otyugh');
+      expect(bound).toContain('Do not narrate the hit.');
+      // The per-turn flags must not leak into the cached system prefix.
+      expect(system).not.toContain('the crimson otyugh');
+      expect(system).not.toContain('Do not narrate the hit.');
     });
   });
 });

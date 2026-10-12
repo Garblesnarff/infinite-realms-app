@@ -19,6 +19,11 @@ export type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: stri
 
 export interface LLMGenerateOptions {
   prompt: string;
+  /**
+   * #352: stable system block, sent as the `system` message so the provider
+   * can cache on the prompt prefix.
+   */
+  systemPrompt?: string;
   model?: string;
   maxTokens?: number;
   temperature?: number;
@@ -36,7 +41,20 @@ export interface LLMResponse {
   text: string;
   model?: string;
   provider?: 'openrouter' | 'gemini';
-  usage?: { inputTokens: number; outputTokens: number; totalTokens: number };
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    /**
+     * #352: prompt tokens served from the provider's prompt cache this turn
+     * (OpenRouter `usage.prompt_tokens_details.cached_tokens`, Gemini
+     * `usageMetadata.cachedContentTokenCount`). Zero/absent means no cache
+     * hit. Only present when the request asked for usage details.
+     */
+    cachedInputTokens?: number;
+    /** #352: prompt tokens written to the cache on this turn. */
+    cacheWriteTokens?: number;
+  };
   error?: string;
   status?: number;
   details?: string;
@@ -180,6 +198,7 @@ export class LLMProviderService {
   static async generate(options: LLMGenerateOptions): Promise<LLMResponse> {
     const {
       prompt,
+      systemPrompt,
       model,
       maxTokens = 1000,
       temperature = 0.8,
@@ -197,6 +216,7 @@ export class LLMProviderService {
           temperature,
           history,
           responseSchema,
+          systemPrompt,
         );
       }
 
@@ -208,6 +228,7 @@ export class LLMProviderService {
           temperature,
           history,
           responseSchema,
+          systemPrompt,
         );
       }
 
@@ -264,6 +285,7 @@ export class LLMProviderService {
     temperature = 0.8,
     history?: ChatMessage[],
     responseSchema?: Record<string, unknown>,
+    systemPrompt?: string,
   ): Promise<LLMResponse> {
     const breaker = getCircuitBreaker('llm:openrouter');
     breaker.allowOrThrow();
@@ -288,6 +310,11 @@ export class LLMProviderService {
     });
     const messages: ChatMessage[] = [];
 
+    // #352: the stable system block goes first so the provider caches on the
+    // prompt prefix; history and the volatile user prompt follow.
+    if (typeof systemPrompt === 'string' && systemPrompt.length > 0) {
+      messages.push({ role: 'system', content: systemPrompt });
+    }
     if (Array.isArray(history)) {
       for (const m of history) {
         if (m && m.role && typeof m.content === 'string') {
@@ -299,7 +326,12 @@ export class LLMProviderService {
 
     type ORChatResp = {
       choices?: { message?: { content?: string } }[];
-      usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+      usage?: {
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        total_tokens?: number;
+        prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
+      };
     };
     const attempts: string[] = [];
     let lastFailure: { status: number; details: string; retryAfter?: number } | null = null;
@@ -311,6 +343,9 @@ export class LLMProviderService {
         messages,
         max_tokens: maxTokens,
         temperature,
+        // #352: ask OpenRouter for the usage detail object so cache hits are
+        // visible (`usage.prompt_tokens_details.cached_tokens`).
+        usage: { include: true },
         ...(responseSchema
           ? {
               response_format: {
@@ -362,6 +397,10 @@ export class LLMProviderService {
             breaker.onSuccess();
             const inputTokens = data.usage?.prompt_tokens ?? 0;
             const outputTokens = data.usage?.completion_tokens ?? 0;
+            // #352: prompt-cache accounting. Absent details mean no cache
+            // information (older path or provider without caching).
+            const cachedInputTokens = data.usage?.prompt_tokens_details?.cached_tokens ?? 0;
+            const cacheWriteTokens = data.usage?.prompt_tokens_details?.cache_write_tokens ?? 0;
             return {
               text,
               model: candidate,
@@ -370,6 +409,8 @@ export class LLMProviderService {
                 inputTokens,
                 outputTokens,
                 totalTokens: data.usage?.total_tokens ?? inputTokens + outputTokens,
+                cachedInputTokens,
+                cacheWriteTokens,
               },
             };
           }
@@ -426,6 +467,7 @@ export class LLMProviderService {
     temperature = 0.8,
     history?: ChatMessage[],
     responseSchema?: Record<string, unknown>,
+    systemPrompt?: string,
   ): Promise<LLMResponse> {
     const breaker = getCircuitBreaker('llm:gemini');
     breaker.allowOrThrow();
@@ -465,6 +507,11 @@ export class LLMProviderService {
         temperature,
         ...(responseSchema ? { responseMimeType: 'application/json', responseSchema } : {}),
       },
+      // #352: the stable system block travels as Gemini's native system
+      // instruction, so implicit prompt caching sees the same stable prefix.
+      ...(typeof systemPrompt === 'string' && systemPrompt.length > 0
+        ? { systemInstruction: { parts: [{ text: systemPrompt }] } }
+        : {}),
     };
 
     const attempts: string[] = [];
@@ -627,6 +674,8 @@ export class LLMProviderService {
         inputTokens,
         outputTokens,
         totalTokens: Number(metadata.totalTokenCount || inputTokens + outputTokens),
+        // #352: Gemini's implicit cache read count for this turn.
+        cachedInputTokens: Number(metadata.cachedContentTokenCount || 0),
       },
     };
   }

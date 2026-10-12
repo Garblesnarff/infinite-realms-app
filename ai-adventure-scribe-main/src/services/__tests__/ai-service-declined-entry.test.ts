@@ -26,6 +26,14 @@ vi.mock('../memory-manager', () => ({
   MemoryManager: { getRelevantMemories: vi.fn(), saveMemories: vi.fn(), extractMemories: vi.fn() },
 }));
 vi.mock('../ai/context-builder', () => ({ ContextBuilder: { build: vi.fn() } }));
+// #352: the steady-state turn builds the volatile user context through this;
+// the real builder would fetch the character loadout over the network.
+vi.mock('../ai/prompts/game-context-prompts', () => ({
+  resolveStarterCampaignId: vi.fn(),
+  GameContextPrompts: {
+    buildUserContextSection: vi.fn(async () => '<game_context/>'),
+  },
+}));
 vi.mock('../ai/dm-response-processor', () => ({ processDMResponse: vi.fn() }));
 vi.mock('@/utils/combatDetection', () => ({ detectCombatFromText: vi.fn() }));
 vi.mock('../ai/campaign-generator', () => ({

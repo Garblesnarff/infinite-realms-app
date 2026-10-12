@@ -118,8 +118,11 @@ async function playFixtureSession(): Promise<SessionRun> {
       conversationHistory: [...history],
     });
     const call = vi.mocked(llmApiClient.generateText).mock.calls.at(-1)?.[0] as any;
-    prompts.push(call.prompt);
-    counts.push(countPromptSections(call.prompt, call.history));
+    // #352: the provider sees the system message + the user message; the diet
+    // is measured on that full bound prompt, not on the user message alone.
+    const boundPrompt = `${call.systemPrompt ?? ''}\n${call.prompt}`;
+    prompts.push(boundPrompt);
+    counts.push(countPromptSections(boundPrompt, call.history));
   };
 
   await callDm(0, '');
