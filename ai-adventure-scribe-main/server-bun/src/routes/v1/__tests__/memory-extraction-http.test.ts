@@ -124,7 +124,12 @@ describe('POST /v1/memory-extraction/jobs (#2148)', () => {
 
   it('returns 202 with a job id before the model answers, then persists with no client waiting', async () => {
     const response = await app.handle(
-      jobRequest({ session_id: SESSION, kind: 'memories', prompt: 'extract this' }),
+      jobRequest({
+        session_id: SESSION,
+        kind: 'memories',
+        // #353: the model's quote must be verbatim from the prompt.
+        prompt: 'extract this: Find the lost bell',
+      }),
     );
 
     // The model call is still pending: the response did not wait for it.
@@ -137,7 +142,7 @@ describe('POST /v1/memory-extraction/jobs (#2148)', () => {
 
     // The response has been fully consumed; nobody is listening any more. Finish the model call.
     resolveExtract!({
-      text: '{"memories":[{"type":"quest","content":"Find the lost bell","importance":4}]}',
+      text: '{"memories":[{"type":"quest","content":"Find the lost bell","importance":4,"quote":"Find the lost bell"}]}',
       provider: 'openrouter',
       model: 'extract/model',
     });

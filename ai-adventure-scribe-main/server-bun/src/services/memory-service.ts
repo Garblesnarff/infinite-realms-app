@@ -5,6 +5,7 @@ import { generateEmbedding, generateEmbeddingDetailed } from './embedding-servic
 import {
   RECALL_BUDGET_MS,
   recallWithBudget,
+  rerankByQueryOverlap,
   shouldRunMatch,
   takeRecallSlot,
 } from './memory-recall.js';
@@ -319,6 +320,11 @@ export class MemoryService {
       ms: result.elapsedMs,
       fellBack: result.fellBack,
     });
+    // #353: re-rank by entity overlap so a question naming a fact surfaces the
+    // memory that contains it, even when the store is crowded.
+    if (!result.fellBack) {
+      return rerankByQueryOverlap(result.rows, query);
+    }
     return result.rows;
   }
 
