@@ -11,11 +11,6 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBlogMedia, useUploadBlogMedia } from '@/hooks/blog/useBlogMedia';
 
-interface _MediaFile extends File {
-  preview?: string;
-  uploadedUrl?: string;
-}
-
 export const BlogMediaManager: React.FC = () => {
   const { isBlogAdmin } = useAuth();
   const [uploadPath, setUploadPath] = useState('uploads');

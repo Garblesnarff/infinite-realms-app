@@ -87,7 +87,6 @@ export function CameraController({
   const fitToScene = useCallback(() => {
     const scenePixelWidth = sceneWidth * gridSize;
     const scenePixelHeight = sceneHeight * gridSize;
-    const _aspect = size.width / size.height;
 
     // Calculate zoom to fit scene with padding
     const padding = 1.1;
@@ -242,7 +241,6 @@ export function CameraController({
 
     const canvas = gl.domElement;
     let lastTouchDistance = 0;
-    let _lastTouchCenter = { x: 0, y: 0 };
 
     const handleTouchStart = (event: TouchEvent) => {
       if (event.touches.length === 1) {
@@ -260,11 +258,6 @@ export function CameraController({
           touch2.clientX - touch1.clientX,
           touch2.clientY - touch1.clientY,
         );
-
-        _lastTouchCenter = {
-          x: (touch1.clientX + touch2.clientX) / 2,
-          y: (touch1.clientY + touch2.clientY) / 2,
-        };
       }
     };
 

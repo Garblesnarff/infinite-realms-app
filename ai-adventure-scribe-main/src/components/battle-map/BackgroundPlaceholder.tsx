@@ -26,7 +26,7 @@ export const BackgroundPlaceholder: React.FC<BackgroundPlaceholderProps> = ({
   const timeRef = useRef(0);
 
   // Animate the placeholder
-  useFrame((state, delta) => {
+  useFrame((_state, delta) => {
     if (!showAnimation) return;
 
     timeRef.current += delta;
@@ -150,7 +150,7 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
 }) => {
   const groupRef = useRef<THREE.Group>(null);
 
-  useFrame((state, delta) => {
+  useFrame((_state, delta) => {
     if (groupRef.current) {
       groupRef.current.rotation.z += delta * rotationSpeed;
     }

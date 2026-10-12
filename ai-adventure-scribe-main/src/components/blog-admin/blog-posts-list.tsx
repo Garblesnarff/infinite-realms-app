@@ -72,6 +72,7 @@ export const BlogPostsList: React.FC = () => {
   const categoryLookup = useMemo(() => {
     const lookup = new Map<string, string>();
     categories.forEach((category) => {
+      // @ts-expect-error #456 category.title can be undefined; lookup stores it as string
       lookup.set(category.id, category.title);
     });
     return lookup;

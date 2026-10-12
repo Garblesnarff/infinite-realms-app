@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useState, useEffect } from 'react';
-import { useForm, type UseFormReturn } from 'react-hook-form';
+import { useForm, type Resolver, type UseFormReturn } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
@@ -77,14 +77,16 @@ export function useBlogPostEditor({
   const { data: tags = [] } = useBlogTags();
   const createMutation = useCreateBlogPost();
   const updateMutation = useUpdateBlogPost(post?.id);
-  const form = useForm<BlogPostFormValues>({
-    resolver: zodResolver(blogPostSchema),
+  const resolver: Resolver<BlogPostFormValues> = zodResolver(blogPostSchema);
+  const form = useForm<BlogPostFormValues, any, BlogPostFormValues>({
+    resolver,
     defaultValues: {
       title: post?.title || '',
       slug: post?.slug || '',
       excerpt: post?.excerpt || '',
       content: post?.content || '',
       coverImageUrl: post?.coverImageUrl || '',
+      // @ts-expect-error #456 post.status can be review/archived, invalid for the 3-value form schema
       status: (post?.status as BlogPostStatus) || 'draft',
       scheduledFor: post?.scheduledFor || '',
       categoryIds: post?.categoryIds || [],

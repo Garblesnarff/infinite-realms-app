@@ -46,8 +46,10 @@ export const SharedCharactersList: React.FC = () => {
       return [];
     }
     if (filterPermission === 'all') {
+      // @ts-expect-error #455 listShared returns character rows, not SharedCharacter
       return sharedCharacters as SharedCharacter[];
     }
+    // @ts-expect-error #455 listShared returns character rows, not SharedCharacter
     return (sharedCharacters as SharedCharacter[]).filter(
       (char) => char.permissionLevel === filterPermission,
     );

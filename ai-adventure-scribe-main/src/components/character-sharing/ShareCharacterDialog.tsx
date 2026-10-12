@@ -290,6 +290,7 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                 <ScrollArea className="max-h-64" aria-labelledby={peopleHeadingId}>
                   <div className="space-y-2">
                     {permissions.map(
+                      // @ts-expect-error #455 permission rows lack userName/userEmail and use literal permission levels
                       (permission: {
                         id: string;
                         userId: string;

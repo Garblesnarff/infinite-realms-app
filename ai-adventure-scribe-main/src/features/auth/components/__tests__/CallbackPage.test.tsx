@@ -26,15 +26,17 @@ vi.mock('@/services/auth/TokenService', () => ({
 }));
 
 describe('CallbackPage', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
   beforeEach(() => {
     vi.clearAllMocks();
     window.history.replaceState(null, '', '/auth/callback');
-    global.fetch = vi.fn();
+    fetchMock = vi.fn();
+    global.fetch = Object.assign(fetchMock, { preconnect: vi.fn() });
   });
 
   it('exchanges a callback code and preserves the existing auth handoff', async () => {
     window.history.replaceState(null, '', '/auth/callback?code=one-time-code');
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+    fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({ accessToken: 'test-access-token', refreshToken: 'test-refresh-token' }),
     });
@@ -60,7 +62,7 @@ describe('CallbackPage', () => {
 
   it('says which account signed in once auth is ready (#2292)', async () => {
     window.history.replaceState(null, '', '/auth/callback?code=one-time-code');
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+    fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({ accessToken: 'test-access-token', refreshToken: 'test-refresh-token' }),
     });

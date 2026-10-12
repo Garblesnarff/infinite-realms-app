@@ -88,7 +88,7 @@ export class FrustumCuller {
    *
    * @param camera - THREE.js camera
    */
-  updateFromCamera(camera: THREE.Camera): void {
+  updateFromCamera(camera: THREE.PerspectiveCamera | THREE.OrthographicCamera): void {
     // Update camera matrices
     camera.updateMatrixWorld(false);
     camera.updateProjectionMatrix();

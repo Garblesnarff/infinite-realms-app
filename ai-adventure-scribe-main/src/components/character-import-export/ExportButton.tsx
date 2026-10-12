@@ -64,6 +64,7 @@ export const ExportButton: React.FC<ExportButtonProps> = ({
     }
     setIsExporting(true);
     try {
+      // @ts-expect-error #454 React tRPC proxy has no .query (vanilla-client API); verify runtime
       const characterData = await trpc.characters.export.query({ characterId });
       if (!characterData) throw new Error('No character data received');
       const filename = generateFilename(characterName);
@@ -157,6 +158,7 @@ export const SimpleExportButton: React.FC<Omit<ExportButtonProps, 'showLabel'>> 
   const handleExport = async (): Promise<void> => {
     setIsExporting(true);
     try {
+      // @ts-expect-error #454 React tRPC proxy has no .query (vanilla-client API); verify runtime
       const characterData = await trpc.characters.export.query({ characterId });
       if (!characterData) throw new Error('No character data received');
       const filename = generateFilename(characterName);
