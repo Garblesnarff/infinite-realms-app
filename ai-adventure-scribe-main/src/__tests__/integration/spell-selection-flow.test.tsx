@@ -189,7 +189,7 @@ vi.mock('@/data/spellOptions', () => ({
       },
     };
 
-    return mockSpells[className] || { cantrips: [], spells: [] };
+    return mockSpells[className as keyof typeof mockSpells] || { cantrips: [], spells: [] };
   },
 }));
 
@@ -391,6 +391,7 @@ describe('Spell Selection Integration Tests', () => {
         spellbook: true,
       },
       classFeatures: [],
+      subclasses: [],
       armorProficiencies: [],
       weaponProficiencies: [],
     };
@@ -405,6 +406,7 @@ describe('Spell Selection Integration Tests', () => {
       skillChoices: ['Acrobatics', 'Athletics'],
       numSkillChoices: 2,
       classFeatures: [],
+      subclasses: [],
       armorProficiencies: [],
       weaponProficiencies: [],
     };

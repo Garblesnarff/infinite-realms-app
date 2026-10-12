@@ -218,7 +218,8 @@ describe('Spell System Performance Tests', () => {
 
         // Simulate spell filtering operation
         const _filtered = dataset.filter(
-          (spell) => spell.school === 'Evocation' && spell.level <= 3 && spell.verbal === true,
+          (spell) =>
+            spell.school === 'Evocation' && spell.level <= 3 && spell.components_verbal === true,
         );
 
         const endTime = performance.now();
@@ -249,7 +250,7 @@ describe('Spell System Performance Tests', () => {
       const complexFiltered = largeDataset
         .filter((spell) => spell.school === 'Evocation' || spell.school === 'Abjuration')
         .filter((spell) => spell.level >= 1 && spell.level <= 5)
-        .filter((spell) => spell.verbal === true)
+        .filter((spell) => spell.components_verbal === true)
         .filter((spell) => spell.name.toLowerCase().includes('a'))
         .sort((a, b) => a.level - b.level);
 
@@ -438,7 +439,7 @@ describe('Spell System Performance Tests', () => {
 
       const featureTests = [
         () => getSpellcastingInfo(wizardCharacter.class!, wizardCharacter.level),
-        () => getRacialSpells(wizardCharacter.race!.name, wizardCharacter.subrace),
+        () => getRacialSpells(wizardCharacter.race!.name, wizardCharacter.subrace ?? undefined),
         () => validateSpellSelection(wizardCharacter, validWizardCantrips, validWizardSpells),
       ];
 
