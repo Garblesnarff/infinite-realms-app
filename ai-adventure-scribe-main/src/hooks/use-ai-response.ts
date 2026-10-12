@@ -1152,13 +1152,15 @@ export const useAIResponse = (): {
 
         // Guarantee clickable options on ordinary narrative turns. Combat turns
         // render server-provided legal actions, and roll-request turns pause on
-        // the dice UI, so both are excluded.
-        if (
+        // the dice UI, so both are excluded. GP-015 (#219): a narration turn
+        // that carries no choices is marked so the UI can say why there are
+        // none instead of rendering nothing.
+        const isNarrationTurn =
           !isInCombat &&
           !shouldStartCombat &&
           result.combat_transition !== 'start' &&
-          processedRolls.playerRollRequests.length === 0
-        ) {
+          processedRolls.playerRollRequests.length === 0;
+        if (isNarrationTurn) {
           if (result.options?.length) {
             finalResponseText = `${finalResponseText.trim()}\n\n${result.options.join('\n')}`;
           } else {
@@ -1189,6 +1191,9 @@ export const useAIResponse = (): {
             handouts: deliveredHandouts,
             combatEngineBlocks: replyEngineBlocks,
             combatEnded: combatWasActiveAtRequestStart && !isInCombat,
+            // GP-015 (#219): narration turn with no action choices — the UI
+            // says why there are none instead of rendering nothing.
+            noActionOptions: isNarrationTurn && !result.options?.length,
           },
           narrationSegments,
           diceRolls,

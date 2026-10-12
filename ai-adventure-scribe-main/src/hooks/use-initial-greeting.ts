@@ -250,7 +250,13 @@ export const useInitialGreeting = ({
         text: displayTextWithOptions,
         timestamp: new Date().toISOString(),
         // The server keeps one of these per session, so a second mount cannot add another (#2379).
-        context: { initialGreeting: true },
+        // GP-015 (#219): the greeting is the session's first narration turn. When it
+        // carries no action choices, mark it so the UI says why there are none.
+        // Roll-request greetings pause on the dice UI, so they are excluded.
+        context: {
+          initialGreeting: true,
+          noActionOptions: openingRollRequests.length === 0 && structuredOptions.length === 0,
+        },
       };
 
       logger.info(
