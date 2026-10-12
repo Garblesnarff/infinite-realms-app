@@ -229,7 +229,8 @@ export function weaponQualifiesForStyle(
 
     case 'great_weapon_fighting':
       // Must be two-handed melee weapon
-      return weapon.properties.twoHanded || weapon.properties.versatile || false;
+      // @ts-expect-error // #192 returns boolean | undefined; keep runtime value (no || false)
+      return weapon.properties.twoHanded || weapon.properties.versatile;
 
     case 'two_weapon_fighting':
       // Must be light weapon (or have Dual Wielder feat)

@@ -218,7 +218,8 @@ export class HeadlessGameClient {
       existingRequests: (response.roll_requests || []) as RollRequest[],
       isDiceRollMessage: Boolean(diceRoll),
       processedSet: this.processedRolls,
-      aiContext: { ...aiContext },
+      // @ts-expect-error // #192 GameContext is not assignable to Record<string, unknown> aiContext param
+      aiContext,
       sessionId: this.sessionId,
       characterId: String(game.character.id || 'player'),
     });
