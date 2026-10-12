@@ -26,6 +26,7 @@ vi.mock('@/services/user-data-api', async () => {
   return {
     userDataApi: {
       createMemories: async (records: unknown[]) => {
+        // @ts-expect-error #493 supabase mock insert typing unmasked by types.ts barrel fix
         const { data, error } = await supabase.from('memories').insert(records).select().single();
         if (error) throw error;
         return [data];

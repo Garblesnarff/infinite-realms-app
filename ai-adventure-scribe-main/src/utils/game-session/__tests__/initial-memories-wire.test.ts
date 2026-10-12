@@ -33,6 +33,11 @@ describe('opening memories wire bodies (#2386)', () => {
 
     expect(created).toEqual(initialMemoryWireBodies('session-1'));
     // The server skips a record that carries this mark when the session already holds one.
-    expect(created.every((memory) => memory.metadata?.is_initial_memory === true)).toBe(true);
+    expect(
+      created.every((memory) => {
+        const meta = memory.metadata as { is_initial_memory?: boolean } | null | undefined;
+        return meta?.is_initial_memory === true;
+      }),
+    ).toBe(true);
   });
 });

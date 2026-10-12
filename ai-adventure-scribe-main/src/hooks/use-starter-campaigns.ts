@@ -124,6 +124,7 @@ export function useStarterCampaign(slug: string | undefined): UseStarterCampaign
       setIsLoading(false);
       return;
     }
+    const slugValue = slug;
 
     async function fetchCampaign(): Promise<void> {
       try {
@@ -132,7 +133,7 @@ export function useStarterCampaign(slug: string | undefined): UseStarterCampaign
           .select(
             'id, slug, title, tagline, genre, tone, difficulty, level_range, estimated_sessions, premise, creative_brief, overview, is_complete, is_published, is_featured, cover_image_url, banner_image_url',
           )
-          .eq('slug', slug)
+          .eq('slug', slugValue)
           .eq('is_published', true)
           .eq('is_complete', true)
           .single();

@@ -61,6 +61,13 @@ interface RollHistoryRow {
   meta: Record<string, unknown>;
 }
 
+/** #493: roll_history not in generated Database types yet */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- table missing from Database; see #493
+function rollHistoryFrom(): any {
+  // @ts-expect-error #493 roll_history missing from generated Database types
+  return supabase.from('roll_history');
+}
+
 function flagEnabled(): boolean {
   try {
     const v = String(import.meta.env.VITE_ENABLE_ROLL_HISTORY ?? 'false').toLowerCase();
@@ -72,8 +79,7 @@ function flagEnabled(): boolean {
 
 async function safePrune(sessionId: string, cap = 500) {
   try {
-    const { data: ids } = await supabase
-      .from('roll_history')
+    const { data: ids } = await rollHistoryFrom()
       .select('id')
       .eq('session_id', sessionId)
       .order('created_at', { ascending: false })
@@ -81,7 +87,7 @@ async function safePrune(sessionId: string, cap = 500) {
 
     const toDelete = (ids || []).map((r: { id: string }) => r.id);
     if (toDelete.length > 0) {
-      await supabase.from('roll_history').delete().in('id', toDelete);
+      await rollHistoryFrom().delete().in('id', toDelete);
     }
   } catch (e) {
     // Fail-safe: table may not exist or permission error; ignore
@@ -104,7 +110,7 @@ export const RollManager = {
         disadvantage: e.disadvantage ?? null,
         meta: e.meta ?? {},
       };
-      await supabase.from('roll_history').insert(payload);
+      await rollHistoryFrom().insert(payload);
       await safePrune(e.sessionId);
     } catch (err) {
       logger.warn('[RollManager] recordRollRequest failed (non-fatal):', err);
@@ -124,7 +130,7 @@ export const RollManager = {
         success: e.success ?? null,
         meta: e.meta ?? {},
       };
-      await supabase.from('roll_history').insert(payload);
+      await rollHistoryFrom().insert(payload);
       await safePrune(e.sessionId);
     } catch (err) {
       logger.warn('[RollManager] recordRollResult failed (non-fatal):', err);
@@ -140,14 +146,13 @@ export const RollManager = {
        */
       const ROLL_COLS =
         'id, session_id, created_at, kind, purpose, formula, dc, ac, result_total, result_natural, advantage, disadvantage, success';
-      const { data, error } = await supabase
-        .from('roll_history')
+      const { data, error } = await rollHistoryFrom()
         .select(ROLL_COLS)
         .eq('session_id', sessionId)
         .order('created_at', { ascending: false })
         .limit(limit);
       if (error) throw error;
-      return (data || []) as RollHistoryRow[];
+      return (data || []) as unknown as RollHistoryRow[];
     } catch (err) {
       logger.warn('[RollManager] getRecentRolls failed (non-fatal):', err);
       return [] as RollHistoryRow[];
