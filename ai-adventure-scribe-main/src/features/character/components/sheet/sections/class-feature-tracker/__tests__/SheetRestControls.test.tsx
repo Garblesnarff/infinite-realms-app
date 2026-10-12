@@ -10,8 +10,8 @@ import { restApi } from '@/services/rest-api';
 
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock('@/lib/logger', () => ({ default: { info: vi.fn(), error: vi.fn(), warn: vi.fn() } }));
-vi.mock('@/services/rest-api', async (orig) => {
-  const mod = await orig();
+vi.mock('@/services/rest-api', async (importOriginal) => {
+  const mod = await importOriginal<{ restApi: typeof restApi }>();
   return {
     ...mod,
     restApi: {
@@ -52,7 +52,7 @@ const characterWithDice = {
 } as Character;
 
 describe('SheetRestControls (#264)', () => {
-  const onUpdate = vi.fn(async () => true);
+  const onUpdate = vi.fn(async (_character: Character) => true);
   const onUpdateProp = onUpdate as unknown as CharacterSheetUpdateFn;
 
   beforeEach(() => {
@@ -105,7 +105,10 @@ describe('SheetRestControls (#264)', () => {
   });
 
   it('applies a short rest directly when no dice are available', async () => {
-    const noDice = { ...characterWithDice, hitDice: { total: 5, remaining: 0, type: 'd8' } } as Character;
+    const noDice = {
+      ...characterWithDice,
+      hitDice: { total: 5, remaining: 0, type: 'd8' },
+    } as Character;
     render(<SheetRestControls character={noDice} onUpdate={onUpdateProp} />);
 
     fireEvent.click(screen.getByRole('button', { name: /short rest/i }));

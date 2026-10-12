@@ -87,8 +87,8 @@ const InventoryManager: React.FC<InventoryManagerProps> = ({ character, onUpdate
       {/* Character Stats */}
       <InventoryStats
         calculatedAC={calculatedAC}
-        equippedArmor={equippedArmor}
-        equippedShield={equippedShield}
+        equippedArmor={equippedArmor ?? null}
+        equippedShield={equippedShield ?? null}
         totalWeight={totalWeight}
         carryingCapacity={carryingCapacity}
         equippedWeaponsCount={equippedWeapons.length}

@@ -1,4 +1,4 @@
-import { Star, Users, Zap, BookOpen } from 'lucide-react';
+import { Users, Zap, BookOpen } from 'lucide-react';
 import React from 'react';
 
 import { FeatureCategoryCard } from './FeatureCategoryCard';
@@ -6,7 +6,7 @@ import { FeaturesProficienciesCard } from './FeaturesProficienciesCard';
 import ClassFeatureTracker from '../sections/ClassFeatureTracker';
 import FightingStylesDisplay from '../sections/FightingStylesDisplay';
 
-import type { Character, CharacterSheetUpdateFn } from '@/types/character';
+import type { Character, CharacterSheetUpdateFn, SubclassFeature } from '@/types/character';
 
 import { getAllClassFeaturesUpToLevel } from '@/data/levelProgression';
 
@@ -52,9 +52,10 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
       level: feature.level,
       description: feature.description,
     })),
+    // @ts-expect-error #479 Character has no subclass field; subclass features never listed
     ...(character.subclass?.features ?? [])
-      .filter((feature) => feature.level <= (character.level ?? 1))
-      .map((feature) => ({
+      .filter((feature: SubclassFeature) => feature.level <= (character.level ?? 1))
+      .map((feature: SubclassFeature) => ({
         name: feature.name,
         source: 'class' as const,
         level: feature.level,
@@ -70,21 +71,6 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
         ]
       : []),
   ];
-
-  const _getFeatureIcon = (source: string) => {
-    switch (source) {
-      case 'race':
-        return <Users className="w-4 h-4 text-emerald-500" />;
-      case 'class':
-        return <Star className="w-4 h-4 text-infinite-teal" />;
-      case 'background':
-        return <BookOpen className="w-4 h-4 text-infinite-purple" />;
-      case 'feat':
-        return <Zap className="w-4 h-4 text-orange-600" />;
-      default:
-        return <Star className="w-4 h-4" />;
-    }
-  };
 
   const getSourceColor = (source: string) => {
     switch (source) {

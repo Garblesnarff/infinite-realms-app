@@ -167,14 +167,14 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
         )}
 
         {/* Damage Resistances, Immunities, and Vulnerabilities */}
-        {(character.damageResistances?.length > 0 ||
-          character.damageImmunities?.length > 0 ||
-          character.damageVulnerabilities?.length > 0) && (
+        {((character.damageResistances?.length ?? 0) > 0 ||
+          (character.damageImmunities?.length ?? 0) > 0 ||
+          (character.damageVulnerabilities?.length ?? 0) > 0) && (
           <div className="border-t pt-3">
             <h4 className="text-sm font-medium mb-2">Damage Characteristics</h4>
 
             {/* Resistances */}
-            {character.damageResistances?.length > 0 && (
+            {(character.damageResistances?.length ?? 0) > 0 && (
               <div className="flex items-start gap-2 mb-2">
                 <ShieldCheck
                   className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0"
@@ -183,7 +183,7 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
                 <div>
                   <span className="text-xs text-muted-foreground">Resistances:</span>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {character.damageResistances.map((resistance, index) => (
+                    {(character.damageResistances ?? []).map((resistance, index) => (
                       <Badge key={index} variant="secondary" className="text-xs py-0.5">
                         {resistance.charAt(0).toUpperCase() + resistance.slice(1)}
                       </Badge>
@@ -194,13 +194,13 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
             )}
 
             {/* Immunities */}
-            {character.damageImmunities?.length > 0 && (
+            {(character.damageImmunities?.length ?? 0) > 0 && (
               <div className="flex items-start gap-2 mb-2">
                 <Shield className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" aria-hidden="true" />
                 <div>
                   <span className="text-xs text-muted-foreground">Immunities:</span>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {character.damageImmunities.map((immunity, index) => (
+                    {(character.damageImmunities ?? []).map((immunity, index) => (
                       <Badge key={index} variant="default" className="text-xs py-0.5">
                         {immunity.charAt(0).toUpperCase() + immunity.slice(1)}
                       </Badge>
@@ -211,13 +211,13 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
             )}
 
             {/* Vulnerabilities */}
-            {character.damageVulnerabilities?.length > 0 && (
+            {(character.damageVulnerabilities?.length ?? 0) > 0 && (
               <div className="flex items-start gap-2">
                 <ShieldX className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" aria-hidden="true" />
                 <div>
                   <span className="text-xs text-muted-foreground">Vulnerabilities:</span>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {character.damageVulnerabilities.map((vulnerability, index) => (
+                    {(character.damageVulnerabilities ?? []).map((vulnerability, index) => (
                       <Badge key={index} variant="destructive" className="text-xs py-0.5">
                         {vulnerability.charAt(0).toUpperCase() + vulnerability.slice(1)}
                       </Badge>
@@ -230,14 +230,14 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
         )}
 
         {/* Vision and Stealth */}
-        {(character.visionTypes?.length > 0 ||
+        {((character.visionTypes?.length ?? 0) > 0 ||
           character.obscurement !== 'clear' ||
           character.isHidden) && (
           <div className="border-t pt-3">
             <h4 className="text-sm font-medium mb-2">Vision & Stealth</h4>
 
             {/* Vision Types */}
-            {character.visionTypes?.length > 0 && (
+            {(character.visionTypes?.length ?? 0) > 0 && (
               <div className="flex items-start gap-2 mb-2">
                 <Target
                   className="w-4 h-4 text-infinite-purple mt-0.5 flex-shrink-0"
@@ -246,7 +246,7 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
                 <div>
                   <span className="text-xs text-muted-foreground">Vision:</span>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {character.visionTypes.map((vision, index) => (
+                    {(character.visionTypes ?? []).map((vision, index) => (
                       <Badge
                         key={index}
                         variant="secondary"
@@ -277,7 +277,7 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
                     >
                       {character.obscurement
                         .replace('_', ' ')
-                        .replace(/\b\w/g, (l) => l.toUpperCase())}
+                        .replace(/\b\w/g, (l: string) => l.toUpperCase())}
                     </Badge>
                   </div>
                 </div>

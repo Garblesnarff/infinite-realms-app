@@ -155,17 +155,17 @@ const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate, onCha
             <div className="flex flex-wrap gap-2">
               <DiceRoller
                 dice="1d20"
-                modifier={character.abilityScores.strength.modifier}
+                modifier={character.abilityScores?.strength.modifier ?? 0}
                 label="STR"
               />
               <DiceRoller
                 dice="1d20"
-                modifier={character.abilityScores.dexterity.modifier}
+                modifier={character.abilityScores?.dexterity.modifier ?? 0}
                 label="DEX"
               />
               <DiceRoller
                 dice="1d20"
-                modifier={character.abilityScores.constitution.modifier}
+                modifier={character.abilityScores?.constitution.modifier ?? 0}
                 label="CON"
               />
             </div>
