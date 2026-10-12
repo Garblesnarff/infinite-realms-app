@@ -83,7 +83,7 @@ export async function castSpell(
       somatic: spell.components_somatic || false,
       material: spell.components_material || false,
       materialDescription: spell.material_components,
-      materialCost: (spell as unknown as { material_cost?: number }).material_cost,
+      materialCost: spell.material_cost_gp,
       materialConsumed: spell.material_consumed || false,
     },
   };

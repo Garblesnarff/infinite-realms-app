@@ -60,6 +60,25 @@ describe('spellcasting-actions', () => {
       );
     });
 
+    it('carries the spell material_cost_gp into components.materialCost (#416)', async () => {
+      const spell = {
+        id: 'revivify',
+        name: 'Revivify',
+        level: 3,
+        concentration: false,
+        components_material: true,
+        material_components: 'diamonds worth 300 gp',
+        material_cost_gp: 300,
+        material_consumed: true,
+      };
+      mockSpellApi.getSpellById.mockResolvedValue(spell as any);
+      const participant: any = { name: 'Gandalf', spellSlots: { 3: { current: 1, max: 1 } } };
+
+      const result = await castSpell({ description: 'Gandalf casts' }, participant, 'revivify', 3);
+
+      expect(result.updatedAction.components?.materialCost).toBe(300);
+    });
+
     it('should cast a non-concentration spell successfully and deduct a slot', async () => {
       const spell = {
         id: 'fireball',
@@ -112,7 +131,7 @@ describe('spellcasting-actions', () => {
         components_somatic: true,
         components_material: true,
         material_components: 'a shaving of licorice root',
-        material_cost: 'free',
+        material_cost_gp: 25,
         material_consumed: false,
       };
       mockSpellApi.getSpellById.mockResolvedValue(spell as any);
@@ -141,7 +160,7 @@ describe('spellcasting-actions', () => {
         somatic: true,
         material: true,
         materialDescription: 'a shaving of licorice root',
-        materialCost: 'free',
+        materialCost: 25,
         materialConsumed: false,
       });
     });
