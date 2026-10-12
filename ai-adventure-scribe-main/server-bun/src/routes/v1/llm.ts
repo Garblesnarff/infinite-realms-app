@@ -18,11 +18,14 @@ import { planRateLimit } from '../../middleware/rate-limit.js';
 import { AIUsageService, type UsageType } from '../../services/ai-usage-service.js';
 import { loadSessionEncounterContext } from '../../services/combat/combat-entry-campaign-index.js';
 import {
+  declareSpellAttackOn,
   detectDeclaredAttack,
   detectDeclaredDefense,
   detectUntargetedAttackSpell,
   looksLikeCombatIntent,
+  type CombatIntentActor,
   type DefensiveDeclaration,
+  type UntargetedAttackSpell,
 } from '../../services/combat/combat-intent-gate.js';
 import { loadCombatIntentActorRoster } from '../../services/combat/combat-intent-roster.js';
 import {
@@ -270,6 +273,70 @@ export const appendDeclaredAttackDirective = (
   const escapedActor = escapeXmlAttribute(actorName);
   const size = encounterDirective ? ` ${encounterDirective}` : '';
   return `${prompt}\n\n<declared_attack actor="${escapedActor}">The player has declared an attack on ${escapedActor}. It has NOT been resolved: the engine has not rolled, so nothing has hit, missed, or dealt damage, and ${escapedActor} has not reacted or moved. Do NOT resolve it. Emit combat_transition:'start' with ${escapedActor} in combatants and describe only the moment before the roll.${size}</declared_attack>`;
+};
+
+/**
+ * GP-060 (#313): the player cast a damaging combat spell with no resolvable target
+ * ("I fling my palms toward the creature's maw and cast Burning Hands"). The intent
+ * gate cannot name the creature from a body part or vague noun, so without this the
+ * DM narrates the cast as flavor and no fight starts. The directive tells the DM to
+ * name the hostile creature in `combatants` and emit combat_transition:'start'
+ * without resolving the damage — the entry gate validates the named creature against
+ * the scene roster (invented ones are dropped), and the engine resolves the cast if
+ * the player confirms the entry. Only used when the roster is non-empty; with no
+ * known creatures there is nothing to fight and the DM narrates normally.
+ */
+export const appendUntargetedSpellDirective = (prompt: string, spellName: string): string => {
+  const escapedSpell = escapeXmlAttribute(spellName);
+  return (
+    `${prompt}\n\n<untargeted_spell name="${escapedSpell}">The player has cast ${escapedSpell} ` +
+    `at a hostile creature. It has NOT been resolved: the engine has not rolled, so nothing ` +
+    `has hit, missed, or dealt damage, and no creature has reacted or moved. Do NOT resolve ` +
+    `it and do NOT narrate it as already done. Name the hostile creature the spell is aimed ` +
+    `at in combatants and emit combat_transition:'start'; describe only the moment before ` +
+    `the roll.</untargeted_spell>`
+  );
+};
+
+/**
+ * GP-060 (#313): the untargeted damaging spell the `<untargeted_spell>` directive named.
+ * The DM named the creature and the entry gate validated it against the roster, so the
+ * cast becomes the declared attack on the first named creature: the engine resolves it
+ * as the opening action when the player confirms the entry, exactly like a typed declared
+ * attack. A no-op when there is no pending entry, when an attack is already declared, or
+ * when the named creature matches no roster actor. Pure: parses and re-serializes the
+ * envelope text.
+ */
+export function attachUntargetedSpellAttack(
+  resultText: string,
+  spell: { id: string; name: string },
+  roster: readonly CombatIntentActor[],
+): string {
+  let envelope: Record<string, unknown>;
+  try {
+    envelope = JSON.parse(resultText) as Record<string, unknown>;
+  } catch {
+    return resultText;
+  }
+  const pending = envelope.combat_entry_pending as
+    | { declaredAttack?: unknown; combatants?: Array<{ name?: string; monsterId?: string }> }
+    | undefined;
+  if (!pending || pending.declaredAttack) return resultText;
+  const combatants = pending.combatants ?? [];
+  const targetName = (combatants[0]?.name ?? '').toLowerCase();
+  if (!targetName) return resultText;
+  const actor = roster.find(
+    (candidate) =>
+      candidate.name.toLowerCase() === targetName ||
+      (candidate.monsterId != null &&
+        combatants[0]?.monsterId != null &&
+        candidate.monsterId === combatants[0]?.monsterId),
+  );
+  if (!actor) return resultText;
+  return JSON.stringify({
+    ...envelope,
+    combat_entry_pending: { ...pending, declaredAttack: declareSpellAttackOn(spell, actor) },
+  });
 };
 
 /**
@@ -537,6 +604,10 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         let declaredAttack: Awaited<ReturnType<typeof detectDeclaredAttack>> = null;
         let untargetedSpellRoster: Awaited<ReturnType<typeof loadCombatIntentActorRoster>> | null =
           null;
+        // GP-060 (#313): the damaging spell cast with no resolvable target, for the DM
+        // directive and the opening-action attachment below. Set only when the scene
+        // roster is non-empty.
+        let untargetedSpell: UntargetedAttackSpell | null = null;
         if (
           combatEntry?.sessionId &&
           typeof playerInput === 'string' &&
@@ -546,8 +617,11 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           declaredAttack = detectDeclaredAttack(playerInput, actors);
           // "At him" points at a creature the DM may have just introduced; only a cast that names
           // nothing (the sheet's) is checked against the roster.
-          const untargetedSpell = declaredAttack ? null : detectUntargetedAttackSpell(playerInput);
-          if (untargetedSpell && !untargetedSpell.pronoun) untargetedSpellRoster = actors;
+          const detectedSpell = declaredAttack ? null : detectUntargetedAttackSpell(playerInput);
+          if (detectedSpell && !detectedSpell.pronoun) {
+            untargetedSpellRoster = actors;
+            if (actors.length > 0) untargetedSpell = detectedSpell;
+          }
         }
         if (combatEntry?.sessionId && !declaredAttack) {
           logger.info({
@@ -623,7 +697,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           ? appendDeclaredAttackDirective(prompt, declaredAttack.actorName, encounterDirective)
           : declaredDefense
             ? appendDeclaredDefenseDirective(prompt, declaredDefense)
-            : prompt;
+            : untargetedSpell
+              ? appendUntargetedSpellDirective(prompt, untargetedSpell.name)
+              : prompt;
 
         const generateOnce = (): Promise<LLMResponse> =>
           LLMProviderService.generate({
@@ -692,6 +768,15 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             return combatEntryGateDeps.getActiveEncounter(sessionId, ownerId);
           },
         });
+        // GP-060 (#313): the DM named the creature the untargeted spell was aimed at, so
+        // the cast becomes the declared attack: the engine resolves it as the opening
+        // action when the player confirms the entry, exactly like a declared attack.
+        if (untargetedSpell && untargetedSpellRoster && !declaredAttack) {
+          result = {
+            ...result,
+            text: attachUntargetedSpellAttack(result.text, untargetedSpell, untargetedSpellRoster),
+          };
+        }
         // #2718: a feature or spell the player claims and their character lacks is refused here,
         // before the reply is persisted or returned, so it applies nothing and spends nothing.
         let allowedCasts: AllowedCasts | null = null;
