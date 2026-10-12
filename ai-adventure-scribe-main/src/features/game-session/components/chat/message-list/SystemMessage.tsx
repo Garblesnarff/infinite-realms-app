@@ -43,9 +43,15 @@ export const SystemMessage: React.FC<SystemMessageProps> = React.memo(
         aria-label="System message"
         className="w-full rounded-xl border border-infinite-gold/30 bg-card/70 px-4 py-3 text-sm text-muted-foreground shadow-sm"
       >
-        {message.context?.intent === 'combat_npc_result' && typeof message.context.round === 'number' && previousEngineKey !== `${message.context.round}|${message.context.combatEngineBlocks?.[0]?.actor}` && (
-          <CombatRoundDivider round={message.context.round} actor={message.context.combatEngineBlocks?.[0]?.actor} />
-        )}
+        {message.context?.intent === 'combat_npc_result' &&
+          typeof message.context.round === 'number' &&
+          previousEngineKey !==
+            `${message.context.round}|${message.context.combatEngineBlocks?.[0]?.actor}` && (
+            <CombatRoundDivider
+              round={message.context.round}
+              actor={message.context.combatEngineBlocks?.[0]?.actor}
+            />
+          )}
         {cards.map((card, index) => (
           <EngineResultCardView
             key={`${index}-${card.line}`}
