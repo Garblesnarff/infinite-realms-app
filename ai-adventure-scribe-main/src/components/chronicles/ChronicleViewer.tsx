@@ -24,6 +24,11 @@ type Chronicle = {
   summary: string | null;
 };
 
+/** react-query v5 passes the Query, not the data (#449). Poll while generating. */
+export const chronicleRefetchInterval = (query: {
+  state: { data?: { status?: string | null } | null };
+}): number | false => (query.state.data?.status === 'generating' ? 3000 : false);
+
 const ChronicleViewer: React.FC<ChronicleViewerProps> = ({ sessionId, open, onClose }) => {
   const { userPlan } = useAuth();
   const { toast } = useToast();
@@ -33,8 +38,7 @@ const ChronicleViewer: React.FC<ChronicleViewerProps> = ({ sessionId, open, onCl
     { sessionId: sessionId ?? '' },
     {
       enabled: open && !!sessionId,
-      // @ts-expect-error #449 refetchInterval receives a Query, not the data, so polling never fires
-      refetchInterval: (data) => (data?.status === 'generating' ? 3000 : false),
+      refetchInterval: chronicleRefetchInterval,
     },
   );
 
