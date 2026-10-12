@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useMessageContext } from '@/contexts/MessageContext';
+import { stripAssetTags } from '@/lib/utils';
 
 /**
  * The route back into a campaign with a new hero. A starter campaign goes
@@ -173,6 +174,18 @@ export const FallenEndState: React.FC<FallenEndStateProps> = ({
 };
 
 /**
+ * #464: the story log shows saved message text, which still carries the DM's
+ * `[ASSET:type:key]` tags and `**bold**` markdown. Drop the tags and render
+ * bold spans so the player reads clean prose.
+ */
+export function renderStoryText(text: string): React.ReactNode[] {
+  return stripAssetTags(text)
+    .split(/\*\*(.+?)\*\*/g)
+    .map((part, i) => (i % 2 === 1 ? <strong key={i}>{part}</strong> : part))
+    .filter((part) => part !== '');
+}
+
+/**
  * The saved session log, read-only: no composer, no roll tray, no sheet.
  * Renders the messages the MessageProvider already loaded for the session.
  */
@@ -196,7 +209,7 @@ export const FallenStoryLog: React.FC = () => {
                 : 'System'}
           </p>
           <p className="whitespace-pre-wrap text-sm leading-relaxed text-card-foreground">
-            {message.text}
+            {renderStoryText(message.text)}
           </p>
         </div>
       ))}
