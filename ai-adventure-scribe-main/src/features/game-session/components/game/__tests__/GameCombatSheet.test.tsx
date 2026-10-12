@@ -3,7 +3,6 @@
  * owner flag into game-master controls outside dev builds, and it feeds the log from the chat.
  */
 import { render, screen } from '@testing-library/react';
-import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GameCombatSheet } from '../game-content/GameCombatSheet';

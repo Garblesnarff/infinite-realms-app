@@ -12,7 +12,6 @@
  * render the narrative, and only call extractMemories() when narrative content remains.
  */
 import { render, act, waitFor } from '@testing-library/react';
-import React from 'react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 // ------- hoisted mock factories (must be accessible inside vi.mock factories) -------

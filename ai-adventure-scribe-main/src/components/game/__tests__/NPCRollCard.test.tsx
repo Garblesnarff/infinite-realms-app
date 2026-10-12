@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { render, screen, act } from '@testing-library/react';
-import React from 'react';
 import { expect, vi, describe, it, beforeEach, afterEach } from 'vitest';
 
 import { NPCRollCard } from '../NPCRollCard';
