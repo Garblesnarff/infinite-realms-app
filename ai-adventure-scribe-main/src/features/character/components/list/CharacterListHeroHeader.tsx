@@ -1,6 +1,8 @@
 import { Plus } from 'lucide-react';
 import React from 'react';
 
+import { ImportCharacterButton } from './ImportCharacterButton';
+
 import { Button } from '@/components/ui/button';
 
 interface CharacterListHeroHeaderProps {
@@ -25,7 +27,7 @@ export const CharacterListHeroHeader: React.FC<CharacterListHeroHeaderProps> = (
       <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto drop-shadow-md">
         Select a character to embark on epic adventures or forge a new legend
       </p>
-      <div className="flex justify-center">
+      <div className="flex flex-wrap justify-center gap-3">
         <Button
           onClick={onCreateNew}
           variant="fantasy"
@@ -35,6 +37,7 @@ export const CharacterListHeroHeader: React.FC<CharacterListHeroHeaderProps> = (
           <Plus className="w-4 h-4" />
           Forge New Hero
         </Button>
+        <ImportCharacterButton />
       </div>
     </div>
   </div>
