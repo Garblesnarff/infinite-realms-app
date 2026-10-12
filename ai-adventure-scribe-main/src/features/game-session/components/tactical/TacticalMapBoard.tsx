@@ -10,19 +10,16 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCombat } from '@/contexts/CombatContext';
 import { cn } from '@/lib/utils';
+import {
+  CombatIntentRefusedError,
+  executeAuthoritativeCombatIntent,
+} from '@/services/combat/combat-action-executor';
 
 type Props = {
   sessionId: string;
   /** Canvas height classes; the rail is narrower than the sheet. */
   canvasClassName?: string;
   className?: string;
-};
-type MoveResponse = {
-  result?: {
-    applied: boolean;
-    path?: Point[];
-    refusal?: { reason?: string; needsFeet?: number; hasFeet?: number };
-  };
 };
 
 export function TacticalMapBoard(props: Props): JSX.Element {
@@ -97,16 +94,22 @@ function TacticalMapBoardView({
       !moves.some((move) => move.x === point.x && move.y === point.y)
     )
       return;
-    const response = await request<MoveResponse>('/move', {
-      method: 'POST',
-      body: JSON.stringify({ entityId: selected.id, x: point.x, y: point.y }),
-    });
-    const result = response.data.result;
-    if (!response.ok || !result?.applied) {
-      const refusal = result?.refusal;
+    const encounterId = combatState.activeEncounter?.id;
+    if (!encounterId) return;
+    try {
+      await executeAuthoritativeCombatIntent(
+        encounterId,
+        { type: 'move', actorId: selected.id, x: point.x, y: point.y },
+        'player',
+        Date.now(),
+        'action_bar',
+      );
+    } catch (error) {
+      const refusal = error instanceof CombatIntentRefusedError ? error.details : undefined;
+      const feet = refusal as { needsFeet?: number; hasFeet?: number } | undefined;
       toast.error(
         refusal?.reason === 'insufficient_movement'
-          ? `Need ${refusal.needsFeet} ft; ${refusal.hasFeet} ft remains.`
+          ? `Need ${feet?.needsFeet} ft; ${feet?.hasFeet} ft remains.`
           : (refusal?.reason ?? 'That move is not available.'),
       );
       return;
