@@ -33,8 +33,8 @@ const ChronicleViewer: React.FC<ChronicleViewerProps> = ({ sessionId, open, onCl
     { sessionId: sessionId ?? '' },
     {
       enabled: open && !!sessionId,
-      refetchInterval: (data) =>
-        (data as { status?: string } | undefined)?.status === 'generating' ? 3000 : false,
+      // @ts-expect-error #449 refetchInterval receives a Query, not the data, so polling never fires
+      refetchInterval: (data) => (data?.status === 'generating' ? 3000 : false),
     },
   );
 
