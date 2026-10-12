@@ -3,14 +3,15 @@ import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 
 import { ExportButton, SimpleExportButton } from '../ExportButton';
 
-// Mock TRPC hooks with hoisted spies
+// Mock TRPC hooks with hoisted spies. #454: the component fetches through
+// useTRPCUtils().characters.export.fetch (the React proxy has no .query).
 const mockQuery = vi.hoisted(() => vi.fn());
 
 vi.mock('@/infrastructure/api/trpc-hooks', () => ({
-  useTRPC: () => ({
+  useTRPCUtils: () => ({
     characters: {
       export: {
-        query: mockQuery,
+        fetch: mockQuery,
       },
     },
   }),
