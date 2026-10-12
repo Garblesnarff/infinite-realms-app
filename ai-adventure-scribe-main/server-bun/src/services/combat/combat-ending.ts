@@ -34,6 +34,7 @@ import {
 } from './combat-end-guard.js';
 import { trackCombatEvent } from './combat-events.js';
 import { publishCombatState } from './combat-sync-service.js';
+import { awardCombatVictoryXp } from './combat-xp.js';
 import { vitalStateOf, type VitalsInput, type WakeOutcome } from './death-saves-service.js';
 import { recordDmTacticalFact } from './tactical-action-service.js';
 import { destroyTacticalCombatMap } from './tactical-combat-lifecycle.js';
@@ -380,6 +381,23 @@ export async function concludeEncounter(
         : `${describeCombatEnd(reason)} ${describeStableWake(options.wake)}`
       : describeCombatEnd(reason),
   );
+  // #310: a won fight awards XP with a visible message. The award lands on the sheet here;
+  // the DM's victory narration states it, so the gain is not silent. Already awarded by the
+  // game, so the DM must not set xp_award for this victory on top of it. Recorded after the
+  // victory sentence so the DM reads the outcome before the award.
+  if (reason === 'last_hostile_defeated') {
+    const { awarded } = await awardCombatVictoryXp({ encounterId, sessionId, userId });
+    if (awarded.length) {
+      const total = awarded.reduce((sum, entry) => sum + entry.xp, 0);
+      await recordDmTacticalFact(
+        sessionId,
+        `COMBAT XP: the game awarded ${total} XP total for this victory — ` +
+          awarded.map((entry) => `${entry.name}: +${entry.xp} XP`).join('; ') +
+          '. This is already on their character sheets. Do not set xp_award for this victory. ' +
+          'State each XP gain in your victory narration so the player sees it.',
+      );
+    }
+  }
   await destroyTacticalCombatMap(sessionId);
   trackCombatEvent('combat_ended', { encounterId, sessionId, reason });
   // An encounter stopped while it was still winnable is the thing run 18 could not see. It
