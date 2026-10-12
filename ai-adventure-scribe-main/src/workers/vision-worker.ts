@@ -12,10 +12,7 @@ import type { Point2D, VisionBlocker } from '@/types/scene';
 import type { Token } from '@/types/token';
 import type { VisionPolygon } from '@/utils/vision-polygon';
 
-import {
-  getAllRayIntersections,
-  clipPolygonToCone,
-} from '@/workers/vision-raycasting';
+import { getAllRayIntersections, clipPolygonToCone } from '@/workers/vision-raycasting';
 
 // ===========================
 // Message Types
@@ -68,7 +65,8 @@ export type VisionWorkerResponse =
   | {
       type: 'MULTI_VISION_RESULT';
       payload: {
-        polygons: Map<string, VisionPolygon>;
+        /** Plain object: postMessage callers build it from a Map (#457). */
+        polygons: Record<string, VisionPolygon>;
       };
       requestId: string;
     }
@@ -290,13 +288,14 @@ function handleCalculateMultiVision(
     polygonsObj[key] = value;
   }
 
-  self.postMessage({
+  const response: VisionWorkerResponse = {
     type: 'MULTI_VISION_RESULT',
     payload: {
       polygons: polygonsObj,
     },
     requestId: message.requestId,
-  } as unknown as VisionWorkerResponse); // Cast needed due to Map serialization
+  };
+  self.postMessage(response);
 }
 
 /**
@@ -407,7 +406,6 @@ function filterWallsByVisionType(token: Token, walls: VisionBlocker[]): VisionBl
 
   return walls.filter((wall) => wall.blocksLight);
 }
-
 
 /**
  * Remove duplicate points
