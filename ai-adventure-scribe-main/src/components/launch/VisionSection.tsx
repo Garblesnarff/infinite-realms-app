@@ -64,6 +64,7 @@ export const VisionSection: React.FC = () => {
       </div>
 
       {/* Add float animation */}
+      {/* @ts-expect-error #192 styled-jsx `jsx` attribute has no type in this Vite app */}
       <style jsx>{`
         @keyframes float {
           0%,

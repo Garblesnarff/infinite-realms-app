@@ -98,6 +98,7 @@ describe('lighting mechanics', () => {
             { x: 150, y: 150 },
           ],
           blocksLight: true,
+          blocksMovement: false,
         },
       ];
 
@@ -110,6 +111,7 @@ describe('lighting mechanics', () => {
             { x: 150, y: 50 },
           ],
           blocksLight: true,
+          blocksMovement: false,
         },
       ];
 
@@ -121,13 +123,15 @@ describe('lighting mechanics', () => {
     });
 
     it('handles walls with no points gracefully', () => {
-      const wallNoPoints = [{ id: 'empty', points: [], blocksLight: true }];
+      const wallNoPoints = [{ id: 'empty', points: [], blocksLight: true, blocksMovement: false }];
       const result = calculateShadows(mockLightSource, wallNoPoints);
       expect(result.length).toBe(0);
     });
 
     it('handles walls with one point gracefully', () => {
-      const wallOnePoint = [{ id: 'point', points: [{ x: 150, y: 50 }], blocksLight: true }];
+      const wallOnePoint = [
+        { id: 'point', points: [{ x: 150, y: 50 }], blocksLight: true, blocksMovement: false },
+      ];
       const result = calculateShadows(mockLightSource, wallOnePoint);
       expect(result.length).toBe(0);
     });
@@ -145,6 +149,7 @@ describe('lighting mechanics', () => {
             { x: 150, y: 150 },
           ],
           blocksLight: false,
+          blocksMovement: false,
         },
       ];
       const gridSize = 200;

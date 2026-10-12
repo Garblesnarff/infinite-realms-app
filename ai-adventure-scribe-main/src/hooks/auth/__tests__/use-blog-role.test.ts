@@ -31,7 +31,7 @@ describe('useBlogRole', () => {
 
     // Production: DEV is unset, and neither override var is set.
     vi.stubEnv('MODE', 'production');
-    vi.stubEnv('DEV', '');
+    vi.stubEnv('DEV', false);
     vi.stubEnv('VITE_DEV_BLOG_ADMIN_EMAIL', undefined);
     vi.stubEnv('VITE_BLOG_ADMIN_DEV_OVERRIDE', undefined);
   });
@@ -94,7 +94,7 @@ describe('useBlogRole', () => {
 
   it('should grant admin in dev mode when override is enabled', async () => {
     vi.stubEnv('MODE', 'development');
-    vi.stubEnv('DEV', 'true');
+    vi.stubEnv('DEV', true);
     vi.stubEnv('VITE_BLOG_ADMIN_DEV_OVERRIDE', 'true');
 
     const { result } = renderHook(() => useBlogRole({ user: mockUser }));
@@ -106,7 +106,7 @@ describe('useBlogRole', () => {
 
   it('should grant admin in dev mode when email matches VITE_DEV_BLOG_ADMIN_EMAIL', async () => {
     vi.stubEnv('MODE', 'development');
-    vi.stubEnv('DEV', 'true');
+    vi.stubEnv('DEV', true);
     vi.stubEnv('VITE_DEV_BLOG_ADMIN_EMAIL', 'test@example.com');
     vi.stubEnv('VITE_BLOG_ADMIN_DEV_OVERRIDE', 'false');
 
@@ -140,7 +140,7 @@ describe('useBlogRole', () => {
 
   it('should clear blog role when user logs out', async () => {
     vi.stubEnv('MODE', 'development');
-    vi.stubEnv('DEV', 'true');
+    vi.stubEnv('DEV', true);
     vi.stubEnv('VITE_BLOG_ADMIN_DEV_OVERRIDE', 'true');
 
     const { result, rerender } = renderHook(({ user }) => useBlogRole({ user }), {

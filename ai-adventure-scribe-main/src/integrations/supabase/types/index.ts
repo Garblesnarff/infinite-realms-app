@@ -1,5 +1,11 @@
 export * from './database';
-export * from './common';
+export type {
+  Tables,
+  TablesInsert,
+  TablesUpdate,
+  Enums,
+  CompositeTypes,
+} from './common';
 export * from './character';
 export * from './campaign';
 export * from './combat';

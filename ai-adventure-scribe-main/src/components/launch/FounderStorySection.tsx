@@ -80,6 +80,7 @@ export const FounderStorySection: React.FC = () => {
       </div>
 
       {/* Add Google Fonts for script signature */}
+      {/* @ts-expect-error #192 styled-jsx `jsx` attribute has no type in this Vite app */}
       <style jsx>{`
         @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap');
         .font-dancing {
