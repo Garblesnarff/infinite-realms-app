@@ -7,8 +7,10 @@ import {
   narrationViolationNote,
   narrativeTurnHasNoEngineEvent,
   releaseHeldSideEffects,
+  type RollOutcomeGateParams,
 } from '../narration-gate';
 
+import type { EngineOutcome } from '@/hooks/ai/silent-player-turn';
 import type { ChatMessage } from '@/services/ai-service';
 
 import logger from '@/lib/logger';
@@ -435,16 +437,17 @@ describe('enforceNarrationGate', () => {
 
     const wiring = (
       narration: { text: string },
-      overrides: Partial<Parameters<typeof gateRollOutcomeContradiction>[0]> = {},
+      overrides: Partial<RollOutcomeGateParams<{ text: string }>> = {},
     ): Promise<{ text: string }> =>
-      gateRollOutcomeContradiction({
+      gateRollOutcomeContradiction<{ text: string }>({
         narration,
         sessionId,
         isDiceRollMessage: true,
-        conversationHistory: [],
+        conversationHistory: [] as ChatMessage[],
         getOutcome: realGetOutcome,
-        isStale: (outcome, history) => isRollOutcomeStale(outcome, history),
-        runGate: vi.fn(async (_outcome, n) => n),
+        isStale: (outcome: PersistedRollOutcome, history: ChatMessage[]) =>
+          isRollOutcomeStale(outcome, history),
+        runGate: vi.fn(async (_outcome: EngineOutcome, n: { text: string }) => n),
         ...overrides,
       });
 

@@ -126,7 +126,7 @@ export async function enforceNarrationGate<T extends GatedNarration>(
     ? contradictsEngineOutcome(narration.text, engineOutcome)
     : [];
   const claims = engineOutcome ? [] : fabricatedOutcomeClaims(narration.text, options);
-  const violations = engineOutcome ? contradictions : claims;
+  const violations: string[] = engineOutcome ? contradictions.map((c) => c.match) : claims;
   const reason = engineOutcome ? NARRATION_OUTCOME_REJECTED_REASON : NARRATION_REJECTED_REASON;
   const violationNote = engineOutcome
     ? engineOutcomeViolationNote(
@@ -142,8 +142,8 @@ export async function enforceNarrationGate<T extends GatedNarration>(
 
   try {
     const retry = await regenerate(violationNote);
-    const repeated = engineOutcome
-      ? contradictsEngineOutcome(retry.text, engineOutcome)
+    const repeated: string[] = engineOutcome
+      ? contradictsEngineOutcome(retry.text, engineOutcome).map((c) => c.match)
       : fabricatedOutcomeClaims(retry.text, options);
     if (!repeated.length) {
       releaseHeldSideEffects(retry);
