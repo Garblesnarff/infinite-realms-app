@@ -41,8 +41,12 @@ export type GroundedWeapon = {
    * True when the requested weapon is on the character sheet (carried) but not in the
    * equipped list (#260). The caller refuses a player-sourced intent with "not equipped"
    * instead of silently substituting. False for weapons the character does not own at
-   * all: those take the ungrounded path (substitute + DM_WEAPON_UNGROUNDED), which must
-   * never refuse and stop a fight.
+   * all: those take the ungrounded path (substitute + DM_WEAPON_UNGROUNDED). A
+   * player-sourced intent naming a real weapon it does not own is refused by the
+   * caller with "not on character sheet" (see refuseUngroundedPlayerWeapon — "real"
+   * there means catalog name/alias, magic-item name, or inventory row id); DM-sourced
+   * intents are never refused, and loose phrases that resolve to none of those
+   * ("sword") are never refusals either.
    */
   notEquipped: boolean;
 };

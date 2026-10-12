@@ -29,8 +29,8 @@ import {
   type WakeOutcome,
 } from './death-saves-service.js';
 import { grantTacticalDash, resetTacticalMovementForTurn } from './tactical-combat-lifecycle.js';
-import { isUnarmedWeaponClaim, UNARMED_STRIKE } from './weapon-catalog.js';
-import { groundRequestedWeapon } from './weapon-grounding.js';
+import { findCatalogWeapon, findMagicBaseWeapon, isUnarmedWeaponClaim, UNARMED_STRIKE } from './weapon-catalog.js';
+import { groundRequestedWeapon, type GroundedWeapon } from './weapon-grounding.js';
 import { logger } from '../../lib/logger.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
@@ -740,6 +740,50 @@ function alreadyEndedTurn(
  * the answer is the movement result itself: there is no attack to roll for, and the caller
  * resolves it without ever opening the popup.
  */
+
+/** `inventory_items.id` is a uuid; a claim shaped like one names a specific row, not a phrase. */
+const INVENTORY_ROW_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * #260 / RG-014: refuse a player-sourced intent that names a weapon the sheet does
+ * not back, instead of silently swapping to an equipped weapon.
+ * - carried but not equipped → `weapon_not_equipped`
+ * - a real weapon the character does not own at all → `weapon_not_on_sheet`
+ *
+ * "Real weapon" means the claim resolves through the SRD catalog by name/alias,
+ * resolves through the magic-item catalog (Sun Blade → longsword, the same
+ * `findCatalogWeapon ?? findMagicBaseWeapon` pairing data-access.ts uses), or is
+ * shaped like an inventory row id — a uuid that names a specific row but matches
+ * nothing the character owns (e.g. a stale client row). Loose or invented phrases
+ * ("sword", "axe") that resolve to none of these are NOT refusals: they take the
+ * substitute path below. DM-sourced intents are never refused — a weapon name must
+ * not stop a fight. Throws exactly one error; the message is a single line so
+ * callers cannot double-print it.
+ */
+export function refuseUngroundedPlayerWeapon(
+  grounding: GroundedWeapon,
+  source: CombatActionSource,
+): void {
+  if (source !== 'player' || !grounding.requested || grounding.grounded) return;
+  if (grounding.notEquipped) {
+    throw new BusinessLogicError(
+      `Weapon not equipped: ${grounding.requested} is not equipped — equip it before attacking, or choose an equipped weapon`,
+      { reason: 'weapon_not_equipped', requestedWeaponId: grounding.requested },
+    );
+  }
+  const namesRealWeapon =
+    findCatalogWeapon(grounding.requested) !== undefined ||
+    findMagicBaseWeapon(grounding.requested) !== undefined ||
+    INVENTORY_ROW_ID_PATTERN.test(grounding.requested);
+  if (namesRealWeapon) {
+    throw new BusinessLogicError(
+      `Weapon not on character sheet: ${grounding.requested} is not on your character sheet — choose an equipped weapon`,
+      { reason: 'weapon_not_on_sheet', requestedWeaponId: grounding.requested },
+    );
+  }
+}
+
 export async function proposeCombatAttack(
   encounterId: string,
   submitted: SubmittedCombatIntent,
@@ -779,17 +823,11 @@ export async function proposeCombatAttack(
   const equipped = await listEquippedWeaponProfiles(actor);
   const carried = await listCarriedWeaponProfiles(actor);
   const grounding = groundRequestedWeapon(resolvedAttack.weaponId, equipped, carried);
-  // #260: a requested weapon that is carried but not equipped must not silently become
-  // a different weapon. Refuse player-sourced intents with a clear message so the player
-  // equips it first. DM narration is never refused: a DM naming an unowned weapon takes
-  // the ungrounded substitute path below, and a carried-but-unequipped one resolves the
-  // same way rather than stopping the fight.
-  if (grounding.notEquipped && source === 'player') {
-    throw new BusinessLogicError(
-      `Weapon not equipped: ${grounding.requested} is not equipped — equip it before attacking, or choose an equipped weapon`,
-      { reason: 'weapon_not_equipped', requestedWeaponId: grounding.requested },
-    );
-  }
+  // #260 / RG-014: refuse a player-sourced intent that names a weapon the sheet does
+  // not back (see refuseUngroundedPlayerWeapon). DM narration is never refused: a DM
+  // naming an unowned weapon takes the ungrounded substitute path below, and a
+  // carried-but-unequipped one resolves the same way rather than stopping the fight.
+  refuseUngroundedPlayerWeapon(grounding, source);
   const groundedWeaponId = isUnarmedWeaponClaim(resolvedAttack.weaponId)
     ? UNARMED_STRIKE.id
     : grounding.weaponId;
@@ -1151,15 +1189,10 @@ export async function executeCombatIntent(
       const equipped = await listEquippedWeaponProfiles(actor);
       const carried = await listCarriedWeaponProfiles(actor);
       const grounding = groundRequestedWeapon(intent.weaponId, equipped, carried);
-      // #260: a requested weapon that is not equipped must not silently swap. Refuse
-      // player-sourced intents clearly; DM narration keeps the ungrounded substitute
-      // path below so a fight is never stopped by a weapon name.
-      if (grounding.notEquipped && source === 'player') {
-        throw new BusinessLogicError(
-          `Weapon not equipped: ${grounding.requested} is not equipped — equip it before attacking, or choose an equipped weapon`,
-          { reason: 'weapon_not_equipped', requestedWeaponId: grounding.requested },
-        );
-      }
+      // #260 / RG-014: refuse a player-sourced intent that names a weapon the sheet
+      // does not back (see refuseUngroundedPlayerWeapon); DM narration keeps the
+      // ungrounded substitute path below so a fight is never stopped by a weapon name.
+      refuseUngroundedPlayerWeapon(grounding, source);
       const groundedWeaponId = isUnarmedWeaponClaim(intent.weaponId)
         ? UNARMED_STRIKE.id
         : grounding.weaponId;
