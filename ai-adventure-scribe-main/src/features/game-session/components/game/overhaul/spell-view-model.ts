@@ -107,7 +107,7 @@ export function buildSpellsViewModel(
     spells,
     spellcasting: classCanCast
       ? {
-          ability: formatAbility(spellcastingAbility),
+          ability: formatAbility(spellcastingAbility as string),
           spellAttackBonus: stats.spellAttackBonus ?? null,
           spellSaveDC: stats.spellSaveDC ?? null,
           canPrepare,

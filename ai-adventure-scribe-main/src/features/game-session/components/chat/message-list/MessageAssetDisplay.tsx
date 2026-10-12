@@ -18,7 +18,7 @@ import {
   getAssetGradient,
 } from './MessageAssetCards';
 
-import type { AssetTag } from '../../utils/parse-asset-tags';
+import type { AssetTag } from '../../../utils/parse-asset-tags';
 import type { CampaignAsset } from '@/hooks/use-campaign-assets';
 
 import { Button } from '@/components/ui/button';

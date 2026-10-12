@@ -282,7 +282,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
               style={{ zIndex: Z_INDEX.DROPDOWN }}
             >
               <SafetyBanner
-                isPaused={sessionData?.is_paused || false}
+                isPaused={(sessionData as unknown as { is_paused?: boolean })?.is_paused || false}
                 lastSafetyCommand={lastSafetyCommand}
                 contentWarnings={contentWarnings}
                 comfortLevel={comfortLevel}
@@ -382,7 +382,12 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
               campaignId={campaignIdForHandler || null}
               characterId={characterIdForHandler}
               turnCount={sessionData.turn_count ?? 0}
-              updateGameSessionState={updateGameSessionState}
+              updateGameSessionState={
+                updateGameSessionState as unknown as (
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  newState: Partial<any>,
+                ) => Promise<void>
+              }
               onAIResponse={innerHandleAIResponse}
               spellCastHandlerRef={spellCastHandlerRef}
               onTerminalDeathStateChange={handleTerminalDeathStateChange}

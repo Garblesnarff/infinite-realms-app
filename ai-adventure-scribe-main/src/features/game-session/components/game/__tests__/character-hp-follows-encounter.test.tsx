@@ -66,7 +66,21 @@ const rawCharacter = () => ({
  */
 const loadedCharacter = (currentHp: number) => {
   const raw = normalizeCharacter(rawCharacter());
-  const stats = raw.character_stats[0];
+  const stats = (
+    raw as unknown as {
+      character_stats: Array<{
+        strength: number;
+        dexterity: number;
+        constitution: number;
+        intelligence: number;
+        wisdom: number;
+        charisma: number;
+        max_hit_points: number;
+        current_hit_points: number;
+        armor_class: number;
+      }>;
+    }
+  ).character_stats[0];
   return {
     id: raw.id,
     name: raw.name,

@@ -276,8 +276,8 @@ describe('session-continuity regression', () => {
     });
 
     // extractMemories must NOT have been called with the roll-result text
-    const rollInputCall = mockExtractMemories.mock.calls.find(([content]: [string]) =>
-      content.includes('Attack Roll'),
+    const rollInputCall = mockExtractMemories.mock.calls.find(([content]: unknown[]) =>
+      (content as string).includes('Attack Roll'),
     );
     expect(rollInputCall).toBeUndefined();
 

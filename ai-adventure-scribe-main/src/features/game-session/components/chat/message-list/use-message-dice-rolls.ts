@@ -2,9 +2,9 @@ import { useMemo, useRef, useCallback, useState } from 'react';
 
 import type { MessageSendContext, DiceRollContext } from '../MessageList';
 import type { RolledResultDetails } from '@/hooks/game/use-dice-roll-request';
+import type { DiceRoll, DiceRollRequest } from '@/types/combat';
 import type { ChatMessage } from '@/types/game';
 import type { RollRequest } from '@/types/roll-request';
-import type { DiceRollRequest } from '@/utils/diceRolls';
 import type { MutableRefObject } from 'react';
 
 import { isEngineTaggedRoll } from '@/contexts/game/dice-queue-visibility';
@@ -289,10 +289,9 @@ export function useMessageDiceRolls({
         // into the settled roll and the DM context so narrative rolls keep their "nat X" and the
         // DM can flag a natural 20/1 (#2219). A hand-entered number has no details and IS the
         // face, so nothing is added and the typed-entry format is unchanged.
-        const settledResult =
-          details?.naturalRoll !== undefined
-            ? { total: numericResult, naturalRoll: details.naturalRoll }
-            : { total: numericResult };
+        const settledResult = (details?.naturalRoll !== undefined
+          ? { total: numericResult, naturalRoll: details.naturalRoll }
+          : { total: numericResult }) as unknown as DiceRoll;
 
         // The queue stores modifier 0 for a save. The dialog total already includes the
         // character's bonus, so the saved modifier is total minus the natural face.

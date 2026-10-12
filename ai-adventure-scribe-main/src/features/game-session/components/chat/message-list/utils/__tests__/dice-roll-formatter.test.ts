@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { formatDiceRoll, getDiceRollOutcome } from '../dice-roll-formatter';
 
-import type { DiceRollRequest } from '@/utils/diceRolls';
+import type { DiceRollRequest } from '@/types/combat';
 
 function check(total: number, dc: number): DiceRollRequest {
   return {
@@ -13,7 +13,15 @@ function check(total: number, dc: number): DiceRollRequest {
     timestamp: new Date('2026-08-15T00:00:00Z'),
     status: 'completed',
     dc,
-    result: { total, naturalRoll: total - 3, results: [total - 3] },
+    result: {
+      dieType: 20,
+      count: 1,
+      modifier: 3,
+      total,
+      naturalRoll: total - 3,
+      results: [total - 3],
+      keptResults: [total - 3],
+    },
   };
 }
 
@@ -40,7 +48,15 @@ describe('dice roll outcome', () => {
       timestamp: new Date('2026-08-15T00:00:00Z'),
       status: 'completed',
       ac: 10,
-      result: { total: 9, naturalRoll: 10, results: [10] },
+      result: {
+        dieType: 20,
+        count: 1,
+        modifier: -1,
+        total: 9,
+        naturalRoll: 10,
+        results: [10],
+        keptResults: [10],
+      },
     };
     expect(getDiceRollOutcome(miss)).toEqual({ success: false, target: 10, targetType: 'ac' });
     expect(formatDiceRoll(miss)).toMatch(/miss$/);

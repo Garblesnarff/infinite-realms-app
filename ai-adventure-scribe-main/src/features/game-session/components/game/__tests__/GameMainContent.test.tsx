@@ -12,6 +12,8 @@ import {
 import { GameMainContent } from '../game-content/GameMainContent';
 import { RollTray } from '../game-content/roll-tray-slot';
 
+import type { SpellCastHandlerRef } from '../../game/spell-cast-handler';
+
 import { trackDmWait } from '@/services/ai/dm-wait';
 import { formatCombatEngineParts } from '@/services/combat/combat-outcome-transcript';
 import {
@@ -63,7 +65,12 @@ vi.mock('@/contexts/CampaignContext', () => ({
   useOptionalCampaign: () => null,
 }));
 vi.mock('@/hooks/use-starter-campaigns', () => ({
-  useStarterCampaigns: () => ({ campaigns: [], featuredCampaigns: [], isLoading: false, error: null }),
+  useStarterCampaigns: () => ({
+    campaigns: [],
+    featuredCampaigns: [],
+    isLoading: false,
+    error: null,
+  }),
 }));
 vi.mock('@/contexts/GameContext', () => ({
   useGame: () => ({
@@ -174,7 +181,11 @@ vi.mock('../game-content/GamePanelControls', () => ({
 
 const sendMessage = vi.fn();
 // #2456: configurable terminal state for death-screen tests.
-let mockTerminalDeathState: { state: string; encounterId: string | null; receivedAt: number } | null = null;
+let mockTerminalDeathState: {
+  state: string;
+  encounterId: string | null;
+  receivedAt: number;
+} | null = null;
 vi.mock('../message/MessageHandler', () => ({
   MessageHandler: ({
     children,
@@ -225,6 +236,7 @@ const baseProps = {
   isCombatDetected: false,
   isGeneratingGreeting: false,
   innerHandleAIResponse: vi.fn(),
+  spellCastHandlerRef: { current: null } as SpellCastHandlerRef,
   contentWarnings: [],
   comfortLevel: 'pg13' as const,
   showSafetyInfo: false,
@@ -536,7 +548,7 @@ describe('GameMainContent overhaul behavior contract', () => {
         {...baseProps}
         sessionData={
           {
-            ...baseProps.sessionData,
+            ...(baseProps.sessionData as unknown as Record<string, unknown>),
             current_scene_description:
               '⚙️ Engine: The Veteran rolled 14 + 5 = 19 vs AC 12 — HIT. The goblin reels back.',
           } as never
@@ -554,7 +566,12 @@ describe('GameMainContent overhaul behavior contract', () => {
     render(
       <GameMainContent
         {...baseProps}
-        sessionData={{ ...baseProps.sessionData, turn_count: 15 } as never}
+        sessionData={
+          {
+            ...(baseProps.sessionData as unknown as Record<string, unknown>),
+            turn_count: 15,
+          } as never
+        }
         showSceneBlurb={false}
       />,
     );
@@ -687,11 +704,11 @@ describe('GameMainContent overhaul behavior contract', () => {
 
     fireEvent.click(screen.getByTestId('death-screen-read-story'));
     expect(screen.getByTestId('death-screen-story-log')).toBeInTheDocument();
-    expect(screen.getByText('I stay in melee and attack again. I will not retreat.'))
-      .toBeInTheDocument();
+    expect(
+      screen.getByText('I stay in melee and attack again. I will not retreat.'),
+    ).toBeInTheDocument();
     expect(screen.getByText(/The Scholar is dead/)).toBeInTheDocument();
-    expect(screen.getByText('The spider’s fangs find the gap in your guard.'))
-      .toBeInTheDocument();
+    expect(screen.getByText('The spider’s fangs find the gap in your guard.')).toBeInTheDocument();
     // And the end state still owns the page: no composer comes back.
     expect(screen.queryByTestId('chat-input')).not.toBeInTheDocument();
   });

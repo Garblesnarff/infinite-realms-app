@@ -8,9 +8,8 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { type RollRequest } from '../DiceRollRequest';
-
 import type { Character } from '@/types/character';
+import type { RollRequest } from '@/types/roll-request';
 
 import { DiceRollRequest } from '@/components/game/DiceRollRequest';
 import { useCharacter } from '@/contexts/CharacterContext';
