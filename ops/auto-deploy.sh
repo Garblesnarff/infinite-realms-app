@@ -559,12 +559,15 @@ zero_downtime_restart() {
     echo "$(ts) [dry-run] would start $STANDBY_APP on :$API_PORT, pm2 restart $LIVE_APP, then delete $STANDBY_APP"
     return 0
   fi
+  local start_out
   pm2 delete "$STANDBY_APP" > /dev/null 2>&1 || true
-  if IR_INCLUDE_STANDBY=1 pm2 start "$ECOSYSTEM_FILE" --only "$STANDBY_APP" > /dev/null 2>&1 &&
+  if start_out=$(IR_INCLUDE_STANDBY=1 pm2 start "$ECOSYSTEM_FILE" --only "$STANDBY_APP" 2>&1) &&
     spid=$(wait_listening "$STANDBY_APP"); then
     echo "$(ts) handoff: $STANDBY_APP (pid $spid) is serving :$API_PORT"
   else
     echo "$(ts) handoff: $STANDBY_APP did not listen on :$API_PORT within ${HANDOFF_WAIT_SECONDS}s — plain restart (short 502 window)"
+    # pm2's own words on the standby start, so the reason is in the deploy log.
+    printf '%s\n' "$start_out" | tail -5 | sed "s/^/$(ts) handoff: pm2 start: /"
     pm2 delete "$STANDBY_APP" > /dev/null 2>&1 || true
     run pm2 restart "$LIVE_APP"
     return
