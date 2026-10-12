@@ -50,14 +50,26 @@ function normalizeSpellSlots(
   ) as Character['spellSlots'];
 }
 
-function aggregateHitDice(hitDice: RestHitDie[]): Character['hitDice'] | undefined {
+/**
+ * #264: fold the server's hit-dice rows into the sheet's { total, remaining, type } shape.
+ * `type` is a display label: a single die type for single-class characters
+ * ("d10"), or a per-class breakdown for multiclass ones ("2d10 + 2d6").
+ * Rows are grouped in class-name order so the label is deterministic.
+ */
+export function aggregateHitDice(hitDice: RestHitDie[]): Character['hitDice'] | undefined {
   if (hitDice.length === 0) return undefined;
   const total = hitDice.reduce((sum, die) => sum + die.totalDice, 0);
   const used = hitDice.reduce((sum, die) => sum + die.usedDice, 0);
+  const ordered = [...hitDice].sort((a, b) => a.className.localeCompare(b.className));
+  const byType = new Map<string, number>();
+  for (const die of ordered) {
+    byType.set(die.dieType, (byType.get(die.dieType) ?? 0) + die.totalDice);
+  }
+  const parts = [...byType.entries()].map(([dieType, count]) => `${count}${dieType}`);
   return {
     total,
     remaining: Math.max(0, total - used),
-    type: hitDice[0].dieType,
+    type: parts.length === 1 && ordered.length === 1 ? ordered[0].dieType : parts.join(' + '),
   };
 }
 

@@ -7,6 +7,7 @@
  */
 import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
 import { and, eq } from 'drizzle-orm';
+import { Elysia } from 'elysia';
 
 import {
   campaigns,
@@ -21,6 +22,7 @@ import {
   combatParticipantStatus,
   combatParticipants,
   conditionsLibrary,
+  dialogueHistory,
   gameSessions,
   restEvents,
 } from '../../../../../db/schema/index';
@@ -60,6 +62,53 @@ mock.module('../../../lib/logger.js', () => ({
   default: stub(),
 }));
 
+// #264: the story-rest route test below mounts llmRoutes on the same pipeline.
+// The generate handler's collaborators are stubbed the way
+// llm-generate-http-contract.test.ts stubs them; the database stays real so
+// applyStoryRest writes through RestService.
+let generatedText = JSON.stringify({
+  text: 'You catch your breath and press on.',
+  rest: { type: 'short' },
+});
+mock.module('../../../middleware/admin.js', () => ({ isAdmin: () => false }));
+mock.module('../../../middleware/rate-limit.js', () => ({
+  planRateLimit: () => new Elysia({ name: 'test-plan-rate-limit' }),
+}));
+mock.module('../../../services/ai-usage-service.js', () => ({
+  AIUsageService: {
+    checkQuotaAndConsume: async () => ({
+      allowed: true,
+      remaining: 99,
+      resetAt: new Date(Date.now() + 60_000),
+    }),
+    recordProviderUsage: async () => {},
+  },
+}));
+mock.module('../../../services/llm-provider-service.js', () => ({
+  LLMProviderService: {
+    generate: async () => ({
+      text: generatedText,
+      provider: 'openrouter',
+      model: 'test/model',
+    }),
+  },
+}));
+mock.module('../../../services/session/session-message-service.js', () => ({
+  SessionMessageService: {
+    withRollTurn: async (
+      _sessionId: string,
+      _userId: string,
+      _playerInput: string | undefined,
+      _rollId: string | undefined,
+      _replyId: string | undefined,
+      generate: () => Promise<unknown>,
+    ) => generate(),
+    // The DM-reply persistence write is not what the story-rest route test
+    // asserts on; keep it from touching the database.
+    addMessage: async () => undefined,
+  },
+}));
+
 if (hasRealDb && !process.env.DATABASE_URL && process.env.TEST_DATABASE_URL) {
   process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
 }
@@ -81,7 +130,12 @@ const pipeline = await importWithRealDb(async () => {
   const { charactersRoutes } = await import('../characters.js');
   const { restRoutes } = await import('../rest.js');
   const { issue1784DataRoutes } = await import('../issue-1784-data.js');
-  return createRequestPipelineApp().use(charactersRoutes).use(restRoutes).use(issue1784DataRoutes);
+  const { llmRoutes } = await import('../llm.js');
+  return createRequestPipelineApp()
+    .use(charactersRoutes)
+    .use(restRoutes)
+    .use(issue1784DataRoutes)
+    .use(llmRoutes);
 });
 
 if (!hasRealDb) {
@@ -958,5 +1012,412 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
       .where(eq(combatParticipantStatus.participantId, endedParticipantId));
     expect(endedStatus.currentHp).toBe(5);
     expect(endedStatus.maxHp).toBe(10);
+  });
+
+  it('#264: short rest spends hit dice through the route — lazy init, CON mod, capped at max, GET shows hit dice', async () => {
+    if (!hasRealDb) return;
+
+    const [{ id: campId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('264-camp') })
+      .returning({ id: campaigns.id });
+    const [{ id: charId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId: campId,
+        name: testId('264-fighter'),
+        level: 1,
+        class: 'Fighter',
+      })
+      .returning({ id: characters.id });
+    await db.insert(characterStats).values({
+      characterId: charId,
+      maxHitPoints: 12,
+      currentHitPoints: 5,
+      temporaryHitPoints: 0,
+      constitution: 14,
+      isConscious: true,
+      vitalState: 'standing',
+    });
+
+    // No hit-dice rows exist: the rest lazily initializes them from class/level.
+    const shortRes = await request(`/v1/rest/characters/${charId}/short`, 'POST', {
+      hitDiceToSpend: 1,
+    });
+    expect(shortRes.status).toBe(200);
+    const body = (await shortRes.json()) as {
+      hitDiceSpent?: number;
+      hpRestored?: number;
+      hitDiceRemaining?: Array<{ dieType: string; totalDice: number; usedDice: number }>;
+    };
+    expect(body.hitDiceSpent).toBe(1);
+    // d10 + CON 14 (+2), minimum 0 per die (2014 PHB): 3..12.
+    expect(body.hpRestored).toBeGreaterThanOrEqual(3);
+    expect(body.hpRestored).toBeLessThanOrEqual(12);
+    expect(body.hitDiceRemaining).toHaveLength(1);
+    expect(body.hitDiceRemaining?.[0].dieType).toBe('d10');
+    expect(body.hitDiceRemaining?.[0].totalDice).toBe(1);
+    expect(body.hitDiceRemaining?.[0].usedDice).toBe(1);
+
+    // GET shows the new HP (capped at max) and the hit dice.
+    const sheet = (await (await request(`/v1/characters/${charId}`, 'GET')).json()) as {
+      stats?: { current_hit_points?: number; max_hit_points?: number };
+      hit_dice?: Array<{ die_type: string; total_dice: number; used_dice: number }>;
+    };
+    expect(sheet.stats?.current_hit_points).toBe(Math.min(12, 5 + (body.hpRestored ?? 0)));
+    expect(sheet.hit_dice).toHaveLength(1);
+    expect(sheet.hit_dice?.[0].die_type).toBe('d10');
+    expect(sheet.hit_dice?.[0].total_dice).toBe(1);
+    expect(sheet.hit_dice?.[0].used_dice).toBe(1);
+
+    await db.delete(characterHitDice).where(eq(characterHitDice.characterId, charId));
+    await db.delete(restEvents).where(eq(restEvents.characterId, charId));
+    await db.delete(characterStats).where(eq(characterStats.characterId, charId));
+    await db.delete(characters).where(eq(characters.id, charId));
+    await db.delete(campaigns).where(eq(campaigns.id, campId));
+  });
+
+  it('#264: multiclass lazy init creates one hit-dice row per class, not class x total level', async () => {
+    if (!hasRealDb) return;
+
+    const [{ id: campId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('264-camp-multi') })
+      .returning({ id: campaigns.id });
+    const [{ id: charId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId: campId,
+        name: testId('264-multiclass'),
+        level: 4,
+        class: 'Fighter',
+        classLevels: [
+          { className: 'Fighter', level: 2 },
+          { className: 'Wizard', level: 2 },
+        ],
+      })
+      .returning({ id: characters.id });
+    await db.insert(characterStats).values({
+      characterId: charId,
+      maxHitPoints: 30,
+      currentHitPoints: 10,
+      temporaryHitPoints: 0,
+      constitution: 14,
+      isConscious: true,
+      vitalState: 'standing',
+    });
+
+    // No hit-dice rows exist: the short rest lazily initializes them per class.
+    const shortRes = await request(`/v1/rest/characters/${charId}/short`, 'POST', {
+      hitDiceToSpend: 0,
+    });
+    expect(shortRes.status).toBe(200);
+    const body = (await shortRes.json()) as {
+      hitDiceRemaining?: Array<{
+        className: string;
+        dieType: string;
+        totalDice: number;
+        usedDice: number;
+      }>;
+    };
+    // 2014 PHB: Fighter 2 / Wizard 2 -> 2d10 + 2d6, not 4d10.
+    expect(body.hitDiceRemaining).toHaveLength(2);
+    const byClass = Object.fromEntries(
+      (body.hitDiceRemaining ?? []).map((row) => [row.className, row]),
+    );
+    expect(byClass.Fighter?.dieType).toBe('d10');
+    expect(byClass.Fighter?.totalDice).toBe(2);
+    expect(byClass.Wizard?.dieType).toBe('d6');
+    expect(byClass.Wizard?.totalDice).toBe(2);
+
+    // GET serves the same per-class rows in deterministic order.
+    const sheet = (await (await request(`/v1/characters/${charId}`, 'GET')).json()) as {
+      hit_dice?: Array<{ class_name: string; die_type: string; total_dice: number }>;
+    };
+    expect(sheet.hit_dice).toHaveLength(2);
+    expect(sheet.hit_dice?.map((row) => row.class_name)).toEqual(['Fighter', 'Wizard']);
+
+    await db.delete(characterHitDice).where(eq(characterHitDice.characterId, charId));
+    await db.delete(restEvents).where(eq(restEvents.characterId, charId));
+    await db.delete(characterStats).where(eq(characterStats.characterId, charId));
+    await db.delete(characters).where(eq(characters.id, charId));
+    await db.delete(campaigns).where(eq(campaigns.id, campId));
+  });
+
+  it('#264: a rest the DM grants in the story applies through RestService — GET shows the new HP and hit dice', async () => {
+    if (!hasRealDb) return;
+    const { applyStoryRest } = await import('../../../services/dm/story-rest.js');
+
+    const [{ id: campId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('264-story-camp') })
+      .returning({ id: campaigns.id });
+    const [{ id: charId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId: campId,
+        name: testId('264-story-hero'),
+        level: 3,
+        class: 'Fighter',
+      })
+      .returning({ id: characters.id });
+    await db.insert(characterStats).values({
+      characterId: charId,
+      maxHitPoints: 20,
+      currentHitPoints: 6,
+      temporaryHitPoints: 0,
+      constitution: 12,
+      isConscious: true,
+      vitalState: 'standing',
+    });
+    const [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId: campId, characterId: charId })
+      .returning({ id: gameSessions.id });
+    const playerMessage = async (text: string) => {
+      await db.insert(dialogueHistory).values({
+        sessionId,
+        speakerType: 'player',
+        message: text,
+      });
+    };
+    const readSheet = async () =>
+      (await (await request(`/v1/characters/${charId}`, 'GET')).json()) as {
+        stats?: { current_hit_points?: number; max_hit_points?: number };
+        hit_dice?: Array<{ die_type: string; total_dice: number; used_dice: number }>;
+      };
+
+    // A short rest the story grants: applied through RestService, spending no hit
+    // dice on its own (the player spends them from the sheet).
+    await playerMessage('We catch our breath behind the rocks for an hour.');
+    expect(await applyStoryRest({ userId, sessionId, rest: { type: 'short' } })).toBe('applied');
+    const afterShort = await readSheet();
+    expect(afterShort.stats?.current_hit_points).toBe(6);
+    expect(afterShort.hit_dice).toHaveLength(1);
+    expect(afterShort.hit_dice?.[0].die_type).toBe('d10');
+    expect(afterShort.hit_dice?.[0].total_dice).toBe(3);
+    expect(afterShort.hit_dice?.[0].used_dice).toBe(0);
+
+    // Retry re-sends the same player message: no second rest.
+    expect(await applyStoryRest({ userId, sessionId, rest: { type: 'short' } })).toBe(
+      'already_applied',
+    );
+
+    // An invalid rest type is rejected, not applied.
+    expect(await applyStoryRest({ userId, sessionId, rest: { type: 'nap' } })).toBe(
+      'invalid_rest',
+    );
+
+    // A long rest the story grants on a later turn: HP to full through the same service.
+    await playerMessage('We bar the door and sleep until dawn.');
+    expect(await applyStoryRest({ userId, sessionId, rest: { type: 'long' } })).toBe('applied');
+    const afterLong = await readSheet();
+    expect(afterLong.stats?.current_hit_points).toBe(20);
+    expect(afterLong.stats?.max_hit_points).toBe(20);
+    expect(afterLong.hit_dice?.[0].used_dice).toBe(0);
+
+    await db.delete(restEvents).where(eq(restEvents.characterId, charId));
+    await db.delete(characterHitDice).where(eq(characterHitDice.characterId, charId));
+    await db.delete(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId));
+    await db.delete(gameSessions).where(eq(gameSessions.id, sessionId));
+    await db.delete(characterStats).where(eq(characterStats.characterId, charId));
+    await db.delete(characters).where(eq(characters.id, charId));
+    await db.delete(campaigns).where(eq(campaigns.id, campId));
+  });
+
+  it('#264: GET before any rest lazily creates hit-dice rows — remaining = total = level', async () => {
+    if (!hasRealDb) return;
+
+    const [{ id: campId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('264-get-camp') })
+      .returning({ id: campaigns.id });
+    const [{ id: charId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId: campId,
+        name: testId('264-get-hero'),
+        level: 3,
+        class: 'Fighter',
+      })
+      .returning({ id: characters.id });
+
+    // A character predating the rest system has no hit-dice rows (QA-058): the
+    // sheet's GET must still serve dice so the first short rest offers the
+    // spend prompt.
+    const before = await db
+      .select()
+      .from(characterHitDice)
+      .where(eq(characterHitDice.characterId, charId));
+    expect(before).toEqual([]);
+
+    const sheet = (await (await request(`/v1/characters/${charId}`, 'GET')).json()) as {
+      hit_dice?: Array<{ die_type: string; total_dice: number; used_dice: number }>;
+    };
+    expect(sheet.hit_dice).toHaveLength(1);
+    expect(sheet.hit_dice?.[0].die_type).toBe('d10');
+    expect(sheet.hit_dice?.[0].total_dice).toBe(3);
+    expect(sheet.hit_dice?.[0].used_dice).toBe(0);
+    // remaining = total = level: nothing spent yet.
+    expect((sheet.hit_dice?.[0].total_dice ?? 0) - (sheet.hit_dice?.[0].used_dice ?? 0)).toBe(3);
+
+    // A second GET reuses the rows rather than duplicating them.
+    const again = (await (await request(`/v1/characters/${charId}`, 'GET')).json()) as {
+      hit_dice?: unknown[];
+    };
+    expect(again.hit_dice).toHaveLength(1);
+
+    await db.delete(characterHitDice).where(eq(characterHitDice.characterId, charId));
+    await db.delete(characters).where(eq(characters.id, charId));
+    await db.delete(campaigns).where(eq(campaigns.id, campId));
+  });
+
+  it('#264: POST /v1/llm/generate applies the envelope rest through the story-rest wiring', async () => {
+    if (!hasRealDb) return;
+
+    const [{ id: campId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('264-routewire-camp') })
+      .returning({ id: campaigns.id });
+    const [{ id: charId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId: campId,
+        name: testId('264-routewire-hero'),
+        level: 3,
+        class: 'Fighter',
+      })
+      .returning({ id: characters.id });
+    await db.insert(characterStats).values({
+      characterId: charId,
+      maxHitPoints: 20,
+      currentHitPoints: 6,
+      temporaryHitPoints: 0,
+      constitution: 12,
+      isConscious: true,
+      vitalState: 'standing',
+    });
+    const [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId: campId, characterId: charId })
+      .returning({ id: gameSessions.id });
+    await db.insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'player',
+      message: 'We catch our breath behind the rocks for an hour.',
+    });
+
+    // The body shape of a DM turn: sessionId + dmReply + combatEntry. The
+    // provider is stubbed at the top of this file; generatedText selects the
+    // envelope it returns.
+    const generateBody = {
+      prompt: 'The party makes camp in the ruins. What do they see?',
+      player_input: 'We catch our breath behind the rocks for an hour.',
+      sessionId,
+      dmReply: { messageId: '11111111-2222-4333-8444-555555555555', inCombat: false },
+      combatEntry: {
+        sessionId,
+        player: { name: testId('264-routewire-hero'), initiativeModifier: 2 },
+      },
+      provider: 'openrouter',
+      requestType: 'user',
+      maxTokens: 8192,
+      temperature: 0.9,
+    };
+
+    // The envelope carries a story rest: the llm.ts wiring must apply it
+    // through RestService, not just narrate it.
+    generatedText = JSON.stringify({
+      text: 'You catch your breath behind the rocks and press on.',
+      rest: { type: 'short' },
+    });
+    const res = await request('/v1/llm/generate', 'POST', generateBody);
+    expect(res.status).toBe(200);
+
+    const rests = await db.select().from(restEvents).where(eq(restEvents.characterId, charId));
+    expect(rests).toHaveLength(1);
+    expect(rests[0].restType).toBe('short');
+    expect(rests[0].notes).toBe('story rest');
+    // The rest went through RestService: hit-dice rows were created lazily.
+    const dice = await db
+      .select()
+      .from(characterHitDice)
+      .where(eq(characterHitDice.characterId, charId));
+    expect(dice).toHaveLength(1);
+    expect(dice[0].totalDice).toBe(3);
+
+    // An envelope with no rest applies nothing: the wiring guard decides, not
+    // just the applier's already-applied check (a new player message, so the
+    // rest would not be a duplicate).
+    generatedText = JSON.stringify({ text: 'The rocks are cold and the wind picks up.' });
+    await db.insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'player',
+      message: 'We keep walking.',
+    });
+    const res2 = await request('/v1/llm/generate', 'POST', generateBody);
+    expect(res2.status).toBe(200);
+    const restsAfter = await db
+      .select()
+      .from(restEvents)
+      .where(eq(restEvents.characterId, charId));
+    expect(restsAfter).toHaveLength(1);
+
+    await db.delete(restEvents).where(eq(restEvents.characterId, charId));
+    await db.delete(characterHitDice).where(eq(characterHitDice.characterId, charId));
+    await db.delete(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId));
+    await db.delete(gameSessions).where(eq(gameSessions.id, sessionId));
+    await db.delete(characterStats).where(eq(characterStats.characterId, charId));
+    await db.delete(characters).where(eq(characters.id, charId));
+    await db.delete(campaigns).where(eq(campaigns.id, campId));
+  });
+
+  it('#264: five concurrent first-GETs create exactly one hit-dice row set', async () => {
+    if (!hasRealDb) return;
+
+    const [{ id: campId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('264-race-camp') })
+      .returning({ id: campaigns.id });
+    const [{ id: charId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId: campId,
+        name: testId('264-race-hero'),
+        level: 3,
+        class: 'Fighter',
+      })
+      .returning({ id: characters.id });
+
+    // The sheet fires several GETs in parallel; every one of them takes the
+    // lazy-create path on a character with no rows. Without the
+    // INSERT ... WHERE NOT EXISTS guard this double-inserts (6d10 on a
+    // Fighter 3).
+    const responses = await Promise.all(
+      Array.from({ length: 5 }, () => request(`/v1/characters/${charId}`, 'GET')),
+    );
+    for (const res of responses) expect(res.status).toBe(200);
+    const sheets = (await Promise.all(
+      responses.map((res) => res.json()),
+    )) as Array<{ hit_dice?: unknown[] }>;
+    for (const sheet of sheets) expect(sheet.hit_dice).toHaveLength(1);
+
+    const rows = await db
+      .select()
+      .from(characterHitDice)
+      .where(eq(characterHitDice.characterId, charId));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].totalDice).toBe(3);
+    expect(rows[0].usedDice).toBe(0);
+
+    await db.delete(characterHitDice).where(eq(characterHitDice.characterId, charId));
+    await db.delete(characters).where(eq(characters.id, charId));
+    await db.delete(campaigns).where(eq(campaigns.id, campId));
   });
 });

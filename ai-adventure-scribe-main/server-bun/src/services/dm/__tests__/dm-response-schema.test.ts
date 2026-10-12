@@ -171,3 +171,29 @@ describe('dmResponseSchema speaker-split contract', () => {
     expect(review.flagged).toBe(false);
   });
 });
+
+describe('dmResponseSchema story rest contract (#264)', () => {
+  test('exposes the nullable rest field with the short/long enum', () => {
+    const properties = dmResponseSchema.properties as Record<string, Record<string, unknown>>;
+
+    expect(properties.rest).toEqual({
+      anyOf: [
+        {
+          type: 'object',
+          additionalProperties: false,
+          properties: { type: { type: 'string', enum: ['short', 'long'] } },
+          required: ['type'],
+        },
+        { type: 'null' },
+      ],
+    });
+  });
+
+  test('accepts a rest grant and the null rest on a plain turn', () => {
+    const granted = parseDmResponse(response({ rest: { type: 'long' } }));
+    expect(granted.success).toBe(true);
+
+    const none = parseDmResponse(response({ rest: null }));
+    expect(none.success).toBe(true);
+  });
+});

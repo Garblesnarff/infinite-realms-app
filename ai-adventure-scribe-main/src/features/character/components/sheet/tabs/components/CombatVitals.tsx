@@ -13,10 +13,10 @@ import {
 } from 'lucide-react';
 import React from 'react';
 
-import { RestActionButtons } from '../../sections/class-feature-tracker/RestActionButtons';
+import { SheetRestControls } from '../../sections/class-feature-tracker/SheetRestControls';
 
 import type { CombatState } from '@/features/character/hooks/use-combat-state';
-import type { Character } from '@/types/character';
+import type { Character, CharacterSheetUpdateFn } from '@/types/character';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -47,7 +47,7 @@ interface CombatVitalsProps {
   healingId: string;
   tempHpId: string;
   /** #214: rests are on the Main tab vitals, not only the Features tab. */
-  onRest?: (restType: 'short' | 'long') => void;
+  onRestUpdate?: CharacterSheetUpdateFn;
 }
 
 /**
@@ -73,7 +73,7 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
   damageId,
   healingId,
   tempHpId,
-  onRest,
+  onRestUpdate,
 }) => {
   const isUnconscious = hasStoredHp && combatState.currentHp <= 0;
   const isDead = combatState.deathSaves.failures >= 3;
@@ -144,6 +144,27 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
             </div>
           )}
         </div>
+
+        {/* Hit Dice (#264): the rows the rest system writes, served by GET character */}
+        {character.hitDice && (
+          <div className="space-y-2 border-t pt-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Hit Dice ({character.hitDice.type})</span>
+              <Badge variant={character.hitDice.remaining === 0 ? 'destructive' : 'secondary'}>
+                {character.hitDice.remaining} / {character.hitDice.total}
+              </Badge>
+            </div>
+            <Progress
+              value={
+                character.hitDice.total > 0
+                  ? (character.hitDice.remaining / character.hitDice.total) * 100
+                  : 0
+              }
+              className="h-2"
+              aria-label={`Hit Dice: ${character.hitDice.remaining} of ${character.hitDice.total} remaining`}
+            />
+          </div>
+        )}
 
         {/* Damage Resistances, Immunities, and Vulnerabilities */}
         {(character.damageResistances?.length > 0 ||
@@ -334,10 +355,10 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
         )}
 
         {/* Rests (#214): Short/Long Rest on the Main tab, not only the Features tab */}
-        {onRest && (
+        {onRestUpdate && (
           <div className="border-t pt-3">
             <h4 className="text-sm font-medium mb-2">Rests</h4>
-            <RestActionButtons onRest={onRest} />
+            <SheetRestControls character={character} onUpdate={onRestUpdate} />
           </div>
         )}
 

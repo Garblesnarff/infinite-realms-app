@@ -24,6 +24,23 @@ import { BusinessLogicError, NotFoundError, ValidationError } from '../../lib/er
 import type { HitDieType, SpendHitDiceResult } from '../../types/rest.js';
 
 /**
+ * Parse a character row's class_levels jsonb into valid {className, level} entries.
+ * Same shape as the spell-slot service's parser; hit dice don't need class-name
+ * normalization because getHitDieType already falls back to d8 for unknown classes.
+ */
+function parseClassLevels(classLevels: unknown): { className: string; level: number }[] {
+  if (!Array.isArray(classLevels)) return [];
+  const parsed: { className: string; level: number }[] = [];
+  for (const entry of classLevels) {
+    const raw = entry as { className?: unknown; level?: unknown } | null | undefined;
+    const name = typeof raw?.className === 'string' ? raw.className.trim() : '';
+    const entryLevel = typeof raw?.level === 'number' && raw.level > 0 ? Math.trunc(raw.level) : 0;
+    if (name && entryLevel > 0) parsed.push({ className: name, level: entryLevel });
+  }
+  return parsed;
+}
+
+/**
  * Rest Hit Dice Service
  */
 export class RestHitDiceService {
@@ -50,6 +67,59 @@ export class RestHitDiceService {
    */
   static getHitDieType(className: string): HitDieType {
     return RestMechanics.getHitDieType(className);
+  }
+
+  /**
+   * #264: lazily create hit-dice rows for a character that has none.
+   * `initializeHitDice` had no callers, so characters created before the rest
+   * system (or whose rows are otherwise missing) had no dice to see or spend.
+   * The die type follows the class table; an unknown class falls back to d8,
+   * the same default `getHitDieType` uses.
+   *
+   * Multiclass characters get one row per class (2014 PHB: hit dice are
+   * tracked per class) — baking a single `class × total level` row would
+   * permanently give e.g. a Fighter 2 / Wizard 2 four d10s instead of 2d10+2d6.
+   *
+   * Race guard (strategist round 2): the route resolve hook calls getById on
+   * every /v1/characters/:id/* request and the sheet fires several GETs in
+   * parallel, so concurrent first-GETs used to double-insert (a Fighter 3
+   * could get 6d10). Each class row is created by one atomic
+   * INSERT ... WHERE NOT EXISTS — no unique constraint or migration needed.
+   */
+  static async ensureHitDice(
+    characterId: string,
+    userId: string,
+    className: string | null,
+    level: number,
+    classLevels?: unknown,
+  ): Promise<CharacterHitDice[]> {
+    await this.verifyCharacterOwnership(characterId, userId);
+    const existing = await this.getHitDice(characterId, userId);
+    if (existing.length > 0) return existing;
+    const parsed = parseClassLevels(classLevels);
+    const toCreate =
+      parsed.length > 1
+        ? parsed.map((entry) => ({ name: entry.className, dice: entry.level }))
+        : [
+            {
+              name: (className ?? '').trim() || 'Unknown',
+              dice: Math.max(1, Math.trunc(level) || 1),
+            },
+          ];
+    for (const row of toCreate) {
+      // The pg driver sends parameters untyped, so the casts are explicit —
+      // same class of bug as the #170/#264 CASE-expression casts.
+      await db.execute(sql`
+        INSERT INTO character_hit_dice (character_id, class_name, die_type, total_dice, used_dice)
+        SELECT ${characterId}::uuid, ${row.name}, ${this.getHitDieType(row.name)}, ${row.dice}::integer, 0
+        WHERE NOT EXISTS (
+          SELECT 1 FROM character_hit_dice
+          WHERE character_id = ${characterId}::uuid AND class_name = ${row.name}
+        )
+      `);
+    }
+    // Re-read: a concurrent caller may have won the insert for a class.
+    return this.getHitDice(characterId, userId);
   }
 
   /**
@@ -160,7 +230,9 @@ export class RestHitDiceService {
   }
 
   /**
-   * Get all hit dice for a character
+   * Get all hit dice for a character.
+   * Ordered by class name so multiclass rows come back deterministically —
+   * without this, the sheet's hit-dice label could flip between renders.
    */
   static async getHitDice(characterId: string, userId: string): Promise<CharacterHitDice[]> {
     const hitDice = await db.query.characterHitDice.findMany({
@@ -178,6 +250,7 @@ export class RestHitDiceService {
             ),
         ),
       ),
+      orderBy: characterHitDice.className,
     });
 
     return hitDice;
@@ -193,7 +266,7 @@ export class RestHitDiceService {
 
   /**
    * Spend hit dice to recover HP
-   * PHB pg. 186: Roll hit die + CON modifier (minimum 1 HP per die)
+   * 2014 PHB pg. 186: Roll hit die + CON modifier, minimum 0 HP per die
    */
   static async spendHitDice(
     characterId: string,
@@ -266,7 +339,14 @@ export class RestHitDiceService {
 
     // ⚡ Bolt: Batch update hit dice usage in a single query instead of N updates.
     if (updates.length > 0) {
-      const caseStatements = updates.map((u) => sql`WHEN ${u.id} THEN ${u.newUsedDice}`);
+      // The pg driver sends parameters untyped; without casts Postgres infers
+      // the CASE as text and the update fails with "column used_dice is of
+      // type integer but expression is of type text" — same cast fix as
+      // restoreHitDice (#170). #264: this path was never hit by a real-DB
+      // test before, which is how the missing casts survived.
+      const caseStatements = updates.map(
+        (u) => sql`WHEN ${u.id}::uuid THEN ${u.newUsedDice}::integer`,
+      );
 
       await db
         .update(characterHitDice)

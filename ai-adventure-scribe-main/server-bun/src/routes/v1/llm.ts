@@ -1083,6 +1083,30 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             logger.warn({ msg: 'DM_STORY_STATE_APPLY_FAILED', sessionId: castSessionId, error });
           }
         }
+        // #264 (#218 step 5): a rest the story grants out of combat reaches the sheet
+        // through RestService — the same ruleset the sheet's rest buttons use — once per
+        // player message. A refused rest is logged inside the applier; it never costs
+        // the player their turn.
+        if (
+          envelope?.rest &&
+          dmReply &&
+          dmReply.inCombat !== true &&
+          castSessionId &&
+          combatEntry &&
+          !envelope.combat_entry_pending
+        ) {
+          try {
+            const { applyStoryRest } = await import('../../services/dm/story-rest.js');
+            await applyStoryRest({
+              userId,
+              sessionId: castSessionId,
+              rest: envelope.rest,
+              rollRequested,
+            });
+          } catch (error) {
+            logger.warn({ msg: 'DM_STORY_REST_APPLY_FAILED', sessionId: castSessionId, error });
+          }
+        }
         // sessionId must not come from combatEntry: that is only sent when combat
         // is NOT already active, so in-combat turns logged `sessionId: null` --
         // precisely the turns being debugged. (#2050 C)

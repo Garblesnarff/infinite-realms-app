@@ -41,7 +41,11 @@ import { CharacterSpellService } from '../../services/character/character-spell-
 import { CharacterService } from '../../services/character-service.js';
 import { SpellSlotDataAccess } from '../../services/spell-slots/spell-slot-data-access.js';
 
-import type { Character, CharacterStats } from '../../../../db/schema/index';
+import type {
+  Character,
+  CharacterHitDice,
+  CharacterStats,
+} from '../../../../db/schema/index';
 
 /**
  * Overlay the engine's spell-slot table onto the sheet-facing character
@@ -332,7 +336,7 @@ function parseSpellString(value: string | string[] | null): string[] {
  * missing here is invisible until a stat comes out wrong (issue #1827).
  */
 export function mapCharacterToApi(
-  character: Character & { stats?: CharacterStats },
+  character: Character & { stats?: CharacterStats; hitDice?: CharacterHitDice[] },
 ): Record<string, unknown> | null {
   if (!character) return null;
 
@@ -371,6 +375,16 @@ export function mapCharacterToApi(
     spell_slots: character.spellSlots,
     pact_slots: character.pactSlots,
     active_concentration: character.activeConcentration,
+    // #264: the rows the rest system writes; the sheet aggregates them into
+    // hitDice { total, remaining, type }.
+    hit_dice: character.hitDice?.map((hd) => ({
+      id: hd.id,
+      character_id: hd.characterId,
+      class_name: hd.className,
+      die_type: hd.dieType,
+      total_dice: hd.totalDice,
+      used_dice: hd.usedDice,
+    })),
     class_features: character.classFeatures,
     enhancement_selections: character.enhancementSelections,
     fighting_styles: character.fightingStyles,

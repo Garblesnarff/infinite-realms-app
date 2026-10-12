@@ -92,8 +92,8 @@ export class RestMechanics {
           const roll =
             preRolledValues?.[rolls.length] ?? this.rollHitDie(hitDie.dieType as HitDieType);
           rolls.push(roll);
-          // Minimum 1 HP per die
-          const hpGained = Math.max(1, roll + conModifier);
+          // 2014 PHB pg. 186: roll + CON modifier per die, minimum 0 each.
+          const hpGained = Math.max(0, roll + conModifier);
           totalHpRestored += hpGained;
         }
 

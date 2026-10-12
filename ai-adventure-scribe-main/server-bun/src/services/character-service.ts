@@ -16,6 +16,7 @@ import { and, desc, eq, exists, inArray, or, sql } from 'drizzle-orm';
 import { syncArmorClassAfterEquipmentChange } from './character/character-armor-class.js';
 import { CharacterSpellService } from './character/character-spell-service.js';
 import { CharacterVitalsService } from './character-vitals-service.js';
+import { RestHitDiceService } from './rest/rest-hit-dice-service.js';
 import { db } from '../../../db/client';
 import {
   characterPermissions,
@@ -96,10 +97,33 @@ export class CharacterService {
       ),
       with: {
         stats: true,
+        // #264: the sheet shows hit dice remaining/total, so the GET serves
+        // the rows the rest system writes.
+        hitDice: true,
       },
     });
 
-    return character || null;
+    if (!character) return null;
+
+    // #264: characters predating the rest system have no hit-dice rows, so the
+    // sheet would show no dice and offer no spend prompt on a first short rest
+    // (QA-058). Create them lazily on the read, once: the sheet's GET is the
+    // path that needs them to exist before a rest is taken. Owner-only — a
+    // reader with permission-share access must not write.
+    if (
+      (character.hitDice?.length ?? 0) === 0 &&
+      (character.userId === userId || character.ownerId === userId)
+    ) {
+      character.hitDice = await RestHitDiceService.ensureHitDice(
+        characterId,
+        userId,
+        character.class,
+        character.level ?? 1,
+        character.classLevels,
+      );
+    }
+
+    return character;
   }
 
   /**

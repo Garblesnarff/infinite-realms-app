@@ -137,12 +137,24 @@ describe('the prompt outside combat (#2400)', () => {
     expect(await buildPrompt(true)).not.toContain('<xp_award_field>');
   });
 
+  it('teaches the story-rest field out of combat only (#264)', async () => {
+    const outOfCombat = await buildPrompt(false);
+    expect(outOfCombat).toContain('<rest_field>');
+    expect(outOfCombat).toContain('`{"type": "long"}`');
+
+    const inCombat = await buildPrompt(true);
+    expect(inCombat).not.toContain('<rest_field>');
+  });
+
   /**
    * GUARD, not a spec: this pins the out-of-combat prompt to the bytes it had before #2400 split
    * out the combat variants. It exists so the split cannot change what a non-combat turn sends.
    * A deliberate edit to these sections will fail it: update the hashes in that same PR.
    * #2533 re-pinned the rules-of-play hash after condensing the five engine-owned combat blocks.
    * #218 step 2 re-pinned the response-structure hash after adding the out-of-combat XP field.
+   * #264 re-pinned the response-structure hash after adding the out-of-combat story-rest field.
+   * #353 re-pinned the response-structure hash after adding the out-of-combat story-items field.
+   * The #264/#353 rebase re-pinned it again after keeping both fields.
    */
   it('keeps the byte-identical sections it had before the combat variants existed', () => {
     const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -151,7 +163,7 @@ describe('the prompt outside combat (#2400)', () => {
       'f119ee187786252d48e7ebc27edce36870089a10e3297bcd55584c703cfb0797',
     );
     expect(sha256(ContextBuilderPrompts.buildResponseStructureSection())).toBe(
-      '8623fb1a15b367350a8e42bf0f8cf0dc8a5131438fb4f5382cc81c4705b3fff9',
+      'f3f2a86c510a2f48b1615c8a5a0d7f6caa77b6f15eebe0ba8910bf1613ba441d',
     );
     expect(sha256(ContextBuilderPrompts.buildFinalRemindersSection())).toBe(
       'f73f18110ce03c6aca6e4a04932ba834ce476d71c27392f86d1b4b81221fada2',

@@ -130,6 +130,21 @@ it to the character sheet; do not state an XP gain in \`text\` without setting t
 
 `;
 
+    // #264 (#218 step 5): the server applies this through RestService, once per player
+    // message, out of combat. A short rest here spends no hit dice on its own.
+    const restField = `<rest_field>
+<title>STORY RESTS</title>
+When the story grants the player's character a rest (they bed down for the night, take an
+hour's breather while the trail is safe), set the \`rest\` JSON field to
+\`{"type": "short"}\` or \`{"type": "long"}\` and narrate the rest in \`text\`. The game applies
+the rest to the character sheet through the same rules as the sheet's rest buttons: a long
+rest restores all hit points and regains half the hit dice; a short rest restores short-rest
+resources and records the rest, and the player spends hit dice from the sheet afterwards.
+Set \`rest\` only when the fiction actually grants a rest — never for a breather the party
+skips — and otherwise set it to \`null\`. On a turn that requests a roll, leave it \`null\`.
+</rest_field>
+
+`;
     // #353: the server writes these to the character's Inventory (once per player
     // message, out of combat). The story engine never sees an item the DM only
     // narrates — it must be in the `items` field.
@@ -177,7 +192,7 @@ field. Use an empty array when resolving a specific combat action${inCombat ? ''
 choice is appropriate.
 </options_field>
 
-${inCombat ? '' : xpAwardField}${inCombat ? '' : storyItemsField}<visual_prompt_rule>
+${inCombat ? '' : xpAwardField}${inCombat ? '' : restField}${inCombat ? '' : storyItemsField}<visual_prompt_rule>
 **OPTIONAL** - At the very end, if the scene would benefit from an illustration:
 VISUAL PROMPT: <short art prompt focusing on key visual elements>
 </visual_prompt_rule>

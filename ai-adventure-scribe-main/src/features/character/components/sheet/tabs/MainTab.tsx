@@ -11,9 +11,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useCombatState } from '@/features/character/hooks/use-combat-state';
 import { useCharacterStats } from '@/hooks/use-character-stats';
-import { useToast } from '@/hooks/use-toast';
-import logger from '@/lib/logger';
-import { applyRestResultToCharacter, restApi } from '@/services/rest-api';
 import {
   getCharacterSheetArmorClass,
   MISSING_ARMOR_CLASS_LABEL,
@@ -39,7 +36,6 @@ const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate, onCha
   const healingId = useId();
   const tempHpId = useId();
   const descriptionId = useId();
-  const { toast } = useToast();
 
   const stats = useCharacterStats(character);
 
@@ -72,31 +68,9 @@ const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate, onCha
   const initiativeModifier = stats?.initiative ?? 0;
   const passivePerception = stats?.passivePerception ?? 10;
 
-  // #214: rests live on the Main tab vitals too, through the same shared rest
-  // path as the Features tab (restApi + applyRestResultToCharacter + persist).
-  const handleRest = async (restType: 'short' | 'long') => {
-    if (!character.id) return;
-    try {
-      const result =
-        restType === 'short'
-          ? await restApi.shortRest(character.id)
-          : await restApi.longRest(character.id);
-      const saved = await onCharacterUpdate(applyRestResultToCharacter(character, result));
-      if (!saved) return;
-      toast({
-        title: restType === 'short' ? 'Short rest complete' : 'Long rest complete',
-      });
-      logger.info(`Completed ${restType} rest (Main tab)`, result);
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      logger.error(`Failed to complete ${restType} rest (Main tab)`, error);
-      toast({
-        title: 'Rest failed',
-        description: reason,
-        variant: 'destructive',
-      });
-    }
-  };
+  // #214 + #264: rests live on the Main tab vitals too, through the shared
+  // SheetRestControls (restApi + applyRestResultToCharacter + persist), the same
+  // path as the Features tab.
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -120,7 +94,7 @@ const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate, onCha
         damageId={damageId}
         healingId={healingId}
         tempHpId={tempHpId}
-        onRest={handleRest}
+        onRestUpdate={onCharacterUpdate}
       />
 
       {/* Core Stats */}

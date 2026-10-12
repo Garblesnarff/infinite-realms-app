@@ -332,31 +332,48 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
     refusedSpells,
     noSlotSpells: noSlot.map((spell) => `${spell.name} (level ${spell.level})`),
   });
-  // Every field the client acts on is emptied: no roll, no combat action, no map or handout
-  // change, no combat start (the entry gate's pending handoff included), no XP, no items, no
-  // conditions. The refusal line is the whole turn.
+  return {
+    ...result,
+    text: JSON.stringify(
+      sanitizeRefusedEnvelope(
+        envelope,
+        slotLine ?? featureRefusalLine(character.name, refused[0] ?? ''),
+      ),
+    ),
+  };
+}
+
+/**
+ * The refusal envelope: every field the client acts on is emptied — no roll, no combat
+ * action, no map or handout change, no combat start (the entry gate's pending handoff
+ * included), no XP, no items, no conditions, no story rest. The refusal line is the whole
+ * turn. Pure, so the safety property is unit-testable without a database.
+ */
+export function sanitizeRefusedEnvelope(
+  envelope: Record<string, unknown>,
+  refusalText: string,
+): Record<string, unknown> {
   const {
     combat_entry_pending: _p,
     combat_exits: _e,
     xp_award: _xp,
     items: _i,
     conditions: _c,
-    ...rest
+    // #264: a refused turn must not apply a story rest the DM bundled with it.
+    rest: _storyRest,
+    ...restFields
   } = envelope;
   return {
-    ...result,
-    text: JSON.stringify({
-      ...rest,
-      text: slotLine ?? featureRefusalLine(character.name, refused[0] ?? ''),
-      options: [],
-      narration_segments: [],
-      roll_requests: [],
-      combat_actions: [],
-      combatants: [],
-      map_actions: [],
-      handout_actions: [],
-      scene_spec: null,
-      combat_transition: 'none',
-    }),
+    ...restFields,
+    text: refusalText,
+    options: [],
+    narration_segments: [],
+    roll_requests: [],
+    combat_actions: [],
+    combatants: [],
+    map_actions: [],
+    handout_actions: [],
+    scene_spec: null,
+    combat_transition: 'none',
   };
 }

@@ -75,6 +75,18 @@ describe('RestService Security', () => {
   const mockUserId = 'user-123';
   const mockCharacterId = 'char-123';
 
+  // #264: production characters carry hit-dice rows (created lazily on the first
+  // rest), so the fixtures do too — the relation is what takeShortRest/takeLongRest
+  // read, not an empty array.
+  const mockHitDiceRow = {
+    id: 'hd-1',
+    characterId: mockCharacterId,
+    className: 'Fighter',
+    dieType: 'd10',
+    totalDice: 1,
+    usedDice: 0,
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     (db.query.combatParticipants.findMany as any).mockResolvedValue([]);
@@ -94,7 +106,7 @@ describe('RestService Security', () => {
       // Mock character found and owned
       (db.query.characters.findFirst as any).mockResolvedValue({
         id: mockCharacterId,
-        hitDice: [],
+        hitDice: [mockHitDiceRow],
         classFeatures: null,
         pactSlots: null,
         spellSlots: null,
@@ -145,7 +157,7 @@ describe('RestService Security', () => {
           maxHitPoints: 10,
           currentHitPoints: 10,
         },
-        hitDice: [],
+        hitDice: [mockHitDiceRow],
         classFeatures: null,
         pactSlots: null,
         spellSlots: null,
@@ -203,7 +215,7 @@ describe('RestService Security', () => {
             currentHitPoints: 10,
             vitalState: 'standing',
           },
-          hitDice: [],
+          hitDice: [mockHitDiceRow],
           classFeatures: null,
           pactSlots: null,
           spellSlots: null,
@@ -289,7 +301,7 @@ describe('RestService Security', () => {
     it('short rest serves the table rows, not the stale JSONB', async () => {
       (db.query.characters.findFirst as any).mockResolvedValue({
         id: mockCharacterId,
-        hitDice: [],
+        hitDice: [mockHitDiceRow],
         classFeatures: null,
         pactSlots: null,
         spellSlots: staleJsonb,
@@ -322,7 +334,7 @@ describe('RestService Security', () => {
           maxHitPoints: 10,
           currentHitPoints: 10,
         },
-        hitDice: [],
+        hitDice: [mockHitDiceRow],
         classFeatures: null,
         pactSlots: null,
         // NULL JSONB: the old code returned null here even though the table
