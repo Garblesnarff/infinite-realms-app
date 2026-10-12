@@ -162,7 +162,7 @@ describe('useSessionManagement', () => {
       // Test the functional update in setSessionData
       const dataUpdater = mockSetSessionData.mock.calls.find(
         (call) => typeof call[0] === 'function',
-      )[0];
+      )![0];
       const prevData = { id: 'sess-1', status: 'active' };
       const nextData = dataUpdater(prevData);
       expect(nextData.status).toBe('completed');

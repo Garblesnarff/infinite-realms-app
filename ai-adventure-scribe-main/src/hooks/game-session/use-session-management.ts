@@ -239,6 +239,7 @@ export const useSessionManagement = ({
         return;
       }
 
+      // @ts-expect-error #192 currentState is only narrowed to 'idle'; the setter callback that reassigns it is not tracked by control-flow analysis, so this guard is unreachable per the type system.
       if (currentState === 'loading') {
         logger.warn('⚠️ [updateGameSessionState] Cannot update - session is loading', {
           attemptedUpdate: resolvedState,
@@ -246,6 +247,7 @@ export const useSessionManagement = ({
         return;
       }
 
+      // @ts-expect-error #192 same as above: the reassignment happens inside the setSessionState callback, so currentState keeps its 'idle' literal type here.
       if (currentState === 'error') {
         logger.warn('⚠️ [updateGameSessionState] Cannot update - session is in error state', {
           attemptedUpdate: resolvedState,

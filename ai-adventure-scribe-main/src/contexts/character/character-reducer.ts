@@ -76,6 +76,7 @@ export function characterReducer(state: CharacterState, action: CharacterAction)
       case 'SET_CHARACTER': {
         // Validate character data before setting
         if (!action.payload || typeof action.payload !== 'object') {
+          // @ts-expect-error #192 Character is non-nullable, so this defensive branch is unreachable; the field is read here to log the bad payload the test passes.
           logger.error('Invalid character payload:', action.payload);
           return {
             ...state,

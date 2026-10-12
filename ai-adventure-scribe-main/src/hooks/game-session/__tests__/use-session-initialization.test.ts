@@ -5,6 +5,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as sessionUtils from '../session-utils';
 import { useSessionInitialization } from '../use-session-initialization';
 
+import type { SessionListApiRow } from '../../../../shared/session-list-contract';
+
 import { userDataApi } from '@/services/user-data-api';
 
 // use-session-initialization.ts (src/hooks/game-session/use-session-initialization.ts)
@@ -41,6 +43,29 @@ vi.mock('../session-utils', async () => {
     ...actual,
     isSessionExpired: vi.fn(),
   };
+});
+
+const sessionListRow = (overrides: Partial<SessionListApiRow> = {}): SessionListApiRow => ({
+  id: 'sess-1',
+  campaign_id: 'camp-123',
+  character_id: 'char-456',
+  session_number: 1,
+  start_time: new Date().toISOString(),
+  end_time: null,
+  status: 'active',
+  current_scene_description: null,
+  summary: null,
+  session_notes: null,
+  turn_count: 0,
+  session_state: null,
+  starter_campaign_id: null,
+  campaign_version: null,
+  ruleset: null,
+  created_at: null,
+  updated_at: null,
+  character: null,
+  session_chronicles: [],
+  ...overrides,
 });
 
 describe('useSessionInitialization', () => {
@@ -210,7 +235,9 @@ describe('useSessionInitialization', () => {
   });
 
   it('should resume an active, non-expired session', async () => {
-    const mockSessions = [{ id: 'sess-1', status: 'active', start_time: new Date().toISOString() }];
+    const mockSessions = [
+      sessionListRow({ id: 'sess-1', status: 'active', start_time: new Date().toISOString() }),
+    ];
     vi.mocked(userDataApi.listSessions).mockResolvedValue(mockSessions);
 
     renderHook(() => useSessionInitialization(defaultProps));
@@ -222,7 +249,9 @@ describe('useSessionInitialization', () => {
   });
 
   it('should cleanup an expired session and continue from it', async () => {
-    const mockSessions = [{ id: 'sess-expired', status: 'active', start_time: '2020-01-01' }];
+    const mockSessions = [
+      sessionListRow({ id: 'sess-expired', status: 'active', start_time: '2020-01-01' }),
+    ];
     vi.mocked(userDataApi.listSessions).mockResolvedValue(mockSessions);
     vi.mocked(sessionUtils.isSessionExpired).mockReturnValue(true);
     // The cleanup completes the expired session, making it the
@@ -248,12 +277,12 @@ describe('useSessionInitialization', () => {
 
   it('should continue from last completed session', async () => {
     const mockSessions = [
-      {
+      sessionListRow({
         id: 'sess-old',
         status: 'completed',
         session_number: 1,
         current_scene_description: 'Scene',
-      },
+      }),
     ];
     // First call: fetch existing
     vi.mocked(userDataApi.listSessions).mockResolvedValueOnce(mockSessions);
@@ -276,12 +305,12 @@ describe('useSessionInitialization', () => {
   // empty session and "Read the story so far" blank (run D2's reload repro).
   it('#2517: resumes the session the character fell in instead of creating a new one', async () => {
     const mockSessions = [
-      {
+      sessionListRow({
         id: 'sess-dead',
         status: 'completed',
         session_number: 1,
         current_scene_description: 'Scene',
-      },
+      }),
     ];
     vi.mocked(userDataApi.listSessions).mockResolvedValueOnce(mockSessions);
     // Follows the real producer: fetchSessionFallenState reads the session's
@@ -318,7 +347,7 @@ describe('useSessionInitialization', () => {
   });
 
   it('should handle error during continuation creation', async () => {
-    const mockSessions = [{ id: 'sess-old', status: 'completed' }];
+    const mockSessions = [sessionListRow({ id: 'sess-old', status: 'completed' })];
     vi.mocked(userDataApi.listSessions).mockResolvedValueOnce(mockSessions);
     vi.mocked(userDataApi.createSession).mockRejectedValueOnce(new Error('Insert failed'));
 

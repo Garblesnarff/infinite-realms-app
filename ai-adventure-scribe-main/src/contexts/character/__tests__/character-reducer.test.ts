@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable max-lines */
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { characterReducer, initialState } from '../character-reducer';
+import { characterReducer, initialState, type CharacterState } from '../character-reducer';
 
 import type { Character } from '@/types/character';
 
@@ -22,9 +22,9 @@ describe('characterReducer', () => {
   const mockCharacter: Character = {
     user_id: 'user-123',
     name: 'Test Character',
-    race: 'Human',
+    race: null,
     subrace: null,
-    class: 'Fighter',
+    class: null,
     level: 1,
     abilityScores: {
       strength: { score: 10, modifier: 0, savingThrow: false },
@@ -105,7 +105,7 @@ describe('characterReducer', () => {
   });
 
   it('should handle SET_GENDER, SET_AGE, SET_HEIGHT, SET_WEIGHT, SET_EYES, SET_SKIN, SET_HAIR', () => {
-    let state = { ...initialState, character: mockCharacter };
+    let state: CharacterState = { ...initialState, character: mockCharacter };
 
     state = characterReducer(state, { type: 'SET_GENDER', payload: 'female' });
     expect(state.character?.gender).toBe('female');
