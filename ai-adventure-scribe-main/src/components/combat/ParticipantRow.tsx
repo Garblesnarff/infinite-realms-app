@@ -70,8 +70,7 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
     // Look up portrait from campaign assets
     const assetKey = participant.name.toLowerCase().replace(/\s+/g, '-');
     const assetType =
-      (participant.participantType as string) === 'monster' ||
-      participant.participantType === 'enemy'
+      participant.participantType === 'monster' || participant.participantType === 'enemy'
         ? 'monster'
         : 'npc';
     const portraitUrl = participant.portraitUrl || getAssetImageUrl?.(assetType, assetKey);
@@ -80,7 +79,7 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
       let icon = null;
       let label = '';
 
-      switch (participant.participantType as string) {
+      switch (participant.participantType) {
         case 'player':
           icon = <Shield className="w-4 h-4 text-blue-500" aria-label="Player" />;
           label = 'Player';
