@@ -10,9 +10,9 @@
  *  - It never throws, and it never hands the caller a promise to await. A failure in the
  *    alert path must never become a failure in the game turn that triggered it.
  *  - The structured `[ALERT] ...` log line is unconditional. The Slack webhook is best-effort
- *    and rate-limited per kind (max one POST per kind per 60s) so a hot failure loop produces
- *    one page, not a flood — but the log line, which costs nothing and never spams anyone's
- *    phone, is written every time.
+ *    and rate-limited per kind (max one POST per kind per 60s by default; a caller may pass
+ *    a longer `windowMs`) so a hot failure loop produces one page, not a flood — but the log
+ *    line, which costs nothing and never spams anyone's phone, is written every time.
  *
  * Reuses the `SLACK_ALERT_WEBHOOK_URL` env var and the `{ text }` payload shape already used
  * by `ops/auto-deploy.sh`'s deploy-smoke-failure alert, per the owner decision on issue #1680.
@@ -32,10 +32,10 @@ const lastWebhookPostAtByKind = new Map<string, number>();
 const formatAlertLine = (kind: string, detail: AlertDetail): string =>
   `[ALERT] kind=${kind} session=${detail.sessionId ?? 'unknown'} error=${detail.error ?? 'none'}`;
 
-/** True (and records `now`) the first time a kind is seen in a 60s window; false after. */
-function withinRateLimit(kind: string, now: number): boolean {
+/** True (and records `now`) the first time a kind is seen in the window; false after. */
+function withinRateLimit(kind: string, now: number, windowMs: number): boolean {
   const lastPostAt = lastWebhookPostAtByKind.get(kind);
-  if (lastPostAt !== undefined && now - lastPostAt < RATE_LIMIT_WINDOW_MS) {
+  if (lastPostAt !== undefined && now - lastPostAt < windowMs) {
     return false;
   }
   lastWebhookPostAtByKind.set(kind, now);
@@ -47,10 +47,15 @@ function withinRateLimit(kind: string, now: number): boolean {
  * is caught internally and voided so a slow or failing webhook can never delay or throw into
  * whatever called `alert()`.
  */
-function postToWebhook(kind: string, detail: AlertDetail, line: string): void {
+function postToWebhook(
+  kind: string,
+  detail: AlertDetail,
+  line: string,
+  windowMs: number,
+): void {
   const webhookUrl = process.env.SLACK_ALERT_WEBHOOK_URL;
   if (!webhookUrl) return;
-  if (!withinRateLimit(kind, Date.now())) return;
+  if (!withinRateLimit(kind, Date.now(), windowMs)) return;
 
   const request = fetch(webhookUrl, {
     method: 'POST',
@@ -73,10 +78,17 @@ function postToWebhook(kind: string, detail: AlertDetail, line: string): void {
  * Report a continuity-path failure. Always writes one structured log line; also fires a
  * rate-limited, best-effort Slack alert when `SLACK_ALERT_WEBHOOK_URL` is configured.
  *
+ * `opts.windowMs` overrides the per-kind webhook rate-limit window (default 60 s);
+ * the key-limit page (#350) uses 15 minutes. The log line is still written every time.
+ *
  * Synchronous and side-effect-only by contract: callers keep their existing degraded-but-safe
  * behavior exactly as before, and just add `alert(...)` alongside it.
  */
-export function alert(kind: string, detail: AlertDetail = {}): void {
+export function alert(
+  kind: string,
+  detail: AlertDetail = {},
+  opts: { windowMs?: number } = {},
+): void {
   const line = formatAlertLine(kind, detail);
   try {
     logger.warn(line);
@@ -85,7 +97,7 @@ export function alert(kind: string, detail: AlertDetail = {}): void {
   }
 
   try {
-    postToWebhook(kind, detail, line);
+    postToWebhook(kind, detail, line, opts.windowMs ?? RATE_LIMIT_WINDOW_MS);
   } catch (error) {
     try {
       logger.warn({

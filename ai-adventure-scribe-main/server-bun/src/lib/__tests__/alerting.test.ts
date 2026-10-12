@@ -99,6 +99,24 @@ describe('alert()', () => {
     expect(fetchCalls).toHaveLength(3);
   });
 
+  it('honours a caller-supplied windowMs instead of the default 60s (#350)', () => {
+    process.env.SLACK_ALERT_WEBHOOK_URL = 'https://hooks.example.test/webhook';
+
+    alert('window_ms_test', {}, { windowMs: 15 * 60 * 1000 });
+    alert('window_ms_test', {}, { windowMs: 15 * 60 * 1000 });
+    expect(fetchCalls).toHaveLength(1);
+
+    // 61s in: past the default window, still inside the custom 15-minute one.
+    mockTime += 61_000;
+    alert('window_ms_test', {}, { windowMs: 15 * 60 * 1000 });
+    expect(fetchCalls).toHaveLength(1);
+
+    // Past the custom window: posts again.
+    mockTime += 15 * 60 * 1000;
+    alert('window_ms_test', {}, { windowMs: 15 * 60 * 1000 });
+    expect(fetchCalls).toHaveLength(2);
+  });
+
   it('never throws when the webhook fetch rejects', async () => {
     process.env.SLACK_ALERT_WEBHOOK_URL = 'https://hooks.example.test/webhook';
     globalThis.fetch = (() => Promise.reject(new Error('network down'))) as unknown as typeof fetch;

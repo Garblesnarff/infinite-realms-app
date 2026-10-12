@@ -3,8 +3,7 @@
 #
 # #2250 shipped a client save that the server refused (422) on every narrative
 # roll, and nothing on prod noticed for a day (#2280): no step after a deploy
-# ever wrote a message. This does, as a dedicated smoke account, with no LLM
-# call — so it is free and deterministic:
+# ever wrote a message. This does, as a dedicated smoke account:
 #
 #   1. GET /version reports the commit just deployed (polled while pm2 starts).
 #   2. Sign in, create a throwaway campaign + session, save a player message.
@@ -14,8 +13,16 @@
 #      so the smoke and the route tests share one source.
 #   4. Save the player's roll-result message.
 #   5. Read the history back: 3 rows, in order, text intact, rollRequests kept.
+#   5b. POST one real /v1/llm/generate turn (#350) and fail unless it answers
+#      with parsed=true and not degraded. #350's outage (provider key spend
+#      cap) degraded every turn for ~22 h and steps 1-6 never noticed, because
+#      none of them calls the provider chain. This step costs one real turn
+#      and one daily quota unit of the smoke account per deploy.
 #   6. Delete the campaign (cascades to the session and its messages) and check
 #      the session is gone.
+#
+# Steps 2-6 write no LLM call except 5b, so the run stays deterministic apart
+# from the one real turn.
 #
 # On any failure: one alert line (alerts.log + Slack, the auto-deploy format),
 # one comment on #2093 naming the step and HTTP status, and the hold file
@@ -31,9 +38,11 @@
 # writes no hold, alert or comment.
 #
 # The env file ($SMOKE_ENV_FILE, default /etc/infiniterealms/smoke.env, root
-# 0600) holds SMOKE_EMAIL and SMOKE_PASSWORD for the dedicated smoke account.
-# Neither they nor the access token are ever printed, put on a command line
-# (visible in ps) or written anywhere but a 0600 temp dir removed on exit.
+# 0600) holds SMOKE_EMAIL and SMOKE_PASSWORD for the dedicated smoke account,
+# plus SMOKE_CLEANUP_SECRET authorizing DELETE /v1/llm/usage (usage-row
+# deletion restores quota, so the endpoint is secret-gated). Neither they nor
+# the access token are ever printed, put on a command line (visible in ps) or
+# written anywhere but a 0600 temp dir removed on exit.
 #
 # ts, post_slack and emit, and the DEPLOY_* alert/state/#2093 defaults, are read
 # out of the sibling auto-deploy.sh (as run-status.sh does), so the alert format
@@ -146,10 +155,11 @@ defuse_markers() { sed -E 's/([Rr][Uu][Nn])([[:space:]]+#?[A-Za-z]?[0-9]+[[:spac
 # api <method> <path> [<request body file>]: sets STATUS, response in $WORK/res.
 # A connection failure is status 000.
 api() {
-  local method=$1 path=$2 data=${3:-}
+  local method=$1 path=$2 data=${3:-} hdrfile=${4:-}
   local args=(-sS -m 20 -o "$WORK/res" -w '%{http_code}' -X "$method" -A "$UA"
     -H 'Accept: application/json' -H @"$AUTH")
   [ -n "$data" ] && args+=(-H 'Content-Type: application/json' --data-binary @"$data")
+  [ -n "$hdrfile" ] && args+=(-H @"$hdrfile")
   : > "$WORK/res"
   STATUS=$("$CURL" "${args[@]}" "$API$path" 2> "$WORK/curl.err") || true
   STATUS=${STATUS:-000}
@@ -182,6 +192,7 @@ S2B="2 (create the smoke campaign and session)"
 S3="3 (save the DM reply with rollRequests — the #2280 wire body)"
 S4="4 (save the roll-result message)"
 S5="5 (read the history back: 3 rows, in order, text intact)"
+S5B="5b (one real /v1/llm/generate turn: parsed=true, not degraded)"
 S6="6 (delete the smoke campaign and session)"
 
 [ -n "$EXPECTED" ] || fail "$S1" "" "no expected commit (pass one, or SMOKE_APP_DIR must be a git checkout)"
@@ -225,9 +236,14 @@ say "step 1 ok: /version is ${SHORT}"
   # shellcheck disable=SC1090
   . "$ENV_FILE"
   [ -n "${SMOKE_EMAIL:-}" ] && [ -n "${SMOKE_PASSWORD:-}" ] || exit 1
+  # The usage-cleanup secret authorizes DELETE /v1/llm/usage (deleting usage
+  # rows restores quota, so the endpoint is secret-gated, not user-open).
+  # Written to a 0600 header file like the auth token, never to the shell env.
+  [ -n "${SMOKE_CLEANUP_SECRET:-}" ] || exit 2
+  printf 'x-smoke-cleanup-secret: %s' "$SMOKE_CLEANUP_SECRET" > "$WORK/cleanup-secret.hdr"
   SMOKE_EMAIL=$SMOKE_EMAIL SMOKE_PASSWORD=$SMOKE_PASSWORD \
     jq -n '{email: env.SMOKE_EMAIL, password: env.SMOKE_PASSWORD}' > "$WORK/login.json"
-) || fail "$S2A" "" "$ENV_FILE must set SMOKE_EMAIL and SMOKE_PASSWORD"
+) || fail "$S2A" "" "$ENV_FILE must set SMOKE_EMAIL, SMOKE_PASSWORD and SMOKE_CLEANUP_SECRET"
 api POST /v1/auth/password-login "$WORK/login.json"
 rm -f "$WORK/login.json"
 # The response carries the tokens: never echo it, only its status.
@@ -304,6 +320,55 @@ if ! GOT=$(jq -r --slurpfile p "$WORK/player.json" --slurpfile d "$WORK/dm.json"
 fi
 [ "$GOT" = ok ] || fail "$S5" 200 "$GOT"
 say "step 5 ok: 3 rows read back in order"
+
+# --- 5b. one real turn through the provider chain (#350) ----------------------
+# The 2026-10-10 outage (provider key spend cap) degraded every DM turn for
+# ~22 h and steps 1-6 never noticed, because none of them calls
+# /v1/llm/generate. This posts one real turn as the smoke account and fails
+# unless the provider answered (parsed=true) and the turn was not degraded.
+# A bare generate (no dmReply): the turn writes only the smoke account's own
+# ai_usage metering rows (quota + usage) — its probe budget, like the script's
+# own alert lines. No campaign/session/message rows are created, so there is
+# nothing for step 6 to sweep. The ai_usage rows ARE swept below, by the ids
+# the generate response carries back (#350 FIX round 2). Costs one real turn
+# and one daily quota unit of the smoke account per deploy.
+#
+# Quota headroom: the probe spends one daily unit. If the smoke account is
+# nearly capped, the probe would 402 and fail the smoke for self-inflicted
+# reasons — fail fast here with a message that says what to do instead.
+api GET /v1/llm/quota
+[ "$STATUS" = 200 ] || fail "$S5B" "$STATUS" "could not read smoke account quota"
+QUOTA_LEFT=$(jq -r '.remaining // empty' < "$WORK/res" 2> /dev/null || true)
+case "$QUOTA_LEFT" in ''|*[!0-9]*) fail "$S5B" 200 "quota response has no numeric remaining" ;; esac
+[ "$QUOTA_LEFT" -ge 2 ] || fail "$S5B" 200 \
+  "smoke account quota nearly exhausted (remaining=$QUOTA_LEFT): the probe would 402 — top up the smoke account or wait for the daily reset"
+jq -n '{prompt: "Reply with exactly these three words: smoke test ok",
+        player_input: "smoke test", maxTokens: 64, temperature: 0,
+        provider: "openrouter", requestType: "user"}' > "$WORK/generate.json"
+api POST /v1/llm/generate "$WORK/generate.json"
+expect_status "$S5B" 200
+if ! jq -e '.parsed == true and ((.degraded // false) == false) and ((.text // "") | length > 0)' \
+  < "$WORK/res" > /dev/null 2>&1; then
+  GEN_REASON=$(jq -r '[.reason, .error] | map(select(. != null and . != "")) | first // empty' < "$WORK/res" 2> /dev/null || true)
+  fail "$S5B" "$STATUS" "no live turn (reason: ${GEN_REASON:-unknown})"
+fi
+# --- 5b cleanup (#350 FIX round 2): delete the ai_usage rows the probe turn
+# created, by the ids the generate response carried back, and assert they are
+# gone — otherwise every deploy accumulates usage rows for the smoke account.
+USAGE_IDS=$(jq -c '[.usageIds // [] | .[] | select(type == "number")]' < "$WORK/res" 2> /dev/null || true)
+USAGE_N=$(jq -r 'length' <<< "${USAGE_IDS:-[]}" 2> /dev/null || echo 0)
+[ "${USAGE_N:-0}" -ge 1 ] || fail "$S5B" "$STATUS" "generate response carried no usageIds to clean up"
+jq -n --argjson ids "$USAGE_IDS" '{ids: $ids}' > "$WORK/usage-delete.json"
+api DELETE /v1/llm/usage "$WORK/usage-delete.json" "$WORK/cleanup-secret.hdr"
+expect_status "$S5B" 200
+DELETED=$(jq -r '.deleted // empty' < "$WORK/res" 2> /dev/null || true)
+[ "$DELETED" = "$USAGE_N" ] || fail "$S5B" "$STATUS" "usage cleanup deleted ${DELETED:-?} rows, wanted $USAGE_N"
+# Assert the cleanup: the smoke account's quota is back where the probe found it.
+api GET /v1/llm/quota
+[ "$STATUS" = 200 ] || fail "$S5B" "$STATUS" "could not re-read smoke account quota after cleanup"
+QUOTA_AFTER=$(jq -r '.remaining // empty' < "$WORK/res" 2> /dev/null || true)
+[ "$QUOTA_AFTER" = "$QUOTA_LEFT" ] || fail "$S5B" "$STATUS" "quota not restored after usage cleanup (remaining=${QUOTA_AFTER:-?}, was $QUOTA_LEFT)"
+say "step 5b ok: one real turn, parsed=true, not degraded; $DELETED usage rows cleaned up"
 
 # --- 6. clean up -------------------------------------------------------------
 api DELETE "/v1/campaigns/$CAMPAIGN"

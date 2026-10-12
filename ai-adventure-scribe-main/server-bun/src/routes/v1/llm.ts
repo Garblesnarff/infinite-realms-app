@@ -8,6 +8,8 @@
  * Ported from /server/src/routes/v1/llm.ts
  */
 
+import { timingSafeEqual } from 'node:crypto';
+
 import { Elysia, t } from 'elysia';
 
 import { deferUntilCommit } from '../../../../db/transaction-context';
@@ -51,6 +53,7 @@ import {
   rewriteNarrationSegmentsFromEnvelope,
 } from '../../services/dm/dm-response-schema.js';
 import { isRetryableUpstreamStatus } from '../../services/llm-errors.js';
+import { isProviderKeyLimitError } from '../../services/llm-key-limit.js';
 import {
   getConfiguredGeminiModels,
   getConfiguredOpenRouterModels,
@@ -170,6 +173,36 @@ const degradedGenerateEnvelope = (): {
   reason: LLM_GENERATE_DEGRADED_REASON,
   text: LLM_GENERATE_DEGRADED_TEXT,
 });
+
+// #350: a turn degraded by a provider key/credit limit is not the player's
+// fault. The message says so plainly, and the route gives the consumed quota
+// unit back (see the degraded branch below) — "Your turn was not used."
+const LLM_GENERATE_KEY_LIMIT_REASON = 'llm_provider_key_limit';
+const LLM_GENERATE_KEY_LIMIT_TEXT =
+  'The storyteller is offline for maintenance. Your turn was not used.';
+
+const keyLimitDegradedEnvelope = (): {
+  parsed: false;
+  degraded: true;
+  reason: string;
+  text: string;
+} => ({
+  parsed: false as const,
+  degraded: true as const,
+  reason: LLM_GENERATE_KEY_LIMIT_REASON,
+  text: LLM_GENERATE_KEY_LIMIT_TEXT,
+});
+
+/**
+ * #350: whether a failed storyteller result was caused by a provider key/credit
+ * limit. The provider service computes the verdict once per chain-exhausted
+ * event and carries it on `result.providerKeyLimit`; the status-only check is
+ * a fallback for results produced off that path (e.g. the breaker-open fast
+ * fail, which synthesizes `upstreamStatus: 403` while the key is known dead).
+ */
+const isKeyLimitResult = (result: LLMResponse): boolean =>
+  result.providerKeyLimit === true ||
+  isProviderKeyLimitError({ upstreamStatus: result.upstreamStatus });
 
 /**
  * #312: whether a failed storyteller call is worth one retry before the turn degrades.
@@ -386,6 +419,13 @@ export const appendDeclaredDefenseDirective = (
   );
 };
 
+function constantTimeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a, 'utf8');
+  const bb = Buffer.from(b, 'utf8');
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+}
+
 export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
   .use(planRateLimit('llm'))
 
@@ -420,6 +460,66 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       return { error: 'Failed to fetch quota status' };
     }
   })
+
+  /**
+   * Delete the caller's own ai_usage rows by id
+   * DELETE /v1/llm/usage
+   *
+   * #350 FIX round 2: the deploy smoke deletes the ai_usage rows its probe
+   * turn created (the ids the generate response carried back) so deploys stop
+   * accumulating usage rows.
+   *
+   * Deleting usage rows restores quota (quota = limit - SUM(units)), so this
+   * endpoint is NOT open to users: it requires the SMOKE_CLEANUP_SECRET shared
+   * secret (sent as the x-smoke-cleanup-secret header), which only the deploy
+   * smoke knows. Without the secret this would be a self-service quota reset.
+   * Scoped to the authenticated user as defense in depth.
+   */
+  .delete(
+    '/usage',
+    async ({ request, body, set }) => {
+      // Direct auth check - bypasses Elysia plugin context issues
+      const { user, error } = await authenticateRequest(request);
+      if (error || !user) {
+        set.status = 401;
+        return { error: error || 'Unauthorized' };
+      }
+
+      // The cleanup secret gates this endpoint: quota is derived from the
+      // usage rows, so deleting rows restores quota. Only the deploy smoke
+      // (which holds the secret in its host env file) may delete rows.
+      const configuredSecret = process.env.SMOKE_CLEANUP_SECRET || '';
+      const presentedSecret = request.headers.get('x-smoke-cleanup-secret') || '';
+      if (configuredSecret === '' || !constantTimeEqual(presentedSecret, configuredSecret)) {
+        set.status = 403;
+        return { error: 'Forbidden' };
+      }
+
+      const ids = Array.isArray(body?.ids)
+        ? body.ids.filter(
+            (id: unknown): id is number => typeof id === 'number' && Number.isFinite(id),
+          )
+        : [];
+      if (ids.length === 0) {
+        set.status = 400;
+        return { error: 'ids must be a non-empty array of usage row ids' };
+      }
+
+      try {
+        const { deleted } = await AIUsageService.deleteUsageRows({ userId: user.userId, ids });
+        return { deleted };
+      } catch (err) {
+        logger.error({ msg: 'LLM_USAGE_DELETE_ERROR', error: err });
+        set.status = 500;
+        return { error: 'Failed to delete usage rows' };
+      }
+    },
+    {
+      body: t.Object({
+        ids: t.Array(t.Number()),
+      }),
+    },
+  )
 
   /**
    * Generate text via LLM
@@ -592,6 +692,10 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           type: quotaType,
           units: 1,
         });
+        // #350 FIX round 2: the ai_usage row ids this turn creates, carried
+        // back so the deploy smoke can delete its probe rows.
+        const usageIds: number[] = [];
+        if (typeof quota.usageId === 'number') usageIds.push(quota.usageId);
         if (!quota.allowed) {
           set.status = 402;
           set.headers['Retry-After'] = String(
@@ -728,7 +832,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // A single transient timeout on the turn that ends a fight (or resolves a check) used to
         // lose the reply, the XP award and the persisted DM row with no recovery — the client was
         // told to "try your action again" after the moment had passed (GP-069).
-        if (isRetryableGenerateResult(result)) {
+        // #350: never retry a key-limit failure — the key is dead, so a retry
+        // only burns up to 5s (e.g. into a still-open breaker) for nothing.
+        if (isRetryableGenerateResult(result) && !isKeyLimitResult(result)) {
           const waitMs = Math.min(5_000, Math.max(0, Math.round((result.retryAfter ?? 1) * 1000)));
           logger.warn({
             msg: 'LLM_GENERATE_RETRY',
@@ -807,21 +913,33 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         }
 
         if (result.error) {
+          // #350: a provider key/credit limit is not the player's fault. Say so
+          // plainly, and give back the quota unit this turn consumed — the turn
+          // never reached a model, so the player must not pay for the outage.
+          const keyLimit = isKeyLimitResult(result);
           logger.error({
             msg: 'LLM_GENERATE_DEGRADED',
             error: result.error,
             status: result.status,
             provider: result.provider,
             model: result.model,
+            ...(keyLimit ? { keyLimit: true } : {}),
           });
-          const degradedEnvelope = degradedGenerateEnvelope();
+          const degradedEnvelope = keyLimit ? keyLimitDegradedEnvelope() : degradedGenerateEnvelope();
+          if (keyLimit) {
+            try {
+              await AIUsageService.refundQuota({ userId, plan, type: quotaType, units: 1 });
+            } catch (refundError) {
+              logger.error({ msg: 'LLM_GENERATE_KEY_LIMIT_REFUND_FAILED', error: refundError });
+            }
+          }
           logEnvelopeShape(null, degradedEnvelope.text, sessionId ?? combatEntry?.sessionId, true);
           set.status = 200;
           return degradedEnvelope;
         }
 
         if (result.usage && result.provider) {
-          await AIUsageService.recordProviderUsage({
+          const usageDetailId = await AIUsageService.recordProviderUsage({
             userId,
             plan,
             type: quotaType,
@@ -832,6 +950,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             // #2218: only DM turns carry dmReply; other generations stay session-less.
             sessionId: dmReply ? (sessionId ?? combatEntry?.sessionId) : undefined,
           });
+          if (typeof usageDetailId === 'number') usageIds.push(usageDetailId);
           // #352: per-turn prompt-cache accounting, log-only (no storage).
           // `cachedTokens` > 0 means the stable system prefix was served from
           // the provider's cache this turn. Only requests that carried a
@@ -1013,9 +1132,14 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         }
 
         return {
+          // #350 FIX round 2: parsed reflects whether the model text actually
+          // parsed — the deploy smoke asserts parsed=true, so a hardcoded true
+          // would let a prose-only (null envelope) reply pass the check.
+          parsed: envelope !== null,
           text: rewriteNarrationSegmentsFromEnvelope(envelope, result.text),
           provider: result.provider,
           model: result.model,
+          usageIds,
           ...(dmReply ? { dmReplyPersisted } : {}),
           ...(canonicalMessageId ? { dmReplyMessageId: canonicalMessageId } : {}),
         };

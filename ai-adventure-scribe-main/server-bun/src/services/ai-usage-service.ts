@@ -68,7 +68,7 @@ export class AIUsageService {
      * cost is derived from model-pricing.
      */
     costUsd?: number;
-  }): Promise<void> {
+  }): Promise<number | null> {
     const model = opts.model || 'unknown';
     const pricing = getModelPricing(model);
     const explicitCost =
@@ -101,7 +101,9 @@ export class AIUsageService {
     try {
       await AIUsageService.ensureTable();
 
-      await sql`
+      // #350 FIX round 2: return the row id so the deploy smoke can delete the
+      // rows its probe turn created.
+      const inserted = await sql`
         INSERT INTO ai_usage (
           org_id, user_id, plan, type, units, period_start,
           provider, model, input_tokens, output_tokens, total_tokens, cost_usd,
@@ -111,7 +113,10 @@ export class AIUsageService {
           ${opts.provider}, ${model}, ${inputTokens}, ${outputTokens}, ${inputTokens + outputTokens}, ${costUsd},
           ${reportedImageOutputTokens}, ${opts.sessionId || null}
         )
+        RETURNING id
       `;
+      const usageId =
+        inserted.length > 0 && inserted[0].id != null ? Number(inserted[0].id) : null;
       const totals = await sql`
         SELECT COALESCE(SUM(cost_usd), 0) AS cost_usd
         FROM ai_usage WHERE user_id = ${opts.userId} AND period_start = ${period}
@@ -122,6 +127,7 @@ export class AIUsageService {
         period,
         costUsd: Number(totals[0]?.cost_usd || 0),
       });
+      return Number.isFinite(usageId) ? usageId : null;
     } catch (error) {
       // Was previously swallowed with no severity guarantee: if this insert fails
       // (e.g. the ai_usage table is missing the provider/model/token/cost columns
@@ -134,6 +140,8 @@ export class AIUsageService {
         provider: opts.provider,
         model,
       });
+      // The insert failed: there is no row id to hand back.
+      return null;
     }
   }
 
@@ -203,7 +211,11 @@ export class AIUsageService {
         input_tokens INTEGER,
         output_tokens INTEGER,
         total_tokens INTEGER,
-        cost_usd NUMERIC
+        cost_usd NUMERIC,
+        -- #350 FIX round 3: stable row id for the deploy smoke's cleanup
+        -- (DELETE /v1/llm/usage by id). Existing tables get it from
+        -- migration 0020_ai_usage_id_pk; this covers fresh databases.
+        id SERIAL PRIMARY KEY
       )
     `;
 
@@ -218,6 +230,8 @@ export class AIUsageService {
     await sql`ALTER TABLE ai_usage ADD COLUMN IF NOT EXISTS cost_usd NUMERIC`;
     await sql`ALTER TABLE ai_usage ADD COLUMN IF NOT EXISTS session_id TEXT`;
     await sql`ALTER TABLE ai_usage ADD COLUMN IF NOT EXISTS image_output_tokens INTEGER`;
+    // #350 FIX round 3: the id SERIAL PRIMARY KEY now comes from migration
+    // 0020_ai_usage_id_pk (runtime DDL for schema changes is not allowed).
 
     AIUsageService.dbInitialized = true;
   }
@@ -261,7 +275,7 @@ export class AIUsageService {
     plan: string;
     type: UsageType;
     units?: number;
-  }): Promise<{ allowed: boolean; remaining: number; resetAt: string }> {
+  }): Promise<{ allowed: boolean; remaining: number; resetAt: string; usageId: number | null }> {
     const { userId, orgId, plan, type } = opts;
     const units = Math.max(1, Math.floor(opts.units ?? 1));
     const quota = AIUsageService.getPlanQuota(plan);
@@ -300,7 +314,7 @@ export class AIUsageService {
               AND type = ${type}
               AND period_start = ${pkey}
           ) + ${units} <= ${limit}
-          RETURNING (
+          RETURNING id, (
             SELECT COALESCE(SUM(units), 0)
             FROM ai_usage
             WHERE (org_id = ${orgId || null} OR user_id = ${userId})
@@ -313,7 +327,14 @@ export class AIUsageService {
           // RETURNING's subquery reads the table before this INSERT, so it is usage before this
           // call. Add this call's units to report what is left after it (#2673 step 3b).
           const usedAfter = Number(result[0].total || 0) + units;
-          return { allowed: true, remaining: Math.max(0, limit - usedAfter) };
+          // #350 FIX round 2: the row id lets the deploy smoke delete the rows
+          // its probe turn created.
+          const usageId = typeof result[0].id === 'number' ? result[0].id : Number(result[0].id);
+          return {
+            allowed: true,
+            remaining: Math.max(0, limit - usedAfter),
+            usageId: Number.isFinite(usageId) ? usageId : null,
+          };
         }
 
         // Quota exceeded: Fall back to a simple SELECT to get the current usage for the response
@@ -325,7 +346,7 @@ export class AIUsageService {
             AND period_start = ${pkey}
         `;
         const used = Number(rows?.[0]?.total || 0);
-        return { allowed: false, remaining: Math.max(0, limit - used) };
+        return { allowed: false, remaining: Math.max(0, limit - used), usageId: null };
       });
 
       return { ...outcome, resetAt };
@@ -335,6 +356,59 @@ export class AIUsageService {
       logger.error({ msg: 'AI_USAGE_DB_ERROR', error, fallback: 'refuse' });
       throw new QuotaUnavailableError();
     }
+  }
+
+  /**
+   * Give back units a checkQuotaAndConsume() call took. Quota is accounted as
+   * SUM(units) over today's rows, so a negative-units row restores the unit.
+   * Used when the turn that consumed the unit never reached a model (#350:
+   * provider key/credit limit) — the player must not pay for the outage.
+   * Throws on DB error; callers log and move on (the turn is already degraded).
+   *
+   * No advisory lock (unlike checkQuotaAndConsume): the refund runs at most
+   * once per consumed turn inside generateTurn, on the same scope columns, so
+   * concurrent refunds of the same unit cannot happen — the SUM still nets to
+   * zero. If this is ever called from anywhere else, revisit.
+   */
+  static async refundQuota(opts: {
+    orgId?: string | null;
+    userId: string;
+    plan: string;
+    type: UsageType;
+    units?: number;
+  }): Promise<void> {
+    const { userId, orgId, plan, type } = opts;
+    const units = Math.max(1, Math.floor(opts.units ?? 1));
+    const pkey = AIUsageService.periodKey();
+    await AIUsageService.ensureTable();
+    await sql`
+      INSERT INTO ai_usage (org_id, user_id, plan, type, units, period_start)
+      VALUES (${orgId || null}, ${userId}, ${plan}, ${type}, ${-units}, ${pkey})
+    `;
+  }
+
+  /**
+   * Delete ai_usage rows by id, scoped to the calling user (#350 FIX round 2).
+   * The deploy smoke deletes the rows its probe turn created (the ids the
+   * generate response carried back) so deploys stop accumulating usage rows.
+   * Returns the number of rows deleted. Never touches another user's rows.
+   */
+  static async deleteUsageRows(opts: {
+    userId: string;
+    ids: number[];
+  }): Promise<{ deleted: number }> {
+    const { userId, ids } = opts;
+    const cleanIds = [...new Set(ids)].filter(
+      (id) => typeof id === 'number' && Number.isFinite(id),
+    );
+    if (cleanIds.length === 0) return { deleted: 0 };
+    await AIUsageService.ensureTable();
+    const rows = await sql`
+      DELETE FROM ai_usage
+      WHERE user_id = ${userId} AND id = ANY(${cleanIds})
+      RETURNING id
+    `;
+    return { deleted: rows.length };
   }
 
   /**
