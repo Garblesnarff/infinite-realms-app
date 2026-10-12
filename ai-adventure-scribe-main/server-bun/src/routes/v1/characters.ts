@@ -7,6 +7,8 @@
  * - GET /v1/characters/:id - Get single character
  * - PUT /v1/characters/:id - Update character
  * - DELETE /v1/characters/:id - Delete character
+ * - GET /v1/characters/:id/export - Download a character as JSON
+ * - POST /v1/characters/import - Create a character from an export
  * - GET /v1/characters/:id/spells - Get character spells
  * - POST /v1/characters/:id/spells - Save character spells
  *
@@ -18,8 +20,19 @@ import { TRPCError } from '@trpc/server';
 import { and, count, eq, gt, inArray } from 'drizzle-orm';
 import { Elysia, t } from 'elysia';
 
+import {
+  buildCharacterExport,
+  CHARACTER_EXPORT_FORMAT,
+  CHARACTER_EXPORT_VERSION,
+  NON_PORTABLE_CHARACTER_KEYS,
+} from './character-json.js';
 import { db } from '../../../../db/client';
-import { characterSpells, spells } from '../../../../db/schema/index';
+import {
+  characterEquipment,
+  characterSpells,
+  inventoryItems,
+  spells,
+} from '../../../../db/schema/index';
 import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
@@ -77,6 +90,7 @@ export async function overlayCharacterConditions(
       conditions: await getActiveCharacterConditions(characterId),
     };
   } catch (error) {
+    // prettier-ignore
     logger.warn({ err: error, characterId }, 'overlayCharacterConditions lookup failed; serving character without conditions');
     return mapped;
   }
@@ -185,6 +199,100 @@ const characterSchema = t.Object({
       }),
     ),
   ),
+});
+
+/**
+ * The one writer for a new character: the wizard's POST and the JSON import both land here.
+ */
+async function createCharacterFromBody(
+  userId: string,
+  body: typeof characterSchema.static,
+): Promise<Character> {
+  return CharacterService.create(
+    userId,
+    {
+      name: body.name,
+      description: body.description,
+      race: body.race,
+      subrace: body.subrace,
+      class: body.class,
+      level: body.level,
+      alignment: body.alignment,
+      experiencePoints: body.experience_points,
+      imageUrl: body.image_url,
+      avatarUrl: body.avatar_url,
+      appearance: body.appearance,
+      personalityTraits: body.personality_traits,
+      personalityNotes: body.personality_notes,
+      backstoryElements: body.backstory_elements,
+      background: body.background,
+      backgroundImage: body.background_image,
+      theme: body.theme,
+      sessionNotes: body.session_notes,
+      campaignId: body.campaign_id,
+      skillProficiencies: body.skill_proficiencies,
+      expertiseProficiencies: body.expertise_proficiencies,
+      toolProficiencies: body.tool_proficiencies,
+      savingThrowProficiencies: body.saving_throw_proficiencies,
+      languages: body.languages,
+      cantrips: body.cantrips,
+      knownSpells: body.known_spells,
+      preparedSpells: body.prepared_spells,
+      ritualSpells: body.ritual_spells,
+      spellSlots: body.spell_slots,
+      pactSlots: body.pact_slots,
+      activeConcentration: body.active_concentration,
+      classFeatures: body.class_features,
+      enhancementSelections: body.enhancement_selections,
+      fightingStyles: body.fighting_styles,
+      copperPieces: body.copper_pieces,
+      silverPieces: body.silver_pieces,
+      electrumPieces: body.electrum_pieces,
+      goldPieces: body.gold_pieces,
+      platinumPieces: body.platinum_pieces,
+      damageResistances: body.damage_resistances,
+      damageImmunities: body.damage_immunities,
+      damageVulnerabilities: body.damage_vulnerabilities,
+      visionTypes: body.vision_types,
+      obscurement: body.obscurement,
+      isHidden: body.is_hidden,
+      stealthCheckBonus: body.stealth_check_bonus,
+      classLevels: body.class_levels,
+      totalLevel: body.total_level,
+    },
+    body.stats
+      ? {
+          strength: body.stats.strength,
+          dexterity: body.stats.dexterity,
+          constitution: body.stats.constitution,
+          intelligence: body.stats.intelligence,
+          wisdom: body.stats.wisdom,
+          charisma: body.stats.charisma,
+          armorClass: body.stats.armor_class,
+          maxHitPoints: body.stats.max_hit_points,
+          currentHitPoints: body.stats.current_hit_points,
+          temporaryHitPoints: body.stats.temporary_hit_points,
+          initiativeBonus: body.stats.initiative_bonus,
+          speed: body.stats.speed,
+        }
+      : undefined,
+    body.equipment,
+    body.inventory_items,
+  );
+}
+
+/**
+ * What an import accepts: the wizard's own body, without the fields that link a character to a
+ * campaign or hold engine-owned slot state. The handler never reads ids, owner ids or sharing
+ * flags: `createCharacterFromBody` copies named fields only, and the owner is the caller.
+ */
+const characterImportSchema = t.Object({
+  format: t.Literal(CHARACTER_EXPORT_FORMAT),
+  version: t.Literal(CHARACTER_EXPORT_VERSION),
+  exported_at: t.Optional(t.String()),
+  character: t.Omit(characterSchema, [...NON_PORTABLE_CHARACTER_KEYS], {
+    additionalProperties: false,
+  }),
 });
 
 const updateCharacterSchema = t.Partial(characterSchema);
@@ -390,77 +498,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
           }
         }
 
-        const character = await CharacterService.create(
-          user!.userId,
-          {
-            name: body.name,
-            description: body.description,
-            race: body.race,
-            subrace: body.subrace,
-            class: body.class,
-            level: body.level,
-            alignment: body.alignment,
-            experiencePoints: body.experience_points,
-            imageUrl: body.image_url,
-            avatarUrl: body.avatar_url,
-            appearance: body.appearance,
-            personalityTraits: body.personality_traits,
-            personalityNotes: body.personality_notes,
-            backstoryElements: body.backstory_elements,
-            background: body.background,
-            backgroundImage: body.background_image,
-            theme: body.theme,
-            sessionNotes: body.session_notes,
-            campaignId: body.campaign_id,
-            skillProficiencies: body.skill_proficiencies,
-            expertiseProficiencies: body.expertise_proficiencies,
-            toolProficiencies: body.tool_proficiencies,
-            savingThrowProficiencies: body.saving_throw_proficiencies,
-            languages: body.languages,
-            cantrips: body.cantrips,
-            knownSpells: body.known_spells,
-            preparedSpells: body.prepared_spells,
-            ritualSpells: body.ritual_spells,
-            spellSlots: body.spell_slots,
-            pactSlots: body.pact_slots,
-            activeConcentration: body.active_concentration,
-            classFeatures: body.class_features,
-            enhancementSelections: body.enhancement_selections,
-            fightingStyles: body.fighting_styles,
-            copperPieces: body.copper_pieces,
-            silverPieces: body.silver_pieces,
-            electrumPieces: body.electrum_pieces,
-            goldPieces: body.gold_pieces,
-            platinumPieces: body.platinum_pieces,
-            damageResistances: body.damage_resistances,
-            damageImmunities: body.damage_immunities,
-            damageVulnerabilities: body.damage_vulnerabilities,
-            visionTypes: body.vision_types,
-            obscurement: body.obscurement,
-            isHidden: body.is_hidden,
-            stealthCheckBonus: body.stealth_check_bonus,
-            classLevels: body.class_levels,
-            totalLevel: body.total_level,
-          },
-          body.stats
-            ? {
-                strength: body.stats.strength,
-                dexterity: body.stats.dexterity,
-                constitution: body.stats.constitution,
-                intelligence: body.stats.intelligence,
-                wisdom: body.stats.wisdom,
-                charisma: body.stats.charisma,
-                armorClass: body.stats.armor_class,
-                maxHitPoints: body.stats.max_hit_points,
-                currentHitPoints: body.stats.current_hit_points,
-                temporaryHitPoints: body.stats.temporary_hit_points,
-                initiativeBonus: body.stats.initiative_bonus,
-                speed: body.stats.speed,
-              }
-            : undefined,
-          body.equipment,
-          body.inventory_items,
-        );
+        const character = await createCharacterFromBody(user!.userId, body);
 
         set.status = 201;
         return mapCharacterToApi(character as Character & { stats?: CharacterStats });
@@ -472,6 +510,26 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
     {
       body: characterSchema,
     },
+  )
+
+  /**
+   * POST /v1/characters/import
+   * Create a new character, owned by the caller, from an export file (#319).
+   */
+  .post(
+    '/import',
+    async ({ body, set, user }) => {
+      // Whatever the schema let through, a file never links a campaign or sets slot state.
+      const character = await createCharacterFromBody(user!.userId, {
+        ...body.character,
+        campaign_id: undefined,
+        spell_slots: undefined,
+        pact_slots: undefined,
+      });
+      set.status = 201;
+      return mapCharacterToApi(character as Character & { stats?: CharacterStats });
+    },
+    { body: characterImportSchema },
   )
 
   /**
@@ -490,6 +548,39 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
     // Serve the out-of-combat conditions so the sheet's Conditions panel reads the
     // same source the story writer writes (#218 step 4).
     return overlayCharacterConditions(withSlots, resolved.id);
+  })
+
+  /**
+   * GET /v1/characters/:id/export
+   * Download the character as JSON (#319). Owner only: a character shared with the caller
+   * through character_permissions is not theirs to export.
+   */
+  .get('/:id/export', async ({ character, user, set }) => {
+    const resolved = character as (Character & { stats?: CharacterStats }) | null;
+    if (!resolved || (resolved.userId !== user!.userId && resolved.ownerId !== user!.userId)) {
+      set.status = 404;
+      return { error: 'Character not found' };
+    }
+    const equipment = await db
+      .select()
+      .from(characterEquipment)
+      .where(eq(characterEquipment.characterId, resolved.id));
+    const inventory = await db
+      .select()
+      .from(inventoryItems)
+      .where(eq(inventoryItems.characterId, resolved.id));
+    const payload = buildCharacterExport({
+      mapped: mapCharacterToApi(resolved) ?? {},
+      characterKeys: Object.keys(characterSchema.properties),
+      stats: resolved.stats
+        ? (mapCharacterToApi(resolved)?.stats as Record<string, unknown>)
+        : null,
+      equipment,
+      inventory,
+    });
+    set.headers['content-disposition'] =
+      `attachment; filename="character-${resolved.id.slice(0, 8)}.json"`;
+    return payload;
   })
 
   /**
@@ -904,7 +995,8 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
       // rangers know their spells and never prepare.
       const cls = (character.class ?? '').trim().toLowerCase();
       const stats = (character as Character & { stats?: CharacterStats | null }).stats;
-      const mod = (score: number | null | undefined): number => Math.floor(((score ?? 10) - 10) / 2);
+      const mod = (score: number | null | undefined): number =>
+        Math.floor(((score ?? 10) - 10) / 2);
       let limit: number | null = null;
       if (cls === 'cleric' || cls === 'druid') limit = mod(stats?.wisdom) + character.level;
       else if (cls === 'wizard') limit = mod(stats?.intelligence) + character.level;
