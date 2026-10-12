@@ -20,7 +20,8 @@ export const blogPostSchema = z.object({
   excerpt: z.string().max(500, 'Excerpt must be 500 characters or less').optional(),
   content: z.string().min(1, 'Content is required'),
   coverImageUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
-  status: z.enum(['draft', 'scheduled', 'published']),
+  // #456: every BlogPostStatus, so a review/archived post keeps its status on save.
+  status: z.enum(['draft', 'review', 'scheduled', 'published', 'archived']),
   scheduledFor: z.string().optional(),
   categoryIds: z.array(z.string()).optional(),
   tagIds: z.array(z.string()).optional(),
@@ -86,8 +87,7 @@ export function useBlogPostEditor({
       excerpt: post?.excerpt || '',
       content: post?.content || '',
       coverImageUrl: post?.coverImageUrl || '',
-      // @ts-expect-error #456 post.status can be review/archived, invalid for the 3-value form schema
-      status: (post?.status as BlogPostStatus) || 'draft',
+      status: post?.status || 'draft',
       scheduledFor: post?.scheduledFor || '',
       categoryIds: post?.categoryIds || [],
       tagIds: post?.tagIds || [],
