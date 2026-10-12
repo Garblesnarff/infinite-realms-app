@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock dependencies BEFORE importing the module under test
 const mockSetLocalStorage = vi.fn();
 vi.mock('@/hooks/use-local-storage', () => ({
-  useLocalStorage: vi.fn((key, initialValue) => {
+  useLocalStorage: vi.fn((_key, initialValue) => {
     return [initialValue, mockSetLocalStorage];
   }),
 }));
@@ -19,7 +19,7 @@ describe('usePanelResize', () => {
     vi.clearAllMocks();
 
     // Default mock implementation
-    vi.mocked(useLocalStorage).mockImplementation((key, initialValue) => {
+    vi.mocked(useLocalStorage).mockImplementation((_key, initialValue) => {
       return [initialValue, mockSetLocalStorage];
     });
   });
