@@ -63,6 +63,7 @@ import {
   playerCombatSpellLabel,
   resolvePlayerCombatSpell,
 } from '@/services/combat/player-combat-spell';
+import { actorMovementRemaining } from '@/services/combat/player-movement-remaining';
 import { trackPlayerRollDismissal } from '@/services/combat/player-roll-bridge';
 import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
 import {
@@ -747,7 +748,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     action: StructuredCombatAction,
     execution: Awaited<ReturnType<typeof executeStructuredCombatActionWithBoundary>>,
     autoRolled: boolean,
-  ): Promise<BatchBoundary> => {
+  ): Promise<BatchBoundary | null> => {
     if (!isPlayerActor(action.actor_id, participants)) {
       resolvedActions.push({
         action,
@@ -830,6 +831,16 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       isPlayerActor(action.actor_id, participants)
     )
       return null;
+    // One attack or attack-roll spell does not end the turn when the player still has
+    // movement: keep the player on the same turn and let the refreshed legal-action menu
+    // offer Move / End turn (#263 CB-011). Unknown movement keeps the old settlement.
+    if (
+      (action.action_type === 'attack' || action.action_type === 'cast_spell') &&
+      isPlayerActor(action.actor_id, participants)
+    ) {
+      const movementLeft = await actorMovementRemaining(sessionId, action.actor_id);
+      if (movementLeft !== null && movementLeft > 0) return null;
+    }
     return crossTurnBoundary(
       action.actor_id,
       action.action_type === 'death_save' ? execution.result : undefined,

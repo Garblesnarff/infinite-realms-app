@@ -21,6 +21,7 @@ import {
 } from '@/services/combat/combat-outcome-transcript';
 import { askPlayerForAttackDie } from '@/services/combat/player-attack-roll';
 import { resolvePlayerCombatSpell } from '@/services/combat/player-combat-spell';
+import { actorMovementRemaining } from '@/services/combat/player-movement-remaining';
 import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
 import { createPlayerMessageFromOption } from '@/utils/parseMessageOptions';
 
@@ -332,15 +333,20 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
           const movementOnly =
             die.movementOnly ||
             (execution.result as { resolvedAs?: string } | null)?.resolvedAs === 'movement_only';
-          // A resolved attack settles the turn, the same settlement the DM pipeline
-          // performs. A movement-only approach spent no Action, so the turn stays
-          // open and the refreshed menu offers the attack again — now in reach.
+          // A resolved attack settles the turn only when the player has nothing left to do —
+          // one swing does not spend the whole turn (#263 CB-011). With movement remaining
+          // the turn stays open and the refreshed menu offers Move / End turn. A
+          // movement-only approach spent no Action, so the turn stays open and the
+          // refreshed menu offers the attack again — now in reach.
           if (!movementOnly && execution.boundary === null) {
-            await executeAuthoritativeCombatIntent(encounter.id, {
-              type: 'end_turn',
-              actorId,
-              actionId: crypto.randomUUID(),
-            });
+            const movementLeft = await actorMovementRemaining(encounter.sessionId, actorId);
+            if (movementLeft === null || movementLeft <= 0) {
+              await executeAuthoritativeCombatIntent(encounter.id, {
+                type: 'end_turn',
+                actorId,
+                actionId: crypto.randomUUID(),
+              });
+            }
           }
           await refreshCombatState();
         } else if (action.type === 'spell' && action.targetIds?.[0]) {
@@ -408,15 +414,19 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
             });
             const movementOnly =
               (execution.result as { resolvedAs?: string } | null)?.resolvedAs === 'movement_only';
-            // A resolved cast settles the turn, the same settlement the DM pipeline
-            // performs. A movement-only resolution spent no Action, so the turn stays
-            // open.
+            // A resolved cast settles the turn only when the player has nothing left to do
+            // (#263 CB-011). With movement remaining the turn stays open and the refreshed
+            // menu offers Move / End turn. A movement-only resolution spent no Action,
+            // so the turn stays open.
             if (!movementOnly && execution.boundary === null) {
-              await executeAuthoritativeCombatIntent(encounter.id, {
-                type: 'end_turn',
-                actorId,
-                actionId: crypto.randomUUID(),
-              });
+              const movementLeft = await actorMovementRemaining(encounter.sessionId, actorId);
+              if (movementLeft === null || movementLeft <= 0) {
+                await executeAuthoritativeCombatIntent(encounter.id, {
+                  type: 'end_turn',
+                  actorId,
+                  actionId: crypto.randomUUID(),
+                });
+              }
             }
             await refreshCombatState();
           }

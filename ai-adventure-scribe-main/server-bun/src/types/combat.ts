@@ -615,6 +615,15 @@ export interface AttackResult {
   hit: boolean;
   /** The kept natural d20 face used for this attack, when the result came from an attack roll. */
   d20?: number;
+  /**
+   * Both d20 faces when advantage or disadvantage rolled a second die: `[kept, dropped]`.
+   * Present only when the engine rolled two dice, so the log can show both and name the kept
+   * one (#263 CB-028). A player-supplied die arrives as a single kept face.
+   */
+  d20Rolls?: [number, number];
+  /** Whether the attack was rolled with advantage / disadvantage (2014 5e). */
+  advantage?: boolean;
+  disadvantage?: boolean;
   /** The engine's attack modifier, kept beside the die so the total can be audited. */
   attackBonus?: number;
   targetAC: number;

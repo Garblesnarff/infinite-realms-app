@@ -44,6 +44,9 @@ vi.mock('@/services/combat/combat-action-executor', async (importOriginal) => ({
     executeStructuredCombatActionWithBoundary(...args),
   executeAuthoritativeCombatIntent: (...args: any[]) => executeAuthoritativeCombatIntent(...args),
 }));
+vi.mock('@/services/combat/player-movement-remaining', () => ({
+  actorMovementRemaining: vi.fn().mockResolvedValue(0),
+}));
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     resolveAoECast: (...args: any[]) => resolveAoECast(...args),
@@ -323,5 +326,38 @@ describe('the sheet Cast of an attack-roll spell in combat (#2343 A1)', () => {
     expect(rollPrompts).toEqual([]);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(executeStructuredCombatActionWithBoundary.mock.calls[0][2]).toBeUndefined();
+  });
+
+  it('keeps the turn open when the caster has movement left (#263 CB-011)', async () => {
+    // The DM pipeline's settleExecutedAction gate: a resolved attack-roll spell with
+    // movement remaining returns null (no boundary crossed) instead of sending end_turn.
+    const { actorMovementRemaining } = await import(
+      '@/services/combat/player-movement-remaining'
+    );
+    vi.mocked(actorMovementRemaining).mockResolvedValue(30);
+
+    await resolve([dmChillTouchAction], 'Chill Touch');
+
+    // No end_turn: the turn stays open for the player to move.
+    const endTurnCalls = executeAuthoritativeCombatIntent.mock.calls.filter(
+      ([, intent]: any[]) => intent?.type === 'end_turn',
+    );
+    expect(endTurnCalls).toHaveLength(0);
+  });
+
+  it('sends end_turn when the caster has no movement left (#263 CB-011 positive control)', async () => {
+    // Positive control for the settleExecutedAction gate: with movement spent, a resolved
+    // attack-roll spell settles the turn via end_turn.
+    const { actorMovementRemaining } = await import(
+      '@/services/combat/player-movement-remaining'
+    );
+    vi.mocked(actorMovementRemaining).mockResolvedValue(0);
+
+    await resolve([dmChillTouchAction], 'Chill Touch');
+
+    const endTurnCalls = executeAuthoritativeCombatIntent.mock.calls.filter(
+      ([, intent]: any[]) => intent?.type === 'end_turn',
+    );
+    expect(endTurnCalls).toHaveLength(1);
   });
 });
