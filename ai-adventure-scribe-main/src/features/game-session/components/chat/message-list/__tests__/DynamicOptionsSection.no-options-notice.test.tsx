@@ -93,6 +93,11 @@ describe('DynamicOptionsSection no-action-options notice (GP-015, #219)', () => 
       currentTurnParticipantId: 'player-1',
       participants: [{ id: 'player-1', participantType: 'player' }],
     } as any;
+    // The combat menu fetches legal actions; stub it so no real request escapes.
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ actorId: 'player-1', actions: [] }),
+    } as Response);
     render(
       <DynamicOptionsSection
         options={[]}
