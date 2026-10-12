@@ -108,6 +108,7 @@ vi.mock('@/services/combat/combat-entry-confirmation-bridge', () => ({
   settlePendingCombatEntryConfirmation: () => {},
   hasPendingCombatEntryConfirmation: () => false,
   markCombatEntryTypedAnswer: () => {},
+  consumeCombatEntryTypedAnswer: () => false,
   onCombatEntryConfirmationPendingChange: () => () => {},
 }));
 vi.mock('@/services/combat/player-roll-bridge', async (importOriginal) => ({
