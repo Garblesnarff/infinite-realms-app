@@ -35,7 +35,7 @@ const EnemyCard: React.FC<EnemyCardProps> = React.memo(({ enemyId, className = '
   const { getAssetImageUrl } = useCampaignAssetsContext();
   const enemy = state.activeEncounter?.participants.find((p) => p.id === enemyId);
 
-  if (!enemy || enemy.participantType !== 'monster') {
+  if (!enemy || (enemy.participantType as string) !== 'monster') {
     return null;
   }
 
@@ -75,7 +75,7 @@ const EnemyCard: React.FC<EnemyCardProps> = React.memo(({ enemyId, className = '
             displayOnly
           />
         )}
-        {damageType !== 'none' && (
+        {(damageType as string) !== 'none' && (
           <Badge variant="secondary" className="ml-auto text-xs">
             {damageType}
           </Badge>

@@ -1,6 +1,6 @@
 import { createCombatParticipant } from './participant-factory';
 
-import type { CombatEncounter } from '@/types/combat';
+import type { CombatEncounter, CombatParticipant } from '@/types/combat';
 
 type ServerStatus = {
   currentHp: number;
@@ -62,7 +62,9 @@ export function mapAuthoritativeCombat(payload: AuthoritativeCombatPayload): Com
       {
         id: participant.id,
         characterId: participant.characterId ?? undefined,
-        participantType: participant.participantType === 'player' ? 'player' : 'monster',
+        participantType: (participant.participantType === 'player'
+          ? 'player'
+          : 'monster') as CombatParticipant['participantType'],
         name: participant.name,
         displayName: participant.monsterAttack?.displayName,
         initiative: participant.initiative,

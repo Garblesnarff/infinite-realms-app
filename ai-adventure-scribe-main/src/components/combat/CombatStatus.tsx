@@ -71,7 +71,9 @@ export const CombatStatus: React.FC<CombatStatusProps> = React.memo(({ className
 
     return {
       name: currentParticipant.name,
+      // @ts-expect-error #428 CombatParticipant.initiative is a number
       initiative: currentParticipant.initiative?.value || 0,
+      // @ts-expect-error #428 CombatParticipant has currentHitPoints/maxHitPoints
       hp: currentParticipant.hitPoints,
     };
   }, [combatState.isInCombat, combatState.activeEncounter]);

@@ -12,6 +12,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // import { Token } from '../Token';
 
 import type { Token as TokenData } from '@/types/token';
+import type { ComponentType } from 'react';
 
 import { TokenSize, TokenDisposition, NameplatePosition } from '@/types/token';
 
@@ -106,6 +107,11 @@ vi.mock('../TokenNameplate', () => ({
     <mesh data-testid="status-icons" data-icon-count={icons.length} data-position={position} />
   ),
 }));
+
+// Type-only stub: the Token component was removed, so this skipped suite would
+// otherwise fail typechecking with "Cannot find name 'Token'". The suite stays
+// skipped; the stub renders nothing and is never exercised.
+const Token: ComponentType<Record<string, unknown>> = () => null;
 
 describe.skip('Token', () => {
   const baseToken: TokenData = {

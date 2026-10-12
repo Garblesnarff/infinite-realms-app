@@ -5,6 +5,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { useCombatActionHandlers } from '../use-combat-action-handlers';
 
+import type { MonsterAttack } from '@/types/combat';
+
 import logger from '@/lib/logger';
 import { processReactionResponse } from '@/utils/reactionSystem';
 import { checkConcentration } from '@/utils/spell-management';
@@ -53,7 +55,11 @@ describe('useCombatActionHandlers', () => {
     isUnconscious: false,
   };
 
-  const mockEncounter = {
+  const mockEncounter: {
+    id: string;
+    participants: unknown[];
+    currentTurnParticipantId: string | null;
+  } = {
     id: 'enc-1',
     participants: [mockParticipant, mockEnemy],
     currentTurnParticipantId: 'p1',
@@ -65,14 +71,14 @@ describe('useCombatActionHandlers', () => {
     updateParticipant: mockUpdateParticipant,
     nextTurn: mockNextTurn,
     validateCombatAction: mockValidateCombatAction,
-    selectedEnemy: null,
+    selectedEnemy: null as string | null,
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  const setupHook = (props = defaultProps): ReturnType<typeof renderHook> => {
+  const setupHook = (props = defaultProps) => {
     return renderHook(() => useCombatActionHandlers(props));
   };
 
@@ -151,7 +157,14 @@ describe('useCombatActionHandlers', () => {
     it('should do nothing if no enemy selected', async () => {
       const { result } = setupHook();
       await act(async () => {
-        await result.current.handleEnemyAttack({ name: 'Bite' });
+        await result.current.handleEnemyAttack({
+          name: 'Bite',
+          attackBonus: 0,
+          damageRoll: '',
+          damageType: 'piercing',
+          reach: 5,
+          description: 'Bite',
+        } as MonsterAttack);
       });
       expect(mockTakeAction).not.toHaveBeenCalled();
     });
@@ -159,7 +172,14 @@ describe('useCombatActionHandlers', () => {
     it('should do nothing if selected enemy not found in encounter', async () => {
       const { result } = setupHook({ ...defaultProps, selectedEnemy: 'non-existent' });
       await act(async () => {
-        await result.current.handleEnemyAttack({ name: 'Bite' });
+        await result.current.handleEnemyAttack({
+          name: 'Bite',
+          attackBonus: 0,
+          damageRoll: '',
+          damageType: 'piercing',
+          reach: 5,
+          description: 'Bite',
+        } as MonsterAttack);
       });
       expect(mockTakeAction).not.toHaveBeenCalled();
     });
@@ -172,11 +192,13 @@ describe('useCombatActionHandlers', () => {
         selectedEnemy: 'e1',
         activeEncounter: encounterWithoutTurn as any,
       });
-      const attack = {
+      const attack: MonsterAttack = {
         name: 'Greataxe',
         attackBonus: 5,
         damageRoll: '1d12+3',
         damageType: 'slashing',
+        reach: 5,
+        description: 'Greataxe',
       };
 
       await act(async () => {
@@ -202,7 +224,14 @@ describe('useCombatActionHandlers', () => {
 
     it('should handle attack without damage roll', async () => {
       const { result } = setupHook({ ...defaultProps, selectedEnemy: 'e1' });
-      const attack = { name: 'Gaze', attackBonus: 0 };
+      const attack: MonsterAttack = {
+        name: 'Gaze',
+        attackBonus: 0,
+        damageRoll: '',
+        damageType: 'psychic',
+        reach: 30,
+        description: 'Gaze',
+      };
 
       await act(async () => {
         await result.current.handleEnemyAttack(attack);

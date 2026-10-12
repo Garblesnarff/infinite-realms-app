@@ -1,7 +1,7 @@
 import { Flame, Zap } from 'lucide-react';
 import React from 'react';
 
-import type { Encounter } from '@/types/combat';
+import type { CombatEncounter as Encounter, CharacterResources } from '@/types/combat';
 
 import { Button } from '@/components/ui/button';
 import { canUseClassFeature } from '@/utils/classFeatures';
@@ -26,7 +26,7 @@ export const ClassFeaturesSection: React.FC<ClassFeaturesSectionProps> = React.m
           .map((feature) => {
             const canUse = canUseClassFeature(
               feature,
-              (currentParticipant.resources || {}) as unknown as Record<string, number>,
+              (currentParticipant.resources || {}) as unknown as CharacterResources,
             );
             return (
               <Button

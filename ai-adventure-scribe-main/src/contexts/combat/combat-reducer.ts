@@ -27,6 +27,7 @@ export const initialCombatState: CombatState = {
   pendingAction: undefined,
   activeReactionOpportunities: [],
   pendingReactionResponse: undefined,
+  diceRollQueue: { pendingRolls: [], isProcessingRoll: false, completedBatchRolls: [] },
 };
 
 /**

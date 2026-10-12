@@ -2,7 +2,7 @@ import React from 'react';
 
 import DeathSaveManager from './DeathSaveManager';
 
-import type { Encounter } from '@/types/combat';
+import type { CombatEncounter as Encounter } from '@/types/combat';
 
 import { Badge } from '@/components/ui/badge';
 import { needsDeathSaves } from '@/utils/combat/deathSaves';

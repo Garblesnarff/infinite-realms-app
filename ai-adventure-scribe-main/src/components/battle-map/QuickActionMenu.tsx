@@ -214,7 +214,7 @@ export const QuickActionMenu: React.FC<QuickActionMenuProps> = ({
 // Exports
 // ===========================
 
-export type { QuickActionMenuProps, QuickAction };
+export type { QuickAction };
 export type {
   UseQuickActionMenuOptions,
   UseQuickActionMenuReturn,

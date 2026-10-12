@@ -11,7 +11,12 @@ const initialCamera: CameraState = {
   zoom: 1,
 };
 
-export const createCameraSlice: StateCreator<BattleMapState, [], [], CameraSlice> = (set) => ({
+export const createCameraSlice: StateCreator<
+  BattleMapState,
+  [['zustand/devtools', never]],
+  [],
+  CameraSlice
+> = (set) => ({
   camera: initialCamera,
 
   setCamera: (camera) =>
@@ -29,7 +34,12 @@ export const createCameraSlice: StateCreator<BattleMapState, [], [], CameraSlice
   resetCamera: () => set({ camera: initialCamera }, false, 'battleMap/resetCamera'),
 });
 
-export const createSceneSlice: StateCreator<BattleMapState, [], [], SceneSlice> = (set) => ({
+export const createSceneSlice: StateCreator<
+  BattleMapState,
+  [['zustand/devtools', never]],
+  [],
+  SceneSlice
+> = (set) => ({
   activeSceneId: null,
   selectedTool: 'select' as ToolType,
 

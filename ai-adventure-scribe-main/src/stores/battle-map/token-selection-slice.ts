@@ -8,7 +8,7 @@ import type { StateCreator } from 'zustand';
 
 export const createTokenSelectionSlice: StateCreator<
   BattleMapState,
-  [],
+  [['zustand/devtools', never]],
   [],
   TokenSelectionSlice
 > = (set) => ({

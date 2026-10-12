@@ -5,7 +5,12 @@
 import type { BattleMapState, WallSlice } from './types';
 import type { StateCreator } from 'zustand';
 
-export const createWallSlice: StateCreator<BattleMapState, [], [], WallSlice> = (set) => ({
+export const createWallSlice: StateCreator<
+  BattleMapState,
+  [['zustand/devtools', never]],
+  [],
+  WallSlice
+> = (set) => ({
   selectedWallId: null,
   hoveredWallId: null,
   wallDrawingActive: false,

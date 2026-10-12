@@ -18,7 +18,7 @@ export function buildCharacterData(character: Character | null | undefined): Cha
   const stats = calculateAllCharacterStats(character);
 
   return {
-    id: character.id,
+    id: character.id as string,
     speed: stats.speed,
     spellSlots: character.spellSlots,
     preparedSpells: character.preparedSpells,

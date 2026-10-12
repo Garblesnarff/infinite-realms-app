@@ -3,7 +3,7 @@ import React from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { type DiceRoll } from '@/utils/diceUtils';
+import { type DiceRoll } from '@/types/combat';
 
 /**
  * Initiative Roll Message Component

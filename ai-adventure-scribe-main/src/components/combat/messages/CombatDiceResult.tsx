@@ -2,8 +2,8 @@ import React from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { HexagonalBadge } from '@/components/ui/hexagonal-badge';
+import { type DiceRoll } from '@/types/combat';
 import { type CombatMessageData } from '@/utils/combat/ai-narration-utils';
-import { type DiceRoll } from '@/utils/diceUtils';
 
 interface CombatDiceResultProps {
   data: CombatMessageData;

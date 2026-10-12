@@ -1,6 +1,6 @@
 import React from 'react';
 
-import type { Encounter } from '@/types/combat';
+import type { CombatEncounter as Encounter } from '@/types/combat';
 
 import { Button } from '@/components/ui/button';
 import { canUseRacialTrait } from '@/utils/racialTraits';

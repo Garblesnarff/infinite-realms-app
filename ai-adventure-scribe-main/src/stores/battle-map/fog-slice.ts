@@ -5,7 +5,12 @@
 import type { BattleMapState, FogSlice } from './types';
 import type { StateCreator } from 'zustand';
 
-export const createFogSlice: StateCreator<BattleMapState, [], [], FogSlice> = (set) => ({
+export const createFogSlice: StateCreator<
+  BattleMapState,
+  [['zustand/devtools', never]],
+  [],
+  FogSlice
+> = (set) => ({
   fogEnabled: true,
   showFogToGM: false,
   fogBrushSize: 50,

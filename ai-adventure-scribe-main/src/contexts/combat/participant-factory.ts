@@ -54,7 +54,7 @@ export function createCombatParticipant(
 
   const participant: CombatParticipant = {
     id: partial.id || crypto.randomUUID(),
-    participantType: partial.participantType || 'monster',
+    participantType: (partial.participantType || 'monster') as CombatParticipant['participantType'],
     name: partial.name || 'Unknown',
     displayName: partial.displayName,
     characterId: partial.characterId,
@@ -127,9 +127,12 @@ export function enrichParticipantWithCharacterData(
   participant.spellSlots = characterData.spellSlots;
   participant.preparedSpells = characterData.preparedSpells;
   participant.activeConcentration = characterData.activeConcentration;
-  participant.damageResistances = characterData.damageResistances || [];
-  participant.damageImmunities = characterData.damageImmunities || [];
-  participant.damageVulnerabilities = characterData.damageVulnerabilities || [];
+  participant.damageResistances = (characterData.damageResistances ||
+    []) as CombatParticipant['damageResistances'];
+  participant.damageImmunities = (characterData.damageImmunities ||
+    []) as CombatParticipant['damageImmunities'];
+  participant.damageVulnerabilities = (characterData.damageVulnerabilities ||
+    []) as CombatParticipant['damageVulnerabilities'];
 
   // Convert fighting style strings to FightingStyle objects
   participant.fightingStyles =

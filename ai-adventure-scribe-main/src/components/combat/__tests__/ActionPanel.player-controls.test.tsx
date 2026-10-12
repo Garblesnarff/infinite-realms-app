@@ -1,10 +1,9 @@
 import { render, screen } from '@testing-library/react';
-import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import ActionPanel from '../ActionPanel';
 
-import type { Encounter } from '@/types/combat';
+import type { CombatEncounter as Encounter } from '@/types/combat';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 
