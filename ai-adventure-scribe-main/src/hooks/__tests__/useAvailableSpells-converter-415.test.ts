@@ -82,7 +82,7 @@ describe('issue #415: converter and hook share one Spell naming', () => {
     expect(converted).not.toHaveProperty('verbal');
   });
 
-  it('useAvailableSpells filtering by casting time and verbal returns the converted spell (network mocked only)', async () => {
+  it('useAvailableSpells filtering by the verbal component returns the converted spell (network mocked only)', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       status: 200,

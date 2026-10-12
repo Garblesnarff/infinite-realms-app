@@ -335,7 +335,7 @@ describe('SpellCard Component', () => {
           isSelected={true}
           isDisabled={false}
           onToggle={mockOnToggle}
-          // @ts-expect-error intentionally passing unexpected value to exercise default branch
+          // Intentionally passing an unexpected value to exercise the default branch
           colorTheme={'unknown' as unknown as 'purple'}
         />,
       );
