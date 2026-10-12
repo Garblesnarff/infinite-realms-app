@@ -12,6 +12,8 @@ interface RitualTabProps {
   availableRitualSpells: Spell[];
 }
 
+type RitualSpell = Spell & { castingTime?: string; range?: string };
+
 /**
  * Extracted RitualTab component for advanced spellcasting
  */
@@ -59,7 +61,8 @@ export const RitualTab: React.FC<RitualTabProps> = ({
                     </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground mb-2">
-                    {spell.school} • {spell.castingTime} (+10 min as ritual) • {spell.range}
+                    {(spell as RitualSpell).school} • {(spell as RitualSpell).castingTime} (+10 min
+                    as ritual) • {(spell as RitualSpell).range}
                   </p>
                   <p className="text-sm">{spell.description}</p>
                 </div>

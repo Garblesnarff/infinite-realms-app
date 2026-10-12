@@ -98,12 +98,12 @@ export function OptionInput<T extends OptionType = OptionType>({
                       ? 'border-primary bg-primary/5 shadow-lg ring-2 ring-primary/30'
                       : 'border-border/30 hover:border-primary/50 hover:shadow-xl'
                   } ${compact ? 'p-4' : 'p-6'} hover:-translate-y-0.5`}
-                  onClick={() => !disabled && handleValueChange(opt)}
+                  onClick={() => !disabled && handleValueChange(opt as OptionSelection<T>['value'])}
                   onKeyDown={(e) => {
                     if (disabled) return;
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      handleValueChange(opt);
+                      handleValueChange(opt as OptionSelection<T>['value']);
                     }
                   }}
                 >
@@ -129,7 +129,7 @@ export function OptionInput<T extends OptionType = OptionType>({
       return (
         <RadioGroup
           value={(value?.value as string) || ''}
-          onValueChange={handleValueChange}
+          onValueChange={handleValueChange as (value: string) => void}
           disabled={disabled}
           className="space-y-2"
         >
@@ -183,9 +183,11 @@ export function OptionInput<T extends OptionType = OptionType>({
                     onClick={() => {
                       if (disabled || (!canSelect && !isSelected)) return;
                       if (isSelected) {
-                        handleValueChange(selectedValues.filter((v) => v !== opt));
+                        handleValueChange(
+                          selectedValues.filter((v) => v !== opt) as OptionSelection<T>['value'],
+                        );
                       } else {
-                        handleValueChange([...selectedValues, opt]);
+                        handleValueChange([...selectedValues, opt] as OptionSelection<T>['value']);
                       }
                     }}
                     onKeyDown={(e) => {
@@ -193,9 +195,14 @@ export function OptionInput<T extends OptionType = OptionType>({
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
                         if (isSelected) {
-                          handleValueChange(selectedValues.filter((v) => v !== opt));
+                          handleValueChange(
+                            selectedValues.filter((v) => v !== opt) as OptionSelection<T>['value'],
+                          );
                         } else {
-                          handleValueChange([...selectedValues, opt]);
+                          handleValueChange([
+                            ...selectedValues,
+                            opt,
+                          ] as OptionSelection<T>['value']);
                         }
                       }
                     }}
@@ -240,9 +247,16 @@ export function OptionInput<T extends OptionType = OptionType>({
                   disabled={disabled || !canSelect}
                   onCheckedChange={(checked) => {
                     if (checked) {
-                      handleValueChange([...selectedValues, optionValue]);
+                      handleValueChange([
+                        ...selectedValues,
+                        optionValue,
+                      ] as OptionSelection<T>['value']);
                     } else {
-                      handleValueChange(selectedValues.filter((v) => v !== optionValue));
+                      handleValueChange(
+                        selectedValues.filter(
+                          (v) => v !== optionValue,
+                        ) as OptionSelection<T>['value'],
+                      );
                     }
                   }}
                 />
@@ -267,7 +281,9 @@ export function OptionInput<T extends OptionType = OptionType>({
             min={option.min}
             max={option.max}
             value={(value?.value as number) || ''}
-            onChange={(e) => handleValueChange(parseInt(e.target.value) || 0)}
+            onChange={(e) =>
+              handleValueChange((parseInt(e.target.value) || 0) as OptionSelection<T>['value'])
+            }
             disabled={disabled}
             placeholder={`${option.min || 0} - ${option.max || '∞'}`}
           />
@@ -283,7 +299,7 @@ export function OptionInput<T extends OptionType = OptionType>({
       return (
         <Textarea
           value={(value?.value as string) || ''}
-          onChange={(e) => handleValueChange(e.target.value)}
+          onChange={(e) => handleValueChange(e.target.value as OptionSelection<T>['value'])}
           disabled={disabled}
           placeholder="Enter your custom text..."
           rows={3}

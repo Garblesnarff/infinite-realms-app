@@ -78,7 +78,10 @@ function validateAbilityScores(character: Character): ValidationResult {
     'wisdom',
     'charisma',
   ] as const;
-  const hasAllScores = abilities.every((ability) => character.abilityScores?.[ability]?.score >= 8);
+  const abilityScores = character.abilityScores;
+  const hasAllScores = abilities.every(
+    (ability) => (abilityScores?.[ability]?.score as number) >= 8,
+  );
   if (!hasAllScores) {
     return invalid('Please complete your ability score selection');
   }
@@ -157,7 +160,7 @@ export function validateCharacterForSave(character: Character): boolean {
   if (spellcasting) {
     const spellcastingInfo = getSpellcastingInfo(characterClass, character.level || 1);
     if (spellcastingInfo) {
-      const racialSpells = getRacialSpells(race?.name || '', character.subrace);
+      const racialSpells = getRacialSpells(race?.name || '', character.subrace ?? undefined);
       const expectedCantrips =
         spellcastingInfo.cantripsKnown + racialSpells.cantrips.length + racialSpells.bonusCantrips;
       const expectedSpells = spellcastingInfo.spellsKnown || 0;

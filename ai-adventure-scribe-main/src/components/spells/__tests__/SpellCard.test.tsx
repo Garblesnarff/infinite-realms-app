@@ -18,9 +18,20 @@ import type { Spell } from '@/types/character';
  * - Accessibility features
  */
 
+// The component-tracking mock and the fixtures below carry the legacy
+// `verbal`/`somatic`/`material*` spell fields alongside the current `Spell` shape.
+type SpellWithComponentFlags = Spell & {
+  verbal?: boolean;
+  somatic?: boolean;
+  material?: boolean;
+  materialDescription?: string;
+  materialCost?: number;
+  materialConsumed?: boolean;
+};
+
 // Mock the spell components utility
 vi.mock('@/utils/spellComponents', () => ({
-  getComponentTrackingInfo: (spell: Spell) => ({
+  getComponentTrackingInfo: (spell: SpellWithComponentFlags) => ({
     verbal: spell.verbal || false,
     somatic: spell.somatic || false,
     material: spell.material || false,
@@ -31,7 +42,7 @@ vi.mock('@/utils/spellComponents', () => ({
 }));
 
 describe('SpellCard Component', () => {
-  const mockSpell: Spell = {
+  const mockSpell: SpellWithComponentFlags = {
     id: 'magic-missile',
     name: 'Magic Missile',
     level: 1,
@@ -47,7 +58,7 @@ describe('SpellCard Component', () => {
     damage: '1d4 + 1',
   };
 
-  const mockCantrip: Spell = {
+  const mockCantrip: SpellWithComponentFlags = {
     id: 'mage-hand',
     name: 'Mage Hand',
     level: 0,
@@ -63,7 +74,7 @@ describe('SpellCard Component', () => {
     concentration: true,
   };
 
-  const mockRitualSpell: Spell = {
+  const mockRitualSpell: SpellWithComponentFlags = {
     id: 'detect-magic',
     name: 'Detect Magic',
     level: 1,
@@ -80,7 +91,7 @@ describe('SpellCard Component', () => {
     ritual: true,
   };
 
-  const mockMaterialSpell: Spell = {
+  const mockMaterialSpell: SpellWithComponentFlags = {
     id: 'fireball',
     name: 'Fireball',
     level: 3,
@@ -335,7 +346,7 @@ describe('SpellCard Component', () => {
           isSelected={true}
           isDisabled={false}
           onToggle={mockOnToggle}
-          // @ts-expect-error intentionally passing unexpected value to exercise default branch
+          // Intentionally passing an unexpected value to exercise the default branch
           colorTheme={'unknown' as unknown as 'purple'}
         />,
       );

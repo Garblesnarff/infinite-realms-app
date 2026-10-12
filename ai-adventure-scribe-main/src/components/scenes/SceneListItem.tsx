@@ -19,7 +19,7 @@ interface SceneData {
   width: number;
   height: number;
   gridSize: number;
-  gridType: string;
+  gridType: 'square' | 'hexagonal_horizontal' | 'hexagonal_vertical' | 'gridless';
   gridColor?: string | null;
   backgroundImageUrl?: string | null;
   thumbnailUrl?: string | null;
@@ -71,7 +71,7 @@ export const SceneListItem: React.FC<SceneListItemProps> = ({
         <div className="relative w-24 h-24 bg-gradient-to-br from-slate-100 to-slate-200 rounded overflow-hidden flex-shrink-0">
           {scene.thumbnailUrl || scene.backgroundImageUrl ? (
             <img
-              src={scene.thumbnailUrl || scene.backgroundImageUrl}
+              src={(scene.thumbnailUrl || scene.backgroundImageUrl) as string}
               alt={scene.name}
               className="w-full h-full object-cover"
             />

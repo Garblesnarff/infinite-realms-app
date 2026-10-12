@@ -6,6 +6,7 @@ import RollDetails from './ability-scores/RollDetails';
 import SummaryCard from './ability-scores/SummaryCard';
 import ValidationAlerts from './ability-scores/ValidationAlerts';
 
+import type { AbilityScores } from '@/types/character';
 import type { AbilityScoreName } from '@/utils/racialAbilityBonuses';
 
 import { Badge } from '@/components/ui/badge';
@@ -244,7 +245,7 @@ const AbilityScoresSelection: React.FC = () => {
           method={method}
           totalModifier={totalModifier}
           remainingPoints={remainingPoints}
-          abilityScores={state.character?.abilityScores || {}}
+          abilityScores={state.character?.abilityScores || ({} as AbilityScores)}
         />
       </div>
     </TooltipProvider>

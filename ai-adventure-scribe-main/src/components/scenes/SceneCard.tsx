@@ -19,7 +19,7 @@ interface SceneData {
   width: number;
   height: number;
   gridSize: number;
-  gridType: string;
+  gridType: 'square' | 'hexagonal_horizontal' | 'hexagonal_vertical' | 'gridless';
   gridColor?: string | null;
   backgroundImageUrl?: string | null;
   thumbnailUrl?: string | null;
@@ -70,7 +70,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
       <div className="relative h-48 bg-gradient-to-br from-slate-100 to-slate-200 overflow-hidden">
         {scene.thumbnailUrl || scene.backgroundImageUrl ? (
           <img
-            src={scene.thumbnailUrl || scene.backgroundImageUrl}
+            src={(scene.thumbnailUrl || scene.backgroundImageUrl) as string}
             alt={scene.name}
             className="w-full h-full object-cover"
           />

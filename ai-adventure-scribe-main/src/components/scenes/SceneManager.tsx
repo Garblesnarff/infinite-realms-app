@@ -137,13 +137,13 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
   const handleDuplicate = (scene: SceneRow) => {
     duplicateMutation.mutate({
       name: `${scene.name} (Copy)`,
-      description: scene.description,
+      description: scene.description as string | undefined,
       campaignId,
       width: scene.width,
       height: scene.height,
       gridSize: scene.gridSize,
       gridType: scene.gridType,
-      gridColor: scene.gridColor,
+      gridColor: scene.gridColor as string | undefined,
       backgroundImageUrl: scene.backgroundImageUrl || '',
       thumbnailUrl: scene.thumbnailUrl || '',
     });

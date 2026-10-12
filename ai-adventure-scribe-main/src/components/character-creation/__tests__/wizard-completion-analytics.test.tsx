@@ -2,6 +2,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import type * as ReactRouterDom from 'react-router-dom';
+
 import WizardContent from '@/components/character-creation/wizard/WizardContent';
 import * as AnalyticsModule from '@/services/analytics';
 
@@ -51,7 +53,7 @@ vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: () => {} }) }));
 
 // Silence navigate by mocking react-router-dom useNavigate
 vi.mock('react-router-dom', async (orig) => {
-  const mod = await orig();
+  const mod = (await orig()) as typeof ReactRouterDom;
   return {
     ...mod,
     useNavigate: () => () => {},

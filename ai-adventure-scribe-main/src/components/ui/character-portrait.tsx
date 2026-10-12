@@ -16,7 +16,7 @@
  */
 
 import { cva, type VariantProps } from 'class-variance-authority';
-import { motion } from 'framer-motion';
+import { motion, type HTMLMotionProps, type Variants } from 'framer-motion';
 import { User } from 'lucide-react';
 import * as React from 'react';
 
@@ -117,7 +117,7 @@ const CharacterPortrait = React.forwardRef<HTMLDivElement, CharacterPortraitProp
       .toUpperCase()
       .slice(0, 2);
 
-    const containerVariants = {
+    const containerVariants: Variants = {
       hidden: { opacity: 0, scale: 0.8 },
       visible: {
         opacity: 1,
@@ -201,7 +201,7 @@ const CharacterPortrait = React.forwardRef<HTMLDivElement, CharacterPortraitProp
           whileHover={{ scale: 1.05 }}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
-          {...props}
+          {...(props as Omit<HTMLMotionProps<'div'>, 'ref'>)}
         >
           {Content}
         </motion.div>

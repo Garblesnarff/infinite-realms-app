@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import type { CharacterData } from '@/services/ai/prompts/character-description-prompts';
+
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useToast } from '@/hooks/use-toast';
@@ -107,7 +109,7 @@ export const useCharacterFinalization = (): {
       const characterData = toCharacterPromptData(state.character);
 
       const enhancedDescription = await characterDescriptionGenerator.generateDescription(
-        characterData,
+        characterData as CharacterData,
         {
           enhanceExisting: Boolean(state.character.description?.trim()),
           includeBackstory: true,

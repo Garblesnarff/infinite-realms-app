@@ -12,6 +12,8 @@ interface SpellCardProps {
   disabled?: boolean;
 }
 
+type DisplaySpell = Spell & { castingTime?: string; range?: string };
+
 /**
  * Extracted SpellCard component for advanced spellcasting
  */
@@ -46,7 +48,7 @@ export const SpellCard: React.FC<SpellCardProps> = ({
           )}
         </div>
         <p className="text-xs text-muted-foreground mb-2">
-          {spell.school} • {spell.castingTime} • {spell.range}
+          {spell.school} • {(spell as DisplaySpell).castingTime} • {(spell as DisplaySpell).range}
         </p>
         <p className="text-sm">{spell.description}</p>
       </div>

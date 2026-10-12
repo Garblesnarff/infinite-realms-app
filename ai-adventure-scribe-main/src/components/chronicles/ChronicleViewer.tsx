@@ -15,18 +15,31 @@ interface ChronicleViewerProps {
   onClose: () => void;
 }
 
+type Chronicle = {
+  status: string | null;
+  share_token: string | null;
+  illustration_url: string | null;
+  chapter_title: string | null;
+  prose: string | null;
+  summary: string | null;
+};
+
 const ChronicleViewer: React.FC<ChronicleViewerProps> = ({ sessionId, open, onClose }) => {
   const { userPlan } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const { data: chronicle, isLoading } = trpc.chronicles.getBySessionId.useQuery(
+  const { data: chronicleQuery, isLoading } = trpc.chronicles.getBySessionId.useQuery(
     { sessionId: sessionId ?? '' },
     {
       enabled: open && !!sessionId,
-      refetchInterval: (data) => (data?.status === 'generating' ? 3000 : false),
+      refetchInterval: (data) =>
+        (data as { status?: string } | undefined)?.status === 'generating' ? 3000 : false,
     },
   );
+
+  // @ts-expect-error #418 the server returns camelCase (shareToken, chapterTitle, chronicleText); this view reads snake_case
+  const chronicle: Chronicle | null | undefined = chronicleQuery;
 
   const isPro = planHasPaidFeatures(userPlan);
 
