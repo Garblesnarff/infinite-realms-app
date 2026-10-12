@@ -1,6 +1,7 @@
 import type { Campaign } from './campaign';
 import type { Memory } from './memory';
 import type { RollRequest } from './roll-request';
+import type { NarrationSegment as ServiceNarrationSegment } from '@/services/ai/shared/types';
 import type { EngineResultCard } from '@/services/combat/engine-result-card';
 import type { JournalHandoutEntry } from '@/services/user-data-api';
 import type { CombatEngineBlock } from '@/utils/combat-engine-blocks';
@@ -27,6 +28,12 @@ export interface MessageContext {
   combatEnded?: boolean;
   /** Structured DM roll requests retained so a pending popup can be restored after reload. */
   rollRequests?: RollRequest[];
+  /**
+   * DM voice segments persisted with the dialogue_history row, in the vocabulary the DM
+   * schema emits (`dm` / `character` / `transition`, #458). Null when the message carries
+   * none, matching what the message queue writes.
+   */
+  narration_segments?: ServiceNarrationSegment[] | null;
   scene_spec?: boolean | null;
   previouslyOn?: boolean;
   handouts?: JournalHandoutEntry[];
