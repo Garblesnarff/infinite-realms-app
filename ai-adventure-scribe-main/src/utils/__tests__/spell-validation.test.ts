@@ -105,6 +105,7 @@ describe('Spell Validation System', () => {
       classFeatures: [],
       armorProficiencies: [],
       weaponProficiencies: [],
+      subclasses: [],
     };
 
     mockCleric = {
@@ -124,6 +125,7 @@ describe('Spell Validation System', () => {
       classFeatures: [],
       armorProficiencies: [],
       weaponProficiencies: [],
+      subclasses: [],
     };
 
     mockBard = {
@@ -143,6 +145,7 @@ describe('Spell Validation System', () => {
       classFeatures: [],
       armorProficiencies: [],
       weaponProficiencies: [],
+      subclasses: [],
     };
 
     mockWarlock = {
@@ -171,6 +174,7 @@ describe('Spell Validation System', () => {
       classFeatures: [],
       armorProficiencies: [],
       weaponProficiencies: [],
+      subclasses: [],
     };
 
     mockFighter = {
@@ -194,6 +198,7 @@ describe('Spell Validation System', () => {
       classFeatures: [],
       armorProficiencies: [],
       weaponProficiencies: [],
+      subclasses: [],
     };
 
     mockRace = {

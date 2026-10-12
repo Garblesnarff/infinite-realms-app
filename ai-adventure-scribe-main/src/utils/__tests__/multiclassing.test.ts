@@ -45,6 +45,7 @@ describe('multiclassing utilities', () => {
       classFeatures: [],
       armorProficiencies: [],
       weaponProficiencies: [],
+      subclasses: [],
     };
 
     mockWizard = {
@@ -59,6 +60,7 @@ describe('multiclassing utilities', () => {
       classFeatures: [],
       armorProficiencies: [],
       weaponProficiencies: [],
+      subclasses: [],
     };
 
     baseCharacter = {
@@ -401,8 +403,8 @@ describe('multiclassing utilities', () => {
       const char = { ...baseCharacter, classLevels: undefined };
       const updated = addMulticlass(char, mockWizard);
       expect(updated.classLevels).toHaveLength(2);
-      expect(updated.classLevels[0].className).toBe('Fighter');
-      expect(updated.classLevels[1].className).toBe('Wizard');
+      expect(updated.classLevels![0].className).toBe('Fighter');
+      expect(updated.classLevels![1].className).toBe('Wizard');
     });
 
     it('should update total level and hit points', () => {

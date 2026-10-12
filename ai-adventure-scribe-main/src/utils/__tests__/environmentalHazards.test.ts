@@ -299,13 +299,13 @@ describe('environmentalHazards utility', () => {
     it('should reduce character HP', () => {
       const saveResult = { saved: false, damageTaken: 10 };
       const updated = applyHazardEffects(mockCharacter, mockHazard, saveResult);
-      expect(updated.hitPoints.current).toBe(10);
+      expect(updated.hitPoints!.current).toBe(10);
     });
 
     it('should not reduce HP below 0', () => {
       const saveResult = { saved: false, damageTaken: 30 };
       const updated = applyHazardEffects(mockCharacter, mockHazard, saveResult);
-      expect(updated.hitPoints.current).toBe(0);
+      expect(updated.hitPoints!.current).toBe(0);
     });
 
     it('should handle character without hitPoints property', () => {
@@ -319,14 +319,14 @@ describe('environmentalHazards utility', () => {
       const saveResult = { saved: false, conditionsApplied: ['prone'] as any };
       // This block is currently a no-op but we can call it for coverage
       const updated = applyHazardEffects(mockCharacter, mockHazard, saveResult);
-      expect(updated.hitPoints.current).toBe(20);
+      expect(updated.hitPoints!.current).toBe(20);
     });
 
     it('should cover exhaustion application block', () => {
       const saveResult = { saved: false, exhaustionApplied: 1 };
       // This block is currently a no-op but we can call it for coverage
       const updated = applyHazardEffects(mockCharacter, mockHazard, saveResult);
-      expect(updated.hitPoints.current).toBe(20);
+      expect(updated.hitPoints!.current).toBe(20);
     });
   });
 });

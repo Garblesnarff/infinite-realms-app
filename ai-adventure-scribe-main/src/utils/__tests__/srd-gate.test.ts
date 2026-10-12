@@ -67,7 +67,6 @@ describe('srdGate', () => {
   });
 
   it('getCanonicalSrdName handles null/empty/invalid inputs', () => {
-    // @ts-expect-error - Testing null input
     expect(getCanonicalSrdName('classes', null)).toBeNull();
     expect(getCanonicalSrdName('classes', '')).toBeNull();
     expect(getCanonicalSrdName('classes', '   ')).toBeNull();

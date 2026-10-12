@@ -111,40 +111,40 @@ describe('classFeatures utilities', () => {
     });
 
     it('should initialize barbarian rages with correct scaling', () => {
-      expect(getCharacterResources('barbarian', 1).rages.max).toBe(2);
-      expect(getCharacterResources('barbarian', 3).rages.max).toBe(3);
-      expect(getCharacterResources('barbarian', 6).rages.max).toBe(4);
-      expect(getCharacterResources('barbarian', 12).rages.max).toBe(5);
-      expect(getCharacterResources('barbarian', 17).rages.max).toBe(6);
+      expect(getCharacterResources('barbarian', 1).rages!.max).toBe(2);
+      expect(getCharacterResources('barbarian', 3).rages!.max).toBe(3);
+      expect(getCharacterResources('barbarian', 6).rages!.max).toBe(4);
+      expect(getCharacterResources('barbarian', 12).rages!.max).toBe(5);
+      expect(getCharacterResources('barbarian', 17).rages!.max).toBe(6);
     });
 
     it('should initialize fighter action surge', () => {
-      expect(getCharacterResources('fighter', 2).actionSurge.max).toBe(1);
-      expect(getCharacterResources('fighter', 17).actionSurge.max).toBe(2);
+      expect(getCharacterResources('fighter', 2).actionSurge!.max).toBe(1);
+      expect(getCharacterResources('fighter', 17).actionSurge!.max).toBe(2);
     });
 
     it('should initialize monk ki points', () => {
       expect(getCharacterResources('monk', 1).kiPoints).toBeUndefined();
-      expect(getCharacterResources('monk', 2).kiPoints.max).toBe(2);
-      expect(getCharacterResources('monk', 10).kiPoints.max).toBe(10);
+      expect(getCharacterResources('monk', 2).kiPoints!.max).toBe(2);
+      expect(getCharacterResources('monk', 10).kiPoints!.max).toBe(10);
     });
 
     it('should initialize sorcerer sorcery points', () => {
       expect(getCharacterResources('sorcerer', 1).sorceryPoints).toBeUndefined();
-      expect(getCharacterResources('sorcerer', 2).sorceryPoints.max).toBe(2);
+      expect(getCharacterResources('sorcerer', 2).sorceryPoints!.max).toBe(2);
     });
 
     it('should initialize bardic inspiration with correct scaling', () => {
-      expect(getCharacterResources('bard', 1).bardic_inspiration.max).toBe(2);
-      expect(getCharacterResources('bard', 5).bardic_inspiration.max).toBe(3);
-      expect(getCharacterResources('bard', 15).bardic_inspiration.max).toBe(4);
+      expect(getCharacterResources('bard', 1).bardic_inspiration!.max).toBe(2);
+      expect(getCharacterResources('bard', 5).bardic_inspiration!.max).toBe(3);
+      expect(getCharacterResources('bard', 15).bardic_inspiration!.max).toBe(4);
     });
 
     it('should initialize cleric channel divinity with correct scaling', () => {
       expect(getCharacterResources('cleric', 1).channelDivinity).toBeUndefined();
-      expect(getCharacterResources('cleric', 2).channelDivinity.max).toBe(1);
-      expect(getCharacterResources('cleric', 6).channelDivinity.max).toBe(2);
-      expect(getCharacterResources('cleric', 18).channelDivinity.max).toBe(3);
+      expect(getCharacterResources('cleric', 2).channelDivinity!.max).toBe(1);
+      expect(getCharacterResources('cleric', 6).channelDivinity!.max).toBe(2);
+      expect(getCharacterResources('cleric', 18).channelDivinity!.max).toBe(3);
     });
 
     // Paladins unlock Channel Divinity at 3rd level per D&D 5e rules (unlike
@@ -153,32 +153,32 @@ describe('classFeatures utilities', () => {
     // case in src/utils/character/class-definitions.ts.
     it('should initialize paladin resources including channel divinity scaling', () => {
       const p1 = getCharacterResources('paladin', 1);
-      expect(p1.layOnHands.max).toBe(5);
+      expect(p1.layOnHands!.max).toBe(5);
       expect(p1.channelDivinity).toBeUndefined();
 
       const p2 = getCharacterResources('paladin', 2);
-      expect(p2.layOnHands.max).toBe(10);
+      expect(p2.layOnHands!.max).toBe(10);
       expect(p2.channelDivinity).toBeUndefined();
 
       const p3 = getCharacterResources('paladin', 3);
-      expect(p3.layOnHands.max).toBe(15);
-      expect(p3.channelDivinity.max).toBe(1);
+      expect(p3.layOnHands!.max).toBe(15);
+      expect(p3.channelDivinity!.max).toBe(1);
 
       const p6 = getCharacterResources('paladin', 6);
-      expect(p6.channelDivinity.max).toBe(1);
+      expect(p6.channelDivinity!.max).toBe(1);
 
       const p18 = getCharacterResources('paladin', 18);
-      expect(p18.channelDivinity.max).toBe(1);
+      expect(p18.channelDivinity!.max).toBe(1);
     });
   });
 
   describe('getClassFeatures', () => {
     it('should return barbarian features with rage scaling', () => {
-      expect(getClassFeatures('barbarian', 1).find((f) => f.name === 'rage').maxUses).toBe(2);
-      expect(getClassFeatures('barbarian', 3).find((f) => f.name === 'rage').maxUses).toBe(3);
-      expect(getClassFeatures('barbarian', 6).find((f) => f.name === 'rage').maxUses).toBe(4);
-      expect(getClassFeatures('barbarian', 12).find((f) => f.name === 'rage').maxUses).toBe(5);
-      expect(getClassFeatures('barbarian', 17).find((f) => f.name === 'rage').maxUses).toBe(6);
+      expect(getClassFeatures('barbarian', 1).find((f) => f.name === 'rage')!.maxUses).toBe(2);
+      expect(getClassFeatures('barbarian', 3).find((f) => f.name === 'rage')!.maxUses).toBe(3);
+      expect(getClassFeatures('barbarian', 6).find((f) => f.name === 'rage')!.maxUses).toBe(4);
+      expect(getClassFeatures('barbarian', 12).find((f) => f.name === 'rage')!.maxUses).toBe(5);
+      expect(getClassFeatures('barbarian', 17).find((f) => f.name === 'rage')!.maxUses).toBe(6);
     });
 
     it('should return rogue features', () => {
@@ -199,30 +199,32 @@ describe('classFeatures utilities', () => {
     it('should return monk features', () => {
       expect(getClassFeatures('monk', 2).some((f) => f.name === 'ki')).toBe(true);
       expect(getClassFeatures('monk', 3).some((f) => f.name === 'deflect_missiles')).toBe(true);
-      expect(getClassFeatures('monk', 1).some((f) => f.name === 'unarmored_defense')).toBe(true);
+      expect(
+        getClassFeatures('monk', 1).some((f) => (f.name as string) === 'unarmored_defense'),
+      ).toBe(true);
     });
 
     it('should return bard features', () => {
-      expect(getClassFeatures('bard', 1).find((f) => f.name === 'bardic_inspiration').maxUses).toBe(
-        2,
-      );
-      expect(getClassFeatures('bard', 5).find((f) => f.name === 'bardic_inspiration').maxUses).toBe(
-        3,
-      );
       expect(
-        getClassFeatures('bard', 15).find((f) => f.name === 'bardic_inspiration').maxUses,
+        getClassFeatures('bard', 1).find((f) => f.name === 'bardic_inspiration')!.maxUses,
+      ).toBe(2);
+      expect(
+        getClassFeatures('bard', 5).find((f) => f.name === 'bardic_inspiration')!.maxUses,
+      ).toBe(3);
+      expect(
+        getClassFeatures('bard', 15).find((f) => f.name === 'bardic_inspiration')!.maxUses,
       ).toBe(4);
     });
 
     it('should return cleric features', () => {
-      expect(getClassFeatures('cleric', 2).find((f) => f.name === 'channel_divinity').maxUses).toBe(
-        1,
-      );
-      expect(getClassFeatures('cleric', 6).find((f) => f.name === 'channel_divinity').maxUses).toBe(
-        2,
-      );
       expect(
-        getClassFeatures('cleric', 18).find((f) => f.name === 'channel_divinity').maxUses,
+        getClassFeatures('cleric', 2).find((f) => f.name === 'channel_divinity')!.maxUses,
+      ).toBe(1);
+      expect(
+        getClassFeatures('cleric', 6).find((f) => f.name === 'channel_divinity')!.maxUses,
+      ).toBe(2);
+      expect(
+        getClassFeatures('cleric', 18).find((f) => f.name === 'channel_divinity')!.maxUses,
       ).toBe(3);
     });
 
@@ -311,7 +313,7 @@ describe('classFeatures utilities', () => {
 
     it('useClassFeature should decrement resources', () => {
       const kiResult = useClassFeature({ name: 'ki', resourceCost: 2 } as any, mockResources);
-      expect(kiResult.resources.kiPoints.current).toBe(3);
+      expect(kiResult.resources.kiPoints!.current).toBe(3);
 
       const rageResult = useClassFeature({ currentUses: 2 } as any, mockResources);
       expect(rageResult.feature.currentUses).toBe(1);
@@ -325,9 +327,9 @@ describe('classFeatures utilities', () => {
       const resources: any = { kiPoints: { max: 10, current: 0 } };
 
       const shortRest = restoreClassFeatures(features, resources, 'short');
-      expect(shortRest.features.find((f) => f.name === 'second_wind').currentUses).toBe(1);
-      expect(shortRest.features.find((f) => f.name === 'rage').currentUses).toBe(0);
-      expect(shortRest.resources.kiPoints.current).toBe(10);
+      expect(shortRest.features.find((f) => f.name === 'second_wind')!.currentUses).toBe(1);
+      expect(shortRest.features.find((f) => f.name === 'rage')!.currentUses).toBe(0);
+      expect(shortRest.resources.kiPoints!.current).toBe(10);
 
       const longRest = restoreClassFeatures(features, resources, 'long');
       expect(longRest.features.every((f) => f.currentUses === f.maxUses)).toBe(true);
@@ -346,7 +348,7 @@ describe('classFeatures utilities', () => {
         expect(result.updatedParticipant.isRaging).toBe(true);
         expect(result.updatedParticipant.damageResistances).toContain('bludgeoning');
         expect(result.updatedParticipant.damageResistances).toContain('fire');
-        expect(result.updatedResources.rages.current).toBe(1);
+        expect(result.updatedResources.rages!.current).toBe(1);
       });
 
       it('activateRage should throw if already raging', () => {

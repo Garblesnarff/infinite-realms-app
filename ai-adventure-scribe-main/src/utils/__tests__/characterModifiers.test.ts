@@ -22,7 +22,6 @@ import {
 import type { Equipment } from '@/data/equipmentOptions';
 import type { Character } from '@/types/character';
 
-
 vi.mock('@/lib/logger', () => ({
   default: {
     warn: vi.fn(),
@@ -265,7 +264,7 @@ describe('characterModifiers', () => {
         } as any,
       };
       const bow: Partial<Equipment> = {
-        range: '80/320',
+        range: { normal: 80, long: 320 },
       };
       // 3 (DEX) + 2 (Prof) = 5
       expect(calculateAttackModifier(character as Character, bow as Equipment)).toBe(5);

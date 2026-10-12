@@ -164,7 +164,7 @@ describe('deathSaves', () => {
 
     it('should handle missing deathSaves object on participant', () => {
       const p = { ...mockParticipant };
-      delete p.deathSaves;
+      delete (p as Partial<CombatParticipant>).deathSaves;
       (d20 as any).mockReturnValue(10);
 
       const { updatedParticipant } = rollDeathSave(p);

@@ -169,7 +169,7 @@ describe('combatDetection', () => {
       expect(playerPart?.initiative).toBe(3);
       expect(playerPart?.armorClass).toBe(16);
 
-      const enemyPart = participants.find((p) => p.participantType === 'monster');
+      const enemyPart = participants.find((p) => (p.participantType as string) === 'monster');
       expect(enemyPart?.name).toBe('Goblin');
       expect(enemyPart?.maxHitPoints).toBe(7);
       // createCombatParticipantsFromDetection looks the enemy up in the real SRD

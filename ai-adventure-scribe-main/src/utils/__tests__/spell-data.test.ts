@@ -1,6 +1,24 @@
 import { describe, it, expect } from 'vitest';
 
-import { cantrips, firstLevelSpells, allSpells } from '@/data/spellOptions';
+import {
+  cantrips as rawCantrips,
+  firstLevelSpells as rawFirstLevelSpells,
+  allSpells as rawAllSpells,
+} from '@/data/spellOptions';
+
+type NormalizedSpell = (typeof rawAllSpells)[number] & {
+  castingTime: string;
+  range: string;
+  verbal?: boolean;
+  somatic?: boolean;
+  material?: boolean;
+  materialDescription?: string;
+  materialCost?: number;
+};
+
+const allSpells = rawAllSpells as unknown as NormalizedSpell[];
+const cantrips = rawCantrips as unknown as NormalizedSpell[];
+const firstLevelSpells = rawFirstLevelSpells as unknown as NormalizedSpell[];
 
 /**
  * Spell Data Integrity Tests

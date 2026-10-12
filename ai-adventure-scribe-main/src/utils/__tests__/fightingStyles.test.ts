@@ -226,7 +226,7 @@ describe('fightingStyles', () => {
         visionTypes: [{ type: 'blindsight', range: 10 }],
       } as any;
       const updated = applyBlindFighting(p);
-      expect(updated.visionTypes.filter((v: any) => v.type === 'blindsight').length).toBe(1);
+      expect(updated.visionTypes!.filter((v: any) => v.type === 'blindsight').length).toBe(1);
     });
 
     it('should return participant as is if they do not have blind fighting style', () => {
