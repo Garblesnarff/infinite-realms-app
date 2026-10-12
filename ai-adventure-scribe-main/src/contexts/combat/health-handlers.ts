@@ -136,8 +136,7 @@ export function createHealthHandlers(dispatch: Dispatch, getState: () => CombatS
 
     const { updatedParticipant, roll } = resolveDeathSave(participant);
     const result: 'success' | 'failure' | 'critical' =
-      // @ts-expect-error #452 nat-20 death save check reads the wrong field
-      roll === 20 ? 'critical' : roll >= 10 ? 'success' : 'failure';
+      roll.total === 20 ? 'critical' : roll.total >= 10 ? 'success' : 'failure';
 
     dispatch({
       type: 'UPDATE_PARTICIPANT',
