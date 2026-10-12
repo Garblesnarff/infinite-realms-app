@@ -1,3 +1,4 @@
+import { carryingCapacityForStrength } from '../../../shared/carrying-capacity';
 import { findSrdClass } from '../../../shared/srd-class-data';
 
 import type { Character } from '@/types/character';
@@ -118,9 +119,5 @@ export const calculateArmorClass = (character: Character): number => {
   return baseAC + effectiveDexMod + shieldBonus;
 };
 
-/**
- * Calculate carrying capacity
- */
-export const calculateCarryingCapacity = (character: Character): number => {
-  return (character.abilityScores?.strength?.score || 10) * 15;
-};
+export const calculateCarryingCapacity = (character: Character): number =>
+  carryingCapacityForStrength(character.abilityScores?.strength?.score || 10);
