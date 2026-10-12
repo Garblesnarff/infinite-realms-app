@@ -323,7 +323,7 @@ describe('useSessionManagement', () => {
         return updater;
       });
 
-      const { result } = setupHook();
+      const { result } = setupHook({ sessionStateRef: { current: 'loading' } }); // #451: guards read the ref
       await act(async () => {
         await result.current.updateGameSessionState({ turn_count: 2 });
       });
@@ -344,7 +344,7 @@ describe('useSessionManagement', () => {
         return updater;
       });
 
-      const { result } = setupHook();
+      const { result } = setupHook({ sessionStateRef: { current: 'error' } }); // #451: guards read the ref
       await act(async () => {
         await result.current.updateGameSessionState({ turn_count: 2 });
       });
