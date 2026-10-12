@@ -12,6 +12,7 @@ import type { WizardStep } from './types';
 export const wizardSteps: WizardStep[] = [
   { component: GenreSelection, label: 'Genre' },
   { component: CampaignParameters, label: 'Parameters' },
+  // @ts-expect-error #192 CampaignEnhancements accepts isOptional, not WizardStepProps.isLoading
   { component: CampaignEnhancements, label: 'Enhancements' },
   { component: BasicDetails, label: 'Details' },
 ];
