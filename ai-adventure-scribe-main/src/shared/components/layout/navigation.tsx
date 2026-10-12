@@ -1,6 +1,6 @@
 import { Sword, Users, Home, LogOut, FileText, Crown, Settings } from 'lucide-react';
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { planHasPaidFeatures } from '../../../../shared/plan-features';
 
@@ -15,6 +15,7 @@ import { useAuth } from '@/contexts/AuthContext';
  */
 const Navigation: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, signOut, isBlogAdmin, userPlan } = useAuth();
   // Same rule and source as the account page (AccountPage `isPro`). While the
   // plan is unknown (loading, or just signed out) show neither badge.
@@ -34,6 +35,7 @@ const Navigation: React.FC = () => {
 
   const handleSignOut = async () => {
     await signOut();
+    navigate('/', { replace: true });
   };
 
   return (
