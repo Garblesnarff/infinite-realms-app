@@ -1998,6 +1998,22 @@ ${playerInput}
     expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
   });
 
+  test('#252: a level-1 Cleric saying "cast Turn Undead" is refused — Channel Divinity is a level-2 feature (RP-28)', async () => {
+    // RP-28 (Hark): a level-1 Cleric's Turn Undead went through. Turn Undead is a Channel
+    // Divinity option and Channel Divinity is a level-2 Cleric feature, so the cast-feature
+    // gate refuses the claim even though the class grants it one level later.
+    const turn = await dmTurn({
+      characterClass: 'Cleric',
+      race: 'Human',
+      scores: 'STR 14(+2), DEX 10(+0), CON 14(+2), INT 10(+0), WIS 16(+3), CHA 14(+2)',
+      dexterityModifier: 0,
+      level: 1,
+      playerInput: 'I cast Turn Undead on them!',
+      reply: castReply('The skeletons recoil from your raised holy symbol.'),
+    });
+    refusalOf(turn, 'Turn Undead');
+  });
+
   test('#252: a Fighter saying "cast Channel Divinity" is refused as a feature the character lacks', async () => {
     const turn = await dmTurn({
       characterClass: 'Fighter',
