@@ -25,6 +25,7 @@ vi.mock('@/services/user-data-api', async () => {
   return {
     userDataApi: {
       createMemories: async (records: unknown[]) => {
+        // @ts-expect-error #493 supabase mock insert/rpc typing unmasked by types.ts barrel fix
         const { data, error } = await supabase.from('memories').insert(records);
         if (error) throw error;
         return data || [];
@@ -60,6 +61,7 @@ vi.mock('@/services/user-data-api', async () => {
         limit: number,
         threshold: number,
       ) => {
+        // @ts-expect-error #493 supabase mock insert/rpc typing unmasked by types.ts barrel fix
         const { data, error } = await supabase.rpc('match_memories', {
           query_embedding: embedding,
           session_id: sessionId,
