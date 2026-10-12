@@ -783,10 +783,19 @@ export async function proposeCombatAttack(
   // equips it first. DM narration is never refused: a DM naming an unowned weapon takes
   // the ungrounded substitute path below, and a carried-but-unequipped one resolves the
   // same way rather than stopping the fight.
-  if (grounding.notEquipped && source === 'player') {
+  // RG-014 (#260): a player naming a weapon that is not on the character sheet at all
+  // must also be refused clearly, not silently swapped to an equipped weapon. The DM
+  // path keeps the substitute so a fight is never stopped by a weapon name.
+  if (source === 'player' && grounding.requested && !grounding.grounded) {
+    if (grounding.notEquipped) {
+      throw new BusinessLogicError(
+        `Weapon not equipped: ${grounding.requested} is not equipped — equip it before attacking, or choose an equipped weapon`,
+        { reason: 'weapon_not_equipped', requestedWeaponId: grounding.requested },
+      );
+    }
     throw new BusinessLogicError(
-      `Weapon not equipped: ${grounding.requested} is not equipped — equip it before attacking, or choose an equipped weapon`,
-      { reason: 'weapon_not_equipped', requestedWeaponId: grounding.requested },
+      `Weapon not on character sheet: ${grounding.requested} is not on your character sheet — choose an equipped weapon`,
+      { reason: 'weapon_not_on_sheet', requestedWeaponId: grounding.requested },
     );
   }
   const groundedWeaponId = isUnarmedWeaponClaim(resolvedAttack.weaponId)
@@ -1149,10 +1158,17 @@ export async function executeCombatIntent(
       // #260: a requested weapon that is not equipped must not silently swap. Refuse
       // player-sourced intents clearly; DM narration keeps the ungrounded substitute
       // path below so a fight is never stopped by a weapon name.
-      if (grounding.notEquipped && source === 'player') {
+      // RG-014 (#260): a player naming a weapon not on the sheet at all is also refused.
+      if (source === 'player' && grounding.requested && !grounding.grounded) {
+        if (grounding.notEquipped) {
+          throw new BusinessLogicError(
+            `Weapon not equipped: ${grounding.requested} is not equipped — equip it before attacking, or choose an equipped weapon`,
+            { reason: 'weapon_not_equipped', requestedWeaponId: grounding.requested },
+          );
+        }
         throw new BusinessLogicError(
-          `Weapon not equipped: ${grounding.requested} is not equipped — equip it before attacking, or choose an equipped weapon`,
-          { reason: 'weapon_not_equipped', requestedWeaponId: grounding.requested },
+          `Weapon not on character sheet: ${grounding.requested} is not on your character sheet — choose an equipped weapon`,
+          { reason: 'weapon_not_on_sheet', requestedWeaponId: grounding.requested },
         );
       }
       const groundedWeaponId = isUnarmedWeaponClaim(intent.weaponId)
