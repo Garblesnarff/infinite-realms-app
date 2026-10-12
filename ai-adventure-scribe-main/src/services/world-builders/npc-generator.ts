@@ -150,7 +150,7 @@ export class NPCGenerator {
     sessionId: string,
     playerAction: string,
     locationName?: string,
-    userId: string,
+    userId?: string,
   ): Promise<GeneratedNPC> {
     try {
       // RLS cannot scope this WorkOS-authenticated Supabase client. Fail closed

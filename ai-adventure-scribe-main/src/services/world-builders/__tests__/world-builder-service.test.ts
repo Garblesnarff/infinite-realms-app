@@ -243,13 +243,13 @@ describe('WorldBuilderService', () => {
       const result = await WorldBuilderService.generateOnDemand({
         ...baseRequest,
         type: 'location',
-        specifications: { locationType: 'shop' },
+        specifications: { locationType: 'building' },
       });
 
       expect(result).toEqual(mockLocation);
       expect(LocationGenerator.createLocation).toHaveBeenCalledWith(
         expect.objectContaining({
-          type: 'shop',
+          type: 'building',
         }),
       );
     });
@@ -261,13 +261,13 @@ describe('WorldBuilderService', () => {
       const result = await WorldBuilderService.generateOnDemand({
         ...baseRequest,
         type: 'npc',
-        specifications: { role: 'merchant' },
+        specifications: { role: 'shopkeeper' },
       });
 
       expect(result).toEqual(mockNPC);
       expect(NPCGenerator.createNPC).toHaveBeenCalledWith(
         expect.objectContaining({
-          role: 'merchant',
+          role: 'shopkeeper',
         }),
       );
     });

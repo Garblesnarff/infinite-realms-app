@@ -6,6 +6,11 @@ import type {
   DeclaredAttackCheckPayload,
   PendingCombatIntentPayload,
 } from '@/services/combat/structured-combat-payload';
+import type {
+  CampaignPayload,
+  CharacterPayload,
+  CharacterStatsPayload,
+} from '@/services/user-data-payload-helpers';
 
 export type {
   CampaignPayload,

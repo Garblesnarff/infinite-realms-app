@@ -12,6 +12,7 @@ describe('WorldBuildingAnalyzer', () => {
       sessionId: 'session-456',
       characterId: 'char-789',
       playerAction: 'I walk down the street',
+      userId: 'user-1',
       recentMemories: [],
     };
 

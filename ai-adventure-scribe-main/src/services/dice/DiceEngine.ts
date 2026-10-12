@@ -139,7 +139,7 @@ export class DiceEngine {
     // Parse the expression to double only the dice portions
     const criticalExpression = baseDamageExpression.replace(
       /(\d+)d(\d+)/g,
-      (match, count, sides) => `${parseInt(count) * 2}d${sides}`,
+      (_match, count, sides) => `${parseInt(count) * 2}d${sides}`,
     );
 
     return this.roll(criticalExpression, { purpose: 'critical damage' });
@@ -290,7 +290,7 @@ export class DiceEngine {
     if (critical) {
       const criticalFormula = baseFormula.replace(
         /(\d+)d(\d+)/g,
-        (match, count, sides) => `${parseInt(count) * 2}d${sides}`,
+        (_match, count, sides) => `${parseInt(count) * 2}d${sides}`,
       );
       return {
         formula: criticalFormula,
