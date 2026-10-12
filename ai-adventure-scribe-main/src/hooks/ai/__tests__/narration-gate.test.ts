@@ -7,8 +7,10 @@ import {
   narrationViolationNote,
   narrativeTurnHasNoEngineEvent,
   releaseHeldSideEffects,
+  type RollOutcomeGateParams,
 } from '../narration-gate';
 
+import type { EngineOutcome } from '@/hooks/ai/silent-player-turn';
 import type { ChatMessage } from '@/services/ai-service';
 
 import logger from '@/lib/logger';
@@ -435,18 +437,19 @@ describe('enforceNarrationGate', () => {
 
     const wiring = (
       narration: { text: string },
-      overrides: Partial<Parameters<typeof gateRollOutcomeContradiction>[0]> = {},
+      overrides: Partial<RollOutcomeGateParams<{ text: string }>> = {},
     ): Promise<{ text: string }> =>
-      gateRollOutcomeContradiction({
-        narration: narration as any,
+      gateRollOutcomeContradiction<{ text: string }>({
+        narration,
         sessionId,
         isDiceRollMessage: true,
-        conversationHistory: [] as any,
-        getOutcome: realGetOutcome as any,
-        isStale: (outcome, history) => isRollOutcomeStale(outcome, history as any) as any,
-        runGate: vi.fn(async (_outcome, n) => n) as any,
+        conversationHistory: [] as ChatMessage[],
+        getOutcome: realGetOutcome,
+        isStale: (outcome: PersistedRollOutcome, history: ChatMessage[]) =>
+          isRollOutcomeStale(outcome, history),
+        runGate: vi.fn(async (_outcome: EngineOutcome, n: { text: string }) => n),
         ...overrides,
-      }) as Promise<{ text: string }>;
+      });
 
     it('drives the gate on a dice-roll turn with a fresh contradicting outcome', async () => {
       const runGate = vi.fn(async (_outcome: any, n: { text: string }) => n) as any;

@@ -126,34 +126,32 @@ export async function enforceNarrationGate<T extends GatedNarration>(
     ? contradictsEngineOutcome(narration.text, engineOutcome)
     : [];
   const claims = engineOutcome ? [] : fabricatedOutcomeClaims(narration.text, options);
-  const violations = (engineOutcome ? contradictions : claims) as any[];
+  const violations: string[] = engineOutcome ? contradictions.map((c) => c.match) : claims;
   const reason = engineOutcome ? NARRATION_OUTCOME_REJECTED_REASON : NARRATION_REJECTED_REASON;
   const violationNote = engineOutcome
     ? engineOutcomeViolationNote(
         engineOutcome,
-        contradictions.map((c: any) => c.match),
+        contradictions.map((c) => c.match),
       )
     : narrationViolationNote(claims);
   if (!violations.length) {
     releaseHeldSideEffects(narration);
     return { narration, outcome: 'clean' };
   }
-  logRejection(1, violations as any, reason);
+  logRejection(1, violations, reason);
 
   try {
     const retry = await regenerate(violationNote);
-    const repeated = (
-      engineOutcome
-        ? contradictsEngineOutcome(retry.text, engineOutcome)
-        : fabricatedOutcomeClaims(retry.text, options)
-    ) as any;
+    const repeated: string[] = engineOutcome
+      ? contradictsEngineOutcome(retry.text, engineOutcome).map((c) => c.match)
+      : fabricatedOutcomeClaims(retry.text, options);
     if (!repeated.length) {
       releaseHeldSideEffects(retry);
       return { narration: retry, outcome: 'regenerated' };
     }
-    logRejection(2, repeated as any, reason);
+    logRejection(2, repeated, reason);
   } catch {
-    logRejection(2, violations as any, 'regeneration_failed');
+    logRejection(2, violations, 'regeneration_failed');
   }
   // Neither reply is kept: nothing they parked runs, and nothing they carried survives.
   return {
