@@ -200,7 +200,9 @@ const wizardBody = (cls: { name: string; hitDie: string; baseHp: number }) => ({
   prepared_spells: PREPARED[cls.name] ?? '',
   gold_pieces: 15,
   equipment: (KITS[cls.name] ?? []).map(equipmentRow),
-  inventory_items: [{ name: 'Backpack', item_type: 'gear', quantity: 1 }],
+  // item_type must satisfy the inventory_items CHECK
+  // ('weapon','armor','consumable','ammunition','equipment','treasure').
+  inventory_items: [{ name: 'Backpack', item_type: 'equipment', quantity: 1 }],
 });
 
 describeWithDb('character create every class (#388)', () => {
