@@ -172,6 +172,21 @@ export class RestService {
   }
 
   /**
+   * #264: create hit-dice rows for a character that has none (lazy init).
+   * Passes the row's class_levels through so multiclass characters get one
+   * row per class instead of a single row at total level.
+   */
+  static async ensureHitDice(
+    characterId: string,
+    userId: string,
+    className: string | null,
+    level: number,
+    classLevels?: unknown,
+  ): Promise<CharacterHitDice[]> {
+    return RestHitDiceService.ensureHitDice(characterId, userId, className, level, classLevels);
+  }
+
+  /**
    * Initialize hit dice for a character based on their class and level
    */
   static async initializeHitDice(
@@ -281,7 +296,18 @@ export class RestService {
     // #180: refuse before anything is spent or written.
     this.assertRestAllowed(character.stats, 'short');
 
-    const hitDice = character.hitDice || [];
+    // #264: characters predating the rest system have no hit-dice rows; create
+    // them lazily so the sheet has dice to see and the rest has dice to spend.
+    let hitDice = character.hitDice || [];
+    if (hitDice.length === 0) {
+      hitDice = await RestHitDiceService.ensureHitDice(
+        characterId,
+        userId,
+        character.class,
+        character.level ?? 1,
+        character.classLevels,
+      );
+    }
 
     // Spend hit dice if requested
     let hpRestored = 0;
@@ -407,7 +433,17 @@ export class RestService {
     // #180: refuse before anything is healed, restored, or recorded.
     this.assertRestAllowed(character.stats, 'long');
 
-    const hitDice = character.hitDice || [];
+    // #264: same lazy hit-dice creation as takeShortRest above.
+    let hitDice = character.hitDice || [];
+    if (hitDice.length === 0) {
+      hitDice = await RestHitDiceService.ensureHitDice(
+        characterId,
+        userId,
+        character.class,
+        character.level ?? 1,
+        character.classLevels,
+      );
+    }
 
     const hpRestored = character.stats
       ? Math.max(0, character.stats.maxHitPoints - character.stats.currentHitPoints)

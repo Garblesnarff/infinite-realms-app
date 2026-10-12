@@ -9,12 +9,20 @@ import { Progress } from '@/components/ui/progress';
 
 interface ResourceSectionProps {
   characterResources: CharacterResources;
+  /**
+   * #264: the server's hit-dice rows, aggregated by GET character. Preferred over the
+   * static class-table values below — those never changed after a rest.
+   */
+  hitDice?: { total: number; remaining: number; type: string };
 }
 
 /**
  * ResourceSection displays character resources like hit dice, ki points, etc.
  */
-export const ResourceSection: React.FC<ResourceSectionProps> = ({ characterResources }) => {
+export const ResourceSection: React.FC<ResourceSectionProps> = ({
+  characterResources,
+  hitDice,
+}) => {
   return (
     <Card>
       <CardHeader>
@@ -24,8 +32,34 @@ export const ResourceSection: React.FC<ResourceSectionProps> = ({ characterResou
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Hit Dice */}
-        {characterResources.hitDice &&
+        {/* Hit Dice — server-driven when the sheet has loaded it (#264) */}
+        {hitDice ? (
+          <div className="border-l-4 border-yellow-500 pl-4">
+            <div className="flex items-center gap-2 mb-2">
+              <h4 className="font-semibold">Hit Dice ({hitDice.type})</h4>
+              <Badge
+                variant={hitDice.remaining === 0 ? 'destructive' : 'outline'}
+                className="ml-auto"
+              >
+                {hitDice.remaining} / {hitDice.total}
+              </Badge>
+            </div>
+            <div className="mt-2">
+              <div className="flex justify-between text-xs mb-1">
+                <span>Remaining</span>
+                <span>
+                  {hitDice.remaining} / {hitDice.total}
+                </span>
+              </div>
+              <Progress
+                value={hitDice.total > 0 ? (hitDice.remaining / hitDice.total) * 100 : 0}
+                className="h-2"
+                aria-label={`Hit Dice (${hitDice.type}) remaining`}
+              />
+            </div>
+          </div>
+        ) : (
+          characterResources.hitDice &&
           Object.entries(characterResources.hitDice).map(([dieType, dice]) => (
             <div key={dieType} className="border-l-4 border-yellow-500 pl-4">
               <div className="flex items-center gap-2 mb-2">
@@ -51,7 +85,8 @@ export const ResourceSection: React.FC<ResourceSectionProps> = ({ characterResou
                 />
               </div>
             </div>
-          ))}
+          ))
+        )}
 
         {/* Class-Specific Resources */}
         {characterResources.rages !== undefined && (

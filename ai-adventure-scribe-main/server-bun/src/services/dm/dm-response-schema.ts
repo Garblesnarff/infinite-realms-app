@@ -193,6 +193,15 @@ export type DMResponse = {
     change: 'apply' | 'remove';
     duration_minutes?: number | null;
   }> | null;
+  /**
+   * A rest the story grants this turn (#264, #218 step 5): the DM narrates the party
+   * resting and the server applies it through RestService — the same ruleset the
+   * sheet's rest buttons use. A short rest spends no hit dice on its own (the player
+   * spends them from the sheet); a long rest restores HP and regains half the hit
+   * dice. The server applies it once per player message; absent or null when the
+   * story grants no rest.
+   */
+  rest?: { type: 'short' | 'long' } | null;
 };
 
 const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: 'null' }] });
@@ -478,11 +487,20 @@ const storyConditionsProperty = nullable({
   },
 });
 
+/** #264: a rest the story grants this turn. Optional and nullable, like `combat_exits`. */
+const storyRestProperty = nullable({
+  type: 'object',
+  additionalProperties: false,
+  properties: { type: { type: 'string', enum: ['short', 'long'] } },
+  required: ['type'],
+});
+
 export const dmResponseSchema = createDmResponseSchema({
   combat_exits: combatExitsProperty,
   xp_award: xpAwardProperty,
   items: storyItemsProperty,
   conditions: storyConditionsProperty,
+  rest: storyRestProperty,
 });
 
 const isPoint = (value: unknown): value is Point =>

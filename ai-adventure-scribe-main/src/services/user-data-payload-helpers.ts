@@ -1,3 +1,5 @@
+import { aggregateHitDice, type RestHitDie } from './rest-api';
+
 export type CharacterStatsPayload = Partial<{
   strength: number;
   dexterity: number;
@@ -133,8 +135,27 @@ export function prepareCampaignPayload(payload: Record<string, unknown>): Campai
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function normalizeCharacter<T extends Record<string, any>>(character: T): T {
+  // #264: fold the GET's snake_case hit_dice rows into the sheet's hitDice shape
+  // ({ total, remaining, type }), the same aggregation the rest results use.
+  const hitDiceRows = Array.isArray(character.hit_dice) ? character.hit_dice : null;
+  const hitDice = hitDiceRows
+    ? aggregateHitDice(
+        hitDiceRows.map(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (row: Record<string, any>): RestHitDie => ({
+            id: String(row.id ?? ''),
+            characterId: String(row.character_id ?? character.id ?? ''),
+            className: String(row.class_name ?? ''),
+            dieType: String(row.die_type ?? ''),
+            totalDice: Number(row.total_dice ?? 0),
+            usedDice: Number(row.used_dice ?? 0),
+          }),
+        ),
+      )
+    : undefined;
   return {
     ...character,
     character_stats: character.stats ? [character.stats] : [],
+    ...(hitDice ? { hitDice } : {}),
   };
 }

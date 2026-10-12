@@ -2,14 +2,13 @@ import React from 'react';
 
 import { FeatureSection } from './class-feature-tracker/FeatureSection';
 import { ResourceSection } from './class-feature-tracker/ResourceSection';
-import { RestActionButtons } from './class-feature-tracker/RestActionButtons';
+import { SheetRestControls } from './class-feature-tracker/SheetRestControls';
 
 import type { Character, CharacterSheetUpdateFn } from '@/types/character';
 import type { ClassFeature } from '@/types/combat';
 
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
-import { applyRestResultToCharacter, restApi } from '@/services/rest-api';
 import { userDataApi } from '@/services/user-data-api';
 import { getClassFeatures, getCharacterResources } from '@/utils/classFeatures';
 
@@ -41,31 +40,8 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
     ? getCharacterResources(character.class.name, character.level || 1)
     : null;
 
-  // Handle resource restoration (short rest or long rest)
-  const handleRest = async (restType: 'short' | 'long') => {
-    if (!character.id) return;
-
-    try {
-      const result =
-        restType === 'short'
-          ? await restApi.shortRest(character.id)
-          : await restApi.longRest(character.id);
-      const saved = await onUpdate(applyRestResultToCharacter(character, result));
-      if (!saved) return;
-      toast({
-        title: restType === 'short' ? 'Short rest complete' : 'Long rest complete',
-      });
-      logger.info(`Completed ${restType} rest`, result);
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      logger.error(`Failed to complete ${restType} rest`, error);
-      toast({
-        title: 'Rest failed',
-        description: reason,
-        variant: 'destructive',
-      });
-    }
-  };
+  // #264: rests go through the shared SheetRestControls (hit-dice prompt on short
+  // rest), the same path as the Main tab.
 
   // Handle using a resource
   const handleUseResource = async (feature: ClassFeature) => {
@@ -124,10 +100,12 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
       />
 
       {/* Character Resources */}
-      {characterResources && <ResourceSection characterResources={characterResources} />}
+      {characterResources && (
+        <ResourceSection characterResources={characterResources} hitDice={character.hitDice} />
+      )}
 
       {/* Rest Actions */}
-      <RestActionButtons onRest={handleRest} />
+      <SheetRestControls character={character} onUpdate={onUpdate} />
     </div>
   );
 };

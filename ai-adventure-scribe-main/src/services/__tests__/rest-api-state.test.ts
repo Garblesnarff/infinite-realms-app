@@ -309,4 +309,27 @@ describe('rest API state application', () => {
     // through until the participant wire refresh brings the server's 0/0.
     expect(updated.deathSaves).toEqual({ successes: 2, failures: 1 });
   });
+
+  it('sends the exact hit-dice spend body the server route consumes (#264)', async () => {
+    // The combat test above spies on restApi.shortRest without restoring; this
+    // test needs the real implementation.
+    (restApi.shortRest as unknown as { mockRestore?: () => void }).mockRestore?.();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(serverShortRest),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      await restApi.shortRest('char-1', 2);
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toContain('/v1/rest/characters/char-1/short');
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(init.body as string)).toEqual({ hitDiceToSpend: 2 });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

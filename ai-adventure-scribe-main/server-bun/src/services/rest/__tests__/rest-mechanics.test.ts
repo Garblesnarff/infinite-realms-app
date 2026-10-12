@@ -64,9 +64,9 @@ describe('RestMechanics', () => {
       expect(result.updates[0].newUsedDice).toBe(1);
     });
 
-    it('should apply CON modifier (min 1)', () => {
+    it('should apply CON modifier (min 0 per die, 2014 PHB)', () => {
       const result = RestMechanics.calculateSpentHitDice(1, -5, mockHitDice, [2]);
-      expect(result.hpRestored).toBe(1); // 2 - 5 = -3, min 1
+      expect(result.hpRestored).toBe(0); // 2 - 5 = -3, min 0
     });
 
     it('should handle multiple dice across classes', () => {
