@@ -1,5 +1,5 @@
 import type { OptionSelection } from './enhancement-options';
-import type { Condition } from '@/types/combat';
+import type { Condition, DamageType, VisionInfo, ObscurementLevel } from '@/types/combat';
 
 import { serializePersonalityEnvelope } from '@/utils/character/personality-envelope';
 
