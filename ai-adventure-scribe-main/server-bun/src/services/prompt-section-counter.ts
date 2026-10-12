@@ -18,7 +18,8 @@
  * Section mapping (tagged blocks in the assembled DM prompt, see
  * src/services/ai-service.ts `fullPrompt` and the ContextBuilder /
  * GameContextPrompts / CampaignContextPrompts renderers):
- * - `campaign_and_canon`: `<starter_campaign_lore>`, `<campaign_details>`,
+ * - `campaign_and_canon`: `<starter_campaign_lore>`, `<input_matched_lore>`
+ *   (#352's per-turn input-matched tail block), `<campaign_details>`,
  *   `<available_visual_assets>` and `<available_handouts>` blocks.
  * - `memory_recall`: `<story_memories>` and `<previous_session_recap>`.
  * - `scene_state`: `<scene_state>` and `<current_scene>`.
@@ -174,6 +175,7 @@ export function countPromptSections(
   takeInto('memory_recall', ['story_memories', 'previous_session_recap']);
   takeInto('campaign_and_canon', [
     'starter_campaign_lore',
+    'input_matched_lore',
     'campaign_details',
     'available_visual_assets',
     'available_handouts',

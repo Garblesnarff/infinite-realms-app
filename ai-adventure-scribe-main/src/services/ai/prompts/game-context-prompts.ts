@@ -102,6 +102,40 @@ Memories are color, not authority: where a memory conflicts with <scene_state>, 
   }
 
   /**
+   * #352: the volatile half of the game context for the user message: the
+   * character sheet and the turn's memories, without the campaign details
+   * (stable — they live in the system block) and without lore (scene-stable —
+   * rendered and cached per scene by the caller).
+   */
+  static async buildUserContextSection(
+    context: GameContext,
+    relevantMemories: Memory[],
+  ): Promise<string> {
+    let section = `<game_context>`;
+
+    if (context.characterDetails) {
+      section += await GameContextPrompts.buildCharacterSection(context.characterDetails);
+    }
+
+    if (relevantMemories.length > 0) {
+      section += `
+<story_memories>
+<title>IMPORTANT STORY MEMORIES</title>
+Reference these memories naturally to maintain story continuity.
+Memories are color, not authority: where a memory conflicts with <scene_state>, the <scene_state> facts are correct and the memory is stale.`;
+      relevantMemories.forEach((memory, index) => {
+        section += `
+<memory index="${index + 1}" type="${memory.type.toUpperCase()}">${memory.content}</memory>`;
+      });
+      section += `
+</story_memories>`;
+    }
+
+    section += `</game_context>`;
+    return section;
+  }
+
+  /**
    * Delegates the equipment section rendering to CharacterContextPrompts
    */
   public static async buildEquipmentSection(char: Record<string, any>): Promise<string> {
