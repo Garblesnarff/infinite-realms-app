@@ -2,6 +2,7 @@ import { Sword, Shield, Heart, Brain, Users, Eye, Crown, Star } from 'lucide-rea
 import React from 'react';
 
 import { type Character } from '@/types/character';
+import { applyRacialBonusesToAbilityScores } from '@/utils/racialAbilityBonuses';
 
 interface CharacterPreviewAbilityScoresProps {
   character: Character;
@@ -29,6 +30,15 @@ function getAbilityIcon(ability: string) {
 export const CharacterPreviewAbilityScores: React.FC<CharacterPreviewAbilityScoresProps> = ({
   character,
 }) => {
+  // Show post-racial scores (#389): the wizard holds base scores, but the
+  // saved character gets racial bonuses. The preview must match the save.
+  const race = typeof character.race === 'object' ? character.race : null;
+  const subrace = typeof character.subrace === 'object' ? character.subrace : null;
+  const displayScores =
+    race || subrace
+      ? applyRacialBonusesToAbilityScores(character.abilityScores || {}, race, subrace)
+      : character.abilityScores || {};
+
   return (
     <div className="space-y-3">
       <h4 className="font-semibold text-sm text-muted-foreground flex items-center">
@@ -36,7 +46,7 @@ export const CharacterPreviewAbilityScores: React.FC<CharacterPreviewAbilityScor
         Ability Scores
       </h4>
       <div className="grid grid-cols-2 gap-2">
-        {Object.entries(character.abilityScores || {}).map(([ability, data]) => (
+        {Object.entries(displayScores).map(([ability, data]) => (
           <div
             key={ability}
             className="flex items-center justify-between p-2 bg-card rounded-lg border border-border"
