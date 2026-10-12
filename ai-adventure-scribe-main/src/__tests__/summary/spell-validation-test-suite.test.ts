@@ -286,8 +286,8 @@ describe('D&D 5E Spell Validation Test Suite - Complete Coverage', () => {
       const wizard = createMockCharacter('Test', mockWizard, mockHuman);
       const highElfWizard = createMockCharacter('Test', mockWizard, mockHuman, mockHighElfSubrace);
 
-      expect(wizard.class.name).toBe('Wizard');
-      expect(wizard.class.spellcasting?.cantripsKnown).toBe(3);
+      expect(wizard.class!.name).toBe('Wizard');
+      expect(wizard.class!.spellcasting?.cantripsKnown).toBe(3);
       expect(highElfWizard.subrace?.name).toBe('High Elf');
 
       console.log('🔧 Test Helpers Available:');

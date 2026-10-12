@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
+import type { Character } from '@/types/character';
+
 import {
   mockWizard,
   mockCleric,
@@ -175,16 +177,27 @@ describe('Spell Validation Performance Tests', () => {
       const multiclassCharacter = {
         ...createMockCharacter('Multiclass Performance', mockWizard, mockHuman),
         classLevels: [
-          { className: 'Wizard', level: 5 },
-          { className: 'Cleric', level: 3 },
-          { className: 'Paladin', level: 2 },
+          { classId: 'wizard', className: 'Wizard', level: 5, hitDie: 6, features: [] },
+          { classId: 'cleric', className: 'Cleric', level: 3, hitDie: 8, features: [] },
+          { classId: 'paladin', className: 'Paladin', level: 2, hitDie: 10, features: [] },
         ],
       };
 
       // Mock the API call to return quickly
       vi.mocked(spellApi.calculateMulticlassCasterLevel).mockResolvedValue({
         totalCasterLevel: 8,
-        spellSlots: { caster_level: 8 },
+        spellSlots: {
+          caster_level: 8,
+          spell_slots_1: 0,
+          spell_slots_2: 0,
+          spell_slots_3: 0,
+          spell_slots_4: 0,
+          spell_slots_5: 0,
+          spell_slots_6: 0,
+          spell_slots_7: 0,
+          spell_slots_8: 0,
+          spell_slots_9: 0,
+        },
         pactMagicSlots: null,
       });
 
@@ -209,14 +222,25 @@ describe('Spell Validation Performance Tests', () => {
         .map((_, i) => ({
           ...createMockCharacter(`Multiclass ${i}`, mockWizard, mockHuman),
           classLevels: [
-            { className: 'Wizard', level: i + 1 },
-            { className: 'Cleric', level: i + 1 },
+            { classId: 'wizard', className: 'Wizard', level: i + 1, hitDie: 6, features: [] },
+            { classId: 'cleric', className: 'Cleric', level: i + 1, hitDie: 8, features: [] },
           ],
         }));
 
       vi.mocked(spellApi.calculateMulticlassCasterLevel).mockImplementation(async () => ({
         totalCasterLevel: 5,
-        spellSlots: { caster_level: 5 },
+        spellSlots: {
+          caster_level: 5,
+          spell_slots_1: 0,
+          spell_slots_2: 0,
+          spell_slots_3: 0,
+          spell_slots_4: 0,
+          spell_slots_5: 0,
+          spell_slots_6: 0,
+          spell_slots_7: 0,
+          spell_slots_8: 0,
+          spell_slots_9: 0,
+        },
         pactMagicSlots: null,
       }));
 
@@ -389,7 +413,7 @@ describe('Spell Validation Performance Tests', () => {
       const startTime = performance.now();
 
       const result = validateSpellSelection(
-        complexCharacter,
+        complexCharacter as unknown as Character,
         ['mage-hand', 'prestidigitation', 'light'],
         ['magic-missile', 'shield', 'detect-magic', 'burning-hands', 'sleep', 'color-spray'],
       );
@@ -430,7 +454,7 @@ describe('Spell Validation Performance Tests', () => {
       expect(executionTime).toBeLessThan(100); // 20 concurrent validations in under 100ms
     });
 
-    it('should not block the event loop during validation', (done) => {
+    it('should not block the event loop during validation', (done: () => void) => {
       const wizardCharacter = createMockCharacter('Event Loop Test', mockWizard, mockHuman);
       let eventLoopBlocked = false;
 

@@ -87,8 +87,8 @@ describe('Spell Class Restriction Enforcement', () => {
       ];
 
       // For now, just verify the character structure is correct for future validation
-      expect(wizardCharacter.class.name).toBe('Wizard');
-      expect(wizardCharacter.class.spellcasting?.ability).toBe('intelligence');
+      expect(wizardCharacter.class!.name).toBe('Wizard');
+      expect(wizardCharacter.class!.spellcasting?.ability).toBe('intelligence');
       expect(problematicDivineSpells).toContain('cure-wounds'); // The historical bug spell
     });
 
@@ -128,7 +128,7 @@ describe('Spell Class Restriction Enforcement', () => {
       ];
 
       for (const spellId of problematicDivineSpells) {
-        vi.mocked(spellApi.validateSpellForClass).mockResolvedValue({
+        vi.mocked((spellApi as any).validateSpellForClass).mockResolvedValue({
           valid: false,
           error: `Wizard cannot learn ${spellId}`,
         });
@@ -154,13 +154,21 @@ describe('Spell Class Restriction Enforcement', () => {
       const clericCharacter = createMockCharacter('Test Cleric', mockCleric, mockHuman);
 
       // Mock API to reject arcane spells for clerics
-      vi.mocked(spellApi.validateSpellForClass).mockImplementation(async (spellId, className) => {
-        const arcaneSpells = ['magic-missile', 'shield', 'fireball', 'counterspell', 'misty-step'];
-        if (className === 'Cleric' && arcaneSpells.includes(spellId)) {
-          return { valid: false, error: `${className} cannot learn ${spellId}` };
-        }
-        return { valid: true };
-      });
+      vi.mocked((spellApi as any).validateSpellForClass).mockImplementation(
+        async (spellId: string, className: string) => {
+          const arcaneSpells = [
+            'magic-missile',
+            'shield',
+            'fireball',
+            'counterspell',
+            'misty-step',
+          ];
+          if (className === 'Cleric' && arcaneSpells.includes(spellId)) {
+            return { valid: false, error: `${className} cannot learn ${spellId}` };
+          }
+          return { valid: true };
+        },
+      );
 
       const invalidCantrips = ['guidance', 'thaumaturgy', 'mage-hand']; // mage-hand is wizard
       const invalidSpells = ['cure-wounds']; // Only one spell for cleric, but this would be invalid
@@ -180,20 +188,22 @@ describe('Spell Class Restriction Enforcement', () => {
       const clericCharacter = createMockCharacter('Test Cleric', mockCleric, mockHuman);
 
       // Mock API to validate cleric spells
-      vi.mocked(spellApi.validateSpellForClass).mockImplementation(async (spellId, className) => {
-        const clericSpells = [
-          'guidance',
-          'thaumaturgy',
-          'sacred-flame',
-          'cure-wounds',
-          'healing-word',
-          'bless',
-        ];
-        if (className === 'Cleric' && clericSpells.includes(spellId)) {
-          return { valid: true };
-        }
-        return { valid: false, error: `${className} cannot learn ${spellId}` };
-      });
+      vi.mocked((spellApi as any).validateSpellForClass).mockImplementation(
+        async (spellId: string, className: string) => {
+          const clericSpells = [
+            'guidance',
+            'thaumaturgy',
+            'sacred-flame',
+            'cure-wounds',
+            'healing-word',
+            'bless',
+          ];
+          if (className === 'Cleric' && clericSpells.includes(spellId)) {
+            return { valid: true };
+          }
+          return { valid: false, error: `${className} cannot learn ${spellId}` };
+        },
+      );
 
       const validCantrips = ['guidance', 'thaumaturgy', 'sacred-flame'];
       // validateSpellSelection() expects spellsPrepared (base 1 at level 1) + the character's
@@ -213,13 +223,15 @@ describe('Spell Class Restriction Enforcement', () => {
       const bardCharacter = createMockCharacter('Test Bard', mockBard, mockHuman);
 
       // Bards cannot learn certain arcane/divine spells like Magic Missile or Shield at 1st level
-      vi.mocked(spellApi.validateSpellForClass).mockImplementation(async (spellId, className) => {
-        const restrictedSpells = ['magic-missile', 'shield', 'guiding-bolt', 'inflict-wounds'];
-        if (className === 'Bard' && restrictedSpells.includes(spellId)) {
-          return { valid: false, error: `${className} cannot learn ${spellId}` };
-        }
-        return { valid: true };
-      });
+      vi.mocked((spellApi as any).validateSpellForClass).mockImplementation(
+        async (spellId: string, className: string) => {
+          const restrictedSpells = ['magic-missile', 'shield', 'guiding-bolt', 'inflict-wounds'];
+          if (className === 'Bard' && restrictedSpells.includes(spellId)) {
+            return { valid: false, error: `${className} cannot learn ${spellId}` };
+          }
+          return { valid: true };
+        },
+      );
 
       // Use bard cantrips that are actually on the bard list
       const cantrips = ['friends', 'vicious-mockery'];
@@ -264,7 +276,7 @@ describe('Spell Class Restriction Enforcement', () => {
 
       for (const testCase of testCases) {
         for (const forbiddenSpell of testCase.forbiddenSpells) {
-          vi.mocked(spellApi.validateSpellForClass).mockResolvedValue({
+          vi.mocked((spellApi as any).validateSpellForClass).mockResolvedValue({
             valid: false,
             error: `${testCase.className} cannot learn ${forbiddenSpell}`,
           });
@@ -289,21 +301,23 @@ describe('Spell Class Restriction Enforcement', () => {
       const wizardCharacter = createMockCharacter('Test Wizard', mockWizard, mockHuman);
 
       // Mock API to allow only wizard spells
-      vi.mocked(spellApi.validateSpellForClass).mockImplementation(async (spellId, _className) => {
-        const wizardSpells = [
-          'mage-hand',
-          'prestidigitation',
-          'light',
-          'minor-illusion',
-          'magic-missile',
-          'shield',
-          'detect-magic',
-          'burning-hands',
-          'sleep',
-          'color-spray',
-        ];
-        return { valid: wizardSpells.includes(spellId) };
-      });
+      vi.mocked((spellApi as any).validateSpellForClass).mockImplementation(
+        async (spellId: string, _className: string) => {
+          const wizardSpells = [
+            'mage-hand',
+            'prestidigitation',
+            'light',
+            'minor-illusion',
+            'magic-missile',
+            'shield',
+            'detect-magic',
+            'burning-hands',
+            'sleep',
+            'color-spray',
+          ];
+          return { valid: wizardSpells.includes(spellId) };
+        },
+      );
 
       // Try to select correct count but with invalid spells mixed in
       const mixedCantrips = ['mage-hand', 'prestidigitation', 'guidance']; // guidance is cleric
@@ -352,7 +366,7 @@ describe('Spell Class Restriction Enforcement', () => {
       ];
 
       for (const spellId of maliciousSpellIds) {
-        vi.mocked(spellApi.validateSpellForClass).mockResolvedValue({
+        vi.mocked((spellApi as any).validateSpellForClass).mockResolvedValue({
           valid: false,
           error: `Invalid spell ID or not available for Wizard: ${spellId}`,
         });
@@ -375,7 +389,9 @@ describe('Spell Class Restriction Enforcement', () => {
       const wizardCharacter = createMockCharacter('Test Wizard', mockWizard, mockHuman);
 
       // Mock API to throw network error
-      vi.mocked(spellApi.validateSpellForClass).mockRejectedValue(new Error('Network error'));
+      vi.mocked((spellApi as any).validateSpellForClass).mockRejectedValue(
+        new Error('Network error'),
+      );
 
       // Provide fully valid wizard selections; network failure must not affect local validation
       const cantrips = ['mage-hand', 'prestidigitation', 'light'];
