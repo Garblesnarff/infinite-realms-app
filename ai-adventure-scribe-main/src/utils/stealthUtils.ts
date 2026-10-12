@@ -26,7 +26,7 @@ export function calculateStealthBonus(participant: CombatParticipant): number {
 
   // Racial bonuses
   let racialBonus = 0;
-  if (participant.racialTraits?.some((t) => t.name === 'naturally_stealthy')) {
+  if (participant.racialTraits?.some((t) => (t.name as string) === 'naturally_stealthy')) {
     racialBonus = 1;
   }
 
@@ -38,7 +38,7 @@ export function calculateStealthBonus(participant: CombatParticipant): number {
 
   // Equipment modifiers
   let equipmentBonus = 0;
-  if (participant.mainHandWeapon?.properties?.finesse) {
+  if (participant.mainHandWeapon?.weaponProperties?.finesse) {
     equipmentBonus += 1; // Finesse weapons help with stealth
   }
 
@@ -129,7 +129,7 @@ export function stopHiding(participant: CombatParticipant): CombatParticipant {
 /**
  * Check if a hidden participant can remain hidden
  */
-export function canRemainHidden(participant: CombatParticipant, actionTaken: string): boolean {
+export function canRemainHidden(_participant: CombatParticipant, actionTaken: string): boolean {
   // Certain actions automatically break stealth
   const breakingActions = ['attack', 'cast_spell', 'shove', 'grapple', 'dash'];
 

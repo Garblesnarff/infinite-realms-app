@@ -99,7 +99,7 @@ export async function repairRefusedCombatAction(
       message: buildRepairPrompt(refusal, refusedAction),
       context: aiContext as never,
       conversationHistory: conversationHistory as never,
-      userPlan,
+      userPlan: userPlan as 'free' | 'pro' | 'enterprise' | 'tester' | undefined,
       turnCount,
       ...(signal ? { signal } : {}),
     });

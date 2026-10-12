@@ -206,10 +206,6 @@ export function calculateTwoWeaponAttacks(participant: CombatParticipant): {
   offHandAttacks: number;
   totalAttacks: number;
 } {
-  const weapons = getEquippedWeapons(participant);
-  const _mainWeapon = weapons.mainHand;
-  const _offHandWeapon = weapons.offHand;
-
   let mainHandAttacks = 1; // Base action
   let offHandAttacks = 0;
 
@@ -227,8 +223,8 @@ export function calculateTwoWeaponAttacks(participant: CombatParticipant): {
     participant.characterClass === 'fighter' &&
     participant.level &&
     participant.level >= 2 &&
-    participant.resources?.action_surge?.currentUses &&
-    participant.resources.action_surge.currentUses > 0
+    participant.resources?.actionSurge?.current &&
+    participant.resources.actionSurge.current > 0
   ) {
     mainHandAttacks += 1; // Additional action
   }

@@ -87,7 +87,7 @@ export interface CombatCheckClientOutcome {
   /** Set when the check resolved; absent when it was declined or there was nothing to do. */
   result?: unknown;
   /** The reason the check was not run, when it was recognised but not resolved. */
-  reason?: 'dismissed' | 'no_target' | 'unrecognised_check' | 'refused';
+  reason?: 'dismissed' | 'no_target' | 'no_target_actor' | 'unrecognised_check' | 'refused';
   /** The engine's own words for a refusal, shown to the player as the reason. */
   message?: string;
 }

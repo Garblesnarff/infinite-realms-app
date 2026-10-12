@@ -16,7 +16,7 @@ import type { CombatDetectionResult } from '@/utils/combatDetection';
  */
 const combat = (isCombat: boolean): CombatDetectionResult => ({
   isCombat,
-  combatType: isCombat ? 'melee' : 'none',
+  combatType: isCombat ? 'attack' : 'none',
   confidence: isCombat ? 0.9 : 0,
   shouldStartCombat: false,
   shouldEndCombat: false,

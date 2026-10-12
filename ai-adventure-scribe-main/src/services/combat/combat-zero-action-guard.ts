@@ -230,7 +230,7 @@ export async function repairZeroActionCombatTurn(
       message: buildZeroActionRepairPrompt(playerMessage, roster, narratedText),
       context: aiContext as never,
       conversationHistory: conversationHistory as never,
-      userPlan,
+      userPlan: userPlan as 'free' | 'pro' | 'enterprise' | 'tester' | undefined,
       turnCount,
       ...(signal ? { signal } : {}),
     });

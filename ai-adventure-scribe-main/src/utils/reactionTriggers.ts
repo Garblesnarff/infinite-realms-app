@@ -166,6 +166,7 @@ export function checkUncannyDodgeOpportunities(
         target.id,
         'damage_taken',
         `You are hit by an attack you can see`,
+        // @ts-expect-error #192: uncanny_dodge is a runtime reaction not yet in the ActionType union
         ['uncanny_dodge'],
         attacker.id,
       ),
@@ -182,6 +183,8 @@ export function checkReactionTriggers(
   action: Partial<CombatAction> & {
     movement?: { fromPosition?: string; toPosition?: string };
     isRangedWeaponAttack?: boolean;
+    fromPosition?: string;
+    toPosition?: string;
   },
   encounter: CombatEncounter,
 ): ReactionOpportunity[] {
@@ -254,6 +257,7 @@ export function checkReactionTriggers(
       break;
     }
 
+    // @ts-expect-error #192: damage_dealt is a runtime action not yet in the ActionType union
     case 'damage_dealt': {
       // Check for uncanny dodge when damage is taken
       const attacker = encounter.participants.find((p) => p.id === action.participantId);
@@ -288,6 +292,7 @@ export function checkReactionTriggers(
       break;
     }
 
+    // @ts-expect-error #192: move is a runtime action not yet in the ActionType union
     case 'move': {
       // Check for polearm master reaction when creature enters reach
       if (action.fromPosition && action.toPosition) {

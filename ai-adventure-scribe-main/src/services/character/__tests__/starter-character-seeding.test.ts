@@ -123,7 +123,10 @@ describe('starter-character-seeding', () => {
   it.each(academyTemplates)(
     'normalizes the real uppercase Academy template shape for $name',
     (template) => {
-      const seed = buildStarterCharacterSeed(template, 'academy-of-arcane-gastronomy');
+      const seed = buildStarterCharacterSeed(
+        template as unknown as StarterCharacterTemplateLike,
+        'academy-of-arcane-gastronomy',
+      );
 
       expect(seed.stats).toMatchObject({
         strength: template.ability_scores.STR,
@@ -148,7 +151,10 @@ describe('starter-character-seeding', () => {
     });
 
     expect(buildStarterCharacterSeed(rawTemplate, 'academy').stats).toMatchObject(
-      buildStarterCharacterSeed(mappedTemplate, 'academy').stats as Record<string, unknown>,
+      buildStarterCharacterSeed(
+        mappedTemplate as unknown as StarterCharacterTemplateLike,
+        'academy',
+      ).stats as Record<string, unknown>,
     );
   });
 
@@ -179,7 +185,7 @@ describe('starter-character-seeding', () => {
           WiSdOm: 12,
           ChArIsMa: 10,
         },
-      }),
+      } as unknown as StarterCharacterTemplateLike),
     ).toEqual({
       strength: 8,
       dexterity: 12,
@@ -194,7 +200,7 @@ describe('starter-character-seeding', () => {
     const template = {
       ...academyTemplates[0],
       ability_scores: { ...academyTemplates[0].ability_scores, LUCK: 18 },
-    };
+    } as unknown as StarterCharacterTemplateLike;
 
     expect(() => buildStarterCharacterSeed(template, 'academy-of-arcane-gastronomy')).toThrow(
       'Unrecognized ability score key "LUCK"',

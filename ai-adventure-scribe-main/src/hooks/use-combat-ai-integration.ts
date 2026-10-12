@@ -61,7 +61,11 @@ export const useCombatAIIntegration = (
       participant: CombatParticipant,
     ): Promise<{ isValid: boolean; suggestions: string[]; errors: string[] }> => {
       try {
-        const validation = await callEdgeFunction('rules-interpreter-execute', {
+        const validation = await callEdgeFunction<{
+          isValid?: boolean;
+          suggestions?: string[];
+          errors?: string[];
+        }>('rules-interpreter-execute', {
           task: {
             id: `combat_validation_${Date.now()}`,
             description: `Validate ${action.actionType} action for ${participant.name}`,

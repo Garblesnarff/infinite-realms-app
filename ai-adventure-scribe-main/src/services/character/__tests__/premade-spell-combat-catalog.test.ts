@@ -132,6 +132,7 @@ const PREMADES: Array<{ campaign: string; name: string; class: string; scores: S
 function premadeSpellIds(premade: (typeof PREMADES)[number]): string[] {
   const seed = buildStarterSpellSeed({
     name: premade.name,
+    race: 'Human',
     class: premade.class,
     level: 1,
     ability_scores: premade.scores,

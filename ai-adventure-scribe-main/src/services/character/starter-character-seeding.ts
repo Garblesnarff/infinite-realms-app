@@ -183,8 +183,8 @@ export function buildStarterSpellSeed(
   const characterClass = findClass(className);
   const info = characterClass ? getSpellcastingInfo(characterClass, level) : null;
   if (!info) return { cantrips: [], knownSpells: [], preparedSpells: [] };
-  const available = getSrdClassSpells(characterClass.name);
-  const authoredAvailable = getClassSpells(characterClass.name);
+  const available = getSrdClassSpells(characterClass!.name);
+  const authoredAvailable = getClassSpells(characterClass!.name);
 
   const curated = getTemplateSpellLists(template);
   const validCantrips = new Set(authoredAvailable.cantrips.map((spell) => spell.id));
@@ -208,15 +208,15 @@ export function buildStarterSpellSeed(
   const curatedKnownSpells = (curated?.knownSpells || []).filter((id) => validSpells.has(id));
   const curatedPreparedSpells = (curated?.preparedSpells || []).filter((id) => validSpells.has(id));
   const knownCandidates =
-    characterClass.id === 'wizard'
+    characterClass!.id === 'wizard'
       ? uniqueSpellIds([...curatedKnownSpells, ...curatedPreparedSpells])
       : curatedKnownSpells;
   const knownSpells = selectSpellIds(knownCandidates, availableKnownSpells, quotas.known);
   const preparedCandidates =
-    characterClass.id === 'wizard'
+    characterClass!.id === 'wizard'
       ? curatedPreparedSpells.filter((id) => knownSpells.includes(id))
       : curatedPreparedSpells;
-  const preparedFallback = characterClass.id === 'wizard' ? knownSpells : availableKnownSpells;
+  const preparedFallback = characterClass!.id === 'wizard' ? knownSpells : availableKnownSpells;
   const preparedSpells = selectSpellIds(preparedCandidates, preparedFallback, quotas.prepared);
 
   return {
