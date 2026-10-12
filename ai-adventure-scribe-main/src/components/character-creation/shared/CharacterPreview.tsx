@@ -3,6 +3,7 @@ import React from 'react';
 
 import { CharacterPreviewAbilityScores } from './CharacterPreviewAbilityScores';
 import { CharacterPreviewHeader } from './CharacterPreviewHeader';
+import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
 
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -47,7 +48,7 @@ const CharacterPreview: React.FC = () => {
   };
 
   const totalLevel = character.level || 1;
-  const proficiencyBonus = Math.ceil(totalLevel / 4) + 1;
+  const characterProficiencyBonus = proficiencyBonus(totalLevel);
 
   return (
     <Card className="glass-strong rounded-2xl hover-lift border-2 border-infinite-purple/20">
@@ -74,7 +75,7 @@ const CharacterPreview: React.FC = () => {
               <div className="text-xs text-muted-foreground">Hit Die</div>
             </div>
             <div className="text-center p-2 bg-card rounded-lg border border-border">
-              <div className="text-lg font-bold text-emerald-400">+{proficiencyBonus}</div>
+              <div className="text-lg font-bold text-emerald-400">+{characterProficiencyBonus}</div>
               <div className="text-xs text-muted-foreground">Proficiency</div>
             </div>
           </div>
@@ -96,10 +97,7 @@ const CharacterPreview: React.FC = () => {
                 </Badge>
               )}
               {character.personalityTraits?.slice(0, 2).map((trait, index) => (
-                <div
-                  key={index}
-                  className="text-xs p-2 bg-card rounded border border-border"
-                >
+                <div key={index} className="text-xs p-2 bg-card rounded border border-border">
                   {trait}
                 </div>
               ))}

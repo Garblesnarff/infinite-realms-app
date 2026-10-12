@@ -1,3 +1,4 @@
+import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
 import { ValidationError } from '../../lib/errors.js';
 import {
   canonicalProficiencyKey,
@@ -111,7 +112,7 @@ function storedProficiencyBonus(level: number | null): number {
   if (typeof level !== 'number' || !Number.isFinite(level)) {
     throw new ValidationError('Character has no stored level');
   }
-  return 2 + Math.floor((Math.max(1, level) - 1) / 4);
+  return proficiencyBonus(level);
 }
 
 function signed(value: number): string {
