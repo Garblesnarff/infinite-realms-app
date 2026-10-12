@@ -119,6 +119,31 @@ function normalizeClassName(raw: string | null | undefined): ClassName | null {
 }
 
 /**
+ * Third-caster subclasses by lowercase name, with the parent class each one
+ * belongs to and the class-table entry it maps to.
+ */
+const THIRD_CASTER_SUBCLASSES: Record<string, { parent: ClassName; className: ClassName }> = {
+  'eldritch knight': { parent: 'Fighter', className: 'Eldritch Knight' },
+  'arcane trickster': { parent: 'Rogue', className: 'Arcane Trickster' },
+};
+
+/**
+ * #420: resolve the effective class for slot calculation. The app sends
+ * Fighter/Rogue with a subclass field; a Fighter with the Eldritch Knight
+ * subclass (or a Rogue with Arcane Trickster) is a third caster. The subclass
+ * only grants slots on its parent class — a mismatched pairing, an unknown
+ * subclass, or a subclass on any other class is ignored.
+ */
+function resolveThirdCasterClass(
+  name: ClassName,
+  subclass: string | null | undefined,
+): ClassName {
+  const entry = THIRD_CASTER_SUBCLASSES[(subclass ?? '').trim().toLowerCase()];
+  if (!entry || entry.parent !== name) return name;
+  return entry.className;
+}
+
+/**
  * Normalize raw classLevels JSONB into validated entries. Shared by
  * seedRowsForCharacter and isPactSlotCharacter so both agree on what counts
  * as multiclass.
@@ -157,11 +182,18 @@ export class SpellSlotMechanics {
    * (character_id, spell_level) unique constraint
    * (`calculateMulticlassSpellSlots` still reports their pact pool separately
    * in `warlockSlots` for other consumers).
+   *
+   * #420: `subclass` carries the character's subclass (e.g. 'Eldritch
+   * Knight'). A Fighter with the Eldritch Knight subclass, or a Rogue with
+   * Arcane Trickster, seeds third-caster rows; any other subclass (or none)
+   * leaves the class as-is. The subclass applies to the single-class path
+   * only — multiclass classLevels entries carry no subclass.
    */
   static seedRowsForCharacter(
     className: string | null | undefined,
     level: number,
     classLevels: unknown,
+    subclass?: string | null,
   ): Array<{ spellLevel: number; totalSlots: number }> {
     if (!Number.isInteger(level) || level < 1 || level > 20) {
       return [];
@@ -179,7 +211,10 @@ export class SpellSlotMechanics {
               const pact = WARLOCK_PACT_MAGIC[level];
               return pact ? { [pact.level]: pact.slots } : {};
             }
-            return SpellSlotMechanics.calculateSpellSlots(name, level).slots;
+            // #420: Fighter/Rogue carry their third-caster status in the
+            // subclass, not the class name.
+            const effectiveName = resolveThirdCasterClass(name, subclass);
+            return SpellSlotMechanics.calculateSpellSlots(effectiveName, level).slots;
           })();
 
     return Object.entries(slots)

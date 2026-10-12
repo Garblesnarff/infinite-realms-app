@@ -11,6 +11,7 @@
 import { eq, and, exists, or } from 'drizzle-orm';
 
 import { ClassFeaturesService } from './class-features-service.js';
+import { SpellSlotDataAccess } from './spell-slots/spell-slot-data-access.js';
 import { db } from '../../../db/client';
 import { classFeaturesLibrary, characterSubclasses, characters } from '../../../db/schema/index';
 import {
@@ -91,6 +92,13 @@ export class SubclassService {
       subclassName,
       chosenAtLevel: level,
     });
+
+    // #420: grant spell slots at once. A Fighter who picks Eldritch Knight
+    // (or a Rogue who picks Arcane Trickster) gains third-caster rows
+    // immediately instead of waiting for a level-up re-sync; the sync reads
+    // the just-written subclass row above. The sync is an idempotent
+    // upsert+prune, so non-caster subclasses are unaffected.
+    await SpellSlotDataAccess.syncSpellSlotTotals(characterId, userId);
 
     // Get subclass features acquired at the choice level
     const subclassFeatures = await db.query.classFeaturesLibrary.findMany({
