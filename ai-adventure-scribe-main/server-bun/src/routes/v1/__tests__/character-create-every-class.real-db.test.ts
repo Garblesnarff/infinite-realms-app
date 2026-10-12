@@ -65,22 +65,34 @@ if (hasRealDb) {
   process.env.PORT ??= '8888';
 }
 
-const CLASSES = [
-  'Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter', 'Monk',
-  'Paladin', 'Ranger', 'Rogue', 'Sorcerer', 'Warlock', 'Wizard',
+const CLASSES: Array<{ name: string; hitDie: string; baseHp: number }> = [
+  // baseHp = hit die max + CON mod (+2 for CON 15) + Dwarven Toughness (+1).
+  // Base CON 14 -> 16 after Hill Dwarf +2 = +3 mod. Using base 14 per strategist.
+  { name: 'Barbarian', hitDie: '1d12', baseHp: 12 + 3 + 1 },
+  { name: 'Bard', hitDie: '1d8', baseHp: 8 + 3 + 1 },
+  { name: 'Cleric', hitDie: '1d8', baseHp: 8 + 3 + 1 },
+  { name: 'Druid', hitDie: '1d8', baseHp: 8 + 3 + 1 },
+  { name: 'Fighter', hitDie: '1d10', baseHp: 10 + 3 + 1 }, // = 14 per #388 RG-006
+  { name: 'Monk', hitDie: '1d8', baseHp: 8 + 3 + 1 },
+  { name: 'Paladin', hitDie: '1d10', baseHp: 10 + 3 + 1 },
+  { name: 'Ranger', hitDie: '1d10', baseHp: 10 + 3 + 1 },
+  { name: 'Rogue', hitDie: '1d8', baseHp: 8 + 3 + 1 },
+  { name: 'Sorcerer', hitDie: '1d6', baseHp: 6 + 3 + 1 },
+  { name: 'Warlock', hitDie: '1d8', baseHp: 8 + 3 + 1 },
+  { name: 'Wizard', hitDie: '1d6', baseHp: 6 + 3 + 1 },
 ];
 
 /**
  * Wire body following the wizard's prepareCharacterPayload output.
  * Hill Dwarf (+2 CON, +1 WIS; Dwarven Toughness +1 HP/level via raceTraits).
- * Base scores: STR 15, DEX 14, CON 13, INT 12, WIS 10, CHA 8.
- * After racials: STR 15, DEX 14, CON 15 (+2), INT 12, WIS 11 (+1), CHA 8.
+ * Base scores: STR 15, DEX 14, CON 14, INT 12, WIS 10, CHA 8.
+ * After racials: STR 15, DEX 14, CON 16 (+3), INT 12, WIS 11 (+1), CHA 8.
  */
-const wizardBody = (className: string) => ({
-  name: `L1 ${className} 388`,
+const wizardBody = (cls: { name: string; hitDie: string; baseHp: number }) => ({
+  name: `L1 ${cls.name} 388`,
   race: 'Dwarf',
   subrace: 'Hill Dwarf',
-  class: className,
+  class: cls.name,
   level: 1,
   background: 'Soldier',
   alignment: 'Lawful Good',
@@ -88,19 +100,19 @@ const wizardBody = (className: string) => ({
   stats: {
     strength: 15,
     dexterity: 14,
-    constitution: 15,
+    constitution: 16,
     intelligence: 12,
     wisdom: 11,
     charisma: 8,
     armor_class: 10,
-    max_hit_points: 13, // d10 + CON (+2) + Dwarven Toughness (+1)
-    current_hit_points: 13,
+    max_hit_points: cls.baseHp,
+    current_hit_points: cls.baseHp,
     temporary_hit_points: 0,
-    hit_dice: '1d10',
+    hit_dice: cls.hitDie,
   },
   skill_proficiencies: JSON.stringify(['Athletics']),
   languages: ['Common', 'Dwarvish'],
-  fighting_styles: className === 'Fighter' ? ['defense'] : [],
+  fighting_styles: cls.name === 'Fighter' ? ['defense'] : [],
   class_features: {},
   cantrips: JSON.stringify([]),
   known_spells: JSON.stringify([]),
@@ -142,9 +154,9 @@ describeWithDb('character create every class (#388)', () => {
     await closeRealDb();
   });
 
-  for (const className of CLASSES) {
-    it(`creates a Hill Dwarf ${className} at L1`, async () => {
-      const res = await request('/v1/characters', 'POST', wizardBody(className));
+  for (const cls of CLASSES) {
+    it(`creates a Hill Dwarf ${cls.name} at L1`, async () => {
+      const res = await request('/v1/characters', 'POST', wizardBody(cls));
       const text = await res.text();
       expect(res.status, text.slice(0, 300)).toBe(201);
       const { id } = JSON.parse(text) as { id: string };
@@ -157,7 +169,8 @@ describeWithDb('character create every class (#388)', () => {
         .from(characterStats)
         .where(eq(characterStats.characterId, id));
       expect(stats).toBeDefined();
-      expect(stats.maxHitPoints).toBeGreaterThan(0);
+      // 2014 rules: Hill Dwarf +2 CON +1 WIS; HP = hit die + CON mod (+3) + Toughness (+1).
+      expect(stats.maxHitPoints).toBe(cls.baseHp);
     });
   }
 });
