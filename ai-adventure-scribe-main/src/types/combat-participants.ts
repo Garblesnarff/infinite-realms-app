@@ -179,6 +179,8 @@ export interface CombatAction {
   // Action details
   actionType: ActionType;
   description: string;
+  /** Class feature name for use_class_feature actions (e.g. 'rage'); set by use-combat-mechanics (#453). */
+  featureUsed?: string;
 
   // Spell-specific information
   spellName?: string;
