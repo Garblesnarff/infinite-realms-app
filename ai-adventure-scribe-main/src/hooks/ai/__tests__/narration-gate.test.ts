@@ -438,18 +438,18 @@ describe('enforceNarrationGate', () => {
       overrides: Partial<Parameters<typeof gateRollOutcomeContradiction>[0]> = {},
     ): Promise<{ text: string }> =>
       gateRollOutcomeContradiction({
-        narration,
+        narration: narration as any,
         sessionId,
         isDiceRollMessage: true,
-        conversationHistory: [],
-        getOutcome: realGetOutcome,
-        isStale: (outcome, history) => isRollOutcomeStale(outcome, history),
-        runGate: vi.fn(async (_outcome, n) => n),
+        conversationHistory: [] as any,
+        getOutcome: realGetOutcome as any,
+        isStale: (outcome, history) => isRollOutcomeStale(outcome, history as any) as any,
+        runGate: vi.fn(async (_outcome, n) => n) as any,
         ...overrides,
-      });
+      }) as Promise<{ text: string }>;
 
     it('drives the gate on a dice-roll turn with a fresh contradicting outcome', async () => {
-      const runGate = vi.fn(async (_outcome: unknown, n: { text: string }) => n);
+      const runGate = vi.fn(async (_outcome: any, n: { text: string }) => n) as any;
 
       const result = await wiring({ text: 'You succeed without a sound.' }, { runGate });
 
@@ -459,7 +459,7 @@ describe('enforceNarrationGate', () => {
     });
 
     it('skips the gate when the outcome is stale', async () => {
-      const runGate = vi.fn(async (_outcome: unknown, n: { text: string }) => n);
+      const runGate = vi.fn(async (_outcome: any, n: { text: string }) => n) as any;
 
       await wiring(
         { text: 'You succeed without a sound.' },
@@ -470,7 +470,7 @@ describe('enforceNarrationGate', () => {
     });
 
     it('skips the gate when the reply follows the verdict', async () => {
-      const runGate = vi.fn(async (_outcome: unknown, n: { text: string }) => n);
+      const runGate = vi.fn(async (_outcome: any, n: { text: string }) => n) as any;
 
       await wiring({ text: 'You fail to stay quiet.' }, { runGate });
 
@@ -479,7 +479,7 @@ describe('enforceNarrationGate', () => {
 
     it('never loads an outcome off the dice-roll branch', async () => {
       const getOutcome = vi.fn(async (_sid: string) => null);
-      const runGate = vi.fn(async (_outcome: unknown, n: { text: string }) => n);
+      const runGate = vi.fn(async (_outcome: any, n: { text: string }) => n) as any;
 
       await wiring(
         { text: 'You succeed without a sound.' },

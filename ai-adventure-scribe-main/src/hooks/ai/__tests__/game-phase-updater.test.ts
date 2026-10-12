@@ -25,6 +25,7 @@ describe('game-phase-updater', () => {
     it('should transition from exploration to combat when combat is detected', () => {
       const combatDetection: CombatDetectionResult = {
         isCombat: true,
+        combatType: 'attack' as const,
         confidence: 0.9,
         shouldStartCombat: true,
         shouldEndCombat: false,
@@ -45,6 +46,7 @@ describe('game-phase-updater', () => {
     it('should transition from combat to exploration when combat ends and context is inactive', () => {
       const combatDetection: CombatDetectionResult = {
         isCombat: false,
+        combatType: 'none' as const,
         confidence: 0.9,
         shouldStartCombat: false,
         shouldEndCombat: true,
@@ -65,6 +67,7 @@ describe('game-phase-updater', () => {
     it('should NOT transition to exploration if isInCombat is still true (active context)', () => {
       const combatDetection: CombatDetectionResult = {
         isCombat: false,
+        combatType: 'none' as const,
         confidence: 0.9,
         shouldStartCombat: false,
         shouldEndCombat: true,
@@ -96,6 +99,7 @@ describe('game-phase-updater', () => {
     it('should do nothing if already in combat phase', () => {
       const combatDetection: CombatDetectionResult = {
         isCombat: true,
+        combatType: 'attack' as const,
         confidence: 0.9,
         shouldStartCombat: false,
         shouldEndCombat: false,

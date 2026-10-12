@@ -327,9 +327,9 @@ describe('the sheet-Cast Acid Splash in a fight (#2374, #2375)', () => {
     it('does not pick a downed creature the player named', async () => {
       await typed('I cast Acid Splash at the Corrupted Shard', [
         APPRENTICE,
-        { ...SHARD, isDead: true, currentHitPoints: 0 },
+        { ...SHARD, isDead: true, currentHitPoints: 0 } as any,
         IMP,
-      ]);
+      ] as any);
 
       expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
     });
