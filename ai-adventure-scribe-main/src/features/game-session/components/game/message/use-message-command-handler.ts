@@ -72,8 +72,9 @@ export const useMessageCommandHandler = ({
       }
 
       // Store safety event in memory
-      await (extractMemories as unknown as (content: string, options?: unknown) => Promise<void>)(
+      await extractMemories(
         `${aiResponseText ? 'Auto-triggered safety' : 'Safety'} command ${safetyCheck.command.type} activated: ${safetyCheck.command.context}`,
+        // @ts-expect-error #450 extractMemories(content, type?) takes no options object
         {
           importance: aiResponseText ? 8 : 9,
           tags: [
