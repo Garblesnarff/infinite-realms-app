@@ -48,10 +48,10 @@ describe('attack-damage', () => {
   const mockWeapon: Equipment = {
     id: 'longsword',
     name: 'Longsword',
-    type: 'weapon',
+    category: 'weapon',
+    cost: { amount: 15, currency: 'gp' },
     weight: 3,
-    price: '15 gp',
-    rarity: 'common',
+    description: 'A longsword.',
     damage: { dice: '1d8', type: 'slashing' },
     weaponProperties: { versatile: true },
   };
@@ -209,19 +209,21 @@ describe('attack-damage', () => {
     it('should handle resistance, immunity, and vulnerability', () => {
       (diceUtils.rollDamage as Mock).mockReturnValue([mockRoll(10)]);
 
-      (diceUtils.calculateDamage as Mock).mockImplementation((
-        baseDamage: number,
-        damageType: string,
-        resistances: string[] = [],
-        immunities: string[] = [],
-        vulnerabilities: string[] = [],
-      ) => {
-        if (immunities.includes(damageType)) return 0;
-        let finalDamage = baseDamage;
-        if (resistances.includes(damageType)) finalDamage = Math.floor(finalDamage / 2);
-        if (vulnerabilities.includes(damageType)) finalDamage = finalDamage * 2;
-        return finalDamage;
-      });
+      (diceUtils.calculateDamage as Mock).mockImplementation(
+        (
+          baseDamage: number,
+          damageType: string,
+          resistances: string[] = [],
+          immunities: string[] = [],
+          vulnerabilities: string[] = [],
+        ) => {
+          if (immunities.includes(damageType)) return 0;
+          let finalDamage = baseDamage;
+          if (resistances.includes(damageType)) finalDamage = Math.floor(finalDamage / 2);
+          if (vulnerabilities.includes(damageType)) finalDamage = finalDamage * 2;
+          return finalDamage;
+        },
+      );
 
       const fireSword: Equipment = {
         ...mockWeapon,
@@ -281,14 +283,29 @@ describe('attack-damage', () => {
       };
 
       // Not raging
-      expect(calculateAttackDamage(mockWeapon, { ...barbarian, isRaging: false, level: 1 }, false).totalBeforeResistance).toBe(7);
+      expect(
+        calculateAttackDamage(mockWeapon, { ...barbarian, isRaging: false, level: 1 }, false)
+          .totalBeforeResistance,
+      ).toBe(7);
 
-      expect(calculateAttackDamage(mockWeapon, { ...barbarian, level: 1 }, false).totalBeforeResistance).toBe(9);
-      expect(calculateAttackDamage(mockWeapon, { ...barbarian, level: 8 }, false).totalBeforeResistance).toBe(9);
-      expect(calculateAttackDamage(mockWeapon, { ...barbarian, level: 9 }, false).totalBeforeResistance).toBe(10);
-      expect(calculateAttackDamage(mockWeapon, { ...barbarian, level: 15 }, false).totalBeforeResistance).toBe(10);
-      expect(calculateAttackDamage(mockWeapon, { ...barbarian, level: 16 }, false).totalBeforeResistance).toBe(11);
-      expect(calculateAttackDamage(mockWeapon, { ...barbarian, level: 20 }, false).totalBeforeResistance).toBe(11);
+      expect(
+        calculateAttackDamage(mockWeapon, { ...barbarian, level: 1 }, false).totalBeforeResistance,
+      ).toBe(9);
+      expect(
+        calculateAttackDamage(mockWeapon, { ...barbarian, level: 8 }, false).totalBeforeResistance,
+      ).toBe(9);
+      expect(
+        calculateAttackDamage(mockWeapon, { ...barbarian, level: 9 }, false).totalBeforeResistance,
+      ).toBe(10);
+      expect(
+        calculateAttackDamage(mockWeapon, { ...barbarian, level: 15 }, false).totalBeforeResistance,
+      ).toBe(10);
+      expect(
+        calculateAttackDamage(mockWeapon, { ...barbarian, level: 16 }, false).totalBeforeResistance,
+      ).toBe(11);
+      expect(
+        calculateAttackDamage(mockWeapon, { ...barbarian, level: 20 }, false).totalBeforeResistance,
+      ).toBe(11);
     });
 
     it('should cap Divine Smite at 5d8', () => {
@@ -315,7 +332,7 @@ describe('attack-damage', () => {
         ...mockAttacker,
         characterClass: 'barbarian',
         isRaging: true,
-        level: 1
+        level: 1,
       };
 
       // Melee attack
@@ -345,7 +362,7 @@ describe('attack-damage', () => {
         isRaging: true,
         strength: 14, // +2
         dexterity: 16, // +3
-        level: 1
+        level: 1,
       } as any;
 
       const rapier: Equipment = {
@@ -371,8 +388,8 @@ describe('attack-damage', () => {
     it('should use abilityScores object in getAbilityModifier', () => {
       const participant = {
         abilityScores: {
-          strength: { score: 18 }
-        }
+          strength: { score: 18 },
+        },
       } as any;
       expect(getAbilityModifier(participant, 'strength')).toBe(4);
     });

@@ -83,7 +83,7 @@ export async function castSpell(
       somatic: spell.components_somatic || false,
       material: spell.components_material || false,
       materialDescription: spell.material_components,
-      materialCost: spell.material_cost,
+      materialCost: (spell as unknown as { material_cost?: number }).material_cost,
       materialConsumed: spell.material_consumed || false,
     },
   };
@@ -117,7 +117,8 @@ export function checkConcentration(
   };
   const constitution = combatant.abilityScores?.constitution;
   const conMod = constitution?.modifier || 0;
-  const proficient = constitution?.savingThrow === true ||
+  const proficient =
+    constitution?.savingThrow === true ||
     combatant.savingThrowProficiencies?.includes('constitution');
   const proficiencyBonus = proficient ? calculateProficiencyBonus(participant.level || 1) : 0;
   const roll = Math.floor(Math.random() * 20) + 1 + conMod + proficiencyBonus;

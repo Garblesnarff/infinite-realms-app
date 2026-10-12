@@ -38,10 +38,10 @@ export const createFade = (
       [axis]: 0,
       transition: {
         duration: duration.normal,
-        ease: easing.ease,
+        ease: easing.ease as [number, number, number, number],
       },
     },
-  };
+  } as unknown as Variants;
 };
 
 /**

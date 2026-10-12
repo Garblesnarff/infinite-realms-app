@@ -146,7 +146,7 @@ export function getAbilityModifier(participant: CombatParticipant, ability: stri
   }
 
   // 2. Check for direct property (Legacy/Simple structure)
-  const directValue = (participant as Record<string, unknown>)[abilityName];
+  const directValue = (participant as unknown as Record<string, unknown>)[abilityName];
   if (typeof directValue === 'number') {
     return Math.floor((directValue - 10) / 2);
   }

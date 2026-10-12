@@ -39,8 +39,8 @@ describe('spellcasting-actions', () => {
         },
       };
 
-      await expect(castSpell({}, participant, 'missing-spell', '1')).rejects.toThrow(
-        'Spell missing-spell not found'
+      await expect(castSpell({}, participant, 'missing-spell', 1)).rejects.toThrow(
+        'Spell missing-spell not found',
       );
     });
 
@@ -55,8 +55,8 @@ describe('spellcasting-actions', () => {
         },
       };
 
-      await expect(castSpell({}, participant, 'fireball', '3')).rejects.toThrow(
-        'No available spell slots at level 3 for Gandalf'
+      await expect(castSpell({}, participant, 'fireball', 3)).rejects.toThrow(
+        'No available spell slots at level 3 for Gandalf',
       );
     });
 
@@ -83,14 +83,14 @@ describe('spellcasting-actions', () => {
         description: 'Gandalf unleashes a fiery blast',
       };
 
-      const result = await castSpell(action, participant, 'fireball', '3');
+      const result = await castSpell(action, participant, 'fireball', 3);
 
-      expect(result.updatedParticipant.spellSlots['3'].current).toBe(1);
+      expect(result.updatedParticipant.spellSlots![3].current).toBe(1);
       expect(result.updatedParticipant.activeConcentration).toBeNull();
       expect(result.updatedAction.spellName).toBe('Fireball');
       expect(result.updatedAction.spellLevel).toBe(3);
       expect(result.updatedAction.description).toBe(
-        'Gandalf unleashes a fiery blast (Cast Fireball using level 3 slot) [Components: V, S]'
+        'Gandalf unleashes a fiery blast (Cast Fireball using level 3 slot) [Components: V, S]',
       );
       expect(result.updatedAction.components).toEqual({
         verbal: true,
@@ -129,12 +129,12 @@ describe('spellcasting-actions', () => {
         description: 'Gandalf speeds up his ally',
       };
 
-      const result = await castSpell(action, participant, 'haste', '3');
+      const result = await castSpell(action, participant, 'haste', 3);
 
-      expect(result.updatedParticipant.spellSlots['3'].current).toBe(0);
+      expect(result.updatedParticipant.spellSlots![3].current).toBe(0);
       expect(result.updatedParticipant.activeConcentration).toBe('Haste');
       expect(result.updatedAction.description).toBe(
-        'Gandalf speeds up his ally (Cast Haste using level 3 slot) [Components: V, S, M] [Material: a shaving of licorice root]'
+        'Gandalf speeds up his ally (Cast Haste using level 3 slot) [Components: V, S, M] [Material: a shaving of licorice root]',
       );
       expect(result.updatedAction.components).toEqual({
         verbal: true,
@@ -163,8 +163,8 @@ describe('spellcasting-actions', () => {
         activeConcentration: 'Invisibility',
       };
 
-      await expect(castSpell({}, participant, 'haste', '3')).rejects.toThrow(
-        'Gandalf is already concentrating on Invisibility'
+      await expect(castSpell({}, participant, 'haste', 3)).rejects.toThrow(
+        'Gandalf is already concentrating on Invisibility',
       );
     });
   });

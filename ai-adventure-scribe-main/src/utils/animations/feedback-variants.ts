@@ -81,7 +81,7 @@ export const celebrate: Variants = {
     scale: 1,
     transition: {
       duration: duration.slow,
-      ease: easing.easeBack,
+      ease: easing.easeBack as [number, number, number, number],
     },
   },
 };
@@ -95,7 +95,7 @@ export const pulseSuccess: Variants = {
     transition: {
       duration: 0.6,
       repeat: 2,
-      ease: easing.ease,
+      ease: easing.ease as [number, number, number, number],
     },
   },
 };
@@ -112,7 +112,7 @@ export const sparkle: Variants = {
     rotate: [0, 180, 360],
     transition: {
       duration: 1,
-      ease: easing.easeOut,
+      ease: easing.easeOut as [number, number, number, number],
     },
   },
 };
@@ -181,7 +181,7 @@ export const progressBar = (value: number): Variants => ({
     width: `${value}%`,
     transition: {
       duration: duration.slow,
-      ease: easing.easeOut,
+      ease: easing.easeOut as [number, number, number, number],
     },
   },
 });
@@ -196,14 +196,14 @@ export const diceRoll: Variants = {
     scale: [1, 1.2, 1],
     transition: {
       duration: 0.8,
-      ease: easing.easeOut,
+      ease: easing.easeOut as [number, number, number, number],
     },
   },
   result: {
     scale: [1, 1.1, 1],
     transition: {
       duration: 0.3,
-      ease: easing.easeBack,
+      ease: easing.easeBack as [number, number, number, number],
     },
   },
 };

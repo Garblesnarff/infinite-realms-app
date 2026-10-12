@@ -38,8 +38,8 @@ export function createCombatActionFromAttack(
   const isSpellAttack = !!(
     weapon &&
     typeof weapon === 'object' &&
-    'isSpell' in (weapon as Record<string, unknown>) &&
-    (weapon as Record<string, unknown>).isSpell === true
+    'isSpell' in (weapon as unknown as Record<string, unknown>) &&
+    (weapon as unknown as Record<string, unknown>).isSpell === true
   );
   const attackType = isSpellAttack ? 'cast_spell' : 'attack';
 
