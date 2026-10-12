@@ -1,9 +1,12 @@
-import type { EngineOutcome } from '@/hooks/ai/silent-player-turn';
 import type { ChatMessage } from '@/services/ai-service';
 import type { PlayerInputOrigin } from '@/services/combat/combat-action-origin';
 import type { PersistedRollOutcome } from '@/types/session-state';
 
-import { contradictsEngineOutcome, fabricatedOutcomeClaims } from '@/hooks/ai/silent-player-turn';
+import {
+  contradictsEngineOutcome,
+  fabricatedOutcomeClaims,
+  type EngineOutcome,
+} from '@/hooks/ai/silent-player-turn';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
 
@@ -126,7 +129,10 @@ export async function enforceNarrationGate<T extends GatedNarration>(
   const violations = engineOutcome ? contradictions : claims;
   const reason = engineOutcome ? NARRATION_OUTCOME_REJECTED_REASON : NARRATION_REJECTED_REASON;
   const violationNote = engineOutcome
-    ? engineOutcomeViolationNote(engineOutcome, contradictions)
+    ? engineOutcomeViolationNote(
+        engineOutcome,
+        contradictions.map((c) => c.match),
+      )
     : narrationViolationNote(claims);
   if (!violations.length) {
     releaseHeldSideEffects(narration);
@@ -238,6 +244,10 @@ export async function gateRollOutcomeContradiction<T extends GatedNarration>(
   const engineOutcome: EngineOutcome = {
     success: outcome.success,
     characterName: params.characterName,
+    // The roll's own words for the attempted action: soft verdict language ("you manage
+    // to") only contradicts when its sentence names the action (#266).
+    description: outcome.description,
+    requestType: outcome.requestType,
   };
   if (!contradictsEngineOutcome(params.narration.text, engineOutcome).length) {
     return params.narration;
