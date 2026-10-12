@@ -419,12 +419,24 @@ export class SpellSlotsService {
       : [];
     const multiclass = classLevels.length > 1;
 
-    // Warlocks resolve here but their class table grants no slots: pact magic
-    // is tracked separately, so the refusal below names that cause.
     const calculation = multiclass
       ? SpellSlotMechanics.calculateMulticlassSpellSlots(classLevels)
       : SpellSlotMechanics.calculateSpellSlots(className, level);
-    const granted = calculation.slots[slotLevelUsed] ?? 0;
+    // #397: pact magic now seeds rows (SpellSlotMechanics.seedRowsForCharacter),
+    // so a single-class warlock whose rows are missing gets the pact row
+    // created here instead of refused. calculateSpellSlots alone still grants
+    // warlocks no slots, hence the override below.
+    let grantedSlots: Record<number, number> = calculation.slots;
+    if (!multiclass && className === 'Warlock') {
+      grantedSlots = Object.fromEntries(
+        SpellSlotMechanics.seedRowsForCharacter(
+          character.class,
+          level,
+          character.classLevels,
+        ).map((row) => [row.spellLevel, row.totalSlots]),
+      );
+    }
+    const granted = grantedSlots[slotLevelUsed] ?? 0;
     if (granted <= 0) {
       fail(
         multiclass
@@ -438,7 +450,7 @@ export class SpellSlotsService {
       .from(characterSpellSlots)
       .where(eq(characterSpellSlots.characterId, characterId));
     const existingLevels = new Set(existing.map((row) => row.spellLevel));
-    const toInsert = Object.entries(calculation.slots)
+    const toInsert = Object.entries(grantedSlots)
       .filter(([slotLevel, total]) => total > 0 && !existingLevels.has(Number(slotLevel)))
       .map(([slotLevel, total]) => ({
         characterId,
