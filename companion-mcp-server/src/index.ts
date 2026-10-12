@@ -9,9 +9,10 @@
  * see .env.example.
  */
 
-import { config } from 'dotenv';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { config } from 'dotenv';
 
 import { loadConfig } from './config.js';
 import { CompanionApiClient } from './ir-client.js';
@@ -26,6 +27,9 @@ async function main(): Promise<void> {
   const running = await startMcpHttpServer(client, mcpPort);
   console.error(
     `Companion MCP server listening at ${running.url} (upstream ${irApiBaseUrl})`,
+  );
+  console.error(
+    `Simulated Alexa+ web client at ${running.url.replace(/\/mcp$/, '/')} (#215 step 3b)`,
   );
 
   const shutdown = (): void => {
