@@ -278,7 +278,7 @@ describe('the sheet-Cast Acid Splash in a fight (#2374, #2375)', () => {
   describe('a typed cast in the area shape (#2443)', () => {
     // Run M10: "I cast Acid Splash at the Bitter End Mercenary", declared by the DM as
     // `dmCantripAoEAction` and refused by the route as `no_area_of_effect`.
-    const typed = (playerMessage: string, participants = [APPRENTICE, SHARD, IMP]) =>
+    const typed = (playerMessage: string, participants: any[] = [APPRENTICE, SHARD, IMP]) =>
       resolve(participants, [dmCantripAoEAction], { playerInputOrigin: 'typed', playerMessage });
 
     beforeEach(() => {
@@ -327,9 +327,9 @@ describe('the sheet-Cast Acid Splash in a fight (#2374, #2375)', () => {
     it('does not pick a downed creature the player named', async () => {
       await typed('I cast Acid Splash at the Corrupted Shard', [
         APPRENTICE,
-        { ...SHARD, isDead: true, currentHitPoints: 0 } as any,
+        { ...SHARD, isDead: true, currentHitPoints: 0 },
         IMP,
-      ] as any);
+      ]);
 
       expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
     });

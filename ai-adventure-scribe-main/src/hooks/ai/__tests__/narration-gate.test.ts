@@ -452,7 +452,7 @@ describe('enforceNarrationGate', () => {
       });
 
     it('drives the gate on a dice-roll turn with a fresh contradicting outcome', async () => {
-      const runGate = vi.fn(async (_outcome: any, n: { text: string }) => n) as any;
+      const runGate = vi.fn(async (_outcome: unknown, n: { text: string }) => n);
 
       const result = await wiring({ text: 'You succeed without a sound.' }, { runGate });
 
@@ -462,7 +462,7 @@ describe('enforceNarrationGate', () => {
     });
 
     it('skips the gate when the outcome is stale', async () => {
-      const runGate = vi.fn(async (_outcome: any, n: { text: string }) => n) as any;
+      const runGate = vi.fn(async (_outcome: unknown, n: { text: string }) => n);
 
       await wiring(
         { text: 'You succeed without a sound.' },
@@ -473,7 +473,7 @@ describe('enforceNarrationGate', () => {
     });
 
     it('skips the gate when the reply follows the verdict', async () => {
-      const runGate = vi.fn(async (_outcome: any, n: { text: string }) => n) as any;
+      const runGate = vi.fn(async (_outcome: unknown, n: { text: string }) => n);
 
       await wiring({ text: 'You fail to stay quiet.' }, { runGate });
 
@@ -482,7 +482,7 @@ describe('enforceNarrationGate', () => {
 
     it('never loads an outcome off the dice-roll branch', async () => {
       const getOutcome = vi.fn(async (_sid: string) => null);
-      const runGate = vi.fn(async (_outcome: any, n: { text: string }) => n) as any;
+      const runGate = vi.fn(async (_outcome: unknown, n: { text: string }) => n);
 
       await wiring(
         { text: 'You succeed without a sound.' },
