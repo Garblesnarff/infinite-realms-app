@@ -43,7 +43,8 @@ export const InitiativeMessage: React.FC<InitiativeMessageProps> = React.memo(
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-xs text-muted-foreground">
-                  [{participant.roll.results.join(', ')}] {participant.roll.modifier >= 0 ? '+' : ''}
+                  [{participant.roll.results.join(', ')}]{' '}
+                  {participant.roll.modifier >= 0 ? '+' : ''}
                   {participant.roll.modifier}
                 </span>
                 <Badge variant="secondary" className="font-mono">

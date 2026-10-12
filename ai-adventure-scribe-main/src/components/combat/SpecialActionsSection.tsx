@@ -70,9 +70,7 @@ export const SpecialActionsSection: React.FC<SpecialActionsSectionProps> = React
         <Button
           variant="outline"
           size="sm"
-          onClick={() =>
-            onTwoWeaponAttack(currentParticipant.id, selectedEnemyId || undefined)
-          }
+          onClick={() => onTwoWeaponAttack(currentParticipant.id, selectedEnemyId || undefined)}
         >
           Two-Weapon Attack
         </Button>

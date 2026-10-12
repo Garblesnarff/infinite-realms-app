@@ -111,7 +111,7 @@ describe('useCombatActionHandlers', () => {
           participantId: 'p1',
           targetParticipantId: 'e1',
           actionType: 'attack',
-        })
+        }),
       );
       expect(result.current.actionValidation).toBeNull(); // Reset after success
     });
@@ -157,18 +157,27 @@ describe('useCombatActionHandlers', () => {
     });
 
     it('should do nothing if selected enemy not found in encounter', async () => {
-        const { result } = setupHook({ ...defaultProps, selectedEnemy: 'non-existent' });
-        await act(async () => {
-          await result.current.handleEnemyAttack({ name: 'Bite' });
-        });
-        expect(mockTakeAction).not.toHaveBeenCalled();
+      const { result } = setupHook({ ...defaultProps, selectedEnemy: 'non-existent' });
+      await act(async () => {
+        await result.current.handleEnemyAttack({ name: 'Bite' });
       });
+      expect(mockTakeAction).not.toHaveBeenCalled();
+    });
 
     it('should execute attack and advance turn', async () => {
       vi.useFakeTimers();
       const encounterWithoutTurn = { ...mockEncounter, currentTurnParticipantId: null };
-      const { result } = setupHook({ ...defaultProps, selectedEnemy: 'e1', activeEncounter: encounterWithoutTurn as any });
-      const attack = { name: 'Greataxe', attackBonus: 5, damageRoll: '1d12+3', damageType: 'slashing' };
+      const { result } = setupHook({
+        ...defaultProps,
+        selectedEnemy: 'e1',
+        activeEncounter: encounterWithoutTurn as any,
+      });
+      const attack = {
+        name: 'Greataxe',
+        attackBonus: 5,
+        damageRoll: '1d12+3',
+        damageType: 'slashing',
+      };
 
       await act(async () => {
         await result.current.handleEnemyAttack(attack);
@@ -179,7 +188,7 @@ describe('useCombatActionHandlers', () => {
           participantId: 'e1',
           actionType: 'attack',
           damageType: 'slashing',
-        })
+        }),
       );
 
       // Verify turn advancement
@@ -192,29 +201,29 @@ describe('useCombatActionHandlers', () => {
     });
 
     it('should handle attack without damage roll', async () => {
-        const { result } = setupHook({ ...defaultProps, selectedEnemy: 'e1' });
-        const attack = { name: 'Gaze', attackBonus: 0 };
+      const { result } = setupHook({ ...defaultProps, selectedEnemy: 'e1' });
+      const attack = { name: 'Gaze', attackBonus: 0 };
 
-        await act(async () => {
-          await result.current.handleEnemyAttack(attack);
-        });
-
-        expect(mockTakeAction).toHaveBeenCalledWith(
-          expect.objectContaining({
-            damageRolls: [],
-          })
-        );
+      await act(async () => {
+        await result.current.handleEnemyAttack(attack);
       });
+
+      expect(mockTakeAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          damageRolls: [],
+        }),
+      );
+    });
   });
 
   describe('handleReactionOpportunity', () => {
     it('should do nothing if no active encounter', async () => {
-        const { result } = setupHook({ ...defaultProps, activeEncounter: null });
-        await act(async () => {
-          await result.current.handleReactionOpportunity({ id: 'opp-1' } as any, 'attack');
-        });
-        expect(mockTakeAction).not.toHaveBeenCalled();
+      const { result } = setupHook({ ...defaultProps, activeEncounter: null });
+      await act(async () => {
+        await result.current.handleReactionOpportunity({ id: 'opp-1' } as any, 'attack');
       });
+      expect(mockTakeAction).not.toHaveBeenCalled();
+    });
 
     it('should process reaction and update participant', async () => {
       const opportunity = { id: 'opp-1', participantId: 'p1', trigger: 'Opportunity Attack' };
@@ -287,17 +296,20 @@ describe('useCombatActionHandlers', () => {
     });
 
     it('should handle damage when participant already has 0 HP', async () => {
-        const participantWithZeroHP = { ...mockParticipant, currentHitPoints: 0 };
-        const encounter = { ...mockEncounter, participants: [participantWithZeroHP, mockEnemy] };
-        const { result } = setupHook({ ...defaultProps, activeEncounter: encounter as any });
-        await act(async () => {
-          await result.current.handleApplyDamage('p1', 5, 'fire');
-        });
+      const participantWithZeroHP = { ...mockParticipant, currentHitPoints: 0 };
+      const encounter = { ...mockEncounter, participants: [participantWithZeroHP, mockEnemy] };
+      const { result } = setupHook({ ...defaultProps, activeEncounter: encounter as any });
+      await act(async () => {
+        await result.current.handleApplyDamage('p1', 5, 'fire');
+      });
 
-        // Should NOT trigger death save reset if already at 0
-        expect(mockUpdateParticipant).not.toHaveBeenCalledWith('p1', expect.objectContaining({
-            deathSaves: expect.anything(),
-        }));
+      // Should NOT trigger death save reset if already at 0
+      expect(mockUpdateParticipant).not.toHaveBeenCalledWith(
+        'p1',
+        expect.objectContaining({
+          deathSaves: expect.anything(),
+        }),
+      );
     });
 
     it('should apply damage and update HP normally', async () => {
@@ -314,7 +326,7 @@ describe('useCombatActionHandlers', () => {
         expect.objectContaining({
           actionType: 'damage_dealt',
           damageDealt: 5,
-        })
+        }),
       );
     });
 
@@ -349,31 +361,37 @@ describe('useCombatActionHandlers', () => {
       });
 
       expect(checkConcentration).toHaveBeenCalled();
-      expect(mockUpdateParticipant).toHaveBeenCalledWith('p1', expect.objectContaining({
-        activeConcentration: null,
-      }));
+      expect(mockUpdateParticipant).toHaveBeenCalledWith(
+        'p1',
+        expect.objectContaining({
+          activeConcentration: null,
+        }),
+      );
     });
 
     it('should maintain concentration if check succeeds', async () => {
-        const participantWithConc = {
-          ...mockParticipant,
-          activeConcentration: { spellId: 'bless' },
-        };
-        const encounterWithConc = {
-          ...mockEncounter,
-          participants: [participantWithConc],
-        };
-        (checkConcentration as any).mockReturnValue(true); // Success
+      const participantWithConc = {
+        ...mockParticipant,
+        activeConcentration: { spellId: 'bless' },
+      };
+      const encounterWithConc = {
+        ...mockEncounter,
+        participants: [participantWithConc],
+      };
+      (checkConcentration as any).mockReturnValue(true); // Success
 
-        const { result } = setupHook({ ...defaultProps, activeEncounter: encounterWithConc as any });
-        await act(async () => {
-          await result.current.handleApplyDamage('p1', 5, 'bludgeoning');
-        });
-
-        expect(mockUpdateParticipant).not.toHaveBeenCalledWith('p1', expect.objectContaining({
-          activeConcentration: null,
-        }));
+      const { result } = setupHook({ ...defaultProps, activeEncounter: encounterWithConc as any });
+      await act(async () => {
+        await result.current.handleApplyDamage('p1', 5, 'bludgeoning');
       });
+
+      expect(mockUpdateParticipant).not.toHaveBeenCalledWith(
+        'p1',
+        expect.objectContaining({
+          activeConcentration: null,
+        }),
+      );
+    });
   });
 
   describe('handleHealing', () => {
@@ -441,8 +459,8 @@ describe('useCombatActionHandlers', () => {
       });
       expect(mockTakeAction).toHaveBeenCalledWith(
         expect.objectContaining({
-            description: expect.stringContaining('regains consciousness'),
-        })
+          description: expect.stringContaining('regains consciousness'),
+        }),
       );
     });
   });

@@ -18,8 +18,7 @@ export const ParticipantStatusSection: React.FC<ParticipantStatusSectionProps> =
   ({ currentParticipant, onDeathSave }) => {
     const isDying = needsDeathSaves(currentParticipant);
     const isDead = currentParticipant.isDead || false;
-    const hasConditions =
-      currentParticipant.conditions && currentParticipant.conditions.length > 0;
+    const hasConditions = currentParticipant.conditions && currentParticipant.conditions.length > 0;
     const hasConcentration = currentParticipant.activeConcentration;
 
     if (!hasConditions && !isDying && !isDead && !hasConcentration) {
