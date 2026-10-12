@@ -17,6 +17,7 @@ import type {
 /**
  * Initial state for combat encounters
  */
+// @ts-expect-error #192 initialCombatState lacks diceRollQueue
 export const initialCombatState: CombatState = {
   activeEncounter: null,
   isInCombat: false,

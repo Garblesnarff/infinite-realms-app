@@ -2,7 +2,7 @@ import React from 'react';
 
 import DeathSaveManager from './DeathSaveManager';
 
-import type { Encounter } from '@/types/combat';
+import type { CombatEncounter as Encounter } from '@/types/combat';
 
 import { Badge } from '@/components/ui/badge';
 import { needsDeathSaves } from '@/utils/combat/deathSaves';
@@ -18,8 +18,7 @@ export const ParticipantStatusSection: React.FC<ParticipantStatusSectionProps> =
   ({ currentParticipant, onDeathSave }) => {
     const isDying = needsDeathSaves(currentParticipant);
     const isDead = currentParticipant.isDead || false;
-    const hasConditions =
-      currentParticipant.conditions && currentParticipant.conditions.length > 0;
+    const hasConditions = currentParticipant.conditions && currentParticipant.conditions.length > 0;
     const hasConcentration = currentParticipant.activeConcentration;
 
     if (!hasConditions && !isDying && !isDead && !hasConcentration) {

@@ -94,7 +94,7 @@ export function useParticipantManagement({
       dispatch({
         type: 'UPDATE_PARTICIPANT',
         participantId,
-        updates: { position: toPosition },
+        updates: { position: toPosition as unknown as CombatParticipant['position'] },
       });
     },
     [state.activeEncounter, addReactionOpportunity, addParticipantReactionOpportunity, dispatch],

@@ -127,9 +127,12 @@ export function enrichParticipantWithCharacterData(
   participant.spellSlots = characterData.spellSlots;
   participant.preparedSpells = characterData.preparedSpells;
   participant.activeConcentration = characterData.activeConcentration;
-  participant.damageResistances = characterData.damageResistances || [];
-  participant.damageImmunities = characterData.damageImmunities || [];
-  participant.damageVulnerabilities = characterData.damageVulnerabilities || [];
+  participant.damageResistances = (characterData.damageResistances ||
+    []) as CombatParticipant['damageResistances'];
+  participant.damageImmunities = (characterData.damageImmunities ||
+    []) as CombatParticipant['damageImmunities'];
+  participant.damageVulnerabilities = (characterData.damageVulnerabilities ||
+    []) as CombatParticipant['damageVulnerabilities'];
 
   // Convert fighting style strings to FightingStyle objects
   participant.fightingStyles =

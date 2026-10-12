@@ -7,7 +7,7 @@ import { RacialTraitsSection } from './RacialTraitsSection';
 import { SpecialActionsSection } from './SpecialActionsSection';
 import { StandardActionsSection } from './StandardActionsSection';
 
-import type { ActionType, Encounter } from '@/types/combat';
+import type { ActionType, CombatEncounter as Encounter } from '@/types/combat';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';

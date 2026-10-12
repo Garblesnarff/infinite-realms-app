@@ -1,6 +1,6 @@
 import React from 'react';
 
-import type { ActionType, Encounter } from '@/types/combat';
+import type { ActionType, CombatEncounter as Encounter } from '@/types/combat';
 
 import { Button } from '@/components/ui/button';
 import DiceRoller from '@/components/ui/dice-roller';
@@ -70,9 +70,7 @@ export const SpecialActionsSection: React.FC<SpecialActionsSectionProps> = React
         <Button
           variant="outline"
           size="sm"
-          onClick={() =>
-            onTwoWeaponAttack(currentParticipant.id, selectedEnemyId || undefined)
-          }
+          onClick={() => onTwoWeaponAttack(currentParticipant.id, selectedEnemyId || undefined)}
         >
           Two-Weapon Attack
         </Button>

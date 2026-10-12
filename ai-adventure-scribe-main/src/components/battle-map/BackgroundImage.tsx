@@ -84,7 +84,8 @@ export const BackgroundImage: React.FC<BackgroundImageProps> = ({
 
       // Handle aspect ratio locking
       if (lockAspectRatio && loadedTexture.image) {
-        const imageAspect = loadedTexture.image.width / loadedTexture.image.height;
+        const imageSize = loadedTexture.image as { width: number; height: number };
+        const imageAspect = imageSize.width / imageSize.height;
         const gridAspect = worldWidth / worldHeight;
 
         if (Math.abs(imageAspect - gridAspect) > 0.01) {
@@ -106,8 +107,8 @@ export const BackgroundImage: React.FC<BackgroundImageProps> = ({
 
       logger.info('Background texture loaded successfully', {
         url: imageUrl,
-        width: loadedTexture.image?.width,
-        height: loadedTexture.image?.height,
+        width: (loadedTexture.image as { width: number; height: number } | undefined)?.width,
+        height: (loadedTexture.image as { width: number; height: number } | undefined)?.height,
       });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Failed to load background image';

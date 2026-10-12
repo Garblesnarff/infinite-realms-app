@@ -11,7 +11,12 @@ const defaultLayerState: LayerState = {
   locked: false,
 };
 
-export const createLayerSlice: StateCreator<BattleMapState, [], [], LayerSlice> = (set, get) => ({
+export const createLayerSlice: StateCreator<
+  BattleMapState,
+  [['zustand/devtools', never]],
+  [],
+  LayerSlice
+> = (set, get) => ({
   layerVisibility: {},
   layerOpacity: {},
   layerLocked: {},

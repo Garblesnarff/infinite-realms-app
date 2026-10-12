@@ -21,12 +21,7 @@ import React from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCombat } from '@/contexts/CombatContext';
 import { useGame } from '@/contexts/GameContext';
 
@@ -76,7 +71,9 @@ export const CombatStatus: React.FC<CombatStatusProps> = React.memo(({ className
 
     return {
       name: currentParticipant.name,
+      // @ts-expect-error #428 CombatParticipant.initiative is a number
       initiative: currentParticipant.initiative?.value || 0,
+      // @ts-expect-error #428 CombatParticipant has currentHitPoints/maxHitPoints
       hp: currentParticipant.hitPoints,
     };
   }, [combatState.isInCombat, combatState.activeEncounter]);
@@ -181,18 +178,18 @@ export const CombatStatus: React.FC<CombatStatusProps> = React.memo(({ className
             </>
           )}
 
-        {/* Pending Dice Rolls */}
-        {pendingRolls.length > 0 && (
-          <>
-            <div className="h-4 w-px bg-border" aria-hidden="true" />
-            <div className="flex items-center gap-1" role="group" aria-label="Pending dice rolls">
-              <Dice6 className="w-3 h-3 text-blue-500 animate-pulse" aria-hidden="true" />
-              <Badge variant="secondary" className="text-xs">
-                {pendingRolls.length} roll{pendingRolls.length > 1 ? 's' : ''} pending
-              </Badge>
-            </div>
-          </>
-        )}
+          {/* Pending Dice Rolls */}
+          {pendingRolls.length > 0 && (
+            <>
+              <div className="h-4 w-px bg-border" aria-hidden="true" />
+              <div className="flex items-center gap-1" role="group" aria-label="Pending dice rolls">
+                <Dice6 className="w-3 h-3 text-blue-500 animate-pulse" aria-hidden="true" />
+                <Badge variant="secondary" className="text-xs">
+                  {pendingRolls.length} roll{pendingRolls.length > 1 ? 's' : ''} pending
+                </Badge>
+              </div>
+            </>
+          )}
 
           {/* Combat Round Counter */}
           {combatState.isInCombat && combatState.activeEncounter?.currentRound && (

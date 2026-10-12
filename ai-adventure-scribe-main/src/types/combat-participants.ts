@@ -30,7 +30,7 @@ export interface CombatParticipant {
   name: string;
   /** Bible heading to show players when it differs from `name` (the DM's label; #2398). */
   displayName?: string;
-  participantType: 'player' | 'enemy' | 'npc';
+  participantType: 'player' | 'enemy' | 'npc' | 'monster';
   characterId?: string;
   characterClass?: string;
   level?: number;

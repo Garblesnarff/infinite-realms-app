@@ -23,9 +23,12 @@ const defaultPerformanceSettings: PerformanceSettings = {
 
 export { defaultPerformanceSettings };
 
-export const createPerformanceSlice: StateCreator<BattleMapState, [], [], PerformanceSlice> = (
-  set,
-) => ({
+export const createPerformanceSlice: StateCreator<
+  BattleMapState,
+  [['zustand/devtools', never]],
+  [],
+  PerformanceSlice
+> = (set) => ({
   performance: defaultPerformanceSettings,
 
   setPerformanceMode: (mode) => {

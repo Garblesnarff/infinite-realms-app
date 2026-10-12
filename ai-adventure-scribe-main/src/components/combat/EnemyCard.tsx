@@ -75,7 +75,7 @@ const EnemyCard: React.FC<EnemyCardProps> = React.memo(({ enemyId, className = '
             displayOnly
           />
         )}
-        {damageType !== 'none' && (
+        {(damageType as string) !== 'none' && (
           <Badge variant="secondary" className="ml-auto text-xs">
             {damageType}
           </Badge>

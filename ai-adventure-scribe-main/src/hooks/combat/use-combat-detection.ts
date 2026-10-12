@@ -1,8 +1,8 @@
 import { useCallback } from 'react';
 
+import type { DiceRoll } from '@/types/combat';
 import type { CombatMessageData } from '@/utils/combat/ai-narration-utils';
 import type { DetectedCombatAction } from '@/utils/combatDetection';
-import type { DiceRoll } from '@/utils/diceUtils';
 
 import { getDamageRollForWeapon, createActionDescription } from '@/utils/combat/ai-narration-utils';
 import { rollDice } from '@/utils/diceUtils';

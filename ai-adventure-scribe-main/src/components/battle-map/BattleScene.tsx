@@ -58,7 +58,7 @@ export const BattleScene: React.FC<BattleSceneProps> = React.memo(
     // Notify parent when scene is loaded
     React.useEffect(() => {
       if (scene && onSceneLoaded) {
-        onSceneLoaded(scene);
+        onSceneLoaded(scene as unknown as Scene);
       }
     }, [scene, onSceneLoaded]);
 
