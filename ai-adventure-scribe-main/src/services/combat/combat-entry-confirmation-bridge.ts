@@ -83,20 +83,25 @@ function notifyPendingChange(): void {
 /**
  * #400: the player answered the card by typing instead of clicking. The typed message runs as
  * a new turn, and that turn must not be re-prompted with another card — the typed action is
- * the answer, and it starts combat through the engine.
+ * the answer, and it starts combat through the engine. The text is stored (not just a
+ * boolean) so a marked send that never becomes a turn cannot leak the skip to an unrelated
+ * later turn: the skip applies only when the consuming turn's message matches.
  */
-let typedAnswerArmed = false;
+let typedAnswerText: string | null = null;
 
-/** Arm the typed-answer flag when a typed message settles the card. */
-export function markCombatEntryTypedAnswer(): void {
-  typedAnswerArmed = true;
+/** Arm the typed-answer skip for the message typed while the card was up. */
+export function markCombatEntryTypedAnswer(text: string): void {
+  typedAnswerText = text;
 }
 
-/** Consume the typed-answer flag; true once, for the next turn's entry hold. */
-export function consumeCombatEntryTypedAnswer(): boolean {
-  const armed = typedAnswerArmed;
-  typedAnswerArmed = false;
-  return armed;
+/**
+ * Consume the typed-answer skip; true once, when the consuming turn's message is the one
+ * that was typed while the card was up. Always clears, so a stale mark never leaks.
+ */
+export function consumeCombatEntryTypedAnswer(text: string): boolean {
+  const matched = typedAnswerText !== null && typedAnswerText === text;
+  typedAnswerText = null;
+  return matched;
 }
 
 /** Registered by the message list while the entry confirmation surface is mounted. */

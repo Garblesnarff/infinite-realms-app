@@ -366,11 +366,11 @@ export const useAIResponse = (): {
         let timingCheckpoint = performance.now();
         logger.info('Getting AI response for session:', sessionId);
 
-        // #400: consume eagerly at turn start, so a turn that fails before the entry hold
-        // does not leak the flag to a later unrelated turn.
-        const typedEntryAnswer = consumeCombatEntryTypedAnswer();
-
         const latestMessage = messages[messages.length - 1];
+        // #400: consume eagerly at turn start, so a turn that fails before the entry hold
+        // does not leak the flag to a later unrelated turn. The skip applies only when this
+        // turn's message is the one typed while the card was up.
+        const typedEntryAnswer = consumeCombatEntryTypedAnswer(latestMessage.text);
         const turnSignal = signal as TurnAbortSignal | undefined;
         const awaitPlayerInput = async <T>(promise: Promise<T>): Promise<T> => {
           turnSignal?.onPlayerWaitChange?.(true);

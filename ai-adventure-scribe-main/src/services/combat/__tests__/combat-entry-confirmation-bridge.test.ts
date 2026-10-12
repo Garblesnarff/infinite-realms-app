@@ -76,10 +76,13 @@ describe('combat-entry-confirmation-bridge', () => {
     expect(seen).toEqual([true, false]);
   });
 
-  it('arms a one-shot typed answer so the next hold is not re-prompted (#400)', () => {
-    expect(consumeCombatEntryTypedAnswer()).toBe(false);
-    markCombatEntryTypedAnswer();
-    expect(consumeCombatEntryTypedAnswer()).toBe(true);
-    expect(consumeCombatEntryTypedAnswer()).toBe(false);
+  it('arms a one-shot typed answer tied to the message text (#400)', () => {
+    expect(consumeCombatEntryTypedAnswer('fire bolt')).toBe(false);
+    markCombatEntryTypedAnswer('fire bolt');
+    // A different message does not consume the skip, and clears the stale mark.
+    expect(consumeCombatEntryTypedAnswer('I look around')).toBe(false);
+    markCombatEntryTypedAnswer('fire bolt');
+    expect(consumeCombatEntryTypedAnswer('fire bolt')).toBe(true);
+    expect(consumeCombatEntryTypedAnswer('fire bolt')).toBe(false);
   });
 });

@@ -241,10 +241,11 @@ export const useMessageHandlerLogic = ({
       // wait forever on a turn parked at the confirmation. The message then runs as a new
       // turn, and the pre-DM hold starts combat through the engine when it declares one.
       // The typed answer also arms the skip for the next hold, so the new turn is not
-      // re-prompted with another card.
+      // re-prompted with another card. The input text is stored so a send that never
+      // becomes a turn cannot leak the skip to an unrelated later message.
       if (hasPendingCombatEntryConfirmation()) {
         settlePendingCombatEntryConfirmation(false);
-        markCombatEntryTypedAnswer();
+        markCombatEntryTypedAnswer(input);
       }
       const saved = [...messagesRef.current]
         .reverse()
