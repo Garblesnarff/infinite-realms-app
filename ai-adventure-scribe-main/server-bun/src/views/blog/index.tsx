@@ -12,7 +12,8 @@ interface BlogIndexPageProps {
 }
 
 export function BlogIndexPage({ site, assets, posts }: BlogIndexPageProps) {
-  const canonicalUrl = `${site.url}/blog`;
+  // #355: the canonical is the blog's final URL, not `${site.url}/blog` (which 301s here).
+  const canonicalUrl = site.blogUrl;
   const heroImage = posts.find((post) => Boolean((post as any).coverImageUrl))?.coverImageUrl ?? site.defaultSocialImageUrl;
 
   const allCategories = extractCategories(posts);

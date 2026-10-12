@@ -1,4 +1,5 @@
 const DEFAULT_SITE_URL = 'https://infinite-realms.ai';
+const DEFAULT_BLOG_URL = 'https://blog.infiniterealms.app';
 const DEFAULT_SITE_NAME = 'Infinite Realms';
 const DEFAULT_SITE_TAGLINE = 'Solo fantasy RPG platform with multi-agent AI storytelling and persistent worlds.';
 const DEFAULT_TWITTER_HANDLE = '@InfiniteRealmsAI';
@@ -7,6 +8,10 @@ const DEFAULT_OG_IMAGE_PATH = '/branding/og-image.png';
 
 export interface SiteConfig {
   url: string;
+  /** The blog's final URL (#355): the blog lives at this host, so its canonical
+   * tags must point here, not at `${url}/blog` (which 301s here). Bare origin,
+   * no path — a path-valued BLOG_BASE_URL would produce redirecting canonicals. */
+  blogUrl: string;
   name: string;
   description: string;
   twitterHandle: string;
@@ -34,6 +39,7 @@ export function getSiteConfig(): SiteConfig {
 
   return {
     url,
+    blogUrl: normalizeSiteUrl(process.env.BLOG_BASE_URL?.trim() || DEFAULT_BLOG_URL),
     name,
     description,
     twitterHandle,

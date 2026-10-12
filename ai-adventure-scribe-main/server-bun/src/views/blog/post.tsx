@@ -13,7 +13,8 @@ interface BlogPostPageProps {
 }
 
 export function BlogPostPage({ site, assets, post, relatedPosts }: BlogPostPageProps) {
-  const canonicalUrl = `${site.url}/blog/${post.slug}`;
+  // #355: the canonical is the post's final URL, not `${site.url}/blog/${slug}` (which 301s).
+  const canonicalUrl = `${site.blogUrl}/${post.slug}`;
   const allKeywords = [...(post.categories as any[]), ...(post.tags as any[])].map(String).filter(Boolean);
   const meta: BaseMeta = {
     title: `${post.title} | ${site.name}`,
