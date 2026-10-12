@@ -731,7 +731,16 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
     const scene = await dropHero();
     // The hero's turn is spent on the death save (a 12: success), then the spider's turn runs.
     await deathSave(scene, 12);
-    const advanced = await advanceNpcTurns(scene.encounterId, userId);
+    // Seeded d20 = floor(0.7 * 20) + 1 = 15: a hit on AC 11 (#460 — the unseeded roll made
+    // this test flaky: a miss leaves failures at 0). A melee hit on the unconscious hero is an
+    // automatic critical = 2 death-save failures.
+    const random = spyOn(Math, 'random').mockReturnValue(0.7);
+    let advanced: Awaited<ReturnType<typeof advanceNpcTurns>>;
+    try {
+      advanced = await advanceNpcTurns(scene.encounterId, userId);
+    } finally {
+      random.mockRestore();
+    }
 
     expect(advanced.results).toHaveLength(1);
     expect(advanced.results[0].action).toMatchObject({
