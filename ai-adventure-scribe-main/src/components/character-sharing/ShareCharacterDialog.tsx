@@ -289,86 +289,70 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
               ) : permissions && permissions.length > 0 ? (
                 <ScrollArea className="max-h-64" aria-labelledby={peopleHeadingId}>
                   <div className="space-y-2">
-                    {permissions.map(
-                      // @ts-expect-error #455 permission rows lack userName/userEmail and use literal permission levels
-                      (permission: {
-                        id: string;
-                        userId: string;
-                        userName?: string;
-                        userEmail?: string;
-                        permissionLevel: PermissionLevel;
-                        grantedAt: string;
-                      }) => (
-                        <div
-                          key={permission.id}
-                          className="flex items-center justify-between p-3 border rounded-lg bg-card"
-                        >
-                          <div className="flex-1">
-                            <div className="font-medium text-sm">
-                              {permission.userName || permission.userId}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {permission.userEmail ||
-                                `Shared ${new Date(permission.grantedAt).toLocaleDateString()}`}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <Select
-                              value={permission.permissionLevel}
-                              onValueChange={(value) =>
-                                handleUpdatePermission(permission.userId, value as PermissionLevel)
-                              }
-                            >
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <SelectTrigger
-                                    className="w-32"
-                                    aria-label={`Change permission level for ${permission.userName || permission.userId}`}
-                                  >
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>
-                                    Change permission level for{' '}
-                                    {permission.userName || permission.userId}
-                                  </p>
-                                </TooltipContent>
-                              </Tooltip>
-                              <SelectContent>
-                                <SelectItem value={PermissionLevel.VIEWER}>Viewer</SelectItem>
-                                <SelectItem value={PermissionLevel.EDITOR}>Editor</SelectItem>
-                                <SelectItem value={PermissionLevel.OWNER}>Owner</SelectItem>
-                              </SelectContent>
-                            </Select>
-
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span
-                                  className={revokeMutation.isPending ? 'cursor-not-allowed' : ''}
-                                >
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => handleRevoke(permission.userId)}
-                                    disabled={revokeMutation.isPending}
-                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                    aria-label={`Revoke access for ${permission.userName || permission.userId}`}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Revoke access for {permission.userName || permission.userId}</p>
-                              </TooltipContent>
-                            </Tooltip>
+                    {permissions.map((permission) => (
+                      <div
+                        key={permission.id}
+                        className="flex items-center justify-between p-3 border rounded-lg bg-card"
+                      >
+                        <div className="flex-1">
+                          <div className="font-medium text-sm">{permission.userId}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {`Shared ${new Date(permission.grantedAt).toLocaleDateString()}`}
                           </div>
                         </div>
-                      ),
-                    )}
+
+                        <div className="flex items-center gap-2">
+                          <Select
+                            value={permission.permissionLevel}
+                            onValueChange={(value) =>
+                              handleUpdatePermission(permission.userId, value as PermissionLevel)
+                            }
+                          >
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <SelectTrigger
+                                  className="w-32"
+                                  aria-label={`Change permission level for ${permission.userId}`}
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Change permission level for {permission.userId}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                            <SelectContent>
+                              <SelectItem value={PermissionLevel.VIEWER}>Viewer</SelectItem>
+                              <SelectItem value={PermissionLevel.EDITOR}>Editor</SelectItem>
+                              <SelectItem value={PermissionLevel.OWNER}>Owner</SelectItem>
+                            </SelectContent>
+                          </Select>
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span
+                                className={revokeMutation.isPending ? 'cursor-not-allowed' : ''}
+                              >
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleRevoke(permission.userId)}
+                                  disabled={revokeMutation.isPending}
+                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  aria-label={`Revoke access for ${permission.userId}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Revoke access for {permission.userId}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </ScrollArea>
               ) : (

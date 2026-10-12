@@ -3,6 +3,9 @@ import React, { useState, useMemo, useId } from 'react';
 
 import { SharedCharacterCard, type SharedCharacter } from './SharedCharacterCard';
 
+import type { AppRouter } from '@/infrastructure/api/trpc-types';
+import type { inferRouterOutputs } from '@trpc/server';
+
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -16,6 +19,30 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTRPC } from '@/infrastructure/api/trpc-hooks';
 import { PermissionLevel } from '@/types/character';
+
+type SharedCharacterRow = inferRouterOutputs<AppRouter>['characters']['listShared'][number];
+
+const PERMISSION_LEVEL: Record<
+  SharedCharacterRow['permission']['permissionLevel'],
+  PermissionLevel
+> = {
+  viewer: PermissionLevel.VIEWER,
+  editor: PermissionLevel.EDITOR,
+  owner: PermissionLevel.OWNER,
+};
+
+const toSharedCharacter = (row: SharedCharacterRow): SharedCharacter => ({
+  id: row.id,
+  name: row.name,
+  race: row.race ?? undefined,
+  class: row.class ?? undefined,
+  level: row.level ?? undefined,
+  avatarUrl: row.avatarUrl ?? undefined,
+  ownerId: row.permission.grantedBy,
+  ownerName: row.permission.grantedBy,
+  permissionLevel: PERMISSION_LEVEL[row.permission.permissionLevel],
+  sharedAt: new Date(row.permission.grantedAt).toISOString(),
+});
 
 /**
  * SharedCharactersList Component
@@ -45,14 +72,11 @@ export const SharedCharactersList: React.FC = () => {
     if (!sharedCharacters) {
       return [];
     }
+    const characters = sharedCharacters.map(toSharedCharacter);
     if (filterPermission === 'all') {
-      // @ts-expect-error #455 listShared returns character rows, not SharedCharacter
-      return sharedCharacters as SharedCharacter[];
+      return characters;
     }
-    // @ts-expect-error #455 listShared returns character rows, not SharedCharacter
-    return (sharedCharacters as SharedCharacter[]).filter(
-      (char) => char.permissionLevel === filterPermission,
-    );
+    return characters.filter((char) => char.permissionLevel === filterPermission);
   }, [sharedCharacters, filterPermission]);
 
   if (error) {
