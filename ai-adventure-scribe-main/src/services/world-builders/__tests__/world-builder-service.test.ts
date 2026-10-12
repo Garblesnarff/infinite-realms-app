@@ -94,7 +94,7 @@ describe('WorldBuilderService', () => {
       expect(result.locations).toHaveLength(0);
       expect(WorldBuilderRepository.validateUserCampaignAccess).toHaveBeenCalledWith(
         mockContext.campaignId,
-        mockContext.userId
+        mockContext.userId,
       );
     });
 
@@ -118,9 +118,15 @@ describe('WorldBuilderService', () => {
 
       const mockLocation = { id: 'loc-1', name: 'Dark Cave' };
       const mockNPC = { id: 'npc-1', name: 'Grog', questHooks: ['Help me find my axe'] };
-      const mockQuest = { id: 'quest-1', title: 'The Lost Axe', hooks: { initial: ['Find the axe'] } };
+      const mockQuest = {
+        id: 'quest-1',
+        title: 'The Lost Axe',
+        hooks: { initial: ['Find the axe'] },
+      };
 
-      vi.mocked(LocationGenerator.generateContextualLocation).mockResolvedValue(mockLocation as any);
+      vi.mocked(LocationGenerator.generateContextualLocation).mockResolvedValue(
+        mockLocation as any,
+      );
       vi.mocked(NPCGenerator.generateContextualNPC).mockResolvedValue(mockNPC as any);
       vi.mocked(QuestGenerator.generateMemoryBasedQuest).mockResolvedValue(mockQuest as any);
       vi.mocked(WorldBuildingAnalyzer.inferQuestTypeFromAction).mockReturnValue('fetch');
@@ -133,7 +139,11 @@ describe('WorldBuilderService', () => {
       expect(result.narrativeElements.hooks).toContain('Help me find my axe');
       expect(result.narrativeElements.opportunities).toContain('Find the axe');
       expect(LocationGenerator.generateContextualLocation).toHaveBeenCalledWith(
-        'camp-123', 'sess-456', 'I enter the dark cave', undefined, 'user-000',
+        'camp-123',
+        'sess-456',
+        'I enter the dark cave',
+        undefined,
+        'user-000',
       );
     });
 
@@ -144,7 +154,9 @@ describe('WorldBuilderService', () => {
         suggestions: { locations: true },
       } as any);
 
-      vi.mocked(LocationGenerator.generateContextualLocation).mockRejectedValue(new Error('Gen failed'));
+      vi.mocked(LocationGenerator.generateContextualLocation).mockRejectedValue(
+        new Error('Gen failed'),
+      );
 
       const result = await WorldBuilderService.expandWorld(mockContext);
       expect(result.locations).toHaveLength(0); // Should not crash
@@ -176,7 +188,9 @@ describe('WorldBuilderService', () => {
 
       // expandWorld will be called internally
       const mockLocation = { id: 'loc-1', name: 'Dark Cave' };
-      vi.mocked(LocationGenerator.generateContextualLocation).mockResolvedValue(mockLocation as any);
+      vi.mocked(LocationGenerator.generateContextualLocation).mockResolvedValue(
+        mockLocation as any,
+      );
       const result = await WorldBuilderService.respondToPlayerAction(...args);
       expect(result).not.toBeNull();
       expect(result?.locations).toHaveLength(1);
@@ -194,7 +208,9 @@ describe('WorldBuilderService', () => {
       vi.spyOn(Math, 'random').mockReturnValue(0.6); // > 0.5
 
       const mockLocation = { id: 'loc-1', name: 'Dark Cave' };
-      vi.mocked(LocationGenerator.generateContextualLocation).mockResolvedValue(mockLocation as any);
+      vi.mocked(LocationGenerator.generateContextualLocation).mockResolvedValue(
+        mockLocation as any,
+      );
       const result = await WorldBuilderService.respondToPlayerAction(...args);
       expect(result).not.toBeNull();
     });
@@ -231,9 +247,11 @@ describe('WorldBuilderService', () => {
       });
 
       expect(result).toEqual(mockLocation);
-      expect(LocationGenerator.createLocation).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'shop',
-      }));
+      expect(LocationGenerator.createLocation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'shop',
+        }),
+      );
     });
 
     it('should generate NPC on demand', async () => {
@@ -247,9 +265,11 @@ describe('WorldBuilderService', () => {
       });
 
       expect(result).toEqual(mockNPC);
-      expect(NPCGenerator.createNPC).toHaveBeenCalledWith(expect.objectContaining({
-        role: 'merchant',
-      }));
+      expect(NPCGenerator.createNPC).toHaveBeenCalledWith(
+        expect.objectContaining({
+          role: 'merchant',
+        }),
+      );
     });
 
     it('should generate quest on demand', async () => {
@@ -263,9 +283,11 @@ describe('WorldBuilderService', () => {
       });
 
       expect(result).toEqual(mockQuest);
-      expect(QuestGenerator.createQuest).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'main',
-      }));
+      expect(QuestGenerator.createQuest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'main',
+        }),
+      );
     });
 
     it('should return null if world builder is disabled', async () => {
@@ -278,25 +300,38 @@ describe('WorldBuilderService', () => {
     });
 
     it('should throw error for unknown generation type', async () => {
-      await expect(WorldBuilderService.generateOnDemand({
-        ...baseRequest,
-        type: 'unknown' as any,
-      })).rejects.toThrow('Unknown generation type: unknown');
+      await expect(
+        WorldBuilderService.generateOnDemand({
+          ...baseRequest,
+          type: 'unknown' as any,
+        }),
+      ).rejects.toThrow('Unknown generation type: unknown');
     });
 
     it('should log and rethrow error if generator fails', async () => {
       vi.mocked(LocationGenerator.createLocation).mockRejectedValue(new Error('Internal failure'));
-      await expect(WorldBuilderService.generateOnDemand({
-        ...baseRequest,
-        type: 'location',
-      })).rejects.toThrow('Internal failure');
+      await expect(
+        WorldBuilderService.generateOnDemand({
+          ...baseRequest,
+          type: 'location',
+        }),
+      ).rejects.toThrow('Internal failure');
     });
   });
 
   describe('edge cases and coverage', () => {
     it('should handle responseToPlayerAction failure gracefully', async () => {
-      vi.mocked(WorldBuilderRepository.validateUserCampaignAccess).mockRejectedValue(new Error('DB error'));
-      const result = await WorldBuilderService.respondToPlayerAction('c', 's', 'ch', 'msg', 'ai', 'user-1');
+      vi.mocked(WorldBuilderRepository.validateUserCampaignAccess).mockRejectedValue(
+        new Error('DB error'),
+      );
+      const result = await WorldBuilderService.respondToPlayerAction(
+        'c',
+        's',
+        'ch',
+        'msg',
+        'ai',
+        'user-1',
+      );
       expect(result).toBeNull();
     });
 
@@ -319,7 +354,11 @@ describe('WorldBuilderService', () => {
       await WorldBuilderService.expandWorld(contextWithGenre);
 
       expect(LocationGenerator.generateContextualLocation).toHaveBeenCalledWith(
-        'camp-123', 'sess-456', 'I enter the dark cave', undefined, 'user-000',
+        'camp-123',
+        'sess-456',
+        'I enter the dark cave',
+        undefined,
+        'user-000',
       );
     });
   });

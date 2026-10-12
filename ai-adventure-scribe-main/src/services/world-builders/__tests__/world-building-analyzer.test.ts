@@ -134,9 +134,33 @@ describe('WorldBuildingAnalyzer', () => {
 
     it('should return type memory_based when many memories are present', async () => {
       const recentMemories: Memory[] = [
-        { id: '1', type: 'quest', content: 'q1', importance: 1, created_at: '', updated_at: '', metadata: null },
-        { id: '2', type: 'npc', content: 'n1', importance: 1, created_at: '', updated_at: '', metadata: null },
-        { id: '3', type: 'location', content: 'l1', importance: 1, created_at: '', updated_at: '', metadata: null },
+        {
+          id: '1',
+          type: 'quest',
+          content: 'q1',
+          importance: 1,
+          created_at: '',
+          updated_at: '',
+          metadata: null,
+        },
+        {
+          id: '2',
+          type: 'npc',
+          content: 'n1',
+          importance: 1,
+          created_at: '',
+          updated_at: '',
+          metadata: null,
+        },
+        {
+          id: '3',
+          type: 'location',
+          content: 'l1',
+          importance: 1,
+          created_at: '',
+          updated_at: '',
+          metadata: null,
+        },
       ];
 
       const context: WorldBuildingContext = {
@@ -161,7 +185,15 @@ describe('WorldBuildingAnalyzer', () => {
 
     it('should cap confidence at 1.0', async () => {
       const recentMemories: Memory[] = [
-        { id: '1', type: 'quest', content: 'q1', importance: 1, created_at: '', updated_at: '', metadata: null },
+        {
+          id: '1',
+          type: 'quest',
+          content: 'q1',
+          importance: 1,
+          created_at: '',
+          updated_at: '',
+          metadata: null,
+        },
       ];
 
       const context: WorldBuildingContext = {
@@ -178,24 +210,38 @@ describe('WorldBuildingAnalyzer', () => {
 
   describe('inferQuestTypeFromAction', () => {
     it('should infer investigation type', () => {
-      expect(WorldBuildingAnalyzer.inferQuestTypeFromAction('I want to investigate the murder')).toBe('investigation');
-      expect(WorldBuildingAnalyzer.inferQuestTypeFromAction('Let us solve the mystery')).toBe('investigation');
+      expect(
+        WorldBuildingAnalyzer.inferQuestTypeFromAction('I want to investigate the murder'),
+      ).toBe('investigation');
+      expect(WorldBuildingAnalyzer.inferQuestTypeFromAction('Let us solve the mystery')).toBe(
+        'investigation',
+      );
     });
 
     it('should infer social type', () => {
       expect(WorldBuildingAnalyzer.inferQuestTypeFromAction('I talk to the king')).toBe('social');
-      expect(WorldBuildingAnalyzer.inferQuestTypeFromAction('Try to negotiate with them')).toBe('social');
-      expect(WorldBuildingAnalyzer.inferQuestTypeFromAction('I will convince the guards')).toBe('social');
+      expect(WorldBuildingAnalyzer.inferQuestTypeFromAction('Try to negotiate with them')).toBe(
+        'social',
+      );
+      expect(WorldBuildingAnalyzer.inferQuestTypeFromAction('I will convince the guards')).toBe(
+        'social',
+      );
     });
 
     it('should infer fetch type', () => {
       expect(WorldBuildingAnalyzer.inferQuestTypeFromAction('Find the lost amulet')).toBe('fetch');
-      expect(WorldBuildingAnalyzer.inferQuestTypeFromAction('Get some herbs for the potion')).toBe('fetch');
-      expect(WorldBuildingAnalyzer.inferQuestTypeFromAction('Bring me the head of the dragon')).toBe('fetch');
+      expect(WorldBuildingAnalyzer.inferQuestTypeFromAction('Get some herbs for the potion')).toBe(
+        'fetch',
+      );
+      expect(
+        WorldBuildingAnalyzer.inferQuestTypeFromAction('Bring me the head of the dragon'),
+      ).toBe('fetch');
     });
 
     it('should infer kill type', () => {
-      expect(WorldBuildingAnalyzer.inferQuestTypeFromAction('I will kill the monster')).toBe('kill');
+      expect(WorldBuildingAnalyzer.inferQuestTypeFromAction('I will kill the monster')).toBe(
+        'kill',
+      );
       expect(WorldBuildingAnalyzer.inferQuestTypeFromAction('Defeat the goblin army')).toBe('kill');
       expect(WorldBuildingAnalyzer.inferQuestTypeFromAction('Time to fight')).toBe('kill');
     });
@@ -207,9 +253,15 @@ describe('WorldBuildingAnalyzer', () => {
     });
 
     it('should infer exploration type', () => {
-      expect(WorldBuildingAnalyzer.inferQuestTypeFromAction('Explore the cave')).toBe('exploration');
-      expect(WorldBuildingAnalyzer.inferQuestTypeFromAction('Discover new lands')).toBe('exploration');
-      expect(WorldBuildingAnalyzer.inferQuestTypeFromAction('Map the territory')).toBe('exploration');
+      expect(WorldBuildingAnalyzer.inferQuestTypeFromAction('Explore the cave')).toBe(
+        'exploration',
+      );
+      expect(WorldBuildingAnalyzer.inferQuestTypeFromAction('Discover new lands')).toBe(
+        'exploration',
+      );
+      expect(WorldBuildingAnalyzer.inferQuestTypeFromAction('Map the territory')).toBe(
+        'exploration',
+      );
     });
 
     it('should return side for unknown actions', () => {
