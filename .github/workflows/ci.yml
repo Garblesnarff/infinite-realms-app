@@ -87,6 +87,7 @@ jobs:
               - 'ai-adventure-scribe-main/server-bun/src/services/dm/**'
               - 'ai-adventure-scribe-main/server-bun/src/services/combat/initiative-order.ts'
               - 'ai-adventure-scribe-main/server-bun/src/data/spellData*'
+              - 'ai-adventure-scribe-main/supabase/migrations/**'
             server:
               - '.github/workflows/**'
               - 'package.json'
