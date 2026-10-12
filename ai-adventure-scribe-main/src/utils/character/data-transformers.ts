@@ -447,7 +447,9 @@ export const transformCharacterData = (
     ),
     languages: parseOptionalProficiencyList(characterData.languages),
     // Vision and Stealth
+    // @ts-expect-error #506 vision_types stored as string[]; Character expects VisionInfo[]
     visionTypes: parseJsonField<string[]>(characterData.vision_types, []),
+    // @ts-expect-error #506 obscurement column is string; Character expects ObscurementLevel
     obscurement: characterData.obscurement || 'clear',
     isHidden: characterData.is_hidden || false,
     stealthCheckBonus: characterData.stealth_check_bonus || 0,
