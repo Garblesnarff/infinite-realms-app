@@ -32,6 +32,31 @@ describe('repairNarration (#266)', () => {
   });
 });
 
+// #467 NT-013: the DM dismissed an engine hit as "ignores your magical assault".
+// The roll_result payload uses the describeAttackRoll shape: a spell attack
+// description, success, total, and AC.
+describe('NT-013 repair (strategist FIX)', () => {
+  const nt013Text = 'The mechanical server ignores your magical assault, its gears grinding on.';
+  const nt013Outcome = {
+    success: true,
+    total: 22,
+    ac: 15,
+    requestType: 'attack',
+    // describeAttackRoll({ kind: 'spell-attack', weaponName: 'Chill Touch', ... })
+    description: 'Chill Touch spell attack vs Mechanical Server',
+  };
+
+  test('the dismissal is caught and the sentence is replaced by the engine truth', () => {
+    const claims = contradictsEngineOutcome(nt013Text, nt013Outcome);
+    expect(claims.length).toBeGreaterThan(0);
+    const truth = repairNarration(nt013Outcome);
+    expect(truth).toBe('The Chill Touch spell attack vs Mechanical Server succeeded (22 vs AC 15).');
+    const spliced = spliceContradictingSentences(nt013Text, claims, truth);
+    expect(spliced).toBe(truth);
+    expect(spliced).not.toContain('ignores your magical assault');
+  });
+});
+
 // The strategist FIX: only the contradicting sentences are replaced — the rest of the DM's
 // reply is legitimate prose and stays.
 describe('spliceContradictingSentences (#266)', () => {
