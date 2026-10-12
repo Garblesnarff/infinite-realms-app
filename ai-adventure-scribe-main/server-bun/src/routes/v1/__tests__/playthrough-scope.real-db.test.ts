@@ -1030,4 +1030,31 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
     // A brand-new character's first session never asks for one.
     expect(await previouslyOn(await startFirstSession(bobId))).toBeNull();
   });
+
+  test('roster Play starts the session with the actual roster character: no hidden copies (#311)', async () => {
+    // The roster Play button (CampaignSelectionModal.handleStartSession) sends only the
+    // campaign and the roster character's id; the server must link that exact character
+    // and must not create a character copy.
+    const before = await database
+      .select({ id: characters.id })
+      .from(characters)
+      .where(eq(characters.userId, userId));
+
+    const { status, json } = await call('POST', '/v1/sessions', {
+      campaign_id: campaignId,
+      character_id: aliceId,
+      status: 'active',
+    });
+
+    expect(status).toBe(201);
+    expect(json.character_id).toBe(aliceId);
+
+    const after = await database
+      .select({ id: characters.id })
+      .from(characters)
+      .where(eq(characters.userId, userId));
+    expect(after.map((c) => c.id).sort()).toEqual(
+      before.map((c) => c.id).sort(),
+    );
+  });
 });
