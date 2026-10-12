@@ -150,6 +150,7 @@ export const useMessageQueue = (sessionId: string | null) => {
           setQueueStatus(retries > 0 ? 'retrying' : 'processing');
 
           // Format the context to ensure it's compatible with Supabase's Json type
+          // @ts-expect-error #458 MessageContext declares no narration_segments (works via index signature)
           const narrationSegments = persistableNarrationSegments(message);
           const rollRequests = message.rollRequests ?? message.context?.rollRequests;
           const contextData = message.context
@@ -296,6 +297,7 @@ export const useMessageQueue = (sessionId: string | null) => {
       if (!sessionId) throw new Error('Session ID is required to save messages');
       const now = new Date().toISOString();
       const formattedBatch = batch.map((message) => {
+        // @ts-expect-error #458 MessageContext declares no narration_segments (works via index signature)
         const narrationSegments = persistableNarrationSegments(message);
         const rollRequests = message.rollRequests ?? message.context?.rollRequests;
         return {

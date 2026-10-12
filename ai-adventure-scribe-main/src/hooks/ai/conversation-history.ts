@@ -7,6 +7,7 @@ import type { ChatMessage } from '@/types/game';
  * "System: …" rather than as something the DM said.
  */
 export function conversationHistoryFrom(messages: readonly ChatMessage[]): ServiceChatMessage[] {
+  // @ts-expect-error #458 game segments include action/dialogue/narration/thought; service NarrationSegment allows only dm/character/transition
   return messages.map((msg) => ({
     id: `msg_${Date.now()}_${Math.random()}`,
     role:

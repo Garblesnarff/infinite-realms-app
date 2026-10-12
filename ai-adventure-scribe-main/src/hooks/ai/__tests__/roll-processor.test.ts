@@ -48,6 +48,8 @@ import {
   dropInCombatRollRequests,
 } from '../roll-processor';
 
+import type { RollRequest } from '@/types/roll-request';
+
 import logger from '@/lib/logger';
 import * as npcRollHandler from '@/services/ai/npc-roll-handler';
 import * as npcAutoRoller from '@/services/combat/npc-auto-roller';
@@ -162,8 +164,6 @@ describe('roll-processor', () => {
         purpose: 'Longsword damage',
       });
 
-      const _result = parseAndAugmentRollRequests(responseText, []);
-
       // One for the parsed hit (if any, mocked here as empty), plus one for auto-damage
       // Actually parseRollRequests is called and we mock it to return nothing
       (parseRollRequests as any).mockReturnValue([]);
@@ -202,7 +202,7 @@ describe('roll-processor', () => {
     });
 
     it('leaves exploration rolls alone when combat is not active', () => {
-      const requests = [
+      const requests: RollRequest[] = [
         { type: 'attack', formula: '1d20+4', purpose: 'Longsword attack' },
         { type: 'damage', formula: '1d8+2', purpose: 'Longsword damage' },
       ];
@@ -245,7 +245,7 @@ describe('roll-processor', () => {
     });
 
     it('should suppress requests if isDiceRollMessage is true', async () => {
-      const params = {
+      const params: Parameters<typeof processRollRequests>[0] = {
         responseText: 'You hit!',
         existingRequests: [{ type: 'damage', formula: '1d8', purpose: 'Damage' }],
         isDiceRollMessage: true,
@@ -407,7 +407,7 @@ describe('roll-processor', () => {
     });
 
     it('should track player attacks in rollStateManager', async () => {
-      const params = {
+      const params: Parameters<typeof processRollRequests>[0] = {
         responseText: 'Roll an attack!',
         existingRequests: [{ type: 'attack', formula: '1d20+5', purpose: 'My attack', ac: 14 }],
         isDiceRollMessage: false,

@@ -294,6 +294,7 @@ export class VisionWorkerManager {
         if (request) {
           // Convert plain object back to Map
           const polygonsMap = new Map<string, VisionPolygon>();
+          // @ts-expect-error #457 worker posts a plain object but the response type declares Map
           const polygonsObj = response.payload.polygons as Record<string, VisionPolygon>;
 
           for (const [key, value] of Object.entries(polygonsObj)) {

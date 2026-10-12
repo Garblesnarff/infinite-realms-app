@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useState, useEffect } from 'react';
-import { useForm, type UseFormReturn } from 'react-hook-form';
+import { useForm, type Resolver, type UseFormReturn } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
@@ -63,7 +63,11 @@ export interface UseBlogPostEditorReturn {
   handlePreview: () => void;
 }
 
-export function useBlogPostEditor({ post, onSuccess, onCancel }: UseBlogPostEditorProps): UseBlogPostEditorReturn {
+export function useBlogPostEditor({
+  post,
+  onSuccess,
+  onCancel,
+}: UseBlogPostEditorProps): UseBlogPostEditorReturn {
   const isEditMode = !!post;
   const [mediaManagerOpen, setMediaManagerOpen] = useState(false);
   const [unsavedChanges, setUnsavedChanges] = useState(false);
@@ -73,14 +77,16 @@ export function useBlogPostEditor({ post, onSuccess, onCancel }: UseBlogPostEdit
   const { data: tags = [] } = useBlogTags();
   const createMutation = useCreateBlogPost();
   const updateMutation = useUpdateBlogPost(post?.id);
-  const form = useForm<BlogPostFormValues>({
-    resolver: zodResolver(blogPostSchema),
+  const resolver: Resolver<BlogPostFormValues> = zodResolver(blogPostSchema);
+  const form = useForm<BlogPostFormValues, any, BlogPostFormValues>({
+    resolver,
     defaultValues: {
       title: post?.title || '',
       slug: post?.slug || '',
       excerpt: post?.excerpt || '',
       content: post?.content || '',
       coverImageUrl: post?.coverImageUrl || '',
+      // @ts-expect-error #456 post.status can be review/archived, invalid for the 3-value form schema
       status: (post?.status as BlogPostStatus) || 'draft',
       scheduledFor: post?.scheduledFor || '',
       categoryIds: post?.categoryIds || [],
@@ -109,8 +115,10 @@ export function useBlogPostEditor({ post, onSuccess, onCancel }: UseBlogPostEdit
   const handleAutoGenerateSEO = (): void => {
     const title = form.getValues('title');
     const excerpt = form.getValues('excerpt') || generateExcerpt(contentValue, 160);
-    if (!form.getValues('seoTitle')) form.setValue('seoTitle', title.substring(0, 60), { shouldDirty: true });
-    if (!form.getValues('seoDescription')) form.setValue('seoDescription', excerpt.substring(0, 160), { shouldDirty: true });
+    if (!form.getValues('seoTitle'))
+      form.setValue('seoTitle', title.substring(0, 60), { shouldDirty: true });
+    if (!form.getValues('seoDescription'))
+      form.setValue('seoDescription', excerpt.substring(0, 160), { shouldDirty: true });
     toast.success('SEO fields populated');
   };
   const handleSelectMedia = (url: string): void => {
@@ -155,16 +163,40 @@ export function useBlogPostEditor({ post, onSuccess, onCancel }: UseBlogPostEdit
   };
   const handlePreview = (): void => {
     const previewData = form.getValues();
-    const queryParams = new URLSearchParams({ title: previewData.title, content: previewData.content, excerpt: previewData.excerpt || '', coverImageUrl: previewData.coverImageUrl || '' });
+    const queryParams = new URLSearchParams({
+      title: previewData.title,
+      content: previewData.content,
+      excerpt: previewData.excerpt || '',
+      coverImageUrl: previewData.coverImageUrl || '',
+    });
     setPreviewUrl(`/admin/blog/preview?${queryParams.toString()}`);
   };
-  const categoryOptions = categories.map((cat) => ({ value: cat.id, label: cat.title || cat.name || cat.slug }));
+  const categoryOptions = categories.map((cat) => ({
+    value: cat.id,
+    label: cat.title || cat.name || cat.slug,
+  }));
   const tagOptions = tags.map((tag) => ({ value: tag.id, label: tag.name }));
   const isPending = createMutation.isPending || updateMutation.isPending;
   return {
-    form, isEditMode, mediaManagerOpen, setMediaManagerOpen, unsavedChanges, setUnsavedChanges,
-    showUnsavedDialog, setShowUnsavedDialog, previewUrl, setPreviewUrl, statusValue, categoryOptions,
-    tagOptions, isPending, handleAutoGenerateExcerpt, handleAutoGenerateSEO, handleSelectMedia,
-    onSubmit, handleCancel, handlePreview,
+    form,
+    isEditMode,
+    mediaManagerOpen,
+    setMediaManagerOpen,
+    unsavedChanges,
+    setUnsavedChanges,
+    showUnsavedDialog,
+    setShowUnsavedDialog,
+    previewUrl,
+    setPreviewUrl,
+    statusValue,
+    categoryOptions,
+    tagOptions,
+    isPending,
+    handleAutoGenerateExcerpt,
+    handleAutoGenerateSEO,
+    handleSelectMedia,
+    onSubmit,
+    handleCancel,
+    handlePreview,
   };
 }

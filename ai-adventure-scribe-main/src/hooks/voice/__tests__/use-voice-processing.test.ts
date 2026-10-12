@@ -384,7 +384,7 @@ describe('useVoiceProcessing', () => {
 
     const { result } = renderHook(() => useVoiceProcessing(defaultProps));
 
-    let firstCall: Promise<void>;
+    let firstCall!: Promise<void>;
     act(() => {
       firstCall = result.current.speakAISegments(aiSegments1 as any);
     });
@@ -436,7 +436,7 @@ describe('useVoiceProcessing', () => {
 
     const { result } = renderHook(() => useVoiceProcessing(defaultProps));
 
-    let firstCall: Promise<void>;
+    let firstCall!: Promise<void>;
     act(() => {
       firstCall = result.current.speakAISegments(aiSegments1 as any);
     });

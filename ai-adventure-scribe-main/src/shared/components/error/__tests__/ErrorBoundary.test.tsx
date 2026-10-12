@@ -106,7 +106,7 @@ describe('ErrorBoundary client-failure reporting (#2515)', () => {
 const SESSION_ID = '72ff7843-6e2d-41ae-9e48-5c5294a31244';
 const GAME_ROUTE = '/app/game/4c9f2b8e-1a77-4c2e-9d31-5b6a7c8d9e0f';
 
-function mockClipboard(): { writeText: ReturnType<typeof vi.fn> } {
+function mockClipboard(): ReturnType<typeof vi.fn> {
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, 'clipboard', {
     value: { writeText },

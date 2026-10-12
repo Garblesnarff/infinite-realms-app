@@ -22,6 +22,7 @@ import './index.css';
 
   // Inject X-Request-Id header into all fetch() calls
   const originalFetch = window.fetch.bind(window);
+  // @ts-expect-error #192 wrapper drops Bun's fetch.preconnect; absent in browsers
   window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
     const headers = new Headers(init?.headers || {});
     const rid = headers.get('x-request-id') || uuidv4();

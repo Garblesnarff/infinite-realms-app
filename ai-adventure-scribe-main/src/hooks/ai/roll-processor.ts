@@ -58,7 +58,7 @@ export function parseAndAugmentRollRequests(
   responseText: string,
   existingRequests: RollRequest[],
 ): RollRequest[] {
-  let rollRequests = existingRequests.map((request) => ({
+  let rollRequests: RollRequest[] = existingRequests.map((request) => ({
     ...request,
     // Keep target AC from the structured response just as the legacy parser
     // mapping below does. Attack resolution reads this value downstream.
