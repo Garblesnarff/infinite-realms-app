@@ -164,7 +164,7 @@ describe('usePanelResize', () => {
 
     expect(mockSetLocalStorage).toHaveBeenCalled();
 
-    const updaters = mockSetLocalStorage.mock.calls.map(call => call[0]);
+    const updaters = mockSetLocalStorage.mock.calls.map((call) => call[0]);
     let foundCorrectUpdate = false;
 
     for (const updater of updaters) {
@@ -195,7 +195,7 @@ describe('usePanelResize', () => {
       // result.current.setIsExpanded(true); // already true
     });
 
-    const updaters = mockSetLocalStorage.mock.calls.map(call => call[0]);
+    const updaters = mockSetLocalStorage.mock.calls.map((call) => call[0]);
     for (const updater of updaters) {
       if (typeof updater === 'function') {
         const initialState = {
