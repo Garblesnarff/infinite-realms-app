@@ -1,4 +1,3 @@
- 
 import { describe, it, expect } from 'vitest';
 
 import { validateAction } from '../rules';
@@ -26,8 +25,8 @@ describe('combat-audit rules', () => {
       const violations = validateAction(action, []);
 
       // Should have missing_initiative AND missing_ac
-      expect(violations.some(v => v.violationType === 'missing_initiative')).toBe(true);
-      expect(violations.some(v => v.severity === 'critical')).toBe(true);
+      expect(violations.some((v) => v.violationType === 'missing_initiative')).toBe(true);
+      expect(violations.some((v) => v.severity === 'critical')).toBe(true);
     });
 
     it('should not flag if initiative was already rolled', () => {
@@ -36,13 +35,13 @@ describe('combat-audit rules', () => {
       const attackAction = createMockAction({ actionType: 'attack_roll', data: { targetAC: 15 } });
       const violations = validateAction(attackAction, [initAction]);
 
-      expect(violations.some(v => v.violationType === 'missing_initiative')).toBe(false);
+      expect(violations.some((v) => v.violationType === 'missing_initiative')).toBe(false);
     });
 
     it('should not flag if action is pre-combat', () => {
       const action = createMockAction({ actionType: 'setup', phase: 'pre-combat' });
       const violations = validateAction(action, []);
-      expect(violations.some(v => v.violationType === 'missing_initiative')).toBe(false);
+      expect(violations.some((v) => v.violationType === 'missing_initiative')).toBe(false);
     });
   });
 
@@ -51,7 +50,7 @@ describe('combat-audit rules', () => {
       const action = createMockAction({ actionType: 'damage_roll', actorId: 'p1' });
       const violations = validateAction(action, []);
 
-      expect(violations.some(v => v.violationType === 'damage_without_attack')).toBe(true);
+      expect(violations.some((v) => v.violationType === 'damage_without_attack')).toBe(true);
     });
 
     it('should flag damage after failed attack', () => {
@@ -60,12 +59,12 @@ describe('combat-audit rules', () => {
         id: 'attack-1',
         actionType: 'attack_roll',
         actorId: 'p1',
-        data: { success: false }
+        data: { success: false },
       });
       const damage = createMockAction({ actionType: 'damage_roll', actorId: 'p1' });
 
       const violations = validateAction(damage, [init, miss]);
-      expect(violations.some(v => v.violationType === 'damage_without_attack')).toBe(true);
+      expect(violations.some((v) => v.violationType === 'damage_without_attack')).toBe(true);
     });
 
     it('should not flag damage after successful attack', () => {
@@ -74,12 +73,16 @@ describe('combat-audit rules', () => {
         id: 'attack-1',
         actionType: 'attack_roll',
         actorId: 'p1',
-        data: { success: true }
+        data: { success: true },
       });
-      const damage = createMockAction({ actionType: 'damage_roll', actorId: 'p1', data: { formula: '1d8+3' } });
+      const damage = createMockAction({
+        actionType: 'damage_roll',
+        actorId: 'p1',
+        data: { formula: '1d8+3' },
+      });
 
       const violations = validateAction(damage, [init, hit]);
-      expect(violations.some(v => v.violationType === 'damage_without_attack')).toBe(false);
+      expect(violations.some((v) => v.violationType === 'damage_without_attack')).toBe(false);
     });
   });
 
@@ -89,7 +92,7 @@ describe('combat-audit rules', () => {
       const attack = createMockAction({ actionType: 'attack_roll', data: {} });
 
       const violations = validateAction(attack, [init]);
-      expect(violations.some(v => v.violationType === 'missing_ac')).toBe(true);
+      expect(violations.some((v) => v.violationType === 'missing_ac')).toBe(true);
     });
   });
 
@@ -99,7 +102,7 @@ describe('combat-audit rules', () => {
       const save = createMockAction({ actionType: 'save', data: {} });
 
       const violations = validateAction(save, [init]);
-      expect(violations.some(v => v.violationType === 'missing_dc')).toBe(true);
+      expect(violations.some((v) => v.violationType === 'missing_dc')).toBe(true);
     });
   });
 
@@ -108,22 +111,22 @@ describe('combat-audit rules', () => {
       const init = createMockAction({ actionType: 'initiative', id: 'init-1' });
       const attack = createMockAction({
         actionType: 'attack_roll',
-        data: { formula: 'invalid', targetAC: 15 }
+        data: { formula: 'invalid', targetAC: 15 },
       });
 
       const violations = validateAction(attack, [init]);
-      expect(violations.some(v => v.violationType === 'invalid_formula')).toBe(true);
+      expect(violations.some((v) => v.violationType === 'invalid_formula')).toBe(true);
     });
 
     it('should flag missing modifiers for attack rolls', () => {
       const init = createMockAction({ actionType: 'initiative', id: 'init-1' });
       const attack = createMockAction({
         actionType: 'attack_roll',
-        data: { formula: '1d20', targetAC: 15 }
+        data: { formula: '1d20', targetAC: 15 },
       });
 
       const violations = validateAction(attack, [init]);
-      expect(violations.some(v => v.violationType === 'missing_modifiers')).toBe(true);
+      expect(violations.some((v) => v.violationType === 'missing_modifiers')).toBe(true);
     });
 
     it('should accept valid complex formulas', () => {
@@ -131,18 +134,18 @@ describe('combat-audit rules', () => {
       const damage = createMockAction({
         actionType: 'damage_roll',
         data: { formula: '2d6+1d4+3' },
-        actorId: 'p1'
+        actorId: 'p1',
       });
       const hit = createMockAction({
         id: 'attack-1',
         actionType: 'attack_roll',
         actorId: 'p1',
-        data: { success: true }
+        data: { success: true },
       });
 
       const violations = validateAction(damage, [init, hit]);
-      expect(violations.some(v => v.violationType === 'invalid_formula')).toBe(false);
-      expect(violations.some(v => v.violationType === 'missing_modifiers')).toBe(false);
+      expect(violations.some((v) => v.violationType === 'invalid_formula')).toBe(false);
+      expect(violations.some((v) => v.violationType === 'missing_modifiers')).toBe(false);
     });
   });
 });

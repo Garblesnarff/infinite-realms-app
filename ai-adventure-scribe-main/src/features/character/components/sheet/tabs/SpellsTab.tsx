@@ -64,9 +64,7 @@ const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate }) => {
   // Long Rest computed from a fallback ability as if they were real.
   if (spellcastingAbility === null) {
     return (
-      <div className="text-center py-8 text-muted-foreground">
-        This class does not cast spells
-      </div>
+      <div className="text-center py-8 text-muted-foreground">This class does not cast spells</div>
     );
   }
 

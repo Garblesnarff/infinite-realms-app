@@ -46,7 +46,7 @@ describe('CombatAuditSystem', () => {
         actorName: 'Hero',
         actionType: 'attack_roll',
         phase: 'combat',
-        data: { targetAC: 15, formula: '1d20+5' }
+        data: { targetAC: 15, formula: '1d20+5' },
       });
 
       expect(actionId).toBeDefined();
@@ -69,7 +69,7 @@ describe('CombatAuditSystem', () => {
         actorName: 'Hero',
         actionType: 'initiative',
         phase: 'pre-combat',
-        data: { formula: '1d20+2' }
+        data: { formula: '1d20+2' },
       });
 
       const violations = auditSystem.getViolations(combatId);
@@ -88,7 +88,7 @@ describe('CombatAuditSystem', () => {
         actorName: 'Hero',
         actionType: 'initiative',
         phase: 'pre-combat',
-        data: { formula: '1d20+2' }
+        data: { formula: '1d20+2' },
       });
 
       // Record attack (Valid)
@@ -98,7 +98,7 @@ describe('CombatAuditSystem', () => {
         actorName: 'Hero',
         actionType: 'attack_roll',
         phase: 'combat',
-        data: { targetAC: 15, formula: '1d20+5', success: true }
+        data: { targetAC: 15, formula: '1d20+5', success: true },
       });
 
       const report = auditSystem.generateAuditReport(combatId);
@@ -118,7 +118,7 @@ describe('CombatAuditSystem', () => {
         actorName: 'Hero',
         actionType: 'attack_roll',
         phase: 'combat',
-        data: { targetAC: 15, formula: '1d20+5' }
+        data: { targetAC: 15, formula: '1d20+5' },
       });
 
       const report = auditSystem.generateAuditReport(combatId);

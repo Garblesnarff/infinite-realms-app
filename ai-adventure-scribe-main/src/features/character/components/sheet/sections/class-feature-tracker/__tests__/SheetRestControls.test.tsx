@@ -105,7 +105,10 @@ describe('SheetRestControls (#264)', () => {
   });
 
   it('applies a short rest directly when no dice are available', async () => {
-    const noDice = { ...characterWithDice, hitDice: { total: 5, remaining: 0, type: 'd8' } } as Character;
+    const noDice = {
+      ...characterWithDice,
+      hitDice: { total: 5, remaining: 0, type: 'd8' },
+    } as Character;
     render(<SheetRestControls character={noDice} onUpdate={onUpdateProp} />);
 
     fireEvent.click(screen.getByRole('button', { name: /short rest/i }));
