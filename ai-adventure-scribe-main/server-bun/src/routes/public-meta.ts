@@ -63,30 +63,28 @@ export function injectPublicMeta(html: string, meta: PublicPageMeta, siteUrl: st
   const canonical = `${siteUrl}${meta.path}`;
   // index.html self-closes void tags (`content="..." />`); tolerate both forms.
   // Since #371 the static tags carry `data-rh="true"` (so the client Helmet
-  // replaces them). Match that optional marker and keep it on the replacement,
-  // otherwise the landing copy leaks to crawlers and the client would stop
-  // replacing the server-injected tag.
-  const metaTag = (name: string): RegExp =>
-    new RegExp(`<meta (?:data-rh="true" )?${name} content=".*?\\s*/?>`);
-  const replaceMeta = (source: string, name: string, content: string): string => {
-    const re = new RegExp(`<meta ((?:data-rh="true" )?)${name} content=".*?\\s*/?>`);
-    // Replacement function (not string): a `$` in future copy would otherwise
-    // be read as a `$&`/`$'` substitution pattern by String.replace.
-    return source.replace(re, (_match, rh: string) => `<meta ${rh}${name} content="${content}">`);
-  };
-  void metaTag;
-  const title = (): string => `<title>${escapeHtml(meta.title)}</title>`;
-  const desc = escapeHtml(meta.description);
-  const ttl = escapeHtml(meta.title);
-  let out = html.replace(/<title>.*?<\/title>/, title);
-  out = replaceMeta(out, 'name="description"', desc);
-  out = replaceMeta(out, 'property="og:title"', ttl);
-  out = replaceMeta(out, 'property="og:description"', desc);
+  // replaces them). Match that optional marker and keep it on the replacement:
+  // without the match the landing copy leaks to crawlers, and without keeping
+  // it the client Helmet would stop replacing the server-injected tag.
+  // The replacement is a function (not a string): a `$` in future copy would
+  // otherwise be read as a `$&`/`$'` substitution pattern by String.replace.
+  const replaceMeta = (source: string, name: string, content: string): string =>
+    source.replace(
+      new RegExp(`<meta ((?:data-rh="true" )?)${name} content=".*?\\s*/?>`),
+      (_match, rh: string) => `<meta ${rh}${name} content="${content}">`,
+    );
+  const description = escapeHtml(meta.description);
+  const title = escapeHtml(meta.title);
+  let out = html.replace(/<title>.*?<\/title>/, () => `<title>${title}</title>`);
+  out = replaceMeta(out, 'name="description"', description);
+  out = replaceMeta(out, 'property="og:title"', title);
+  out = replaceMeta(out, 'property="og:description"', description);
   out = replaceMeta(out, 'property="og:url"', escapeHtml(canonical));
-  out = replaceMeta(out, 'name="twitter:title"', ttl);
-  out = replaceMeta(out, 'name="twitter:description"', desc);
+  out = replaceMeta(out, 'name="twitter:title"', title);
+  out = replaceMeta(out, 'name="twitter:description"', description);
   if (!/<link rel="canonical"/.test(out)) {
-    out = out.replace('</head>', () => `<link rel="canonical" href="${escapeHtml(canonical)}">\n</head>`);
+    const link = `<link rel="canonical" href="${escapeHtml(canonical)}">`;
+    out = out.replace('</head>', () => `${link}\n</head>`);
   }
   return out;
 }
