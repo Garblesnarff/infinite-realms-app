@@ -66,7 +66,11 @@ export function characterReducer(state: CharacterState, action: CharacterAction)
   // Enhanced error boundary for reducer operations
   try {
     // Debug logging to track state changes
-    logger.debug('Reducer action:', action.type, 'payload' in action ? action.payload : 'No payload');
+    logger.debug(
+      'Reducer action:',
+      action.type,
+      'payload' in action ? action.payload : 'No payload',
+    );
     logger.debug('Current state:', state);
     switch (action.type) {
       case 'SET_CHARACTER': {

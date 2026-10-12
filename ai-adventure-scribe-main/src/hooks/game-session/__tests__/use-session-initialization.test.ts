@@ -210,9 +210,7 @@ describe('useSessionInitialization', () => {
   });
 
   it('should resume an active, non-expired session', async () => {
-    const mockSessions = [
-      { id: 'sess-1', status: 'active', start_time: new Date().toISOString() },
-    ];
+    const mockSessions = [{ id: 'sess-1', status: 'active', start_time: new Date().toISOString() }];
     vi.mocked(userDataApi.listSessions).mockResolvedValue(mockSessions);
 
     renderHook(() => useSessionInitialization(defaultProps));
@@ -224,9 +222,7 @@ describe('useSessionInitialization', () => {
   });
 
   it('should cleanup an expired session and continue from it', async () => {
-    const mockSessions = [
-      { id: 'sess-expired', status: 'active', start_time: '2020-01-01' },
-    ];
+    const mockSessions = [{ id: 'sess-expired', status: 'active', start_time: '2020-01-01' }];
     vi.mocked(userDataApi.listSessions).mockResolvedValue(mockSessions);
     vi.mocked(sessionUtils.isSessionExpired).mockReturnValue(true);
     // The cleanup completes the expired session, making it the
@@ -252,7 +248,12 @@ describe('useSessionInitialization', () => {
 
   it('should continue from last completed session', async () => {
     const mockSessions = [
-      { id: 'sess-old', status: 'completed', session_number: 1, current_scene_description: 'Scene' },
+      {
+        id: 'sess-old',
+        status: 'completed',
+        session_number: 1,
+        current_scene_description: 'Scene',
+      },
     ];
     // First call: fetch existing
     vi.mocked(userDataApi.listSessions).mockResolvedValueOnce(mockSessions);
@@ -275,7 +276,12 @@ describe('useSessionInitialization', () => {
   // empty session and "Read the story so far" blank (run D2's reload repro).
   it('#2517: resumes the session the character fell in instead of creating a new one', async () => {
     const mockSessions = [
-      { id: 'sess-dead', status: 'completed', session_number: 1, current_scene_description: 'Scene' },
+      {
+        id: 'sess-dead',
+        status: 'completed',
+        session_number: 1,
+        current_scene_description: 'Scene',
+      },
     ];
     vi.mocked(userDataApi.listSessions).mockResolvedValueOnce(mockSessions);
     // Follows the real producer: fetchSessionFallenState reads the session's
