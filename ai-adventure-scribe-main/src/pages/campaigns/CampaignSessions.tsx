@@ -68,6 +68,7 @@ const CampaignSessions: React.FC = () => {
 
         return (rows ?? []) as SessionListItem[];
       },
+      initialPageParam: 0,
       getNextPageParam: (lastPage, pages) =>
         lastPage.length === PAGE_SIZE ? pages.length : undefined,
       enabled: Boolean(campaignId),

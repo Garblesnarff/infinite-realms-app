@@ -28,10 +28,10 @@ export { DiceRollEmbed } from './dice/DiceRollEmbed';
 
 // Game UI components
 export { GameInterface } from './game-interface';
-export { GameContent } from './game/GameContent';
-export { GameContentWithErrorBoundary } from './game/GameContentWithErrorBoundary';
+export { default as GameContent } from './game/GameContent';
+export { default as GameContentWithErrorBoundary } from './game/GameContentWithErrorBoundary';
 export { StatsBar } from './game/StatsBar';
-export { MemoryPanel } from './game/MemoryPanel';
+export { GameSidePanel } from './game/MemoryPanel';
 export { CompactCharacterHeader } from './game/CompactCharacterHeader';
 export { CampaignSidePanel } from './game/CampaignSidePanel';
 export { FloatingActionPanel } from './game/FloatingActionPanel';
@@ -39,7 +39,7 @@ export { CombatSummary } from './game/CombatSummary';
 export { TimelineRail } from './game/TimelineRail';
 
 // Game session components
-export { SessionValidator } from './game/session/SessionValidator';
+export { useSessionValidator } from './game/session/SessionValidator';
 
 // Game content components
 export * from './game/game-content';

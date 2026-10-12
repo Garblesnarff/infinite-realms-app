@@ -19,6 +19,7 @@ describe('Spell Validation Extended', () => {
     mockCleric = {
       id: 'cleric',
       name: 'Cleric',
+      description: '',
       hitDie: 8,
       primaryAbility: 'wisdom',
       savingThrowProficiencies: ['wisdom', 'charisma'],
@@ -31,11 +32,13 @@ describe('Spell Validation Extended', () => {
       classFeatures: [],
       armorProficiencies: [],
       weaponProficiencies: [],
+      subclasses: [],
     };
 
     mockPaladin = {
       id: 'paladin',
       name: 'Paladin',
+      description: '',
       hitDie: 10,
       primaryAbility: 'charisma',
       savingThrowProficiencies: ['wisdom', 'charisma'],
@@ -48,11 +51,13 @@ describe('Spell Validation Extended', () => {
       classFeatures: [],
       armorProficiencies: [],
       weaponProficiencies: [],
+      subclasses: [],
     };
 
     mockFighter = {
       id: 'fighter',
       name: 'Fighter',
+      description: '',
       hitDie: 10,
       primaryAbility: 'strength',
       savingThrowProficiencies: ['strength', 'constitution'],
@@ -61,6 +66,7 @@ describe('Spell Validation Extended', () => {
       classFeatures: [],
       armorProficiencies: [],
       weaponProficiencies: [],
+      subclasses: [],
     };
 
     mockRace = {

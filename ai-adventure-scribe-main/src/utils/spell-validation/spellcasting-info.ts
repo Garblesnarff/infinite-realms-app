@@ -86,7 +86,10 @@ export function getSpellcastingInfo(
     hasSpellbook: classBase?.hasSpellbook || false,
     isPactMagic: classBase?.isPactMagic || false,
     ritualCasting: classBase?.ritualCasting || false,
-    spellcastingAbility: classBase?.spellcastingAbility || spellcasting?.ability || 'intelligence',
+    spellcastingAbility:
+      classBase?.spellcastingAbility ||
+      (spellcasting?.ability as SpellcastingInfo['spellcastingAbility']) ||
+      'intelligence',
   };
 
   // Wizard cantrip scaling: 3 at lvl 1, 4 at lvl 4, 5 at lvl 10

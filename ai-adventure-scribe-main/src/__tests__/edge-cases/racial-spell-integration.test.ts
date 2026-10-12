@@ -508,6 +508,7 @@ describe('Racial Spell Integration Edge Cases', () => {
         mockElf,
         modernHighElf,
       );
+      void _modernCharacter;
 
       const racialSpells = getRacialSpells('Elf', modernHighElf);
       expect(racialSpells.bonusCantrips).toBe(2); // Should use subrace data
@@ -529,6 +530,7 @@ describe('Racial Spell Integration Edge Cases', () => {
         mockElf,
         incompleteSubrace,
       );
+      void _incompleteCharacter;
 
       // Should fall back to race-based hardcoded mapping if available
       const racialSpells = getRacialSpells('High Elf'); // Direct race lookup
@@ -558,6 +560,7 @@ describe('Racial Spell Integration Edge Cases', () => {
         mockElf,
         manySpellsSubrace,
       );
+      void _manySpellsCharacter;
 
       const startTime = Date.now();
       const racialSpells = getRacialSpells('Elf', manySpellsSubrace);

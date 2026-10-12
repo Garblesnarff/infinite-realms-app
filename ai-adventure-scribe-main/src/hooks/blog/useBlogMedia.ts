@@ -61,7 +61,7 @@ export function useUploadBlogMedia(
       const asset: BlogMediaAsset = {
         id: signed.path,
         path: signed.path,
-        bucket: signed.bucket,
+        bucket: signed.bucket!,
         publicUrl: buildMediaPublicUrl(signed.path, signed.bucket),
         name: finalFilename,
         mimeType: type,

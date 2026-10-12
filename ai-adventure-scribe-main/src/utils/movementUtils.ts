@@ -53,7 +53,8 @@ export function doesMovementProvokeOpportunityAttacks(
     (toPosition === 'ranged' || toPosition === 'distant');
 
   // Check for features that prevent opportunity attacks
-  const hasMobileFeature = participant.classFeatures?.some((f) => f.name === 'mobile') || false;
+  const hasMobileFeature =
+    participant.classFeatures?.some((f) => (f.name as string) === 'mobile') || false;
   const isUsingDisengage = participant.bonusActionTaken; // Simplified - would need proper tracking
 
   return isLeavingReach && !hasMobileFeature && !isUsingDisengage;
@@ -99,7 +100,7 @@ export function calculateMovementCost(
  * Check if a participant can move to a position
  */
 export function canMoveToPosition(
-  participant: CombatParticipant,
+  _participant: CombatParticipant,
   currentPosition: string,
   targetPosition: string,
   availableMovement: number,

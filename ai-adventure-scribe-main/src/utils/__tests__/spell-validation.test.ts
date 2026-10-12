@@ -375,6 +375,7 @@ describe('Spell Validation System', () => {
         ...wizardCharacter,
         class: mockCleric,
       };
+      void _clericCharacter;
 
       fighterCharacter = {
         ...wizardCharacter,
@@ -455,6 +456,7 @@ describe('Spell Validation System', () => {
           ['mage-hand', 'prestidigitation', 'light'],
           Array(7).fill('magic-missile'), // 7 instead of 6, but this would be caught by unique validation
         );
+        void _result;
 
         const spells = [
           'magic-missile',

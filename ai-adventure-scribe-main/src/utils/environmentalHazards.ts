@@ -199,7 +199,7 @@ export function calculateHazardDamage(hazard: EnvironmentalHazard, saveSuccess: 
  */
 export function applyHazardEffects(
   character: Character,
-  hazard: EnvironmentalHazard,
+  _hazard: EnvironmentalHazard,
   saveResult: HazardSaveResult,
 ): Character {
   // Create a copy of the character to modify

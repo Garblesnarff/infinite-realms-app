@@ -517,7 +517,7 @@ export function validateOptionSelection<T extends OptionType>(
 export function checkOptionAvailability(
   option: EnhancementOption,
   character?: any,
-  campaign?: any,
+  _campaign?: any,
   selectedOptions: string[] = [],
 ): boolean {
   // Check level requirements

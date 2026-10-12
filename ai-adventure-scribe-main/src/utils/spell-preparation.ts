@@ -95,12 +95,15 @@ export function calculateSpellPreparationLimits(character: Character): SpellPrep
     : 0;
 
   // Calculate max spell level based on character level and class
+  const spellcastingMetadata = characterClass.spellcasting as NonNullable<
+    typeof characterClass.spellcasting
+  > & { casterType?: 'full' | 'half' | 'third' | 'pact' };
   let maxSpellLevel = 0;
-  if (characterClass.spellcasting.casterType === 'full') {
+  if (spellcastingMetadata.casterType === 'full') {
     maxSpellLevel = Math.min(9, Math.ceil(level / 2));
-  } else if (characterClass.spellcasting.casterType === 'half') {
+  } else if (spellcastingMetadata.casterType === 'half') {
     maxSpellLevel = Math.min(5, Math.floor(level / 2));
-  } else if (characterClass.spellcasting.casterType === 'third') {
+  } else if (spellcastingMetadata.casterType === 'third') {
     maxSpellLevel = Math.min(4, Math.floor(level / 3));
   }
 

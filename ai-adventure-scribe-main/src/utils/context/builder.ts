@@ -142,8 +142,8 @@ export const gameContextBuilder = new GameContextBuilder();
 interface CampaignRow {
   id: string;
   name: string;
-  description?: string | null;
-  genre?: string | null;
+  description?: string;
+  genre?: string;
   status?: string | null;
   era?: string | null;
   location?: string | null;
@@ -173,8 +173,8 @@ interface CharacterEquipmentRow {
 interface CharacterRow {
   id: string;
   name: string;
-  race?: string | null;
-  class?: string | null;
+  race: string;
+  class: string;
   level?: number | null;
   character_stats?: CharacterStatsRow[] | null;
   character_equipment?: CharacterEquipmentRow[] | null;

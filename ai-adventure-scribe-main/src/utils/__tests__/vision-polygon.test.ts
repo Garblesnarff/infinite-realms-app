@@ -88,7 +88,7 @@ describe('vision-polygon', () => {
       vi.mocked(visionCalculations.calculateVisionRadius).mockReturnValue(60);
       vi.mocked(polygonGenerator.getAllRayIntersections).mockReturnValue(mockPoints as any);
       vi.mocked(geometry.isPointInVisionCone).mockImplementation(
-        (origin, rot, angle, pt) => pt.x > 100,
+        (_origin, _rot, _angle, pt) => pt.x > 100,
       );
 
       const result = calculateVisionPolygon(token, []);

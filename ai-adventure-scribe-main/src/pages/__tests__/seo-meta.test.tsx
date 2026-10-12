@@ -18,7 +18,6 @@ import { HelmetProvider } from 'react-helmet-async';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// @ts-expect-error vite ?raw import — no type declaration needed for the test
 import indexHtml from '../../../index.html?raw';
 import ExploreGalleryPage from '../ExploreGalleryPage';
 import LaunchPage from '../LaunchPage';

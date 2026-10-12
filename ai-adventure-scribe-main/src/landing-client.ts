@@ -199,12 +199,5 @@ function throttle<T extends (...args: unknown[]) => void>(fn: T, wait: number): 
   } as T;
 }
 
-// Extend Window interface for gtag
-declare global {
-  interface Window {
-    gtag?: (...args: unknown[]) => void;
-  }
-}
-
 // Export for testing
 export { initWaitlistForms, initSmoothScroll, initAnalytics };

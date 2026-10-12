@@ -129,13 +129,19 @@ export function validateSpellSelection(
       if (cantrips.length !== expectedCantrips) {
         errors.push({
           type: 'COUNT_MISMATCH',
+          message: `Expected ${expectedCantrips} racial cantrips, but got ${cantrips.length}`,
           expected: expectedCantrips,
           actual: cantrips.length,
         });
       }
       const expectedSpells = racialSpells.spells.length;
       if (spells.length !== expectedSpells) {
-        errors.push({ type: 'COUNT_MISMATCH', expected: expectedSpells, actual: spells.length });
+        errors.push({
+          type: 'COUNT_MISMATCH',
+          message: `Expected ${expectedSpells} racial spells, but got ${spells.length}`,
+          expected: expectedSpells,
+          actual: spells.length,
+        });
       }
     } else if (cantrips.length > 0 || spells.length > 0) {
       errors.push({

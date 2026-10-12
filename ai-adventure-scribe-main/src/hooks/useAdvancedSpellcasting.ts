@@ -120,7 +120,7 @@ export function useAdvancedSpellcasting(): UseAdvancedSpellcastingReturn {
    * Apply all spellcasting selections
    */
   const applySpellcastingFeatures = useCallback((): void => {
-    const updates: Partial<Character> = {};
+    const updates: Partial<Character> & { advancedSpellcastingComplete?: boolean } = {};
 
     if (canPrepareSpells) {
       // #2710: preparedSpells holds names (for GET /v1/characters/:id/spells
@@ -229,11 +229,11 @@ export function useAdvancedSpellcasting(): UseAdvancedSpellcastingReturn {
       (!hasSpellcasting ||
         (!canPrepareSpells && !usesMetamagic && !usesPactMagic && !usesRitualCasting))
     ) {
+      const completionPayload: Partial<Character> & { advancedSpellcastingComplete?: boolean } = {};
+      completionPayload.advancedSpellcastingComplete = true;
       dispatch({
         type: 'UPDATE_CHARACTER',
-        payload: {
-          advancedSpellcastingComplete: true,
-        },
+        payload: completionPayload,
       });
     }
   }, [

@@ -98,6 +98,8 @@ export async function validateSpellSelectionAsync(
     return { valid: errors.length === 0, errors, warnings };
   }
 
+  const className = character.class.name;
+
   // Get racial bonus spells
   const racialSpells = getRacialSpells(character.race?.name || '', character.subrace || undefined);
 
@@ -136,7 +138,7 @@ export async function validateSpellSelectionAsync(
     ) {
       errors.push({
         type: 'INVALID_SPELL',
-        message: `${cantripId} is not available as a cantrip for ${character.class.name}`,
+        message: `${cantripId} is not available as a cantrip for ${className}`,
         spellId: cantripId,
       });
     }
@@ -160,7 +162,7 @@ export async function validateSpellSelectionAsync(
     if (availableSpellIds.length > 0 && !availableSpellIds.includes(spellId)) {
       errors.push({
         type: 'INVALID_SPELL',
-        message: `${spellId} is not available as a 1st level spell for ${character.class.name}`,
+        message: `${spellId} is not available as a 1st level spell for ${className}`,
         spellId: spellId,
       });
     }

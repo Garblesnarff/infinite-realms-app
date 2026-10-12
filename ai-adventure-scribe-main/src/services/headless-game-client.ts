@@ -218,7 +218,7 @@ export class HeadlessGameClient {
       existingRequests: (response.roll_requests || []) as RollRequest[],
       isDiceRollMessage: Boolean(diceRoll),
       processedSet: this.processedRolls,
-      aiContext,
+      aiContext: { ...aiContext },
       sessionId: this.sessionId,
       characterId: String(game.character.id || 'player'),
     });

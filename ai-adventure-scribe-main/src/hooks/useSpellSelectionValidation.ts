@@ -67,13 +67,7 @@ export function useSpellSelectionValidation({
       } catch (error) {
         logger.error('Async spell validation failed:', error);
         // Fall back to synchronous validation
-        const result = validateSpellSelection(
-          character,
-          selectedCantrips,
-          selectedSpells,
-          availableCantripIds,
-          availableSpellIds,
-        );
+        const result = validateSpellSelection(character, selectedCantrips, selectedSpells);
         if (mounted) {
           setValidation(result);
         }

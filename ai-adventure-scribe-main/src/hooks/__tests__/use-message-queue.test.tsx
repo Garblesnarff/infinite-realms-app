@@ -2,7 +2,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, act } from '@testing-library/react';
 import React from 'react';
-// @ts-expect-error: uuid ships without its own types in this repo
 import { v4 as uuidv4 } from 'uuid';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 

@@ -65,7 +65,7 @@ export interface UseHotkeysOptions {
   /** Allow hotkeys in text input fields */
   allowInInput?: boolean;
   /** Custom input field detector */
-  isInputField?: (element: HTMLElement) => boolean;
+  isInputField?: (element: HTMLElement | null) => boolean;
 }
 
 export interface UseHotkeysReturn {

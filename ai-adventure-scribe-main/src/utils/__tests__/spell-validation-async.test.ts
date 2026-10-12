@@ -102,6 +102,7 @@ describe('spell-validation async/multiclass utilities', () => {
       weaponProficiencies: [],
       subclasses: [],
     };
+    void _warlock;
     human = {
       id: 'human',
       name: 'Human',

@@ -223,7 +223,9 @@ describe('Spell Validation Utils', () => {
         ok: true,
         json: async () => ({ isValid: true }),
       };
-      global.fetch = vi.fn().mockResolvedValue(mockResponse);
+      global.fetch = Object.assign(vi.fn().mockResolvedValue(mockResponse), {
+        preconnect: vi.fn(),
+      });
 
       const result = await isSpellValidForClassAsync('mage-hand', 'Wizard');
       expect(global.fetch).toHaveBeenCalledWith('/api/spells/validate', {
@@ -239,7 +241,9 @@ describe('Spell Validation Utils', () => {
         ok: true,
         json: async () => ({ isValid: false }),
       };
-      global.fetch = vi.fn().mockResolvedValue(mockResponse);
+      global.fetch = Object.assign(vi.fn().mockResolvedValue(mockResponse), {
+        preconnect: vi.fn(),
+      });
 
       const result = await isSpellValidForClassAsync('mage-hand', 'Wizard');
       expect(result).toBe(false);
@@ -250,7 +254,9 @@ describe('Spell Validation Utils', () => {
         ok: true,
         json: async () => ({}),
       };
-      global.fetch = vi.fn().mockResolvedValue(mockResponse);
+      global.fetch = Object.assign(vi.fn().mockResolvedValue(mockResponse), {
+        preconnect: vi.fn(),
+      });
 
       const result = await isSpellValidForClassAsync('mage-hand', 'Wizard');
       expect(result).toBe(false);
@@ -261,7 +267,9 @@ describe('Spell Validation Utils', () => {
         ok: false,
         statusText: 'Bad Request',
       };
-      global.fetch = vi.fn().mockResolvedValue(mockResponse);
+      global.fetch = Object.assign(vi.fn().mockResolvedValue(mockResponse), {
+        preconnect: vi.fn(),
+      });
 
       const result = await isSpellValidForClassAsync('mage-hand', 'Wizard');
       expect(result).toBe(false);
@@ -272,7 +280,9 @@ describe('Spell Validation Utils', () => {
     });
 
     it('should log error and return false if fetch throws', async () => {
-      global.fetch = vi.fn().mockRejectedValue(new Error('Network Error'));
+      global.fetch = Object.assign(vi.fn().mockRejectedValue(new Error('Network Error')), {
+        preconnect: vi.fn(),
+      });
 
       const result = await isSpellValidForClassAsync('mage-hand', 'Wizard');
       expect(result).toBe(false);
