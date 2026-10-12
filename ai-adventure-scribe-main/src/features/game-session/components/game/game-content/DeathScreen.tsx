@@ -118,8 +118,8 @@ export const FallenEndState: React.FC<FallenEndStateProps> = ({
         <div className="space-y-3">
           <h2 className="text-2xl font-bold text-card-foreground">{name} has fallen</h2>
           <p className="text-muted-foreground leading-relaxed">
-            The party was defeated and the tale of {name} ends here. The story cannot continue
-            with a fallen hero — but every ending is a new beginning.
+            The party was defeated and the tale of {name} ends here. The story cannot continue with
+            a fallen hero — but every ending is a new beginning.
           </p>
         </div>
 
@@ -180,14 +180,20 @@ export const FallenStoryLog: React.FC = () => {
   const { messages } = useMessageContext();
   const visible = messages.filter((message) => message.text?.trim());
   if (visible.length === 0) {
-    return <p className="text-sm text-muted-foreground">The story so far is still being written.</p>;
+    return (
+      <p className="text-sm text-muted-foreground">The story so far is still being written.</p>
+    );
   }
   return (
     <div data-testid="death-screen-story-log" className="space-y-3">
       {visible.map((message, index) => (
         <div key={message.id ?? index} className="space-y-0.5">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {message.sender === 'player' ? 'You' : message.sender === 'dm' ? 'Dungeon Master' : 'System'}
+            {message.sender === 'player'
+              ? 'You'
+              : message.sender === 'dm'
+                ? 'Dungeon Master'
+                : 'System'}
           </p>
           <p className="whitespace-pre-wrap text-sm leading-relaxed text-card-foreground">
             {message.text}
