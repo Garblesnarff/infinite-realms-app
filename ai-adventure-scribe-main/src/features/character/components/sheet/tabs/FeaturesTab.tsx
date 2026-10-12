@@ -34,8 +34,14 @@ interface Feature {
  */
 const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
   const className = character.class?.name ?? '';
+  // Racial traits come from both the race and the subrace (#389: Hill Dwarf's
+  // Dwarven Toughness lives on the subrace and was never listed). Dedupe in
+  // case a subrace repeats a race trait.
+  const racialTraits = [
+    ...new Set([...(character.race?.traits ?? []), ...(character.subrace?.traits ?? [])]),
+  ];
   const features: Feature[] = [
-    ...(character.race?.traits ?? []).map((trait) => ({
+    ...racialTraits.map((trait) => ({
       name: trait,
       source: 'race' as const,
       description: trait,
