@@ -178,7 +178,7 @@ const CharacterSheetTabs: React.FC<CharacterSheetTabsProps> = ({
 
           <TabsContent value="gallery" className="space-y-4">
             <CharacterGallery
-              characterId={character.id}
+              characterId={character.id!}
               avatarUrl={character.avatar_url}
               designSheetUrl={character.image_url}
               backgroundUrl={character.background_image}
