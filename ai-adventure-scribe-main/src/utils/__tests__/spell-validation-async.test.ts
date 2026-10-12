@@ -67,6 +67,7 @@ describe('spell-validation async/multiclass utilities', () => {
       classFeatures: [],
       armorProficiencies: [],
       weaponProficiencies: [],
+      subclasses: [],
     };
     fighter = {
       id: 'fighter',
@@ -99,6 +100,7 @@ describe('spell-validation async/multiclass utilities', () => {
       classFeatures: [],
       armorProficiencies: [],
       weaponProficiencies: [],
+      subclasses: [],
     };
     human = {
       id: 'human',

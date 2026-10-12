@@ -18,7 +18,7 @@ describe('Animation Utilities', () => {
 
     it('should create a stagger animation with custom values', () => {
       const result = createStagger(0.2, 0.5);
-      expect(result.visible.transition).toEqual({
+      expect((result.visible as any).transition).toEqual({
         staggerChildren: 0.2,
         delayChildren: 0.5,
       });
@@ -29,27 +29,27 @@ describe('Animation Utilities', () => {
     it('should create a fade animation with no direction', () => {
       const result = createFade('none');
       expect(result.hidden).toEqual({ opacity: 0, y: 0 });
-      expect(result.visible.opacity).toBe(1);
+      expect((result.visible as any).opacity).toBe(1);
     });
 
     it('should create a fade animation for "up"', () => {
       const result = createFade('up', 20);
-      expect(result.hidden.y).toBe(20); // Starts below (y: 20), moves to 0. Animate UP.
+      expect((result.hidden as any).y).toBe(20); // Starts below (y: 20), moves to 0. Animate UP.
     });
 
     it('should create a fade animation for "down"', () => {
       const result = createFade('down', 20);
-      expect(result.hidden.y).toBe(-20); // Starts above (y: -20), moves to 0. Animate DOWN.
+      expect((result.hidden as any).y).toBe(-20); // Starts above (y: -20), moves to 0. Animate DOWN.
     });
 
     it('should create a fade animation for "left"', () => {
       const result = createFade('left', 20);
-      expect(result.hidden.x).toBe(20); // Starts right (x: 20), moves to 0. Animate LEFT.
+      expect((result.hidden as any).x).toBe(20); // Starts right (x: 20), moves to 0. Animate LEFT.
     });
 
     it('should create a fade animation for "right"', () => {
       const result = createFade('right', 20);
-      expect(result.hidden.x).toBe(-20); // Starts left (x: -20), moves to 0. Animate RIGHT.
+      expect((result.hidden as any).x).toBe(-20); // Starts left (x: -20), moves to 0. Animate RIGHT.
     });
   });
 

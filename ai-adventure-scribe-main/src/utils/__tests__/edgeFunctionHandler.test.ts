@@ -56,7 +56,7 @@ describe('edgeFunctionHandler', () => {
     vi.resetModules();
     // Default env state
     vi.stubEnv('VITE_USE_LOCAL_AI', 'false');
-    vi.stubEnv('DEV', 'false');
+    vi.stubEnv('DEV', 'false' as unknown as boolean);
   });
 
   afterEach(() => {
@@ -92,13 +92,13 @@ describe('edgeFunctionHandler', () => {
     expect(result).toBeNull();
     expect(logger.error).toHaveBeenCalledWith(
       expect.stringContaining('Failed to call test-function'),
-      mockError
+      mockError,
     );
     expect(toast).toHaveBeenCalledWith(
       expect.objectContaining({
         title: 'Error',
         variant: 'destructive',
-      })
+      }),
     );
   });
 

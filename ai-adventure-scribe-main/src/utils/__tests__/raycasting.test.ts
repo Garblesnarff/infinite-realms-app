@@ -26,6 +26,7 @@ describe('raycasting utils', () => {
         { x: 100, y: 100 },
       ],
       blocksLight: true,
+      blocksMovement: true,
     },
     {
       id: 'wall-2',
@@ -34,6 +35,7 @@ describe('raycasting utils', () => {
         { x: 100, y: 100 },
       ],
       blocksLight: true,
+      blocksMovement: true,
     },
     {
       id: 'no-block',
@@ -42,6 +44,7 @@ describe('raycasting utils', () => {
         { x: 50, y: 50 },
       ],
       blocksLight: false,
+      blocksMovement: false,
     },
   ];
 
@@ -95,6 +98,7 @@ describe('raycasting utils', () => {
           { x: 250, y: 300 },
         ],
         blocksLight: true,
+        blocksMovement: true,
       };
 
       // Ray hitting the closing segment (250, 300) to (200, 200)
@@ -116,15 +120,21 @@ describe('raycasting utils', () => {
   describe('getAllRayIntersections', () => {
     it('should cast rays to all vertices and handle edge cases', () => {
       const origin = { x: 50, y: 50 };
-      const walls: VisionBlocker[] = [{
-        id: 'w1',
-        points: [{ x: 100, y: 0 }, { x: 100, y: 100 }],
-        blocksLight: true
-      }];
+      const walls: VisionBlocker[] = [
+        {
+          id: 'w1',
+          points: [
+            { x: 100, y: 0 },
+            { x: 100, y: 100 },
+          ],
+          blocksLight: true,
+          blocksMovement: true,
+        },
+      ];
       const result = getAllRayIntersections(origin, walls, 500);
 
       expect(result.length).toBeGreaterThanOrEqual(6);
-      expect(result.some(e => e.wallId === 'w1')).toBe(true);
+      expect(result.some((e) => e.wallId === 'w1')).toBe(true);
     });
 
     it('should return a circle of points if no walls exist', () => {
@@ -132,7 +142,7 @@ describe('raycasting utils', () => {
       const result = getAllRayIntersections(origin, [], 100);
 
       expect(result.length).toBe(32);
-      result.forEach(e => {
+      result.forEach((e) => {
         expect(e.distance).toBe(100);
         expect(Math.sqrt(e.point.x ** 2 + e.point.y ** 2)).toBeCloseTo(100);
       });
@@ -169,27 +179,23 @@ describe('raycasting utils', () => {
     it('should sort points clockwise around origin', () => {
       const origin = { x: 0, y: 0 };
       const points = [
-        { x: 0, y: 1 },   // PI/2
-        { x: 1, y: 0 },   // 0
-        { x: 0, y: -1 },  // -PI/2
-        { x: -1, y: 0 },  // PI
+        { x: 0, y: 1 }, // PI/2
+        { x: 1, y: 0 }, // 0
+        { x: 0, y: -1 }, // -PI/2
+        { x: -1, y: 0 }, // PI
       ];
       const sorted = sortPointsByAngle(origin, points);
 
       expect(sorted[0]).toEqual({ x: 0, y: -1 }); // -PI/2
-      expect(sorted[1]).toEqual({ x: 1, y: 0 });  // 0
-      expect(sorted[2]).toEqual({ x: 0, y: 1 });  // PI/2
+      expect(sorted[1]).toEqual({ x: 1, y: 0 }); // 0
+      expect(sorted[2]).toEqual({ x: 0, y: 1 }); // PI/2
       expect(sorted[3]).toEqual({ x: -1, y: 0 }); // PI
     });
   });
 
   describe('sortEndpointsByAngle', () => {
     it('should sort endpoints by angle', () => {
-      const endpoints: any[] = [
-        { angle: 1.5 },
-        { angle: -1.0 },
-        { angle: 0.5 },
-      ];
+      const endpoints: any[] = [{ angle: 1.5 }, { angle: -1.0 }, { angle: 0.5 }];
       const sorted = sortEndpointsByAngle(endpoints);
       expect(sorted[0].angle).toBe(-1.0);
       expect(sorted[1].angle).toBe(0.5);
@@ -220,13 +226,17 @@ describe('raycasting utils', () => {
       const origin = { x: 0, y: 0 };
       const wall: VisionBlocker = {
         id: 'w',
-        points: [{ x: 10, y: -10 }, { x: 10, y: 10 }],
-        blocksLight: true
+        points: [
+          { x: 10, y: -10 },
+          { x: 10, y: 10 },
+        ],
+        blocksLight: true,
+        blocksMovement: true,
       };
       const result = raycastCone(origin, 0, Math.PI / 2, 5, [wall]);
 
       expect(result.length).toBe(5);
-      result.forEach(hit => {
+      result.forEach((hit) => {
         expect(hit.point.x).toBeCloseTo(10);
         expect(hit.wallId).toBe('w');
       });
@@ -236,8 +246,12 @@ describe('raycasting utils', () => {
   describe('isInShadow', () => {
     const wall: VisionBlocker = {
       id: 'w',
-      points: [{ x: 50, y: 0 }, { x: 50, y: 100 }],
-      blocksLight: true
+      points: [
+        { x: 50, y: 0 },
+        { x: 50, y: 100 },
+      ],
+      blocksLight: true,
+      blocksMovement: true,
     };
 
     it('should return true if point is in shadow', () => {

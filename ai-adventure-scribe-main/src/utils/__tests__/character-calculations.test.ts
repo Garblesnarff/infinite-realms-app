@@ -18,7 +18,7 @@ import {
   calculateEncumbrance,
 } from '../character-calculations';
 
-import type { Character } from '@/types/character';
+import type { Character, CharacterClass } from '@/types/character';
 
 describe('character-calculations', () => {
   describe('calculateProficiencyBonus', () => {
@@ -291,7 +291,7 @@ describe('character-calculations', () => {
       it.each(['Ranger', 'Paladin'])('%s has no spellcasting at level 1', (name) => {
         const character = halfCaster(name, 1);
 
-        expect(getSpellcastingAbility(character.class, 1)).toBeNull();
+        expect(getSpellcastingAbility(character.class as CharacterClass | null, 1)).toBeNull();
         expect(calculateSpellSaveDC(character)).toBeUndefined();
         expect(calculateSpellAttackBonus(character)).toBeUndefined();
         expect(calculateSpellSlots(character)).toBeUndefined();
@@ -300,7 +300,7 @@ describe('character-calculations', () => {
       it('gives a level 2 Ranger two first-level slots, not the full-caster three', () => {
         const ranger = halfCaster('Ranger', 2);
 
-        expect(getSpellcastingAbility(ranger.class, 2)).toBe('wisdom');
+        expect(getSpellcastingAbility(ranger.class as CharacterClass | null, 2)).toBe('wisdom');
         expect(calculateSpellSaveDC(ranger)).toBe(12);
         expect(calculateSpellAttackBonus(ranger)).toBe(4);
         expect(calculateSpellSlots(ranger)).toEqual({ 1: 2 });

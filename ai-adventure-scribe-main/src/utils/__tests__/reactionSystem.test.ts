@@ -279,7 +279,7 @@ describe('reactionSystem', () => {
 
     it('should process uncanny_dodge correctly', () => {
       const opportunity = { participantId: 'p1', triggeredBy: 'p2' } as any;
-      const action = processReactionResponse(opportunity, 'uncanny_dodge', encounter);
+      const action = processReactionResponse(opportunity, 'uncanny_dodge' as any, encounter);
       expect(action.actionType).toBe('uncanny_dodge');
     });
 
@@ -389,7 +389,9 @@ describe('reactionSystem', () => {
       };
 
       const opportunities = checkReactionTriggers(action, encounter);
-      expect(opportunities.some((o) => o.availableReactions.includes('uncanny_dodge'))).toBe(true);
+      expect(opportunities.some((o) => o.availableReactions.includes('uncanny_dodge' as any))).toBe(
+        true,
+      );
     });
 
     it('should check for polearm master on move', () => {

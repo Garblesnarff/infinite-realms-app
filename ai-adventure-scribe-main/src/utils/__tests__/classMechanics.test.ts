@@ -133,18 +133,30 @@ describe('classMechanics', () => {
 
   describe('isIncapacitated', () => {
     it('should return true for stunned, paralyzed, unconscious, petrified', () => {
-      expect(isIncapacitated(createMockParticipant({ conditions: [{ name: 'stunned' }] }))).toBe(true);
-      expect(isIncapacitated(createMockParticipant({ conditions: [{ name: 'paralyzed' }] }))).toBe(true);
-      expect(isIncapacitated(createMockParticipant({ conditions: [{ name: 'unconscious' }] }))).toBe(true);
-      expect(isIncapacitated(createMockParticipant({ conditions: [{ name: 'petrified' }] }))).toBe(true);
+      expect(isIncapacitated(createMockParticipant({ conditions: [{ name: 'stunned' }] }))).toBe(
+        true,
+      );
+      expect(isIncapacitated(createMockParticipant({ conditions: [{ name: 'paralyzed' }] }))).toBe(
+        true,
+      );
+      expect(
+        isIncapacitated(createMockParticipant({ conditions: [{ name: 'unconscious' }] })),
+      ).toBe(true);
+      expect(isIncapacitated(createMockParticipant({ conditions: [{ name: 'petrified' }] }))).toBe(
+        true,
+      );
     });
 
     it('should return true for the explicit incapacitated condition (BUG DETECTION)', () => {
-      expect(isIncapacitated(createMockParticipant({ conditions: [{ name: 'incapacitated' }] }))).toBe(true);
+      expect(
+        isIncapacitated(createMockParticipant({ conditions: [{ name: 'incapacitated' }] })),
+      ).toBe(true);
     });
 
     it('should return false if no incapacitating conditions', () => {
-      expect(isIncapacitated(createMockParticipant({ conditions: [{ name: 'poisoned' }] }))).toBe(false);
+      expect(isIncapacitated(createMockParticipant({ conditions: [{ name: 'poisoned' }] }))).toBe(
+        false,
+      );
       expect(isIncapacitated(createMockParticipant({ conditions: [] }))).toBe(false);
     });
   });
@@ -240,13 +252,13 @@ describe('classMechanics', () => {
         });
         const resources = { rages: { current: 2, max: 2 } };
 
-        const result = activateRage(participant, resources);
+        const result = activateRage(participant, resources as any);
         expect(result.updatedParticipant.isRaging).toBe(true);
         expect(result.updatedParticipant.damageResistances).toContain('bludgeoning');
         expect(result.updatedParticipant.damageResistances).toContain('piercing');
         expect(result.updatedParticipant.damageResistances).toContain('slashing');
         expect(result.updatedParticipant.damageResistances).toContain('fire');
-        expect(result.updatedResources.rages.current).toBe(1);
+        expect(result.updatedResources.rages!.current).toBe(1);
       });
 
       it('should throw if already raging', () => {

@@ -77,7 +77,7 @@ describe('attackUtils', () => {
     damageVulnerabilities: [],
   };
 
-  const mockWeapon: Equipment = {
+  const mockWeapon = {
     id: 'longsword',
     name: 'Longsword',
     type: 'weapon',
@@ -86,7 +86,7 @@ describe('attackUtils', () => {
     rarity: 'common',
     damage: { dice: '1d8', type: 'slashing' },
     weaponProperties: { versatile: true },
-  };
+  } as unknown as Equipment;
 
   beforeEach(() => {
     vi.clearAllMocks();

@@ -17,38 +17,39 @@ import {
 
 import type { Character, Spell } from '@/types/character';
 
-
 describe('spellComponents', () => {
-  const mockCharacter = (overrides = {}): Character => ({
-    name: 'Test Wizard',
-    level: 1,
-    class: {
-      name: 'Wizard',
-      spellcasting: {
-        ability: 'intelligence',
+  const mockCharacter = (overrides = {}): Character =>
+    ({
+      name: 'Test Wizard',
+      level: 1,
+      class: {
+        name: 'Wizard',
+        spellcasting: {
+          ability: 'intelligence',
+        },
+      } as any,
+      abilityScores: {
+        intelligence: { modifier: 3 },
+        wisdom: { modifier: 1 },
+      } as any,
+      conditions: [],
+      preparedSpells: [],
+      spellSlots: {
+        1: { max: 2, current: 2 },
       },
-    } as any,
-    abilityScores: {
-      intelligence: { modifier: 3 },
-      wisdom: { modifier: 1 },
-    } as any,
-    conditions: [],
-    preparedSpells: [],
-    spellSlots: {
-      1: { max: 2, current: 2 },
-    },
-    ...overrides,
-  } as Character);
+      ...overrides,
+    }) as Character;
 
-  const mockSpell = (overrides = {}): Spell => ({
-    id: 'magic-missile',
-    name: 'Magic Missile',
-    level: 1,
-    verbal: true,
-    somatic: true,
-    material: false,
-    ...overrides,
-  } as Spell);
+  const mockSpell = (overrides = {}): Spell =>
+    ({
+      id: 'magic-missile',
+      name: 'Magic Missile',
+      level: 1,
+      verbal: true,
+      somatic: true,
+      material: false,
+      ...overrides,
+    }) as unknown as Spell;
 
   describe('hasRequiredComponents', () => {
     it('should return true when all components are met', () => {

@@ -25,10 +25,10 @@ describe('vision-polygon-generator', () => {
     it('should sort points clockwise from east (-PI to PI)', () => {
       const origin = { x: 0, y: 0 };
       const points = [
-        { x: 0, y: 10 },   // South (PI/2)
-        { x: 10, y: 0 },   // East (0)
-        { x: 0, y: -10 },  // North (-PI/2)
-        { x: -10, y: 0 },  // West (PI or -PI)
+        { x: 0, y: 10 }, // South (PI/2)
+        { x: 10, y: 0 }, // East (0)
+        { x: 0, y: -10 }, // North (-PI/2)
+        { x: -10, y: 0 }, // West (PI or -PI)
       ];
 
       const sorted = sortPointsByAngle(origin, points);
@@ -48,12 +48,7 @@ describe('vision-polygon-generator', () => {
 
   describe('sortEndpointsByAngle', () => {
     it('should sort endpoints by their angle property', () => {
-      const endpoints: any[] = [
-        { angle: 1.5 },
-        { angle: -0.5 },
-        { angle: 0 },
-        { angle: -1.5 },
-      ];
+      const endpoints: any[] = [{ angle: 1.5 }, { angle: -0.5 }, { angle: 0 }, { angle: -1.5 }];
 
       const sorted = sortEndpointsByAngle(endpoints);
 
@@ -106,8 +101,7 @@ describe('vision-polygon-generator', () => {
       expect(result[0].angle).toBeCloseTo(-Math.PI);
       // Verify points are at maxRange
       const dist = Math.sqrt(
-        Math.pow(result[0].point.x - origin.x, 2) +
-        Math.pow(result[0].point.y - origin.y, 2)
+        Math.pow(result[0].point.x - origin.x, 2) + Math.pow(result[0].point.y - origin.y, 2),
       );
       expect(dist).toBeCloseTo(maxRange);
     });
@@ -116,7 +110,10 @@ describe('vision-polygon-generator', () => {
       const walls: VisionBlocker[] = [
         {
           id: 'wall-1',
-          points: [{ x: 200, y: 200 }, { x: 200, y: 100 }],
+          points: [
+            { x: 200, y: 200 },
+            { x: 200, y: 100 },
+          ],
           blocksLight: true,
         } as any,
       ];
@@ -126,6 +123,7 @@ describe('vision-polygon-generator', () => {
           point: { x: orig.x + dir.x * 100, y: orig.y + dir.y * 100 },
           distance: 100,
           wallId: 'wall-1',
+          segmentIndex: 0,
         };
       });
 
@@ -172,36 +170,36 @@ describe('vision-polygon-generator', () => {
       expect(result[0].isWallVertex).toBe(false);
 
       const dist = Math.sqrt(
-        Math.pow(result[0].point.x - origin.x, 2) +
-        Math.pow(result[0].point.y - origin.y, 2)
+        Math.pow(result[0].point.x - origin.x, 2) + Math.pow(result[0].point.y - origin.y, 2),
       );
       expect(dist).toBeCloseTo(maxRange);
     });
 
     it('should avoid duplicate angles', () => {
-        const walls: VisionBlocker[] = [
-          {
-            id: 'wall-1',
-            points: [{ x: 200, y: 200 }],
-            blocksLight: true,
-          } as any,
-          {
-            id: 'wall-2',
-            points: [{ x: 200, y: 200 }], // Same point
-            blocksLight: true,
-          } as any,
-        ];
+      const walls: VisionBlocker[] = [
+        {
+          id: 'wall-1',
+          points: [{ x: 200, y: 200 }],
+          blocksLight: true,
+        } as any,
+        {
+          id: 'wall-2',
+          points: [{ x: 200, y: 200 }], // Same point
+          blocksLight: true,
+        } as any,
+      ];
 
-        vi.mocked(raycastToWalls).mockReturnValue({
-          point: { x: 200, y: 200 },
-          distance: 141.4,
-          wallId: 'wall-1',
-        });
-
-        const result = getAllRayIntersections(origin, walls, maxRange);
-
-        // Should still be 3 rays because angles are identical
-        expect(result).toHaveLength(3);
+      vi.mocked(raycastToWalls).mockReturnValue({
+        point: { x: 200, y: 200 },
+        distance: 141.4,
+        wallId: 'wall-1',
+        segmentIndex: 0,
       });
+
+      const result = getAllRayIntersections(origin, walls, maxRange);
+
+      // Should still be 3 rays because angles are identical
+      expect(result).toHaveLength(3);
+    });
   });
 });

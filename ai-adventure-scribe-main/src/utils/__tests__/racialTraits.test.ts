@@ -56,15 +56,30 @@ describe('racialTraits', () => {
 
     it('should ignore active traits for resistances', () => {
       const traits: RacialTrait[] = [
-        { name: 'active_res', type: 'active', description: '', damageType: 'cold' },
+        {
+          name: 'active_res' as unknown as RacialTrait['name'],
+          type: 'active',
+          description: '',
+          damageType: 'cold',
+        },
       ];
       expect(getRacialResistances(traits)).toEqual([]);
     });
 
     it('should return multiple resistances', () => {
       const traits: RacialTrait[] = [
-        { name: 'res1', type: 'passive', description: '', damageType: 'fire' },
-        { name: 'res2', type: 'passive', description: '', damageType: 'poison' },
+        {
+          name: 'res1' as unknown as RacialTrait['name'],
+          type: 'passive',
+          description: '',
+          damageType: 'fire',
+        },
+        {
+          name: 'res2' as unknown as RacialTrait['name'],
+          type: 'passive',
+          description: '',
+          damageType: 'poison',
+        },
       ];
       expect(getRacialResistances(traits)).toEqual(['fire', 'poison']);
     });
@@ -142,7 +157,11 @@ describe('racialTraits', () => {
       });
 
       it('should return true if no maxUses is defined', () => {
-        const noMax: RacialTrait = { name: 'feature', type: 'active', description: '' };
+        const noMax: RacialTrait = {
+          name: 'feature' as unknown as RacialTrait['name'],
+          type: 'active',
+          description: '',
+        };
         expect(canUseRacialTrait(noMax)).toBe(true);
       });
 
@@ -183,7 +202,7 @@ describe('racialTraits', () => {
     describe('restoreRacialTraits', () => {
       const traits: RacialTrait[] = [
         {
-          name: 'short_trait',
+          name: 'short_trait' as unknown as RacialTrait['name'],
           type: 'active',
           description: '',
           usesPerRest: 'short',
@@ -191,7 +210,7 @@ describe('racialTraits', () => {
           currentUses: 0,
         },
         {
-          name: 'long_trait',
+          name: 'long_trait' as unknown as RacialTrait['name'],
           type: 'active',
           description: '',
           usesPerRest: 'long',
@@ -199,7 +218,7 @@ describe('racialTraits', () => {
           currentUses: 0,
         },
         {
-          name: 'none_trait',
+          name: 'none_trait' as unknown as RacialTrait['name'],
           type: 'active',
           description: '',
           usesPerRest: 'none',
@@ -210,24 +229,30 @@ describe('racialTraits', () => {
 
       it('should restore short rest traits on short rest', () => {
         const restored = restoreRacialTraits(traits, 'short');
-        expect(restored.find((t) => t.name === 'short_trait')?.currentUses).toBe(1);
-        expect(restored.find((t) => t.name === 'long_trait')?.currentUses).toBe(0);
+        expect(restored.find((t) => (t.name as string) === 'short_trait')?.currentUses).toBe(1);
+        expect(restored.find((t) => (t.name as string) === 'long_trait')?.currentUses).toBe(0);
       });
 
       it('should restore both short and long rest traits on long rest', () => {
         const restored = restoreRacialTraits(traits, 'long');
-        expect(restored.find((t) => t.name === 'short_trait')?.currentUses).toBe(1);
-        expect(restored.find((t) => t.name === 'long_trait')?.currentUses).toBe(1);
+        expect(restored.find((t) => (t.name as string) === 'short_trait')?.currentUses).toBe(1);
+        expect(restored.find((t) => (t.name as string) === 'long_trait')?.currentUses).toBe(1);
       });
 
       it('should not restore traits with usesPerRest: none', () => {
         const restored = restoreRacialTraits(traits, 'long');
-        expect(restored.find((t) => t.name === 'none_trait')?.currentUses).toBe(0);
+        expect(restored.find((t) => (t.name as string) === 'none_trait')?.currentUses).toBe(0);
       });
 
       it('should handle restore for trait without maxUses', () => {
         const noMaxTraits: RacialTrait[] = [
-          { name: 'no_max', type: 'active', description: '', usesPerRest: 'short', currentUses: 0 },
+          {
+            name: 'no_max' as unknown as RacialTrait['name'],
+            type: 'active',
+            description: '',
+            usesPerRest: 'short',
+            currentUses: 0,
+          },
         ];
         const restored = restoreRacialTraits(noMaxTraits, 'short');
         expect(restored[0].currentUses).toBe(0);

@@ -44,7 +44,7 @@ describe('downtimeActivities', () => {
       charisma: { score: 10, modifier: 0 },
       strength: { score: 12, modifier: 1 },
     } as any,
-  };
+  } as Partial<Character>;
 
   const mockActivity: DowntimeActivity = {
     id: 'test-activity',

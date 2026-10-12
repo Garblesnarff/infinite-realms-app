@@ -6,7 +6,7 @@ import { CONDITION_EFFECTS } from '../condition-definitions';
 import type { CombatParticipant, Condition } from '@/types/combat';
 
 describe('CONDITION_EFFECTS', () => {
-  const mockParticipant: CombatParticipant = {
+  const mockParticipant = {
     id: 'p1',
     name: 'Test Participant',
     participantType: 'monster',
@@ -19,7 +19,7 @@ describe('CONDITION_EFFECTS', () => {
     actionTaken: false,
     bonusActionTaken: false,
     reactionTaken: false,
-  };
+  } as unknown as CombatParticipant;
 
   describe('blinded', () => {
     const blinded = CONDITION_EFFECTS.blinded;
@@ -54,7 +54,10 @@ describe('CONDITION_EFFECTS', () => {
     });
 
     it('does not auto-fail attacks against non-players', () => {
-      const target: CombatParticipant = { ...mockParticipant, participantType: 'monster' };
+      const target: CombatParticipant = {
+        ...mockParticipant,
+        participantType: 'monster' as unknown as CombatParticipant['participantType'],
+      };
       const modifiers = charmed.getModifiers(mockParticipant, 'attack', target);
       expect(modifiers.autoFail).toBe(false);
     });
@@ -100,7 +103,7 @@ describe('CONDITION_EFFECTS', () => {
     });
 
     it('onApply sets movementUsed to speed', () => {
-      const condition: Condition = { name: 'grappled', duration: -1 };
+      const condition: Condition = { name: 'grappled', description: '', duration: -1 };
       const updated = grappled.onApply!(mockParticipant, condition);
       expect(updated.movementUsed).toBe(mockParticipant.speed);
       expect(updated.conditions).toContain(condition);
@@ -116,7 +119,9 @@ describe('CONDITION_EFFECTS', () => {
     });
 
     it('returns incapacitated description', () => {
-      expect(incapacitated.getModifiers(mockParticipant, 'action').description).toContain('Incapacitated');
+      expect(incapacitated.getModifiers(mockParticipant, 'action').description).toContain(
+        'Incapacitated',
+      );
     });
   });
 
@@ -216,7 +221,7 @@ describe('CONDITION_EFFECTS', () => {
     });
 
     it('onApply sets movementUsed to speed', () => {
-      const condition: Condition = { name: 'restrained', duration: -1 };
+      const condition: Condition = { name: 'restrained', description: '', duration: -1 };
       const updated = restrained.onApply!(mockParticipant, condition);
       expect(updated.movementUsed).toBe(mockParticipant.speed);
     });
@@ -256,7 +261,7 @@ describe('CONDITION_EFFECTS', () => {
     it('level 1 gives disadvantage on ability checks', () => {
       const participant: CombatParticipant = {
         ...mockParticipant,
-        conditions: [{ name: 'exhaustion', level: 1, duration: -1 }],
+        conditions: [{ name: 'exhaustion', level: 1, description: '', duration: -1 }],
       };
       const modifiers = exhaustion.getModifiers(participant, 'ability_check');
       expect(modifiers.disadvantage).toBe(true);
@@ -265,7 +270,7 @@ describe('CONDITION_EFFECTS', () => {
     it('level 2 gives disadvantage on ability checks but not attacks', () => {
       const participant: CombatParticipant = {
         ...mockParticipant,
-        conditions: [{ name: 'exhaustion', level: 2, duration: -1 }],
+        conditions: [{ name: 'exhaustion', level: 2, description: '', duration: -1 }],
       };
       expect(exhaustion.getModifiers(participant, 'ability_check').disadvantage).toBe(true);
       expect(exhaustion.getModifiers(participant, 'attack').disadvantage).toBe(false);
@@ -274,7 +279,7 @@ describe('CONDITION_EFFECTS', () => {
     it('level 3 gives disadvantage on attacks and saves', () => {
       const participant: CombatParticipant = {
         ...mockParticipant,
-        conditions: [{ name: 'exhaustion', level: 3, duration: -1 }],
+        conditions: [{ name: 'exhaustion', level: 3, description: '', duration: -1 }],
       };
       expect(exhaustion.getModifiers(participant, 'attack').disadvantage).toBe(true);
       expect(exhaustion.getModifiers(participant, 'save').disadvantage).toBe(true);
@@ -283,7 +288,7 @@ describe('CONDITION_EFFECTS', () => {
     it('returns empty modifiers when exhaustion level is 0', () => {
       const participant: CombatParticipant = {
         ...mockParticipant,
-        conditions: [{ name: 'exhaustion', level: 0, duration: -1 }],
+        conditions: [{ name: 'exhaustion', level: 0, description: '', duration: -1 }],
       };
       const modifiers = exhaustion.getModifiers(participant, 'attack');
       expect(modifiers.disadvantage).toBe(false);
