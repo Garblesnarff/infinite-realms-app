@@ -9,7 +9,7 @@ vi.mock('../../geometry', () => ({
     // and the ray is horizontal-ish
     if (p3.x === 150 && p4.x === 150 && p3.y === 50 && p4.y === 150) {
       if ((p1.x < 150 && p2.x > 150) || (p1.x > 150 && p2.x < 150)) {
-         return true;
+        return true;
       }
     }
     return false;
@@ -46,7 +46,10 @@ describe('lighting mechanics', () => {
 
   describe('calculateShadows', () => {
     it('returns empty array if light source does not emit light', () => {
-      const nonEmittingSource = { ...mockLightSource, light: { ...mockLightSource.light, emitsLight: false } };
+      const nonEmittingSource = {
+        ...mockLightSource,
+        light: { ...mockLightSource.light, emitsLight: false },
+      };
       const result = calculateShadows(nonEmittingSource, mockWalls);
       expect(result).toEqual([]);
     });
@@ -87,18 +90,28 @@ describe('lighting mechanics', () => {
 
     it('should cast shadows regardless of wall winding order', () => {
       // Light at 100, 100. Wall at 150, 50 -> 150, 150 (Normal points left)
-      const wall1 = [{
-        id: 'wall-1',
-        points: [{ x: 150, y: 50 }, { x: 150, y: 150 }],
-        blocksLight: true,
-      }];
+      const wall1 = [
+        {
+          id: 'wall-1',
+          points: [
+            { x: 150, y: 50 },
+            { x: 150, y: 150 },
+          ],
+          blocksLight: true,
+        },
+      ];
 
       // Light at 100, 100. Wall at 150, 150 -> 150, 50 (Normal points right)
-      const wall2 = [{
-        id: 'wall-2',
-        points: [{ x: 150, y: 150 }, { x: 150, y: 50 }],
-        blocksLight: true,
-      }];
+      const wall2 = [
+        {
+          id: 'wall-2',
+          points: [
+            { x: 150, y: 150 },
+            { x: 150, y: 50 },
+          ],
+          blocksLight: true,
+        },
+      ];
 
       const result1 = calculateShadows(mockLightSource, wall1);
       const result2 = calculateShadows(mockLightSource, wall2);
@@ -124,11 +137,16 @@ describe('lighting mechanics', () => {
     const bounds = { minX: 0, minY: 0, maxX: 200, maxY: 200 };
 
     it('skips walls that do not block light', () => {
-      const nonBlockingWall = [{
-        id: 'wall-1',
-        points: [{ x: 150, y: 50 }, { x: 150, y: 150 }],
-        blocksLight: false,
-      }];
+      const nonBlockingWall = [
+        {
+          id: 'wall-1',
+          points: [
+            { x: 150, y: 50 },
+            { x: 150, y: 150 },
+          ],
+          blocksLight: false,
+        },
+      ];
       const gridSize = 200;
       const result = calculateAmbientOcclusion(bounds, nonBlockingWall, gridSize, 200);
       expect(result[0][0]).toBe(1);
@@ -175,9 +193,11 @@ describe('lighting mechanics', () => {
 
       // We need to re-mock lineSegmentsIntersect to handle this specific polygon
       const { lineSegmentsIntersect } = await import('../../geometry');
-      (lineSegmentsIntersect as any).mockImplementation((_p1: any, _p2: any, _p3: any, _p4: any) => {
+      (lineSegmentsIntersect as any).mockImplementation(
+        (_p1: any, _p2: any, _p3: any, _p4: any) => {
           return false;
-      });
+        },
+      );
 
       calculateAmbientOcclusion(smallBounds, polygonWall, 1, 100);
 
