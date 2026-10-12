@@ -65,7 +65,8 @@ export type VisionWorkerResponse =
   | {
       type: 'MULTI_VISION_RESULT';
       payload: {
-        polygons: Map<string, VisionPolygon>;
+        /** Plain object: postMessage callers build it from a Map (#457). */
+        polygons: Record<string, VisionPolygon>;
       };
       requestId: string;
     }
@@ -287,13 +288,14 @@ function handleCalculateMultiVision(
     polygonsObj[key] = value;
   }
 
-  self.postMessage({
+  const response: VisionWorkerResponse = {
     type: 'MULTI_VISION_RESULT',
     payload: {
       polygons: polygonsObj,
     },
     requestId: message.requestId,
-  } as unknown as VisionWorkerResponse); // Cast needed due to Map serialization
+  };
+  self.postMessage(response);
 }
 
 /**
