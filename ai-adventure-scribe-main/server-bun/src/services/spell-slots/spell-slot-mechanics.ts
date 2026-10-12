@@ -118,15 +118,45 @@ function normalizeClassName(raw: string | null | undefined): ClassName | null {
   return match ?? null;
 }
 
+/**
+ * Normalize raw classLevels JSONB into validated entries. Shared by
+ * seedRowsForCharacter and isPactSlotCharacter so both agree on what counts
+ * as multiclass.
+ */
+function parseClassLevels(
+  classLevels: unknown,
+): Array<{ className: ClassName; level: number }> {
+  if (!Array.isArray(classLevels)) return [];
+  return classLevels
+    .map((entry) => {
+      const raw = entry as { className?: unknown; level?: unknown };
+      const name =
+        typeof raw.className === 'string' ? normalizeClassName(raw.className) : null;
+      const entryLevel = typeof raw.level === 'number' && raw.level > 0 ? raw.level : 0;
+      return name && entryLevel > 0 ? { className: name, level: entryLevel } : null;
+    })
+    .filter((entry): entry is { className: ClassName; level: number } => entry !== null);
+}
+
 export class SpellSlotMechanics {
   /**
    * #270: rows to seed `character_spell_slots` for a character, from the single
    * slot source (the 2014 5e tables above). Used at creation and at level-up.
    *
-   * Non-casters, pact casters (warlock — pact magic is a separate pool the
-   * slot rows do not track, #217) and unrecognized class names yield no rows;
-   * multiclass characters use the PHB combined progression, the same rule
+   * Non-casters and unrecognized class names yield no rows; multiclass
+   * characters use the PHB combined progression, the same rule
    * `ensureSpellSlotRow` applies on a first cast.
+   *
+   * #397: single-class warlocks seed pact-magic rows — one row at the pact
+   * slot level holding the pact slot count (2014 PHB pg. 107). The
+   * `character_spell_slots` table has no kind column, so the design records
+   * the pact pool as ordinary rows at the pact slot level; that is
+   * unambiguous because only single-class warlocks seed pact rows.
+   * Multiclass warlocks seed no pact rows: a pact level can collide with a
+   * regular row at the same spell level under the table's
+   * (character_id, spell_level) unique constraint
+   * (`calculateMulticlassSpellSlots` still reports their pact pool separately
+   * in `warlockSlots` for other consumers).
    */
   static seedRowsForCharacter(
     className: string | null | undefined,
@@ -137,17 +167,7 @@ export class SpellSlotMechanics {
       return [];
     }
 
-    const parsedLevels = Array.isArray(classLevels)
-      ? classLevels
-          .map((entry) => {
-            const raw = entry as { className?: unknown; level?: unknown };
-            const name =
-              typeof raw.className === 'string' ? normalizeClassName(raw.className) : null;
-            const entryLevel = typeof raw.level === 'number' && raw.level > 0 ? raw.level : 0;
-            return name && entryLevel > 0 ? { className: name, level: entryLevel } : null;
-          })
-          .filter((entry): entry is { className: ClassName; level: number } => entry !== null)
-      : [];
+    const parsedLevels = parseClassLevels(classLevels);
 
     const slots: Record<number, number> =
       parsedLevels.length > 1
@@ -155,6 +175,10 @@ export class SpellSlotMechanics {
         : (() => {
             const name = normalizeClassName(className);
             if (!name) return {};
+            if (name === 'Warlock') {
+              const pact = WARLOCK_PACT_MAGIC[level];
+              return pact ? { [pact.level]: pact.slots } : {};
+            }
             return SpellSlotMechanics.calculateSpellSlots(name, level).slots;
           })();
 
@@ -169,6 +193,20 @@ export class SpellSlotMechanics {
           totalSlots > 0,
       )
       .sort((a, b) => a.spellLevel - b.spellLevel);
+  }
+
+  /**
+   * #397: whether the character's seeded slot rows are pact-magic rows. True
+   * only for single-class warlocks — the only characters seedRowsForCharacter
+   * grants pact rows to. Short rests restore pact rows (2014 PHB pg. 107:
+   * pact slots recover on a short or long rest); long rests restore every row.
+   */
+  static isPactSlotCharacter(
+    className: string | null | undefined,
+    classLevels: unknown,
+  ): boolean {
+    if (parseClassLevels(classLevels).length > 1) return false;
+    return normalizeClassName(className) === 'Warlock';
   }
 
   /**

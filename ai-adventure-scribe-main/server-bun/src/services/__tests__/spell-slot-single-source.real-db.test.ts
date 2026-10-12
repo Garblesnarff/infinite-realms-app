@@ -54,6 +54,9 @@ const LevelUpService = hasRealDb
 const ProgressionService = hasRealDb
   ? (await import('../progression-service.js')).ProgressionService
   : undefined;
+const RestService = hasRealDb
+  ? (await import('../rest-service.js')).RestService
+  : undefined;
 // The route module's import graph reaches services/workos.ts, which constructs
 // its client at import time. This suite never calls WorkOS; the dummies only
 // satisfy that import, the same way spell-slot-backfill.real-db.test.ts does.
@@ -368,9 +371,53 @@ describeWithDb('creation seeds slot rows from the single slot source (#270)', ()
     expect(await totals(id)).toEqual([]);
   });
 
-  it('a warlock gets no rows: pact magic is a separate pool the rows do not track', async () => {
-    const id = await createViaRoute(testId('wlk'), 'Warlock', 1);
-    expect(await totals(id)).toEqual([]);
+  it('L1 warlock gets 1 pact slot at level 1 (#397)', async () => {
+    const id = await createViaRoute(testId('wlk1'), 'Warlock', 1);
+    expect(await totals(id)).toEqual([[1, 1, 0]]);
+  });
+
+  it('L3 warlock gets 2 pact slots at level 2 (#397)', async () => {
+    const id = await createViaRoute(testId('wlk3'), 'Warlock', 3);
+    expect(await totals(id)).toEqual([[2, 2, 0]]);
+  });
+
+  it('L5 warlock gets 2 pact slots at level 3 (#397)', async () => {
+    const id = await createViaRoute(testId('wlk5'), 'Warlock', 5);
+    expect(await totals(id)).toEqual([[3, 2, 0]]);
+  });
+
+  it('L11 warlock gets 3 pact slots at level 5 (#397)', async () => {
+    const id = await createViaRoute(testId('wlk11'), 'Warlock', 11);
+    expect(await totals(id)).toEqual([[5, 3, 0]]);
+  });
+
+  it('a short rest restores a warlock\u2019s spent pact slot (#397)', async () => {
+    const id = await createViaRoute(testId('wlkSr'), 'Warlock', 1);
+    const spent = await SpellSlotsService!.useSpellSlot(
+      { characterId: id, spellName: 'Hex', spellLevel: 1, slotLevelUsed: 1 },
+      creationUserId,
+    );
+    expect(spent.success).toBe(true);
+    expect(await totals(id)).toEqual([[1, 1, 1]]);
+
+    await RestService!.takeShortRest(id, creationUserId);
+    expect(await totals(id)).toEqual([[1, 1, 0]]);
+  });
+
+  it('level-up re-syncs a warlock\u2019s pact rows and prunes the old slot level (#397)', async () => {
+    const id = await createViaRoute(testId('wlkLvl'), 'Warlock', 1);
+    expect(await totals(id)).toEqual([[1, 1, 0]]);
+
+    await ProgressionService!.initializeProgression(id, creationUserId);
+    const first = await LevelUpService!.levelUp({ characterId: id }, creationUserId);
+    expect(first.newLevel).toBe(2);
+    // Warlock 2: 2 pact slots, still at slot level 1.
+    expect(await totals(id)).toEqual([[1, 2, 0]]);
+
+    const second = await LevelUpService!.levelUp({ characterId: id }, creationUserId);
+    expect(second.newLevel).toBe(3);
+    // Warlock 3: 2 pact slots at slot level 2; the level-1 row is pruned.
+    expect(await totals(id)).toEqual([[2, 2, 0]]);
   });
 
   it('level-up re-syncs totals from the table and keeps spent slots', async () => {

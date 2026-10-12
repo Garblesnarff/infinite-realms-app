@@ -167,10 +167,11 @@ export class CharacterService {
       if (!character) throw new InternalServerError('Failed to create character');
 
       // #270: seed the engine's spell-slot table from the single slot source
-      // (the 2014 5e tables) at creation, in the same transaction. Non-casters,
-      // warlocks (pact magic is a separate pool the rows do not track) and
-      // unrecognized classes correctly get no rows. The client-sent JSONB copy
-      // is left exactly as sent; the rows are the engine's source of truth.
+      // (the 2014 5e tables) at creation, in the same transaction. Non-casters
+      // and unrecognized classes correctly get no rows; single-class warlocks
+      // seed pact-magic rows at the pact slot level (#397). The client-sent
+      // JSONB copy is left exactly as sent; the rows are the engine's source
+      // of truth.
       const slotRows = SpellSlotMechanics.seedRowsForCharacter(
         data.class ?? null,
         character.level ?? 1,

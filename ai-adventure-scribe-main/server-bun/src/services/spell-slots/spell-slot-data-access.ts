@@ -257,8 +257,8 @@ export class SpellSlotDataAccess {
    * already-spent slots survive (a level-up is not a rest), clamped to the new
    * total so a de-levelled character can never hold more used than granted.
    * Slot levels the new level no longer grants are pruned. Characters with no
-   * slots at the new level (non-casters, warlocks, level-1 half-casters) keep
-   * no rows.
+   * slots at the new level (non-casters, level-1 half-casters) keep no rows;
+   * single-class warlocks re-sync their pact-magic rows (#397).
    */
   static async syncSpellSlotTotals(characterId: string, userId: string): Promise<void> {
     const [character] = await db

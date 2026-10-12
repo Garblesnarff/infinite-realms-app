@@ -15,6 +15,7 @@ import { ClassFeaturesService } from './class-features-service.js';
 import { CombatHPService } from './combat-hp-service.js';
 import { ExhaustionService } from './exhaustion-service.js';
 import { RestHitDiceService } from './rest/rest-hit-dice-service.js';
+import { SpellSlotMechanics } from './spell-slots/spell-slot-mechanics.js';
 import { db } from '../../../db/client';
 import {
   characterConditions,
@@ -320,6 +321,13 @@ export class RestService {
         updatedAt: new Date(),
       })
       .where(eq(characters.id, characterId));
+    // #397: a single-class warlock's engine-table rows are pact slots, which
+    // recover on a short rest (2014 PHB pg. 107). The legacy
+    // characters.pactSlots JSONB restore above is unchanged; the engine rows
+    // are restored here.
+    if (SpellSlotMechanics.isPactSlotCharacter(character.class, character.classLevels)) {
+      await SpellSlotsService.restoreSpellSlots({ characterId }, userId);
+    }
     await ClassFeaturesService.restoreFeatures({ characterId, restType: 'short', userId });
 
     // Create rest event.
@@ -358,7 +366,8 @@ export class RestService {
       resourcesRestored,
       // The engine's slot table is the single source of truth (#2598): the
       // result serves the table's rows, never the legacy JSONB. A short rest
-      // does not restore slots, so the table is read as-is.
+      // restores only pact rows (single-class warlocks, #397); other rows are
+      // read as-is.
       spellSlots: toRestSpellSlots(
         (await SpellSlotsService.getCharacterSpellSlots(characterId, userId)).slots,
       ),
