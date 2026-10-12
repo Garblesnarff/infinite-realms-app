@@ -274,6 +274,8 @@ export interface Character {
   savingThrowProficiencies?: (keyof AbilityScores)[];
   languages?: string[];
   remainingAbilityPoints?: number;
+  /** UI-only method used to validate the selected ability-score rules. */
+  abilityScoreMethod?: 'pointBuy' | 'standardArray' | 'roll';
   // Spellcasting
   cantrips?: string[];
   knownSpells?: string[];

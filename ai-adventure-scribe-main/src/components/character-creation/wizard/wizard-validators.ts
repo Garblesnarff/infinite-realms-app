@@ -5,10 +5,17 @@
  * monolithic validateCurrentStep() switch statement in WizardContent.tsx.
  */
 
+import { getCharacterNameError } from './validation-rules';
 import { validateSpells, validateAdvancedSpellcasting } from './wizard-spell-validators';
 
 import type { Character } from '@/types/character';
 
+import {
+  calculatePointBuyPoints,
+  POINT_BUY_MAX,
+  POINT_BUY_MIN,
+  POINT_BUY_TOTAL,
+} from '@/hooks/ability-score/use-point-buy-logic';
 import { getSpellcastingInfo, getRacialSpells } from '@/utils/spell-validation';
 
 export interface ValidationResult {
@@ -25,8 +32,9 @@ function invalid(message: string): ValidationResult {
 // ---------- Individual step validators ----------
 
 function validateBasicInfo(character: Character): ValidationResult {
-  if (!character.name?.trim()) {
-    return invalid('Please enter a character name before proceeding');
+  const nameError = getCharacterNameError(character.name || '');
+  if (nameError) {
+    return invalid('Name: ' + nameError);
   }
   return VALID;
 }
@@ -85,6 +93,28 @@ function validateAbilityScores(character: Character): ValidationResult {
   if (!hasAllScores) {
     return invalid('Please complete your ability score selection');
   }
+
+  // Drafts saved before abilityScoreMethod existed have no method. Do not
+  // treat that absence as point buy: a stored 16 or a total over 27 is a roll
+  // and must still save. Only an explicit point-buy choice is budget-checked.
+  // A missing method whose scores already fit 8–15 and 27 points passes either way.
+  if (character.abilityScoreMethod === 'pointBuy') {
+    const hasOutOfRangeScore = abilities.some((ability) => {
+      const score = character.abilityScores?.[ability]?.score ?? POINT_BUY_MIN;
+      return score < POINT_BUY_MIN || score > POINT_BUY_MAX;
+    });
+    if (hasOutOfRangeScore) {
+      return invalid('Ability Scores: Point Buy scores must be between 8 and 15');
+    }
+
+    const pointsUsed = calculatePointBuyPoints(character);
+    if (pointsUsed > POINT_BUY_TOTAL) {
+      return invalid(
+        `Ability Scores: Point Buy allows ${POINT_BUY_TOTAL} points maximum; you have used ${pointsUsed}.`,
+      );
+    }
+  }
+
   return VALID;
 }
 
@@ -142,12 +172,15 @@ export function validateCharacterForSave(character: Character): boolean {
     languages,
     name,
   } = character;
+  const nameError = getCharacterNameError(name || '');
+  const abilityScoresValidation = validateAbilityScores(character);
 
   const hasBasicFields = !!(
-    name?.trim() &&
+    !nameError &&
     race &&
     characterClass &&
     abilityScores &&
+    abilityScoresValidation.isValid &&
     background &&
     skillProficiencies !== undefined &&
     languages !== undefined

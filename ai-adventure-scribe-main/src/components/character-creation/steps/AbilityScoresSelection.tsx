@@ -6,7 +6,6 @@ import RollDetails from './ability-scores/RollDetails';
 import SummaryCard from './ability-scores/SummaryCard';
 import ValidationAlerts from './ability-scores/ValidationAlerts';
 
-import type { AbilityScores } from '@/types/character';
 import type { AbilityScoreName } from '@/utils/racialAbilityBonuses';
 
 import { Badge } from '@/components/ui/badge';
@@ -46,10 +45,28 @@ const AbilityScoresSelection: React.FC = () => {
     racialBonuses,
     getFinalScore,
     pointsUsed,
+    pointBuyScoreRangeValid,
     pointBuyValid,
     standardArrayValid,
     totalModifier,
   } = useAbilityScoreSelection();
+
+  const hitPoints = React.useMemo(() => {
+    const hitDie = state.character?.class?.hitDie;
+    if (!hitDie) return null;
+
+    const raceTraits = [
+      ...(state.character?.race?.traits || []),
+      ...(state.character?.subrace?.traits || []),
+    ];
+    const toughnessBonus = raceTraits.includes('Dwarven Toughness') ? 1 : 0;
+    return hitDie + calculateModifier(getFinalScore('constitution')) + toughnessBonus;
+  }, [
+    getFinalScore,
+    state.character?.class?.hitDie,
+    state.character?.race?.traits,
+    state.character?.subrace?.traits,
+  ]);
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -207,6 +224,7 @@ const AbilityScoresSelection: React.FC = () => {
 
         <ValidationAlerts
           pointBuyValid={pointBuyValid}
+          pointBuyScoreRangeValid={pointBuyScoreRangeValid}
           pointsUsed={pointsUsed}
           standardArrayValid={standardArrayValid}
           racialBonuses={racialBonuses}
@@ -220,7 +238,9 @@ const AbilityScoresSelection: React.FC = () => {
             const finalScore = getFinalScore(ability);
             const modifier = calculateModifier(finalScore);
             const nextCost =
-              method === 'pointBuy' ? POINT_COST[baseScore + 1] - POINT_COST[baseScore] : 0;
+              method === 'pointBuy' && baseScore < 15
+                ? (POINT_COST[baseScore + 1] ?? 0) - (POINT_COST[baseScore] ?? 0)
+                : 0;
 
             return (
               <AbilityScoreCard
@@ -245,7 +265,8 @@ const AbilityScoresSelection: React.FC = () => {
           method={method}
           totalModifier={totalModifier}
           remainingPoints={remainingPoints}
-          abilityScores={state.character?.abilityScores || ({} as AbilityScores)}
+          getFinalScore={getFinalScore}
+          hitPoints={hitPoints}
         />
       </div>
     </TooltipProvider>
