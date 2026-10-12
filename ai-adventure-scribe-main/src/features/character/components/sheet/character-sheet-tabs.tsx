@@ -8,7 +8,7 @@ import {
   TrendingUp,
   Image as ImageIcon,
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { forwardRef, useLayoutEffect, useRef, useState } from 'react';
 
 import { CharacterSheetHeader } from './CharacterSheetHeader';
 // Tab Components
@@ -31,6 +31,46 @@ interface CharacterSheetTabsProps {
   // #2701: the sheet save path — persists the edit, then refreshes silently.
   onCharacterUpdate: CharacterSheetUpdateFn;
 }
+
+const FOCUSABLE_DESCENDANT =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+type SheetTabsContentProps = React.ComponentPropsWithoutRef<typeof TabsContent>;
+
+/**
+ * WAI-ARIA APG: tabpanel keeps tabindex=0 when it has no focusable content so
+ * keyboard users can still reach empty panels (e.g. Spells for a non-caster).
+ * Set tabindex=-1 only when a focusable descendant already provides a stop.
+ */
+const SheetTabsContent = forwardRef<React.ElementRef<typeof TabsContent>, SheetTabsContentProps>(
+  ({ children, ...props }, forwardedRef) => {
+    const localRef = useRef<HTMLDivElement | null>(null);
+    const [tabIndex, setTabIndex] = useState(0);
+
+    useLayoutEffect(() => {
+      const panel = localRef.current;
+      if (!panel) return;
+      const hasFocusable = panel.querySelector(FOCUSABLE_DESCENDANT) != null;
+      setTabIndex(hasFocusable ? -1 : 0);
+    }, [children]);
+
+    const setRefs = (node: HTMLDivElement | null) => {
+      localRef.current = node;
+      if (typeof forwardedRef === 'function') {
+        forwardedRef(node);
+      } else if (forwardedRef) {
+        forwardedRef.current = node;
+      }
+    };
+
+    return (
+      <TabsContent ref={setRefs} tabIndex={tabIndex} {...props}>
+        {children}
+      </TabsContent>
+    );
+  },
+);
+SheetTabsContent.displayName = 'SheetTabsContent';
 
 /**
  * Tabbed character sheet layout inspired by Roll20
@@ -128,7 +168,7 @@ const CharacterSheetTabs: React.FC<CharacterSheetTabsProps> = ({
         </TabsList>
 
         <div className="mt-4">
-          <TabsContent value="main" tabIndex={-1} className="space-y-4">
+          <SheetTabsContent value="main" className="space-y-4">
             <MainTab
               character={character}
               onUpdate={() => {
@@ -136,54 +176,54 @@ const CharacterSheetTabs: React.FC<CharacterSheetTabsProps> = ({
               }}
               onCharacterUpdate={onCharacterUpdate}
             />
-          </TabsContent>
+          </SheetTabsContent>
 
-          <TabsContent value="abilities" tabIndex={-1} className="space-y-4">
+          <SheetTabsContent value="abilities" className="space-y-4">
             <AbilitiesTab
               character={character}
               onUpdate={() => {
                 void onCharacterUpdate(character);
               }}
             />
-          </TabsContent>
+          </SheetTabsContent>
 
-          <TabsContent value="advancement" tabIndex={-1} className="space-y-4">
+          <SheetTabsContent value="advancement" className="space-y-4">
             {character.classLevels && character.classLevels.length > 1 ? (
               <MulticlassManager character={character} onUpdate={onCharacterUpdate} />
             ) : (
               <ExperienceManager character={character} onUpdate={onCharacterUpdate} />
             )}
-          </TabsContent>
+          </SheetTabsContent>
 
-          <TabsContent value="spells" tabIndex={-1} className="space-y-4">
+          <SheetTabsContent value="spells" className="space-y-4">
             <SpellsTab
               character={character}
               onUpdate={() => {
                 void onCharacterUpdate(character);
               }}
             />
-          </TabsContent>
+          </SheetTabsContent>
 
-          <TabsContent value="inventory" tabIndex={-1} className="space-y-4">
+          <SheetTabsContent value="inventory" className="space-y-4">
             <InventoryTab character={character} onUpdate={onCharacterUpdate} />
-          </TabsContent>
+          </SheetTabsContent>
 
-          <TabsContent value="features" tabIndex={-1} className="space-y-4">
+          <SheetTabsContent value="features" className="space-y-4">
             <FeaturesTab character={character} onUpdate={onCharacterUpdate} />
-          </TabsContent>
+          </SheetTabsContent>
 
-          <TabsContent value="notes" tabIndex={-1} className="space-y-4">
+          <SheetTabsContent value="notes" className="space-y-4">
             <NotesTab character={character} onUpdate={onCharacterUpdate} />
-          </TabsContent>
+          </SheetTabsContent>
 
-          <TabsContent value="gallery" tabIndex={-1} className="space-y-4">
+          <SheetTabsContent value="gallery" className="space-y-4">
             <CharacterGallery
               characterId={character.id!}
               avatarUrl={character.avatar_url}
               designSheetUrl={character.image_url}
               backgroundUrl={character.background_image}
             />
-          </TabsContent>
+          </SheetTabsContent>
         </div>
       </Tabs>
     </div>
