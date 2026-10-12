@@ -1444,10 +1444,12 @@ export async function executeCombatIntent(
       result = exitResult;
       // No discrete-action fact here: `describePlayerExit` is the engine line, and a second
       // "dashed" line under it would tell the DM the player ran and then dashed.
-      if (intent.type === 'yield' && exitResult.exit !== null) {
+      if (intent.type === 'yield' && exitResult.exit !== null && actor.participantType === 'player') {
         // #262: the surrender is the ending, with its own reason — the engine end line names
         // it, so a typed or clicked yield can never again read as "Combat has ended." with no
         // reason. Flee keeps the #2580 design: the player leaves and the DM ends the scene.
+        // The player gate matters: a DM-hallucinated monster yield must not end the fight
+        // with false "party surrendered" fiction (the bogus exit itself is a #2580 gap).
         await concludeEncounter(encounterId, encounter.sessionId, userId, 'player_surrendered');
         yieldEndedCombat = true;
       }
