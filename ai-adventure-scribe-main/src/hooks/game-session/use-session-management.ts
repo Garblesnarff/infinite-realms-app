@@ -15,6 +15,8 @@ import { userDataApi } from '@/services/user-data-api';
 interface UseSessionManagementProps {
   setSessionData: React.Dispatch<React.SetStateAction<ExtendedGameSession | null>>;
   setSessionState: React.Dispatch<React.SetStateAction<SessionState>>;
+  /** #451: current session state, read by the loading/error guards. */
+  sessionStateRef?: React.MutableRefObject<SessionState>;
   mountedRef: React.MutableRefObject<boolean>;
   toastRef: React.MutableRefObject<any>;
   starterCampaignId?: string;
@@ -27,6 +29,7 @@ interface UseSessionManagementProps {
 export const useSessionManagement = ({
   setSessionData,
   setSessionState,
+  sessionStateRef,
   mountedRef,
   toastRef,
   starterCampaignId,
@@ -225,11 +228,8 @@ export const useSessionManagement = ({
         });
       }
 
-      let currentState: SessionState = 'idle';
-      setSessionState((prev) => {
-        currentState = prev;
-        return prev;
-      });
+      // #451: a setState updater does not run synchronously, so read the ref.
+      const currentState: SessionState = sessionStateRef?.current ?? 'idle';
 
       if (!sessId) {
         logger.warn('⚠️ [updateGameSessionState] Cannot update - session not initialized', {
@@ -239,7 +239,6 @@ export const useSessionManagement = ({
         return;
       }
 
-      // @ts-expect-error #451 currentState is read right after setSessionState(prev => ...) and is only narrowed to 'idle'; the setter callback that reassigns it is not tracked by control-flow analysis, so this guard is unreachable per the type system.
       if (currentState === 'loading') {
         logger.warn('⚠️ [updateGameSessionState] Cannot update - session is loading', {
           attemptedUpdate: resolvedState,
@@ -247,7 +246,6 @@ export const useSessionManagement = ({
         return;
       }
 
-      // @ts-expect-error #451 same as above: the reassignment happens inside the setSessionState callback, so currentState keeps its 'idle' literal type here.
       if (currentState === 'error') {
         logger.warn('⚠️ [updateGameSessionState] Cannot update - session is in error state', {
           attemptedUpdate: resolvedState,
@@ -288,7 +286,7 @@ export const useSessionManagement = ({
         logger.info('✅ [updateGameSessionState] Session updated successfully:', sessId);
       }
     },
-    [setSessionData, setSessionState, mountedRef, toastRef],
+    [setSessionData, setSessionState, sessionStateRef, mountedRef, toastRef],
   );
 
   return {

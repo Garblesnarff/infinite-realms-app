@@ -113,6 +113,10 @@ export const useGameSession = (
   }, []);
 
   // Store toast in ref to avoid dependency changes and prevent stale closures
+  // #451: the current session state for updateGameSessionState's loading/error guards.
+  const sessionStateRef = useRef<SessionState>(sessionState);
+  sessionStateRef.current = sessionState;
+
   const toastRef = useRef(toast);
   useEffect(() => {
     toastRef.current = toast;
@@ -166,6 +170,7 @@ export const useGameSession = (
   const { createGameSession, cleanupSession, updateGameSessionState } = useSessionManagement({
     setSessionData,
     setSessionState,
+    sessionStateRef,
     mountedRef,
     toastRef,
     starterCampaignId,
