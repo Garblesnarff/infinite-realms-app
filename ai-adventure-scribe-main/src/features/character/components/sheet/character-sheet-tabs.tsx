@@ -128,7 +128,7 @@ const CharacterSheetTabs: React.FC<CharacterSheetTabsProps> = ({
         </TabsList>
 
         <div className="mt-4">
-          <TabsContent value="main" className="space-y-4">
+          <TabsContent value="main" tabIndex={-1} className="space-y-4">
             <MainTab
               character={character}
               onUpdate={() => {
@@ -138,7 +138,7 @@ const CharacterSheetTabs: React.FC<CharacterSheetTabsProps> = ({
             />
           </TabsContent>
 
-          <TabsContent value="abilities" className="space-y-4">
+          <TabsContent value="abilities" tabIndex={-1} className="space-y-4">
             <AbilitiesTab
               character={character}
               onUpdate={() => {
@@ -147,7 +147,7 @@ const CharacterSheetTabs: React.FC<CharacterSheetTabsProps> = ({
             />
           </TabsContent>
 
-          <TabsContent value="advancement" className="space-y-4">
+          <TabsContent value="advancement" tabIndex={-1} className="space-y-4">
             {character.classLevels && character.classLevels.length > 1 ? (
               <MulticlassManager character={character} onUpdate={onCharacterUpdate} />
             ) : (
@@ -155,7 +155,7 @@ const CharacterSheetTabs: React.FC<CharacterSheetTabsProps> = ({
             )}
           </TabsContent>
 
-          <TabsContent value="spells" className="space-y-4">
+          <TabsContent value="spells" tabIndex={-1} className="space-y-4">
             <SpellsTab
               character={character}
               onUpdate={() => {
@@ -164,19 +164,19 @@ const CharacterSheetTabs: React.FC<CharacterSheetTabsProps> = ({
             />
           </TabsContent>
 
-          <TabsContent value="inventory" className="space-y-4">
+          <TabsContent value="inventory" tabIndex={-1} className="space-y-4">
             <InventoryTab character={character} onUpdate={onCharacterUpdate} />
           </TabsContent>
 
-          <TabsContent value="features" className="space-y-4">
+          <TabsContent value="features" tabIndex={-1} className="space-y-4">
             <FeaturesTab character={character} onUpdate={onCharacterUpdate} />
           </TabsContent>
 
-          <TabsContent value="notes" className="space-y-4">
+          <TabsContent value="notes" tabIndex={-1} className="space-y-4">
             <NotesTab character={character} onUpdate={onCharacterUpdate} />
           </TabsContent>
 
-          <TabsContent value="gallery" className="space-y-4">
+          <TabsContent value="gallery" tabIndex={-1} className="space-y-4">
             <CharacterGallery
               characterId={character.id!}
               avatarUrl={character.avatar_url}
