@@ -36,14 +36,14 @@ const SKILLS = {
 } as const;
 
 type SkillName = keyof typeof SKILLS;
-type AbilityName = keyof typeof character.abilityScores;
+type AbilityName = keyof NonNullable<Character['abilityScores']>;
 
 /**
  * Abilities & Skills tab with clickable rolls
  * Shows ability scores, modifiers, saves, and skills
  */
 const AbilitiesTab: React.FC<AbilitiesTabProps> = ({ character, onUpdate: _onUpdate }) => {
-  const proficiencyBonus = calculateProficiencyBonus(character.level);
+  const proficiencyBonus = calculateProficiencyBonus(character.level!);
 
   // For demo purposes, assume some proficiencies based on class
   const getProficiencies = (): { skills: SkillName[]; saves: AbilityName[] } => {
@@ -78,14 +78,14 @@ const AbilitiesTab: React.FC<AbilitiesTabProps> = ({ character, onUpdate: _onUpd
 
   const getSkillModifier = (skill: SkillName): number => {
     const ability = SKILLS[skill] as AbilityName;
-    const abilityMod = character.abilityScores[ability].modifier;
+    const abilityMod = character.abilityScores![ability].modifier;
     const isProficient = proficientSkills.includes(skill);
 
     return abilityMod + (isProficient ? proficiencyBonus : 0);
   };
 
   const getSaveModifier = (ability: AbilityName): number => {
-    const abilityMod = character.abilityScores[ability].modifier;
+    const abilityMod = character.abilityScores![ability].modifier;
     const isProficient = proficientSaves.includes(ability);
 
     return abilityMod + (isProficient ? proficiencyBonus : 0);
@@ -106,7 +106,7 @@ const AbilitiesTab: React.FC<AbilitiesTabProps> = ({ character, onUpdate: _onUpd
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {Object.entries(character.abilityScores).map(([ability, data]) => (
+          {Object.entries(character.abilityScores!).map(([ability, data]) => (
             <div
               key={ability}
               className="flex items-center justify-between p-3 border border-white/10 rounded-lg"
@@ -137,7 +137,7 @@ const AbilitiesTab: React.FC<AbilitiesTabProps> = ({ character, onUpdate: _onUpd
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {Object.entries(character.abilityScores).map(([ability, _data]) => {
+          {Object.entries(character.abilityScores!).map(([ability, _data]) => {
             const isProficient = proficientSaves.includes(ability as AbilityName);
             const modifier = getSaveModifier(ability as AbilityName);
 

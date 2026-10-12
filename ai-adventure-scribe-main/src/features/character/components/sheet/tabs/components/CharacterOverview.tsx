@@ -246,7 +246,7 @@ const CharacterOverview: React.FC<CharacterOverviewProps> = ({ character, onUpda
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {character.personalityTraits?.length > 0 && (
+              {character.personalityTraits && character.personalityTraits.length > 0 && (
                 <div>
                   <h4 className="text-sm font-medium text-muted-foreground mb-2">
                     Personality Traits
@@ -261,7 +261,7 @@ const CharacterOverview: React.FC<CharacterOverviewProps> = ({ character, onUpda
                 </div>
               )}
 
-              {character.ideals?.length > 0 && (
+              {character.ideals && character.ideals.length > 0 && (
                 <div>
                   <h4 className="text-sm font-medium text-muted-foreground mb-2">Ideals</h4>
                   <div className="space-y-1">
@@ -278,7 +278,7 @@ const CharacterOverview: React.FC<CharacterOverviewProps> = ({ character, onUpda
                 </div>
               )}
 
-              {character.bonds?.length > 0 && (
+              {character.bonds && character.bonds.length > 0 && (
                 <div>
                   <h4 className="text-sm font-medium text-muted-foreground mb-2">Bonds</h4>
                   <div className="space-y-1">
@@ -295,7 +295,7 @@ const CharacterOverview: React.FC<CharacterOverviewProps> = ({ character, onUpda
                 </div>
               )}
 
-              {character.flaws?.length > 0 && (
+              {character.flaws && character.flaws.length > 0 && (
                 <div>
                   <h4 className="text-sm font-medium text-muted-foreground mb-2">Flaws</h4>
                   <div className="space-y-1">
