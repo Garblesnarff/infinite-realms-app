@@ -9,12 +9,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { useTRPC } from '@/infrastructure/api/trpc-hooks';
 import logger from '@/lib/logger';
@@ -61,7 +56,10 @@ export const ExportButton: React.FC<ExportButtonProps> = ({
 
   const handleExport = async (format: 'json' | 'pdf' = 'json'): Promise<void> => {
     if (format === 'pdf') {
-      toast({ title: 'Coming Soon', description: 'PDF export will be available in a future update.' });
+      toast({
+        title: 'Coming Soon',
+        description: 'PDF export will be available in a future update.',
+      });
       return;
     }
     setIsExporting(true);
@@ -88,7 +86,9 @@ export const ExportButton: React.FC<ExportButtonProps> = ({
 
   const isIconOnly = size === 'icon' || !showLabel;
   const buttonAriaLabel = isIconOnly ? `Export options for ${characterName}` : undefined;
-  const tooltipText = isExporting ? `Exporting ${characterName}...` : `Export options for ${characterName}`;
+  const tooltipText = isExporting
+    ? `Exporting ${characterName}...`
+    : `Export options for ${characterName}`;
 
   return (
     <TooltipProvider>
@@ -105,8 +105,14 @@ export const ExportButton: React.FC<ExportButtonProps> = ({
                   className={`${className || ''} ${isExporting ? 'pointer-events-none' : ''}`}
                   aria-label={buttonAriaLabel}
                 >
-                  {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                  {!isIconOnly && <span className="ml-2">{isExporting ? 'Exporting...' : 'Export'}</span>}
+                  {isExporting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  {!isIconOnly && (
+                    <span className="ml-2">{isExporting ? 'Exporting...' : 'Export'}</span>
+                  )}
                 </Button>
               </DropdownMenuTrigger>
             </span>
@@ -170,7 +176,9 @@ export const SimpleExportButton: React.FC<Omit<ExportButtonProps, 'showLabel'>> 
 
   const isIconOnly = size === 'icon';
   const buttonAriaLabel = isIconOnly ? `Export ${characterName} data as JSON` : undefined;
-  const tooltipText = isExporting ? `Exporting ${characterName}...` : `Export ${characterName} data as JSON`;
+  const tooltipText = isExporting
+    ? `Exporting ${characterName}...`
+    : `Export ${characterName} data as JSON`;
 
   return (
     <TooltipProvider>

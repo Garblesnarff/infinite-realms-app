@@ -63,7 +63,11 @@ export interface UseBlogPostEditorReturn {
   handlePreview: () => void;
 }
 
-export function useBlogPostEditor({ post, onSuccess, onCancel }: UseBlogPostEditorProps): UseBlogPostEditorReturn {
+export function useBlogPostEditor({
+  post,
+  onSuccess,
+  onCancel,
+}: UseBlogPostEditorProps): UseBlogPostEditorReturn {
   const isEditMode = !!post;
   const [mediaManagerOpen, setMediaManagerOpen] = useState(false);
   const [unsavedChanges, setUnsavedChanges] = useState(false);
@@ -109,8 +113,10 @@ export function useBlogPostEditor({ post, onSuccess, onCancel }: UseBlogPostEdit
   const handleAutoGenerateSEO = (): void => {
     const title = form.getValues('title');
     const excerpt = form.getValues('excerpt') || generateExcerpt(contentValue, 160);
-    if (!form.getValues('seoTitle')) form.setValue('seoTitle', title.substring(0, 60), { shouldDirty: true });
-    if (!form.getValues('seoDescription')) form.setValue('seoDescription', excerpt.substring(0, 160), { shouldDirty: true });
+    if (!form.getValues('seoTitle'))
+      form.setValue('seoTitle', title.substring(0, 60), { shouldDirty: true });
+    if (!form.getValues('seoDescription'))
+      form.setValue('seoDescription', excerpt.substring(0, 160), { shouldDirty: true });
     toast.success('SEO fields populated');
   };
   const handleSelectMedia = (url: string): void => {
@@ -155,16 +161,40 @@ export function useBlogPostEditor({ post, onSuccess, onCancel }: UseBlogPostEdit
   };
   const handlePreview = (): void => {
     const previewData = form.getValues();
-    const queryParams = new URLSearchParams({ title: previewData.title, content: previewData.content, excerpt: previewData.excerpt || '', coverImageUrl: previewData.coverImageUrl || '' });
+    const queryParams = new URLSearchParams({
+      title: previewData.title,
+      content: previewData.content,
+      excerpt: previewData.excerpt || '',
+      coverImageUrl: previewData.coverImageUrl || '',
+    });
     setPreviewUrl(`/admin/blog/preview?${queryParams.toString()}`);
   };
-  const categoryOptions = categories.map((cat) => ({ value: cat.id, label: cat.title || cat.name || cat.slug }));
+  const categoryOptions = categories.map((cat) => ({
+    value: cat.id,
+    label: cat.title || cat.name || cat.slug,
+  }));
   const tagOptions = tags.map((tag) => ({ value: tag.id, label: tag.name }));
   const isPending = createMutation.isPending || updateMutation.isPending;
   return {
-    form, isEditMode, mediaManagerOpen, setMediaManagerOpen, unsavedChanges, setUnsavedChanges,
-    showUnsavedDialog, setShowUnsavedDialog, previewUrl, setPreviewUrl, statusValue, categoryOptions,
-    tagOptions, isPending, handleAutoGenerateExcerpt, handleAutoGenerateSEO, handleSelectMedia,
-    onSubmit, handleCancel, handlePreview,
+    form,
+    isEditMode,
+    mediaManagerOpen,
+    setMediaManagerOpen,
+    unsavedChanges,
+    setUnsavedChanges,
+    showUnsavedDialog,
+    setShowUnsavedDialog,
+    previewUrl,
+    setPreviewUrl,
+    statusValue,
+    categoryOptions,
+    tagOptions,
+    isPending,
+    handleAutoGenerateExcerpt,
+    handleAutoGenerateSEO,
+    handleSelectMedia,
+    onSubmit,
+    handleCancel,
+    handlePreview,
   };
 }
