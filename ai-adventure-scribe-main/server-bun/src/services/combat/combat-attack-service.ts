@@ -84,16 +84,20 @@ function isProvidedD20(value: number | undefined): value is number {
  */
 function deathSaveFailureFields(
   hpResult: DamageResult,
+  targetParticipantType?: string,
 ): Pick<
   AttackResult,
   'deathSaveFailuresAdded' | 'deathSavesFailures' | 'instantDeath' | 'damageOverflow' | 'hpMaximum'
 > {
+  // Monsters die at 0 HP with no death saves (2014 5e): the failure tally is a player-only
+  // concept, so a monster's kill line is just "DEAD", not "FAILED 3 of 3 failures" (#314 CB-075).
+  const isPlayer = targetParticipantType === 'player';
   return {
     // The numbers behind the verdict, so the engine line can state them (#2640).
     ...((hpResult.overflow ?? 0) > 0
       ? { damageOverflow: hpResult.overflow, hpMaximum: hpResult.hpMaximum }
       : {}),
-    ...((hpResult.deathSaveFailuresAdded ?? 0) > 0
+    ...(isPlayer && (hpResult.deathSaveFailuresAdded ?? 0) > 0
       ? {
           deathSaveFailuresAdded: hpResult.deathSaveFailuresAdded,
           deathSavesFailures: hpResult.newDeathSavesFailures,
@@ -595,7 +599,7 @@ export class CombatAttackService {
           targetNewHp: hpResult.newCurrentHp,
           targetIsConscious: hpResult.isConscious,
           targetIsDead: hpResult.isDead,
-          ...deathSaveFailureFields(hpResult),
+          ...deathSaveFailureFields(hpResult, targetParticipant.participantType),
           ...(autoCritOnDowned ? { autoCritOnDowned: true } : {}),
           ...(critReason ? { autoCritReason: critReason } : {}),
           targetCondition: healthConditionForCombat(
@@ -951,7 +955,7 @@ export class CombatAttackService {
               targetNewHp: hpResult.newCurrentHp,
               targetIsConscious: hpResult.isConscious,
               targetIsDead: hpResult.isDead,
-              ...deathSaveFailureFields(hpResult),
+              ...deathSaveFailureFields(hpResult, targetParticipant.participantType),
               targetCondition: healthConditionForCombat(
                 hpResult.newCurrentHp,
                 targetParticipant.maxHp,
@@ -1069,7 +1073,7 @@ export class CombatAttackService {
                 targetNewHp: hpResult.newCurrentHp,
                 targetIsConscious: hpResult.isConscious,
                 targetIsDead: hpResult.isDead,
-                ...deathSaveFailureFields(hpResult),
+                ...deathSaveFailureFields(hpResult, targetParticipant.participantType),
                 targetCondition: healthConditionForCombat(
                   hpResult.newCurrentHp,
                   targetParticipant.maxHp,
@@ -1177,7 +1181,7 @@ export class CombatAttackService {
                 targetNewHp: hpResult.newCurrentHp,
                 targetIsConscious: hpResult.isConscious,
                 targetIsDead: hpResult.isDead,
-                ...deathSaveFailureFields(hpResult),
+                ...deathSaveFailureFields(hpResult, targetParticipant.participantType),
                 targetCondition: healthConditionForCombat(
                   hpResult.newCurrentHp,
                   targetParticipant.maxHp,

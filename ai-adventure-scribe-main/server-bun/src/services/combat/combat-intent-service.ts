@@ -1703,7 +1703,11 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
       (participant) =>
         participant.id !== actor.id &&
         participant.isActive &&
-        participant.participantType !== actor.participantType,
+        participant.participantType !== actor.participantType &&
+        // A dead creature is not a legal target: the attack button must retarget to a living
+        // enemy when its original target died, and a dead target grants no advantage (#314
+        // CB-074). Monsters die at 0 HP with no death saves (2014 5e).
+        vitalStateOf(participant as unknown as VitalsInput) !== 'dead',
     );
     const targetConditions = new Map(
       await Promise.all(

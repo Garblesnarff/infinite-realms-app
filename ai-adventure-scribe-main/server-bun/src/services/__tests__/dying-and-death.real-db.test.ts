@@ -1787,4 +1787,29 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
       for (const undo of restore) undo();
     }
   });
+
+  test('a monster killed at 0 HP just dies: no death-save lines (#314 CB-075)', async () => {
+    // Per 2014 5e, monsters do not roll death saves — they die at 0 HP. The kill line must not
+    // carry "FAILED 3 of 3 failures" or any death-save tally.
+    // Hero STR 14 (+2): the unarmed strike deals 3 damage, enough to kill from 1 HP.
+    const scene = await seedScene({ heroHp: 7, heroStrength: 14 });
+    // Drop the spider to 1 HP so the hero's next blow kills it.
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 1 })
+      .where(eq(combatParticipantStatus.participantId, scene.spiderId));
+    await giveTurnTo(scene.encounterId, scene.heroId);
+    const result = (await executeCombatIntent(
+      scene.encounterId,
+      { type: 'attack', actorId: scene.heroId, targetId: scene.spiderId, d20: 15 },
+      userId,
+      'dm',
+    )) as Record<string, any>;
+
+    expect(result.targetIsDead).toBe(true);
+    // No death-save fields on a monster kill: the transcript builder sees no tally to render.
+    expect(result.deathSaveFailuresAdded).toBeUndefined();
+    expect(result.deathSavesFailures).toBeUndefined();
+    expect((await statusOf(scene.spiderId)).currentHp).toBe(0);
+  });
 });
