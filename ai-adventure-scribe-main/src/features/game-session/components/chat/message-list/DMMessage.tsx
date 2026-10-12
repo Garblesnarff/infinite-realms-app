@@ -295,7 +295,9 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
             <MessageVoicePlayer
               messageId={messageId}
               messageText={displayContent}
-              narrationSegments={resolveNarrationSegments(message)}
+              narrationSegments={resolveNarrationSegments(
+                message as unknown as Parameters<typeof resolveNarrationSegments>[0],
+              )}
             />
           )}
 

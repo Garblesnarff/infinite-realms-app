@@ -46,7 +46,9 @@ describe('useMessageDiceRolls', () => {
   const mockOnSendMessage = vi.fn();
   const mockOnSendFullMessage = vi.fn();
 
-  const mockGameState = {
+  const mockGameState: {
+    diceRollQueue: { currentRollId: string | null; pendingRolls: unknown[] };
+  } = {
     diceRollQueue: {
       currentRollId: null,
       pendingRolls: [],

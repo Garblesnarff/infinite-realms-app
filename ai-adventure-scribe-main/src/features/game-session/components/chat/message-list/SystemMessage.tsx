@@ -49,7 +49,7 @@ export const SystemMessage: React.FC<SystemMessageProps> = React.memo(
             `${message.context.round}|${message.context.combatEngineBlocks?.[0]?.actor}` && (
             <CombatRoundDivider
               round={message.context.round}
-              actor={message.context.combatEngineBlocks?.[0]?.actor}
+              actor={message.context.combatEngineBlocks?.[0]?.actor as string}
             />
           )}
         {cards.map((card, index) => (

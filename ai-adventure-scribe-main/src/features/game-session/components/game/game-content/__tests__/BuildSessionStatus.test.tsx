@@ -28,7 +28,7 @@ import type * as AppVersion from '@/services/app-version';
 
 const SESSION_ID = '72ff7843-6e2d-41ae-9e48-5c5294a31244';
 
-function mockClipboard(): { writeText: ReturnType<typeof vi.fn> } {
+function mockClipboard(): ReturnType<typeof vi.fn> {
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, 'clipboard', {
     value: { writeText },

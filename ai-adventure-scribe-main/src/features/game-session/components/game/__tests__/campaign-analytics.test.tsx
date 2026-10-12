@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { GameSidePanel } from '../MemoryPanel';
 
-import type { ExtendedGameSession } from '@/types/game';
+import type { ExtendedGameSession } from '@/hooks/game-session/session-utils';
 
 import * as AnalyticsModule from '@/services/analytics';
 

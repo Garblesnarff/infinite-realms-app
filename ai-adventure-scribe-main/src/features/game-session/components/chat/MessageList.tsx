@@ -5,6 +5,7 @@ import { MessageListContainer } from './message-list/MessageListContainer';
 import { useImageGeneration } from './message-list/useImageGeneration';
 import { useScrollBehavior } from './message-list/useScrollBehavior';
 
+import type { CampaignContext as ImageCampaignContext } from './message-list/buildSceneImageRequest';
 import type { ChatMessage } from '@/types/game';
 
 import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
@@ -116,7 +117,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
         sessionId,
         routeCampaignId,
         character: characterState.character,
-        campaign: campaignState.campaign,
+        campaign: campaignState.campaign as unknown as ImageCampaignContext | null,
         messages,
         getAssetImageUrl,
       });

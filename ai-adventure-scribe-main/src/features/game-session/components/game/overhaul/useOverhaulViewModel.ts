@@ -452,10 +452,11 @@ export function useOverhaulViewModel(opts?: {
       campaign: {
         name: campaign?.name ?? 'Adventure',
         chapter: opts?.chapterLabel ?? FROZEN_CAMPAIGN_CHAPTER_LABEL,
-        thumbnailUrl: campaign?.background_image ?? undefined,
+        thumbnailUrl:
+          (campaign as unknown as { background_image?: string })?.background_image ?? undefined,
         objective: campaign?.description ?? 'Your adventure awaits.',
         objectiveTasks: [],
-        regionLabel: campaign?.location ?? undefined,
+        regionLabel: (campaign as unknown as { location?: string })?.location ?? undefined,
       },
       party,
       partyMax: 1 + MAX_SESSION_COMPANIONS,

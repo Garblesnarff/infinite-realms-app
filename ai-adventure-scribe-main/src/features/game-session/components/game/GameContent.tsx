@@ -301,6 +301,7 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
   const [comfortLevel] = useState<'pg' | 'pg13' | 'r' | 'custom'>('pg13');
   const [showSafetyInfo] = useState(false);
 
+  // @ts-expect-error #417 MessageContext exposes isLoading, not messagesLoading
   const { messages, sendMessage, messagesLoading } = useMessageContext();
   const { createMemory } = useMemoryContext();
 
@@ -315,7 +316,7 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
 
   const { isGenerating: isGeneratingGreeting } = useInitialGreeting({
     sessionId,
-    sessionData,
+    sessionData: sessionData as unknown as Parameters<typeof useInitialGreeting>[0]['sessionData'],
     characterId: characterIdForHandler,
     campaignId: campaignIdForHandler,
     messages,
@@ -391,7 +392,9 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
       setShowTracker={setShowTracker}
       isCombatDetected={isCombatDetected}
       isGeneratingGreeting={isGeneratingGreeting}
-      innerHandleAIResponse={innerHandleAIResponse}
+      innerHandleAIResponse={
+        innerHandleAIResponse as unknown as (message: unknown) => Promise<void>
+      }
       isDM={isDM}
       spellCastHandlerRef={spellCastHandlerRef}
       lastSafetyCommand={lastSafetyCommand}

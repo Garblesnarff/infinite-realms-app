@@ -12,6 +12,8 @@ import {
 import { GameMainContent } from '../game-content/GameMainContent';
 import { RollTray } from '../game-content/roll-tray-slot';
 
+import type { SpellCastHandlerRef } from '../../game/spell-cast-handler';
+
 import { trackDmWait } from '@/services/ai/dm-wait';
 import { formatCombatEngineParts } from '@/services/combat/combat-outcome-transcript';
 import {
@@ -234,6 +236,7 @@ const baseProps = {
   isCombatDetected: false,
   isGeneratingGreeting: false,
   innerHandleAIResponse: vi.fn(),
+  spellCastHandlerRef: { current: null } as SpellCastHandlerRef,
   contentWarnings: [],
   comfortLevel: 'pg13' as const,
   showSafetyInfo: false,
@@ -545,7 +548,7 @@ describe('GameMainContent overhaul behavior contract', () => {
         {...baseProps}
         sessionData={
           {
-            ...baseProps.sessionData,
+            ...(baseProps.sessionData as unknown as Record<string, unknown>),
             current_scene_description:
               '⚙️ Engine: The Veteran rolled 14 + 5 = 19 vs AC 12 — HIT. The goblin reels back.',
           } as never
@@ -563,7 +566,12 @@ describe('GameMainContent overhaul behavior contract', () => {
     render(
       <GameMainContent
         {...baseProps}
-        sessionData={{ ...baseProps.sessionData, turn_count: 15 } as never}
+        sessionData={
+          {
+            ...(baseProps.sessionData as unknown as Record<string, unknown>),
+            turn_count: 15,
+          } as never
+        }
         showSceneBlurb={false}
       />,
     );

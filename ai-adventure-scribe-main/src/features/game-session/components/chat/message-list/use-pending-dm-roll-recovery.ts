@@ -37,6 +37,6 @@ export function usePendingDmRollRecovery({
 
     const pending = latestUnansweredDmRollRequest(messages);
     if (!pending) return;
-    processAiResponse(pending.requests);
+    processAiResponse(pending.requests as unknown as Parameters<typeof processAiResponse>[0]);
   }, [messages, messagesReady, processAiResponse, sessionId, state.diceRollQueue.pendingRolls]);
 }

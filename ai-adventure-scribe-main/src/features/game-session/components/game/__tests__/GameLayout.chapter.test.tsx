@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { GameLayout } from '../game-content/GameLayout';
 
+import type { SpellCastHandlerRef } from '../../game/spell-cast-handler';
+
 vi.mock('@/contexts/SceneBackgroundContext', () => ({
   useSceneBackground: () => ({ currentBackgroundUrl: null, isTransitioning: false }),
 }));
@@ -48,6 +50,7 @@ const layoutProps = {
   isGeneratingGreeting: false,
   innerHandleAIResponse: vi.fn(),
   isDM: false,
+  spellCastHandlerRef: { current: null } as SpellCastHandlerRef,
   contentWarnings: [],
   comfortLevel: 'pg13' as const,
   showSafetyInfo: false,

@@ -28,7 +28,7 @@ export const MemoryCard: React.FC<MemoryCardProps> = React.memo(({ memory }) => 
             <div className="mt-1 text-xs text-muted-foreground">
               {Object.entries(memory.metadata).map(([key, value]) => (
                 <span key={key} className="mr-2">
-                  {key}: {value}
+                  {key}: {value as React.ReactNode}
                 </span>
               ))}
             </div>

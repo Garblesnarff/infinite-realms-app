@@ -181,7 +181,9 @@ describe('extractMemories option stripping (#1654)', () => {
 
     // Find the updater call that sets current_scene_description and inspect its result.
     const sceneUpdates = updateGameSessionState.mock.calls
-      .map(([updater]: [(prev: Record<string, unknown>) => Record<string, unknown>]) => updater({}))
+      .map(([updater]: unknown[]) =>
+        (updater as (prev: Record<string, unknown>) => Record<string, unknown>)({}),
+      )
       .filter((result: Record<string, unknown>) => 'current_scene_description' in result);
 
     expect(sceneUpdates.length).toBeGreaterThan(0);

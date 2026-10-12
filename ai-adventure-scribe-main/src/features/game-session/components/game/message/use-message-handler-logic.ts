@@ -10,6 +10,7 @@ import { useSessionValidator } from '../session/SessionValidator';
 import type { ExtendedGameSession, SessionStateUpdater } from '../../../types/session';
 import type { MessageSendContext } from '../../chat/MessageList';
 import type { LocalNotice } from '@/hooks/ai/types';
+import type { EnhancedChatMessage } from '@/hooks/use-ai-response';
 import type { ChatMessage } from '@/types/game';
 import type { RollRequest } from '@/types/roll-request';
 
@@ -440,7 +441,7 @@ export const useMessageHandlerLogic = ({
     turnPhase('submit');
     let turnCountAdvanced = false;
     let textShown = false;
-    let earlyMessage: ChatMessage | null = null;
+    let earlyMessage: EnhancedChatMessage | null = null;
     let rollTurnStarted = false;
     let textPhaseEmitted = false;
     try {
@@ -468,7 +469,7 @@ export const useMessageHandlerLogic = ({
           diceRollPending = Boolean(earlyResponse.rollRequests?.length);
           combatPreflightPending = Boolean(
             diceRollPending ||
-            earlyResponse.combatDetection?.shouldStartCombat ||
+            (earlyResponse as unknown as EnhancedChatMessage).combatDetection?.shouldStartCombat ||
             earlyResponse.context?.combat_transition === 'start',
           );
           turnPhase('text shown');
@@ -510,7 +511,11 @@ export const useMessageHandlerLogic = ({
         answeredRollIndex >= 0
           ? answeredRollIndex
           : resumingSavedMessage
-            ? currentMessages.findLastIndex((message) => message.sender === 'player')
+            ? (
+                currentMessages as unknown as {
+                  findLastIndex(predicate: (message: ChatMessage) => boolean): number;
+                }
+              ).findLastIndex((message: ChatMessage) => message.sender === 'player')
             : -1;
       const savedMessage = savedMessageIndex >= 0 ? currentMessages[savedMessageIndex] : undefined;
 
@@ -538,7 +543,7 @@ export const useMessageHandlerLogic = ({
       // CRITICAL FIX: Use provided context if available (for dice roll results)
       // This preserves the 'dice_roll' intent through the message flow,
       // enabling the roll suppression logic in use-ai-response.ts
-      const playerMessage: ChatMessage =
+      const playerMessage = (
         resumingSavedMessage && savedMessage
           ? providedContext?.intent === 'resume_unanswered' &&
             providedContext.retryInput !== undefined
@@ -553,7 +558,8 @@ export const useMessageHandlerLogic = ({
                 intent: isFirstMessage ? 'first_action' : 'query',
                 isFirstMessage,
               },
-            };
+            }
+      ) as ChatMessage;
       if (!resumingSavedMessage) {
         await rejectWhenAborted(sendMessage(playerMessage), turnSignal); // This adds to UI and saves to dialogue_history
         playerMessagePersisted = true;
@@ -660,7 +666,9 @@ export const useMessageHandlerLogic = ({
                 rollTurnStarted = true;
                 turnPhase('text shown');
                 textPhaseEmitted = true;
-                processAiResponse(earlyPromptRollRequests);
+                processAiResponse(
+                  earlyPromptRollRequests as unknown as Parameters<typeof processAiResponse>[0],
+                );
               } else if (hasEarlyRollRequests) {
                 logger.info('[RollPrompt] early roll prompt withheld for an engine-resolved turn', {
                   requestTypes: (earlyResponse.rollRequests ?? []).map((request) => request.type),
@@ -751,7 +759,7 @@ export const useMessageHandlerLogic = ({
       // Sanitize the AI response text first
       const processedText = sanitizeDMText(aiResponseMessage.text);
 
-      const sanitizedAiResponseMessage: ChatMessage = {
+      const sanitizedAiResponseMessage: EnhancedChatMessage = {
         ...aiResponseMessage,
         text: processedText,
       };
@@ -806,11 +814,14 @@ export const useMessageHandlerLogic = ({
         !hasRollRequests &&
         (sanitizedAiResponseMessage.text || sanitizedAiResponseMessage.narrationSegments?.length)
       ) {
-        const finalMessage: ChatMessage = earlyMessage
+        // `earlyMessage` is assigned inside the `onTextReady` callback TS cannot see through,
+        // so the read site still narrows it to its `null` initializer. The alias widens it back.
+        const seenEarlyMessage = earlyMessage as EnhancedChatMessage | null;
+        const finalMessage: ChatMessage = seenEarlyMessage
           ? {
               ...sanitizedAiResponseMessage,
-              id: earlyMessage.id,
-              timestamp: earlyMessage.timestamp,
+              id: seenEarlyMessage.id,
+              timestamp: seenEarlyMessage.timestamp,
             }
           : { ...sanitizedAiResponseMessage, id: dmMessageId };
 
@@ -836,7 +847,9 @@ export const useMessageHandlerLogic = ({
       }
 
       if (hasRollRequests && !rollTurnStarted) {
-        processAiResponse(narrativeRollRequests);
+        processAiResponse(
+          narrativeRollRequests as unknown as Parameters<typeof processAiResponse>[0],
+        );
       }
 
       if (

@@ -1,4 +1,4 @@
-import type { DiceRollRequest } from '@/utils/diceRolls';
+import type { DiceRollRequest } from '@/types/combat';
 
 export interface DiceRollOutcome {
   success: boolean;
