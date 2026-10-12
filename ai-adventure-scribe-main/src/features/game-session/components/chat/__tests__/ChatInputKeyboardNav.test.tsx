@@ -53,7 +53,9 @@ describe('ChatInput Keyboard Navigation', () => {
 
     render(<ChatInput onSendMessage={onSendMessage} isDisabled={false} />);
 
-    const textarea = screen.getByPlaceholderText(/Describe what your character/i) as HTMLTextAreaElement;
+    const textarea = screen.getByPlaceholderText(
+      /Describe what your character/i,
+    ) as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: '/roll' } });
 
     // Mock mightBeDiceCommand to return false for the next call (after selection)

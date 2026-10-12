@@ -185,6 +185,8 @@ describe('CombatSummary', () => {
     render(<CombatSummary />);
 
     expect(screen.getByText('Current: Hero')).toBeInTheDocument();
-    expect(screen.getByText(/Action: Used \| Bonus: Available \| Reaction: Used/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Action: Used \| Bonus: Available \| Reaction: Used/),
+    ).toBeInTheDocument();
   });
 });

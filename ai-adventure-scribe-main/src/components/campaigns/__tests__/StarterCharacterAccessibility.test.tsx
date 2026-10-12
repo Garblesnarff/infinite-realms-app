@@ -38,13 +38,7 @@ const mockTemplate: StarterCharacterTemplate = {
 
 describe('StarterCharacterCard Accessibility', () => {
   it('renders with correct ARIA attributes when selected', () => {
-    render(
-      <StarterCharacterCard
-        template={mockTemplate}
-        isSelected={true}
-        onSelect={vi.fn()}
-      />
-    );
+    render(<StarterCharacterCard template={mockTemplate} isSelected={true} onSelect={vi.fn()} />);
 
     const button = screen.getByRole('button', {
       name: /Select Valerius the Brave, Human Fighter/i,
@@ -60,13 +54,7 @@ describe('StarterCharacterCard Accessibility', () => {
   });
 
   it('renders with correct ARIA attributes when not selected', () => {
-    render(
-      <StarterCharacterCard
-        template={mockTemplate}
-        isSelected={false}
-        onSelect={vi.fn()}
-      />
-    );
+    render(<StarterCharacterCard template={mockTemplate} isSelected={false} onSelect={vi.fn()} />);
 
     const button = screen.getByRole('button', {
       name: /Select Valerius the Brave, Human Fighter/i,
@@ -77,13 +65,7 @@ describe('StarterCharacterCard Accessibility', () => {
   });
 
   it('falls back when a linked portrait fails to load', () => {
-    render(
-      <StarterCharacterCard
-        template={mockTemplate}
-        isSelected={false}
-        onSelect={vi.fn()}
-      />
-    );
+    render(<StarterCharacterCard template={mockTemplate} isSelected={false} onSelect={vi.fn()} />);
 
     fireEvent.error(screen.getByRole('img', { name: mockTemplate.name }));
 

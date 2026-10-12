@@ -58,7 +58,7 @@ describe('SharedCharactersList Accessibility', () => {
     render(
       <MemoryRouter>
         <SharedCharactersList />
-      </MemoryRouter>
+      </MemoryRouter>,
     );
 
     const badge = screen.getByText('Viewer');
@@ -82,7 +82,7 @@ describe('SharedCharactersList Accessibility', () => {
     render(
       <MemoryRouter>
         <SharedCharactersList />
-      </MemoryRouter>
+      </MemoryRouter>,
     );
 
     // The button should have size="icon" which often results in h-9 w-9 or similar classes from Shadcn
@@ -105,7 +105,7 @@ describe('SharedCharactersList Accessibility', () => {
     render(
       <MemoryRouter>
         <SharedCharactersList />
-      </MemoryRouter>
+      </MemoryRouter>,
     );
 
     const viewButton = screen.getByLabelText(/View Thorin Oakenshield's character sheet/i);

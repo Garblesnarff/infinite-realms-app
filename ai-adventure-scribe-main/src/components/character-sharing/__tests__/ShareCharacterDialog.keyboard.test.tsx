@@ -46,13 +46,7 @@ vi.mock('@/hooks/use-toast', () => ({
 
 describe('ShareCharacterDialog Keyboard Navigation', () => {
   it('navigates through suggestions with arrow keys and selects with Enter', () => {
-    render(
-      <ShareCharacterDialog
-        open={true}
-        onOpenChange={() => {}}
-        characterId="char-123"
-      />
-    );
+    render(<ShareCharacterDialog open={true} onOpenChange={() => {}} characterId="char-123" />);
 
     const input = screen.getByPlaceholderText(/Search by name or email/i);
 
@@ -83,13 +77,7 @@ describe('ShareCharacterDialog Keyboard Navigation', () => {
   });
 
   it('closes suggestions and clears input on Escape even if no results', () => {
-    render(
-      <ShareCharacterDialog
-        open={true}
-        onOpenChange={() => {}}
-        characterId="char-123"
-      />
-    );
+    render(<ShareCharacterDialog open={true} onOpenChange={() => {}} characterId="char-123" />);
 
     const input = screen.getByPlaceholderText(/Search by name or email/i);
 
@@ -105,13 +93,7 @@ describe('ShareCharacterDialog Keyboard Navigation', () => {
 
   it('closes suggestions on blur after a delay', async () => {
     vi.useFakeTimers();
-    render(
-      <ShareCharacterDialog
-        open={true}
-        onOpenChange={() => {}}
-        characterId="char-123"
-      />
-    );
+    render(<ShareCharacterDialog open={true} onOpenChange={() => {}} characterId="char-123" />);
 
     const input = screen.getByPlaceholderText(/Search by name or email/i);
     fireEvent.change(input, { target: { value: 'j' } });

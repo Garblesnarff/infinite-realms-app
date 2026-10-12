@@ -82,7 +82,14 @@ describe('MultiSelect Accessibility', () => {
   });
 
   it('renders placeholder when empty', () => {
-    render(<MultiSelect options={options} value={[]} onChange={() => {}} placeholder="Test Placeholder" />);
+    render(
+      <MultiSelect
+        options={options}
+        value={[]}
+        onChange={() => {}}
+        placeholder="Test Placeholder"
+      />,
+    );
     expect(screen.getByText('Test Placeholder')).toBeInTheDocument();
   });
 });

@@ -20,9 +20,7 @@ describe('RaceCard Components', () => {
       Dexterity: 2,
       Intelligence: 1,
     } as Record<string, number>,
-    subraces: [
-      { id: 'high-elf', name: 'High Elf' }
-    ] as unknown as CharacterRace['subraces'],
+    subraces: [{ id: 'high-elf', name: 'High Elf' }] as unknown as CharacterRace['subraces'],
   };
 
   const defaultProps = {
@@ -39,7 +37,7 @@ describe('RaceCard Components', () => {
     render(
       <TooltipProvider>
         <RaceCardListView {...defaultProps} />
-      </TooltipProvider>
+      </TooltipProvider>,
     );
 
     // Verify race name and description
@@ -68,7 +66,7 @@ describe('RaceCard Components', () => {
     render(
       <TooltipProvider>
         <RaceCardListView {...defaultProps} canAddToComparison={false} />
-      </TooltipProvider>
+      </TooltipProvider>,
     );
 
     const comparisonBtn = screen.getByRole('button', { name: /add to comparison/i });
@@ -84,7 +82,7 @@ describe('RaceCard Components', () => {
     render(
       <TooltipProvider>
         <RaceCardCompactView {...defaultProps} />
-      </TooltipProvider>
+      </TooltipProvider>,
     );
 
     expect(screen.getByText('Elf')).toBeInTheDocument();
@@ -99,7 +97,7 @@ describe('RaceCard Components', () => {
     render(
       <TooltipProvider>
         <RaceCardGridView {...defaultProps} isFavorite={true} />
-      </TooltipProvider>
+      </TooltipProvider>,
     );
 
     expect(screen.getByText('Elf')).toBeInTheDocument();

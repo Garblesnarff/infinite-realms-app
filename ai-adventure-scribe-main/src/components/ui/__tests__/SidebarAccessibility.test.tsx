@@ -14,7 +14,7 @@ describe('Sidebar Accessibility', () => {
     render(
       <SidebarProvider defaultOpen={true}>
         <SidebarTrigger />
-      </SidebarProvider>
+      </SidebarProvider>,
     );
 
     const trigger = screen.getByRole('button', { name: /Toggle Sidebar \(Ctrl\+B\)/i });
@@ -29,7 +29,7 @@ describe('Sidebar Accessibility', () => {
     render(
       <SidebarProvider defaultOpen={false}>
         <SidebarRail />
-      </SidebarProvider>
+      </SidebarProvider>,
     );
 
     const rail = screen.getByRole('button', { name: /Toggle Sidebar \(Ctrl\+B\)/i });

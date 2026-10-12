@@ -17,10 +17,7 @@ describe('MessageVoicePlayer', () => {
 
   it('renders correctly', () => {
     const { getByTestId, getByText } = render(
-      <MessageVoicePlayer
-        messageId={mockMessageId}
-        messageText={mockMessageText}
-      />,
+      <MessageVoicePlayer messageId={mockMessageId} messageText={mockMessageText} />,
     );
 
     expect(getByTestId('voice-controls')).toBeDefined();
@@ -29,18 +26,10 @@ describe('MessageVoicePlayer', () => {
 
   it('is memoized', () => {
     const { rerender, getByText } = render(
-      <MessageVoicePlayer
-        messageId={mockMessageId}
-        messageText={mockMessageText}
-      />,
+      <MessageVoicePlayer messageId={mockMessageId} messageText={mockMessageText} />,
     );
 
-    rerender(
-      <MessageVoicePlayer
-        messageId={mockMessageId}
-        messageText={mockMessageText}
-      />,
-    );
+    rerender(<MessageVoicePlayer messageId={mockMessageId} messageText={mockMessageText} />);
 
     expect(getByText(`Controls for ${mockMessageId}`)).toBeDefined();
   });

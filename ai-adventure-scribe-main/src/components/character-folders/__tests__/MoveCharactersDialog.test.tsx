@@ -50,13 +50,7 @@ test('MoveCharactersDialog renders dialog components and has correct accessible 
 });
 
 test('MoveCharactersDialog renders cancel and move action buttons with tooltips', async () => {
-  render(
-    <MoveCharactersDialog
-      open={true}
-      onOpenChange={() => {}}
-      characterIds={['char-1']}
-    />,
-  );
+  render(<MoveCharactersDialog open={true} onOpenChange={() => {}} characterIds={['char-1']} />);
 
   // Check the Cancel button
   const cancelButton = screen.getByRole('button', { name: /cancel/i });

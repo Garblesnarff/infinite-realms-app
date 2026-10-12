@@ -25,12 +25,14 @@ describe('CampaignCardHoverPopup Tooltips and UX', () => {
         onPlay={vi.fn()}
         onEnter={vi.fn()}
         onDeleteClick={vi.fn()}
-      />
+      />,
     );
 
     // Verify buttons have correct aria-labels
     const playBtn = screen.getByRole('button', { name: /Play campaign: Curse of Strahd/i });
-    const enterBtn = screen.getByRole('button', { name: /Enter campaign management: Curse of Strahd/i });
+    const enterBtn = screen.getByRole('button', {
+      name: /Enter campaign management: Curse of Strahd/i,
+    });
     const deleteBtn = screen.getByRole('button', { name: /Delete campaign: Curse of Strahd/i });
 
     expect(playBtn).toBeInTheDocument();
@@ -56,13 +58,15 @@ describe('CampaignCardHoverPopup Tooltips and UX', () => {
         onPlay={handlePlay}
         onEnter={handleEnter}
         onDeleteClick={handleDelete}
-      />
+      />,
     );
 
     const user = userEvent.setup();
 
     const playBtn = screen.getByRole('button', { name: /Play campaign: Curse of Strahd/i });
-    const enterBtn = screen.getByRole('button', { name: /Enter campaign management: Curse of Strahd/i });
+    const enterBtn = screen.getByRole('button', {
+      name: /Enter campaign management: Curse of Strahd/i,
+    });
     const deleteBtn = screen.getByRole('button', { name: /Delete campaign: Curse of Strahd/i });
 
     await user.click(playBtn);

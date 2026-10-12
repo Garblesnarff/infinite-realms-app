@@ -17,7 +17,14 @@ vi.mock('@/features/campaign/hooks/use-character-selection', () => ({
         race: 'Human',
         class: 'Ranger',
         level: 5,
-        ability_scores: { strength: 16, dexterity: 14, constitution: 15, intelligence: 12, wisdom: 14, charisma: 14 },
+        ability_scores: {
+          strength: 16,
+          dexterity: 14,
+          constitution: 15,
+          intelligence: 12,
+          wisdom: 14,
+          charisma: 14,
+        },
       },
     ],
     characters: [],
@@ -37,7 +44,7 @@ describe('CharacterSelectionModal Accessibility', () => {
         onClose={handleClose}
         campaignId="camp-1"
         campaignName="The Ring Quest"
-      />
+      />,
     );
 
     const card = screen.getByRole('button', { name: /Select character: Aragorn/i });
@@ -53,7 +60,7 @@ describe('CharacterSelectionModal Accessibility', () => {
         onClose={vi.fn()}
         campaignId="camp-1"
         campaignName="The Ring Quest"
-      />
+      />,
     );
 
     const strModifier = screen.getByLabelText(/Strength modifier: \+3/i);
@@ -71,7 +78,7 @@ describe('CharacterSelectionModal Accessibility', () => {
         onClose={vi.fn()}
         campaignId="camp-1"
         campaignName="The Ring Quest"
-      />
+      />,
     );
 
     // The inner "Start Adventure" button should be hidden as the card itself is the trigger
