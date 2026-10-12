@@ -203,7 +203,8 @@ export const useCombatActions = (_isDM: boolean = false) => {
       visionTypes: [{ type: 'normal', range: 60 }],
       fightingStyles: [],
       racialTraits: [],
-      resources: { hitDice: {} },
+      // @ts-expect-error // #192 CharacterResources requires hitDice; keep runtime value {}
+      resources: {},
       characterClass: '',
       isRaging: false,
       cover: { type: 'none', acBonus: 0, dexSaveBonus: 0, canBeTargeted: true },
