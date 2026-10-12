@@ -23,7 +23,6 @@ export const FinalCTASection: React.FC = () => {
   useEffect(() => {
     const handleScroll = () => {
       if (sectionRef.current) {
-        const _rect = sectionRef.current.getBoundingClientRect();
         const scrolled = window.scrollY;
         // Move background at different speed than content
         const rate = scrolled * 0.3;

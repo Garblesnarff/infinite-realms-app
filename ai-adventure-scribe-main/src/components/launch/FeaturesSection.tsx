@@ -17,7 +17,7 @@ export const FeaturesSection: React.FC = () => {
   /**
    * Map features to background images
    */
-  const getFeatureImage = (index: number, title: string) => {
+  const getFeatureImage = (title: string) => {
     // Map each feature to its unique image
     const imageMap: Record<string, string> = {
       'Stories That Remember You': '/feature-statue.jpg',
@@ -98,7 +98,7 @@ export const FeaturesSection: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {features.features.map((feature, index) => {
             const styling = getStatusStyling(feature.status);
-            const backgroundImage = getFeatureImage(index, feature.title);
+            const backgroundImage = getFeatureImage(feature.title);
 
             return (
               <div

@@ -133,7 +133,7 @@ export function parseMessageOptions(rawContent: string): ParsedMessage {
   }
 
   // If no numbered options found, try lettered format (A., B., C.)
-  if (options.length === 0) {
+  if (!options.length) {
     letteredRegex.lastIndex = 0; // Reset regex
     while ((match = letteredRegex.exec(messageContent)) !== null) {
       const [_fullMatch, letterStr, boldText, description] = match;
@@ -162,7 +162,7 @@ export function parseMessageOptions(rawContent: string): ParsedMessage {
   }
 
   // Fallback: Try numbered options without bold formatting
-  if (options.length === 0) {
+  if (!options.length) {
     numberedFallbackRegex.lastIndex = 0;
     while ((match = numberedFallbackRegex.exec(messageContent)) !== null) {
       const [_fullMatch, numberStr, fullText] = match;
@@ -183,7 +183,7 @@ export function parseMessageOptions(rawContent: string): ParsedMessage {
   }
 
   // Fallback: Try lettered options without bold formatting
-  if (options.length === 0) {
+  if (!options.length) {
     letteredFallbackRegex.lastIndex = 0;
     while ((match = letteredFallbackRegex.exec(messageContent)) !== null) {
       const [_fullMatch, letterStr, fullText] = match;

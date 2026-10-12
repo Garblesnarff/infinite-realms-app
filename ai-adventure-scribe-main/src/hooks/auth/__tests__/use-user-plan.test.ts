@@ -31,7 +31,7 @@ describe('useUserPlan', () => {
     (isOffline as any).mockReturnValue(false);
 
     // Mock global fetch
-    global.fetch = vi.fn();
+    vi.stubGlobal('fetch', vi.fn());
 
     vi.stubEnv('VITE_API_URL', apiUrl);
   });

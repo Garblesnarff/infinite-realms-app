@@ -10,6 +10,8 @@
 import React from 'react';
 import * as THREE from 'three';
 
+import type { TokenLightConfig } from '@/types/token';
+
 /**
  * Light source data for shader
  */
@@ -315,15 +317,7 @@ export function tokenToShaderLight(
   token: {
     x: number;
     y: number;
-    light: {
-      emitsLight: boolean;
-      bright: number;
-      dim: number;
-      color: string;
-      colorIntensity?: number;
-      angle?: number;
-      rotation?: number;
-    };
+    light: TokenLightConfig;
   },
   gridSize: number,
 ): ShaderLightSource | null {
