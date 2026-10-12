@@ -10,7 +10,7 @@ import {
 } from './character-proficiency-calculations';
 import { findSrdClass } from '../../shared/srd-class-data';
 
-import type { Character, CharacterClass } from '@/types/character';
+import type { AbilityScores, Character, CharacterClass } from '@/types/character';
 
 import { EQUIPMENT_LOOKUP } from '@/data/equipmentOptions';
 import { getSpellSlotsByLevel } from '@/data/spellcastingFeatures';
@@ -112,7 +112,7 @@ export {
 export const calculateSpellSaveDC = (
   character: Character,
   profBonus?: number,
-  spellcastingAbility?: keyof Character['abilityScores'] | null,
+  spellcastingAbility?: keyof AbilityScores | null,
 ): number | undefined => {
   const ability =
     spellcastingAbility !== undefined
@@ -135,7 +135,7 @@ export const calculateSpellSaveDC = (
 export const calculateSpellAttackBonus = (
   character: Character,
   profBonus?: number,
-  spellcastingAbility?: keyof Character['abilityScores'] | null,
+  spellcastingAbility?: keyof AbilityScores | null,
 ): number | undefined => {
   const ability =
     spellcastingAbility !== undefined
@@ -156,9 +156,9 @@ export const calculateSpellAttackBonus = (
  * spellcasting level yet (2014 Ranger and Paladin cast from level 2) has none.
  */
 export const getSpellcastingAbility = (
-  characterClass: CharacterClass | null,
+  characterClass: CharacterClass | null | undefined,
   level?: number,
-): keyof Character['abilityScores'] | null => {
+): keyof AbilityScores | null => {
   if (!characterClass) {
     return null;
   }

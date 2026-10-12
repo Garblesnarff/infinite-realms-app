@@ -1,9 +1,30 @@
-import type { DowntimeActivity } from '@/types/downtimeActivities';
+import type { Character } from '@/types/character';
+import type { DowntimeActivity, DowntimeOutcome } from '@/types/downtimeActivities';
+
+/**
+ * Outcome shape as authored in the downtime activity data. `DowntimeOutcome`
+ * requires an `id` this data never sets, and the authored effects are keyed
+ * `type` / `goldRecovery` / `itemsGained` rather than the names on
+ * `DowntimeOutcome`.
+ */
+export interface DowntimeOutcomeEffects extends Omit<DowntimeOutcome, 'id'> {
+  id?: string;
+  type?: 'success' | 'failure';
+  goldRecovery?: number;
+  itemsGained?: NonNullable<Character['inventory']>;
+}
+
+/**
+ * A downtime activity whose outcomes use the authored effect keys above.
+ */
+export interface AuthoredDowntimeActivity extends Omit<DowntimeActivity, 'outcomes'> {
+  outcomes: DowntimeOutcomeEffects[];
+}
 
 /**
  * Common downtime activities data
  */
-export const commonDowntimeActivities: DowntimeActivity[] = [
+export const commonDowntimeActivities: AuthoredDowntimeActivity[] = [
   {
     id: 'scribing_spell',
     name: 'Scribe a Spell Scroll',

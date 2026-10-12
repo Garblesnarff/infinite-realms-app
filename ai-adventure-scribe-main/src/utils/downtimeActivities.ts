@@ -4,15 +4,10 @@
  * Functions for handling downtime activities, rolls, and outcomes
  */
 
-import { commonDowntimeActivities } from './downtimeCommonActivities';
+import { commonDowntimeActivities, type DowntimeOutcomeEffects } from './downtimeCommonActivities';
 
 import type { Character } from '@/types/character';
-import type {
-  DowntimeActivity,
-  DowntimeOutcome,
-  DowntimeActivityType,
-  DowntimeResult,
-} from '@/types/downtimeActivities';
+import type { DowntimeActivity, DowntimeActivityType } from '@/types/downtimeActivities';
 
 import { hasProficiency } from '@/utils/character/parse-proficiency-list';
 import { rollDice } from '@/utils/diceUtils';
@@ -20,10 +15,33 @@ import { rollDice } from '@/utils/diceUtils';
 export { commonDowntimeActivities };
 
 /**
+ * The downtime code reads and writes a `gold` purse on the character even
+ * though `Character` does not declare one.
+ */
+export interface CharacterWithGold extends Character {
+  gold?: number;
+}
+
+/**
+ * Result of performing a downtime activity.
+ */
+export interface DowntimeResult {
+  success: boolean;
+  activityCompleted: boolean;
+  message: string;
+  goldSpent: number;
+  materialsUsed: number;
+  daysSpent: number;
+  outcome?: DowntimeOutcomeEffects;
+  rollResult?: number;
+  dc?: number;
+}
+
+/**
  * Check if a character meets the prerequisites for a downtime activity
  */
 export function checkDowntimePrerequisites(
-  character: Character,
+  character: CharacterWithGold,
   activity: DowntimeActivity,
 ): { canPerform: boolean; reason?: string } {
   // Check level requirement
@@ -91,7 +109,7 @@ export function checkDowntimePrerequisites(
  * Perform a downtime activity and calculate the outcome
  */
 export function performDowntimeActivity(
-  character: Character,
+  character: CharacterWithGold,
   activity: DowntimeActivity,
 ): DowntimeResult {
   // Check prerequisites first
@@ -108,7 +126,7 @@ export function performDowntimeActivity(
   }
 
   // Spend resources
-  const updatedCharacter = { ...character };
+  const updatedCharacter: CharacterWithGold = { ...character };
 
   // Deduct gold
   if (activity.goldCost !== undefined && updatedCharacter.gold !== undefined) {
@@ -133,7 +151,9 @@ export function performDowntimeActivity(
       goldSpent: activity.goldCost || 0,
       materialsUsed: activity.materialCost || 0,
       daysSpent: activity.daysRequired,
-      outcome: activity.outcomes.find((outcome) => outcome.type === 'success'),
+      outcome: (activity.outcomes as DowntimeOutcomeEffects[]).find(
+        (outcome) => outcome.type === 'success',
+      ),
     };
   }
 
@@ -143,13 +163,17 @@ export function performDowntimeActivity(
   const success = rollResult.total >= activity.successDC;
 
   // Find appropriate outcome
-  let outcome: DowntimeOutcome | undefined;
+  let outcome: DowntimeOutcomeEffects | undefined;
 
   if (success) {
-    outcome = activity.outcomes.find((outcome) => outcome.type === 'success');
+    outcome = (activity.outcomes as DowntimeOutcomeEffects[]).find(
+      (outcome) => outcome.type === 'success',
+    );
   } else {
     // Find failure outcome
-    outcome = activity.outcomes.find((outcome) => outcome.type === 'failure');
+    outcome = (activity.outcomes as DowntimeOutcomeEffects[]).find(
+      (outcome) => outcome.type === 'failure',
+    );
 
     // If no specific failure outcome, use generic failure
     if (!outcome) {
@@ -238,7 +262,7 @@ export function calculateDowntimeCost(activity: DowntimeActivity): number {
  * Check if a character can afford a downtime activity
  */
 export function canAffordDowntimeActivity(
-  character: Character,
+  character: CharacterWithGold,
   activity: DowntimeActivity,
 ): boolean {
   const totalCost = calculateDowntimeCost(activity);

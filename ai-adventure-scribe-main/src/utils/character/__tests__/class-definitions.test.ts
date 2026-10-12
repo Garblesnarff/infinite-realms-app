@@ -160,7 +160,7 @@ describe('class-definitions', () => {
       const getFeatures = CLASS_FEATURES_MAP['barbarian'];
       const lvl1 = getFeatures(1);
       expect(lvl1.some((f) => f.name === 'rage')).toBe(true);
-      expect(lvl1.some((f) => f.name === 'unarmored_defense')).toBe(true);
+      expect(lvl1.some((f) => (f.name as string) === 'unarmored_defense')).toBe(true);
 
       const rage = lvl1.find((f) => f.name === 'rage');
       expect(rage?.maxUses).toBe(2);
@@ -185,7 +185,7 @@ describe('class-definitions', () => {
 
     it('should return correct features for Monk', () => {
       const getFeatures = CLASS_FEATURES_MAP['monk'];
-      expect(getFeatures(1).some((f) => f.name === 'unarmored_defense')).toBe(true);
+      expect(getFeatures(1).some((f) => (f.name as string) === 'unarmored_defense')).toBe(true);
       expect(getFeatures(2).some((f) => f.name === 'ki')).toBe(true);
       expect(getFeatures(3).some((f) => f.name === 'deflect_missiles')).toBe(true);
     });
@@ -212,13 +212,13 @@ describe('class-definitions', () => {
 
     it('should return correct features for Druid', () => {
       const getFeatures = CLASS_FEATURES_MAP['druid'];
-      expect(getFeatures(1).some((f) => f.name === 'wild_shape')).toBe(false);
-      expect(getFeatures(2).some((f) => f.name === 'wild_shape')).toBe(true);
+      expect(getFeatures(1).some((f) => (f.name as string) === 'wild_shape')).toBe(false);
+      expect(getFeatures(2).some((f) => (f.name as string) === 'wild_shape')).toBe(true);
 
-      const ws2 = getFeatures(2).find((f) => f.name === 'wild_shape');
+      const ws2 = getFeatures(2).find((f) => (f.name as string) === 'wild_shape');
       expect(ws2?.maxUses).toBe(2);
 
-      const ws20 = getFeatures(20).find((f) => f.name === 'wild_shape');
+      const ws20 = getFeatures(20).find((f) => (f.name as string) === 'wild_shape');
       expect(ws20?.maxUses).toBe(999);
     });
   });
