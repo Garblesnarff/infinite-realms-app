@@ -17,6 +17,7 @@ import {
   EMBEDDING_MAX_INPUT_CHARS,
   EMBEDDING_MODEL,
   normalizeEmbedding,
+  parseRetryDelayMs,
 } from '../../../shared/embedding-limits.js';
 
 /**
@@ -36,6 +37,8 @@ export class EmbeddingError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly providerStatus?: number,
+    readonly retryDelayMs?: number | null,
   ) {
     super(message);
     this.name = 'EmbeddingError';
@@ -93,7 +96,14 @@ export async function generateEmbeddingDetailed(
   }
 
   if (!response.ok) {
-    throw new EmbeddingError('Embedding request failed', response.status >= 500 ? 503 : 502);
+    const errorText = await response.text().catch(() => '');
+    const retryDelayMs = parseRetryDelayMs(errorText);
+    throw new EmbeddingError(
+      'Embedding request failed',
+      response.status >= 500 ? 503 : 502,
+      response.status,
+      retryDelayMs,
+    );
   }
 
   const data = (await response.json()) as {
@@ -119,7 +129,8 @@ export async function generateEmbeddingDetailed(
 export async function generateEmbedding(
   text: string,
   taskType: EmbeddingTaskType,
+  signal?: AbortSignal,
 ): Promise<number[]> {
-  const result = await generateEmbeddingDetailed(text, taskType);
+  const result = await generateEmbeddingDetailed(text, taskType, signal);
   return result.values;
 }

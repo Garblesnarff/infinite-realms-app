@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, isNull, sql } from 'drizzle-orm';
 
 import { CampaignService } from './campaign-service.js';
-import { generateEmbedding, generateEmbeddingDetailed } from './embedding-service.js';
+import { EmbeddingError, generateEmbedding, generateEmbeddingDetailed } from './embedding-service.js';
 import {
   RECALL_BUDGET_MS,
   recallWithBudget,
@@ -35,19 +35,75 @@ import { logger } from '../lib/logger.js';
  * system's index of it did, and bumping the timestamp would make an internal write look like
  * an edit to anything reading recency.
  */
+/** Maximum total attempts for background memory embedding attachment (1 initial + 2 retries). */
+export const ATTACH_EMBEDDING_MAX_ATTEMPTS = 3;
+/** Fallback retry delay (ms) when 429 body carries no parsed retry hint. */
+export const DEFAULT_ATTACH_RETRY_DELAY_MS = 2_000;
+/** Ceiling cap (ms) on any single retry delay to prevent unbounded background waiting. */
+export const MAX_ATTACH_RETRY_DELAY_MS = 10_000;
+
+export interface AttachEmbeddingOptions {
+  sleep?: (ms: number) => Promise<void>;
+  signal?: AbortSignal;
+  maxAttempts?: number;
+}
+
+/**
+ * Resolve the effective background attempt budget. The budget is never configurable past
+ * ATTACH_EMBEDDING_MAX_ATTEMPTS: non-finite (Infinity/NaN), non-positive, or extreme inputs
+ * fall back to (or are capped at) the default, so a misconfigured caller can never make
+ * background retries unbounded.
+ */
+function resolveAttachAttempts(raw: number | undefined): number {
+  if (raw === undefined || !Number.isFinite(raw) || raw < 1) return ATTACH_EMBEDDING_MAX_ATTEMPTS;
+  return Math.min(Math.floor(raw), ATTACH_EMBEDDING_MAX_ATTEMPTS);
+}
+
 export async function attachEmbedding(
   memoryId: string,
   content: string,
   sessionId?: string,
+  options?: AttachEmbeddingOptions,
 ): Promise<void> {
-  try {
-    const embedding = await generateEmbedding(content, 'RETRIEVAL_DOCUMENT');
-    await db.update(memories).set({ embedding }).where(eq(memories.id, memoryId));
-  } catch (error) {
-    alert('memory_embedding_failed', {
-      sessionId,
-      error: `memory=${memoryId} ${error instanceof Error ? error.message : String(error)}`,
-    });
+  const maxAttempts = resolveAttachAttempts(options?.maxAttempts);
+  const sleepFn = options?.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
+  const signal = options?.signal;
+
+  let attempt = 0;
+  while (attempt < maxAttempts) {
+    attempt++;
+
+    if (signal?.aborted) {
+      return;
+    }
+
+    try {
+      const embedding = await generateEmbedding(content, 'RETRIEVAL_DOCUMENT', signal);
+      await db.update(memories).set({ embedding }).where(eq(memories.id, memoryId));
+      return;
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+        return;
+      }
+
+      const is429 = error instanceof EmbeddingError && error.providerStatus === 429;
+      if (!is429 || attempt >= maxAttempts) {
+        alert('memory_embedding_failed', {
+          sessionId,
+          error: `memory=${memoryId} ${error instanceof Error ? error.message : String(error)}`,
+        });
+        return;
+      }
+
+      const delayFromError = error instanceof EmbeddingError ? error.retryDelayMs : null;
+      const rawDelay =
+        delayFromError != null && delayFromError > 0
+          ? delayFromError
+          : DEFAULT_ATTACH_RETRY_DELAY_MS;
+      const delayMs = Math.min(rawDelay, MAX_ATTACH_RETRY_DELAY_MS);
+
+      await sleepFn(delayMs);
+    }
   }
 }
 

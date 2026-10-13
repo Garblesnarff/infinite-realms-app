@@ -4,7 +4,10 @@ import {
   EMBEDDING_MAX_INPUT_CHARS,
   EMBEDDING_MODEL,
   normalizeEmbedding,
+  parseRetryDelayMs,
 } from '../../../shared/embedding-limits';
+
+export { parseRetryDelayMs };
 
 /**
  * Embedding generation using Google's gemini-embedding-001, pinned to 768 dimensions to match
@@ -106,20 +109,6 @@ const defaultLimiter = createItemRateLimiter({
   onWait: (ms) => console.warn(`  ...rate limit: waiting ${Math.ceil(ms / 1000)}s`),
 });
 
-/**
- * Pull a retry delay out of a 429 body.
- *
- * Google returns the machine-readable `RetryInfo` field, which is what we key on. The prose
- * "Please retry in 16.6s." in the same payload is a human-facing restatement of the same value
- * and is matched as a fallback, so a response carrying only the prose still paces correctly.
- */
-export function parseRetryDelayMs(body: string): number | null {
-  const structured = /"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/.exec(body);
-  if (structured) return Math.ceil(parseFloat(structured[1]) * 1000);
-  const prose = /retry in\s+(\d+(?:\.\d+)?)\s*s/i.exec(body);
-  if (prose) return Math.ceil(parseFloat(prose[1]) * 1000);
-  return null;
-}
 
 export interface PostBatchDeps {
   limiter?: ItemRateLimiter;
