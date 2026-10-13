@@ -264,6 +264,8 @@ describe('detectDeclaredDefense (#262)', () => {
     expect(detectDeclaredDefense('I disengage')).toBe('disengage');
     expect(detectDeclaredDefense('Dash')).toBe('dash');
     expect(detectDeclaredDefense('I yield')).toBe('yield');
+    expect(detectDeclaredDefense('I surrender')).toBe('yield');
+    expect(detectDeclaredDefense('surrender')).toBe('yield');
     expect(detectDeclaredDefense('I flee')).toBe('flee');
     expect(detectDeclaredDefense('run away')).toBe('flee');
   });

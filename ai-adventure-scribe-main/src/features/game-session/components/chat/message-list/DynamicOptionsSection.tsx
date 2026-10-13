@@ -252,11 +252,39 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
           // No `end_turn` after it: the exit has already taken the player out of the turn order,
           // and a turn boundary for a participant who no longer has one is a second refusal.
           await refreshCombatState();
-        } else if (
-          action.type === 'dash' ||
-          action.type === 'dodge' ||
-          action.type === 'disengage'
-        ) {
+        } else if (action.type === 'dodge') {
+          // #262: Dodge ends the turn. The DM pipeline crosses the turn boundary
+          // after every executed action; the inline option has to do the same or
+          // the turn stays open on a spent action. Disadvantage on attacks against
+          // the dodger is applied by the engine until their next turn.
+          const result = await executeAuthoritativeCombatIntent(
+            encounter.id,
+            { type: 'dodge', actorId },
+            'dm',
+            Date.now(),
+            'typed',
+          );
+          const parts = [
+            ...formatCombatActionParts(
+              { actor_id: actorId, action_type: 'dodge' },
+              result,
+              roster,
+            ),
+            ...formatWakeParts(result),
+          ];
+          await sendEngineNotice(onSendMessage, {
+            text: parts.map((part) => part.line).join('\n\n'),
+            cards: parts.map((part) => part.card),
+          });
+          if (!(result as { combatEnded?: boolean } | null)?.combatEnded) {
+            await executeAuthoritativeCombatIntent(encounter.id, {
+              type: 'end_turn',
+              actorId,
+              actionId: crypto.randomUUID(),
+            });
+          }
+          await refreshCombatState();
+        } else if (action.type === 'dash' || action.type === 'disengage') {
           const result = await executeAuthoritativeCombatIntent(
             encounter.id,
             { type: action.type, actorId },
