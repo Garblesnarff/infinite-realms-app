@@ -301,8 +301,7 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
   const [comfortLevel] = useState<'pg' | 'pg13' | 'r' | 'custom'>('pg13');
   const [showSafetyInfo] = useState(false);
 
-  // @ts-expect-error #417 MessageContext exposes isLoading, not messagesLoading
-  const { messages, sendMessage, messagesLoading } = useMessageContext();
+  const { messages, sendMessage, isLoading: messagesLoading } = useMessageContext();
   const { createMemory } = useMemoryContext();
 
   const combatAI = useCombatAIIntegration({
