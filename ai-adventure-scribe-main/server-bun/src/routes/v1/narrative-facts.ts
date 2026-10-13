@@ -1,6 +1,7 @@
 import { Elysia, t } from 'elysia';
 
 import { alert } from '../../lib/alerting.js';
+import { AppError } from '../../lib/errors.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { NarrativeLedgerService } from '../../services/narrative/narrative-ledger-service.js';
 
@@ -80,7 +81,7 @@ export function createNarrativeFactRoutes({
       // caller treats a null block as "no ground truth to state" and still sends the prompt.
       // Degrading quietly is what v2 guardrail 3 forbids, though, so the failure pages
       // through alert() (#1680) before the null goes back.
-      async ({ query, user }) => {
+      async ({ query, user, set }) => {
         try {
           return {
             scene_state: await ledger.renderSceneState(query.session_id, user!.userId, {
@@ -88,6 +89,22 @@ export function createNarrativeFactRoutes({
             }),
           };
         } catch (renderError) {
+          const isAppErr = renderError instanceof AppError;
+          const statusCode = isAppErr
+            ? renderError.statusCode
+            : typeof (renderError as { statusCode?: unknown })?.statusCode === 'number'
+              ? (renderError as { statusCode: number }).statusCode
+              : (renderError as { name?: unknown })?.name === 'NotFoundError'
+                ? 404
+                : null;
+
+          if (statusCode === 401 || statusCode === 403 || statusCode === 404) {
+            set.status = statusCode;
+            return {
+              error: renderError instanceof Error ? renderError.message : String(renderError),
+            };
+          }
+
           alertFn('scene_state_render_failed', {
             sessionId: query.session_id,
             error: renderError instanceof Error ? renderError.message : String(renderError),
