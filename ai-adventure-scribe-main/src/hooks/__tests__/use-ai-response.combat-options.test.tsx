@@ -25,6 +25,9 @@ vi.mock('@/contexts/GameContext', () => ({
     setGamePhase: vi.fn(),
   })),
 }));
+vi.mock('@/services/combat/player-movement-remaining', () => ({
+  actorMovementRemaining: vi.fn().mockResolvedValue(0),
+}));
 vi.mock('@/services/auth/TokenService', () => ({
   getAuthHeaders: vi.fn(() => ({ Authorization: 'Bearer test' })),
   getAccessToken: vi.fn(() => 'test'),
