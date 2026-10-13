@@ -1,9 +1,14 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 import FeaturesTab from '../FeaturesTab';
 
 import type { Character } from '@/types/character';
+
+vi.mock('@/services/class-features-api', () => ({
+  getCharacterClassFeatures: vi.fn().mockResolvedValue({ features: [], usesRemaining: {} }),
+}));
 
 // #389: subrace traits (Hill Dwarf's Dwarven Toughness) must appear in the
 // Racial Traits section, not just the base race's traits. Fixture follows the
@@ -28,9 +33,18 @@ const buildCharacter = (overrides: Partial<Character> = {}): Character =>
     ...overrides,
   }) as Character;
 
+const renderTab = (character: Character): ReturnType<typeof render> => {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <FeaturesTab character={character} onUpdate={async () => true} />
+    </QueryClientProvider>,
+  );
+};
+
 describe('FeaturesTab racial traits (#389)', () => {
   it('lists the subrace trait alongside the race traits', () => {
-    render(<FeaturesTab character={buildCharacter()} onUpdate={async () => true} />);
+    renderTab(buildCharacter());
 
     // Each trait renders as a title + description pair.
     expect(screen.getAllByText('Darkvision').length).toBeGreaterThan(0);
@@ -39,17 +53,14 @@ describe('FeaturesTab racial traits (#389)', () => {
   });
 
   it('dedupes a trait present on both race and subrace', () => {
-    render(
-      <FeaturesTab
-        character={buildCharacter({
-          subrace: {
-            id: 'hill-dwarf',
-            name: 'Hill Dwarf',
-            traits: ['Dwarven Toughness', 'Darkvision'],
-          } as unknown as Character['subrace'],
-        })}
-        onUpdate={async () => true}
-      />,
+    renderTab(
+      buildCharacter({
+        subrace: {
+          id: 'hill-dwarf',
+          name: 'Hill Dwarf',
+          traits: ['Dwarven Toughness', 'Darkvision'],
+        } as unknown as Character['subrace'],
+      }),
     );
 
     // One feature card for Darkvision (title + description = 2 nodes), not two cards.
@@ -57,12 +68,7 @@ describe('FeaturesTab racial traits (#389)', () => {
   });
 
   it('renders with no subrace', () => {
-    render(
-      <FeaturesTab
-        character={buildCharacter({ subrace: null })}
-        onUpdate={async () => true}
-      />,
-    );
+    renderTab(buildCharacter({ subrace: null }));
 
     expect(screen.getAllByText('Darkvision').length).toBeGreaterThan(0);
     expect(screen.queryByText('Dwarven Toughness')).not.toBeInTheDocument();
