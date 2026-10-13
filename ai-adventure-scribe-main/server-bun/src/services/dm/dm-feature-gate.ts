@@ -118,7 +118,16 @@ async function loadLibrary(): Promise<LibraryFeature[]> {
   return (await ClassFeaturesService.getFeaturesLibrary()) as LibraryFeature[];
 }
 
-/** The session's character, only when the session and the character are this user's. */
+/**
+ * The session's character, gated on the character belonging to this user.
+ * For sessions with a campaign, the campaign must also belong to the user.
+ * Sessions without a linked campaign (campaignId null — createSession's
+ * character-only / neither branches) skip the campaign check, so the #218
+ * writers (items, XP, conditions, rest) work there. Note: this also means
+ * `refuseFeaturesCharacterLacks` now receives a character (instead of null)
+ * on campaign-less sessions; the character-ownership check is the
+ * authorization gate in both cases.
+ */
 export async function ownedSessionCharacter(
   sessionId: string,
   userId: string,
@@ -126,20 +135,31 @@ export async function ownedSessionCharacter(
   const { db } = await import('../../../../db/client');
   const { and, eq, or } = await import('drizzle-orm');
   const { campaigns, characters, gameSessions } = await import('../../../../db/schema/index');
-  const [row] = await db
-    .select({ character: characters })
+  // #463: look up the character through the session first; only check campaign
+  // ownership when a campaign is actually linked. The old innerJoin on campaigns
+  // matched nothing for campaign-less sessions, so every #218 writer silently
+  // skipped the turn with no_character.
+  const [sessionRow] = await db
+    .select({ character: characters, campaignId: gameSessions.campaignId })
     .from(gameSessions)
-    .innerJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
     .innerJoin(characters, eq(gameSessions.characterId, characters.id))
     .where(
       and(
         eq(gameSessions.id, sessionId),
-        eq(campaigns.userId, userId),
         or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
       ),
     )
     .limit(1);
-  return row?.character ?? null;
+  if (!sessionRow) return null;
+  if (sessionRow.campaignId) {
+    const [campaign] = await db
+      .select({ id: campaigns.id })
+      .from(campaigns)
+      .where(and(eq(campaigns.id, sessionRow.campaignId), eq(campaigns.userId, userId)))
+      .limit(1);
+    if (!campaign) return null;
+  }
+  return sessionRow.character;
 }
 
 export interface FeatureGateInput {

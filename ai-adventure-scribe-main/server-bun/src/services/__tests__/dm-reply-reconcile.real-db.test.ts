@@ -122,6 +122,9 @@ const { applyStoryItems, applyStoryItemsOnce } = await importWithRealDb(
 );
 const { applyStoryConditions, applyStoryConditionsOnce, getActiveCharacterConditions, SRD_2014_CONDITIONS } =
   await importWithRealDb(() => import('../dm/story-conditions.js'));
+const { refuseFeaturesCharacterLacks } = await importWithRealDb(
+  () => import('../dm/dm-feature-gate.js'),
+);
 
 if (!hasRealDb) {
   console.warn(
@@ -3199,6 +3202,131 @@ ${playerInput}
       'applied',
     ]);
     expect(await sheetInventory(turn.character.id)).toEqual([{ name: 'Charts', quantity: 2 }]);
+  });
+
+  test('#463: story items reach the inventory on the client-shaped starter session via POST /v1/llm/generate', async () => {
+    // Strategist round 3, item 2. The client's real starter flow
+    // (starter-campaign-bootstrap.ts resolveOrCreateStarterCampaign +
+    // StarterCharacterSelectionPage + createGameSession) builds the session as:
+    // campaignId = the user's own campaign copy (never null),
+    // starterCampaignId = the starter id, characterId = the seeded premade.
+    // Drive the full DM turn through the route with an items envelope, exactly
+    // as the client sends it, and assert the inventory row lands.
+    await database
+      .update(gameSessions)
+      .set({ starterCampaignId: 'midsummer' })
+      .where(eq(gameSessions.id, sessionId));
+    try {
+      const playerInput = 'I pick up the brass key.';
+      await playerSays(playerInput);
+      const turn = await dmTurn({
+        ...fighter,
+        playerInput,
+        reply: storyReply('You pocket the brass key.', {
+          items: [{ name: 'Brass Key', quantity: 1, change: 'gain' }],
+        }),
+      });
+      expect(turn.status).toBe(200);
+      expect(await sheetInventory(turn.character.id)).toEqual([
+        { name: 'Brass Key', quantity: 1 },
+      ]);
+    } finally {
+      await database
+        .update(gameSessions)
+        .set({ starterCampaignId: null })
+        .where(eq(gameSessions.id, sessionId));
+    }
+  });
+
+  test('#463: story items reach the inventory on a null-campaign session via POST /v1/llm/generate', async () => {
+    // Regression test for this PR's fix. Sessions created without a campaign
+    // (createSession's character-only / neither branches) carry campaignId null.
+    // The old ownedSessionCharacter inner-joined campaigns and matched nothing,
+    // so every #218 writer skipped with no_character; the fixed lookup resolves
+    // the character through the session and only checks campaign ownership when
+    // a campaign is linked.
+    await database
+      .update(gameSessions)
+      .set({ campaignId: null, starterCampaignId: 'midsummer' })
+      .where(eq(gameSessions.id, sessionId));
+    try {
+      const playerInput = 'I pick up the brass key.';
+      await playerSays(playerInput);
+      const turn = await dmTurn({
+        ...fighter,
+        playerInput,
+        reply: storyReply('You pocket the brass key.', {
+          items: [{ name: 'Brass Key', quantity: 1, change: 'gain' }],
+        }),
+      });
+      expect(turn.status).toBe(200);
+      expect(await sheetInventory(turn.character.id)).toEqual([
+        { name: 'Brass Key', quantity: 1 },
+      ]);
+    } finally {
+      await database
+        .update(gameSessions)
+        .set({ campaignId, starterCampaignId: null })
+        .where(eq(gameSessions.id, sessionId));
+    }
+  });
+
+  test('#463: the feature gate runs on a null-campaign session (refuseFeaturesCharacterLacks gets the character)', async () => {
+    // Strategist round 3, item 3. This PR's ownedSessionCharacter change also
+    // means refuseFeaturesCharacterLacks receives the character (instead of
+    // null) on null-campaign sessions. The gate must still refuse a feature the
+    // character lacks, rather than skipping the check.
+    const [{ id: nullCampaignSessionId }] = await database
+      .insert(gameSessions)
+      .values({
+        campaignId: null,
+        starterCampaignId: 'midsummer-gate',
+        sessionNumber: 1,
+        status: 'active',
+      })
+      .returning({ id: gameSessions.id });
+    let characterId = '';
+    try {
+      const [character] = await database
+        .insert(characters)
+        .values({
+          userId,
+          campaignId: null,
+          name: testId('gp-gate-fighter'),
+          class: 'Fighter',
+          race: 'Human',
+          level: 1,
+        })
+        .returning();
+      if (!character) throw new Error('[dm-reply-reconcile] the gate character was not seeded');
+      characterId = character.id;
+      await database
+        .update(gameSessions)
+        .set({ characterId: character.id })
+        .where(eq(gameSessions.id, nullCampaignSessionId));
+      const result = await refuseFeaturesCharacterLacks({
+        result: {
+          text: JSON.stringify(
+            envelopeOf({
+              text: 'Action Surge! You lunge at the cultist twice.',
+              options: [],
+              roll_requests: [],
+            }),
+          ),
+          provider: 'openrouter',
+          model: 't/m',
+          usage: { inputTokens: 4200, outputTokens: 310 },
+        } as never,
+        userId,
+        sessionId: nullCampaignSessionId,
+        playerInput: 'I use Action Surge and swing again before he recovers.',
+      });
+      const line = `${character.name} can't use Action Surge: it isn't on their character sheet.`;
+      expect(JSON.parse(String(result.text)).text).toBe(line);
+    } finally {
+      await database.delete(gameSessions).where(eq(gameSessions.id, nullCampaignSessionId));
+      if (characterId) await database.delete(characters).where(eq(characters.id, characterId));
+    }
   });
 
   test('#218 step 4: two concurrent applies for one player message apply the condition once (row lock)', async () => {
