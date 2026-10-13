@@ -11,6 +11,7 @@ import type { CombatEngineBlock } from '@/utils/combat-engine-blocks';
 import type { DetectedEnemy, DetectedCombatAction } from '@/utils/combatDetection';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { isEngineTaggedRoll } from '@/contexts/game/dice-queue-visibility';
 import { useGame } from '@/contexts/GameContext';
@@ -258,6 +259,9 @@ export const useAIResponse = (): {
   const { setGamePhase, state: gameState, cancelDiceRoll } = useGame();
   const { refreshCombatState } = useCombat();
   const { user, userPlan } = useAuth();
+  // #400: the owned character sheet (equipment/spells) for the suggestion filter. The
+  // session context's character payload is identity+stats only, so it cannot source this.
+  const { state: characterState } = useCharacter();
   const [combatTurnUiState, setCombatTurnUiState] = useState<CombatTurnUiState>(
     INITIAL_COMBAT_TURN_UI_STATE,
   );
@@ -533,9 +537,15 @@ export const useAIResponse = (): {
         const characterId = String(characterRecord.id || '');
         lastCombatCharacterIdRef.current = characterId;
         lastCombatEncounterRef.current = activeEncounter;
-        // #400: the DM's suggested options are filtered against the sheet deterministically —
-        // an option naming a spell or attack the character cannot use never reaches the screen.
-        const sheetCombatNames = extractSheetCombatNames(characterRecord);
+        // #400: the DM's suggested options are filtered against the owned sheet —
+        // an option naming a spell or attack the character cannot use never reaches the
+        // screen. Without a sheet the filter is a no-op: filtering against an empty sheet
+        // would drop legitimate suggestions.
+        const sheetCombatNames = extractSheetCombatNames(
+          characterState.character as Record<string, unknown> | null,
+        );
+        const filterSheetOptions = (options: unknown[]): unknown[] =>
+          sheetCombatNames ? filterOptionsAgainstSheet(options, sheetCombatNames) : options;
 
         // A character on the floor cannot act (SRD 5.1): the one thing their turn holds is the
         // death saving throw, which the dying panel's driver sends as `death_save_turn`. Any other
@@ -816,7 +826,7 @@ export const useAIResponse = (): {
                     !earlyShouldStartCombat;
                   let earlyText = parsedResult.text;
                   if (!suppressRender && parsedResult.options?.length) {
-                    earlyText = `${earlyText.trim()}\n\n${filterOptionsAgainstSheet(parsedResult.options, sheetCombatNames).join('\n')}`;
+                    earlyText = `${earlyText.trim()}\n\n${filterSheetOptions(parsedResult.options).join('\n')}`;
                   }
 
                   await onTextReady(
@@ -1180,9 +1190,7 @@ export const useAIResponse = (): {
           processedRolls.playerRollRequests.length === 0;
         // #400: sheet-illegal suggestions never reach the screen; the emptiness checks read
         // the filtered list so the UI can say why there are no choices.
-        const sheetOptions = result.options?.length
-          ? filterOptionsAgainstSheet(result.options, sheetCombatNames)
-          : [];
+        const sheetOptions = result.options?.length ? filterSheetOptions(result.options) : [];
         if (isNarrationTurn) {
           if (sheetOptions.length) {
             finalResponseText = `${finalResponseText.trim()}\n\n${sheetOptions.join('\n')}`;
@@ -1253,6 +1261,7 @@ export const useAIResponse = (): {
       user?.id,
       setGamePhase,
       cancelDiceRoll,
+      characterState.character,
     ],
   );
 

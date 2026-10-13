@@ -32,6 +32,9 @@ import { setPlayerRollHost } from '@/services/combat/player-roll-bridge';
 import { userDataApi } from '@/services/user-data-api';
 
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: vi.fn(() => ({ userPlan: 'pro' })) }));
+vi.mock('@/contexts/CharacterContext', () => ({
+  useCharacter: vi.fn(() => ({ state: { character: null } })),
+}));
 vi.mock('@/contexts/CombatContext', () => ({ useCombat: vi.fn() }));
 vi.mock('@/contexts/GameContext', () => ({
   useGame: vi.fn(() => ({

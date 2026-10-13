@@ -42,15 +42,17 @@ const stringList = (value: unknown): string[] =>
     : [];
 
 /**
- * The sheet's usable attacks and spells, from the character record the turn already carries.
- * Attacks are equipment entries that name a real SRD weapon (an "attack with Shortsword"
- * suggestion is only legal when the sheet actually lists a shortsword); unarmed strike is
- * always available. Spells are the cantrips plus the known, prepared, pact and ritual lists.
+ * The sheet's usable attacks and spells, from the owned character record (the full sheet, not
+ * the session context's limited payload). Attacks are equipment entries that name a real SRD
+ * weapon (an "attack with Shortsword" suggestion is only legal when the sheet actually lists
+ * a shortsword); unarmed strike is always available. Spells are the cantrips plus the known,
+ * prepared, pact and ritual lists. Returns null when there is no sheet: filtering against an
+ * empty sheet would drop legitimate suggestions, so the caller must treat null as "do not filter".
  */
 export function extractSheetCombatNames(
   characterRecord: Record<string, unknown> | null | undefined,
-): SheetCombatNames {
-  if (!characterRecord) return { attacks: [UNARMED_STRIKE], spells: [] };
+): SheetCombatNames | null {
+  if (!characterRecord) return null;
   const attacks = stringList(characterRecord.equipment)
     .map(normalizeCombatName)
     .filter((name) => SRD_WEAPON_NAMES.has(name));

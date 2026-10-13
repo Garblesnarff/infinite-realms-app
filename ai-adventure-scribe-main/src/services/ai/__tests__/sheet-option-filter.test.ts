@@ -41,8 +41,12 @@ describe('extractSheetCombatNames', () => {
     );
   });
 
-  it('survives a missing record and non-string entries', () => {
-    expect(extractSheetCombatNames(null)).toEqual({ attacks: ['unarmed strike'], spells: [] });
+  it('returns null when there is no sheet — the caller must not filter then', () => {
+    expect(extractSheetCombatNames(null)).toBeNull();
+    expect(extractSheetCombatNames(undefined)).toBeNull();
+  });
+
+  it('survives non-string entries', () => {
     expect(
       extractSheetCombatNames({ equipment: [42, null], cantrips: 'not-a-list' } as any),
     ).toEqual({ attacks: ['unarmed strike'], spells: [] });
