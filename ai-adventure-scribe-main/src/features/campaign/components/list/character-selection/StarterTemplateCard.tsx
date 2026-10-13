@@ -6,8 +6,9 @@ import type { Ability } from '@/types/character';
 import type { AbilityScoreName } from '@/utils/racialAbilityBonuses';
 
 import { resolveCampaignArtwork } from '@/components/campaigns/campaign-artwork';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import { Z_INDEX } from '@/constants/z-index';
 import { lookupRaces } from '@/data/races';
 import { getEffectiveAbilityScores } from '@/hooks/use-character-stats';
@@ -205,10 +206,12 @@ export const StarterTemplateCard: React.FC<StarterTemplateCardProps> = ({
             </div>
           </div>
 
-          <Button
-            className="w-full bg-infinite-gold text-infinite-dark hover:bg-infinite-purple"
-            disabled={isCreating}
-            tabIndex={-1}
+          <div
+            className={cn(
+              buttonVariants({ variant: 'default' }),
+              'w-full bg-infinite-gold text-infinite-dark hover:bg-infinite-purple',
+              isCreating && 'pointer-events-none opacity-50',
+            )}
             aria-hidden="true"
           >
             {isCreating ? (
@@ -222,7 +225,7 @@ export const StarterTemplateCard: React.FC<StarterTemplateCardProps> = ({
                 Start Adventure
               </>
             )}
-          </Button>
+          </div>
         </div>
       </CardContent>
     </Card>

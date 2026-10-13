@@ -4,8 +4,9 @@ import React from 'react';
 import type { Character } from '@/features/campaign/hooks/use-character-selection';
 
 import { resolveCampaignArtwork } from '@/components/campaigns/campaign-artwork';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import { Z_INDEX } from '@/constants/z-index';
 
 interface PlayableCharacterCardProps {
@@ -181,14 +182,16 @@ export const PlayableCharacterCard: React.FC<PlayableCharacterCardProps> = ({
             </>
           )}
 
-          <Button
-            className="w-full bg-infinite-gold text-infinite-dark hover:bg-infinite-purple"
-            tabIndex={-1}
+          <div
+            className={cn(
+              buttonVariants({ variant: 'default' }),
+              'w-full bg-infinite-gold text-infinite-dark hover:bg-infinite-purple',
+            )}
             aria-hidden="true"
           >
             <Play className="h-4 w-4 mr-2" />
             {actionLabel}
-          </Button>
+          </div>
         </div>
       </CardContent>
     </Card>

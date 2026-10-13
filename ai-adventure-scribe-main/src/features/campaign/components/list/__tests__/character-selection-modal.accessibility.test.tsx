@@ -70,7 +70,7 @@ describe('CharacterSelectionModal Accessibility', () => {
     expect(strLabel).toHaveAttribute('aria-hidden', 'true');
   });
 
-  it('marks decorative images and buttons as hidden', () => {
+  it('marks decorative images and inner action indicators as aria-hidden without using a button element', () => {
     render(
       <CharacterSelectionModal
         isOpen={true}
@@ -80,9 +80,15 @@ describe('CharacterSelectionModal Accessibility', () => {
       />,
     );
 
-    // The inner "Start Adventure" button should be hidden as the card itself is the trigger
-    const startButton = screen.getByText(/Start Adventure/i).closest('button');
-    expect(startButton).toHaveAttribute('aria-hidden', 'true');
-    expect(startButton).toHaveAttribute('tabIndex', '-1');
+    // The inner "Start Adventure" label is inside a decorative div (aria-hidden="true") so that no native button is hidden
+    const ctaIndicator = screen.getByText(/Start Adventure/i).closest('div[aria-hidden="true"]');
+    expect(ctaIndicator).not.toBeNull();
+    expect(ctaIndicator?.tagName.toLowerCase()).toBe('div');
+    expect(ctaIndicator).toHaveAttribute('aria-hidden', 'true');
+
+    // Ensure there are no native button elements marked with aria-hidden="true" inside the card
+    const card = screen.getByRole('button', { name: /Select character: Aragorn/i });
+    const hiddenButtons = card.querySelectorAll('button[aria-hidden="true"]');
+    expect(hiddenButtons.length).toBe(0);
   });
 });
