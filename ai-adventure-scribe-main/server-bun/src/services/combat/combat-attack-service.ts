@@ -42,7 +42,7 @@ import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { aggregateResistances } from './resistance-resolver.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { assessPlayerCombatSpell, resolveCatalogSpell } from '../../data/spellData.js';
-import { rollD20 } from '../../lib/dice.js';
+import { rollD20, rollD20Pair } from '../../lib/dice.js';
 import { NotFoundError, InternalServerError, BusinessLogicError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
@@ -417,14 +417,20 @@ export class CombatAttackService {
     // fleer's turn, so claiming a turn action for the attacker would spend a second creature's
     // Action for a blow provoked by the first one.
     const resolveAttackRoll = async () => {
-      // The player's own die when they rolled one, and only then. `rollD20` already applied
+      // The player's own die when they rolled one, and only then. `rollD20Pair` already applied
       // advantage when it rolled; a provided die was rolled in the popup, which was told the
       // advantage state by `proposeAttack` and submits the die it kept. Rolling a second die
       // here would apply advantage twice.
       const autoRolled = !isProvidedD20(providedD20);
-      const attackRoll = autoRolled
-        ? rollD20(rules.advantage, rules.disadvantage)
-        : (providedD20 as number);
+      const pair = autoRolled
+        ? rollD20Pair(rules.advantage, rules.disadvantage)
+        : { kept: providedD20 as number };
+      const attackRoll = pair.kept;
+      // Both dice when the engine rolled two, so the log can show them and name the kept one
+      // (#263 CB-028). A player-supplied die is a single kept face: the popup already showed
+      // both dice to the roller.
+      const bothDice =
+        pair.other === undefined ? undefined : ([pair.kept, pair.other] as [number, number]);
 
       // Seated AC plus cover (half +2, three-quarters +5). The line names the bonus.
       const targetAC = rules.targetAc;
@@ -498,6 +504,9 @@ export class CombatAttackService {
         return {
           hit: false,
           d20: attackRoll,
+          ...(bothDice ? { d20Rolls: bothDice } : {}),
+          advantage: rules.advantage,
+          disadvantage: rules.disadvantage,
           attackBonus: rules.attackBonus,
           ...acFacts,
           totalAttackRoll: hitCheck.totalAttackRoll,
@@ -586,6 +595,9 @@ export class CombatAttackService {
         return {
           hit: true,
           d20: attackRoll,
+          ...(bothDice ? { d20Rolls: bothDice } : {}),
+          advantage: rules.advantage,
+          disadvantage: rules.disadvantage,
           attackBonus: rules.attackBonus,
           ...acFacts,
           totalAttackRoll: hitCheck.totalAttackRoll,
@@ -987,9 +999,16 @@ export class CombatAttackService {
         } else if (spell.attackType) {
           // Spell attack roll
           const attackRules = spellRules.get(targetId);
-          const attackRoll = isProvidedD20(d20)
-            ? d20
-            : rollD20(attackRules?.advantage, attackRules?.disadvantage);
+          // Both dice when the engine rolled two, so the log can show them (#263 CB-028).
+          // A player-supplied die is the single kept face from the popup.
+          const spellPair = isProvidedD20(d20)
+            ? { kept: d20 as number }
+            : rollD20Pair(attackRules?.advantage, attackRules?.disadvantage);
+          const attackRoll = spellPair.kept;
+          const spellBothDice =
+            spellPair.other === undefined
+              ? undefined
+              : ([spellPair.kept, spellPair.other] as [number, number]);
           const hitCheckResult = checkHit({
             attackRoll,
             attackBonus: spellAttackBonus,
@@ -1000,6 +1019,9 @@ export class CombatAttackService {
             return {
               hit: false,
               d20: attackRoll,
+              ...(spellBothDice ? { d20Rolls: spellBothDice } : {}),
+              advantage: attackRules?.advantage,
+              disadvantage: attackRules?.disadvantage,
               attackBonus: spellAttackBonus,
               ...acFacts,
               totalAttackRoll: hitCheckResult.totalAttackRoll,
@@ -1060,6 +1082,9 @@ export class CombatAttackService {
               const attackResult: AttackResult = {
                 hit: true,
                 d20: attackRoll,
+                ...(spellBothDice ? { d20Rolls: spellBothDice } : {}),
+                advantage: attackRules?.advantage,
+                disadvantage: attackRules?.disadvantage,
                 attackBonus: spellAttackBonus,
                 ...acFacts,
                 totalAttackRoll: hitCheckResult.totalAttackRoll,

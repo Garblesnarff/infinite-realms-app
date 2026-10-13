@@ -47,6 +47,9 @@ import { userDataApi } from '@/services/user-data-api';
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: vi.fn(() => ({ userPlan: 'pro' })) }));
 vi.mock('@/contexts/CombatContext', () => ({ useCombat: vi.fn() }));
 vi.mock('@/contexts/GameContext', () => ({ useGame: vi.fn() }));
+vi.mock('@/services/combat/player-movement-remaining', () => ({
+  actorMovementRemaining: vi.fn().mockResolvedValue(0),
+}));
 vi.mock('@/services/auth/TokenService', () => ({
   getAuthHeaders: vi.fn(() => ({ Authorization: 'Bearer test' })),
   getAccessToken: vi.fn(() => 'test'),

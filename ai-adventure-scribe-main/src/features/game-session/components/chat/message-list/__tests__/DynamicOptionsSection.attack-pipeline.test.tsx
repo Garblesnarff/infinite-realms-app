@@ -9,6 +9,7 @@ import {
   executeStructuredCombatActionWithBoundary,
 } from '@/services/combat/combat-action-executor';
 import { askPlayerForAttackDie } from '@/services/combat/player-attack-roll';
+import { actorMovementRemaining } from '@/services/combat/player-movement-remaining';
 import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
 
 /**
@@ -60,6 +61,9 @@ vi.mock('@/services/combat/player-attack-roll', () => ({
 vi.mock('@/services/combat/player-spell-cast', () => ({
   askPlayerForSpellCast: vi.fn(),
 }));
+vi.mock('@/services/combat/player-movement-remaining', () => ({
+  actorMovementRemaining: vi.fn(),
+}));
 vi.mock('@/components/game/ActionOptions', () => ({
   ActionOptions: ({ options, onOptionSelect }: { options: any[]; onOptionSelect: any }) => (
     <div data-testid="action-options">
@@ -105,6 +109,9 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
     vi.mocked(executeAuthoritativeCombatIntent).mockResolvedValue({
       currentParticipant: { id: SWARM_1_ID },
     } as any);
+    // Default: no movement left, so the turn settles as before (#263 keeps the old behavior
+    // when the board is unknown or spent).
+    vi.mocked(actorMovementRemaining).mockResolvedValue(0);
   });
 
   const PARTICIPANTS = [
@@ -185,6 +192,118 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
     expect(executeAuthoritativeCombatIntent).toHaveBeenCalledTimes(1);
     // The DM never sees this attack as text.
     expect(onOptionSelect).not.toHaveBeenCalled();
+  });
+
+  it('one attack with movement left does not end the turn (#263 CB-011)', async () => {
+    // The Scholar still has 30 ft after the swing: the turn stays open and the refreshed
+    // menu offers Move / End turn instead of the attack spending the whole turn.
+    vi.mocked(actorMovementRemaining).mockResolvedValue(30);
+    render(
+      <DynamicOptionsSection
+        options={[]}
+        onOptionSelect={onOptionSelect}
+        onSendMessage={onSendMessage}
+        hasDynamicOverlay
+      />,
+    );
+    fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
+
+    await waitFor(() => expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalled());
+    expect(actorMovementRemaining).toHaveBeenCalledWith('session-d5', SCHOLAR_ID);
+    // No end_turn: the turn is still the player's.
+    expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
+    // The DM never sees this attack as text.
+    expect(onOptionSelect).not.toHaveBeenCalled();
+  });
+
+  it('posts the player result before any turn-end when movement remains (#263 CB-024)', async () => {
+    // CB-024: the log must show the player's attack result BEFORE "ended their turn" and
+    // enemy lines. With movement remaining, the attack handler posts the player's result
+    // via onSendMessage and sends no end_turn: the turn-end (and any enemy actions) can
+    // only happen after, when the player explicitly ends the turn.
+    vi.mocked(actorMovementRemaining).mockResolvedValue(30);
+    render(
+      <DynamicOptionsSection
+        options={[]}
+        onOptionSelect={onOptionSelect}
+        onSendMessage={onSendMessage}
+        hasDynamicOverlay
+      />,
+    );
+    fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
+
+    // The player's result is posted first.
+    await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(1));
+    const playerMessage = onSendMessage.mock.calls[0][0] as { text: string };
+    expect(playerMessage.text).toContain('HIT');
+    // And no turn boundary has been crossed yet: no end_turn intent.
+    expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
+  });
+
+  it('orders result, then end_turn, then enemy lines when the turn settles (#263 CB-024)', async () => {
+    // CB-024: with no movement left the attack settles the turn. The log must show the
+    // player's attack result BEFORE the end_turn intent, and the enemy lines only arrive
+    // via the server's end_turn response — never before the player's result is visible.
+    // Default mock: actorMovementRemaining -> 0, so the turn settles.
+    const npcRow = serverRow(
+      'npc-row-swarm-attack',
+      'swarm-attack-action',
+      { type: 'attack', actorId: SWARM_1_ID, targetIds: [SCHOLAR_ID] },
+      {
+        actorName: 'Light-Eater Swarm 1',
+        targetName: 'The Scholar',
+        hit: true,
+        finalDamage: 2,
+        targetNewHp: 8,
+        targetIsConscious: true,
+      },
+    );
+    vi.mocked(executeAuthoritativeCombatIntent).mockImplementation(
+      serverEndTurn({ currentParticipant: { id: SWARM_1_ID } }, [npcRow]),
+    );
+
+    // Capture the server-delivered enemy row, noting the end_turn call order when it lands.
+    const npcRows: Array<{ text: string }> = [];
+    const mockedEndTurn = vi.mocked(executeAuthoritativeCombatIntent);
+    let endTurnOrderAtNpcRow = -1;
+    const capture = (event: Event) => {
+      endTurnOrderAtNpcRow = mockedEndTurn.mock.invocationCallOrder[0];
+      npcRows.push(...((event as CustomEvent).detail as Array<{ text: string }>));
+    };
+    window.addEventListener('session-engine-rows', capture);
+    try {
+      render(
+        <DynamicOptionsSection
+          options={[]}
+          onOptionSelect={onOptionSelect}
+          onSendMessage={onSendMessage}
+          hasDynamicOverlay
+        />,
+      );
+      fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
+
+      // 1) The player's result is posted.
+      await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(1));
+      expect((onSendMessage.mock.calls[0][0] as { text: string }).text).toContain('HIT');
+      // 2) Then the end_turn intent is sent.
+      await waitFor(() =>
+        expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith(
+          'encounter-d5',
+          keyedEndTurn,
+        ),
+      );
+      // 3) Then the enemy line arrives via the server's end_turn response.
+      await waitFor(() => expect(npcRows).toHaveLength(1));
+      expect(npcRows[0].text).toContain('2 damage');
+
+      // Invocation order: result posted < end_turn sent <= enemy line delivered.
+      const resultOrder = onSendMessage.mock.invocationCallOrder[0];
+      const endTurnOrder = mockedEndTurn.mock.invocationCallOrder[0];
+      expect(resultOrder).toBeLessThan(endTurnOrder);
+      expect(endTurnOrderAtNpcRow).toBe(endTurnOrder);
+    } finally {
+      window.removeEventListener('session-engine-rows', capture);
+    }
   });
 
   it('a movement-only approach spends no Action and keeps the turn open', async () => {

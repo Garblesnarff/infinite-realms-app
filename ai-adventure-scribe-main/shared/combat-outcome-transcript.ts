@@ -61,6 +61,10 @@ export interface CombatEngineResult {
   distanceFeet?: number;
   reachFeet?: number;
   d20?: number;
+  /** Both d20 faces `[kept, dropped]` when advantage/disadvantage rolled a second die (#263). */
+  d20Rolls?: [number, number];
+  advantage?: boolean;
+  disadvantage?: boolean;
   attackBonus?: number;
   totalAttackRoll?: number;
   targetAC?: number;
@@ -149,6 +153,24 @@ function isFiniteNumber(value: unknown): value is number {
 
 function formatModifier(value: number): string {
   return value < 0 ? `- ${Math.abs(value)}` : `+ ${value}`;
+}
+
+/**
+ * The d20 portion of an attack line. Advantage/disadvantage rolled two dice: the line names
+ * both and the kept one (#263 CB-028). `d20Rolls` is `[kept, dropped]`.
+ */
+function formatD20Roll(result: CombatEngineResult): string {
+  const kept = result.d20 as number;
+  const rolls = result.d20Rolls;
+  if (
+    Array.isArray(rolls) &&
+    rolls.length === 2 &&
+    (result.advantage === true || result.disadvantage === true)
+  ) {
+    const kind = result.advantage === true ? 'advantage' : 'disadvantage';
+    return `rolled ${rolls[0]} and ${rolls[1]} (${kind}, kept ${kept})`;
+  }
+  return `rolled ${kept}`;
 }
 
 function targetState(result: CombatEngineResult): string | null {
@@ -240,7 +262,7 @@ export function formatCombatEngineParts(
     isFiniteNumber(result.totalAttackRoll) &&
     isFiniteNumber(result.targetAC);
   const roll = hasRoll
-    ? `rolled ${result.d20} ${formatModifier(result.attackBonus as number)} = ${result.totalAttackRoll} ${formatVersusArmorClass(result)}`
+    ? `${formatD20Roll(result)} ${formatModifier(result.attackBonus as number)} = ${result.totalAttackRoll} ${formatVersusArmorClass(result)}`
     : `resolved an attack against ${target}`;
   const critical =
     result.autoCritReason !== undefined

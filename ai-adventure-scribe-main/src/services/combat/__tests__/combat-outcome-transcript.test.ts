@@ -43,6 +43,43 @@ describe('combat outcome transcript', () => {
     expect(line).not.toContain('8 HP');
   });
 
+  it('names both d20s and the kept one on disadvantage (#263 CB-028)', () => {
+    const line = formatCombatEngineOutcome(attack, {
+      actorName: 'The Seeker',
+      targetName: 'Balthazar',
+      d20: 8,
+      d20Rolls: [8, 14],
+      disadvantage: true,
+      attackBonus: 4,
+      totalAttackRoll: 12,
+      targetAC: 12,
+      hit: true,
+      finalDamage: 3,
+      damageType: 'slashing',
+    });
+
+    expect(line).toContain('rolled 8 and 14 (disadvantage, kept 8)');
+    expect(line).toContain('12 vs AC 12');
+  });
+
+  it('names both d20s and the kept one on advantage (#263 CB-028)', () => {
+    const line = formatCombatEngineOutcome(attack, {
+      actorName: 'The Seeker',
+      targetName: 'Balthazar',
+      d20: 18,
+      d20Rolls: [18, 7],
+      advantage: true,
+      attackBonus: 4,
+      totalAttackRoll: 22,
+      targetAC: 12,
+      hit: true,
+      finalDamage: 3,
+      damageType: 'slashing',
+    });
+
+    expect(line).toContain('rolled 18 and 7 (advantage, kept 18)');
+  });
+
   it('reports a miss and does not invent damage or a condition', () => {
     const line = formatCombatEngineOutcome(attack, {
       actorName: 'Balthazar',
