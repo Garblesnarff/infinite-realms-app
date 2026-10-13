@@ -54,6 +54,9 @@ export const DYING_SCHOLAR_PARTICIPANT = {
   damageVulnerabilities: [],
   multiclassInfo: null,
   monsterAttack: null,
+  // #374: persisted at seating for exact 2014 victory-XP awards; NULL for players.
+  monsterRef: null,
+  xpValue: null,
   createdAt: '2026-10-05T23:43:11.586Z',
   updatedAt: '2026-10-05T23:43:11.972Z',
   status: {

@@ -155,6 +155,20 @@ export const combatParticipants = pgTable(
      */
     monsterAttack: jsonb('monster_attack'),
 
+    /**
+     * #374: the monster's XP value, persisted at seating time. From the authored
+     * stat block's XP field (campaign bibles), else the SRD catalog entry it
+     * resolved to, else NULL. Never re-derived from the display name.
+     * Used for exact 2014 XP awards on last_hostile_defeated; NULL falls back
+     * to the threshold method with a COMBAT_XP_FALLBACK log.
+     */
+    xpValue: integer('xp_value'),
+    /**
+     * #374: reference to the monster's source (SRD catalog id or bible key),
+     * for auditing which rung of the resolution ladder the XP came from.
+     */
+    monsterRef: text('monster_ref'),
+
     // Timestamps
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),

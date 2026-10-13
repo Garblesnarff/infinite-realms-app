@@ -198,3 +198,32 @@ export function findAuthoredMonster(
   }
   return name ? findTitledPartialMatch(index, name) : null;
 }
+
+export interface MissingXpBlock {
+  campaignId: string;
+  entityName: string;
+  chunkType: string;
+  coverage: ParseCoverage;
+}
+
+/**
+ * #374 item 4 — the no-XP audit. Pure: every authored stat block in the index
+ * that parsed to a real block but carries no explicit XP. A missing XP on a new
+ * campaign is a content error (the award falls back to the DMG threshold);
+ * NPC bios that parse to nothing are not stat blocks and are skipped.
+ */
+export function findBlocksMissingXp(index: CampaignMonsterIndex): MissingXpBlock[] {
+  const out: MissingXpBlock[] = [];
+  for (const m of index.byKey.values()) {
+    if (m.coverage === 'none') continue;
+    if (m.parsed.xp === undefined) {
+      out.push({
+        campaignId: index.campaignId,
+        entityName: m.entityName,
+        chunkType: m.chunkType,
+        coverage: m.coverage,
+      });
+    }
+  }
+  return out.sort((a, b) => a.entityName.localeCompare(b.entityName));
+}

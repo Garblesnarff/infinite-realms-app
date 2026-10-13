@@ -1,0 +1,17 @@
+-- 0021_combat_participants_xp -- NO-OP MIGRATION. Deliberately contains no DDL.
+--
+-- The authoritative DDL is authored by hand in
+-- supabase/migrations/20261012_combat_participants_xp.sql, which is the
+-- authoritative statement of the change.
+--
+-- This file and meta/0021_snapshot.json exist only to advance the drizzle
+-- snapshot chain so that `bun run db:check-drift`
+-- (scripts/check-schema-drift.sh, wired into the `schema-drift` CI job) sees
+-- db/schema/combat.ts and db/migrations/ back in agreement. Only the snapshot
+-- matters -- the same arrangement as 0010_combat_participant_ac_nullable.sql
+-- and 0012_combat_pending_intent.sql.
+--
+-- The generated DDL is NOT kept here because the replay in
+-- scripts/test-migrations.sh merges db/migrations/ and supabase/migrations/
+-- into one history. Keeping it would collide with the hand-written supabase
+-- migration. With no DDL in it the file is safe at any point in the replay.

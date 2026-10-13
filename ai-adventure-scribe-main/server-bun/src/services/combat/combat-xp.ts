@@ -51,10 +51,42 @@ export async function awardCombatVictoryXp(input: {
       ),
     ];
     if (!playerIds.length) return { awarded: [], defeatedNames: [] };
+    // #310: victory XP requires enemies to have been defeated. An encounter that never
+    // seated monsters (e.g. the end-check running before monsters arrive, or a malformed
+    // encounter) is not a victory — awarding here is what put +25/+50/+75 on the sheet
+    // the moment combat started, with no message. 'monster' is the hostile seat:
+    // 'npc' seats are allies/bystanders and must not count (aligns with #425).
+    const hostileCount = state.participants.filter((p) => p.participantType === 'monster').length;
+    if (!hostileCount) return { awarded: [], defeatedNames: [] };
+    // Hostiles are the 'monster' seats: 'npc' seats are allies/bystanders and must not
+    // count toward the award or force the threshold fallback (their xp_value is NULL).
     const defeatedNames = state.participants
-      .filter((p) => p.participantType !== 'player')
+      .filter((p) => p.participantType === 'monster')
       .map((p) => p.name)
       .filter(Boolean);
+
+    // #374: the exact 2014 award. Every defeated hostile's XP was persisted at seating;
+    // when all of them carry one, the award is the sum split evenly among the player
+    // characters — no encounter multiplier for awards (2014). Any NULL falls back to
+    // the difficulty-threshold method below, with a log naming the gap.
+    const defeatedHostiles = state.participants.filter(
+      (p) => p.participantType === 'monster',
+    );
+    const seatedXp = defeatedHostiles.map((p) => p.xpValue ?? null);
+    const missingXpCount = seatedXp.filter((v) => v == null).length;
+    const exactTotal =
+      defeatedHostiles.length > 0 && missingXpCount === 0
+        ? seatedXp.reduce<number>((sum, v) => sum + (v ?? 0), 0)
+        : null;
+    if (missingXpCount > 0) {
+      logger.info({
+        msg: 'COMBAT_XP_FALLBACK',
+        encounterId,
+        sessionId,
+        defeatedHostiles: defeatedHostiles.length,
+        missingXpCount,
+      });
+    }
 
     const awarded = await db.transaction(async (tx) => {
       const [locked] = await tx
@@ -78,7 +110,12 @@ export async function awardCombatVictoryXp(input: {
         );
       const awards: CombatXpAward[] = [];
       for (const row of rows) {
-        const xp = combatVictoryXp(row.level ?? 1, locked.difficulty);
+        // #374: exact split of the seated-XP sum (floored: XP is integral); the threshold
+        // method is the fallback when any defeated hostile lacks a seated value.
+        const xp =
+          exactTotal != null
+            ? Math.floor(exactTotal / playerIds.length)
+            : combatVictoryXp(row.level ?? 1, locked.difficulty);
         if (xp <= 0) continue;
         await tx
           .update(characters)

@@ -143,6 +143,9 @@ export function resolveCombatantStats(
         damageResistances: parsed.damageResistances ?? srd?.damageResistances ?? [],
         damageImmunities: parsed.damageImmunities ?? srd?.damageImmunities ?? [],
         damageVulnerabilities: parsed.damageVulnerabilities ?? srd?.damageVulnerabilities ?? [],
+        // #374: authored XP first, then the SRD catalog entry it resolved to, else NULL.
+        // Never re-derived from the display name.
+        xp: parsed.xp ?? srd?.xp ?? null,
         ...(srd?.abilityScores ? { abilityScores: srd.abilityScores } : {}),
         attacks: srd?.attacks ?? { attacks: [], unsupported: [] },
         filledFromFallback,
