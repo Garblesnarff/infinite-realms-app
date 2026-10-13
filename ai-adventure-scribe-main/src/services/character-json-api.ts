@@ -17,8 +17,30 @@ export interface ImportedCharacterResponse {
 
 async function responseError(response: Response): Promise<Error> {
   try {
-    const body = (await response.json()) as { error?: unknown };
-    if (typeof body.error === 'string' && body.error) return new Error(body.error);
+    const body = (await response.json()) as {
+      error?: unknown;
+      message?: unknown;
+      issues?: Array<{ path?: unknown; message?: unknown }>;
+    };
+    if (Array.isArray(body.issues) && body.issues.length > 0) {
+      const issueDetails = body.issues
+        .map((issue) => {
+          const path = typeof issue?.path === 'string' ? issue.path : '';
+          const msg = typeof issue?.message === 'string' ? issue.message : '';
+          return [path, msg].filter(Boolean).join(' ');
+        })
+        .filter(Boolean);
+      if (issueDetails.length > 0) {
+        const prefix = typeof body.error === 'string' && body.error ? `${body.error}: ` : '';
+        return new Error(`${prefix}${issueDetails.join('; ')}`);
+      }
+    }
+    if (typeof body.error === 'string' && body.error) {
+      return new Error(body.error);
+    }
+    if (typeof body.message === 'string' && body.message) {
+      return new Error(body.message);
+    }
   } catch {
     // Use the status below when the server did not return JSON.
   }
