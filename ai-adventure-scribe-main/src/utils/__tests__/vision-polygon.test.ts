@@ -78,16 +78,18 @@ describe('vision-polygon', () => {
     it('should clip polygon to vision cone', () => {
       const token = createMockToken({
         vision: { enabled: true, range: 60, angle: 90 },
-        rotation: 0
+        rotation: 0,
       });
       const mockPoints = [
         { point: { x: 160, y: 100 } }, // In cone
-        { point: { x: 40, y: 100 } },  // Out of cone
+        { point: { x: 40, y: 100 } }, // Out of cone
       ];
 
       vi.mocked(visionCalculations.calculateVisionRadius).mockReturnValue(60);
       vi.mocked(polygonGenerator.getAllRayIntersections).mockReturnValue(mockPoints as any);
-      vi.mocked(geometry.isPointInVisionCone).mockImplementation((origin, rot, angle, pt) => pt.x > 100);
+      vi.mocked(geometry.isPointInVisionCone).mockImplementation(
+        (_origin, _rot, _angle, pt) => pt.x > 100,
+      );
 
       const result = calculateVisionPolygon(token, []);
 
@@ -102,7 +104,7 @@ describe('vision-polygon', () => {
       const token = createMockToken({ vision: { enabled: true, visionMode: 'truesight' } });
       const walls: VisionBlocker[] = [
         { id: 'w1', blocksLight: true, blocksMovement: false } as any, // Transparent/Soft
-        { id: 'w2', blocksLight: true, blocksMovement: true } as any,  // Hard
+        { id: 'w2', blocksLight: true, blocksMovement: true } as any, // Hard
       ];
 
       vi.mocked(visionCalculations.calculateVisionRadius).mockReturnValue(60);
@@ -112,7 +114,7 @@ describe('vision-polygon', () => {
       expect(polygonGenerator.getAllRayIntersections).toHaveBeenCalledWith(
         expect.anything(),
         expect.arrayContaining([expect.objectContaining({ id: 'w2' })]),
-        expect.anything()
+        expect.anything(),
       );
       const filteredWalls = vi.mocked(polygonGenerator.getAllRayIntersections).mock.calls[0][1];
       expect(filteredWalls).toHaveLength(1);
@@ -130,7 +132,7 @@ describe('vision-polygon', () => {
       expect(polygonGenerator.getAllRayIntersections).toHaveBeenCalledWith(
         expect.anything(),
         [],
-        expect.anything()
+        expect.anything(),
       );
     });
   });
@@ -180,7 +182,14 @@ describe('vision-polygon', () => {
     });
 
     it('should merge multiple polygons using convex hull', () => {
-      const poly1 = { points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 0, y: 10 }], range: 10 } as any;
+      const poly1 = {
+        points: [
+          { x: 0, y: 0 },
+          { x: 10, y: 0 },
+          { x: 0, y: 10 },
+        ],
+        range: 10,
+      } as any;
       const poly2 = { points: [{ x: 10, y: 10 }], range: 20 } as any;
 
       const result = mergeVisionPolygons([poly1, poly2]);

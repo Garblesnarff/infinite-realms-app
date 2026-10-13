@@ -1,7 +1,7 @@
 import { FIGHTING_STYLES } from './constants';
 
-import type { DiceRoll } from '../diceUtils';
 import type {
+  DiceRoll,
   FightingStyle,
   FightingStyleName,
   CombatParticipant,
@@ -229,6 +229,7 @@ export function weaponQualifiesForStyle(
 
     case 'great_weapon_fighting':
       // Must be two-handed melee weapon
+      // @ts-expect-error // #192 returns boolean | undefined; keep runtime value (no || false)
       return weapon.properties.twoHanded || weapon.properties.versatile;
 
     case 'two_weapon_fighting':

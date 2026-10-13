@@ -19,6 +19,7 @@ describe('Spell Validation Extended', () => {
     mockCleric = {
       id: 'cleric',
       name: 'Cleric',
+      description: '',
       hitDie: 8,
       primaryAbility: 'wisdom',
       savingThrowProficiencies: ['wisdom', 'charisma'],
@@ -31,11 +32,13 @@ describe('Spell Validation Extended', () => {
       classFeatures: [],
       armorProficiencies: [],
       weaponProficiencies: [],
+      subclasses: [],
     };
 
     mockPaladin = {
       id: 'paladin',
       name: 'Paladin',
+      description: '',
       hitDie: 10,
       primaryAbility: 'charisma',
       savingThrowProficiencies: ['wisdom', 'charisma'],
@@ -48,11 +51,13 @@ describe('Spell Validation Extended', () => {
       classFeatures: [],
       armorProficiencies: [],
       weaponProficiencies: [],
+      subclasses: [],
     };
 
     mockFighter = {
       id: 'fighter',
       name: 'Fighter',
+      description: '',
       hitDie: 10,
       primaryAbility: 'strength',
       savingThrowProficiencies: ['strength', 'constitution'],
@@ -61,6 +66,7 @@ describe('Spell Validation Extended', () => {
       classFeatures: [],
       armorProficiencies: [],
       weaponProficiencies: [],
+      subclasses: [],
     };
 
     mockRace = {
@@ -128,7 +134,7 @@ describe('Spell Validation Extended', () => {
       const result = validateSpellSelection(
         clericChar,
         ['guidance', 'light-cleric', 'resistance'],
-        ['cure-wounds', 'guiding-bolt', 'bless', 'shield-of-faith']
+        ['cure-wounds', 'guiding-bolt', 'bless', 'shield-of-faith'],
       );
 
       expect(result.valid).toBe(true);
@@ -136,10 +142,10 @@ describe('Spell Validation Extended', () => {
       const tooMany = validateSpellSelection(
         clericChar,
         ['guidance', 'light-cleric', 'resistance'],
-        ['cure-wounds', 'guiding-bolt', 'bless', 'shield-of-faith', 'command']
+        ['cure-wounds', 'guiding-bolt', 'bless', 'shield-of-faith', 'command'],
       );
       expect(tooMany.valid).toBe(false);
-      expect(tooMany.errors.some(e => e.type === 'COUNT_MISMATCH')).toBe(true);
+      expect(tooMany.errors.some((e) => e.type === 'COUNT_MISMATCH')).toBe(true);
     });
   });
 
@@ -154,37 +160,25 @@ describe('Spell Validation Extended', () => {
       };
 
       // At lvl 3, Tiefling has Thaumaturgy (cantrip) and Hellish Rebuke (spell)
-      const result = validateSpellSelection(
-        fighterChar,
-        ['thaumaturgy'],
-        ['hellish-rebuke']
-      );
+      const result = validateSpellSelection(fighterChar, ['thaumaturgy'], ['hellish-rebuke']);
       expect(result.valid).toBe(true);
 
-      const missingSpell = validateSpellSelection(
-        fighterChar,
-        ['thaumaturgy'],
-        []
-      );
+      const missingSpell = validateSpellSelection(fighterChar, ['thaumaturgy'], []);
       expect(missingSpell.valid).toBe(false);
-      expect(missingSpell.errors.some(e => e.type === 'COUNT_MISMATCH')).toBe(true);
+      expect(missingSpell.errors.some((e) => e.type === 'COUNT_MISMATCH')).toBe(true);
     });
 
     it('should reject non-spellcaster level 1 Human Fighter with spells', () => {
-        const fighterChar: Character = {
-          name: 'Human Fighter',
-          level: 1,
-          class: mockFighter,
-          race: mockRace,
-        };
+      const fighterChar: Character = {
+        name: 'Human Fighter',
+        level: 1,
+        class: mockFighter,
+        race: mockRace,
+      };
 
-        const result = validateSpellSelection(
-          fighterChar,
-          ['mage-hand'],
-          ['magic-missile']
-        );
-        expect(result.valid).toBe(false);
-        expect(result.errors.some(e => e.type === 'LEVEL_REQUIREMENT')).toBe(true);
-      });
+      const result = validateSpellSelection(fighterChar, ['mage-hand'], ['magic-missile']);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.type === 'LEVEL_REQUIREMENT')).toBe(true);
+    });
   });
 });

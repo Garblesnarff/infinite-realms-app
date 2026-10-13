@@ -126,7 +126,7 @@ describe('commonHazards definitions and integration tests', () => {
       it('should correctly reduce character HP when damage is applied', () => {
         const saveResult = { saved: false, damageTaken: 5 };
         const updatedChar = applyHazardEffects(mockCharacter, acidPool, saveResult);
-        expect(updatedChar.hitPoints.current).toBe(10);
+        expect(updatedChar.hitPoints!.current).toBe(10);
       });
     });
 

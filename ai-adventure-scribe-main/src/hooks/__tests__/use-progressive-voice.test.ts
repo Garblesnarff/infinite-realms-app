@@ -24,7 +24,7 @@ vi.mock('@/services/voice-director', () => {
 // 3. Mock other dependencies
 const mockSetIsVoiceEnabled = vi.fn();
 vi.mock('../use-local-storage', () => ({
-  useLocalStorage: vi.fn((key, def) => [def, mockSetIsVoiceEnabled]),
+  useLocalStorage: vi.fn((_key, def) => [def, mockSetIsVoiceEnabled]),
 }));
 
 const mockToast = vi.fn();

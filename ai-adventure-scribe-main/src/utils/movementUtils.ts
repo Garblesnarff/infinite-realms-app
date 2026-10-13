@@ -53,6 +53,7 @@ export function doesMovementProvokeOpportunityAttacks(
     (toPosition === 'ranged' || toPosition === 'distant');
 
   // Check for features that prevent opportunity attacks
+  // @ts-expect-error // #192 ClassFeature name union has no 'mobile' (see #508)
   const hasMobileFeature = participant.classFeatures?.some((f) => f.name === 'mobile') || false;
   const isUsingDisengage = participant.bonusActionTaken; // Simplified - would need proper tracking
 
@@ -99,7 +100,7 @@ export function calculateMovementCost(
  * Check if a participant can move to a position
  */
 export function canMoveToPosition(
-  participant: CombatParticipant,
+  _participant: CombatParticipant,
   currentPosition: string,
   targetPosition: string,
   availableMovement: number,

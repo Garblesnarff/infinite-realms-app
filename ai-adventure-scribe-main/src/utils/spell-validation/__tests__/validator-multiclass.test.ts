@@ -39,7 +39,7 @@ describe('validateMulticlassSpellSelection', () => {
   it('should fall back to regular validation for single-class characters', async () => {
     const mockCharacter: Partial<Character> = {
       id: 'char-1',
-      classLevels: [{ className: 'Wizard', level: 1 }],
+      classLevels: [{ classId: 'wizard', className: 'Wizard', level: 1, hitDie: 6, features: [] }],
     };
     const mockResult = { valid: true, errors: [], warnings: [] };
     (validateSpellSelection as any).mockReturnValue(mockResult);
@@ -47,7 +47,7 @@ describe('validateMulticlassSpellSelection', () => {
     const result = await validateMulticlassSpellSelection(
       mockCharacter as Character,
       ['cantrip1'],
-      ['spell1']
+      ['spell1'],
     );
 
     expect(validateSpellSelection).toHaveBeenCalledWith(mockCharacter, ['cantrip1'], ['spell1']);
@@ -71,8 +71,8 @@ describe('validateMulticlassSpellSelection', () => {
     const mockCharacter: Partial<Character> = {
       id: 'char-1',
       classLevels: [
-        { className: 'Wizard', level: 1 },
-        { className: 'Cleric', level: 1 },
+        { classId: 'wizard', className: 'Wizard', level: 1, hitDie: 6, features: [] },
+        { classId: 'cleric', className: 'Cleric', level: 1, hitDie: 8, features: [] },
       ],
     };
 
@@ -87,15 +87,17 @@ describe('validateMulticlassSpellSelection', () => {
 
     expect(result.valid).toBe(true);
     expect(result.warnings).toContain('Multiclass caster level: 2');
-    expect(result.warnings).not.toContain('Pact Magic slots are separate from regular spell slots.');
+    expect(result.warnings).not.toContain(
+      'Pact Magic slots are separate from regular spell slots.',
+    );
   });
 
   it('should add Pact Magic warning if character has pact magic slots', async () => {
     const mockCharacter: Partial<Character> = {
       id: 'char-1',
       classLevels: [
-        { className: 'Warlock', level: 1 },
-        { className: 'Wizard', level: 1 },
+        { classId: 'warlock', className: 'Warlock', level: 1, hitDie: 8, features: [] },
+        { classId: 'wizard', className: 'Wizard', level: 1, hitDie: 6, features: [] },
       ],
     };
 
@@ -115,8 +117,8 @@ describe('validateMulticlassSpellSelection', () => {
     const mockCharacter: Partial<Character> = {
       id: 'char-1',
       classLevels: [
-        { className: 'Wizard', level: 1 },
-        { className: 'Cleric', level: 1 },
+        { classId: 'wizard', className: 'Wizard', level: 1, hitDie: 6, features: [] },
+        { classId: 'cleric', className: 'Cleric', level: 1, hitDie: 8, features: [] },
       ],
     };
 
@@ -129,7 +131,7 @@ describe('validateMulticlassSpellSelection', () => {
       expect.objectContaining({
         type: 'LEVEL_REQUIREMENT',
         message: 'Failed to calculate multiclass spell requirements',
-      })
+      }),
     );
   });
 
@@ -137,8 +139,8 @@ describe('validateMulticlassSpellSelection', () => {
     const mockCharacter: Partial<Character> = {
       id: 'char-1',
       classLevels: [
-        { className: 'Wizard', level: 1 },
-        { className: 'Cleric', level: 1 },
+        { classId: 'wizard', className: 'Wizard', level: 1, hitDie: 6, features: [] },
+        { classId: 'cleric', className: 'Cleric', level: 1, hitDie: 8, features: [] },
       ],
     };
 
@@ -153,7 +155,7 @@ describe('validateMulticlassSpellSelection', () => {
     expect(result.errors).toContainEqual(
       expect.objectContaining({
         type: 'LEVEL_REQUIREMENT',
-      })
+      }),
     );
   });
 });

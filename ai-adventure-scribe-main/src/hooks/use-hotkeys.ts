@@ -65,7 +65,7 @@ export interface UseHotkeysOptions {
   /** Allow hotkeys in text input fields */
   allowInInput?: boolean;
   /** Custom input field detector */
-  isInputField?: (element: HTMLElement) => boolean;
+  isInputField?: (element: HTMLElement | null) => boolean;
 }
 
 export interface UseHotkeysReturn {
@@ -92,7 +92,12 @@ export interface UseHotkeysReturn {
 function defaultIsInputField(element: HTMLElement | null): boolean {
   if (!element?.tagName) return false;
   const tagName = element.tagName.toLowerCase();
-  return tagName === 'input' || tagName === 'textarea' || tagName === 'select' || element.contentEditable === 'true';
+  return (
+    tagName === 'input' ||
+    tagName === 'textarea' ||
+    tagName === 'select' ||
+    element.contentEditable === 'true'
+  );
 }
 
 /**
@@ -113,10 +118,12 @@ function getHotkeyKey(
  * Check if event matches hotkey config
  */
 function matchesHotkey(event: KeyboardEvent, config: HotkeyConfig): boolean {
-  return event.key.toLowerCase() === config.key.toLowerCase() &&
+  return (
+    event.key.toLowerCase() === config.key.toLowerCase() &&
     !!config.ctrl === (event.ctrlKey || event.metaKey) &&
     !!config.alt === event.altKey &&
-    !!config.shift === event.shiftKey;
+    !!config.shift === event.shiftKey
+  );
 }
 
 // ===========================
@@ -149,10 +156,19 @@ export function useHotkeys(options: UseHotkeysOptions): UseHotkeysReturn {
   // ===========================
 
   const registerHotkey = useCallback((config: HotkeyConfig) => {
-    const key = getHotkeyKey(config.key, { ctrl: config.ctrl, alt: config.alt, shift: config.shift });
-    const existing = hotkeysRef.current.find((h) => getHotkeyKey(h.key, { ctrl: h.ctrl, alt: h.alt, shift: h.shift }) === key);
+    const key = getHotkeyKey(config.key, {
+      ctrl: config.ctrl,
+      alt: config.alt,
+      shift: config.shift,
+    });
+    const existing = hotkeysRef.current.find(
+      (h) => getHotkeyKey(h.key, { ctrl: h.ctrl, alt: h.alt, shift: h.shift }) === key,
+    );
     if (existing) {
-      logger.warn(`Hotkey conflict: ${key}`, { existing: existing.description, new: config.description });
+      logger.warn(`Hotkey conflict: ${key}`, {
+        existing: existing.description,
+        new: config.description,
+      });
       hotkeysRef.current = hotkeysRef.current.filter((h) => h !== existing);
     }
     hotkeysRef.current = [...hotkeysRef.current, config];
@@ -160,7 +176,9 @@ export function useHotkeys(options: UseHotkeysOptions): UseHotkeysReturn {
   }, []);
 
   const unregisterHotkey = useCallback((key: string) => {
-    hotkeysRef.current = hotkeysRef.current.filter((h) => h.key.toLowerCase() !== key.toLowerCase());
+    hotkeysRef.current = hotkeysRef.current.filter(
+      (h) => h.key.toLowerCase() !== key.toLowerCase(),
+    );
     logger.debug(`Unregistered hotkey: ${key}`);
   }, []);
 
@@ -169,7 +187,9 @@ export function useHotkeys(options: UseHotkeysOptions): UseHotkeysReturn {
   const isRegistered = useCallback(
     (key: string, modifiers?: { ctrl?: boolean; alt?: boolean; shift?: boolean }) => {
       const target = getHotkeyKey(key, modifiers);
-      return hotkeysRef.current.some((h) => getHotkeyKey(h.key, { ctrl: h.ctrl, alt: h.alt, shift: h.shift }) === target);
+      return hotkeysRef.current.some(
+        (h) => getHotkeyKey(h.key, { ctrl: h.ctrl, alt: h.alt, shift: h.shift }) === target,
+      );
     },
     [],
   );

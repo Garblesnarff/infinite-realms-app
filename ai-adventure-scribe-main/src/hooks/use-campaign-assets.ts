@@ -60,6 +60,8 @@ export function useCampaignAssets(
       return;
     }
 
+    const campaignId = starterCampaignId;
+
     async function loadAssets(): Promise<void> {
       setIsLoading(true);
       setError(null);
@@ -70,17 +72,17 @@ export function useCampaignAssets(
         // ⚡ Bolt: Parallelize asset loading to reduce total latency.
         // Instead of 3 sequential await calls, Promise.all executes them concurrently.
         const [charResult, chunkResult, campaignResult] = await Promise.all([
-          userDataApi.listStarterCharacterTemplates(starterCampaignId),
+          userDataApi.listStarterCharacterTemplates(campaignId),
           supabase
             .from('campaign_chunks')
             .select('entity_name, chunk_type, metadata')
-            .eq('campaign_id', starterCampaignId)
+            .eq('campaign_id', campaignId)
             .not('entity_name', 'is', null)
             .not('metadata->image_url', 'is', null),
           supabase
             .from('starter_campaigns')
             .select('title, cover_image_url, banner_image_url')
-            .eq('id', starterCampaignId)
+            .eq('id', campaignId)
             .single(),
         ]);
 

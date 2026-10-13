@@ -279,7 +279,8 @@ export function parseRegexRollRequests(message: string): ParsedRollRequest[] {
   // Generic roll requests with explicit dice
   GENERIC_ROLL_PATTERN.lastIndex = 0;
   while ((match = GENERIC_ROLL_PATTERN.exec(text)) !== null) {
-    if (requests.some((r) => r.originalText.includes(match[0]))) continue;
+    const matchedText = match[0];
+    if (requests.some((r) => r.originalText.includes(matchedText))) continue;
 
     const formula = match[1].trim();
     const rawPurpose = match[2]?.trim();

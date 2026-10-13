@@ -88,7 +88,7 @@ function campaignReducer(state: CampaignState, action: CampaignAction): Campaign
         campaign: {
           ...state.campaign,
           ...action.payload,
-        },
+        } as Campaign,
       };
     default:
       return state;

@@ -110,7 +110,7 @@ export async function calculateMulticlassCasterLevel(
 export async function getEnhancedSpellcastingInfo(
   character: Character,
 ): Promise<(SpellcastingInfo & { multiclassInfo?: MulticlassCalculation }) | null> {
-  const baseInfo = getSpellcastingInfo(character.class, character.level || 1);
+  const baseInfo = getSpellcastingInfo(character.class!, character.level || 1);
 
   if (!baseInfo) {
     return baseInfo;

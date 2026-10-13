@@ -11,7 +11,8 @@ import { validateMulticlass } from './multiclass/validation';
 import type { MulticlassProficiencyResult } from './multiclass/proficiencies';
 import type { MulticlassSpellcastingResult } from './multiclass/spellcasting';
 import type { MulticlassValidationResult } from './multiclass/validation';
-import type { Character, CharacterClass, ClassFeature } from '@/types/character';
+import type { LevelFeature } from '@/data/levelProgression';
+import type { Character, CharacterClass } from '@/types/character';
 
 import { getAllClassFeaturesUpToLevel } from '@/data/levelProgression';
 
@@ -21,11 +22,7 @@ export type {
   MulticlassProficiencyResult,
   MulticlassValidationResult,
 };
-export {
-  calculateMulticlassSpellcasting,
-  calculateMulticlassProficiencies,
-  validateMulticlass,
-};
+export { calculateMulticlassSpellcasting, calculateMulticlassProficiencies, validateMulticlass };
 
 // ===========================
 // Hit Points Calculation
@@ -71,12 +68,12 @@ export function calculateMulticlassHitPoints(character: Character): number {
 /**
  * Get all class features for a multiclass character
  */
-export function getMulticlassFeatures(character: Character): ClassFeature[] {
+export function getMulticlassFeatures(character: Character): LevelFeature[] {
   if (!character.classLevels || character.classLevels.length === 0) {
     return [];
   }
 
-  const allFeatures: ClassFeature[] = [];
+  const allFeatures: LevelFeature[] = [];
 
   character.classLevels.forEach((classLevel) => {
     const features = getAllClassFeaturesUpToLevel(classLevel.className, classLevel.level);

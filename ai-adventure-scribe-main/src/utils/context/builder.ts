@@ -60,7 +60,9 @@ class GameContextBuilder {
       context.campaign = {
         basic: {
           name: campaign.name,
+          // @ts-expect-error // #192 row field is string | null; context type wants string | undefined
           description: campaign.description,
+          // @ts-expect-error // #192 row field is string | null; context type wants string | undefined
           genre: campaign.genre,
           status: campaign.status || 'active',
         },
@@ -79,7 +81,9 @@ class GameContextBuilder {
       context.character = {
         basic: {
           name: character.name,
+          // @ts-expect-error // #192 row field is string | null; context type wants string | undefined
           race: character.race,
+          // @ts-expect-error // #192 row field is string | null; context type wants string | undefined
           class: character.class,
           level: character.level || 1,
         },

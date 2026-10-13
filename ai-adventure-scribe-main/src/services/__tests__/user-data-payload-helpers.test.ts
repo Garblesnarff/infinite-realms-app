@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { normalizeCharacter } from '@/services/user-data-payload-helpers';
 
+type NormalizedCharacter = Record<string, unknown> & {
+  hitDice?: { total: number; remaining: number; type: string };
+};
+
 /**
  * #264 (review finding 3): normalizeCharacter folds the GET's snake_case
  * hit_dice rows into the sheet's hitDice shape — the path the "sheet must
@@ -10,7 +14,7 @@ import { normalizeCharacter } from '@/services/user-data-payload-helpers';
  */
 describe('normalizeCharacter hit_dice mapping (#264)', () => {
   it('aggregates snake_case rows into the sheet hitDice shape', () => {
-    const normalized = normalizeCharacter({
+    const normalized: NormalizedCharacter = normalizeCharacter({
       id: 'char-1',
       class: 'Fighter',
       hit_dice: [
@@ -29,7 +33,7 @@ describe('normalizeCharacter hit_dice mapping (#264)', () => {
   });
 
   it('renders a per-class label for multiclass rows', () => {
-    const normalized = normalizeCharacter({
+    const normalized: NormalizedCharacter = normalizeCharacter({
       id: 'char-2',
       class: 'Fighter',
       hit_dice: [
@@ -56,12 +60,16 @@ describe('normalizeCharacter hit_dice mapping (#264)', () => {
   });
 
   it('leaves hitDice unset when there are no rows', () => {
-    const normalized = normalizeCharacter({ id: 'char-3', class: 'Rogue', hit_dice: [] });
+    const normalized: NormalizedCharacter = normalizeCharacter({
+      id: 'char-3',
+      class: 'Rogue',
+      hit_dice: [],
+    });
     expect(normalized.hitDice).toBeUndefined();
   });
 
   it('leaves hitDice unset when hit_dice is absent', () => {
-    const normalized = normalizeCharacter({ id: 'char-4', class: 'Rogue' });
+    const normalized: NormalizedCharacter = normalizeCharacter({ id: 'char-4', class: 'Rogue' });
     expect(normalized.hitDice).toBeUndefined();
   });
 });

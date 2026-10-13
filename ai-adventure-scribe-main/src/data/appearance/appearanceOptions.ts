@@ -33,7 +33,7 @@ const defaultOptions: AppearanceOptions = {
   hairColors: ['black', 'brown', 'blonde', 'red', 'white', 'gray'],
 };
 
-const APPEARANCE_BY_RACE: Partial<Record<RaceKey, AppearanceOptions>> = {
+const APPEARANCE_BY_RACE: Partial<Record<RaceKey, Partial<AppearanceOptions>>> = {
   human: {
     eyeColors: ['amber', 'blue', 'brown', 'gray', 'green', 'hazel'],
     skinColors: [
@@ -184,7 +184,9 @@ function mergeOptions(
 export function getAppearanceOptions(raceName?: string, subraceId?: string): AppearanceOptions {
   const raceKey = normalizeKey(raceName);
   const base =
-    raceKey && APPEARANCE_BY_RACE[raceKey] ? APPEARANCE_BY_RACE[raceKey]! : defaultOptions;
+    raceKey && APPEARANCE_BY_RACE[raceKey]
+      ? (APPEARANCE_BY_RACE[raceKey] as AppearanceOptions)
+      : defaultOptions;
   const subraceKey = normalizeKey(subraceId);
   const subraceOptions =
     subraceKey && APPEARANCE_BY_RACE[subraceKey] ? APPEARANCE_BY_RACE[subraceKey] : undefined;

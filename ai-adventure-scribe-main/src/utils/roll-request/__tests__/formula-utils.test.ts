@@ -53,7 +53,7 @@ describe('normalizeFormula', () => {
     inputs.forEach((input) => {
       const firstPass = normalizeFormula(input);
       const secondPass = normalizeFormula(firstPass);
-      expect(secondPass).toBe(firstPass, `Failed idempotency for input: ${input}`);
+      expect(secondPass, `Failed idempotency for input: ${input}`).toBe(firstPass);
     });
   });
 

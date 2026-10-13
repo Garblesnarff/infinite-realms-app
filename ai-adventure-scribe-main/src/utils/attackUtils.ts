@@ -80,6 +80,7 @@ export function performAttack(
   const tempHpToReduce = Math.min(target.temporaryHitPoints, damageToDeal);
   const remainingDamage = damageToDeal - tempHpToReduce;
   const _newTempHp = target.temporaryHitPoints - tempHpToReduce;
+  void _newTempHp;
   const newHp =
     remainingDamage > 0
       ? Math.max(0, target.currentHitPoints - remainingDamage)

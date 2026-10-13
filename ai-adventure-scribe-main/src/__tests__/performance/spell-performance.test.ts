@@ -221,6 +221,7 @@ describe('Spell System Performance Tests', () => {
           (spell) =>
             spell.school === 'Evocation' && spell.level <= 3 && spell.components_verbal === true,
         );
+        void _filtered;
 
         const endTime = performance.now();
         durations.push(endTime - startTime);
@@ -398,6 +399,7 @@ describe('Spell System Performance Tests', () => {
         longSpells.slice(0, 3),
         longSpells.slice(3, 9),
       );
+      void _result;
 
       const endTime = performance.now();
       const duration = endTime - startTime;

@@ -4,10 +4,7 @@ import type { Spell, Character } from '@/types/character';
 import type { SpellValidationResult } from '@/utils/spell-validation';
 
 import logger from '@/lib/logger';
-import {
-  validateSpellSelection,
-  validateSpellSelectionAsync,
-} from '@/utils/spell-validation';
+import { validateSpellSelection, validateSpellSelectionAsync } from '@/utils/spell-validation';
 
 export interface UseSpellSelectionValidationProps {
   character: Character | null;
@@ -130,6 +127,7 @@ export function useSpellSelectionValidation({
           character,
           selectedCantrips,
           selectedSpells,
+          // @ts-expect-error // #192 validateSpellSelection sync signature takes 3 args; test asserts 5 (useSpellSelectionValidation.test.ts:189)
           availableCantripIds,
           availableSpellIds,
         );

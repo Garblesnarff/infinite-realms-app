@@ -220,7 +220,7 @@ export class SafetyCommandProcessor {
     return null;
   }
 
-  private findTriggerWord(text: string, triggerWords: string[]): string | null {
+  protected findTriggerWord(text: string, triggerWords: string[]): string | null {
     // Keep original for backwards compatibility
     const words = text.toLowerCase().split(/\s+/);
     for (const trigger of triggerWords) {
