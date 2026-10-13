@@ -237,7 +237,7 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     if (hasStructuredResponseText) {
       // Structured openings use the same text field as every other DM turn.
       // Do not run legacy fence-stripping against the serialized JSON object.
-      result = { text: applyAssetPostProcessing({ text: structuredResponse.text }).text };
+      result = { text: applyAssetPostProcessing({ text: structuredResponse!.text }).text };
     } else {
       // Fence-stripping is retained only for legacy plain-text providers.
       let sampledText: string;
