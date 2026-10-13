@@ -13,8 +13,13 @@ import {
 } from './combat-notice';
 import { enforceNarrationGate } from './narration-gate';
 import { SILENT_PLAYER_TURN_SETUP, silentPlayerTurnPayload } from './silent-player-turn';
-import { facingName, type EngineRosterEntry } from '../../../shared/engine-display-name';
+import {
+  facingName,
+  playerFacingWeaponName,
+  type EngineRosterEntry,
+} from '../../../shared/engine-display-name';
 
+import type { CombatEngineResult } from '../../../shared/combat-outcome-transcript';
 import type { DMAoESpellAction } from '@/services/ai/dm-response-schema';
 import type { StructuredCombatAction } from '@/services/combat/combat-action-executor';
 import type { EngineResultCard } from '@/services/combat/engine-result-card';
@@ -208,6 +213,62 @@ const sameAction = (left: StructuredCombatAction, right: StructuredCombatAction)
   left.slot_level === right.slot_level &&
   left.target_ids.length === right.target_ids.length &&
   left.target_ids.every((target, index) => target === right.target_ids[index]);
+
+/**
+ * The roll_result payload for an engine-resolved player attack (#467). An action-card
+ * attack's die never reaches the DM message flow, so logIncomingRolls never writes its
+ * roll_result — and the narration repair would see no engine outcome for the attack the
+ * DM is about to narrate. Null when the result is not a single attack roll: a save
+ * spell's result wears attack vocabulary (`hit` = failed save, #2391) but rolled no
+ * attack, a multi-target result has no single verdict, and an unnamed weapon leaves no
+ * accurate description to anchor on. The description mirrors describeAttackRoll's
+ * output ("Chill Touch spell attack vs Mechanical Server") so the repair and the
+ * dismissal patterns read the same words the roll prompt showed.
+ */
+export function engineAttackRollResult(
+  action: StructuredCombatAction,
+  result: unknown,
+  targetLabel: string,
+): {
+  success: boolean;
+  total: number;
+  ac?: number;
+  requestType: 'attack';
+  description: string;
+  timestamp: string;
+} | null {
+  if (action.action_type !== 'attack' && action.action_type !== 'cast_spell') return null;
+  if (!result || typeof result !== 'object') return null;
+  const outcome = result as CombatEngineResult;
+  if (Array.isArray(outcome.results)) return null;
+  if (typeof outcome.hit !== 'boolean' || typeof outcome.totalAttackRoll !== 'number') return null;
+  // A saving-throw spell has no attack roll, so it has no hit or miss to contradict.
+  if (outcome.saveAbility && typeof outcome.saved === 'boolean') return null;
+  let name: string | null = null;
+  if (action.action_type === 'cast_spell') {
+    const spell =
+      outcome.spellName?.trim() || playerCombatSpellLabel(action.spell_id, action.spell_id);
+    if (spell && spell !== 'unknown spell') name = spell;
+  } else {
+    const weapon =
+      typeof outcome.weaponResolution?.resolved === 'string'
+        ? outcome.weaponResolution.resolved.trim()
+        : '';
+    if (weapon) name = playerFacingWeaponName(weapon, outcome.actorName);
+  }
+  if (!name) return null;
+  return {
+    success: outcome.hit,
+    total: outcome.totalAttackRoll,
+    ...(typeof outcome.targetAC === 'number' ? { ac: outcome.targetAC } : {}),
+    requestType: 'attack',
+    description:
+      action.action_type === 'cast_spell'
+        ? `${name} spell attack vs ${targetLabel}`
+        : `${name} attack vs ${targetLabel}`,
+    timestamp: new Date().toISOString(),
+  };
+}
 
 /**
  * Resolves targeted actions until the first turn or combat boundary, then asks the DM to narrate
@@ -820,6 +881,37 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       // such rather than passed off as theirs.
       ...(autoRolled ? { autoRolled: true } : {}),
     });
+    // #467: an action-card attack's die never reaches the DM message flow, so logIncomingRolls
+    // never writes its roll_result — the narration repair would see no engine outcome for the
+    // attack the DM is about to narrate. Log the engine's authoritative verdict so the repair
+    // can check the narration against it. The state service is lazy-imported: its user-data-api
+    // chain resets the auth gate at module load, which must not run for every importer of this
+    // module (narration-outcome.ts does the same for db/client). A failed write fails open
+    // (the repair stays silent), never the turn.
+    if (sessionId) {
+      const attackOutcome = engineAttackRollResult(
+        action,
+        execution.result,
+        facingName(
+          (execution.result as CombatEngineResult | null)?.targetName,
+          action.target_ids[0],
+          roster,
+        ),
+      );
+      if (attackOutcome) {
+        try {
+          const { SessionStateService } = await import('@/services/session-state-service');
+          await SessionStateService.appendRollEvent(sessionId, {
+            kind: 'roll_result',
+            payload: attackOutcome,
+          });
+        } catch (error) {
+          logger.warn('[CombatResolution] attack outcome log failed; narration repair fails open', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    }
     if (execution.boundary === 'combat_ended') return 'combat_ended';
     // A melee declaration can spend movement without resolving an attack. The engine leaves
     // Action unused in this movement-only result, so keep the player on the same turn and let

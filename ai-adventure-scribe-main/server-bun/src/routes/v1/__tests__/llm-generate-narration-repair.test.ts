@@ -12,6 +12,8 @@
 import { describe, expect, it, mock } from 'bun:test';
 import { Elysia } from 'elysia';
 
+import { describeAttackRoll } from '../../../../../shared/describe-attack-roll.js';
+
 let combatLogForTest: unknown[] = [];
 let dbShouldThrow = false;
 /** A query chain that returns rows based on what is selected, not call order: the
@@ -233,5 +235,45 @@ describe('#266 /generate narration repair', () => {
     const narration = 'You succeed in climbing the shaft unheard.';
     const envelope = await postGenerate(narration);
     expect(envelope.text).toBe(narration);
+  });
+});
+
+describe('#467 NT-013 /generate narration repair (strategist FIX)', () => {
+  // The roll_result the client logs for an engine-resolved action-card attack
+  // (combat-resolution-step.ts): the engine's authoritative verdict. The description is
+  // derived from the real producer — describeAttackRoll for the NT-013 popup spec —
+  // not handwritten, so the test proves the repair against the words production sends.
+  const NT013_DESCRIPTION = describeAttackRoll({
+    kind: 'spell-attack',
+    weaponName: 'Chill Touch',
+    targetLabel: 'Mechanical Server',
+    actorLabel: 'The Apprentice',
+    attackBonus: 5,
+    targetAc: 15,
+    advantage: false,
+    disadvantage: false,
+  });
+  const NT013_PAYLOAD = {
+    success: true,
+    total: 22,
+    ac: 15,
+    requestType: 'attack',
+    description: NT013_DESCRIPTION,
+    timestamp: nowIso(),
+  };
+
+  it('repairs the DM dismissing the engine hit as "ignores your magical assault"', async () => {
+    queueRollOutcome([rollEntry(nowIso(), NT013_PAYLOAD)]);
+    const envelope = await postGenerate(
+      'The mechanical server ignores your magical assault, its gears grinding on. ' +
+        'You step back, wary of its reach.',
+    );
+    // The contradicting sentence is replaced by the engine truth; the rest stays.
+    expect(envelope.text).toBe(
+      `The ${NT013_DESCRIPTION} succeeded (22 vs AC 15). ` +
+        'You step back, wary of its reach.',
+    );
+    expect(envelope.text).not.toContain('ignores your magical assault');
+    expect(envelope.narration_segments).toEqual([]);
   });
 });
