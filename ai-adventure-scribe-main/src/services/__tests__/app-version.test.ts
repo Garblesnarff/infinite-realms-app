@@ -1,6 +1,40 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractServedAppVersion, shortBuildVersion } from '@/services/app-version';
+import {
+  extractServedAppVersion,
+  resolveAppBuildVersion,
+  shortBuildVersion,
+} from '@/services/app-version';
+
+describe('resolveAppBuildVersion', () => {
+  it('reads build version from meta tag in DOM when present', () => {
+    const meta = document.createElement('meta');
+    meta.name = 'app-version';
+    meta.content = '8d502d9291f1';
+    document.head.appendChild(meta);
+
+    try {
+      expect(resolveAppBuildVersion()).toBe('8d502d9291f1');
+    } finally {
+      meta.remove();
+    }
+  });
+
+  it('falls back to dev/env version when meta tag is missing or unreplaced placeholder', () => {
+    expect(resolveAppBuildVersion()).toBe('dev');
+
+    const meta = document.createElement('meta');
+    meta.name = 'app-version';
+    meta.content = '__APP_BUILD_VERSION__';
+    document.head.appendChild(meta);
+
+    try {
+      expect(resolveAppBuildVersion()).toBe('dev');
+    } finally {
+      meta.remove();
+    }
+  });
+});
 
 describe('extractServedAppVersion', () => {
   it('reads the app-version meta tag', () => {

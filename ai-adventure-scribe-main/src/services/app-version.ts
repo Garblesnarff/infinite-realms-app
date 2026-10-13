@@ -1,11 +1,18 @@
+export function resolveAppBuildVersion(): string {
+  if (typeof document !== 'undefined') {
+    const metaTag = document.querySelector('meta[name="app-version"]');
+    const content = metaTag?.getAttribute('content')?.trim();
+    if (content && content !== '__APP_BUILD_VERSION__') {
+      return content;
+    }
+  }
+  return String(import.meta.env.VITE_RELEASE || import.meta.env.VITE_APP_VERSION || 'dev');
+}
+
 /**
- * The same build identifier is embedded in the running bundle and index.html.
- * Vite defines __APP_BUILD_VERSION__ during a build; the fallback keeps tests and
- * non-Vite consumers deterministic.
+ * The same build identifier is embedded in index.html and read by the app at runtime.
  */
-export const APP_BUILD_VERSION =
-  (typeof __APP_BUILD_VERSION__ === 'string' && __APP_BUILD_VERSION__.trim()) ||
-  String(import.meta.env.VITE_RELEASE || import.meta.env.VITE_APP_VERSION || 'dev');
+export const APP_BUILD_VERSION = resolveAppBuildVersion();
 
 /** The release number from package.json at build time, e.g. "0.33.0" (#227). */
 export const APP_RELEASE_VERSION =
