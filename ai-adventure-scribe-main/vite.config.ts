@@ -99,7 +99,6 @@ function isEntryReachable(id: string, api: ChunkGraphApi): boolean {
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   define: {
-    __APP_BUILD_VERSION__: JSON.stringify(resolveBuildVersion(mode)),
     __APP_RELEASE_VERSION__: JSON.stringify(RELEASE_VERSION),
   },
   server: {
