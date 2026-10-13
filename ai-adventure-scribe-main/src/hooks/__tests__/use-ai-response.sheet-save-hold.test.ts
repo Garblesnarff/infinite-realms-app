@@ -26,6 +26,10 @@ import { setSpellTargetSaveHost } from '@/services/combat/spell-target-save-brid
 import { userDataApi } from '@/services/user-data-api';
 
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: vi.fn(() => ({ userPlan: 'pro' })) }));
+vi.mock('@/contexts/CharacterContext', () => ({
+  // #400: the owned sheet for the suggestion filter; null keeps the filter a no-op here.
+  useCharacter: () => ({ state: { character: null } }),
+}));
 vi.mock('@/contexts/CombatContext', () => ({
   useCombat: vi.fn(() => ({
     state: { isInCombat: false, activeEncounter: null },

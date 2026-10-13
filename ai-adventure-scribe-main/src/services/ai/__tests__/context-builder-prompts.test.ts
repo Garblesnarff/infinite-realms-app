@@ -10,3 +10,11 @@ describe('ContextBuilderPrompts.buildVoiceOptimizationSection', () => {
     expect(section).toContain('at least two segments with distinct speakers');
   });
 });
+
+describe('ContextBuilderPrompts.buildResponseStructureSection', () => {
+  it('limits suggested attacks and spells to the character sheet (#400)', () => {
+    const section = ContextBuilderPrompts.buildResponseStructureSection({ inCombat: false });
+    expect(section).toContain('<options_field>');
+    expect(section).toContain('spell or attack the character does not have');
+  });
+});

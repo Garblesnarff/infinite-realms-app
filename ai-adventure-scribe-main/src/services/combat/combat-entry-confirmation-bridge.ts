@@ -52,6 +52,58 @@ let pending: {
   dismiss: () => void;
 } | null = null;
 
+type PendingChangeListener = (isPending: boolean) => void;
+const pendingChangeListeners = new Set<PendingChangeListener>();
+
+/**
+ * Subscribe to entry-confirmation pending state. #400: the card is a question the player may
+ * answer by typing, so the composer stays live while it is up — unlike a dice-roll prompt,
+ * which owns the single dice slot and keeps the composer blocked.
+ */
+export function onCombatEntryConfirmationPendingChange(
+  listener: PendingChangeListener,
+): () => void {
+  pendingChangeListeners.add(listener);
+  return () => {
+    pendingChangeListeners.delete(listener);
+  };
+}
+
+function notifyPendingChange(): void {
+  const isPending = pending !== null;
+  for (const listener of [...pendingChangeListeners]) {
+    try {
+      listener(isPending);
+    } catch (error) {
+      logger.warn('[CombatEntry] pending-change listener threw', error);
+    }
+  }
+}
+
+/**
+ * #400: the player answered the card by typing instead of clicking. The typed message runs as
+ * a new turn, and that turn must not be re-prompted with another card — the typed action is
+ * the answer, and it starts combat through the engine. The text is stored (not just a
+ * boolean) so a marked send that never becomes a turn cannot leak the skip to an unrelated
+ * later turn: the skip applies only when the consuming turn's message matches.
+ */
+let typedAnswerText: string | null = null;
+
+/** Arm the typed-answer skip for the message typed while the card was up. */
+export function markCombatEntryTypedAnswer(text: string): void {
+  typedAnswerText = text;
+}
+
+/**
+ * Consume the typed-answer skip; true once, when the consuming turn's message is the one
+ * that was typed while the card was up. Always clears, so a stale mark never leaks.
+ */
+export function consumeCombatEntryTypedAnswer(text: string): boolean {
+  const matched = typedAnswerText !== null && typedAnswerText === text;
+  typedAnswerText = null;
+  return matched;
+}
+
 /** Registered by the message list while the entry confirmation surface is mounted. */
 export function setCombatEntryConfirmationHost(
   next: CombatEntryConfirmationHost | null,
@@ -95,6 +147,7 @@ export function settlePendingCombatEntryConfirmation(confirmed: boolean, target?
   if (!pending) return false;
   const settled = pending;
   pending = null;
+  notifyPendingChange();
   settled.dismiss();
   settled.settle(confirmed, target);
   return true;
@@ -134,8 +187,12 @@ export function requestCombatEntryAnswer(
     };
 
     pending = { spec, ownerKey: activeOwnerKey, settle, dismiss: () => dismissPopup() };
+    notifyPendingChange();
     const hostDismiss = activeHost.present(spec, (confirmed, target) => {
-      if (pending?.settle === settle) pending = null;
+      if (pending?.settle === settle) {
+        pending = null;
+        notifyPendingChange();
+      }
       settle(confirmed, target);
     });
     dismissPopup = hostDismiss;
