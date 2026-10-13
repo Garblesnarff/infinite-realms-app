@@ -24,8 +24,7 @@ export function canAttemptGrapple(participant: CombatParticipant): boolean {
 
   // Must have at least one free hand
   // For simplicity, we'll assume they can grapple if they have a main hand weapon that's not two-handed
-  // @ts-expect-error // #192 CombatParticipant weapon type has no .properties (issue #507)
-  if (participant.mainHandWeapon?.properties.twoHanded) {
+  if (participant.mainHandWeapon?.weaponProperties?.twoHanded) {
     return false;
   }
 

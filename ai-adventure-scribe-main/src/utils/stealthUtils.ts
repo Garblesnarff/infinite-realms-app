@@ -39,8 +39,7 @@ export function calculateStealthBonus(participant: CombatParticipant): number {
 
   // Equipment modifiers
   let equipmentBonus = 0;
-  // @ts-expect-error // #192 CombatParticipant weapon type has no .properties (issue #507)
-  if (participant.mainHandWeapon?.properties?.finesse) {
+  if (participant.mainHandWeapon?.weaponProperties?.finesse) {
     equipmentBonus += 1; // Finesse weapons help with stealth
   }
 

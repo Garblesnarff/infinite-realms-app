@@ -32,7 +32,7 @@ describe('grappleUtils', () => {
       conditions: [],
       abilityScores: { strength: { modifier: 4 } },
       mainHandWeapon: {
-        properties: {
+        weaponProperties: {
           twoHanded: false,
         },
       },
@@ -61,13 +61,20 @@ describe('grappleUtils', () => {
     });
 
     it('should return false if the participant has a two-handed weapon', () => {
-      mockParticipant.mainHandWeapon.properties.twoHanded = true;
+      mockParticipant.mainHandWeapon.weaponProperties.twoHanded = true;
       expect(canAttemptGrapple(mockParticipant)).toBe(false);
     });
 
     it('should return true if mainHandWeapon is undefined', () => {
       delete mockParticipant.mainHandWeapon;
       expect(canAttemptGrapple(mockParticipant)).toBe(true);
+    });
+
+    it('blocks the grapple when the weapon has weaponProperties.twoHanded', () => {
+      mockParticipant.mainHandWeapon = {
+        weaponProperties: { twoHanded: true },
+      };
+      expect(canAttemptGrapple(mockParticipant)).toBe(false);
     });
   });
 
