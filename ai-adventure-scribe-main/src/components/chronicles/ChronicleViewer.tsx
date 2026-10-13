@@ -15,15 +15,6 @@ interface ChronicleViewerProps {
   onClose: () => void;
 }
 
-type Chronicle = {
-  status: string | null;
-  share_token: string | null;
-  illustration_url: string | null;
-  chapter_title: string | null;
-  prose: string | null;
-  summary: string | null;
-};
-
 /** react-query v5 passes the Query, not the data (#449). Poll while generating. */
 export const chronicleRefetchInterval = (query: {
   state: { data?: { status?: string | null } | null };
@@ -34,7 +25,7 @@ const ChronicleViewer: React.FC<ChronicleViewerProps> = ({ sessionId, open, onCl
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const { data: chronicleQuery, isLoading } = trpc.chronicles.getBySessionId.useQuery(
+  const { data: chronicle, isLoading } = trpc.chronicles.getBySessionId.useQuery(
     { sessionId: sessionId ?? '' },
     {
       enabled: open && !!sessionId,
@@ -42,14 +33,11 @@ const ChronicleViewer: React.FC<ChronicleViewerProps> = ({ sessionId, open, onCl
     },
   );
 
-  // @ts-expect-error #418 the server returns camelCase (shareToken, chapterTitle, chronicleText); this view reads snake_case
-  const chronicle: Chronicle | null | undefined = chronicleQuery;
-
   const isPro = planHasPaidFeatures(userPlan);
 
   const handleCopyShareLink = () => {
-    if (!chronicle?.share_token) return;
-    navigator.clipboard.writeText(`${window.location.origin}/chronicle/${chronicle.share_token}`);
+    if (!chronicle?.shareToken) return;
+    navigator.clipboard.writeText(`${window.location.origin}/chronicle/${chronicle.shareToken}`);
     toast({ title: 'Link copied!' });
   };
 
@@ -92,25 +80,25 @@ const ChronicleViewer: React.FC<ChronicleViewerProps> = ({ sessionId, open, onCl
       if (isPro) {
         return (
           <div className="space-y-4">
-            {chronicle.illustration_url && (
+            {chronicle.illustrationUrl && (
               <img
-                src={chronicle.illustration_url}
-                alt={chronicle.chapter_title ?? 'Chronicle illustration'}
+                src={chronicle.illustrationUrl}
+                alt={chronicle.chapterTitle ?? 'Chronicle illustration'}
                 className="w-full rounded-lg object-cover"
                 style={{ maxHeight: '250px' }}
               />
             )}
-            {chronicle.chapter_title && (
+            {chronicle.chapterTitle && (
               <h2 className="font-serif text-2xl font-bold text-amber-400 leading-tight">
-                {chronicle.chapter_title}
+                {chronicle.chapterTitle}
               </h2>
             )}
-            {chronicle.prose && (
+            {chronicle.chronicleText && (
               <p className="text-base leading-relaxed whitespace-pre-wrap text-foreground">
-                {chronicle.prose}
+                {chronicle.chronicleText}
               </p>
             )}
-            {chronicle.share_token && (
+            {chronicle.shareToken && (
               <Button size="sm" variant="outline" onClick={handleCopyShareLink} className="mt-2">
                 Share ↗
               </Button>
@@ -122,8 +110,8 @@ const ChronicleViewer: React.FC<ChronicleViewerProps> = ({ sessionId, open, onCl
       // Free plan: show summary + upgrade CTA
       return (
         <div className="space-y-4">
-          {chronicle.summary && (
-            <p className="text-base leading-relaxed text-foreground">{chronicle.summary}</p>
+          {chronicle.chronicleText && (
+            <p className="text-base leading-relaxed text-foreground">{chronicle.chronicleText}</p>
           )}
           <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-3">
             <p className="text-sm text-muted-foreground">
