@@ -18,7 +18,7 @@ export const createInitialMemories = async (
   greetingText: string,
   onMemoryCreated: (memory: Omit<Memory, 'id' | 'created_at' | 'updated_at'>) => Promise<void>,
   options: { skipOpeningScene?: boolean } = {},
-) => {
+): Promise<void> => {
   try {
     logger.info('[Initial Greeting] Creating foundational memories');
 
@@ -55,12 +55,14 @@ export const createInitialMemories = async (
 
     // Create opening scene memory from the DM's greeting unless an existing
     // poisoned row was updated in place during fallback regeneration.
+    const narrativeGreeting = extractNarrativeContent(greetingText);
+
     if (!options.skipOpeningScene) {
       await onMemoryCreated({
         session_id: sessionId,
         type: 'location' as MemoryType,
         subcategory: 'current_location',
-        content: `Opening Scene: ${greetingText}`,
+        content: `Opening Scene: ${narrativeGreeting}`,
         importance: 7,
         metadata: {
           scene_type: 'opening',
