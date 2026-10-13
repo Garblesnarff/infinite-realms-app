@@ -71,21 +71,10 @@ export const useMessageCommandHandler = ({
         await sendMessage(safetyResponse);
       }
 
-      // Store safety event in memory
+      // Store safety event in memory. extractMemories(content) takes the text only;
+      // the options object it used to get was ignored (#450).
       await extractMemories(
         `${aiResponseText ? 'Auto-triggered safety' : 'Safety'} command ${safetyCheck.command.type} activated: ${safetyCheck.command.context}`,
-        // @ts-expect-error #450 extractMemories(content, type?) takes no options object
-        {
-          importance: aiResponseText ? 8 : 9,
-          tags: [
-            'safety',
-            safetyCheck.command.type,
-            safetyCheck.command.autoTriggered ? 'auto-triggered' : 'manual',
-            ...(aiResponseText ? ['ai-response'] : []),
-          ],
-          type: 'game_event',
-          context_id: sessionId,
-        },
       );
 
       // Handle pause/resume state changes
