@@ -6,9 +6,42 @@ import {
   stripSeparatorLines,
   stripAssetTags,
   stripBrainstorming,
+  stripRollScaffolding,
   sanitizeForMemoryExtraction,
   splitIntoSegments,
 } from '../segmentation';
+
+import type { DiceRollRequest } from '@/types/combat';
+
+import { formatDiceRoll } from '@/features/game-session/components/chat/message-list/utils/dice-roll-formatter';
+
+
+const makeRollRequest = (
+  description: string,
+  requestType: DiceRollRequest['requestType'],
+  naturalRoll: number,
+  modifier: number,
+  target?: { dc?: number; ac?: number },
+  options?: { advantage?: boolean; disadvantage?: boolean },
+): DiceRollRequest => ({
+  id: 'roll-test-1',
+  requestType,
+  description,
+  rollConfig: { dieType: 20, count: 1, modifier, ...options },
+  timestamp: new Date('2026-09-05T00:00:00Z'),
+  status: 'completed',
+  ...target,
+  result: {
+    dieType: 20,
+    count: 1,
+    modifier,
+    naturalRoll,
+    results: [naturalRoll],
+    keptResults: [naturalRoll],
+    total: naturalRoll + modifier,
+    critical: naturalRoll === 20,
+  },
+});
 
 describe('stripOptionMenus', () => {
   it('removes A/B/C option menu lines', () => {
@@ -284,6 +317,181 @@ describe('sanitizeForMemoryExtraction — engine transcript lines (#1808)', () =
     expect(cleanInput).not.toContain('⚙️ Engine:');
     expect(cleanInput).toContain('The ward shatters and the corridor falls silent.');
     expect(persistedMessage).toContain('⚙️ Engine:');
+  });
+});
+
+describe('stripRollScaffolding', () => {
+  it('preserves the exact stranger test sentence without deleting "fail" mid-sentence', () => {
+    const input =
+      '...your own white-hot fury, fail you in the suffocating stillness...';
+    expect(stripRollScaffolding(input)).toBe(input);
+  });
+
+  it('preserves normal narrative prose containing engine vocabulary (success, hit, miss, critical hit)', () => {
+    const input =
+      'The strike was a success, hitting the mark directly, avoiding a critical hit or embarrassing miss.';
+    expect(stripRollScaffolding(input)).toBe(input);
+  });
+
+  it('strips roll breakdown scaffolding produced by real formatDiceRoll calls', () => {
+    const stealthRoll = formatDiceRoll(
+      makeRollRequest('Stealth check', 'skill_check', 13, 2, { dc: 13 }),
+    );
+    expect(stealthRoll).toContain('success');
+    expect(stripRollScaffolding(stealthRoll)).toBe('Stealth check: 15');
+
+    const attackRoll = formatDiceRoll(
+      makeRollRequest(
+        'Longsword attack',
+        'attack',
+        20,
+        2,
+        { ac: 15 },
+        { advantage: true },
+      ),
+    );
+    expect(attackRoll).toContain('CRITICAL HIT!');
+    expect(stripRollScaffolding(attackRoll)).toBe('Longsword attack: 22');
+
+    const perceptionFail = formatDiceRoll(
+      makeRollRequest('Perception check', 'skill_check', 6, 2, { dc: 12 }),
+    );
+    expect(perceptionFail).toContain('fail');
+    expect(stripRollScaffolding(perceptionFail)).toBe('Perception check: 8');
+
+    const noDcCheck = formatDiceRoll(
+      makeRollRequest('Perception check', 'skill_check', 12, 2, {}),
+    );
+    expect(noDcCheck).toContain('(no DC)');
+    expect(stripRollScaffolding(noDcCheck)).toBe('Perception check: 14');
+
+    const criticalMiss = formatDiceRoll(
+      makeRollRequest('Shortbow attack', 'attack', 1, 0, { ac: 10 }),
+    );
+    expect(criticalMiss).toContain('Critical Miss');
+    expect(stripRollScaffolding(criticalMiss)).toBe('Shortbow attack: 1');
+  });
+
+  it('keeps adjacent prose intact when a real roll row is inline on the same line', () => {
+    const row = formatDiceRoll(
+      makeRollRequest('Stealth check', 'skill_check', 13, 2, { dc: 13 }),
+    );
+    expect(row).toBe('Stealth check: 15 (nat 13+2) success');
+
+    const input = `${row}. You refuse to fail again.`;
+    expect(stripRollScaffolding(input)).toBe(
+      'Stealth check: 15. You refuse to fail again.',
+    );
+  });
+
+  it('preserves prose that mentions "vs DC 13" alongside fail/miss vocabulary', () => {
+    const input =
+      'The trap triggers vs DC 13 — you miss the ledge and fail to recover.';
+    expect(stripRollScaffolding(input)).toBe(input);
+  });
+
+  it('strips an inline [ADV] CRITICAL HIT! row without touching nearby prose', () => {
+    const row = formatDiceRoll(
+      makeRollRequest(
+        'Longsword attack',
+        'attack',
+        20,
+        2,
+        { ac: 15 },
+        { advantage: true },
+      ),
+    );
+    expect(row).toBe('Longsword attack: 22 (nat 20+2) [ADV] hit CRITICAL HIT!');
+
+    const input = `What a critical hit! ${row} The crowd goes wild at your success.`;
+    expect(stripRollScaffolding(input)).toBe(
+      'What a critical hit! Longsword attack: 22 The crowd goes wild at your success.',
+    );
+  });
+
+  it('strips a pending roll row but leaves prose mentioning pending alone', () => {
+    const pending = formatDiceRoll({
+      ...makeRollRequest('Stealth check', 'skill_check', 13, 2, { dc: 13 }),
+      result: undefined,
+    });
+    expect(pending).toBe('Stealth check: pending');
+    expect(stripRollScaffolding(pending)).toBe('Stealth check');
+
+    const prose = 'Status: pending approval from the quartermaster.';
+    expect(stripRollScaffolding(prose)).toBe(prose);
+  });
+
+  it('leaves a bare outcome word followed by more prose alone (no distinctive roll fragment)', () => {
+    // No (nat ...)/[ADV]/etc. fragment proves this is a roll row, and the
+    // outcome word is not in terminal position, so it must survive.
+    expect(stripRollScaffolding('Stealth check: 15 success and you fail')).toBe(
+      'Stealth check: 15 success and you fail',
+    );
+    expect(stripRollScaffolding('Score: 20 success stories')).toBe(
+      'Score: 20 success stories',
+    );
+  });
+
+  it('does not treat "HH:MM"-style times as roll rows', () => {
+    expect(stripRollScaffolding('Time: 12:30 (nat 5) success')).toBe(
+      'Time: 12:30 (nat 5) success',
+    );
+  });
+
+  it('keeps lowercase "critical hit" prose next to a roll row', () => {
+    const input = 'That was a critical hit, a clean success.';
+    expect(stripRollScaffolding(input)).toBe(input);
+  });
+});
+
+describe('sanitizeForMemoryExtraction — multiline narrative mixed with roll scaffolding', () => {
+  it('preserves narrative sentences with "fail" alongside formatDiceRoll rows', () => {
+    const stealthFormatted = formatDiceRoll(
+      makeRollRequest('Stealth check', 'skill_check', 13, 2, { dc: 13 }),
+    );
+
+    const multilineInput = [
+      'The cold shadows stretch across the hallway as your own white-hot fury, fail you in the suffocating stillness.',
+      '',
+      stealthFormatted,
+      '',
+      'You creep into the dark, refusing to fail again.',
+    ].join('\n');
+
+    const sanitized = sanitizeForMemoryExtraction(multilineInput);
+
+    expect(sanitized).toContain(
+      'The cold shadows stretch across the hallway as your own white-hot fury, fail you in the suffocating stillness.',
+    );
+    expect(sanitized).toContain('You creep into the dark, refusing to fail again.');
+    expect(sanitized).not.toContain('success');
+    expect(sanitized).not.toContain('(nat 13+2)');
+    expect(sanitized).not.toContain('vs DC 13');
+  });
+
+  it('preserves inline prose around real roll rows through the public entry point', () => {
+    const stealthFormatted = formatDiceRoll(
+      makeRollRequest('Stealth check', 'skill_check', 13, 2, { dc: 13 }),
+    );
+
+    const multilineInput = [
+      '...your own white-hot fury, fail you in the suffocating stillness...',
+      `${stealthFormatted} You refuse to fail again.`,
+      'The trap triggers vs DC 13 — you miss the ledge and fail to recover.',
+    ].join('\n');
+
+    const sanitized = sanitizeForMemoryExtraction(multilineInput);
+
+    expect(sanitized).toContain(
+      '...your own white-hot fury, fail you in the suffocating stillness...',
+    );
+    expect(sanitized).toContain('You refuse to fail again.');
+    expect(sanitized).toContain(
+      'The trap triggers vs DC 13 — you miss the ledge and fail to recover.',
+    );
+    expect(sanitized).toContain('Stealth check: 15');
+    expect(sanitized).not.toContain('(nat 13+2)');
+    expect(sanitized).not.toContain('success');
   });
 });
 
