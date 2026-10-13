@@ -50,11 +50,12 @@ export const computeQuoteStateMap = (text: string): boolean[] => {
           stack.push("'");
         }
       } else if (currentQuote === "'" || currentQuote === '‘') {
-        if (currentQuote === '‘' && char === '’') {
+        // A ’ followed by a letter is an internal apostrophe (Professor’s), not a close.
+        if (currentQuote === '‘' && char === '’' && isSingleQuoteClose(text, i)) {
           stack.pop();
         } else if (char === "'" && isSingleQuoteClose(text, i)) {
           stack.pop();
-        } else if (currentQuote === "'" && char === '’') {
+        } else if (currentQuote === "'" && char === '’' && isSingleQuoteClose(text, i)) {
           stack.pop();
         } else if (char === '"' || char === '“') {
           stack.push(char);

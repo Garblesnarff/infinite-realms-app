@@ -114,4 +114,22 @@ describe('smartSplitParagraph', () => {
       expect(p.length).toBeLessThanOrEqual(400);
     });
   });
+
+  it('keeps a long curly-quoted line with internal apostrophes in one paragraph (#42)', () => {
+    const quote =
+      '‘The Professor’s lantern swings once. It’s not the wind that moves it. ' +
+      'Nobody’s hand is near it, and the flame doesn’t gutter. ' +
+      'Whatever’s down there has been waiting a long, long time for someone foolish enough to come. ' +
+      'Don’t follow the light. Don’t answer if it calls your name. ' +
+      'And whatever you do, don’t tell the Dean’s men where we’ve gone.’';
+    const text = `The old caretaker leans close. ${quote} He steps back into the dark. The door shuts behind him.`;
+    expect(text.length).toBeGreaterThan(320);
+
+    const paragraphs = smartSplitParagraph(text);
+
+    expect(paragraphs.length).toBeGreaterThan(1);
+    const holder = paragraphs.find((p) => p.includes('‘The Professor’s lantern'));
+    expect(holder).toBeDefined();
+    expect(holder).toContain('we’ve gone.’');
+  });
 });
