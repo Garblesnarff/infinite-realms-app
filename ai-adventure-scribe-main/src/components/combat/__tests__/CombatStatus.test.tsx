@@ -79,8 +79,9 @@ describe('CombatStatus', () => {
         {
           id: 'p1',
           name: 'Hero',
-          initiative: { value: 15 },
-          hitPoints: { current: 20, maximum: 20 },
+          initiative: 15,
+          currentHitPoints: 20,
+          maxHitPoints: 20,
         },
       ],
       currentTurnParticipantId: 'p1',
@@ -113,6 +114,37 @@ describe('CombatStatus', () => {
     const roundCounter = screen.getByLabelText('Combat Round 1');
     expect(roundCounter).toBeDefined();
     expect(roundCounter.getAttribute('tabindex')).toBe('0');
+  });
+
+  it('renders health label Health: 20 of 20 for active turn participant', () => {
+    const combatEncounter = {
+      participants: [
+        {
+          id: 'p1',
+          name: 'Hero',
+          initiative: 15,
+          currentHitPoints: 20,
+          maxHitPoints: 20,
+        },
+      ],
+      currentTurnParticipantId: 'p1',
+      currentRound: 1,
+    };
+
+    vi.mocked(useGame).mockReturnValue({
+      state: { ...mockGameState, currentPhase: 'combat' },
+    } as any);
+    vi.mocked(useCombat).mockReturnValue({
+      state: {
+        isInCombat: true,
+        activeEncounter: combatEncounter,
+      },
+    } as any);
+
+    render(<CombatStatus />);
+
+    const healthIndicator = screen.getByLabelText('Health: 20 of 20');
+    expect(healthIndicator).toBeDefined();
   });
 
   it('displays pending rolls count with accessibility label', () => {
