@@ -438,4 +438,32 @@ describe('attack wait status in the composer (#2536)', () => {
     expect(screen.getByTestId('attack-wait-status')).toHaveTextContent(ATTACK_WAIT_RESOLVING);
     expect(screen.queryByText('The DM is still thinking…')).not.toBeInTheDocument();
   });
+
+  it('pending turn → status line visible; resolved turn → status line gone', async () => {
+    renderComposer();
+
+    // 1. Pending turn: Send action
+    await sendAttack('I swing my warhammer at the skeleton');
+
+    // Status line is visible promptly (< 2 s) and composer is blocked against duplicate submit
+    expect(screen.getByTestId('attack-wait-status')).toHaveTextContent(TURN_WAIT_WORKING);
+    expect(screen.getByRole('textbox')).toHaveValue('I swing my warhammer at the skeleton');
+    expect(screen.getByRole('button', { name: 'Sending message...' })).toBeDisabled();
+
+    // 2. Turn resolution
+    await act(async () => {
+      finishTurn?.(
+        dmReplyFromGetAIResponse(
+          '⚙️ Engine: Warhammer vs Skeleton — HIT! 8 bludgeoning damage.',
+        ),
+      );
+      for (let index = 0; index < 8; index += 1) await Promise.resolve();
+    });
+
+    // Resolved turn: status line is gone, composer unlocked, input cleared
+    expect(screen.queryByTestId('attack-wait-status')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sending message...' })).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled(); // Disabled because input is empty
+  });
 });
