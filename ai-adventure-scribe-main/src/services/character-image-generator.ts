@@ -284,8 +284,7 @@ export class CharacterImageGenerator {
         const base64Image = await openRouterService.generateImage({
           prompt,
           model: 'google/gemini-2.5-flash-image',
-          // @ts-expect-error #437 referenceImage is not in ImageGenerationRequest, so the reference image is silently dropped
-          referenceImage: referenceImageBase64,
+          ...(referenceImageBase64 ? { referenceImages: [referenceImageBase64] } : {}),
         });
         return base64Image;
       } catch (error) {
