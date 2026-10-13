@@ -56,6 +56,7 @@ const queryClient = new QueryClient({
 const _ErrorThrowingComponent = () => {
   throw new Error('Test error in character creation');
 };
+void _ErrorThrowingComponent;
 
 describe('Character Creation ErrorBoundary Protection', () => {
   beforeEach(() => {

@@ -1,7 +1,7 @@
 import { Sword, Shield, Heart, Brain, Users, Eye, Crown, Star } from 'lucide-react';
 import React from 'react';
 
-import { type Character } from '@/types/character';
+import { type AbilityScores, type Character } from '@/types/character';
 import { applyRacialBonusesToAbilityScores } from '@/utils/racialAbilityBonuses';
 
 interface CharacterPreviewAbilityScoresProps {
@@ -34,10 +34,11 @@ export const CharacterPreviewAbilityScores: React.FC<CharacterPreviewAbilityScor
   // saved character gets racial bonuses. The preview must match the save.
   const race = typeof character.race === 'object' ? character.race : null;
   const subrace = typeof character.subrace === 'object' ? character.subrace : null;
-  const displayScores =
+  const emptyScores = {} as AbilityScores;
+  const displayScores: AbilityScores =
     race || subrace
-      ? applyRacialBonusesToAbilityScores(character.abilityScores || {}, race, subrace)
-      : character.abilityScores || {};
+      ? applyRacialBonusesToAbilityScores(character.abilityScores ?? emptyScores, race, subrace)
+      : (character.abilityScores ?? emptyScores);
 
   return (
     <div className="space-y-3">

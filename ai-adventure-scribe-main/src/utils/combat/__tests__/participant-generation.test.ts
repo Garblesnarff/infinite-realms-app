@@ -77,15 +77,15 @@ describe('createCombatParticipantsFromDetection', () => {
   });
 
   it('handles numeric and missing CR', () => {
-    // @ts-expect-error - testing invalid input
     const participants1 = createCombatParticipantsFromDetection(
+      // @ts-expect-error - testing invalid input
       [{ ...enemies[0], estimatedCR: 5 }],
       null,
     );
     expect(participants1[0].initiative).toBe(2);
 
-    // @ts-expect-error - testing invalid input
     const participants2 = createCombatParticipantsFromDetection(
+      // @ts-expect-error - testing invalid input
       [{ ...enemies[0], estimatedCR: undefined }],
       null,
     );

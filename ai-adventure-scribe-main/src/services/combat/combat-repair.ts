@@ -99,6 +99,7 @@ export async function repairRefusedCombatAction(
       message: buildRepairPrompt(refusal, refusedAction),
       context: aiContext as never,
       conversationHistory: conversationHistory as never,
+      // @ts-expect-error // #192 userPlan arrives as string from Muse-owned AI hooks; narrow there, not with a cast
       userPlan,
       turnCount,
       ...(signal ? { signal } : {}),

@@ -10,11 +10,19 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 
 const mockTemplate: StarterCharacterTemplate = {
   id: 'test-id',
+  starterCampaignId: 'test-campaign',
+  templateKey: 'valerius-the-brave',
   name: 'Valerius the Brave',
   race: 'Human',
+  subrace: null,
   class: 'Fighter',
+  background: 'Soldier',
+  level: 1,
   tagline: 'A veteran of a hundred battles.',
   portraitUrl: 'https://example.com/portrait.png',
+  cardImageUrl: null,
+  portraitPrompt: null,
+  displayOrder: 0,
   abilityScores: {
     strength: 16,
     dexterity: 14,
@@ -25,12 +33,13 @@ const mockTemplate: StarterCharacterTemplate = {
   },
   personality: {
     traits: ['Brave', 'Loyal'],
-    ideals: 'Protect the weak',
-    bonds: 'My sword is my life',
-    flaws: 'Quick to anger',
+    ideals: ['Protect the weak'],
+    bonds: ['My sword is my life'],
+    flaws: ['Quick to anger'],
   },
   skills: ['Athletics', 'Perception'],
   languages: ['Common'],
+  equipment: [],
   adaptedBackstory: 'Grew up in the city of Neverwinter...',
   campaignHook: 'Sent by the Lord of Neverwinter to investigate...',
 };

@@ -107,7 +107,7 @@ export function moveArmy(army: Army, newX: number, newY: number, battlefield: Ba
  */
 export function simulateCombatRound(
   armies: Army[],
-  battlefield: Battlefield,
+  _battlefield: Battlefield,
   roundNumber: number,
 ): CombatRound {
   const events: CombatEvent[] = [];

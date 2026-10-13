@@ -49,6 +49,8 @@ export const useDiceRollManagement = (
 
       return () => clearTimeout(timeoutId);
     }
+
+    return undefined;
   }, [state.diceRollQueue.pendingRolls, dispatch]);
 
   /**

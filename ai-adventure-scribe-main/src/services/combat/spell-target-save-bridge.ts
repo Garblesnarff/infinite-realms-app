@@ -61,7 +61,7 @@ export function requestSpellTargetSave(spec: SpellTargetSaveSpec): Promise<Spell
       resolve(answer);
     };
     pending = { settle, dismiss: () => dismissCard() };
-    const hostHandle = host.present(spec, () => {
+    const hostHandle = host!.present(spec, () => {
       if (pending?.settle === settle) {
         pending = null;
         settle();

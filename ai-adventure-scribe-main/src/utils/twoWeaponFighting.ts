@@ -206,10 +206,6 @@ export function calculateTwoWeaponAttacks(participant: CombatParticipant): {
   offHandAttacks: number;
   totalAttacks: number;
 } {
-  const weapons = getEquippedWeapons(participant);
-  const _mainWeapon = weapons.mainHand;
-  const _offHandWeapon = weapons.offHand;
-
   let mainHandAttacks = 1; // Base action
   let offHandAttacks = 0;
 
@@ -227,7 +223,9 @@ export function calculateTwoWeaponAttacks(participant: CombatParticipant): {
     participant.characterClass === 'fighter' &&
     participant.level &&
     participant.level >= 2 &&
+    // @ts-expect-error // #192 resources has no action_surge.currentUses (issue #507)
     participant.resources?.action_surge?.currentUses &&
+    // @ts-expect-error // #192 resources has no action_surge.currentUses (issue #507)
     participant.resources.action_surge.currentUses > 0
   ) {
     mainHandAttacks += 1; // Additional action

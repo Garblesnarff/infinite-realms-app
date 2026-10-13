@@ -58,9 +58,11 @@ export function processReactionResponse(
         turnOrder: 0,
       };
 
+    // @ts-expect-error #192: uncanny_dodge is a runtime reaction not yet in the ActionType union
     case 'uncanny_dodge':
       return {
         participantId: opportunity.participantId,
+        // @ts-expect-error #192: uncanny_dodge is a runtime reaction not yet in the ActionType union
         actionType: 'uncanny_dodge',
         description: `${participant.name} uses uncanny dodge to halve the damage`,
         round: encounter.currentRound,

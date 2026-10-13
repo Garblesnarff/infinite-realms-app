@@ -33,7 +33,7 @@ describe('combat-action-executor', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    globalThis.fetch = vi.fn();
+    globalThis.fetch = vi.fn() as unknown as typeof fetch;
   });
 
   afterAll(() => {

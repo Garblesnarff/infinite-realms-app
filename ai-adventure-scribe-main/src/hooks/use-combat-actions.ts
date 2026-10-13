@@ -31,7 +31,7 @@ export const useCombatActions = (_isDM: boolean = false) => {
   const { sessionId } = useGameSession();
   const { state: characterState } = useCharacter();
   const { validateCombatAction } = useCombatAIIntegration({
-    sessionId,
+    sessionId: sessionId ?? undefined,
     characterId: characterState.character?.id,
     campaignId: undefined, // Will be passed from parent if needed
   });
@@ -203,6 +203,7 @@ export const useCombatActions = (_isDM: boolean = false) => {
       visionTypes: [{ type: 'normal', range: 60 }],
       fightingStyles: [],
       racialTraits: [],
+      // @ts-expect-error // #192 CharacterResources requires hitDice; keep runtime value {}
       resources: {},
       characterClass: '',
       isRaging: false,

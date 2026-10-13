@@ -444,7 +444,7 @@ describe('Combat Roll Flow Integration', () => {
       combatAuditSystem.startCombatAudit(combatId);
 
       // Try to make attack without initiative - should create violation
-      const _attackActionId = combatAuditSystem.recordAction({
+      combatAuditSystem.recordAction({
         combatId,
         actorId: 'player1',
         actorName: 'Alice',
