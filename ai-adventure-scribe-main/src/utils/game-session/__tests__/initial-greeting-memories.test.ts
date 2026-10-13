@@ -93,6 +93,70 @@ describe('initial-greeting-memories', () => {
         ['atmosphere', 5],
       ]);
     });
+
+    it('strips action options before creating location and atmosphere foundational memories', async () => {
+      const createdMemories: Array<Record<string, unknown>> = [];
+      const onMemoryCreated = vi.fn().mockImplementation(async (memory) => {
+        createdMemories.push(memory);
+      });
+
+      const greetingWithOptions = `You step into the dimly lit tavern. The air smells of cheap ale and roasted meat.
+
+A. **Look around** for the contact.
+B. **Approach the barkeep** directly.
+C. **Find a corner table** and observe.
+D. **Leave the tavern** quietly.`;
+
+      await createInitialMemories(
+        'session-1',
+        mockCharacter,
+        mockCampaign,
+        greetingWithOptions,
+        onMemoryCreated,
+      );
+
+      const locationMemory = createdMemories.find((m) => m.type === 'location');
+      const atmosphereMemory = createdMemories.find((m) => m.type === 'atmosphere');
+
+      expect(locationMemory).toBeDefined();
+      expect(locationMemory?.content).toBe(
+        'Opening Scene: You step into the dimly lit tavern. The air smells of cheap ale and roasted meat.',
+      );
+      expect(locationMemory?.content).not.toMatch(/[A-D]\.\s+\*\*/);
+
+      expect(atmosphereMemory).toBeDefined();
+      expect(atmosphereMemory?.content).toContain('The air smells of cheap ale and roasted meat');
+      expect(atmosphereMemory?.content).not.toMatch(/[A-D]\.\s+\*\*/);
+    });
+
+    it('respects skipOpeningScene while creating character, campaign, and atmosphere memories', async () => {
+      const createdMemories: Array<Record<string, unknown>> = [];
+      const onMemoryCreated = vi.fn().mockImplementation(async (memory) => {
+        createdMemories.push(memory);
+      });
+
+      const greetingWithOptions = `The dungeon hallway is cold and damp.
+
+A. **Inspect the door**.
+B. **Listen closely**.`;
+
+      await createInitialMemories(
+        'session-1',
+        mockCharacter,
+        mockCampaign,
+        greetingWithOptions,
+        onMemoryCreated,
+        { skipOpeningScene: true },
+      );
+
+      expect(createdMemories.map((m) => m.type)).toEqual([
+        'character_moment',
+        'world_detail',
+        'atmosphere',
+      ]);
+      const locationMemory = createdMemories.find((m) => m.type === 'location');
+      expect(locationMemory).toBeUndefined();
+    });
   });
 
   describe('extractAtmosphereFromGreeting', () => {
