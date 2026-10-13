@@ -45,7 +45,7 @@ export class VoiceConsistencyRepository {
     Array<{
       id: string;
       characterName: string;
-      voiceCategory: string;
+      voiceCategory: string | null;
       voiceId: string | null;
       lastUsed: Date;
       appearanceCount: number;
@@ -63,7 +63,6 @@ export class VoiceConsistencyRepository {
       }
 
       // Transform to the expected format
-      // @ts-expect-error #438 voice_category is string|null but the return type declares voiceCategory: string
       return data.map((mapping) => ({
         id: mapping.id,
         characterName: mapping.character_name,

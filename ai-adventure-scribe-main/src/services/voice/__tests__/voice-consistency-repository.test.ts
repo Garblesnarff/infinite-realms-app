@@ -89,6 +89,26 @@ describe('VoiceConsistencyRepository', () => {
       expect(result[1].lastUsed).toBeInstanceOf(Date);
     });
 
+    it('should return a null voiceCategory when the API row has a null voice_category', async () => {
+      mockGetMappings.mockResolvedValueOnce([
+        {
+          id: 'mapping-null',
+          character_name: 'Nameless One',
+          voice_category: null,
+          voice_id: 'voice-null',
+          last_used: '2026-03-30T12:00:00.000Z',
+          updated_at: '2026-03-30T12:00:00.000Z',
+          appearance_count: 2,
+        },
+      ]);
+
+      const result = await VoiceConsistencyRepository.getSessionMappings(sessionId);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].voiceCategory).toBeNull();
+      expect(typeof result[0].voiceCategory).not.toBe('string');
+    });
+
     it('should return empty list when no mappings exist', async () => {
       mockGetMappings.mockResolvedValueOnce([]);
 

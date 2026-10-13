@@ -36,9 +36,9 @@ type ResolvedVoice = {
   isCacheable: boolean;
 };
 
-function resolveVoiceCategory(category: string): ResolvedVoice {
-  const canonicalCategory = getCanonicalVoiceCategory(category);
-  const voiceConfig = VoiceMapper.getVoiceForCategory(category);
+function resolveVoiceCategory(category: string | null): ResolvedVoice {
+  const canonicalCategory = getCanonicalVoiceCategory(category ?? '');
+  const voiceConfig = VoiceMapper.getVoiceForCategory(category ?? '');
 
   if (!canonicalCategory) {
     return {
@@ -56,7 +56,7 @@ function resolveVoiceCategory(category: string): ResolvedVoice {
 }
 
 function resolvePersistedVoiceConfig(mapping: {
-  voiceCategory: string;
+  voiceCategory: string | null;
   voiceId: string | null;
 }): ResolvedVoice {
   const resolved = resolveVoiceCategory(mapping.voiceCategory);
@@ -131,7 +131,7 @@ export class VoiceConsistencyService {
       const availableVoiceCategories = [...VOICE_CATEGORY_VALUES];
       const knownCharacters: SessionVoiceContext['knownCharacters'] = {};
       mappings.forEach((mapping) => {
-        const voiceCategory = getCanonicalVoiceCategory(mapping.voiceCategory);
+        const voiceCategory = getCanonicalVoiceCategory(mapping.voiceCategory ?? '');
         if (!voiceCategory) {
           logger.warn(
             `Ignoring unmapped persisted voice category "${mapping.voiceCategory}" for "${mapping.characterName}"`,
@@ -329,8 +329,8 @@ export class VoiceConsistencyService {
 
     const voiceCategoryCounts: Record<string, number> = {};
     mappings.forEach((mapping) => {
-      voiceCategoryCounts[mapping.voiceCategory] =
-        (voiceCategoryCounts[mapping.voiceCategory] || 0) + 1;
+      voiceCategoryCounts[String(mapping.voiceCategory)] =
+        (voiceCategoryCounts[String(mapping.voiceCategory)] || 0) + 1;
     });
 
     const recentCharacters = mappings
