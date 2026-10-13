@@ -113,6 +113,7 @@ export const useCombatActions = (_isDM: boolean = false) => {
         fightingStyles: p.fightingStyles || [],
         racialTraits: p.racialTraits || [],
         classFeatures: p.classFeatures || [],
+        feats: p.feats || [],
         resources: p.resources || {},
         characterClass: p.characterClass || '',
         isRaging: false,
