@@ -131,7 +131,7 @@ export function isNetworkError(error: unknown): boolean {
   return false;
 }
 
-function waitForNetworkRetry(delayMs: number, signal?: AbortSignal): Promise<void> {
+function waitForNetworkRetry(delayMs: number, signal?: AbortSignal | null): Promise<void> {
   return new Promise((resolve, reject) => {
     const onAbort = (): void => {
       clearTimeout(timerId);
@@ -157,7 +157,7 @@ function waitForNetworkRetry(delayMs: number, signal?: AbortSignal): Promise<voi
 async function requestWithNetworkRetry(
   path: string,
   request: () => Promise<Response>,
-  signal?: AbortSignal,
+  signal?: AbortSignal | null,
   retryBudgetMs: number = NETWORK_RETRY_BUDGET_MS,
 ): Promise<Response> {
   const startedAt = Date.now();
@@ -404,6 +404,14 @@ export interface ImageQuotaStatus {
   resetAt: string;
 }
 
+interface LlmApiErrorBody {
+  error?: string;
+  message?: string;
+  retryable?: boolean;
+  retry_after?: number;
+  resetAt?: string;
+}
+
 class LlmApiClient {
   /**
    * Server request id of the most recent call through `fetchWithAuth`, so a
@@ -467,15 +475,9 @@ class LlmApiClient {
       this.lastRequestId = logServerRequestId(path, res, performance.now() - startedAt);
       if (!res.ok) {
         const text = await res.text().catch(() => '');
-        let body: {
-          error?: string;
-          message?: string;
-          retryable?: boolean;
-          retry_after?: number;
-          resetAt?: string;
-        } | null = null;
+        let body: LlmApiErrorBody | null = null;
         try {
-          body = text ? (JSON.parse(text) as typeof body) : null;
+          body = text ? (JSON.parse(text) as LlmApiErrorBody) : null;
         } catch {
           body = null;
         }

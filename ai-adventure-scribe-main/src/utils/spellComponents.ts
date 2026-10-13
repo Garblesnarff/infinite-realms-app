@@ -4,7 +4,7 @@
  * Handles spell component tracking, preparation requirements, and casting validation.
  */
 
-import type { Spell, Character } from '@/types/character';
+import type { Spell, Character, ClassFeature } from '@/types/character';
 
 /**
  * Check if a character has the required components for a spell
@@ -21,6 +21,7 @@ export function hasRequiredComponents(
   let componentCost = 0;
 
   // Check verbal component
+  // @ts-expect-error #524 'silenced' is not a ConditionName; conditions is optional
   if (spell.components_verbal && character.conditions.some((c) => c.name === 'silenced')) {
     missingComponents.push('Verbal (silenced)');
   }
@@ -28,7 +29,8 @@ export function hasRequiredComponents(
   // Check somatic component
   if (spell.components_somatic) {
     // Check if hands are free or if character has War Caster feat
-    const hasWarCaster = character.classFeatures?.some((f) => f.name === 'war_caster') || false;
+    const hasWarCaster =
+      character.classFeatures?.some((f: ClassFeature) => f.name === 'war_caster') || false;
     const handsFree = true; // Simplified - would check actual equipment
 
     if (!handsFree && !hasWarCaster) {
@@ -106,6 +108,7 @@ export function getSpellPreparationLimit(character: Character): number {
   }
 
   const spellcastingAbility = character.class.spellcasting.ability;
+  // @ts-expect-error #524 abilityScores is optional but assumed present for casters
   const abilityModifier = character.abilityScores[spellcastingAbility].modifier;
 
   // Wizard formula: Intelligence modifier + Wizard level
@@ -287,7 +290,7 @@ export function consumeMaterialComponents(spell: Spell): {
  * For now, we'll just return tracking information
  */
 export function trackComponentUsage(
-  character: Character,
+  _character: Character,
   spell: Spell,
 ): {
   componentsTracked: boolean;

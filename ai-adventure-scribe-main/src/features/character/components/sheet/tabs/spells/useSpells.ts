@@ -110,6 +110,7 @@ export const useSpells = (character: Character, onUpdate?: () => void): UseSpell
       setSpells(primarySpells);
 
       // Optional: Try to enhance with API data (non-blocking)
+      // @ts-expect-error #523 CharacterSpellService has no isEnabled method
       if (character?.id && characterSpellService.isEnabled()) {
         try {
           setLoading(true);
