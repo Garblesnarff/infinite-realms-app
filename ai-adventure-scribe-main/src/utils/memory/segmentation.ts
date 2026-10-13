@@ -55,43 +55,27 @@ export const stripRollScaffolding = (content: string): string => {
   if (!content) return content;
 
   return content
-    .split(/\r?\n/)
-    .map((line) => {
-      // Check if this line contains formatDiceRoll scaffolding or roll output indicators
-      const isRollLine =
-        /\(nat\s+\d+|\[(?:ADV|DIS)\]|\bvs\s+(?:DC|AC)\s+\d+|\(no DC\)|[✓✗]|:\s*pending\b|:\s*-?\d+(?:\s*\([^)]*\))?(?:\s*\[[^\]]*\])?(?:\s*vs\s+(?:DC|AC)\s+\d+)?\s+(?:success|fail|hit|miss|CRITICAL\s+HIT!?|Critical\s+Miss)\b/i.test(
-          line,
-        );
-
-      if (!isRollLine) {
-        return line;
-      }
-
-      return (
-        line
-          // Remove legacy checkmark glyphs
-          .replace(/[✓✗]/g, '')
-          // Remove pending indicator
-          .replace(/:\s*pending\b/gi, '')
-          // Remove critical indicators on roll lines
-          .replace(/\bCRITICAL\s+HIT!?/gi, '')
-          .replace(/\bCritical\s+Miss\b/gi, '')
-          // Remove outcome words on roll lines
-          .replace(/\b(?:success|fail|hit|miss)\b/gi, '')
-          // Remove natural roll notation: (nat 13+2), (nat 18-1), (nat 20)
-          .replace(/\(nat\s+\d+[+-]?\d*\)/gi, '')
-          // Remove advantage/disadvantage tags
-          .replace(/\[(?:ADV|DIS)\]/gi, '')
-          // Remove vs DC/AC comparisons
-          .replace(/\bvs\s+(?:DC|AC)\s+\d+/gi, '')
-          // Remove (no DC) tag
-          .replace(/\(no DC\)/gi, '')
-          // Normalize leftover whitespace on the roll line
-          .replace(/\s{2,}/g, ' ')
-          .trim()
-      );
-    })
-    .join('\n');
+    // Remove pending indicator when at the end of a roll description (not prose like "Status: pending approval")
+    .replace(/:\s*pending(?=\s*(?:[.\n\r,]|$))/gi, '')
+    // Remove roll outcome scaffolding appended to roll totals (e.g. "Stealth check: 15 (nat 13+2) vs DC 13 success")
+    .replace(
+      /(:\s*-?\d+)((?:\s*\(nat\s+\d+[+-]?\d*\))?(?:\s*\[(?:ADV|DIS)\])?(?:\s*vs\s+(?:DC|AC)\s+\d+)?(?:\s*\(no DC\))?(?:\s*(?:success|fail|hit|miss)\b)?(?:\s*(?:CRITICAL\s+HIT!?|Critical\s+Miss))?(?:\s*[✓✗])?)/gi,
+      (match, score, scaffolding) => {
+        if (scaffolding && scaffolding.trim().length > 0) {
+          return score;
+        }
+        return match;
+      },
+    )
+    // Remove any remaining standalone structural dice notation tokens that never appear in prose
+    .replace(/\(nat\s+\d+[+-]?\d*\)/gi, '')
+    .replace(/\[(?:ADV|DIS)\]/gi, '')
+    .replace(/\(no DC\)/gi, '')
+    .replace(/[✓✗]/g, '')
+    // Normalize leftover whitespace around replacements while keeping line structure
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/ \./g, '.')
+    .trim();
 };
 
 /**
