@@ -72,6 +72,21 @@ const HARM_PATTERNS: RegExp[] = [
     'gi',
   ),
   /\bknocked\s+(?:you\s+)?(?:prone|unconscious|down)\b/gi,
+  // The DM narrating the player character's death for a turn the engine resolved nothing
+  // for (#468, Hark NT-106: a lethal free-text action narrated as final death with no roll,
+  // while the sheet still showed full HP). Anchored on the player ("you") — an NPC's death
+  // ("the goblin dies") is not a fabrication. Hypotheticals ("you would die", "if you die")
+  // are excluded by isHypotheticalDeath below; "your death saving throw" is excluded by the
+  // negative lookahead.
+  /\byou\s+die\b/gi,
+  /\byou\s+(?:\w+\s+and\s+)?die\b/gi,
+  /\byou\s+(?:are|were)\s+dead\b/gi,
+  /\byou['’]re\s+dead\b/gi,
+  /\bkill(?:s|ed|ing)?\s+you\b/gi,
+  /\bslay(?:s|ed|ing)?\s+you\b/gi,
+  /\byour\s+death\b(?!\s+saving)/gi,
+  // #468 NT-106: "Your journey through the chasm ends here" — the journey ending is death.
+  /\b(?:your|the)\s+(?:journey|quest|adventure|tale|story)\b[^.!?]{0,40}?\bends?\s+here\b/gi,
 ];
 
 /** The player casting or striking, which only a turn where the player did nothing can fabricate. */
@@ -86,6 +101,46 @@ const NEGATOR = /\b(?:no|not|never|without|nor|neither|cannot)\b|n['’]t\b/i;
 const ADJACENT_NEGATOR = /\b(?:nothing|none)\b/i;
 /** A negation does not reach across these: "does not respond, but its strike hits you". */
 const CLAUSE_BREAK = /[,;:]|\b(?:but|though|although|yet|however)\b/i;
+
+/**
+ * "you would die if you jumped", "if you die, your friends mourn", "you die if you touch
+ * the altar": a hypothetical death is a warning, not a death claim (#468). Examines the
+ * sentence for conditional modals before the match and "if" anywhere in the sentence.
+ * Also excludes threats and attempts ("I will kill you", "trying to kill you") — the
+ * killing hasn't happened. Only applies to death claims — other harm patterns keep their
+ * existing behavior.
+ */
+function isHypotheticalDeath(text: string, index: number, matched: string): boolean {
+  if (!/\b(?:die|dead|death|kill(?:s|ed|ing)?|slay(?:s|ed|ing)?)\b/i.test(matched)) return false;
+  const boundary = Math.max(
+    text.lastIndexOf('.', index - 1),
+    text.lastIndexOf('!', index - 1),
+    text.lastIndexOf('?', index - 1),
+  );
+  const sentenceStart = boundary + 1;
+  const sentenceEnd = (() => {
+    const rest = text.slice(index + matched.length);
+    const m = /[.!?]/.exec(rest);
+    return m ? index + matched.length + m.index : text.length;
+  })();
+  const beforeMatch = text.slice(sentenceStart, index);
+  const sentence = text.slice(sentenceStart, sentenceEnd);
+  // Conditional modals before the match, or "if" anywhere in the sentence.
+  if (/\b(?:would|could|might|can|may)\b/i.test(beforeMatch)) return true;
+  if (/\bif\b/i.test(sentence)) return true;
+  // Threats and attempts: the killing hasn't happened.
+  // ('ll covers both the ASCII and curly apostrophe.)
+  if (/\b(?:will|'ll|’ll)\b/i.test(beforeMatch.slice(-20))) return true;
+  if (/\b(?:trying|tries|attempting|attempts|about|going|want|wants)\s+to\s*$/i.test(beforeMatch)) {
+    return true;
+  }
+  // "Move and you die": an imperative threat, not a death claim. The "you die" is what
+  // happens IF you move, not what has happened.
+  if (/^\s*\w+\s+and\s+you\s+die\b/i.test(sentence) && !/^\s*you\b/i.test(sentence)) {
+    return true;
+  }
+  return false;
+}
 
 /** "no damage was dealt", "does not strike you", "without any hit": the DM honouring the note. */
 function isNegated(text: string, index: number, matched: string): boolean {
@@ -125,6 +180,7 @@ export function fabricatedOutcomeClaims(
       const matched = match[0];
       if (match[1]) continue;
       if (isNegated(source, index, matched)) continue;
+      if (isHypotheticalDeath(source, index, matched)) continue;
       if (FIGURATIVE_SUBJECT.test(source.slice(Math.max(0, index - 40), index))) continue;
       claims.add(matched.trim().toLowerCase().slice(0, 80));
     }

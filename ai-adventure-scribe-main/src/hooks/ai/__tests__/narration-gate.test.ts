@@ -203,6 +203,36 @@ describe('enforceNarrationGate', () => {
     expect(note).toContain('no creature attacked');
   });
 
+  // #468 NT-106 (strategist FIX): end-to-end for a fabricated player death.
+  // Reject → regenerate once → replaced with the neutral line; held side effects never run.
+  describe('fabricated player death (#468)', () => {
+    const DEATH = 'Your journey through the chasm ends here. You fall and die.';
+
+    it('rejects the death claim and regenerates once', async () => {
+      const regenerate = vi.fn().mockResolvedValue({ text: CLEAN });
+
+      const outcome = await gate({ text: DEATH }, regenerate);
+
+      expect(regenerate).toHaveBeenCalledTimes(1);
+      expect(outcome.outcome).toBe('regenerated');
+      expect(outcome.narration.text).toBe(CLEAN);
+    });
+
+    it('replaces with the neutral line when the retry also claims death, holding side effects', async () => {
+      const first = vi.fn().mockResolvedValue(undefined);
+      const second = vi.fn().mockResolvedValue(undefined);
+      const regenerate = vi.fn().mockResolvedValue({ text: DEATH, heldSideEffects: second });
+
+      const outcome = await gate({ text: DEATH, heldSideEffects: first }, regenerate);
+
+      expect(outcome.outcome).toBe('replaced');
+      expect(outcome.narration.text).toBe(NEUTRAL_NO_EFFECT_LINE);
+      expect(first).not.toHaveBeenCalled();
+      expect(second).not.toHaveBeenCalled();
+      expect(outcome.narration.heldSideEffects).toBeUndefined();
+    });
+  });
+
   describe('with an engine outcome (#266)', () => {
     const gateWithOutcome = (
       narration: Record<string, unknown>,
