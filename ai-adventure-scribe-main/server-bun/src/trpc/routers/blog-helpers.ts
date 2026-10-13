@@ -299,7 +299,7 @@ export async function syncPostTags(
  */
 export async function canManagePost(
   ctx: Context,
-  postId: string,
+  _postId: string,
   postAuthorId: string,
 ): Promise<{ canManage: boolean; userAuthorId: string | null; isAdmin: boolean }> {
   if (!ctx.user) {

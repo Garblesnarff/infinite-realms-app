@@ -80,28 +80,98 @@ export const WARLOCK_PACT_MAGIC: Record<number, { slots: number; level: number }
  */
 export const CLASS_SPELLCASTING: Record<ClassName, ClassSpellcasting> = {
   // Full casters
-  Wizard: { className: 'Wizard', casterType: 'full', spellcastingAbility: 'intelligence', spellsKnownOrPrepared: 'prepared' },
-  Sorcerer: { className: 'Sorcerer', casterType: 'full', spellcastingAbility: 'charisma', spellsKnownOrPrepared: 'known' },
-  Cleric: { className: 'Cleric', casterType: 'full', spellcastingAbility: 'wisdom', spellsKnownOrPrepared: 'prepared' },
-  Druid: { className: 'Druid', casterType: 'full', spellcastingAbility: 'wisdom', spellsKnownOrPrepared: 'prepared' },
-  Bard: { className: 'Bard', casterType: 'full', spellcastingAbility: 'charisma', spellsKnownOrPrepared: 'known' },
+  Wizard: {
+    className: 'Wizard',
+    casterType: 'full',
+    spellcastingAbility: 'intelligence',
+    spellsKnownOrPrepared: 'prepared',
+  },
+  Sorcerer: {
+    className: 'Sorcerer',
+    casterType: 'full',
+    spellcastingAbility: 'charisma',
+    spellsKnownOrPrepared: 'known',
+  },
+  Cleric: {
+    className: 'Cleric',
+    casterType: 'full',
+    spellcastingAbility: 'wisdom',
+    spellsKnownOrPrepared: 'prepared',
+  },
+  Druid: {
+    className: 'Druid',
+    casterType: 'full',
+    spellcastingAbility: 'wisdom',
+    spellsKnownOrPrepared: 'prepared',
+  },
+  Bard: {
+    className: 'Bard',
+    casterType: 'full',
+    spellcastingAbility: 'charisma',
+    spellsKnownOrPrepared: 'known',
+  },
 
   // Half casters (start at level 2)
-  Paladin: { className: 'Paladin', casterType: 'half', spellcastingAbility: 'charisma', spellsKnownOrPrepared: 'prepared' },
-  Ranger: { className: 'Ranger', casterType: 'half', spellcastingAbility: 'wisdom', spellsKnownOrPrepared: 'known' },
+  Paladin: {
+    className: 'Paladin',
+    casterType: 'half',
+    spellcastingAbility: 'charisma',
+    spellsKnownOrPrepared: 'prepared',
+  },
+  Ranger: {
+    className: 'Ranger',
+    casterType: 'half',
+    spellcastingAbility: 'wisdom',
+    spellsKnownOrPrepared: 'known',
+  },
 
   // Third casters (subclass features)
-  'Eldritch Knight': { className: 'Eldritch Knight', casterType: 'third', spellcastingAbility: 'intelligence', spellsKnownOrPrepared: 'known' },
-  'Arcane Trickster': { className: 'Arcane Trickster', casterType: 'third', spellcastingAbility: 'intelligence', spellsKnownOrPrepared: 'known' },
+  'Eldritch Knight': {
+    className: 'Eldritch Knight',
+    casterType: 'third',
+    spellcastingAbility: 'intelligence',
+    spellsKnownOrPrepared: 'known',
+  },
+  'Arcane Trickster': {
+    className: 'Arcane Trickster',
+    casterType: 'third',
+    spellcastingAbility: 'intelligence',
+    spellsKnownOrPrepared: 'known',
+  },
 
   // Pact magic
-  Warlock: { className: 'Warlock', casterType: 'pact', spellcastingAbility: 'charisma', spellsKnownOrPrepared: 'known' },
+  Warlock: {
+    className: 'Warlock',
+    casterType: 'pact',
+    spellcastingAbility: 'charisma',
+    spellsKnownOrPrepared: 'known',
+  },
 
   // Non-casters
-  Fighter: { className: 'Fighter', casterType: 'none', spellcastingAbility: null, spellsKnownOrPrepared: null },
-  Rogue: { className: 'Rogue', casterType: 'none', spellcastingAbility: null, spellsKnownOrPrepared: null },
-  Barbarian: { className: 'Barbarian', casterType: 'none', spellcastingAbility: null, spellsKnownOrPrepared: null },
-  Monk: { className: 'Monk', casterType: 'none', spellcastingAbility: null, spellsKnownOrPrepared: null },
+  Fighter: {
+    className: 'Fighter',
+    casterType: 'none',
+    spellcastingAbility: null,
+    spellsKnownOrPrepared: null,
+  },
+  Rogue: {
+    className: 'Rogue',
+    casterType: 'none',
+    spellcastingAbility: null,
+    spellsKnownOrPrepared: null,
+  },
+  Barbarian: {
+    className: 'Barbarian',
+    casterType: 'none',
+    spellcastingAbility: null,
+    spellsKnownOrPrepared: null,
+  },
+  Monk: {
+    className: 'Monk',
+    casterType: 'none',
+    spellcastingAbility: null,
+    spellsKnownOrPrepared: null,
+  },
 };
 
 /**
@@ -134,10 +204,7 @@ const THIRD_CASTER_SUBCLASSES: Record<string, { parent: ClassName; className: Cl
  * only grants slots on its parent class — a mismatched pairing, an unknown
  * subclass, or a subclass on any other class is ignored.
  */
-function resolveThirdCasterClass(
-  name: ClassName,
-  subclass: string | null | undefined,
-): ClassName {
+function resolveThirdCasterClass(name: ClassName, subclass: string | null | undefined): ClassName {
   const entry = THIRD_CASTER_SUBCLASSES[(subclass ?? '').trim().toLowerCase()];
   if (!entry || entry.parent !== name) return name;
   return entry.className;
@@ -148,15 +215,12 @@ function resolveThirdCasterClass(
  * seedRowsForCharacter and isPactSlotCharacter so both agree on what counts
  * as multiclass.
  */
-function parseClassLevels(
-  classLevels: unknown,
-): Array<{ className: ClassName; level: number }> {
+function parseClassLevels(classLevels: unknown): Array<{ className: ClassName; level: number }> {
   if (!Array.isArray(classLevels)) return [];
   return classLevels
     .map((entry) => {
       const raw = entry as { className?: unknown; level?: unknown };
-      const name =
-        typeof raw.className === 'string' ? normalizeClassName(raw.className) : null;
+      const name = typeof raw.className === 'string' ? normalizeClassName(raw.className) : null;
       const entryLevel = typeof raw.level === 'number' && raw.level > 0 ? raw.level : 0;
       return name && entryLevel > 0 ? { className: name, level: entryLevel } : null;
     })
@@ -236,10 +300,7 @@ export class SpellSlotMechanics {
    * grants pact rows to. Short rests restore pact rows (2014 PHB pg. 107:
    * pact slots recover on a short or long rest); long rests restore every row.
    */
-  static isPactSlotCharacter(
-    className: string | null | undefined,
-    classLevels: unknown,
-  ): boolean {
+  static isPactSlotCharacter(className: string | null | undefined, classLevels: unknown): boolean {
     if (parseClassLevels(classLevels).length > 1) return false;
     return normalizeClassName(className) === 'Warlock';
   }
@@ -337,7 +398,7 @@ export class SpellSlotMechanics {
    * @returns Multiclass spell slot calculation
    */
   static calculateMulticlassSpellSlots(
-    classes: Array<{ className: ClassName; level: number }>
+    classes: Array<{ className: ClassName; level: number }>,
   ): MulticlassSpellSlots {
     let totalCasterLevel = 0;
     let warlockLevel = 0;
@@ -404,7 +465,7 @@ export class SpellSlotMechanics {
    * @param targetLevel - Target level to upcast to
    * @returns Upcasting validation result
    */
-  static canUpcast(spellName: string, baseLevel: number, targetLevel: number): UpcastValidation {
+  static canUpcast(_spellName: string, baseLevel: number, targetLevel: number): UpcastValidation {
     // Cantrips cannot be upcast
     if (baseLevel === 0) {
       return {
