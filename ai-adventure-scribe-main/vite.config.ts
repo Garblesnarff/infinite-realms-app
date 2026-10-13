@@ -1,10 +1,16 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'path';
 
 import react from '@vitejs/plugin-react-swc';
 import { visualizer } from 'rollup-plugin-visualizer';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
+
+import {
+  computeOgImageHash,
+  getOgImageHashedFilename,
+  transformOgImageInHtml,
+} from './src/utils/og-image-hash';
 
 const BUILD_VERSION_PLACEHOLDER = '__APP_BUILD_VERSION__';
 
@@ -55,6 +61,35 @@ function injectBuildVersion(buildVersion: string): {
     name: 'inject-build-version',
     transformIndexHtml(html: string) {
       return html.replaceAll(BUILD_VERSION_PLACEHOLDER, escapeHtmlAttribute(buildVersion));
+    },
+  };
+}
+
+function contentHashedOgImagePlugin(): Plugin {
+  const imagePath = path.resolve(__dirname, 'public/og-image.png');
+  let hashedFilename = '';
+  let imageBuffer: Buffer | null = null;
+
+  if (existsSync(imagePath)) {
+    imageBuffer = readFileSync(imagePath);
+    const hash = computeOgImageHash(imageBuffer);
+    hashedFilename = getOgImageHashedFilename(hash);
+  }
+
+  return {
+    name: 'content-hashed-og-image',
+    transformIndexHtml(html: string) {
+      if (!hashedFilename) return html;
+      return transformOgImageInHtml(html, hashedFilename);
+    },
+    generateBundle() {
+      if (hashedFilename && imageBuffer) {
+        this.emitFile({
+          type: 'asset',
+          fileName: hashedFilename,
+          source: imageBuffer,
+        });
+      }
     },
   };
 }
@@ -112,6 +147,7 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     injectBuildVersion(resolveBuildVersion(mode)),
+    contentHashedOgImagePlugin(),
     react(),
     mode === 'production' &&
       visualizer({

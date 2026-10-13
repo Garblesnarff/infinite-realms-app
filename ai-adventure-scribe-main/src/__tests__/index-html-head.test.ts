@@ -51,8 +51,9 @@ describe('index.html share tags', () => {
     const twitterImage = meta('name', 'twitter:image');
     expect(ogImage).toMatch(/^https:\/\//);
     expect(twitterImage).toMatch(/^https:\/\//);
-    expect(ogImage).toBe('https://infiniterealms.app/og-image.png');
-    expect(twitterImage).toBe('https://infiniterealms.app/og-image.png');
+    expect(ogImage).toMatch(/^https:\/\/infiniterealms\.app\/og-image(\.[a-f0-9]+)?\.png$/);
+    expect(twitterImage).toMatch(/^https:\/\/infiniterealms\.app\/og-image(\.[a-f0-9]+)?\.png$/);
+    expect(ogImage).toBe(twitterImage);
   });
 
   it('loads no https scripts from hosts other than infiniterealms.app', () => {
