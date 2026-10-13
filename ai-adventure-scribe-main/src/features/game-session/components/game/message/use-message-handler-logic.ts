@@ -36,12 +36,7 @@ import {
 import logger from '@/lib/logger';
 import { clearPendingInput } from '@/services/auth/TokenService';
 import { CombatIntentRefusedError } from '@/services/combat/combat-action-executor';
-import {
-  hasPendingCombatEntryConfirmation,
-  markCombatEntryTypedAnswer,
-  onCombatEntryConfirmationPendingChange,
-  settlePendingCombatEntryConfirmation,
-} from '@/services/combat/combat-entry-confirmation-bridge';
+import { settlePendingCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
 import { settlePendingPlayerRoll } from '@/services/combat/player-roll-bridge';
 import { settlePendingSpellTargetSave } from '@/services/combat/spell-target-save-bridge';
 import { isTerminalDefeatError } from '@/services/user-data-api';
@@ -236,17 +231,6 @@ export const useMessageHandlerLogic = ({
   const [retryInFlight, setRetryInFlight] = React.useState(false);
   const handleSendMessage = React.useCallback(
     (input: string, context?: MessageSendContext): Promise<void> => {
-      // #400: typing (or a sheet pick) while the entry card is up answers the card — dismiss
-      // it first so the suspended turn can finish. Without the settle, the queued send would
-      // wait forever on a turn parked at the confirmation. The message then runs as a new
-      // turn, and the pre-DM hold starts combat through the engine when it declares one.
-      // The typed answer also arms the skip for the next hold, so the new turn is not
-      // re-prompted with another card. The input text is stored so a send that never
-      // becomes a turn cannot leak the skip to an unrelated later message.
-      if (hasPendingCombatEntryConfirmation()) {
-        settlePendingCombatEntryConfirmation(false);
-        markCombatEntryTypedAnswer(input);
-      }
       const saved = [...messagesRef.current]
         .reverse()
         .find((message) => message.sender === 'player');
@@ -298,18 +282,6 @@ export const useMessageHandlerLogic = ({
       turnPhaseRef.current = null;
     }
   }, []);
-
-  // #400: the entry card is a question the player may answer by typing (or a sheet pick), so
-  // the composer stays live while it is up. A dice-roll prompt is different: it owns the
-  // single dice slot, so the composer stays blocked there. The bridge notifies on present and
-  // on settle, covering both the pre-DM hold and the post-DM card.
-  React.useEffect(
-    () =>
-      onCombatEntryConfirmationPendingChange((isPending) => {
-        if (isPending) setComposerBlocked(false);
-      }),
-    [setComposerBlocked],
-  );
 
   // Update refs when values change
   React.useEffect(() => {

@@ -13,10 +13,6 @@ import { CharacterSheetHeader } from '../CharacterSheetHeader';
 const mockDeleteCharacter = vi.fn();
 const mockToast = vi.fn();
 
-vi.mock('@/contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'char-owner-1' } }),
-}));
-
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: { deleteCharacter: (...args: unknown[]) => mockDeleteCharacter(...args) },
 }));

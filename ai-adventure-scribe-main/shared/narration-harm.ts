@@ -170,24 +170,12 @@ const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\
 /** Attack nouns whose miss can contradict an engine hit. */
 const MISS_NOUN = 'strike|attack|blow|shot|arrow|blade|swing';
 
-/**
- * Attack nouns for dismissal claims (#467). Extends MISS_NOUN with the words the DM uses
- * when waving an attack off: "ignores your magical assault", "shrugs off your spell".
- */
-const DISMISS_NOUN = `${MISS_NOUN}|assault|spell|magic`;
-
 interface OutcomePattern {
   re: RegExp;
   /** Soft verdict language ("manage to", "successful"): needs the rolled action named. */
   soft: boolean;
   /** A miss claim: skipped when the attack belongs to someone but the player. */
   miss: boolean;
-  /**
-   * A dismissal claim ("ignores your assault"): the DM narrating the player's attack as
-   * having no effect. Like a miss, but only contradicts a hit — for a miss, "ignores your
-   * assault" is consistent. The patterns anchor on "your", so no possessor/target check.
-   */
-  dismiss?: boolean;
 }
 
 /**
@@ -231,52 +219,6 @@ const ATTACK_MISS: OutcomePattern[] = [
   { re: new RegExp(`\\b(?:fall|falls|fell)\\s+short\\b[^.!?]{0,40}?\\b(?:${MISS_NOUN})s?\\b`, 'gi'), soft: false, miss: true },
 ];
 
-/**
- * The DM narrating the player's attack as having no effect, contradicting a SUCCESSFUL engine
- * verdict (an engine hit). "The mechanical server ignores your magical assault" after the
- * engine logged HIT 17+5=22 for 8 damage (#467, Hark NT-013). Only contradicts a hit: for a
- * miss, "ignores your assault" is consistent. Anchored on the player's attack ("your ..."),
- * and only on attack rolls like the miss patterns.
- */
-const ATTACK_DISMISS: OutcomePattern[] = [
-  {
-    re: new RegExp(
-      `\\bignor(?:e|es|ed|ing)\\s+your\\b[^.!?,;:]{0,40}?\\b(?:${DISMISS_NOUN})s?\\b`,
-      'gi',
-    ),
-    soft: false,
-    miss: false,
-    dismiss: true,
-  },
-  {
-    re: new RegExp(
-      `\\bshrug(?:s|ged|ging)?\\s+off\\s+your\\b[^.!?,;:]{0,40}?\\b(?:${DISMISS_NOUN})s?\\b`,
-      'gi',
-    ),
-    soft: false,
-    miss: false,
-    dismiss: true,
-  },
-  {
-    re: new RegExp(
-      `\\byour\\b[^.!?,;:]{0,40}?\\b(?:${DISMISS_NOUN})s?\\b[^.!?,;:]{0,40}?\\b(?:has|have|had)\\s+no\\s+effect\\b`,
-      'gi',
-    ),
-    soft: false,
-    miss: false,
-    dismiss: true,
-  },
-  {
-    re: new RegExp(
-      `\\bunaffected\\s+by\\s+your\\b[^.!?,;:]{0,40}?\\b(?:${DISMISS_NOUN})s?\\b`,
-      'gi',
-    ),
-    soft: false,
-    miss: false,
-    dismiss: true,
-  },
-];
-
 /** Subject-anchored success/failure claims for the named player character. */
 function namePatterns(name: string, success: boolean): OutcomePattern[] {
   const n = escapeRegExp(name);
@@ -296,35 +238,6 @@ function namePatterns(name: string, success: boolean): OutcomePattern[] {
           ),
           soft: false,
           miss: true,
-        },
-        // "The server ignores Mira's assault": the named character's attack waved off (#467).
-        {
-          re: new RegExp(
-            `\\bignor(?:e|es|ed|ing)\\s+${n}['’]s\\b[^.!?,;:]{0,40}?\\b(?:${DISMISS_NOUN})s?\\b`,
-            'gi',
-          ),
-          soft: false,
-          miss: false,
-          dismiss: true,
-        },
-        // "The server shrugs off Mira's assault", "Mira's spell has no effect".
-        {
-          re: new RegExp(
-            `\\bshrug(?:s|ged|ging)?\\s+off\\s+${n}['’]s\\b[^.!?,;:]{0,40}?\\b(?:${DISMISS_NOUN})s?\\b`,
-            'gi',
-          ),
-          soft: false,
-          miss: false,
-          dismiss: true,
-        },
-        {
-          re: new RegExp(
-            `\\b${n}['’]s\\b[^.!?,;:]{0,40}?\\b(?:${DISMISS_NOUN})s?\\b[^.!?,;:]{0,40}?\\b(?:has|have|had)\\s+no\\s+effect\\b`,
-            'gi',
-          ),
-          soft: false,
-          miss: false,
-          dismiss: true,
         },
       ]
     : [
@@ -371,25 +284,6 @@ const ACTION_STOPWORDS = new Set([
 function actionKeywords(outcome: EngineOutcome): string[] {
   const text = `${outcome.requestType ?? ''} ${outcome.description ?? ''}`.toLowerCase();
   const words = text
-    .split(/[^a-z0-9]+/)
-    .filter((word) => word.length > 2 && !ACTION_STOPWORDS.has(word));
-  return [...new Set(words)];
-}
-
-/**
- * The spell or weapon name from an attack-roll description, as its content words
- * ("Chill Touch spell attack vs Mechanical Server" → chill, touch; "Longsword attack
- * vs Goblin — 1d20+7 vs AC 15" → longsword). The dynamic dismiss pattern ("ignores your
- * Chill Touch") must only match the thing the player attacked with — matching every
- * content word of the roll would also match the target's name ("ignores your Mechanical
- * Server"), which is not a dismissal of the attack (#467 nit).
- */
-function attackNameKeywords(outcome: EngineOutcome): string[] {
-  const description = outcome.description ?? '';
-  const name = /^(.*?)\s+(?:spell\s+)?attack\s+(?:vs|on|against)\s+/i.exec(description)?.[1]?.trim();
-  if (!name) return [];
-  const words = name
-    .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter((word) => word.length > 2 && !ACTION_STOPWORDS.has(word));
   return [...new Set(words)];
@@ -449,21 +343,6 @@ function isOutcomeClaimNegated(text: string, index: number): boolean {
  */
 function isAttackRoll(outcome: EngineOutcome): boolean {
   return !!outcome.requestType && /attack/i.test(outcome.requestType);
-}
-
-/**
- * The dismissal names a spell ("ignores your spell", "unaffected by your magic") rather
- * than a weapon attack (#467 B4). Only contradicts when the rolled attack looks like a
- * spell — checked against the outcome's own words.
- */
-function isSpellNounDismissal(matched: string): boolean {
-  return /\b(?:spells?|magic)\b/i.test(matched);
-}
-
-/** The outcome's description suggests a spell attack ("Fireball spell", "magic missile"). */
-function isSpellAttack(outcome: EngineOutcome): boolean {
-  const text = `${outcome.requestType ?? ''} ${outcome.description ?? ''}`.toLowerCase();
-  return /\b(?:spell|magic|cantrip)\b/.test(text);
 }
 
 /**
@@ -566,33 +445,15 @@ export function contradictsEngineOutcome(
   outcome: EngineOutcome,
 ): OutcomeClaim[] {
   const source = text ?? '';
-  const base = outcome.success
-    ? [...YOU_FAILURE, ...ATTACK_MISS, ...ATTACK_DISMISS]
-    : YOU_SUCCESS;
+  const base = outcome.success ? [...YOU_FAILURE, ...ATTACK_MISS] : YOU_SUCCESS;
   // The name crosses the HTTP boundary on combatEntry (llm.ts), so it is validated here
   // rather than trusted: a non-string must not reach the pattern builder.
   const rawName = outcome.characterName;
   const name = typeof rawName === 'string' && rawName.trim() ? rawName.trim() : undefined;
   const patterns = name ? [...base, ...namePatterns(name, outcome.success)] : base;
   const keywords = actionKeywords(outcome);
-  // "ignores your Chill Touch": the DM names the specific spell, not a generic noun.
-  // Built from the spell/weapon name alone — not every content word of the roll — so
-  // the target's name can never match (#467 nit).
-  const nameKeywords = attackNameKeywords(outcome);
-  if (outcome.success && nameKeywords.length > 0) {
-    const kwAlt = nameKeywords.map(escapeRegExp).join('|');
-    patterns.push({
-      re: new RegExp(
-        `\\bignor(?:e|es|ed|ing)\\s+your\\b[^.!?,;:]{0,40}?\\b(?:${kwAlt})\\b`,
-        'gi',
-      ),
-      soft: false,
-      miss: false,
-      dismiss: true,
-    });
-  }
   const claims: OutcomeClaim[] = [];
-  for (const { re, soft, miss, dismiss } of patterns) {
+  for (const { re, soft, miss } of patterns) {
     for (const match of source.matchAll(re)) {
       const index = match.index ?? 0;
       if (isOutcomeClaimNegated(source, index)) continue;
@@ -605,15 +466,6 @@ export function contradictsEngineOutcome(
       // attack, and the noun is the player's ("your"/name) or the clause names the rolled
       // target. A failed skill check is not contradicted by someone else's arrow.
       if (miss && (!isAttackRoll(outcome) || !isPlayerMiss(sentence, name, outcome))) continue;
-      // "ignores your assault": a dismissal only contradicts an attack roll's hit. The
-      // patterns anchor on the player's own attack ("your"), so no possessor/target check.
-      // "unaffected by your magic" after a sword hit is consistent (B4): spell/magic nouns
-      // only contradict when the rolled attack looks like a spell.
-      if (dismiss && !isAttackRoll(outcome)) continue;
-      if (dismiss && isSpellNounDismissal(match[0]) && !isSpellAttack(outcome)) continue;
-      // "ignores your taunt, but your assault strikes true": the dismissal scopes to a
-      // different clause than the attack noun (B5). The DM affirmed the hit.
-      if (dismiss && CLAUSE_BREAK.test(match[0])) continue;
       // "you manage to catch your breath" after a failed Stealth check: soft verdict language
       // only contradicts when the sentence names the rolled action. With no action words on
       // the outcome there is nothing to anchor on, so the claim stands as before.

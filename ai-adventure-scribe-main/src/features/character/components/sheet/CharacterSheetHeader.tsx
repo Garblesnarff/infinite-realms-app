@@ -19,7 +19,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { IRPanel, IRThumb } from '@/components/ui/ir-primitives';
-import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
@@ -40,8 +39,6 @@ interface CharacterSheetHeaderProps {
 export const CharacterSheetHeader: React.FC<CharacterSheetHeaderProps> = ({ character }) => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user } = useAuth();
-  const isOwner = Boolean(user?.id && character.user_id && user.id === character.user_id);
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
   const portraitUrl = character.image_url ?? character.avatar_url;
   const hitPoints = getCharacterSheetHitPoints(character);
@@ -106,7 +103,7 @@ export const CharacterSheetHeader: React.FC<CharacterSheetHeaderProps> = ({ char
           </p>
         </div>
 
-        {character.id && isOwner && <ExportCharacterButton characterId={character.id} />}
+        {character.id && <ExportCharacterButton characterId={character.id} />}
 
         {/* Quick Stats */}
         <div className="hidden md:flex items-center gap-4 text-sm">

@@ -158,10 +158,6 @@ const deathSaveIntentResult = (roll: number) => ({
   roundNumber: 3,
   deathSaves: [SCHOLAR_SAVE(roll)],
 });
-vi.mock('@/contexts/CharacterContext', () => ({
-  // #400: the owned sheet for the suggestion filter; null keeps the filter a no-op here.
-  useCharacter: () => ({ state: { character: null } }),
-}));
 
 /** `advance-npc-turns` after the save: the spider strikes the body, and the turn comes back. */
 const spiderStrikesTheBody = {

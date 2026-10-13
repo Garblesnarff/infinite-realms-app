@@ -1,4 +1,5 @@
 import { looksLikeCombatIntent } from '../../../shared/combat-intent-prefilter';
+import { isDescriptorOnlyCreature } from '../../../shared/engine-display-name';
 import { isUnresolvedNpcName } from '../../../shared/unresolved-creature-name';
 
 import type { AIResponse } from '@/services/ai/shared/types';
@@ -26,6 +27,22 @@ export function confirmCombatEntry(
   const combatantLabels = pendingEntry.combatants
     .map((combatant) => combatant.name)
     .filter((label) => !isUnresolvedNpcName(label));
+
+  const descriptors = pendingEntry.combatants
+    .filter(
+      (c) =>
+        Boolean(c.monsterId) ||
+        (pendingEntry.sceneSpecSynthesized && isDescriptorOnlyCreature(c.name)),
+    )
+    .map((c) => c.name)
+    .filter((label) => !isUnresolvedNpcName(label));
+
+  if (pendingEntry.declaredAttack?.monsterId && pendingEntry.declaredAttack.actorName) {
+    if (!descriptors.includes(pendingEntry.declaredAttack.actorName)) {
+      descriptors.push(pendingEntry.declaredAttack.actorName);
+    }
+  }
+
   const declaredTarget = pendingEntry.declaredAttack?.actorName?.trim();
   const declaredTargets = declaredTarget ? [declaredTarget] : [];
   const normalizeLabel = (value: string): string =>
@@ -48,6 +65,7 @@ export function confirmCombatEntry(
     actorLabel: player.name,
     combatantLabels,
     ...(declaredTargets.length ? { declaredTargets, otherCombatants } : {}),
+    ...(descriptors.length ? { descriptors } : {}),
     initiativeRoll: null,
     initiativeModifier: player.initiativeModifier,
   });

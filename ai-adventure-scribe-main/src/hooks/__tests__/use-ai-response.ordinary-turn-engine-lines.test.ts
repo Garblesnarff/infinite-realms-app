@@ -114,10 +114,6 @@ const encounterHeldBy = (participantId: string): Record<string, unknown> => ({
   currentRound: 2,
   participants,
 });
-vi.mock('@/contexts/CharacterContext', () => ({
-  // #400: the owned sheet for the suggestion filter; null keeps the filter a no-op here.
-  useCharacter: () => ({ state: { character: null } }),
-}));
 
 /** What Emil's swing returns from `advance-npc-turns`: the same shape as the #2385 fixture. */
 const emilSwing = {

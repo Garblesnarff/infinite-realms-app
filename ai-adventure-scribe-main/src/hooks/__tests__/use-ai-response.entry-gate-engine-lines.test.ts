@@ -24,17 +24,11 @@ import type { LocalNotice } from '@/hooks/ai/types';
 import { useCombat } from '@/contexts/CombatContext';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
-import {
-  consumeCombatEntryTypedAnswer,
-  requestCombatEntryConfirmation,
-} from '@/services/combat/combat-entry-confirmation-bridge';
+import { requestCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
 import { setPlayerRollHost } from '@/services/combat/player-roll-bridge';
 import { userDataApi } from '@/services/user-data-api';
 
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: vi.fn(() => ({ userPlan: 'pro' })) }));
-vi.mock('@/contexts/CharacterContext', () => ({
-  useCharacter: vi.fn(() => ({ state: { character: null } })),
-}));
 vi.mock('@/contexts/CombatContext', () => ({ useCombat: vi.fn() }));
 vi.mock('@/contexts/GameContext', () => ({
   useGame: vi.fn(() => ({
@@ -63,7 +57,6 @@ vi.mock('@/services/ai-service', () => ({
 vi.mock('@/services/combat/combat-entry-confirmation-bridge', () => ({
   requestCombatEntryConfirmation: vi.fn(),
   requestCombatEntryAnswer: vi.fn(),
-  consumeCombatEntryTypedAnswer: vi.fn().mockReturnValue(false),
 }));
 vi.mock('@/services/combat/combat-attack-proposal', () => ({
   proposeAuthoritativeSpell: vi.fn().mockResolvedValue({
@@ -271,7 +264,6 @@ describe('useAIResponse: an entry-gate encounter shows its engine lines (#2378)'
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(consumeCombatEntryTypedAnswer).mockReturnValue(false);
     order = [];
     held = '';
     intentBodies = [];

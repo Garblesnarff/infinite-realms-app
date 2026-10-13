@@ -2663,10 +2663,7 @@ ${playerInput}
         amount: 40,
         reason: 'Talked the gatekeeper round',
       });
-    expect((await Promise.all([award(), award()])).map((grant) => grant.outcome).sort()).toEqual([
-      'already_awarded',
-      'awarded',
-    ]);
+    expect((await Promise.all([award(), award()])).sort()).toEqual(['already_awarded', 'awarded']);
     expect(await sheetXp(turn.character.id)).toBe(40);
     expect(await xpEvents(turn.character.id)).toHaveLength(1);
   });
@@ -2714,13 +2711,13 @@ ${playerInput}
       description: 'Goblin',
     });
     expect(
-      (await awardStoryXpOnce({
+      await awardStoryXpOnce({
         characterId: turn.character.id,
         sessionId,
         since,
         amount: 30,
         reason: 'Truce with the ogre',
-      })).outcome,
+      }),
     ).toBe('awarded');
     expect(await sheetXp(turn.character.id)).toBe(30);
   });
@@ -2794,13 +2791,13 @@ ${playerInput}
     };
     await playerSays('I scout the pass.');
     expect(
-      (await awardStoryXpOnce({
+      await awardStoryXpOnce({
         characterId: turn.character.id,
         sessionId,
         since: await playerSince(),
         amount: 50,
         reason: 'Scouting the pass',
-      })).outcome,
+      }),
     ).toBe('awarded');
     // A new player message: not a Retry, so the cap (not the already-awarded check) decides.
     await playerSays('I parley with the patrol.');
@@ -2809,13 +2806,13 @@ ${playerInput}
     let outcome: unknown;
     let capped: Array<Record<string, unknown>>;
     try {
-      outcome = (await awardStoryXpOnce({
+      outcome = await awardStoryXpOnce({
         characterId: turn.character.id,
         sessionId,
         since: await playerSince(),
         amount: 50,
         reason: 'Parley with the patrol',
-      })).outcome;
+      });
       // Read the spy before mockRestore(): restoring clears the recorded calls.
       capped = info.mock.calls
         .slice(before)
@@ -2906,13 +2903,13 @@ ${playerInput}
     };
     await playerSays('I chart the mountain passes.');
     expect(
-      (await awardStoryXpOnce({
+      await awardStoryXpOnce({
         characterId: turn.character.id,
         sessionId,
         since: await playerSince(),
         amount: 75,
         reason: 'Charted the passes',
-      })).outcome,
+      }),
     ).toBe('awarded');
     expect(await xpEvents(turn.character.id)).toHaveLength(1);
     // A new player message earning more: the cap is full, so nothing is written.
@@ -2922,13 +2919,13 @@ ${playerInput}
     let outcome: unknown;
     let capped: Array<Record<string, unknown>>;
     try {
-      outcome = (await awardStoryXpOnce({
+      outcome = await awardStoryXpOnce({
         characterId: turn.character.id,
         sessionId,
         since: await playerSince(),
         amount: 50,
         reason: 'Befriended the clan',
-      })).outcome;
+      });
       // Read the spy before mockRestore(): restoring clears the recorded calls.
       capped = info.mock.calls
         .slice(before)
@@ -2995,13 +2992,13 @@ ${playerInput}
       .limit(1);
     if (!since) throw new Error('[dm-reply-reconcile] the player row has no created_at');
     expect(
-      (await awardStoryXpOnce({
+      await awardStoryXpOnce({
         characterId: turn.character.id,
         sessionId,
         since,
         amount: 50,
         reason: 'Recounted legend',
-      })).outcome,
+      }),
     ).toBe('capped');
     expect(await sheetXp(turn.character.id)).toBe(0);
     expect(await xpEvents(turn.character.id)).toEqual([]);

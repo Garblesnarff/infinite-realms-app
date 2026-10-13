@@ -181,3 +181,109 @@ export function formatVersusArmorClass(facts: {
   }
   return `vs AC ${effective}`;
 }
+
+const DESCRIPTOR_CREATURE_NOUNS = new Set([
+  'hulk',
+  'ooze',
+  'hunter',
+  'spider',
+  'roach',
+  'dragon',
+  'goblin',
+  'orc',
+  'bandit',
+  'troll',
+  'ogre',
+  'golem',
+  'skeleton',
+  'zombie',
+  'beast',
+  'creature',
+  'monster',
+  'cube',
+  'owlbear',
+  'ghoul',
+  'wraith',
+  'specter',
+  'kobold',
+  'bugbear',
+  'hobgoblin',
+  'gnoll',
+  'cultist',
+  'harpy',
+  'minotaur',
+  'basilisk',
+  'chimera',
+  'hydra',
+  'gargoyle',
+  'vampire',
+  'fiend',
+  'demon',
+  'devil',
+  'aberration',
+  'construct',
+  'elemental',
+  'shadow',
+  'drakewarden',
+  'beholder',
+  'lich',
+  'mummy',
+  'shaman',
+  'wight',
+  'raider',
+  'slime',
+  'worm',
+  'horror',
+  'stalker',
+  'crawler',
+  'creeper',
+  'lurker',
+  'dread',
+]);
+
+export function isDescriptorOnlyCreature(name: string | null | undefined): boolean {
+  if (!name) return false;
+  const trimmed = name.trim();
+  if (!trimmed) return false;
+
+  const withoutArticle = trimmed.replace(/^the\s+/i, '').trim();
+  const lower = withoutArticle.toLowerCase();
+  const baseName = lower.replace(/\s+\d+$/, '');
+  const words = baseName.split(/[\s-]+/).filter(Boolean);
+
+  return words.some((word) => DESCRIPTOR_CREATURE_NOUNS.has(word));
+}
+
+/**
+ * Format a creature or participant name for prose-facing copy (#2143).
+ *
+ * Descriptor-only creatures ("Chiropteran Hulk", "Amorphous Shadow-Ooze") listed in `descriptors`
+ * or matching creature descriptor nouns become "the <lowercase descriptor>".
+ * Named creatures ("Vance", "Professor Emil Darkwater") remain unchanged.
+ */
+export function formatCreatureForProse(
+  name: string | null | undefined,
+  descriptors?: readonly string[],
+): string {
+  if (!name) return '';
+  const trimmed = name.trim();
+  if (!trimmed) return '';
+
+  const withoutArticle = trimmed.replace(/^the\s+/i, '').trim();
+
+  const isExplicitDescriptor = descriptors
+    ? descriptors.some(
+        (d) =>
+          d.trim().toLowerCase() === trimmed.toLowerCase() ||
+          d.trim().toLowerCase() === withoutArticle.toLowerCase(),
+      )
+    : undefined;
+
+  const isDescriptor = isExplicitDescriptor ?? isDescriptorOnlyCreature(trimmed);
+
+  if (isDescriptor) {
+    return `the ${withoutArticle.toLowerCase()}`;
+  }
+
+  return trimmed;
+}

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   displayNameFromRoster,
+  formatCreatureForProse,
   formatVersusArmorClass,
   rosterEntryForParticipant,
   playerFacingWeaponName,
@@ -159,6 +160,38 @@ describe('slug and weapon fallbacks (#2306)', () => {
     );
     expect(playerFacingWeaponName('Sneak Attack', 'The Vitruvian Spider')).toBe('Sneak Attack');
     expect(playerFacingWeaponName('Opportunity Attack')).toBe('Opportunity Attack');
+  });
+});
+
+describe('formatCreatureForProse (#2143)', () => {
+  it('converts descriptor-only creatures to "the ..." prose form', () => {
+    const descriptors = [
+      'Chiropteran Hulk',
+      'Amorphous Shadow-Ooze',
+      'Chitinous Hunter',
+      'Goblin Shaman',
+    ];
+    expect(formatCreatureForProse('Chiropteran Hulk', descriptors)).toBe('the chiropteran hulk');
+    expect(formatCreatureForProse('Amorphous Shadow-Ooze', descriptors)).toBe(
+      'the amorphous shadow-ooze',
+    );
+    expect(formatCreatureForProse('Chitinous Hunter', descriptors)).toBe('the chitinous hunter');
+    expect(formatCreatureForProse('Goblin Shaman', descriptors)).toBe('the goblin shaman');
+    expect(formatCreatureForProse('The Chiropteran Hulk', descriptors)).toBe(
+      'the chiropteran hulk',
+    );
+  });
+
+  it('preserves proper names of creatures and characters', () => {
+    const descriptors = ['Chiropteran Hulk'];
+    expect(formatCreatureForProse('Vance', descriptors)).toBe('Vance');
+    expect(formatCreatureForProse('Professor Emil Darkwater', descriptors)).toBe(
+      'Professor Emil Darkwater',
+    );
+    expect(formatCreatureForProse('Captain Sarah Reeves', descriptors)).toBe(
+      'Captain Sarah Reeves',
+    );
+    expect(formatCreatureForProse('Valerius', descriptors)).toBe('Valerius');
   });
 });
 

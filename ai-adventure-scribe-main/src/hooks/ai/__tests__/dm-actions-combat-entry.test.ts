@@ -1040,17 +1040,13 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     expect(outcome.activeEncounter).toBeNull();
     expect(outcome.isInCombat).toBe(false);
     expect(outcome.result.combat_actions).toEqual([]);
-    // #400: the decline keeps the DM's telegraph prose (it is already on screen and it is the
-    // answer to the player's message) and only strips the combat machinery. Blanking the text
-    // dropped the player's action and let a later DM turn narrate the hostile away.
-    expect(outcome.responseText).toBe('Vance catches your arm before the punch lands.');
-    expect(outcome.result.text).toBe('Vance catches your arm before the punch lands.');
+    expect(outcome.responseText).toBe('');
     expect(outcome.localNotice).toBe(
-      'No encounter was seated; the hostile is still in the scene.',
+      'Combat entry declined. No encounter was seated; your action was not resolved.',
     );
     expect(outcome.localNotices).toEqual([
       {
-        text: 'No encounter was seated; the hostile is still in the scene.',
+        text: 'Combat entry declined. No encounter was seated; your action was not resolved.',
         persist: true,
       },
     ]);
@@ -1344,34 +1340,5 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
       }),
     );
     expect(outcome.responseText).toBe('Frost takes Vance in the chest.');
-  });
-
-  it('#400: a typed answer settles the card — entryConfirmed skips the second card and seats', async () => {
-    // The loop this guards: the composer is unlocked, the player answered the card by typing,
-    // and the DM/gate still returns combat_entry_pending for the typed action. The typed turn
-    // passes entryConfirmed, so the card must not come back — the entry seats straight through.
-    const refresh = vi.fn().mockResolvedValue(PLAYER_TURN_ENCOUNTER);
-    const outcome = await invoke(
-      {
-        combat_transition: 'none',
-        combat_entry_pending: PENDING_ENTRY,
-        combat_actions: [],
-        roll_requests: [],
-      },
-      refresh,
-      { entryConfirmed: true },
-    );
-
-    expect(requestCombatEntryConfirmation).not.toHaveBeenCalled();
-    expect(requestPlayerInitiativeRoll).toHaveBeenCalledWith({
-      actorLabel: 'The Storyteller',
-      initiativeModifier: 2,
-    });
-    expect(userDataApi.enterCombat).toHaveBeenCalledWith(
-      'session-1',
-      expect.objectContaining({ playerInitiativeRoll: 16 }),
-    );
-    expect(refresh).toHaveBeenCalled();
-    expect(outcome.isInCombat).toBe(true);
   });
 });

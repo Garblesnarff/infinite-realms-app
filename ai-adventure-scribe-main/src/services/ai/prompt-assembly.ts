@@ -98,8 +98,7 @@ export function buildTurnFlagsLine(input: DmTurnFlagsInput): string {
     flags.push(
       `The player's message named ${combatEntryDeclined}, but the player chose not to strike. ` +
         'No attack, spell, or roll happened this turn: nothing hit, missed, or dealt damage, and nothing was cast. ' +
-        'Narrate the moment as it stands, never as if the attack had happened, and do not start combat or request attack rolls. ' +
-        'The creature is still in the scene: do not narrate it leaving, fleeing, dissipating, or being removed (#400).',
+        'Narrate the moment as it stands, never as if the attack had happened, and do not start combat or request attack rolls.',
     );
   }
   if (narrationViolation) {

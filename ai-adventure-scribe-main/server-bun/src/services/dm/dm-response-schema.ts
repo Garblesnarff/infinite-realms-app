@@ -464,11 +464,6 @@ const xpAwardProperty = nullable({
   additionalProperties: false,
   properties: { amount: { type: 'integer' }, reason: { type: 'string' } },
   required: ['amount', 'reason'],
-  description:
-    '#310 story-win XP: when the party achieves a story win or milestone out of combat — ' +
-    'solves the mystery, completes the objective, turns the arc — award XP here. The game ' +
-    'adds it to the sheet and posts it in chat; state the award in your narration too. ' +
-    'Never use for combat victories: the game awards those itself.',
 });
 
 /** #218 step 3: items the story grants or takes this turn. Optional and nullable. */

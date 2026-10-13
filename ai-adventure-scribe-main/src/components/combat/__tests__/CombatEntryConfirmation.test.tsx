@@ -102,14 +102,18 @@ describe('CombatEntryConfirmation', () => {
   });
 
   it.each([
-    [namedHostilePending.combatants.map((combatant) => combatant.name), 'Chitinous Hunter'],
-    [[], 'the opposing side'],
-  ])('for a fight the DM left unnamed (#2532), labels %j read "Strike at %s?"', (labels, shown) => {
+    [
+      namedHostilePending.combatants.map((combatant) => combatant.name),
+      'the chitinous hunter',
+      [namedHostilePending.combatants[0].name],
+    ],
+    [[], 'the opposing side', []],
+  ])('for a fight the DM left unnamed (#2532), labels %j read "Strike at %s?"', (labels, shown, descriptors) => {
     const spec = { actorLabel: 'The Storyteller', initiativeRoll: null, initiativeModifier: 2 };
     render(
       <CombatEntryConfirmation
         confirmation={{
-          spec: { ...spec, combatantLabels: labels },
+          spec: { ...spec, combatantLabels: labels, descriptors },
           confirm: vi.fn(),
           decline: vi.fn(),
         }}
@@ -176,6 +180,64 @@ describe('CombatEntryConfirmation', () => {
     fireEvent.click(screen.getByRole('button', { name: '[Do something else]' }));
     expect(decline).toHaveBeenCalledTimes(1);
   });
+  it('renders descriptor-only creatures as "the ..." in prose while preserving proper names (#2143)', () => {
+    render(
+      <CombatEntryConfirmation
+        confirmation={{
+          spec: {
+            actorLabel: 'The Storyteller',
+            combatantLabels: ['Amorphous Shadow-Ooze'],
+            declaredTargets: ['Amorphous Shadow-Ooze'],
+            otherCombatants: ['Chiropteran Hulk'],
+            descriptors: ['Amorphous Shadow-Ooze', 'Chiropteran Hulk'],
+            initiativeRoll: null,
+            initiativeModifier: 2,
+          },
+          confirm: vi.fn(),
+          decline: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        'Strike at the amorphous shadow-ooze? Your initiative is rolled after you confirm.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Also joining the fight: the chiropteran hulk.')).toBeInTheDocument();
+  });
+
+  it('formats target choice button labels with "the ..." for descriptor-only creatures while retaining canonical target in confirm callback (#2143)', () => {
+    const confirm = vi.fn();
+
+    render(
+      <CombatEntryConfirmation
+        confirmation={{
+          spec: {
+            actorLabel: 'The Scholar',
+            combatantLabels: ['Amorphous Shadow-Ooze', 'Professor Emil Darkwater'],
+            targetChoices: ['Amorphous Shadow-Ooze', 'Professor Emil Darkwater'],
+            descriptors: ['Amorphous Shadow-Ooze'],
+            spellLabel: 'Fire Bolt',
+            initiativeRoll: null,
+            initiativeModifier: 1,
+          },
+          confirm,
+          decline: vi.fn(),
+        }}
+      />,
+    );
+
+    const oozeButton = screen.getByRole('button', { name: '[Strike the amorphous shadow-ooze]' });
+    const profButton = screen.getByRole('button', { name: '[Strike Professor Emil Darkwater]' });
+
+    expect(oozeButton).toHaveAttribute('data-target', 'Amorphous Shadow-Ooze');
+    expect(profButton).toHaveAttribute('data-target', 'Professor Emil Darkwater');
+
+    fireEvent.click(oozeButton);
+    expect(confirm).toHaveBeenCalledWith('Amorphous Shadow-Ooze');
+  });
+
   it('logs its label and choice lists as separate arrays, so the logger never prints [Circular] (#2445)', () => {
     const candidates = ['Captain Sarah Reeves'];
     render(
