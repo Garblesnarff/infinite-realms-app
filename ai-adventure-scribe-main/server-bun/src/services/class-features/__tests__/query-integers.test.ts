@@ -9,8 +9,8 @@ describe('class feature integer query parsing', () => {
     expect(parseOptionalBoundedInteger('20', 1, 20)).toBe(20);
   });
 
-  it('rejects partial, fractional, signed, and out-of-range values', () => {
-    for (const value of ['2levels', '1.5', '+1', '-1', '0', '21', 'Infinity']) {
+  it('rejects whitespace, signs, partial, fractional, and unsafe representations', () => {
+    for (const value of [' 1 ', '2levels', '1.5', '+1', '-1', '0', '21', 'Infinity', '9007199254740992']) {
       expect(parseOptionalBoundedInteger(value, 1, 20)).toBeNull();
     }
   });

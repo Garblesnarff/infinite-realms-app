@@ -1,3 +1,5 @@
+import { parseBoundedIntegerCore } from '../../shared/bounded-integer.js';
+
 interface BoundedIntegerOptions {
   fallback: number;
   min: number;
@@ -13,14 +15,14 @@ export function parseBoundedInteger(
   value: string | number | null | undefined,
   { fallback, min, max, outOfRange = 'clamp' }: BoundedIntegerOptions,
 ): number {
-  const normalized = typeof value === 'string' ? value.trim() : value;
-  if (normalized === '' || normalized === null || normalized === undefined) return fallback;
-  if (typeof normalized === 'string' && !/^-?\d+$/.test(normalized)) return fallback;
-
-  const parsed = typeof normalized === 'number' ? normalized : Number(normalized);
-  if (!Number.isSafeInteger(parsed)) return fallback;
-
-  if (outOfRange === 'fallback' && (parsed < min || parsed > max)) return fallback;
-
-  return Math.min(max, Math.max(min, parsed));
+  return parseBoundedIntegerCore(value, {
+    min,
+    max,
+    allowSigned: true,
+    allowNumbers: true,
+    trim: true,
+    outOfRange: outOfRange === 'fallback' ? 'reject' : 'clamp',
+    invalidFallback: fallback,
+    outOfRangeFallback: fallback,
+  });
 }
