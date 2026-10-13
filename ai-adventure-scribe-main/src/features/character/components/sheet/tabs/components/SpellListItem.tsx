@@ -22,9 +22,9 @@ const SpellListItem: React.FC<SpellListItemProps> = ({ spell, isCantrip = false 
       if (!spell) return '';
 
       const components = [];
-      if (spell.verbal || spell.components_verbal) components.push('V');
-      if (spell.somatic || spell.components_somatic) components.push('S');
-      if (spell.material || spell.components_material) components.push('M');
+      if (spell.components_verbal) components.push('V');
+      if (spell.components_somatic) components.push('S');
+      if (spell.components_material) components.push('M');
       return components.join(', ');
     } catch (error) {
       logger.warn('[SpellListItem] Error formatting components for spell:', spell?.name, error);
@@ -34,7 +34,10 @@ const SpellListItem: React.FC<SpellListItemProps> = ({ spell, isCantrip = false 
 
   try {
     if (!spell || !spell.id) {
-      logger.warn(`[SpellListItem] Invalid ${isCantrip ? 'cantrip' : 'leveled spell'} data:`, spell);
+      logger.warn(
+        `[SpellListItem] Invalid ${isCantrip ? 'cantrip' : 'leveled spell'} data:`,
+        spell,
+      );
       return null;
     }
 
@@ -106,7 +109,11 @@ const SpellListItem: React.FC<SpellListItemProps> = ({ spell, isCantrip = false 
       </div>
     );
   } catch (error) {
-    logger.error(`[SpellListItem] Error rendering ${isCantrip ? 'cantrip' : 'spell'}:`, spell, error);
+    logger.error(
+      `[SpellListItem] Error rendering ${isCantrip ? 'cantrip' : 'spell'}:`,
+      spell,
+      error,
+    );
     return (
       <div className="flex items-center justify-between p-3 border rounded-lg border-destructive/30">
         <div className="flex-1">

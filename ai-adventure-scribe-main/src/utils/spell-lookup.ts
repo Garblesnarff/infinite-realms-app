@@ -49,9 +49,7 @@ export function getSpellById(spellId: string, createFallback: boolean = true): S
     // carry 'Animal Friendship' instead of 'animal-friendship'. Resolve names
     // too — otherwise the lookup falls through to a level-0 fallback stub and
     // a level-1 spell is filed under Cantrips on the sheet.
-    const byName = allSpells.find(
-      (spell) => spell?.name?.toLowerCase() === spellId.toLowerCase(),
-    );
+    const byName = allSpells.find((spell) => spell?.name?.toLowerCase() === spellId.toLowerCase());
     if (byName) return byName;
 
     // Log missing spells for debugging
@@ -253,12 +251,12 @@ export function createFallbackSpell(spellId: string): Spell {
     name: spellId.replace(/-/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
     level: 0,
     school: 'Unknown',
-    castingTime: 'Unknown',
-    range: 'Unknown',
+    casting_time: 'Unknown',
+    range_text: 'Unknown',
     components: 'Unknown',
-    verbal: false,
-    somatic: false,
-    material: false,
+    components_verbal: false,
+    components_somatic: false,
+    components_material: false,
     duration: 'Unknown',
     description: 'Spell data not available. This spell may need to be added to the spell database.',
     concentration: false,

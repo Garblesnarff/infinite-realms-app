@@ -18,18 +18,12 @@ const normalizeSpells = (spells: readonly unknown[]): SrdSpell[] =>
     const spell = rawSpell as SrdSpell;
     return {
       ...spell,
-      castingTime: spell.casting_time,
-      range: spell.range_text,
-      verbal: spell.components_verbal,
-      somatic: spell.components_somatic,
-      material: spell.components_material,
-      ...(spell.material_components ? { materialDescription: spell.material_components } : {}),
       duration:
         spell.concentration && !spell.duration.toLowerCase().includes('concentration')
           ? `Concentration, ${spell.duration}`
           : spell.duration,
     };
-  }) as unknown as SrdSpell[];
+  });
 
 export const allSpells = normalizeSpells(sourceSpells);
 export const srdSpells = normalizeSpells(srdSpellsJson);

@@ -18,31 +18,20 @@ import type { Spell } from '@/types/character';
  * - Accessibility features
  */
 
-// The component-tracking mock and the fixtures below carry the legacy
-// `verbal`/`somatic`/`material*` spell fields alongside the current `Spell` shape.
-type SpellWithComponentFlags = Spell & {
-  verbal?: boolean;
-  somatic?: boolean;
-  material?: boolean;
-  materialDescription?: string;
-  materialCost?: number;
-  materialConsumed?: boolean;
-};
-
 // Mock the spell components utility
 vi.mock('@/utils/spellComponents', () => ({
-  getComponentTrackingInfo: (spell: SpellWithComponentFlags) => ({
-    verbal: spell.verbal || false,
-    somatic: spell.somatic || false,
-    material: spell.material || false,
-    materialDescription: spell.materialDescription,
-    materialCost: spell.materialCost,
-    materialConsumed: spell.materialConsumed || false,
+  getComponentTrackingInfo: (spell: Spell) => ({
+    verbal: spell.components_verbal || false,
+    somatic: spell.components_somatic || false,
+    material: spell.components_material || false,
+    materialDescription: spell.material_components,
+    materialCost: spell.material_cost_gp,
+    materialConsumed: spell.material_consumed || false,
   }),
 }));
 
 describe('SpellCard Component', () => {
-  const mockSpell: SpellWithComponentFlags = {
+  const mockSpell: Spell = {
     id: 'magic-missile',
     name: 'Magic Missile',
     level: 1,
@@ -50,15 +39,15 @@ describe('SpellCard Component', () => {
     casting_time: '1 action',
     range_text: '120 feet',
     components: 'V, S',
-    verbal: true,
-    somatic: true,
-    material: false,
+    components_verbal: true,
+    components_somatic: true,
+    components_material: false,
     duration: 'Instantaneous',
     description: 'A dart of magical force strikes its target, dealing 1d4 + 1 force damage.',
     damage: '1d4 + 1',
   };
 
-  const mockCantrip: SpellWithComponentFlags = {
+  const mockCantrip: Spell = {
     id: 'mage-hand',
     name: 'Mage Hand',
     level: 0,
@@ -66,15 +55,15 @@ describe('SpellCard Component', () => {
     casting_time: '1 action',
     range_text: '30 feet',
     components: 'V, S',
-    verbal: true,
-    somatic: true,
-    material: false,
+    components_verbal: true,
+    components_somatic: true,
+    components_material: false,
     duration: 'Concentration, up to 1 minute',
     description: 'A spectral, floating hand appears at a point you choose within range.',
     concentration: true,
   };
 
-  const mockRitualSpell: SpellWithComponentFlags = {
+  const mockRitualSpell: Spell = {
     id: 'detect-magic',
     name: 'Detect Magic',
     level: 1,
@@ -82,16 +71,16 @@ describe('SpellCard Component', () => {
     casting_time: '1 action',
     range_text: 'Self',
     components: 'V, S',
-    verbal: true,
-    somatic: true,
-    material: false,
+    components_verbal: true,
+    components_somatic: true,
+    components_material: false,
     duration: 'Concentration, up to 10 minutes',
     description: 'For the duration, you sense the presence of magic within 30 feet of you.',
     concentration: true,
     ritual: true,
   };
 
-  const mockMaterialSpell: SpellWithComponentFlags = {
+  const mockMaterialSpell: Spell = {
     id: 'fireball',
     name: 'Fireball',
     level: 3,
@@ -99,10 +88,10 @@ describe('SpellCard Component', () => {
     casting_time: '1 action',
     range_text: '150 feet',
     components: 'V, S, M (a tiny ball of bat guano and sulfur)',
-    verbal: true,
-    somatic: true,
-    material: true,
-    materialDescription: 'a tiny ball of bat guano and sulfur',
+    components_verbal: true,
+    components_somatic: true,
+    components_material: true,
+    material_components: 'a tiny ball of bat guano and sulfur',
     duration: 'Instantaneous',
     description:
       'A bright streak flashes from your pointing finger to a point you choose within range.',

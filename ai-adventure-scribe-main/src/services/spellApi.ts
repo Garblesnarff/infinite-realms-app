@@ -8,7 +8,6 @@ import { getAuthHeaders } from '@/services/auth/TokenService';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
-
 interface SpellProgression {
   character_level: number;
   cantrips_known: number;
@@ -73,27 +72,28 @@ interface ServerSpell {
 }
 
 // Convert API spell to frontend Spell type
-function convertApiSpellToSpell(apiSpell: ServerSpell): Spell {
-  // The server returns spell objects directly from spellData.ts, not in API format
-  // So the properties are: castingTime (not casting_time), verbal (not components_verbal), etc.
+export function convertApiSpellToSpell(apiSpell: ServerSpell): Spell {
+  const parts: string[] = [];
+  if (apiSpell.verbal) parts.push('V');
+  if (apiSpell.somatic) parts.push('S');
+  if (apiSpell.material) parts.push('M');
   return {
     id: apiSpell.id,
     name: apiSpell.name,
     level: apiSpell.level,
     school: apiSpell.school,
-    castingTime: apiSpell.castingTime,
-    range: apiSpell.range,
+    casting_time: apiSpell.castingTime,
+    range_text: apiSpell.range,
+    components: parts.join(', '),
+    components_verbal: apiSpell.verbal,
+    components_somatic: apiSpell.somatic,
+    components_material: apiSpell.material,
+    material_components: apiSpell.materialComponents || '',
     duration: apiSpell.duration,
     description: apiSpell.description,
-    verbal: apiSpell.verbal,
-    somatic: apiSpell.somatic,
-    material: apiSpell.material,
-    materialComponents: apiSpell.materialComponents || '',
     concentration: apiSpell.concentration,
     ritual: apiSpell.ritual,
-    damage: apiSpell.damage || false,
-    attackSave: apiSpell.attackSave || '',
-    damageEffect: apiSpell.damageEffect || '',
+    damage: apiSpell.damageEffect || '',
   };
 }
 

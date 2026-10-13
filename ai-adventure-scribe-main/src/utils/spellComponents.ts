@@ -6,7 +6,6 @@
 
 import type { Spell, Character } from '@/types/character';
 
-
 /**
  * Check if a character has the required components for a spell
  */
@@ -22,12 +21,12 @@ export function hasRequiredComponents(
   let componentCost = 0;
 
   // Check verbal component
-  if (spell.verbal && character.conditions.some((c) => c.name === 'silenced')) {
+  if (spell.components_verbal && character.conditions.some((c) => c.name === 'silenced')) {
     missingComponents.push('Verbal (silenced)');
   }
 
   // Check somatic component
-  if (spell.somatic) {
+  if (spell.components_somatic) {
     // Check if hands are free or if character has War Caster feat
     const hasWarCaster = character.classFeatures?.some((f) => f.name === 'war_caster') || false;
     const handsFree = true; // Simplified - would check actual equipment
@@ -38,9 +37,9 @@ export function hasRequiredComponents(
   }
 
   // Check material component
-  if (spell.material) {
-    if (spell.materialCost) {
-      componentCost = spell.materialCost;
+  if (spell.components_material) {
+    if (spell.material_cost_gp) {
+      componentCost = spell.material_cost_gp;
 
       // Check if character has the material component
       // In a real implementation, this would check the character's inventory
@@ -48,14 +47,14 @@ export function hasRequiredComponents(
       let hasComponent = true;
 
       // For high-cost consumed components, we might want to verify they're available
-      if (spell.materialConsumed && spell.materialCost && spell.materialCost > 100) {
+      if (spell.material_consumed && spell.material_cost_gp && spell.material_cost_gp > 100) {
         // This is a simplified check - in a real implementation, you'd check inventory
         // For very expensive components, we're assuming the character might not have them
         hasComponent = false; // Simplified for demonstration
       }
 
       if (!hasComponent) {
-        missingComponents.push(`Material (${spell.materialDescription})`);
+        missingComponents.push(`Material (${spell.material_components})`);
       }
     }
   }
@@ -83,7 +82,7 @@ export function isSpellPrepared(
   }
 
   // Prepared spells
-  if (spell.prepared) {
+  if (spell.is_prepared) {
     return { isPrepared: true };
   }
 
@@ -155,7 +154,7 @@ export function validateSpellCast(
   }
 
   // Check ritual casting
-  if (spell.ritual && !spell.prepared) {
+  if (spell.ritual && !spell.is_prepared) {
     const canCastRitual = character.class?.spellcasting?.ritualCasting || false;
     if (!canCastRitual) {
       reasons.push('Cannot cast rituals');
@@ -249,12 +248,12 @@ export function getComponentTrackingInfo(spell: Spell): {
   materialConsumed?: boolean;
 } {
   return {
-    verbal: spell.verbal || false,
-    somatic: spell.somatic || false,
-    material: spell.material || false,
-    materialDescription: spell.materialDescription,
-    materialCost: spell.materialCost,
-    materialConsumed: spell.materialConsumed,
+    verbal: spell.components_verbal || false,
+    somatic: spell.components_somatic || false,
+    material: spell.components_material || false,
+    materialDescription: spell.material_components,
+    materialCost: spell.material_cost_gp,
+    materialConsumed: spell.material_consumed,
   };
 }
 
@@ -269,11 +268,11 @@ export function consumeMaterialComponents(spell: Spell): {
   cost?: number;
 } {
   // Check if the spell has material components that are consumed
-  if (spell.material && spell.materialConsumed && spell.materialDescription) {
+  if (spell.components_material && spell.material_consumed && spell.material_components) {
     return {
       consumed: true,
-      componentDescription: spell.materialDescription,
-      cost: spell.materialCost || 0,
+      componentDescription: spell.material_components,
+      cost: spell.material_cost_gp || 0,
     };
   }
 

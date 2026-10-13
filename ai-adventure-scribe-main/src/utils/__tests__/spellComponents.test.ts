@@ -45,9 +45,9 @@ describe('spellComponents', () => {
       id: 'magic-missile',
       name: 'Magic Missile',
       level: 1,
-      verbal: true,
-      somatic: true,
-      material: false,
+      components_verbal: true,
+      components_somatic: true,
+      components_material: false,
       ...overrides,
     }) as unknown as Spell;
 
@@ -64,7 +64,7 @@ describe('spellComponents', () => {
       const char = mockCharacter({
         conditions: [{ name: 'silenced' }],
       });
-      const spell = mockSpell({ verbal: true });
+      const spell = mockSpell({ components_verbal: true });
       const result = hasRequiredComponents(char, spell);
       expect(result.hasComponents).toBe(false);
       expect(result.missingComponents).toContain('Verbal (silenced)');
@@ -77,16 +77,16 @@ describe('spellComponents', () => {
       const char = mockCharacter({
         classFeatures: [{ name: 'war_caster' }],
       });
-      const spell = mockSpell({ somatic: true });
+      const spell = mockSpell({ components_somatic: true });
       const result = hasRequiredComponents(char, spell);
       expect(result.hasComponents).toBe(true);
     });
 
     it('should handle material components and costs', () => {
       const spell = mockSpell({
-        material: true,
-        materialCost: 50,
-        materialDescription: 'A pinch of dust',
+        components_material: true,
+        material_cost_gp: 50,
+        material_components: 'A pinch of dust',
       });
       const char = mockCharacter();
       const result = hasRequiredComponents(char, spell);
@@ -96,10 +96,10 @@ describe('spellComponents', () => {
 
     it('should return false for expensive consumed material components', () => {
       const spell = mockSpell({
-        material: true,
-        materialCost: 500,
-        materialConsumed: true,
-        materialDescription: 'A diamond worth 500gp',
+        components_material: true,
+        material_cost_gp: 500,
+        material_consumed: true,
+        material_components: 'A diamond worth 500gp',
       });
       const char = mockCharacter();
       const result = hasRequiredComponents(char, spell);
@@ -116,7 +116,7 @@ describe('spellComponents', () => {
     });
 
     it('should return true for spells marked as prepared', () => {
-      const spell = mockSpell({ prepared: true });
+      const spell = mockSpell({ is_prepared: true });
       const char = mockCharacter();
       expect(isSpellPrepared(char, spell).isPrepared).toBe(true);
     });
@@ -185,7 +185,7 @@ describe('spellComponents', () => {
         preparedSpells: ['Magic Missile'],
         conditions: [{ name: 'silenced' }],
       });
-      const spell = mockSpell({ name: 'Magic Missile', level: 1, verbal: true });
+      const spell = mockSpell({ name: 'Magic Missile', level: 1, components_verbal: true });
       const result = validateSpellCast(char, spell);
       expect(result.canCast).toBe(false);
       expect(result.reasons).toContain('Verbal (silenced)');
@@ -304,11 +304,11 @@ describe('spellComponents', () => {
   describe('getComponentTrackingInfo', () => {
     it('should extract tracking info', () => {
       const spell = mockSpell({
-        verbal: true,
-        material: true,
-        materialDescription: 'A bit of fur',
-        materialCost: 0,
-        materialConsumed: false,
+        components_verbal: true,
+        components_material: true,
+        material_components: 'A bit of fur',
+        material_cost_gp: 0,
+        material_consumed: false,
       });
       const info = getComponentTrackingInfo(spell);
       expect(info.verbal).toBe(true);
@@ -320,10 +320,10 @@ describe('spellComponents', () => {
   describe('consumeMaterialComponents', () => {
     it('should return consumed: true for consumed components', () => {
       const spell = mockSpell({
-        material: true,
-        materialConsumed: true,
-        materialDescription: 'A pearl',
-        materialCost: 100,
+        components_material: true,
+        material_consumed: true,
+        material_components: 'A pearl',
+        material_cost_gp: 100,
       });
       const result = consumeMaterialComponents(spell);
       expect(result.consumed).toBe(true);
@@ -331,7 +331,7 @@ describe('spellComponents', () => {
     });
 
     it('should return consumed: false if not consumed', () => {
-      const spell = mockSpell({ material: true, materialConsumed: false });
+      const spell = mockSpell({ components_material: true, material_consumed: false });
       const result = consumeMaterialComponents(spell);
       expect(result.consumed).toBe(false);
     });
@@ -340,9 +340,9 @@ describe('spellComponents', () => {
   describe('trackComponentUsage', () => {
     it('should return tracking message for consumed components', () => {
       const spell = mockSpell({
-        material: true,
-        materialConsumed: true,
-        materialDescription: 'A pearl',
+        components_material: true,
+        material_consumed: true,
+        material_components: 'A pearl',
       });
       const char = mockCharacter();
       const result = trackComponentUsage(char, spell);
@@ -351,7 +351,7 @@ describe('spellComponents', () => {
     });
 
     it('should return default message if nothing consumed', () => {
-      const spell = mockSpell({ material: false });
+      const spell = mockSpell({ components_material: false });
       const char = mockCharacter();
       const result = trackComponentUsage(char, spell);
       expect(result.trackingMessage).toBe('No components consumed');
