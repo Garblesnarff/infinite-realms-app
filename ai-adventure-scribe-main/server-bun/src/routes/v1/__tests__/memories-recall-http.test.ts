@@ -85,7 +85,20 @@ mock.module('../../../services/session-service.js', () => ({
 mock.module('../../../services/ai-usage-service.js', () => ({
   AIUsageService: { recordProviderUsage: async () => {} },
 }));
+class MockEmbeddingError extends Error {
+  constructor(
+    message: string,
+    readonly status: number = 502,
+    readonly providerStatus?: number,
+    readonly retryDelayMs?: number | null,
+  ) {
+    super(message);
+    this.name = 'EmbeddingError';
+  }
+}
+
 mock.module('../../../services/embedding-service.js', () => ({
+  EmbeddingError: MockEmbeddingError,
   generateEmbedding: async () => [1, 0],
   generateEmbeddingDetailed: async () => {
     embedCalls += 1;

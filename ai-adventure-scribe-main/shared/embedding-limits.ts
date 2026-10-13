@@ -64,3 +64,18 @@ export function normalizeEmbedding(values: number[]): number[] {
  * project to a paid tier lifts the ceiling; update this constant if that happens.
  */
 export const EMBEDDING_FREE_TIER_ITEMS_PER_MIN = 100;
+
+/**
+ * Pull a retry delay out of a 429 body.
+ *
+ * Google returns the machine-readable `RetryInfo` field, which is what we key on. The prose
+ * "Please retry in 16.6s." in the same payload is a human-facing restatement of the same value
+ * and is matched as a fallback, so a response carrying only the prose still paces correctly.
+ */
+export function parseRetryDelayMs(body: string): number | null {
+  const structured = /"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/.exec(body);
+  if (structured) return Math.ceil(parseFloat(structured[1]) * 1000);
+  const prose = /retry in\s+(\d+(?:\.\d+)?)\s*s/i.exec(body);
+  if (prose) return Math.ceil(parseFloat(prose[1]) * 1000);
+  return null;
+}
