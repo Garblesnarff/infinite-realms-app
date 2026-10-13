@@ -507,8 +507,91 @@ record_state build ok ""
 # /etc/infiniterealms/alerts.env and folds it in itself, so a plain restart
 # carries the webhook and `--update-env` would only re-introduce the dependence
 # on whatever environment happened to invoke the script. Do not add it back.
-if ! run pm2 restart infiniterealms-bun; then
-  echo "$(ts) DEPLOY FAILED: pm2 restart infiniterealms-bun — pm2 output above"
+# Zero-downtime restart (#422). pm2 `reload` is a plain restart in fork mode
+# (bun does not run under pm2's cluster mode), so `pm2 restart` left a 1-3 s
+# window with nothing listening on :8888 and every API call in it got a 502
+# from nginx — OPTIONS preflights first, since a client fires one per polling
+# route. Instead:
+#   1. start infiniterealms-bun-standby: the NEW code, listening on :8888
+#      alongside the live app (both open the port with SO_REUSEPORT, see
+#      server-bun/src/index.ts), with IR_STANDBY=1 so it runs no background
+#      sweeps;
+#   2. once the standby listens, `pm2 restart infiniterealms-bun` — the kernel
+#      sends new connections to the standby while the live app is down;
+#   3. once the live app listens again, delete the standby (SIGTERM, so its
+#      in-flight requests drain through the graceful shutdown).
+# If the standby does not come up — for example the live app predates
+# reusePort, so the port cannot be shared — this falls back to the plain
+# restart, with the old short 502 window. If the live app does not come back,
+# the standby is LEFT serving and the step fails, so prod stays up on the new
+# code. The pm2 name stays hardcoded on purpose (see the #1888 note above).
+LIVE_APP=infiniterealms-bun
+STANDBY_APP=infiniterealms-bun-standby
+API_PORT=${DEPLOY_API_PORT:-8888}
+HANDOFF_WAIT_SECONDS=${DEPLOY_HANDOFF_WAIT_SECONDS:-60}
+ECOSYSTEM_FILE="$PWD_REPO/ecosystem.production.config.cjs"
+
+pm2_pid() {
+  pm2 jlist 2> /dev/null | jq -r --arg n "$1" '.[] | select(.name == $n and .pm2_env.status == "online") | .pid' 2> /dev/null | head -1
+}
+port_pids() {
+  ss -ltnpH "sport = :$API_PORT" 2> /dev/null | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u
+}
+# Print the app's pid once that pid listens on :API_PORT; fail after the wait.
+wait_listening() {
+  local app=$1 i pid
+  for ((i = 0; i < HANDOFF_WAIT_SECONDS; i++)); do
+    pid=$(pm2_pid "$app")
+    # pm2 reports a started app online at once; no pid after 5 s means it never started.
+    [ -n "$pid" ] || [ "$i" -lt 5 ] || return 1
+    if [ -n "$pid" ] && port_pids | grep -qx "$pid"; then
+      echo "$pid"
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+zero_downtime_restart() {
+  local spid lpid extra
+  if [ "$DRY_RUN" = 1 ]; then
+    echo "$(ts) [dry-run] would start $STANDBY_APP on :$API_PORT, pm2 restart $LIVE_APP, then delete $STANDBY_APP"
+    return 0
+  fi
+  local start_out
+  pm2 delete "$STANDBY_APP" > /dev/null 2>&1 || true
+  if start_out=$(IR_INCLUDE_STANDBY=1 pm2 start "$ECOSYSTEM_FILE" --only "$STANDBY_APP" 2>&1) &&
+    spid=$(wait_listening "$STANDBY_APP"); then
+    echo "$(ts) handoff: $STANDBY_APP (pid $spid) is serving :$API_PORT"
+  else
+    echo "$(ts) handoff: $STANDBY_APP did not listen on :$API_PORT within ${HANDOFF_WAIT_SECONDS}s — plain restart (short 502 window)"
+    # pm2's own words on the standby start, so the reason is in the deploy log.
+    printf '%s\n' "$start_out" | tail -5 | sed "s/^/$(ts) handoff: pm2 start: /"
+    pm2 delete "$STANDBY_APP" > /dev/null 2>&1 || true
+    run pm2 restart "$LIVE_APP"
+    return
+  fi
+  if ! run pm2 restart "$LIVE_APP"; then
+    echo "$(ts) handoff: pm2 restart $LIVE_APP failed — $STANDBY_APP (pid $spid) LEFT serving :$API_PORT"
+    return 1
+  fi
+  if ! lpid=$(wait_listening "$LIVE_APP"); then
+    echo "$(ts) handoff: $LIVE_APP did not listen again within ${HANDOFF_WAIT_SECONDS}s — $STANDBY_APP (pid $spid) LEFT serving :$API_PORT"
+    return 1
+  fi
+  pm2 delete "$STANDBY_APP" > /dev/null 2>&1 || true
+  echo "$(ts) handoff: $LIVE_APP (pid $lpid) is serving :$API_PORT; $STANDBY_APP stopped"
+  # The standby drains for up to the server's graceful-shutdown timeout. After
+  # that, any listener that is not the live app is the old duplicate-worker
+  # leak (CLAUDE.md gotcha): say so, but do not kill anything from cron.
+  sleep 6
+  extra=$(port_pids | grep -vx "$lpid" | tr '\n' ' ')
+  [ -z "$extra" ] || echo "$(ts) WARNING: extra listener(s) on :$API_PORT not owned by $LIVE_APP: $extra"
+}
+
+if ! zero_downtime_restart; then
+  echo "$(ts) DEPLOY FAILED: restart of infiniterealms-bun — handoff/pm2 output above"
   record_state pm2_restart fail "pm2 restart failed at ${NEW_HEAD:0:8}. The client bundle was NOT published, so dist/ still matches the pre-deploy server (${PREV_HEAD:0:8}) — no version skew. Check 'pm2 list' and 'pm2 logs infiniterealms-bun'"
   exit 1
 fi

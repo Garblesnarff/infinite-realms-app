@@ -2,6 +2,8 @@
 
 `auto-deploy.sh` is the canonical host deploy script. Install or invoke this tracked copy from the existing deploy cron. It preserves the current single-writer behavior (`git reset --hard origin/main`, then PM2 restart).
 
+The restart is a zero-downtime handoff (#422): the script starts `infiniterealms-bun-standby` (the new code, `IR_STANDBY=1`, no background sweeps) on :8888 next to the live app (both listen with SO_REUSEPORT), restarts `infiniterealms-bun` while the standby serves, then deletes the standby once the live app listens again. If the standby cannot bind, the script falls back to a plain `pm2 restart` (the old 1-3 s 502 window). If the live app does not come back, the standby is left serving and the deploy fails.
+
 After the deploy it runs `ops/smoke.sh` (below) when that is configured, and never rolls back automatically. Failures page through `SLACK_ALERT_WEBHOOK_URL` (from `/etc/infiniterealms/alerts.env`) and `/var/log/infiniterealms/alerts.log`, rate-limited, and exit non-zero for cron mail.
 
 (This paragraph used to say the script sources `/etc/infiniterealms/llm-smoke.env` and runs the full API journey, with `INFINITE_REALMS_*`, `BUN_BIN`, `PM2_PROCESS` and `API_SMOKE_ENV_FILE` overrides. The tracked script at `200a8957` does none of that; the six-hour `scripts/api-smoke.ts` journey is a separate cron, see `ai-adventure-scribe-main/docs/LLM_PROVIDER_RESILIENCE.md`. The overrides it really takes are the `DEPLOY_*` ones named below.)

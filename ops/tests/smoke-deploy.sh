@@ -43,6 +43,8 @@ chmod +x "$TMP/bin"/*
 
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+# The stub pm2 never reports a pid, so the #422 handoff falls back at once.
+export DEPLOY_HANDOFF_WAIT_SECONDS=1
 export GIT_AUTHOR_DATE=2026-09-25T00:00:00Z GIT_COMMITTER_DATE=2026-09-25T00:00:00Z
 
 # setup <dir> <moved|still>: a clone whose origin/main is one commit ahead
