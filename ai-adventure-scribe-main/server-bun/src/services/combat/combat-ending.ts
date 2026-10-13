@@ -34,7 +34,7 @@ import {
 } from './combat-end-guard.js';
 import { trackCombatEvent } from './combat-events.js';
 import { publishCombatState } from './combat-sync-service.js';
-import { awardCombatVictoryXp } from './combat-xp.js';
+import { awardCombatVictoryXp, ensureCombatVictoryXpNotice } from './combat-xp.js';
 import { vitalStateOf, type VitalsInput, type WakeOutcome } from './death-saves-service.js';
 import { recordDmTacticalFact } from './tactical-action-service.js';
 import { destroyTacticalCombatMap } from './tactical-combat-lifecycle.js';
@@ -301,6 +301,13 @@ export async function concludeEncounter(
     }
   }
 
+  // #310: recover a lost victory-XP notice before the claim. A retry that returns on
+  // the already-concluded encounter re-posts the notice from the stored award without
+  // re-awarding; on the first call there is no stored award yet, so this is a no-op.
+  if (reason === 'last_hostile_defeated') {
+    await ensureCombatVictoryXpNotice({ encounterId, sessionId, userId });
+  }
+
   // Claim the terminal transition before writing any side effects. The conditional update is
   // the idempotency boundary: a post-conclusion retry returns here without another ledger fact,
   // tactical instruction, telemetry event, teardown, or publish.
@@ -391,20 +398,21 @@ export async function concludeEncounter(
         : `${describeCombatEnd(reason)} ${describeStableWake(options.wake)}`
       : describeCombatEnd(reason),
   );
-  // #310: a won fight awards XP with a visible message. The award lands on the sheet here;
-  // the DM's victory narration states it, so the gain is not silent. Already awarded by the
-  // game, so the DM must not set xp_award for this victory on top of it. Recorded after the
-  // victory sentence so the DM reads the outcome before the award.
+  // #310: a won fight awards XP with a visible message. The award lands on the sheet in
+  // `awardCombatVictoryXp`, which also ensures the deterministic engine chat line (the
+  // player always sees it); the DM's victory narration covers the fiction. Already awarded
+  // by the game, so the DM must not set xp_award for this victory on top of it. Recorded
+  // after the victory sentence so the DM reads the outcome before the award.
   if (reason === 'last_hostile_defeated') {
     const { awarded } = await awardCombatVictoryXp({ encounterId, sessionId, userId });
     if (awarded.length) {
       const total = awarded.reduce((sum, entry) => sum + entry.xp, 0);
+      const breakdown = awarded.map((entry) => `${entry.name}: +${entry.xp} XP`).join('; ');
       await recordDmTacticalFact(
         sessionId,
-        `COMBAT XP: the game awarded ${total} XP total for this victory — ` +
-          awarded.map((entry) => `${entry.name}: +${entry.xp} XP`).join('; ') +
-          '. This is already on their character sheets. Do not set xp_award for this victory. ' +
-          'State each XP gain in your victory narration so the player sees it.',
+        `COMBAT XP: the game awarded ${total} XP total for this victory — ${breakdown}. ` +
+          'This is already on their character sheets and posted in chat. Do not set xp_award ' +
+          'for this victory. Narrate the victory without restating the XP.',
       );
     }
   }
