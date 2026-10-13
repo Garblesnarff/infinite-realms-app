@@ -14,8 +14,7 @@ describe('combat-audit rules', () => {
     actorId: 'p1',
     actorName: 'Player 1',
     actionType: 'attack_roll',
-    // @ts-expect-error #480 'combat' is not a valid CombatAction phase
-    phase: 'combat',
+    phase: 'turn',
     data: { description: '' },
     ...overrides,
   });
@@ -43,8 +42,7 @@ describe('combat-audit rules', () => {
     });
 
     it('should not flag if action is pre-combat', () => {
-      // @ts-expect-error #480 'setup' is not a valid CombatAction actionType
-      const action = createMockAction({ actionType: 'setup', phase: 'pre-combat' });
+      const action = createMockAction({ actionType: 'skill_check', phase: 'pre-combat' });
       const violations = validateAction(action, []);
       expect(violations.some((v) => v.violationType === 'missing_initiative')).toBe(false);
     });
