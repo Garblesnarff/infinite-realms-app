@@ -19,6 +19,11 @@
 # pulled into the program via imports; see tsconfig.typecheck.json.
 set -u
 
+if [ -z "${BASH_VERSION:-}" ] || [ "${BASH_VERSINFO[0]:-0}" -lt 3 ] || { [ "${BASH_VERSINFO[0]:-0}" -eq 3 ] && [ "${BASH_VERSINFO[1]:-0}" -lt 2 ]; }; then
+  echo "FAIL: server-typecheck-gate requires Bash >= 3.2 (found ${BASH_VERSION:-none})" >&2
+  exit 1
+fi
+
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SERVER_DIR="$APP_DIR/server-bun"
 ALLOWLIST="$SERVER_DIR/typecheck-known-errors.txt"

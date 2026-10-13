@@ -43,21 +43,51 @@ if [ "$app_hooks_path" != "../.husky" ]; then
   exit 1
 fi
 
-if ! bash "$APP_ROOT/scripts/server-typecheck-gate.sh" >/dev/null; then
-  echo "FAIL: server typecheck gate rejected the main checkout" >&2
+bash_executables=()
+if [ -x "/bin/bash" ]; then
+  bash_executables+=("/bin/bash")
+fi
+if command -v bash >/dev/null 2>&1; then
+  path_bash="$(command -v bash)"
+  already_added=0
+  for existing in "${bash_executables[@]}"; do
+    if [ "$existing" = "$path_bash" ]; then
+      already_added=1
+      break
+    fi
+  done
+  if [ "$already_added" -eq 0 ]; then
+    bash_executables+=("$path_bash")
+  fi
+fi
+
+if [ "${#bash_executables[@]}" -eq 0 ]; then
+  echo "FAIL: no bash executable found to test server typecheck gate" >&2
   exit 1
 fi
 
+for shell_bin in "${bash_executables[@]}"; do
+  if ! "$shell_bin" "$APP_ROOT/scripts/server-typecheck-gate.sh" >/dev/null; then
+    echo "FAIL: server typecheck gate rejected main checkout under $shell_bin" >&2
+    exit 1
+  fi
+done
+
 printf 'const invalidTypecheckFixture: string = 123;\n' > "$TYPE_ERROR_FILE"
-if bash "$APP_ROOT/scripts/server-typecheck-gate.sh" > "$TMP_ROOT/typecheck-failure.log" 2>&1; then
-  echo "FAIL: server typecheck gate accepted a new type error" >&2
-  cat "$TMP_ROOT/typecheck-failure.log" >&2
-  exit 1
-fi
-if ! grep -q '__typecheck_gate_test__.ts' "$TMP_ROOT/typecheck-failure.log"; then
-  echo "FAIL: typecheck gate did not report the new type error" >&2
-  cat "$TMP_ROOT/typecheck-failure.log" >&2
-  exit 1
-fi
+
+for shell_bin in "${bash_executables[@]}"; do
+  if "$shell_bin" "$APP_ROOT/scripts/server-typecheck-gate.sh" > "$TMP_ROOT/typecheck-failure.log" 2>&1; then
+    echo "FAIL: server typecheck gate accepted a new type error under $shell_bin" >&2
+    cat "$TMP_ROOT/typecheck-failure.log" >&2
+    exit 1
+  fi
+  if ! grep -q '__typecheck_gate_test__.ts' "$TMP_ROOT/typecheck-failure.log"; then
+    echo "FAIL: typecheck gate did not report the new type error under $shell_bin" >&2
+    cat "$TMP_ROOT/typecheck-failure.log" >&2
+    exit 1
+  fi
+done
+
+rm -f "$TYPE_ERROR_FILE"
 
 echo "hooks-and-typecheck-gate: PASS"
