@@ -6,17 +6,17 @@ import CampaignPreview from './CampaignPreview';
 
 import { CampaignProvider, useCampaign } from '@/contexts/CampaignContext';
 
-function CampaignStateSetter({ campaign }: { campaign: Record<string, unknown> }) {
+type Campaign = NonNullable<ReturnType<typeof useCampaign>['state']['campaign']>;
+
+function CampaignStateSetter({ campaign }: { campaign: Campaign }) {
   const { dispatch } = useCampaign();
   React.useEffect(() => {
-    if (campaign) {
-      dispatch({ type: 'UPDATE_CAMPAIGN', payload: campaign as Parameters<typeof dispatch>[0]['payload'] });
-    }
+    dispatch({ type: 'UPDATE_CAMPAIGN', payload: campaign });
   }, [campaign, dispatch]);
   return <CampaignPreview />;
 }
 
-function renderWithCampaign(campaign: Record<string, unknown>) {
+function renderWithCampaign(campaign: Campaign) {
   return render(
     <CampaignProvider>
       <CampaignStateSetter campaign={campaign} />
