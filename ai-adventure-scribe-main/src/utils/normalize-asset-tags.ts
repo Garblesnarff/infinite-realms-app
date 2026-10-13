@@ -68,7 +68,7 @@ function comparableNameText(value: string): string {
  * such as "The Throat of Basalt" for
  * "the-throat-of-basalt-upper-chasm".
  */
-function startsWithVisibleNamePrefix(value: string, name: string): boolean {
+function startsWithVisibleNamePrefix(value: string, name: string, originalValue?: string): boolean {
   const valueWords = getComparableWords(value);
   const nameWords = getComparableWords(name);
   let matchedWords = 0;
@@ -81,7 +81,16 @@ function startsWithVisibleNamePrefix(value: string, name: string): boolean {
     matchedWords++;
   }
 
-  return matchedWords >= MIN_VISIBLE_NAME_PREFIX_WORDS;
+  if (matchedWords >= MIN_VISIBLE_NAME_PREFIX_WORDS) {
+    return true;
+  }
+
+  if (matchedWords === 1 && originalValue) {
+    const firstWord = originalValue.split(/\s+/).filter(Boolean).shift() ?? '';
+    return /^[A-Z]/.test(firstWord);
+  }
+
+  return false;
 }
 
 function startsWithVisibleNameSuffix(value: string, name: string, originalValue: string): boolean {
@@ -108,20 +117,26 @@ function startsWithVisibleNameSuffix(value: string, name: string, originalValue:
   return false;
 }
 
-function endsWithVisibleNamePrefix(value: string, name: string): boolean {
+function endsWithVisibleNamePrefix(value: string, name: string, originalValue?: string): boolean {
   const valueWords = getComparableWords(value);
   const nameWords = getComparableWords(name);
   const maxPrefixLength = Math.min(valueWords.length, nameWords.length);
 
   for (
     let prefixLength = maxPrefixLength;
-    prefixLength >= MIN_VISIBLE_NAME_PREFIX_WORDS;
+    prefixLength >= 1;
     prefixLength--
   ) {
     const valueSuffix = valueWords.slice(-prefixLength);
     const namePrefix = nameWords.slice(0, prefixLength);
     if (valueSuffix.every((word, index) => word === namePrefix[index])) {
-      return true;
+      if (prefixLength >= MIN_VISIBLE_NAME_PREFIX_WORDS) {
+        return true;
+      }
+      if (prefixLength === 1 && originalValue) {
+        const lastWord = originalValue.split(/\s+/).filter(Boolean).pop() ?? '';
+        return /^[A-Z]/.test(lastWord);
+      }
     }
   }
 
@@ -152,8 +167,8 @@ export function isAssetNamePresentAroundTag(
   return (
     endsWithWholeName(normalizedBeforeTag, comparableName) ||
     startsWithWholeName(normalizedAfterTag, comparableName) ||
-    endsWithVisibleNamePrefix(normalizedBeforeTag, comparableName) ||
-    startsWithVisibleNamePrefix(normalizedAfterTag, comparableName) ||
+    endsWithVisibleNamePrefix(normalizedBeforeTag, comparableName, beforeTag) ||
+    startsWithVisibleNamePrefix(normalizedAfterTag, comparableName, originalAfterTag) ||
     startsWithVisibleNameSuffix(normalizedAfterTag, comparableName, originalAfterTag)
   );
 }

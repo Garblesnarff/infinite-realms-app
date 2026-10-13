@@ -41,10 +41,10 @@ describe('normalize-asset-tags', () => {
       expect(result).toBe('I meet [ASSET:npc:remy-the-manager] Remy The Manager.');
     });
 
-    it('does not treat only the first word after a tag as the full name', () => {
+    it('recognizes a capitalized short name after a tag as a visible name', () => {
       const input = 'I meet [ASSET:npc:remy-"the-manager"] Remy is here.';
       const result = normalizeAssetTagKeysInContent(input);
-      expect(result).toBe('I meet Remy The Manager [ASSET:npc:remy-the-manager] Remy is here.');
+      expect(result).toBe('I meet [ASSET:npc:remy-the-manager] Remy is here.');
     });
 
     it('does not treat a leading article and unrelated text as the full name', () => {

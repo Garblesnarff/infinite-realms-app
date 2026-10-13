@@ -16,10 +16,140 @@ export interface AssetInfo {
 }
 
 /**
- * Prepared asset with pre-compiled regex pattern for performance
+ * Prepared asset item with pre-compiled regex pattern for performance
  */
-interface PreparedAsset extends AssetInfo {
+export interface PreparedMatchItem {
+  text: string;
+  asset: AssetInfo;
   pattern: RegExp;
+  isSingleWordOrAlias: boolean;
+}
+
+const TITLES = [
+  'sir',
+  'lady',
+  'lord',
+  'captain',
+  'general',
+  'doctor',
+  'master',
+  'king',
+  'queen',
+  'baron',
+  'baroness',
+  'count',
+  'countess',
+  'madam',
+  'madame',
+  'professor',
+  'dame',
+  'archmage',
+  'chancellor',
+  'duke',
+  'duchess',
+  'prince',
+  'princess',
+];
+
+const STOP_WORDS = new Set([
+  ...TITLES,
+  'the',
+  'an',
+  'a',
+  'manager',
+  'guard',
+  'innkeeper',
+  'tavern',
+  'chef',
+  'cook',
+  'baker',
+  'smith',
+  'butcher',
+  'of',
+  'and',
+  'or',
+  'in',
+  'on',
+  'at',
+  'to',
+  'from',
+  'with',
+]);
+
+/**
+ * Generate candidate aliases for NPC assets (quoted epithets stripped, titles stripped, short forms)
+ */
+export function generateNpcAliases(fullName: string): string[] {
+  const candidates = new Set<string>();
+  const trimmedFull = fullName.trim();
+  if (!trimmedFull) return [];
+
+  candidates.add(trimmedFull);
+
+  // Unquoted form if quotes exist
+  if (trimmedFull.includes('"') || trimmedFull.includes("'")) {
+    const unquoted = trimmedFull.replace(/["']/g, '').replace(/\s+/g, ' ').trim();
+    if (unquoted) candidates.add(unquoted);
+
+    // Form outside quotes
+    const outsideQuotes = trimmedFull.replace(/["'][^"']*["']/g, '').replace(/\s+/g, ' ').trim();
+    if (outsideQuotes) candidates.add(outsideQuotes);
+  }
+
+  // Handle titles/honorifics stripping
+  const lowerFull = trimmedFull.toLowerCase();
+  let titleStripped = '';
+  for (const title of TITLES) {
+    if (lowerFull.startsWith(title + ' ')) {
+      titleStripped = trimmedFull.slice(title.length + 1).trim();
+      if (titleStripped) candidates.add(titleStripped);
+      break;
+    }
+  }
+
+  // Handle " of " stripping (e.g., Sir Gareth of Oakhaven -> Sir Gareth)
+  const ofIndex = lowerFull.indexOf(' of ');
+  if (ofIndex > 0) {
+    const beforeOf = trimmedFull.slice(0, ofIndex).trim();
+    if (beforeOf) candidates.add(beforeOf);
+  }
+
+  if (titleStripped) {
+    const lowerTitleStripped = titleStripped.toLowerCase();
+    const ofIndexStripped = lowerTitleStripped.indexOf(' of ');
+    if (ofIndexStripped > 0) {
+      const beforeOfStripped = titleStripped.slice(0, ofIndexStripped).trim();
+      if (beforeOfStripped) candidates.add(beforeOfStripped);
+    }
+  }
+
+  // Leading proper-noun run / first word
+  for (const cand of Array.from(candidates)) {
+    const words = cand.replace(/["']/g, '').split(/\s+/);
+    if (words.length > 1) {
+      const firstWord = words[0].replace(/^[^a-zA-Z]+|[^a-zA-Z]+$/g, '');
+      if (firstWord && /^[A-Z]/.test(firstWord) && !STOP_WORDS.has(firstWord.toLowerCase())) {
+        candidates.add(firstWord);
+      }
+    }
+  }
+
+  // Clean and filter candidates
+  const validAliases: string[] = [];
+  for (const candidate of candidates) {
+    const clean = candidate.replace(/^[^a-zA-Z0-9"'`]+|[^a-zA-Z0-9"'`]+$/g, '').trim();
+    if (clean.length < 2) continue;
+
+    // Check if single-word candidate is in stop words
+    const isSingleWord = !clean.includes(' ');
+    if (isSingleWord && STOP_WORDS.has(clean.toLowerCase())) {
+      continue;
+    }
+
+    validAliases.push(clean);
+  }
+
+  return validAliases;
 }
 
 // Module-level cache for assets to avoid re-fetching
@@ -29,7 +159,7 @@ let cachedAssets: { campaignId: string; assets: AssetInfo[] } | null = null;
 // to avoid O(N log N) sorting and O(N) regex compilation on every AI response.
 let preparedAssetsCache: {
   originalAssets: AssetInfo[];
-  prepared: PreparedAsset[];
+  prepared: PreparedMatchItem[];
 } | null = null;
 
 function escapeRegex(str: string): string {
@@ -58,22 +188,55 @@ function guardAssetTags(text: string): string {
 }
 
 /**
- * Internal helper to prepare assets for processing (sorting and regex compilation)
+ * Internal helper to prepare assets for processing (alias generation, sorting, and regex compilation)
  */
-function getPreparedAssets(assets: AssetInfo[]): PreparedAsset[] {
+function getPreparedAssets(assets: AssetInfo[]): PreparedMatchItem[] {
   // Return cached version if it's the exact same array reference
   if (preparedAssetsCache && preparedAssetsCache.originalAssets === assets) {
     return preparedAssetsCache.prepared;
   }
 
-  // Sort assets by name length (longest first) to avoid partial matches
-  // e.g. "Lord Diabolo" matches before "Lord"
-  const sorted = [...assets].sort((a, b) => b.name.length - a.name.length);
+  const candidateMap = new Map<AssetInfo, string[]>();
+  const aliasToAssetKeys = new Map<string, Set<string>>();
 
-  const prepared = sorted.map((asset) => ({
-    ...asset,
-    pattern: new RegExp(`\\b${escapeRegex(asset.name)}\\b`, 'i'),
-  }));
+  for (const asset of assets) {
+    const isNpc = asset.type === 'npc' || asset.type === 'character';
+    const aliases = isNpc ? generateNpcAliases(asset.name) : [asset.name];
+    candidateMap.set(asset, aliases);
+
+    for (const alias of aliases) {
+      const lowerAlias = alias.toLowerCase().trim();
+      if (!aliasToAssetKeys.has(lowerAlias)) {
+        aliasToAssetKeys.set(lowerAlias, new Set());
+      }
+      aliasToAssetKeys.get(lowerAlias)!.add(asset.key);
+    }
+  }
+
+  const prepared: PreparedMatchItem[] = [];
+
+  for (const asset of assets) {
+    const aliases = candidateMap.get(asset) || [asset.name];
+    for (const alias of aliases) {
+      const lowerAlias = alias.toLowerCase().trim();
+      const isFullName = alias.toLowerCase() === asset.name.toLowerCase();
+
+      const matchingKeys = aliasToAssetKeys.get(lowerAlias);
+      if (!isFullName && matchingKeys && matchingKeys.size > 1) {
+        continue;
+      }
+
+      prepared.push({
+        text: alias,
+        asset,
+        pattern: new RegExp(`\\b${escapeRegex(alias)}\\b`, 'i'),
+        isSingleWordOrAlias: !alias.includes(' ') || !isFullName,
+      });
+    }
+  }
+
+  // Sort match items by text length (longest first) so fuller forms win
+  prepared.sort((a, b) => b.text.length - a.text.length);
 
   preparedAssetsCache = {
     originalAssets: assets,
@@ -86,34 +249,54 @@ function getPreparedAssets(assets: AssetInfo[]): PreparedAsset[] {
 /**
  * Post-process AI response to automatically insert asset tags
  * Scans for entity names and inserts [ASSET:type:key] before them
- *
- * IMPORTANT: Only matches FULL asset names to avoid false positives.
- * e.g., "The Unwashed Dish" matches, but "dish" alone does NOT.
  */
 export function insertAssetTags(text: string, assets: AssetInfo[]): string {
   let result = text;
 
   if (!assets || assets.length === 0) return guardAssetTags(result);
 
-  // ⚡ Bolt: Use prepared assets to skip redundant sorting and regex compilation.
-  const preparedAssets = getPreparedAssets(assets);
+  const preparedItems = getPreparedAssets(assets);
 
-  for (const asset of preparedAssets) {
+  for (const item of preparedItems) {
+    const { asset, text: aliasText, pattern } = item;
+
     // Skip if tag already exists for this asset
     const existingTag = `[ASSET:${asset.type}:${asset.key}]`;
     if (result.includes(existingTag)) continue;
 
-    // Match FULL name only (case-insensitive, word boundary) using pre-compiled pattern
-    const match = result.match(asset.pattern);
+    const match = result.match(pattern);
 
     if (match && match.index !== undefined) {
-      // For single-word asset names, only auto-insert when the matched text starts with a
-      // capital letter (proper-noun context). This prevents matching common English words
-      // used as nouns in prose (e.g. "whisper" in "barely above a whisper").
-      const isSingleWord = !asset.name.includes(' ');
-      if (isSingleWord) {
-        const matchedChar = result[match.index];
-        if (matchedChar === matchedChar.toLowerCase()) continue;
+      const matchedStr = match[0];
+
+      // Capitalization context check:
+      // Must start with an uppercase letter to ensure proper-noun usage.
+      const matchedChar = result[match.index];
+      if (!/^[A-Z]/.test(matchedChar)) continue;
+
+      // For multi-word candidates, enforce that capitalized words in aliasText
+      // are also capitalized in matchedStr (to avoid matching common nouns like "the manager").
+      if (aliasText.includes(' ')) {
+        const aliasWords = aliasText.split(/\s+/);
+        const matchedWords = matchedStr.split(/\s+/);
+        let capitalizationMismatch = false;
+
+        for (let i = 0; i < Math.min(aliasWords.length, matchedWords.length); i++) {
+          const aliasWord = aliasWords[i].replace(/^[^a-zA-Z]+|[^a-zA-Z]+$/g, '');
+          const matchedWord = matchedWords[i].replace(/^[^a-zA-Z]+|[^a-zA-Z]+$/g, '');
+          if (
+            aliasWord &&
+            /^[A-Z]/.test(aliasWord) &&
+            !['The', 'An', 'A', 'Of'].includes(aliasWord)
+          ) {
+            if (!matchedWord || !/^[A-Z]/.test(matchedWord)) {
+              capitalizationMismatch = true;
+              break;
+            }
+          }
+        }
+
+        if (capitalizationMismatch) continue;
       }
 
       // Check if there's already an asset tag right before this match
