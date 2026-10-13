@@ -76,7 +76,6 @@ import {
   reportSheetCastResult,
 } from '@/services/combat/sheet-cast-progress';
 import { standingHostiles } from '@/services/combat/sheet-cast-save-hold';
-import { SessionStateService } from '@/services/session-state-service';
 import {
   combatRoundFrom,
   combatSequenceFrom,
@@ -871,8 +870,10 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     // #467: an action-card attack's die never reaches the DM message flow, so logIncomingRolls
     // never writes its roll_result — the narration repair would see no engine outcome for the
     // attack the DM is about to narrate. Log the engine's authoritative verdict so the repair
-    // can check the narration against it. A failed write fails open (the repair stays silent),
-    // never the turn.
+    // can check the narration against it. The state service is lazy-imported: its user-data-api
+    // chain resets the auth gate at module load, which must not run for every importer of this
+    // module (narration-outcome.ts does the same for db/client). A failed write fails open
+    // (the repair stays silent), never the turn.
     if (sessionId) {
       const attackOutcome = engineAttackRollResult(
         action,
@@ -885,6 +886,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       );
       if (attackOutcome) {
         try {
+          const { SessionStateService } = await import('@/services/session-state-service');
           await SessionStateService.appendRollEvent(sessionId, {
             kind: 'roll_result',
             payload: attackOutcome,

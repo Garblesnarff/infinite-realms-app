@@ -36,6 +36,7 @@ const chatWithDM = vi.fn();
 const executeStructuredCombatActionWithBoundary = vi.fn();
 const executeAuthoritativeCombatIntent = vi.fn();
 const askPlayerForAttackDie = vi.fn();
+const appendRollEvent = vi.fn();
 
 vi.mock('@/services/ai-service', () => ({
   AIService: { chatWithDM: (...args: any[]) => chatWithDM(...args) },
@@ -44,6 +45,13 @@ vi.mock('@/lib/logger', () => ({
   default: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/services/combat/combat-repair', () => ({ repairRefusedCombatAction: vi.fn() }));
+// #467: the resolution step logs the engine's attack verdict as a roll_result for the
+// narration repair; the test's session state is hermetic, not the network.
+vi.mock('@/services/session-state-service', () => ({
+  SessionStateService: {
+    appendRollEvent: (...args: any[]) => appendRollEvent(...args),
+  },
+}));
 vi.mock('@/services/combat/combat-action-executor', async (importOriginal) => ({
   ...(await importOriginal<typeof CombatActionExecutor>()),
   executeStructuredCombatActionWithBoundary: (...args: any[]) =>
