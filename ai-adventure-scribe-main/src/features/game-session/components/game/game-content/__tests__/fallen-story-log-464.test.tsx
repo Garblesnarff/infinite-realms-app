@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-const { DM_TEXT } = vi.hoisted(() => {
+const { DM_TEXT, state } = vi.hoisted(() => {
   const DM_TEXT = [
     'The torchlight catches on [ASSET:npc:professor-vale] Professor Vale\'s spectacles. She says, "**Mind the gap** on the eastern stair." The cold air smells faintly of *ozone.',
     '',
@@ -15,13 +15,14 @@ const { DM_TEXT } = vi.hoisted(() => {
     '',
     '⚙️ Engine: The Storyteller rolled 15 + 2 = 17 vs DC 14 — SUCCESS.',
   ].join('\n');
-  return { DM_TEXT };
+  const state: { messages: Array<{ id: string; sender: string; text: string }> } = {
+    messages: [{ id: 'm1', sender: 'dm', text: DM_TEXT }],
+  };
+  return { DM_TEXT, state };
 });
 
 vi.mock('@/contexts/MessageContext', () => ({
-  useMessageContext: () => ({
-    messages: [{ id: 'm1', sender: 'dm', text: DM_TEXT }],
-  }),
+  useMessageContext: () => ({ messages: state.messages }),
 }));
 vi.mock('@/contexts/CampaignAssetsContext', () => ({
   useCampaignAssetsContext: () => ({ getAsset: vi.fn() }),
@@ -81,5 +82,35 @@ describe('FallenStoryLog (#464)', () => {
     expect(text).not.toContain('ROLL_REQUESTS_V1');
     expect(text).toContain('Professor Vale');
     expect(text).toContain('Mind the gap');
+  });
+
+  it('prepares only DM text, so player and system text keep A./--- lines', () => {
+    const playerText = 'I pick one:\nA. Climb the stair\n---\nB. Wait here';
+    const systemText = 'Session saved.\n---\nC. Checkpoint 3';
+    state.messages = [
+      { id: 'p1', sender: 'player', text: playerText },
+      { id: 's1', sender: 'system', text: systemText },
+    ];
+    render(<FallenStoryLog />);
+    const log = screen.getByTestId('death-screen-story-log');
+    expect(log.textContent).toContain('A. Climb the stair');
+    expect(log.textContent).toContain('B. Wait here');
+    expect(log.textContent).toContain('C. Checkpoint 3');
+    state.messages = [{ id: 'm1', sender: 'dm', text: DM_TEXT }];
+  });
+
+  it('filters after preparing: roll-only and engine-only DM rows render no header', () => {
+    state.messages = [
+      { id: 'm1', sender: 'dm', text: DM_TEXT },
+      {
+        id: 'm2',
+        sender: 'dm',
+        text: '```ROLL_REQUESTS_V1\n{"rolls":[{"type":"check","formula":"1d20","purpose":"Stealth","dc":12}]}\n```',
+      },
+      { id: 'm3', sender: 'dm', text: '⚙️ Engine: The Storyteller rolled 9 vs DC 12 — FAIL.' },
+    ];
+    render(<FallenStoryLog />);
+    expect(screen.getAllByText('Dungeon Master')).toHaveLength(1);
+    state.messages = [{ id: 'm1', sender: 'dm', text: DM_TEXT }];
   });
 });

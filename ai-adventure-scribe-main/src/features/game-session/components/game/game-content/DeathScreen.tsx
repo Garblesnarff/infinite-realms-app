@@ -181,7 +181,17 @@ export const FallenEndState: React.FC<FallenEndStateProps> = ({
  */
 export const FallenStoryLog: React.FC = () => {
   const { messages } = useMessageContext();
-  const visible = messages.filter((message) => message.text?.trim());
+  // Prepare first (DM text only: the chat path cuts roll-request and --- blocks,
+  // which would truncate player and system text), then drop rows left empty.
+  const visible = messages
+    .map((message) => ({
+      message,
+      text:
+        message.sender === 'dm'
+          ? prepareChatDisplayText(message.text ?? '').text
+          : (message.text ?? ''),
+    }))
+    .filter(({ text }) => text.trim());
   if (visible.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">The story so far is still being written.</p>
@@ -189,7 +199,7 @@ export const FallenStoryLog: React.FC = () => {
   }
   return (
     <div data-testid="death-screen-story-log" className="space-y-3">
-      {visible.map((message, index) => (
+      {visible.map(({ message, text }, index) => (
         <div key={message.id ?? index} className="space-y-0.5">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {message.sender === 'player'
@@ -199,7 +209,7 @@ export const FallenStoryLog: React.FC = () => {
                 : 'System'}
           </p>
           <div className="whitespace-pre-wrap text-sm leading-relaxed text-card-foreground">
-            {formatNarrative(prepareChatDisplayText(message.text).text).content}
+            {formatNarrative(text).content}
           </div>
         </div>
       ))}
