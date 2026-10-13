@@ -76,6 +76,9 @@ const availableCantrips = sorcererCantrips.slice(0, 4);
 const availableSpells = sorcererSpells.slice(0, 2);
 
 const STALE_MESSAGE = 'Expected 4 cantrips (4 class + 0 racial), but got 3';
+// #320 follow-up: Sorcerer cantrips known scales 4 -> 5 at level 4, so a
+// level-up with the same 4 cantrips selected must report the new count.
+const LEVEL_UP_MESSAGE = 'Expected 5 cantrips (5 class + 0 racial), but got 4';
 
 function renderValidation(
   initialSelected: string[],
@@ -159,6 +162,48 @@ describe('useSpellSelectionValidation #320 CR-010 (stale count warning)', () => 
 
     expect(result.current.validation).toEqual({ valid: false, errors: [], warnings: [] });
     expect(result.current.isValidating).toBe(false);
+    expect(result.current.canProceed).toBe(false);
+  });
+
+  it('revalidates when the level changes with an identical selection', async () => {
+    // The validation key includes class/race/level alongside the id and the
+    // spell IDs, because the expected counts are derived from them (Sorcerer
+    // cantrips known: 4 at level 1, 5 at level 4). Without the level in the
+    // key, a level-up with the same selections would keep showing the stale
+    // level-1 result instead of revalidating.
+    const { result, rerender } = renderHook(
+      ({ character }) =>
+        useSpellSelectionValidation({
+          character,
+          selectedCantrips: cantripIds,
+          selectedSpells: spellIds,
+          availableCantrips,
+          availableSpells,
+        }),
+      { initialProps: { character: sorcererCharacter } },
+    );
+
+    // 4/4 at level 1: valid.
+    await waitFor(() => {
+      expect(result.current.validation.valid).toBe(true);
+    });
+    expect(result.current.validation.errors).toEqual([]);
+
+    // Level up with identical selections. The inputs key changed, so the
+    // hook must drop the stale level-1 result and revalidate.
+    rerender({ character: { ...sorcererCharacter, level: 4 } });
+
+    expect(result.current.validation.errors).toEqual([]);
+    expect(result.current.validation.valid).toBe(false);
+    expect(result.current.isValidating).toBe(true);
+
+    // The revalidation lands with the level-4 rules applied: the same 4
+    // cantrips are now one short of the expected 5.
+    await waitFor(() => {
+      expect(result.current.isValidating).toBe(false);
+    });
+    expect(result.current.validation.valid).toBe(false);
+    expect(result.current.validation.errors.map((e) => e.message)).toContain(LEVEL_UP_MESSAGE);
     expect(result.current.canProceed).toBe(false);
   });
 });

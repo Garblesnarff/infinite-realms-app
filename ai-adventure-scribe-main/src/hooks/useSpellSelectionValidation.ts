@@ -39,6 +39,12 @@ Object.freeze(NEUTRAL_VALIDATION);
  * A cheap key for the validation inputs. The arrays are compared by content
  * (joined IDs), not by reference, so a parent that rebuilds arrays on every
  * render does not retrigger validation or the stale reset.
+ *
+ * #320 follow-up: the key must include the character's class, race and
+ * level, not just the id. The validation rules (expected cantrip/spell
+ * counts) are derived from those fields (see getSpellcastingInfo), so a
+ * level-up with identical spell IDs changes what "valid" means and must
+ * revalidate instead of keeping the previous result.
  */
 function inputsKey(
   character: Character | null,
@@ -49,6 +55,9 @@ function inputsKey(
 ): string {
   return [
     character?.id ?? 'none',
+    character?.class?.id ?? 'none',
+    character?.race?.id ?? 'none',
+    character?.level ?? 'none',
     selectedCantrips.join(','),
     selectedSpells.join(','),
     availableCantrips.map((c) => c.id).join(','),
