@@ -3,9 +3,9 @@
  * #210 QA-039: sheet tab panels must not add an extra keyboard focus stop
  * when content is already focusable; empty panels stay reachable (tabindex 0).
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import CharacterSheetTabs from '../character-sheet-tabs';
@@ -157,5 +157,49 @@ describe('CharacterSheetTabs focus order (#210 QA-039)', () => {
     spellsTab.focus();
     await user.tab();
     expect(panel).toHaveFocus();
+  });
+
+  it('re-checks when a child adds a button after mount (async content)', async () => {
+    let reveal: () => void = () => {};
+    const LateButton: React.FC = () => {
+      const [shown, setShown] = useState(false);
+      useEffect(() => {
+        reveal = () => setShown(true);
+      }, []);
+      return shown ? <button type="button">Cast</button> : <div>loading</div>;
+    };
+    mainTabState.body = <LateButton />;
+    const { container } = render(
+      <CharacterSheetTabs
+        character={{ id: 'c1', name: 'X' } as any}
+        onCharacterUpdate={vi.fn() as any}
+      />,
+    );
+    const panel = container.querySelector('[role="tabpanel"]')!;
+    expect(panel.getAttribute('tabindex')).toBe('0');
+    act(() => reveal());
+    await waitFor(() => expect(panel.getAttribute('tabindex')).toBe('-1'));
+  });
+
+  it('goes back to tabindex 0 when the last focusable child is removed', async () => {
+    let hide: () => void = () => {};
+    const LeavingButton: React.FC = () => {
+      const [shown, setShown] = useState(true);
+      useEffect(() => {
+        hide = () => setShown(false);
+      }, []);
+      return shown ? <button type="button">Cast</button> : <div>none</div>;
+    };
+    mainTabState.body = <LeavingButton />;
+    const { container } = render(
+      <CharacterSheetTabs
+        character={{ id: 'c1', name: 'X' } as any}
+        onCharacterUpdate={vi.fn() as any}
+      />,
+    );
+    const panel = container.querySelector('[role="tabpanel"]')!;
+    expect(panel.getAttribute('tabindex')).toBe('-1');
+    act(() => hide());
+    await waitFor(() => expect(panel.getAttribute('tabindex')).toBe('0'));
   });
 });

@@ -8,7 +8,7 @@ import {
   TrendingUp,
   Image as ImageIcon,
 } from 'lucide-react';
-import React, { forwardRef, useLayoutEffect, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useLayoutEffect, useState } from 'react';
 
 import { CharacterSheetHeader } from './CharacterSheetHeader';
 // Tab Components
@@ -44,24 +44,39 @@ type SheetTabsContentProps = React.ComponentPropsWithoutRef<typeof TabsContent>;
  */
 const SheetTabsContent = forwardRef<React.ElementRef<typeof TabsContent>, SheetTabsContentProps>(
   ({ children, ...props }, forwardedRef) => {
-    const localRef = useRef<HTMLDivElement | null>(null);
+    const [panel, setPanel] = useState<HTMLDivElement | null>(null);
     const [tabIndex, setTabIndex] = useState(0);
 
+    // Re-check whenever the panel's content changes by itself (e.g. SpellsTab
+    // loads async), not only when the parent re-renders.
     useLayoutEffect(() => {
-      const panel = localRef.current;
       if (!panel) return;
-      const hasFocusable = panel.querySelector(FOCUSABLE_DESCENDANT) != null;
-      setTabIndex(hasFocusable ? -1 : 0);
-    }, [children]);
+      const check = () => {
+        const hasFocusable = panel.querySelector(FOCUSABLE_DESCENDANT) != null;
+        setTabIndex(hasFocusable ? -1 : 0);
+      };
+      check();
+      const observer = new MutationObserver(check);
+      observer.observe(panel, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['tabindex', 'disabled', 'href', 'contenteditable'],
+      });
+      return () => observer.disconnect();
+    }, [panel]);
 
-    const setRefs = (node: HTMLDivElement | null) => {
-      localRef.current = node;
-      if (typeof forwardedRef === 'function') {
-        forwardedRef(node);
-      } else if (forwardedRef) {
-        forwardedRef.current = node;
-      }
-    };
+    const setRefs = useCallback(
+      (node: HTMLDivElement | null) => {
+        setPanel(node);
+        if (typeof forwardedRef === 'function') {
+          forwardedRef(node);
+        } else if (forwardedRef) {
+          forwardedRef.current = node;
+        }
+      },
+      [forwardedRef],
+    );
 
     return (
       <TabsContent ref={setRefs} tabIndex={tabIndex} {...props}>
