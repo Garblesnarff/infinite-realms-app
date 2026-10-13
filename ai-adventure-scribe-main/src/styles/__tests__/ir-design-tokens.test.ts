@@ -17,6 +17,7 @@ const read = (relative: string): string =>
 
 const overhaulCss = read('../ir-overhaul.css');
 const indexCss = read('../../index.css');
+const componentsCss = read('../infinite-realms-components.css');
 
 /** Body of the first top-level `.ir-app { … }` rule (the token block). */
 const irAppBlock = (): string => {
@@ -143,14 +144,98 @@ describe('design token wiring (#2258)', () => {
     expect(overhaulCss).toMatch(/\.ir-narr\s*\{[^}]*'EB Garamond'/);
   });
 
-  it('switches off animation and transition inside the app under prefers-reduced-motion', () => {
+  it('consolidates prefers-reduced-motion rules to exactly one block in index.css and none in components.css (#101)', () => {
+    const countBlocks = (css: string): number =>
+      css.match(/@media\s*\([^)]*prefers-reduced-motion[^)]*\)/g)?.length ?? 0;
+
+    expect(countBlocks(indexCss)).toBe(1);
+    expect(countBlocks(componentsCss)).toBe(0);
+
     const start = indexCss.lastIndexOf('@media (prefers-reduced-motion: reduce)');
     expect(start).toBeGreaterThanOrEqual(0);
     const block = indexCss.slice(start);
-    expect(block).toMatch(/\.ir-app \*,\s*\.ir-app \*::before,\s*\.ir-app \*::after/);
+
+    expect(block).toMatch(/\*,\s*\*::before,\s*\*::after/);
     expect(block).toMatch(/animation-duration:\s*0\.01ms !important/);
     expect(block).toMatch(/animation-iteration-count:\s*1 !important/);
     expect(block).toMatch(/transition-duration:\s*0\.01ms !important/);
     expect(block).toMatch(/scroll-behavior:\s*auto !important/);
+    expect(block).toMatch(/scroll-snap-type:\s*none !important/);
+    expect(block).toMatch(/\.motion-safe/);
+    expect(block).toMatch(/\.pulse/);
+  });
+
+  it('provides browser evidence of animation and transition suppression under reduced motion vs allowed motion (#101)', () => {
+    const extractReducedRules = (css: string): string => {
+      const match = css.match(/@media\s*\([^)]*prefers-reduced-motion[^)]*\)\s*\{/);
+      if (!match?.index) return '';
+      let depth = 1;
+      const start = match.index + match[0].length;
+      let i = start;
+      while (i < css.length && depth > 0) {
+        if (css[i] === '{') depth++;
+        else if (css[i] === '}') depth--;
+        i++;
+      }
+      return css.slice(start, i - 1);
+    };
+
+    const reducedRules = extractReducedRules(indexCss);
+    expect(reducedRules).not.toBe('');
+
+    const baseCss = `
+      .pulse { animation: pulse 2s infinite; }
+      .fade-in { animation: fadeIn 0.3s ease; }
+      .animate-spin { animation: spin 1s linear infinite; }
+      .hover-lift { transition: transform 0.2s ease; }
+      .motion-safe { animation: pulse 2s infinite; transition: all 0.3s; }
+      .animate-float { animation: float 6s infinite; }
+    `;
+
+    const html = `
+      <div class="ir-app">
+        <div class="pulse" id="app-pulse">App Pulse</div>
+        <div class="fade-in" id="app-fade">App Fade</div>
+        <div class="motion-safe" id="app-motion-safe">App Motion Safe</div>
+        <div class="animate-spin" id="app-spin">App Spin</div>
+        <button class="hover-lift" id="app-lift">App Button</button>
+      </div>
+      <div class="marketing-page">
+        <div class="animate-float" id="mkt-float">Marketing Float</div>
+      </div>
+    `;
+
+    const containerAllowed = document.createElement('div');
+    containerAllowed.innerHTML = `<style>${baseCss}</style>${html}`;
+    document.body.appendChild(containerAllowed);
+
+    const spinAllowedEl = document.querySelector('#app-spin');
+    expect(spinAllowedEl).toBeInstanceOf(HTMLElement);
+    if (spinAllowedEl) {
+      expect(window.getComputedStyle(spinAllowedEl).animationDuration).not.toBe('0.01ms');
+    }
+    document.body.removeChild(containerAllowed);
+
+    const containerReduced = document.createElement('div');
+    containerReduced.innerHTML = `<style>${baseCss}\n${reducedRules}</style>${html}`;
+    document.body.appendChild(containerReduced);
+
+    const checkSuppression = (sel: string, isTransition = false): void => {
+      const el = document.querySelector(sel);
+      expect(el).toBeInstanceOf(HTMLElement);
+      if (!el) return;
+      const st = window.getComputedStyle(el);
+      expect(isTransition ? st.transitionDuration : st.animationDuration).toBe('0.01ms');
+      if (!isTransition) expect(st.animationIterationCount).toBe('1');
+    };
+
+    checkSuppression('#app-pulse');
+    checkSuppression('#app-fade');
+    checkSuppression('#app-motion-safe');
+    checkSuppression('#app-spin');
+    checkSuppression('#app-lift', true);
+    checkSuppression('#mkt-float');
+
+    document.body.removeChild(containerReduced);
   });
 });
