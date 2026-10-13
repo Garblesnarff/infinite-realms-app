@@ -1,5 +1,11 @@
 import type { Subrace } from '@/types/character';
 
+const SPELL_MINIMUM_LEVELS: Record<string, number> = {
+  'hellish-rebuke': 3,
+  'faerie-fire': 3,
+  'darkness': 5,
+};
+
 /**
  * Get racial bonus spells for a character
  */
@@ -109,6 +115,11 @@ export function getRacialSpells(
   } else if (racialSpells[race]) {
     applyFallback(race);
   }
+
+  // Filter spells by minimum required level
+  result.spells = result.spells.filter(
+    (spell) => level >= (SPELL_MINIMUM_LEVELS[spell] ?? 1),
+  );
 
   return result;
 }
