@@ -829,7 +829,6 @@ describe('D3: combat options use the real response hook (#2547)', () => {
 
   it.each([
     ['dash', 'Dash'],
-    ['dodge', 'Dodge'],
     ['disengage', 'Disengage'],
   ])('submits %s through the authoritative intent path', async (type, label) => {
     extraAction = { type, label };
@@ -862,9 +861,7 @@ describe('D3: combat options use the real response hook (#2547)', () => {
         expect.objectContaining({
           sender: 'system',
           persist: true,
-          text: expect.stringMatching(
-            new RegExp(`⚙️ Engine: .* ${type === 'dodge' ? 'dodged' : 'disengaged'}\\.`),
-          ),
+          text: expect.stringMatching(new RegExp(`⚙️ Engine: .* disengaged\\.`)),
           context: expect.objectContaining({
             intent: 'combat_pending_intent',
             engineCards: [expect.objectContaining({ kind: 'move' })],
@@ -872,6 +869,51 @@ describe('D3: combat options use the real response hook (#2547)', () => {
         }),
       ]);
     }
+  });
+
+  it('submits dodge through the authoritative intent path and ends the turn (#262)', async () => {
+    extraAction = { type: 'dodge', label: 'Dodge' };
+    render(<Game />);
+    fireEvent.click(await screen.findByRole('button', { name: /Dodge/ }));
+    await waitFor(() =>
+      expect(requests.some((request) => request.intent?.type === 'dodge')).toBe(true),
+    );
+    // #2622 changed expectation: Dodge used to be sent to the DM as chat text. The engine
+    // resolves it, so the DM is never asked.
+    await waitFor(() => expect(persisted.length).toBe(1));
+    expect(vi.mocked(AIService.chatWithDM)).not.toHaveBeenCalled();
+    expect(requests.filter((request) => request.intent?.type === 'dodge')).toEqual([
+      expect.objectContaining({
+        source: 'dm',
+        origin: 'typed',
+        intent: expect.objectContaining({ type: 'dodge', actorId: 'scholar-1' }),
+      }),
+    ]);
+    // #262: Dodge ends the character's turn. The inline option posts end_turn after the dodge
+    // intent — the same settlement the DM pipeline performs after every executed action — so
+    // the turn advances and comes back in round 2. The old assertion (no end_turn) pinned the
+    // bug this issue reports.
+    await waitFor(() => expect(advances).toBe(1));
+    expect(requests.filter((request) => request.intent?.type === 'end_turn')).toEqual([
+      expect.objectContaining({
+        intent: expect.objectContaining({ type: 'end_turn', actorId: 'scholar-1' }),
+      }),
+    ]);
+    expect(response).toBeUndefined();
+    expect(held).toBe('scholar-1');
+    expect(round).toBe(2);
+    // The engine's own row, persisted once, as a system message with its card.
+    expect(persisted).toEqual([
+      expect.objectContaining({
+        sender: 'system',
+        persist: true,
+        text: expect.stringMatching(new RegExp(`⚙️ Engine: .* dodged\\.`)),
+        context: expect.objectContaining({
+          intent: 'combat_pending_intent',
+          engineCards: [expect.objectContaining({ kind: 'move' })],
+        }),
+      }),
+    ]);
   });
 });
 

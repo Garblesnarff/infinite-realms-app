@@ -86,7 +86,10 @@ const DEFENSIVE_DECLARATION_PATTERNS: Array<{ type: DefensiveDeclaration; patter
   { type: 'dodge', pattern: /^(?:i\s+)?dodge[sd]?\s*[.!]?$/i },
   { type: 'disengage', pattern: /^(?:i\s+)?disengage[sd]?\s*[.!]?$/i },
   { type: 'dash', pattern: /^(?:i\s+)?dash(?:e[sd])?\s*[.!]?$/i },
-  { type: 'yield', pattern: /^(?:i\s+)?yield[sd]?\s*[.!]?$/i },
+  // #262: "I surrender" is the natural typed phrasing of a yield; without it the
+  // declaration falls through to the DM as free text and the end guard and the
+  // DM prompt disagree about what ends the fight.
+  { type: 'yield', pattern: /^(?:i\s+)?(?:yield[sd]?|surrender[sd]?)\s*[.!]?$/i },
   { type: 'flee', pattern: /^(?:i\s+)?(?:flee[sd]?|run\s+away)\s*[.!]?$/i },
 ];
 

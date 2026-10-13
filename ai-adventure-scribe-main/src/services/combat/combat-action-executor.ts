@@ -34,6 +34,12 @@ export interface StructuredCombatAction {
     | 'ready'
     | 'use_object'
     /**
+     * #262: a typed yield/flee the DM declares in `combat_actions`. Dispatched to
+     * the same intent the inline option sends, so the typed and clicked paths agree.
+     */
+    | 'yield'
+    | 'flee'
+    /**
      * The dying player's death saving throw (#2518). Never declared by the DM: the client builds
      * it when the turn reaches a player on the floor, and the die is the player's.
      */
@@ -372,6 +378,23 @@ export async function executeStructuredCombatActionWithBoundary(
       encounterId,
       {
         type: action.action_type as 'dash' | 'dodge' | 'disengage',
+        actorId: action.actor_id,
+      },
+      'dm',
+      dmStartedAt,
+      origin,
+      signal,
+    );
+  } else if (action.action_type === 'yield' || action.action_type === 'flee') {
+    // #262: a typed yield/flee the DM declared. The same intent the inline option
+    // sends: the engine records the exit and, for a player yield, concludes the
+    // encounter with the `player_surrendered` reason. Routing through the intent —
+    // instead of the old `combat_transition:'end'` + player `combat_exits` the end
+    // guard drops — is what makes the DM prompt and the guard agree.
+    result = await executeAuthoritativeCombatIntent(
+      encounterId,
+      {
+        type: action.action_type,
         actorId: action.actor_id,
       },
       'dm',

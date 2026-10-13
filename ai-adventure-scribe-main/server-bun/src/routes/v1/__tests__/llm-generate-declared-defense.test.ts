@@ -129,7 +129,7 @@ describe('#262 declared-defense directive on /v1/llm/generate', () => {
     expect(generatedPrompts[0]).not.toContain('<declared_defense');
   });
 
-  it('directs yield at combat_transition end with a surrendered exit, not a combat_action', async () => {
+  it("directs yield at a combat_action of type 'yield', like dodge", async () => {
     mockActiveEncounter = { id: 'encounter-defense-1' };
     generatedPrompts = [];
 
@@ -138,8 +138,36 @@ describe('#262 declared-defense directive on /v1/llm/generate', () => {
     expect(response.status).toBe(200);
     expect(generatedPrompts).toHaveLength(1);
     expect(generatedPrompts[0]).toContain('<declared_defense type="yield">');
-    expect(generatedPrompts[0]).toContain("combat_transition:'end'");
-    expect(generatedPrompts[0]).toContain("exit:'surrendered'");
-    expect(generatedPrompts[0]).not.toContain("combat_action of type 'yield'");
+    expect(generatedPrompts[0]).toContain("combat_action of type 'yield'");
+    // #262: the old directive aimed at combat_transition:'end' with a player
+    // combat_exits entry, which the end guard drops — the prompt and the guard
+    // disagreed. The yield now travels as the intent the inline option sends.
+    expect(generatedPrompts[0]).not.toContain("combat_transition:'end'");
+    expect(generatedPrompts[0]).not.toContain('combat_exits');
+  });
+
+  it("detects 'I surrender' as a yield declaration", async () => {
+    mockActiveEncounter = { id: 'encounter-defense-1' };
+    generatedPrompts = [];
+
+    const response = await postGenerate(dmTurnBody('I surrender'));
+
+    expect(response.status).toBe(200);
+    expect(generatedPrompts).toHaveLength(1);
+    expect(generatedPrompts[0]).toContain('<declared_defense type="yield">');
+    expect(generatedPrompts[0]).toContain("combat_action of type 'yield'");
+  });
+
+  it("directs flee at a combat_action of type 'flee'", async () => {
+    mockActiveEncounter = { id: 'encounter-defense-1' };
+    generatedPrompts = [];
+
+    const response = await postGenerate(dmTurnBody('I flee'));
+
+    expect(response.status).toBe(200);
+    expect(generatedPrompts).toHaveLength(1);
+    expect(generatedPrompts[0]).toContain('<declared_defense type="flee">');
+    expect(generatedPrompts[0]).toContain("combat_action of type 'flee'");
+    expect(generatedPrompts[0]).not.toContain("combat_transition:'end'");
   });
 });

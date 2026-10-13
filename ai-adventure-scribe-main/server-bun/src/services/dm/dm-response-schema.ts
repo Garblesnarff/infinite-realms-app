@@ -59,7 +59,13 @@ export type DMTargetedCombatAction = {
     | 'help'
     | 'hide'
     | 'ready'
-    | 'use_object';
+    | 'use_object'
+    /**
+     * #262: a typed yield/flee reaches the engine as the same intent the inline
+     * option sends, so the DM can declare them in `combat_actions`.
+     */
+    | 'yield'
+    | 'flee';
   target_ids: string[];
   weapon_id: string | null;
   spell_id: string | null;
@@ -280,6 +286,9 @@ const targetedCombatActionSchema = {
         'hide',
         'ready',
         'use_object',
+        // #262: typed yield/flee are declared as combat actions, like dodge.
+        'yield',
+        'flee',
       ],
     },
     target_ids: { type: 'array', items: { type: 'string' } },

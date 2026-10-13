@@ -385,32 +385,28 @@ export function attachUntargetedSpellAttack(
  * narrates the dodge but the engine never applies it. The directive tells the DM to
  * emit the structured combat_action instead of just narrating.
  *
- * Yield and flee are not combat actions: they end the fight, so the DM emits
- * combat_transition:'end' with a combat_exits entry (the engine records the exit
- * with its reason). The DM addresses participants by board slug, never database id.
+ * Yield and flee go through the same combat_action path: the engine resolves them
+ * through the intent the inline option sends, so a typed surrender ends the
+ * encounter with the `player_surrendered` reason. Directing the DM at
+ * `combat_transition:'end'` with a player `combat_exits` entry instead disagrees
+ * with the end guard, which drops exit declarations that name the player — the
+ * prompt promised "the engine records the exit with its reason" while the guard
+ * refused the end outright (#262).
  */
 export const appendDeclaredDefenseDirective = (
   prompt: string,
   defense: 'dodge' | 'disengage' | 'dash' | 'yield' | 'flee',
 ): string => {
-  if (defense === 'yield' || defense === 'flee') {
-    const exit = defense === 'yield' ? 'surrendered' : 'fled';
-    const label =
-      defense === 'yield' ? 'Yield (surrender: combat ends)' : 'Flee (leave combat: combat ends)';
-    return (
-      `${prompt}\n\n<declared_defense type="${defense}">The player has declared a defensive ` +
-      `action: ${label}. It has NOT been resolved by the engine. Do NOT just narrate it. ` +
-      `Emit combat_transition:'end' with a combat_exits entry for the current player ` +
-      `character (exit:'${exit}', addressed by board slug as shown in the tracker) so the ` +
-      `engine records the exit with its reason, then narrate the result.</declared_defense>`
-    );
-  }
   const actionLabel =
     defense === 'dodge'
       ? 'Dodge (attack rolls against the character have disadvantage while the attacker is visible to them, and they have advantage on Dexterity saving throws, until the start of their next turn)'
       : defense === 'disengage'
         ? 'Disengage (movement does not provoke opportunity attacks this turn)'
-        : 'Dash (gain extra movement this turn)';
+        : defense === 'dash'
+          ? 'Dash (gain extra movement this turn)'
+          : defense === 'yield'
+            ? 'Yield (surrender: the engine ends the fight with the surrender recorded)'
+            : 'Flee (leave the fight: the engine records the exit, and a hostile in reach gets one attack as you turn)';
   return (
     `${prompt}\n\n<declared_defense type="${defense}">The player has declared a defensive ` +
     `action: ${actionLabel}. It has NOT been resolved by the engine. Do NOT just narrate it. ` +
