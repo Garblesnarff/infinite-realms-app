@@ -25,7 +25,6 @@ export const actionDispatchTable: Record<string, ActionDispatchEntry> = {
     participant.participantType === 'player' ? handleSpellCast(action, participant) : undefined,
   divine_smite: (action, participant) => handleDivineSmite(action, participant),
   use_class_feature: (action, participant) =>
-    // @ts-expect-error #453 CombatAction has no featureUsed
     action.featureUsed === 'rage' ? handleRageActivation(action, participant) : undefined,
   end_rage: (_action, participant) => handleRageDeactivation(participant),
   short_rest: (_action, participant) => handleShortRest(participant, 1),
