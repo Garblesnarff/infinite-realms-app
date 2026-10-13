@@ -1,22 +1,22 @@
 import { render, screen } from '@testing-library/react';
 import React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import CampaignPreview from './CampaignPreview';
 
 import { CampaignProvider, useCampaign } from '@/contexts/CampaignContext';
 
-function CampaignStateSetter({ campaign }: { campaign: any }) {
+function CampaignStateSetter({ campaign }: { campaign: Record<string, unknown> }) {
   const { dispatch } = useCampaign();
   React.useEffect(() => {
     if (campaign) {
-      dispatch({ type: 'UPDATE_CAMPAIGN', payload: campaign });
+      dispatch({ type: 'UPDATE_CAMPAIGN', payload: campaign as Parameters<typeof dispatch>[0]['payload'] });
     }
   }, [campaign, dispatch]);
   return <CampaignPreview />;
 }
 
-function renderWithCampaign(campaign: any) {
+function renderWithCampaign(campaign: Record<string, unknown>) {
   return render(
     <CampaignProvider>
       <CampaignStateSetter campaign={campaign} />
