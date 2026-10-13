@@ -85,7 +85,7 @@ export type PlayerRollSpec =
  * `null` means nobody rolled: the engine should roll this attack itself — unless `cancelled`,
  * which means the player dismissed the prompt and the action must not resolve at all.
  */
-export type PlayerRollOutcome = { d20: number | null; cancelled?: boolean };
+export type PlayerRollOutcome = { d20: number | null; cancelled?: boolean; timedOut?: boolean };
 
 export interface PlayerRollHostHandle {
   /** The queue id for the popup, used to commit a player-initiated roll before it settles. */
@@ -120,7 +120,16 @@ let pending: {
   represent: (next: PlayerRollHost) => void;
   /** The host showing this prompt unmounted and no replacement has registered yet. */
   hostGone?: boolean;
+  /** True when the waiting prompt is the death-saving-throw prompt (#261 CB-025). */
+  deathSave: boolean;
 } | null = null;
+
+/**
+ * The waiting death-save prompt was dismissed while its 45 s timer still runs. The dismiss
+ * says "not now" and never rolls (RG-019); the composer slot keeps its Roll button so the
+ * player can re-open the prompt and roll when ready. Cleared when a new prompt is requested.
+ */
+let dismissedDeathSave = false;
 
 /** Keep the ask-first popup short enough to be a turn prompt, but long enough to be usable. */
 export const PLAYER_INITIATIVE_ROLL_TIMEOUT_MS = 30_000;
@@ -268,6 +277,18 @@ export function settlePendingPlayerRoll(outcome: PlayerRollOutcome): boolean {
   return true;
 }
 
+/**
+ * Settles the outstanding roll, but only when it is the death-saving-throw prompt (#261
+ * CB-025). A dying player's prompt must never be settled through the generic attack-roll
+ * path by accident: the call site names the death save, and a pending attack, initiative or
+ * check prompt is left for its own settler. Returns false when no death-save prompt waits.
+ */
+export function settleDeathSaveRoll(outcome: PlayerRollOutcome): boolean {
+  if (!pending?.deathSave) return false;
+  logger.info('[PlayerRoll] death saving throw prompt settled by an explicit death-save settle');
+  return settlePendingPlayerRoll(outcome);
+}
+
 function isInitiativeSpec(spec: PlayerRollSpec): spec is PlayerInitiativeRollSpec {
   return 'initiativeModifier' in spec;
 }
@@ -344,6 +365,7 @@ function requestPlayerRoll(
     pending = {
       settle,
       label: rollLabel,
+      deathSave: isDeathSaveSpec(spec),
       dismiss: () => dismissPopup(),
       // Drop the old host's queue entry, then ask the new host. The timer keeps running.
       represent: (next) => {
@@ -351,6 +373,8 @@ function requestPlayerRoll(
         presentTo(next);
       },
     };
+    // A new prompt supersedes any dismissed state from the previous one.
+    dismissedDeathSave = false;
     const hostHandle = presentTo(host);
 
     if (settled) {
@@ -361,7 +385,7 @@ function requestPlayerRoll(
         logger.info(
           `[PlayerRoll] ${rollLabel} prompt timed out after ${timeoutMs}ms; auto-rolling`,
         );
-        settlePendingPlayerRoll({ d20: null });
+        settlePendingPlayerRoll({ d20: null, timedOut: true });
       }, timeoutMs);
       if (pending?.settle === settle) {
         pending.timeoutId = timeoutId;
@@ -399,17 +423,53 @@ export function requestPlayerInitiativeRoll(
 /**
  * Asks the dying player for their death saving throw die and waits for it.
  *
- * Dismissing the prompt is not a way out of the roll: a dying character cannot decline their
- * own turn, so a dismissal reads as "the engine rolls it", exactly like the timer.
+ * Dismissing the prompt is not a way out of the roll, but it must never roll the die
+ * either (RG-019 — a dismiss that rolls can kill the character): a dismissal closes the
+ * panel and leaves the bounded timer to resolve the turn. A dying character cannot
+ * decline their own turn, so only the timer reads as "the engine rolls it".
  */
 export async function requestPlayerDeathSaveRoll(
   spec: Omit<PlayerDeathSaveRollSpec, 'deathSave'>,
-): Promise<{ d20: number | null }> {
+): Promise<{ d20: number | null; autoRolled: boolean }> {
   const outcome = await requestPlayerRoll(
     { ...spec, deathSave: true },
     PLAYER_DEATH_SAVE_ROLL_TIMEOUT_MS,
   );
-  return { d20: outcome.cancelled ? null : outcome.d20 };
+  // A dismissed death-save prompt never resolves the roll (RG-019): only the 45 s timer
+  // reads as "the engine rolls it", so autoRolled marks exactly the timer path.
+  return {
+    d20: outcome.cancelled ? null : outcome.d20,
+    autoRolled: outcome.timedOut === true,
+  };
+}
+
+/**
+ * Records that the player dismissed the waiting death-save prompt. The prompt's 45 s timer
+ * keeps running as the stall guard; the composer slot keeps its Roll button so the player
+ * can re-open the prompt and roll when ready. Dismiss alone never rolls (RG-019).
+ */
+export function markDeathSavePromptDismissed(): void {
+  if (pending?.deathSave) dismissedDeathSave = true;
+}
+
+/**
+ * Whether the waiting death-save prompt was dismissed and its 45 s timer still runs.
+ * The composer slot shows its Roll button while this is true.
+ */
+export function wasDeathSavePromptDismissed(): boolean {
+  return dismissedDeathSave && pending?.deathSave === true;
+}
+
+/**
+ * Re-opens the waiting death-save prompt on the current host after a dismiss, so the
+ * player can roll when ready. Returns false when no death-save prompt is waiting or no
+ * host is mounted. The 45 s timer keeps running as the stall guard; this is a re-present,
+ * not a re-send, so the turn is never requested twice (CB-025).
+ */
+export function representPendingDeathSaveRoll(): boolean {
+  if (!pending?.deathSave || !host) return false;
+  pending.represent(host);
+  return true;
 }
 
 /**

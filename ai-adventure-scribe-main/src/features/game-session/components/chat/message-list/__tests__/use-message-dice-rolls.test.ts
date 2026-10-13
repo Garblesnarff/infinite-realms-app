@@ -28,6 +28,7 @@ vi.mock('@/hooks/combat/use-player-roll-host', () => ({
 
 vi.mock('@/services/combat/player-roll-bridge', () => ({
   hasPendingPlayerRoll: vi.fn(() => false),
+  markDeathSavePromptDismissed: vi.fn(),
 }));
 
 vi.mock('@/lib/logger', () => ({

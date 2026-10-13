@@ -603,7 +603,16 @@ class LlmApiClient {
           text?: string;
           provider?: 'openrouter' | 'gemini';
           model?: string;
+          terminalState?: string;
+          encounterId?: string;
         };
+        // #261 CB-027: the fallback provider's envelope can carry the handled terminal
+        // state too; dropping it here turned a defeat into empty text.
+        if (data?.terminalState === 'party_defeated') {
+          throw new PartyDefeatedError(
+            typeof data.encounterId === 'string' ? data.encounterId : null,
+          );
+        }
         params.onResponseMetadata?.({ provider: data.provider, model: data.model });
         this.lastGenerateRequestId = this.lastRequestId;
         return data?.text ?? '';
@@ -614,7 +623,15 @@ class LlmApiClient {
           text?: string;
           provider?: 'openrouter' | 'gemini';
           model?: string;
+          terminalState?: string;
+          encounterId?: string;
         };
+        // #261 CB-027: same handled terminal state on the other fallback direction.
+        if (data?.terminalState === 'party_defeated') {
+          throw new PartyDefeatedError(
+            typeof data.encounterId === 'string' ? data.encounterId : null,
+          );
+        }
         params.onResponseMetadata?.({ provider: data.provider, model: data.model });
         this.lastGenerateRequestId = this.lastRequestId;
         return data?.text ?? '';

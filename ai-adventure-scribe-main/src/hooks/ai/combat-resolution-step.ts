@@ -549,8 +549,9 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         action.action_type === 'death_save' &&
         isPlayerActor(action.actor_id, participants)
       ) {
-        // The dying player's whole turn is this one die. Never withdrawn: a dismissed or
-        // timed-out prompt means the engine rolls it, and the line says it did.
+        // The dying player's whole turn is this one die. Never withdrawn by dismissal: a
+        // dismissed prompt closes without rolling (RG-019) and the bridge's bounded timer
+        // rolls it on timeout; the line says which happened.
         playerDie = await awaitPlayerInput(askPlayerForDeathSaveDie({ actorLabel }));
       } else if (asksPlayer) {
         const asked = await awaitPlayerInput(
@@ -776,6 +777,18 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       for (const part of engineParts) {
         if (part.card.kind === 'spell') reportSheetCastResult(part.card);
       }
+    }
+    // The 45 s timer is the stall guard for a dismissed death-save prompt: when it fires the
+    // engine rolls the save, and the transcript says so first (strategist decision, #261).
+    if (action.action_type === 'death_save' && autoRolled) {
+      appendEngineBlock({
+        source: 'player',
+        actorId: action.actor_id,
+        lines: ['Death save auto-rolled after 45 s.'],
+        cards: [],
+        round: combatRoundFrom(execution.result, playerRound ?? 1),
+        serverSequence: combatSequenceFrom(execution.result),
+      });
     }
     appendEngineBlock({
       source: isPlayerActor(action.actor_id, participants) ? 'player' : 'npc',
@@ -1243,6 +1256,13 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     });
   let narration = await narrate();
   if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError');
+  // #261 CB-027: the DM envelope can carry the handled terminal state directly (the server
+  // answers 200 with terminalState). Short-circuit before the gate and repair passes: they
+  // would rewrite the empty-text terminal envelope into a "Processing Error". The caller
+  // takes the terminal path from the flag.
+  if (narration?.terminalState === 'party_defeated') {
+    return { ...narration, combatEngineBlocks: orderedEngineBlocks };
+  }
   if (narrationGated) {
     narration = (
       await enforceNarrationGate({

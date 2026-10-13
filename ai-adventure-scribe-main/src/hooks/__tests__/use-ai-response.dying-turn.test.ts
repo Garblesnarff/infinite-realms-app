@@ -239,7 +239,7 @@ const spiderRow = (() => {
 describe('useAIResponse: the dying player’s turn (#2518)', () => {
   let order: string[];
   let intentBodies: Array<Record<string, any>>;
-  let rollAnswer: { d20: number | null; cancelled?: boolean };
+  let rollAnswer: { d20: number | null; cancelled?: boolean; timedOut?: boolean };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -399,8 +399,10 @@ describe('useAIResponse: the dying player’s turn (#2518)', () => {
     expect(JSON.stringify(asked.conversationHistory)).toContain('death saving throw');
   });
 
-  it('an unanswered prompt (45 s) or a dismissed one is rolled by the engine, and the line says so', async () => {
-    rollAnswer = { d20: null };
+  it('an unanswered prompt (45 s) is rolled by the engine, and the line says so', async () => {
+    // The 45 s timer fired: the bridge settles { d20: null, timedOut: true }, which is the
+    // only path that reads as "the engine rolls it" (RG-019).
+    rollAnswer = { d20: null, timedOut: true };
     await playDyingTurn(() => {});
 
     const { dmStartedAt: _clock, ...sent } = intentBodies[0];
@@ -521,6 +523,47 @@ describe('useAIResponse: the dying player’s turn (#2518)', () => {
     expect(AIService.chatWithDM).toHaveBeenCalledTimes(1);
     // A story beat, not a death: the end state does not replace the game.
     await waitFor(() => expect(result.current.terminalDeathState).toBeNull());
+  });
+
+  it('a terminalState on the resolution narration takes the terminal path directly (#261 CB-027)', async () => {
+    // The party fell during this turn's resolution: the resolution's own narrate() returns
+    // the handled terminal state. The death screen must come from that flag — not from the
+    // race-prone fetchSessionFallenState fallback, and not as an empty "Processing Error".
+    vi.mocked(AIService.chatWithDM).mockImplementation((async () => ({
+      text: '',
+      terminalState: 'party_defeated',
+      terminalEncounterId: 'enc-1',
+    })) as any);
+    vi.mocked(userDataApi.fetchSessionFallenState).mockResolvedValue(null);
+
+    const { result } = renderHook(() => useAIResponse());
+    const response = await result.current.getAIResponse(
+      [
+        {
+          text: 'Death saving throw.',
+          sender: 'player',
+          timestamp: new Date().toISOString(),
+          context: { intent: 'death_save_turn' },
+        },
+      ] as any,
+      SESSION_ID,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      () => {},
+    );
+
+    expect(response.context?.intent).toBe('terminal');
+    expect(response.context?.terminalState).toBe('party_defeated');
+    await waitFor(() =>
+      expect(result.current.terminalDeathState).toMatchObject({
+        state: 'party_defeated',
+        encounterId: 'enc-1',
+      }),
+    );
+    // The fallback was never consulted: the flag, not the race, produced the screen.
+    expect(userDataApi.fetchSessionFallenState).not.toHaveBeenCalled();
   });
 
   it('three failures: the DEAD line is printed, the screen comes from the resolution, and the killing round is narrated', async () => {

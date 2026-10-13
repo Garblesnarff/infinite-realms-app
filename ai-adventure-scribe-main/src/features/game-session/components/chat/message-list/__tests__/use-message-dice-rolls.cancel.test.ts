@@ -7,7 +7,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useMessageDiceRolls } from '../use-message-dice-rolls';
 
-import { settleCombatAttackRoll } from '@/hooks/combat/use-player-roll-host';
+import {
+  settleCombatAttackRoll,
+  settleCombatCheckRoll,
+  settleCombatDeathSaveRoll,
+  settleCombatInitiativeRoll,
+} from '@/hooks/combat/use-player-roll-host';
+import { markDeathSavePromptDismissed } from '@/services/combat/player-roll-bridge';
 
 const { game } = vi.hoisted(() => ({
   game: {
@@ -28,8 +34,12 @@ vi.mock('@/hooks/combat/use-player-roll-host', () => ({
   settleCombatAttackRoll: vi.fn(() => false),
   settleCombatInitiativeRoll: vi.fn(() => false),
   settleCombatCheckRoll: vi.fn(() => false),
+  settleCombatDeathSaveRoll: vi.fn(() => false),
 }));
-vi.mock('@/services/combat/player-roll-bridge', () => ({ hasPendingPlayerRoll: () => false }));
+vi.mock('@/services/combat/player-roll-bridge', () => ({
+  hasPendingPlayerRoll: () => false,
+  markDeathSavePromptDismissed: vi.fn(),
+}));
 vi.mock('@/lib/logger', () => ({ default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock('@/utils/error-handler', () => ({ handleAsyncError: vi.fn() }));
 
@@ -147,5 +157,34 @@ describe('Cancel on a roll prompt (#2291)', () => {
     await Promise.resolve();
     expect(onSendMessage).toHaveBeenCalledTimes(1);
     expect(game.cancelDiceRoll).toHaveBeenCalledTimes(1);
+  });
+
+  it('RG-019: dismissing a death-save prompt settles nothing and writes no line', async () => {
+    queue({
+      id: 'deathsave-1',
+      status: 'pending',
+      requestType: 'death_save',
+      description: 'Death saving throw — roll a d20',
+      rollConfig: { dieType: 20, count: 1, modifier: 0 },
+      combatDeathSaveRoll: true,
+    });
+    const onSendMessage = vi.fn().mockResolvedValue(undefined);
+    const { result } = renderHook(() => useMessageDiceRolls({ onSendMessage }));
+    act(() => result.current.handleCancelRoll());
+
+    // The panel closes…
+    expect(game.cancelDiceRoll).toHaveBeenCalledWith('deathsave-1');
+    // …but no settler runs: the dismiss must not roll the save, and the bridge's
+    // bounded timer stays the backstop that resolves the turn.
+    expect(settleCombatAttackRoll).not.toHaveBeenCalled();
+    expect(settleCombatInitiativeRoll).not.toHaveBeenCalled();
+    expect(settleCombatCheckRoll).not.toHaveBeenCalled();
+    expect(settleCombatDeathSaveRoll).not.toHaveBeenCalled();
+    // …and the dismiss is recorded so the composer slot can keep its Roll button —
+    // dismiss bookkeeping, not a settle.
+    expect(markDeathSavePromptDismissed).toHaveBeenCalledTimes(1);
+    // …and no declined-roll line is written: the turn is not declined, only the panel.
+    await Promise.resolve();
+    expect(onSendMessage).not.toHaveBeenCalled();
   });
 });

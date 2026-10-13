@@ -120,17 +120,17 @@ export async function askPlayerForAttackDie(
  * The dying player's death saving throw die. There is nothing to propose first: the roll is a
  * bare d20 against DC 10, with no bonus, no target and no advantage, so the prompt opens at once.
  *
- * Returns `{ d20: undefined, autoRolled: true }` when the prompt timed out or was dismissed. A
- * dying character cannot decline their own turn, so the engine rolls the die rather than the
- * action being withdrawn, and the transcript says so, as it does for every other player die.
+ * Passes through `requestPlayerDeathSaveRoll`'s `autoRolled`, which is exactly the 45 s timer
+ * path: a dismissed prompt closes without rolling (RG-019) and never reads as engine-rolled.
+ * A dying character cannot decline their own turn, so when the engine rolls the die the
+ * transcript says so, as it does for every other player die.
  */
 export async function askPlayerForDeathSaveDie(params: {
   actorLabel: string;
 }): Promise<{ d20?: number; autoRolled: boolean }> {
   try {
     const outcome = await requestPlayerDeathSaveRoll({ actorLabel: params.actorLabel });
-    if (outcome.d20 === null) return { autoRolled: true };
-    return { d20: outcome.d20, autoRolled: false };
+    return { d20: outcome.d20 ?? undefined, autoRolled: outcome.autoRolled };
   } catch (error) {
     logger.warn('[PlayerRoll] death save prompt failed; the engine rolls it', error);
     return { autoRolled: true };

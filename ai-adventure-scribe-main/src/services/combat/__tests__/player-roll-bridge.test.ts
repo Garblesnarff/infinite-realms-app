@@ -2,9 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import {
   hasPendingPlayerRoll,
+  markDeathSavePromptDismissed,
   markPlayerRollCommitted,
   pendingPlayerRollDeadline,
   pendingPlayerRollLabel,
+  representPendingDeathSaveRoll,
   requestPlayerAttackRoll,
   requestPlayerDeathSaveRoll,
   requestPlayerInitiativeRoll,
@@ -12,9 +14,11 @@ import {
   PLAYER_DEATH_SAVE_ROLL_TIMEOUT_MS,
   PLAYER_INITIATIVE_ROLL_TIMEOUT_MS,
   setPlayerRollHost,
+  settleDeathSaveRoll,
   settlePendingPlayerRoll,
   releasePlayerRollHost,
   trackPlayerRollDismissal,
+  wasDeathSavePromptDismissed,
 } from '../player-roll-bridge';
 
 /**
@@ -156,7 +160,7 @@ describe('the player roll bridge', () => {
     });
     await vi.advanceTimersByTimeAsync(PLAYER_INITIATIVE_ROLL_TIMEOUT_MS);
 
-    await expect(pending).resolves.toEqual({ d20: null });
+    await expect(pending).resolves.toEqual({ d20: null, timedOut: true });
     expect(dismiss).toHaveBeenCalledTimes(1);
     expect(hasPendingPlayerRoll()).toBe(false);
   });
@@ -221,7 +225,7 @@ describe('the player roll bridge', () => {
     });
     await vi.advanceTimersByTimeAsync(PLAYER_INITIATIVE_ROLL_TIMEOUT_MS);
 
-    await expect(pending).resolves.toEqual({ d20: null });
+    await expect(pending).resolves.toEqual({ d20: null, timedOut: true });
     expect(markPlayerRollCommitted('initiative-roll-1')).toBe(false);
     settleInitiative?.({ d20: 14 });
     expect(hasPendingPlayerRoll()).toBe(false);
@@ -242,7 +246,7 @@ describe('the player roll bridge', () => {
     expect(hasPendingPlayerRoll()).toBe(true);
     await vi.advanceTimersByTimeAsync(PLAYER_ATTACK_ROLL_TIMEOUT_MS);
 
-    await expect(pending).resolves.toEqual({ d20: null });
+    await expect(pending).resolves.toEqual({ d20: null, timedOut: true });
     expect(dismiss).toHaveBeenCalledTimes(1);
     expect(hasPendingPlayerRoll()).toBe(false);
   });
@@ -305,7 +309,10 @@ describe('the player roll bridge', () => {
 
     const timedOut = trackPlayerRollDismissal(() => requestPlayerAttackRoll(SPEC));
     await vi.advanceTimersByTimeAsync(PLAYER_ATTACK_ROLL_TIMEOUT_MS);
-    await expect(timedOut).resolves.toEqual({ value: { d20: null }, dismissed: false });
+    await expect(timedOut).resolves.toEqual({
+      value: { d20: null, timedOut: true },
+      dismissed: false,
+    });
   });
 
   it('lets the engine roll once a released host is not replaced', async () => {
@@ -414,6 +421,7 @@ describe('the death saving throw prompt (#2518)', () => {
 
     await expect(requestPlayerDeathSaveRoll({ actorLabel: 'The Scholar' })).resolves.toEqual({
       d20: 14,
+      autoRolled: false,
     });
     expect(present.mock.calls[0][0]).toEqual({ actorLabel: 'The Scholar', deathSave: true });
   });
@@ -429,8 +437,42 @@ describe('the death saving throw prompt (#2518)', () => {
     expect(PLAYER_DEATH_SAVE_ROLL_TIMEOUT_MS).toBe(45_000);
 
     await vi.advanceTimersByTimeAsync(PLAYER_DEATH_SAVE_ROLL_TIMEOUT_MS);
-    await expect(pending).resolves.toEqual({ d20: null });
+    await expect(pending).resolves.toEqual({ d20: null, autoRolled: true });
     expect(hasPendingPlayerRoll()).toBe(false);
+  });
+
+  it('a dismissed death-save prompt is visible to the slot until the timer settles it', async () => {
+    setPlayerRollHost({ present: () => hostHandle('death-roll-1') });
+    const pending = requestPlayerDeathSaveRoll({ actorLabel: 'The Scholar' });
+
+    expect(wasDeathSavePromptDismissed()).toBe(false);
+    markDeathSavePromptDismissed();
+    expect(wasDeathSavePromptDismissed()).toBe(true);
+    // Dismiss alone never rolls: the promise is still waiting on the 45 s timer.
+    expect(hasPendingPlayerRoll()).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(PLAYER_DEATH_SAVE_ROLL_TIMEOUT_MS);
+    await expect(pending).resolves.toEqual({ d20: null, autoRolled: true });
+    expect(wasDeathSavePromptDismissed()).toBe(false);
+  });
+
+  it('re-presenting a dismissed death-save prompt re-opens it without rolling', async () => {
+    const present = vi.fn(() => hostHandle('death-roll-1'));
+    setPlayerRollHost({ present });
+    const pending = requestPlayerDeathSaveRoll({ actorLabel: 'The Scholar' });
+    markDeathSavePromptDismissed();
+
+    expect(representPendingDeathSaveRoll()).toBe(true);
+    expect(present).toHaveBeenCalledTimes(2);
+    expect(hasPendingPlayerRoll()).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(PLAYER_DEATH_SAVE_ROLL_TIMEOUT_MS);
+    await pending;
+  });
+
+  it('re-presenting with no waiting death-save prompt does nothing', () => {
+    expect(representPendingDeathSaveRoll()).toBe(false);
+    expect(wasDeathSavePromptDismissed()).toBe(false);
   });
 
   it('a dismissed prompt is not a way out: it reads as "the engine rolls it"', async () => {
@@ -443,12 +485,37 @@ describe('the death saving throw prompt (#2518)', () => {
 
     await expect(requestPlayerDeathSaveRoll({ actorLabel: 'The Scholar' })).resolves.toEqual({
       d20: null,
+      autoRolled: false,
     });
   });
 
   it('with no dice host mounted the engine rolls it, so the turn can never wedge', async () => {
     await expect(requestPlayerDeathSaveRoll({ actorLabel: 'The Scholar' })).resolves.toEqual({
       d20: null,
+      autoRolled: false,
     });
+  });
+
+  it('settleDeathSaveRoll settles a waiting death-save prompt through its own named path (#261)', async () => {
+    setPlayerRollHost({ present: () => hostHandle('death-roll-1') });
+    const pending = requestPlayerDeathSaveRoll({ actorLabel: 'The Scholar' });
+
+    expect(settleDeathSaveRoll({ d20: null })).toBe(true);
+    await expect(pending).resolves.toEqual({ d20: null, autoRolled: false });
+    expect(hasPendingPlayerRoll()).toBe(false);
+  });
+
+  it('settleDeathSaveRoll refuses a pending attack prompt: the generic path must not claim a death save by accident (#261)', async () => {
+    setPlayerRollHost({ present: () => hostHandle('attack-roll-1') });
+    const pending = requestPlayerAttackRoll(SPEC);
+
+    expect(settleDeathSaveRoll({ d20: null })).toBe(false);
+    expect(hasPendingPlayerRoll()).toBe(true);
+    expect(settlePendingPlayerRoll({ d20: null })).toBe(true);
+    await expect(pending).resolves.toEqual({ d20: null });
+  });
+
+  it('settleDeathSaveRoll with nothing pending returns false', () => {
+    expect(settleDeathSaveRoll({ d20: null })).toBe(false);
   });
 });

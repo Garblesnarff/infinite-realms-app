@@ -52,6 +52,7 @@ import {
   hasPendingPlayerRoll,
   isNarrativeRollCommitted,
   pendingPlayerRollLabel,
+  settleDeathSaveRoll,
   settlePendingPlayerRoll,
 } from '@/services/combat/player-roll-bridge';
 import { sheetCastSignal } from '@/services/combat/sheet-cast-progress';
@@ -423,7 +424,9 @@ export const useAIResponse = (): {
         if (!isDiceRollMessage && hasPendingPlayerRoll()) {
           const label = pendingPlayerRollLabel();
           logger.info('[PlayerRoll] superseded by a new player action; the engine rolls it');
-          settlePendingPlayerRoll({ d20: null });
+          // #261 CB-025: a death-save prompt settles through its own named path, never the
+          // generic attack-roll settle.
+          if (!settleDeathSaveRoll({ d20: null })) settlePendingPlayerRoll({ d20: null });
           onEngineNotice?.({
             text: `Your ${label ?? 'combat'} roll was rolled for you because you took another action.`,
             persist: true,
@@ -995,6 +998,31 @@ export const useAIResponse = (): {
         const combatEngineBlocks = (
           result as AIResponse & { combatEngineBlocks?: CombatEngineBlock[] }
         ).combatEngineBlocks;
+
+        // #261 CB-027: the resolution step's own narrate() can return the handled terminal
+        // state (the party fell during this turn's resolution). The check above only sees
+        // the pre-resolution `answered`; without this the death screen depends on the
+        // race-prone fetchSessionFallenState fallback and the DM wrap-up goes out empty.
+        if ((result as AIResponse).terminalState === 'party_defeated') {
+          setCombatTurnUiState(
+            combatTurnUiStateForEncounter(null, false, lastCombatCharacterIdRef.current),
+          );
+          setTerminalDeathState({
+            state: 'party_defeated',
+            encounterId: (result as AIResponse).terminalEncounterId ?? null,
+            receivedAt: Date.now(),
+          });
+          const terminalMessage: EnhancedChatMessage = {
+            text: '',
+            sender: 'dm',
+            timestamp: new Date().toISOString(),
+            context: {
+              intent: 'terminal',
+              terminalState: 'party_defeated',
+            },
+          };
+          return terminalMessage;
+        }
 
         // Combat resolution and the autonomous NPC loop advance the server outside the browser
         // reducer. Re-read that truth before returning control to the UI so a player handoff is

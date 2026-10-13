@@ -59,4 +59,42 @@ describe('LlmApiClient.generateText party_defeated terminal state (#2456)', () =
       llmApiClient.generateText({ prompt: 'I lie still in the dark.' }),
     ).resolves.toBe('The darkness stirs.');
   });
+
+  it('throws PartyDefeatedError when the fallback provider returns terminalState party_defeated (#261)', async () => {
+    // The preferred provider is not configured; the request falls through to the other
+    // provider, whose envelope carries the handled terminal state. Dropping it there
+    // turned a defeat into empty text and a "Processing Error".
+    fetchMock
+      .mockRejectedValueOnce(new Error('Server not configured for OpenRouter'))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          terminalState: 'party_defeated',
+          encounterId: 'encounter-fallback-1',
+          text: '',
+        }),
+      );
+
+    const request = llmApiClient.generateText({ prompt: 'I lie still in the dark.' });
+    await expect(request).rejects.toBeInstanceOf(PartyDefeatedError);
+    await expect(request).rejects.toMatchObject({ encounterId: 'encounter-fallback-1' });
+  });
+
+  it('throws PartyDefeatedError on the gemini-preferred fallback direction too (#261)', async () => {
+    fetchMock
+      .mockRejectedValueOnce(new Error('Server not configured for Gemini'))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          terminalState: 'party_defeated',
+          encounterId: 'encounter-fallback-2',
+          text: '',
+        }),
+      );
+
+    const request = llmApiClient.generateText({
+      prompt: 'I lie still in the dark.',
+      provider: 'gemini',
+    });
+    await expect(request).rejects.toBeInstanceOf(PartyDefeatedError);
+    await expect(request).rejects.toMatchObject({ encounterId: 'encounter-fallback-2' });
+  });
 });

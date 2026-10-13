@@ -206,7 +206,7 @@ describe('combat-entry roll prompts (#2190)', () => {
       await vi.advanceTimersByTimeAsync(PLAYER_INITIATIVE_ROLL_TIMEOUT_MS);
     });
 
-    await expect(enginePrompt).resolves.toEqual({ d20: null });
+    await expect(enginePrompt).resolves.toEqual({ d20: null, timedOut: true });
     expect(onSendFullMessage).not.toHaveBeenCalled();
 
     unmount();
