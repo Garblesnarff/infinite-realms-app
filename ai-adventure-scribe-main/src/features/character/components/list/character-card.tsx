@@ -86,7 +86,8 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps): JS
   } = useCharacterImageHotLoading(character.id, character.created_at);
 
   // #2517: a fallen character is listed read-only; opening it shows the end
-  // state (the sheet swaps), and it can neither be played nor deleted here.
+  // state (the sheet swaps), and it cannot be played. #209: Delete stays
+  // available so the fallen entry can be removed from the roster.
   const fallen = isFallenCharacter(character);
 
   // #209: at-rest caption labels so duplicate premade copies are distinguishable
@@ -275,7 +276,8 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps): JS
         {/* #209: at-rest caption — name plus distinguishing labels, always visible
             so duplicate premade copies can be told apart without hovering, and an
             always-visible Delete that works on touch (the hover popup is
-            unreachable without a pointer). Fallen characters stay read-only. */}
+            unreachable without a pointer). Fallen characters are unplayable but
+            can still be deleted here. */}
         <div
           data-testid="character-card-caption"
           className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-3"
@@ -287,34 +289,32 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps): JS
               <div className="truncate text-xs text-white/70">{captionMeta.join(' · ')}</div>
             )}
           </div>
-          {!fallen && (
-            <button
-              type="button"
-              data-testid="character-card-delete"
-              // #311: the accessible name carries the creation time so two
-              // copies of the same premade ("Delete The Faithful" x2) are
-              // distinguishable to assistive tech.
-              aria-label={
-                createdLabel
-                  ? `Delete ${character.name} (created ${createdLabel})`
-                  : `Delete ${character.name}`
-              }
-              title="Delete character"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDeleteClick();
-              }}
-              onKeyDown={(e) => {
-                // #209: the hero div handles Enter/Space as "open details"; stop the
-                // keydown here or keyboard activation would navigate instead of
-                // opening the delete dialog.
-                e.stopPropagation();
-              }}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black/50 text-white/80 backdrop-blur-sm transition hover:bg-destructive hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-            >
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-            </button>
-          )}
+          <button
+            type="button"
+            data-testid="character-card-delete"
+            // #311: the accessible name carries the creation time so two
+            // copies of the same premade ("Delete The Faithful" x2) are
+            // distinguishable to assistive tech.
+            aria-label={
+              createdLabel
+                ? `Delete ${character.name} (created ${createdLabel})`
+                : `Delete ${character.name}`
+            }
+            title="Delete character"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteClick();
+            }}
+            onKeyDown={(e) => {
+              // #209: the hero div handles Enter/Space as "open details"; stop the
+              // keydown here or keyboard activation would navigate instead of
+              // opening the delete dialog.
+              e.stopPropagation();
+            }}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black/50 text-white/80 backdrop-blur-sm transition hover:bg-destructive hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          >
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </button>
         </div>
       </div>
 
