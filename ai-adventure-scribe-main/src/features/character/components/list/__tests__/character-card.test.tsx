@@ -125,10 +125,18 @@ describe('CharacterCard #209 at-rest caption', () => {
   it('gives each duplicate copy a distinct Delete accessible name', () => {
     // #311 retest: both Delete buttons were named "Delete The Faithful".
     renderCard(
-      scholarCopy({ id: 'char-scholar-1', name: 'The Faithful', created_at: '2026-10-10T14:00:00.000Z' }),
+      scholarCopy({
+        id: 'char-scholar-1',
+        name: 'The Faithful',
+        created_at: '2026-10-10T14:00:00.000Z',
+      }),
     );
     renderCard(
-      scholarCopy({ id: 'char-scholar-2', name: 'The Faithful', created_at: '2026-10-10T18:30:00.000Z' }),
+      scholarCopy({
+        id: 'char-scholar-2',
+        name: 'The Faithful',
+        created_at: '2026-10-10T18:30:00.000Z',
+      }),
     );
 
     const deleteButtons = screen.getAllByTestId('character-card-delete');
@@ -203,16 +211,26 @@ describe('CharacterCard #209 always-visible Delete', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('/roster');
   });
 
-  it('hides Delete on fallen characters and keeps the Fallen badge', () => {
+  it('#209: shows Delete on fallen characters, opens the confirm dialog, and keeps the Fallen badge', async () => {
     renderCard(
       scholarCopy({
         character_stats: [{ max_hit_points: 24, current_hit_points: 0, vital_state: 'dead' }],
       }),
     );
 
-    expect(screen.queryByTestId('character-card-delete')).not.toBeInTheDocument();
+    const deleteButton = screen.getByTestId('character-card-delete');
+    expect(deleteButton).toBeVisible();
     expect(screen.getByTestId('character-fallen-badge')).toBeInTheDocument();
     // The caption still labels the copy.
     expect(screen.getByTestId('character-card-caption')).toHaveTextContent('The Scholar');
+
+    // A fallen character stays unplayable.
+    expect(
+      screen.queryByRole('button', { name: 'Play as this character' }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(deleteButton);
+    expect(await screen.findByText('Delete Character')).toBeInTheDocument();
+    expect(screen.getByText('Permanently Delete')).toBeInTheDocument();
   });
 });
