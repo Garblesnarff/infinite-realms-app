@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { Users, Zap, BookOpen } from 'lucide-react';
 import React from 'react';
 
@@ -6,9 +7,10 @@ import { FeaturesProficienciesCard } from './FeaturesProficienciesCard';
 import ClassFeatureTracker from '../sections/ClassFeatureTracker';
 import FightingStylesDisplay from '../sections/FightingStylesDisplay';
 
-import type { Character, CharacterSheetUpdateFn, SubclassFeature } from '@/types/character';
+import type { Character, CharacterSheetUpdateFn } from '@/types/character';
 
 import { getAllClassFeaturesUpToLevel } from '@/data/levelProgression';
+import { getCharacterClassFeatures } from '@/services/class-features-api';
 
 interface FeaturesTabProps {
   character: Character;
@@ -40,6 +42,24 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
   const racialTraits = [
     ...new Set([...(character.race?.traits ?? []), ...(character.subrace?.traits ?? [])]),
   ];
+  const { data: classFeatures } = useQuery({
+    queryKey: ['class-features', character.id],
+    queryFn: () => getCharacterClassFeatures(character.id ?? ''),
+    enabled: Boolean(character.id),
+  });
+  const subclassFeatures: Feature[] = (classFeatures?.features ?? []).flatMap((row) => {
+    const feature = row.feature;
+    if (!feature?.subclassName) return [];
+    if (feature.levelAcquired > (character.level ?? 1)) return [];
+    return [
+      {
+        name: feature.featureName,
+        source: 'class' as const,
+        level: feature.levelAcquired,
+        description: feature.description,
+      },
+    ];
+  });
   const features: Feature[] = [
     ...racialTraits.map((trait) => ({
       name: trait,
@@ -52,15 +72,7 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
       level: feature.level,
       description: feature.description,
     })),
-    // @ts-expect-error #479 Character has no subclass field; subclass features never listed
-    ...(character.subclass?.features ?? [])
-      .filter((feature: SubclassFeature) => feature.level <= (character.level ?? 1))
-      .map((feature: SubclassFeature) => ({
-        name: feature.name,
-        source: 'class' as const,
-        level: feature.level,
-        description: feature.description,
-      })),
+    ...subclassFeatures,
     ...(character.background
       ? [
           {
@@ -101,6 +113,15 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
 
       {/* Fighting Styles */}
       <FightingStylesDisplay character={character} />
+
+      <FeatureCategoryCard
+        title="Subclass Features"
+        icon={<Zap className="w-5 h-5 text-infinite-teal" />}
+        borderColorClass="border-infinite-teal"
+        badgeColorClass={getSourceColor('class')}
+        features={subclassFeatures}
+        badgeLabel={() => character.class?.name ?? 'Subclass'}
+      />
 
       {/* Racial Traits */}
       <FeatureCategoryCard
