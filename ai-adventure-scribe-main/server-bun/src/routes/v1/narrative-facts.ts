@@ -89,14 +89,9 @@ export function createNarrativeFactRoutes({
             }),
           };
         } catch (renderError) {
-          const isAppErr = renderError instanceof AppError;
-          const statusCode = isAppErr
-            ? renderError.statusCode
-            : typeof (renderError as { statusCode?: unknown })?.statusCode === 'number'
-              ? (renderError as { statusCode: number }).statusCode
-              : (renderError as { name?: unknown })?.name === 'NotFoundError'
-                ? 404
-                : null;
+          // Declared AppError contracts only (UnauthorizedError 401, ForbiddenError 403,
+          // NotFoundError 404 from lib/errors.ts): caller errors, not ledger faults, so no alert.
+          const statusCode = renderError instanceof AppError ? renderError.statusCode : null;
 
           if (statusCode === 401 || statusCode === 403 || statusCode === 404) {
             set.status = statusCode;

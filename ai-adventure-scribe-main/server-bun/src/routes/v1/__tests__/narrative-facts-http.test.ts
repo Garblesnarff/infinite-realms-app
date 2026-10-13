@@ -31,9 +31,9 @@ const requireAuth = new Elysia({ name: 'test-narrative-auth' })
     user: { userId: 'member-1', email: 'member@example.test', plan: 'free' },
   }));
 
-const alertFn = ((key: string, payload: unknown) => {
+const alertFn: NonNullable<NarrativeFactRouteOptions['alertFn']> = (key, payload) => {
   alertCalls.push({ key, payload });
-}) as unknown as NonNullable<NarrativeFactRouteOptions['alertFn']>;
+};
 
 const ledger = {
   currentFacts: async (sessionId: string, userId: string) => {
@@ -67,6 +67,10 @@ const ledger = {
     }
     if (sessionId === 'session-forbidden') {
       throw new ForbiddenError('Access denied');
+    }
+    if (sessionId === 'session-duck-typed') {
+      // Not a declared AppError: a plain Error that only carries a statusCode.
+      throw Object.assign(new Error('Untyped 404-looking fault'), { statusCode: 404 });
     }
     if (sessionId === 'session-error') {
       throw new Error('Genuine ledger fault');
@@ -128,17 +132,26 @@ describe('narrative fact HTTP boundary', () => {
 
   it('returns 403 and does not alert for forbidden sessions', async () => {
     const response = await app.handle(
-      new Request(
-        'http://localhost/v1/narrative-facts/scene-state?session_id=session-forbidden',
-        {
-          headers: { 'x-test-user': 'member' },
-        },
-      ),
+      new Request('http://localhost/v1/narrative-facts/scene-state?session_id=session-forbidden', {
+        headers: { 'x-test-user': 'member' },
+      }),
     );
 
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ error: 'Access denied' });
     expect(alertCalls).toEqual([]);
+  });
+
+  it('treats an untyped error with a statusCode as a ledger fault (200 null + alert)', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/v1/narrative-facts/scene-state?session_id=session-duck-typed', {
+        headers: { 'x-test-user': 'member' },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ scene_state: null });
+    expect(alertCalls.map((call) => call.key)).toEqual(['scene_state_render_failed']);
   });
 
   it('degrades to 200 with scene_state: null and emits one alert for genuine ledger faults', async () => {
