@@ -377,6 +377,25 @@ function actionKeywords(outcome: EngineOutcome): string[] {
 }
 
 /**
+ * The spell or weapon name from an attack-roll description, as its content words
+ * ("Chill Touch spell attack vs Mechanical Server" → chill, touch; "Longsword attack
+ * vs Goblin — 1d20+7 vs AC 15" → longsword). The dynamic dismiss pattern ("ignores your
+ * Chill Touch") must only match the thing the player attacked with — matching every
+ * content word of the roll would also match the target's name ("ignores your Mechanical
+ * Server"), which is not a dismissal of the attack (#467 nit).
+ */
+function attackNameKeywords(outcome: EngineOutcome): string[] {
+  const description = outcome.description ?? '';
+  const name = /^(.*?)\s+(?:spell\s+)?attack\s+(?:vs|on|against)\s+/i.exec(description)?.[1]?.trim();
+  if (!name) return [];
+  const words = name
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length > 2 && !ACTION_STOPWORDS.has(word));
+  return [...new Set(words)];
+}
+
+/**
  * "the goblin's arrow", "an ogre's blow": an attack noun possessed by someone other than the
  * player. Their miss is not the player's miss and cannot contradict the player's engine hit.
  * "your arrow" and "<name>'s swing" are the player's own and pass through.
@@ -557,9 +576,11 @@ export function contradictsEngineOutcome(
   const patterns = name ? [...base, ...namePatterns(name, outcome.success)] : base;
   const keywords = actionKeywords(outcome);
   // "ignores your Chill Touch": the DM names the specific spell, not a generic noun.
-  // Build a dynamic dismiss pattern from the outcome's action keywords.
-  if (outcome.success && keywords.length > 0) {
-    const kwAlt = keywords.map(escapeRegExp).join('|');
+  // Built from the spell/weapon name alone — not every content word of the roll — so
+  // the target's name can never match (#467 nit).
+  const nameKeywords = attackNameKeywords(outcome);
+  if (outcome.success && nameKeywords.length > 0) {
+    const kwAlt = nameKeywords.map(escapeRegExp).join('|');
     patterns.push({
       re: new RegExp(
         `\\bignor(?:e|es|ed|ing)\\s+your\\b[^.!?,;:]{0,40}?\\b(?:${kwAlt})\\b`,

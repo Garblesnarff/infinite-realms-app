@@ -235,3 +235,33 @@ describe('#266 /generate narration repair', () => {
     expect(envelope.text).toBe(narration);
   });
 });
+
+describe('#467 NT-013 /generate narration repair (strategist FIX)', () => {
+  // The roll_result the client logs for an engine-resolved action-card attack
+  // (combat-resolution-step.ts): the engine's authoritative verdict, with the
+  // description in describeAttackRoll's exact output shape for
+  // { kind: 'spell-attack', weaponName: 'Chill Touch', targetLabel: 'Mechanical Server' }.
+  const NT013_PAYLOAD = {
+    success: true,
+    total: 22,
+    ac: 15,
+    requestType: 'attack',
+    description: 'Chill Touch spell attack vs Mechanical Server',
+    timestamp: nowIso(),
+  };
+
+  it('repairs the DM dismissing the engine hit as "ignores your magical assault"', async () => {
+    queueRollOutcome([rollEntry(nowIso(), NT013_PAYLOAD)]);
+    const envelope = await postGenerate(
+      'The mechanical server ignores your magical assault, its gears grinding on. ' +
+        'You step back, wary of its reach.',
+    );
+    // The contradicting sentence is replaced by the engine truth; the rest stays.
+    expect(envelope.text).toBe(
+      'The Chill Touch spell attack vs Mechanical Server succeeded (22 vs AC 15). ' +
+        'You step back, wary of its reach.',
+    );
+    expect(envelope.text).not.toContain('ignores your magical assault');
+    expect(envelope.narration_segments).toEqual([]);
+  });
+});
