@@ -190,6 +190,9 @@ Populate the \`options\` JSON field with 2-3 player-facing choices when appropri
 must use the \`A. **Bold Action**, description\` format. Keep options out of the narrative \`text\`
 field. Use an empty array when resolving a specific combat action${inCombat ? '' : ' or roll request'} and no player
 choice is appropriate.
+An option that names an attack or a spell must name one the character can actually use: an attack
+from their sheet, or a spell they have prepared or known (see the character sheet). Never offer a
+spell or attack the character does not have (#400).
 </options_field>
 
 ${inCombat ? '' : xpAwardField}${inCombat ? '' : restField}${inCombat ? '' : storyItemsField}<visual_prompt_rule>

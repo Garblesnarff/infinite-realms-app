@@ -11,6 +11,7 @@ import type { CombatEngineBlock } from '@/utils/combat-engine-blocks';
 import type { DetectedEnemy, DetectedCombatAction } from '@/utils/combatDetection';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { isEngineTaggedRoll } from '@/contexts/game/dice-queue-visibility';
 import { useGame } from '@/contexts/GameContext';
@@ -45,8 +46,13 @@ import { processRollRequests } from '@/hooks/ai/roll-processor';
 import { logIncomingRolls, logRollRequests } from '@/hooks/ai/session-logger';
 import { suspectsFabricatedOutcome } from '@/hooks/ai/silent-player-turn';
 import logger from '@/lib/logger';
+import {
+  extractSheetCombatNames,
+  filterOptionsAgainstSheet,
+} from '@/services/ai/sheet-option-filter';
 import { AIService, isRollOutcomeStale } from '@/services/ai-service';
 import { playerInputOriginOf } from '@/services/combat/combat-action-origin';
+import { consumeCombatEntryTypedAnswer } from '@/services/combat/combat-entry-confirmation-bridge';
 import { participantVital } from '@/services/combat/participant-vital';
 import {
   hasPendingPlayerRoll,
@@ -254,6 +260,9 @@ export const useAIResponse = (): {
   const { setGamePhase, state: gameState, cancelDiceRoll } = useGame();
   const { refreshCombatState } = useCombat();
   const { user, userPlan } = useAuth();
+  // #400: the owned character sheet (equipment/spells) for the suggestion filter. The
+  // session context's character payload is identity+stats only, so it cannot source this.
+  const { state: characterState } = useCharacter();
   const [combatTurnUiState, setCombatTurnUiState] = useState<CombatTurnUiState>(
     INITIAL_COMBAT_TURN_UI_STATE,
   );
@@ -367,6 +376,10 @@ export const useAIResponse = (): {
         logger.info('Getting AI response for session:', sessionId);
 
         const latestMessage = messages[messages.length - 1];
+        // #400: consume eagerly at turn start, so a turn that fails before the entry hold
+        // does not leak the flag to a later unrelated turn. The skip applies only when this
+        // turn's message is the one typed while the card was up.
+        const typedEntryAnswer = consumeCombatEntryTypedAnswer(latestMessage.text);
         const turnSignal = signal as TurnAbortSignal | undefined;
         const awaitPlayerInput = async <T>(promise: Promise<T>): Promise<T> => {
           turnSignal?.onPlayerWaitChange?.(true);
@@ -527,6 +540,15 @@ export const useAIResponse = (): {
         const characterId = String(characterRecord.id || '');
         lastCombatCharacterIdRef.current = characterId;
         lastCombatEncounterRef.current = activeEncounter;
+        // #400: the DM's suggested options are filtered against the owned sheet —
+        // an option naming a spell or attack the character cannot use never reaches the
+        // screen. Without a sheet the filter is a no-op: filtering against an empty sheet
+        // would drop legitimate suggestions.
+        const sheetCombatNames = extractSheetCombatNames(
+          characterState.character as Record<string, unknown> | null,
+        );
+        const filterSheetOptions = (options: unknown[]): unknown[] =>
+          sheetCombatNames ? filterOptionsAgainstSheet(options, sheetCombatNames) : options;
 
         // A character on the floor cannot act (SRD 5.1): the one thing their turn holds is the
         // death saving throw, which the dying panel's driver sends as `death_save_turn`. Any other
@@ -663,8 +685,11 @@ export const useAIResponse = (): {
         // player before the DM is called. The DM answering first is how a Chill Touch got
         // narrated as a miss with no roll (run 14). Strike goes to the engine below with no
         // DM text yet; "Do something else" calls the DM with a note that nothing happened.
+        // #400: a message typed while the card was up already answered it — the typed action
+        // is the player's combat declaration, so the hold is skipped and the engine resolves it.
+        // (typedEntryAnswer was consumed at turn start.)
         const heldEntry =
-          !activeEncounter && !isDiceRollMessage
+          !activeEncounter && !isDiceRollMessage && !typedEntryAnswer
             ? await awaitPlayerInput(
                 holdCombatEntryBeforeDm({
                   sessionId,
@@ -804,7 +829,7 @@ export const useAIResponse = (): {
                     !earlyShouldStartCombat;
                   let earlyText = parsedResult.text;
                   if (!suppressRender && parsedResult.options?.length) {
-                    earlyText = `${earlyText.trim()}\n\n${parsedResult.options.join('\n')}`;
+                    earlyText = `${earlyText.trim()}\n\n${filterSheetOptions(parsedResult.options).join('\n')}`;
                   }
 
                   await onTextReady(
@@ -980,7 +1005,10 @@ export const useAIResponse = (): {
           playerMessage: latestMessage.text,
           isDiceRollMessage: !!isDiceRollMessage,
           playerInputOrigin,
-          entryConfirmed: heldEntry?.decision === 'confirmed',
+          // #400: a typed answer while the card was up already settled it — the typed action
+          // is the player's answer, so a combat_entry_pending from the DM/gate must not
+          // re-show the card (that loops now that the composer is unlocked).
+          entryConfirmed: heldEntry?.decision === 'confirmed' || typedEntryAnswer,
           onEngineNotice,
           signal,
           onPlayerWaitChange: turnSignal?.onPlayerWaitChange,
@@ -1188,9 +1216,12 @@ export const useAIResponse = (): {
           !shouldStartCombat &&
           result.combat_transition !== 'start' &&
           processedRolls.playerRollRequests.length === 0;
+        // #400: sheet-illegal suggestions never reach the screen; the emptiness checks read
+        // the filtered list so the UI can say why there are no choices.
+        const sheetOptions = result.options?.length ? filterSheetOptions(result.options) : [];
         if (isNarrationTurn) {
-          if (result.options?.length) {
-            finalResponseText = `${finalResponseText.trim()}\n\n${result.options.join('\n')}`;
+          if (sheetOptions.length) {
+            finalResponseText = `${finalResponseText.trim()}\n\n${sheetOptions.join('\n')}`;
           } else {
             runDeferredTask(
               'action options',
@@ -1221,7 +1252,7 @@ export const useAIResponse = (): {
             combatEnded: combatWasActiveAtRequestStart && !isInCombat,
             // GP-015 (#219): narration turn with no action choices — the UI
             // says why there are none instead of rendering nothing.
-            noActionOptions: isNarrationTurn && !result.options?.length,
+            noActionOptions: isNarrationTurn && !sheetOptions.length,
           },
           narrationSegments,
           diceRolls,
@@ -1258,6 +1289,7 @@ export const useAIResponse = (): {
       user?.id,
       setGamePhase,
       cancelDiceRoll,
+      characterState.character,
     ],
   );
 

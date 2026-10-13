@@ -33,10 +33,12 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/services/combat/combat-entry-confirmation-bridge', () => ({
   requestCombatEntryConfirmation: vi.fn(),
   requestCombatEntryAnswer: vi.fn(),
+  consumeCombatEntryTypedAnswer: vi.fn().mockReturnValue(false),
 }));
 
 import logger from '@/lib/logger';
 import {
+  consumeCombatEntryTypedAnswer,
   requestCombatEntryAnswer,
   requestCombatEntryConfirmation,
 } from '@/services/combat/combat-entry-confirmation-bridge';
@@ -75,6 +77,7 @@ describe('holdCombatEntryBeforeDm', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(consumeCombatEntryTypedAnswer).mockReturnValue(false);
     vi.stubGlobal('fetch', fetchMock);
     fetchMock.mockResolvedValue(jsonResponse({ pending }));
     vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(true);
@@ -227,6 +230,7 @@ describe('an attack spell with no creature named ("I cast Fire Bolt at him")', (
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(consumeCombatEntryTypedAnswer).mockReturnValue(false);
     vi.stubGlobal('fetch', fetchMock);
     fetchMock.mockResolvedValueOnce(jsonResponse({ pending: null, targetChoice: choice }));
   });

@@ -19,6 +19,7 @@ import {
 } from '../../../shared/test-fixtures/declared-attack-hold';
 import { useAIResponse } from '../use-ai-response';
 
+import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
 import {
   buildSpellCastContext,
@@ -27,6 +28,7 @@ import {
 import { handleDmActionsAndTransitions } from '@/hooks/ai/dm-actions-handler';
 import { AIService } from '@/services/ai-service';
 import {
+  consumeCombatEntryTypedAnswer,
   requestCombatEntryAnswer,
   requestCombatEntryConfirmation,
 } from '@/services/combat/combat-entry-confirmation-bridge';
@@ -38,6 +40,10 @@ vi.mock('@/contexts/CombatContext', () => ({
     state: { isInCombat: false, activeEncounter: null },
     refreshCombatState: vi.fn(async () => null),
   })),
+}));
+vi.mock('@/contexts/CharacterContext', () => ({
+  // The owned sheet: equipment and spell lists live here, not in the session context.
+  useCharacter: vi.fn(() => ({ state: { character: null } })),
 }));
 vi.mock('@/contexts/GameContext', () => ({
   useGame: vi.fn(() => ({
@@ -56,6 +62,7 @@ vi.mock('@/services/ai-service', () => ({ AIService: { chatWithDM: vi.fn() } }))
 vi.mock('@/services/combat/combat-entry-confirmation-bridge', () => ({
   requestCombatEntryConfirmation: vi.fn(),
   requestCombatEntryAnswer: vi.fn(),
+  consumeCombatEntryTypedAnswer: vi.fn().mockReturnValue(false),
 }));
 vi.mock('@/hooks/ai/dm-actions-handler', () => ({ handleDmActionsAndTransitions: vi.fn() }));
 vi.mock('@/services/memory-manager', () => ({
@@ -129,10 +136,24 @@ describe('useAIResponse: the combat-entry popup comes before the DM (#2341)', ()
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(consumeCombatEntryTypedAnswer).mockReturnValue(false);
     order = [];
     vi.mocked(useCombat).mockReturnValue({
       state: { isInCombat: false, activeEncounter: null },
       refreshCombatState: vi.fn(async () => null),
+    } as any);
+    // The owned sheet for the suggestion filter; the session context below carries no
+    // equipment/spells by design.
+    vi.mocked(useCharacter).mockReturnValue({
+      state: {
+        character: {
+          ...declaredAttackCharacter,
+          equipment: ['Quarterstaff'],
+          cantrips: ['Chill Touch', 'Fire Bolt'],
+          knownSpells: [],
+          preparedSpells: [],
+        },
+      },
     } as any);
     vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
       id: DECLARED_ATTACK_SESSION_ID,
@@ -410,6 +431,29 @@ describe('useAIResponse: the combat-entry popup comes before the DM (#2341)', ()
     );
   });
 
+  it('skips the hold when the message was typed while the card was up (#400)', async () => {
+    vi.mocked(consumeCombatEntryTypedAnswer).mockReturnValue(true);
+
+    await play();
+
+    // The typed action is the player's answer: no card, straight to the DM/engine.
+    expect(requestCombatEntryConfirmation).not.toHaveBeenCalled();
+    expect(requestCombatEntryAnswer).not.toHaveBeenCalled();
+    expect(AIService.chatWithDM).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes entryConfirmed when the typed answer settles the card (#400)', async () => {
+    vi.mocked(consumeCombatEntryTypedAnswer).mockReturnValue(true);
+
+    await play();
+
+    // The typed action already answered the card: a combat_entry_pending from the DM/gate
+    // must not re-show it (that loops now that the composer is unlocked).
+    expect(handleDmActionsAndTransitions).toHaveBeenCalledWith(
+      expect.objectContaining({ entryConfirmed: true }),
+    );
+  });
+
   it('does not check a message during a fight or a submitted dice result', async () => {
     const liveEncounter = {
       id: 'enc-1',
@@ -434,5 +478,95 @@ describe('useAIResponse: the combat-entry popup comes before the DM (#2341)', ()
     await play([{ ...chillTouchMessages[0], context: { intent: 'dice_roll' } }]);
     expect(userDataApi.detectDeclaredAttack).not.toHaveBeenCalled();
     expect(requestCombatEntryConfirmation).not.toHaveBeenCalled();
+  });
+});
+
+describe('useAIResponse: sheet-only option filter reads the owned sheet (#400)', () => {
+  const play = async (messages: unknown[]) => {
+    const { result } = renderHook(() => useAIResponse());
+    return result.current.getAIResponse(messages as any, DECLARED_ATTACK_SESSION_ID);
+  };
+
+  beforeEach(() => {
+    vi.mocked(useCharacter).mockReturnValue({
+      state: {
+        character: {
+          ...declaredAttackCharacter,
+          equipment: ['Longsword'],
+          cantrips: ['Fire Bolt'],
+          knownSpells: [],
+          preparedSpells: [],
+        },
+      },
+    } as any);
+  });
+
+  it('filters DM options against the owned sheet, not the limited session-context character', async () => {
+    // The actual producer shape: the session context selects identity+stats only — no
+    // equipment, no spell lists. A filter reading this character would drop real actions.
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: DECLARED_ATTACK_SESSION_ID,
+      campaign_id: 'camp-1',
+      character_id: declaredAttackCharacter.id,
+      campaign: { id: 'camp-1' },
+      character: {
+        id: declaredAttackCharacter.id,
+        name: 'The Scholar',
+        level: 3,
+        race: 'Human',
+        class: 'Fighter',
+        background: 'Soldier',
+      },
+    } as any);
+    vi.mocked(userDataApi.detectDeclaredAttack).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ pending: null }),
+    } as any);
+    vi.mocked(AIService.chatWithDM).mockResolvedValue({
+      text: 'The goblin snarls at you.',
+      options: [
+        'A. **Fire Bolt**, hurl a mote of flame.',
+        'B. **Fireball**, engulf them all.',
+        'C. **Attack with Longsword**, swing at the goblin.',
+        'D. **Talk**, try to parley.',
+      ],
+      roll_requests: [],
+    } as any);
+
+    const response = await play([
+      { text: 'I face the goblin.', sender: 'player', timestamp: new Date().toISOString() },
+    ]);
+
+    // The known spell and the equipped attack survive because the OWNED sheet
+    // (CharacterContext) lists them — even though the session-context character carries
+    // no spell lists or equipment at all. The unowned recognized spell is dropped; the
+    // non-combat option passes through.
+    expect(response.text).toContain('Fire Bolt');
+    expect(response.text).toContain('Longsword');
+    expect(response.text).toContain('Talk');
+    expect(response.text).not.toContain('Fireball');
+  });
+
+  it('does not filter when the owned sheet is unavailable', async () => {
+    vi.mocked(useCharacter).mockReturnValue({ state: { character: null } } as any);
+    vi.mocked(userDataApi.detectDeclaredAttack).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ pending: null }),
+    } as any);
+    vi.mocked(AIService.chatWithDM).mockResolvedValue({
+      text: 'The goblin snarls at you.',
+      options: ['A. **Fireball**, engulf them all.'],
+      roll_requests: [],
+    } as any);
+
+    const response = await play([
+      { text: 'I face the goblin.', sender: 'player', timestamp: new Date().toISOString() },
+    ]);
+
+    // No sheet means no safe gate: the suggestion passes through rather than being
+    // dropped on missing data.
+    expect(response.text).toContain('Fireball');
   });
 });

@@ -193,8 +193,7 @@ export const useSceneCreationWizard = ({
     currentStep,
     formData,
     progress,
-    // @ts-expect-error #419 tRPC v11 exposes isPending; isLoading is undefined here
-    isLoading: createSceneMutation.isLoading,
+    isLoading: createSceneMutation.isPending,
     updateFormData,
     handleNext,
     handlePrevious,

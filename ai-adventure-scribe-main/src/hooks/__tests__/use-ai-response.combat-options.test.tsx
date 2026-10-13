@@ -135,6 +135,10 @@ const encounterHeldBy = (participantId: string, currentRound = 1, playerActionUs
             : participant.actionUsed,
     })),
   });
+vi.mock('@/contexts/CharacterContext', () => ({
+  // #400: the owned sheet for the suggestion filter; null keeps the filter a no-op here.
+  useCharacter: () => ({ state: { character: null } }),
+}));
 const participants = encounterHeldBy('scholar-1').participants;
 
 const noNpcTurns = {
