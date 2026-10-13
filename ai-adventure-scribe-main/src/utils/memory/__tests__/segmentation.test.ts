@@ -376,6 +376,8 @@ describe('stripRollScaffolding', () => {
     const row = formatDiceRoll(
       makeRollRequest('Stealth check', 'skill_check', 13, 2, { dc: 13 }),
     );
+    expect(row).toBe('Stealth check: 15 (nat 13+2) success');
+
     const input = `${row}. You refuse to fail again.`;
     expect(stripRollScaffolding(input)).toBe(
       'Stealth check: 15. You refuse to fail again.',
@@ -399,6 +401,8 @@ describe('stripRollScaffolding', () => {
         { advantage: true },
       ),
     );
+    expect(row).toBe('Longsword attack: 22 (nat 20+2) [ADV] hit CRITICAL HIT!');
+
     const input = `What a critical hit! ${row} The crowd goes wild at your success.`;
     expect(stripRollScaffolding(input)).toBe(
       'What a critical hit! Longsword attack: 22 The crowd goes wild at your success.',
@@ -406,11 +410,37 @@ describe('stripRollScaffolding', () => {
   });
 
   it('strips a pending roll row but leaves prose mentioning pending alone', () => {
-    const pendingRoll = 'Athletics check: pending';
-    expect(stripRollScaffolding(pendingRoll)).toBe('Athletics check');
+    const pending = formatDiceRoll({
+      ...makeRollRequest('Stealth check', 'skill_check', 13, 2, { dc: 13 }),
+      result: undefined,
+    });
+    expect(pending).toBe('Stealth check: pending');
+    expect(stripRollScaffolding(pending)).toBe('Stealth check');
 
     const prose = 'Status: pending approval from the quartermaster.';
     expect(stripRollScaffolding(prose)).toBe(prose);
+  });
+
+  it('leaves a bare outcome word followed by more prose alone (no distinctive roll fragment)', () => {
+    // No (nat ...)/[ADV]/etc. fragment proves this is a roll row, and the
+    // outcome word is not in terminal position, so it must survive.
+    expect(stripRollScaffolding('Stealth check: 15 success and you fail')).toBe(
+      'Stealth check: 15 success and you fail',
+    );
+    expect(stripRollScaffolding('Score: 20 success stories')).toBe(
+      'Score: 20 success stories',
+    );
+  });
+
+  it('does not treat "HH:MM"-style times as roll rows', () => {
+    expect(stripRollScaffolding('Time: 12:30 (nat 5) success')).toBe(
+      'Time: 12:30 (nat 5) success',
+    );
+  });
+
+  it('keeps lowercase "critical hit" prose next to a roll row', () => {
+    const input = 'That was a critical hit, a clean success.';
+    expect(stripRollScaffolding(input)).toBe(input);
   });
 });
 
@@ -440,12 +470,13 @@ describe('sanitizeForMemoryExtraction — multiline narrative mixed with roll sc
   });
 
   it('preserves inline prose around real roll rows through the public entry point', () => {
-    const row = formatDiceRoll(
+    const stealthFormatted = formatDiceRoll(
       makeRollRequest('Stealth check', 'skill_check', 13, 2, { dc: 13 }),
     );
+
     const multilineInput = [
       '...your own white-hot fury, fail you in the suffocating stillness...',
-      `${row} You refuse to fail again.`,
+      `${stealthFormatted} You refuse to fail again.`,
       'The trap triggers vs DC 13 — you miss the ledge and fail to recover.',
     ].join('\n');
 
@@ -458,6 +489,9 @@ describe('sanitizeForMemoryExtraction — multiline narrative mixed with roll sc
     expect(sanitized).toContain(
       'The trap triggers vs DC 13 — you miss the ledge and fail to recover.',
     );
+    expect(sanitized).toContain('Stealth check: 15');
+    expect(sanitized).not.toContain('(nat 13+2)');
+    expect(sanitized).not.toContain('success');
   });
 });
 

@@ -46,36 +46,50 @@ export const stripCodeBlocks = (content: string): string => {
  * Strip dice roll scaffolding text produced by formatDiceRoll() before segmentation.
  * These patterns are transient game mechanics output, not durable memories.
  *
- * Matches the output format of formatDiceRoll() in MessageListContainer.tsx:
- *   "Stealth Check: 15 (nat 13+2) vs DC 13 success"
- *   "Attack Roll: 22 (nat 18+4) [ADV] hit CRITICAL HIT!"
- *   "Perception Check: 8 (nat 6+2) fail"
+ * Matches the output grammar of formatDiceRoll() in
+ * features/game-session/components/chat/message-list/utils/dice-roll-formatter.ts:
+ *   "Stealth Check: 15 (nat 13+2) success"
+ *   "Longsword attack: 22 (nat 20+2) [ADV] hit CRITICAL HIT!"
+ *   "Perception check: 8 (nat 6+2) fail"
+ *   "Perception check: 14 (nat 12+2) (no DC)"
+ *   "Shortbow attack: 1 miss Critical Miss"
+ *   "Stealth check: pending"
+ * (Legacy rows may also carry "vs DC 13"/"vs AC 10" and ✓/✗ glyphs.)
+ *
+ * Only fragments the producer actually emits are removed, and only in the
+ * structural position the producer puts them (a "<description>: <total>" roll
+ * row, inline or on its own line). Bare outcome words in ordinary prose
+ * ("fail", "success", "hit", "miss", "critical hit") are never touched (#30).
  */
+// Fragments only the producer emits — never ordinary prose.
+const PRODUCER_FRAG =
+  /(?:\s*\(nat\s+\d+[+-]?\d*\)|\s*\[(?:ADV|DIS)\]|\s+vs\s+(?:DC|AC)\s+\d+|\s*[✓✗]|\s+\(no\s+DC\))/;
+// The producer's critical trailer, case-sensitive (prose "critical hit" survives).
+const CRIT_FRAG = /(?:\s+CRITICAL\s+HIT!?|\s+Critical\s+Miss)/;
+// The producer's outcome word, case-sensitive (the producer emits lowercase).
+// Stripped non-terminally only after a distinctive producer fragment proves the
+// row is a roll; a bare outcome word is stripped only in the producer's
+// terminal position (end of row, sentence punctuation, or before the trailer).
+const OUTCOME_ANY = /\s+(?:success|fail|hit|miss)\b/;
+const OUTCOME_TERM =
+  /\s+(?:success|fail|hit|miss)\b(?=\s*(?:[.!?;:]|$|\n)|\s+(?:CRITICAL\s+HIT!?|Critical\s+Miss))/;
+
+// A "<description>: <total>" roll row followed by the producer's fragments.
+// The (?<!\d) guard keeps "12:30"-style times from matching as roll rows.
+const ROLL_ROW_RE = new RegExp(
+  `([^:\\n]{1,200}?)(?<!\\d):\\s*(-?\\d+)` +
+    `((?:${PRODUCER_FRAG.source}+(?:${OUTCOME_ANY.source})?(?:${CRIT_FRAG.source})?` +
+    `|${OUTCOME_TERM.source}(?:${CRIT_FRAG.source})?))`,
+  'g',
+);
+
+// The producer's pending row: "<description>: pending".
+const PENDING_ROW_RE = /([^:\n]{1,200}?)(?<!\d):\s*pending(?=\s*(?:[.!?;:]|$|\n))/g;
+
 export const stripRollScaffolding = (content: string): string => {
   if (!content) return content;
 
-  return content
-    // Remove pending indicator when at the end of a roll description (not prose like "Status: pending approval")
-    .replace(/:\s*pending(?=\s*(?:[.\n\r,]|$))/gi, '')
-    // Remove roll outcome scaffolding appended to roll totals (e.g. "Stealth check: 15 (nat 13+2) vs DC 13 success")
-    .replace(
-      /(:\s*-?\d+)((?:\s*\(nat\s+\d+[+-]?\d*\))?(?:\s*\[(?:ADV|DIS)\])?(?:\s*vs\s+(?:DC|AC)\s+\d+)?(?:\s*\(no DC\))?(?:\s*(?:success|fail|hit|miss)\b)?(?:\s*(?:CRITICAL\s+HIT!?|Critical\s+Miss))?(?:\s*[✓✗])?)/gi,
-      (match, score, scaffolding) => {
-        if (scaffolding && scaffolding.trim().length > 0) {
-          return score;
-        }
-        return match;
-      },
-    )
-    // Remove any remaining standalone structural dice notation tokens that never appear in prose
-    .replace(/\(nat\s+\d+[+-]?\d*\)/gi, '')
-    .replace(/\[(?:ADV|DIS)\]/gi, '')
-    .replace(/\(no DC\)/gi, '')
-    .replace(/[✓✗]/g, '')
-    // Normalize leftover whitespace around replacements while keeping line structure
-    .replace(/[ \t]{2,}/g, ' ')
-    .replace(/ \./g, '.')
-    .trim();
+  return content.replace(ROLL_ROW_RE, '$1: $2').replace(PENDING_ROW_RE, '$1');
 };
 
 /**
