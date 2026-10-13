@@ -1,5 +1,5 @@
 import { Sword, MessageCircle, Eye, Zap, User } from 'lucide-react';
-import React, { useState, useEffect, useId } from 'react';
+import React, { useState, useEffect, useId, useRef } from 'react';
 
 import type { ActionOption } from '@/utils/parseMessageOptions';
 
@@ -15,6 +15,13 @@ interface ActionOptionsProps {
   delay?: number; // Delay in milliseconds before showing options
   disabled?: boolean;
   className?: string;
+  /**
+   * Explicit loading signal from the caller (#118). While true, an empty options
+   * array means a refresh is in flight (e.g. the legal-action re-fetch between
+   * combat turns): the last options stay on screen but disabled. When false, an
+   * empty array is final-empty and the controls clear immediately.
+   */
+  isLoading?: boolean;
 }
 
 /**
@@ -73,26 +80,83 @@ function getOptionIcon(text: string): React.ComponentType<{ className?: string }
   return User;
 }
 
+function areOptionsEqual(a: ActionOption[], b: ActionOption[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const optA = a[i];
+    const optB = b[i];
+    if (
+      optA.id !== optB.id ||
+      optA.number !== optB.number ||
+      optA.text !== optB.text ||
+      optA.fullText !== optB.fullText ||
+      optA.title !== optB.title ||
+      optA.description !== optB.description
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /**
  * ActionOptions component displays clickable option buttons with a configurable delay
  * Encourages player roleplay before showing suggested actions
  */
 export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
   ({
-    options,
+    options: incomingOptions,
     onOptionSelect,
     delay = 10000, // 10 seconds default
     disabled = false,
     resetSelectionAfterCompletion = false,
     className = '',
+    isLoading = false,
   }) => {
     const [visible, setVisible] = useState(false);
     const [selectedOption, setSelectedOption] = useState<string | null>(null);
+    const [displayedOptions, setDisplayedOptions] = useState<ActionOption[]>(incomingOptions);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const instructionsId = useId();
+
+    const previousIncomingRef = useRef<ActionOption[]>(incomingOptions);
+    const previousLoadingRef = useRef<boolean>(isLoading);
+
+    useEffect(() => {
+      const incomingChanged = !areOptionsEqual(previousIncomingRef.current, incomingOptions);
+      const loadingChanged = previousLoadingRef.current !== isLoading;
+      if (!incomingChanged && !loadingChanged) {
+        return;
+      }
+      previousIncomingRef.current = incomingOptions;
+      previousLoadingRef.current = isLoading;
+
+      if (incomingOptions.length > 0) {
+        // Fresh options arrived: the initial load or a completed refresh. Show them
+        // immediately without re-triggering the initial delay.
+        setDisplayedOptions(incomingOptions);
+        setIsRefreshing(false);
+        if (!visible && delay === 0) {
+          setVisible(true);
+        }
+      } else if (isLoading && displayedOptions.length > 0) {
+        // The caller signals a refresh in flight (e.g. the legal-action re-fetch
+        // between combat turns): keep the last options on screen but disabled, so a
+        // stale option can never submit for another turn. They clear when loading
+        // ends with the array still empty.
+        setIsRefreshing(true);
+      } else if (!isLoading) {
+        // Settled and empty: final-empty. Clear immediately — no grace period (#118).
+        setDisplayedOptions([]);
+        setSelectedOption(null);
+        setIsRefreshing(false);
+      }
+    }, [incomingOptions, isLoading, visible, delay, displayedOptions.length]);
 
     // Show options after delay
     useEffect((): (() => void) | void => {
-      if (options.length > 0) {
+      if (incomingOptions.length > 0) {
+        if (visible) return; // Already visible, keep visible without resetting
         let mounted = true;
         const timer = setTimeout(() => {
           if (mounted) {
@@ -105,11 +169,11 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
           clearTimeout(timer);
         };
       }
-    }, [options, delay]);
+    }, [incomingOptions.length, delay, visible]);
 
     // Handle option selection
     const handleOptionClick = (option: ActionOption): void => {
-      if (disabled || selectedOption) return;
+      if (disabled || isRefreshing || selectedOption) return;
       logger.info('[ActionOptions] Option clicked:', option.text);
       setSelectedOption(option.id);
       const completion = onOptionSelect(option);
@@ -121,8 +185,10 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
       }
     };
 
+    const optionsToRender = displayedOptions.length > 0 ? displayedOptions : incomingOptions;
+
     // Don't render if no options
-    if (options.length === 0) {
+    if (optionsToRender.length === 0) {
       return null;
     }
 
@@ -148,7 +214,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
           {visible && (
             <div className="space-y-3 animate-in fade-in-0 duration-500">
               <div id={instructionsId} className="text-xs text-muted-foreground text-center mb-3">
-                What would you like to do?
+                What would you like to do? Select an option to submit it immediately.
               </div>
 
               <div
@@ -156,10 +222,11 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
                 role="group"
                 aria-labelledby={instructionsId}
               >
-                {options.map((option, index) => {
+                {optionsToRender.map((option, index) => {
                   const IconComponent = getOptionIcon(option.text);
                   const isSelected = selectedOption === option.id;
-                  const isDisabled = disabled || (selectedOption && selectedOption !== option.id);
+                  const isDisabled =
+                    disabled || isRefreshing || (selectedOption && selectedOption !== option.id);
                   // Numbered by position: the model's own numbers can repeat or be missing (#2256).
                   const displayNumber = index + 1;
 
