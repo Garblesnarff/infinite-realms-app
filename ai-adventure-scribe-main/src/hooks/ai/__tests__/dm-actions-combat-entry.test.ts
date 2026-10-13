@@ -1345,4 +1345,33 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     );
     expect(outcome.responseText).toBe('Frost takes Vance in the chest.');
   });
+
+  it('#400: a typed answer settles the card — entryConfirmed skips the second card and seats', async () => {
+    // The loop this guards: the composer is unlocked, the player answered the card by typing,
+    // and the DM/gate still returns combat_entry_pending for the typed action. The typed turn
+    // passes entryConfirmed, so the card must not come back — the entry seats straight through.
+    const refresh = vi.fn().mockResolvedValue(PLAYER_TURN_ENCOUNTER);
+    const outcome = await invoke(
+      {
+        combat_transition: 'none',
+        combat_entry_pending: PENDING_ENTRY,
+        combat_actions: [],
+        roll_requests: [],
+      },
+      refresh,
+      { entryConfirmed: true },
+    );
+
+    expect(requestCombatEntryConfirmation).not.toHaveBeenCalled();
+    expect(requestPlayerInitiativeRoll).toHaveBeenCalledWith({
+      actorLabel: 'The Storyteller',
+      initiativeModifier: 2,
+    });
+    expect(userDataApi.enterCombat).toHaveBeenCalledWith(
+      'session-1',
+      expect.objectContaining({ playerInitiativeRoll: 16 }),
+    );
+    expect(refresh).toHaveBeenCalled();
+    expect(outcome.isInCombat).toBe(true);
+  });
 });

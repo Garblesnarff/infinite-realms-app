@@ -45,6 +45,10 @@ import { processRollRequests } from '@/hooks/ai/roll-processor';
 import { logIncomingRolls, logRollRequests } from '@/hooks/ai/session-logger';
 import { suspectsFabricatedOutcome } from '@/hooks/ai/silent-player-turn';
 import logger from '@/lib/logger';
+import {
+  extractSheetCombatNames,
+  filterOptionsAgainstSheet,
+} from '@/services/ai/sheet-option-filter';
 import { AIService, isRollOutcomeStale } from '@/services/ai-service';
 import { playerInputOriginOf } from '@/services/combat/combat-action-origin';
 import { consumeCombatEntryTypedAnswer } from '@/services/combat/combat-entry-confirmation-bridge';
@@ -529,6 +533,9 @@ export const useAIResponse = (): {
         const characterId = String(characterRecord.id || '');
         lastCombatCharacterIdRef.current = characterId;
         lastCombatEncounterRef.current = activeEncounter;
+        // #400: the DM's suggested options are filtered against the sheet deterministically —
+        // an option naming a spell or attack the character cannot use never reaches the screen.
+        const sheetCombatNames = extractSheetCombatNames(characterRecord);
 
         // A character on the floor cannot act (SRD 5.1): the one thing their turn holds is the
         // death saving throw, which the dying panel's driver sends as `death_save_turn`. Any other
@@ -809,7 +816,7 @@ export const useAIResponse = (): {
                     !earlyShouldStartCombat;
                   let earlyText = parsedResult.text;
                   if (!suppressRender && parsedResult.options?.length) {
-                    earlyText = `${earlyText.trim()}\n\n${parsedResult.options.join('\n')}`;
+                    earlyText = `${earlyText.trim()}\n\n${filterOptionsAgainstSheet(parsedResult.options, sheetCombatNames).join('\n')}`;
                   }
 
                   await onTextReady(
@@ -985,7 +992,10 @@ export const useAIResponse = (): {
           playerMessage: latestMessage.text,
           isDiceRollMessage: !!isDiceRollMessage,
           playerInputOrigin,
-          entryConfirmed: heldEntry?.decision === 'confirmed',
+          // #400: a typed answer while the card was up already settled it — the typed action
+          // is the player's answer, so a combat_entry_pending from the DM/gate must not
+          // re-show the card (that loops now that the composer is unlocked).
+          entryConfirmed: heldEntry?.decision === 'confirmed' || typedEntryAnswer,
           onEngineNotice,
           signal,
           onPlayerWaitChange: turnSignal?.onPlayerWaitChange,
@@ -1168,9 +1178,14 @@ export const useAIResponse = (): {
           !shouldStartCombat &&
           result.combat_transition !== 'start' &&
           processedRolls.playerRollRequests.length === 0;
+        // #400: sheet-illegal suggestions never reach the screen; the emptiness checks read
+        // the filtered list so the UI can say why there are no choices.
+        const sheetOptions = result.options?.length
+          ? filterOptionsAgainstSheet(result.options, sheetCombatNames)
+          : [];
         if (isNarrationTurn) {
-          if (result.options?.length) {
-            finalResponseText = `${finalResponseText.trim()}\n\n${result.options.join('\n')}`;
+          if (sheetOptions.length) {
+            finalResponseText = `${finalResponseText.trim()}\n\n${sheetOptions.join('\n')}`;
           } else {
             runDeferredTask(
               'action options',
@@ -1201,7 +1216,7 @@ export const useAIResponse = (): {
             combatEnded: combatWasActiveAtRequestStart && !isInCombat,
             // GP-015 (#219): narration turn with no action choices — the UI
             // says why there are none instead of rendering nothing.
-            noActionOptions: isNarrationTurn && !result.options?.length,
+            noActionOptions: isNarrationTurn && !sheetOptions.length,
           },
           narrationSegments,
           diceRolls,

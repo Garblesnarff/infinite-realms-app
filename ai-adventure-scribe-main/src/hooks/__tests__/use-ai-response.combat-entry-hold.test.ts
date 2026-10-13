@@ -424,6 +424,18 @@ describe('useAIResponse: the combat-entry popup comes before the DM (#2341)', ()
     expect(AIService.chatWithDM).toHaveBeenCalledTimes(1);
   });
 
+  it('passes entryConfirmed when the typed answer settles the card (#400)', async () => {
+    vi.mocked(consumeCombatEntryTypedAnswer).mockReturnValue(true);
+
+    await play();
+
+    // The typed action already answered the card: a combat_entry_pending from the DM/gate
+    // must not re-show it (that loops now that the composer is unlocked).
+    expect(handleDmActionsAndTransitions).toHaveBeenCalledWith(
+      expect.objectContaining({ entryConfirmed: true }),
+    );
+  });
+
   it('does not check a message during a fight or a submitted dice result', async () => {
     const liveEncounter = {
       id: 'enc-1',
