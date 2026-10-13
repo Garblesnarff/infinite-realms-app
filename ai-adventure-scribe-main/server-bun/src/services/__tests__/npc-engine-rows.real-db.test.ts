@@ -24,7 +24,10 @@ import { ENEMY_HITS_PLAYER, REEVES } from '../../../../shared/test-fixtures/engi
 import { resolveMonsterAttackProfile } from '../combat/monster-attack-profile.js';
 
 const userId = testId('npc-engine-rows-user');
-mock.module('../../lib/dice.js', () => ({ rollD20: () => 14 }));
+mock.module('../../lib/dice.js', () => ({
+  rollD20: () => 14,
+  rollD20Pair: () => ({ kept: 14 }),
+}));
 mock.module('../../lib/auth.js', () => ({
   authenticateRequest: async () => ({ user: { userId }, error: null }),
 }));
