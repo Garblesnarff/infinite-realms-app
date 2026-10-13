@@ -162,6 +162,10 @@ const dmEnvelope = (fields: Record<string, unknown>) =>
     isFirstMessage: false,
     deferSideEffects: true,
   });
+vi.mock('@/contexts/CharacterContext', () => ({
+  // #400: the owned sheet for the suggestion filter; null keeps the filter a no-op here.
+  useCharacter: () => ({ state: { character: null } }),
+}));
 
 describe('useAIResponse: DM roll requests and the player’s turn (#2530)', () => {
   let prompts: Array<{ spec: PlayerRollSpec; settle: (outcome: PlayerRollOutcome) => void }>;

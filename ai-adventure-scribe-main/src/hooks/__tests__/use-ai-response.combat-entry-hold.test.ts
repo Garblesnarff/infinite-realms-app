@@ -528,7 +528,8 @@ describe('useAIResponse: sheet-only option filter reads the owned sheet (#400)',
       options: [
         'A. **Fire Bolt**, hurl a mote of flame.',
         'B. **Fireball**, engulf them all.',
-        'C. **Talk**, try to parley.',
+        'C. **Attack with Longsword**, swing at the goblin.',
+        'D. **Talk**, try to parley.',
       ],
       roll_requests: [],
     } as any);
@@ -537,10 +538,12 @@ describe('useAIResponse: sheet-only option filter reads the owned sheet (#400)',
       { text: 'I face the goblin.', sender: 'player', timestamp: new Date().toISOString() },
     ]);
 
-    // The known spell survives because the OWNED sheet (CharacterContext) lists it — even
-    // though the session-context character carries no spell lists at all. The unowned
-    // recognized spell is dropped; the non-combat option passes through.
+    // The known spell and the equipped attack survive because the OWNED sheet
+    // (CharacterContext) lists them — even though the session-context character carries
+    // no spell lists or equipment at all. The unowned recognized spell is dropped; the
+    // non-combat option passes through.
     expect(response.text).toContain('Fire Bolt');
+    expect(response.text).toContain('Longsword');
     expect(response.text).toContain('Talk');
     expect(response.text).not.toContain('Fireball');
   });
