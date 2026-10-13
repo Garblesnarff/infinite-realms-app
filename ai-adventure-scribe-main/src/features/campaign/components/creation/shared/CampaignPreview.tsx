@@ -138,15 +138,13 @@ const CampaignPreview: React.FC = () => {
                 <div className="font-bold text-sm capitalize">{campaign.campaign_length}</div>
               </div>
             )}
-            {/* @ts-expect-error #433 Campaign has setting_details, not setting */}
-            {campaign.setting?.location && (
+            {typeof campaign.setting_details?.location === 'string' && (
               <div className="flex items-center justify-between p-2 bg-card rounded-lg border border-border">
                 <div className="flex items-center space-x-2">
                   <Map className="w-4 h-4" />
                   <span className="text-xs font-medium">Location</span>
                 </div>
-                {/* @ts-expect-error #433 Campaign has setting_details, not setting */}
-                <div className="font-bold text-sm">{campaign.setting.location}</div>
+                <div className="font-bold text-sm">{campaign.setting_details.location}</div>
               </div>
             )}
           </div>
