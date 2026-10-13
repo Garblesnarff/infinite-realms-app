@@ -3,7 +3,7 @@ import { userEvent } from '@testing-library/user-event';
 import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-import type { Character, CharacterClass, CharacterRace, Subrace } from '@/types/character';
+import type { Character, CharacterClass, CharacterRace } from '@/types/character';
 
 import { getClassSpells } from '@/data/spellOptions';
 
@@ -370,7 +370,6 @@ describe('Spell Selection Integration Tests', () => {
   let mockWizard: CharacterClass;
   let mockFighter: CharacterClass;
   let mockRace: CharacterRace;
-  let _mockHighElfSubrace: Subrace;
 
   beforeEach(() => {
     // Mock character classes
@@ -419,18 +418,6 @@ describe('Spell Selection Integration Tests', () => {
       speed: 30,
       traits: [],
       languages: ['Common'],
-    };
-
-    _mockHighElfSubrace = {
-      id: 'high-elf',
-      name: 'High Elf',
-      description: 'Elves with magical heritage',
-      abilityScoreIncrease: { intelligence: 1 },
-      traits: ['Elf Weapon Training', 'Cantrip'],
-      bonusCantrip: {
-        source: 'wizard',
-        count: 1,
-      },
     };
   });
 

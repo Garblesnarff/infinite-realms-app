@@ -73,6 +73,7 @@ const StarterCharacterSelectionPage: React.FC = () => {
     setIsCreating(true);
 
     try {
+      // @ts-expect-error #544 template spells may be null; seeder expects undefined
       const character = await seedStarterCharacter(selectedTemplate, campaignId, (payload) =>
         userDataApi.createCharacter(payload),
       );

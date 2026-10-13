@@ -313,7 +313,7 @@ export function buildCharacterSheet(character: Character | null): CharacterSheet
   // it), a hero at 0 HP is still unconscious per the 5e rules — derive it from the HP line
   // rather than showing "None".
   const effectiveVitalState =
-    vitalState ?? (hpCurrent === 0 && hpMax > 0 ? 'dying' : undefined);
+    vitalState ?? (hpCurrent === 0 && hpMax !== null && hpMax > 0 ? 'dying' : undefined);
   const vitalCondition: ConditionVM | null =
     effectiveVitalState === 'dying'
       ? { id: 'vital-dying', name: 'Unconscious (dying)' }

@@ -110,6 +110,7 @@ Narrate the scene:`.trim();
         systemInstruction: 'NPC_ROLL_CONTINUATION',
         npcRollResults: rollSummary,
       },
+      // @ts-expect-error #545 chatWithDM params declare no sessionId or options
       sessionId,
       options: {
         includeMemory: false, // Don't pull memories for roll continuation
@@ -118,6 +119,7 @@ Narrate the scene:`.trim();
       ...(signal ? { signal } : {}),
     });
 
+    // @ts-expect-error #545 AIResponse has no response field (legacy fallback)
     const narrative = result.text || result.response || '';
 
     logger.info('[NPCRollHandler] AI narrative continuation received:', {

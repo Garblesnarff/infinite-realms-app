@@ -375,7 +375,7 @@ function requestPlayerRoll(
     };
     // A new prompt supersedes any dismissed state from the previous one.
     dismissedDeathSave = false;
-    const hostHandle = presentTo(host);
+    const hostHandle = presentTo(host!);
 
     if (settled) {
       // A synchronous host settlement happened before the real dismiss function was returned.

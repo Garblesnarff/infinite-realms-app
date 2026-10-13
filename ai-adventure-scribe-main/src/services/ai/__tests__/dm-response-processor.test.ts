@@ -796,5 +796,7 @@ it('removes the model d20 bonus from every visible projection of a narrative rol
   expect(result.text).toBe('Make an Investigation check (1d20, DC 14).');
   expect(result.narrationSegments?.[0].text).toBe('Make an Investigation check (1d20, DC 14).');
   expect(result.options).toEqual(['Investigate (1d20)']);
-  expect(result.roll_requests?.[0].purpose).toBe('Investigation (1d20)');
+  expect((result.roll_requests?.[0] as { purpose?: string } | undefined)?.purpose).toBe(
+    'Investigation (1d20)',
+  );
 });
