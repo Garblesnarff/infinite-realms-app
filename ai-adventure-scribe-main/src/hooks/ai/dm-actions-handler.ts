@@ -272,17 +272,17 @@ export async function handleDmActionsAndTransitions(
           params.entryConfirmed === true ||
           (await awaitPlayerInput(confirmCombatEntry(pendingEntry, player)));
         if (!confirmed) {
-          // A decline is a real answer: do not call `/enter` and do not resolve the model's
-          // attack batch. But the DM's telegraph is already on screen and the player's message
-          // deserves its answer, so the prose stays — only the combat machinery is stripped
-          // (#400: blanking the telegraph dropped the player's action and let a later DM turn
-          // narrate the hostile away). The notice names the mechanical state: no encounter was
-          // seated and the hostile is still in the scene.
+          // A decline is a real answer: do not call `/enter`, do not resolve the model's attack
+          // batch, and do not let the pre-entry telegraph become a fabricated outcome.
+          responseText = '';
           narrationSegments = undefined;
-          appendLocalNotice('No encounter was seated; the hostile is still in the scene.');
+          appendLocalNotice(
+            'Combat entry declined. No encounter was seated; your action was not resolved.',
+          );
           logClearedRollRequests('entry_declined');
           result = {
             ...result,
+            text: '',
             combat_transition: 'none',
             combat_entry_pending: undefined,
             combat_actions: [],

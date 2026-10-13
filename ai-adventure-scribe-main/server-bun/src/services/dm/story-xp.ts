@@ -17,11 +17,6 @@
 import { ownedSessionCharacter } from './dm-feature-gate.js';
 import { playerMessage } from './story-spell-slots.js';
 import { logger } from '../../lib/logger.js';
-import {
-  engineChatLineExists,
-  postEngineChatLine,
-  type EngineChatLineWriter,
-} from '../engine-chat-line.js';
 import { XP_THRESHOLDS } from '../progression/progression-mechanics.js';
 
 export type StoryXpOutcome =
@@ -49,12 +44,6 @@ export function storyXpSessionCap(level: number): number {
   return Math.floor(maxStoryXp(level) / 4);
 }
 
-export interface StoryXpGrant {
-  outcome: 'awarded' | 'already_awarded' | 'no_character' | 'capped';
-  /** XP actually written to the sheet by this call — 0 when nothing was written. */
-  granted: number;
-}
-
 /**
  * The single writer. Locks the character row, so two turns for one message cannot both read
  * "nothing awarded yet" and both add; then adds the award unless an XP event for this character
@@ -67,7 +56,7 @@ export async function awardStoryXpOnce(input: {
   since: Date;
   amount: number;
   reason: string;
-}): Promise<StoryXpGrant> {
+}): Promise<'awarded' | 'already_awarded' | 'no_character' | 'capped'> {
   const { db } = await import('../../../../db/client');
   const { and, eq, gte, sql } = await import('drizzle-orm');
   const { characters, experienceEvents } = await import('../../../../db/schema/index');
@@ -78,7 +67,7 @@ export async function awardStoryXpOnce(input: {
       .from(characters)
       .where(eq(characters.id, characterId))
       .for('update');
-    if (!locked) return { outcome: 'no_character', granted: 0 };
+    if (!locked) return 'no_character';
     const [awarded] = await tx
       .select({ id: experienceEvents.id })
       .from(experienceEvents)
@@ -91,7 +80,7 @@ export async function awardStoryXpOnce(input: {
         ),
       )
       .limit(1);
-    if (awarded) return { outcome: 'already_awarded', granted: 0 };
+    if (awarded) return 'already_awarded';
     // #273: one quarter of the level's milestone band per session, clamped and logged.
     // Only story awards (source 'other') count toward the session total, as above.
     const [sumRow] = await tx
@@ -116,7 +105,7 @@ export async function awardStoryXpOnce(input: {
         sessionCap,
       });
     }
-    if (granted <= 0) return { outcome: 'capped', granted: 0 };
+    if (granted <= 0) return 'capped';
     await tx
       .update(characters)
       .set({
@@ -131,81 +120,18 @@ export async function awardStoryXpOnce(input: {
       source: 'other',
       description: reason.slice(0, 500) || null,
     });
-    return { outcome: granted < amount ? 'capped' : 'awarded', granted };
+    return granted < amount ? 'capped' : 'awarded';
   });
 }
 
-/**
- * #310: posts the visible story-XP chat line, recoverably.
- *
- * Idempotent: skips when the notice row already exists. Reads the STORED award event —
- * never re-awards to repair a message — so a retry (already_awarded because an earlier
- * call stored the grant) re-posts a lost notice with the granted amount, including
- * partial #273 caps. A failed write is caught and logged; the next call retries.
- * Never throws.
- */
-export async function ensureStoryXpNotice(
-  input: {
-    sessionId: string;
-    userId: string;
-    characterId: string;
-    since: Date;
-    reason: string;
-  },
-  writer: EngineChatLineWriter = postEngineChatLine,
-): Promise<void> {
-  const { sessionId, userId, characterId, since, reason } = input;
-  const idSeed = `story-xp:${sessionId}:${characterId}:${since.getTime()}`;
-  const { db } = await import('../../../../db/client');
-  const { and, eq, gte } = await import('drizzle-orm');
-  const { experienceEvents } = await import('../../../../db/schema/index');
-  try {
-    if (await engineChatLineExists(idSeed)) return;
-    const [event] = await db
-      .select({ xp: experienceEvents.xpGained, why: experienceEvents.description })
-      .from(experienceEvents)
-      .where(
-        and(
-          eq(experienceEvents.characterId, characterId),
-          eq(experienceEvents.sessionId, sessionId),
-          eq(experienceEvents.source, 'other'),
-          gte(experienceEvents.timestamp, since),
-        ),
-      )
-      .limit(1);
-    if (!event) return;
-    const why = event.why || reason || 'a story win';
-    await writer({
-      sessionId,
-      userId,
-      idSeed,
-      text: `⚙️ Engine: Story XP — +${event.xp} XP (${why}). Already on your character sheet.`,
-      context: {
-        intent: 'story_xp',
-        combatEngineBlocks: [{ sequence: 0, source: 'system', lines: [why], cards: [] }],
-      },
-    });
-  } catch (error) {
-    logger.warn({
-      msg: 'STORY_XP_NOTICE_FAILED_WILL_RETRY',
-      sessionId,
-      characterId,
-      error: error instanceof Error ? error.message : error,
-    });
-  }
-}
-
 /** Reads the reply's `xp_award` and applies it for the session's own character. */
-export async function awardStoryXp(
-  input: {
-    userId: string;
-    sessionId: string;
-    xpAward: unknown;
-    /** The reply asks for a roll: the outcome is not known yet, so nothing is earned yet. */
-    rollRequested?: boolean;
-  },
-  deps: { noticeWriter?: EngineChatLineWriter } = {},
-): Promise<StoryXpOutcome> {
+export async function awardStoryXp(input: {
+  userId: string;
+  sessionId: string;
+  xpAward: unknown;
+  /** The reply asks for a roll: the outcome is not known yet, so nothing is earned yet. */
+  rollRequested?: boolean;
+}): Promise<StoryXpOutcome> {
   const { userId, sessionId } = input;
   const award = input.xpAward as { amount?: unknown; reason?: unknown };
   const character = await ownedSessionCharacter(sessionId, userId);
@@ -224,28 +150,13 @@ export async function awardStoryXp(
   // No saved player message, no key to award once against: the turn answers nothing the player did.
   else if (!message?.createdAt) outcome = 'no_player_message';
   else {
-    const reason = typeof award.reason === 'string' ? award.reason : '';
-    const grant = await awardStoryXpOnce({
+    outcome = await awardStoryXpOnce({
       characterId: character.id,
       sessionId,
       since: message.createdAt,
       amount: award.amount,
-      reason,
+      reason: typeof award.reason === 'string' ? award.reason : '',
     });
-    outcome = grant.outcome;
-    // #310: the visible notice is recoverable, not fire-and-forget. On a retry
-    // (already_awarded because an earlier call stored the grant) this re-posts a lost
-    // notice from the stored event without awarding again.
-    await ensureStoryXpNotice(
-      {
-        sessionId,
-        userId,
-        characterId: character.id,
-        since: message.createdAt,
-        reason,
-      },
-      deps.noticeWriter,
-    );
   }
   logger.info({
     msg: 'DM_STORY_XP_AWARD',

@@ -1,5 +1,7 @@
 import React, { useEffect } from 'react';
 
+import { formatCreatureForProse } from '../../../shared/engine-display-name';
+
 import type { PendingCombatEntryConfirmation } from '@/hooks/combat/use-combat-entry-confirmation-host';
 
 import { Button } from '@/components/ui/button';
@@ -34,10 +36,15 @@ export const CombatEntryConfirmation: React.FC<CombatEntryConfirmationProps> = (
   if (typeof document === 'undefined') return null;
 
   const { spec } = confirmation;
+  const descriptors = spec.descriptors;
   const declaredTargets = spec.declaredTargets ?? [];
   const primaryCombatants = declaredTargets.length ? declaredTargets : spec.combatantLabels;
-  const combatants = primaryCombatants.length ? primaryCombatants.join(', ') : 'the opposing side';
-  const otherCombatants = spec.otherCombatants ?? [];
+  const combatants = primaryCombatants.length
+    ? primaryCombatants.map((label) => formatCreatureForProse(label, descriptors)).join(', ')
+    : 'the opposing side';
+  const otherCombatants = (spec.otherCombatants ?? []).map((label) =>
+    formatCreatureForProse(label, descriptors),
+  );
   const targetChoices = spec.targetChoices ?? [];
 
   const resolve = (event: React.MouseEvent<HTMLButtonElement>): void => {
@@ -82,7 +89,7 @@ export const CombatEntryConfirmation: React.FC<CombatEntryConfirmationProps> = (
                   data-target={choice}
                   onClick={resolve}
                 >
-                  {`[Strike ${choice}]`}
+                  {`[Strike ${formatCreatureForProse(choice, descriptors)}]`}
                 </Button>
               ))
             ) : (

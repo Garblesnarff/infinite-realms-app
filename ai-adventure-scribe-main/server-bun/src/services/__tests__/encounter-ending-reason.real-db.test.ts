@@ -27,7 +27,7 @@
  * Requires TEST_DATABASE_URL or DATABASE_URL — see fixtures/real-db.ts.
  */
 import { afterAll, beforeEach, expect, test } from 'bun:test';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 
 import {
   closeRealDb,
@@ -44,26 +44,21 @@ import {
   combatEncounters,
   combatParticipantStatus,
   combatParticipants,
-  dialogueHistory,
   experienceEvents,
   gameSessions,
   tacticalMaps,
 } from '../../../../db/schema/index';
 
 import type { CombatEndReason } from '../../types/combat.js';
-import type { EngineChatLineWriter } from '../engine-chat-line.js';
 
 const { concludeEncounter, describeCombatEnd } = await importWithRealDb(
   () => import('../combat/combat-ending.js'),
-);
-const { awardCombatVictoryXp } = await importWithRealDb(
-  () => import('../combat/combat-xp.js'),
 );
 const { consumeDmTacticalFacts, recordDmTacticalFact } = await importWithRealDb(
   () => import('../combat/tactical-action-service.js'),
 );
 const { saveTacticalMap } = await importWithRealDb(() => import('../combat/tactical-map-store.js'));
-const { awardStoryXp, awardStoryXpOnce } = await importWithRealDb(() => import('../dm/story-xp.js'));
+const { awardStoryXpOnce } = await importWithRealDb(() => import('../dm/story-xp.js'));
 
 if (!hasRealDb) {
   console.warn(
@@ -255,29 +250,6 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
       .from(combatEncounters)
       .where(eq(combatEncounters.id, encounterId));
     return row;
-  };
-
-  /** Persisted chat-visible engine lines for a session, filtered by marker. */
-  const engineNotices = async (sid: string, marker: string) => {
-    const rows = await db
-      .select({ message: dialogueHistory.message })
-      .from(dialogueHistory)
-      .where(and(eq(dialogueHistory.sessionId, sid), eq(dialogueHistory.speakerType, 'system')));
-    return rows.map((row) => row.message).filter((message) => message.includes(marker));
-  };
-  const victoryNotices = (sid: string) => engineNotices(sid, '⚙️ Engine: Victory!');
-  const storyNotices = (sid: string) => engineNotices(sid, '⚙️ Engine: Story XP');
-
-  /** The latest player message's server clock for a session (the award's `since`). */
-  const playerSince = async (sid: string) => {
-    const [row] = await db
-      .select({ createdAt: dialogueHistory.createdAt })
-      .from(dialogueHistory)
-      .where(and(eq(dialogueHistory.sessionId, sid), eq(dialogueHistory.speakerType, 'player')))
-      .orderBy(desc(dialogueHistory.createdAt))
-      .limit(1);
-    if (!row?.createdAt) throw new Error('[encounter-ending-reason] the player row has no created_at');
-    return row.createdAt;
   };
 
   test('every reason produces a distinct, non-empty sentence for the DM', () => {
@@ -516,141 +488,6 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
     expect(sheetAgain.xp).toBe(sheet.xp);
   });
 
-  test('a failed victory notice write is recovered on retry without re-awarding (#310)', async () => {
-    const [sheetBefore] = await db
-      .select({ xp: characters.experiencePoints })
-      .from(characters)
-      .where(eq(characters.id, characterId));
-    // Fail-first: the award commits, the notice write throws (caught and logged by the
-    // ensure — the award flow never breaks on a lost notice).
-    const failingWriter: EngineChatLineWriter = async () => {
-      throw new Error('transient notice failure');
-    };
-    const first = await awardCombatVictoryXp(
-      { encounterId, sessionId, userId },
-      { noticeWriter: failingWriter },
-    );
-    expect(first.awarded).toHaveLength(1);
-    expect(await victoryNotices(sessionId)).toHaveLength(0);
-
-    // Retry: the award is not repeated, the notice is re-posted from the stored award.
-    const second = await awardCombatVictoryXp({ encounterId, sessionId, userId });
-    expect(second.awarded).toHaveLength(0);
-    const [sheet] = await db
-      .select({ xp: characters.experiencePoints })
-      .from(characters)
-      .where(eq(characters.id, characterId));
-    // The fixture hero is level 3 and the golem seats no XP: medium threshold band, 150.
-    expect((sheet.xp ?? 0) - (sheetBefore.xp ?? 0)).toBe(150);
-    const combatEvents = await db
-      .select({ id: experienceEvents.id })
-      .from(experienceEvents)
-      .where(
-        and(
-          eq(experienceEvents.characterId, characterId),
-          eq(experienceEvents.sessionId, sessionId),
-          eq(experienceEvents.source, 'combat'),
-        ),
-      );
-    expect(combatEvents).toHaveLength(1);
-    const notices = await victoryNotices(sessionId);
-    expect(notices).toHaveLength(1);
-    expect(notices[0]).toContain('⚙️ Engine: Victory!');
-    expect(notices[0]).toContain('+150 XP');
-    expect(notices[0]).toContain('Already on your character sheets.');
-  });
-
-  test('a failed story-XP notice write is recovered on retry without re-awarding (#310)', async () => {
-    // GP-074: a story win out of combat — the logbook solved. The player message is what
-    // the award keys its once-per-message idempotency on.
-    await db.insert(dialogueHistory).values({
-      sessionId,
-      speakerType: 'player',
-      message: 'I piece together the logbook.',
-    });
-    const [sheetBefore] = await db
-      .select({ xp: characters.experiencePoints })
-      .from(characters)
-      .where(eq(characters.id, characterId));
-
-    // Fail-first: the grant commits, the notice write throws (caught and logged).
-    const failingWriter: EngineChatLineWriter = async () => {
-      throw new Error('transient notice failure');
-    };
-    const outcome = await awardStoryXp(
-      { userId, sessionId, xpAward: { amount: 50, reason: 'Solved the logbook' } },
-      { noticeWriter: failingWriter },
-    );
-    expect(outcome).toBe('awarded');
-    expect(await storyNotices(sessionId)).toHaveLength(0);
-
-    // Retry (the DM re-sends the turn): already_awarded, and the notice is re-posted
-    // from the STORED event — the retry's different amount/reason must not leak in,
-    // and the award must not be written again.
-    const retryOutcome = await awardStoryXp({
-      userId,
-      sessionId,
-      xpAward: { amount: 60, reason: 'Solved the logbook again' },
-    });
-    expect(retryOutcome).toBe('already_awarded');
-    const [sheet] = await db
-      .select({ xp: characters.experiencePoints })
-      .from(characters)
-      .where(eq(characters.id, characterId));
-    expect((sheet.xp ?? 0) - (sheetBefore.xp ?? 0)).toBe(50);
-    const notices = await storyNotices(sessionId);
-    expect(notices).toHaveLength(1);
-    expect(notices[0]).toContain('⚙️ Engine: Story XP');
-    expect(notices[0]).toContain('+50 XP');
-    expect(notices[0]).toContain('Solved the logbook');
-    expect(notices[0]).not.toContain('+60 XP');
-  });
-
-  test('a capped story-XP retry messages the stored granted amount, not the request (#310, #273)', async () => {
-    // Level 3 story cap is 450/session. Fill most of it, then fail the notice on a
-    // partial-cap grant; the retry must message the 50 granted, not the 100 requested.
-    await db.insert(dialogueHistory).values({
-      sessionId,
-      speakerType: 'player',
-      message: 'I rally the villagers.',
-    });
-    const firstGrant = await awardStoryXpOnce({
-      characterId,
-      sessionId,
-      since: await playerSince(sessionId),
-      amount: 400,
-      reason: 'Rallied the villagers',
-    });
-    expect(firstGrant.outcome).toBe('awarded');
-    expect(firstGrant.granted).toBe(400);
-
-    await db.insert(dialogueHistory).values({
-      sessionId,
-      speakerType: 'player',
-      message: 'I broker the truce.',
-    });
-    const failingWriter: EngineChatLineWriter = async () => {
-      throw new Error('transient notice failure');
-    };
-    const cappedOutcome = await awardStoryXp(
-      { userId, sessionId, xpAward: { amount: 100, reason: 'Brokered the truce' } },
-      { noticeWriter: failingWriter },
-    );
-    expect(cappedOutcome).toBe('capped');
-    expect(await storyNotices(sessionId)).toHaveLength(0);
-
-    const retryOutcome = await awardStoryXp({
-      userId,
-      sessionId,
-      xpAward: { amount: 100, reason: 'Brokered the truce' },
-    });
-    expect(retryOutcome).toBe('already_awarded');
-    const notices = await storyNotices(sessionId);
-    expect(notices).toHaveLength(1);
-    expect(notices[0]).toContain('+50 XP');
-    expect(notices[0]).not.toContain('+100 XP');
-  });
-
   test('a victory awards combat XP at level 20 while story XP stays capped at 0 (#310, #273)', async () => {
     // The fixture hero is level 3 and shared across tests, so the level-20 check gets its
     // own character, session and encounter (one active encounter per session since #1954).
@@ -776,7 +613,7 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
       amount: 500,
       reason: 'epic deed',
     });
-    expect(storyOutcome.outcome).toBe('capped');
+    expect(storyOutcome).toBe('capped');
     const epicEventsAfter = await db
       .select({ source: experienceEvents.source })
       .from(experienceEvents)

@@ -2,7 +2,6 @@
 import React, { useMemo, useEffect, useRef } from 'react';
 
 import { formatNarrative } from './formatNarrative';
-import { prepareChatDisplayText } from './prepare-chat-display-text';
 import { MessageAssetDisplay } from './MessageAssetDisplay';
 import { MessageVoicePlayer } from './MessageVoicePlayer';
 import { CombatRoundDivider } from './CombatRoundDivider';
@@ -17,9 +16,12 @@ import { Button } from '@/components/ui/button';
 import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
 import { useSceneBackground, type AssetType } from '@/contexts/SceneBackgroundContext';
 import { cn } from '@/lib/utils';
+import { extractEngineGeneratedLines } from '@/utils/engine-lines';
 import { isEngineResultCard } from '@/services/combat/engine-result-card';
 import { combatEngineBlocksFromContext, engineBlockDividerKey } from '@/utils/combat-engine-blocks';
 import { resolveNarrationSegments } from '@/utils/narration-segments';
+import { removeRollRequestsFromMessage } from '@/utils/rollRequestParser';
+import { parseAssetTags } from '../../../utils/parse-asset-tags';
 
 interface DMMessageProps {
   message: ChatMessage;
@@ -68,17 +70,23 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
      * This avoids redundant regex execution and multiple memoization overheads.
      */
     const processed = useMemo(() => {
-      // 1-2. Strip roll requests, visual prompts and asset tags; split off engine lines
-      const { text, engineLines, assetTags } = prepareChatDisplayText(displayContent);
+      // 1. Remove roll requests and visual prompt markers from display
+      let text = removeRollRequestsFromMessage(displayContent);
+      text = text.replace(/^[\t ]*VISUAL\s+PROMPT:.*$/gim, '').trim();
+      const { lines: engineLines, fiction } = extractEngineGeneratedLines(text);
+      text = fiction;
       const combatEngineBlocks = combatEngineBlocksFromContext(message.context);
 
+      // 2. Parse and remove asset tags, extracting referenced assets
+      const { cleanContent, assets: assetTags } = parseAssetTags(text);
+
       // 3. Format narrative structure (markdown-like emphasis, etc)
-      const narrative = formatNarrative(text);
+      const narrative = formatNarrative(cleanContent);
 
       return {
         ...narrative,
         assetTags,
-        cleanContent: text,
+        cleanContent,
         engineLines: combatEngineBlocks.length ? [] : engineLines,
         combatEngineBlocks,
       };
