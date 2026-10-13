@@ -296,12 +296,28 @@ describe('twoWeaponFighting', () => {
         ...baseParticipant,
         characterClass: 'fighter',
         level: 2,
-        resources: { action_surge: { currentUses: 1 } },
+        resources: { actionSurge: { current: 1, max: 2 } },
         mainHandWeapon: mockLightWeapon,
         offHandWeapon: mockLightWeapon,
       } as any;
       const result = calculateTwoWeaponAttacks(p);
       expect(result.mainHandAttacks).toBe(2); // 1 base + 1 action surge
+    });
+
+    it('reads actionSurge.current (typed field) and adds attack when > 0', () => {
+      const p = {
+        ...baseParticipant,
+        characterClass: 'fighter',
+        level: 2,
+        resources: { actionSurge: { current: 1, max: 2 } },
+        mainHandWeapon: mockLightWeapon,
+        offHandWeapon: mockLightWeapon,
+      } as any;
+      const result = calculateTwoWeaponAttacks(p);
+      expect(result.mainHandAttacks).toBe(2);
+      p.resources.actionSurge.current = 0;
+      const resultNoSurge = calculateTwoWeaponAttacks(p);
+      expect(resultNoSurge.mainHandAttacks).toBe(1);
     });
   });
 

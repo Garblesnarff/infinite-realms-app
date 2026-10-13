@@ -61,9 +61,18 @@ describe('stealthUtils', () => {
       const participant: any = {
         level: 1,
         conditions: [],
-        mainHandWeapon: { properties: { finesse: true } },
+        mainHandWeapon: { weaponProperties: { finesse: true } },
       };
       // 2 (dex) + 2 (prof) + 1 (weapon) = 5
+      expect(calculateStealthBonus(participant)).toBe(5);
+    });
+
+    it('uses weaponProperties.finesse as the typed field for equipment bonus', () => {
+      const participant: any = {
+        level: 1,
+        conditions: [],
+        mainHandWeapon: { weaponProperties: { finesse: true } },
+      };
       expect(calculateStealthBonus(participant)).toBe(5);
     });
 
