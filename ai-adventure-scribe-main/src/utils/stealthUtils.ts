@@ -26,7 +26,6 @@ export function calculateStealthBonus(participant: CombatParticipant): number {
 
   // Racial bonuses
   let racialBonus = 0;
-  // @ts-expect-error // #192 racial trait name union has no 'naturally_stealthy' (issue #508)
   if (participant.racialTraits?.some((t) => t.name === 'naturally_stealthy')) {
     racialBonus = 1;
   }

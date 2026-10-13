@@ -22,7 +22,8 @@ export type RacialTraitName =
   | 'infernal_legacy'
   | 'natural_armor'
   | 'brave'
-  | 'halfling_nimbleness';
+  | 'halfling_nimbleness'
+  | 'naturally_stealthy';
 
 export interface RacialTrait {
   name: RacialTraitName;

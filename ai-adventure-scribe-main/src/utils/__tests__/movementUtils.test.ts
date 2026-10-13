@@ -84,14 +84,15 @@ describe('movementUtils', () => {
       expect(doesMovementProvokeOpportunityAttacks(baseParticipant, 'melee', 'melee')).toBe(false);
     });
 
-    it('should NOT provoke OA if participant has mobile feature', () => {
+    it('should NOT provoke OA if participant has the mobile feat', () => {
       const mobileParticipant = {
         ...baseParticipant,
-        classFeatures: [{ name: 'mobile' }],
+        feats: ['mobile'],
       };
       expect(doesMovementProvokeOpportunityAttacks(mobileParticipant, 'melee', 'ranged')).toBe(
         false,
       );
+      expect(doesMovementProvokeOpportunityAttacks(baseParticipant, 'melee', 'ranged')).toBe(true);
     });
 
     it('should NOT provoke OA if participant is using disengage (mocked as bonusActionTaken)', () => {

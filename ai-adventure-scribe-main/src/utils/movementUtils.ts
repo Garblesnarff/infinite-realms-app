@@ -53,8 +53,7 @@ export function doesMovementProvokeOpportunityAttacks(
     (toPosition === 'ranged' || toPosition === 'distant');
 
   // Check for features that prevent opportunity attacks
-  // @ts-expect-error // #192 ClassFeature name union has no 'mobile' (see #508)
-  const hasMobileFeature = participant.classFeatures?.some((f) => f.name === 'mobile') || false;
+  const hasMobileFeature = participant.feats?.includes('mobile') ?? false;
   const isUsingDisengage = participant.bonusActionTaken; // Simplified - would need proper tracking
 
   return isLeavingReach && !hasMobileFeature && !isUsingDisengage;

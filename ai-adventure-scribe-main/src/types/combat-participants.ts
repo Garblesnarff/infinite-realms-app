@@ -100,6 +100,10 @@ export interface CombatParticipant {
   isRaging?: boolean; // Track if Barbarian is currently raging
   activeConcentration?: string | null;
 
+  // Feats
+  /** Mirrors `Character.feats`: a list of feat ids from `src/data/featOptions.ts` (e.g. 'mobile'). */
+  feats?: string[];
+
   // Spellcasting
   spellSlots?: Record<SpellSlotLevel, SpellSlotConfig>;
   preparedSpells?: string[];
