@@ -1,5 +1,5 @@
 import { Sword, MessageCircle, Eye, Zap, User } from 'lucide-react';
-import React, { useState, useEffect, useId } from 'react';
+import React, { useState, useEffect, useId, useRef } from 'react';
 
 import type { ActionOption } from '@/utils/parseMessageOptions';
 
@@ -73,13 +73,41 @@ function getOptionIcon(text: string): React.ComponentType<{ className?: string }
   return User;
 }
 
+function areOptionsEqual(a: ActionOption[], b: ActionOption[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const optA = a[i];
+    const optB = b[i];
+    if (
+      optA.id !== optB.id ||
+      optA.number !== optB.number ||
+      optA.text !== optB.text ||
+      optA.fullText !== optB.fullText ||
+      optA.title !== optB.title ||
+      optA.description !== optB.description
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * How long the component keeps the last-known options on screen (disabled) after
+ * the options array goes empty, before treating the empty state as final and
+ * clearing the controls. Covers transient reloads such as the legal-action
+ * re-fetch between combat turns; a genuinely option-less turn clears instead of
+ * keeping stale buttons up forever (#118).
+ */
+export const ACTION_OPTIONS_REFRESH_GRACE_MS = 5000;
+
 /**
  * ActionOptions component displays clickable option buttons with a configurable delay
  * Encourages player roleplay before showing suggested actions
  */
 export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
   ({
-    options,
+    options: incomingOptions,
     onOptionSelect,
     delay = 10000, // 10 seconds default
     disabled = false,
@@ -88,11 +116,66 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
   }) => {
     const [visible, setVisible] = useState(false);
     const [selectedOption, setSelectedOption] = useState<string | null>(null);
+    const [displayedOptions, setDisplayedOptions] = useState<ActionOption[]>(incomingOptions);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const instructionsId = useId();
+
+    const previousIncomingRef = useRef<ActionOption[]>(incomingOptions);
+    const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // The refresh grace timer is owned by the sync effect below. It must survive
+    // re-renders (a parent re-render hands us a new [] instance without changing
+    // the state) and die only on unmount, on fresh options, or on its own expiry.
+    useEffect(() => {
+      return () => {
+        if (refreshTimerRef.current !== null) {
+          clearTimeout(refreshTimerRef.current);
+          refreshTimerRef.current = null;
+        }
+      };
+    }, []);
+
+    useEffect(() => {
+      if (areOptionsEqual(previousIncomingRef.current, incomingOptions)) {
+        return;
+      }
+      previousIncomingRef.current = incomingOptions;
+
+      if (incomingOptions.length > 0) {
+        // Fresh options arrived: the initial load or a completed refresh. Show them
+        // immediately without re-triggering the initial delay.
+        if (refreshTimerRef.current !== null) {
+          clearTimeout(refreshTimerRef.current);
+          refreshTimerRef.current = null;
+        }
+        setDisplayedOptions(incomingOptions);
+        setIsRefreshing(false);
+        if (!visible && delay === 0) {
+          setVisible(true);
+        }
+      } else if (displayedOptions.length > 0 && !isRefreshing) {
+        // The options array went empty while options were on screen. Treat this as
+        // a transient reload (e.g. the legal-action re-fetch between combat turns):
+        // keep the last options on screen but disabled, so a stale option can never
+        // submit for another turn. If no new options arrive before the grace period
+        // ends, the empty state is final and the stale controls are cleared.
+        setIsRefreshing(true);
+        refreshTimerRef.current = setTimeout(() => {
+          refreshTimerRef.current = null;
+          setDisplayedOptions([]);
+          setSelectedOption(null);
+          setIsRefreshing(false);
+        }, ACTION_OPTIONS_REFRESH_GRACE_MS);
+      } else if (displayedOptions.length === 0) {
+        setDisplayedOptions([]);
+        setIsRefreshing(false);
+      }
+    }, [incomingOptions, visible, delay, displayedOptions.length, isRefreshing]);
 
     // Show options after delay
     useEffect((): (() => void) | void => {
-      if (options.length > 0) {
+      if (incomingOptions.length > 0) {
+        if (visible) return; // Already visible, keep visible without resetting
         let mounted = true;
         const timer = setTimeout(() => {
           if (mounted) {
@@ -105,11 +188,11 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
           clearTimeout(timer);
         };
       }
-    }, [options, delay]);
+    }, [incomingOptions.length, delay, visible]);
 
     // Handle option selection
     const handleOptionClick = (option: ActionOption): void => {
-      if (disabled || selectedOption) return;
+      if (disabled || isRefreshing || selectedOption) return;
       logger.info('[ActionOptions] Option clicked:', option.text);
       setSelectedOption(option.id);
       const completion = onOptionSelect(option);
@@ -121,8 +204,10 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
       }
     };
 
+    const optionsToRender = displayedOptions.length > 0 ? displayedOptions : incomingOptions;
+
     // Don't render if no options
-    if (options.length === 0) {
+    if (optionsToRender.length === 0) {
       return null;
     }
 
@@ -148,7 +233,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
           {visible && (
             <div className="space-y-3 animate-in fade-in-0 duration-500">
               <div id={instructionsId} className="text-xs text-muted-foreground text-center mb-3">
-                What would you like to do?
+                What would you like to do? Select an option to submit it immediately.
               </div>
 
               <div
@@ -156,10 +241,11 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
                 role="group"
                 aria-labelledby={instructionsId}
               >
-                {options.map((option, index) => {
+                {optionsToRender.map((option, index) => {
                   const IconComponent = getOptionIcon(option.text);
                   const isSelected = selectedOption === option.id;
-                  const isDisabled = disabled || (selectedOption && selectedOption !== option.id);
+                  const isDisabled =
+                    disabled || isRefreshing || (selectedOption && selectedOption !== option.id);
                   // Numbered by position: the model's own numbers can repeat or be missing (#2256).
                   const displayNumber = index + 1;
 

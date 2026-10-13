@@ -1,7 +1,7 @@
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, type RenderResult } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { ActionOptions } from '../ActionOptions';
+import { ActionOptions, ACTION_OPTIONS_REFRESH_GRACE_MS } from '../ActionOptions';
 
 // Mock logger
 vi.mock('@/lib/logger', () => ({
@@ -205,6 +205,166 @@ describe('ActionOptions', () => {
       showOptions(mockOptions);
 
       expect(labels()).toEqual(['Option 1', 'Option 2', 'Option 3', 'Option 4', 'Option 5']);
+    });
+  });
+
+  describe('stability during option reloads and explicit click instructions', () => {
+    it('explains in accessible instruction text that clicking an option submits it immediately', () => {
+      render(<ActionOptions options={mockOptions} onOptionSelect={onOptionSelect} delay={0} />);
+      act(() => {
+        vi.advanceTimersByTime(0);
+      });
+
+      expect(screen.getByText(/Select an option to submit it immediately/i)).toBeInTheDocument();
+    });
+
+    it('does not flicker back to loading state or reset timer when rerendered with equivalent option array', () => {
+      const { rerender } = render(
+        <ActionOptions options={mockOptions} onOptionSelect={onOptionSelect} delay={1000} />,
+      );
+
+      // Advance halfway
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+
+      // Rerender with new array instance containing identical options
+      const equivalentOptions = mockOptions.map((opt) => ({ ...opt }));
+      rerender(
+        <ActionOptions options={equivalentOptions} onOptionSelect={onOptionSelect} delay={1000} />,
+      );
+
+      // Advance remaining 500ms (total 1000ms from start)
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+
+      // Should show options now because delay timer was preserved, not restarted
+      expect(screen.getByText(/Attack the goblin/i)).toBeInTheDocument();
+    });
+
+    it('preserves displayed options in disabled state when options transiently become empty during refresh', () => {
+      const { rerender } = render(
+        <ActionOptions options={mockOptions} onOptionSelect={onOptionSelect} delay={0} />,
+      );
+      act(() => {
+        vi.advanceTimersByTime(0);
+      });
+
+      expect(screen.getByText(/Attack the goblin/i)).toBeInTheDocument();
+
+      // Options refreshed to empty [] while re-fetching
+      rerender(<ActionOptions options={[]} onOptionSelect={onOptionSelect} delay={0} />);
+
+      // The previous option buttons should remain visible (no flicker to empty/loading)
+      const attackButton = screen.getByText(/Attack the goblin/i).closest('button');
+      expect(attackButton).toBeInTheDocument();
+      // But disabled so stale options cannot be submitted
+      expect(attackButton).toBeDisabled();
+
+      // Clicking disabled stale option should not invoke callback
+      if (attackButton) {
+        fireEvent.click(attackButton);
+      }
+      expect(onOptionSelect).not.toHaveBeenCalled();
+    });
+
+    it('updates options immediately without re-triggering initial delay when new options arrive', () => {
+      const { rerender } = render(
+        <ActionOptions options={mockOptions} onOptionSelect={onOptionSelect} delay={1000} />,
+      );
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(screen.getByText(/Attack the goblin/i)).toBeInTheDocument();
+
+      const newOptions = [
+        { id: 'opt-new-1', number: 1, text: 'Open the chest', fullText: '1. **Open**' },
+      ];
+
+      // Refreshing to [] first, then receiving new options
+      rerender(<ActionOptions options={[]} onOptionSelect={onOptionSelect} delay={1000} />);
+      rerender(<ActionOptions options={newOptions} onOptionSelect={onOptionSelect} delay={1000} />);
+
+      // New options should be visible immediately without waiting another 1000ms
+      expect(screen.getByText(/Open the chest/i)).toBeInTheDocument();
+      const openButton = screen.getByText(/Open the chest/i).closest('button');
+      expect(openButton).not.toBeDisabled();
+    });
+  });
+
+  describe('loading / final-empty lifecycle (#118)', () => {
+    const showImmediately = (options: typeof mockOptions): RenderResult => {
+      const utils = render(
+        <ActionOptions options={options} onOptionSelect={onOptionSelect} delay={0} />,
+      );
+      act(() => {
+        vi.advanceTimersByTime(0);
+      });
+      return utils;
+    };
+
+    it('transitions from loading to options when the first options arrive', () => {
+      const { rerender } = render(
+        <ActionOptions options={[]} onOptionSelect={onOptionSelect} delay={0} />,
+      );
+      expect(screen.queryByText(/What would you like to do/i)).not.toBeInTheDocument();
+
+      rerender(<ActionOptions options={mockOptions} onOptionSelect={onOptionSelect} delay={0} />);
+      act(() => {
+        vi.advanceTimersByTime(0);
+      });
+
+      expect(screen.getByText(/What would you like to do/i)).toBeInTheDocument();
+      expect(screen.getByText(/Attack the goblin/i)).toBeInTheDocument();
+    });
+
+    it('clears final-empty controls once the refresh grace period expires with no new options', () => {
+      const { rerender, container } = showImmediately(mockOptions);
+      expect(screen.getByText(/Attack the goblin/i)).toBeInTheDocument();
+
+      rerender(<ActionOptions options={[]} onOptionSelect={onOptionSelect} delay={0} />);
+
+      // A parent re-render handing us a new [] instance mid-grace must neither
+      // cancel nor restart the grace timer.
+      rerender(<ActionOptions options={[]} onOptionSelect={onOptionSelect} delay={0} />);
+
+      // Within the grace period the stale controls are retained, disabled.
+      act(() => {
+        vi.advanceTimersByTime(ACTION_OPTIONS_REFRESH_GRACE_MS - 1);
+      });
+      expect(screen.getByText(/Attack the goblin/i)).toBeInTheDocument();
+
+      // Past the grace period with still no options: the empty state is final,
+      // so the stale controls are cleared instead of being kept forever.
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(screen.queryByText(/Attack the goblin/i)).not.toBeInTheDocument();
+      expect(container.firstChild).toBeNull();
+    });
+
+    it('submits a freshly arrived option exactly once after a refresh', () => {
+      const { rerender } = showImmediately(mockOptions);
+
+      // Refresh cycle: options empty out, then a fresh set arrives.
+      rerender(<ActionOptions options={[]} onOptionSelect={onOptionSelect} delay={0} />);
+      const freshOptions = [
+        { id: 'opt-new-1', number: 1, text: 'Open the chest', fullText: '1. **Open**' },
+      ];
+      rerender(<ActionOptions options={freshOptions} onOptionSelect={onOptionSelect} delay={0} />);
+
+      // The stale option from before the refresh is gone; the fresh one is enabled.
+      expect(screen.queryByText(/Attack the goblin/i)).not.toBeInTheDocument();
+      const openButton = screen.getByText(/Open the chest/i).closest('button');
+      expect(openButton).not.toBeDisabled();
+
+      if (openButton) {
+        fireEvent.click(openButton);
+        fireEvent.click(openButton);
+      }
+      expect(onOptionSelect).toHaveBeenCalledTimes(1);
+      expect(onOptionSelect).toHaveBeenCalledWith(freshOptions[0]);
     });
   });
 });
