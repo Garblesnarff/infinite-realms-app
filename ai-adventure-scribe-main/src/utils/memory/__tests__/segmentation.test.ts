@@ -371,6 +371,55 @@ describe('stripRollScaffolding', () => {
     expect(criticalMiss).toContain('Critical Miss');
     expect(stripRollScaffolding(criticalMiss)).toBe('Shortbow attack: 1');
   });
+
+  it('keeps adjacent prose intact when a real roll row is inline on the same line', () => {
+    const row = formatDiceRoll(
+      makeRollRequest('Stealth check', 'skill_check', 13, 2, { dc: 13 }),
+    );
+    expect(row).toBe('Stealth check: 15 (nat 13+2) success');
+
+    const input = `${row}. You refuse to fail again.`;
+    expect(stripRollScaffolding(input)).toBe(
+      'Stealth check: 15. You refuse to fail again.',
+    );
+  });
+
+  it('preserves prose that mentions "vs DC 13" alongside fail/miss vocabulary', () => {
+    const input =
+      'The trap triggers vs DC 13 — you miss the ledge and fail to recover.';
+    expect(stripRollScaffolding(input)).toBe(input);
+  });
+
+  it('strips an inline [ADV] CRITICAL HIT! row without touching nearby prose', () => {
+    const row = formatDiceRoll(
+      makeRollRequest(
+        'Longsword attack',
+        'attack',
+        20,
+        2,
+        { ac: 15 },
+        { advantage: true },
+      ),
+    );
+    expect(row).toBe('Longsword attack: 22 (nat 20+2) [ADV] hit CRITICAL HIT!');
+
+    const input = `What a critical hit! ${row} The crowd goes wild at your success.`;
+    expect(stripRollScaffolding(input)).toBe(
+      'What a critical hit! Longsword attack: 22 The crowd goes wild at your success.',
+    );
+  });
+
+  it('strips a pending roll row but leaves prose mentioning pending alone', () => {
+    const pending = formatDiceRoll({
+      ...makeRollRequest('Stealth check', 'skill_check', 13, 2, { dc: 13 }),
+      result: undefined,
+    });
+    expect(pending).toBe('Stealth check: pending');
+    expect(stripRollScaffolding(pending)).toBe('Stealth check');
+
+    const prose = 'Status: pending approval from the quartermaster.';
+    expect(stripRollScaffolding(prose)).toBe(prose);
+  });
 });
 
 describe('sanitizeForMemoryExtraction — multiline narrative mixed with roll scaffolding', () => {
@@ -396,6 +445,31 @@ describe('sanitizeForMemoryExtraction — multiline narrative mixed with roll sc
     expect(sanitized).not.toContain('success');
     expect(sanitized).not.toContain('(nat 13+2)');
     expect(sanitized).not.toContain('vs DC 13');
+  });
+
+  it('preserves inline prose around real roll rows through the public entry point', () => {
+    const stealthFormatted = formatDiceRoll(
+      makeRollRequest('Stealth check', 'skill_check', 13, 2, { dc: 13 }),
+    );
+
+    const multilineInput = [
+      '...your own white-hot fury, fail you in the suffocating stillness...',
+      `${stealthFormatted} You refuse to fail again.`,
+      'The trap triggers vs DC 13 — you miss the ledge and fail to recover.',
+    ].join('\n');
+
+    const sanitized = sanitizeForMemoryExtraction(multilineInput);
+
+    expect(sanitized).toContain(
+      '...your own white-hot fury, fail you in the suffocating stillness...',
+    );
+    expect(sanitized).toContain('You refuse to fail again.');
+    expect(sanitized).toContain(
+      'The trap triggers vs DC 13 — you miss the ledge and fail to recover.',
+    );
+    expect(sanitized).toContain('Stealth check: 15');
+    expect(sanitized).not.toContain('(nat 13+2)');
+    expect(sanitized).not.toContain('success');
   });
 });
 
