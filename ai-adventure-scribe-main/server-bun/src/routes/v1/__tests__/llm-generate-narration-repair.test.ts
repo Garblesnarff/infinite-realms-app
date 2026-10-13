@@ -12,6 +12,8 @@
 import { describe, expect, it, mock } from 'bun:test';
 import { Elysia } from 'elysia';
 
+import { describeAttackRoll } from '../../../../../shared/describe-attack-roll.js';
+
 let combatLogForTest: unknown[] = [];
 let dbShouldThrow = false;
 /** A query chain that returns rows based on what is selected, not call order: the
@@ -238,15 +240,25 @@ describe('#266 /generate narration repair', () => {
 
 describe('#467 NT-013 /generate narration repair (strategist FIX)', () => {
   // The roll_result the client logs for an engine-resolved action-card attack
-  // (combat-resolution-step.ts): the engine's authoritative verdict, with the
-  // description in describeAttackRoll's exact output shape for
-  // { kind: 'spell-attack', weaponName: 'Chill Touch', targetLabel: 'Mechanical Server' }.
+  // (combat-resolution-step.ts): the engine's authoritative verdict. The description is
+  // derived from the real producer — describeAttackRoll for the NT-013 popup spec —
+  // not handwritten, so the test proves the repair against the words production sends.
+  const NT013_DESCRIPTION = describeAttackRoll({
+    kind: 'spell-attack',
+    weaponName: 'Chill Touch',
+    targetLabel: 'Mechanical Server',
+    actorLabel: 'The Apprentice',
+    attackBonus: 5,
+    targetAc: 15,
+    advantage: false,
+    disadvantage: false,
+  });
   const NT013_PAYLOAD = {
     success: true,
     total: 22,
     ac: 15,
     requestType: 'attack',
-    description: 'Chill Touch spell attack vs Mechanical Server',
+    description: NT013_DESCRIPTION,
     timestamp: nowIso(),
   };
 
@@ -258,7 +270,7 @@ describe('#467 NT-013 /generate narration repair (strategist FIX)', () => {
     );
     // The contradicting sentence is replaced by the engine truth; the rest stays.
     expect(envelope.text).toBe(
-      'The Chill Touch spell attack vs Mechanical Server succeeded (22 vs AC 15). ' +
+      `The ${NT013_DESCRIPTION} succeeded (22 vs AC 15). ` +
         'You step back, wary of its reach.',
     );
     expect(envelope.text).not.toContain('ignores your magical assault');

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 
 import type {
-  PlayerAttackRollSpec,
   PlayerCheckRollSpec,
   PlayerDeathSaveRollSpec,
   PlayerInitiativeRollSpec,
@@ -10,6 +9,13 @@ import type {
   PlayerRollSpec,
 } from '@/services/combat/player-roll-bridge';
 import type { DiceRollRequest } from '@/types/combat';
+
+/** Re-exported from shared/ so the popup and the server's narration repair read the same words (#467). */
+export {
+  attackModifierForRoll,
+  describeAttackRoll,
+  type AttackRollDescriptionSpec,
+} from '../../../shared/describe-attack-roll';
 
 import { useGame } from '@/contexts/GameContext';
 import { useShowTargetNumbers } from '@/features/game-session/hooks/use-show-target-numbers';
@@ -103,31 +109,6 @@ export function usePlayerRollHost(): string | null {
   }, [requestDiceRoll, cancelDiceRoll, showTargetNumbers]);
 
   return pendingRollId;
-}
-
-/**
- * "Longsword attack vs Sentient Glaze — 1d20+7 vs AC 15 (advantage)"
- *
- * When target numbers are hidden (Hard/Deadly, or the player turned them off), the
- * "vs AC N" clause is dropped entirely — never rendered as "(hidden)" or "?" —
- * so the dialog agrees with the engine line (#2513, #2573).
- */
-export function describeAttackRoll(spec: PlayerAttackRollSpec, showTargetNumbers = true): string {
-  const edge = spec.advantage ? ' (advantage)' : spec.disadvantage ? ' (disadvantage)' : '';
-  if (spec.kind === 'spell-attack') {
-    return `${spec.weaponName} spell attack vs ${spec.targetLabel}${edge}`;
-  }
-  const modifier = attackModifierForRoll(spec);
-  const sign = modifier >= 0 ? '+' : '';
-  const target = showTargetNumbers ? ` vs AC ${spec.targetAc}` : '';
-  return (
-    `${spec.weaponName} attack vs ${spec.targetLabel} — ` + `1d20${sign}${modifier}${target}${edge}`
-  );
-}
-
-/** The popup text and displayed total must use the exact modifier sent to the roll queue. */
-export function attackModifierForRoll(spec: PlayerAttackRollSpec): number {
-  return spec.attackBonus;
 }
 
 /** "Initiative for The Seeker — 1d20+2" */

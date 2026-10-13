@@ -45,6 +45,7 @@ vi.mock('@/services/session-state-service', () => ({
 }));
 
 const { resolveDeclaredCombatActions } = await import('../combat-resolution-step');
+const { describeAttackRoll } = await import('@/hooks/combat/use-player-roll-host');
 
 const APPRENTICE_ID = '1bc3932f-da2d-4525-84e5-77a31a4b3bef';
 const SERVER_ID = '5d1e0a44-1111-4222-8333-444444444444';
@@ -118,9 +119,18 @@ describe('action-card attack outcome logging (#467)', () => {
         total: 22,
         ac: 15,
         requestType: 'attack',
-        // describeAttackRoll's exact output for the NT-013 spec, so the repair and the
-        // dismissal patterns read the same words the roll prompt showed.
-        description: 'Chill Touch spell attack vs Mechanical Server',
+        // The real producer's output for the NT-013 popup spec — the repair and the
+        // dismissal patterns must read the same words the roll prompt showed.
+        description: describeAttackRoll({
+          kind: 'spell-attack',
+          weaponName: 'Chill Touch',
+          targetLabel: 'Mechanical Server',
+          actorLabel: 'The Apprentice',
+          attackBonus: 5,
+          targetAc: 15,
+          advantage: false,
+          disadvantage: false,
+        }),
         timestamp: expect.any(String),
       },
     });

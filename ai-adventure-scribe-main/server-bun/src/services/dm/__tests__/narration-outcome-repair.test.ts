@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { describeAttackRoll } from '../../../../../shared/describe-attack-roll.js';
 import {
   contradictsEngineOutcome,
   spliceContradictingSentences,
@@ -34,23 +35,33 @@ describe('repairNarration (#266)', () => {
 
 // #467 NT-013: the DM dismissed an engine hit as "ignores your magical assault".
 // The roll_result payload uses the describeAttackRoll shape: a spell attack
-// description, success, total, and AC.
+// description, success, total, and AC. The description is derived from the real
+// producer, not handwritten.
 describe('NT-013 repair (strategist FIX)', () => {
   const nt013Text = 'The mechanical server ignores your magical assault, its gears grinding on.';
+  const nt013Description = describeAttackRoll({
+    kind: 'spell-attack',
+    weaponName: 'Chill Touch',
+    targetLabel: 'Mechanical Server',
+    actorLabel: 'The Apprentice',
+    attackBonus: 5,
+    targetAc: 15,
+    advantage: false,
+    disadvantage: false,
+  });
   const nt013Outcome = {
     success: true,
     total: 22,
     ac: 15,
     requestType: 'attack',
-    // describeAttackRoll({ kind: 'spell-attack', weaponName: 'Chill Touch', ... })
-    description: 'Chill Touch spell attack vs Mechanical Server',
+    description: nt013Description,
   };
 
   test('the dismissal is caught and the sentence is replaced by the engine truth', () => {
     const claims = contradictsEngineOutcome(nt013Text, nt013Outcome);
     expect(claims.length).toBeGreaterThan(0);
     const truth = repairNarration(nt013Outcome);
-    expect(truth).toBe('The Chill Touch spell attack vs Mechanical Server succeeded (22 vs AC 15).');
+    expect(truth).toBe(`The ${nt013Description} succeeded (22 vs AC 15).`);
     const spliced = spliceContradictingSentences(nt013Text, claims, truth);
     expect(spliced).toBe(truth);
     expect(spliced).not.toContain('ignores your magical assault');
