@@ -52,24 +52,46 @@ export const stripCodeBlocks = (content: string): string => {
  *   "Perception Check: 8 (nat 6+2) fail"
  */
 export const stripRollScaffolding = (content: string): string => {
-  return (
-    content
-      // Remove success/failure markers (used exclusively by formatDiceRoll)
-      .replace(/[✓✗]/g, '')
-      // Critical markers first so `\bhit\b` does not eat "CRITICAL HIT".
-      .replace(/\bCRITICAL\s+HIT!?/gi, '')
-      .replace(/\bCritical\s+Miss\b/gi, '')
-      .replace(/\b(?:success|fail|hit|miss)\b/gi, '')
-      // Remove natural roll notation: (nat 13+2), (nat 18-1), (nat 20)
-      .replace(/\(nat\s+\d+[+-]?\d*\)/g, '')
-      // Remove advantage/disadvantage tags
-      .replace(/\[(?:ADV|DIS)\]/g, '')
-      // Remove vs DC/AC comparisons
-      .replace(/\bvs\s+(?:DC|AC)\s+\d+/gi, '')
-      // Normalize leftover whitespace
-      .replace(/\s{2,}/g, ' ')
-      .trim()
-  );
+  if (!content) return content;
+
+  return content
+    .split(/\r?\n/)
+    .map((line) => {
+      // Check if this line contains formatDiceRoll scaffolding or roll output indicators
+      const isRollLine =
+        /\(nat\s+\d+|\[(?:ADV|DIS)\]|\bvs\s+(?:DC|AC)\s+\d+|\(no DC\)|[✓✗]|:\s*pending\b|:\s*-?\d+(?:\s*\([^)]*\))?(?:\s*\[[^\]]*\])?(?:\s*vs\s+(?:DC|AC)\s+\d+)?\s+(?:success|fail|hit|miss|CRITICAL\s+HIT!?|Critical\s+Miss)\b/i.test(
+          line,
+        );
+
+      if (!isRollLine) {
+        return line;
+      }
+
+      return (
+        line
+          // Remove legacy checkmark glyphs
+          .replace(/[✓✗]/g, '')
+          // Remove pending indicator
+          .replace(/:\s*pending\b/gi, '')
+          // Remove critical indicators on roll lines
+          .replace(/\bCRITICAL\s+HIT!?/gi, '')
+          .replace(/\bCritical\s+Miss\b/gi, '')
+          // Remove outcome words on roll lines
+          .replace(/\b(?:success|fail|hit|miss)\b/gi, '')
+          // Remove natural roll notation: (nat 13+2), (nat 18-1), (nat 20)
+          .replace(/\(nat\s+\d+[+-]?\d*\)/gi, '')
+          // Remove advantage/disadvantage tags
+          .replace(/\[(?:ADV|DIS)\]/gi, '')
+          // Remove vs DC/AC comparisons
+          .replace(/\bvs\s+(?:DC|AC)\s+\d+/gi, '')
+          // Remove (no DC) tag
+          .replace(/\(no DC\)/gi, '')
+          // Normalize leftover whitespace on the roll line
+          .replace(/\s{2,}/g, ' ')
+          .trim()
+      );
+    })
+    .join('\n');
 };
 
 /**
