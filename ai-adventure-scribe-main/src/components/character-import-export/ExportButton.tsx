@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
-import { useTRPC } from '@/infrastructure/api/trpc-hooks';
+import { useTRPCUtils } from '@/infrastructure/api/trpc-hooks';
 import logger from '@/lib/logger';
 
 interface ExportButtonProps {
@@ -51,7 +51,7 @@ export const ExportButton: React.FC<ExportButtonProps> = ({
   className,
 }) => {
   const { toast } = useToast();
-  const trpc = useTRPC();
+  const utils = useTRPCUtils();
   const [isExporting, setIsExporting] = useState(false);
 
   const handleExport = async (format: 'json' | 'pdf' = 'json'): Promise<void> => {
@@ -64,8 +64,7 @@ export const ExportButton: React.FC<ExportButtonProps> = ({
     }
     setIsExporting(true);
     try {
-      // @ts-expect-error #454 React tRPC proxy has no .query (vanilla-client API); verify runtime
-      const characterData = await trpc.characters.export.query({ characterId });
+      const characterData = await utils.characters.export.fetch({ characterId }, { staleTime: 0 });
       if (!characterData) throw new Error('No character data received');
       const filename = generateFilename(characterName);
       downloadJSON(characterData, filename);
@@ -152,14 +151,13 @@ export const SimpleExportButton: React.FC<Omit<ExportButtonProps, 'showLabel'>> 
   className,
 }) => {
   const { toast } = useToast();
-  const trpc = useTRPC();
+  const utils = useTRPCUtils();
   const [isExporting, setIsExporting] = useState(false);
 
   const handleExport = async (): Promise<void> => {
     setIsExporting(true);
     try {
-      // @ts-expect-error #454 React tRPC proxy has no .query (vanilla-client API); verify runtime
-      const characterData = await trpc.characters.export.query({ characterId });
+      const characterData = await utils.characters.export.fetch({ characterId }, { staleTime: 0 });
       if (!characterData) throw new Error('No character data received');
       const filename = generateFilename(characterName);
       downloadJSON(characterData, filename);

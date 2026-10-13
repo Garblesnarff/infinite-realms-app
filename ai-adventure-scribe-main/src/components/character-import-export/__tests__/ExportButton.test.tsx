@@ -3,14 +3,15 @@ import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 
 import { ExportButton, SimpleExportButton } from '../ExportButton';
 
-// Mock TRPC hooks with hoisted spies
+// Mock TRPC hooks with hoisted spies. #454: the component fetches through
+// useTRPCUtils().characters.export.fetch (the React proxy has no .query).
 const mockQuery = vi.hoisted(() => vi.fn());
 
 vi.mock('@/infrastructure/api/trpc-hooks', () => ({
-  useTRPC: () => ({
+  useTRPCUtils: () => ({
     characters: {
       export: {
-        query: mockQuery,
+        fetch: mockQuery,
       },
     },
   }),
@@ -96,7 +97,10 @@ describe('ExportButton Components Accessibility and UX', () => {
     });
 
     // Should trigger query
-    expect(mockQuery).toHaveBeenCalledWith({ characterId: 'test-character-id' });
+    expect(mockQuery).toHaveBeenCalledWith(
+      { characterId: 'test-character-id' },
+      expect.objectContaining({ staleTime: 0 }),
+    );
 
     // Since the call is asynchronous, we wait or let the promises resolve
     await vi.waitFor(() => {
