@@ -269,6 +269,31 @@ describe('parseMessageOptions', () => {
       );
     });
 
+    it('should convert "before he reaches you" and "push past you" to objective case "me"', () => {
+      const option1 = {
+        id: 'opt-reaches',
+        number: 1,
+        text: 'Make a break for it, bolting toward the exit of the kitchen before he reaches you.',
+        fullText:
+          '**Make a break for it**, bolting toward the exit of the kitchen before he reaches you.',
+      };
+
+      const option2 = {
+        id: 'opt-past',
+        number: 2,
+        text: 'Prepare to Strike, ready your mace for a defensive posture if they attempt to push past you.',
+        fullText:
+          '**Prepare to Strike**, ready your mace for a defensive posture if they attempt to push past you.',
+      };
+
+      expect(createPlayerMessageFromOption(option1)).toBe(
+        'Make a break for it, bolting toward the exit of the kitchen before he reaches me.',
+      );
+      expect(createPlayerMessageFromOption(option2)).toBe(
+        'Prepare to Strike, ready my mace for a defensive posture if they attempt to push past me.',
+      );
+    });
+
     // Regression: the generic "you" -> "I" rule used to fire on "you were",
     // producing "I were". Caught in a live playtest of The Eternal Feast, where
     // an option read "demand to know why you were chosen".
