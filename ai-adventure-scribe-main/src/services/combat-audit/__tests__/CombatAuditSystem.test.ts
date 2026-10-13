@@ -45,8 +45,7 @@ describe('CombatAuditSystem', () => {
         actorId: 'p1',
         actorName: 'Hero',
         actionType: 'attack_roll',
-        // @ts-expect-error #480 'combat' is not a valid CombatAction phase
-        phase: 'combat',
+        phase: 'turn',
         data: { targetAC: 15, formula: '1d20+5', description: '' },
       });
 
@@ -98,8 +97,7 @@ describe('CombatAuditSystem', () => {
         actorId: 'p1',
         actorName: 'Hero',
         actionType: 'attack_roll',
-        // @ts-expect-error #480 'combat' is not a valid CombatAction phase
-        phase: 'combat',
+        phase: 'turn',
         data: { targetAC: 15, formula: '1d20+5', success: true, description: '' },
       });
 
@@ -119,8 +117,7 @@ describe('CombatAuditSystem', () => {
         actorId: 'p1',
         actorName: 'Hero',
         actionType: 'attack_roll',
-        // @ts-expect-error #480 'combat' is not a valid CombatAction phase
-        phase: 'combat',
+        phase: 'turn',
         data: { targetAC: 15, formula: '1d20+5', description: '' },
       });
 
