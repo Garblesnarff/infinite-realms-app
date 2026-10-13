@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
 
+import {
+  attackModifierForRoll,
+  describeAttackRoll,
+  type AttackRollDescriptionSpec,
+} from '../../../shared/describe-attack-roll';
+
 import type {
   PlayerCheckRollSpec,
   PlayerDeathSaveRollSpec,
@@ -11,11 +17,7 @@ import type {
 import type { DiceRollRequest } from '@/types/combat';
 
 /** Re-exported from shared/ so the popup and the server's narration repair read the same words (#467). */
-export {
-  attackModifierForRoll,
-  describeAttackRoll,
-  type AttackRollDescriptionSpec,
-} from '../../../shared/describe-attack-roll';
+export { attackModifierForRoll, describeAttackRoll, type AttackRollDescriptionSpec };
 
 import { useGame } from '@/contexts/GameContext';
 import { useShowTargetNumbers } from '@/features/game-session/hooks/use-show-target-numbers';
