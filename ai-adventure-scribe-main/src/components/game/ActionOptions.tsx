@@ -15,6 +15,13 @@ interface ActionOptionsProps {
   delay?: number; // Delay in milliseconds before showing options
   disabled?: boolean;
   className?: string;
+  /**
+   * Explicit loading signal from the caller (#118). While true, an empty options
+   * array means a refresh is in flight (e.g. the legal-action re-fetch between
+   * combat turns): the last options stay on screen but disabled. When false, an
+   * empty array is final-empty and the controls clear immediately.
+   */
+  isLoading?: boolean;
 }
 
 /**
@@ -93,15 +100,6 @@ function areOptionsEqual(a: ActionOption[], b: ActionOption[]): boolean {
 }
 
 /**
- * How long the component keeps the last-known options on screen (disabled) after
- * the options array goes empty, before treating the empty state as final and
- * clearing the controls. Covers transient reloads such as the legal-action
- * re-fetch between combat turns; a genuinely option-less turn clears instead of
- * keeping stale buttons up forever (#118).
- */
-export const ACTION_OPTIONS_REFRESH_GRACE_MS = 5000;
-
-/**
  * ActionOptions component displays clickable option buttons with a configurable delay
  * Encourages player roleplay before showing suggested actions
  */
@@ -113,6 +111,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
     disabled = false,
     resetSelectionAfterCompletion = false,
     className = '',
+    isLoading = false,
   }) => {
     const [visible, setVisible] = useState(false);
     const [selectedOption, setSelectedOption] = useState<string | null>(null);
@@ -121,56 +120,38 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
     const instructionsId = useId();
 
     const previousIncomingRef = useRef<ActionOption[]>(incomingOptions);
-    const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-    // The refresh grace timer is owned by the sync effect below. It must survive
-    // re-renders (a parent re-render hands us a new [] instance without changing
-    // the state) and die only on unmount, on fresh options, or on its own expiry.
-    useEffect(() => {
-      return () => {
-        if (refreshTimerRef.current !== null) {
-          clearTimeout(refreshTimerRef.current);
-          refreshTimerRef.current = null;
-        }
-      };
-    }, []);
+    const previousLoadingRef = useRef<boolean>(isLoading);
 
     useEffect(() => {
-      if (areOptionsEqual(previousIncomingRef.current, incomingOptions)) {
+      const incomingChanged = !areOptionsEqual(previousIncomingRef.current, incomingOptions);
+      const loadingChanged = previousLoadingRef.current !== isLoading;
+      if (!incomingChanged && !loadingChanged) {
         return;
       }
       previousIncomingRef.current = incomingOptions;
+      previousLoadingRef.current = isLoading;
 
       if (incomingOptions.length > 0) {
         // Fresh options arrived: the initial load or a completed refresh. Show them
         // immediately without re-triggering the initial delay.
-        if (refreshTimerRef.current !== null) {
-          clearTimeout(refreshTimerRef.current);
-          refreshTimerRef.current = null;
-        }
         setDisplayedOptions(incomingOptions);
         setIsRefreshing(false);
         if (!visible && delay === 0) {
           setVisible(true);
         }
-      } else if (displayedOptions.length > 0 && !isRefreshing) {
-        // The options array went empty while options were on screen. Treat this as
-        // a transient reload (e.g. the legal-action re-fetch between combat turns):
-        // keep the last options on screen but disabled, so a stale option can never
-        // submit for another turn. If no new options arrive before the grace period
-        // ends, the empty state is final and the stale controls are cleared.
+      } else if (isLoading && displayedOptions.length > 0) {
+        // The caller signals a refresh in flight (e.g. the legal-action re-fetch
+        // between combat turns): keep the last options on screen but disabled, so a
+        // stale option can never submit for another turn. They clear when loading
+        // ends with the array still empty.
         setIsRefreshing(true);
-        refreshTimerRef.current = setTimeout(() => {
-          refreshTimerRef.current = null;
-          setDisplayedOptions([]);
-          setSelectedOption(null);
-          setIsRefreshing(false);
-        }, ACTION_OPTIONS_REFRESH_GRACE_MS);
-      } else if (displayedOptions.length === 0) {
+      } else if (!isLoading) {
+        // Settled and empty: final-empty. Clear immediately — no grace period (#118).
         setDisplayedOptions([]);
+        setSelectedOption(null);
         setIsRefreshing(false);
       }
-    }, [incomingOptions, visible, delay, displayedOptions.length, isRefreshing]);
+    }, [incomingOptions, isLoading, visible, delay, displayedOptions.length]);
 
     // Show options after delay
     useEffect((): (() => void) | void => {

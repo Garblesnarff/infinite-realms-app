@@ -106,23 +106,36 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
     const [legalState, setLegalState] = useState<{ actorId?: string; actions: LegalAction[] }>({
       actions: [],
     });
+    // Explicit loading signal for the action-options menu (#118): true from the
+    // moment a combat action is dispatched (or a legal-action re-fetch starts)
+    // until that re-fetch settles, so ActionOptions retains disabled old options
+    // only during an actual refresh and clears a settled empty menu immediately.
+    const [isRefreshingLegalActions, setIsRefreshingLegalActions] = useState(false);
 
     const refreshLegalActions = useCallback(async () => {
-      if (!showCombatMenu || !encounter?.id) return;
-      const response = await fetch(
-        `${apiBase}/v1/combat/${encodeURIComponent(encounter.id)}/legal-actions`,
-        {
-          headers: getAuthHeaders(),
-        },
-      );
-      if (!response.ok) return;
-      const payload = (await response.json()) as { actorId?: string; actions?: LegalAction[] };
-      // A dying player's only legal action is the death save, and the dying panel owns it: a
-      // chip here would send the label as a typed action to a character who cannot act.
-      setLegalState({
-        actorId: payload.actorId,
-        actions: (payload.actions ?? []).filter((action) => action.type !== 'death_save'),
-      });
+      if (!showCombatMenu || !encounter?.id) {
+        setIsRefreshingLegalActions(false);
+        return;
+      }
+      setIsRefreshingLegalActions(true);
+      try {
+        const response = await fetch(
+          `${apiBase}/v1/combat/${encodeURIComponent(encounter.id)}/legal-actions`,
+          {
+            headers: getAuthHeaders(),
+          },
+        );
+        if (!response.ok) return;
+        const payload = (await response.json()) as { actorId?: string; actions?: LegalAction[] };
+        // A dying player's only legal action is the death save, and the dying panel owns it: a
+        // chip here would send the label as a typed action to a character who cannot act.
+        setLegalState({
+          actorId: payload.actorId,
+          actions: (payload.actions ?? []).filter((action) => action.type !== 'death_save'),
+        });
+      } finally {
+        setIsRefreshingLegalActions(false);
+      }
     }, [
       showCombatMenu,
       encounter?.id,
@@ -187,6 +200,10 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
       )
         return;
       setError(null);
+      // The refresh cycle starts with the dispatch: every path below re-fetches
+      // legal actions in the finally, and the combat-state update in between can
+      // commit while the fetch has not started yet (#118).
+      setIsRefreshingLegalActions(true);
       try {
         if (action.type === 'end_turn') {
           // The server writes the boundary's row (death saves, a stable hero waking, the
@@ -265,11 +282,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
             'typed',
           );
           const parts = [
-            ...formatCombatActionParts(
-              { actor_id: actorId, action_type: 'dodge' },
-              result,
-              roster,
-            ),
+            ...formatCombatActionParts({ actor_id: actorId, action_type: 'dodge' }, result, roster),
             ...formatWakeParts(result),
           ];
           await sendEngineNotice(onSendMessage, {
@@ -490,6 +503,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
           onOptionSelect={handleSelection}
           resetSelectionAfterCompletion={showCombatMenu}
           delay={hasDynamicOverlay || showCombatMenu ? 0 : 10000}
+          isLoading={isRefreshingLegalActions}
         />
       </div>
     );
