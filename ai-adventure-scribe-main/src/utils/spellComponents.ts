@@ -22,7 +22,7 @@ export function hasRequiredComponents(
 
   // Check verbal component
   // @ts-expect-error #524 'silenced' is not a ConditionName; conditions is optional
-  if (spell.components_verbal && character.conditions.some((c) => c.name === 'silenced')) {
+  if (spell.components_verbal && character.conditions?.some((c) => c.name === 'silenced')) {
     missingComponents.push('Verbal (silenced)');
   }
 
@@ -108,8 +108,7 @@ export function getSpellPreparationLimit(character: Character): number {
   }
 
   const spellcastingAbility = character.class.spellcasting.ability;
-  // @ts-expect-error #524 abilityScores is optional but assumed present for casters
-  const abilityModifier = character.abilityScores[spellcastingAbility].modifier;
+  const abilityModifier = character.abilityScores?.[spellcastingAbility]?.modifier ?? 0;
 
   // Wizard formula: Intelligence modifier + Wizard level
   if (character.class.name === 'Wizard') {
