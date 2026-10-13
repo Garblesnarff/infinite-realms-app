@@ -21,10 +21,17 @@ vi.mock('./TacticalMapCanvas', () => ({
     </div>
   ),
 }));
+const combatStateHolder = vi.hoisted(() => ({
+  current: {
+    activeEncounter: {
+      id: 'enc-1',
+      currentTurnParticipantId: 'pc',
+    } as { id: string; currentTurnParticipantId: string; currentRound?: number } | null,
+  },
+}));
+
 vi.mock('@/contexts/CombatContext', () => ({
-  useCombat: () => ({
-    state: { activeEncounter: { id: 'enc-1', currentTurnParticipantId: 'pc' } },
-  }),
+  useCombat: () => ({ state: combatStateHolder.current }),
 }));
 
 const map = (): TacticalMap => ({
@@ -223,5 +230,59 @@ describe('tactical map combat flow', () => {
     expect(
       await screen.findByRole('tooltip', { name: 'Collapse tactical map' }),
     ).toBeInTheDocument();
+  });
+
+  it('reads the round from the authoritative encounter, not the stale map field (#179 item 3)', async () => {
+    combatStateHolder.current = {
+      activeEncounter: { id: 'enc-1', currentTurnParticipantId: 'pc', currentRound: 3 },
+    };
+    try {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() => Promise.resolve({ ok: false, json: async () => null })),
+      );
+      render(
+        <TacticalMapProvider sessionId="s">
+          <TacticalMapBoard sessionId="s" />
+        </TacticalMapProvider>,
+      );
+      await act(async () =>
+        window.dispatchEvent(
+          // The map payload still carries round 1: the map fetch happens once per
+          // session and no delta ever updates its round field (NT-046).
+          new CustomEvent('tactical-map-delta', { detail: { type: 'map_created', map: map() } }),
+        ),
+      );
+      expect(await screen.findByText(/Initiative · round 3/)).toBeInTheDocument();
+    } finally {
+      combatStateHolder.current = {
+        activeEncounter: { id: 'enc-1', currentTurnParticipantId: 'pc' },
+      };
+    }
+  });
+
+  it('falls back to the map round when no encounter is active (#179 item 3)', async () => {
+    combatStateHolder.current = { activeEncounter: null };
+    try {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() => Promise.resolve({ ok: false, json: async () => null })),
+      );
+      render(
+        <TacticalMapProvider sessionId="s">
+          <TacticalMapBoard sessionId="s" />
+        </TacticalMapProvider>,
+      );
+      await act(async () =>
+        window.dispatchEvent(
+          new CustomEvent('tactical-map-delta', { detail: { type: 'map_created', map: map() } }),
+        ),
+      );
+      expect(await screen.findByText(/Initiative · round 1/)).toBeInTheDocument();
+    } finally {
+      combatStateHolder.current = {
+        activeEncounter: { id: 'enc-1', currentTurnParticipantId: 'pc' },
+      };
+    }
   });
 });
