@@ -694,11 +694,17 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
         user!.userId,
         body.amount,
         'damage_taken',
-        { critical: body.critical === true },
+        { critical: body.critical === true, damageType: body.damageType },
       );
       return { ...vitals, engineLines };
     },
-    { body: t.Object({ amount: t.Number({ minimum: 0 }), critical: t.Optional(t.Boolean()) }) },
+    {
+      body: t.Object({
+        amount: t.Number({ minimum: 0 }),
+        critical: t.Optional(t.Boolean()),
+        damageType: t.Optional(t.String()),
+      }),
+    },
   )
 
   /**

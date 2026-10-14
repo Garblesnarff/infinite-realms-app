@@ -10,7 +10,11 @@ import { userDataApi } from '@/services/user-data-api';
  * Damage always goes through the server (POST /v1/characters/:id/damage) — the client
  * keeps no local HP copy (#621 Part A).
  */
-export const useDamageAutoApplication = (state: GameState, characterId?: string | null): void => {
+export const useDamageAutoApplication = (
+  state: GameState,
+  characterId?: string | null,
+  refreshCombatState?: () => Promise<void>,
+): void => {
   // Track which damage_taken rolls have been applied to prevent double-application
   const appliedDamageRollsRef = useRef<Set<string>>(new Set());
 
@@ -46,8 +50,16 @@ export const useDamageAutoApplication = (state: GameState, characterId?: string 
         appliedDamageRollsRef.current.add(roll.id);
 
         try {
-          await userDataApi.applyCharacterDamage(characterId, damageAmount);
+          await userDataApi.applyCharacterDamage(characterId, damageAmount, roll.damageType);
           logger.info(`✅ Applied ${damageAmount} damage to character HP via server`);
+          // Refresh the combat tracker so it shows the new HP (#621 FIX).
+          if (refreshCombatState) {
+            try {
+              await refreshCombatState();
+            } catch (refreshError) {
+              logger.error('❌ Failed to refresh combat state after damage:', refreshError);
+            }
+          }
         } catch (error) {
           appliedDamageRollsRef.current.delete(roll.id);
           logger.error('❌ Failed to persist damage:', error);

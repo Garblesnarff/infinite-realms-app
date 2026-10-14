@@ -85,7 +85,31 @@ describe('character damage route wire body (#621)', () => {
       'user-1',
       8,
       'damage_taken',
-      { critical: false },
+      { critical: false, damageType: undefined },
+    );
+  });
+
+  it('forwards damageType to applyNonAttackDamage when the client sends it', async () => {
+    applyNonAttackDamage.mockClear();
+
+    const response = await app.handle(
+      new Request('http://localhost/v1/characters/character-1/damage', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer test-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ amount: 8, damageType: 'fire' }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(applyNonAttackDamage).toHaveBeenCalledWith(
+      'character-1',
+      'user-1',
+      8,
+      'damage_taken',
+      { critical: false, damageType: 'fire' },
     );
   });
 

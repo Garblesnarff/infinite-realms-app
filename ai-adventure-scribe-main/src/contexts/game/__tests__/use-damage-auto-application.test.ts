@@ -80,7 +80,7 @@ describe('useDamageAutoApplication (#621 Part A)', () => {
     await waitFor(() => {
       expect(applyCharacterDamage).toHaveBeenCalledTimes(1);
     });
-    expect(applyCharacterDamage).toHaveBeenCalledWith('char-123', 8);
+    expect(applyCharacterDamage).toHaveBeenCalledWith('char-123', 8, 'slashing');
   });
 
   it('a damage_taken roll out of combat still calls the server route exactly once', async () => {
@@ -91,7 +91,21 @@ describe('useDamageAutoApplication (#621 Part A)', () => {
     await waitFor(() => {
       expect(applyCharacterDamage).toHaveBeenCalledTimes(1);
     });
-    expect(applyCharacterDamage).toHaveBeenCalledWith('char-123', 8);
+    expect(applyCharacterDamage).toHaveBeenCalledWith('char-123', 8, 'slashing');
+  });
+
+  it('refreshes combat state after successful damage application', async () => {
+    const refreshCombatState = vi.fn().mockResolvedValue(undefined);
+    const state = stateWithRoll(completedDamageTakenRoll(), true);
+
+    renderHook(() => useDamageAutoApplication(state, 'char-123', refreshCombatState));
+
+    await waitFor(() => {
+      expect(applyCharacterDamage).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(refreshCombatState).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('does not call the server twice for the same roll', async () => {

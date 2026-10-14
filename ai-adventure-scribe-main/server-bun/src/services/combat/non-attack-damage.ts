@@ -98,7 +98,7 @@ export async function applyNonAttackDamage(
   userId: string,
   amount: number,
   sourceDescription = 'non-attack damage',
-  options: { critical?: boolean } = {},
+  options: { critical?: boolean; damageType?: string } = {},
 ): Promise<NonAttackDamageResult> {
   const live = amount > 0 ? await findLiveParticipant(characterId) : null;
 
@@ -140,6 +140,7 @@ export async function applyNonAttackDamage(
     live.encounterId,
     {
       damageAmount: amount,
+      damageType: options.damageType,
       sourceDescription,
       uncapped: true,
       isCriticalHit: options.critical === true,
