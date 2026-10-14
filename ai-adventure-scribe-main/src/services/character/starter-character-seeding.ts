@@ -36,7 +36,7 @@ export interface StarterCharacterTemplateLike {
   abilityScores?: Record<string, number>;
   ability_scores?: Record<string, number>;
   /** Optional forward-compatible curated spell shape. */
-  spells?: StarterTemplateSpellLists;
+  spells?: StarterTemplateSpellLists | null;
   cantrips?: string[] | null;
   knownSpells?: string[] | null;
   preparedSpells?: string[] | null;

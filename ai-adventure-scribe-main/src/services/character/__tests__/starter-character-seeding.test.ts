@@ -173,6 +173,22 @@ describe('starter-character-seeding', () => {
     });
   });
 
+  it('seeds identical create-payloads whether template.spells is null or undefined', () => {
+    const templateNull = {
+      ...clericTemplate,
+      spells: null,
+    };
+    const templateUndefined = {
+      ...clericTemplate,
+      spells: undefined,
+    };
+
+    const payloadNull = buildStarterCharacterSeed(templateNull, 'campaign-id');
+    const payloadUndefined = buildStarterCharacterSeed(templateUndefined, 'campaign-id');
+
+    expect(payloadNull).toEqual(payloadUndefined);
+  });
+
   it('normalizes full ability names without regard to casing', () => {
     expect(
       getAbilityScores({
