@@ -123,6 +123,7 @@ wt_git() { # git as root in a worktree, never trusting the worktree's own .git
   GIT_DIR="$MIRROR/worktrees/$name" GIT_WORK_TREE="$JOBS/$name" git -C "$JOBS/$name" "$@"
 }
 wt_remove() {
+  rm -f "$JOBS/prompt-${1#issue-}.md" # every exit path, not only the PR one
   git --git-dir="$MIRROR" worktree remove --force "$JOBS/$1" > /dev/null 2>&1 || rm -rf "${JOBS:?}/$1"
   git --git-dir="$MIRROR" worktree prune
 }
@@ -198,8 +199,15 @@ pr_title() { # conventional title from the issue title
 
 # ---- checks ----------------------------------------------------------------
 install_deps() {
-  as_foreman bash -c "cd '$1/$APP' && timeout 15m bun install --frozen-lockfile && cd server-bun && timeout 15m bun install" \
-    > "$2" 2>&1
+  # GIT_DIR=/dev/null: the app's `prepare` script (scripts/setup-git-hooks.sh)
+  # then takes its "not a git repository" exit 0, instead of failing to write
+  # the root-owned mirror config and failing the install after the packages
+  # are in. The two installs run independently.
+  as_foreman bash -c "cd '$1/$APP' || exit 1
+    GIT_DIR=/dev/null timeout 15m bun install --frozen-lockfile; a=\$?
+    cd server-bun && GIT_DIR=/dev/null timeout 15m bun install; b=\$?
+    echo \"[catjam] app install exit \$a, server-bun install exit \$b\"
+    [ \$a = 0 ] && [ \$b = 0 ]" > "$2" 2>&1
 }
 
 # run_checks <name> <outdir>: client typecheck + unit tests for the changed area.
