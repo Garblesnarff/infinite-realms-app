@@ -150,7 +150,8 @@ describe('insertAssetTags — short-name NPC alias matching & guards', () => {
   };
 
   it('tags subsequent short-name capitalized mentions (turn 2 scenario)', () => {
-    const turn2Text = 'Your gaze lingers on Remy, trying to read the static-laced features of his face.';
+    const turn2Text =
+      'Your gaze lingers on Remy, trying to read the static-laced features of his face.';
     const result = insertAssetTags(turn2Text, [REMY_MANAGER]);
 
     expect(result).toBe(
@@ -158,7 +159,7 @@ describe('insertAssetTags — short-name NPC alias matching & guards', () => {
     );
   });
 
-  it('tags possessive short-name mentions (Remy\'s)', () => {
+  it("tags possessive short-name mentions (Remy's)", () => {
     const text = "Your gaze lingers on Remy's face as he stands near the podium.";
     const result = insertAssetTags(text, [REMY_MANAGER]);
 
@@ -209,5 +210,39 @@ describe('insertAssetTags — short-name NPC alias matching & guards', () => {
     const result = insertAssetTags(text, [MAIN_FLOOR]);
 
     expect(result).toBe(text);
+  });
+});
+
+describe('insertAssetTags — title-stripped NPC alias (end to end)', () => {
+  const SIR_GARETH: AssetInfo = {
+    type: 'npc',
+    key: 'sir-gareth-of-oakhaven',
+    name: 'Sir Gareth of Oakhaven',
+  };
+  const GARETH_SMITH: AssetInfo = {
+    type: 'npc',
+    key: 'gareth-the-smith',
+    name: 'Gareth the Smith',
+  };
+
+  it('keeps the visible short name without prepending the full display name', () => {
+    const result = insertAssetTags('Gareth greets you.', [SIR_GARETH]);
+
+    expect(result).toBe('[ASSET:npc:sir-gareth-of-oakhaven] Gareth greets you.');
+    expect(result).not.toContain('Sir Gareth Of Oakhaven');
+  });
+
+  it('keeps the visible short name mid-sentence and on later mentions', () => {
+    const result = insertAssetTags('You meet Gareth at the gate. Gareth smiles.', [SIR_GARETH]);
+
+    expect(result).toBe(
+      'You meet [ASSET:npc:sir-gareth-of-oakhaven] Gareth at the gate. Gareth smiles.',
+    );
+  });
+
+  it('still refuses to tag a short name shared by two NPCs', () => {
+    const text = 'Gareth greets you.';
+
+    expect(insertAssetTags(text, [SIR_GARETH, GARETH_SMITH])).toBe(text);
   });
 });

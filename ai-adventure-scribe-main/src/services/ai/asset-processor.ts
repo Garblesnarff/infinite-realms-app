@@ -2,6 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 import { generateAssetKey } from '@/utils/asset-key';
+import { NAME_TITLES as TITLES } from '@/utils/name-titles';
 import {
   deriveAssetDisplayName,
   isAssetNamePresentAroundTag,
@@ -24,32 +25,6 @@ export interface PreparedMatchItem {
   pattern: RegExp;
   isSingleWordOrAlias: boolean;
 }
-
-const TITLES = [
-  'sir',
-  'lady',
-  'lord',
-  'captain',
-  'general',
-  'doctor',
-  'master',
-  'king',
-  'queen',
-  'baron',
-  'baroness',
-  'count',
-  'countess',
-  'madam',
-  'madame',
-  'professor',
-  'dame',
-  'archmage',
-  'chancellor',
-  'duke',
-  'duchess',
-  'prince',
-  'princess',
-];
 
 const STOP_WORDS = new Set([
   ...TITLES,
@@ -92,7 +67,10 @@ export function generateNpcAliases(fullName: string): string[] {
     if (unquoted) candidates.add(unquoted);
 
     // Form outside quotes
-    const outsideQuotes = trimmedFull.replace(/["'][^"']*["']/g, '').replace(/\s+/g, ' ').trim();
+    const outsideQuotes = trimmedFull
+      .replace(/["'][^"']*["']/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
     if (outsideQuotes) candidates.add(outsideQuotes);
   }
 
