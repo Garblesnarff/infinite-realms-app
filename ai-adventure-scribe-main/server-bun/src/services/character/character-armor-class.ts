@@ -19,11 +19,8 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import { db } from '../../../../db/client';
 import { characterEquipment, characterStats, inventoryItems } from '../../../../db/schema/index';
-import {
-  abilityScoreModifier,
-  computeArmorClass,
-  type ArmorClassEquipmentItem,
-} from '../../../../shared/armor-class';
+import { abilityModifier } from '../../../../shared/ability-modifier';
+import { computeArmorClass, type ArmorClassEquipmentItem } from '../../../../shared/armor-class';
 import { logger } from '../../lib/logger.js';
 
 /** `inventory_items` has no shield type; the legacy table does, so both are accepted. */
@@ -86,7 +83,7 @@ export async function recomputeStoredArmorClass(
     equipped: row.equipped,
   }));
 
-  const armorClass = computeArmorClass(equipment, abilityScoreModifier(stats.dexterity ?? 10), {
+  const armorClass = computeArmorClass(equipment, abilityModifier(stats.dexterity ?? 10), {
     warn: (msg, context) => logger.warn({ msg, characterId, ...context }),
   });
 

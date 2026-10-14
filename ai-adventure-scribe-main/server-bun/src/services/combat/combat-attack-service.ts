@@ -41,6 +41,7 @@ import { autoCritReason, checkHit, checkAutoCrit } from './hit-check.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { aggregateResistances } from './resistance-resolver.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
+import { abilityModifier } from '../../../../shared/ability-modifier';
 import { assessPlayerCombatSpell, resolveCatalogSpell } from '../../data/spellData.js';
 import { rollD20, rollD20Pair } from '../../lib/dice.js';
 import { NotFoundError, InternalServerError, BusinessLogicError } from '../../lib/errors.js';
@@ -197,7 +198,7 @@ export class CombatAttackService {
   }
 
   private abilityModifier(score = 10): number {
-    return Math.floor((score - 10) / 2);
+    return abilityModifier(score);
   }
 
   private spellcastingAbility(className?: string | null): string {

@@ -1,8 +1,10 @@
 import React from 'react';
 
+import { abilityModifier } from '../../../../../shared/ability-modifier';
+
 const getModifier = (score?: number): string => {
   if (!score) return '+0';
-  const mod = Math.floor((score - 10) / 2);
+  const mod = abilityModifier(score);
   return mod >= 0 ? `+${mod}` : `${mod}`;
 };
 

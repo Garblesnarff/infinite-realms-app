@@ -1,14 +1,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { AgentContext, CampaignContext, CharacterContext, StarterCampaignContext, StarterCampaignRule, StarterCampaignEntity } from './types.ts';
+import { abilityModifier } from '../../../shared/ability-modifier.ts';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
-
-/**
- * Calculates ability score modifier
- */
-const calculateModifier = (score: number): number => Math.floor((score - 10) / 2);
 
 /**
  * Fetches and builds character context
@@ -44,27 +40,27 @@ export async function buildCharacterContext(characterId: string): Promise<Charac
       abilityScores: {
         strength: { 
           score: characterData.character_stats.strength,
-          modifier: calculateModifier(characterData.character_stats.strength)
+          modifier: abilityModifier(characterData.character_stats.strength)
         },
         dexterity: { 
           score: characterData.character_stats.dexterity,
-          modifier: calculateModifier(characterData.character_stats.dexterity)
+          modifier: abilityModifier(characterData.character_stats.dexterity)
         },
         constitution: { 
           score: characterData.character_stats.constitution,
-          modifier: calculateModifier(characterData.character_stats.constitution)
+          modifier: abilityModifier(characterData.character_stats.constitution)
         },
         intelligence: { 
           score: characterData.character_stats.intelligence,
-          modifier: calculateModifier(characterData.character_stats.intelligence)
+          modifier: abilityModifier(characterData.character_stats.intelligence)
         },
         wisdom: { 
           score: characterData.character_stats.wisdom,
-          modifier: calculateModifier(characterData.character_stats.wisdom)
+          modifier: abilityModifier(characterData.character_stats.wisdom)
         },
         charisma: { 
           score: characterData.character_stats.charisma,
-          modifier: calculateModifier(characterData.character_stats.charisma)
+          modifier: abilityModifier(characterData.character_stats.charisma)
         }
       },
       armorClass: characterData.character_stats.armor_class,

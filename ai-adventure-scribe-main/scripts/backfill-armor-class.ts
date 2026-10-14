@@ -29,11 +29,8 @@ import { fileURLToPath } from 'node:url';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
 
-import {
-  abilityScoreModifier,
-  describeArmorClass,
-  type ArmorClassEquipmentItem,
-} from '../shared/armor-class.ts';
+import { abilityModifier } from '../shared/ability-modifier.ts';
+import { describeArmorClass, type ArmorClassEquipmentItem } from '../shared/armor-class.ts';
 
 config();
 config({ path: join(process.cwd(), 'server-bun/.env') });
@@ -144,7 +141,7 @@ export function planArmorClassBackfill(input: BackfillInput): ArmorClassPlan[] {
     if (!ownsArmor) continue;
 
     const characterName = nameById.get(stats.character_id) ?? 'Unnamed character';
-    const dexterityModifier = abilityScoreModifier(stats.dexterity ?? 10);
+    const dexterityModifier = abilityModifier(stats.dexterity ?? 10);
     const breakdown = describeArmorClass(items, dexterityModifier, {
       warn: (message, context) =>
         console.warn(

@@ -1,3 +1,5 @@
+import { abilityModifier } from '../../shared/ability-modifier';
+
 import type { Character } from '@/types/character';
 
 import { getProficiencyBonus } from '@/data/levelProgression';
@@ -35,14 +37,6 @@ export interface Scene {
 }
 
 /**
- * Calculate ability modifier from ability score
- * Formula: (score - 10) / 2, rounded down
- */
-function calculateAbilityModifier(score: number): number {
-  return Math.floor((score - 10) / 2);
-}
-
-/**
  * Calculate passive skill score
  * @param abilityScore - The relevant ability score (e.g., Wisdom for Perception)
  * @param proficiencyBonus - Character's proficiency bonus based on level
@@ -54,9 +48,9 @@ export function calculatePassiveSkill(
   proficiencyBonus: number,
   isProficient: boolean,
 ): number {
-  const abilityModifier = calculateAbilityModifier(abilityScore);
+  const modifier = abilityModifier(abilityScore);
   const proficiency = isProficient ? proficiencyBonus : 0;
-  return 10 + abilityModifier + proficiency;
+  return 10 + modifier + proficiency;
 }
 
 /**

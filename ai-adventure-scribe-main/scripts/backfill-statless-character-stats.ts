@@ -46,7 +46,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
 import postgres from 'postgres';
 
-import { abilityScoreModifier } from '../shared/armor-class.ts';
+import { abilityModifier } from '../shared/ability-modifier.ts';
 import { findSrdClass, SRD_ABILITY_NAMES, type SrdAbilityName } from '../shared/srd-class-data.ts';
 import { races } from '../src/data/races/index.ts';
 
@@ -217,9 +217,9 @@ export function applyRacialAbilityIncreases(
 }
 
 export function unarmoredArmorClass(classId: string, scores: AbilityScores): number {
-  const dex = abilityScoreModifier(scores.dexterity);
-  if (classId === 'monk') return 10 + dex + abilityScoreModifier(scores.wisdom);
-  if (classId === 'barbarian') return 10 + dex + abilityScoreModifier(scores.constitution);
+  const dex = abilityModifier(scores.dexterity);
+  if (classId === 'monk') return 10 + dex + abilityModifier(scores.wisdom);
+  if (classId === 'barbarian') return 10 + dex + abilityModifier(scores.constitution);
   return 10 + dex;
 }
 
@@ -239,7 +239,7 @@ export function seedRaceClassDefaults(character: CharacterRow): StatlessRepairPl
   }
   const base = assignClassStandardArray(srdClass.id);
   const { scores, speed } = applyRacialAbilityIncreases(base, character.race, character.subrace);
-  const constitutionModifier = abilityScoreModifier(scores.constitution);
+  const constitutionModifier = abilityModifier(scores.constitution);
   const maxHitPoints = srdClass.hitDie + constitutionModifier;
   return {
     characterId: character.id,

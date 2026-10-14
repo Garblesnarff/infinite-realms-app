@@ -147,11 +147,6 @@ function dexterityBonusFor(category: SrdArmorCategory, dexterityModifier: number
   return dexterityModifier;
 }
 
-/** The 5e ability modifier, so callers holding a raw score do not each reinvent it. */
-export function abilityScoreModifier(score: number): number {
-  return Math.floor((score - 10) / 2);
-}
-
 export interface ArmorClassBreakdown {
   armorClass: number;
   /** The armour that was worn, or null when the character is unarmoured. */

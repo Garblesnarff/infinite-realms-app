@@ -4,6 +4,8 @@
  * Handles the application and management of magical item effects on characters
  */
 
+import { abilityModifier } from '../../shared/ability-modifier';
+
 import type { Character } from '@/types/character';
 import type { CombatParticipant } from '@/types/combat';
 
@@ -18,6 +20,7 @@ export {
   isMagicItemActive,
   parseAttunementRequirements,
 } from './magic-item-attunement';
+
 
 type SpellEffect = {
   spellName: string;
@@ -216,7 +219,7 @@ export function applyMagicItemEffectsToParticipant(
       ...participant.abilityScores,
       [ability]: {
         ...participant.abilityScores?.[ability],
-        modifier: Math.floor((score + bonus - 10) / 2),
+        modifier: abilityModifier(score + bonus),
       },
     };
   });

@@ -14,15 +14,6 @@ export const POINT_BUY_COSTS: { [key: number]: number } = {
 };
 
 /**
- * Calculates ability score modifier according to D&D 5E rules
- * @param score - The ability score value
- * @returns The calculated modifier
- */
-export const calculateModifier = (score: number): number => {
-  return Math.floor((score - 10) / 2);
-};
-
-/**
  * Calculates the difference in point cost between two ability scores
  * @param currentScore - The starting ability score
  * @param targetScore - The target ability score

@@ -1,3 +1,4 @@
+import { abilityModifier } from '../../../../shared/ability-modifier';
 import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
 
 /**
@@ -113,7 +114,7 @@ export class ProgressionMechanics {
    * Calculate Constitution modifier
    */
   static calculateConModifier(constitution: number): number {
-    return Math.floor((constitution - 10) / 2);
+    return abilityModifier(constitution);
   }
 
   /**

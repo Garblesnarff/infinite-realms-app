@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { abilityModifier } from '../../../../shared/ability-modifier';
 import { resolveStarterCampaignIdFromSessionList } from '../../../../shared/session-list-contract';
 
 import { useAuth } from '@/contexts/AuthContext';
@@ -283,7 +284,7 @@ export function useCharacterSelection({
    */
   const getModifier = useCallback((score?: number): string => {
     if (!score) return '+0';
-    const mod = Math.floor((score - 10) / 2);
+    const mod = abilityModifier(score);
     return mod >= 0 ? `+${mod}` : `${mod}`;
   }, []);
 

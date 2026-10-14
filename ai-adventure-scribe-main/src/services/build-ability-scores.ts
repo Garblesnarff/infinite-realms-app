@@ -4,6 +4,8 @@
  * inline builders.
  */
 
+import { abilityModifier } from '../../shared/ability-modifier';
+
 import type { AbilityScores } from '@/types/character';
 
 interface RawAbilityStats {
@@ -16,7 +18,7 @@ interface RawAbilityStats {
 }
 
 export function buildAbilityScores(stats: RawAbilityStats): AbilityScores {
-  const modifier = (score: number): number => Math.floor((score - 10) / 2);
+  const modifier = (score: number): number => abilityModifier(score);
 
   return {
     strength: { score: stats.strength, modifier: modifier(stats.strength), savingThrow: false },

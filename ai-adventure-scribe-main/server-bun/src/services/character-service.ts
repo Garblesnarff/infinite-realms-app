@@ -26,13 +26,10 @@ import {
   characterStats,
   characters,
 } from '../../../db/schema/index';
-import {
-  abilityScoreModifier,
-  computeArmorClass,
-  type ArmorClassEquipmentItem,
-} from '../../../shared/armor-class';
+import { computeArmorClass, type ArmorClassEquipmentItem } from '../../../shared/armor-class';
 import { InternalServerError } from '../lib/errors.js';
 import { SpellSlotMechanics } from './spell-slots/spell-slot-mechanics.js';
+import { abilityModifier } from '../../../shared/ability-modifier';
 
 import type { Character, NewCharacter, NewCharacterStats } from '../../../db/schema/index';
 
@@ -226,7 +223,7 @@ export class CharacterService {
             ? {
                 armorClass: computeArmorClass(
                   toArmorClassItems(equipment),
-                  abilityScoreModifier(stats.dexterity ?? 10),
+                  abilityModifier(stats.dexterity ?? 10),
                 ),
               }
             : {}),

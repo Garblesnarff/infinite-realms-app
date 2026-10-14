@@ -1,5 +1,6 @@
 import { CharacterContext, PassiveScores } from './types.ts';
 import { proficiencyBonus } from '../../../shared/proficiency-bonus.ts';
+import { abilityModifier } from '../../../shared/ability-modifier.ts';
 
 /**
  * PassiveSkillsEvaluator
@@ -16,16 +17,6 @@ import { proficiencyBonus } from '../../../shared/proficiency-bonus.ts';
  */
 function getProficiencyBonus(level: number): number {
   return proficiencyBonus(level);
-}
-
-/**
- * Calculate ability modifier from ability score
- * Formula: (score - 10) / 2, rounded down
- * @param score - Ability score (typically 3-20, can be higher)
- * @returns Ability modifier (-4 to +5 for typical scores)
- */
-function calculateAbilityModifier(score: number): number {
-  return Math.floor((score - 10) / 2);
 }
 
 /**
@@ -81,9 +72,9 @@ function calculatePassiveSkill(
   isProficient: boolean,
   observantBonus: number = 0,
 ): number {
-  const abilityModifier = calculateAbilityModifier(abilityScore);
+  const modifier = abilityModifier(abilityScore);
   const proficiency = isProficient ? proficiencyBonus : 0;
-  return 10 + abilityModifier + proficiency + observantBonus;
+  return 10 + modifier + proficiency + observantBonus;
 }
 
 /**

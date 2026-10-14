@@ -50,7 +50,7 @@ import { fileURLToPath } from 'node:url';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
 
-import { abilityScoreModifier } from '../shared/armor-class.ts';
+import { abilityModifier } from '../shared/ability-modifier.ts';
 import { findSrdClass } from '../shared/srd-class-data.ts';
 import { lookupRaces } from '../src/data/races/index.ts';
 
@@ -242,14 +242,14 @@ export function planRow(
   if (!changed) return { kind: 'alreadyCorrect' };
 
   const toughness = race.toughness || subrace?.toughness || false;
-  const newArmorClass = 10 + abilityScoreModifier(newScores.dexterity);
+  const newArmorClass = 10 + abilityModifier(newScores.dexterity);
 
   let newMaxHitPoints: number | null = null;
   if (character.level === 1) {
     const classData = findSrdClass(character.class);
     if (classData) {
       newMaxHitPoints =
-        classData.hitDie + abilityScoreModifier(newScores.constitution) + (toughness ? 1 : 0);
+        classData.hitDie + abilityModifier(newScores.constitution) + (toughness ? 1 : 0);
     }
   }
 

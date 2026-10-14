@@ -26,7 +26,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
 import postgres from 'postgres';
 
-import { abilityScoreModifier } from '../shared/armor-class.ts';
+import { abilityModifier } from '../shared/ability-modifier.ts';
 import { findSrdClass, type SrdHitDie } from '../shared/srd-class-data.ts';
 
 config();
@@ -163,7 +163,7 @@ export function planLevelOneHitPointBackfill(
       continue;
     }
 
-    const constitutionModifier = abilityScoreModifier(stats.constitution);
+    const constitutionModifier = abilityModifier(stats.constitution);
     const maxHitPoints = classData.hitDie + constitutionModifier;
     const currentHitPoints =
       stats.max_hit_points === maxHitPoints

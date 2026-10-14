@@ -14,6 +14,7 @@ import {
 } from './combat-action-executor';
 import { requestPlayerCheckRoll } from './player-roll-bridge';
 import { standingHostiles } from './sheet-cast-save-hold';
+import { abilityModifier } from '../../../shared/ability-modifier';
 import { detectCombatCheck } from '../../../shared/combat-check-intent';
 
 import type { ClientCombatIntent } from './combat-action-executor';
@@ -60,7 +61,7 @@ export function skillCheckModifierFor(
     kind === 'escape'
       ? Math.max(scoreOf('str') ?? 0, scoreOf('dex') ?? 0) || undefined
       : scoreOf(ability);
-  return typeof score === 'number' ? Math.floor((score - 10) / 2) : 0;
+  return typeof score === 'number' ? abilityModifier(score) : 0;
 }
 
 /** What the caller needs to resolve a check against real numbers. */
