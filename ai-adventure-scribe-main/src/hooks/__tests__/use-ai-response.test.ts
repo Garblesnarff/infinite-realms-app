@@ -175,6 +175,86 @@ describe('useAIResponse', () => {
     expect(AIService.chatWithDM).toHaveBeenCalled();
   });
 
+  it('#633 PR2: does not forward onStreamChunk while combat is active at request start', async () => {
+    const { AIService } = await import('@/services/ai-service');
+
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: mockSessionId,
+      campaign_id: 'camp-1',
+      character_id: 'char-1',
+      campaign: { id: 'camp-1', name: 'Camp' },
+      character: { id: 'char-1', name: 'Char' },
+    } as any);
+    vi.mocked(useCombat).mockReturnValue({
+      state: {
+        isInCombat: true,
+        activeEncounter: { id: 'enc-1', phase: 'active' },
+      },
+      refreshCombatState: vi.fn(async () => ({ id: 'enc-1', phase: 'active' })),
+    } as any);
+    (AIService.chatWithDM as any).mockResolvedValue({
+      text: 'A blow lands.',
+      narrationSegments: [],
+      dice_rolls: [],
+      roll_requests: [],
+      combatDetection: { isCombat: true },
+    });
+
+    const { result } = renderHook(() => useAIResponse());
+    await result.current.getAIResponse(
+      mockMessages as any,
+      mockSessionId,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      () => {},
+    );
+
+    expect(AIService.chatWithDM).toHaveBeenCalled();
+    // The early render suppresses in-combat turns (#2139); the preview
+    // follows the same contract, so no stream is requested.
+    expect((AIService.chatWithDM as any).mock.calls[0][0].onStream).toBeUndefined();
+  });
+
+  it('#633 PR2: forwards onStreamChunk when combat is not active', async () => {
+    const { AIService } = await import('@/services/ai-service');
+
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: mockSessionId,
+      campaign_id: 'camp-1',
+      character_id: 'char-1',
+      campaign: { id: 'camp-1', name: 'Camp' },
+      character: { id: 'char-1', name: 'Char' },
+    } as any);
+    (AIService.chatWithDM as any).mockResolvedValue({
+      text: 'Greetings traveler!',
+      narrationSegments: [],
+      dice_rolls: [],
+      roll_requests: [],
+      combatDetection: { isCombat: false },
+    });
+
+    const onStreamChunk = (): void => {};
+    const { result } = renderHook(() => useAIResponse());
+    await result.current.getAIResponse(
+      mockMessages as any,
+      mockSessionId,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      onStreamChunk,
+    );
+
+    expect(AIService.chatWithDM).toHaveBeenCalled();
+    expect((AIService.chatWithDM as any).mock.calls[0][0].onStream).toBe(onStreamChunk);
+  });
+
   it('#219: a failed out-of-combat turn resets the preflight so the composer cannot wedge', async () => {
     const { AIService } = await import('@/services/ai-service');
 

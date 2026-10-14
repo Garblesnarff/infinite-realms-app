@@ -771,8 +771,10 @@ export const useAIResponse = (): {
           // #2609: the dice-UI send path opens the roll-outcome gate from the
           // roll itself, not from message text.
           ...(isDiceRollMessage ? { isDiceRollMessage } : {}),
-          // #633 PR2: opt the main DM turn into streamed narration deltas.
-          ...(onStreamChunk ? { onStream: onStreamChunk } : {}),
+          // #633 PR2: opt the main DM turn into streamed narration deltas. No
+          // preview while combat is active: the early render suppresses those
+          // turns (#2139), so the preview follows the same contract.
+          ...(onStreamChunk && !combatWasActiveAtRequestStart ? { onStream: onStreamChunk } : {}),
           context: aiContext,
           conversationHistory,
           userPlan: userPlan || undefined,

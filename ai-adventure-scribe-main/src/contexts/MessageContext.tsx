@@ -51,6 +51,8 @@ interface MessageContextType {
   loadMore: () => void;
   sendMessage: (message: ChatMessage) => Promise<void>;
   updateMessage: (message: ChatMessage) => void;
+  /** #633 PR2: remove a render-only row (the streaming narration preview). */
+  removeMessage: (id: string) => void;
   queueStatus: 'idle' | 'processing' | 'error' | 'retrying';
 }
 
@@ -75,7 +77,8 @@ export const MessageProvider: React.FC<{
   } = useMessages(sessionId, {
     pollForCompanions,
   });
-  const { messageMutation, queueStatus, updateMessage } = useMessageQueue(sessionId);
+  const { messageMutation, queueStatus, updateMessage, removeMessage } =
+    useMessageQueue(sessionId);
   const { mutateAsync } = messageMutation;
   const queryClient = useQueryClient();
   const handleRemoteMessage = useCallback(() => {
@@ -104,6 +107,7 @@ export const MessageProvider: React.FC<{
       loadMore,
       sendMessage,
       updateMessage,
+      removeMessage,
       queueStatus,
     }),
     [
@@ -115,6 +119,7 @@ export const MessageProvider: React.FC<{
       loadMore,
       sendMessage,
       updateMessage,
+      removeMessage,
       queueStatus,
     ],
   );
