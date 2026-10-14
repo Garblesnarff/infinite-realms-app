@@ -197,8 +197,19 @@ describe('detectDeclaredAttack', () => {
     });
   });
 
-  it('treats I attack with no weapon as an Unarmed Strike', () => {
+  it('treats a bare I attack with no weapon as the default equipped weapon (#569)', () => {
     const attack = detectDeclaredAttack('I attack the professor', actors);
+    expect(attack).toMatchObject({
+      verb: 'attack',
+      actorName: 'Professor Emil Darkwater',
+      attackSource: 'weapon',
+      weaponStated: false,
+    });
+    expect(attack).not.toHaveProperty('weaponName');
+  });
+
+  it('keeps an explicit unarmed weapon word unarmed (#569)', () => {
+    const attack = detectDeclaredAttack('I attack the professor with my fists', actors);
     expect(attack).toMatchObject({
       verb: 'attack',
       actorName: 'Professor Emil Darkwater',

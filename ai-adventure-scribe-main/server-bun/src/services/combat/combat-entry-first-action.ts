@@ -162,10 +162,10 @@ function sourceFor(declared: DeclaredAttack): CombatEntryFirstActionSource {
   }
   const weaponClaim = declared.weaponName?.trim();
   if (weaponClaim && !isUnarmedWeaponClaim(weaponClaim)) return 'weapon';
-  if (
-    !weaponClaim &&
-    (isUnarmedAttackVerb(declared.verb) || declared.verb.toLowerCase() === 'attack')
-  ) {
+  // A bare "attack" is the generic declaration with no weapon claimed: the default equipped
+  // weapon answers (#569), exactly as the in-combat proposal resolves an unclaimed weapon.
+  // Only an explicit unarmed verb (punch, kick, …) is an unarmed strike (#1807).
+  if (!weaponClaim && isUnarmedAttackVerb(declared.verb)) {
     return 'unarmed';
   }
   return declared.attackSource ?? 'weapon';

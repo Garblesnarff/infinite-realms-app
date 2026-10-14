@@ -448,10 +448,16 @@ const resolveClauseAttack = (
     });
   }
   const namedWeapon = Boolean(match.weaponName && !isUnarmedWeaponClaim(match.weaponName));
-  const unarmedVerb = isUnarmedAttackVerb(match.verb) || match.verb === 'attack';
+  // A bare "attack" names no weapon and no unarmed body part: it is the generic attack
+  // declaration, resolved against the default equipped weapon downstream (#569) — the same
+  // rule the in-combat proposal applies when nothing was claimed. Only an explicit unarmed
+  // verb (punch, kick, …) or an unarmed weapon word ("with my fists") is an unarmed strike
+  // (#1807).
+  const unarmedVerb = isUnarmedAttackVerb(match.verb);
+  const unarmedWeaponWord = Boolean(match.weaponName && isUnarmedWeaponClaim(match.weaponName));
   return {
     ...toDeclaredAttack(match.verb, actor),
-    attackSource: namedWeapon || !unarmedVerb ? 'weapon' : 'unarmed',
+    attackSource: namedWeapon || (!unarmedVerb && !unarmedWeaponWord) ? 'weapon' : 'unarmed',
     weaponStated: namedWeapon,
     ...(namedWeapon ? { weaponName: match.weaponName } : {}),
   };

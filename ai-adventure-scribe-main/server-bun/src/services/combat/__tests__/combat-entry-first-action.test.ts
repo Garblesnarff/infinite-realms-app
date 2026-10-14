@@ -1,8 +1,24 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, mock } from 'bun:test';
 
 process.env.DATABASE_URL ??= 'postgres://test.invalid/unused';
 
+mock.module('../../lib/logger.js', () => ({
+  logger: {
+    info: mock(() => {}),
+    warn: mock(() => {}),
+    debug: mock(() => {}),
+    error: mock(() => {}),
+  },
+  combatLogger: {
+    info: mock(() => {}),
+    warn: mock(() => {}),
+    debug: mock(() => {}),
+    error: mock(() => {}),
+  },
+}));
+
 const { deriveCombatEntryFirstAction } = await import('../combat-entry-first-action.js');
+const { detectDeclaredAttack } = await import('../combat-intent-gate.js');
 
 const state = {
   encounter: { id: 'encounter-1' },
@@ -112,6 +128,19 @@ const quarterstaff = {
   proficient: true,
 };
 
+/** The shape listEquippedWeaponProfiles returns for a mundane equipped shortsword. */
+const shortsword = {
+  id: 'inventory-shortsword',
+  name: 'Shortsword',
+  damageDice: '1d6',
+  damageType: 'piercing',
+  normalRange: 5,
+  magicBonus: 0,
+  finesse: true,
+  ranged: false,
+  proficient: true,
+};
+
 describe('deriveCombatEntryFirstAction', () => {
   it('uses the declared scene name when the seated target still has a synthetic label', async () => {
     const firstAction = await deriveCombatEntryFirstAction(
@@ -157,7 +186,7 @@ describe('deriveCombatEntryFirstAction', () => {
     },
   );
 
-  it('resolves a bare attack with no stated weapon as Unarmed Strike', async () => {
+  it('resolves a bare attack with no stated weapon to the default equipped weapon (#569)', async () => {
     const firstAction = await deriveCombatEntryFirstAction(
       {
         sessionId: 'session-1',
@@ -169,11 +198,11 @@ describe('deriveCombatEntryFirstAction', () => {
     );
 
     expect(firstAction).toMatchObject({
-      source: 'unarmed',
-      attackSource: 'unarmed',
-      weaponId: 'unarmed-strike',
-      weaponName: 'Unarmed Strike',
-      combat_action: { weapon_id: 'unarmed-strike' },
+      source: 'weapon',
+      attackSource: 'weapon',
+      weaponId: 'inventory-quarterstaff',
+      weaponName: 'Quarterstaff',
+      combat_action: { weapon_id: 'inventory-quarterstaff' },
     });
   });
 
@@ -218,6 +247,58 @@ describe('deriveCombatEntryFirstAction', () => {
       weaponId: 'unarmed-strike',
       weaponName: 'Unarmed Strike',
       combat_action: { weapon_id: 'unarmed-strike' },
+    });
+  });
+
+  it('offers the default equipped weapon for a bare attack declaration (#569)', async () => {
+    // The DeclaredAttack is built by the real parser, the way /declared-attack produces it:
+    // a bare "I attack X" names no weapon, so the entry must offer the default equipped
+    // weapon — the same rule the in-combat proposal applies — not an Unarmed Strike.
+    const declaredAttack = detectDeclaredAttack('I attack the Dragon Goldscale', [
+      { name: 'Rook' },
+      { name: 'Dragon Goldscale' },
+    ]);
+    expect(declaredAttack).toMatchObject({ verb: 'attack', attackSource: 'weapon' });
+    expect(declaredAttack).not.toHaveProperty('weaponName');
+
+    const firstAction = await deriveCombatEntryFirstAction(
+      {
+        sessionId: 'session-1',
+        combatState: {
+          ...state,
+          participants: [
+            state.participants[0],
+            { ...state.participants[1], name: 'Dragon Goldscale' },
+          ],
+        },
+        player: { characterId: 'character-1', name: 'Rook' },
+        declaredAttack: declaredAttack!,
+      },
+      {
+        ...deps,
+        getParticipantAbilityProfile: async () => ({
+          level: 1,
+          scores: { str: 12, dex: 16 },
+          savingThrowProficiencies: [],
+          saveBonuses: {},
+          spellIds: [],
+        }),
+        listEquippedWeaponProfiles: async () => [shortsword],
+      },
+    );
+
+    expect(firstAction).toMatchObject({
+      type: 'attack',
+      source: 'weapon',
+      attackSource: 'weapon',
+      weaponId: 'inventory-shortsword',
+      weaponName: 'Shortsword',
+      roll_request: {
+        purpose: 'Shortsword attack against Dragon Goldscale',
+        formula: '1d20+5',
+        modifier: 5,
+      },
+      combat_action: { weapon_id: 'inventory-shortsword' },
     });
   });
 
