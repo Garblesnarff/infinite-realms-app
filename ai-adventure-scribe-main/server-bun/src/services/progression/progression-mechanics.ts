@@ -1,5 +1,6 @@
 import { abilityModifier } from '../../../../shared/ability-modifier';
 import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
+import { XP_TO_REACH_LEVEL } from '../../../../shared/xp-tables';
 
 /**
  * Progression Mechanics
@@ -11,28 +12,7 @@ import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
 /**
  * D&D 5E XP thresholds by level (PHB pg. 15)
  */
-export const XP_THRESHOLDS: Record<number, number> = {
-  1: 0,
-  2: 300,
-  3: 900,
-  4: 2700,
-  5: 6500,
-  6: 14000,
-  7: 23000,
-  8: 34000,
-  9: 48000,
-  10: 64000,
-  11: 85000,
-  12: 100000,
-  13: 120000,
-  14: 140000,
-  15: 165000,
-  16: 195000,
-  17: 225000,
-  18: 265000,
-  19: 305000,
-  20: 355000,
-};
+export { XP_TO_REACH_LEVEL as XP_THRESHOLDS };
 
 /**
  * Levels that grant Ability Score Improvement (PHB pg. 12)
@@ -74,9 +54,9 @@ export class ProgressionMechanics {
       return 0;
     }
     if (level > 20) {
-      return XP_THRESHOLDS[20] ?? 0;
+      return XP_TO_REACH_LEVEL[20] ?? 0;
     }
-    return XP_THRESHOLDS[level] ?? 0;
+    return XP_TO_REACH_LEVEL[level] ?? 0;
   }
 
   /**
@@ -84,7 +64,7 @@ export class ProgressionMechanics {
    */
   static calculateLevelFromXP(totalXp: number): number {
     for (let level = 20; level >= 1; level--) {
-      const threshold = XP_THRESHOLDS[level];
+      const threshold = XP_TO_REACH_LEVEL[level];
       if (threshold !== undefined && totalXp >= threshold) {
         return level;
       }
@@ -139,6 +119,6 @@ export class ProgressionMechanics {
    * Get the full XP table
    */
   static getXPTable(): Record<number, number> {
-    return { ...XP_THRESHOLDS };
+    return { ...XP_TO_REACH_LEVEL };
   }
 }

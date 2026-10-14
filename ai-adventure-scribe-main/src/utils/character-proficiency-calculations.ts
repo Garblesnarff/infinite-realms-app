@@ -9,6 +9,7 @@ import {
   SUBRACE_SKILL_PROFICIENCIES_MAP,
   CLASS_SAVING_THROW_PROFICIENCIES_MAP,
 } from './character-calculations-data';
+import { abilityModifier } from '../../shared/ability-modifier';
 
 import type { Character, CharacterClass, CharacterRace, Subrace } from '@/types/character';
 
@@ -176,7 +177,7 @@ export const calculateSavingThrowModifiers = (
       const proficient = profSet?.has(ability) ?? false;
       // An ability entry may lack its persisted modifier; derive it from the
       // score instead of yielding NaN from `undefined + pb` (#2343 C7).
-      const baseMod = data.modifier ?? Math.floor(((data.score ?? 10) - 10) / 2);
+      const baseMod = data.modifier ?? abilityModifier(data.score ?? 10);
       savingThrows[ability] = {
         modifier: baseMod + (proficient ? pb : 0),
         proficient,

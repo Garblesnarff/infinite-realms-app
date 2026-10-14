@@ -16,6 +16,7 @@
  * @see /shared/weapon-proficiency.ts
  */
 
+import { abilityModifier } from '../../../shared/ability-modifier';
 import { isWeaponProficientWithAny } from '../../../shared/weapon-proficiency';
 
 import type { WeaponProficiencySubject } from '../../../shared/weapon-proficiency';
@@ -60,7 +61,7 @@ export interface WeaponAttackBonus {
   ability: 'strength' | 'dexterity';
 }
 
-const abilityMod = (score?: number): number => Math.floor(((score ?? 10) - 10) / 2);
+const abilityMod = (score?: number): number => abilityModifier(score ?? 10);
 
 /**
  * The sheet's attack bonus for one inventory weapon, computed the way the

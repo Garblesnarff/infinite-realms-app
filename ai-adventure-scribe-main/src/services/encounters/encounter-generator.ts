@@ -1,6 +1,7 @@
 import { generateSocialEncounter, generateExplorationEncounter } from './social-templates';
 import { loadMonsters } from './srd-loader';
 import { getDifficultyAdjustment } from './telemetry';
+import { encounterXpPerCharacter } from '../../../shared/xp-tables';
 
 import type {
   EncounterGenerationInput,
@@ -16,18 +17,6 @@ const SAMPLE_MONSTERS: MonsterDef[] = [
   { id: 'srd:orc', name: 'Orc', cr: 0.5, xp: 100, tags: ['hills', 'forest'] },
   { id: 'srd:bandit', name: 'Bandit', cr: 0.125, xp: 25, tags: ['road'] },
 ];
-
-// Per-character XP thresholds per 5e (SRD 5.1). Levels 1-5 sufficient for MVP; extend as needed.
-const XP_THRESHOLDS: Record<
-  number,
-  { easy: number; medium: number; hard: number; deadly: number }
-> = {
-  1: { easy: 25, medium: 50, hard: 75, deadly: 100 },
-  2: { easy: 50, medium: 100, hard: 150, deadly: 200 },
-  3: { easy: 75, medium: 150, hard: 225, deadly: 400 },
-  4: { easy: 125, medium: 250, hard: 375, deadly: 500 },
-  5: { easy: 250, medium: 500, hard: 750, deadly: 1100 },
-};
 
 const MULTIPLIERS = [
   { count: 1, mult: 1 },
@@ -45,8 +34,7 @@ function partyAverages(levels: number[]) {
 }
 
 function difficultyBudget(size: number, avgLevel: number, diff: Difficulty): number {
-  const per = XP_THRESHOLDS[avgLevel] ?? XP_THRESHOLDS[Object.keys(XP_THRESHOLDS).length];
-  return (per[diff] || per.medium) * size;
+  return encounterXpPerCharacter(avgLevel, diff) * size;
 }
 
 function effectiveXp(xpPerMonster: number, count: number): number {
