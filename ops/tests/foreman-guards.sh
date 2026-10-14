@@ -122,5 +122,52 @@ printf '%s\n' "t 2026-10-14 pr=5 0.10 sha=abcdef12 dry-run-verdict" "t 2026-10-1
 got=$(attempts 5 abcdef12)
 [ "$got" = 1 ] && ok "attempts: dry-run rows are not attempts (got $got)" || bad "attempts: got '$got', want 1"
 
+# ---- #586 follow-ups ----------------------------------------------------------
+# issue_task: the "## Task (catjam)" heading the catjam issues use.
+printf '%s\n' "intro" "## Task (catjam)" "drop the dead call" "## Notes" "not this" > "$TMP/issue-catjam.txt"
+rc=0
+BODY_FILE=$TMP/issue-catjam.txt REPO=x/y bash -euo pipefail -c '
+  gh() { case "$*" in *.title*) echo "Dead call" ;; *) cat "$BODY_FILE" ;; esac; }
+  . "$1"; issue_task 8; echo END' _ "$FUNCS" > "$TMP/itc.out" || rc=$?
+got=$(cat "$TMP/itc.out"); [ "$rc" = 0 ] || got="rc=$rc"
+[ "$got" = $'## Issue #8: Dead call\n\ndrop the dead call\nEND' ] && ok "issue_task: ## Task (catjam) heading" || bad "issue_task (catjam): got '${got:0:80}'"
+
+# reviewer scope: only catjam/ branches and Jules PRs.
+eval "$(grep -E '^(is_jules|in_scope)\(\)' "$HERE/../foreman/review.sh")"
+expect "in_scope: catjam branch" 0 in_scope catjam/523-usespells-calls
+expect "in_scope: jules/ branch" 0 in_scope jules/33-token-lease-tests-4093067214957886031
+expect "in_scope: jules-<id> branch" 0 in_scope jules-4509757697115893744-51b67e07
+expect "in_scope: Jules fix- branch with session id" 0 in_scope fix-reduced-motion-consolidation-101-6753896271757081518
+expect "in_scope: release-please" 1 in_scope release-please--branches--main
+expect "in_scope: crew codex branch" 1 in_scope codex/200-proficiency
+expect "in_scope: ops branch" 1 in_scope ops/claude-bash-guard
+
+# reviewer: no-diff rows count as attempts, dry-run ones do not.
+printf '%s\n' "t 2026-10-14 pr=6 0 sha=00aa11bb no-diff" "t 2026-10-14 pr=6 0 sha=00aa11bb dry-run-no-diff" > "$LEDGER"
+got=$(attempts 6 00aa11bb)
+[ "$got" = 1 ] && ok "attempts: a no-diff row is an attempt (got $got)" || bad "attempts no-diff: got '$got', want 1"
+
+# typecheck baseline: only errors that main does not have count, whatever
+# their line numbers.
+eval "$(grep -E '^tc_norm\(\)' "$HERE/../foreman/catjam-runner.sh")"
+printf '%s\n' "src/a.ts(10,5): error TS2339: Property 'x' does not exist." "src/b.ts(3,1): error TS2304: Cannot find name 'y'." > "$TMP/tc-base.txt"
+printf '%s\n' "src/a.ts(12,5): error TS2339: Property 'x' does not exist." "src/b.ts(3,1): error TS2304: Cannot find name 'y'." \
+  "src/c.ts(1,1): error TS2322: Type 'string' is not assignable." "Found 3 errors." > "$TMP/tc-new.txt"
+got=$(comm -13 <(tc_norm "$TMP/tc-base.txt") <(tc_norm "$TMP/tc-new.txt"))
+[ "$got" = "src/c.ts: error TS2322: Type 'string' is not assignable." ] && ok "tc_norm: one new error, a moved one is not new" || bad "tc_norm: got '$got'"
+: > "$TMP/tc-empty.txt"
+got=$(set -euo pipefail; tc_norm "$TMP/tc-empty.txt"; echo END)
+[ "$got" = END ] && ok "tc_norm: no errors under pipefail" || bad "tc_norm empty: got '$got'"
+
+# tsc_app: two parallel jobs never run tsc at the same time.
+sed -n '/^tsc_app() {/,/^}/p' "$HERE/../foreman/catjam-runner.sh" > "$TMP/tsc-funcs.sh"
+mkdir -p "$TMP/state"
+rc=0
+STATE=$TMP/state APP=app L=$TMP/tsc-order.log bash -euo pipefail -c '
+  as_foreman() { echo start >> "$L"; sleep 0.5; echo end >> "$L"; }
+  . "$1"; tsc_app d1 /dev/null & tsc_app d2 /dev/null & wait' _ "$TMP/tsc-funcs.sh" || rc=$?
+got=$(tr '\n' ' ' < "$TMP/tsc-order.log")
+[ "$rc" = 0 ] && [ "$got" = "start end start end " ] && ok "tsc_app: parallel calls are serialized" || bad "tsc_app: rc=$rc order '$got'"
+
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]

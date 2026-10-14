@@ -2,7 +2,9 @@
 # realms-reviewer (#586): headless Sonnet reviewer + daily summary.
 #
 # Runs INSIDE the realms-foreman container (ops/foreman/Dockerfile), started by
-# realms-reviewer.service hourly at :50 UTC. For each open same-repo PR whose
+# realms-reviewer.service hourly at :50 UTC. It reviews only catjam/ branches
+# and Jules PRs; release-please, crew and hand-made PRs keep the human
+# strategist. For each such open same-repo PR whose
 # newest trusted "Strategist review" comment (token owner, OWNER/MEMBER) is not
 # at the current head and whose CI has finished (max 8 per run, max 2 attempts
 # per PR head), it pre-fetches the PR, diff, checks, failed logs, comments and
@@ -118,6 +120,7 @@ ci_finished() { # 0 when every check at the head has completed (and at least one
 }
 
 is_jules() { [[ $1 == jules* || $1 =~ -[0-9]{15,}$ ]]; }
+in_scope() { [[ $1 == catjam/* ]] || is_jules "$1"; } # in_scope <head ref>
 
 # ---- one review ------------------------------------------------------------
 # prefetch <pr> <sha> <ref> <dir>: everything the review needs, as files, so the
@@ -185,8 +188,22 @@ review_pr() {
   out=$STATE/claude-$n.json
   # A failed fetch must not hand the model empty files, and must not stop the tick.
   prefetch "$n" "$sha" "$ref" "$dir" || true
-  if ! jq -e --arg sha "$sha" '.head_sha == $sha' "$dir/pr/pr.json" > /dev/null 2>&1 || [ ! -s "$dir/pr/diff.patch" ]; then
+  if ! jq -e --arg sha "$sha" '.head_sha == $sha' "$dir/pr/pr.json" > /dev/null 2>&1; then
     logline "pr=#$n sha=$s8 result=prefetch-failed-or-head-moved"
+    rm -rf "$dir"; return 0
+  fi
+  if [ ! -s "$dir/pr/diff.patch" ]; then
+    # gh pr diff fails the same way every time on some PRs (e.g. a diff too
+    # large for the API). Count it as an attempt, and on the last one say so
+    # on the PR, so it gets a human review instead of being skipped silently.
+    local nd=no-diff
+    [ "$POST" = 1 ] || nd=dry-run-no-diff
+    echo "$(date -u +%FT%TZ) $(today) pr=$n 0 sha=$s8 $nd" >> "$LEDGER"
+    logline "pr=#$n sha=$s8 result=no-diff (gh pr diff failed or was empty)"
+    if [ "$POST" = 1 ] && [ "$(attempts "$n" "$s8")" -ge "$MAX_ATTEMPTS" ]; then
+      gh api "repos/$REPO/issues/$n/comments" -f body="realms-reviewer: could not read this PR's diff at $s8 ($MAX_ATTEMPTS tries; gh pr diff failed or was empty, e.g. a diff too large for the API). No verdict from the bot; this head needs a human strategist review." > /dev/null ||
+        say "pr #$n: no-diff comment failed"
+    fi
     rm -rf "$dir"; return 0
   fi
   {
@@ -309,6 +326,7 @@ review_tick() {
   while IFS=$'\t' read -r n sha ref first; do
     [ -n "$n" ] || continue
     [ -z "$ONLY_PR" ] || [ "$n" = "$ONLY_PR" ] || continue
+    { [ "$POST" = 0 ] && [ -n "$ONLY_PR" ]; } || in_scope "$ref" || continue # --pr may dry-run any PR
     [ "$done_n" -lt "$MAX_PRS" ] || break
     case $first in *" at ${sha:0:8}"*) continue ;; esac
     if [ "$(attempts "$n" "${sha:0:8}")" -ge "$MAX_ATTEMPTS" ]; then

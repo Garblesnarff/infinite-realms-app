@@ -37,6 +37,7 @@ JOBS=$WORK/jobs          # one worktree per issue, owned by foreman
 FHOME=$WORK/home         # foreman's HOME (bun cache, opencode cache)
 LOG=$STATE/catjam-runner.log
 ACTIVE=$STATE/active     # one marker per running job; leftovers = a job that died
+BASELINES=$STATE/tc-baseline  # tsc output per main sha: <sha>.txt
 
 PUSH=1
 ONLY_ISSUE=""
@@ -55,7 +56,7 @@ fi
 export GH_TOKEN GH_REPO=$REPO GH_PROMPT_DISABLED=1 GH_NO_UPDATE_NOTIFIER=1
 
 umask 022
-mkdir -p "$STATE" "$JOBS" "$FHOME" "$ACTIVE"
+mkdir -p "$STATE" "$JOBS" "$FHOME" "$ACTIVE" "$BASELINES"
 chmod 700 "$STATE"
 FUID=$(id -u foreman)
 chown "$FUID:$FUID" "$JOBS" "$FHOME"
@@ -134,7 +135,7 @@ issue_task() { # the issue's "## Task" section, else title + body
   title=$(gh api "repos/$REPO/issues/$n" --jq .title)
   body=$(gh api "repos/$REPO/issues/$n" --jq '.body // ""')
   local task
-  task=$(awk '/^## Task[[:space:]]*$/{f=1; next} f && /^## /{exit} f' <<< "$body")
+  task=$(awk '/^## Task([[:space:]]+\(catjam\))?[[:space:]]*$/{f=1; next} f && /^## /{exit} f' <<< "$body")
   if [ -n "$(printf '%s' "$task" | tr -d '[:space:]')" ]; then
     printf '## Issue #%s: %s\n\n%s\n' "$n" "$title" "$task"
   else
@@ -212,6 +213,32 @@ install_deps() {
     [ \$a = 0 ] && [ \$b = 0 ]" > "$2" 2>&1
 }
 
+# tsc_app <dir> <outfile>: the client typecheck, one at a time. Each run peaks
+# near 2 GB and the container has 4 GB, so two parallel jobs must not overlap.
+tsc_app() {
+  local rc=0
+  {
+    flock 8
+    as_foreman bash -c "cd '$1/$APP' && timeout 15m bun x tsc --noEmit -p tsconfig.app.json" > "$2" 2>&1 8>&- || rc=$?
+  } 8> "$STATE/tsc.lock"
+  return "$rc"
+}
+
+# record_baseline <name>: tsc output for the main commit a new job starts from,
+# cached per sha, so run_checks can tell new errors from main's own.
+record_baseline() {
+  local sha f
+  sha=$(wt_git "$1" rev-parse HEAD)
+  f=$BASELINES/$sha.txt
+  [ -s "$f" ] && return 0
+  tsc_app "$JOBS/$1" "$f.tmp" || true
+  mv "$f.tmp" "$f"
+  find "$BASELINES" -name '*.txt' -mtime +3 -delete 2> /dev/null || true
+}
+
+# tc_norm: tsc error lines without positions, sorted, for comparing two runs.
+tc_norm() { grep 'error TS' "$1" | sed -E 's/\([0-9]+,[0-9]+\)//' | sort || true; }
+
 # run_checks <name> <outdir>: client typecheck + unit tests for the changed area.
 # Writes typecheck.txt / tests.txt and sets TC_RC / TEST_RC.
 run_checks() {
@@ -220,18 +247,38 @@ run_checks() {
   # tsconfig.json is a solution file (files: [] + references), so a plain
   # `tsc --noEmit` checks nothing. Check the app project and fail only on errors
   # in files this job changed: main carries pre-existing errors.
-  local tc_all=$out/typecheck-full.txt tc_rc=0 changed_rel
-  as_foreman bash -c "cd '$dir/$APP' && timeout 15m bun x tsc --noEmit -p tsconfig.app.json" > "$tc_all" 2>&1 || tc_rc=$?
+  local tc_all=$out/typecheck-full.txt tc_rc=0 changed_rel count base_sha base_file base_note new_errs
+  tsc_app "$dir" "$tc_all" || tc_rc=$?
   changed_rel=$(sed -n "s#^$APP/##p" <<< "$files")
+  count=$(grep -c 'error TS' "$tc_all" || true)
+  # Main's baseline: the merge-base with origin/main (a new job's start commit).
+  base_sha=$(wt_git "$name" merge-base HEAD origin/main 2> /dev/null || true)
+  base_file=$BASELINES/$base_sha.txt
+  new_errs=""
+  if [ -n "$base_sha" ] && [ -s "$base_file" ]; then
+    base_note="main ${base_sha:0:8} has $(grep -c 'error TS' "$base_file" || true)"
+    new_errs=$(comm -13 <(tc_norm "$base_file") <(tc_norm "$tc_all"))
+  else
+    base_note="main baseline not recorded"
+  fi
   TC_RC=0
   {
-    echo "\$ bun x tsc --noEmit -p tsconfig.app.json   (exit $tc_rc; $(grep -c 'error TS' "$tc_all" || true) errors repo-wide; errors in changed files below)"
+    echo "\$ bun x tsc --noEmit -p tsconfig.app.json   (exit $tc_rc; $count errors repo-wide, $base_note)"
     if [ "$tc_rc" -gt 2 ]; then
       TC_RC=$tc_rc; tail -n 40 "$tc_all"
-    elif [ -n "$changed_rel" ] && awk -F'(' 'NR == FNR { c[$0]; next } ($1 in c)' <(printf '%s\n' "$changed_rel") "$tc_all" > "$out/tc-changed.txt" && [ -s "$out/tc-changed.txt" ]; then
-      TC_RC=1; cat "$out/tc-changed.txt"
     else
-      echo "(none)"
+      echo "Errors in changed files:"
+      if [ -n "$changed_rel" ] && awk -F'(' 'NR == FNR { c[$0]; next } ($1 in c)' <(printf '%s\n' "$changed_rel") "$tc_all" > "$out/tc-changed.txt" && [ -s "$out/tc-changed.txt" ]; then
+        TC_RC=1; cat "$out/tc-changed.txt"
+      else
+        echo "(none)"
+      fi
+      echo "Errors not on main (any file):"
+      if [ -n "$new_errs" ]; then
+        TC_RC=1; awk 'NR <= 40' <<< "$new_errs"
+      else
+        echo "(none)"
+      fi
     fi
   } > "$out/typecheck.txt"
   rm -f "$out/tc-changed.txt"
@@ -307,7 +354,7 @@ write_body() { # write_body <out> <issue> <round> <minutes> <oc_rc>
       "$MODEL" "$oc_ver" "$round" "$oc_rc" "$mins"
     printf '## Changed files\n\n```text\n'
     wt_git "$JOB" diff --cached --stat origin/main | tail -n 60
-    printf '```\n\n## Client typecheck: `tsc -p tsconfig.app.json`, errors in changed files (exit %s)\n\n' "$TC_RC"
+    printf '```\n\n## Client typecheck: `tsc -p tsconfig.app.json`, errors in changed files or not on main (exit %s)\n\n' "$TC_RC"
     fence "$OUT/typecheck.txt"
     printf '\n## Unit tests for the changed area (exit %s)\n\n' "$TEST_RC"
     fence "$OUT/tests.txt"
@@ -364,6 +411,8 @@ run_job() {
   if ! install_deps "$JOBS/$JOB" "$OUT/install.txt"; then
     say "issue #$n: bun install failed (see $OUT/install.txt); continuing so the model can still read the code"
   fi
+  # Before the model edits anything: a new job's worktree is exactly main.
+  [ "$mode" = fix ] || record_baseline "$JOB"
 
   local oc_rc=0
   as_foreman bash -c "cd '$JOBS/$JOB' && timeout --kill-after=60 '$JOB_TIMEOUT' opencode run --auto -m '$MODEL' \"\$(cat '$JOBS/prompt-$n.md')\"" \
