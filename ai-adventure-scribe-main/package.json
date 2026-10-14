@@ -36,7 +36,6 @@
     "test:migrations": "bash scripts/test-migrations.sh",
     "e2e": "playwright test",
     "seed:test-data": "node scripts/seed-test-data.js",
-    "seed:foundry": "bun run db/seeds/foundry-example-data.ts",
     "install:all": "bun install",
     "mvp:setup": "echo 'Setting up MVP...' && bun install && echo 'Next: Copy .env.example to .env.local and configure your Supabase credentials'",
     "mvp:build": "bun run lint && bun run build",

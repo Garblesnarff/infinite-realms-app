@@ -1,5 +1,5 @@
 /**
- * Participant add/remove/update and battle-map movement callbacks.
+ * Participant add/remove/update and movement callbacks.
  */
 
 import { useCallback } from 'react';
