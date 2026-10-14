@@ -23,6 +23,12 @@ export interface PlayerSpellCastResult {
   movementOnly: boolean;
   /** The player cancelled on the target-saves card: nothing is sent to the engine. */
   cancelled?: boolean;
+  /**
+   * The bridge's 45 s timer fired while the prompt showed "Rolls for you in N s", so the
+   * game rolls for the player (#566). The action-bar caller commits with no player die;
+   * a dismissed or refused popup reports plain `autoRolled: true` and stops there.
+   */
+  timedOut?: boolean;
 }
 
 const labelFor = (
@@ -138,7 +144,16 @@ export async function askPlayerForSpellCast(
         ...rollSpec,
       }),
     );
-    if (outcome.d20 === null) return { autoRolled: true, movementOnly: false };
+    if (outcome.d20 === null) {
+      // The bridge's 45 s timer is the one auto-roll the popup promised ("Rolls for you in
+      // N s"), so it reports `timedOut` and the engine rolls (#566). Every other null die
+      // keeps the old shape.
+      return {
+        autoRolled: true,
+        movementOnly: false,
+        ...(outcome.timedOut === true ? { timedOut: true } : {}),
+      };
+    }
     return { d20: outcome.d20, autoRolled: false, movementOnly: false };
   } catch (error) {
     logger.warn('[SpellAttack] popup failed; the engine rolls this spell', error);

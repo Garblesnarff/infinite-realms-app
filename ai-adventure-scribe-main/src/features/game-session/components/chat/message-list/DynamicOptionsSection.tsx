@@ -343,7 +343,10 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
           // #2652 round 4: same gap as the spell branch — if the proposal was
           // refused/failed or the popup did not produce a die, stop here.
           // A movement-only approach needs no die.
-          if (!die.movementOnly && (die.autoRolled || die.d20 == null)) {
+          // #566: the 45 s timer is the exception — its countdown promised the game
+          // rolls for the player, so the commit below runs with no player die and the
+          // engine rolls. A dismissed or refused popup still stops here.
+          if (!die.movementOnly && !die.timedOut && (die.autoRolled || die.d20 == null)) {
             setError('The attack could not be made. Nothing was spent.');
             return;
           }
@@ -420,7 +423,10 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
             // produce a die, stop here. Committing with an undefined d20 would let the
             // engine roll for the player — the bug this PR exists to close.
             // A movement-only cast needs no die.
-            if (!cast.movementOnly && (cast.autoRolled || cast.d20 == null)) {
+            // #566: the 45 s timer is the exception — its countdown promised the game
+            // rolls for the player, so the commit below runs with no player die and the
+            // engine rolls. A dismissed or refused popup still stops here.
+            if (!cast.movementOnly && !cast.timedOut && (cast.autoRolled || cast.d20 == null)) {
               setError(
                 cast.cancelled
                   ? 'The cast was cancelled. Nothing was spent.'

@@ -63,10 +63,15 @@ export interface PlayerAttackDieParams {
  * can wedge behind a modal is worse than a die the player did not personally throw. The
  * transcript still says the engine rolled, so a player who closed the popup never wonders
  * whether dice are being hidden.
+ *
+ * `timedOut` marks the one auto-roll the popup actually promised: the bridge's 45 s timer
+ * fired while the prompt showed "Rolls for you in N s", so the game rolls for the player
+ * (#566). The action-bar caller lets a timed-out attack commit with no player die (the engine
+ * rolls); a dismissed or refused popup reports plain `autoRolled: true` and still stops there.
  */
 export async function askPlayerForAttackDie(
   params: PlayerAttackDieParams,
-): Promise<{ d20?: number; autoRolled: boolean; movementOnly: boolean }> {
+): Promise<{ d20?: number; autoRolled: boolean; movementOnly: boolean; timedOut?: boolean }> {
   const { encounterId, action, actorLabel } = params;
   const targetId = action.target_ids[0];
   if (!targetId) return { autoRolled: true, movementOnly: false };
@@ -106,7 +111,16 @@ export async function askPlayerForAttackDie(
       advantage: !!proposal.advantage,
       disadvantage: !!proposal.disadvantage,
     });
-    if (outcome.d20 === null) return { autoRolled: true, movementOnly: false };
+    if (outcome.d20 === null) {
+      // The bridge's 45 s timer is the one auto-roll the popup promised ("Rolls for you in
+      // N s"), so it reports `timedOut` and the engine rolls (#566). Every other null die —
+      // a dismissed popup, a superseded prompt, no host — keeps the old shape.
+      return {
+        autoRolled: true,
+        movementOnly: false,
+        ...(outcome.timedOut === true ? { timedOut: true } : {}),
+      };
+    }
     return { d20: outcome.d20, autoRolled: false, movementOnly: false };
   } catch (error) {
     // A failed proposal must not cost the player their turn. The engine rolls it as it always

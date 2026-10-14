@@ -194,6 +194,33 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
     expect(onOptionSelect).not.toHaveBeenCalled();
   });
 
+  it('lets the engine roll when the 45 s timer expires instead of stopping (#566)', async () => {
+    // The prompt promised "Rolls for you in N s": the bridge timer settles
+    // { d20: null, timedOut: true }, so the chip commits with no player die and the
+    // engine rolls — unlike a refused/dismissed popup, which stops with a menu alert.
+    vi.mocked(askPlayerForAttackDie).mockResolvedValue({
+      autoRolled: true,
+      movementOnly: false,
+      timedOut: true,
+    });
+    render(
+      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
+    );
+    fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
+
+    await waitFor(() => expect(askPlayerForAttackDie).toHaveBeenCalled());
+    // The commit carries no player die: the engine rolls, as the countdown promised.
+    expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledWith(
+      'encounter-d5',
+      expect.objectContaining({ target_ids: [SWARM_1_ID], weapon_id: 'quarterstaff' }),
+      undefined,
+      'action_bar',
+    );
+    // No menu alert: nothing failed, and the DM never sees this attack as text.
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(onOptionSelect).not.toHaveBeenCalled();
+  });
+
   it('one attack with movement left does not end the turn (#263 CB-011)', async () => {
     // The Scholar still has 30 ft after the swing: the turn stays open and the refreshed
     // menu offers Move / End turn instead of the attack spending the whole turn.
@@ -776,6 +803,33 @@ describe('the spell-attack option runs the declare pipeline, never DM text (#258
     expect(onOptionSelect).not.toHaveBeenCalled();
     // The menu alert is shown.
     expect(await screen.findByRole('alert')).toHaveTextContent('could not be cast');
+  });
+
+  it('lets the engine roll when the 45 s timer expires instead of stopping (#566)', async () => {
+    // The prompt promised "Rolls for you in N s": the bridge timer settles
+    // { d20: null, timedOut: true }, so the chip commits with no player die and the
+    // engine rolls — unlike a refused/dismissed popup, which stops with a menu alert.
+    vi.mocked(askPlayerForSpellCast).mockResolvedValue({
+      autoRolled: true,
+      movementOnly: false,
+      timedOut: true,
+    });
+    render(
+      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
+    );
+    fireEvent.click(await screen.findByText('Cast Chill Touch'));
+
+    await waitFor(() => expect(askPlayerForSpellCast).toHaveBeenCalled());
+    // The commit carries no player die: the engine rolls, as the countdown promised.
+    expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledWith(
+      'encounter-d5',
+      expect.objectContaining({ action_type: 'cast_spell', target_ids: [SWARM_1_ID] }),
+      undefined,
+      'action_bar',
+    );
+    // No menu alert: nothing failed, and the DM never sees this cast as text.
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(onOptionSelect).not.toHaveBeenCalled();
   });
 
   it('refuses a stale attack-spell chip with no targets instead of sending it as chat text', async () => {
