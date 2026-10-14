@@ -82,6 +82,18 @@ describe('askPlayerForSpellCast', () => {
     expect(requestPlayerAttackRoll).not.toHaveBeenCalled();
   });
 
+  it('marks the bridge timer so the action bar lets the engine roll (#566)', async () => {
+    // The bridge's 45 s timer settles exactly this shape:
+    // settlePendingPlayerRoll({ d20: null, timedOut: true }).
+    vi.mocked(requestPlayerAttackRoll).mockResolvedValue({ d20: null, timedOut: true });
+
+    await expect(ask('fire-bolt')).resolves.toEqual({
+      autoRolled: true,
+      movementOnly: false,
+      timedOut: true,
+    });
+  });
+
   it('opens no popup for Magic Missile', async () => {
     await expect(ask('magic-missile')).resolves.toEqual({ autoRolled: true, movementOnly: false });
     expect(requestPlayerAttackRoll).not.toHaveBeenCalled();

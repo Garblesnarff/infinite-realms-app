@@ -101,6 +101,19 @@ describe('the player attack die', () => {
       await expect(ask()).resolves.toEqual({ autoRolled: true, movementOnly: false });
     });
 
+    it('marks the bridge timer so the action bar lets the engine roll (#566)', async () => {
+      vi.mocked(proposeAuthoritativeAttack).mockResolvedValue(LEGAL_PROPOSAL as any);
+      // The bridge's 45 s timer settles exactly this shape:
+      // settlePendingPlayerRoll({ d20: null, timedOut: true }).
+      vi.mocked(requestPlayerAttackRoll).mockResolvedValue({ d20: null, timedOut: true });
+
+      await expect(ask()).resolves.toEqual({
+        autoRolled: true,
+        movementOnly: false,
+        timedOut: true,
+      });
+    });
+
     it('falls back to the engine when the proposal itself fails', async () => {
       // A dead proposal endpoint must never cost the player their turn.
       vi.mocked(proposeAuthoritativeAttack).mockRejectedValue(new Error('gateway down'));
