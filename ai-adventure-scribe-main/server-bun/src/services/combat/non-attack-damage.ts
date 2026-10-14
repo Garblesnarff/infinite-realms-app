@@ -23,6 +23,8 @@ import { describeGoingDown } from './death-saves-service.js';
 import { instantDeathOutcome } from './hp-mechanics.js';
 import { recordDmTacticalFact } from './tactical-action-service.js';
 
+import type { DamageType } from '../../types/combat.js';
+
 export interface NonAttackDamageResult {
   vitals: CharacterVitals;
   /** Player-visible engine lines, in order. The DM receives the same sentences as tactical facts. */
@@ -98,7 +100,7 @@ export async function applyNonAttackDamage(
   userId: string,
   amount: number,
   sourceDescription = 'non-attack damage',
-  options: { critical?: boolean; damageType?: string } = {},
+  options: { critical?: boolean; damageType?: DamageType } = {},
 ): Promise<NonAttackDamageResult> {
   const live = amount > 0 ? await findLiveParticipant(characterId) : null;
 

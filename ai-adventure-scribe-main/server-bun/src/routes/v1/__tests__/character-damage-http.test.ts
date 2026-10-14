@@ -127,4 +127,19 @@ describe('character damage route wire body (#621)', () => {
 
     expect(response.status).toBe(422);
   });
+
+  it('rejects an invalid damageType at the schema boundary', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/v1/characters/character-1/damage', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer test-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ amount: 8, damageType: 'not-a-type' }),
+      }),
+    );
+
+    expect(response.status).toBe(422);
+  });
 });

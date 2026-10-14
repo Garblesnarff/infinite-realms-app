@@ -702,7 +702,23 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
       body: t.Object({
         amount: t.Number({ minimum: 0 }),
         critical: t.Optional(t.Boolean()),
-        damageType: t.Optional(t.String()),
+        damageType: t.Optional(
+          t.Union([
+            t.Literal('acid'),
+            t.Literal('bludgeoning'),
+            t.Literal('cold'),
+            t.Literal('fire'),
+            t.Literal('force'),
+            t.Literal('lightning'),
+            t.Literal('necrotic'),
+            t.Literal('piercing'),
+            t.Literal('poison'),
+            t.Literal('psychic'),
+            t.Literal('radiant'),
+            t.Literal('slashing'),
+            t.Literal('thunder'),
+          ]),
+        ),
       }),
     },
   )
