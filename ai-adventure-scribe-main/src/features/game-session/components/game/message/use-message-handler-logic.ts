@@ -643,6 +643,22 @@ export const useMessageHandlerLogic = ({
           abortController.signal,
         );
       };
+      // #633 PR2: progressive DM narration. Chunks accumulate into the
+      // dmMessageId row the early/final render already owns; the authoritative
+      // final text replaces this preview through the existing path below, so
+      // suppression, withholding and persistence guarantees are unchanged.
+      let streamedNarration = '';
+      const onStreamChunk = (chunk: string): void => {
+        if (abortController.signal.aborted) return;
+        streamedNarration += chunk;
+        updateMessage({
+          id: dmMessageId,
+          text: sanitizeDMText(streamedNarration),
+          sender: 'dm',
+          timestamp: new Date().toISOString(),
+          context: { intent: 'response' },
+        });
+      };
       // Pass necessary context to getAIResponse. It fetches its own campaign/char details if needed.
       // Use ref to get current messages to avoid stale closure
       const aiResponseMessage = await rejectWhenAborted(
@@ -759,6 +775,7 @@ export const useMessageHandlerLogic = ({
           dmMessageId,
           showEngineNotice,
           abortController.signal,
+          onStreamChunk,
         ),
         turnSignal,
       );

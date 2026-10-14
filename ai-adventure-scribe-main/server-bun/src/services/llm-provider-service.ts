@@ -31,6 +31,13 @@ export interface LLMGenerateOptions {
   history?: ChatMessage[];
   provider?: 'openrouter' | 'gemini';
   responseSchema?: Record<string, unknown>;
+  /**
+   * #633 PR2: when set, the OpenRouter call uses `stream: true` and this
+   * callback fires once per content delta as tokens arrive. The full text is
+   * still accumulated and returned in `LLMResponse.text`, so validation,
+   * retry and every downstream step behave exactly as non-streaming.
+   */
+  onToken?: (deltaText: string) => void;
 }
 
 export interface LLMExtractOptions {
@@ -228,6 +235,84 @@ const pickGeminiApiVersion = (modelId: string): 'v1' | 'v1beta' => {
   return /^gemini-2\.5-/i.test(modelId) ? 'v1' : 'v1beta';
 };
 
+type OpenRouterStreamUsage = {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
+};
+
+type OpenRouterStreamResult = {
+  text: string;
+  usage?: OpenRouterStreamUsage;
+  /** A provider `error` event arrived on the stream after HTTP 200. */
+  streamError?: string;
+};
+
+/**
+ * #633 PR2: consume an OpenRouter chat-completions SSE stream (`stream: true`).
+ * Fires `onToken` once per `choices[0].delta.content` increment, accumulates
+ * the full completion text, and captures the `usage` object OpenRouter sends
+ * on the final chunk. `:` keepalive comment lines are skipped; the stream
+ * ends at `data: [DONE]`.
+ */
+const consumeOpenRouterStream = async (
+  response: Response,
+  onToken: (deltaText: string) => void,
+): Promise<OpenRouterStreamResult> => {
+  const result: OpenRouterStreamResult = { text: '' };
+  if (!response.body) return { ...result, streamError: 'empty response body' };
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  const handleData = (data: string): void => {
+    if (data === '[DONE]') return;
+    let chunk: {
+      choices?: Array<{ delta?: { content?: string } }>;
+      usage?: OpenRouterStreamUsage;
+      error?: { message?: string } | string;
+    };
+    try {
+      chunk = JSON.parse(data) as typeof chunk;
+    } catch {
+      return;
+    }
+    if (chunk.error) {
+      result.streamError =
+        typeof chunk.error === 'string' ? chunk.error : (chunk.error.message ?? 'stream error');
+      return;
+    }
+    const delta = chunk.choices?.[0]?.delta?.content;
+    if (typeof delta === 'string' && delta.length > 0) {
+      result.text += delta;
+      onToken(delta);
+    }
+    if (chunk.usage) result.usage = chunk.usage;
+  };
+  const handleBlock = (block: string): void => {
+    for (const line of block.split('\n')) {
+      if (line.startsWith(':')) continue;
+      const match = /^data:\s?(.*?)\r?$/.exec(line);
+      if (match) handleData(match[1]);
+    }
+  };
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let sep: number;
+    while ((sep = buffer.indexOf('\n\n')) >= 0) {
+      handleBlock(buffer.slice(0, sep));
+      buffer = buffer.slice(sep + 2);
+    }
+  }
+  // Flush any buffered partial character, then a trailing event without a
+  // terminating blank line (defensive).
+  buffer += decoder.decode();
+  if (buffer.length > 0) handleBlock(buffer);
+  return result;
+};
+
 export class LLMProviderService {
   /**
    * Generate text via OpenRouter or Gemini
@@ -242,6 +327,7 @@ export class LLMProviderService {
       history,
       provider = 'openrouter',
       responseSchema,
+      onToken,
     } = options;
 
     try {
@@ -254,6 +340,7 @@ export class LLMProviderService {
           history,
           responseSchema,
           systemPrompt,
+          onToken,
         );
       }
 
@@ -333,6 +420,7 @@ export class LLMProviderService {
     history?: ChatMessage[],
     responseSchema?: Record<string, unknown>,
     systemPrompt?: string,
+    onToken?: (deltaText: string) => void,
   ): Promise<LLMResponse> {
     const breaker = getCircuitBreaker('llm:openrouter');
     breaker.allowOrThrow();
@@ -395,6 +483,9 @@ export class LLMProviderService {
         // #352: ask OpenRouter for the usage detail object so cache hits are
         // visible (`usage.prompt_tokens_details.cached_tokens`).
         usage: { include: true },
+        // #633 PR2: stream tokens when the caller wants progress callbacks.
+        // Usage rides the final stream chunk automatically.
+        ...(onToken ? { stream: true } : {}),
         ...(responseSchema
           ? {
               response_format: {
@@ -421,8 +512,30 @@ export class LLMProviderService {
           });
 
           if (response.ok) {
-            const data = (await response.json()) as ORChatResp;
-            const text: string = data.choices?.[0]?.message?.content ?? '';
+            let text: string;
+            let usage: ORChatResp['usage'] | undefined;
+            if (onToken) {
+              // #633 PR2: accumulate the streamed completion, firing the
+              // token callback per delta. Everything below (validation,
+              // retry, usage accounting) is shared with the non-stream path.
+              const streamed = await consumeOpenRouterStream(response, onToken);
+              if (streamed.streamError) {
+                lastFailure = { status: 502, details: streamed.streamError };
+                logger.warn({
+                  msg: 'LLM_OPENROUTER_STREAM_EVENT_ERROR',
+                  model: candidate,
+                  retry: retry + 1,
+                  error: streamed.streamError,
+                });
+                continue;
+              }
+              text = streamed.text;
+              usage = streamed.usage;
+            } else {
+              const data = (await response.json()) as ORChatResp;
+              text = data.choices?.[0]?.message?.content ?? '';
+              usage = data.usage;
+            }
             if (responseSchema) {
               try {
                 validateStructuredResponseText(text, responseSchema);
@@ -451,12 +564,12 @@ export class LLMProviderService {
             // #350 B1: the key works again — drop the key-limit signal so a
             // later breaker-open (from unrelated failures) is not misread.
             setProviderKeyLimitActive('openrouter', false);
-            const inputTokens = data.usage?.prompt_tokens ?? 0;
-            const outputTokens = data.usage?.completion_tokens ?? 0;
+            const inputTokens = usage?.prompt_tokens ?? 0;
+            const outputTokens = usage?.completion_tokens ?? 0;
             // #352: prompt-cache accounting. Absent details mean no cache
             // information (older path or provider without caching).
-            const cachedInputTokens = data.usage?.prompt_tokens_details?.cached_tokens ?? 0;
-            const cacheWriteTokens = data.usage?.prompt_tokens_details?.cache_write_tokens ?? 0;
+            const cachedInputTokens = usage?.prompt_tokens_details?.cached_tokens ?? 0;
+            const cacheWriteTokens = usage?.prompt_tokens_details?.cache_write_tokens ?? 0;
             return {
               text,
               model: candidate,
@@ -464,7 +577,7 @@ export class LLMProviderService {
               usage: {
                 inputTokens,
                 outputTokens,
-                totalTokens: data.usage?.total_tokens ?? inputTokens + outputTokens,
+                totalTokens: usage?.total_tokens ?? inputTokens + outputTokens,
                 cachedInputTokens,
                 cacheWriteTokens,
               },

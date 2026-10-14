@@ -188,6 +188,12 @@ export class AIService {
     isDiceRollMessage?: boolean;
     /** #2418: aborts the generate request, so a cancelled cast stops waiting for the DM. */
     signal?: AbortSignal;
+    /**
+     * #633 PR2: progressive narration chunks, in order, while the turn
+     * streams. The resolved AIResponse is still built from the authoritative
+     * final text.
+     */
+    onStream?: (chunk: string) => void;
   }): Promise<AIResponse> {
     // Dedupe in-flight chat calls (2s TTL)
     const key = keyFor(
@@ -762,6 +768,8 @@ export class AIService {
           combatEntry,
           dmReply: params.dmReply,
           signal: params.signal,
+          // #633 PR2: opt the DM turn into server-sent narration deltas.
+          ...(params.onStream ? { onStream: params.onStream } : {}),
         });
         reportTurnPhase(
           params.onTurnPhase,
