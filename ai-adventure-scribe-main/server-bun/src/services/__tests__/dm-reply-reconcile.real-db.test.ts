@@ -3114,6 +3114,24 @@ ${playerInput}
     expect(await sheetInventory(characterId)).toEqual([]);
   });
 
+  test('#463: a pickup the model narrates but leaves null writes nothing — the Hark failure shape', async () => {
+    // Hark rows NT-039..NT-140 / N2-020..N2-164: the DM narrates the pickup ("You pocket
+    // the brass key") but the `items` field stays null, so the writer correctly applies
+    // nothing and the item never reaches Inventory. This pins the server's correct
+    // behavior on the model-faithful envelope; the #218 step-3 tests above prove the
+    // converse (items populated → the row lands). The fix is on the emission side:
+    // the `items` schema property now carries a description (#310 precedent).
+    const playerInput = 'I pick up the brass key.';
+    await playerSays(playerInput);
+    const turn = await dmTurn({
+      ...fighter,
+      playerInput,
+      reply: storyReply('You pocket the brass key.', { items: null }),
+    });
+    expect(turn.status).toBe(200);
+    expect(await sheetInventory(turn.character.id)).toEqual([]);
+  });
+
   test('#218 step 4: an applied condition reaches the sheet once, and removal clears it', async () => {
     await seedConditionLibrary();
     const playerInput = 'I breathe the spores in.';
