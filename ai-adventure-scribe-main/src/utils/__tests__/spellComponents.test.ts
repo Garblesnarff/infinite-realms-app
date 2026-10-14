@@ -106,6 +106,14 @@ describe('spellComponents', () => {
       expect(result.hasComponents).toBe(false);
       expect(result.missingComponents[0]).toContain('Material (A diamond worth 500gp)');
     });
+
+    it('should return true when character conditions is undefined and spell has verbal component', () => {
+      const char = mockCharacter({ conditions: undefined });
+      const spell = mockSpell({ components_verbal: true });
+      const result = hasRequiredComponents(char, spell);
+      expect(result.hasComponents).toBe(true);
+      expect(result.missingComponents).toHaveLength(0);
+    });
   });
 
   describe('isSpellPrepared', () => {
@@ -160,6 +168,22 @@ describe('spellComponents', () => {
         abilityScores: { wisdom: { modifier: 2 } } as any,
       });
       expect(getSpellPreparationLimit(char)).toBe(5);
+    });
+
+    it('should return level (modifier 0) when abilityScores is missing', () => {
+      const char = mockCharacter({
+        level: 3,
+        abilityScores: undefined,
+      });
+      expect(getSpellPreparationLimit(char)).toBe(3);
+    });
+
+    it('should return modifier + level when abilityScores is present', () => {
+      const char = mockCharacter({
+        level: 4,
+        abilityScores: { intelligence: { modifier: 3 } } as any,
+      });
+      expect(getSpellPreparationLimit(char)).toBe(7);
     });
   });
 
