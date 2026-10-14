@@ -4,7 +4,6 @@ import type { AbilityScores, Character } from '@/types/character';
 import type { CharacterSpellDisplay } from '@/utils/spell-lookup';
 
 import logger from '@/lib/logger';
-import { characterSpellService } from '@/services/characterSpellApi';
 import { applyRestResultToCharacter, restApi } from '@/services/rest-api';
 import { calculateProficiencyBonus } from '@/utils/character/basic-math';
 import { getCharacterSpells } from '@/utils/spell-lookup';
@@ -71,7 +70,7 @@ export function resolveSpellcastingAbility(character: Character): keyof AbilityS
 export const useSpells = (character: Character, onUpdate?: () => void): UseSpellsReturn => {
   // State for spell data
   const [spells, setSpells] = useState<CharacterSpellDisplay[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Long-rest state is separate from the page-level loading/error: a failed
@@ -95,7 +94,7 @@ export const useSpells = (character: Character, onUpdate?: () => void): UseSpell
 
   // Load character spells from character data with optional API enhancement
   useEffect(() => {
-    const loadSpells = async (): Promise<void> => {
+    const loadSpells = (): void => {
       logger.debug('🎯 [useSpells] Loading spells for character:', character?.name || 'Unknown');
 
       setError(null);
@@ -108,32 +107,6 @@ export const useSpells = (character: Character, onUpdate?: () => void): UseSpell
 
       // Set primary data immediately
       setSpells(primarySpells);
-
-      // Optional: Try to enhance with API data (non-blocking)
-      // @ts-expect-error #523 CharacterSpellService has no isEnabled method
-      if (character?.id && characterSpellService.isEnabled()) {
-        try {
-          setLoading(true);
-          const apiSpellData = await characterSpellService.getCharacterSpells(character.id);
-          const apiSpells = [...apiSpellData.cantrips, ...apiSpellData.spells];
-
-          if (apiSpells.length > 0) {
-            logger.info('🔮 [useSpells] Enhanced with API data:', {
-              apiSpellCount: apiSpells.length,
-              primarySpellCount: primarySpells.length,
-            });
-
-            // Merge API data with character data
-            const enhancedSpells: CharacterSpellDisplay[] = [...apiSpells];
-
-            setSpells(enhancedSpells);
-          }
-        } catch (err) {
-          logger.warn('🚫 [useSpells] API enhancement failed, using character data:', err);
-        } finally {
-          setLoading(false);
-        }
-      }
     };
 
     loadSpells();
