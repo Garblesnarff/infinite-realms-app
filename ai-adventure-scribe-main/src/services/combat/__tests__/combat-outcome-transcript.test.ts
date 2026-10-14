@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { rosterEntryForParticipant } from '../../../../shared/engine-display-name';
 import { buildNpcEngineMessage } from '../../../../shared/npc-engine-message';
 import { DEATH_SAVE_FAILED } from '../../../../shared/test-fixtures/engine-results';
 import {
@@ -373,6 +374,50 @@ describe('spell engine lines', () => {
         '⚙️ Engine: The Scholar rolled 6 on their death saving throw — FAILURE (0 successes, 2 failures).',
       ]);
     });
+  });
+
+  /**
+   * #567: the engine line and the DM fact must name the enemy the same way. The
+   * participant below is the shape `mapAuthoritativeCombat` produces from a seated row:
+   * the DM-invented seat label in `name`, the bible heading in `displayName` (from
+   * `monsterAttack.displayName`). The spell result follows the `CombatAttackService`
+   * save-spell branch: no `actorName` / `targetName`, so the name comes from the roster
+   * alone — the same roster the server's `participantLabel` reads.
+   */
+  it('names a save-spell target by its display name, matching the server DM fact (#567)', () => {
+    const roster = [
+      { id: 'rook', name: 'Rook', participantType: 'player' },
+      {
+        id: 'cultist-1',
+        name: 'Hidden Figure',
+        displayName: 'Monotony Cultist 1',
+        participantType: 'monster',
+      },
+    ].map(rosterEntryForParticipant);
+    const line = formatCombatEngineOutcome(
+      { actor_id: 'rook', action_type: 'cast_spell', target_ids: ['cultist-1'] },
+      {
+        hit: false,
+        targetAC: 0,
+        totalAttackRoll: 9,
+        finalDamage: 2,
+        damageType: 'acid',
+        targetNewHp: 6,
+        targetIsConscious: true,
+        targetIsDead: false,
+        spellName: 'Acid Splash',
+        saveAbility: 'dex',
+        saveRoll: 9,
+        saveDC: 13,
+        saved: false,
+      },
+      roster,
+    );
+
+    expect(line).toBe(
+      '⚙️ Engine: Rook cast Acid Splash at Monotony Cultist 1 — DEX save 9 vs DC 13 — FAIL. 2 acid damage. Monotony Cultist 1 is now at 6 HP.',
+    );
+    expect(line).not.toContain('Hidden Figure');
   });
 });
 

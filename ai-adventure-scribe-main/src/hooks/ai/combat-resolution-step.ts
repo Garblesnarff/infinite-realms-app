@@ -138,6 +138,14 @@ export interface CombatResolutionParams {
     isUnconscious?: boolean;
     currentHitPoints?: number;
     maxHitPoints?: number;
+    /**
+     * The player-facing bestiary name (#567). The engine roster resolves it here, exactly
+     * like the server's `participantLabel`; without it an engine line falls back to the
+     * DM-invented seat label while the DM fact the narration repeats uses the bible heading.
+     */
+    displayName?: string | null;
+    /** Stored attack profile; only its `displayName` is read by the roster builder. */
+    monsterAttack?: unknown;
   }>;
   /** Actors whose refused declarations are already queued for their next legal turn. */
   queuedIntentActorIds?: string[];
