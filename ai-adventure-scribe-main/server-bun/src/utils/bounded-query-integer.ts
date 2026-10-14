@@ -1,3 +1,5 @@
+import { parseBoundedIntegerCore } from '../../../shared/bounded-integer.js';
+
 interface BoundedQueryIntegerOptions {
   min: number;
   max: number;
@@ -8,10 +10,13 @@ export function parseBoundedQueryInteger(
   value: unknown,
   { min, max }: BoundedQueryIntegerOptions,
 ): number | undefined {
-  if (typeof value !== 'string' || !/^\d+$/.test(value)) return undefined;
-
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed)) return undefined;
-
-  return Math.min(max, Math.max(min, parsed));
+  return parseBoundedIntegerCore(value, {
+    min,
+    max,
+    allowSigned: false,
+    allowNumbers: false,
+    trim: false,
+    outOfRange: 'clamp',
+    invalidFallback: undefined,
+  });
 }

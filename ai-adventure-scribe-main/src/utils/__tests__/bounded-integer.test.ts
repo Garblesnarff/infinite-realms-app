@@ -1,13 +1,26 @@
 import { describe, expect, it } from 'vitest';
 
+import { parseBoundedIntegerCore } from '../../../shared/bounded-integer';
 import { parseBoundedInteger } from '../bounded-integer';
 
 describe('parseBoundedInteger', () => {
   const options = { fallback: 3, min: 0, max: 100 };
 
-  it('accepts complete safe integers', () => {
+  it('accepts complete safe integers as numbers or strings', () => {
     expect(parseBoundedInteger('42', options)).toBe(42);
     expect(parseBoundedInteger(7, options)).toBe(7);
+    expect(parseBoundedInteger('0', options)).toBe(0);
+    expect(parseBoundedInteger(0, options)).toBe(0);
+  });
+
+  it('trims whitespace surrounding valid integer strings', () => {
+    expect(parseBoundedInteger('  42  ', options)).toBe(42);
+    expect(parseBoundedInteger('  0  ', options)).toBe(0);
+  });
+
+  it('accepts negative signs but rejects explicit positive signs', () => {
+    expect(parseBoundedInteger('-5', { ...options, min: -10 })).toBe(-5);
+    expect(parseBoundedInteger('+5', options)).toBe(3);
   });
 
   it('clamps complete integers to the configured range', () => {
@@ -21,7 +34,7 @@ describe('parseBoundedInteger', () => {
   });
 
   it.each(['12px', '1.5', '1e2', '0x10', '', 'Infinity', '9007199254740992'])(
-    'rejects %j',
+    'rejects invalid or unsafe representation %j',
     (value) => {
       expect(parseBoundedInteger(value, options)).toBe(3);
     },
@@ -30,5 +43,22 @@ describe('parseBoundedInteger', () => {
   it('uses the fallback for missing values', () => {
     expect(parseBoundedInteger(null, options)).toBe(3);
     expect(parseBoundedInteger(undefined, options)).toBe(3);
+  });
+});
+
+describe('parseBoundedIntegerCore reject contract', () => {
+  it('requires outOfRangeFallback when outOfRange is reject (type-level regression)', () => {
+    const omitted = { min: 0, max: 100, invalidFallback: 0, outOfRange: 'reject' as const };
+    // Without outOfRangeFallback the core would return undefined typed as a value.
+    // The @ts-expect-error fails the typecheck if that call ever compiles again.
+    // @ts-expect-error reject mode requires outOfRangeFallback
+    const callWithoutFallback = (): unknown => parseBoundedIntegerCore('150', omitted);
+    expect(typeof callWithoutFallback).toBe('function');
+  });
+
+  it('returns the explicit fallback for out-of-range input in reject mode', () => {
+    const options = { min: 0, max: 100, invalidFallback: 0, outOfRange: 'reject' as const };
+    expect(parseBoundedIntegerCore('150', { ...options, outOfRangeFallback: null })).toBeNull();
+    expect(parseBoundedIntegerCore('150', { ...options, outOfRangeFallback: -7 })).toBe(-7);
   });
 });
