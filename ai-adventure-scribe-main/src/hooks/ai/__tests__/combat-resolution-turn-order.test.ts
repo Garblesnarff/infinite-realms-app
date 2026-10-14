@@ -1,4 +1,8 @@
+/* eslint-disable max-lines */
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildNpcEngineMessage } from '../../../../shared/npc-engine-message';
@@ -6,14 +10,18 @@ import {
   ENEMY_HITS_PLAYER,
   FIGHT_ROSTER,
   PLAYER_HITS_ENEMY,
+  PLAYER_SPELL_ATTACK_HITS,
   REEVES,
   SCHOLAR,
 } from '../../../../shared/test-fixtures/engine-results';
 
 import type { CombatEngineBlock } from '@/utils/combat-engine-blocks';
 
+import { useMessages } from '@/hooks/use-messages';
 import { markAuthReady } from '@/lib/auth-gate';
 import { setPlayerRollHost } from '@/services/combat/player-roll-bridge';
+import { userDataApi } from '@/services/user-data-api';
+import { combatEngineBlocksFromContext } from '@/utils/combat-engine-blocks';
 
 /**
  * #263 turn-order half (strategist Required #2 on PR #600): the proving test.
@@ -29,6 +37,11 @@ import { setPlayerRollHost } from '@/services/combat/player-roll-bridge';
  * `writeNpcEngineRow` calls); the attack results copy the full output of
  * `CombatAttackService.resolveAttack` + `exposeAttackVisibility`
  * (`shared/test-fixtures/engine-results.ts`), fields included that the mappers always set.
+ *
+ * The final order assertion goes through the REAL use-messages ordering: the settled reply
+ * (with its combatEngineBlocks and a producer-shaped sequenceNumber) and the dispatched
+ * session-engine-rows are fed through `useMessages` (renderHook), which merges them with
+ * the real `compareMessages` (sequenceNumber). The test does not concatenate arrays itself.
  */
 const chatWithDM = vi.fn();
 const repairRefusedCombatAction = vi.fn();
@@ -45,6 +58,12 @@ vi.mock('@/services/combat/combat-repair', () => ({
 }));
 vi.mock('@/services/combat/player-movement-remaining', () => ({
   actorMovementRemaining: vi.fn().mockResolvedValue(0),
+}));
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    listSessionMessages: vi.fn(),
+    saveSessionMessages: vi.fn(),
+  },
 }));
 
 const { resolveDeclaredCombatActions } = await import('../combat-resolution-step');
@@ -66,6 +85,20 @@ const LONGSWORD_PROPOSAL = {
   targetLabel: 'Captain Sarah Reeves',
 };
 
+/** `proposeAuthoritativeSpell`'s whole return for The Scholar's Chill Touch at Reeves. */
+const CHILL_TOUCH_PROPOSAL = {
+  movementOnly: false,
+  spellId: 'chill-touch',
+  spellName: 'Chill Touch',
+  kind: 'attack',
+  attackBonus: 6,
+  saveDC: 13,
+  targetAc: 13,
+  advantage: false,
+  disadvantage: false,
+  targetLabel: 'Captain Sarah Reeves',
+};
+
 /** What the DM writes for a typed longsword attack by The Scholar at Captain Sarah Reeves. */
 const dmAttackAction = {
   actor_id: SCHOLAR.id,
@@ -74,6 +107,17 @@ const dmAttackAction = {
   weapon_id: 'longsword',
   spell_id: null,
   slot_level: null,
+  movement_feet: 0,
+};
+
+/** What the DM writes for a typed Chill Touch by The Scholar at Captain Sarah Reeves. */
+const dmSpellAction = {
+  actor_id: SCHOLAR.id,
+  action_type: 'cast_spell' as const,
+  target_ids: [REEVES.id],
+  weapon_id: null,
+  spell_id: 'chill-touch',
+  slot_level: 0,
   movement_feet: 0,
 };
 
@@ -139,21 +183,86 @@ const NPC_TURNS = {
   engineRows: [],
 };
 
-const resolve = (combatActions: unknown[]) =>
+const resolve = (combatActions: unknown[], declarationText: string) =>
   resolveDeclaredCombatActions({
     encounterId: ENCOUNTER_ID,
     sessionId: SESSION_ID,
     combatActions,
-    declarationText: 'I attack Captain Sarah Reeves with my longsword.',
+    declarationText,
     aiContext: {},
     conversationHistory: [],
     participants: FIGHT_ROSTER,
     playerInputOrigin: 'typed',
   } as any);
 
+const createQueryClient = (): QueryClient =>
+  new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+
+const Wrapper = ({ children }: { children: React.ReactNode }): React.ReactElement => {
+  const client = React.useMemo(() => createQueryClient(), []);
+  return React.createElement(QueryClientProvider, { client }, children);
+};
+
+/**
+ * Feed the settled reply and the dispatched rows through the REAL use-messages ordering.
+ *
+ * The reply's sequenceNumber is producer-shaped: the server assigns sequences in the order
+ * messages are written. The `timeline` records the settle's actual commit order —
+ * `appendEngineBlock` (which builds the reply's blocks) runs before the movement check,
+ * which runs before `crossTurnBoundary` (which writes the rows). If the blocks were built
+ * before the rows were written, the reply sorts before them (sequence 10 < 11); if a
+ * production mutation moved the boundary ahead of the block commit, the reply sorts after
+ * (sequence 13 > 12) and the order assertion goes red.
+ */
+const orderThroughUseMessages = async (
+  replyText: string,
+  blocks: CombatEngineBlock[],
+  timeline: string[],
+  rows: Array<{ id: string; sequence: number; text: string; timestamp: string; context: unknown }>,
+) => {
+  const blocksFirst = timeline[0] === 'movement-check';
+  const replySequence = blocksFirst ? 10 : 13;
+  // Snapshot the rows: the `collectRows` listener is still attached and would double-count
+  // the manual dispatch below.
+  const rowsSnapshot = rows.map((row) => ({ ...row }));
+  vi.mocked(userDataApi.listSessionMessages).mockResolvedValue({
+    messages: [
+      {
+        id: 'dm-reply-1',
+        message: replyText,
+        speaker_type: 'dm',
+        timestamp: new Date().toISOString(),
+        sequence_number: replySequence,
+        context: { combatEngineBlocks: blocks },
+        game_sessions: { characters: null },
+      },
+    ],
+    total: 1,
+    hasMore: false,
+  });
+  const { result } = renderHook(() => useMessages(SESSION_ID), { wrapper: Wrapper });
+  await waitFor(() => expect(result.current.data).toHaveLength(1));
+  act(() => {
+    window.dispatchEvent(
+      new CustomEvent('session-engine-rows', {
+        detail: rowsSnapshot.map((row) => ({
+          id: row.id,
+          sessionId: SESSION_ID,
+          sequence: row.sequence,
+          text: row.text,
+          timestamp: row.timestamp,
+          context: row.context,
+        })),
+      }),
+    );
+  });
+  await waitFor(() => expect(result.current.data).toHaveLength(1 + rowsSnapshot.length));
+  return result.current.data;
+};
+
 describe('the turn-order transcript of a settled player attack (#263)', () => {
   const rollPrompts: unknown[] = [];
-  const dispatchedRows: Array<{ text: string }> = [];
+  const dispatchedRows: Array<{ id: string; sequence: number; text: string; timestamp: string; context: unknown }> = [];
   /**
    * Temporal order of the settle's two commits. `appendEngineBlock` is synchronous in
    * `settleExecutedAction`, ahead of the awaited movement check; the end_turn fetch is
@@ -163,8 +272,16 @@ describe('the turn-order transcript of a settled player attack (#263)', () => {
   const timeline: string[] = [];
 
   const collectRows = (event: Event): void => {
-    for (const row of (event as CustomEvent<Array<{ text?: string }>>).detail ?? []) {
-      if (row.text) dispatchedRows.push({ text: row.text });
+    for (const row of (event as CustomEvent<Array<{ id?: string; sequence?: number; text?: string; timestamp?: string; context?: unknown }>>).detail ?? []) {
+      if (row.text) {
+        dispatchedRows.push({
+          id: row.id ?? `row-${row.sequence}`,
+          sequence: row.sequence ?? 0,
+          text: row.text,
+          timestamp: row.timestamp ?? new Date().toISOString(),
+          context: row.context,
+        });
+      }
     }
   };
 
@@ -197,13 +314,18 @@ describe('the turn-order transcript of a settled player attack (#263)', () => {
         return jsonResponse(200, { session_state: null });
       }
       const body = JSON.parse(String(init.body));
-      if (body.phase === 'propose')
+      if (body.phase === 'propose') {
+        if (body.intent?.type === 'spell')
+          return jsonResponse(200, { accepted: true, proposal: CHILL_TOUCH_PROPOSAL });
         return jsonResponse(200, { accepted: true, proposal: LONGSWORD_PROPOSAL });
+      }
       // The real route returns `{ accepted, result, engineRows }`; the client reads
       // `payload.result`. A player's attack writes no dialogue row server-side
       // (`writesEngineRow` is false for it), so its result carries no `engineRows`.
       if (body.intent.type === 'attack')
         return jsonResponse(200, { accepted: true, result: PLAYER_HITS_ENEMY, engineRows: [] });
+      if (body.intent.type === 'spell')
+        return jsonResponse(200, { accepted: true, result: PLAYER_SPELL_ATTACK_HITS, engineRows: [] });
       if (body.intent.type === 'end_turn') {
         timeline.push('end_turn-sent');
         return jsonResponse(200, {
@@ -229,7 +351,7 @@ describe('the turn-order transcript of a settled player attack (#263)', () => {
   });
 
   it('reads attack, then the player result row, then "ended their turn", then the enemy rows', async () => {
-    const result = await resolve([dmAttackAction]);
+    const result = await resolve([dmAttackAction], 'I attack Captain Sarah Reeves with my longsword.');
 
     // The player threw their own die through the real prompt.
     expect(rollPrompts).toHaveLength(1);
@@ -261,10 +383,63 @@ describe('the turn-order transcript of a settled player attack (#263)', () => {
     expect(BOUNDARY_ROW.text).toContain('The Scholar ended their turn');
     expect(ENEMY_ROW.text).toContain('Captain Sarah Reeves rolled 14 + 0 = 14 vs AC 11');
 
-    // The whole client transcript in order: player's result, boundary, enemy rows.
-    const transcript = [...engineLines, ...dispatchedRows.map((row) => row.text)];
-    expect(transcript[0]).toContain('The Scholar rolled 14 + 4 = 18 vs AC 13');
-    expect(transcript[1]).toContain('The Scholar ended their turn');
-    expect(transcript[2]).toContain('Captain Sarah Reeves rolled 14 + 0 = 14 vs AC 11');
+    // The whole client transcript in order, through the REAL use-messages merge: the
+    // settled reply (carrying the player's result in its combatEngineBlocks) sorts before
+    // the boundary and enemy rows by the real `compareMessages` (sequenceNumber).
+    const ordered = await orderThroughUseMessages(
+      'The cold steel finds its mark.',
+      result.combatEngineBlocks as CombatEngineBlock[],
+      timeline,
+      dispatchedRows,
+    );
+    expect(ordered).toHaveLength(3);
+    // The reply carries the player's result in its blocks.
+    const replyBlocks = combatEngineBlocksFromContext(ordered[0].context as Record<string, unknown>);
+    expect(replyBlocks).toHaveLength(1);
+    expect(replyBlocks[0].lines[0]).toContain('The Scholar rolled 14 + 4 = 18 vs AC 13');
+    // Then "ended their turn", then the enemy rows — the CB-024 / N2-034 order.
+    expect(ordered[1].text).toContain('The Scholar ended their turn');
+    expect(ordered[2].text).toContain('Captain Sarah Reeves rolled 14 + 0 = 14 vs AC 11');
+  });
+
+  it('orders a settled Chill Touch before "ended their turn" and the enemy rows', async () => {
+    const result = await resolve([dmSpellAction], 'I cast Chill Touch at Captain Sarah Reeves.');
+
+    // The player threw their own die through the real prompt.
+    expect(rollPrompts).toHaveLength(1);
+
+    // The player's spell result row, rendered by the real outcome mapper.
+    const engineLines = (result.combatEngineBlocks as CombatEngineBlock[]).flatMap(
+      (block) => block.lines,
+    );
+    expect(engineLines).toHaveLength(1);
+    expect(engineLines[0]).toContain('The Scholar');
+    expect(engineLines[0]).toContain('Chill Touch');
+
+    // The spell resolved before the boundary was crossed: propose, commit, then end_turn.
+    const intents = fetchMock.mock.calls
+      .filter(([url]: any[]) => String(url).includes('/v1/combat/'))
+      .map(([, init]: any[]) => {
+        const body = JSON.parse(String(init.body));
+        return body.phase === 'propose' ? 'propose' : body.intent.type;
+      });
+    expect(intents).toEqual(['propose', 'spell', 'end_turn']);
+
+    // The player's result row was committed before the boundary was crossed.
+    expect(timeline).toEqual(['movement-check', 'end_turn-sent']);
+
+    // The whole client transcript in order, through the REAL use-messages merge.
+    const ordered = await orderThroughUseMessages(
+      'The grave-chill takes hold.',
+      result.combatEngineBlocks as CombatEngineBlock[],
+      timeline,
+      dispatchedRows,
+    );
+    expect(ordered).toHaveLength(3);
+    const replyBlocks = combatEngineBlocksFromContext(ordered[0].context as Record<string, unknown>);
+    expect(replyBlocks).toHaveLength(1);
+    expect(replyBlocks[0].lines[0]).toContain('Chill Touch');
+    expect(ordered[1].text).toContain('The Scholar ended their turn');
+    expect(ordered[2].text).toContain('Captain Sarah Reeves rolled 14 + 0 = 14 vs AC 11');
   });
 });
