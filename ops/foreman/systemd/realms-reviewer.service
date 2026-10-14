@@ -10,7 +10,7 @@ Requires=docker.service
 [Service]
 Type=oneshot
 Nice=10
-TimeoutStartSec=55min
+TimeoutStartSec=100min
 TimeoutStopSec=90s
 ExecStartPre=-/usr/bin/docker rm -f realms-reviewer
 ExecStart=/usr/bin/docker run --rm --init --name realms-reviewer --stop-timeout 60 \
