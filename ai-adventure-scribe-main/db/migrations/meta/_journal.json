@@ -155,6 +155,13 @@
       "when": 1791774621945,
       "tag": "0021_combat_participants_xp",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792004488979,
+      "tag": "0022_perpetual_malice",
+      "breakpoints": true
     }
   ]
 }
