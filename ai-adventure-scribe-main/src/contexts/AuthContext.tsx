@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 
 import { useBlogRole, type BlogRole } from '@/hooks/auth/use-blog-role';
 import { useUserPlan, type UserPlan } from '@/hooks/auth/use-user-plan';
+import { fetchWithTimeout } from '@/infrastructure/api/fetch-with-timeout';
 import { resetAuthGate, markAuthReady } from '@/lib/auth-gate';
 import logger from '@/lib/logger';
 import {
@@ -14,10 +15,15 @@ import {
   SESSION_ENDED_EVENT,
   SESSION_ENDED_STORAGE_KEY,
   SESSION_STORAGE_KEY,
+  TokenRefreshTransportError,
   type WorkOSSession,
 } from '@/services/auth/TokenService';
 
 export type { BlogRole, UserPlan };
+
+/** Ceiling for the session-verification round trip so a hung backend cannot
+ *  leave the app on "Loading..." forever (#565). */
+const AUTH_VERIFY_TIMEOUT_MS = 15_000;
 
 // WorkOS User type (compatible with existing code)
 interface WorkOSUser {
@@ -32,6 +38,12 @@ interface AuthContextType {
   session: WorkOSSession | null;
   sessionEnded: boolean;
   loading: boolean;
+  /**
+   * The auth backend could not be reached (network error, timeout, or 5xx),
+   * e.g. mid deploy-swap. The stored session is intact — this is not a
+   * sign-out — and the UI should offer a retry (#565).
+   */
+  connectionError: boolean;
   blogRole: BlogRole | null;
   blogRoleLoading: boolean;
   isBlogAdmin: boolean;
@@ -61,6 +73,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<WorkOSSession | null>(null);
   const [sessionEnded, setSessionEnded] = useState(() => isSessionEnded());
   const [loading, setLoading] = useState(true);
+  const [connectionError, setConnectionError] = useState(false);
   const sessionRef = React.useRef<WorkOSSession | null>(session);
   sessionRef.current = session;
 
@@ -85,6 +98,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Block all API calls until auth verification completes
     resetAuthGate();
     setLoading(true);
+    setConnectionError(false);
+
+    // #565: a transport failure (network error, timeout) or a 5xx is not an
+    // auth verdict — the stored session stays intact so a deploy swap cannot
+    // sign the player out. The UI surfaces connectionError with a retry.
+    // Re-persist: the mount effect writes persistSession(null) while this
+    // verification is in flight, so restore the cached pair here.
+    const handleTransientFailure = (): void => {
+      persistSession(cachedSession);
+      setSession(cachedSession);
+      setConnectionError(true);
+      setLoading(false);
+      markAuthReady(); // Unblock API calls — they fail fast on their own now
+    };
 
     if (isSessionEnded()) {
       endSession();
@@ -107,12 +134,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Verify token and get user data from backend
       const apiUrl = import.meta.env?.VITE_API_URL || '';
       const verifyToken = async (accessToken: string) => {
-        const res = await fetch(`${apiUrl}/api/trpc/auth.me`, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
+        // #565: bound the round trip — a blackholed connection must fail,
+        // not leave the app on "Loading..." forever.
+        const res = await fetchWithTimeout(
+          `${apiUrl}/api/trpc/auth.me`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
           },
-        });
+          AUTH_VERIFY_TIMEOUT_MS,
+        );
         if (!res.ok) return { ok: false as const, status: res.status };
         const payload = await res.json();
         return { ok: true as const, userData: payload.result?.data };
@@ -126,23 +159,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // page load after idle silently signed the user out and the first
       // API calls raced out with a stale token (cold-load 401 bug).
       if (!result.ok && result.status === 401 && cachedSession.refresh_token) {
-        const newTokens = await refreshAccessTokenOnce(
-          cachedSession.refresh_token,
-          cachedSession.access_token,
-        );
-        if (newTokens) {
-          activeSession = {
-            access_token: newTokens.accessToken,
-            refresh_token: newTokens.refreshToken,
-          };
-          persistSession(activeSession);
-          result = await verifyToken(activeSession.access_token);
+        try {
+          const newTokens = await refreshAccessTokenOnce(
+            cachedSession.refresh_token,
+            cachedSession.access_token,
+          );
+          if (newTokens) {
+            activeSession = {
+              access_token: newTokens.accessToken,
+              refresh_token: newTokens.refreshToken,
+            };
+            persistSession(activeSession);
+            result = await verifyToken(activeSession.access_token);
+          }
+        } catch (error) {
+          if (error instanceof TokenRefreshTransportError) {
+            handleTransientFailure();
+            return;
+          }
+          throw error;
         }
       }
 
       if (!result.ok) {
         if (isSessionEnded()) {
           endSession();
+          return;
+        }
+
+        if (result.status >= 500) {
+          // The backend never gave an auth verdict (e.g. deploy swap) —
+          // keep the stored session and let the player retry.
+          handleTransientFailure();
           return;
         }
 
@@ -163,6 +211,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearSessionEnded();
         setSession(activeSession);
         setSessionEnded(false);
+        setConnectionError(false);
         setUser({
           id: userData.id,
           email: userData.email,
@@ -185,12 +234,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (isSessionEnded()) {
         endSession();
       } else {
+        // #565: the backend could not be reached at all — not an auth verdict.
+        // Keep the stored session; the UI offers a retry via connectionError.
         clearSessionEnded();
-        persistSession(null);
-        setSession(null);
-        setUser(null);
         setSessionEnded(false);
-        markAuthReady(); // Unblock API calls even on error
+        handleTransientFailure();
       }
     } finally {
       setLoading(false);
@@ -265,10 +313,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (isTokenExpiringSoon(activeSession.access_token)) {
         logger.info('Access token expiring soon, refreshing...');
-        const newTokens = await refreshAccessTokenOnce(
-          activeSession.refresh_token,
-          activeSession.access_token,
-        );
+        let newTokens: Awaited<ReturnType<typeof refreshAccessTokenOnce>> = null;
+        try {
+          newTokens = await refreshAccessTokenOnce(
+            activeSession.refresh_token,
+            activeSession.access_token,
+          );
+        } catch (error) {
+          // #565: the refresh endpoint is unreachable (deploy swap) — not an
+          // auth verdict. Leave the session alone; the next tick retries.
+          if (!(error instanceof TokenRefreshTransportError)) {
+            logger.error('Unexpected token refresh rejection:', { error });
+          }
+        }
 
         if (newTokens) {
           logger.info('Token refreshed successfully');
@@ -359,6 +416,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       session,
       sessionEnded,
       loading,
+      connectionError,
       blogRole,
       blogRoleLoading,
       isBlogAdmin,
@@ -377,6 +435,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       session,
       sessionEnded,
       loading,
+      connectionError,
       blogRole,
       blogRoleLoading,
       isBlogAdmin,

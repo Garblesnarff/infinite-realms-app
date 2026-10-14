@@ -1,5 +1,9 @@
 import { logServerRequestId } from './request-id-log';
 
+import {
+  DEFAULT_REQUEST_TIMEOUT_MS,
+  startRequestTimeout,
+} from '@/infrastructure/api/fetch-with-timeout';
 import { waitForAuth } from '@/lib/auth-gate';
 import logger from '@/lib/logger';
 import {
@@ -7,10 +11,12 @@ import {
   loadCachedSession,
   persistSession,
   refreshAccessTokenOnce,
+  TokenRefreshTransportError,
 } from '@/services/auth/TokenService';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 const LLM_GENERATE_ROUTE_PREFIX = '/v1/llm/generate';
+const IMAGE_GENERATE_ROUTE_PREFIX = '/v1/images/generate';
 const MEMORY_EXTRACTION_JOBS_ROUTE = '/v1/memory-extraction/jobs';
 export const NETWORK_RETRY_BUDGET_MS = 20_000;
 export const BACKGROUND_LLM_RETRY_BUDGET_MS = 5_000;
@@ -90,8 +96,14 @@ function getRouteTimeoutMs(path: string): number | undefined {
   // Memory extraction has no timeout: the server answers 202 at once and finishes the job
   // itself (#2148). The 10 s timeout that used to sit here aborted every production extraction
   // and logged each one as LLM_API_REQUEST_ABORTED.
+  if (path.startsWith(MEMORY_EXTRACTION_JOBS_ROUTE)) return undefined;
   if (isGenerateRoute(path)) return 90_000;
-  return undefined;
+  // Image generation is model work like /v1/llm/generate: slow but bounded by the
+  // caller, not by the transport. Everything else gets a ceiling so a deploy
+  // swap that blackholes a connection surfaces as an error instead of hanging
+  // the UI forever (#565).
+  if (path.startsWith(IMAGE_GENERATE_ROUTE_PREFIX)) return undefined;
+  return DEFAULT_REQUEST_TIMEOUT_MS;
 }
 
 function getErrorName(error: unknown): string {
@@ -273,48 +285,64 @@ export async function fetchWithAuth(
   options: FetchWithAuthOptions = {},
 ): Promise<Response> {
   const { retryBudgetMs = NETWORK_RETRY_BUDGET_MS, ...requestInit } = options;
+  // #565: bound the whole attempt so a blackholed connection (deploy swap)
+  // fails instead of hanging the caller forever. Exempt routes (model work,
+  // memory extraction) keep no ceiling — see getRouteTimeoutMs.
+  const timeoutMs = getRouteTimeoutMs(path);
+  const timeoutHandle =
+    timeoutMs === undefined ? undefined : startRequestTimeout(timeoutMs, requestInit.signal);
+  // The timeout signal replaces the caller's signal on the wire: it fires on
+  // timeout AND when the caller's signal aborts (see startRequestTimeout).
+  const effectiveInit = timeoutHandle ? { ...requestInit, signal: timeoutHandle.signal } : requestInit;
   const request = (accessToken?: string): Promise<Response> =>
     requestWithNetworkRetry(
       path,
-      () => fetch(`${API_BASE_URL}${path}`, buildRequestInit(requestInit, accessToken)),
-      requestInit.signal,
+      () => fetch(`${API_BASE_URL}${path}`, buildRequestInit(effectiveInit, accessToken)),
+      timeoutHandle?.signal ?? requestInit.signal,
       retryBudgetMs,
     );
 
-  const response = await request();
-  if (response.status !== 401 || !isV1Route(path)) return response;
-
-  const session = loadCachedSession();
-  if (!session?.refresh_token) {
-    logger.warn('AUTH_RETRY_AFTER_401', { route: path, outcome: 'refresh_unavailable' });
-    throw new SessionExpiredError();
-  }
-
-  let tokens: Awaited<ReturnType<typeof refreshAccessTokenOnce>>;
   try {
-    tokens = await refreshAccessTokenOnce(session.refresh_token, session.access_token);
-  } catch {
-    logger.warn('AUTH_RETRY_AFTER_401', { route: path, outcome: 'refresh_failed' });
-    throw new SessionExpiredError();
-  }
+    const response = await request();
+    if (response.status !== 401 || !isV1Route(path)) return response;
 
-  if (!tokens) {
-    logger.warn('AUTH_RETRY_AFTER_401', { route: path, outcome: 'refresh_failed' });
-    throw new SessionExpiredError();
-  }
+    const session = loadCachedSession();
+    if (!session?.refresh_token) {
+      logger.warn('AUTH_RETRY_AFTER_401', { route: path, outcome: 'refresh_unavailable' });
+      throw new SessionExpiredError();
+    }
 
-  persistSession({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken });
-  const retryResponse = await request(tokens.accessToken);
-  if (retryResponse.status === 401) {
-    logger.warn('AUTH_RETRY_AFTER_401', { route: path, outcome: 'session_expired' });
-    throw new SessionExpiredError();
-  }
+    let tokens: Awaited<ReturnType<typeof refreshAccessTokenOnce>>;
+    try {
+      tokens = await refreshAccessTokenOnce(session.refresh_token, session.access_token);
+    } catch (error) {
+      // A transport failure reaching the refresh endpoint is not an auth
+      // verdict — let it surface as-is instead of reporting session-expired
+      // (#565). The stored session stays intact.
+      if (error instanceof TokenRefreshTransportError) throw error;
+      logger.warn('AUTH_RETRY_AFTER_401', { route: path, outcome: 'refresh_failed' });
+      throw new SessionExpiredError();
+    }
+    if (!tokens) {
+      logger.warn('AUTH_RETRY_AFTER_401', { route: path, outcome: 'refresh_failed' });
+      throw new SessionExpiredError();
+    }
 
-  logger.info('AUTH_RETRY_AFTER_401', {
-    route: path,
-    outcome: retryResponse.ok ? 'retry_succeeded' : 'retry_failed',
-  });
-  return retryResponse;
+    persistSession({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken });
+    const retryResponse = await request(tokens.accessToken);
+    if (retryResponse.status === 401) {
+      logger.warn('AUTH_RETRY_AFTER_401', { route: path, outcome: 'session_expired' });
+      throw new SessionExpiredError();
+    }
+
+    logger.info('AUTH_RETRY_AFTER_401', {
+      route: path,
+      outcome: retryResponse.ok ? 'retry_succeeded' : 'retry_failed',
+    });
+    return retryResponse;
+  } finally {
+    timeoutHandle?.done();
+  }
 }
 
 export interface LLMHistoryMessage {
@@ -443,28 +471,13 @@ class LlmApiClient {
     }
 
     await waitForAuth();
-    const timeoutMs = getRouteTimeoutMs(path);
-    const timeoutController = timeoutMs === undefined ? undefined : new AbortController();
-    let removeExternalAbortListener: (() => void) | undefined;
-    if (timeoutController && options.signal) {
-      const abortFromExternalSignal = (): void => timeoutController.abort();
-      if (options.signal.aborted) {
-        abortFromExternalSignal();
-      } else {
-        options.signal.addEventListener('abort', abortFromExternalSignal, { once: true });
-        removeExternalAbortListener = () =>
-          options.signal?.removeEventListener('abort', abortFromExternalSignal);
-      }
-    }
-    const timeoutId = timeoutController
-      ? setTimeout(() => timeoutController.abort(), timeoutMs)
-      : undefined;
 
     try {
       const startedAt = performance.now();
+      // Route timeouts (e.g. 90 s for /v1/llm/generate, 30 s default) are
+      // applied inside the shared fetchWithAuth (#565).
       const res = await fetchWithAuth(path, {
         ...options,
-        ...(timeoutController ? { signal: timeoutController.signal } : {}),
         headers: {
           'Content-Type': 'application/json',
           ...options.headers,
@@ -530,9 +543,6 @@ class LlmApiClient {
         });
       }
       throw err;
-    } finally {
-      if (timeoutId !== undefined) clearTimeout(timeoutId);
-      removeExternalAbortListener?.();
     }
   }
 

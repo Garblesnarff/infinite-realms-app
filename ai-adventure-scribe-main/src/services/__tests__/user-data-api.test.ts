@@ -43,7 +43,7 @@ describe('userDataApi tactical transport', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       'http://localhost:8888/v1/sessions/session%20id/tactical-map/context/entity%2Fid',
-      { headers: { Authorization: 'Bearer access-token' } },
+      { headers: { Authorization: 'Bearer access-token' }, signal: expect.any(AbortSignal) },
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
@@ -56,6 +56,7 @@ describe('userDataApi tactical transport', () => {
           sceneSpec: { width: 10, height: 10 },
           player: { characterId: 'character-1', name: 'Rook', initiativeModifier: 0 },
         }),
+        signal: expect.any(AbortSignal),
       },
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
@@ -65,6 +66,7 @@ describe('userDataApi tactical transport', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer access-token' },
         body: JSON.stringify({ combat_exits: [] }),
+        signal: expect.any(AbortSignal),
       },
     );
   });

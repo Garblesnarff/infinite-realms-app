@@ -13,6 +13,12 @@ vi.mock('@/services/auth/TokenService', () => ({
   loadCachedSession: vi.fn(() => ({ access_token: 'test-token', refresh_token: 'test-refresh' })),
   persistSession: vi.fn(),
   refreshAccessTokenOnce: vi.fn(),
+  TokenRefreshTransportError: class TokenRefreshTransportError extends Error {
+    constructor(message = 'Token refresh endpoint unreachable') {
+      super(message);
+      this.name = 'TokenRefreshTransportError';
+    }
+  },
 }));
 
 import { llmApiClient, PartyDefeatedError } from '../rest-client';

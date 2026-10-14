@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import CallbackPage from '../CallbackPage';
@@ -48,6 +48,7 @@ describe('CallbackPage', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: 'one-time-code' }),
+        signal: expect.any(AbortSignal), // 15 s exchange ceiling (#565)
       });
     });
     expect(persistSession).toHaveBeenCalledWith({
@@ -92,5 +93,38 @@ describe('CallbackPage', () => {
       access_token: expect.any(String),
       refresh_token: expect.any(String),
     });
+  });
+
+  it('passes an abort signal to the exchange fetch (#565)', async () => {
+    window.history.replaceState(null, '', '/auth/callback?code=one-time-code');
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ accessToken: 'test-access-token', refreshToken: 'test-refresh-token' }),
+    });
+
+    render(<CallbackPage />);
+
+    await waitFor(() => {
+      const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+    });
+  });
+
+  it('shows an error instead of hanging when the exchange stalls (#565)', async () => {
+    vi.useFakeTimers();
+    window.history.replaceState(null, '', '/auth/callback?code=one-time-code');
+    fetchMock.mockReturnValue(new Promise(() => {})); // blackhole
+
+    render(<CallbackPage />);
+
+    // "Completing sign in..." is showing; the 15 s exchange ceiling fires,
+    // then the existing error path redirects home after 3 s.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+      await vi.advanceTimersByTimeAsync(3_000);
+    });
+    vi.useRealTimers();
+    await screen.findByText('Authentication Error');
+    expect(navigate).toHaveBeenCalledWith('/');
   });
 });
