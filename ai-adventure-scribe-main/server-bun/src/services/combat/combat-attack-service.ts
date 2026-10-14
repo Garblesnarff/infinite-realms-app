@@ -41,6 +41,7 @@ import { autoCritReason, checkHit, checkAutoCrit } from './hit-check.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { aggregateResistances } from './resistance-resolver.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
+import { abilityModifier } from '../../../../shared/ability-modifier';
 import { assessPlayerCombatSpell, resolveCatalogSpell } from '../../data/spellData.js';
 import { rollD20, rollD20Pair } from '../../lib/dice.js';
 import { NotFoundError, InternalServerError, BusinessLogicError } from '../../lib/errors.js';
@@ -51,6 +52,7 @@ import { CombatHPService } from '../combat-hp-service.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { SpellSlotsService } from '../spell-slots-service.js';
 import { markPlayerDamageProvocation } from './npc-provocation.js';
+import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
 
 import type { WeaponAttack, CreatureStats } from '../../../../db/schema/index';
 import type {
@@ -196,11 +198,7 @@ export class CombatAttackService {
   }
 
   private abilityModifier(score = 10): number {
-    return Math.floor((score - 10) / 2);
-  }
-
-  private proficiencyBonus(level = 1): number {
-    return 2 + Math.floor((Math.max(1, level) - 1) / 4);
+    return abilityModifier(score);
   }
 
   private spellcastingAbility(className?: string | null): string {
@@ -762,7 +760,7 @@ export class CombatAttackService {
     }
     const spellAbility = this.spellcastingAbility(casterProfile.className);
     const spellModifier = this.abilityModifier(casterProfile.scores[spellAbility]);
-    const spellAttackBonus = spellModifier + this.proficiencyBonus(casterProfile.level);
+    const spellAttackBonus = spellModifier + proficiencyBonus(casterProfile.level);
     return {
       spell,
       casterData,
@@ -1156,7 +1154,7 @@ export class CombatAttackService {
           const saveBonus =
             explicitBonus ??
             this.abilityModifier(targetProfile.scores[ability]) +
-              (proficient ? this.proficiencyBonus(targetProfile.level) : 0);
+              (proficient ? proficiencyBonus(targetProfile.level) : 0);
           const saveRoll = rollD20() + saveBonus;
           const savedSuccessfully = saveRoll >= saveDC;
 

@@ -5,6 +5,7 @@ import AbilityScoreCard from './ability-scores/AbilityScoreCard';
 import RollDetails from './ability-scores/RollDetails';
 import SummaryCard from './ability-scores/SummaryCard';
 import ValidationAlerts from './ability-scores/ValidationAlerts';
+import { abilityModifier } from '../../../../shared/ability-modifier';
 
 import type { AbilityScoreName } from '@/utils/racialAbilityBonuses';
 
@@ -20,7 +21,6 @@ import {
   POINT_COST,
   type Method,
 } from '@/hooks/use-ability-score-selection';
-import { calculateModifier } from '@/utils/abilityScoreUtils';
 import { getTotalRacialBonus } from '@/utils/racialAbilityBonuses';
 
 /**
@@ -60,7 +60,7 @@ const AbilityScoresSelection: React.FC = () => {
       ...(state.character?.subrace?.traits || []),
     ];
     const toughnessBonus = raceTraits.includes('Dwarven Toughness') ? 1 : 0;
-    return hitDie + calculateModifier(getFinalScore('constitution')) + toughnessBonus;
+    return hitDie + abilityModifier(getFinalScore('constitution')) + toughnessBonus;
   }, [
     getFinalScore,
     state.character?.class?.hitDie,
@@ -236,7 +236,7 @@ const AbilityScoresSelection: React.FC = () => {
             const baseScore = state.character?.abilityScores?.[ability]?.score || 8;
             const racialBonus = getTotalRacialBonus(ability as AbilityScoreName, racialBonuses);
             const finalScore = getFinalScore(ability);
-            const modifier = calculateModifier(finalScore);
+            const modifier = abilityModifier(finalScore);
             const nextCost =
               method === 'pointBuy' && baseScore < 15
                 ? (POINT_COST[baseScore + 1] ?? 0) - (POINT_COST[baseScore] ?? 0)

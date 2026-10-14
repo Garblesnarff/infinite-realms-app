@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
-import { POINT_BUY_COSTS, calculateModifier, getPointCostDifference } from './abilityScoreUtils';
+import { POINT_BUY_COSTS, getPointCostDifference } from './abilityScoreUtils';
+import { abilityModifier } from '../../shared/ability-modifier';
 
 describe('abilityScoreUtils', () => {
   describe('POINT_BUY_COSTS', () => {
@@ -17,19 +18,19 @@ describe('abilityScoreUtils', () => {
     });
   });
 
-  describe('calculateModifier', () => {
+  describe('abilityModifier', () => {
     it('should calculate correct modifiers for various scores', () => {
-      expect(calculateModifier(10)).toBe(0);
-      expect(calculateModifier(11)).toBe(0); // 11-10 = 1, floor(1/2) = 0
-      expect(calculateModifier(12)).toBe(1);
-      expect(calculateModifier(13)).toBe(1);
-      expect(calculateModifier(14)).toBe(2);
-      expect(calculateModifier(15)).toBe(2);
-      expect(calculateModifier(16)).toBe(3);
-      expect(calculateModifier(1)).toBe(-5); // 1-10 = -9, floor(-9/2) = -5
-      expect(calculateModifier(8)).toBe(-1);
-      expect(calculateModifier(9)).toBe(-1);
-      expect(calculateModifier(20)).toBe(5);
+      expect(abilityModifier(10)).toBe(0);
+      expect(abilityModifier(11)).toBe(0); // 11-10 = 1, floor(1/2) = 0
+      expect(abilityModifier(12)).toBe(1);
+      expect(abilityModifier(13)).toBe(1);
+      expect(abilityModifier(14)).toBe(2);
+      expect(abilityModifier(15)).toBe(2);
+      expect(abilityModifier(16)).toBe(3);
+      expect(abilityModifier(1)).toBe(-5); // 1-10 = -9, floor(-9/2) = -5
+      expect(abilityModifier(8)).toBe(-1);
+      expect(abilityModifier(9)).toBe(-1);
+      expect(abilityModifier(20)).toBe(5);
     });
   });
 

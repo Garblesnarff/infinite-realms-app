@@ -5,6 +5,8 @@
  * and special class-based damage bonuses (Sneak Attack, Divine Smite, Rage).
  */
 
+import { abilityModifier } from '../../../shared/ability-modifier';
+
 import type { Equipment } from '@/data/equipmentOptions';
 import type { CombatParticipant, DamageType, DiceRoll } from '@/types/combat';
 import type { DamageCalculation } from '@/utils/combat/attack-types';
@@ -142,13 +144,13 @@ export function getAbilityModifier(participant: CombatParticipant, ability: stri
     | undefined;
   const scoreFromObject = abilityScores?.[abilityName]?.score;
   if (typeof scoreFromObject === 'number') {
-    return Math.floor((scoreFromObject - 10) / 2);
+    return abilityModifier(scoreFromObject);
   }
 
   // 2. Check for direct property (Legacy/Simple structure)
   const directValue = (participant as unknown as Record<string, unknown>)[abilityName];
   if (typeof directValue === 'number') {
-    return Math.floor((directValue - 10) / 2);
+    return abilityModifier(directValue);
   }
 
   // Default ability scores for basic combat
@@ -163,7 +165,7 @@ export function getAbilityModifier(participant: CombatParticipant, ability: stri
 
   // Get modifier from default scores (floor of (score-10)/2)
   const score = defaultAbilityScores[abilityName] || 12;
-  return Math.floor((score - 10) / 2);
+  return abilityModifier(score);
 }
 
 /**

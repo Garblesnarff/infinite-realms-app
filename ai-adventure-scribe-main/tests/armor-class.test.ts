@@ -8,12 +8,8 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  SRD_ARMOR,
-  abilityScoreModifier,
-  computeArmorClass,
-  describeArmorClass,
-} from '../shared/armor-class';
+import { abilityModifier } from '../shared/ability-modifier';
+import { SRD_ARMOR, computeArmorClass, describeArmorClass } from '../shared/armor-class';
 
 import { armor as equipmentCatalogArmor } from '@/data/equipment/armor';
 
@@ -106,13 +102,13 @@ describe('computeArmorClass', () => {
   });
 });
 
-describe('abilityScoreModifier', () => {
+describe('abilityModifier', () => {
   it('is the 5e table', () => {
-    expect(abilityScoreModifier(10)).toBe(0);
-    expect(abilityScoreModifier(11)).toBe(0);
-    expect(abilityScoreModifier(18)).toBe(4);
-    expect(abilityScoreModifier(8)).toBe(-1);
-    expect(abilityScoreModifier(7)).toBe(-2);
+    expect(abilityModifier(10)).toBe(0);
+    expect(abilityModifier(11)).toBe(0);
+    expect(abilityModifier(18)).toBe(4);
+    expect(abilityModifier(8)).toBe(-1);
+    expect(abilityModifier(7)).toBe(-2);
   });
 });
 

@@ -27,11 +27,8 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
 import postgres from 'postgres';
 
-import {
-  abilityScoreModifier,
-  computeArmorClass,
-  type ArmorClassEquipmentItem,
-} from '../shared/armor-class.ts';
+import { abilityModifier } from '../shared/ability-modifier.ts';
+import { computeArmorClass, type ArmorClassEquipmentItem } from '../shared/armor-class.ts';
 import {
   getAbilityScores,
   type StarterCharacterTemplateLike,
@@ -326,9 +323,9 @@ export function planAbilityScoreBackfill(
     }
 
     const equipment = equipmentByCharacterId.get(target.characterId) || [];
-    const armorClass = computeArmorClass(equipment, abilityScoreModifier(abilityScores.dexterity));
+    const armorClass = computeArmorClass(equipment, abilityModifier(abilityScores.dexterity));
     const maxHitPoints =
-      classHitDie(character.class) + abilityScoreModifier(abilityScores.constitution);
+      classHitDie(character.class) + abilityModifier(abilityScores.constitution);
     const currentHitPoints =
       stats.current_hit_points === stats.max_hit_points
         ? maxHitPoints

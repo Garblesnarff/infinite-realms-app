@@ -1,4 +1,5 @@
 import { carryingCapacityForStrength } from '../../../shared/carrying-capacity';
+import { proficiencyBonus } from '../../../shared/proficiency-bonus';
 import { findSrdClass } from '../../../shared/srd-class-data';
 
 import type { Character } from '@/types/character';
@@ -33,7 +34,7 @@ export const SKILLS_MAP = {
  * Calculate proficiency bonus based on character level
  */
 export const calculateProficiencyBonus = (level: number): number => {
-  return Math.floor((level - 1) / 4) + 2;
+  return proficiencyBonus(level);
 };
 
 /**

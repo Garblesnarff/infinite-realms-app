@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
 
+import { abilityModifier } from '../../shared/ability-modifier';
+
 import type { Character, Ability, AbilityScores, CharacterRace, Subrace } from '@/types/character';
 import type { CharacterStats } from '@/utils/character-calculations';
 import type { AbilityScoreName } from '@/utils/racialAbilityBonuses';
@@ -132,7 +134,7 @@ export function getEffectiveAbilityScores(
         score: effectiveScore,
         baseScore: data.score,
         racialBonus,
-        modifier: Math.floor((effectiveScore - 10) / 2),
+        modifier: abilityModifier(effectiveScore),
       };
 
       return acc;

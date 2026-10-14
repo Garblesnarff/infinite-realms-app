@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
-import type { AbilityScores, Character } from '@/types/character';
+import { abilityModifier } from '../../../shared/ability-modifier';
 
-import { calculateModifier } from '@/utils/abilityScoreUtils';
+import type { AbilityScores, Character } from '@/types/character';
 
 // Cost table for point-buy system
 export const POINT_COST: Record<number, number> = {
@@ -96,7 +96,7 @@ export const usePointBuyLogic = ({ character, dispatch, method }: UsePointBuyLog
           ...character?.abilityScores,
           [ability]: {
             score: currentScore + 1,
-            modifier: calculateModifier(currentScore + 1),
+            modifier: abilityModifier(currentScore + 1),
             savingThrow: character?.abilityScores?.[ability]?.savingThrow || false,
           },
         };
@@ -131,7 +131,7 @@ export const usePointBuyLogic = ({ character, dispatch, method }: UsePointBuyLog
           ...character?.abilityScores,
           [ability]: {
             score: currentScore - 1,
-            modifier: calculateModifier(currentScore - 1),
+            modifier: abilityModifier(currentScore - 1),
             savingThrow: character?.abilityScores?.[ability]?.savingThrow || false,
           },
         };

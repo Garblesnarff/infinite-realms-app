@@ -1,3 +1,6 @@
+import { abilityModifier } from '../../../../shared/ability-modifier';
+import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
+
 export type WeaponRuleProfile = {
   id: string;
   name: string;
@@ -62,9 +65,8 @@ export type AttackRuleResolution = {
   disadvantage: boolean;
 };
 
-export const abilityModifier = (score: number): number => Math.floor((score - 10) / 2);
-export const proficiencyBonus = (level: number): number =>
-  2 + Math.floor((Math.max(1, level) - 1) / 4);
+export { abilityModifier };
+export { proficiencyBonus };
 
 const includes = (conditions: string[], names: string[]): boolean =>
   conditions.some((condition) => names.includes(condition.toLowerCase()));

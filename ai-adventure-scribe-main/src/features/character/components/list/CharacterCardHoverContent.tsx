@@ -1,6 +1,8 @@
 import { Play, Trash2, Sword, Shield, Star } from 'lucide-react';
 import React from 'react';
 
+import { abilityModifier } from '../../../../../shared/ability-modifier';
+
 import type { Character } from '@/types/character';
 
 import { Button } from '@/components/ui/button';
@@ -38,7 +40,7 @@ const CharacterCardHoverContent = ({
 
   // Calculate ability score modifier
   const getModifier = (score: number): number => {
-    return Math.floor((score - 10) / 2);
+    return abilityModifier(score);
   };
 
   // Format modifier with + or - sign

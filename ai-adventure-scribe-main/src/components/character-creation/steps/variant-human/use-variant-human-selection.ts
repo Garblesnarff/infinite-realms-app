@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 
+import { abilityModifier } from '../../../../../shared/ability-modifier';
+
 import type { AbilityScores } from '@/types/character';
 
 import { useCharacter } from '@/contexts/CharacterContext';
@@ -180,7 +182,7 @@ export const useVariantHumanSelection = (): {
           } else if (isCustomLineage) {
             current.score += 2;
           }
-          current.modifier = Math.floor((current.score - 10) / 2);
+          current.modifier = abilityModifier(current.score);
         }
       }
     });
@@ -196,7 +198,7 @@ export const useVariantHumanSelection = (): {
           const current = updatedAbilityScores[ability as keyof typeof updatedAbilityScores];
           if (current) {
             current.score += increase;
-            current.modifier = Math.floor((current.score - 10) / 2);
+            current.modifier = abilityModifier(current.score);
           }
         }
       });

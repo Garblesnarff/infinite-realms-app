@@ -1,3 +1,5 @@
+import { abilityModifier } from '../../../shared/ability-modifier';
+
 import type { CombatParticipant } from '@/types/combat';
 import type { DetectedEnemy } from '@/utils/combatDetection';
 
@@ -90,7 +92,7 @@ export function createCombatParticipantsFromDetection(
 
     const initiativeModifier =
       monster?.abilities?.dexterity != null
-        ? Math.floor((monster.abilities.dexterity - 10) / 2)
+        ? abilityModifier(monster.abilities.dexterity)
         : 0;
     const attackActions =
       monster?.actions?.filter((action) => action.attack_bonus !== undefined) ?? [];

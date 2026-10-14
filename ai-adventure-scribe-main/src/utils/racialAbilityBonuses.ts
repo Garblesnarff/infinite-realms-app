@@ -1,6 +1,6 @@
-import type { AbilityScores, CharacterRace, Subrace } from '@/types/character';
+import { abilityModifier } from '../../shared/ability-modifier';
 
-import { calculateModifier } from '@/utils/abilityScoreUtils';
+import type { AbilityScores, CharacterRace, Subrace } from '@/types/character';
 
 /**
  * Utility functions for calculating and applying racial ability score bonuses
@@ -178,7 +178,7 @@ export function applyRacialBonusesToAbilityScores(
     if (bonus === 0) return;
 
     const score = Math.min(current.score + bonus, 20);
-    finalScores[ability] = { ...current, score, modifier: calculateModifier(score) };
+    finalScores[ability] = { ...current, score, modifier: abilityModifier(score) };
   });
 
   return finalScores;

@@ -1,3 +1,4 @@
+import { abilityModifier } from '../../../shared/ability-modifier';
 /**
  * Roll Request Formula Utilities
  * Extracted from regex-parser.ts
@@ -68,7 +69,7 @@ const ABILITY_NAMES = {
 
 type AbilityKey = (typeof ABILITY_NAMES)[keyof typeof ABILITY_NAMES];
 
-function abilityModifier(character: Record<string, unknown>, ability: AbilityKey): number | null {
+function characterAbilityModifier(character: Record<string, unknown>, ability: AbilityKey): number | null {
   const statsRecord = Array.isArray(character.character_stats)
     ? character.character_stats[0]
     : character.character_stats;
@@ -77,13 +78,13 @@ function abilityModifier(character: Record<string, unknown>, ability: AbilityKey
     if (!source || typeof source !== 'object') continue;
     const value = (source as Record<string, unknown>)[ability];
     if (typeof value === 'number' && Number.isFinite(value)) {
-      return Math.floor((value - 10) / 2);
+      return abilityModifier(value);
     }
     if (value && typeof value === 'object') {
       const modifier = (value as { modifier?: unknown }).modifier;
       if (typeof modifier === 'number' && Number.isFinite(modifier)) return modifier;
       const score = (value as { score?: unknown }).score;
-      if (typeof score === 'number' && Number.isFinite(score)) return Math.floor((score - 10) / 2);
+      if (typeof score === 'number' && Number.isFinite(score)) return abilityModifier(score);
     }
   }
   return null;
@@ -123,7 +124,7 @@ export function resolveFormulaForCharacter(
         ability = purposeAbility?.[1];
       }
     }
-    const modifier = ability ? abilityModifier(character, ability) : null;
+    const modifier = ability ? characterAbilityModifier(character, ability) : null;
     return modifier === null ? token : String(modifier);
   });
   if (/[a-z]/i.test(normalized.replace(/\d+d\d+/gi, ''))) return null;
