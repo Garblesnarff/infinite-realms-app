@@ -3,8 +3,8 @@ import React from 'react';
 
 import { CharacterPreviewAbilityScores } from './CharacterPreviewAbilityScores';
 import { CharacterPreviewHeader } from './CharacterPreviewHeader';
-import { findSrdClass } from '../../../../shared/srd-class-data';
 import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
+import { findSrdClass } from '../../../../shared/srd-class-data';
 
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';

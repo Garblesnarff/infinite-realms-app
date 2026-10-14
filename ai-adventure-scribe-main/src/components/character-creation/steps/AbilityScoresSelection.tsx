@@ -60,7 +60,7 @@ const AbilityScoresSelection: React.FC = () => {
       ...(state.character?.subrace?.traits || []),
     ];
     const toughnessBonus = raceTraits.includes('Dwarven Toughness') ? 1 : 0;
-    return hitDie + calculateModifier(getFinalScore('constitution')) + toughnessBonus;
+    return hitDie + abilityModifier(getFinalScore('constitution')) + toughnessBonus;
   }, [
     getFinalScore,
     state.character?.class?.hitDie,

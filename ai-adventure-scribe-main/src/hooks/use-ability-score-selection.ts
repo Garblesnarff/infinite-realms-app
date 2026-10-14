@@ -235,7 +235,7 @@ export const useAbilityScoreSelection = (): UseAbilityScoreSelectionReturn => {
   // Calculate total modifier bonus
   const totalModifier = useMemo(() => {
     return ABILITIES.reduce((total, ability) => {
-      return total + calculateModifier(getFinalScore(ability));
+      return total + abilityModifier(getFinalScore(ability));
     }, 0);
   }, [getFinalScore]);
 
