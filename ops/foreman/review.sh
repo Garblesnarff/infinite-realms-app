@@ -56,6 +56,9 @@ STATE=$WORK/state
 RUNNER_LOG=${RUNNER_STATE:-/runner-state}/catjam-runner.log
 MAX_ATTEMPTS=${REVIEW_MAX_ATTEMPTS:-2}   # per (PR, head sha8) without a posted verdict
 CLAUDE_TIMEOUT=${REVIEW_CLAUDE_TIMEOUT:-20m}
+# Last line of every verdict comment and review, so Muse can tell bot verdicts
+# from the human strategist's (it waits for the strategist on protected paths).
+BOT_SIGNATURE='— posted by the foreman reviewer bot (Sonnet)'
 LEDGER=$STATE/spend.log  # "<iso> <utc date> pr=<n> <usd> sha=<sha8> <result> models=<id,id|none>"
 LOG=$STATE/review.log
 
@@ -329,8 +332,9 @@ post_verdict() {
   verdict=$(jq -r .verdict <<< "$v")
   s8=${sha:0:8}
   comment=$(jq -r '.comment // ""' <<< "$v" | sed '1{/^Strategist review/d}')
-  comment="Strategist review — $verdict at $s8"$'\n'"$comment"
-  review="Strategist review — $verdict at $s8. Details in the PR comment of the same title."
+  comment=$(grep -vxF -- "$BOT_SIGNATURE" <<< "$comment" || true) # the model must not forge or double it
+  comment="Strategist review — $verdict at $s8"$'\n'"$comment"$'\n\n'"$BOT_SIGNATURE"
+  review="Strategist review — $verdict at $s8. Details in the PR comment of the same title."$'\n\n'"$BOT_SIGNATURE"
   jules=$(jq -r '.jules // ""' <<< "$v")
   # Literal env secret values first (compared in-shell, never on a command
   # line), then secret-shaped strings. Logs go to stderr; stdout is the result.

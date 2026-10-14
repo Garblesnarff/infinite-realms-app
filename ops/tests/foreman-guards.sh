@@ -287,5 +287,20 @@ git -C "$DEL" rm -q app/src/pages/Page.tsx
 got=$(delcheck deleted_refs x $'app/src/components/old/Old.tsx\napp/src/components/old/index.ts')
 [ -z "$got" ] && ok "deleted_refs: no imports left" || bad "deleted_refs clean: '$got'"
 
+# reviewer: every verdict comment and review ends with the bot signature, once,
+# even when the model wrote the line itself.
+{ grep -E "^BOT_SIGNATURE=" "$HERE/../foreman/review.sh"; sed -n '/^post_verdict() {/,/^}/p' "$HERE/../foreman/review.sh"; } > "$TMP/pv-funcs.sh"
+mkdir -p "$TMP/pv"
+STATE=$TMP/pv bash -euo pipefail -c '
+  POST=0 REVIEW_MODELS=claude-sonnet-5-5
+  contains_env_secret() { return 1; }; has_secret_pattern() { return 1; }; logline() { :; }
+  . "$1"
+  post_verdict 5 0123456789abcdef x/y "{\"verdict\":\"PASS\",\"comment\":\"Strategist review — PASS at 01234567\\nLooks fine.\\n— posted by the foreman reviewer bot (Sonnet)\"}" 0.1 > /dev/null' _ "$TMP/pv-funcs.sh"
+sig='— posted by the foreman reviewer bot (Sonnet)'
+c=$(jq -r .comment "$TMP/pv/dry-run/5.json"); r=$(jq -r .review "$TMP/pv/dry-run/5.json")
+[ "$(tail -n 1 <<< "$c")" = "$sig" ] && [ "$(grep -cxF -- "$sig" <<< "$c")" = 1 ] && [ "$(head -n 1 <<< "$c")" = "Strategist review — PASS at 01234567" ] \
+  && ok "post_verdict: comment ends with the bot signature once" || bad "post_verdict comment: '$c'"
+[ "$(tail -n 1 <<< "$r")" = "$sig" ] && ok "post_verdict: review ends with the bot signature" || bad "post_verdict review: '$r'"
+
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]
