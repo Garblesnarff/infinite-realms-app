@@ -281,7 +281,7 @@ export function createTacticalMapRoutes({
           };
           try {
             if (body.phase === 'resolve') return await resolved();
-            const proposal = await proposeAoECast(params.id, request);
+            const proposal = await proposeAoECast(params.id, request, user.userId);
             if (proposal.autoConfirm) return await resolved();
             if (proposal.hostile) {
               await Bun.sleep(1500);
