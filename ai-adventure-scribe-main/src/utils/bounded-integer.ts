@@ -15,14 +15,20 @@ export function parseBoundedInteger(
   value: string | number | null | undefined,
   { fallback, min, max, outOfRange = 'clamp' }: BoundedIntegerOptions,
 ): number {
-  return parseBoundedIntegerCore(value, {
+  const shared = {
     min,
     max,
     allowSigned: true,
     allowNumbers: true,
     trim: true,
-    outOfRange: outOfRange === 'fallback' ? 'reject' : 'clamp',
     invalidFallback: fallback,
-    outOfRangeFallback: fallback,
-  });
+  };
+  if (outOfRange === 'fallback') {
+    return parseBoundedIntegerCore(value, {
+      ...shared,
+      outOfRange: 'reject',
+      outOfRangeFallback: fallback,
+    });
+  }
+  return parseBoundedIntegerCore(value, { ...shared, outOfRange: 'clamp' });
 }

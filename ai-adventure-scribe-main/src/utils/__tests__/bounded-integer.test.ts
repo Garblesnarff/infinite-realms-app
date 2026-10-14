@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { parseBoundedIntegerCore } from '../../../shared/bounded-integer';
 import { parseBoundedInteger } from '../bounded-integer';
 
 describe('parseBoundedInteger', () => {
@@ -42,5 +43,22 @@ describe('parseBoundedInteger', () => {
   it('uses the fallback for missing values', () => {
     expect(parseBoundedInteger(null, options)).toBe(3);
     expect(parseBoundedInteger(undefined, options)).toBe(3);
+  });
+});
+
+describe('parseBoundedIntegerCore reject contract', () => {
+  it('requires outOfRangeFallback when outOfRange is reject (type-level regression)', () => {
+    const omitted = { min: 0, max: 100, invalidFallback: 0, outOfRange: 'reject' as const };
+    // Without outOfRangeFallback the core would return undefined typed as a value.
+    // The @ts-expect-error fails the typecheck if that call ever compiles again.
+    // @ts-expect-error reject mode requires outOfRangeFallback
+    const callWithoutFallback = (): unknown => parseBoundedIntegerCore('150', omitted);
+    expect(typeof callWithoutFallback).toBe('function');
+  });
+
+  it('returns the explicit fallback for out-of-range input in reject mode', () => {
+    const options = { min: 0, max: 100, invalidFallback: 0, outOfRange: 'reject' as const };
+    expect(parseBoundedIntegerCore('150', { ...options, outOfRangeFallback: null })).toBeNull();
+    expect(parseBoundedIntegerCore('150', { ...options, outOfRangeFallback: -7 })).toBe(-7);
   });
 });

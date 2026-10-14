@@ -1,13 +1,26 @@
-export interface BoundedIntegerCoreOptions<TInvalid, TOutOfRange = number> {
+interface BoundedIntegerCoreBaseOptions<TInvalid> {
   min: number;
   max: number;
   allowSigned?: boolean;
   allowNumbers?: boolean;
   trim?: boolean;
-  outOfRange?: 'clamp' | 'reject';
   invalidFallback: TInvalid;
-  outOfRangeFallback?: TOutOfRange;
 }
+
+/**
+ * `reject` must name the value returned for an out-of-range input. Without the
+ * field the call does not type-check, so the parser cannot return an undefined
+ * value typed as TOutOfRange.
+ */
+export type BoundedIntegerCoreOptions<TInvalid, TOutOfRange = number> =
+  | (BoundedIntegerCoreBaseOptions<TInvalid> & {
+      outOfRange?: 'clamp';
+      outOfRangeFallback?: never;
+    })
+  | (BoundedIntegerCoreBaseOptions<TInvalid> & {
+      outOfRange: 'reject';
+      outOfRangeFallback: TOutOfRange;
+    });
 
 /**
  * Shared core numeric parser for bounded integer utilities.
@@ -22,9 +35,7 @@ export function parseBoundedIntegerCore<TInvalid, TOutOfRange = number>(
     allowSigned = false,
     allowNumbers = false,
     trim = false,
-    outOfRange = 'clamp',
     invalidFallback,
-    outOfRangeFallback,
   } = options;
 
   let raw: unknown = value;
@@ -57,8 +68,8 @@ export function parseBoundedIntegerCore<TInvalid, TOutOfRange = number>(
   }
 
   if (num < min || num > max) {
-    if (outOfRange === 'reject') {
-      return outOfRangeFallback as TOutOfRange;
+    if (options.outOfRange === 'reject') {
+      return options.outOfRangeFallback;
     }
     return Math.min(max, Math.max(min, num));
   }
