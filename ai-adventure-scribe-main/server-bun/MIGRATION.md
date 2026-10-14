@@ -58,8 +58,6 @@ This document tracks the migration from Express (`/server`) to Elysia (`/server-
 ## Services to Port 🔄
 
 - [ ] Blog service (server/src/services/blog-service.ts)
-- [ ] Blog scheduler (server/src/services/blog-scheduler.ts)
-- [ ] Blog content generator (server/src/services/blog-content-generator.ts)
 - [ ] Other services (TBD)
 
 ## WebSocket Support 🔄
