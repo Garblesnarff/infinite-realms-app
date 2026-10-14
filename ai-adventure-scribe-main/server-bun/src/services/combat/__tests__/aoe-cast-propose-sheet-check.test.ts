@@ -25,13 +25,28 @@ const silentLogger = {
   child: () => silentLogger,
 };
 
-mock.module('../../../../../db/client', () => ({ db: {} }));
+// The real import chain (aoe-cast-service -> combat-intent-service -> ...) links every
+// named export of these modules, so each mock carries the module's full export surface
+// even though the propose path never calls most of them. An incomplete mock fails CI
+// with `Export named '...' not found in module` at link time.
+mock.module('../../../../../db/client', () => ({
+  db: {},
+  pgClient: {},
+  withNpcActionTransaction: async (...args: unknown[]) => {
+    const fn = args[args.length - 1];
+    return typeof fn === 'function' ? (fn as (tx: unknown) => unknown)({}) : undefined;
+  },
+}));
 mock.module('../../../lib/env.js', () => ({
   env: { WORKOS_CLIENT_ID: 'test-client', NODE_ENV: 'test' },
+  getEnv: () => ({ WORKOS_CLIENT_ID: 'test-client', NODE_ENV: 'test' }),
 }));
 mock.module('../../../lib/logger.js', () => ({
   logger: silentLogger,
   combatLogger: silentLogger,
+  errorLogSerializers: {},
+  progressionLogger: silentLogger,
+  spellLogger: silentLogger,
 }));
 
 // The Apprentice's sheet, as the seed writes it: Burning Hands is known, Fireball is not.
@@ -64,18 +79,26 @@ mock.module('../../../services/combat/data-access.js', () => ({
   getCharacterWeapons: async () => [],
   getCreatureStats: async () => null,
   getCreatureStatsBatch: async () => new Map(),
+  listCarriedWeaponProfiles: async () => [],
   createWeaponAttack: async () => null,
   monsterAttackSource: () => 'none',
-  claimEncounterVersion: async () => {},
   verifyCharacterOwnership: async () => {},
   verifyEncounterAccess: async () => {},
   getParticipantInEncounter: async () => null,
 }));
 mock.module('../../../services/dm/dm-feature-gate.js', () => ({
   ownedSessionCharacter: async () => ({ id: CHARACTER_ID, name: 'The Apprentice' }),
+  featureRefusalLine: () => '',
+  refuseFeaturesCharacterLacks: async () => null,
+  sanitizeRefusedEnvelope: (envelope: unknown) => envelope,
 }));
 mock.module('../../../services/collaboration/room-manager.js', () => ({
   broadcastToRoom: noop,
+  broadcastToScene: noop,
+  getRoomUsers: async () => [],
+  joinRoom: noop,
+  leaveRoom: noop,
+  rooms: new Map(),
 }));
 
 let board: TacticalMap;
@@ -155,9 +178,10 @@ describe('GP-061 (#313): propose refuses a sheet-unknown area spell at once', ()
   });
 
   it('proposes a sheet-listed area spell without the sheet refusal', async () => {
-    // Burning Hands is on the sheet: the propose must not refuse as spell_not_known.
-    // (It may still refuse for unrelated geometry reasons; the sheet check passes.)
-    const error = await proposeAoECast(
+    // Burning Hands is on the sheet: the propose resolves to a player-pending preview —
+    // it is refused as spell_not_known never, and the sheet check is what would have
+    // thrown before any area was placed.
+    const result = await proposeAoECast(
       SESSION_ID,
       {
         actorId: 'the-apprentice',
@@ -167,20 +191,17 @@ describe('GP-061 (#313): propose refuses a sheet-unknown area spell at once', ()
         slotLevel: 1,
       },
       USER_ID,
-    ).then(
-      () => null,
-      (err: unknown) => err,
     );
-    if (error) {
-      expect((error as { details?: { reason?: string } }).details?.reason).not.toBe(
-        'spell_not_known',
-      );
-    }
+    expect(result.preview.type).toBe('aoe_preview');
+    expect(result.preview.state).toBe('player-pending');
+    expect(result.preview.actorId).toBe(APPRENTICE_ID);
+    expect(result.preview.spellId).toBe('burning-hands');
+    expect(result.hostile).toBe(false);
   });
 
   it('skips the sheet check for a monster caster', async () => {
-    // NPCs have no sheet; a hostile Fireball telegraph must not be refused as not-known.
-    const error = await proposeAoECast(
+    // NPCs have no sheet; a hostile Fireball telegraph resolves, never refused as not-known.
+    const result = await proposeAoECast(
       SESSION_ID,
       {
         actorId: CULTIST_ID,
@@ -190,14 +211,11 @@ describe('GP-061 (#313): propose refuses a sheet-unknown area spell at once', ()
         slotLevel: 3,
       },
       USER_ID,
-    ).then(
-      () => null,
-      (err: unknown) => err,
     );
-    if (error) {
-      expect((error as { details?: { reason?: string } }).details?.reason).not.toBe(
-        'spell_not_known',
-      );
-    }
+    expect(result.preview.type).toBe('aoe_preview');
+    expect(result.preview.state).toBe('hostile-telegraph');
+    expect(result.preview.actorId).toBe(CULTIST_ID);
+    expect(result.preview.spellId).toBe('fireball');
+    expect(result.hostile).toBe(true);
   });
 });
