@@ -10,7 +10,6 @@ import { Elysia, t } from 'elysia';
 
 import { logger } from './lib/logger.js';
 import {
-  rooms,
   joinRoom,
   leaveRoom,
   broadcastToRoom,
