@@ -86,6 +86,7 @@ curl -s -o /dev/null -w "%{http_code}" \
 
 - If HTTP status code is `200 OK`, the branch **already exists**. **Abort immediately** to avoid collision or unauthorized overwrite.
 - If HTTP status code is `404 Not Found`, the target branch name is available. Proceed with the push flow.
+- Any other status (for example `401`, `403`, `429` or `5xx`) is an **abort**. Do not treat it as "the name is free": report the status and stop.
 
 ---
 
@@ -157,8 +158,9 @@ Content-Type: application/json
 }
 ```
 
-- `mode`: `"100644"` for standard files, `"100755"` for executable files, `"040000"` for subdirectories.
-- `type`: `"blob"`.
+- `mode` and `type` must agree. For files, use `"100644"` (regular) or `"100755"` (executable) with `"type": "blob"`. The example above writes one file this way.
+- A subdirectory entry uses `"040000"` with `"type": "tree"`. The official mode list describes `040000` as "subdirectory (tree)". The reference page does not state the pairing as an explicit rule, so this guide does not depend on it: list files by their full path, as above.
+- Do not use `"type": "blob"` with `"040000"`.
 
 Record the returned `tree.sha`.
 
@@ -204,6 +206,8 @@ Content-Type: application/json
 ```
 
 Verify that the server returns `201 Created`.
+
+If the response is `422 Unprocessable Entity` (the ref already exists, for example because another worker created the same branch between Step 2 and this request), **abort and report the race**. Never overwrite the ref: do not `PATCH /repos/{owner}/{repo}/git/refs/heads/{branch}` with `force: true`, and do not delete and recreate it.
 
 ---
 
