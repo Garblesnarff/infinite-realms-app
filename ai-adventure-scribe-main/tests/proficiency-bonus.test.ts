@@ -26,4 +26,9 @@ describe('proficiency bonus', () => {
     expect(proficiencyBonus(0)).toBe(2);
     expect(proficiencyBonus(21)).toBe(6);
   });
+
+  it('falls back to +2 for missing or non-numeric levels instead of NaN', () => {
+    expect(proficiencyBonus(Number.NaN)).toBe(2);
+    expect(proficiencyBonus(undefined as unknown as number)).toBe(2);
+  });
 });
