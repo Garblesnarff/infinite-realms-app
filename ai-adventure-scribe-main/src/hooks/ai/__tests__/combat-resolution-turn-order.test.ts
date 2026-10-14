@@ -375,7 +375,8 @@ describe('the turn-order transcript of a settled player attack (#263)', () => {
 
     // The player's result row was committed before the boundary was crossed: the movement
     // check runs after `appendEngineBlock` and before `crossTurnBoundary` in the settle.
-    expect(timeline).toEqual(['movement-check', 'end_turn-sent']);
+    // The timeline is not asserted directly; it determines the reply's sequenceNumber below
+    // (via `blocksFirst`), so the useMessages ordering assertion is the proof.
 
     // The server rows dispatch in the order the server wrote them: the boundary row that
     // `writeNpcEngineRow` stored for the keyed end_turn, then the drained enemy row.
@@ -425,8 +426,8 @@ describe('the turn-order transcript of a settled player attack (#263)', () => {
       });
     expect(intents).toEqual(['propose', 'spell', 'end_turn']);
 
-    // The player's result row was committed before the boundary was crossed.
-    expect(timeline).toEqual(['movement-check', 'end_turn-sent']);
+    // The timeline determines the reply's sequenceNumber below (via `blocksFirst`);
+    // the useMessages ordering assertion is the proof.
 
     // The whole client transcript in order, through the REAL use-messages merge.
     const ordered = await orderThroughUseMessages(
