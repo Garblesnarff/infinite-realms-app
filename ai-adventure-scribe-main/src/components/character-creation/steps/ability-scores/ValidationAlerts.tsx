@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface ValidationAlertsProps {
   pointBuyValid: boolean;
+  pointBuyScoreRangeValid: boolean;
   pointsUsed: number;
   standardArrayValid: boolean;
   racialBonuses: RacialBonus[];
@@ -16,6 +17,7 @@ interface ValidationAlertsProps {
 
 const ValidationAlerts: React.FC<ValidationAlertsProps> = ({
   pointBuyValid,
+  pointBuyScoreRangeValid,
   pointsUsed,
   standardArrayValid,
   racialBonuses,
@@ -27,7 +29,9 @@ const ValidationAlerts: React.FC<ValidationAlertsProps> = ({
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            You have exceeded your point budget! You have used {pointsUsed} points (maximum 27).
+            {!pointBuyScoreRangeValid
+              ? 'Point Buy scores must be between 8 and 15 before racial bonuses.'
+              : `Point Buy allows 27 points maximum; you have used ${pointsUsed}.`}
           </AlertDescription>
         </Alert>
       )}

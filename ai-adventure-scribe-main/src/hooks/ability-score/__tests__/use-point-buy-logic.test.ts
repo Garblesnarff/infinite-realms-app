@@ -47,6 +47,50 @@ describe('usePointBuyLogic', () => {
     expect(result.current.remainingPoints).toBe(20);
   });
 
+  it('derives remaining points from the current scores when none are stored', () => {
+    const character = {
+      ...mockCharacter,
+      remainingAbilityPoints: undefined,
+      abilityScores: Object.fromEntries(
+        Object.keys(mockCharacter.abilityScores).map((ability) => [
+          ability,
+          { score: 10, modifier: 0, savingThrow: false },
+        ]),
+      ),
+    };
+    const { result } = renderHook(() =>
+      usePointBuyLogic({
+        character,
+        dispatch: mockDispatch,
+        method: 'pointBuy',
+      }),
+    );
+
+    expect(result.current.remainingPoints).toBe(15);
+  });
+
+  it('recalculates remaining points when the character scores arrive after mount', () => {
+    const initialCharacter = { ...mockCharacter, remainingAbilityPoints: undefined };
+    const { result, rerender } = renderHook(
+      ({ character }) =>
+        usePointBuyLogic({ character, dispatch: mockDispatch, method: 'pointBuy' }),
+      { initialProps: { character: initialCharacter } },
+    );
+
+    expect(result.current.remainingPoints).toBe(27);
+
+    const updatedCharacter = {
+      ...initialCharacter,
+      abilityScores: {
+        ...initialCharacter.abilityScores,
+        constitution: { score: 13, modifier: 1, savingThrow: false },
+      },
+    };
+    rerender({ character: updatedCharacter });
+
+    expect(result.current.remainingPoints).toBe(22);
+  });
+
   it('should increase score and decrease remaining points', () => {
     const { result } = renderHook(() =>
       usePointBuyLogic({
@@ -94,13 +138,15 @@ describe('usePointBuyLogic', () => {
     });
 
     expect(result.current.remainingPoints).toBe(27);
-    expect(mockDispatch).not.toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
         payload: expect.objectContaining({
-            abilityScores: expect.objectContaining({
-                strength: expect.objectContaining({ score: 16 })
-            })
-        })
-    }));
+          abilityScores: expect.objectContaining({
+            strength: expect.objectContaining({ score: 16 }),
+          }),
+        }),
+      }),
+    );
   });
 
   it('should not increase score if not enough points', () => {
@@ -125,9 +171,11 @@ describe('usePointBuyLogic', () => {
     });
 
     expect(result.current.remainingPoints).toBe(0);
-    expect(mockDispatch).not.toBeCalledWith(expect.objectContaining({
-      payload: expect.objectContaining({ abilityScores: expect.anything() })
-    }));
+    expect(mockDispatch).not.toBeCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ abilityScores: expect.anything() }),
+      }),
+    );
   });
 
   it('should decrease score and refund points', () => {
@@ -151,8 +199,8 @@ describe('usePointBuyLogic', () => {
       result.current.handleDecreaseScore('strength');
     });
 
-    // 9 -> 8 refunds 1 point
-    expect(result.current.remainingPoints).toBe(28);
+    // 9 -> 8 refunds 1 point, capped at the 27-point budget
+    expect(result.current.remainingPoints).toBe(27);
     expect(mockDispatch).toHaveBeenCalledWith({
       type: 'UPDATE_CHARACTER',
       payload: expect.objectContaining({
@@ -180,9 +228,41 @@ describe('usePointBuyLogic', () => {
     });
 
     expect(result.current.remainingPoints).toBe(27);
-    expect(mockDispatch).not.toBeCalledWith(expect.objectContaining({
-      payload: expect.objectContaining({ abilityScores: expect.anything() })
-    }));
+    expect(mockDispatch).not.toBeCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ abilityScores: expect.anything() }),
+      }),
+    );
+  });
+
+  it('does not produce NaN when a rolled score is outside point-buy bounds', () => {
+    const rolledCharacter = {
+      ...mockCharacter,
+      abilityScores: {
+        ...mockCharacter.abilityScores,
+        strength: { score: 17, modifier: 3, savingThrow: false },
+      },
+    };
+    const { result } = renderHook(() =>
+      usePointBuyLogic({
+        character: rolledCharacter,
+        dispatch: mockDispatch,
+        method: 'pointBuy',
+      }),
+    );
+    mockDispatch.mockClear();
+
+    act(() => {
+      result.current.handleDecreaseScore('strength');
+    });
+
+    expect(result.current.remainingPoints).not.toBeNaN();
+    expect(result.current.pointBuyValid).toBe(false);
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ abilityScores: expect.anything() }),
+      }),
+    );
   });
 
   it('should maintain referential stability of returned hook values when parameters do not change', () => {
@@ -201,14 +281,14 @@ describe('usePointBuyLogic', () => {
 
   it('should calculate pointsUsed correctly', () => {
     const charWithModifiedScores = {
-        ...mockCharacter,
-        abilityScores: {
-          ...mockCharacter.abilityScores,
-          strength: { score: 10, modifier: 0, savingThrow: false }, // 2 points
-          dexterity: { score: 12, modifier: 1, savingThrow: false }, // 4 points
-          constitution: { score: 8 }, // 0 points, testing fallback
-        },
-      };
+      ...mockCharacter,
+      abilityScores: {
+        ...mockCharacter.abilityScores,
+        strength: { score: 10, modifier: 0, savingThrow: false }, // 2 points
+        dexterity: { score: 12, modifier: 1, savingThrow: false }, // 4 points
+        constitution: { score: 8 }, // 0 points, testing fallback
+      },
+    };
 
     const { result } = renderHook(() =>
       usePointBuyLogic({
@@ -235,7 +315,7 @@ describe('usePointBuyLogic', () => {
     expect(result.current.pointsUsed).toBe(0);
 
     act(() => {
-        result.current.handleIncreaseScore('strength');
+      result.current.handleIncreaseScore('strength');
     });
     expect(result.current.remainingPoints).toBe(26);
   });
@@ -250,7 +330,7 @@ describe('usePointBuyLogic', () => {
     );
 
     act(() => {
-        result.current.handleDecreaseScore('strength');
+      result.current.handleDecreaseScore('strength');
     });
     // Should not decrease below 8 (default)
     expect(result.current.remainingPoints).toBe(27);
@@ -258,16 +338,16 @@ describe('usePointBuyLogic', () => {
 
   it('should mark as invalid if more than 27 points used', () => {
     const charWithWayTooManyPoints = {
-        ...mockCharacter,
-        abilityScores: {
-          strength: { score: 15, modifier: 2, savingThrow: false }, // 9
-          dexterity: { score: 15, modifier: 2, savingThrow: false }, // 9
-          constitution: { score: 15, modifier: 2, savingThrow: false }, // 9
-          intelligence: { score: 15, modifier: 2, savingThrow: false }, // 9
-          wisdom: { score: 8, modifier: -1, savingThrow: false }, // 0
-          charisma: { score: 8, modifier: -1, savingThrow: false }, // 0
-        },
-      };
+      ...mockCharacter,
+      abilityScores: {
+        strength: { score: 15, modifier: 2, savingThrow: false }, // 9
+        dexterity: { score: 15, modifier: 2, savingThrow: false }, // 9
+        constitution: { score: 15, modifier: 2, savingThrow: false }, // 9
+        intelligence: { score: 15, modifier: 2, savingThrow: false }, // 9
+        wisdom: { score: 8, modifier: -1, savingThrow: false }, // 0
+        charisma: { score: 8, modifier: -1, savingThrow: false }, // 0
+      },
+    };
 
     const { result } = renderHook(() =>
       usePointBuyLogic({
@@ -283,12 +363,12 @@ describe('usePointBuyLogic', () => {
 
   it('should return 0 pointsUsed if method is not pointBuy', () => {
     const charWithModifiedScores = {
-        ...mockCharacter,
-        abilityScores: {
-          ...mockCharacter.abilityScores,
-          strength: { score: 10, modifier: 0, savingThrow: false }, // 2 points
-        },
-      };
+      ...mockCharacter,
+      abilityScores: {
+        ...mockCharacter.abilityScores,
+        strength: { score: 10, modifier: 0, savingThrow: false }, // 2 points
+      },
+    };
 
     const { result } = renderHook(() =>
       usePointBuyLogic({

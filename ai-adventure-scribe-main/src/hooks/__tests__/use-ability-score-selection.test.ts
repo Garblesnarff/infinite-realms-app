@@ -97,6 +97,31 @@ describe('useAbilityScoreSelection', () => {
   });
 
   describe('Point Buy Method', () => {
+    it('resets out-of-range rolled scores when returning to point buy', () => {
+      mockState.character.abilityScores.strength = {
+        score: 17,
+        modifier: 3,
+        savingThrow: false,
+      };
+      const { result } = renderHook(() => useAbilityScoreSelection());
+
+      act(() => {
+        result.current.setMethod('roll');
+        result.current.setMethod('pointBuy');
+      });
+
+      expect(mockDispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            abilityScores: expect.objectContaining({
+              strength: expect.objectContaining({ score: 8 }),
+            }),
+          }),
+        }),
+      );
+      expect(result.current.remainingPoints).toBe(27);
+    });
+
     it('should increase score and decrease remaining points', () => {
       const { result } = renderHook(() => useAbilityScoreSelection());
 
@@ -187,7 +212,7 @@ describe('useAbilityScoreSelection', () => {
           }),
         }),
       );
-      expect(result.current.remainingPoints).toBe(28); // 27 + (cost(10) - cost(9)) = 27 + (2 - 1) = 28
+      expect(result.current.remainingPoints).toBe(27); // The 27-point budget is the upper bound.
     });
 
     it('should not decrease score below 8', () => {

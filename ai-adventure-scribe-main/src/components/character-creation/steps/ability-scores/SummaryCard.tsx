@@ -10,19 +10,18 @@ interface SummaryCardProps {
   method: string;
   totalModifier: number;
   remainingPoints: number;
-  abilityScores: AbilityScores;
+  getFinalScore: (ability: keyof AbilityScores) => number;
+  hitPoints: number | null;
 }
 
 const SummaryCard: React.FC<SummaryCardProps> = ({
   method,
   totalModifier,
   remainingPoints,
-  abilityScores,
+  getFinalScore,
+  hitPoints,
 }) => {
-  const totalScore = ABILITIES.reduce(
-    (total, ability) => total + (abilityScores[ability]?.score || 8),
-    0,
-  );
+  const totalScore = ABILITIES.reduce((total, ability) => total + getFinalScore(ability), 0);
 
   return (
     <Card className="p-4">
@@ -32,6 +31,9 @@ const SummaryCard: React.FC<SummaryCardProps> = ({
           <p className="text-sm text-muted-foreground">
             Total modifier bonus: {totalModifier >= 0 ? '+' : ''}
             {totalModifier}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Level 1 hit points: {hitPoints ?? 'Select a class'}
           </p>
         </div>
         <div className="flex gap-4">

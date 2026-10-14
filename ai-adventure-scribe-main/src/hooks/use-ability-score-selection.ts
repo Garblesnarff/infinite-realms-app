@@ -4,7 +4,15 @@ import type { AbilityScores } from '@/types/character';
 
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useAbilityRollingLogic } from '@/hooks/ability-score/use-ability-rolling-logic';
-import { usePointBuyLogic, ABILITIES, POINT_COST } from '@/hooks/ability-score/use-point-buy-logic';
+import {
+  calculatePointBuyPoints,
+  usePointBuyLogic,
+  ABILITIES,
+  POINT_BUY_MAX,
+  POINT_BUY_MIN,
+  POINT_BUY_TOTAL,
+  POINT_COST,
+} from '@/hooks/ability-score/use-point-buy-logic';
 import { useToast } from '@/hooks/use-toast';
 import { calculateModifier } from '@/utils/abilityScoreUtils';
 import { type AbilityScoreRollResult } from '@/utils/diceRolls';
@@ -22,7 +30,7 @@ export type Method = 'pointBuy' | 'standardArray' | 'roll';
 export interface UseAbilityScoreSelectionReturn {
   state: ReturnType<typeof useCharacter>['state'];
   method: Method;
-  setMethod: React.Dispatch<React.SetStateAction<Method>>;
+  setMethod: (method: Method) => void;
   rollHistory: number[][];
   currentRollDetails: AbilityScoreRollResult | null;
   remainingPoints: number;
@@ -36,6 +44,7 @@ export interface UseAbilityScoreSelectionReturn {
   racialBonuses: RacialBonus[];
   getFinalScore: (ability: keyof AbilityScores) => number;
   pointsUsed: number;
+  pointBuyScoreRangeValid: boolean;
   pointBuyValid: boolean;
   standardArrayValid: boolean;
   totalModifier: number;
@@ -49,7 +58,9 @@ export interface UseAbilityScoreSelectionReturn {
 export const useAbilityScoreSelection = (): UseAbilityScoreSelectionReturn => {
   const { state, dispatch } = useCharacter();
   const { toast } = useToast();
-  const [method, setMethod] = useState<Method>('pointBuy');
+  const [method, setMethodState] = useState<Method>(
+    () => state.character?.abilityScoreMethod ?? 'pointBuy',
+  );
 
   // Delegate point-buy logic
   const {
@@ -58,6 +69,7 @@ export const useAbilityScoreSelection = (): UseAbilityScoreSelectionReturn => {
     handleIncreaseScore,
     handleDecreaseScore,
     pointsUsed,
+    pointBuyScoreRangeValid,
     pointBuyValid,
   } = usePointBuyLogic({
     character: state.character,
@@ -150,6 +162,31 @@ export const useAbilityScoreSelection = (): UseAbilityScoreSelectionReturn => {
     setCurrentRollDetails,
   ]);
 
+  const handleMethodChange = useCallback(
+    (nextMethod: Method) => {
+      setMethodState(nextMethod);
+      dispatch({
+        type: 'UPDATE_CHARACTER',
+        payload: { abilityScoreMethod: nextMethod },
+      });
+      if (nextMethod !== 'pointBuy') return;
+
+      const scores = state.character?.abilityScores;
+      const hasOutOfRangeScore = ABILITIES.some((ability) => {
+        const score = scores?.[ability]?.score ?? POINT_BUY_MIN;
+        return score < POINT_BUY_MIN || score > POINT_BUY_MAX;
+      });
+
+      if (hasOutOfRangeScore) {
+        handleReset();
+        return;
+      }
+
+      setRemainingPoints(POINT_BUY_TOTAL - calculatePointBuyPoints(state.character));
+    },
+    [dispatch, handleReset, setRemainingPoints, state.character],
+  );
+
   const getAbilityDescription = useCallback((ability: keyof AbilityScores) => {
     const descriptions: Record<keyof AbilityScores, string> = {
       strength: 'Physical power, athletic ability, melee attacks',
@@ -197,15 +234,15 @@ export const useAbilityScoreSelection = (): UseAbilityScoreSelectionReturn => {
   // Calculate total modifier bonus
   const totalModifier = useMemo(() => {
     return ABILITIES.reduce((total, ability) => {
-      return total + (state.character?.abilityScores?.[ability]?.modifier || 0);
+      return total + calculateModifier(getFinalScore(ability));
     }, 0);
-  }, [state.character?.abilityScores]);
+  }, [getFinalScore]);
 
   return useMemo(
     () => ({
       state,
       method,
-      setMethod,
+      setMethod: handleMethodChange,
       rollHistory,
       currentRollDetails,
       remainingPoints,
@@ -219,6 +256,7 @@ export const useAbilityScoreSelection = (): UseAbilityScoreSelectionReturn => {
       racialBonuses,
       getFinalScore,
       pointsUsed,
+      pointBuyScoreRangeValid,
       pointBuyValid,
       standardArrayValid,
       totalModifier,
@@ -226,6 +264,7 @@ export const useAbilityScoreSelection = (): UseAbilityScoreSelectionReturn => {
     [
       state,
       method,
+      handleMethodChange,
       rollHistory,
       currentRollDetails,
       remainingPoints,
@@ -239,6 +278,7 @@ export const useAbilityScoreSelection = (): UseAbilityScoreSelectionReturn => {
       racialBonuses,
       getFinalScore,
       pointsUsed,
+      pointBuyScoreRangeValid,
       pointBuyValid,
       standardArrayValid,
       totalModifier,

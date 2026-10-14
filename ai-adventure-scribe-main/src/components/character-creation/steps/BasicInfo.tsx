@@ -1,44 +1,13 @@
 import { Sparkles, User, AlertCircle } from 'lucide-react';
 import React, { useState } from 'react';
 
+import { getCharacterNameError } from '../wizard/validation-rules';
+
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useToast } from '@/hooks/use-toast';
-
-/**
- * Character name validation rules per D&D 5E conventions
- */
-const NAME_MIN_LENGTH = 1;
-const NAME_MAX_LENGTH = 50;
-const NAME_PATTERN = /^[a-zA-Z\s\-']+$/;
-
-/**
- * Validates character name against D&D 5E naming conventions
- */
-function validateCharacterName(name: string): { isValid: boolean; error?: string } {
-  if (!name || name.trim().length === 0) {
-    return { isValid: false, error: 'Character name is required' };
-  }
-
-  if (name.trim().length < NAME_MIN_LENGTH) {
-    return { isValid: false, error: `Name must be at least ${NAME_MIN_LENGTH} character` };
-  }
-
-  if (name.length > NAME_MAX_LENGTH) {
-    return { isValid: false, error: `Name must be ${NAME_MAX_LENGTH} characters or less` };
-  }
-
-  if (!NAME_PATTERN.test(name)) {
-    return {
-      isValid: false,
-      error: 'Name can only contain letters, spaces, hyphens, and apostrophes',
-    };
-  }
-
-  return { isValid: true };
-}
 
 /**
  * BasicInfo component for character creation
@@ -70,13 +39,13 @@ const BasicInfo: React.FC = () => {
    * Shows validation error if name is invalid
    */
   const handleNameBlur = () => {
-    const validation = validateCharacterName(state.character?.name || '');
+    const error = getCharacterNameError(state.character?.name || '');
 
-    if (!validation.isValid) {
-      setNameError(validation.error || 'Invalid name');
+    if (error) {
+      setNameError(error);
       toast({
         title: 'Invalid Name',
-        description: validation.error,
+        description: error,
         variant: 'destructive',
       });
     } else {

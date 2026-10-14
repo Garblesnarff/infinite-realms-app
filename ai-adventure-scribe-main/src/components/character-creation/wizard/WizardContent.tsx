@@ -248,11 +248,13 @@ const WizardContent: React.FC = () => {
         if (!isValid) {
           // Check for critical missing fields
           const criticalMissing = [];
-          if (!state.character.name?.trim()) criticalMissing.push('name');
+          if (!validateStep('Basic Info', state.character).isValid) criticalMissing.push('name');
           if (!state.character.race) criticalMissing.push('race');
           if (!state.character.class) criticalMissing.push('class');
           if (!state.character.background) criticalMissing.push('background');
-          if (!state.character.abilityScores) criticalMissing.push('ability scores');
+          if (!validateStep('Ability Scores', state.character).isValid) {
+            criticalMissing.push('ability scores');
+          }
 
           if (criticalMissing.length > 0) {
             toast({
