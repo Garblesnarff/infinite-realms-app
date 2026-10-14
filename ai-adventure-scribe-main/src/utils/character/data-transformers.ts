@@ -124,6 +124,17 @@ export interface CharacterRow {
     description?: string | null;
     duration?: number | null;
   }> | null;
+  /**
+   * #264: hit dice folded from the GET's snake_case hit_dice rows by
+   * normalizeCharacter (user-data-payload-helpers) into the sheet's
+   * { total, remaining, type } shape. Declared here so transformCharacterData
+   * can carry it through to the sheet's rest controls.
+   */
+  hitDice?: {
+    total: number;
+    remaining: number;
+    type: string;
+  } | null;
 }
 
 // ===========================
@@ -513,6 +524,10 @@ export const transformCharacterData = (
     ritualSpells: parseSpellListField(characterData.ritual_spells),
     classFeatures: readStoredClassFeatures(characterData.class_features),
     enhancementSelections: readStoredEnhancementSelections(characterData.enhancement_selections),
+    // #264: hit dice folded from the GET's hit_dice rows. Dropped here, the
+    // sheet's short-rest prompt never saw dice to spend and every short rest
+    // went through with zero dice (toast only, no healing).
+    hitDice: characterData.hitDice ?? undefined,
     // #218 step 4: the story writer applies conditions server-side; the sheet only renders
     // what the server serves. A missing or malformed entry is dropped, never rendered.
     conditions: Array.isArray(characterData.conditions)

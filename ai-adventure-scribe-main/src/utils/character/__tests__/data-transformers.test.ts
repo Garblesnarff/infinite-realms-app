@@ -236,6 +236,26 @@ describe('data-transformers', () => {
       expect(character.inventory?.[0].itemName).toBe('Unknown item');
     });
 
+    it('carries hitDice folded from the GET hit_dice rows through to the sheet (#264)', () => {
+      // normalizeCharacter folds the server's hit_dice rows into hitDice; the
+      // sheet's short-rest prompt reads it from the transformed character, so
+      // dropping it here meant no dice were ever offered and every short rest
+      // went through with zero dice spent.
+      const row: CharacterRow = {
+        ...mockCharacterRow,
+        hitDice: { total: 1, remaining: 1, type: 'd10' },
+      };
+      const character = transformCharacterData(row, mockStats, mockEquipment);
+
+      expect(character.hitDice).toEqual({ total: 1, remaining: 1, type: 'd10' });
+    });
+
+    it('leaves hitDice undefined when the row carries none (#264)', () => {
+      const character = transformCharacterData(mockCharacterRow, mockStats, mockEquipment);
+
+      expect(character.hitDice).toBeUndefined();
+    });
+
     describe('canonical race, class, and background hydration', () => {
       it('covers the same twelve classes as the frontend class records', () => {
         expect(SRD_CLASS_TABLE.map((entry) => entry.name).sort()).toEqual(
