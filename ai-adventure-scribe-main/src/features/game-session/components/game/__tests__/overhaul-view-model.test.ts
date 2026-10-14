@@ -162,12 +162,114 @@ describe('game-session character sheet view model', () => {
     } as unknown as Character);
     expect(missing.conditions.map((c) => c.name)).toContain('Unconscious (dying)');
 
-    // Above 0 HP with no vital_state: no vital condition is invented.
+    // Above 0 HP but below max with no vital_state: wounded, not "None"
+    // (#261 remainder — Hark night 10-13: the old "no invented conditions"
+    // expectation predates the wounded defect being pinned).
     const hurt = buildCharacterSheet({
       ...base,
       character_stats: { current_hit_points: 5, max_hit_points: 8 },
     } as unknown as Character);
-    expect(hurt.conditions).toEqual([]);
+    expect(hurt.conditions.map((c) => c.name)).toContain('Wounded');
+  });
+
+  it('shows Wounded instead of None when below max HP (#261 remainder)', () => {
+    const base = {
+      id: 'char-wounded',
+      name: 'The Scholar',
+      level: 1,
+      race: { name: 'Tiefling', speed: 30, traits: [], languages: [] },
+      class: { name: 'Sorcerer', hitDie: 6 },
+      abilityScores: {
+        strength: { score: 8, modifier: -1, savingThrow: false },
+        dexterity: { score: 14, modifier: 2, savingThrow: false },
+        constitution: { score: 12, modifier: 1, savingThrow: false },
+        intelligence: { score: 10, modifier: 0, savingThrow: false },
+        wisdom: { score: 10, modifier: 0, savingThrow: false },
+        charisma: { score: 16, modifier: 3, savingThrow: true },
+      },
+    } as unknown as Character;
+
+    // Hark N2-025: 11/14 with no vital_state on the mirror.
+    const woundedNoMirror = buildCharacterSheet({
+      ...base,
+      character_stats: { current_hit_points: 11, max_hit_points: 14 },
+    } as unknown as Character);
+    expect(woundedNoMirror.conditions.map((c) => c.name)).toContain('Wounded');
+
+    // Hark N2-037: 4/7 with vital_state 'standing'.
+    const woundedStanding = buildCharacterSheet({
+      ...base,
+      character_stats: { current_hit_points: 4, max_hit_points: 7, vital_state: 'standing' },
+    } as unknown as Character);
+    expect(woundedStanding.conditions.map((c) => c.name)).toContain('Wounded');
+
+    // Full HP: still no invented conditions.
+    const full = buildCharacterSheet({
+      ...base,
+      character_stats: { current_hit_points: 8, max_hit_points: 8, vital_state: 'standing' },
+    } as unknown as Character);
+    expect(full.conditions).toEqual([]);
+  });
+
+  it('prefers the live encounter vital state over a stale character_stats mirror (#261 remainder)', () => {
+    const base = {
+      id: 'char-stale-mirror',
+      name: 'The Scholar',
+      level: 1,
+      race: { name: 'Tiefling', speed: 30, traits: [], languages: [] },
+      class: { name: 'Sorcerer', hitDie: 6 },
+      abilityScores: {
+        strength: { score: 8, modifier: -1, savingThrow: false },
+        dexterity: { score: 14, modifier: 2, savingThrow: false },
+        constitution: { score: 12, modifier: 1, savingThrow: false },
+        intelligence: { score: 10, modifier: 0, savingThrow: false },
+        wisdom: { score: 10, modifier: 0, savingThrow: false },
+        charisma: { score: 16, modifier: 3, savingThrow: true },
+      },
+    } as unknown as Character;
+
+    // Hark N2-037: the mirror still says "dying" after the killing blow, but the
+    // encounter participant flags (server-stamped every combat sync) say dead.
+    const deadLive = buildCharacterSheet(
+      {
+        ...base,
+        character_stats: { current_hit_points: 0, max_hit_points: 8, vital_state: 'dying' },
+      } as unknown as Character,
+      'dead',
+    );
+    expect(deadLive.conditions.map((c) => c.name)).toContain('Dead');
+    expect(deadLive.conditions.map((c) => c.name)).not.toContain('Unconscious (dying)');
+
+    // Live "dying" wins over a mirror that has not been written yet.
+    const dyingLive = buildCharacterSheet(
+      {
+        ...base,
+        character_stats: { current_hit_points: 0, max_hit_points: 8 },
+      } as unknown as Character,
+      'dying',
+    );
+    expect(dyingLive.conditions.map((c) => c.name)).toContain('Unconscious (dying)');
+
+    // Live "standing" clears a stale "dying" mirror; HP below max still reads Wounded.
+    const healedLive = buildCharacterSheet(
+      {
+        ...base,
+        character_stats: { current_hit_points: 5, max_hit_points: 8, vital_state: 'dying' },
+      } as unknown as Character,
+      'standing',
+    );
+    expect(healedLive.conditions.map((c) => c.name)).toContain('Wounded');
+    expect(healedLive.conditions.map((c) => c.name)).not.toContain('Unconscious (dying)');
+
+    // Live "stabilized" maps to Unconscious (stable).
+    const stableLive = buildCharacterSheet(
+      {
+        ...base,
+        character_stats: { current_hit_points: 0, max_hit_points: 8 },
+      } as unknown as Character,
+      'stabilized',
+    );
+    expect(stableLive.conditions.map((c) => c.name)).toContain('Unconscious (stable)');
   });
 });
 

@@ -183,7 +183,16 @@ export function mergePartyMembers(
   return party;
 }
 
-export function buildCharacterSheet(character: Character | null): CharacterSheetVM {
+/**
+ * Vital states the sheet's Conditions panel renders, in the engine's vocabulary
+ * (`character_stats.vital_state`).
+ */
+export type SheetVitalState = 'standing' | 'dying' | 'stabilized' | 'dead';
+
+export function buildCharacterSheet(
+  character: Character | null,
+  liveVitalState?: SheetVitalState | null,
+): CharacterSheetVM {
   const empty: CharacterSheetVM = {
     name: 'No Character',
     subtitle: '',
@@ -308,12 +317,23 @@ export function buildCharacterSheet(character: Character | null): CharacterSheet
   const storedStats = Array.isArray(character.character_stats)
     ? character.character_stats[0]
     : character.character_stats;
-  const vitalState = storedStats?.vital_state;
+  // #261 remainder: the sheet's character is loaded once per session, so the mirror can still
+  // say "dying" after the killing blow. The encounter participant carries the server-stamped
+  // vital state with every combat sync — when the caller passes it, it wins.
+  const vitalState = liveVitalState ?? storedStats?.vital_state;
   // RG-018: if the mirror has not written vital_state yet (or the client has not refreshed
   // it), a hero at 0 HP is still unconscious per the 5e rules — derive it from the HP line
   // rather than showing "None".
   const effectiveVitalState =
     vitalState ?? (hpCurrent === 0 && hpMax !== null && hpMax > 0 ? 'dying' : undefined);
+  // #261 remainder: a hero below max HP but on their feet is wounded — the panel said "None"
+  // through every hit until 0 HP (Hark N2-025/N2-037).
+  const isWounded =
+    (effectiveVitalState === 'standing' || effectiveVitalState === undefined) &&
+    hpCurrent !== null &&
+    hpMax !== null &&
+    hpCurrent > 0 &&
+    hpCurrent < hpMax;
   const vitalCondition: ConditionVM | null =
     effectiveVitalState === 'dying'
       ? { id: 'vital-dying', name: 'Unconscious (dying)' }
@@ -321,7 +341,9 @@ export function buildCharacterSheet(character: Character | null): CharacterSheet
         ? { id: 'vital-stabilized', name: 'Unconscious (stable)' }
         : effectiveVitalState === 'dead'
           ? { id: 'vital-dead', name: 'Dead' }
-          : null;
+          : isWounded
+            ? { id: 'vital-wounded', name: 'Wounded' }
+            : null;
   const conditions: ConditionVM[] = [
     ...(vitalCondition ? [vitalCondition] : []),
     ...(character.conditions ?? []).map((c, i) => ({
@@ -414,7 +436,30 @@ export function useOverhaulViewModel(opts?: {
   const activeCompanions = companionData?.companions ?? EMPTY_COMPANIONS;
 
   return useMemo<GameOverhaulViewModel>(() => {
-    const sheet = buildCharacterSheet(character);
+    // #261 remainder: the protagonist's live vital state. The server stamps vitalStateOf on
+    // every encounter participant with each combat sync (socket + poll), while the sheet's
+    // character — and its character_stats mirror — is loaded once per session. Without this
+    // the Conditions panel keeps a stale "Unconscious (dying)" after death (Hark N2-037).
+    // Read the way the server's vitalStateOf does — hit points plus the death-save counters,
+    // never the isUnconscious flag: local optimistic HP updates don't maintain it, so a hero
+    // dropped to 0 HP by one would briefly read "standing".
+    const protagonistParticipant = character?.id
+      ? (encounter?.participants ?? []).find(
+          (p) => p.participantType === 'player' && p.characterId === character.id,
+        )
+      : undefined;
+    const liveVitalState: SheetVitalState | undefined = !protagonistParticipant
+      ? undefined
+      : protagonistParticipant.isDead ||
+          (protagonistParticipant.currentHitPoints <= 0 && protagonistParticipant.deathSaves.failures >= 3)
+        ? 'dead'
+        : protagonistParticipant.isStable ||
+            (protagonistParticipant.currentHitPoints <= 0 && protagonistParticipant.deathSaves.successes >= 3)
+          ? 'stabilized'
+          : protagonistParticipant.currentHitPoints <= 0
+            ? 'dying'
+            : 'standing';
+    const sheet = buildCharacterSheet(character, liveVitalState);
 
     const turn = summarizeCombatTurn(encounter);
     const combatants: CombatantVM[] = (encounter?.participants ?? [])
