@@ -89,15 +89,18 @@ function deathSaveFailureFields(
   AttackResult,
   'deathSaveFailuresAdded' | 'deathSavesFailures' | 'instantDeath' | 'damageOverflow' | 'hpMaximum'
 > {
-  // Monsters die at 0 HP with no death saves (2014 5e): the failure tally is a player-only
-  // concept, so a monster's kill line is just "DEAD", not "FAILED 3 of 3 failures" (#314 CB-075).
-  const isPlayer = targetParticipantType === 'player';
+  // Monsters die at 0 HP with no death saves (2014 5e): the failure tally, the overflow
+  // numbers and the instant-death flag are a player-only concept, so a monster's kill line
+  // is just "DEAD", not "FAILED 3 of 3 failures" (#314 CB-075). The flag used to leak for
+  // monsters, and damageAtZeroHpPart printed the player-worded massive-damage sentence and
+  // FAILED card for them (#570).
+  if (targetParticipantType !== 'player') return {};
   return {
     // The numbers behind the verdict, so the engine line can state them (#2640).
     ...((hpResult.overflow ?? 0) > 0
       ? { damageOverflow: hpResult.overflow, hpMaximum: hpResult.hpMaximum }
       : {}),
-    ...(isPlayer && (hpResult.deathSaveFailuresAdded ?? 0) > 0
+    ...((hpResult.deathSaveFailuresAdded ?? 0) > 0
       ? {
           deathSaveFailuresAdded: hpResult.deathSaveFailuresAdded,
           deathSavesFailures: hpResult.newDeathSavesFailures,
