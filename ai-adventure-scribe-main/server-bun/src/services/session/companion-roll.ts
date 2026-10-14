@@ -1,3 +1,4 @@
+import { abilityModifier } from '../../../../shared/ability-modifier';
 import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
 import { ValidationError } from '../../lib/errors.js';
 import {
@@ -105,7 +106,7 @@ function storedAbilityModifier(stats: StoredRollStats | null, ability: AbilityNa
   if (typeof score !== 'number' || !Number.isFinite(score)) {
     throw new ValidationError(`Character has no stored ${ability} score`);
   }
-  return Math.floor((score - 10) / 2);
+  return abilityModifier(score);
 }
 
 function storedProficiencyBonus(level: number | null): number {
@@ -159,17 +160,17 @@ export function calculateCompanionRollModifier(
     }
   }
 
-  const abilityModifier = storedAbilityModifier(stats, ability);
-  const modifier = abilityModifier + effectiveProficiency;
+  const scoreModifier = storedAbilityModifier(stats, ability);
+  const modifier = scoreModifier + effectiveProficiency;
   const breakdown = [
     '1d20',
-    `${abilityShortName(ability)} ${signed(abilityModifier)}`,
+    `${abilityShortName(ability)} ${signed(scoreModifier)}`,
     ...(effectiveProficiency > 0 ? [`Prof ${signed(effectiveProficiency)}`] : []),
   ];
 
   return {
     ability,
-    abilityModifier,
+    abilityModifier: scoreModifier,
     proficiencyBonus: effectiveProficiency,
     modifier,
     isProficient: proficient,

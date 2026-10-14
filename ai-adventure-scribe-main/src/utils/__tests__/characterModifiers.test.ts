@@ -2,22 +2,8 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import {
-  calculateAbilityModifier,
-  calculateProficiencyBonus,
-  getAbilityModifier,
-  getProficiencyBonus,
-  isSkillProficient,
-  isSaveProficient,
-  calculateSkillModifier,
-  calculateSaveModifier,
-  calculateAttackModifier,
-  calculateInitiativeModifier,
-  generateDiceFormula,
-  calculateRollWithBreakdown,
-  parseAbilityName,
-  getCharacterStatsForAI,
-} from '../characterModifiers';
+import { abilityModifier } from '../../../shared/ability-modifier';
+import { calculateProficiencyBonus, getAbilityModifier, getProficiencyBonus, isSkillProficient, isSaveProficient, calculateSkillModifier, calculateSaveModifier, calculateAttackModifier, calculateInitiativeModifier, generateDiceFormula, calculateRollWithBreakdown, parseAbilityName, getCharacterStatsForAI } from '../characterModifiers';
 
 import type { Equipment } from '@/data/equipmentOptions';
 import type { Character } from '@/types/character';
@@ -36,17 +22,17 @@ describe('characterModifiers', () => {
     vi.clearAllMocks();
   });
 
-  describe('calculateAbilityModifier', () => {
+  describe('abilityModifier', () => {
     it('should calculate correct modifiers for various scores', () => {
-      expect(calculateAbilityModifier(1)).toBe(-5);
-      expect(calculateAbilityModifier(5)).toBe(-3);
-      expect(calculateAbilityModifier(9)).toBe(-1);
-      expect(calculateAbilityModifier(10)).toBe(0);
-      expect(calculateAbilityModifier(11)).toBe(0);
-      expect(calculateAbilityModifier(12)).toBe(1);
-      expect(calculateAbilityModifier(15)).toBe(2);
-      expect(calculateAbilityModifier(20)).toBe(5);
-      expect(calculateAbilityModifier(30)).toBe(10);
+      expect(abilityModifier(1)).toBe(-5);
+      expect(abilityModifier(5)).toBe(-3);
+      expect(abilityModifier(9)).toBe(-1);
+      expect(abilityModifier(10)).toBe(0);
+      expect(abilityModifier(11)).toBe(0);
+      expect(abilityModifier(12)).toBe(1);
+      expect(abilityModifier(15)).toBe(2);
+      expect(abilityModifier(20)).toBe(5);
+      expect(abilityModifier(30)).toBe(10);
     });
   });
 

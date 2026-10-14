@@ -1,4 +1,5 @@
 import { parsePersonalityEnvelope } from './personality-envelope';
+import { abilityModifier } from '../../../shared/ability-modifier';
 
 import type {
   AbilityScores,
@@ -333,32 +334,32 @@ export const transformAbilityScores = (
   return {
     strength: {
       score: statsData.strength,
-      modifier: Math.floor((statsData.strength - 10) / 2),
+      modifier: abilityModifier(statsData.strength),
       savingThrow: false,
     },
     dexterity: {
       score: statsData.dexterity,
-      modifier: Math.floor((statsData.dexterity - 10) / 2),
+      modifier: abilityModifier(statsData.dexterity),
       savingThrow: false,
     },
     constitution: {
       score: statsData.constitution,
-      modifier: Math.floor((statsData.constitution - 10) / 2),
+      modifier: abilityModifier(statsData.constitution),
       savingThrow: false,
     },
     intelligence: {
       score: statsData.intelligence,
-      modifier: Math.floor((statsData.intelligence - 10) / 2),
+      modifier: abilityModifier(statsData.intelligence),
       savingThrow: false,
     },
     wisdom: {
       score: statsData.wisdom,
-      modifier: Math.floor((statsData.wisdom - 10) / 2),
+      modifier: abilityModifier(statsData.wisdom),
       savingThrow: false,
     },
     charisma: {
       score: statsData.charisma,
-      modifier: Math.floor((statsData.charisma - 10) / 2),
+      modifier: abilityModifier(statsData.charisma),
       savingThrow: false,
     },
   };

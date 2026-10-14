@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import { normalizeAbilityScores } from './ability-score-normalization';
+import { abilityModifier } from '../../../shared/ability-modifier';
 import { computeArmorClass } from '../../../shared/armor-class';
 import { findSrdClass, getSrdSpellQuotas } from '../../../shared/srd-class-data';
 
@@ -78,7 +79,7 @@ export function getAbilityScores(template: StarterCharacterTemplateLike): Record
 }
 
 function getModifier(score: number): number {
-  return Math.floor((score - 10) / 2);
+  return abilityModifier(score);
 }
 
 function getClassHitDie(className: string): number {

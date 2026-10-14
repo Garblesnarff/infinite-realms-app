@@ -23,16 +23,7 @@ import {
 import { hasProficiency } from '@/utils/character/parse-proficiency-list';
 
 // Re-export basic modifier definitions and helpers
-export {
-  calculateAbilityModifier,
-  calculateProficiencyBonus,
-  getAbilityModifier,
-  getProficiencyBonus,
-  isSkillProficient,
-  isSaveProficient,
-  SKILL_ABILITIES,
-  SKILL_ALIASES,
-} from '@/utils/character/basic-modifiers';
+export { calculateProficiencyBonus, getAbilityModifier, getProficiencyBonus, isSkillProficient, isSaveProficient, SKILL_ABILITIES, SKILL_ALIASES } from '@/utils/character/basic-modifiers';
 export type { AbilityName } from '@/utils/character/basic-modifiers';
 
 // Re-export roll breakdown functions and types
@@ -41,6 +32,7 @@ export {
   calculateRollWithBreakdown,
   getCharacterStatsForAI,
 } from '@/utils/character/roll-breakdown';
+
 export type { RollCalculation } from '@/utils/character/roll-breakdown';
 
 /**

@@ -1,3 +1,5 @@
+import { abilityModifier } from '../../../shared/ability-modifier';
+
 const numeric = (value: unknown, fallback = 0): number =>
   typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 
@@ -13,7 +15,7 @@ const dexterityModifier = (character: Record<string, unknown>): number => {
   const stats = character.stats as Record<string, unknown> | undefined;
   const flatDexterity = character.dexterity ?? stats?.dexterity;
   if (typeof flatDexterity === 'number' && Number.isFinite(flatDexterity)) {
-    return Math.floor((flatDexterity - 10) / 2);
+    return abilityModifier(flatDexterity);
   }
   const characterStats = character.character_stats;
   if (Array.isArray(characterStats)) {
@@ -22,7 +24,7 @@ const dexterityModifier = (character: Record<string, unknown>): number => {
     );
     const rowDexterity = row?.dexterity;
     if (typeof rowDexterity === 'number' && Number.isFinite(rowDexterity)) {
-      return Math.floor((rowDexterity - 10) / 2);
+      return abilityModifier(rowDexterity);
     }
   }
   return 0;

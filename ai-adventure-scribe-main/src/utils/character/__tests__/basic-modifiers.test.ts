@@ -2,16 +2,8 @@
 
 import { describe, it, expect } from 'vitest';
 
-import {
-  calculateAbilityModifier,
-  calculateProficiencyBonus,
-  getAbilityModifier,
-  getProficiencyBonus,
-  isSkillProficient,
-  isSaveProficient,
-  SKILL_ABILITIES,
-  SKILL_ALIASES,
-} from '../basic-modifiers';
+import { abilityModifier } from '../../../../shared/ability-modifier';
+import { calculateProficiencyBonus, getAbilityModifier, getProficiencyBonus, isSkillProficient, isSaveProficient, SKILL_ABILITIES, SKILL_ALIASES } from '../basic-modifiers';
 
 describe('basic-modifiers', () => {
   describe('SKILL_ABILITIES', () => {
@@ -31,19 +23,19 @@ describe('basic-modifiers', () => {
     });
   });
 
-  describe('calculateAbilityModifier', () => {
+  describe('abilityModifier', () => {
     it('should correctly calculate modifiers from scores', () => {
-      expect(calculateAbilityModifier(1)).toBe(-5);
-      expect(calculateAbilityModifier(3)).toBe(-4);
-      expect(calculateAbilityModifier(5)).toBe(-3);
-      expect(calculateAbilityModifier(9)).toBe(-1);
-      expect(calculateAbilityModifier(10)).toBe(0);
-      expect(calculateAbilityModifier(11)).toBe(0);
-      expect(calculateAbilityModifier(12)).toBe(1);
-      expect(calculateAbilityModifier(13)).toBe(1);
-      expect(calculateAbilityModifier(14)).toBe(2);
-      expect(calculateAbilityModifier(20)).toBe(5);
-      expect(calculateAbilityModifier(30)).toBe(10);
+      expect(abilityModifier(1)).toBe(-5);
+      expect(abilityModifier(3)).toBe(-4);
+      expect(abilityModifier(5)).toBe(-3);
+      expect(abilityModifier(9)).toBe(-1);
+      expect(abilityModifier(10)).toBe(0);
+      expect(abilityModifier(11)).toBe(0);
+      expect(abilityModifier(12)).toBe(1);
+      expect(abilityModifier(13)).toBe(1);
+      expect(abilityModifier(14)).toBe(2);
+      expect(abilityModifier(20)).toBe(5);
+      expect(abilityModifier(30)).toBe(10);
     });
   });
 

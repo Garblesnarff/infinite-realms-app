@@ -8,6 +8,7 @@
  * @module server-bun/services/rest/rest-mechanics
  */
 
+import { abilityModifier } from '../../../../shared/ability-modifier';
 import { HIT_DICE_BY_CLASS } from '../../types/rest.js';
 
 import type { CharacterHitDice } from '../../../../db/schema/index';
@@ -18,7 +19,7 @@ export class RestMechanics {
    * Calculate Constitution modifier from ability score
    */
   static calculateConModifier(constitution: number): number {
-    return Math.floor((constitution - 10) / 2);
+    return abilityModifier(constitution);
   }
 
   /**

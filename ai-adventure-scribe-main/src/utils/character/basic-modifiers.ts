@@ -8,6 +8,8 @@
  * @author AI Dungeon Master Team
  */
 
+import { abilityModifier } from '../../../shared/ability-modifier';
+
 import type { Character } from '@/types/character';
 
 import { calculateProficiencyBonus as calculateBasicProficiencyBonus } from '@/utils/character/basic-math';
@@ -61,14 +63,6 @@ export const SKILL_ALIASES: Record<string, string> = {
 };
 
 /**
- * Calculate ability modifier from ability score
- * Formula: floor((score - 10) / 2)
- */
-export function calculateAbilityModifier(score: number): number {
-  return Math.floor((score - 10) / 2);
-}
-
-/**
  * Calculate proficiency bonus based on character level
  * D&D 5e proficiency bonus progression
  */
@@ -86,7 +80,7 @@ export function getAbilityModifier(character: Character, ability: AbilityName): 
   }
 
   // Use pre-calculated modifier if available, otherwise calculate
-  return abilityScore.modifier ?? calculateAbilityModifier(abilityScore.score);
+  return abilityScore.modifier ?? abilityModifier(abilityScore.score);
 }
 
 /**

@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { abilityModifier } from '../../../../shared/ability-modifier';
 import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
 import { getCharacterPassiveScores } from '../../passive-skills-service';
 
@@ -86,7 +87,7 @@ PLAYER CHARACTER: ${char.name}, a level ${char.level} ${char.race || 'Unknown Ra
     if (char.character_stats && char.character_stats.length > 0) {
       const stats = char.character_stats[0];
       const calcMod = (score: number = 10): string => {
-        const mod = Math.floor((score - 10) / 2);
+        const mod = abilityModifier(score);
         return mod >= 0 ? `+${mod}` : `${mod}`;
       };
 

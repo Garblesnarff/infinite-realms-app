@@ -1,10 +1,11 @@
 import { useState, useCallback, useMemo } from 'react';
 
+import { abilityModifier } from '../../../shared/ability-modifier';
+
 import type { CharacterAction } from '@/contexts/character/types';
 import type { AbilityScores, Character } from '@/types/character';
 
 import { useToast } from '@/hooks/use-toast';
-import { calculateModifier } from '@/utils/abilityScoreUtils';
 import {
   generateAbilityScoresDetailed,
   rerollSingleScoreDetailed,
@@ -51,7 +52,7 @@ export const useAbilityRollingLogic = ({ character, dispatch }: UseAbilityRollin
     ABILITIES.forEach((ability, index) => {
       newScores[ability] = {
         score: rollResult.scores[index],
-        modifier: calculateModifier(rollResult.scores[index]),
+        modifier: abilityModifier(rollResult.scores[index]),
         savingThrow: character?.abilityScores?.[ability]?.savingThrow || false,
       };
     });
@@ -99,7 +100,7 @@ export const useAbilityRollingLogic = ({ character, dispatch }: UseAbilityRollin
       ABILITIES.forEach((ability, index) => {
         newScores[ability] = {
           score: updatedResult.scores[index],
-          modifier: calculateModifier(updatedResult.scores[index]),
+          modifier: abilityModifier(updatedResult.scores[index]),
           savingThrow: character?.abilityScores?.[ability]?.savingThrow || false,
         };
       });

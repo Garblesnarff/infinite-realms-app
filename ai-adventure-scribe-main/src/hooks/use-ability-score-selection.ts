@@ -1,12 +1,13 @@
 import { useState, useMemo, useCallback } from 'react';
 
+import { abilityModifier } from '../../shared/ability-modifier';
+
 import type { AbilityScores } from '@/types/character';
 
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useAbilityRollingLogic } from '@/hooks/ability-score/use-ability-rolling-logic';
 import { usePointBuyLogic, ABILITIES, POINT_COST } from '@/hooks/ability-score/use-point-buy-logic';
 import { useToast } from '@/hooks/use-toast';
-import { calculateModifier } from '@/utils/abilityScoreUtils';
 import { type AbilityScoreRollResult } from '@/utils/diceRolls';
 import {
   calculateRacialBonuses,
@@ -96,7 +97,7 @@ export const useAbilityScoreSelection = (): UseAbilityScoreSelectionReturn => {
     ABILITIES.forEach((ability, index) => {
       newScores[ability] = {
         score: standardArray[index],
-        modifier: calculateModifier(standardArray[index]),
+        modifier: abilityModifier(standardArray[index]),
         savingThrow: state.character?.abilityScores?.[ability]?.savingThrow || false,
       };
     });
@@ -129,7 +130,7 @@ export const useAbilityScoreSelection = (): UseAbilityScoreSelectionReturn => {
     ABILITIES.forEach((ability) => {
       newScores[ability] = {
         score: 8,
-        modifier: calculateModifier(8),
+        modifier: abilityModifier(8),
         savingThrow: state.character?.abilityScores?.[ability]?.savingThrow || false,
       };
     });

@@ -4,6 +4,7 @@ import {
   type SrdActionParse,
 } from './monster-attack-profile.js';
 import { monsterKeyTokens, normalizeMonsterKey } from './monster-key.js';
+import { abilityModifier } from '../../../../shared/ability-modifier';
 import monsterCatalog from '../../../../src/data/srd/monsters.json' with { type: 'json' };
 import { logger } from '../../lib/logger.js';
 
@@ -142,8 +143,6 @@ const findNearMissEntry = (monsterId: string): CatalogEntry | null => {
 
   return matches.length === 1 ? matches[0]!.entry : null;
 };
-
-const abilityModifier = (score: number): number => Math.floor((score - 10) / 2);
 
 /** SRD speeds are display strings ("30 ft.", "40 ft. swim"); combat needs the number. */
 const walkSpeedFeet = (speed: Record<string, string> | undefined): number => {

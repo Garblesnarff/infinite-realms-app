@@ -2,6 +2,7 @@ import React from 'react';
 
 import { getClassIcon } from './StarterCharacterCard';
 import { StarterCharacterPortrait } from './StarterCharacterPortrait';
+import { abilityModifier } from '../../../shared/ability-modifier';
 
 import type { StarterCharacterTemplate } from '@/hooks/use-starter-character-templates';
 
@@ -17,7 +18,7 @@ import {
  * Get ability modifier from score
  */
 export function getModifier(score: number): string {
-  const mod = Math.floor((score - 10) / 2);
+  const mod = abilityModifier(score);
   return mod >= 0 ? `+${mod}` : `${mod}`;
 }
 
