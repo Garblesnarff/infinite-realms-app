@@ -1,0 +1,26 @@
+# catjam-runner (#586). Install: see ops/foreman/README.md.
+# Runs as root only to drive docker (adding foreman to the docker group would be
+# root-equivalent). Everything else runs inside the capped container, and repo
+# or model code runs there as uid foreman with no secrets in its environment.
+# No mount of /var/www or any prod env file. This container gets ONLY GH_TOKEN:
+# the env file is filtered through a pipe (bash process substitution), so the
+# Anthropic key and the Slack webhook never enter it and no copy is written.
+[Unit]
+Description=Infinite Realms catjam-runner (opencode free-model coder, #586)
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+Nice=10
+TimeoutStartSec=110min
+TimeoutStopSec=90s
+ExecStartPre=-/usr/bin/docker rm -f realms-catjam
+ExecStart=/bin/bash -c 'exec /usr/bin/docker run --rm --init --name realms-catjam --stop-timeout 60 \
+  --cpus 2 --memory 4g --memory-swap 4g --cpu-shares 256 --pids-limit 1024 \
+  --cap-drop ALL --cap-add CHOWN --cap-add DAC_OVERRIDE --cap-add FOWNER --cap-add SETUID --cap-add SETGID \
+  --security-opt no-new-privileges \
+  --env-file <(grep -E "^GH_TOKEN=" /etc/realms-foreman/env) \
+  -v /var/lib/realms-foreman/runner:/work \
+  realms-foreman:pilot catjam-runner.sh'
+ExecStopPost=-/usr/bin/docker rm -f realms-catjam

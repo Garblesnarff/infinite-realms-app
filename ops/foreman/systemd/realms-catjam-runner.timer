@@ -1,0 +1,10 @@
+[Unit]
+Description=catjam-runner every 30 min (#586)
+
+[Timer]
+OnCalendar=*-*-* *:00/30:00 UTC
+RandomizedDelaySec=60
+Persistent=false
+
+[Install]
+WantedBy=timers.target
