@@ -42,6 +42,7 @@ exports[`GameMainContent overhaul behavior contract > keeps the live message, di
           <button
             aria-pressed="true"
             class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3 ir-hit"
+            data-state="closed"
             type="button"
           >
             Show target numbers: 
