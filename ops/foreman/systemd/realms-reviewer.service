@@ -11,8 +11,9 @@ Requires=docker.service
 Type=oneshot
 Nice=10
 TimeoutStartSec=55min
+TimeoutStopSec=90s
 ExecStartPre=-/usr/bin/docker rm -f realms-reviewer
-ExecStart=/usr/bin/docker run --rm --init --name realms-reviewer \
+ExecStart=/usr/bin/docker run --rm --init --name realms-reviewer --stop-timeout 60 \
   --cpus 2 --memory 4g --memory-swap 4g --cpu-shares 256 --pids-limit 1024 \
   --cap-drop ALL --cap-add CHOWN --cap-add DAC_OVERRIDE --cap-add FOWNER --cap-add SETUID --cap-add SETGID \
   --security-opt no-new-privileges \

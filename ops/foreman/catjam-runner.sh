@@ -28,16 +28,15 @@ JOB_TIMEOUT=${CATJAM_JOB_TIMEOUT:-45m}
 MAX_FIX_ROUNDS=${CATJAM_MAX_FIX_ROUNDS:-3}
 WORK=${FOREMAN_WORK:-/work}
 APP=ai-adventure-scribe-main
-# Secret-shaped strings. Built from pieces so the repo's own pre-commit secret
-# hook (.husky/check-secrets.sh) does not flag this line.
-SK=sk
-SECRET_RE="${SK}_live_|${SK}_test_|${SK}-ant-|ghp_[A-Za-z0-9]{20}|github_pat_|hooks\.slack\.com/services|-----BEGIN [A-Z ]*PRIVATE K""EY"
+# shellcheck source=ops/foreman/lib.sh
+. "$(dirname "$(readlink -f "$0")")/lib.sh"
 
 STATE=$WORK/state        # root-only: logs, job artifacts, lock
 MIRROR=$WORK/mirror.git  # root-owned, world-readable bare clone
 JOBS=$WORK/jobs          # one worktree per issue, owned by foreman
 FHOME=$WORK/home         # foreman's HOME (bun cache, opencode cache)
 LOG=$STATE/catjam-runner.log
+ACTIVE=$STATE/active     # one marker per running job; leftovers = a job that died
 
 PUSH=1
 ONLY_ISSUE=""
@@ -56,7 +55,7 @@ fi
 export GH_TOKEN GH_REPO=$REPO GH_PROMPT_DISABLED=1 GH_NO_UPDATE_NOTIFIER=1
 
 umask 022
-mkdir -p "$STATE" "$JOBS" "$FHOME"
+mkdir -p "$STATE" "$JOBS" "$FHOME" "$ACTIVE"
 chmod 700 "$STATE"
 FUID=$(id -u foreman)
 chown "$FUID:$FUID" "$JOBS" "$FHOME"
@@ -83,6 +82,22 @@ rm_label() {
   gh api -X DELETE "repos/$REPO/issues/$1/labels/$2" > /dev/null 2>&1 || true
 }
 comment() { ghw api "repos/$REPO/issues/$1/comments" -f body="$2" > /dev/null; }
+
+# The token owner. Only their OWNER/MEMBER "Strategist review" comments count.
+OWNER_LOGIN=$(gh api user --jq .login)
+
+# trusted_reviews <pr>: JSON array of trusted "Strategist review" comments, oldest first
+trusted_reviews() {
+  gh api "repos/$REPO/issues/$1/comments?per_page=100" --paginate | jq -s 'add // []' |
+    jq --arg me "$OWNER_LOGIN" "$TRUSTED_REVIEWS_JQ"
+}
+
+# catjam_pr <issue> [state]: "<number>\t<ref>" of the newest same-repo catjam/<n>- PR
+catjam_pr() {
+  local all
+  all=$(gh api "repos/$REPO/pulls?state=${2:-open}&per_page=100&sort=updated&direction=desc" --paginate | jq -s 'add // []')
+  jq -r --arg repo "$REPO" --arg pfx "catjam/$1-" "$CATJAM_PR_JQ" <<< "$all"
+}
 
 # ---- mirror + per-job worktree (root-owned git dirs) ----------------------
 refresh_mirror() {
@@ -172,7 +187,7 @@ slug() { tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//
 pr_title() { # conventional title from the issue title
   local t
   t=$(gh api "repos/$REPO/issues/$1" --jq .title | sed -E 's/^P[0-3][: ]+//')
-  if ! printf '%s' "$t" | grep -qE '^(fix|feat|refactor|test|chore|perf|docs)(\([^)]*\))?!?: '; then
+  if ! [[ $t =~ ^(fix|feat|refactor|test|chore|perf|docs)(\([^\)]*\))?\!?:\  ]]; then
     t="fix: $t"
   fi
   printf '%s' "$t" | cut -c1-110
@@ -180,7 +195,7 @@ pr_title() { # conventional title from the issue title
 
 # ---- checks ----------------------------------------------------------------
 install_deps() {
-  as_foreman bash -c "cd '$1/$APP' && bun install --frozen-lockfile && cd server-bun && bun install" \
+  as_foreman bash -c "cd '$1/$APP' && timeout 15m bun install --frozen-lockfile && cd server-bun && timeout 15m bun install" \
     > "$2" 2>&1
 }
 
@@ -226,15 +241,15 @@ run_checks() {
 }
 
 # Refuse diffs the token or the rules would reject anyway. Prints the reason.
+# Each input is captured first and matched through a here-string (see lib.sh:
+# `git diff | grep -q` under pipefail missed secrets in diffs over ~64 KB).
 diff_refusal() {
-  local name=$1 files
+  local name=$1 files diff
   files=$(wt_git "$name" diff --cached --name-only)
-  if printf '%s\n' "$files" | grep -qE '^\.github/'; then echo "touches .github/"; return 0; fi
-  if printf '%s\n' "$files" | grep -qE '(^|/)\.env($|\.)'; then echo "adds an .env file"; return 0; fi
-  if wt_git "$name" diff --cached -U0 | grep -E '^\+' |
-    grep -qE "$SECRET_RE"; then
-    echo "added lines look like a secret"; return 0
-  fi
+  if grep -qE '^\.github/' <<< "$files"; then echo "touches .github/"; return 0; fi
+  if grep -qE '(^|/)\.env($|\.)' <<< "$files"; then echo "adds an .env file"; return 0; fi
+  diff=$(wt_git "$name" diff --cached -U0)
+  if diff_has_secret "$diff"; then echo "added lines look like a secret"; return 0; fi
   return 1
 }
 
@@ -246,7 +261,8 @@ fence() { # fence <file>: last 150 lines in a text block
 
 write_body() { # write_body <out> <issue> <round> <minutes> <oc_rc>
   local out=$1 n=$2 round=$3 mins=$4 oc_rc=$5 oc_ver
-  oc_ver=$(as_foreman opencode --version 2> /dev/null | head -1 || echo unknown)
+  oc_ver=$(as_foreman opencode --version 2> /dev/null || echo unknown)
+  oc_ver=${oc_ver%%$'\n'*}
   {
     printf 'For strategist review.\n\nDo not merge — for review\n\nRefs #%s\n\n' "$n"
     printf 'Model: `%s` via opencode %s (catjam-runner, round %s). opencode exit %s, %s min.\n\n' \
@@ -273,20 +289,18 @@ run_job() {
   minutes() { echo $((($(date +%s) - start + 59) / 60)); }
 
   if [ "$mode" = fix ]; then
-    local prjson
-    prjson=$(gh api "repos/$REPO/pulls?state=open&per_page=100" --paginate \
-      --jq ".[] | select(.head.ref | startswith(\"catjam/$n-\")) | {number, ref: .head.ref}" | head -1)
-    if [ -z "$prjson" ]; then
+    local prline
+    prline=$(catjam_pr "$n")
+    if [ -z "$prline" ]; then
       rm_label "$n" catjam-fix
       joblog "issue=#$n pr=- result=no-open-catjam-pr minutes=$(minutes)"; return 0
     fi
-    pr=$(jq -r .number <<< "$prjson"); branch=$(jq -r .ref <<< "$prjson")
-    gh api "repos/$REPO/issues/$pr/comments" --paginate \
-      --jq '.[] | select(.body | startswith("Strategist review")) | {body}' | jq -s . > "$OUT/reviews.json"
+    IFS=$'\t' read -r pr branch <<< "$prline"
+    trusted_reviews "$pr" > "$OUT/reviews.json"
     jq -r 'last | .body // ""' "$OUT/reviews.json" > "$OUT/newest.txt"
     local fixes
     fixes=$(jq '[.[] | select(.body | startswith("Strategist review — FIX"))] | length' "$OUT/reviews.json")
-    if ! head -1 "$OUT/newest.txt" | grep -q '^Strategist review — FIX'; then
+    if [[ $(sed -n 1p "$OUT/newest.txt") != "Strategist review — FIX"* ]]; then
       rm_label "$n" catjam-fix
       joblog "issue=#$n pr=#$pr result=stale-fix-label minutes=$(minutes)"; return 0
     fi
@@ -393,7 +407,9 @@ main() {
   printf '{"$schema":"https://opencode.ai/config.json","share":"disabled","autoupdate":false}\n' \
     > "$FHOME/.config/opencode/opencode.json"
   chown -R "$FUID:$FUID" "$FHOME/.config"
-  if ! as_foreman opencode models --refresh 2> /dev/null | grep -qxF "$MODEL"; then
+  local models
+  models=$(as_foreman opencode models --refresh 2> /dev/null || true)
+  if ! grep -qxF -- "$MODEL" <<< "$models"; then
     say "model $MODEL is not in 'opencode models'; nothing to do until the runner config is fixed"
     exit 1
   fi
@@ -402,27 +418,85 @@ main() {
   if [ -n "$ONLY_ISSUE" ]; then
     jobs="$ONLY_ISSUE new"
   else
-    jobs=$(queue | awk '!seen[$1]++' | head -n "$MAX_JOBS")
+    jobs=$(queue | awk -v max="$MAX_JOBS" '!seen[$1]++ && n++ < max')
   fi
   [ -n "$jobs" ] || { say "queue empty"; exit 0; }
 
   # Each job runs in a background subshell so `set -e` stays in force inside it
-  # (bash ignores -e in any function called from an `||` list).
+  # (bash ignores -e in any function called from an `||` list). The marker is
+  # removed only when run_job returns normally; a failed or killed job leaves
+  # it for recover_active.
   local n mode p
   declare -A issue_of=()
   while read -r n mode; do
-    run_job "$n" "$mode" &
+    echo "$mode" > "$ACTIVE/$n"
+    { run_job "$n" "$mode"; rm -f "$ACTIVE/$n"; } &
     issue_of[$!]=$n
   done <<< "$jobs"
-  for p in "${!issue_of[@]}"; do
-    if ! wait "$p"; then
-      n=${issue_of[$p]}
-      add_label "$n" needs-human || true
-      rm_label "$n" catjam-wip; rm_label "$n" catjam-fix
-      wt_remove "issue-$n" || true
-      joblog "issue=#$n pr=- result=failed-runner-error (see journal; labeled needs-human)"
+  for p in "${!issue_of[@]}"; do wait "$p" || true; done
+  recover_active "job failed (runner error)"
+}
+
+# ---- recovery --------------------------------------------------------------
+# recover_active <reason>: every job with a leftover marker died mid-run. Remove
+# its worktree and move catjam-wip / catjam-fix to needs-human, so the issue is
+# flagged instead of sitting in catjam-wip forever.
+recover_active() {
+  local f n
+  for f in "$ACTIVE"/*; do
+    [ -e "$f" ] || continue
+    n=$(basename "$f")
+    wt_remove "issue-$n" || true
+    rm -f "$JOBS/prompt-$n.md"
+    add_label "$n" needs-human || true
+    rm_label "$n" catjam-wip; rm_label "$n" catjam-fix
+    comment "$n" "catjam: the runner stopped mid-job ($1). Labeled needs-human." || true
+    joblog "issue=#$n pr=- result=recovered reason=\"$1\""
+    rm -f "$f"
+  done
+}
+
+# recover_stale_wip: open issues still labeled catjam-wip while no job is running
+# (we hold the lock). With an open catjam PR that is normal. With a merged one
+# the work is done. With none, the job died before opening its PR.
+recover_stale_wip() {
+  local n prs
+  prs=$(gh api "repos/$REPO/issues?state=open&labels=catjam-wip&per_page=100" --jq '.[] | select(.pull_request | not) | .number')
+  for n in $prs; do
+    [ -z "$(catjam_pr "$n" open)" ] || continue
+    local merged
+    merged=$(gh api "repos/$REPO/pulls?state=closed&per_page=100&sort=updated&direction=desc" |
+      jq -r --arg repo "$REPO" --arg pfx "catjam/$n-" \
+        '[.[] | select(.merged_at != null and .head.repo.full_name == $repo and (.head.ref | startswith($pfx)))] | first // empty | .number')
+    if [ -n "$merged" ]; then
+      add_label "$n" catjam-done; rm_label "$n" catjam-wip
+      joblog "issue=#$n pr=#$merged result=stale-wip-merged-to-done"
+    else
+      add_label "$n" needs-human; rm_label "$n" catjam-wip
+      comment "$n" "catjam: catjam-wip with no open catjam PR (a runner job died before opening it). Labeled needs-human."
+      joblog "issue=#$n pr=- result=stale-wip-to-needs-human"
     fi
   done
 }
 
+# On TERM/INT (systemd timeout, docker stop) kill the jobs, then recover them.
+# EXIT also covers a `set -e` death of the main shell. Subshells do not inherit
+# the EXIT trap.
+cleanup() {
+  local rc=$?
+  trap '' TERM INT
+  trap - EXIT
+  if [ "${KILLED:-0}" = 1 ]; then
+    kill -TERM 0 2> /dev/null || true
+    wait 2> /dev/null || true
+  fi
+  recover_active "runner exited $rc" || true
+  exit "$rc"
+}
+trap cleanup EXIT
+trap 'KILLED=1; exit 143' TERM
+trap 'KILLED=1; exit 130' INT
+
+recover_active "previous runner was killed"
+[ "$PUSH" = 0 ] || recover_stale_wip
 main

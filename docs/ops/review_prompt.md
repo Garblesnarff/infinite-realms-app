@@ -1,6 +1,6 @@
 # realms-reviewer prompt (#586)
 
-`ops/foreman/review.sh` sends this whole file to `claude -p` (Sonnet, API key), one PR per call. The model only writes verdict JSON; `review.sh` does all posting. The text below is copied unchanged from the first comment on #586. Change it only through a reviewed PR: the reviewer reads this file from `origin/main` on every run.
+`ops/foreman/review.sh` sends this whole file to `claude -p` (Sonnet, API key), one PR per call. The model only writes verdict JSON; `review.sh` does all posting. The model has no shell and no GitHub token: review.sh runs the gh commands named below itself, saves their output as files, and its task section tells the model which file stands in for which command. The text below is copied unchanged from the first comment on #586. Change it only through a reviewed PR: the reviewer reads this file from `origin/main` on every run.
 
 ### Review prompt
 ```text
