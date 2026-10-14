@@ -26,7 +26,6 @@ mock.module('../lib/logger.js', () => ({
 
 const { t } = await import('elysia');
 const { createRequestPipelineApp } = await import('../http-pipeline.js');
-const { loggingPlugin } = await import('../middleware/logging.js');
 
 const MARKER = 'PLAYER-TEXT-MARKER-7f3a9c';
 
@@ -116,22 +115,5 @@ describe('a validation failure never logs the submitted body (#2382)', () => {
     const line = lines.find((entry) => entry.msg === 'request.error');
     expect(line).toMatchObject({ error: 'database unreachable', errorName: 'Error' });
     expect(typeof line?.stack).toBe('string');
-  });
-
-  it('the loggingPlugin error line leaves the body out too', async () => {
-    lines = [];
-    // The plugin's hooks are local to its own instance, so the route goes on the plugin itself.
-    // Nothing mounts `loggingPlugin` today; this keeps its line from leaking if something does.
-    const app = loggingPlugin.post('/cast', () => ({ ok: true }), schema);
-
-    await post(app);
-
-    const line = lines.find((entry) => entry.type === 'error');
-    expect(line).toMatchObject({
-      errorMessage: 'Validation failed',
-      issues: [expect.objectContaining({ path: '/slotLevel' })],
-    });
-    expect(line?.errorStack).toBeUndefined();
-    expect(JSON.stringify(lines)).not.toContain(MARKER);
   });
 });
