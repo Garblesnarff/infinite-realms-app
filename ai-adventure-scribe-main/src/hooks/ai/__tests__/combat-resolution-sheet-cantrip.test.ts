@@ -335,6 +335,82 @@ describe('the sheet-Cast Acid Splash in a fight (#2374, #2375)', () => {
     });
   });
 
+  describe('the action-list Acid Splash with one visible enemy (#564)', () => {
+    // The combat action list sends the bare chip label as the player's message; the DM declares
+    // the cantrip in the area shape and the route refuses it as `no_area_of_effect`. The bare
+    // label names no creature, so with one standing hostile the fallback casts at it — the save
+    // card appears and the save resolves like a sheet cast. Anything else the player typed keeps
+    // the refusal, since the words may name a target the roster does not know (#2438).
+    const buttonClick = (playerMessage: string, participants: any[] = [APPRENTICE, SHARD]) =>
+      resolve(participants, [dmCantripAoEAction], { playerInputOrigin: 'typed', playerMessage });
+
+    beforeEach(() => {
+      resolveAoECast.mockResolvedValue(NO_AREA);
+      executeStructuredCombatActionWithBoundary.mockResolvedValue({
+        outcomes: [],
+        result: ACID_SPLASH_RESULT,
+        boundary: null,
+      });
+    });
+
+    it('casts the cantrip at the only standing hostile', async () => {
+      const result = await buttonClick('Cast Acid Splash');
+
+      expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledTimes(1);
+      expect(executeStructuredCombatActionWithBoundary.mock.calls[0].slice(0, 2)).toEqual([
+        'enc-m9',
+        expect.objectContaining({
+          actor_id: APPRENTICE_ID,
+          action_type: 'cast_spell',
+          spell_id: 'acid-splash',
+          target_ids: [SHARD_ID],
+          slot_level: null,
+        }),
+      ]);
+      expect(presented).toEqual([
+        {
+          actorLabel: 'The Apprentice',
+          targetLabel: 'Corrupted Shard',
+          spellName: 'Acid Splash',
+          saveAbility: 'DEX',
+        },
+      ]);
+      expect(engineLines(result).join('\n')).not.toContain('refused');
+      expect(repairRefusedCombatAction).not.toHaveBeenCalled();
+    });
+
+    it('still refuses when the words name a downed creature instead of the one standing', async () => {
+      const result = await buttonClick('I cast Acid Splash at the Corrupted Shard', [
+        APPRENTICE,
+        { ...SHARD, isDead: true, currentHitPoints: 0 },
+        IMP,
+      ]);
+
+      expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
+      expect(engineLines(result).join('\n')).toContain(
+        'Acid Splash has no area of effect — name its target and cast it again',
+      );
+    });
+
+    it('still refuses with two hostiles standing', async () => {
+      const result = await buttonClick('Cast Acid Splash', [APPRENTICE, SHARD, IMP]);
+
+      expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
+      expect(engineLines(result).join('\n')).toContain(
+        'Acid Splash has no area of effect — name its target and cast it again',
+      );
+    });
+
+    it('still refuses when the words name a creature the roster does not know (#2438)', async () => {
+      const result = await buttonClick('I cast Acid Splash at the Sour Knight');
+
+      expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
+      expect(engineLines(result).join('\n')).toContain(
+        'Acid Splash has no area of effect — name its target and cast it again',
+      );
+    });
+  });
+
   it('spends no repair call on a refused typed player cast (#2443)', async () => {
     resolveAoECast.mockResolvedValue(NO_AREA);
 

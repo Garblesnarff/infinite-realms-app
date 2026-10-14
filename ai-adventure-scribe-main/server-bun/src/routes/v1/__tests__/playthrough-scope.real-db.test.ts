@@ -296,7 +296,9 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
     const [alice, bob] = await database
       .insert(characters)
       .values([
-        { userId, campaignId, name: 'Alice' },
+        // GP-061 (#313): the AoE propose path now checks the sheet. Alice knows Fireball,
+        // so the authorization test's propose succeeds as before.
+        { userId, campaignId, name: 'Alice', knownSpells: 'fireball' },
         { userId, campaignId, name: 'Bob' },
       ])
       .returning({ id: characters.id });
