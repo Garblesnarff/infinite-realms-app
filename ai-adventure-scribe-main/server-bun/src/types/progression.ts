@@ -175,28 +175,7 @@ export interface XPHistoryQuery {
 /**
  * D&D 5E XP thresholds by level (PHB pg. 15)
  */
-export const XP_TABLE: Record<number, number> = {
-  1: 0,
-  2: 300,
-  3: 900,
-  4: 2700,
-  5: 6500,
-  6: 14000,
-  7: 23000,
-  8: 34000,
-  9: 48000,
-  10: 64000,
-  11: 85000,
-  12: 100000,
-  13: 120000,
-  14: 140000,
-  15: 165000,
-  16: 195000,
-  17: 225000,
-  18: 265000,
-  19: 305000,
-  20: 355000,
-};
+export { XP_TO_REACH_LEVEL as XP_TABLE } from '../../../shared/xp-tables';
 
 /**
  * Levels that grant Ability Score Improvement (PHB pg. 12)

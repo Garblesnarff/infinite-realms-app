@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { FROZEN_CAMPAIGN_CHAPTER_LABEL } from './campaign-chapter';
 import { actedCount, summarizeCombatTurn } from './combat-turn-order';
 import { buildSpellsViewModel } from './spell-view-model';
+import { abilityModifier } from '../../../../../../shared/ability-modifier';
 import { MAX_SESSION_COMPANIONS } from '../../../../../../shared/companion-constants';
 import { isCatalogWeaponName } from '../../../../../../shared/equipment-weapon-resolver';
 
@@ -80,7 +81,7 @@ const prettify = (id: string): string =>
     .replace(/(^|\s)\w/g, (c) => c.toUpperCase())
     .trim() || 'Item';
 
-const abilityMod = (score?: number): number => Math.floor(((score ?? 10) - 10) / 2);
+const abilityMod = (score?: number): number => abilityModifier(score ?? 10);
 
 const EMPTY_SPELLS: SpellsVM = {
   cantrips: [],

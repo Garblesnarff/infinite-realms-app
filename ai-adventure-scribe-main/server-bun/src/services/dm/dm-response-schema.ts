@@ -394,10 +394,10 @@ const baseProperties = {
           'corridor',
         ],
       },
-      size: { type: ['string', 'null'], enum: ['small', 'medium', 'large', null] },
+      size: nullable({ type: 'string', enum: ['small', 'medium', 'large'] }),
       sceneDescription: nullable({ type: 'string' }),
       seed: nullable({ type: 'number' }),
-      enemyPlacement: { type: ['string', 'null'], enum: ['ambush', 'guarding', 'formation', null] },
+      enemyPlacement: nullable({ type: 'string', enum: ['ambush', 'guarding', 'formation'] }),
     },
     required: [
       'id',

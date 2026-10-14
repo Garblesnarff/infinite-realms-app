@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
 import { abilityModifier } from '../../shared/ability-modifier';
+import { XP_TO_REACH_LEVEL } from '../../shared/xp-tables';
 
 import type { Character, Ability, AbilityScores, CharacterRace, Subrace } from '@/types/character';
 import type { CharacterStats } from '@/utils/character-calculations';
@@ -27,10 +28,6 @@ const SPELLCASTING_CLASSES = new Set([
   'Arcane Trickster',
 ]);
 
-const XP_THRESHOLDS = [
-  0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000, 165000,
-  195000, 225000, 265000, 305000, 355000,
-];
 
 /**
  * Hook for calculating and memoizing character statistics
@@ -90,8 +87,8 @@ export const useLevelProgression = (character: Character | null) => {
     const currentLevel = character.level || 1;
     const currentXP = character.experience || 0;
 
-    const nextLevelXP = XP_THRESHOLDS[currentLevel] || XP_THRESHOLDS[19];
-    const previousLevelXP = XP_THRESHOLDS[currentLevel - 1] || 0;
+    const nextLevelXP = XP_TO_REACH_LEVEL[currentLevel + 1] || XP_TO_REACH_LEVEL[20];
+    const previousLevelXP = XP_TO_REACH_LEVEL[currentLevel] || 0;
     const progressXP = currentXP - previousLevelXP;
     const requiredXP = nextLevelXP - previousLevelXP;
     const progressPercent = currentLevel >= 20 ? 100 : (progressXP / requiredXP) * 100;

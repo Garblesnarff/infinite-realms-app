@@ -7,11 +7,13 @@
  * weapon's magic bonus. No proficiency on damage.
  */
 
+import { abilityModifier } from '../../../shared/ability-modifier';
+
 import type { Character } from '@/types/character';
 
 import { resolveEquipmentById, resolveEquipmentByName } from '@/data/equipment/resolver';
 
-const abilityMod = (score?: number): number => Math.floor(((score ?? 10) - 10) / 2);
+const abilityMod = (score?: number): number => abilityModifier(score ?? 10);
 
 /** Null when the key does not resolve to a catalog weapon with damage dice. */
 export function getWeaponDamageText(

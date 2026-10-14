@@ -7,7 +7,8 @@ import { abilityModifier } from '../shared/ability-modifier';
 
 const APP_ROOT = join(__dirname, '..');
 const PRODUCTION_ROOTS = ['src', 'server-bun/src', 'supabase/functions', 'shared'];
-const INLINE_FORMULA = /\(\s*[^()\n]*?\s-\s*10\s*\)\s*\/\s*2\b/;
+// Matches the formula with any inner parentheses, e.g. ((score ?? 10) - 10) / 2.
+const INLINE_FORMULA = /-\s*10\s*\)\s*\/\s*2\b/;
 
 function hasInlineFormula(source: string): boolean {
   return source
