@@ -1,10 +1,8 @@
 /**
- * Shared CORS configuration for all Deno edge functions.
+ * Shared CORS configuration for Deno edge functions.
  *
  * Headers include every value used by any function so that a single
- * import covers chat-ai, dm-agent-execute, rules-interpreter-execute,
- * clone-template, archive-sessions, generate-embedding, get-secret,
- * and text-to-speech.
+ * import covers clone-template and other functions.
  */
 
 export const corsHeaders: Record<string, string> = {

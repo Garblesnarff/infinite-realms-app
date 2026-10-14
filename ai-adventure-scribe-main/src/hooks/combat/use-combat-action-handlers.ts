@@ -20,23 +20,18 @@ interface UseCombatActionHandlersProps {
   takeAction: (action: Partial<CombatAction>) => Promise<void>;
   updateParticipant: (participantId: string, updates: Partial<CombatParticipant>) => Promise<void>;
   nextTurn: () => Promise<void>;
-  validateCombatAction: (
-    action: Partial<CombatAction>,
-    participant: CombatParticipant,
-  ) => Promise<{ isValid: boolean; suggestions: string[]; errors: string[] }>;
   selectedEnemy: string | null;
 }
 
 /**
  * Hook to manage combat action handlers, extracted from useCombatActions.
- * Handles the execution and validation of various combat actions.
+ * Handles the execution of various combat actions.
  */
 export const useCombatActionHandlers = ({
   activeEncounter,
   takeAction,
   updateParticipant,
   nextTurn,
-  validateCombatAction,
   selectedEnemy,
 }: UseCombatActionHandlersProps) => {
   const [actionValidation, setActionValidation] = useState<{
@@ -46,7 +41,7 @@ export const useCombatActionHandlers = ({
   } | null>(null);
   const [reactionOpportunities, setReactionOpportunities] = useState<ReactionOpportunity[]>([]);
 
-  // Validate and execute combat action
+  // Execute combat action
   const handleCombatAction = useCallback(
     async (
       actionType: ActionType,
@@ -66,7 +61,7 @@ export const useCombatActionHandlers = ({
         return;
       }
 
-      // Create action for validation
+      // Create action
       const action: Partial<CombatAction> = {
         participantId,
         targetParticipantId: targetId,
@@ -105,27 +100,14 @@ export const useCombatActionHandlers = ({
         }
       }
 
-      // Validate action with AI rules interpreter
       try {
-        const validation = await validateCombatAction(action, participant);
-        setActionValidation(validation);
-
-        if (!validation.isValid) {
-          // Show validation errors to user
-          logger.warn('Invalid combat action:', validation.errors);
-          return;
-        }
-
-        // Execute valid action
         await takeAction(action);
         setActionValidation(null);
       } catch (error) {
-        logger.error('Error validating combat action:', error);
-        // Proceed with action if validation fails
-        await takeAction(action);
+        logger.error('Error taking combat action:', error);
       }
     },
-    [activeEncounter, takeAction, updateParticipant, validateCombatAction],
+    [activeEncounter, takeAction, updateParticipant],
   );
 
   // Handle enemy attack with AI integration

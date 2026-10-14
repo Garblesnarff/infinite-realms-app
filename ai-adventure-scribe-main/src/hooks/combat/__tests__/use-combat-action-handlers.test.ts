@@ -32,11 +32,6 @@ describe('useCombatActionHandlers', () => {
   const mockTakeAction = vi.fn().mockResolvedValue(undefined);
   const mockUpdateParticipant = vi.fn().mockResolvedValue(undefined);
   const mockNextTurn = vi.fn().mockResolvedValue(undefined);
-  const mockValidateCombatAction = vi.fn().mockResolvedValue({
-    isValid: true,
-    suggestions: [],
-    errors: [],
-  });
 
   const mockParticipant = {
     id: 'p1',
@@ -70,7 +65,6 @@ describe('useCombatActionHandlers', () => {
     takeAction: mockTakeAction,
     updateParticipant: mockUpdateParticipant,
     nextTurn: mockNextTurn,
-    validateCombatAction: mockValidateCombatAction,
     selectedEnemy: null as string | null,
   };
 
@@ -94,7 +88,7 @@ describe('useCombatActionHandlers', () => {
       await act(async () => {
         await result.current.handleCombatAction('attack', 'p1');
       });
-      expect(mockValidateCombatAction).not.toHaveBeenCalled();
+      expect(mockTakeAction).not.toHaveBeenCalled();
     });
 
     it('should do nothing if participant not found', async () => {
@@ -102,16 +96,15 @@ describe('useCombatActionHandlers', () => {
       await act(async () => {
         await result.current.handleCombatAction('attack', 'non-existent');
       });
-      expect(mockValidateCombatAction).not.toHaveBeenCalled();
+      expect(mockTakeAction).not.toHaveBeenCalled();
     });
 
-    it('should execute action if validation passes', async () => {
+    it('should execute action', async () => {
       const { result } = setupHook();
       await act(async () => {
         await result.current.handleCombatAction('attack', 'p1', 'e1');
       });
 
-      expect(mockValidateCombatAction).toHaveBeenCalled();
       expect(mockTakeAction).toHaveBeenCalledWith(
         expect.objectContaining({
           participantId: 'p1',
@@ -119,29 +112,11 @@ describe('useCombatActionHandlers', () => {
           actionType: 'attack',
         }),
       );
-      expect(result.current.actionValidation).toBeNull(); // Reset after success
+      expect(result.current.actionValidation).toBeNull();
     });
 
-    it('should not execute action if validation fails', async () => {
-      mockValidateCombatAction.mockResolvedValueOnce({
-        isValid: false,
-        suggestions: ['Try something else'],
-        errors: ['Too far away'],
-      });
-
-      const { result } = setupHook();
-      await act(async () => {
-        await result.current.handleCombatAction('attack', 'p1', 'e1');
-      });
-
-      expect(mockValidateCombatAction).toHaveBeenCalled();
-      expect(mockTakeAction).not.toHaveBeenCalled();
-      expect(result.current.actionValidation?.isValid).toBe(false);
-      expect(logger.warn).toHaveBeenCalled();
-    });
-
-    it('should proceed with action if validation throws', async () => {
-      mockValidateCombatAction.mockRejectedValueOnce(new Error('Validation failed'));
+    it('should log error if takeAction throws', async () => {
+      mockTakeAction.mockRejectedValueOnce(new Error('Action failed'));
 
       const { result } = setupHook();
       await act(async () => {
@@ -149,7 +124,6 @@ describe('useCombatActionHandlers', () => {
       });
 
       expect(logger.error).toHaveBeenCalled();
-      expect(mockTakeAction).toHaveBeenCalled();
     });
   });
 
