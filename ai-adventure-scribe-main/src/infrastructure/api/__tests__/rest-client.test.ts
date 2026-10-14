@@ -18,6 +18,12 @@ vi.mock('@/services/auth/TokenService', () => ({
   loadCachedSession: loadCachedSessionMock,
   persistSession: persistSessionMock,
   refreshAccessTokenOnce: refreshMock,
+  TokenRefreshTransportError: class TokenRefreshTransportError extends Error {
+    constructor(message = 'Token refresh endpoint unreachable') {
+      super(message);
+      this.name = 'TokenRefreshTransportError';
+    }
+  },
 }));
 
 import {
@@ -166,5 +172,122 @@ describe('fetchWithAuth', () => {
       route: '/v1/llm/extract',
       outcome: 'session_expired',
     });
+  });
+
+  it('rethrows a transport failure from the refresh endpoint instead of reporting session-expired (#565)', async () => {
+    const { TokenRefreshTransportError } = await import('@/services/auth/TokenService');
+    fetchMock.mockResolvedValueOnce(response(401));
+    refreshMock.mockRejectedValue(new TokenRefreshTransportError());
+
+    await expect(fetchWithAuth('/v1/characters')).rejects.toBeInstanceOf(
+      TokenRefreshTransportError,
+    );
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      'AUTH_RETRY_AFTER_401',
+      expect.objectContaining({ outcome: 'refresh_failed' }),
+    );
+  });
+
+  /** A fetch mock that hangs like a blackholed connection, but honors aborts like a real fetch. */
+  const blackholedFetch = (): void => {
+    fetchMock.mockImplementation(
+      (_input: unknown, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          const signal = init?.signal as AbortSignal | undefined;
+          const onAbort = (): void =>
+            reject(new DOMException('The request was aborted.', 'AbortError'));
+          if (signal?.aborted) {
+            onAbort();
+          } else {
+            signal?.addEventListener('abort', onAbort, { once: true });
+          }
+        }),
+    );
+  };
+
+  it('aborts a hung request on a default route after 30 s (#565)', async () => {
+    vi.useFakeTimers();
+    try {
+    blackholedFetch();
+
+    const request = fetchWithAuth('/v1/characters', { method: 'POST' });
+    const rejection = expect(request).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.advanceTimersByTimeAsync(30_000);
+    await rejection;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the 90 s ceiling for /v1/llm/generate (#565)', async () => {
+    vi.useFakeTimers();
+    try {
+    blackholedFetch();
+
+    const request = fetchWithAuth('/v1/llm/generate', { method: 'POST' });
+    const rejection = expect(request).rejects.toMatchObject({ name: 'AbortError' });
+    let settled = false;
+    void request.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(60_000);
+    await rejection;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves memory-extraction jobs without a ceiling (#2148, #565)', async () => {
+    vi.useFakeTimers();
+    try {
+    fetchMock.mockReturnValue(new Promise(() => {})); // hangs
+
+    const request = fetchWithAuth('/v1/memory-extraction/jobs', { method: 'POST' });
+    let settled = false;
+    void request.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    await vi.advanceTimersByTimeAsync(180_000);
+    expect(settled).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves image generation without a ceiling (#565)', async () => {
+    vi.useFakeTimers();
+    try {
+    fetchMock.mockReturnValue(new Promise(() => {})); // hangs
+
+    const request = fetchWithAuth('/v1/images/generate', { method: 'POST' });
+    let settled = false;
+    void request.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    await vi.advanceTimersByTimeAsync(180_000);
+    expect(settled).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

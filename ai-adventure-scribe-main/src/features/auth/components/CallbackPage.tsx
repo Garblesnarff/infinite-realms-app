@@ -10,8 +10,13 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
+import { fetchWithTimeout } from '@/infrastructure/api/fetch-with-timeout';
 import logger from '@/lib/logger';
 import { persistSession } from '@/services/auth/TokenService';
+
+/** Ceiling for the one-time code exchange so a hung backend cannot leave the
+ *  page on "Completing sign in..." forever (#565). */
+const AUTH_EXCHANGE_TIMEOUT_MS = 15_000;
 
 export default function CallbackPage() {
   const navigate = useNavigate();
@@ -26,11 +31,15 @@ export default function CallbackPage() {
 
         if (exchangeCode) {
           const apiUrl = import.meta.env?.VITE_API_URL || '';
-          const response = await fetch(`${apiUrl}/v1/auth/exchange`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code: exchangeCode }),
-          });
+          const response = await fetchWithTimeout(
+            `${apiUrl}/v1/auth/exchange`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ code: exchangeCode }),
+            },
+            AUTH_EXCHANGE_TIMEOUT_MS,
+          );
 
           if (!response.ok) {
             throw new Error(`Token exchange failed (${response.status})`);

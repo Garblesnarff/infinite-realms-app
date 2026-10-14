@@ -1,3 +1,4 @@
+import { fetchWithTimeout } from '@/infrastructure/api/fetch-with-timeout';
 import logger from '@/lib/logger';
 
 // WorkOS Session type (simplified, compatible with access_token usage)
@@ -41,6 +42,35 @@ export class TokenRefreshError extends Error {
     this.code = code;
   }
 }
+
+/**
+ * The refresh endpoint could not be reached at all (network error or timeout),
+ * e.g. mid deploy-swap. This is a transport failure, not an auth verdict: the
+ * stored session must stay intact and callers must not report session-expired
+ * (#565).
+ */
+export class TokenRefreshTransportError extends Error {
+  constructor(message = 'Token refresh endpoint unreachable') {
+    super(message);
+    this.name = 'TokenRefreshTransportError';
+  }
+}
+
+/** True for failures that mean "no answer", never "the server rejected us". */
+const isTransportFailure = (error: unknown): boolean => {
+  const name =
+    error && typeof error === 'object' && 'name' in error
+      ? (error as { name?: unknown }).name
+      : undefined;
+  if (name === 'AbortError') return true;
+  return (
+    error instanceof TypeError &&
+    /failed to fetch|network(?:error| error)|load failed/i.test(error.message)
+  );
+};
+
+/** Ceiling for the refresh POST so a hung endpoint cannot stall auth forever (#565). */
+const TOKEN_REFRESH_REQUEST_TIMEOUT_MS = 15_000;
 
 const readSession = (raw: string | null): WorkOSSession | null => {
   if (!raw) return null;
@@ -298,11 +328,15 @@ export const isTokenExpiringSoon = (token: string): boolean => {
 const requestTokenRefresh = async (refreshToken: string): Promise<RefreshResult> => {
   try {
     const apiUrl = import.meta.env?.VITE_API_URL || '';
-    const response = await fetch(`${apiUrl}/v1/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-    });
+    const response = await fetchWithTimeout(
+      `${apiUrl}/v1/auth/refresh`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      },
+      TOKEN_REFRESH_REQUEST_TIMEOUT_MS,
+    );
 
     if (!response.ok) {
       const payload = await readResponseJson(response);
@@ -335,6 +369,9 @@ const requestTokenRefresh = async (refreshToken: string): Promise<RefreshResult>
     };
   } catch (error) {
     logger.error('Error refreshing token:', { error });
+    // A blackholed endpoint is not an auth verdict — propagate it so callers
+    // keep the stored session instead of signing the player out (#565).
+    if (isTransportFailure(error)) throw new TokenRefreshTransportError();
     return null;
   }
 };
@@ -378,6 +415,9 @@ export const refreshAccessToken = (
   if (!refreshInFlight) {
     const coordinatedRefresh = refreshWithCoordination(refreshToken, currentAccessToken).catch(
       (error: unknown) => {
+        // Transport failures propagate: they are not auth verdicts, so the
+        // caller's stored session must stay intact (#565).
+        if (error instanceof TokenRefreshTransportError) throw error;
         logger.error('Token refresh coordination failed:', { error });
         return null;
       },
