@@ -17,6 +17,8 @@ If `gh` CLI is installed and authenticated, you can pass a PR number:
 scripts/pre-merge-check.sh 2053
 ```
 
+The base is the branch's current tip on `origin` (read with `git ls-remote`), not the local `origin/<base>` ref, which can be stale. If that tip is not in the local object database, the check fails closed. It never fetches.
+
 ### 2. Check Specific Git References
 Pass base and head references explicitly:
 

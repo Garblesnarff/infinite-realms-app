@@ -45,7 +45,15 @@ if [ $# -eq 1 ]; then
       echo "ERROR: Could not resolve base branch or head SHA for PR #$path_or_pr." >&2
       exit 1
     fi
-    BASE_REF="origin/$BASE_NAME"
+    # Use the base branch's current tip on origin, not the local origin/<base>
+    # ref: that ref can be stale, and checking against a stale base gives a
+    # false PASS. ls-remote only reads, so this never fetches or updates refs.
+    PR_BASE_TIP=$(git ls-remote --heads origin "refs/heads/$BASE_NAME" 2>/dev/null | cut -f1 || true)
+    if [ -z "$PR_BASE_TIP" ]; then
+      echo "ERROR: Could not read the current tip of '$BASE_NAME' from origin (git ls-remote)." >&2
+      exit 1
+    fi
+    BASE_REF="$PR_BASE_TIP"
     HEAD_REF="$HEAD_OID"
   else
     usage
@@ -56,11 +64,17 @@ elif [ $# -eq 2 ]; then
 fi
 
 # Resolve exact SHAs
-BASE_SHA=$(git rev-parse --verify "$BASE_REF" 2>/dev/null || true)
-HEAD_SHA=$(git rev-parse --verify "$HEAD_REF" 2>/dev/null || true)
+# ^{commit}: a bare full SHA passes --verify even when its object is absent.
+BASE_SHA=$(git rev-parse --verify "$BASE_REF^{commit}" 2>/dev/null || true)
+HEAD_SHA=$(git rev-parse --verify "$HEAD_REF^{commit}" 2>/dev/null || true)
 
 if [ -z "$BASE_SHA" ]; then
-  echo "ERROR: Unable to resolve base ref '$BASE_REF' to a valid SHA." >&2
+  if [ -n "${PR_BASE_TIP:-}" ]; then
+    # Fail closed: checking against a base we cannot read would be a guess.
+    echo "ERROR: Current tip of the PR base ($PR_BASE_TIP) is not in the local object database. This check does not fetch; fetch origin and re-run." >&2
+  else
+    echo "ERROR: Unable to resolve base ref '$BASE_REF' to a valid SHA." >&2
+  fi
   exit 1
 fi
 
