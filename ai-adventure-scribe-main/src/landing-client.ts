@@ -8,6 +8,8 @@
  * - FAQ accordion interactions
  */
 
+import { buildWaitlistJoinRequest } from './landing/waitlist-join-request';
+
 import logger from '@/lib/logger';
 
 // Initialize when DOM is ready
@@ -37,20 +39,19 @@ function initWaitlistForms() {
       const email = emailInput.value.trim();
       if (!email) return;
 
+      const source = form.dataset.source || 'landing';
+      const join = buildWaitlistJoinRequest({ email, source });
+
       // Disable form during submission
       submitButton.disabled = true;
       const originalText = submitButton.textContent;
       submitButton.textContent = 'Joining...';
 
       try {
-        const response = await fetch('/api/trpc/waitlist.join', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            json: { email },
-          }),
+        const response = await fetch(join.path, {
+          method: join.method,
+          headers: join.headers,
+          body: JSON.stringify(join.body),
         });
 
         if (response.ok) {
@@ -63,7 +64,7 @@ function initWaitlistForms() {
           submitButton.textContent = 'Joined!';
 
           // Track conversion
-          trackEvent('waitlist_signup', { source: form.dataset.source || 'landing' });
+          trackEvent('waitlist_signup', { source });
 
           // Reset button after delay
           setTimeout(() => {
