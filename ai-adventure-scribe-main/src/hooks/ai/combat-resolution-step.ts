@@ -205,6 +205,19 @@ const isDeclaredCombatAction = (action: unknown): action is DeclaredCombatAction
   Boolean(action && typeof action === 'object' && 'target_ids' in action) ||
   isAoESpellAction(action);
 
+/**
+ * Whether the player's message is exactly the combat action list's chip for the spell.
+ * `getLegalCombatActions` labels the chip `Cast <name>` and the list sends the label as the
+ * message, so the bare label names no creature. A hand-typed message identical to the label
+ * (modulo case and surrounding whitespace) is indistinguishable from the button and gets the
+ * same treatment; anything else the player typed keeps the refusal, since the words may name
+ * a target the roster does not know (#2438).
+ */
+const isBareActionListCast = (message: string, spellId: string | null): boolean => {
+  const label = playerCombatSpellLabel(spellId, spellId).toLowerCase();
+  return message.trim().toLowerCase() === `cast ${label}`;
+};
+
 const sameAction = (left: StructuredCombatAction, right: StructuredCombatAction): boolean =>
   left.actor_id === right.actor_id &&
   left.action_type === right.action_type &&
@@ -717,15 +730,25 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       // its card for that creature before the DM was called, `holdSaveCardBeforeDm`, #2392); with
       // more, the player is asked, since the engine must not choose for them. A typed cast means
       // the one creature the player named; when the words name none or several, the engine's
-      // refusal stands (#2438 reports it).
+      // refusal stands (#2438 reports it). The action list's chip is the exception: it sends the
+      // bare label ("Cast Acid Splash"), which names no creature, so with one standing hostile
+      // the cast goes there — the only creature it can mean (#564).
       const hostiles = standingHostiles(participants ?? []);
       let targets = hostiles;
       if (origin === 'typed') {
         const message = (playerMessage ?? '').toLowerCase();
-        targets = hostiles.filter(
+        const named = hostiles.filter(
           (hostile) => !!hostile.name && message.includes(hostile.name.toLowerCase()),
         );
-        if (targets.length !== 1) throw error;
+        if (named.length === 1) {
+          targets = named;
+        } else if (named.length > 1) {
+          throw error;
+        } else if (hostiles.length === 1 && isBareActionListCast(message, action.spell_id)) {
+          targets = hostiles;
+        } else {
+          throw error;
+        }
       }
       if (targets.length !== 1) {
         throw new CombatIntentRefusedError(
