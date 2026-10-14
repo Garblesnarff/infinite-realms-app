@@ -85,7 +85,8 @@ lt() { awk -v a="$1" -v b="$2" 'BEGIN { exit !(a < b) }'; }
 min() { awk -v a="$1" -v b="$2" 'BEGIN { printf "%.2f", (a < b ? a : b) }'; }
 
 # attempts <pr> <sha8>: reviews already paid for at this head
-attempts() { awk -v p="pr=$1" -v s="sha=$2" '$3 == p && $5 == s { n++ } END { print n + 0 }' "$LEDGER" 2> /dev/null || echo 0; }
+# (dry-run rows still count toward spend, not toward attempts)
+attempts() { awk -v p="pr=$1" -v s="sha=$2" '$3 == p && $5 == s && $6 !~ /^dry-run/ { n++ } END { print n + 0 }' "$LEDGER" 2> /dev/null || echo 0; }
 
 # The token owner. Only their OWNER/MEMBER "Strategist review" comments count.
 OWNER_LOGIN=$(gh api user --jq .login)
@@ -107,9 +108,13 @@ scan_prs() {
 
 ci_finished() { # 0 when every check at the head has completed (and at least one exists)
   local pending total
-  total=$(gh pr checks "$1" --json bucket --jq 'length' 2> /dev/null || echo 0)
-  pending=$(gh pr checks "$1" --json bucket --jq '[.[] | select(.bucket == "pending")] | length' 2> /dev/null || echo 1)
-  [ "${total:-0}" -gt 0 ] && [ "${pending:-1}" -eq 0 ]
+  # gh pr checks exits non-zero when a check failed or is pending, after
+  # printing the count; keep the output and accept only a single number.
+  total=$(gh pr checks "$1" --json bucket --jq 'length' 2> /dev/null) || true
+  pending=$(gh pr checks "$1" --json bucket --jq '[.[] | select(.bucket == "pending")] | length' 2> /dev/null) || true
+  [[ $total =~ ^[0-9]+$ ]] || total=0
+  [[ $pending =~ ^[0-9]+$ ]] || pending=1
+  [ "$total" -gt 0 ] && [ "$pending" -eq 0 ]
 }
 
 is_jules() { [[ $1 == jules* || $1 =~ -[0-9]{15,}$ ]]; }
@@ -124,11 +129,11 @@ prefetch() {
     --jq '{number, title, body, draft, state, mergeable, mergeable_state, author: .user.login,
            head_ref: .head.ref, head_sha: .head.sha, base_ref: .base.ref, additions, deletions, changed_files}' > "$d/pr.json"
   gh pr view "$n" --json files --jq '.files[] | "\(.additions)+ \(.deletions)- \(.path)"' > "$d/files.txt"
-  gh pr diff "$n" > "$d/diff.patch" 2>&1 || echo "(gh pr diff failed)" >> "$d/diff.patch"
+  gh pr diff "$n" > "$d/diff.patch" 2> /dev/null || : > "$d/diff.patch"
   gh pr checks "$n" --json name,workflow,state,bucket,link,startedAt,completedAt > "$d/checks.json" 2> /dev/null || true
   jq -e 'type == "array"' "$d/checks.json" > /dev/null 2>&1 || echo '[]' > "$d/checks.json"
   : > "$d/failed-logs.txt"
-  for run in $(jq -r '.[] | select(.bucket == "fail") | .link' "$d/checks.json" | sed -nE 's#.*/actions/runs/([0-9]+).*#\1#p' | sort -u | head -3); do
+  for run in $(jq -r '.[] | select(.bucket == "fail") | .link' "$d/checks.json" | sed -nE 's#.*/actions/runs/([0-9]+).*#\1#p' | sort -u | awk 'NR <= 3'); do
     printf '===== run %s: gh run view --log-failed (last 300 lines) =====\n' "$run" >> "$d/failed-logs.txt"
     { gh run view "$run" --log-failed 2>&1 || true; } | tail -n 300 >> "$d/failed-logs.txt"
   done
@@ -139,7 +144,7 @@ prefetch() {
          | {author: .user.login, author_association, created_at, body}]' <<< "$comments" > "$d/other-comments.json"
   linked=$(
     { grep -oiE '(refs|closes|fixes|resolves) #[0-9]+' <<< "$(jq -r '.body // ""' "$d/pr.json")" | grep -oE '[0-9]+' || true
-      if [[ $ref =~ ^catjam/([0-9]+)- ]]; then echo "${BASH_REMATCH[1]}"; fi; } | sort -un | head -3)
+      if [[ $ref =~ ^catjam/([0-9]+)- ]]; then echo "${BASH_REMATCH[1]}"; fi; } | sort -un | awk 'NR <= 3')
   for k in $linked; do
     gh issue view "$k" --json number,title,body,labels,state > "$d/issue-$k.json" 2> /dev/null || true
   done
@@ -161,8 +166,10 @@ run_claude() {
     cd "$1"
     deny=()
     for p in "${CLAUDE_DENY_ROOTS[@]}"; do deny+=("Read(/$p/**)" "Edit(/$p/**)"); done
-    exec timeout --kill-after=30 "$CLAUDE_TIMEOUT" \
-      setpriv --reuid="$FUID" --regid="$FUID" --clear-groups --inh-caps=-all -- \
+    # timeout runs inside setpriv: as foreman it can signal claude (root has
+    # no CAP_KILL in this container).
+    exec setpriv --reuid="$FUID" --regid="$FUID" --clear-groups --inh-caps=-all -- \
+      timeout --kill-after=30 "$CLAUDE_TIMEOUT" \
       claude -p --model "$MODEL" --max-budget-usd "$2" --output-format json \
       --no-session-persistence --strict-mcp-config --safe-mode \
       --tools Read,Grep,Glob,Write --permission-mode default \
@@ -238,6 +245,7 @@ EOF
   else
     logline "pr=#$n sha=$s8 result=$result claude_exit=$rc usd=$cost"
   fi
+  [ "$POST" = 1 ] || result=dry-run-$result
   echo "$(date -u +%FT%TZ) $(today) pr=$n $cost sha=$s8 $result" >> "$LEDGER"
   rm -rf "$dir"
 }
