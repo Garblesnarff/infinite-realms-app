@@ -1,15 +1,18 @@
+/* eslint-disable max-lines -- service-level and live-route suites share the concentration fixtures; splitting would rebuild them in each file. */
 /**
  * Server-side concentration (2014 5e, #621 Round 4), against a real Postgres.
  *
  * When a concentrating character takes damage via POST /v1/characters/:id/damage,
  * the server must force a CON save (DC max(10, half damage)); a failed save ends
- * concentration. These suites drive `applyNonAttackDamage` — the route's single
- * choke point for combat and out-of-combat damage — with a pinned d20, then read
- * `character_concentration` back directly.
+ * concentration. The service-level suites drive `applyNonAttackDamage` — the
+ * route's single choke point for combat and out-of-combat damage — with a pinned
+ * d20, then read `character_concentration` back directly. The live-route suite
+ * posts through the real Elysia route (only auth faked) with the d20 pinned via
+ * Math.random, the route path's only RNG consumer.
  *
  * Requires TEST_DATABASE_URL or DATABASE_URL -- see fixtures/real-db.ts.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { eq } from 'drizzle-orm';
 
 import {
@@ -32,6 +35,22 @@ import {
 if (!hasRealDb) {
   console.warn('[concentration] SKIPPED: set TEST_DATABASE_URL to a scratch Postgres to run these.');
 }
+
+// Live-route tests below post through the real Elysia route with a real DB.
+// Only authentication is faked (a `Bearer <liveUserId>` is that user), the way
+// playthrough-scope.real-db.test.ts does it; the route, applyNonAttackDamage,
+// and the concentration service are all real.
+const LIVE_USER_PREFIX = 'conc-live-route-user-';
+const liveUserId = `${LIVE_USER_PREFIX}${process.pid}`;
+
+mock.module('../../lib/auth.js', () => ({
+  authenticateRequest: async (request: Request) => {
+    const token = request.headers.get('authorization')?.replace(/^Bearer\s+/, '');
+    return token && token.startsWith(LIVE_USER_PREFIX)
+      ? { user: { userId: token, email: 'player@example.test', plan: 'free' }, error: null }
+      : { user: null, error: 'Unauthorized' };
+  },
+}));
 
 import type * as ConcentrationService from '../combat/concentration-service.js';
 import type * as NonAttackDamage from '../combat/non-attack-damage.js';
@@ -263,6 +282,139 @@ describeWithDb('concentration', () => {
     expect(result.concentration?.dropped).toBe(true);
     expect(await getConcentration(combatCharacterId)).toBeNull();
     expect(result.engineLines).toContainEqual(expect.stringContaining('concentration'));
+  });
+});
+
+describe('live route: POST /v1/characters/:id/damage forces the CON save (#621 Round 5)', () => {
+  // The strategist's live-route requirement: the concentration save must be
+  // exercised through the real HTTP route, not around it. The route handler
+  // and applyNonAttackDamage are NOT mocked here (unlike
+  // character-damage-http.test.ts, which mocks applyNonAttackDamage); only
+  // auth is faked, per the file header. The d20 is pinned by stubbing
+  // Math.random around the request. A full-path grep of server-bun/src shows
+  // the damage route path's only RNG consumer is the concentration save's
+  // rollD20() (Math.floor(Math.random() * 20) + 1): character-vitals-service
+  // and CombatHPService.applyDamage roll nothing; the combat-hp death-save
+  // roll is unreachable here (no live participant); the pipeline uses
+  // crypto.randomUUID, not Math.random.
+  // Fresh client per run: the fixture's shared client is closed by the
+  // earlier describe's afterAll, so a describe-body capture would be dead.
+  let db: ReturnType<typeof realDb>;
+  const MAX_HP = 40;
+
+  let app: { handle: (request: Request) => Response | Promise<Response> };
+  let liveCharacterId: string;
+
+  async function postDamageWithRoll(
+    amount: number,
+    randomValue: number,
+  ): Promise<{ status: number; json: Record<string, unknown> }> {
+    const realRandom = Math.random;
+    Math.random = () => randomValue;
+    try {
+      const response = await app.handle(
+        new Request(`http://localhost/v1/characters/${liveCharacterId}/damage`, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${liveUserId}`,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ amount }),
+        }),
+      );
+      return { status: response.status, json: (await response.json()) as Record<string, unknown> };
+    } finally {
+      Math.random = realRandom;
+    }
+  }
+
+  async function resetLiveCaster(): Promise<void> {
+    await db
+      .delete(characterConcentration)
+      .where(eq(characterConcentration.characterId, liveCharacterId));
+    await db
+      .update(characterStats)
+      .set({ currentHitPoints: MAX_HP, temporaryHitPoints: 0 })
+      .where(eq(characterStats.characterId, liveCharacterId));
+  }
+
+  beforeAll(async () => {
+    db = realDb();
+    const { createRequestPipelineApp } = await import('../../http-pipeline.js');
+    const { charactersRoutes } = await import('../../routes/v1/characters.js');
+    app = createRequestPipelineApp().use(charactersRoutes);
+
+    const [{ id }] = await db
+      .insert(characters)
+      .values({ userId: liveUserId, name: testId('live-caster'), level: 5 })
+      .returning({ id: characters.id });
+    liveCharacterId = id;
+    await db.insert(characterStats).values({
+      characterId: id,
+      constitution: 14,
+      maxHitPoints: MAX_HP,
+      currentHitPoints: MAX_HP,
+      temporaryHitPoints: 0,
+    });
+  });
+
+  beforeEach(async () => {
+    if (!hasRealDb) return;
+    await resetLiveCaster();
+  });
+
+  afterAll(async () => {
+    await closeRealDb();
+  });
+
+  it('a failed CON save through the live route drops concentration', async () => {
+    await startConcentration(liveCharacterId, { name: 'Bless' });
+    expect(await getConcentration(liveCharacterId)).not.toBeNull();
+
+    // 30 damage -> DC max(10, 15) = 15. d20 pinned to 1: 1 + 2 = 3 fails.
+    const { status, json } = await postDamageWithRoll(30, 0);
+
+    expect(status).toBe(200);
+    expect(json.currentHitPoints).toBe(MAX_HP - 30);
+    expect(json.engineLines).toContainEqual(
+      expect.stringContaining('loses concentration on Bless'),
+    );
+    expect(await getConcentration(liveCharacterId)).toBeNull();
+  });
+
+  it('a successful CON save through the live route maintains concentration and reports the DC', async () => {
+    await startConcentration(liveCharacterId, { name: 'Bless' });
+    expect(await getConcentration(liveCharacterId)).not.toBeNull();
+
+    // 30 damage -> DC 15. d20 pinned to 20: 20 + 2 = 22 succeeds.
+    const { status, json } = await postDamageWithRoll(30, 0.99999);
+
+    expect(status).toBe(200);
+    expect(json.engineLines).toContainEqual(
+      expect.stringContaining('maintains concentration on Bless (CON save 22 vs DC 15)'),
+    );
+    expect(await getConcentration(liveCharacterId)).not.toBeNull();
+  });
+
+  it('the forced save uses DC max(10, half damage): same die, different damage, different outcome', async () => {
+    // d20 pinned to 12 -> total 12 + 2 = 14. Against 30 damage (DC 15) the
+    // save fails; against 19 damage (DC 10) it succeeds. This pins the DC
+    // formula through the route without reading the DC out of band.
+    await startConcentration(liveCharacterId, { name: 'Bless' });
+    expect(await getConcentration(liveCharacterId)).not.toBeNull();
+    const failed = await postDamageWithRoll(30, 0.55);
+    expect(failed.status).toBe(200);
+    expect(await getConcentration(liveCharacterId)).toBeNull();
+
+    await resetLiveCaster();
+    await startConcentration(liveCharacterId, { name: 'Bless' });
+    expect(await getConcentration(liveCharacterId)).not.toBeNull();
+    const kept = await postDamageWithRoll(19, 0.55);
+    expect(kept.status).toBe(200);
+    expect(kept.json.engineLines).toContainEqual(
+      expect.stringContaining('maintains concentration on Bless (CON save 14 vs DC 10)'),
+    );
+    expect(await getConcentration(liveCharacterId)).not.toBeNull();
   });
 });
 });
