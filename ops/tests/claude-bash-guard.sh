@@ -115,11 +115,137 @@ EOF'
 expect allow 'grep -c x <<< "$VAR"'
 expect allow 'echo $((1<<3))'
 
-# not Bash, or not parseable: allow
-rc=0; echo '{"tool_name":"Write","tool_input":{"file_path":"/x","content":"kill -9 -1"}}' | python3 "$GUARD" || rc=$?
-if [ "$rc" -eq 0 ]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "FAIL: non-Bash tool blocked"; fi
-rc=0; echo 'not json' | python3 "$GUARD" || rc=$?
-if [ "$rc" -eq 0 ]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "FAIL: bad JSON blocked"; fi
+expect block 'cat <<123
+x
+123'
+expect block 'cat <<.EOF
+x
+.EOF'
+expect allow 'cat <<E"OF"
+x
+EOF'
+
+# 1. $(...) and backticks inside double quotes run; inside single quotes
+#    or escaped they do not
+expect block 'gh pr create --body "Run `kill -TERM -1` to reproduce"'
+expect block 'echo "$(kill -TERM -1)"'
+expect block 'git commit -m "x $(reboot)"'
+expect block 'echo "a $(echo "b $(kill -9 -1)")"'
+expect block 'echo "$(( $(kill -9 -1) + 1 ))"'
+expect block 'echo `echo "\`reboot\`"`'
+expect allow 'git commit -m "fix: escaped \`kill -TERM -1\` text"'
+expect allow "echo 'single quoted \`kill -TERM -1\` and \$(reboot)'"
+expect allow "echo \"it's \$(date)\""
+expect allow 'echo "$(( 2 << 1 ))"'
+expect allow "cat <<'EOF'
+Never run kill -TERM -1 here; \$(date) and \`x\` stay text.
+EOF"
+expect allow "python3 - <<'EOF'
+s = 'cat << EOF'
+EOF"
+# A quoted heredoc body can feed a shell (bash <<'EOF'), so a dangerous
+# command at the start of a body line, or of a code span, is still refused.
+expect block "bash <<'EOF'
+kill -9 -1
+EOF"
+expect block "cat <<'EOF' | sudo sh
+if true; then reboot; fi
+EOF"
+expect allow "python3 - <<'EOF'
+note = '''If it hangs, then systemctl restart docker, or run \`kill -TERM -1\`.'''
+EOF"
+
+# 2. -c inside a short-flag cluster, and su -c
+expect block 'bash -lc "kill -9 -1"'
+expect block 'bash -ic "reboot"'
+expect block 'sh -xc reboot'
+expect block 'bash -euo pipefail -c "kill -9 -1"'
+expect block 'su -c "kill -9 -1"'
+expect block 'su - root -c reboot'
+expect block 'su -lc reboot'
+expect block 'su --command="kill -9 -1"'
+expect block 'runuser -u root -- bash -c reboot'
+expect allow 'bash -lc "echo hi"'
+expect allow 'bash -x ops/tests/claude-bash-guard.sh'
+expect allow 'su -s /bin/bash foreman'
+
+# 3. wrapper flags that take a value
+expect block 'sudo -u root kill -9 -1'
+expect block 'nice -n 5 kill -9 -1'
+expect block 'timeout -s KILL 5 kill -9 -1'
+expect block 'timeout -- 5 reboot'
+expect block 'env -u X kill -9 -1'
+expect block 'ionice -c 3 kill -9 -1'
+expect block 'env -S "kill -9 -1"'
+expect block 'watch -n 5 "kill -9 -1"'
+expect block 'xargs -n 1 kill -9 -1 < pids'
+expect allow 'sudo -u postgres psql -c "select 1"'
+expect allow 'nice -n 10 bun run build'
+expect allow 'timeout -k 30 600 bun test'
+expect allow 'command -v reboot'
+
+# 4. shell keywords before a command
+expect block 'if true; then kill -9 -1; fi'
+expect block 'for i in 1; do reboot; done'
+expect block '{ kill -9 -1; }'
+expect block '! kill -9 -1'
+expect block 'while true; do reboot; done'
+expect block 'until false; do kill -9 -1; done'
+expect block 'if false; then :; else reboot; fi'
+expect allow 'if true; then echo ok; fi'
+expect allow 'for f in a b; do echo "$f"; done'
+
+# 5. rm of /root and other system dirs; pm2 stop|delete all
+expect block 'rm -rf /root'
+expect block 'rm -rf /root/'
+expect block 'rm -rf /root/*'
+expect block 'rm -rf /home'
+expect block 'rm -rf /usr'
+expect block 'rm -rf /boot'
+expect block 'rm -rf ~'
+expect block 'rm -rf $HOME'
+expect block 'rm -rf /var/www'
+expect block 'pm2 delete all'
+expect block 'pm2 stop all'
+expect block 'pm2 stop "all"'
+expect allow 'CONFIRM_DANGEROUS=1 pm2 stop all'
+expect allow 'pm2 stop eco'
+expect allow 'rm -rf /root/scratch/x'
+expect allow 'rm -rf /var/www/infiniterealms/worktrees/issue-1'
+
+# more stop paths
+expect block 'nginx -s stop'
+expect block 'nginx -s quit'
+expect block '/etc/init.d/nginx stop'
+expect block 'invoke-rc.d docker restart'
+expect block 'docker stop $(docker ps -q)'
+expect block 'docker kill "$(docker ps -q)"'
+expect allow 'nginx -s reload'
+expect allow 'nginx -t'
+expect allow 'docker stop realms-foreman-runner'
+expect allow 'CONFIRM_DANGEROUS=1 nginx -s stop'
+
+# 7. extra cases
+expect block 'init 0'
+expect block 'kill -KILL -1'
+expect block 'kill -0 -1'
+expect block 'pkill -1'
+expect block 'eval eval eval eval eval eval eval echo hi'
+
+# 6. not Bash: allow. Unreadable payload or a non-string command: block
+# (fail closed)
+feed() {
+  local want=$1 payload=$2 rc=0
+  printf '%s' "$payload" | python3 "$GUARD" 2>/dev/null || rc=$?
+  if [ "$rc" -eq "$want" ]; then PASS=$((PASS + 1)); else FAIL=$((FAIL + 1)); echo "FAIL: want rc=$want, got rc=$rc: $payload"; fi
+}
+feed 0 '{"tool_name":"Write","tool_input":{"file_path":"/x","content":"kill -9 -1"}}'
+feed 2 'not json'
+feed 2 ''
+feed 2 '[]'
+feed 2 '{"tool_name":"Bash","tool_input":{"command":5}}'
+feed 2 '{"tool_name":"Bash","tool_input":"kill -9 -1"}'
+feed 2 '{"tool_name":"Bash"}'
 
 echo "claude-bash-guard: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
