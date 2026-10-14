@@ -843,20 +843,6 @@
     }
   }
 
-  /* Reduced motion support */
-  @media (prefers-reduced-motion: reduce) {
-    .motion-safe {
-      animation: none !important;
-      transition: none !important;
-    }
-
-    .motion-safe * {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-    }
-  }
-
   /* Dark mode optimizations */
   @media (prefers-color-scheme: dark) {
     .dark-optimized {
@@ -923,18 +909,6 @@
 
   .hyphens-auto {
     hyphens: auto;
-  }
-
-  /* Accessibility: Respect reduced motion */
-  @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-      scroll-snap-type: none !important;
-    }
   }
 
   /* Chat-specific animations */
@@ -1763,14 +1737,31 @@
   }
 }
 
-/* Reduced motion: switch off every animation and transition inside the app. */
+/* Accessibility: Respect reduced motion across global, app, and component styles */
 @media (prefers-reduced-motion: reduce) {
-  .ir-app *,
-  .ir-app *::before,
-  .ir-app *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+    scroll-snap-type: none !important;
+  }
+
+  .motion-safe {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .fade-in,
+  .slide-in-up,
+  .slide-in-left,
+  .slide-in-right,
+  .hover-lift,
+  .pulse,
+  .glow-pulse,
+  .fantasy-progress-fill::after {
+    animation: none !important;
   }
 }

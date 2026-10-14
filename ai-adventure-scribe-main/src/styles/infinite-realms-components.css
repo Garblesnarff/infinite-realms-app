@@ -635,26 +635,3 @@
   }
 }
 
-/**
- * Reduced motion support
- */
-@media (prefers-reduced-motion: reduce) {
-  .fade-in,
-  .slide-in-up,
-  .slide-in-left,
-  .slide-in-right,
-  .hover-lift,
-  .pulse,
-  .glow-pulse {
-    animation: none;
-  }
-
-  .fantasy-progress-fill::after {
-    animation: none;
-  }
-
-  * {
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
-  }
-}
