@@ -123,7 +123,10 @@ const CharacterPreview: React.FC = () => {
                 </Badge>
               )}
               {character.personalityTraits?.slice(0, 2).map((trait, index) => (
-                <div key={index} className="text-xs p-2 bg-card rounded border border-border">
+                <div
+                  key={index}
+                  className="text-xs p-2 bg-card rounded border border-border"
+                >
                   {trait}
                 </div>
               ))}
