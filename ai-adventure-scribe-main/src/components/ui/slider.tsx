@@ -24,7 +24,7 @@ const Slider = React.forwardRef<
         <SliderPrimitive.Range className="absolute h-full bg-gradient-to-r from-primary/80 to-primary shadow-sm" />
       </SliderPrimitive.Track>
       <SliderPrimitive.Thumb
-        className="block h-6 w-6 rounded-full border-3 border-primary bg-background shadow-lg ring-offset-background transition-all hover:scale-110 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electricCyan focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 cursor-grab active:cursor-grabbing active:scale-105"
+        className="block h-6 w-6 rounded-full border-3 border-primary bg-background shadow-lg ring-offset-background transition-all hover:scale-110 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 cursor-grab active:cursor-grabbing active:scale-105"
         aria-valuetext={ariaValueText}
       />
     </SliderPrimitive.Root>

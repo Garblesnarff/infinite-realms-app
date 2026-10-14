@@ -4,7 +4,7 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 
 const hexagonalBadgeVariants = cva(
-  'inline-flex items-center justify-center border font-semibold transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-electricCyan focus-visible:ring-offset-2 relative hover:scale-105',
+  'inline-flex items-center justify-center border font-semibold transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 relative hover:scale-105',
   {
     variants: {
       variant: {
