@@ -1,5 +1,6 @@
 import { CombatEncounterService } from './combat-encounter-service.js';
 import { executeCombatIntent } from './combat-intent-service.js';
+import { getParticipantAbilityProfile } from './data-access.js';
 import { loadActiveTacticalMap, saveTacticalMap } from './tactical-map-store.js';
 import { resolveCatalogSpell } from '../../data/spellData.js';
 import { BusinessLogicError } from '../../lib/errors.js';
@@ -7,6 +8,7 @@ import { calculateAoECast } from '../../tactical/aoe.js';
 import { dispatchMapAction } from '../../tactical/dispatch.js';
 import { describeEntityRoster, resolveEntityRef } from '../../tactical/identity.js';
 import { broadcastToRoom } from '../collaboration/room-manager.js';
+import { ownedSessionCharacter } from '../dm/dm-feature-gate.js';
 
 import type { CombatActionOrigin } from './combat-intent-service.js';
 import type { Spell } from '../../data/spellData.js';
@@ -83,7 +85,43 @@ function aimFor(
   return { origin, direction };
 }
 
-async function prepare(sessionId: string, request: AoECastRequest) {
+/**
+ * GP-061 (#313): refuse an area spell the PC's sheet does not list, before the area is placed.
+ * The solo game seats one player character per session, so a PC's cast is theirs. Fails open:
+ * a sheet that cannot be read skips the check rather than blocking the cast.
+ */
+async function assertPcKnowsSpell(
+  sessionId: string,
+  userId: string,
+  actor: MapEntity,
+  spell: Spell,
+): Promise<void> {
+  let characterId: string | null = null;
+  try {
+    const character = await ownedSessionCharacter(sessionId, userId);
+    characterId = character?.id ?? null;
+  } catch {
+    return;
+  }
+  if (!characterId) return;
+  let spellIds: string[];
+  try {
+    const profile = await getParticipantAbilityProfile({ characterId });
+    spellIds = profile.spellIds ?? [];
+  } catch {
+    return;
+  }
+  const isKnown = spellIds.some((known) => resolveCatalogSpell(known)?.id === spell.id);
+  if (!isKnown) {
+    throw new AoECastRefusedError(
+      `Spell refused: ${spell.name} is not on ${actor.name ?? 'the caster'}'s sheet — cast a spell you know or have prepared`,
+      'spell_not_known',
+      { spellId: spell.id },
+    );
+  }
+}
+
+async function prepare(sessionId: string, request: AoECastRequest, userId: string) {
   const [map, spell] = await Promise.all([
     loadActiveTacticalMap(sessionId),
     resolveCatalogSpell(request.spellId),
@@ -108,6 +146,12 @@ async function prepare(sessionId: string, request: AoECastRequest) {
       'caster_not_on_map',
       { roster: describeEntityRoster(map.entities) },
     );
+  // GP-061 (#313): the sheet check runs at propose time, not just at resolve. A spell the
+  // caster does not know is refused at once — no area is placed and no "Confirm spell area"
+  // is asked. Mirrors prepareSpellCast's ordering (sheet before combat-spell assessment).
+  if (actor.type === 'pc') {
+    await assertPcKnowsSpell(sessionId, userId, actor, spell);
+  }
   const { origin, direction } = aimFor(spell, actor, request);
   // A cone or line with no direction is an empty template: `isAoECell` answers false for every
   // cell, so the cast would reach the "catches no creature" refusal with a hint about distance
@@ -129,8 +173,12 @@ async function prepare(sessionId: string, request: AoECastRequest) {
   };
 }
 
-export async function proposeAoECast(sessionId: string, request: AoECastRequest) {
-  const { spell, actor, cast } = await prepare(sessionId, request);
+export async function proposeAoECast(
+  sessionId: string,
+  request: AoECastRequest,
+  userId: string,
+) {
+  const { spell, actor, cast } = await prepare(sessionId, request, userId);
   const playerCast = actor.type === 'pc';
   const autoConfirm = playerCast && isSelfRange(spell);
   const preview: AoEPreviewDelta = {
@@ -162,7 +210,7 @@ export async function resolveAoECast(
   request: AoECastRequest,
   userId: string,
 ): Promise<AoECastResolution> {
-  const { map, spell, area, actor, origin, cast } = await prepare(sessionId, request);
+  const { map, spell, area, actor, origin, cast } = await prepare(sessionId, request, userId);
   const encounter = await CombatEncounterService.getActiveEncounter(sessionId, userId);
   if (!encounter)
     throw new AoECastRefusedError('there is no active fight to cast it in', 'no_active_encounter');
