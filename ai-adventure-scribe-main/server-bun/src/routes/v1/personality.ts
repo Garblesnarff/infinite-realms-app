@@ -23,18 +23,15 @@ type PersonalityType = (typeof VALID_TYPES)[number];
 
 /**
  * Interface for a single personality element row as returned by the random
- * endpoints (#465: the select is narrowed to id, content column, source).
+ * endpoints (#465: the select names only columns prod really has — `text` is
+ * the content column on all four tables, and only personality_traits has
+ * `source`).
  */
 interface PersonalityRow {
   id: string;
   text?: string;
-  ideal?: string;
-  bond?: string;
-  flaw?: string;
-  background?: string | null;
-  source: string;
-  alignment?: string;
-  created_at?: string;
+  // Only personality_traits has a source column in prod.
+  source?: string;
 }
 
 // Map type to table name
@@ -46,16 +43,19 @@ const TABLE_MAP: Record<PersonalityType, string> = {
 };
 
 // ⚡ Bolt: Define explicit column lists for each table to avoid over-fetching and improve query performance.
-// #465: select only the columns the API contract serves. The sole consumer
-// (character-creation Step 8) reads only the text content columns; selecting
-// background/alignment/created_at coupled this read path to DDL that no
-// migration tree owns, and a missing `alignment` column on personality_ideals
-// 500'd every ideals randomize while traits kept working.
+// #465 (reopened): select ONLY the columns prod's information_schema reports.
+// The content column is `text` on all four tables, and only
+// personality_traits has `source`. #496 narrowed the selects but named
+// `ideal`/`bond`/`flaw` + `source` for the non-trait tables — columns prod
+// does not have — so PostgREST kept answering 42703 and every ideals/bonds/
+// flaws randomize kept 500ing while traits kept working. Selecting
+// background/alignment/created_at would re-couple this read path to DDL that
+// no migration tree owns.
 const COLUMN_MAP: Record<PersonalityType, string> = {
   traits: 'id, text, source',
-  ideals: 'id, ideal, source',
-  bonds: 'id, bond, source',
-  flaws: 'id, flaw, source',
+  ideals: 'id, text',
+  bonds: 'id, text',
+  flaws: 'id, text',
 };
 
 export const personalityRoutes = new Elysia({ prefix: '/v1/personality' })
