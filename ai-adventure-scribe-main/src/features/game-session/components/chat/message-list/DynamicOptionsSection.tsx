@@ -6,6 +6,7 @@ import type { ActionOption } from '@/utils/parseMessageOptions';
 import { ActionOptions } from '@/components/game/ActionOptions';
 import { useCombat } from '@/contexts/CombatContext';
 import { getAuthHeaders } from '@/services/auth/TokenService';
+import { combatBoundaryFromResult } from '@/services/combat/combat-action-boundary';
 import {
   executeAuthoritativeCombatIntent,
   executeStructuredCombatActionWithBoundary,
@@ -262,8 +263,19 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
             ),
             ...formatWakeParts(result),
           ];
+          // #262: a yield that ends the fight must carry the engine end line with its
+          // reason — the same line the attack/spell branches append when the boundary
+          // reports combat_ended. Without it the yield dead-ends at "X yielded.".
+          const endLine =
+            combatBoundaryFromResult(result) === 'combat_ended'
+              ? formatCombatEndLine(
+                  (result as { endedReason?: string | null } | null)?.endedReason,
+                )
+              : null;
           await sendEngineNotice(onSendMessage, {
-            text: parts.map((part) => part.line).join('\n\n'),
+            text: [...parts.map((part) => part.line), ...(endLine ? [endLine] : [])].join(
+              '\n\n',
+            ),
             cards: parts.map((part) => part.card),
           });
           // No `end_turn` after it: the exit has already taken the player out of the turn order,
