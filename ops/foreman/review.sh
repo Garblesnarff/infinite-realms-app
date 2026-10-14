@@ -2,12 +2,15 @@
 # realms-reviewer (#586): headless Sonnet reviewer + daily summary.
 #
 # Runs INSIDE the realms-foreman container (ops/foreman/Dockerfile), started by
-# realms-reviewer.service hourly at :50 UTC. It reviews only catjam/ branches
-# and Jules PRs; release-please, crew and hand-made PRs keep the human
-# strategist. For each such open same-repo PR whose
-# newest trusted "Strategist review" comment (token owner, OWNER/MEMBER) is not
-# at the current head and whose CI has finished (max 8 per run, max 2 attempts
-# per PR head), it pre-fetches the PR, diff, checks, failed logs, comments and
+# realms-reviewer.service hourly at :50 UTC. It reviews every open same-repo PR
+# (catjam, Jules, crew, hand-made, drafts) EXCEPT the ones the human strategist
+# keeps (scope_reason): release-please, a draft whose body says WIP, and any PR
+# that changes .github/, .husky/, ops/foreman/, ops/claude-hooks/, migrations or
+# docs/ops/review_prompt.md. Each skip is logged once per head as skip-scope.
+# For each PR whose newest trusted "Strategist review" comment (token owner,
+# OWNER/MEMBER) is not at the current head and whose CI has finished (max 12
+# per run, no new review after 40 min, max 2 attempts per PR head), it
+# pre-fetches the PR, diff, checks, failed logs, comments and
 # linked issues into a scratch dir, then runs `claude -p` with
 # docs/ops/review_prompt.md from origin/main. Claude gets ONLY
 # ANTHROPIC_API_KEY, no shell, no gh, and file tools confined to that dir.
@@ -28,17 +31,24 @@
 #   review.sh --summary-now      # post the summary now (once per UTC day)
 #   review.sh --slack-test       # send one test line to the webhook
 #
-# Spend cap: stops for the UTC day once the ledger reaches REVIEW_DAILY_USD
-# (default $3). Set the hard $90/month limit in the Anthropic console too.
+# Spend: at most $1.50 per review and $5.00 per UTC day (DAILY_CAP_USD); the
+# summary tracks the $99 credit that expires 2026-11-02. Every ledger row ends
+# with models=<ids billed>, read from the claude JSON (modelUsage); if the
+# costliest model is not Sonnet the row says model-mismatch and the tick stops.
 set -euo pipefail
 # shellcheck source=ops/foreman/lib.sh
 . "$(dirname "$(readlink -f "$0")")/lib.sh"
 
 REPO=${REVIEW_REPO:-Garblesnarff/infinite-realms-app}
 MODEL=${REVIEW_MODEL:-sonnet}
-MAX_PRS=${REVIEW_MAX_PRS:-8}
-DAILY_USD=${REVIEW_DAILY_USD:-3.00}
-PER_PR_USD=${REVIEW_PER_PR_USD:-0.75}
+EXPECT_MODEL_RE=${REVIEW_EXPECT_MODEL_RE:-sonnet}  # the costliest billed model must match (case-insensitive)
+MAX_PRS=${REVIEW_MAX_PRS:-12}
+DAILY_CAP_USD=${REVIEW_DAILY_CAP_USD:-5.00}
+PER_PR_USD=${REVIEW_PER_PR_USD:-1.50}
+TICK_MINUTES=${REVIEW_TICK_MINUTES:-40}  # start no new review after this; the unit allows 100 min
+CREDIT_USD=${REVIEW_CREDIT_USD:-99}
+CREDIT_START=${REVIEW_CREDIT_START:-2026-10-14}
+CREDIT_END=${REVIEW_CREDIT_END:-2026-11-02}
 SUMMARY_HOUR=${REVIEW_SUMMARY_HOUR_UTC:-11}
 OPS_LOG_ISSUE=${REVIEW_OPS_LOG_ISSUE:-230}
 WORK=${FOREMAN_WORK:-/work}
@@ -46,7 +56,7 @@ STATE=$WORK/state
 RUNNER_LOG=${RUNNER_STATE:-/runner-state}/catjam-runner.log
 MAX_ATTEMPTS=${REVIEW_MAX_ATTEMPTS:-2}   # per (PR, head sha8) without a posted verdict
 CLAUDE_TIMEOUT=${REVIEW_CLAUDE_TIMEOUT:-20m}
-LEDGER=$STATE/spend.log  # "<iso> <utc date> pr=<n> <usd> sha=<sha8> <result>"
+LEDGER=$STATE/spend.log  # "<iso> <utc date> pr=<n> <usd> sha=<sha8> <result> models=<id,id|none>"
 LOG=$STATE/review.log
 
 MODE=tick
@@ -120,7 +130,44 @@ ci_finished() { # 0 when every check at the head has completed (and at least one
 }
 
 is_jules() { [[ $1 == jules* || $1 =~ -[0-9]{15,}$ ]]; }
-in_scope() { [[ $1 == catjam/* ]] || is_jules "$1"; } # in_scope <head ref>
+
+# ---- scope -----------------------------------------------------------------
+# Paths whose PRs the human strategist reviews (the bot's own code, CI, git
+# hooks, the reviewer prompt, and schema).
+PROTECTED_RE='^(\.github/|\.husky/|ops/foreman/|ops/claude-hooks/|docs/ops/review_prompt\.md$|ai-adventure-scribe-main/(\.husky/|db/migrations/|supabase/migrations/|drizzle/))'
+# protected_path < paths: prints the first protected path, if any
+protected_path() { grep -E "$PROTECTED_RE" | awk 'NR == 1' || true; }
+# scope_reason <pr> <ref>: why the bot leaves this PR to the strategist; prints
+# nothing when the bot should review it. Fails closed: when the PR or its file
+# list cannot be read, it prints a reason and the PR is skipped.
+scope_reason() {
+  local n=$1 ref=$2 meta files count hit
+  if [[ $ref == release-please--* ]]; then echo release-please; return 0; fi
+  meta=$(gh api "repos/$REPO/pulls/$n" --jq '{title, draft, body: (.body // "")}' 2> /dev/null) || { echo pr-read-failed; return 0; }
+  if jq -e '.title | startswith("chore(main): release")' <<< "$meta" > /dev/null; then echo release-please; return 0; fi
+  if jq -e '.draft and (.body | test("\\bWIP\\b"; "i"))' <<< "$meta" > /dev/null; then echo wip-draft; return 0; fi
+  files=$(gh api "repos/$REPO/pulls/$n/files?per_page=100" --paginate 2> /dev/null | jq -s 'add // []' 2> /dev/null) || { echo files-read-failed; return 0; }
+  count=$(jq 'length' <<< "$files" 2> /dev/null || echo x)
+  [[ $count =~ ^[0-9]+$ ]] || { echo files-read-failed; return 0; }
+  # The API lists at most 3000 files; at the cap the list may be cut short.
+  if [ "$count" -ge 3000 ]; then echo files-list-truncated; return 0; fi
+  hit=$(jq -r '.[] | .filename, (.previous_filename // empty)' <<< "$files" | protected_path)
+  if [ -n "$hit" ]; then echo "protected-path $hit"; fi
+  return 0
+}
+# skip_scope <pr> <sha8> <reason>: log once per PR, head and reason
+skip_scope() {
+  local key="$1 $2 $3"
+  grep -qxF -- "$key" "$STATE/scope-skips" 2> /dev/null && return 0
+  echo "$key" >> "$STATE/scope-skips"
+  logline "pr=#$1 sha=$2 skip-scope $3"
+}
+
+# ---- model ids -------------------------------------------------------------
+# models_of <claude json>: billed model ids, comma-separated, or "none"
+models_of() { jq -r '(.modelUsage // {}) | keys | if length == 0 then "none" else join(",") end' "$1" 2> /dev/null || echo none; }
+# top_model <claude json>: the model with the highest costUSD, or empty
+top_model() { jq -r '(.modelUsage // {}) | to_entries | max_by(.value.costUSD // 0) | .key // empty' "$1" 2> /dev/null || true; }
 
 # ---- one review ------------------------------------------------------------
 # prefetch <pr> <sha> <ref> <dir>: everything the review needs, as files, so the
@@ -198,11 +245,13 @@ review_pr() {
     # on the PR, so it gets a human review instead of being skipped silently.
     local nd=no-diff
     [ "$POST" = 1 ] || nd=dry-run-no-diff
-    echo "$(date -u +%FT%TZ) $(today) pr=$n 0 sha=$s8 $nd" >> "$LEDGER"
+    echo "$(date -u +%FT%TZ) $(today) pr=$n 0 sha=$s8 $nd models=none" >> "$LEDGER"
     logline "pr=#$n sha=$s8 result=no-diff (gh pr diff failed or was empty)"
     if [ "$POST" = 1 ] && [ "$(attempts "$n" "$s8")" -ge "$MAX_ATTEMPTS" ]; then
       gh api "repos/$REPO/issues/$n/comments" -f body="realms-reviewer: could not read this PR's diff at $s8 ($MAX_ATTEMPTS tries; gh pr diff failed or was empty, e.g. a diff too large for the API). No verdict from the bot; this head needs a human strategist review." > /dev/null ||
         say "pr #$n: no-diff comment failed"
+      gh api -X POST "repos/$REPO/issues/$n/labels" -f 'labels[]=needs-human' > /dev/null ||
+        say "pr #$n: adding needs-human failed"
     fi
     rm -rf "$dir"; return 0
   fi
@@ -244,6 +293,9 @@ EOF
   local cost
   cost=$(jq -r '.total_cost_usd // empty' "$out" 2> /dev/null || true)
   [[ $cost =~ ^[0-9]+(\.[0-9]+)?$ ]] || cost=$budget
+  local top
+  REVIEW_MODELS=$(models_of "$out")
+  top=$(top_model "$out")
 
   local verdicts=$dir/verdicts.json result v=""
   if ! jq -e 'type == "array"' "$verdicts" > /dev/null 2>&1; then
@@ -257,13 +309,18 @@ EOF
       '[.[] | select(.pr == $n and .sha == $sha and (.verdict | IN("PASS","FIX","CLOSE")))] | first // empty' "$verdicts")
     if [ -z "$v" ]; then result=no-valid-verdict-for-head; else result=verdict; fi
   fi
-  if [ "$result" = verdict ]; then
+  if [ -n "$top" ] && ! grep -qiE -- "$EXPECT_MODEL_RE" <<< "$top"; then
+    # Billed mostly by a model we did not ask for: post nothing, stop the tick.
+    result=model-mismatch
+    MODEL_MISMATCH=1
+    logline "pr=#$n sha=$s8 result=model-mismatch top=$top models=$REVIEW_MODELS usd=$cost (want /$EXPECT_MODEL_RE/); stopping this tick"
+  elif [ "$result" = verdict ]; then
     result=$(post_verdict "$n" "$sha" "$ref" "$v" "$cost") || result=post-error
   else
-    logline "pr=#$n sha=$s8 result=$result claude_exit=$rc usd=$cost"
+    logline "pr=#$n sha=$s8 result=$result claude_exit=$rc usd=$cost models=$REVIEW_MODELS"
   fi
   [ "$POST" = 1 ] || result=dry-run-$result
-  echo "$(date -u +%FT%TZ) $(today) pr=$n $cost sha=$s8 $result" >> "$LEDGER"
+  echo "$(date -u +%FT%TZ) $(today) pr=$n $cost sha=$s8 $result models=$REVIEW_MODELS" >> "$LEDGER"
   rm -rf "$dir"
 }
 
@@ -278,22 +335,22 @@ post_verdict() {
   # Literal env secret values first (compared in-shell, never on a command
   # line), then secret-shaped strings. Logs go to stderr; stdout is the result.
   if contains_env_secret "$comment"$'\n'"$jules"; then
-    logline "pr=#$n sha=$s8 verdict=$verdict result=dropped-env-secret usd=$cost"
+    logline "pr=#$n sha=$s8 verdict=$verdict result=dropped-env-secret usd=$cost models=$REVIEW_MODELS"
     echo dropped-env-secret; return 0
   fi
   if has_secret_pattern "$comment"$'\n'"$jules"; then
-    logline "pr=#$n sha=$s8 verdict=$verdict result=dropped-secret-pattern usd=$cost"
+    logline "pr=#$n sha=$s8 verdict=$verdict result=dropped-secret-pattern usd=$cost models=$REVIEW_MODELS"
     echo dropped-secret-pattern; return 0
   fi
   if [ "$POST" = 0 ]; then
     mkdir -p "$STATE/dry-run"
     jq --arg c "$comment" --arg r "$review" '.comment = $c | .review = $r' <<< "$v" > "$STATE/dry-run/$n.json"
-    logline "pr=#$n sha=$s8 verdict=$verdict result=dry-run usd=$cost"
+    logline "pr=#$n sha=$s8 verdict=$verdict result=dry-run usd=$cost models=$REVIEW_MODELS"
     echo dry-run; return 0
   fi
   now=$(gh api "repos/$REPO/pulls/$n" --jq .head.sha)
   if [ "$now" != "$sha" ]; then
-    logline "pr=#$n sha=$s8 verdict=$verdict result=dropped-head-moved usd=$cost"
+    logline "pr=#$n sha=$s8 verdict=$verdict result=dropped-head-moved usd=$cost models=$REVIEW_MODELS"
     echo dropped-head-moved; return 0
   fi
   # Label first: if a later POST fails, the runner still gets its FIX round.
@@ -302,7 +359,7 @@ post_verdict() {
       say "pr #$n: adding catjam-fix to #${BASH_REMATCH[1]} failed"
   fi
   if ! gh api "repos/$REPO/issues/$n/comments" -f body="$comment" > /dev/null; then
-    logline "pr=#$n sha=$s8 verdict=$verdict result=post-failed usd=$cost"
+    logline "pr=#$n sha=$s8 verdict=$verdict result=post-failed usd=$cost models=$REVIEW_MODELS"
     echo post-failed; return 0
   fi
   gh api "repos/$REPO/pulls/$n/reviews" -f commit_id="$sha" -f event=COMMENT -f body="$review" > /dev/null ||
@@ -311,7 +368,7 @@ post_verdict() {
     [[ $jules == @jules* ]] || jules="@jules $jules"
     gh api "repos/$REPO/issues/$n/comments" -f body="$jules" > /dev/null || say "pr #$n: @jules comment failed"
   fi
-  logline "pr=#$n sha=$s8 verdict=$verdict result=posted usd=$cost"
+  logline "pr=#$n sha=$s8 verdict=$verdict result=posted usd=$cost models=$REVIEW_MODELS"
   echo posted
 }
 
@@ -322,26 +379,36 @@ review_tick() {
     say "could not read docs/ops/review_prompt.md from main; skipping reviews"; return 0
   fi
   chmod 644 "$PROMPT_FILE"
-  local n sha ref first done_n=0 spent budget
+  local n sha ref first done_n=0 spent budget reason start
+  start=$(date +%s)
+  MODEL_MISMATCH=0
   while IFS=$'\t' read -r n sha ref first; do
     [ -n "$n" ] || continue
     [ -z "$ONLY_PR" ] || [ "$n" = "$ONLY_PR" ] || continue
-    { [ "$POST" = 0 ] && [ -n "$ONLY_PR" ]; } || in_scope "$ref" || continue # --pr may dry-run any PR
     [ "$done_n" -lt "$MAX_PRS" ] || break
+    if [ $(($(date +%s) - start)) -ge $((TICK_MINUTES * 60)) ]; then
+      logline "tick time budget reached ($TICK_MINUTES min, $done_n reviews); the rest waits for the next tick"
+      break
+    fi
     case $first in *" at ${sha:0:8}"*) continue ;; esac
+    if [ "$POST" = 1 ] || [ -z "$ONLY_PR" ]; then # --pr N --dry-run may try any PR
+      reason=$(scope_reason "$n" "$ref")
+      if [ -n "$reason" ]; then skip_scope "$n" "${sha:0:8}" "$reason"; continue; fi
+    fi
     if [ "$(attempts "$n" "${sha:0:8}")" -ge "$MAX_ATTEMPTS" ]; then
       say "pr #$n: $MAX_ATTEMPTS attempts at ${sha:0:8} without a posted verdict; skip until the head changes"
       continue
     fi
     ci_finished "$n" || { say "pr #$n: CI not finished, skip"; continue; }
     spent=$(spent_today)
-    if ! lt "$spent" "$DAILY_USD"; then
-      logline "daily cap reached (\$$spent of \$$DAILY_USD); stopping reviews until 00:00Z"
+    if ! lt "$spent" "$DAILY_CAP_USD"; then
+      logline "daily cap reached (\$$spent of \$$DAILY_CAP_USD); stopping reviews until 00:00Z"
       break
     fi
-    budget=$(min "$PER_PR_USD" "$(awk -v a="$DAILY_USD" -v b="$spent" 'BEGIN { print a - b }')")
+    budget=$(min "$PER_PR_USD" "$(awk -v a="$DAILY_CAP_USD" -v b="$spent" 'BEGIN { print a - b }')")
     review_pr "$n" "$sha" "$ref" "$budget"
     done_n=$((done_n + 1))
+    [ "$MODEL_MISMATCH" = 0 ] || break
   done < <(scan_prs)
 }
 
@@ -355,7 +422,7 @@ search_both() { { search "$1 is:issue"; search "$1 is:pr"; } | sort -un; }
 since_iso() { date -u -d '24 hours ago' +%FT%TZ; }
 
 summary_text() {
-  local since merged pass needs_human p1 rob deploys live spend fixes runs mins
+  local since merged pass needs_human p1 rob deploys live fixes runs mins
   since=$(since_iso)
   merged=$(search "repo:$REPO is:pr is:merged merged:>=$since")
   pass=$(scan_prs | awk -F'\t' '$4 ~ /^Strategist review — PASS at / && index($4, substr($2, 1, 8)) { print $1 }')
@@ -364,7 +431,6 @@ summary_text() {
   rob=$(search_both "repo:$REPO is:open label:needs-rob")
   deploys=$(gh api -X GET "repos/$REPO/commits" -f sha=main -f since="$since" -f per_page=100 --jq length)
   live=$(curl -fsS -m 10 https://api.infiniterealms.app/version 2> /dev/null | jq -r '.short // "unknown"' || echo unknown)
-  spend=$(awk -v s="$since" '$1 >= s { t += $4 } END { printf "%.2f", t + 0 }' "$LEDGER" 2> /dev/null || echo 0.00)
   fixes=$(awk -v s="$since" '$1 >= s && /verdict=FIX result=posted/ { sub(/^pr=/, "", $2); print $2 }' "$LOG" 2> /dev/null | sort -u | tr '\n' ' ')
   runs=$(awk -v s="$since" '$1 >= s && /issue=#/' "$RUNNER_LOG" 2> /dev/null | wc -l)
   mins=$(awk -v s="$since" '$1 >= s { for (i = 1; i <= NF; i++) if ($i ~ /^minutes=/) { sub(/minutes=/, "", $i); t += $i } } END { print t + 0 }' "$RUNNER_LOG" 2> /dev/null || echo 0)
@@ -377,13 +443,31 @@ summary_text() {
   echo "needs-human ($(count "$needs_human")): $(printf '%s\n' "$needs_human" | nums)"
   echo "Open P1s ($(count "$p1")): $(printf '%s\n' "$p1" | nums)"
   echo "Prod deploys: $deploys commits to main (auto-deploy ships each); live build $live"
-  echo "API spend: \$$spend (cap \$$DAILY_USD/day)"
+  spend_lines "$(today)"
   echo "Runner: $runs jobs, $mins min"
   if [ -n "$rob" ]; then
     echo "Rob: typed lines needed on $(printf '%s\n' "$rob" | nums)"
   else
     echo "Rob: none"
   fi
+}
+
+# spend_lines <utc date>: today's spend vs the cap, the models billed today, and
+# the credit: used since CREDIT_START, left, days to CREDIT_END and the daily
+# burn that would use the rest. Reads only the ledger.
+spend_lines() {
+  local day=$1 models
+  models=$(awk -v d="$day" '$2 == d { for (i = 7; i <= NF; i++) if ($i ~ /^models=/) { sub(/^models=/, "", $i); print $i } }' "$LEDGER" 2> /dev/null |
+    tr ',' '\n' | grep -v '^none$' | sort -u | paste -sd, - || true)
+  awk -v d="$day" -v cap="$DAILY_CAP_USD" -v cs="$CREDIT_START" -v credit="$CREDIT_USD" -v m="${models:-none}" \
+    -v days="$(( ($(date -u -d "$CREDIT_END" +%s) - $(date -u -d "$day" +%s)) / 86400 ))" -v ce="$CREDIT_END" '
+    $2 == d { t += $4 } $2 >= cs { c += $4 }
+    END {
+      printf "API spend today: $%.2f of $%.2f cap; models billed: %s\n", t, cap, m
+      left = credit - c
+      if (days > 0) printf "Credit: $%.2f of $%.2f used since %s, $%.2f left, %d days to %s (about $%.2f/day uses it)\n", c, credit, cs, left, days, ce, left / days
+      else printf "Credit: $%.2f of $%.2f used since %s; the credit ended %s\n", c, credit, cs, ce
+    }' "$LEDGER" 2> /dev/null || echo "API spend: ledger unreadable"
 }
 
 slack_post() { # text on stdin; webhook URL never appears on a command line
@@ -411,7 +495,7 @@ case $MODE in
   summary) post_summary ;;
   tick)
     : "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY missing from /etc/realms-foreman/env}"
-    # Decide at tick start: up to 8 reviews can run past the hour, and the
+    # Decide at tick start: up to 12 reviews can run past the hour, and the
     # 11:50Z summary must still post. It goes first, before the reviews.
     run_summary=0
     if [ "$(date -u +%H)" = "$(printf '%02d' "$SUMMARY_HOUR")" ] && [ -z "$ONLY_PR" ]; then run_summary=1; fi

@@ -132,15 +132,74 @@ BODY_FILE=$TMP/issue-catjam.txt REPO=x/y bash -euo pipefail -c '
 got=$(cat "$TMP/itc.out"); [ "$rc" = 0 ] || got="rc=$rc"
 [ "$got" = $'## Issue #8: Dead call\n\ndrop the dead call\nEND' ] && ok "issue_task: ## Task (catjam) heading" || bad "issue_task (catjam): got '${got:0:80}'"
 
-# reviewer scope: only catjam/ branches and Jules PRs.
-eval "$(grep -E '^(is_jules|in_scope)\(\)' "$HERE/../foreman/review.sh")"
-expect "in_scope: catjam branch" 0 in_scope catjam/523-usespells-calls
-expect "in_scope: jules/ branch" 0 in_scope jules/33-token-lease-tests-4093067214957886031
-expect "in_scope: jules-<id> branch" 0 in_scope jules-4509757697115893744-51b67e07
-expect "in_scope: Jules fix- branch with session id" 0 in_scope fix-reduced-motion-consolidation-101-6753896271757081518
-expect "in_scope: release-please" 1 in_scope release-please--branches--main
-expect "in_scope: crew codex branch" 1 in_scope codex/200-proficiency
-expect "in_scope: ops branch" 1 in_scope ops/claude-bash-guard
+# reviewer scope: every same-repo PR except release-please, WIP drafts and PRs
+# that touch protected paths. gh is stubbed: PRMETA / PRFILES are the API
+# answers, "fail" makes the call fail.
+SCOPE_FUNCS=$TMP/scope-funcs.sh
+{ grep -E "^PROTECTED_RE=" "$HERE/../foreman/review.sh"
+  sed -n '/^protected_path() {/p; /^scope_reason() {/,/^}/p' "$HERE/../foreman/review.sh"; } > "$SCOPE_FUNCS"
+scope() { # scope <ref> <meta json|fail> <files json|fail> -> reason ("" = review)
+  REF=$1 PRMETA=$2 PRFILES=$3 bash -euo pipefail -c '
+    REPO=x/y
+    gh() {
+      case "$*" in
+        *"/files"*) [ "$PRFILES" != fail ] || return 1; printf "%s" "$PRFILES" ;;
+        *) [ "$PRMETA" != fail ] || return 1; printf "%s" "$PRMETA" | jq "{title, draft, body: (.body // \"\")}" ;;
+      esac
+    }
+    . "$1"; scope_reason 9 "$REF"' _ "$SCOPE_FUNCS"
+}
+plain='{"title":"fix: x","draft":true,"body":"For strategist review."}'
+f() { jq -cn --args '[$ARGS.positional[] | {filename: .}]' "$@"; }
+want_scope() { # want_scope <name> <want> <ref> <meta> <files>
+  local got; got=$(scope "$3" "$4" "$5" 2>&1) || got="rc=$?"
+  [ "$got" = "$2" ] && ok "scope: $1" || bad "scope: $1 (want '$2', got '$got')"
+}
+src=$(f ai-adventure-scribe-main/src/a.ts)
+want_scope "catjam branch is reviewed" "" catjam/523-x "$plain" "$src"
+want_scope "jules branch is reviewed" "" jules/33-x-4093067214957886031 "$plain" "$src"
+want_scope "crew codex branch is reviewed" "" codex/200-proficiency "$plain" "$src"
+want_scope "crew wonky branch is reviewed" "" wonky/2664-step0 "$plain" "$src"
+want_scope "hand-made branch is reviewed" "" fix/2710-wizard "$plain" "$src"
+want_scope "WIP in a non-draft is reviewed" "" fix/x '{"title":"fix: x","draft":false,"body":"WIP notes"}' "$src"
+want_scope "release-please ref" release-please release-please--branches--main "$plain" "$src"
+want_scope "release title" release-please some/branch '{"title":"chore(main): release 0.38.0","draft":false,"body":""}' "$src"
+want_scope "WIP draft" wip-draft fix/x '{"title":"fix: x","draft":true,"body":"wip: not ready"}' "$src"
+want_scope ".github change" "protected-path .github/workflows/ci.yml" fix/x "$plain" "$(f src/x.ts .github/workflows/ci.yml)"
+want_scope "ops/foreman change" "protected-path ops/foreman/review.sh" fix/x "$plain" "$(f ops/foreman/review.sh)"
+want_scope "ops/claude-hooks change" "protected-path ops/claude-hooks/bash-guard.py" fix/x "$plain" "$(f ops/claude-hooks/bash-guard.py)"
+want_scope "migration" "protected-path ai-adventure-scribe-main/db/migrations/0001_x.sql" fix/x "$plain" "$(f ai-adventure-scribe-main/db/migrations/0001_x.sql)"
+want_scope "supabase migration" "protected-path ai-adventure-scribe-main/supabase/migrations/1_x.sql" fix/x "$plain" "$(f ai-adventure-scribe-main/supabase/migrations/1_x.sql)"
+want_scope "reviewer prompt" "protected-path docs/ops/review_prompt.md" fix/x "$plain" "$(f docs/ops/review_prompt.md)"
+want_scope "rename out of a protected path" "protected-path .husky/pre-commit" fix/x "$plain" '[{"filename":"scripts/pre-commit","previous_filename":".husky/pre-commit"}]'
+want_scope "file list fails (closed)" files-read-failed fix/x "$plain" fail
+want_scope "PR read fails (closed)" pr-read-failed fix/x fail "$src"
+want_scope "3000 files (closed)" files-list-truncated fix/x "$plain" "$(jq -cn '[range(3000) | {filename: "src/f\(.).ts"}]')"
+want_scope "other docs are reviewed" "" fix/x "$plain" "$(f docs/ops/other.md docs/review_prompt.md)"
+
+# reviewer: billed model ids from the claude JSON.
+eval "$(grep -E '^(models_of|top_model)\(\)' "$HERE/../foreman/review.sh")"
+echo '{"total_cost_usd":0.2,"modelUsage":{"claude-haiku-5-5":{"costUSD":0.01},"claude-sonnet-5-5":{"costUSD":0.19}}}' > "$TMP/claude-a.json"
+echo '{"total_cost_usd":0.2,"modelUsage":{"claude-haiku-5-5":{"costUSD":0.15},"claude-sonnet-5-5":{"costUSD":0.05}}}' > "$TMP/claude-b.json"
+echo 'not json' > "$TMP/claude-c.json"
+[ "$(models_of "$TMP/claude-a.json")" = "claude-haiku-5-5,claude-sonnet-5-5" ] && ok "models_of: both ids" || bad "models_of: got '$(models_of "$TMP/claude-a.json")'"
+[ "$(top_model "$TMP/claude-a.json")" = claude-sonnet-5-5 ] && ok "top_model: sonnet costliest" || bad "top_model a: '$(top_model "$TMP/claude-a.json")'"
+[ "$(top_model "$TMP/claude-b.json")" = claude-haiku-5-5 ] && ok "top_model: haiku costliest (mismatch case)" || bad "top_model b: '$(top_model "$TMP/claude-b.json")'"
+[ "$(models_of "$TMP/claude-c.json")" = none ] && [ -z "$(top_model "$TMP/claude-c.json")" ] && ok "models_of/top_model: bad JSON" || bad "bad JSON models"
+grep -q 'grep -qiE -- "$EXPECT_MODEL_RE" <<< "$top"' "$HERE/../foreman/review.sh" && ok "review_pr: compares the top model with EXPECT_MODEL_RE" || bad "review_pr: no model check"
+
+# reviewer summary: day spend vs cap, credit since start, days left, models.
+eval "$(sed -n '/^spend_lines() {/,/^}/p' "$HERE/../foreman/review.sh")"
+LEDGER=$TMP/ledger-credit.log DAILY_CAP_USD=5.00 CREDIT_USD=99 CREDIT_START=2026-10-14 CREDIT_END=2026-11-02
+printf '%s\n' "t 2026-10-13 pr=1 9.00 sha=a x" "t 2026-10-14 pr=1 1.00 sha=a posted" \
+  "t 2026-10-15 pr=2 0.50 sha=b posted models=claude-sonnet-5-5" "t 2026-10-15 pr=3 1.50 sha=c no-verdict models=claude-haiku-5-5,claude-sonnet-5-5" \
+  "t 2026-10-15 pr=4 0 sha=d no-diff models=none" > "$LEDGER"
+got=$(spend_lines 2026-10-15)
+want=$'API spend today: $2.00 of $5.00 cap; models billed: claude-haiku-5-5,claude-sonnet-5-5\nCredit: $3.00 of $99.00 used since 2026-10-14, $96.00 left, 18 days to 2026-11-02 (about $5.33/day uses it)'
+[ "$got" = "$want" ] && ok "spend_lines: cap, credit, days left, models" || bad "spend_lines: got '$got'"
+got=$(spend_lines 2026-11-03 | sed -n 2p)
+[ "$got" = 'Credit: $3.00 of $99.00 used since 2026-10-14; the credit ended 2026-11-02' ] && ok "spend_lines: after the credit ends" || bad "spend_lines end: '$got'"
+LEDGER=$TMP/spend.log
 
 # reviewer: no-diff rows count as attempts, dry-run ones do not.
 printf '%s\n' "t 2026-10-14 pr=6 0 sha=00aa11bb no-diff" "t 2026-10-14 pr=6 0 sha=00aa11bb dry-run-no-diff" > "$LEDGER"
@@ -160,7 +219,7 @@ got=$(set -euo pipefail; tc_norm "$TMP/tc-empty.txt"; echo END)
 [ "$got" = END ] && ok "tc_norm: no errors under pipefail" || bad "tc_norm empty: got '$got'"
 
 # tsc_app: two parallel jobs never run tsc at the same time.
-sed -n '/^tsc_app() {/,/^}/p' "$HERE/../foreman/catjam-runner.sh" > "$TMP/tsc-funcs.sh"
+sed -n '/^tsc_run() {/,/^}/p; /^tsc_app() {/,/^}/p; /^record_baseline() {/,/^}/p' "$HERE/../foreman/catjam-runner.sh" > "$TMP/tsc-funcs.sh"
 mkdir -p "$TMP/state"
 rc=0
 STATE=$TMP/state APP=app L=$TMP/tsc-order.log bash -euo pipefail -c '
@@ -168,6 +227,65 @@ STATE=$TMP/state APP=app L=$TMP/tsc-order.log bash -euo pipefail -c '
   . "$1"; tsc_app d1 /dev/null & tsc_app d2 /dev/null & wait' _ "$TMP/tsc-funcs.sh" || rc=$?
 got=$(tr '\n' ' ' < "$TMP/tsc-order.log")
 [ "$rc" = 0 ] && [ "$got" = "start end start end " ] && ok "tsc_app: parallel calls are serialized" || bad "tsc_app: rc=$rc order '$got'"
+
+# record_baseline: a clean main (0 errors) is a recorded baseline; a run that
+# did not finish is not cached; two jobs on one sha run tsc once.
+baseline() { # baseline <tsc exit> <tsc output> [parallel] -> prints the cached file or "absent", then tsc runs
+  rm -rf "$TMP/bl"; mkdir -p "$TMP/bl/state" "$TMP/bl/base"
+  TSC_RC=$1 TSC_OUT=$2 PAR=${3:-} STATE=$TMP/bl/state BASELINES=$TMP/bl/base JOBS=$TMP/bl APP=app L=$TMP/bl/runs bash -euo pipefail -c '
+    as_foreman() { echo run >> "$L"; sleep 0.3; [ -z "$TSC_OUT" ] || printf "%s\n" "$TSC_OUT"; return "$TSC_RC"; }
+    wt_git() { echo 0123456789abcdef0123456789abcdef01234567; }
+    say() { :; }
+    . "$1"
+    if [ -n "$PAR" ]; then record_baseline j1 & record_baseline j2 & wait; else record_baseline j1; fi' _ "$TMP/tsc-funcs.sh"
+  f=$TMP/bl/base/0123456789abcdef0123456789abcdef01234567.txt
+  if [ -e "$f" ]; then cat "$f"; else echo absent; fi
+  echo "runs=$(grep -c run "$TMP/bl/runs" || true) leftovers=$(find "$TMP/bl/base" -name '*.tmp*' | wc -l)"
+}
+got=$(baseline 0 "")
+[ "$got" = $'# tsc exit 0\nruns=1 leftovers=0' ] && ok "record_baseline: clean main is recorded (non-empty)" || bad "record_baseline clean: '$got'"
+got=$(baseline 2 "src/a.ts(1,1): error TS2304: x")
+[ "$got" = $'# tsc exit 2\nsrc/a.ts(1,1): error TS2304: x\nruns=1 leftovers=0' ] && ok "record_baseline: errors cached with exit line" || bad "record_baseline errors: '$got'"
+got=$(baseline 124 "partial")
+[ "$got" = $'absent\nruns=1 leftovers=0' ] && ok "record_baseline: timeout (rc 124) not cached" || bad "record_baseline timeout: '$got'"
+got=$(baseline 2 "src/a.ts(1,1): error TS2304: x" par)
+[ "$got" = $'# tsc exit 2\nsrc/a.ts(1,1): error TS2304: x\nruns=1 leftovers=0' ] && ok "record_baseline: two parallel jobs, one tsc run, no race" || bad "record_baseline parallel: '$got'"
+got=$(tc_norm <(printf '%s\n' "# tsc exit 0"))
+[ -z "$got" ] && ok "tc_norm: exit line is not an error" || bad "tc_norm exit line: '$got'"
+
+# runner: a deleted test must be listed in the issue's task; deleted modules
+# that are still imported are reported; nearby tests replace deleted ones.
+DEL=$TMP/delrepo
+git init -q "$DEL"
+mkdir -p "$DEL/app/src/components/old/__tests__" "$DEL/app/src/components/keep/__tests__" "$DEL/app/src/pages"
+echo 'export const Old = 1;' > "$DEL/app/src/components/old/Old.tsx"
+echo 'export * from "./Old";' > "$DEL/app/src/components/old/index.ts"
+echo 'test("old", () => {});' > "$DEL/app/src/components/old/__tests__/Old.test.tsx"
+echo 'test("keep", () => {});' > "$DEL/app/src/components/keep/__tests__/Keep.test.tsx"
+echo 'test("other", () => {});' > "$DEL/app/src/components/keep/__tests__/Other.test.tsx"
+echo "import { Old } from '@/components/old';" > "$DEL/app/src/pages/Page.tsx"
+git -C "$DEL" add -A && git -C "$DEL" -c user.name=t -c user.email=t@t commit -qm base
+git -C "$DEL" rm -q -r app/src/components/old
+sed -n '/^diff_refusal() {/,/^}/p; /^nearby_tests() {/,/^}/p; /^deleted_refs() {/,/^}/p' "$HERE/../foreman/catjam-runner.sh" > "$TMP/del-funcs.sh"
+delcheck() { # delcheck <function and args...>
+  TASK=${TASK:-} DEL=$DEL bash -euo pipefail -c '
+    APP=app
+    wt_git() { shift; git -C "$DEL" "$@"; }
+    issue_task() { printf "%s\n" "$TASK"; }
+    diff_has_secret() { return 1; }
+    . "$1"; shift; "$@"' _ "$TMP/del-funcs.sh" "$@"
+}
+got=$(TASK="delete app/src/components/old/Old.tsx and app/src/components/old/index.ts" delcheck diff_refusal x 7 || true)
+[ "$got" = "deletes test app/src/components/old/__tests__/Old.test.tsx, which the issue does not list" ] && ok "diff_refusal: unlisted test deletion refused" || bad "diff_refusal unlisted: '$got'"
+got=$(TASK="Tests to delete: app/src/components/old/__tests__/Old.test.tsx" delcheck diff_refusal x 7 || true)
+[ -z "$got" ] && ok "diff_refusal: listed test deletion allowed" || bad "diff_refusal listed: '$got'"
+got=$(delcheck nearby_tests x app/src/components/old/Old.tsx)
+[ "$got" = $'app/src/components/keep/__tests__/Keep.test.tsx\napp/src/components/keep/__tests__/Other.test.tsx' ] && ok "nearby_tests: closest remaining tests" || bad "nearby_tests: '$got'"
+got=$(delcheck deleted_refs x $'app/src/components/old/Old.tsx\napp/src/components/old/index.ts\napp/src/components/old/__tests__/Old.test.tsx')
+[ "$got" = "app/src/pages/Page.tsx:1:import { Old } from '@/components/old';" ] && ok "deleted_refs: import of a deleted index found" || bad "deleted_refs: '$got'"
+git -C "$DEL" rm -q app/src/pages/Page.tsx
+got=$(delcheck deleted_refs x $'app/src/components/old/Old.tsx\napp/src/components/old/index.ts')
+[ -z "$got" ] && ok "deleted_refs: no imports left" || bad "deleted_refs clean: '$got'"
 
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]
