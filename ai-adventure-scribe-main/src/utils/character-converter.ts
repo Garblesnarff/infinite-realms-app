@@ -1,4 +1,15 @@
+import { abilityModifier } from '../../shared/ability-modifier';
+
 import type { Character } from '@/types/character';
+
+const ABILITY_KEYS = [
+  'strength',
+  'dexterity',
+  'constitution',
+  'intelligence',
+  'wisdom',
+  'charisma',
+] as const;
 
 interface CharacterDetails {
   id: string;
@@ -23,38 +34,12 @@ export function convertCharacterDetailsToCharacter(charDetails: CharacterDetails
     name: charDetails.name,
     level: charDetails.level,
     abilityScores: stats
-      ? {
-          strength: {
-            score: stats.strength || 10,
-            modifier: Math.floor(((stats.strength || 10) - 10) / 2),
-            savingThrow: false,
-          },
-          dexterity: {
-            score: stats.dexterity || 10,
-            modifier: Math.floor(((stats.dexterity || 10) - 10) / 2),
-            savingThrow: false,
-          },
-          constitution: {
-            score: stats.constitution || 10,
-            modifier: Math.floor(((stats.constitution || 10) - 10) / 2),
-            savingThrow: false,
-          },
-          intelligence: {
-            score: stats.intelligence || 10,
-            modifier: Math.floor(((stats.intelligence || 10) - 10) / 2),
-            savingThrow: false,
-          },
-          wisdom: {
-            score: stats.wisdom || 10,
-            modifier: Math.floor(((stats.wisdom || 10) - 10) / 2),
-            savingThrow: false,
-          },
-          charisma: {
-            score: stats.charisma || 10,
-            modifier: Math.floor(((stats.charisma || 10) - 10) / 2),
-            savingThrow: false,
-          },
-        }
+      ? Object.fromEntries(
+          ABILITY_KEYS.map((key) => {
+            const score = stats[key] || 10;
+            return [key, { score, modifier: abilityModifier(score), savingThrow: false }];
+          }),
+        ) as Character['abilityScores']
       : {
           // Provide a default if stats are missing
           strength: { score: 10, modifier: 0, savingThrow: false },

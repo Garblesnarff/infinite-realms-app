@@ -33,6 +33,7 @@ import {
   inventoryItems,
   spells,
 } from '../../../../db/schema/index';
+import { abilityModifier } from '../../../../shared/ability-modifier';
 import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
@@ -1009,8 +1010,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
       // rangers know their spells and never prepare.
       const cls = (character.class ?? '').trim().toLowerCase();
       const stats = (character as Character & { stats?: CharacterStats | null }).stats;
-      const mod = (score: number | null | undefined): number =>
-        Math.floor(((score ?? 10) - 10) / 2);
+      const mod = (score: number | null | undefined): number => abilityModifier(score ?? 10);
       let limit: number | null = null;
       if (cls === 'cleric' || cls === 'druid') limit = mod(stats?.wisdom) + character.level;
       else if (cls === 'wizard') limit = mod(stats?.intelligence) + character.level;
