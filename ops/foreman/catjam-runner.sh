@@ -133,7 +133,7 @@ issue_task() { # the issue's "## Task" section, else title + body
   title=$(gh api "repos/$REPO/issues/$n" --jq .title)
   body=$(gh api "repos/$REPO/issues/$n" --jq '.body // ""')
   local task
-  task=$(printf '%s\n' "$body" | awk '/^## Task[[:space:]]*$/{f=1; next} f && /^## /{exit} f')
+  task=$(awk '/^## Task[[:space:]]*$/{f=1; next} f && /^## /{exit} f' <<< "$body")
   if [ -n "$(printf '%s' "$task" | tr -d '[:space:]')" ]; then
     printf '## Issue #%s: %s\n\n%s\n' "$n" "$title" "$task"
   else
@@ -142,8 +142,11 @@ issue_task() { # the issue's "## Task" section, else title + body
 }
 
 worker_rules() { # AGENTS.md "# Worker rules" section from origin/main
-  git --git-dir="$MIRROR" show origin/main:AGENTS.md |
-    awk '/^# Worker rules/{f=1} /^# Hetzner \(ops\) rules/{exit} f'
+  # Capture first: awk exits at the ops heading, and under pipefail a piped
+  # `git show` would die of SIGPIPE (141) and set -e would end the job.
+  local agents
+  agents=$(git --git-dir="$MIRROR" show origin/main:AGENTS.md)
+  awk '/^# Worker rules/{f=1} /^# Hetzner \(ops\) rules/{exit} f' <<< "$agents"
 }
 
 write_prompt() { # write_prompt <issue> <out> [fix-items-file]
@@ -487,6 +490,9 @@ cleanup() {
   trap '' TERM INT
   trap - EXIT
   if [ "${KILLED:-0}" = 1 ]; then
+    # Root has no CAP_KILL here, so it cannot signal foreman-uid processes:
+    # stop them as foreman (kill -1 = every process this uid may signal).
+    as_foreman kill -TERM -1 2> /dev/null || true
     kill -TERM 0 2> /dev/null || true
     wait 2> /dev/null || true
   fi
