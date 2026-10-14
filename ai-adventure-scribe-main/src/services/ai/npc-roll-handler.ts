@@ -110,17 +110,11 @@ Narrate the scene:`.trim();
         systemInstruction: 'NPC_ROLL_CONTINUATION',
         npcRollResults: rollSummary,
       },
-      // @ts-expect-error #545 chatWithDM params declare no sessionId or options
-      sessionId,
-      options: {
-        includeMemory: false, // Don't pull memories for roll continuation
-        includeVoiceContext: false, // Voice not needed for continuation
-      },
+       relevantMemories: [], // #545: an empty list stops chatWithDM from fetching memories for a roll continuation
       ...(signal ? { signal } : {}),
     });
 
-    // @ts-expect-error #545 AIResponse has no response field (legacy fallback)
-    const narrative = result.text || result.response || '';
+    const narrative = result.text || '';
 
     logger.info('[NPCRollHandler] AI narrative continuation received:', {
       narrativeLength: narrative.length,
