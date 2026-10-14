@@ -1217,12 +1217,17 @@ describe('authoritative Move intent', () => {
       'The Scholar moved to (7, 7) by the engine. Describe the movement and keep the action unused.',
     ]);
     const firstLegal = await getLegalCombatActions(encounter.id, 'user-1');
-    expect(firstLegal.actions).toContainEqual(
-      expect.objectContaining({
-        type: 'attack',
-        label: 'Attack with Quarterstaff (move closer first)',
-      }),
-    );
+    // #259: with no movement left, "(move closer first)" is not offered — the engine would
+    // answer every attempt with the identical "no attack was rolled" without advancing the
+    // turn. Dash and End turn remain.
+    expect(
+      firstLegal.actions.some(
+        (action) =>
+          action.type === 'attack' && String(action.label).includes('move closer first'),
+      ),
+    ).toBe(false);
+    expect(firstLegal.actions).toContainEqual({ type: 'dash', label: 'Dash' });
+    expect(firstLegal.actions).toContainEqual({ type: 'end_turn', label: 'End turn' });
     const nextTurnMap = (await loadActiveTacticalMap(encounter.sessionId))!;
     resetMovement(nextTurnMap, scholar.id);
     await saveTacticalMap(nextTurnMap);
