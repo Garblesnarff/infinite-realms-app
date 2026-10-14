@@ -64,6 +64,9 @@ const { consumeDmTacticalFacts, recordDmTacticalFact } = await importWithRealDb(
 );
 const { saveTacticalMap } = await importWithRealDb(() => import('../combat/tactical-map-store.js'));
 const { awardStoryXp, awardStoryXpOnce } = await importWithRealDb(() => import('../dm/story-xp.js'));
+const { executeCombatIntent } = await importWithRealDb(
+  () => import('../combat/combat-intent-service.js'),
+);
 
 if (!hasRealDb) {
   console.warn(
@@ -514,6 +517,50 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
       .from(characters)
       .where(eq(characters.id, characterId));
     expect(sheetAgain.xp).toBe(sheet.xp);
+  });
+
+  test('combat start grants no XP and posts no victory notice: the end check does not fire on a live fight (#310)', async () => {
+    // Hark N2 (2026-10-13): XP landed on the sheet (+25/50/75) the moment combat started,
+    // before any attack, with no message. The victory award is the only in-combat XP
+    // writer, so the invariant is pinned at its choke point: the end check, run through
+    // the real intent pipeline the same way the entry route's NPC drain runs it at combat
+    // start, must not conclude a fight whose monster is still standing.
+    const [sheetBefore] = await db
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    const eventsBefore = await db
+      .select({ id: experienceEvents.id })
+      .from(experienceEvents)
+      .where(eq(experienceEvents.characterId, characterId));
+
+    // The combat-entry route drains NPC turns right after seating, and every drained turn
+    // ends with an end_turn through this pipeline, which runs the end check. The hero
+    // holds the turn here (initiative 20 over the golem's 10), so this is the player's
+    // own end_turn on a live fight. The golem is standing at 2/11 HP with no seated XP,
+    // so a misfire would pay the level-3 medium threshold band: 150.
+    await executeCombatIntent(
+      encounterId,
+      { type: 'end_turn', actorId: heroId },
+      userId,
+      'player',
+    );
+
+    // The fight is untouched: still active, no award, no notice.
+    const row = await encounterRow();
+    expect(row.status).toBe('active');
+    expect(row.endedReason).toBeNull();
+    const [sheetAfter] = await db
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect(sheetAfter.xp ?? 0).toBe(sheetBefore.xp ?? 0);
+    const eventsAfter = await db
+      .select({ id: experienceEvents.id })
+      .from(experienceEvents)
+      .where(eq(experienceEvents.characterId, characterId));
+    expect(eventsAfter).toHaveLength(eventsBefore.length);
+    expect(await victoryNotices(sessionId)).toHaveLength(0);
   });
 
   test('a failed victory notice write is recovered on retry without re-awarding (#310)', async () => {
