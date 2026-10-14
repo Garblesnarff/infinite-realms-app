@@ -431,6 +431,19 @@ describe('D3: combat options use the real response hook (#2547)', () => {
               body.intent.type === 'dash' ? null : { applied: true, action: body.intent.type },
           });
         }
+        if (body.intent?.type === 'yield') {
+          // #262: the shape the real route returns for a player yield — recordPlayerExit's
+          // PlayerExitResult (exit: 'surrendered'; a yield provokes no opportunity attack)
+          // wrapped by markCombatEnded with the player_surrendered reason.
+          return reply({
+            result: {
+              exit: 'surrendered',
+              opportunityAttack: null,
+              combatEnded: true,
+              endedReason: 'player_surrendered',
+            },
+          });
+        }
         // The player's End turn: the intent route (#2658 step 3) runs Emil before it answers, so
         // the body carries his turn and the turn is the player's again, in round 2.
         advances++;
@@ -918,6 +931,44 @@ describe('D3: combat options use the real response hook (#2547)', () => {
         }),
       }),
     ]);
+  });
+
+  it('ends a clicked yield with the engine end line carrying the surrender reason (#262)', async () => {
+    extraAction = { type: 'yield', label: 'Yield' };
+    render(<Game />);
+    fireEvent.click(await screen.findByRole('button', { name: /Yield/ }));
+    await waitFor(() =>
+      expect(requests.some((request) => request.intent?.type === 'yield')).toBe(true),
+    );
+    // #2622 changed expectation: the inline option resolves through the engine, so the
+    // DM is never asked.
+    await waitFor(() => expect(persisted.length).toBe(1));
+    expect(vi.mocked(AIService.chatWithDM)).not.toHaveBeenCalled();
+    expect(requests.filter((request) => request.intent?.type === 'yield')).toEqual([
+      expect.objectContaining({
+        source: 'dm',
+        origin: 'action_bar',
+        intent: expect.objectContaining({ type: 'yield', actorId: 'scholar-1' }),
+      }),
+    ]);
+    // The engine's own row, persisted once, as a system message with its card — and the
+    // combat end line with the reason. Without the end line the yield dead-ends at
+    // "X yielded." (Hark N2-098/N2-136): the proving test demands the end line always
+    // carry a reason.
+    expect(persisted).toEqual([
+      expect.objectContaining({
+        sender: 'system',
+        persist: true,
+        text:
+          '⚙️ Engine: The Scholar yielded.\n\n' +
+          '⚙️ Engine: Combat ended — the party surrendered (reason: player_surrendered).',
+        context: expect.objectContaining({
+          intent: 'combat_pending_intent',
+          engineCards: [expect.objectContaining({ kind: 'move' })],
+        }),
+      }),
+    ]);
+    expect(response).toBeUndefined();
   });
 });
 
