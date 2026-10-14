@@ -205,6 +205,7 @@ mock.module(`${CLIENT}/services/auth/TokenService`, () => ({
   loadCachedSession: () => null,
   persistSession: () => {},
   refreshAccessTokenOnce: async () => null,
+  TokenRefreshTransportError: class TokenRefreshTransportError extends Error {},
 }));
 const clientLogger = {
   debug: () => {},

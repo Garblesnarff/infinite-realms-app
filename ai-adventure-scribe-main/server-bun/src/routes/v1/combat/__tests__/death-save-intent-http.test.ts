@@ -210,6 +210,7 @@ mock.module('../../../../../../src/services/auth/TokenService', () => ({
   loadCachedSession: () => null,
   persistSession: () => {},
   refreshAccessTokenOnce: async () => null,
+  TokenRefreshTransportError: class TokenRefreshTransportError extends Error {},
 }));
 
 const { createRequestPipelineApp } = await import('../../../../http-pipeline.js');
