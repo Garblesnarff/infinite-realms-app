@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import AbilityScoresSelection from '../AbilityScoresSelection';
@@ -52,6 +52,22 @@ function renderAbilityScoresStep(): ReturnType<typeof render> {
   );
 }
 
+function SeedStoredMethod(): React.ReactElement | null {
+  const { state, dispatch } = useCharacter();
+  const [seeded, setSeeded] = useState(false);
+
+  useEffect(() => {
+    dispatch({
+      type: 'SET_CHARACTER',
+      payload: { ...character, class: fighter, abilityScoreMethod: 'roll' },
+    });
+    setSeeded(true);
+  }, [dispatch]);
+
+  if (!seeded || state.character?.abilityScoreMethod !== 'roll') return null;
+  return <AbilityScoresSelection />;
+}
+
 describe('AbilityScoresSelection wizard step (#213)', () => {
   it('shows racial bonuses, final modifiers, point-buy totals, and level-one HP', () => {
     renderAbilityScoresStep();
@@ -77,5 +93,20 @@ describe('AbilityScoresSelection wizard step (#213)', () => {
         screen.getByText(`Level 1 hit points: ${characterClass.hitDie + 3}`),
       ).toBeInTheDocument();
     });
+  });
+
+  it('shows the Roll tab when the stored method is roll', async () => {
+    render(
+      <CharacterProvider>
+        <SeedStoredMethod />
+      </CharacterProvider>,
+    );
+
+    const rollTab = await screen.findByRole('tab', { name: 'Roll Scores' });
+    expect(rollTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Point Buy' })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
   });
 });

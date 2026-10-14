@@ -77,7 +77,7 @@ const AbilityScoresSelection: React.FC = () => {
         </div>
 
         <Tabs
-          defaultValue="pointBuy"
+          value={method}
           className="w-full"
           onValueChange={(value) => setMethod(value as Method)}
         >
