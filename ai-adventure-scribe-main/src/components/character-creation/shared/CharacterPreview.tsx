@@ -3,11 +3,14 @@ import React from 'react';
 
 import { CharacterPreviewAbilityScores } from './CharacterPreviewAbilityScores';
 import { CharacterPreviewHeader } from './CharacterPreviewHeader';
+import { findSrdClass } from '../../../../shared/srd-class-data';
 
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useCharacter } from '@/contexts/CharacterContext';
+import { type AbilityScores } from '@/types/character';
+import { applyRacialBonusesToAbilityScores } from '@/utils/racialAbilityBonuses';
 
 /**
  * Real-time character preview component
@@ -49,6 +52,25 @@ const CharacterPreview: React.FC = () => {
   const totalLevel = character.level || 1;
   const proficiencyBonus = Math.ceil(totalLevel / 4) + 1;
 
+  // #389: the creation summary must show a labeled HP that matches what the
+  // save will store. Mirror transformAbilityScoresForStorage's level-1 HP
+  // derivation (class hit die + post-racial CON modifier + Dwarven Toughness),
+  // the same producer the save path uses.
+  const race = typeof character.race === 'object' ? character.race : null;
+  const subrace = typeof character.subrace === 'object' ? character.subrace : null;
+  const finalScores: AbilityScores = applyRacialBonusesToAbilityScores(
+    character.abilityScores ?? ({} as AbilityScores),
+    race,
+    subrace,
+    character.racialAbilityChoices,
+  );
+  const constitutionModifier = finalScores.constitution?.modifier ?? 0;
+  const raceTraits = [...(race?.traits ?? []), ...(subrace?.traits ?? [])];
+  const toughnessBonus = raceTraits.includes('Dwarven Toughness') ? 1 : 0;
+  const hitDie = findSrdClass(character.class?.name)?.hitDie ?? character.class?.hitDie;
+  const hitPoints =
+    typeof hitDie === 'number' ? hitDie + constitutionModifier + toughnessBonus : null;
+
   return (
     <Card className="glass-strong rounded-2xl hover-lift border-2 border-infinite-purple/20">
       <div className="p-6 space-y-6">
@@ -66,7 +88,11 @@ const CharacterPreview: React.FC = () => {
             <Sword className="w-4 h-4 mr-2" />
             Combat Stats
           </h4>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="text-center p-2 bg-card rounded-lg border border-border">
+              <div className="text-lg font-bold text-red-400">{hitPoints ?? '—'}</div>
+              <div className="text-xs text-muted-foreground">HP</div>
+            </div>
             <div className="text-center p-2 bg-card rounded-lg border border-border">
               <div className="text-lg font-bold text-infinite-teal">
                 {character.class?.hitDie ? character.class.hitDie : 8}
