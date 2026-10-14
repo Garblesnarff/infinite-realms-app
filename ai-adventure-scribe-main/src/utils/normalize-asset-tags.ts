@@ -1,6 +1,8 @@
 import { generateAssetKey, stripKeyPossessiveS } from './asset-key';
+import { NAME_TITLES } from './name-titles';
 
 const LEADING_ARTICLE_PATTERN = /^(?:the|an|a)\s+/i;
+const LEADING_TITLE_PATTERN = new RegExp(`^(?:${NAME_TITLES.join('|')})\\s+`, 'i');
 const ASSET_NAME_WORD_PATTERN = /[a-z0-9]+(?:['’-][a-z0-9]+)*/gi;
 const MIN_VISIBLE_NAME_PREFIX_WORDS = 2;
 const MIN_VISIBLE_NAME_SUFFIX_WORDS = 1;
@@ -14,6 +16,10 @@ export function deriveAssetDisplayName(normalizedKey: string): string {
 
 function normalizeLeadingArticle(value: string): string {
   return value.replace(LEADING_ARTICLE_PATTERN, '').trim();
+}
+
+function stripLeadingTitle(value: string): string {
+  return value.replace(LEADING_TITLE_PATTERN, '').trim();
 }
 
 function startsWithWholeName(value: string, name: string): boolean {
@@ -68,7 +74,7 @@ function comparableNameText(value: string): string {
  * such as "The Throat of Basalt" for
  * "the-throat-of-basalt-upper-chasm".
  */
-function startsWithVisibleNamePrefix(value: string, name: string): boolean {
+function startsWithVisibleNamePrefix(value: string, name: string, originalValue?: string): boolean {
   const valueWords = getComparableWords(value);
   const nameWords = getComparableWords(name);
   let matchedWords = 0;
@@ -81,7 +87,16 @@ function startsWithVisibleNamePrefix(value: string, name: string): boolean {
     matchedWords++;
   }
 
-  return matchedWords >= MIN_VISIBLE_NAME_PREFIX_WORDS;
+  if (matchedWords >= MIN_VISIBLE_NAME_PREFIX_WORDS) {
+    return true;
+  }
+
+  if (matchedWords === 1 && originalValue) {
+    const firstWord = originalValue.split(/\s+/).filter(Boolean).shift() ?? '';
+    return /^[A-Z]/.test(firstWord);
+  }
+
+  return false;
 }
 
 function startsWithVisibleNameSuffix(value: string, name: string, originalValue: string): boolean {
@@ -108,20 +123,22 @@ function startsWithVisibleNameSuffix(value: string, name: string, originalValue:
   return false;
 }
 
-function endsWithVisibleNamePrefix(value: string, name: string): boolean {
+function endsWithVisibleNamePrefix(value: string, name: string, originalValue?: string): boolean {
   const valueWords = getComparableWords(value);
   const nameWords = getComparableWords(name);
   const maxPrefixLength = Math.min(valueWords.length, nameWords.length);
 
-  for (
-    let prefixLength = maxPrefixLength;
-    prefixLength >= MIN_VISIBLE_NAME_PREFIX_WORDS;
-    prefixLength--
-  ) {
+  for (let prefixLength = maxPrefixLength; prefixLength >= 1; prefixLength--) {
     const valueSuffix = valueWords.slice(-prefixLength);
     const namePrefix = nameWords.slice(0, prefixLength);
     if (valueSuffix.every((word, index) => word === namePrefix[index])) {
-      return true;
+      if (prefixLength >= MIN_VISIBLE_NAME_PREFIX_WORDS) {
+        return true;
+      }
+      if (prefixLength === 1 && originalValue) {
+        const lastWord = originalValue.split(/\s+/).filter(Boolean).pop() ?? '';
+        return /^[A-Z]/.test(lastWord);
+      }
     }
   }
 
@@ -133,15 +150,12 @@ function endsWithVisibleNamePrefix(value: string, name: string): boolean {
  * already visible immediately before or after a tag. Leading articles are
  * optional on either side of the match.
  */
-export function isAssetNamePresentAroundTag(
+function isNameVisibleAroundTag(
   content: string,
   tagStart: number,
   tagLength: number,
-  derivedName: string,
+  normalizedName: string,
 ): boolean {
-  const normalizedName = normalizeLeadingArticle(derivedName).toLowerCase();
-  if (!normalizedName) return false;
-
   const beforeTag = content.slice(0, tagStart).replace(/[\s"'`*_]+$/, '');
   const afterTag = content.slice(tagStart + tagLength).replace(/^[^a-zA-Z]+/, '');
   const normalizedBeforeTag = comparableNameText(normalizeLeadingArticle(beforeTag).toLowerCase());
@@ -152,10 +166,30 @@ export function isAssetNamePresentAroundTag(
   return (
     endsWithWholeName(normalizedBeforeTag, comparableName) ||
     startsWithWholeName(normalizedAfterTag, comparableName) ||
-    endsWithVisibleNamePrefix(normalizedBeforeTag, comparableName) ||
-    startsWithVisibleNamePrefix(normalizedAfterTag, comparableName) ||
+    endsWithVisibleNamePrefix(normalizedBeforeTag, comparableName, beforeTag) ||
+    startsWithVisibleNamePrefix(normalizedAfterTag, comparableName, originalAfterTag) ||
     startsWithVisibleNameSuffix(normalizedAfterTag, comparableName, originalAfterTag)
   );
+}
+
+export function isAssetNamePresentAroundTag(
+  content: string,
+  tagStart: number,
+  tagLength: number,
+  derivedName: string,
+): boolean {
+  const normalizedName = normalizeLeadingArticle(derivedName).toLowerCase();
+  if (!normalizedName) return false;
+
+  // A title-stripped name is the same entity ("Gareth" is "Sir Gareth of
+  // Oakhaven" without its honorific), so either form counts as visible.
+  const titleStrippedName = stripLeadingTitle(normalizedName);
+  const candidateNames =
+    titleStrippedName && titleStrippedName !== normalizedName
+      ? [normalizedName, titleStrippedName]
+      : [normalizedName];
+
+  return candidateNames.some((name) => isNameVisibleAroundTag(content, tagStart, tagLength, name));
 }
 
 /**

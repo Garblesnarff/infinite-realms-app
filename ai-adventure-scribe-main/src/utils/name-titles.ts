@@ -1,0 +1,27 @@
+// Honorifics a narration drops when it names an NPC by the name alone ("Gareth"
+// for "Sir Gareth of Oakhaven"). Shared with the NPC alias generator.
+export const NAME_TITLES = [
+  'sir',
+  'lady',
+  'lord',
+  'captain',
+  'general',
+  'doctor',
+  'master',
+  'king',
+  'queen',
+  'baron',
+  'baroness',
+  'count',
+  'countess',
+  'madam',
+  'madame',
+  'professor',
+  'dame',
+  'archmage',
+  'chancellor',
+  'duke',
+  'duchess',
+  'prince',
+  'princess',
+];
