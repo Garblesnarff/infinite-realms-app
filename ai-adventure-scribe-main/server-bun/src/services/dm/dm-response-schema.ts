@@ -484,6 +484,15 @@ const storyItemsProperty = nullable({
     },
     required: ['name', 'quantity', 'change'],
   },
+  // #463: the model narrated pickups but left `items` null on 18 Hark rows, so the
+  // writer never ran. Like #310's xp_award description, this tells the model when
+  // to populate the nullable field inside the structured-output contract.
+  description:
+    '#463 story items: when the story gives the player\'s character an item (found, gifted, ' +
+    'looted, purchased) or takes one away (spent, lost, stolen, broken), set this field to an ' +
+    'array of `{"name": "<exact item name>", "quantity": <whole number>, "change": "gain"|"lose"}`. ' +
+    'The game updates the character\'s Inventory; do not narrate receiving or losing an item ' +
+    'without setting the field. Otherwise leave it null.',
 });
 
 /** #218 step 4: conditions the story applies or removes out of combat. Optional and nullable. */

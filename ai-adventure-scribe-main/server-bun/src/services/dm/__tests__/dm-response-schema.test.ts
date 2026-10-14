@@ -197,3 +197,30 @@ describe('dmResponseSchema story rest contract (#264)', () => {
     expect(none.success).toBe(true);
   });
 });
+
+describe('dmResponseSchema story items contract (#463)', () => {
+  test('the items field carries a description telling the model when to populate it', () => {
+    // #463: the model narrated pickups but left `items` null, so the writer never
+    // ran. In the strict structured-output contract the property description is
+    // the in-schema signal for when to populate a nullable field (#310 precedent).
+    const properties = dmResponseSchema.properties as Record<string, Record<string, unknown>>;
+    const [objectVariant] = properties.items.anyOf as Array<Record<string, unknown>>;
+
+    expect(typeof objectVariant.description).toBe('string');
+    const description = String(objectVariant.description);
+    expect(description).toContain('gain');
+    expect(description).toContain('lose');
+    expect(description).toContain('Inventory');
+    expect(description).toContain('null');
+  });
+
+  test('accepts an item grant and the null items on a plain turn', () => {
+    const granted = parseDmResponse(
+      response({ items: [{ name: 'Brass Key', quantity: 1, change: 'gain' }] }),
+    );
+    expect(granted.success).toBe(true);
+
+    const none = parseDmResponse(response({ items: null }));
+    expect(none.success).toBe(true);
+  });
+});
