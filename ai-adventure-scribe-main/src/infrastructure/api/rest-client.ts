@@ -368,6 +368,15 @@ export interface GenerateTextParams {
   responseSchema?: Record<string, unknown>;
   /** Aborts the request; the caller treats the resulting AbortError as a cancel. */
   signal?: AbortSignal;
+  /**
+   * #633 PR2: progressive DM narration. When set, the request sends
+   * `stream: true` and the server replies `text/event-stream`: this callback
+   * fires once per narration chunk, in order, as tokens arrive. The returned
+   * string is still the authoritative final text. When the response is not an
+   * SSE stream (older server, fallback), the callback never fires and the
+   * call behaves exactly like the non-streaming path.
+   */
+  onStream?: (chunk: string) => void;
   requestType?: 'user' | 'system';
   onResponseMetadata?: (metadata: {
     provider?: 'openrouter' | 'gemini';
@@ -408,6 +417,21 @@ export interface GenerateTextParams {
       hpMax?: number;
     };
   };
+}
+
+/**
+ * #633 PR2: the final payload of the opt-in SSE stream — the same shape as
+ * the POST /v1/llm/generate JSON response.
+ */
+export interface GenerateStreamPayload {
+  text?: string;
+  provider?: 'openrouter' | 'gemini';
+  model?: string;
+  dmReplyMessageId?: string;
+  terminalState?: string;
+  encounterId?: string;
+  error?: string;
+  resetAt?: string;
 }
 
 export interface GenerateImageParams {
@@ -546,6 +570,76 @@ class LlmApiClient {
     }
   }
 
+  /**
+   * #633 PR2: consume the opt-in SSE stream from POST /v1/llm/generate.
+   * `delta` events carry narration chunks in order; the `done` event carries
+   * the final payload (the same shape as the JSON response). Returns null
+   * when the response is not an SSE stream, so the caller falls back to the
+   * JSON path. Throws on `error` events and on a stream that ends without a
+   * final payload, mirroring the HTTP error mapping below.
+   */
+  private async readGenerateStream(
+    res: Response,
+    onStream: (chunk: string) => void,
+  ): Promise<GenerateStreamPayload | null> {
+    const contentType = res.headers.get('content-type') ?? '';
+    if (!contentType.includes('text/event-stream') || !res.body) return null;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let payload: GenerateStreamPayload | null = null;
+    const handleEvent = (data: string): void => {
+      let event: {
+        type?: string;
+        text?: string;
+        payload?: GenerateStreamPayload;
+        message?: string;
+        statusCode?: number;
+      };
+      try {
+        event = JSON.parse(data) as typeof event;
+      } catch {
+        return;
+      }
+      if (event.type === 'delta' && typeof event.text === 'string') {
+        onStream(event.text);
+      } else if (event.type === 'done' && event.payload && typeof event.payload === 'object') {
+        payload = event.payload;
+      } else if (event.type === 'error') {
+        const status = typeof event.statusCode === 'number' ? event.statusCode : 500;
+        throw new ApiClientError(
+          `API ${status}: ${event.message ?? 'stream failed'}`,
+          status,
+          status === 429 || status >= 500,
+        );
+      }
+    };
+    const handleBlock = (block: string): void => {
+      for (const line of block.split('\n')) {
+        const match = /^data:\s?(.*?)\r?$/.exec(line);
+        if (match) handleEvent(match[1]);
+      }
+    };
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let sep: number;
+      while ((sep = buffer.indexOf('\n\n')) >= 0) {
+        handleBlock(buffer.slice(0, sep));
+        buffer = buffer.slice(sep + 2);
+      }
+    }
+    // Flush any buffered partial character, then a trailing event without a
+    // terminating blank line (defensive).
+    buffer += decoder.decode();
+    if (buffer.length > 0) handleBlock(buffer);
+    if (!payload) {
+      throw new ApiClientError('API 500: stream ended without a final payload', 500, false);
+    }
+    return payload;
+  }
+
   async generateText(params: GenerateTextParams): Promise<string> {
     this.lastGenerateRequestId = null;
     const preferredProvider =
@@ -575,11 +669,42 @@ class LlmApiClient {
           sessionId: params.sessionId,
           combatEntry: params.combatEntry,
           dmReply: params.dmReply,
+          // #633 PR2: opt-in to server-sent narration deltas. Off by default.
+          ...(params.onStream ? { stream: true } : {}),
         }),
       });
 
     try {
       const res = await makeReq(preferredProvider);
+      // #633 PR2: when the caller passed onStream, the server answers
+      // text/event-stream. Anything else falls through to the JSON path.
+      if (params.onStream) {
+        const streamed = await this.readGenerateStream(res, params.onStream);
+        if (streamed) {
+          // #2456: the party was defeated. This is a handled terminal state,
+          // not a DM reply — throw so callers can render the death screen
+          // instead of treating it as ordinary text or an error.
+          if (streamed.terminalState === 'party_defeated') {
+            throw new PartyDefeatedError(
+              typeof streamed.encounterId === 'string' ? streamed.encounterId : null,
+            );
+          }
+          if (typeof streamed.error === 'string') {
+            // Mirror the 402 mapping: only the quota path returns resetAt.
+            if (typeof streamed.resetAt === 'string') {
+              throw new QuotaExceededError(`API 402: ${streamed.error}`, streamed.resetAt);
+            }
+            throw new ApiClientError(`API error: ${streamed.error}`, 500, false);
+          }
+          params.onResponseMetadata?.({
+            provider: streamed.provider,
+            model: streamed.model,
+            ...(streamed.dmReplyMessageId ? { dmReplyMessageId: streamed.dmReplyMessageId } : {}),
+          });
+          this.lastGenerateRequestId = this.lastRequestId;
+          return streamed.text ?? '';
+        }
+      }
       const data = (await res.json()) as {
         text?: string;
         provider?: 'openrouter' | 'gemini';

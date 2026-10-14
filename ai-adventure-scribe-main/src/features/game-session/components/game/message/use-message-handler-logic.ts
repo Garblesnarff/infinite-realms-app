@@ -189,7 +189,8 @@ export const useMessageHandlerLogic = ({
     finalLines?: string[];
   } | null;
 } => {
-  const { messages, messagesReady, sendMessage, updateMessage } = useMessageContext();
+  const { messages, messagesReady, sendMessage, updateMessage, removeMessage } =
+    useMessageContext();
   const { extractMemories } = useMemoryContext();
   const {
     getAIResponse,
@@ -643,6 +644,33 @@ export const useMessageHandlerLogic = ({
           abortController.signal,
         );
       };
+      // #633 PR2: progressive DM narration. Chunks accumulate into the
+      // dmMessageId row the early/final render already owns; the authoritative
+      // final text replaces this preview through the existing path below. The
+      // preview follows the early-render suppression contract: no preview
+      // starts in combat (gated in use-ai-response), and a turn the parse
+      // suppresses (roll requests, combat start, narration gate) has its
+      // preview withdrawn in onTextReady so withheld prose never lingers.
+      let streamedNarration = '';
+      // The row id the preview wrote under, captured before any reassignment.
+      const previewRowId = dmMessageId;
+      let previewWithdrawn = false;
+      const onStreamChunk = (chunk: string): void => {
+        if (abortController.signal.aborted || previewWithdrawn) return;
+        streamedNarration += chunk;
+        updateMessage({
+          id: previewRowId,
+          text: sanitizeDMText(streamedNarration),
+          sender: 'dm',
+          timestamp: new Date().toISOString(),
+          context: { intent: 'response' },
+        });
+      };
+      const withdrawPreview = (): void => {
+        if (previewWithdrawn) return;
+        previewWithdrawn = true;
+        if (streamedNarration) removeMessage(previewRowId);
+      };
       // Pass necessary context to getAIResponse. It fetches its own campaign/char details if needed.
       // Use ref to get current messages to avoid stale closure
       const aiResponseMessage = await rejectWhenAborted(
@@ -671,6 +699,12 @@ export const useMessageHandlerLogic = ({
             const suppressRender = textReadyOptions?.suppressRender ?? hasEarlyRollRequests;
 
             if (suppressRender) {
+              // #633 PR2: withdraw the streaming preview. This turn's prose is
+              // withheld until the engine resolves it (roll requests, combat
+              // start, narration gate); the final path below skips
+              // updateMessage here, so without this the preview would linger
+              // with prose the player must not see yet.
+              withdrawPreview();
               // The engine may resolve this turn before the final narration exists — a roll
               // request, combat entry, or any in-combat turn (`requestPlayerAttackRoll` runs
               // inside `handleDmActionsAndTransitions`, after this callback). Declaration-turn
@@ -759,6 +793,7 @@ export const useMessageHandlerLogic = ({
           dmMessageId,
           showEngineNotice,
           abortController.signal,
+          onStreamChunk,
         ),
         turnSignal,
       );

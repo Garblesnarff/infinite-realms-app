@@ -12,6 +12,7 @@ import { timingSafeEqual } from 'node:crypto';
 
 import { Elysia, t } from 'elysia';
 
+import { SSE_HEADERS, extractPartialNarration } from './llm-streaming.js';
 import { deferUntilCommit } from '../../../../db/transaction-context';
 import { authenticateRequest, type AuthUser } from '../../lib/auth.js';
 import { logger } from '../../lib/logger.js';
@@ -548,6 +549,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         sessionId,
         player_input: requestedPlayerInput,
         dmReply: requestedDmReply,
+        stream,
       } = body || {};
       let dmReply = requestedDmReply;
       const safeModel = allowlistedModel(model);
@@ -564,7 +566,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         return { error: 'Missing prompt' };
       }
 
-      const generateTurn = async (canonicalMessageId?: string) => {
+      const generateTurn = async (canonicalMessageId?: string, onToken?: (text: string) => void) => {
         // Phase 0.6 (#1688): per-section prompt token telemetry, log-only. No storage --
         // one structured log line per turn, WARN instead of INFO when the total estimate
         // is large enough to matter for the Phase 4 bounded-prompt work. Absent `metrics`
@@ -822,6 +824,10 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             history,
             provider,
             responseSchema,
+            // #633 PR2: stream provider tokens when the client opted in; the
+            // full text still accumulates, so retry and everything downstream
+            // behave exactly as non-streaming.
+            ...(onToken ? { onToken } : {}),
           });
         let result = await generateOnce();
         // #312: one bounded retry on a retryable storyteller failure before the turn degrades.
@@ -1164,29 +1170,86 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           ...(canonicalMessageId ? { dmReplyMessageId: canonicalMessageId } : {}),
         };
       };
-      if (sessionId && (dmReply || requestedPlayerInput || extractPlayerInputFromPrompt(prompt))) {
-        const { SessionMessageService } =
-          await import('../../services/session/session-message-service.js');
-        try {
-          return await SessionMessageService.withRollTurn(
-            sessionId,
-            user.userId,
-            requestedPlayerInput?.trim() || extractPlayerInputFromPrompt(prompt),
-            dmReply?.rollRequestId,
-            dmReply?.messageId,
-            (replyId) => {
-              if (replyId) dmReply = { ...dmReply, messageId: replyId };
-              return generateTurn(replyId);
-            },
-          );
-        } catch (error) {
-          const { AppError } = await import('../../lib/errors.js');
-          if (!(error instanceof AppError)) throw error;
-          set.status = error.statusCode;
-          return { error: error.message };
+      const runTurn = (onToken?: (text: string) => void) => {
+        if (sessionId && (dmReply || requestedPlayerInput || extractPlayerInputFromPrompt(prompt))) {
+          return (async () => {
+            const { SessionMessageService } =
+              await import('../../services/session/session-message-service.js');
+            try {
+              return await SessionMessageService.withRollTurn(
+                sessionId,
+                user.userId,
+                requestedPlayerInput?.trim() || extractPlayerInputFromPrompt(prompt),
+                dmReply?.rollRequestId,
+                dmReply?.messageId,
+                (replyId) => {
+                  if (replyId) dmReply = { ...dmReply, messageId: replyId };
+                  return generateTurn(replyId, onToken);
+                },
+              );
+            } catch (error) {
+              const { AppError } = await import('../../lib/errors.js');
+              if (!(error instanceof AppError)) throw error;
+              // SSE mode: headers are already sent, so the error travels as
+              // an event instead of an HTTP status.
+              if (stream === true) throw error;
+              set.status = error.statusCode;
+              return { error: error.message };
+            }
+          })();
         }
+        return generateTurn(undefined, onToken);
+      };
+      // #633 PR2: opt-in streaming. Provider tokens stream out as narration
+      // `delta` events while the full response accumulates and runs the
+      // identical pipeline (retry, contract enforcement, parse, persistence).
+      // The final `done` event's payload matches the non-streaming JSON
+      // response shape exactly.
+      if (stream === true) {
+        const encoder = new TextEncoder();
+        const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+        const writer = writable.getWriter();
+        const sendEvent = (event: Record<string, unknown>): void => {
+          void writer
+            .write(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
+            .catch(() => {
+              // The client went away; the turn still completes server-side.
+            });
+        };
+        let streamedRaw = '';
+        let emittedNarration = '';
+        const onToken = (delta: string): void => {
+          streamedRaw += delta;
+          const narration = extractPartialNarration(streamedRaw);
+          if (
+            narration !== null &&
+            narration.length > emittedNarration.length &&
+            narration.startsWith(emittedNarration)
+          ) {
+            const fresh = narration.slice(emittedNarration.length);
+            emittedNarration = narration;
+            sendEvent({ type: 'delta', text: fresh });
+          }
+        };
+        void (async () => {
+          try {
+            const payload = await runTurn(onToken);
+            sendEvent({ type: 'done', payload });
+          } catch (error) {
+            const { AppError } = await import('../../lib/errors.js');
+            if (error instanceof AppError) {
+              sendEvent({ type: 'error', message: error.message, statusCode: error.statusCode });
+            } else {
+              logger.error({ msg: 'LLM_GENERATE_STREAM_FAILED', error });
+              sendEvent({ type: 'error', message: 'Generation failed', statusCode: 500 });
+            }
+          } finally {
+            await writer.close().catch(() => {});
+          }
+        })();
+        return new Response(readable, { headers: SSE_HEADERS });
       }
-      return generateTurn();
+      return runTurn();
     },
     {
       body: t.Object({
@@ -1225,6 +1288,11 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         provider: t.Optional(t.Union([t.Literal('openrouter'), t.Literal('gemini')])),
         requestType: t.Optional(t.Union([t.Literal('user'), t.Literal('system')])),
         responseSchema: t.Optional(t.Any()),
+        // #633 PR2: opt-in SSE streaming of the DM turn's narration. Off by
+        // default; the client sends `stream: true` to receive
+        // `text/event-stream` with progressive narration deltas and a final
+        // event carrying the same payload shape as the JSON response.
+        stream: t.Optional(t.Boolean()),
         // Phase 0.6 (#1688): optional, numbers-only per-section prompt token telemetry.
         // Permissive on keys (log-only, never stored) so new sections don't require a
         // schema change; values must be numbers.

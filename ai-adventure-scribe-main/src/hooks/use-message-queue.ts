@@ -90,6 +90,37 @@ export const useMessageQueue = (sessionId: string | null) => {
   );
 
   /**
+   * #633 PR2: remove a render-only row from the cache. Only the streaming
+   * narration preview uses this: when the turn's suppression rules (roll
+   * requests, combat start, narration gate) decide the prose must be
+   * withheld, the preview is withdrawn so it does not linger on screen.
+   * Persisted rows are never removed through this path.
+   */
+  const removeMessage = useCallback(
+    (id: string): void => {
+      if (!sessionId || !id) return;
+
+      const messageQueries = queryClient.getQueryCache().findAll({
+        queryKey: ['messages', sessionId],
+      });
+      messageQueries.forEach((query) => {
+        queryClient.setQueryData(
+          query.queryKey,
+          (old: { messages: ChatMessage[]; hasMore: boolean } | undefined) => {
+            if (!old?.messages) return old;
+            if (!old.messages.some((message) => message.id === id)) return old;
+            return {
+              ...old,
+              messages: old.messages.filter((message) => message.id !== id),
+            };
+          },
+        );
+      });
+    },
+    [queryClient, sessionId],
+  );
+
+  /**
    * Handles message persistence with enhanced retry logic and backoff
    * Generates message IDs on the frontend to avoid race conditions with database replication
    */
@@ -348,7 +379,8 @@ export const useMessageQueue = (sessionId: string | null) => {
       messageMutation,
       queueStatus,
       updateMessage,
+      removeMessage,
     }),
-    [messageMutation, queueStatus, updateMessage],
+    [messageMutation, queueStatus, updateMessage, removeMessage],
   );
 };
