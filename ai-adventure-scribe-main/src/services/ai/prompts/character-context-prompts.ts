@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
 import { getCharacterPassiveScores } from '../../passive-skills-service';
 
 import type { EquippedLoadout } from '@/services/user-data-api';
@@ -94,10 +95,8 @@ PLAYER CHARACTER: ${char.name}, a level ${char.level} ${char.race || 'Unknown Ra
 STR ${stats.strength}(${calcMod(stats.strength)}), DEX ${stats.dexterity}(${calcMod(stats.dexterity)}), CON ${stats.constitution}(${calcMod(stats.constitution)}), INT ${stats.intelligence}(${calcMod(stats.intelligence)}), WIS ${stats.wisdom}(${calcMod(stats.wisdom)}), CHA ${stats.charisma}(${calcMod(stats.charisma)})
 </ability_scores>`;
 
-      const profBonus =
-        char.level >= 17 ? 6 : char.level >= 13 ? 5 : char.level >= 9 ? 4 : char.level >= 5 ? 3 : 2;
       section += `
-<proficiency_bonus>+${profBonus}</proficiency_bonus>`;
+<proficiency_bonus>+${proficiencyBonus(char.level)}</proficiency_bonus>`;
     }
 
     section += await CharacterContextPrompts.buildEquipmentSection(char);
