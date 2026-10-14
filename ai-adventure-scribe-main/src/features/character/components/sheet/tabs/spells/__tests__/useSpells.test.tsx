@@ -9,6 +9,7 @@ import {
   resolveSpellcastingAbility,
   toTabSpellSlots,
 } from '@/features/character/components/sheet/tabs/spells/useSpells';
+import { characterSpellService } from '@/services/characterSpellApi';
 import { restApi } from '@/services/rest-api';
 
 // Mock the spell API service (disabled so the hook uses character data only)
@@ -302,6 +303,14 @@ describe('useSpells', () => {
 
     const { result } = renderHook(() => useSpells(classless));
     expect(result.current.spellcastingAbility).toBeNull();
+  });
+
+  it('never calls the spell API, whatever the service flag says (#523)', () => {
+    (characterSpellService as unknown as { isEnabled: ReturnType<typeof vi.fn> }).isEnabled.mockReturnValueOnce(true);
+    const character = makeCharacter();
+    const { result } = renderHook(() => useSpells(character));
+    expect(characterSpellService.getCharacterSpells).not.toHaveBeenCalled();
+    expect(result.current.error).toBeNull();
   });
 
   it('converts the real loader slot shape ({max, current}) into the tab grid', () => {
