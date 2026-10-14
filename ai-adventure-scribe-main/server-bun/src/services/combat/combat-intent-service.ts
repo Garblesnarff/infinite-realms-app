@@ -34,7 +34,7 @@ import { groundRequestedWeapon, type GroundedWeapon } from './weapon-grounding.j
 import { logger } from '../../lib/logger.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
-import { resolveAttackRules } from './combat-rules.js';
+import { resolveAttackRules, type WeaponRuleProfile } from './combat-rules.js';
 import { publishCombatState } from './combat-sync-service.js';
 import {
   claimTurnActionAndResolve,
@@ -1767,32 +1767,49 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
         ),
       ),
     );
+    // #259: "Attack with X (move closer first)" is only offered for a target the engine
+    // would actually move toward. Offering it with no movement left (or no closer cell)
+    // produces the "no attack was rolled" loop: the identical intent retries identically
+    // forever because the non-spending movement_only never advances the turn.
+    const canCloseDistance =
+      map && mapActor
+        ? (targetId: string, weapon: WeaponRuleProfile): boolean => {
+            const plan = planApproach(map, actor.id, targetId, weapon.normalRange ?? 5);
+            const destination = plan?.destination;
+            return (
+              !!destination && (destination.x !== mapActor.x || destination.y !== mapActor.y)
+            );
+          }
+        : undefined;
     actions.push(
-      ...buildCombatWeaponOptions(weapons, (weapon) =>
-        opposingTargets.map((target) => {
-          const targetEntity = map?.entities.find((entity) => entity.id === target.id);
-          const rules = resolveAttackRules({
-            strength: profile.scores.str ?? 10,
-            dexterity: profile.scores.dex ?? 10,
-            level: profile.level,
-            baseTargetAc: resolveParticipantArmorClass(target.armorClass, {
-              participantId: target.id,
-              encounterId,
-            }),
-            weapon,
-            attackerConditions,
-            targetConditions: targetConditions.get(target.id) ?? [],
-            geometry:
-              map && mapActor && targetEntity
-                ? {
-                    distanceFeet: getDistance(mapActor, targetEntity),
-                    hasLineOfSight: checkLineOfSight(map, actor.id, target.id),
-                    cover: getCover(map, actor.id, target.id),
-                  }
-                : undefined,
-          });
-          return { targetId: target.id, legal: rules.legal, refusal: rules.refusal };
-        }),
+      ...buildCombatWeaponOptions(
+        weapons,
+        (weapon) =>
+          opposingTargets.map((target) => {
+            const targetEntity = map?.entities.find((entity) => entity.id === target.id);
+            const rules = resolveAttackRules({
+              strength: profile.scores.str ?? 10,
+              dexterity: profile.scores.dex ?? 10,
+              level: profile.level,
+              baseTargetAc: resolveParticipantArmorClass(target.armorClass, {
+                participantId: target.id,
+                encounterId,
+              }),
+              weapon,
+              attackerConditions,
+              targetConditions: targetConditions.get(target.id) ?? [],
+              geometry:
+                map && mapActor && targetEntity
+                  ? {
+                      distanceFeet: getDistance(mapActor, targetEntity),
+                      hasLineOfSight: checkLineOfSight(map, actor.id, target.id),
+                      cover: getCover(map, actor.id, target.id),
+                    }
+                  : undefined,
+            });
+            return { targetId: target.id, legal: rules.legal, refusal: rules.refusal };
+          }),
+        { canCloseDistance },
       ),
     );
     actions.push(
