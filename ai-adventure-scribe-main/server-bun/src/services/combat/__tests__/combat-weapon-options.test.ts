@@ -458,4 +458,39 @@ describe('combat weapon option builder', () => {
       false,
     );
   });
+
+  test('canCloseDistance gates the move-closer-first offer per target (#259)', () => {
+    const longsword = profileFor('longsword');
+    const outOfRange = () => [
+      { targetId: 'hostile-1', legal: false, refusal: 'out_of_range' as const },
+    ];
+
+    // No gate: the old behavior, offered.
+    expect(buildCombatWeaponOptions([longsword], outOfRange).map((option) => option.label)).toEqual(
+      ['Attack with Longsword (move closer first)'],
+    );
+
+    // Gate open: offered.
+    expect(
+      buildCombatWeaponOptions([longsword], outOfRange, {
+        canCloseDistance: () => true,
+      }).map((option) => option.label),
+    ).toEqual(['Attack with Longsword (move closer first)']);
+
+    // Gate closed: the out-of-range melee target is not offered at all — no empty chip,
+    // so the menu cannot loop "no attack was rolled".
+    expect(
+      buildCombatWeaponOptions([longsword], outOfRange, {
+        canCloseDistance: () => false,
+      }),
+    ).toEqual([]);
+
+    // Legal targets are unaffected by the gate.
+    const legal = () => [{ targetId: 'hostile-1', legal: true, refusal: undefined }];
+    expect(
+      buildCombatWeaponOptions([longsword], legal, {
+        canCloseDistance: () => false,
+      }).map((option) => option.label),
+    ).toEqual(['Attack with Longsword']);
+  });
 });

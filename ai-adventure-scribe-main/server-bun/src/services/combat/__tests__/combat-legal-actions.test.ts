@@ -183,6 +183,7 @@ describe('getLegalCombatActions', () => {
   test('offers the carried melee weapon at range with a move-closer hint', async () => {
     map.entities[0].x = 0;
     map.entities[0].y = 0;
+    map.entities[0].movementRemaining = 30;
     map.entities[1].x = 6;
     map.entities[1].y = 0;
 
@@ -195,6 +196,25 @@ describe('getLegalCombatActions', () => {
         targetIds: ['monster-1'],
       }),
     );
+  });
+
+  test('does not offer move-closer-first when no movement remains (#259)', async () => {
+    // The 15 ft loop: with no movement left the engine answers every "(move closer first)"
+    // attempt with the identical "no attack was rolled", and the non-spending movement_only
+    // never advances the turn. The option is not offered instead.
+    map.entities[0].x = 0;
+    map.entities[0].y = 0;
+    map.entities[0].movementRemaining = 0;
+    map.entities[1].x = 3;
+    map.entities[1].y = 0;
+
+    const result = await getLegalCombatActions('encounter-1', 'user-1');
+    const labels = result.actions.map((action) => action.label);
+
+    expect(labels).not.toContain('Attack with Quarterstaff (move closer first)');
+    // The turn is not a dead end: Dash, Dodge and End turn are still offered.
+    expect(labels).toContain('Dash');
+    expect(labels).toContain('End turn');
   });
 
   test('plans Move toward the nearest hostile without spending the Action', async () => {
@@ -259,6 +279,7 @@ describe('getLegalCombatActions', () => {
     ];
     map.entities[0].x = 0;
     map.entities[0].y = 0;
+    map.entities[0].movementRemaining = 30;
     map.entities[1].x = 6;
     map.entities[1].y = 0;
 
@@ -277,6 +298,13 @@ describe('getLegalCombatActions', () => {
 
     expect(result.actions.some((action) => action.type === 'move')).toBe(false);
     expect(result.actions).toContainEqual({ type: 'end_turn', label: 'End turn' });
+    // #259: the spent approach also removes the "(move closer first)" attack — offering it
+    // would loop "no attack was rolled" with the turn never advancing.
+    expect(
+      result.actions.some(
+        (action) => action.type === 'attack' && String(action.label).includes('move closer first'),
+      ),
+    ).toBe(false);
   });
 
   test("suggests one cast per spell on the character's own list, never one they lack (#2343 A3)", async () => {
