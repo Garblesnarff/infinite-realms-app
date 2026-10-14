@@ -13,6 +13,7 @@ import { and, desc, eq } from 'drizzle-orm';
 
 import { db } from '../../../../db/client';
 import { characterConcentration, characterStats } from '../../../../db/schema/index';
+import { abilityModifier } from '../../../../shared/ability-modifier.js';
 import { rollD20 } from '../../lib/dice.js';
 
 export interface ConcentrationState {
@@ -110,7 +111,8 @@ async function constitutionModifier(characterId: string): Promise<number> {
     .where(eq(characterStats.characterId, characterId))
     .orderBy(desc(characterStats.createdAt))
     .limit(1);
-  return Math.floor(((row?.constitution ?? 10) - 10) / 2);
+  // One owner for the modifier rule (#616): shared/ability-modifier.ts.
+  return abilityModifier(row?.constitution ?? 10);
 }
 
 /** Player-facing line for a broken concentration, in the engine-lines style. */
