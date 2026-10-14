@@ -12,9 +12,7 @@ import type { ReactionOpportunity, CombatParticipant } from '@/types/combat';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { useCombatActionHandlers } from '@/hooks/combat/use-combat-action-handlers';
-import { useCombatAIIntegration } from '@/hooks/use-combat-ai-integration';
 import { useCombatMechanics } from '@/hooks/use-combat-mechanics';
-import { useGameSession } from '@/hooks/use-game-session';
 
 export const useCombatActions = (_isDM: boolean = false) => {
   const {
@@ -28,13 +26,7 @@ export const useCombatActions = (_isDM: boolean = false) => {
     updateParticipant,
   } = useCombat();
 
-  const { sessionId } = useGameSession();
   const { state: characterState } = useCharacter();
-  const { validateCombatAction } = useCombatAIIntegration({
-    sessionId: sessionId ?? undefined,
-    characterId: characterState.character?.id,
-    campaignId: undefined, // Will be passed from parent if needed
-  });
 
   const { activeEncounter, isInCombat, showInitiativeTracker = false } = state;
 
@@ -148,7 +140,6 @@ export const useCombatActions = (_isDM: boolean = false) => {
     takeAction,
     updateParticipant,
     nextTurn,
-    validateCombatAction,
     selectedEnemy,
   });
 

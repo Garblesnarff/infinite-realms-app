@@ -8,14 +8,12 @@
 
 import { useCallback } from 'react';
 
-import type { CombatEvent, CombatAction, CombatParticipant, CombatEncounter } from '@/types/combat';
+import type { CombatEvent, CombatEncounter } from '@/types/combat';
 import type { CombatMessageData } from '@/utils/combat/ai-narration-utils';
 import type { DetectedCombatAction } from '@/utils/combatDetection';
 
 import { useCombat } from '@/contexts/CombatContext';
 import { useCombatDetection } from '@/hooks/combat/use-combat-detection';
-import { logger } from '@/lib/logger';
-import { callEdgeFunction } from '@/utils/edgeFunctionHandler';
 
 // Re-export types and constants for backward compatibility
 export type { CombatMessageData };
@@ -28,10 +26,6 @@ interface CombatAIIntegrationProps {
 }
 
 export interface UseCombatAIIntegrationReturn {
-  validateCombatAction: (
-    action: Partial<CombatAction>,
-    participant: CombatParticipant,
-  ) => Promise<{ isValid: boolean; suggestions: string[]; errors: string[] }>;
   processCombatEvent: (event: CombatEvent) => Promise<void>;
   createCombatActionRoll: (action: DetectedCombatAction) => Promise<CombatMessageData | null>;
   isInCombat: boolean;
@@ -54,53 +48,7 @@ export const useCombatAIIntegration = (
   // Kept as a compatibility no-op while the retired combat-event narration path is removed.
   const processCombatEvent = useCallback(async (_event: CombatEvent) => undefined, []);
 
-  // Validate combat action with the still-supported rules compatibility call.
-  const validateCombatAction = useCallback(
-    async (
-      action: Partial<CombatAction>,
-      participant: CombatParticipant,
-    ): Promise<{ isValid: boolean; suggestions: string[]; errors: string[] }> => {
-      try {
-        const validation = await callEdgeFunction<{
-          isValid?: boolean;
-          suggestions?: string[];
-          errors?: string[];
-        }>('rules-interpreter-execute', {
-          task: {
-            id: `combat_validation_${Date.now()}`,
-            description: `Validate ${action.actionType} action for ${participant.name}`,
-            expectedOutput: 'Combat action validation result',
-            context: {
-              ruleType: 'combat',
-              data: {
-                action,
-                participant,
-                encounter: state.activeEncounter,
-              },
-            },
-          },
-          agentContext: {
-            role: 'Rules Interpreter',
-            goal: 'Validate combat action according to D&D 5e rules',
-            backstory: 'Expert in D&D 5e combat mechanics',
-          },
-        });
-
-        return {
-          isValid: validation?.isValid ?? true,
-          suggestions: validation?.suggestions ?? [],
-          errors: validation?.errors ?? [],
-        };
-      } catch (error) {
-        logger.error('Error validating combat action:', error);
-        return { isValid: true, suggestions: [], errors: [] };
-      }
-    },
-    [state.activeEncounter],
-  );
-
   return {
-    validateCombatAction,
     processCombatEvent,
     createCombatActionRoll,
     isInCombat: state.isInCombat,

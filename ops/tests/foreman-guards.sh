@@ -83,5 +83,44 @@ got=$(jq -r --arg repo Garblesnarff/infinite-realms-app --arg pfx catjam/446- "$
 got=$(jq -r --arg repo Garblesnarff/infinite-realms-app --arg pfx catjam/999- "$CATJAM_PR_JQ" <<< "$pulls")
 [ -z "$got" ] && ok "catjam PR: none -> empty" || bad "catjam PR none: got '$got'"
 
+# ---- runner prompt: early-exit awk on a large input (pilot dry run, #586) ---
+# worker_rules piped `git show` into an awk that exits at the ops heading; under
+# pipefail the producer died of SIGPIPE and set -e ended the job (dry run #446).
+git -C "$TMP" init -q --bare mirror.git
+git -C "$TMP" init -q src
+{ echo "# Worker rules"; echo "rule one"; echo "# Hetzner (ops) rules";
+  for i in $(seq 1 20000); do echo "ops filler line $i padding padding padding"; done; } > "$TMP/src/AGENTS.md"
+git -C "$TMP/src" add AGENTS.md
+git -C "$TMP/src" -c user.name=t -c user.email=t@t commit -qm agents
+git -C "$TMP/src" push -q "$TMP/mirror.git" HEAD:refs/remotes/origin/main
+MIRROR=$TMP/mirror.git
+old_rc=0
+( set -e; git --git-dir="$MIRROR" show origin/main:AGENTS.md | awk '/^# Worker rules/{f=1} /^# Hetzner \(ops\) rules/{exit} f' > /dev/null ) || old_rc=$?
+echo "     (old worker_rules pipeline exit: $old_rc)"
+# Run in a fresh bash: set -e is ignored inside `x=$(...) || ...` in this shell.
+FUNCS=$TMP/runner-funcs.sh
+sed -n '/^issue_task() {/,/^}/p; /^worker_rules() {/,/^}/p' "$HERE/../foreman/catjam-runner.sh" > "$FUNCS"
+rc=0
+MIRROR=$MIRROR bash -euo pipefail -c '. "$1"; worker_rules; echo END' _ "$FUNCS" > "$TMP/wr.out" || rc=$?
+got=$(cat "$TMP/wr.out"); [ "$rc" = 0 ] || got="rc=$rc"
+[ "$got" = $'# Worker rules\nrule one\nEND' ] && ok "worker_rules: completes under set -e on a big AGENTS.md" || bad "worker_rules: got '${got:0:80}'"
+
+{ echo "intro"; echo "## Task"; echo "do the thing"; echo "## Notes";
+  for i in $(seq 1 20000); do echo "note filler $i padding padding padding"; done; } > "$TMP/issue-body.txt"
+rc=0
+BODY_FILE=$TMP/issue-body.txt REPO=x/y bash -euo pipefail -c '
+  gh() { case "$*" in *.title*) echo "Fix it" ;; *) cat "$BODY_FILE" ;; esac; }
+  . "$1"; issue_task 7; echo END' _ "$FUNCS" > "$TMP/it.out" || rc=$?
+got=$(cat "$TMP/it.out"); [ "$rc" = 0 ] || got="rc=$rc"
+[ "$got" = $'## Issue #7: Fix it\n\ndo the thing\nEND' ] && ok "issue_task: ## Task section of a big body under set -e" || bad "issue_task: got '${got:0:80}'"
+
+# ---- reviewer: dry-run rows do not count as attempts -----------------------
+eval "$(grep -E '^attempts\(\)' "$HERE/../foreman/review.sh")"
+LEDGER=$TMP/spend.log
+printf '%s\n' "t 2026-10-14 pr=5 0.10 sha=abcdef12 dry-run-verdict" "t 2026-10-14 pr=5 0.10 sha=abcdef12 dry-run-claude-failed" \
+  "t 2026-10-14 pr=5 0.20 sha=abcdef12 posted-PASS" > "$LEDGER"
+got=$(attempts 5 abcdef12)
+[ "$got" = 1 ] && ok "attempts: dry-run rows are not attempts (got $got)" || bad "attempts: got '$got', want 1"
+
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]

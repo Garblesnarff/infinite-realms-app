@@ -12,10 +12,6 @@ vi.mock('@/contexts/CombatContext', () => ({
   useCombat: vi.fn(),
 }));
 
-vi.mock('@/hooks/use-combat-ai-integration', () => ({
-  useCombatAIIntegration: vi.fn(),
-}));
-
 vi.mock('@/hooks/use-combat-mechanics', () => ({
   useCombatMechanics: vi.fn(() => ({
     showAdvantageModal: false,
@@ -29,10 +25,6 @@ vi.mock('@/hooks/use-combat-mechanics', () => ({
     handleConcentrationSave: vi.fn(),
     handleTwoWeaponAttack: vi.fn(),
   })),
-}));
-
-vi.mock('@/hooks/use-game-session', () => ({
-  useGameSession: vi.fn(),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -55,8 +47,6 @@ import { useCombatActions } from '../use-combat-actions';
 
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
-import { useCombatAIIntegration } from '@/hooks/use-combat-ai-integration';
-import { useGameSession } from '@/hooks/use-game-session';
 import { processReactionResponse } from '@/utils/reactionSystem';
 import { checkConcentration } from '@/utils/spell-management';
 
@@ -67,7 +57,6 @@ describe('useCombatActions', () => {
   const mockTakeAction = vi.fn();
   const mockAddParticipant = vi.fn();
   const mockUpdateParticipant = vi.fn();
-  const mockValidateCombatAction = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -93,15 +82,6 @@ describe('useCombatActions', () => {
       },
     } as any);
 
-    vi.mocked(useGameSession).mockReturnValue({
-      sessionId: 'session-123',
-    } as any);
-
-    vi.mocked(useCombatAIIntegration).mockReturnValue({
-      validateCombatAction: mockValidateCombatAction,
-    } as any);
-
-    mockValidateCombatAction.mockResolvedValue({ isValid: true, suggestions: [], errors: [] });
     vi.mocked(checkConcentration).mockReturnValue(true);
   });
 
@@ -421,31 +401,14 @@ describe('useCombatActions', () => {
       } as any);
     });
 
-    it('should execute action if validation passes', async () => {
+    it('should execute action', async () => {
       const { result } = renderHook(() => useCombatActions());
 
       await act(async () => {
         await result.current.handleCombatAction('attack', 'p1', 'target-1');
       });
 
-      expect(mockValidateCombatAction).toHaveBeenCalled();
       expect(mockTakeAction).toHaveBeenCalled();
-    });
-
-    it('should not execute action if validation fails', async () => {
-      mockValidateCombatAction.mockResolvedValue({
-        isValid: false,
-        suggestions: [],
-        errors: ['No movement left'],
-      });
-      const { result } = renderHook(() => useCombatActions());
-
-      await act(async () => {
-        await result.current.handleCombatAction('attack', 'p1', 'target-1');
-      });
-
-      expect(mockTakeAction).not.toHaveBeenCalled();
-      expect(result.current.actionValidation?.isValid).toBe(false);
     });
 
     it('should not execute if participant not found', async () => {
@@ -471,17 +434,6 @@ describe('useCombatActions', () => {
       });
 
       expect(mockTakeAction).not.toHaveBeenCalled();
-    });
-
-    it('should proceed with action if validation throws', async () => {
-      mockValidateCombatAction.mockRejectedValue(new Error('Validation failed'));
-      const { result } = renderHook(() => useCombatActions());
-
-      await act(async () => {
-        await result.current.handleCombatAction('attack', 'p1', 'target-1');
-      });
-
-      expect(mockTakeAction).toHaveBeenCalled();
     });
   });
 
