@@ -75,25 +75,53 @@ describe('NPCRollHandler', () => {
               actor: 'Goblin',
               hitOrMiss: 'HIT'
             })
-          ])
-        }),
-        sessionId
-      }));
+           ])
+         })
+       }));
     });
 
-    it('should handle result.response fallback from AIService', async () => {
-      const rolls: any[] = [
-        {
-          request: { purpose: 'test', type: 'check' },
-          result: { total: 10, rolls: [] }
-        }
-      ];
+     it('keeps memory off for a roll continuation and sends no ignored fields (#545)', async () => {
+       const rolls: any[] = [
+         {
+           request: {
+             actorName: 'Goblin',
+             purpose: 'attacks the Fighter',
+             type: 'attack',
+             formula: '1d20+4',
+             ac: 15
+           },
+           result: {
+             total: 18,
+             naturalRoll: 14,
+             rolls: [{ dice: 20, value: 14 }],
+             critical: false
+           }
+         }
+       ];
 
-      (AIService.chatWithDM as any).mockResolvedValue({ response: 'Response text' });
+       (AIService.chatWithDM as any).mockResolvedValue({ text: 'ok' });
 
-      const result = await continueNarrativeWithNPCRolls(rolls, mockAiContext, sessionId);
-      expect(result.narrative).toBe('Response text');
-    });
+       await continueNarrativeWithNPCRolls(rolls, mockAiContext, sessionId);
+
+       const call = (AIService.chatWithDM as any).mock.calls[0][0];
+       expect(call.relevantMemories).toEqual([]);
+       expect(call).not.toHaveProperty('sessionId');
+       expect(call).not.toHaveProperty('options');
+     });
+
+     it('ignores a legacy result.response field (AIResponse has no such field)', async () => {
+       const rolls: any[] = [
+         {
+           request: { purpose: 'test', type: 'check' },
+           result: { total: 10, rolls: [] }
+         }
+       ];
+
+       (AIService.chatWithDM as any).mockResolvedValue({ response: 'Response text' });
+
+       const result = await continueNarrativeWithNPCRolls(rolls, mockAiContext, sessionId);
+       expect(result.narrative).toBe('');
+     });
 
     it('should handle missing actor name and natural roll in prompt generation', async () => {
       const rolls: any[] = [
