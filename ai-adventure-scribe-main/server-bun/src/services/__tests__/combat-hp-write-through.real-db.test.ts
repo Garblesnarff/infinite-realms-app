@@ -18,6 +18,7 @@ import {
   campaigns,
   characterStats,
   characters,
+  combatDamageLog,
   combatEncounters,
   combatParticipantStatus,
   combatParticipants,
@@ -110,6 +111,9 @@ describeWithDb('combat damage reaches the character record', () => {
   /** Both rows back to full health, so each test starts from the state combat seeding produces. */
   beforeEach(async () => {
     if (!hasRealDb) return;
+    // Every applyDamage writes a combat_damage_log row, and the suite shares one encounter:
+    // without this, earlier tests' rows accumulate and pollute per-test aggregations (#570).
+    await db.delete(combatDamageLog).where(eq(combatDamageLog.encounterId, encounterId));
     await db
       .update(combatParticipantStatus)
       .set({
@@ -380,5 +384,54 @@ describeWithDb('combat damage reaches the character record', () => {
     // divergence this PR exists to remove, pointing the other way.
     expect((await sheet()).currentHitPoints).toBe(MAX_HP);
     expect((await participant(heroId)).currentHp).toBe(MAX_HP);
+  });
+
+  it('aggregates per-participant damage for the combat summary (#570)', async () => {
+    const { CombatHPService } = await import('../combat-hp-service.js');
+    const { getCombatDamageSummary } = await import('../combat/combat-damage-summary.js');
+
+    // The hero hits the goblin for 7 fire; the goblin hits the hero for 3 piercing.
+    // Both write combat_damage_log rows carrying their source participant.
+    await CombatHPService.applyDamage(
+      goblinId,
+      encounterId,
+      {
+        damageAmount: 7,
+        damageType: 'fire',
+        sourceParticipantId: heroId,
+        sourceDescription: 'fire bolt',
+      },
+      userId,
+    );
+    await CombatHPService.applyDamage(
+      heroId,
+      encounterId,
+      {
+        damageAmount: 3,
+        damageType: 'piercing',
+        sourceParticipantId: goblinId,
+        sourceDescription: 'scimitar',
+      },
+      userId,
+    );
+
+    const summary = await getCombatDamageSummary(encounterId, userId);
+
+    expect(summary.encounterId).toBe(encounterId);
+    expect(summary.rounds).toBe(1);
+    expect(summary.totalDamage).toBe(10);
+    expect(summary.participants).toHaveLength(2);
+    expect(summary.participants.find((p) => p.participantId === heroId)).toMatchObject({
+      name: 'The Seeker',
+      damageDealt: 7,
+      damageTaken: 3,
+      status: 'ok',
+    });
+    expect(summary.participants.find((p) => p.participantId === goblinId)).toMatchObject({
+      name: 'Goblin',
+      damageDealt: 3,
+      damageTaken: 7,
+      status: 'ok',
+    });
   });
 });

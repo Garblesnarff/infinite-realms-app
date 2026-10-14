@@ -3,10 +3,83 @@ import React from 'react';
 import type { CombatEncounter } from '@/types/combat-encounter';
 import type { ChatMessage } from '@/types/game';
 
+import { getAuthHeaders } from '@/services/auth/TokenService';
 import { combatMessageEndedCombat } from '@/utils/combat-engine-blocks';
 
 /** Posts the summary anyway if this fight's terminal DM message never arrives. */
 export const COMBAT_SUMMARY_FALLBACK_MS = 15_000;
+
+/** The server damage-summary fetch must not hold the summary hostage. */
+export const COMBAT_DAMAGE_SUMMARY_TIMEOUT_MS = 8_000;
+
+const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
+
+/**
+ * The wire shape of `GET /v1/combat/:encounterId/damage-summary`, aggregated server-side
+ * from `combat_damage_log` (#570). The client's in-memory encounter cannot produce these
+ * numbers for a server-driven fight: authoritative encounters map `actions: []`, and the
+ * final HP state is discarded when the server ends the fight in the same read as the
+ * killing blow.
+ */
+export interface ServerDamageSummaryParticipant {
+  participantId: string;
+  name: string;
+  damageDealt: number;
+  damageTaken: number;
+  status: 'dead' | 'unconscious' | 'ok';
+}
+
+export interface ServerDamageSummary {
+  encounterId: string;
+  rounds: number;
+  totalDamage: number;
+  participants: ServerDamageSummaryParticipant[];
+}
+
+export async function fetchCombatDamageSummary(
+  encounterId: string,
+): Promise<ServerDamageSummary> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), COMBAT_DAMAGE_SUMMARY_TIMEOUT_MS);
+  try {
+    const response = await fetch(
+      `${apiBase}/v1/combat/${encodeURIComponent(encounterId)}/damage-summary`,
+      { headers: getAuthHeaders(), signal: controller.signal },
+    );
+    if (!response.ok) throw new Error(`damage-summary ${response.status}`);
+    const body = (await response.json()) as { summary?: ServerDamageSummary };
+    if (!body.summary) throw new Error('damage-summary missing summary');
+    return body.summary;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/** The CombatSummaryMessage card shape, from a server damage summary. */
+export function buildCombatSummaryMessageFromServer(
+  summary: ServerDamageSummary,
+): ChatMessage {
+  return {
+    text: 'Combat has ended.',
+    sender: 'system',
+    context: {
+      combatData: {
+        type: 'summary',
+        summary: {
+          rounds: summary.rounds,
+          totalDamage: summary.totalDamage,
+          participants: summary.participants.map((p) => ({
+            name: p.name,
+            damageDealt: p.damageDealt,
+            damageTaken: p.damageTaken,
+            status: p.status,
+          })),
+          outcome: 'Combat concluded',
+        },
+      },
+    },
+  };
+}
 
 interface DeferredCombatSummaryParams {
   isInCombat: boolean;
@@ -57,6 +130,32 @@ export function buildCombatSummaryMessage(
 }
 
 /**
+ * Posts the summary for an ended encounter. A server-driven fight fetches the real damage
+ * totals from the server (#570); anything else — a local manual-combat encounter, or a
+ * failed or timed-out fetch — falls back to the in-memory encounter build.
+ */
+async function postCombatSummary(
+  encounter: CombatEncounter | null | undefined,
+  sendMessage: (message: ChatMessage) => unknown,
+): Promise<void> {
+  if (encounter?.origin === 'server' && encounter.id) {
+    let summary: ServerDamageSummary | undefined;
+    try {
+      summary = await fetchCombatDamageSummary(encounter.id);
+    } catch {
+      // Fall through to the in-memory build below.
+    }
+    if (summary) {
+      // The send stays outside the try: a throwing sendMessage after a good fetch must
+      // not fall through and post the in-memory summary a second time.
+      await sendMessage(buildCombatSummaryMessageFromServer(summary));
+      return;
+    }
+  }
+  await sendMessage(buildCombatSummaryMessage(encounter));
+}
+
+/**
  * "Combat has ended." is held until THIS fight's terminal DM message is in the transcript, so the
  * killing HIT reads before the summary (#2127).
  *
@@ -93,7 +192,7 @@ export function useDeferredCombatSummary({
     const pending = pendingRef.current;
     if (!pending) return;
     pendingRef.current = null;
-    void sendMessageRef.current(buildCombatSummaryMessage(pending.encounter));
+    void postCombatSummary(pending.encounter, sendMessageRef.current);
   }, []);
 
   React.useEffect(() => {

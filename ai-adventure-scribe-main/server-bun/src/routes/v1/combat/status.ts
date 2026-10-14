@@ -11,6 +11,7 @@ import {
 import { AppError } from '../../../lib/errors.js';
 import { logger } from '../../../lib/logger.js';
 import { requireAuth } from '../../../middleware/auth.js';
+import { getCombatDamageSummary } from '../../../services/combat/combat-damage-summary.js';
 import { ConditionQueryService } from '../../../services/conditions/condition-query-service.js';
 import { ConditionsService } from '../../../services/conditions-service.js';
 
@@ -243,6 +244,22 @@ export const statusRoutes = new Elysia()
     } catch (e) {
       logger.error({ msg: 'Get active conditions error', error: e });
       return mapCombatError(set, e, 'Failed to get active conditions', 'Encounter not found');
+    }
+  })
+
+  /**
+   * GET /v1/combat/:encounterId/damage-summary
+   * End-of-combat damage totals for the Combat Summary card (#570), aggregated from
+   * combat_damage_log. Encounter ownership is enforced by the resolve/onBeforeHandle
+   * above and again inside getCombatDamageSummary.
+   */
+  .get('/:encounterId/damage-summary', async ({ params, set, user }) => {
+    try {
+      const summary = await getCombatDamageSummary(params.encounterId, user!.userId);
+      return { success: true, summary };
+    } catch (e) {
+      logger.error({ msg: 'Get damage summary error', error: e });
+      return mapCombatError(set, e, 'Failed to get damage summary', 'Encounter not found');
     }
   })
 

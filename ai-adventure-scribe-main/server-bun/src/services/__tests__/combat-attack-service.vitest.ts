@@ -466,6 +466,188 @@ describe('CombatAttackService', () => {
       expect(result).not.toHaveProperty('deathSavesFailures');
     });
 
+    it('omits the instant-death fields for an NPC target killed by massive damage (#570)', async () => {
+      // Producer: HPMechanics.calculateDamageResult sets massiveDamage/overflow/hpMaximum
+      // when the overflow reaches the target's maximum. The player-only gate in
+      // deathSaveFailureFields must strip those fields for NPC targets too, or
+      // damageAtZeroHpPart prints the player-worded massive-damage sentence and FAILED
+      // card for a monster ("takes massive damage: 9 damage remains after 0 HP ...").
+      vi.mocked(CombatHPService.applyDamage).mockResolvedValue({
+        damageDealt: 17,
+        newCurrentHp: 0,
+        isConscious: false,
+        isDead: true,
+        massiveDamage: true,
+        overflow: 9,
+        hpMaximum: 8,
+        deathSaveFailuresAdded: 0,
+        newDeathSavesFailures: 0,
+      } as any);
+
+      const mockEncounterId = 'enc-123';
+      const mockTargetId = 'target-123';
+      const mockAttackerId = 'attacker-123';
+
+      (db.select as any)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          leftJoin: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([
+            {
+              participant: {
+                id: mockTargetId,
+                name: 'The Silent Monk 1',
+                armorClass: 15,
+                participantType: 'npc',
+                damageImmunities: [],
+                damageResistances: [],
+                damageVulnerabilities: [],
+              },
+              stats: { armorClass: 15 },
+              status: {
+                currentHp: 0,
+                maxHp: 8,
+                tempHp: 0,
+                isConscious: false,
+                deathSavesFailures: 0,
+              },
+              encounter: { currentRound: 1, sessionId: 'session-123' },
+            },
+            {
+              participant: { id: mockAttackerId, armorClass: 10, participantType: 'player' },
+              stats: null,
+              status: null,
+              encounter: {},
+            },
+          ]),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([]),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([]),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          orderBy: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue([]),
+        })
+        .mockReturnValueOnce(statusRead(true)) // attacker: getActiveConditionNames reads its status row
+        .mockReturnValueOnce(statusRead(false)); // target
+
+      const result = await service.resolveAttack(
+        mockEncounterId,
+        {
+          attackerId: mockAttackerId,
+          expectedVersion: 1,
+          targetId: mockTargetId,
+          attackType: 'melee',
+        },
+        mockUserId,
+      );
+
+      expect(result.hit).toBe(true);
+      // The gate: massive damage on an NPC target must not carry the player-worded fields.
+      expect(result).not.toHaveProperty('instantDeath');
+      expect(result).not.toHaveProperty('damageOverflow');
+      expect(result).not.toHaveProperty('hpMaximum');
+    });
+
+    it('sets the instant-death fields for a player target killed by massive damage (#570)', async () => {
+      // The same massive-damage verdict on a player target keeps the fields, so the
+      // engine line can state the numbers (#2640) and the DM is told what happened.
+      vi.mocked(CombatHPService.applyDamage).mockResolvedValue({
+        damageDealt: 17,
+        newCurrentHp: 0,
+        isConscious: false,
+        isDead: true,
+        massiveDamage: true,
+        overflow: 9,
+        hpMaximum: 8,
+        deathSaveFailuresAdded: 0,
+        newDeathSavesFailures: 3,
+      } as any);
+
+      const mockEncounterId = 'enc-123';
+      const mockTargetId = 'target-123';
+      const mockAttackerId = 'attacker-123';
+
+      (db.select as any)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          leftJoin: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([
+            {
+              participant: {
+                id: mockTargetId,
+                name: 'The Professor',
+                armorClass: 15,
+                participantType: 'player',
+                damageImmunities: [],
+                damageResistances: [],
+                damageVulnerabilities: [],
+              },
+              stats: { armorClass: 15 },
+              status: {
+                currentHp: 0,
+                maxHp: 8,
+                tempHp: 0,
+                isConscious: false,
+                deathSavesFailures: 0,
+              },
+              encounter: { currentRound: 1, sessionId: 'session-123' },
+            },
+            {
+              participant: { id: mockAttackerId, armorClass: 10, participantType: 'npc' },
+              stats: null,
+              status: null,
+              encounter: {},
+            },
+          ]),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([]),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([]),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          orderBy: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue([]),
+        })
+        .mockReturnValueOnce(statusRead(true)) // attacker: getActiveConditionNames reads its status row
+        .mockReturnValueOnce(statusRead(false)); // target
+
+      const result = await service.resolveAttack(
+        mockEncounterId,
+        {
+          attackerId: mockAttackerId,
+          expectedVersion: 1,
+          targetId: mockTargetId,
+          attackType: 'melee',
+        },
+        mockUserId,
+      );
+
+      expect(result.hit).toBe(true);
+      expect(result.instantDeath).toBe(true);
+      expect(result.damageOverflow).toBe(9);
+      expect(result.hpMaximum).toBe(8);
+    });
+
     it('omits the death-save failure fields when no failures were added (#2457)', async () => {
       // The beforeEach applyDamage mock returns no death-save failure fields, so the
       // result must not carry the keys at all rather than zero-valued placeholders.
