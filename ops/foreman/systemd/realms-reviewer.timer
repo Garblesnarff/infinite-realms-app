@@ -1,0 +1,9 @@
+[Unit]
+Description=realms-reviewer hourly at :50 UTC; the 11:50Z run posts the daily summary (#586)
+
+[Timer]
+OnCalendar=*-*-* *:50:00 UTC
+Persistent=false
+
+[Install]
+WantedBy=timers.target

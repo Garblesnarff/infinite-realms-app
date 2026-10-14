@@ -1,0 +1,23 @@
+# realms-reviewer (#586). Install: see ops/foreman/README.md.
+# Same container caps as the runner. Its own state dir; the runner's state is
+# mounted read-only for the daily summary's runner minutes. The runner's work
+# dir (model-written files) is never mounted here.
+[Unit]
+Description=Infinite Realms realms-reviewer (claude -p Sonnet reviewer + daily summary, #586)
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+Nice=10
+TimeoutStartSec=55min
+ExecStartPre=-/usr/bin/docker rm -f realms-reviewer
+ExecStart=/usr/bin/docker run --rm --init --name realms-reviewer \
+  --cpus 2 --memory 4g --memory-swap 4g --cpu-shares 256 --pids-limit 1024 \
+  --cap-drop ALL --cap-add CHOWN --cap-add DAC_OVERRIDE --cap-add FOWNER --cap-add SETUID --cap-add SETGID \
+  --security-opt no-new-privileges \
+  --env-file /etc/realms-foreman/env \
+  -v /var/lib/realms-foreman/reviewer:/work \
+  -v /var/lib/realms-foreman/runner/state:/runner-state:ro \
+  realms-foreman:pilot review.sh
+ExecStopPost=-/usr/bin/docker rm -f realms-reviewer
