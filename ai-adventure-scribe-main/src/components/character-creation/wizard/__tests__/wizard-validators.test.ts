@@ -125,4 +125,74 @@ describe('wizard validation messages (#213)', () => {
 
     expect(result).toEqual({ isValid: true, message: '' });
   });
+
+  it('accepts rolled scores below 8 when method is roll', () => {
+    const result = validateStep(
+      'Ability Scores',
+      abilityScoreSheet([15, 6, 12, 10, 13, 9], 'roll') as never,
+    );
+
+    expect(result).toEqual({ isValid: true, message: '' });
+  });
+
+  it('accepts the lowest rolled scores', () => {
+    const result = validateStep(
+      'Ability Scores',
+      abilityScoreSheet([18, 3, 3, 3, 3, 3], 'roll') as never,
+    );
+
+    expect(result).toEqual({ isValid: true, message: '' });
+  });
+
+  it('rejects a rolled score of 2', () => {
+    const result = validateStep(
+      'Ability Scores',
+      abilityScoreSheet([15, 2, 12, 10, 13, 9], 'roll') as never,
+    );
+
+    expect(result).toEqual({
+      isValid: false,
+      message: 'Please complete your ability score selection',
+    });
+  });
+
+  it('rejects a missing rolled score', () => {
+    const result = validateStep('Ability Scores', {
+      abilityScoreMethod: 'roll',
+      abilityScores: {
+        strength: { score: 15, modifier: 0, savingThrow: false },
+        dexterity: { score: 6, modifier: 0, savingThrow: false },
+        constitution: { score: 12, modifier: 0, savingThrow: false },
+        intelligence: { score: 10, modifier: 0, savingThrow: false },
+        wisdom: { score: 13, modifier: 0, savingThrow: false },
+      },
+      race: dwarf,
+    } as never);
+
+    expect(result).toEqual({
+      isValid: false,
+      message: 'Please complete your ability score selection',
+    });
+  });
+
+  it('rejects a point-buy score of 7 with the range message', () => {
+    const result = validateStep(
+      'Ability Scores',
+      abilityScoreSheet([7, 8, 8, 8, 8, 8], 'pointBuy') as never,
+    );
+
+    expect(result).toEqual({
+      isValid: false,
+      message: 'Ability Scores: Point Buy scores must be between 8 and 15',
+    });
+  });
+
+  it('accepts a draft with no method and a score below 8', () => {
+    const result = validateStep(
+      'Ability Scores',
+      abilityScoreSheet([16, 6, 12, 10, 13, 9]) as never,
+    );
+
+    expect(result).toEqual({ isValid: true, message: '' });
+  });
 });

@@ -18,6 +18,9 @@ import {
 } from '@/hooks/ability-score/use-point-buy-logic';
 import { getSpellcastingInfo, getRacialSpells } from '@/utils/spell-validation';
 
+// Lowest score a 4d6-drop-lowest roll can produce (1+1+1).
+const ROLLED_SCORE_MIN = 3;
+
 export interface ValidationResult {
   isValid: boolean;
   message: string;
@@ -88,7 +91,7 @@ function validateAbilityScores(character: Character): ValidationResult {
   ] as const;
   const abilityScores = character.abilityScores;
   const hasAllScores = abilities.every(
-    (ability) => (abilityScores?.[ability]?.score as number) >= 8,
+    (ability) => (abilityScores?.[ability]?.score as number) >= ROLLED_SCORE_MIN,
   );
   if (!hasAllScores) {
     return invalid('Please complete your ability score selection');
