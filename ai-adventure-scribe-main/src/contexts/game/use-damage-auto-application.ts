@@ -1,23 +1,20 @@
 import { useEffect, useRef } from 'react';
 
 import type { GameState } from './game-reducer';
-import type { CombatState, DamageType } from '@/types/combat';
 
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 
 /**
  * Custom hook to automatically apply damage from completed dice rolls to the player's HP.
- * This bridges the AI DM's damage requests with the combat HP system.
- *
- * Extracted from GameContext.tsx to reduce monolithic complexity.
+ * Damage always goes through the server (POST /v1/characters/:id/damage) — the client
+ * keeps no local HP copy (#621 Part A).
  */
 export const useDamageAutoApplication = (
   state: GameState,
-  combatState: CombatState,
-  dealDamage: (participantId: string, damage: number, damageType?: DamageType) => Promise<void>,
   characterId?: string | null,
-) => {
+  refreshCombatState?: () => Promise<void>,
+): void => {
   // Track which damage_taken rolls have been applied to prevent double-application
   const appliedDamageRollsRef = useRef<Set<string>>(new Set());
 
@@ -35,50 +32,39 @@ export const useDamageAutoApplication = (
         !appliedDamageRollsRef.current.has(roll.id),
     );
 
-    // Apply each damage roll
+    // Apply each damage roll via the server route, in combat and out
     completedDamageRolls.forEach(async (roll) => {
       const damageAmount = roll.result?.total || 0;
       if (damageAmount > 0) {
+        if (!characterId) {
+          logger.error(
+            `❌ Cannot apply damage_taken roll ${roll.id}: no characterId (damage of ${damageAmount} dropped)`,
+          );
+          return;
+        }
         logger.info(
-          `💔 Auto-applying damage_taken roll: ${damageAmount} ${roll.damageType || 'untyped'} damage to player`,
+          `💔 Auto-applying damage_taken roll: ${damageAmount} ${roll.damageType || 'untyped'} damage to player via server`,
         );
 
         // Mark as applied to prevent double-application
         appliedDamageRollsRef.current.add(roll.id);
 
-        // If in combat, apply via CombatContext
-        if (combatState.isInCombat && combatState.activeEncounter) {
-          // Find player participant
-          const playerParticipant = combatState.activeEncounter.participants.find(
-            (p) => p.participantType === 'player',
-          );
-          if (playerParticipant) {
-            logger.info(
-              `⚔️ Applying ${damageAmount} damage to ${playerParticipant.name} in combat via dealDamage`,
-            );
+        try {
+          await userDataApi.applyCharacterDamage(characterId, damageAmount, roll.damageType);
+          logger.info(`✅ Applied ${damageAmount} damage to character HP via server`);
+          // Refresh the combat tracker so it shows the new HP (#621 FIX).
+          if (refreshCombatState) {
             try {
-              await dealDamage(playerParticipant.id, damageAmount, roll.damageType);
-              logger.info(`✅ Damage applied successfully to ${playerParticipant.name}`);
-            } catch (error) {
-              logger.error(`❌ Failed to apply damage:`, error);
+              await refreshCombatState();
+            } catch (refreshError) {
+              logger.error('❌ Failed to refresh combat state after damage:', refreshError);
             }
           }
-        } else if (characterId) {
-          try {
-            await userDataApi.applyCharacterDamage(characterId, damageAmount);
-            logger.info(`✅ Applied ${damageAmount} out-of-combat damage to character HP`);
-          } catch (error) {
-            appliedDamageRollsRef.current.delete(roll.id);
-            logger.error('❌ Failed to persist out-of-combat damage:', error);
-          }
+        } catch (error) {
+          appliedDamageRollsRef.current.delete(roll.id);
+          logger.error('❌ Failed to persist damage:', error);
         }
       }
     });
-  }, [
-    state.diceRollQueue.pendingRolls,
-    combatState.isInCombat,
-    combatState.activeEncounter,
-    dealDamage,
-    characterId,
-  ]);
+  }, [state.diceRollQueue.pendingRolls, characterId]);
 };

@@ -32,22 +32,13 @@ import { and, eq, exists, or, sql } from 'drizzle-orm';
 import { HPMechanics } from './combat/hp-mechanics.js';
 import { db } from '../../../db/client';
 import { characterStats, characters } from '../../../db/schema/index';
+import { DEATH_SAVE_LIMIT } from '../../../shared/death-save-limit.js';
 
 import type { HPStatusInput } from './combat/hp-mechanics.js';
 import type { VitalState } from '../../../db/schema/index';
 
 /** The transaction handle Drizzle hands to `db.transaction`'s callback. */
 export type VitalsTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-/**
- * 5E: three failures kill, three successes stabilise.
- *
- * Spelled here rather than imported from `services/combat/death-saves-service.ts`, which owns
- * the same two thresholds: that module pulls in the encounter service and the initiative
- * service behind it, and this one has no business depending on the combat graph — combat
- * depends on it.
- */
-const DEATH_SAVE_LIMIT = 3;
 
 /** A character's full vital state, as read from or written to `character_stats`. */
 export interface CharacterVitals {
