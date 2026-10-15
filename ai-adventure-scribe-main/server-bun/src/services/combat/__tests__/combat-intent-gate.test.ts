@@ -51,13 +51,16 @@ describe('detectDeclaredAttack', () => {
     });
   });
 
-  it.each(['hit', 'strike'])('classifies a bare %s as an unarmed attack', (verb) => {
-    expect(detectDeclaredAttack(`${verb} Darkwater`, actors)).toMatchObject({
-      verb,
-      actorName: 'Professor Emil Darkwater',
-      attackSource: 'unarmed',
-    });
-  });
+  it.each(['hit', 'strike'])(
+    'classifies a bare %s as a weapon attack (generic verb, not a body part) (#569)',
+    (verb) => {
+      expect(detectDeclaredAttack(`${verb} Darkwater`, actors)).toMatchObject({
+        verb,
+        actorName: 'Professor Emil Darkwater',
+        attackSource: 'weapon',
+      });
+    },
+  );
 
   it('captures a trailing staff claim from a raw hit phrase', () => {
     expect(detectDeclaredAttack('hit him with my staff', soleActor)).toMatchObject({
@@ -91,13 +94,13 @@ describe('detectDeclaredAttack', () => {
     });
   });
 
-  it('keeps a raw strike without a weapon word unarmed', () => {
+  it('treats a raw strike without a weapon word as a weapon attack (#569)', () => {
     const attack = detectDeclaredAttack('I strike him', soleActor);
 
     expect(attack).toMatchObject({
       verb: 'strike',
       actorName: 'Professor Emil Darkwater',
-      attackSource: 'unarmed',
+      attackSource: 'weapon',
     });
     expect(attack).not.toHaveProperty('weaponName');
     expect(info).toHaveBeenCalledTimes(1);
