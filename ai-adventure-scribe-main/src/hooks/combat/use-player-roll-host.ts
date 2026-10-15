@@ -159,11 +159,13 @@ function unregisterSettler(rollId: string): void {
 export function settleCombatAttackRoll(
   rollId: string,
   d20: number | null,
-  options: { cancelled?: boolean } = {},
+  options: { cancelled?: boolean; d20Rolls?: [number, number] } = {},
 ): boolean {
   return settleCombatPlayerRoll(
     rollId,
-    options.cancelled ? { d20: null, cancelled: true } : { d20 },
+    options.cancelled
+      ? { d20: null, cancelled: true }
+      : { d20, ...(options.d20Rolls ? { d20Rolls: options.d20Rolls } : {}) },
   );
 }
 

@@ -96,6 +96,8 @@ export type CombatIntent =
       disadvantage?: boolean;
       /** The player's own attack die, when the popup rolled it. See `AttackRollInput`. */
       d20?: number;
+      /** Both popup dice `[kept, dropped]` when it rolled two for advantage/disadvantage (#263). */
+      d20Rolls?: [number, number];
     }
   | {
       type: 'spell';
@@ -106,6 +108,8 @@ export type CombatIntent =
       slotLevel?: number | null;
       /** The player's own attack die for attack-roll spells, when the popup rolled it. */
       d20?: number;
+      /** Both popup dice `[kept, dropped]` when it rolled two for advantage/disadvantage (#263). */
+      d20Rolls?: [number, number];
       expectedVersion: number;
     }
   | { type: 'dash' | 'dodge' | 'disengage'; actorId: string; expectedVersion: number }
@@ -1250,6 +1254,7 @@ export async function executeCombatIntent(
               advantage: intent.advantage,
               disadvantage: intent.disadvantage,
               providedD20: intent.d20,
+              providedD20Rolls: intent.d20Rolls,
             } satisfies AttackRollInput,
             userId,
           ),
@@ -1354,6 +1359,7 @@ export async function executeCombatIntent(
           spellName: intent.spellName,
           slotLevel: intent.slotLevel,
           d20: intent.d20,
+          d20Rolls: intent.d20Rolls,
           expectedVersion: intent.expectedVersion,
         } satisfies SpellAttackInput,
         userId,

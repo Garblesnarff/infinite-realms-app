@@ -32,6 +32,13 @@ const unversionedIntentVariants = [
   }),
 ];
 
+const dieFace = t.Number({ minimum: 1, maximum: 20 });
+/**
+ * Both dice the popup rolled for advantage/disadvantage, `[kept, dropped]`. Each face is
+ * bounded like `d20`: a body carrying a 40 is a malformed payload, not a lucky roll.
+ */
+const d20Pair = t.Optional(t.Tuple([dieFace, dieFace]));
+
 const attackFields = {
   type: t.Literal('attack'),
   actorId: participantId,
@@ -42,7 +49,10 @@ const attackFields = {
   disadvantage: t.Optional(t.Boolean()),
   // The player's own attack die. Bounded to a real d20 face here as well as in the service:
   // a body carrying `d20: 40` is a malformed payload, not a lucky roll.
-  d20: t.Optional(t.Number({ minimum: 1, maximum: 20 })),
+  d20: t.Optional(dieFace),
+  // The popup's dropped die, so the log can name both dice (#263 CB-028). Absent for a
+  // hand-entered die, which has no dropped face, and for engine rolls.
+  d20Rolls: d20Pair,
 };
 
 const spellFields = {
@@ -55,7 +65,9 @@ const spellFields = {
   slotLevel: t.Optional(t.Union([t.Number({ minimum: 1, maximum: 9 }), t.Null()])),
   // Like weapon attacks, spell-attack popups may supply the player's kept natural d20. Save
   // spells ignore this field; the resolver still owns save rolls, DCs, damage, and HP writes.
-  d20: t.Optional(t.Number({ minimum: 1, maximum: 20 })),
+  d20: t.Optional(dieFace),
+  // The popup's dropped die, so the log can name both dice (#263 CB-028).
+  d20Rolls: d20Pair,
 };
 
 const defensiveFields = {

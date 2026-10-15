@@ -227,6 +227,7 @@ const { executeStructuredCombatActionWithBoundary } = (await import(bridgeModule
     encounterId: string,
     action: Record<string, unknown>,
     providedD20?: number,
+    providedD20Rolls?: [number, number],
     origin?: string,
   ): Promise<{ result?: Record<string, any>; boundary: string | null }>;
 };
@@ -272,6 +273,7 @@ describe('the dying player’s death save through the client bridge and the real
       ENCOUNTER_ID,
       deathSaveAction,
       14,
+      undefined,
       'dice_roll',
     );
 
@@ -291,6 +293,7 @@ describe('the dying player’s death save through the client bridge and the real
     await executeStructuredCombatActionWithBoundary(
       ENCOUNTER_ID,
       deathSaveAction,
+      undefined,
       undefined,
       'dice_roll',
     );

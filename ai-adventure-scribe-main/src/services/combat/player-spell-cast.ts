@@ -19,6 +19,8 @@ export interface PlayerSpellCastParams {
 
 export interface PlayerSpellCastResult {
   d20?: number;
+  /** Both d20 faces `[kept, dropped]` when the spell popup rolled two (#263 CB-028). */
+  d20Rolls?: [number, number];
   autoRolled: boolean;
   movementOnly: boolean;
   /** The player cancelled on the target-saves card: nothing is sent to the engine. */
@@ -154,7 +156,7 @@ export async function askPlayerForSpellCast(
         ...(outcome.timedOut === true ? { timedOut: true } : {}),
       };
     }
-    return { d20: outcome.d20, autoRolled: false, movementOnly: false };
+    return { d20: outcome.d20, d20Rolls: outcome.d20Rolls, autoRolled: false, movementOnly: false };
   } catch (error) {
     logger.warn('[SpellAttack] popup failed; the engine rolls this spell', error);
     return { autoRolled: true, movementOnly: false };

@@ -60,6 +60,17 @@ describe('askPlayerForSpellCast', () => {
     expect(requestSpellTargetSave).not.toHaveBeenCalled();
   });
 
+  it('carries the spell popup’s dropped die with the kept one (#263 CB-028)', async () => {
+    vi.mocked(requestPlayerAttackRoll).mockResolvedValue({ d20: 8, d20Rolls: [8, 14] });
+
+    await expect(ask('fire-bolt')).resolves.toEqual({
+      d20: 8,
+      d20Rolls: [8, 14],
+      autoRolled: false,
+      movementOnly: false,
+    });
+  });
+
   it('opens a target-saves card for Acid Splash and does not ask for a player die', async () => {
     await expect(ask('acid-splash')).resolves.toEqual({ autoRolled: true, movementOnly: false });
     expect(requestSpellTargetSave).toHaveBeenCalledWith({

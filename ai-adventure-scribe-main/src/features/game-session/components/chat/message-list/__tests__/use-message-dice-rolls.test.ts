@@ -408,6 +408,52 @@ describe('useMessageDiceRolls', () => {
         expect.anything(),
       );
     });
+
+    it('hands both popup dice to the engine on a disadvantaged attack (#263 CB-028)', async () => {
+      // The animated popup rolled two dice (results [8, 14], kept 8). The engine settler owns
+      // this die, so the dropped face travels with the kept one instead of being discarded.
+      vi.mocked(settleCombatAttackRoll).mockReturnValue(true);
+      const attackRoll = { ...activeRoll, requestType: 'attack' };
+      mockUseGame.getCurrentDiceRoll.mockReturnValue(attackRoll);
+
+      const { result } = renderHook(() =>
+        useMessageDiceRolls({
+          onSendMessage: mockOnSendMessage,
+          onSendFullMessage: mockOnSendFullMessage,
+        }),
+      );
+
+      await act(async () => {
+        await result.current.handleManualResult(11, {
+          naturalRoll: 8,
+          results: [8, 14],
+          keptResults: [8],
+        });
+      });
+
+      expect(settleCombatAttackRoll).toHaveBeenCalledWith('roll-1', 8, { d20Rolls: [8, 14] });
+      expect(mockUseGame.completeDiceRoll).toHaveBeenCalled();
+    });
+
+    it('sends no pair for a hand-entered attack die (#263)', async () => {
+      // A typed number has no details and no dropped face: the engine gets the bare die.
+      vi.mocked(settleCombatAttackRoll).mockReturnValue(true);
+      const attackRoll = { ...activeRoll, requestType: 'attack' };
+      mockUseGame.getCurrentDiceRoll.mockReturnValue(attackRoll);
+
+      const { result } = renderHook(() =>
+        useMessageDiceRolls({
+          onSendMessage: mockOnSendMessage,
+          onSendFullMessage: mockOnSendFullMessage,
+        }),
+      );
+
+      await act(async () => {
+        await result.current.handleManualResult(18);
+      });
+
+      expect(settleCombatAttackRoll).toHaveBeenCalledWith('roll-1', 18, undefined);
+    });
   });
 
   describe('handleManualResult', () => {

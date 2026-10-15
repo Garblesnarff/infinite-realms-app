@@ -107,6 +107,7 @@ describe('player spell resolution', () => {
       'enc-1',
       spellAction('fire-bolt'),
       17,
+      undefined,
     );
     expect(askPlayerForAttackDie).not.toHaveBeenCalled();
     expect(result.text).toContain(
@@ -152,6 +153,7 @@ describe('player spell resolution', () => {
     expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledWith(
       'enc-1',
       spellAction('acid-splash'),
+      undefined,
       undefined,
     );
   });

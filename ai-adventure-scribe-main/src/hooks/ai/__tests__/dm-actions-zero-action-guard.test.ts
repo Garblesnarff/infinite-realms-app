@@ -106,6 +106,7 @@ describe('the zero-action guard inside the DM action pipeline', () => {
       'encounter-1',
       REPAIRED_ACTION,
       undefined,
+      undefined,
     );
   });
 
@@ -145,6 +146,7 @@ describe('the zero-action guard inside the DM action pipeline', () => {
     expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledWith(
       'encounter-1',
       REPAIRED_ACTION,
+      undefined,
       undefined,
     );
     expect(outcome.result.roll_requests ?? []).toEqual([]);
@@ -211,6 +213,7 @@ describe('the zero-action guard inside the DM action pipeline', () => {
       expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledWith(
         'encounter-1',
         REPAIRED_ACTION,
+        undefined,
         undefined,
       );
     });
