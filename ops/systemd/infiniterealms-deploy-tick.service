@@ -1,0 +1,11 @@
+[Unit]
+Description=InfiniteRealms 1-minute deploy tick (#663 item 2)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Runs from the deployed checkout; the script resolves repo/state paths itself.
+# systemd's minimal PATH already has git (/usr/bin); the script needs nothing
+# else on a quiet tick.
+ExecStart=/var/www/infiniterealms/ai-adventure-scribe-main/ops/auto-deploy-tick.sh
