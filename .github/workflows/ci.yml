@@ -157,8 +157,11 @@ jobs:
         run: cmp -s AGENTS.md ai-adventure-scribe-main/AGENTS.md
       - if: ${{ !cancelled() }}
         run: node scripts/security-lint.js
+      # gitleaks-action@v2 exits 1 on any event other than push, pull_request,
+      # workflow_dispatch and schedule, so a merge-queue run would always go
+      # red. The same commits were already scanned on their pull_request run.
       - name: Gitleaks scan
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event_name != 'merge_group' }}
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -250,7 +253,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           # `--changed origin/main` needs main's history; a plain run does not.
-          fetch-depth: ${{ (github.event_name == 'pull_request' && vars.CI_PR_CHANGED_ONLY == 'true') && 0 || 1 }}
+          # The values are strings on purpose: a bare 0 is falsy in Actions
+          # expressions, so `&& 0 || 1` would always give 1 (a shallow clone).
+          fetch-depth: ${{ (github.event_name == 'pull_request' && vars.CI_PR_CHANGED_ONLY == 'true') && '0' || '1' }}
+      # Changed-only mode fails closed if the checkout cannot see main.
+      - name: changed-only needs full history and origin/main
+        if: ${{ github.event_name == 'pull_request' && vars.CI_PR_CHANGED_ONLY == 'true' }}
+        working-directory: .
+        run: |
+          git rev-parse --is-shallow-repository
+          test "$(git rev-parse --is-shallow-repository)" = "false"
+          git rev-parse --verify origin/main
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       # Three timing-sensitive tests flaked at vitest's 5s default under CI load,
@@ -283,7 +296,7 @@ jobs:
   # (the run conclusion, the automerger, people) needs to change.
   frontend:
     needs: [changes, frontend-test, frontend-build]
-    if: ${{ always() && needs.changes.outputs.frontend == 'true' }}
+    if: ${{ !cancelled() && needs.changes.outputs.frontend == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
