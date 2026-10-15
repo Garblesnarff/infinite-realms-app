@@ -19,7 +19,7 @@ import type {
 /**
  * Conditions that include or supersede other conditions
  */
-export const CONDITION_HIERARCHY: Record<string, string[]> = {
+const CONDITION_HIERARCHY: Record<string, string[]> = {
   Paralyzed: ['Incapacitated'],
   Petrified: ['Incapacitated'],
   Stunned: ['Incapacitated'],
@@ -29,7 +29,7 @@ export const CONDITION_HIERARCHY: Record<string, string[]> = {
 /**
  * Mutually incompatible conditions
  */
-export const INCOMPATIBLE_CONDITIONS: Record<string, string[]> = {
+const INCOMPATIBLE_CONDITIONS: Record<string, string[]> = {
   Invisible: ['Blinded'], // Being invisible doesn't help if you're blind
   Prone: ['Flying'], // Can't be prone while flying
 };
