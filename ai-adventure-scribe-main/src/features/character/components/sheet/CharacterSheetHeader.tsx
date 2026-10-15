@@ -2,8 +2,8 @@ import { Heart, Play, Shield, Sword, Trash2 } from 'lucide-react';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import CampaignSelectionModal from '../list/campaign-selection-modal';
 import { ExportCharacterButton } from './ExportCharacterButton';
+import CampaignSelectionModal from '../list/campaign-selection-modal';
 
 import type { Character } from '@/types/character';
 
