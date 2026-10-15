@@ -318,28 +318,38 @@ fx=$(awk "$(grep -o "'/^Required:/[^']*'" "$HERE/../foreman/catjam-runner.sh" | 
 ! grep -q "posted by the foreman" <<< "$fx" && grep -q "fix a" <<< "$fx" && ok "runner: fix items drop the bot signature" || bad "runner fix items: '$fx'"
 
 # reviewer tiers (#663 item 5): Haiku only for a small PR off the heavy paths.
-eval "$(grep -E "^(HEAVY_RE|SMALL_MAX_LINES|SMALL_MODEL|SMALL_EXPECT_MODEL_RE|MODEL|EXPECT_MODEL_RE|BOT_SIGNATURE_PREFIX)=" "$HERE/../foreman/review.sh")"
+eval "$(grep -E "^(LIGHT_RE|HEAVY_RE|HEAVY_I_RE|SMALL_MAX_LINES|SMALL_MODEL|SMALL_EXPECT_MODEL_RE|MODEL|EXPECT_MODEL_RE|BOT_SIGNATURE_PREFIX)=" "$HERE/../foreman/review.sh")"
 eval "$(sed -n '/^pick_tier() {/,/^}/p;/^set_tier() {/,/^}/p' "$HERE/../foreman/review.sh")"
 tier_of() { # tier_of <additions> <deletions> <path>...
   local a=$1 d=$2; shift 2
   printf '{"additions":%s,"deletions":%s}' "$a" "$d" > "$TMP/tier-pr.json"; printf '%s\n' "$@" > "$TMP/tier-paths.txt"
   pick_tier "$TMP/tier-pr.json" "$TMP/tier-paths.txt"
 }
-[ "$(tier_of 200 100 ai-adventure-scribe-main/src/components/ui/Button.tsx README.md)" = "haiku lines=300" ] && ok "pick_tier: 300 lines off heavy paths -> haiku" || bad "pick_tier small: '$(tier_of 200 100 a/b.ts)'"
-[ "$(tier_of 200 101 ai-adventure-scribe-main/src/components/ui/Button.tsx)" = "sonnet lines=301" ] && ok "pick_tier: 301 lines -> sonnet" || bad "pick_tier 301"
-for p in ai-adventure-scribe-main/server-bun/src/services/combat/attack.ts ai-adventure-scribe-main/src/hooks/useCombatState.ts \
-  ai-adventure-scribe-main/server-bun/src/services/dm/story-xp.ts ai-adventure-scribe-main/src/services/ai/dm-response-processor.ts \
-  ai-adventure-scribe-main/src/features/game-session/components/chat/message-list/DMMessage.tsx ai-adventure-scribe-main/src/hooks/useDmTurn.ts \
-  ai-adventure-scribe-main/src/utils/use-pending-dm-roll.ts ai-adventure-scribe-main/db/migrations/0042_x.sql \
-  ai-adventure-scribe-main/supabase/migrations/20261015_x.sql ai-adventure-scribe-main/drizzle/meta/_journal.json ops/smoke.sh \
-  .factory/droids/dungeon-master-agent.md; do
-  t=$(tier_of 1 1 docs/x.md "$p"); [ "${t%% *}" = sonnet ] || { bad "pick_tier heavy path not sonnet: $p -> $t"; tf=1; }
+A=ai-adventure-scribe-main
+[ "$(tier_of 200 100 $A/src/components/ui/button.tsx README.md)" = "haiku lines=300" ] && ok "pick_tier: 300 light lines -> haiku" || bad "pick_tier small: '$(tier_of 200 100 $A/src/components/ui/button.tsx)'"
+[ "$(tier_of 200 101 $A/src/components/ui/button.tsx)" = "sonnet lines=301" ] && ok "pick_tier: 301 lines -> sonnet" || bad "pick_tier 301"
+tf=
+for p in $A/src/components/ui/button.tsx $A/src/components/ui/__tests__/button.test.tsx $A/src/pages/legal/Terms.tsx \
+  $A/src/pages/__tests__/LaunchPage.test.tsx $A/src/styles/ir-overhaul.css docs/ops/notes.md $A/docs/x.md README.md $A/server-bun/README.md; do
+  t=$(tier_of 1 1 "$p"); [ "${t%% *}" = haiku ] || { bad "pick_tier light path not haiku: $p -> $t"; tf=1; }
 done
-[ -n "${tf:-}" ] || ok "pick_tier: combat, DM, migrations, drizzle, ops and dungeon-master paths -> sonnet"
-for p in ai-adventure-scribe-main/src/pages/Admin.tsx ai-adventure-scribe-main/src/admin/users.ts ai-adventure-scribe-main/src/lib/random.ts docs/ops/notes.md; do
-  t=$(tier_of 1 1 "$p"); [ "${t%% *}" = haiku ] || { bad "pick_tier false heavy hit: $p -> $t"; tf2=1; }
+[ -n "$tf" ] || ok "pick_tier: ui kit, pages, styles, docs, READMEs and their tests -> haiku"
+# Off the allow list or on a deny list: always Sonnet, alone or next to a light path.
+tf=
+for p in $A/server-bun/src/services/combat/attack.ts $A/src/hooks/useCombatState.ts \
+  $A/server-bun/src/services/dm/story-xp.ts $A/src/services/ai/dm-response-processor.ts \
+  $A/src/features/game-session/components/chat/message-list/DMMessage.tsx $A/src/hooks/useDmTurn.ts \
+  $A/src/utils/use-pending-dm-roll.ts $A/db/migrations/0042_x.sql $A/supabase/migrations/20261015_x.sql \
+  $A/drizzle/meta/_journal.json ops/smoke.sh .factory/droids/dungeon-master-agent.md \
+  $A/server-bun/src/tactical/grid.ts $A/server-bun/src/services/dungeon_master/x.ts $A/server-bun/src/middleware/auth.ts \
+  $A/server-bun/src/routes/stripe-webhook.ts $A/db/schema/users.ts $A/drizzle.config.ts Dockerfile $A/Dockerfile scripts/deploy.sh \
+  $A/src/pages/BlogAdminLogin.tsx $A/src/pages/PricingPage.tsx $A/src/components/ui/session-banner.tsx $A/src/pages/AuthCallback.tsx \
+  $A/src/components/ui/token-meter.tsx $A/src/pages/account/billing.tsx $A/server-bun/src/lib/crypto.ts $A/server-bun/src/rls/policies.ts \
+  $A/src/pages/permissions.tsx $A/package.json $A/bun.lock .env.example $A/src/lib/random.ts AGENTS.md PR-POLICY.md CLAUDE.md \
+  $A/docs/examples/sql/test-archival.sql docs/runbooks/restore.sh; do
+  t=$(tier_of 1 1 $A/src/components/ui/button.tsx "$p"); [ "${t%% *}" = sonnet ] || { bad "pick_tier not sonnet: $p -> $t"; tf=1; }
 done
-[ -n "${tf2:-}" ] || ok "pick_tier: admin, random, docs/ops are not heavy"
+[ -n "$tf" ] || ok "pick_tier: deny-list and off-list paths -> sonnet"
 printf '{"additions":null}' > "$TMP/tier-pr.json"
 [ "$(pick_tier "$TMP/tier-pr.json" "$TMP/tier-paths.txt")" = "sonnet lines-unknown" ] && ok "pick_tier: unreadable size -> sonnet" || bad "pick_tier null"
 : > "$TMP/tier-empty.txt"; printf '{"additions":1,"deletions":1}' > "$TMP/tier-pr.json"

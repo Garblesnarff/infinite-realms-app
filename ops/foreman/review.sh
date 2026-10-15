@@ -38,8 +38,9 @@
 # tick stops.
 #
 # Tiers (#663 item 5): a PR of at most 300 changed lines (additions +
-# deletions) that touches no combat, DM, migration or ops/ path is reviewed by
-# Haiku; every other PR by Sonnet. Anything unreadable falls back to Sonnet.
+# deletions) whose every path is on the light allow list (LIGHT_RE) and off the
+# deny lists (HEAVY_RE, HEAVY_I_RE) is reviewed by Haiku; every other PR by
+# Sonnet. Anything unreadable falls back to Sonnet.
 set -euo pipefail
 # shellcheck source=ops/foreman/lib.sh
 . "$(dirname "$(readlink -f "$0")")/lib.sh"
@@ -51,9 +52,14 @@ SMALL_MODEL=${REVIEW_SMALL_MODEL:-haiku}
 SMALL_EXPECT_MODEL_RE=${REVIEW_SMALL_EXPECT_MODEL_RE:-haiku}
 SMALL_MAX_LINES=${REVIEW_SMALL_MAX_LINES:-300}
 RUN_MODEL=$MODEL RUN_EXPECT_RE=$EXPECT_MODEL_RE  # per review, set by set_tier
-# Paths that always get Sonnet: combat, the DM (dm/, dm-*, *-dm-*, DMMessage,
-# useDmX, dungeon-master), migrations, drizzle and ops/.
-HEAVY_RE='[Cc]ombat|COMBAT|(^|/)([Dd]m|DM)([-_./A-Z]|$)|[a-z](Dm|DM)([A-Z._-]|$)|[-_.]dm([-_./]|$)|[Dd]ungeon-?[Mm]aster|(^|/)(db|supabase)/migrations/|(^|/)drizzle/|^ops/'
+# Haiku is opt-in: every path must be on LIGHT_RE (docs, READMEs, UI kit
+# components, pages, styles, and the tests inside those folders) and none may
+# hit a deny pattern. Any other path gives Sonnet.
+LIGHT_RE='^(ai-adventure-scribe-main/)?docs/|(^|/)README\.md$|^ai-adventure-scribe-main/src/(components/ui|pages|styles)/'
+# Deny, case-sensitive: the DM by name (dm/, dm-*, *-dm-*, DMMessage, useDmX).
+HEAVY_RE='(^|/)([Dd]m|DM)([-_./A-Z]|$)|[a-z](Dm|DM)([A-Z._-]|$)|[-_.]dm([-_./]|$)'
+# Deny, case-insensitive: game rules, schema, money, auth, infra.
+HEAVY_I_RE='combat|tactical|dungeon[-_]?master|migrations/|(^|/)db/schema|drizzle|^ops/|auth|session|token|secret|crypto|stripe|billing|payment|pricing|checkout|subscription|webhook|middleware|rls|permission|polic(y|ies)|admin|dockerfile|deploy|(^|/)\.env|(^|/)(package\.json|bun\.lockb?)$|\.(sql|sh)$'
 MAX_PRS=${REVIEW_MAX_PRS:-12}
 DAILY_CAP_USD=${REVIEW_DAILY_CAP_USD:-5.00}
 PER_PR_USD=${REVIEW_PER_PR_USD:-1.50}
@@ -187,8 +193,10 @@ pick_tier() {
   [[ $lines =~ ^[0-9]+$ ]] || { echo "sonnet lines-unknown"; return 0; }
   [ -s "$2" ] || { echo "sonnet paths-unknown"; return 0; }
   if [ "$lines" -gt "$SMALL_MAX_LINES" ]; then echo "sonnet lines=$lines"; return 0; fi
-  hit=$(grep -E -- "$HEAVY_RE" "$2" | awk 'NR == 1' || true)
+  hit=$({ grep -E -- "$HEAVY_RE" "$2"; grep -iE -- "$HEAVY_I_RE" "$2"; } | awk 'NR == 1' || true)
   if [ -n "$hit" ]; then echo "sonnet path=$hit"; return 0; fi
+  hit=$(grep -vE -- "$LIGHT_RE" "$2" | awk 'NR == 1' || true)
+  if [ -n "$hit" ]; then echo "sonnet not-light=$hit"; return 0; fi
   echo "haiku lines=$lines"
 }
 # set_tier <tier>: the model, the billing check and the signature for one review
