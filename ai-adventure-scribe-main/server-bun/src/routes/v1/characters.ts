@@ -244,7 +244,8 @@ async function createCharacterFromBody(
       knownSpells: body.known_spells,
       preparedSpells: body.prepared_spells,
       ritualSpells: body.ritual_spells,
-      spellSlots: body.spell_slots,
+      // #617: the legacy characters.spell_slots JSONB is no longer written;
+      // character_spell_slots is the single source of truth (#2459).
       pactSlots: body.pact_slots,
       activeConcentration: body.active_concentration,
       classFeatures: body.class_features,
@@ -636,7 +637,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
             knownSpells: body.known_spells,
             preparedSpells: body.prepared_spells,
             ritualSpells: body.ritual_spells,
-            spellSlots: body.spell_slots,
+            // #617: the legacy characters.spell_slots JSONB is no longer written.
             pactSlots: body.pact_slots,
             activeConcentration: body.active_concentration,
             classFeatures: body.class_features,

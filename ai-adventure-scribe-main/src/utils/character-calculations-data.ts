@@ -20,34 +20,7 @@ export const SPELLCASTING_ABILITY_MAP: Record<string, keyof AbilityScores> = {
 };
 
 /**
- * ⚡ Bolt: Static map of full caster spell slot progression.
- * Moved outside to avoid redundant re-allocation on every call.
- */
-export const FULL_CASTER_SLOTS_MAP: Record<number, readonly number[]> = {
-  1: [2], // 1st level spells
-  2: [3],
-  3: [4, 2], // 1st, 2nd level spells
-  4: [4, 3],
-  5: [4, 3, 2], // 1st, 2nd, 3rd level spells
-  6: [4, 3, 3],
-  7: [4, 3, 3, 1], // 1st, 2nd, 3rd, 4th level spells
-  8: [4, 3, 3, 2],
-  9: [4, 3, 3, 3, 1], // 1st, 2nd, 3rd, 4th, 5th level spells
-  10: [4, 3, 3, 3, 2],
-  11: [4, 3, 3, 3, 2, 1], // 1st-6th level spells
-  12: [4, 3, 3, 3, 2, 1],
-  13: [4, 3, 3, 3, 2, 1, 1], // 1st-7th level spells
-  14: [4, 3, 3, 3, 2, 1, 1],
-  15: [4, 3, 3, 3, 2, 1, 1, 1], // 1st-8th level spells
-  16: [4, 3, 3, 3, 2, 1, 1, 1],
-  17: [4, 3, 3, 3, 2, 1, 1, 1, 1], // 1st-9th level spells
-  18: [4, 3, 3, 3, 3, 1, 1, 1, 1],
-  19: [4, 3, 3, 3, 3, 2, 1, 1, 1],
-  20: [4, 3, 3, 3, 3, 2, 2, 1, 1],
-} as const;
-
-/**
- * ⚡ Bolt: Static map of skill proficiencies for each class.
+ * ⚡ Bolt: Static maps of skill proficiencies for each class.
  * Moved outside to avoid redundant re-allocation on every call.
  */
 export const CLASS_SKILL_PROFICIENCIES_MAP: Record<string, readonly string[]> = {

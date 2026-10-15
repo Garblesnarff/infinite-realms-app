@@ -132,73 +132,103 @@ export const metamagicOptions: MetamagicOption[] = [
 ];
 
 /**
- * Spellcasting progression tables for different classes
+ * Spellcasting progression tables for different classes.
+ *
+ * #617: slot arrays derive from shared/spell-slot-tables.ts (epic #616).
+ * Cantrips/spells-known stay here — they are not slot tables.
  */
+import {
+  FULL_CASTER_SLOTS,
+  WARLOCK_PACT_MAGIC,
+  halfCasterSlots,
+} from '../../shared/spell-slot-tables';
+
+const fullCasterEntry = (level: number, cantrips: number) => ({
+  cantrips,
+  spells: [...(FULL_CASTER_SLOTS[level] ?? [])],
+});
+
+const halfCasterEntry = (level: number) => ({
+  cantrips: 0,
+  // The legacy half-caster table carried 5 spell levels; slice to match.
+  spells: [...halfCasterSlots(level).slice(0, 5)],
+});
+
+const pactEntry = (level: number, cantrips: number, spellsKnown: number) => {
+  const pact = WARLOCK_PACT_MAGIC[level];
+  return {
+    cantrips,
+    pactSlots: pact?.slots ?? 0,
+    pactSlotLevel: pact?.level ?? 0,
+    spellsKnown,
+  };
+};
+
 export const spellcastingProgression = {
   fullCaster: {
-    1: { cantrips: 3, spells: [2, 0, 0, 0, 0, 0, 0, 0, 0] },
-    2: { cantrips: 3, spells: [3, 0, 0, 0, 0, 0, 0, 0, 0] },
-    3: { cantrips: 3, spells: [4, 2, 0, 0, 0, 0, 0, 0, 0] },
-    4: { cantrips: 4, spells: [4, 3, 0, 0, 0, 0, 0, 0, 0] },
-    5: { cantrips: 4, spells: [4, 3, 2, 0, 0, 0, 0, 0, 0] },
-    6: { cantrips: 4, spells: [4, 3, 3, 0, 0, 0, 0, 0, 0] },
-    7: { cantrips: 4, spells: [4, 3, 3, 1, 0, 0, 0, 0, 0] },
-    8: { cantrips: 4, spells: [4, 3, 3, 2, 0, 0, 0, 0, 0] },
-    9: { cantrips: 4, spells: [4, 3, 3, 3, 1, 0, 0, 0, 0] },
-    10: { cantrips: 5, spells: [4, 3, 3, 3, 2, 0, 0, 0, 0] },
-    11: { cantrips: 5, spells: [4, 3, 3, 3, 2, 1, 0, 0, 0] },
-    12: { cantrips: 5, spells: [4, 3, 3, 3, 2, 1, 0, 0, 0] },
-    13: { cantrips: 5, spells: [4, 3, 3, 3, 2, 1, 1, 0, 0] },
-    14: { cantrips: 5, spells: [4, 3, 3, 3, 2, 1, 1, 0, 0] },
-    15: { cantrips: 5, spells: [4, 3, 3, 3, 2, 1, 1, 1, 0] },
-    16: { cantrips: 5, spells: [4, 3, 3, 3, 2, 1, 1, 1, 0] },
-    17: { cantrips: 5, spells: [4, 3, 3, 3, 2, 1, 1, 1, 1] },
-    18: { cantrips: 5, spells: [4, 3, 3, 3, 3, 1, 1, 1, 1] },
-    19: { cantrips: 5, spells: [4, 3, 3, 3, 3, 2, 1, 1, 1] },
-    20: { cantrips: 5, spells: [4, 3, 3, 3, 3, 2, 2, 1, 1] },
+    1: fullCasterEntry(1, 3),
+    2: fullCasterEntry(2, 3),
+    3: fullCasterEntry(3, 3),
+    4: fullCasterEntry(4, 4),
+    5: fullCasterEntry(5, 4),
+    6: fullCasterEntry(6, 4),
+    7: fullCasterEntry(7, 4),
+    8: fullCasterEntry(8, 4),
+    9: fullCasterEntry(9, 4),
+    10: fullCasterEntry(10, 5),
+    11: fullCasterEntry(11, 5),
+    12: fullCasterEntry(12, 5),
+    13: fullCasterEntry(13, 5),
+    14: fullCasterEntry(14, 5),
+    15: fullCasterEntry(15, 5),
+    16: fullCasterEntry(16, 5),
+    17: fullCasterEntry(17, 5),
+    18: fullCasterEntry(18, 5),
+    19: fullCasterEntry(19, 5),
+    20: fullCasterEntry(20, 5),
   },
   halfCaster: {
-    2: { cantrips: 0, spells: [2, 0, 0, 0, 0] },
-    3: { cantrips: 0, spells: [3, 0, 0, 0, 0] },
-    4: { cantrips: 0, spells: [3, 0, 0, 0, 0] },
-    5: { cantrips: 0, spells: [4, 2, 0, 0, 0] },
-    6: { cantrips: 0, spells: [4, 2, 0, 0, 0] },
-    7: { cantrips: 0, spells: [4, 3, 0, 0, 0] },
-    8: { cantrips: 0, spells: [4, 3, 0, 0, 0] },
-    9: { cantrips: 0, spells: [4, 3, 2, 0, 0] },
-    10: { cantrips: 0, spells: [4, 3, 2, 0, 0] },
-    11: { cantrips: 0, spells: [4, 3, 3, 0, 0] },
-    12: { cantrips: 0, spells: [4, 3, 3, 0, 0] },
-    13: { cantrips: 0, spells: [4, 3, 3, 1, 0] },
-    14: { cantrips: 0, spells: [4, 3, 3, 1, 0] },
-    15: { cantrips: 0, spells: [4, 3, 3, 2, 0] },
-    16: { cantrips: 0, spells: [4, 3, 3, 2, 0] },
-    17: { cantrips: 0, spells: [4, 3, 3, 3, 1] },
-    18: { cantrips: 0, spells: [4, 3, 3, 3, 1] },
-    19: { cantrips: 0, spells: [4, 3, 3, 3, 2] },
-    20: { cantrips: 0, spells: [4, 3, 3, 3, 2] },
+    2: halfCasterEntry(2),
+    3: halfCasterEntry(3),
+    4: halfCasterEntry(4),
+    5: halfCasterEntry(5),
+    6: halfCasterEntry(6),
+    7: halfCasterEntry(7),
+    8: halfCasterEntry(8),
+    9: halfCasterEntry(9),
+    10: halfCasterEntry(10),
+    11: halfCasterEntry(11),
+    12: halfCasterEntry(12),
+    13: halfCasterEntry(13),
+    14: halfCasterEntry(14),
+    15: halfCasterEntry(15),
+    16: halfCasterEntry(16),
+    17: halfCasterEntry(17),
+    18: halfCasterEntry(18),
+    19: halfCasterEntry(19),
+    20: halfCasterEntry(20),
   },
   pactMagic: {
-    1: { cantrips: 2, pactSlots: 1, pactSlotLevel: 1, spellsKnown: 2 },
-    2: { cantrips: 2, pactSlots: 2, pactSlotLevel: 1, spellsKnown: 3 },
-    3: { cantrips: 2, pactSlots: 2, pactSlotLevel: 2, spellsKnown: 4 },
-    4: { cantrips: 3, pactSlots: 2, pactSlotLevel: 2, spellsKnown: 5 },
-    5: { cantrips: 3, pactSlots: 2, pactSlotLevel: 3, spellsKnown: 6 },
-    6: { cantrips: 3, pactSlots: 2, pactSlotLevel: 3, spellsKnown: 7 },
-    7: { cantrips: 3, pactSlots: 2, pactSlotLevel: 4, spellsKnown: 8 },
-    8: { cantrips: 3, pactSlots: 2, pactSlotLevel: 4, spellsKnown: 9 },
-    9: { cantrips: 3, pactSlots: 2, pactSlotLevel: 5, spellsKnown: 10 },
-    10: { cantrips: 4, pactSlots: 2, pactSlotLevel: 5, spellsKnown: 10 },
-    11: { cantrips: 4, pactSlots: 3, pactSlotLevel: 5, spellsKnown: 11 },
-    12: { cantrips: 4, pactSlots: 3, pactSlotLevel: 5, spellsKnown: 11 },
-    13: { cantrips: 4, pactSlots: 3, pactSlotLevel: 5, spellsKnown: 12 },
-    14: { cantrips: 4, pactSlots: 3, pactSlotLevel: 5, spellsKnown: 12 },
-    15: { cantrips: 4, pactSlots: 3, pactSlotLevel: 5, spellsKnown: 13 },
-    16: { cantrips: 4, pactSlots: 3, pactSlotLevel: 5, spellsKnown: 13 },
-    17: { cantrips: 4, pactSlots: 4, pactSlotLevel: 5, spellsKnown: 14 },
-    18: { cantrips: 4, pactSlots: 4, pactSlotLevel: 5, spellsKnown: 14 },
-    19: { cantrips: 4, pactSlots: 4, pactSlotLevel: 5, spellsKnown: 15 },
-    20: { cantrips: 4, pactSlots: 4, pactSlotLevel: 5, spellsKnown: 15 },
+    1: pactEntry(1, 2, 2),
+    2: pactEntry(2, 2, 3),
+    3: pactEntry(3, 2, 4),
+    4: pactEntry(4, 3, 5),
+    5: pactEntry(5, 3, 6),
+    6: pactEntry(6, 3, 7),
+    7: pactEntry(7, 3, 8),
+    8: pactEntry(8, 3, 9),
+    9: pactEntry(9, 3, 10),
+    10: pactEntry(10, 4, 10),
+    11: pactEntry(11, 4, 11),
+    12: pactEntry(12, 4, 11),
+    13: pactEntry(13, 4, 12),
+    14: pactEntry(14, 4, 12),
+    15: pactEntry(15, 4, 13),
+    16: pactEntry(16, 4, 13),
+    17: pactEntry(17, 4, 14),
+    18: pactEntry(18, 4, 14),
+    19: pactEntry(19, 4, 15),
+    20: pactEntry(20, 4, 15),
   },
 };
 

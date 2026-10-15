@@ -1,5 +1,8 @@
 import type { Spell } from '@/types/character';
 
+// #617: spell-slot tables live in shared/spell-slot-tables.ts (epic #616).
+import { FULL_CASTER_SLOTS } from '../../shared/spell-slot-tables';
+
 import { getClassSpells, allSpells } from '@/data/spellOptions';
 import {
   spellProgressionTables,
@@ -100,69 +103,23 @@ class LocalSpellService {
   }
 
   async getMulticlassSpellSlots(casterLevel: number): Promise<MulticlassSpellSlots> {
-    const spellSlotTable: Record<number, MulticlassSpellSlots> = {
-      1: {
-        caster_level: 1,
-        spell_slots_1: 2,
-        spell_slots_2: 0,
-        spell_slots_3: 0,
-        spell_slots_4: 0,
-        spell_slots_5: 0,
-        spell_slots_6: 0,
-        spell_slots_7: 0,
-        spell_slots_8: 0,
-        spell_slots_9: 0,
-      },
-      2: {
-        caster_level: 2,
-        spell_slots_1: 3,
-        spell_slots_2: 0,
-        spell_slots_3: 0,
-        spell_slots_4: 0,
-        spell_slots_5: 0,
-        spell_slots_6: 0,
-        spell_slots_7: 0,
-        spell_slots_8: 0,
-        spell_slots_9: 0,
-      },
-      3: {
-        caster_level: 3,
-        spell_slots_1: 4,
-        spell_slots_2: 2,
-        spell_slots_3: 0,
-        spell_slots_4: 0,
-        spell_slots_5: 0,
-        spell_slots_6: 0,
-        spell_slots_7: 0,
-        spell_slots_8: 0,
-        spell_slots_9: 0,
-      },
-      4: {
-        caster_level: 4,
-        spell_slots_1: 4,
-        spell_slots_2: 3,
-        spell_slots_3: 0,
-        spell_slots_4: 0,
-        spell_slots_5: 0,
-        spell_slots_6: 0,
-        spell_slots_7: 0,
-        spell_slots_8: 0,
-        spell_slots_9: 0,
-      },
-      5: {
-        caster_level: 5,
-        spell_slots_1: 4,
-        spell_slots_2: 3,
-        spell_slots_3: 2,
-        spell_slots_4: 0,
-        spell_slots_5: 0,
-        spell_slots_6: 0,
-        spell_slots_7: 0,
-        spell_slots_8: 0,
-        spell_slots_9: 0,
-      },
+    // #617: slots derive from shared/spell-slot-tables.ts (epic #616).
+    // The legacy table only carried levels 1-5 and fell back to level 1's row
+    // for anything else; that fallback is preserved verbatim.
+    const level = casterLevel >= 1 && casterLevel <= 5 ? casterLevel : 1;
+    const slots = FULL_CASTER_SLOTS[level] ?? [0, 0, 0, 0, 0, 0, 0, 0, 0];
+    return {
+      caster_level: level,
+      spell_slots_1: slots[0],
+      spell_slots_2: slots[1],
+      spell_slots_3: slots[2],
+      spell_slots_4: slots[3],
+      spell_slots_5: slots[4],
+      spell_slots_6: slots[5],
+      spell_slots_7: slots[6],
+      spell_slots_8: slots[7],
+      spell_slots_9: slots[8],
     };
-    return spellSlotTable[casterLevel] || spellSlotTable[1];
   }
 
   async getSpellcastingClasses(): Promise<SpellcastingClass[]> {

@@ -2,7 +2,7 @@
  * Combat-related spellcasting actions and concentration management
  */
 import type { CombatParticipant, CombatAction } from '@/types/combat';
-import type { SpellSlotLevel } from '@/utils/spell-slots-table';
+import type { SpellSlotLevel } from '../../../shared/spell-slot-tables';
 
 import { spellApi } from '@/services/spellApi';
 import { calculateProficiencyBonus } from '@/utils/character/basic-math';

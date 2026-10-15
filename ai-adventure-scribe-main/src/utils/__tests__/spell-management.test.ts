@@ -3,12 +3,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import {
-  calculateSpellSlots,
   deductSpellSlot,
   restoreSpellSlots,
   castSpell,
   checkConcentration,
 } from '../spell-management';
+// #617: calculateSpellSlots merged into character-calculations.ts.
+import { calculateSpellSlots } from '../character-calculations';
 
 import type { Character } from '@/types/character';
 import type { CombatParticipant } from '@/types/combat';
@@ -42,11 +43,9 @@ describe('spell-management', () => {
   });
 
   describe('calculateSpellSlots', () => {
-    it('should return zero slots for a character without class levels', () => {
+    it('should return undefined for a character without class levels or class', () => {
       const character = { classLevels: [] } as unknown as Character;
-      const slots = calculateSpellSlots(character);
-      expect(slots[1].max).toBe(0);
-      expect(slots[9].max).toBe(0);
+      expect(calculateSpellSlots(character)).toBeUndefined();
     });
 
     it('should calculate slots for a level 1 Wizard (full caster)', () => {
@@ -54,8 +53,8 @@ describe('spell-management', () => {
         classLevels: [{ className: 'Wizard', level: 1, hitDie: 6 }],
       } as unknown as Character;
       const slots = calculateSpellSlots(character);
-      expect(slots[1].max).toBe(2);
-      expect(slots[2].max).toBe(0);
+      expect(slots?.[1]).toBe(2);
+      expect(slots?.[2] ?? 0).toBe(0);
     });
 
     it('should calculate slots for a level 5 Wizard', () => {
@@ -63,9 +62,9 @@ describe('spell-management', () => {
         classLevels: [{ className: 'Wizard', level: 5, hitDie: 6 }],
       } as unknown as Character;
       const slots = calculateSpellSlots(character);
-      expect(slots[1].max).toBe(4);
-      expect(slots[2].max).toBe(3);
-      expect(slots[3].max).toBe(2);
+      expect(slots?.[1]).toBe(4);
+      expect(slots?.[2]).toBe(3);
+      expect(slots?.[3]).toBe(2);
     });
 
     it('should calculate slots for a level 5 Paladin (half caster)', () => {
@@ -74,8 +73,8 @@ describe('spell-management', () => {
       } as unknown as Character;
       const slots = calculateSpellSlots(character);
       // Level 5 Paladin should have Level 1: 4, Level 2: 2 slots
-      expect(slots[1].max).toBe(4);
-      expect(slots[2].max).toBe(2);
+      expect(slots?.[1]).toBe(4);
+      expect(slots?.[2]).toBe(2);
     });
 
     it('should handle multiclassing Wizard 3 / Cleric 2 (full 3 + full 2 = 5)', () => {
@@ -86,9 +85,9 @@ describe('spell-management', () => {
         ],
       } as unknown as Character;
       const slots = calculateSpellSlots(character);
-      expect(slots[1].max).toBe(4);
-      expect(slots[2].max).toBe(3);
-      expect(slots[3].max).toBe(2);
+      expect(slots?.[1]).toBe(4);
+      expect(slots?.[2]).toBe(3);
+      expect(slots?.[3]).toBe(2);
     });
 
     it('should handle multiclassing Wizard 3 / Paladin 4 (full 3 + half 2 = 5)', () => {
@@ -99,9 +98,9 @@ describe('spell-management', () => {
         ],
       } as unknown as Character;
       const slots = calculateSpellSlots(character);
-      expect(slots[1].max).toBe(4);
-      expect(slots[2].max).toBe(3);
-      expect(slots[3].max).toBe(2);
+      expect(slots?.[1]).toBe(4);
+      expect(slots?.[2]).toBe(3);
+      expect(slots?.[3]).toBe(2);
     });
 
     it('should NOT count Warlock levels towards combined caster level', () => {
@@ -113,9 +112,9 @@ describe('spell-management', () => {
       } as unknown as Character;
       const slots = calculateSpellSlots(character);
       // Should be level 3 caster slots
-      expect(slots[1].max).toBe(4);
-      expect(slots[2].max).toBe(2);
-      expect(slots[3].max).toBe(0);
+      expect(slots?.[1]).toBe(4);
+      expect(slots?.[2]).toBe(2);
+      expect(slots?.[3] ?? 0).toBe(0);
     });
 
     it('should calculate slots for a level 20 Wizard', () => {
@@ -123,10 +122,10 @@ describe('spell-management', () => {
         classLevels: [{ className: 'Wizard', level: 20, hitDie: 6 }],
       } as unknown as Character;
       const slots = calculateSpellSlots(character);
-      expect(slots[1].max).toBe(4);
-      expect(slots[3].max).toBe(3);
-      expect(slots[5].max).toBe(3);
-      expect(slots[9].max).toBe(1);
+      expect(slots?.[1]).toBe(4);
+      expect(slots?.[3]).toBe(3);
+      expect(slots?.[5]).toBe(3);
+      expect(slots?.[9]).toBe(1);
     });
   });
 
