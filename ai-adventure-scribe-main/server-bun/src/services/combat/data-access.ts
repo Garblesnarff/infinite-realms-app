@@ -44,6 +44,7 @@ import {
 import { isWeaponProficientWithAny } from '../../../../shared/weapon-proficiency';
 import { BusinessLogicError, NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
+import { isAlreadyOnSheet, sheetItemNameSet } from '../character/sheet-item-names.js';
 
 import type { WeaponRuleProfile } from './combat-rules.js';
 import type { MonsterAttack } from './monster-attack-profile.js';
@@ -131,8 +132,7 @@ function candidateToProfile(
     magicBonus: candidate.magicBonus,
     finesse: Boolean(candidate.properties.finesse ?? catalog?.weaponProperties?.finesse),
     ranged: normalRange > 5,
-    proficient:
-      proficientIds.length > 0 ? characterCanUseWeapon(owner, proficientIds) : false,
+    proficient: proficientIds.length > 0 ? characterCanUseWeapon(owner, proficientIds) : false,
   };
 }
 
@@ -175,14 +175,17 @@ export async function listEquippedWeaponProfiles(participant: any): Promise<Weap
         columns: { class: true, race: true, subrace: true },
       }),
     ]);
+    const sheetNames = sheetItemNameSet(legacy.map((item) => item.itemName));
     const candidates: EquippedWeaponCandidate[] = [
-      ...inventory.map((item) => ({
-        id: item.id,
-        name: item.name,
-        itemType: item.itemType,
-        magicBonus: Number(parseInventoryProperties(item.properties).magicBonus ?? 0),
-        properties: parseInventoryProperties(item.properties),
-      })),
+      ...inventory
+        .filter((item) => !isAlreadyOnSheet(sheetNames, item.name))
+        .map((item) => ({
+          id: item.id,
+          name: item.name,
+          itemType: item.itemType,
+          magicBonus: Number(parseInventoryProperties(item.properties).magicBonus ?? 0),
+          properties: parseInventoryProperties(item.properties),
+        })),
       ...legacy.map((item) => ({
         id: item.id,
         name: item.itemName,
@@ -267,14 +270,17 @@ export async function listCarriedWeaponProfiles(participant: any): Promise<Weapo
       columns: { class: true, race: true, subrace: true },
     }),
   ]);
+  const sheetNames = sheetItemNameSet(legacy.map((item) => item.itemName));
   const candidates: EquippedWeaponCandidate[] = [
-    ...inventory.map((item) => ({
-      id: item.id,
-      name: item.name,
-      itemType: item.itemType,
-      magicBonus: Number(parseInventoryProperties(item.properties).magicBonus ?? 0),
-      properties: parseInventoryProperties(item.properties),
-    })),
+    ...inventory
+      .filter((item) => !isAlreadyOnSheet(sheetNames, item.name))
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        itemType: item.itemType,
+        magicBonus: Number(parseInventoryProperties(item.properties).magicBonus ?? 0),
+        properties: parseInventoryProperties(item.properties),
+      })),
     ...legacy.map((item) => ({
       id: item.id,
       name: item.itemName,

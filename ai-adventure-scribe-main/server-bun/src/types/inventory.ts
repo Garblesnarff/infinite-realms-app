@@ -130,9 +130,15 @@ export interface InventorySummary {
 /**
  * Attunement result
  */
+/** A row attune can read. Sheet rows live on character_equipment; story grants on inventory_items. */
+export interface AttunedRecord {
+  id: string;
+  isAttuned: boolean | null;
+}
+
 export interface AttunementResult {
   success: boolean;
-  attunedItem?: InventoryItem;
+  attunedItem?: AttunedRecord;
   currentAttunedCount: number;
   maxAttunedCount: number;
   error?: string;
