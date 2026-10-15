@@ -5,8 +5,8 @@ Spec: issue #586. Reviewer prompt: `docs/ops/review_prompt.md`.
 | Piece | File | Schedule |
 |---|---|---|
 | Coder: opencode + the free "cat jam" model (`opencode/cat-jam-free`) | `catjam-runner.sh` | `realms-catjam-runner.timer`, every 30 min |
-| Reviewer: `claude -p`, Sonnet, API key | `review.sh` | `realms-reviewer.timer`, hourly at :50 UTC |
-| Daily summary to Slack #last-24 and #230 | `review.sh` (11:50Z run) | same timer |
+| Reviewer: `claude -p`, Sonnet, API key | `review.sh` | `realms-reviewer.timer`, every 2 minutes; a cheap pre-check exits idle ticks |
+| Daily summary to Slack #last-24 and #230 | `review.sh` (first 11:xx UTC tick) | same timer |
 | Sandbox image (opencode + Claude Code live only here) | `Dockerfile` | — |
 | Shared guards (secret checks, trusted-review and same-repo filters) | `lib.sh`, tested by `ops/tests/foreman-guards.sh` | — |
 
@@ -60,7 +60,7 @@ Rebuild the image after any change to these scripts. The units run the copies ba
 - Scope: the bot reviews every open same-repo PR except release-please, a draft whose body says WIP, and any PR that changes `.github/`, `.husky/`, `ops/foreman/`, `ops/claude-hooks/`, migrations or `docs/ops/review_prompt.md` (also through a rename). Those stay with the human strategist; each is logged once per head as `skip-scope <reason>` in `review.log`. If the file list cannot be read, the PR is skipped (fail closed). `review.sh --dry-run --pr N` can still try any PR.
 - Runner checks: tsc (`-p tsconfig.app.json`) runs one at a time under `state/tsc.lock`. A new job first records tsc on its main commit in `state/tc-baseline/<sha>.txt` (first line `# tsc exit <rc>`; not cached when tsc did not finish). The typecheck fails on errors in changed files and on any error main does not have. Tests: those named after changed files; for deleted files, the nearest remaining tests plus a `git grep` for `@/` imports of the deleted modules. A test file may be deleted only when the issue's task lists it; the runner refuses any other test deletion.
 - Timeouts: opencode 45m, each bun install / tsc / test step 15m, `claude -p` 20m. On TERM/INT (unit timeout, `docker stop`) the runner kills its jobs, removes their worktrees, and moves `catjam-wip`/`catjam-fix` to `needs-human`. Each tick also recovers jobs left behind by a hard kill, and any `catjam-wip` issue with no open catjam PR.
-- The 11:50Z summary is decided when the tick starts and posts before the reviews, so long reviews cannot push it past the hour.
+- The daily summary posts on the first tick of the 11:xx UTC hour, before the pre-check and the reviews. A per-day marker is checked before the summary is built, so the other 11:xx ticks cost nothing.
 - Pause: `systemctl stop realms-catjam-runner.timer realms-reviewer.timer`.
 - Overrides go in a unit drop-in as `-e` flags, e.g. `CATJAM_MODEL`, `CATJAM_MAX_JOBS` (2), `CATJAM_JOB_TIMEOUT` (45m), `CATJAM_MAX_FIX_ROUNDS` (3), `REVIEW_MODEL` (sonnet), `REVIEW_MAX_PRS` (12), `REVIEW_PER_PR_USD` (1.50), `REVIEW_DAILY_CAP_USD` (5.00), `REVIEW_TICK_MINUTES` (40).
 - One-off: `review.sh --dry-run --pr N`, `review.sh --summary-dry-run`, `review.sh --slack-test`.

@@ -170,23 +170,33 @@ ci_finished_cached() { # <pr> <sha8>: ci_finished_at with a 300s negative cache
 }
 
 verdict_posted() { # <pr> <sha8>: 0 when this script posted a verdict at the head
-  awk -v p="pr=$1" -v s="sha=$2" '$3 == p && $5 == s && $6 == "posted"' "$LEDGER" 2> /dev/null | grep -q .
+  # awk's own exit status: no `| grep -q`, which can SIGPIPE awk under pipefail.
+  awk -v p="pr=$1" -v s="sha=$2" '$3 == p && $5 == s && $6 == "posted" { f = 1; exit } END { exit !f }' "$LEDGER" 2> /dev/null
 }
 
 scope_skipped() { # <pr> <sha8>: 0 when this head was scope-skipped (local log)
   grep -q "^$1 $2 " "$STATE/scope-skips" 2> /dev/null
 }
 
+# first_trusted_line < comment pages: the first line of the newest trusted
+# "Strategist review". --paginate prints one JSON array per page, so the pages
+# are merged first (as comments_json does) before the filter sees them.
+first_trusted_line() {
+  jq -s 'add // []' | jq -r --arg me "$OWNER_LOGIN" "$TRUSTED_REVIEWS_JQ"' | last | (.body // "") | split("\n")[0]'
+}
+
 trusted_review_at() { # <pr> <sha8>: 0 when a trusted "Strategist review" is at the head
   local n=$1 s8=$2 first
-  first=$(gh api "repos/$REPO/issues/$n/comments?per_page=100" --paginate 2> /dev/null |
-    jq -s --arg me "$OWNER_LOGIN" "$TRUSTED_REVIEWS_JQ"' | last | (.body // "") | split("\n")[0]') || return 1
+  first=$(gh api "repos/$REPO/issues/$n/comments?per_page=100" --paginate 2> /dev/null | first_trusted_line) || return 1
   [[ $first == *" at $s8"* ]]
 }
 
 precheck() { # 0 = may have work (run review_tick); 1 = idle
   local n sha s8 prs open_ns
-  prs=$(gh api "repos/$REPO/pulls?state=open&per_page=100" --jq '.[] | "\(.number) \(.head.sha)"' 2> /dev/null) ||
+  # Every page, and same-repo PRs only, as scan_prs: a fork PR is never
+  # reviewed, so it must not make every tick a full tick.
+  prs=$(gh api "repos/$REPO/pulls?state=open&per_page=100" --paginate \
+    --jq ".[] | select(.head.repo.full_name == \"$REPO\") | \"\(.number) \(.head.sha)\"" 2> /dev/null) ||
     { say "pre-check: open-PR list failed"; return 1; }
   # prune the CI cache to currently-open PRs
   open_ns=$(awk '{print $1}' <<< "$prs" | paste -sd'|')
@@ -558,9 +568,11 @@ slack_post() { # text on stdin; webhook URL never appears on a command line
 
 post_summary() {
   local marker=$STATE/summary-$(today) text
+  # Marker first: on the 2-minute timer every 11:xx tick calls this, and
+  # building the summary costs a comments call per open PR plus searches.
+  if [ "$POST" = 1 ] && [ -e "$marker" ]; then return 0; fi
   text=$(summary_text)
   if [ "$POST" = 0 ]; then printf '%s\n' "$text"; return 0; fi
-  [ ! -e "$marker" ] || { say "summary already posted today"; return 0; }
   printf '%s\n' "$text" | slack_post || say "slack post failed"
   gh api "repos/$REPO/issues/$OPS_LOG_ISSUE/comments" -f body="$text" > /dev/null || say "#$OPS_LOG_ISSUE comment failed"
   touch "$marker"
