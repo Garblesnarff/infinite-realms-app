@@ -47,6 +47,8 @@ const CampaignOverview: React.FC<CampaignOverviewProps> = ({ campaign, onStartNe
       return userDataApi.listSessions({ campaignId, status: 'active' });
     },
     enabled: Boolean(campaignId),
+    staleTime: 0, // #707: Overview Resume must reflect sessions started while off-screen
+    refetchOnMount: 'always',
   });
 
   const resumableSession = React.useMemo(() => {
