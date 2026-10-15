@@ -23,7 +23,7 @@ const label = (entity: DigestEntity): string => entity.name || entity.id;
 const RANGED_PATTERN =
   /\b(?:ranged?|bow|longbow|shortbow|crossbow|sling|dart|javelin|thrown|throws?|firebolt|fire bolt|eldritch blast|ray|bolt|arrow|blast|beam|cantrip|spell|casts?|magic missile)\b/i;
 
-export function isRangedDescriptor(...descriptors: Array<string | null | undefined>): boolean {
+function isRangedDescriptor(...descriptors: Array<string | null | undefined>): boolean {
   return RANGED_PATTERN.test(descriptors.filter(Boolean).join(' '));
 }
 

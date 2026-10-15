@@ -103,7 +103,7 @@ export interface EncounterNote {
  * elsewhere in the chunk — ability text about "a group", disposition prose
  * about packs — never change the count.
  */
-export function parseEncounterNote(content: string | null | undefined): EncounterNote {
+function parseEncounterNote(content: string | null | undefined): EncounterNote {
   if (!content || typeof content !== 'string') return { kind: null, sourceText: '' };
 
   const explicit = /(?:^|[\n*_>|-])\s*\**\s*encounters?\s*\**\s*[:—-]\s*([^\n]*)/i.exec(content);
@@ -132,7 +132,7 @@ export function parseEncounterNote(content: string | null | undefined): Encounte
 }
 
 /** The encounter note for one combatant, via the real authored-monster lookup. */
-export function encounterNoteFor(
+function encounterNoteFor(
   index: CampaignMonsterIndex,
   monsterId: string | null | undefined,
   name: string | null | undefined,
@@ -154,7 +154,7 @@ const isPackLike = (kind: EncounterNoteKind | null): boolean =>
  * overrides every difficulty to 1; otherwise the difficulty bucket decides,
  * with a pack/swarm/group note lifting Hard from 2 to 3.
  */
-export function desiredHostileCount(
+function desiredHostileCount(
   difficulty: EncounterDifficulty | null,
   note: EncounterNote,
 ): number {
@@ -227,7 +227,7 @@ function nameTokens(name: string): string[] {
  * safe to person. A solo/boss/unique `Encounters:` note caps even a
  * generic creature at 1 through `desiredHostileCount`.
  */
-export function isNamedUnique(
+function isNamedUnique(
   index: CampaignMonsterIndex,
   lookup: { monsterId?: string | null; npcId?: string | null; name: string },
 ): boolean {
@@ -277,7 +277,7 @@ const bibleMonsterId = (
  * the explicit `Encounters:` segment is read, and only names the monster
  * index can resolve are seated.
  */
-export function statedCompanionNames(
+function statedCompanionNames(
   index: CampaignMonsterIndex,
   primaryName: string,
   note: EncounterNote,
@@ -379,7 +379,7 @@ export function expandDerivedCombatants<T extends SizedCombatant>(
 }
 
 /** Every seated hostile name, numbered the way `buildEntryParticipants` numbers them. */
-export function expandedCreatureNames(combatants: readonly SizedCombatant[]): string[] {
+function expandedCreatureNames(combatants: readonly SizedCombatant[]): string[] {
   const names: string[] = [];
   for (const combatant of combatants) {
     const count = Math.max(1, combatant.count || 1);

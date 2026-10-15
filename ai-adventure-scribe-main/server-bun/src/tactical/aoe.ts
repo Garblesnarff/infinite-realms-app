@@ -20,7 +20,7 @@ export type AoECastGeometry = {
   cells: Point[];
 };
 
-export function parametersForArea(
+function parametersForArea(
   area: SpellAreaOfEffect,
   direction: Point | null,
   sourceEntityId?: string,
