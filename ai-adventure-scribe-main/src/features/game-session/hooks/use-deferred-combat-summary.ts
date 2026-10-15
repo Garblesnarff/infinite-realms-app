@@ -142,7 +142,10 @@ async function postCombatSummary(
     let summary: ServerDamageSummary | undefined;
     try {
       summary = await fetchCombatDamageSummary(encounter.id);
-    } catch {
+    } catch (error) {
+      // A failed fetch must not silently produce a zero-damage summary (#570 D4-013):
+      // log it so the fallback is visible in diagnostics.
+      console.warn('[combat-summary] server damage-summary fetch failed, using in-memory fallback', error);
       // Fall through to the in-memory build below.
     }
     if (summary) {

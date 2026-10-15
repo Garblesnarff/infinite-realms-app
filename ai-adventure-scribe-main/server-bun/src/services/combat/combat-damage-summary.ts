@@ -40,10 +40,11 @@ export async function getCombatDamageSummary(
   encounterId: string,
   userId: string,
 ): Promise<CombatDamageSummary> {
-  // getDamageLog and getCombatState both enforce encounter ownership for userId and throw
-  // NotFoundError for an encounter the caller may not see.
+  // The route's verifyEncounterOwnership (resolve/onBeforeHandle in status.ts) already
+  // enforces ownership before this runs, so the damage log is fetched by encounterId
+  // alone. getCombatState keeps its userId check for the roster.
   const [logs, combat] = await Promise.all([
-    getDamageLog(encounterId, undefined, undefined, userId),
+    getDamageLog(encounterId),
     CombatEncounterService.getCombatState(encounterId, userId),
   ]);
   const dealt = new Map<string, number>();
