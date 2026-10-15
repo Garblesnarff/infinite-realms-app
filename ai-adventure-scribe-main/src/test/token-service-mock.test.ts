@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { createTokenServiceMock } from './token-service-mock';
 
 describe('createTokenServiceMock', () => {
   it('converts function exports into vi.fn() returning undefined', async () => {
-    const originalFn = () => 'original result';
-    const fakeImportOriginal = async () => ({
+    const originalFn = (): string => 'original result';
+    const fakeImportOriginal = async (): Promise<Record<string, unknown>> => ({
       someFunction: originalFn,
     });
 
@@ -21,7 +22,7 @@ describe('createTokenServiceMock', () => {
     }
     const SOME_CONSTANT = 'CONST_VALUE';
 
-    const fakeImportOriginal = async () => ({
+    const fakeImportOriginal = async (): Promise<Record<string, unknown>> => ({
       SomeClass,
       SOME_CONSTANT,
     });
@@ -33,8 +34,8 @@ describe('createTokenServiceMock', () => {
   });
 
   it('ensures overrides win over stubs and allows adding new names not in original', async () => {
-    const originalFn = () => 'original';
-    const fakeImportOriginal = async () => ({
+    const originalFn = (): string => 'original';
+    const fakeImportOriginal = async (): Promise<Record<string, unknown>> => ({
       getAccessToken: originalFn,
     });
 
