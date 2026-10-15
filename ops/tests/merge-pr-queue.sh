@@ -5,6 +5,10 @@
 #      non-conventional title, empty PR)
 #   2. merge queue ON  → GraphQL enqueuePullRequest, no REST merge
 #   3. merge queue OFF → REST squash merge, no enqueue
+#   4. the caller's expected head sha: required, refused on mismatch, pinned
+#      in both merge calls
+#   5. renames out of workflow/migration folders, the 3000-file cap, the PR
+#      argument check, perf: titles
 #
 #   bash ops/tests/merge-pr-queue.sh
 set -euo pipefail
@@ -21,7 +25,7 @@ export TMP
 # Behaviour is driven by env files the test writes per case:
 #   $TMP/pr.json        PR object
 #   $TMP/files.json     files array
-#   $TMP/queue.json     GraphQL branch-protection response
+#   $TMP/queue.json     GET rules/branches/main response (active rules)
 mkdir -p "$TMP/bin"
 cat > "$TMP/bin/gh" <<'STUB'
 #!/usr/bin/env bash
@@ -38,7 +42,7 @@ serve() {  # serve <file> -- [gh args...]
 args="$*"
 if [[ "$args" == *"pulls/99/files"* ]]; then serve "$TMP/files.json" "$@"; exit 0; fi
 if [[ "$args" == *"pulls/99"* && "$args" != *"merge"* ]]; then serve "$TMP/pr.json" "$@"; exit 0; fi
-if [[ "$args" == *"/rulesets"* ]]; then serve "$TMP/queue.json" "$@"; exit 0; fi
+if [[ "$args" == *"rules/branches/main"* ]]; then serve "$TMP/queue.json" "$@"; exit 0; fi
 if [[ "$args" == *"enqueuePullRequest"* ]]; then
   printf '%s' '{"data":{"enqueuePullRequest":{"mergeQueueEntry":{"id":"Q1","state":"QUEUED","position":3}}}}' \
     | serve /dev/stdin "$@"; exit 0
@@ -54,74 +58,127 @@ export PATH="$TMP/bin:$PATH"
 export GH_TOKEN=fake
 
 pass=0; fail=0
+SHA=deadbeef12345678deadbeef12345678deadbeef
+OTHER=0123456789abcdef0123456789abcdef01234567
 ok()   { pass=$((pass+1)); echo "ok: $1"; }
 notok(){ fail=$((fail+1)); echo "FAIL: $1"; }
 
 mkpr() { # title author base state
   cat > "$TMP/pr.json" <<JSON
-{"title":"$1","user":{"login":"$2"},"head":{"sha":"deadbeef12345678"},"node_id":"PR_node_1","base":{"ref":"$3"},"state":"$4"}
+{"title":"$1","user":{"login":"$2"},"head":{"sha":"$SHA"},"node_id":"PR_node_1","base":{"ref":"$3"},"state":"$4"}
 JSON
 }
 
 # --- skip rules ---------------------------------------------------------------
 mkpr "feat(x): thing" "someone" "main" "open"; echo '[]' > "$TMP/files.json"
-out=$(bash "$SCRIPT" 99 2>&1) || true
+out=$(bash "$SCRIPT" 99 "$SHA" 2>&1) || true
 [[ "$out" == "skip: empty PR (0 files)" ]] && ok "empty PR skipped" || notok "empty PR: $out"
 
 mkpr "feat(x): thing" "someone" "main" "open"
 echo '[{"filename":".github/workflows/ci.yml"}]' > "$TMP/files.json"
-out=$(bash "$SCRIPT" 99 2>&1) || true
+out=$(bash "$SCRIPT" 99 "$SHA" 2>&1) || true
 [[ "$out" == skip:\ workflow\ PR* ]] && ok "workflow PR skipped" || notok "workflow: $out"
 
 mkpr "feat(x): thing" "someone" "main" "open"
 echo '[{"filename":"ai-adventure-scribe-main/db/migrations/0022_x.sql"}]' > "$TMP/files.json"
-out=$(bash "$SCRIPT" 99 2>&1) || true
+out=$(bash "$SCRIPT" 99 "$SHA" 2>&1) || true
 [[ "$out" == skip:\ migration* ]] && ok "migration skipped" || notok "migration: $out"
 
 mkpr "chore(main): release 0.38.0" "someone" "main" "open"
 echo '[{"filename":"a.txt"}]' > "$TMP/files.json"
-out=$(bash "$SCRIPT" 99 2>&1) || true
+out=$(bash "$SCRIPT" 99 "$SHA" 2>&1) || true
 [[ "$out" == skip:\ release\ PR* ]] && ok "release title skipped" || notok "release title: $out"
 
 mkpr "feat(x): thing" "release-please[bot]" "main" "open"
-out=$(bash "$SCRIPT" 99 2>&1) || true
+out=$(bash "$SCRIPT" 99 "$SHA" 2>&1) || true
 [[ "$out" == skip:\ release\ PR* ]] && ok "release author skipped" || notok "release author: $out"
 
 mkpr "do stuff" "someone" "main" "open"
-out=$(bash "$SCRIPT" 99 2>&1) || true
+out=$(bash "$SCRIPT" 99 "$SHA" 2>&1) || true
 [[ "$out" == skip:\ non-conventional\ title* ]] && ok "non-conventional title skipped" || notok "title: $out"
 
 mkpr "fix(combat): thing (#621)" "someone" "other-branch" "open"
-out=$(bash "$SCRIPT" 99 2>&1) || true
+out=$(bash "$SCRIPT" 99 "$SHA" 2>&1) || true
 [[ "$out" == "skip: base is other-branch, not main" ]] && ok "non-main base skipped" || notok "base: $out"
 
 # --- merge queue ON → enqueue, no REST merge ----------------------------------
 mkpr "fix(combat): thing (#621)" "someone" "main" "open"
 echo '[{"filename":"ops/foreman/merge-pr.sh"}]' > "$TMP/files.json"
 cat > "$TMP/queue.json" <<'JSON'
-[{"id":1,"name":"main protection","target":"branch","rules":[{"type":"merge_queue","parameters":{}}]}]
+[{"type":"pull_request","ruleset_source_type":"Repository","ruleset_source":"Garblesnarff/infinite-realms-app","ruleset_id":1,"parameters":{}},
+ {"type":"merge_queue","ruleset_source_type":"Repository","ruleset_source":"Garblesnarff/infinite-realms-app","ruleset_id":1,"parameters":{"merge_method":"SQUASH"}}]
 JSON
 : > "$STUB_LOG"
-out=$(bash "$SCRIPT" 99 2>&1)
+out=$(bash "$SCRIPT" 99 "$SHA" 2>&1)
 [[ "$out" == *"enqueued: id=Q1 state=QUEUED position=3"* ]] && ok "queue ON → enqueued" || notok "enqueue: $out"
 grep -q "enqueuePullRequest" "$STUB_LOG" && ok "enqueue mutation called" || notok "no enqueue call"
 grep -q "pulls/99/merge" "$STUB_LOG" && notok "REST merge called while queue on" || ok "no REST merge while queue on"
 
 # --- merge queue OFF → REST squash merge, no enqueue --------------------------
 cat > "$TMP/queue.json" <<'JSON'
-[{"id":1,"name":"main protection","target":"branch","rules":[{"type":"pull_request"}]}]
+[{"type":"pull_request","ruleset_source_type":"Repository","ruleset_source":"Garblesnarff/infinite-realms-app","ruleset_id":1,"parameters":{}}]
 JSON
 : > "$STUB_LOG"
-out=$(bash "$SCRIPT" 99 2>&1)
+out=$(bash "$SCRIPT" 99 "$SHA" 2>&1)
 [[ "$out" == *"merged: sha=abc123 merged=true"* ]] && ok "queue OFF → REST merged" || notok "rest merge: $out"
 grep -q "pulls/99/merge" "$STUB_LOG" && ok "REST merge called" || notok "no REST merge call"
 grep -q "enqueuePullRequest" "$STUB_LOG" && notok "enqueue called while queue off" || ok "no enqueue while queue off"
 
 # --- dry run -------------------------------------------------------------------
 : > "$STUB_LOG"
-out=$(bash "$SCRIPT" 99 --dry-run 2>&1)
+out=$(bash "$SCRIPT" 99 "$SHA" --dry-run 2>&1)
 [[ "$out" == *"dry-run:"* ]] && ok "dry-run prints intent" || notok "dry-run: $out"
 grep -q "enqueuePullRequest" "$STUB_LOG" && notok "dry-run enqueued" || ok "dry-run makes no mutation"
+
+# --- expected head sha ----------------------------------------------------------
+cat > "$TMP/queue.json" <<'JSON'
+[]
+JSON
+mkpr "fix(x): thing" "someone" "main" "open"
+echo '[{"filename":"a.txt"}]' > "$TMP/files.json"
+: > "$STUB_LOG"
+rc=0; out=$(bash "$SCRIPT" 99 "$OTHER" 2>&1) || rc=$?
+[ "$rc" = 1 ] && [[ "$out" == refuse:* ]] && ok "head differs from the approved sha → refuse, exit 1" || notok "mismatch: rc=$rc $out"
+grep -qE "pulls/99/merge|enqueuePullRequest" "$STUB_LOG" && notok "merge called on a sha mismatch" || ok "no merge call on a sha mismatch"
+rc=0; out=$(bash "$SCRIPT" 99 2>&1) || rc=$?
+[ "$rc" = 2 ] && ok "missing expected sha → exit 2" || notok "missing sha: rc=$rc $out"
+rc=0; out=$(bash "$SCRIPT" 99 deadbeef 2>&1) || rc=$?
+[ "$rc" = 2 ] && ok "short expected sha → exit 2" || notok "short sha: rc=$rc $out"
+: > "$STUB_LOG"
+out=$(MERGE_EXPECT_SHA=$SHA bash "$SCRIPT" 99 2>&1)
+[[ "$out" == *"merged: sha=abc123"* ]] && ok "MERGE_EXPECT_SHA works" || notok "env sha: $out"
+grep -q "pulls/99/merge.*sha=$SHA" "$STUB_LOG" && ok "REST merge pins the approved sha" || notok "REST merge sha not pinned: $(cat "$STUB_LOG")"
+cat > "$TMP/queue.json" <<'JSON'
+[{"type":"merge_queue","ruleset_id":1,"parameters":{}}]
+JSON
+: > "$STUB_LOG"
+bash "$SCRIPT" 99 "$SHA" > /dev/null 2>&1
+grep -q "headOid=$SHA" "$STUB_LOG" && ok "enqueue pins the approved sha" || notok "enqueue sha not pinned: $(cat "$STUB_LOG")"
+echo '[]' > "$TMP/queue.json"
+
+# --- argument checks --------------------------------------------------------------
+rc=0; bash "$SCRIPT" --dryrun "$SHA" > /dev/null 2>&1 || rc=$?
+[ "$rc" = 2 ] && ok "unknown option → exit 2" || notok "unknown option rc=$rc"
+rc=0; bash "$SCRIPT" 9x "$SHA" > /dev/null 2>&1 || rc=$?
+[ "$rc" = 2 ] && ok "non-numeric PR → exit 2" || notok "non-numeric PR rc=$rc"
+
+# --- renames, file cap, perf: -------------------------------------------------------
+echo '[{"filename":"docs/old-ci.yml","previous_filename":".github/workflows/ci.yml"}]' > "$TMP/files.json"
+out=$(bash "$SCRIPT" 99 "$SHA" 2>&1) || true
+[[ "$out" == "skip: workflow PR (.github/workflows/ci.yml)" ]] && ok "rename out of workflows skipped" || notok "workflow rename: $out"
+echo '[{"filename":"docs/0022_x.sql","previous_filename":"ai-adventure-scribe-main/db/migrations/0022_x.sql"}]' > "$TMP/files.json"
+out=$(bash "$SCRIPT" 99 "$SHA" 2>&1) || true
+[[ "$out" == skip:\ migration* ]] && ok "rename out of migrations skipped" || notok "migration rename: $out"
+jq -n '[range(3000) | {filename: "f\(.).txt"}]' > "$TMP/files.json"
+out=$(bash "$SCRIPT" 99 "$SHA" 2>&1) || true
+[[ "$out" == skip:\ file\ list\ truncated* ]] && ok "3000 files skipped" || notok "3000 files: $out"
+jq -n '[range(2999) | {filename: "f\(.).txt"}]' > "$TMP/files.json"
+out=$(bash "$SCRIPT" 99 "$SHA" --dry-run 2>&1) || true
+[[ "$out" == *"dry-run:"* ]] && ok "2999 files not skipped" || notok "2999 files: $out"
+mkpr "perf(dm): faster thing" "someone" "main" "open"
+echo '[{"filename":"a.txt"}]' > "$TMP/files.json"
+out=$(bash "$SCRIPT" 99 "$SHA" --dry-run 2>&1) || true
+[[ "$out" == *"dry-run:"* ]] && ok "perf: title accepted" || notok "perf title: $out"
 
 echo "--- $pass passed, $fail failed ---"
 [ "$fail" = "0" ]
