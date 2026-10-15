@@ -16,6 +16,7 @@ import { ownedSessionCharacter } from './dm-feature-gate.js';
 import { playerMessage } from './story-spell-slots.js';
 import { resolveCatalogItem } from '../../data/itemCatalog.js';
 import { logger } from '../../lib/logger.js';
+
 export type StoryItemChange = {
   name: string;
   quantity: number;
