@@ -106,69 +106,6 @@ export function createSoftwareAppSchema(site: SiteConfig): object {
   };
 }
 
-/**
- * Creates Organization schema
- * @see https://schema.org/Organization
- */
-export function createOrganizationSchema(site: SiteConfig): object {
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'Organization',
-    '@id': `${site.url}#organization`,
-    name: site.name,
-    url: site.url,
-    logo: {
-      '@type': 'ImageObject',
-      url: site.logoUrl,
-    },
-    sameAs: [
-      // Add social profiles here when available
-    ],
-  };
-}
-
-/**
- * Creates BreadcrumbList schema
- * @see https://schema.org/BreadcrumbList
- */
-export function createBreadcrumbSchema(
-  site: SiteConfig,
-  items: Array<{ name: string; url: string }>
-): object {
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'BreadcrumbList',
-    itemListElement: items.map((item, index) => ({
-      '@type': 'ListItem',
-      position: index + 1,
-      name: item.name,
-      item: item.url.startsWith('http') ? item.url : `${site.url}${item.url}`,
-    })),
-  };
-}
-
-/**
- * Creates HowTo schema for step-by-step guides
- * @see https://schema.org/HowTo
- */
-export function createHowToSchema(
-  name: string,
-  description: string,
-  steps: Array<{ name: string; text: string }>
-): object {
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'HowTo',
-    name,
-    description,
-    step: steps.map((step, index) => ({
-      '@type': 'HowToStep',
-      position: index + 1,
-      name: step.name,
-      text: step.text,
-    })),
-  };
-}
 
 /**
  * Combines multiple schema objects into a graph

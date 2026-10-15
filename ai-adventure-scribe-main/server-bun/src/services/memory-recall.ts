@@ -6,7 +6,7 @@
 
 export const RECALL_BUDGET_MS = 300;
 /** One user can embed at most this many queries per minute. */
-export const RECALL_PER_MINUTE = 30;
+const RECALL_PER_MINUTE = 30;
 
 const windows = new Map<string, { count: number; resetAt: number }>();
 

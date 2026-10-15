@@ -24,7 +24,7 @@ export interface VersionPayload {
   clientBuild: string | null;
 }
 
-export const UNKNOWN_COMMIT = 'unknown';
+const UNKNOWN_COMMIT = 'unknown';
 const SHA = /^[0-9a-f]{7,40}$/i;
 
 export interface VersionSources {
@@ -56,7 +56,7 @@ function defaultReadClientIndex(): string {
  * `pm2 restart`, so HEAD at startup is the deployed commit, and a later `git` change on the box
  * without a restart must not make /version claim code that isn't running.
  */
-export function resolveCommit(sources: VersionSources = {}): string {
+function resolveCommit(sources: VersionSources = {}): string {
   const env = sources.env ?? process.env;
   const fromEnv = env.GIT_COMMIT?.trim();
   if (fromEnv && SHA.test(fromEnv)) return fromEnv.toLowerCase();
@@ -70,7 +70,7 @@ export function resolveCommit(sources: VersionSources = {}): string {
 }
 
 /** Entry chunk and baked-in build stamp from the served index.html. Never throws. */
-export function readClientBuild(readIndex: () => string = defaultReadClientIndex): {
+function readClientBuild(readIndex: () => string = defaultReadClientIndex): {
   bundle: string | null;
   clientBuild: string | null;
 } {
