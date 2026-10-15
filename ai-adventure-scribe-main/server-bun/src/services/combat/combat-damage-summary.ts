@@ -40,10 +40,14 @@ export async function getCombatDamageSummary(
   encounterId: string,
   userId: string,
 ): Promise<CombatDamageSummary> {
-  // getDamageLog and getCombatState both enforce encounter ownership for userId and throw
-  // NotFoundError for an encounter the caller may not see.
+  // Ownership is enforced by the route's verifyEncounterOwnership (resolve/onBeforeHandle
+  // in status.ts) before this runs. Fetch the damage log by encounterId alone: the
+  // userId-scoped variant joins through gameSessions/campaigns/characters, and that chain
+  // can return zero rows for an encounter the caller owns (stale session link, test
+  // fixtures), which made the summary silently show 0 damage (#570 D4-013). getCombatState
+  // keeps its userId check for the roster.
   const [logs, combat] = await Promise.all([
-    getDamageLog(encounterId, undefined, undefined, userId),
+    getDamageLog(encounterId),
     CombatEncounterService.getCombatState(encounterId, userId),
   ]);
   const dealt = new Map<string, number>();
