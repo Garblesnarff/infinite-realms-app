@@ -162,7 +162,7 @@ describe('CombatRulesPrompts', () => {
     it('should return correct base structure when isCombat is true but enemies and actions are empty', () => {
       const minimalContext: CombatDetectionResult = {
         isCombat: true,
-        combatType: 'melee',
+        combatType: 'attack',
         confidence: 0.85,
         shouldStartCombat: true,
         shouldEndCombat: false,
@@ -173,7 +173,7 @@ describe('CombatRulesPrompts', () => {
       const result = CombatRulesPrompts.formatCombatContext(minimalContext);
 
       expect(result).toContain('COMBAT CONTEXT DETECTED:');
-      expect(result).toContain('Combat Type: melee');
+      expect(result).toContain('Combat Type: attack');
       expect(result).toContain('Confidence: 85%');
       expect(result).toContain('Should Start Combat: YES');
       expect(result).toContain('Should End Combat: NO');
@@ -185,14 +185,14 @@ describe('CombatRulesPrompts', () => {
     it('should format detected enemies list with details when present', () => {
       const enemyContext: CombatDetectionResult = {
         isCombat: true,
-        combatType: 'ranged',
+        combatType: 'initiative',
         confidence: 0.9,
         shouldStartCombat: false,
         shouldEndCombat: false,
         enemies: [
           {
             name: 'Goblin 1',
-            type: 'creature',
+            type: 'beast',
             estimatedCR: '1/4',
             suggestedHP: 7,
             suggestedAC: 15,
@@ -201,7 +201,7 @@ describe('CombatRulesPrompts', () => {
           {
             name: 'Orc Boss',
             type: 'humanoid',
-            estimatedCR: 2,
+            estimatedCR: '2',
             suggestedHP: 45,
             suggestedAC: 16,
             description: 'A muscular orc wielding a greataxe.',
@@ -212,7 +212,7 @@ describe('CombatRulesPrompts', () => {
       const result = CombatRulesPrompts.formatCombatContext(enemyContext);
 
       expect(result).toContain('DETECTED ENEMIES:');
-      expect(result).toContain('- Goblin 1 (creature, CR 1/4)');
+      expect(result).toContain('- Goblin 1 (beast, CR 1/4)');
       expect(result).toContain('HP: 7, AC: 15');
       expect(result).toContain('Description: A sneaky goblin with a shortbow.');
 
@@ -224,7 +224,7 @@ describe('CombatRulesPrompts', () => {
     it('should format detected combat actions with all fields present', () => {
       const actionContext: CombatDetectionResult = {
         isCombat: true,
-        combatType: 'skirmish',
+        combatType: 'attack',
         confidence: 0.95,
         shouldStartCombat: false,
         shouldEndCombat: false,
@@ -250,7 +250,7 @@ describe('CombatRulesPrompts', () => {
     it('should handle optional target and weapon missing from combat actions', () => {
       const actionContext: CombatDetectionResult = {
         isCombat: true,
-        combatType: 'skirmish',
+        combatType: 'attack',
         confidence: 0.95,
         shouldStartCombat: false,
         shouldEndCombat: false,
@@ -258,7 +258,7 @@ describe('CombatRulesPrompts', () => {
           {
             actor: 'Wizard',
             action: 'casts Shield',
-            rollType: 'defense',
+            rollType: 'save',
             rollNeeded: false,
           },
         ],
@@ -272,13 +272,13 @@ describe('CombatRulesPrompts', () => {
       expect(actionLine).toContain('- Wizard performs casts Shield');
       expect(actionLine).not.toContain('against');
       expect(actionLine).not.toContain('with');
-      expect(result).toContain('Roll Type: defense, Needs Roll: NO');
+      expect(result).toContain('Roll Type: save, Needs Roll: NO');
     });
 
     it('declares the attack as combat_actions and requests no roll', () => {
       const result = CombatRulesPrompts.formatCombatContext({
         isCombat: true,
-        combatType: 'melee',
+        combatType: 'attack',
         confidence: 0.9,
         shouldStartCombat: false,
         shouldEndCombat: false,
