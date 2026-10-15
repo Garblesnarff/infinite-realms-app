@@ -287,5 +287,28 @@ git -C "$DEL" rm -q app/src/pages/Page.tsx
 got=$(delcheck deleted_refs x $'app/src/components/old/Old.tsx\napp/src/components/old/index.ts')
 [ -z "$got" ] && ok "deleted_refs: no imports left" || bad "deleted_refs clean: '$got'"
 
+# reviewer: "author never judges" runs before the paid call (#662).
+{ sed -n '/^model_family_of_text() {/,/^}/p' "$HERE/../foreman/lib.sh"; sed -n '/^author_skip() {/,/^}/p' "$HERE/../foreman/review.sh"; } > "$TMP/as-funcs.sh"
+as_run() { # as_run <author family> <MODEL> <POST>: prints "<status> <gh calls>"; ledger in $TMP/as-ledger
+  : > "$TMP/as-gh"; : > "$TMP/as-ledger"
+  AF=$1 MODEL=$2 POST=$3 LEDGER=$TMP/as-ledger GHLOG=$TMP/as-gh REPO=x/y bash -uo pipefail -c '
+    author_model_family() { echo "$AF"; }; logline() { :; }; say() { :; }; today() { echo 2026-10-15; }
+    gh() { echo "$*" >> "$GHLOG"; }
+    . "$1"
+    author_skip 9 abcd1234; echo "$?"' _ "$TMP/as-funcs.sh"
+}
+st=$(as_run sonnet sonnet 1)
+[ "$st" = 0 ] && grep -qE '^[^ ]+ 2026-10-15 pr=9 0 sha=abcd1234 author-model-skip models=none$' "$TMP/as-ledger" && grep -q 'labels\[\]=needs-other-reviewer' "$TMP/as-gh" \
+  && ok "author_skip: same family -> \$0 ledger row + label, no review" || bad "author_skip same: st=$st ledger='$(cat "$TMP/as-ledger")' gh='$(cat "$TMP/as-gh")'"
+st=$(as_run sonnet claude-sonnet-5-5 0)
+[ "$st" = 0 ] && grep -q ' dry-run-author-model-skip models=none$' "$TMP/as-ledger" && [ ! -s "$TMP/as-gh" ] \
+  && ok "author_skip: dry run writes a dry-run row and adds no label" || bad "author_skip dry: st=$st ledger='$(cat "$TMP/as-ledger")' gh='$(cat "$TMP/as-gh")'"
+st=$(as_run haiku sonnet 1)
+[ "$st" = 1 ] && [ ! -s "$TMP/as-ledger" ] && [ ! -s "$TMP/as-gh" ] && ok "author_skip: other family -> review" || bad "author_skip other: st=$st"
+st=$(as_run "" sonnet 1)
+[ "$st" = 1 ] && [ ! -s "$TMP/as-ledger" ] && ok "author_skip: unknown author -> review (fail-open)" || bad "author_skip unknown: st=$st"
+awk '/^review_pr\(\) \{/ { f = 1 } f && /author_skip "\$n" "\$s8"/ { a = NR } f && /run_claude "\$dir"/ { r = NR } f && /^}/ { exit } END { exit !(a && r && a < r) }' "$HERE/../foreman/review.sh" \
+  && ok "review_pr: author_skip runs before run_claude" || bad "review_pr: author_skip not before run_claude"
+
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]

@@ -3,14 +3,14 @@
 # ops/foreman/lib.sh maps "model:" / "author-model:" / "Co-Authored-By:" lines
 # to a model family, or empty when no model is named.
 #
-#   bash ops/foreman/author-model-check.test.sh
+#   bash ops/tests/author-model-check.test.sh
 #
 # Needs only bash; no network, no gh. Exits non-zero on the first failure.
 set -euo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=ops/foreman/lib.sh
-. "$HERE/lib.sh"
+. "$HERE/../foreman/lib.sh"
 
 pass=0 fail=0
 expect_family() { # expect_family <name> <want: family|empty> <text>
