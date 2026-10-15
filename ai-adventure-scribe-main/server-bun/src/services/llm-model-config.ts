@@ -3,14 +3,14 @@
 // llm-model-config.test.ts. Keep these ids in the same form returned by /v1/models.
 // Structured DM responses require both response_format and structured_outputs.
 export const DEFAULT_OPENROUTER_TEXT_MODEL = 'google/gemini-3.1-flash-lite';
-export const DEFAULT_OPENROUTER_FALLBACK_MODELS = [
+const DEFAULT_OPENROUTER_FALLBACK_MODELS = [
   'mistralai/mistral-nemo',
   'meta-llama/llama-3.1-8b-instruct',
 ];
 export const DEFAULT_GEMINI_TEXT_MODEL = 'gemini-2.5-flash-lite';
-export const DEFAULT_GEMINI_FALLBACK_MODEL = 'gemini-3.1-flash-lite-preview';
-export const DEFAULT_OPENROUTER_EXTRACTION_MODEL = 'mistralai/mistral-nemo';
-export const DEFAULT_OPENROUTER_EXTRACTION_FALLBACK_MODEL = 'meta-llama/llama-3.1-8b-instruct';
+const DEFAULT_GEMINI_FALLBACK_MODEL = 'gemini-3.1-flash-lite-preview';
+const DEFAULT_OPENROUTER_EXTRACTION_MODEL = 'mistralai/mistral-nemo';
+const DEFAULT_OPENROUTER_EXTRACTION_FALLBACK_MODEL = 'meta-llama/llama-3.1-8b-instruct';
 
 const dedupe = (values: string[]): string[] => {
   const seen = new Set<string>();
