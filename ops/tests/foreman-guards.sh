@@ -186,7 +186,6 @@ echo 'not json' > "$TMP/claude-c.json"
 [ "$(top_model "$TMP/claude-a.json")" = claude-sonnet-5-5 ] && ok "top_model: sonnet costliest" || bad "top_model a: '$(top_model "$TMP/claude-a.json")'"
 [ "$(top_model "$TMP/claude-b.json")" = claude-haiku-5-5 ] && ok "top_model: haiku costliest (mismatch case)" || bad "top_model b: '$(top_model "$TMP/claude-b.json")'"
 [ "$(models_of "$TMP/claude-c.json")" = none ] && [ -z "$(top_model "$TMP/claude-c.json")" ] && ok "models_of/top_model: bad JSON" || bad "bad JSON models"
-grep -q 'grep -qiE -- "$EXPECT_MODEL_RE" <<< "$top"' "$HERE/../foreman/review.sh" && ok "review_pr: compares the top model with EXPECT_MODEL_RE" || bad "review_pr: no model check"
 
 # reviewer summary: day spend vs cap, credit since start, days left, models.
 eval "$(sed -n '/^spend_lines() {/,/^}/p' "$HERE/../foreman/review.sh")"
@@ -289,7 +288,7 @@ got=$(delcheck deleted_refs x $'app/src/components/old/Old.tsx\napp/src/componen
 
 # reviewer: every verdict comment and review ends with the bot signature, once,
 # even when the model wrote the line itself.
-{ grep -E "^(BOT_SIGNATURE=|is_jules\(\))" "$HERE/../foreman/review.sh"; sed -n '/^post_verdict() {/,/^}/p' "$HERE/../foreman/review.sh"; } > "$TMP/pv-funcs.sh"
+{ grep -E "^(BOT_SIGNATURE_PREFIX=|BOT_SIGNATURE=|is_jules\(\))" "$HERE/../foreman/review.sh"; sed -n '/^post_verdict() {/,/^}/p' "$HERE/../foreman/review.sh"; } > "$TMP/pv-funcs.sh"
 mkdir -p "$TMP/pv"
 STATE=$TMP/pv bash -euo pipefail -c '
   POST=0 REVIEW_MODELS=claude-sonnet-5-5
@@ -317,6 +316,40 @@ j=$(jq -r .jules "$TMP/pv/dry-run/6.json")
 printf 'Strategist review — FIX at 01234567\nRequired:\n1. fix a\n\n— posted by the foreman reviewer bot (Sonnet)\n' > "$TMP/newest.txt"
 fx=$(awk "$(grep -o "'/^Required:/[^']*'" "$HERE/../foreman/catjam-runner.sh" | tr -d "'")" "$TMP/newest.txt")
 ! grep -q "posted by the foreman" <<< "$fx" && grep -q "fix a" <<< "$fx" && ok "runner: fix items drop the bot signature" || bad "runner fix items: '$fx'"
+
+# reviewer tiers (#663 item 5): Haiku only for a small PR off the heavy paths.
+eval "$(grep -E "^(HEAVY_RE|SMALL_MAX_LINES|SMALL_MODEL|SMALL_EXPECT_MODEL_RE|MODEL|EXPECT_MODEL_RE|BOT_SIGNATURE_PREFIX)=" "$HERE/../foreman/review.sh")"
+eval "$(sed -n '/^pick_tier() {/,/^}/p;/^set_tier() {/,/^}/p' "$HERE/../foreman/review.sh")"
+tier_of() { # tier_of <additions> <deletions> <path>...
+  local a=$1 d=$2; shift 2
+  printf '{"additions":%s,"deletions":%s}' "$a" "$d" > "$TMP/tier-pr.json"; printf '%s\n' "$@" > "$TMP/tier-paths.txt"
+  pick_tier "$TMP/tier-pr.json" "$TMP/tier-paths.txt"
+}
+[ "$(tier_of 200 100 ai-adventure-scribe-main/src/components/ui/Button.tsx README.md)" = "haiku lines=300" ] && ok "pick_tier: 300 lines off heavy paths -> haiku" || bad "pick_tier small: '$(tier_of 200 100 a/b.ts)'"
+[ "$(tier_of 200 101 ai-adventure-scribe-main/src/components/ui/Button.tsx)" = "sonnet lines=301" ] && ok "pick_tier: 301 lines -> sonnet" || bad "pick_tier 301"
+for p in ai-adventure-scribe-main/server-bun/src/services/combat/attack.ts ai-adventure-scribe-main/src/hooks/useCombatState.ts \
+  ai-adventure-scribe-main/server-bun/src/services/dm/story-xp.ts ai-adventure-scribe-main/src/services/ai/dm-response-processor.ts \
+  ai-adventure-scribe-main/src/features/game-session/components/chat/message-list/DMMessage.tsx ai-adventure-scribe-main/src/hooks/useDmTurn.ts \
+  ai-adventure-scribe-main/src/utils/use-pending-dm-roll.ts ai-adventure-scribe-main/db/migrations/0042_x.sql \
+  ai-adventure-scribe-main/supabase/migrations/20261015_x.sql ai-adventure-scribe-main/drizzle/meta/_journal.json ops/smoke.sh \
+  .factory/droids/dungeon-master-agent.md; do
+  t=$(tier_of 1 1 docs/x.md "$p"); [ "${t%% *}" = sonnet ] || { bad "pick_tier heavy path not sonnet: $p -> $t"; tf=1; }
+done
+[ -n "${tf:-}" ] || ok "pick_tier: combat, DM, migrations, drizzle, ops and dungeon-master paths -> sonnet"
+for p in ai-adventure-scribe-main/src/pages/Admin.tsx ai-adventure-scribe-main/src/admin/users.ts ai-adventure-scribe-main/src/lib/random.ts docs/ops/notes.md; do
+  t=$(tier_of 1 1 "$p"); [ "${t%% *}" = haiku ] || { bad "pick_tier false heavy hit: $p -> $t"; tf2=1; }
+done
+[ -n "${tf2:-}" ] || ok "pick_tier: admin, random, docs/ops are not heavy"
+printf '{"additions":null}' > "$TMP/tier-pr.json"
+[ "$(pick_tier "$TMP/tier-pr.json" "$TMP/tier-paths.txt")" = "sonnet lines-unknown" ] && ok "pick_tier: unreadable size -> sonnet" || bad "pick_tier null"
+: > "$TMP/tier-empty.txt"; printf '{"additions":1,"deletions":1}' > "$TMP/tier-pr.json"
+[ "$(pick_tier "$TMP/tier-pr.json" "$TMP/tier-empty.txt")" = "sonnet paths-unknown" ] && ok "pick_tier: no path list -> sonnet" || bad "pick_tier empty paths"
+set_tier haiku; [ "$RUN_MODEL" = haiku ] && [ "$RUN_EXPECT_RE" = haiku ] && [ "$BOT_SIGNATURE" = "— posted by the foreman reviewer bot (Haiku)" ] \
+  && ok "set_tier haiku: model, billing check, signature" || bad "set_tier haiku: $RUN_MODEL $RUN_EXPECT_RE $BOT_SIGNATURE"
+set_tier sonnet; [ "$RUN_MODEL" = sonnet ] && [ "$RUN_EXPECT_RE" = sonnet ] && [ "$BOT_SIGNATURE" = "— posted by the foreman reviewer bot (Sonnet)" ] \
+  && ok "set_tier sonnet: model, billing check, signature" || bad "set_tier sonnet: $RUN_MODEL $RUN_EXPECT_RE $BOT_SIGNATURE"
+grep -q 'claude -p --model "$RUN_MODEL"' "$HERE/../foreman/review.sh" && grep -q 'grep -qiE -- "$RUN_EXPECT_RE" <<< "$top"' "$HERE/../foreman/review.sh" \
+  && ok "review_pr: claude and the billing check use the tier's model" || bad "review_pr: tier model not wired"
 
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]
