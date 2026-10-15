@@ -56,6 +56,9 @@ STATE=$WORK/state
 RUNNER_LOG=${RUNNER_STATE:-/runner-state}/catjam-runner.log
 MAX_ATTEMPTS=${REVIEW_MAX_ATTEMPTS:-2}   # per (PR, head sha8) without a posted verdict
 CLAUDE_TIMEOUT=${REVIEW_CLAUDE_TIMEOUT:-20m}
+# Last line of every verdict comment and review, so Muse can tell bot verdicts
+# from the human strategist's (it waits for the strategist on protected paths).
+BOT_SIGNATURE='— posted by the foreman reviewer bot (Sonnet)'
 LEDGER=$STATE/spend.log  # "<iso> <utc date> pr=<n> <usd> sha=<sha8> <result> models=<id,id|none>"
 LOG=$STATE/review.log
 
@@ -329,9 +332,21 @@ post_verdict() {
   verdict=$(jq -r .verdict <<< "$v")
   s8=${sha:0:8}
   comment=$(jq -r '.comment // ""' <<< "$v" | sed '1{/^Strategist review/d}')
-  comment="Strategist review — $verdict at $s8"$'\n'"$comment"
-  review="Strategist review — $verdict at $s8. Details in the PR comment of the same title."
+  # The model must not forge or double the signature; a copy with trailing
+  # spaces counts as a copy.
+  comment=$(awk -v s="$BOT_SIGNATURE" '{t = $0; sub(/[[:space:]]+$/, "", t)} t != s' <<< "$comment")
+  comment="Strategist review — $verdict at $s8"$'\n'"$comment"$'\n\n'"$BOT_SIGNATURE"
+  review="Strategist review — $verdict at $s8. Details in the PR comment of the same title."$'\n\n'"$BOT_SIGNATURE"
   jules=$(jq -r '.jules // ""' <<< "$v")
+  # The @jules note (FIX/CLOSE on Jules PRs) is posted under the same account,
+  # so it is signed too. Empty means no @jules comment is posted.
+  if is_jules "$ref" && [ "$verdict" != PASS ] && [ -n "$jules" ]; then
+    jules=$(awk -v s="$BOT_SIGNATURE" '{t = $0; sub(/[[:space:]]+$/, "", t)} t != s' <<< "$jules")
+    [[ $jules == @jules* ]] || jules="@jules $jules"
+    jules+=$'\n\n'"$BOT_SIGNATURE"
+  else
+    jules=
+  fi
   # Literal env secret values first (compared in-shell, never on a command
   # line), then secret-shaped strings. Logs go to stderr; stdout is the result.
   if contains_env_secret "$comment"$'\n'"$jules"; then
@@ -344,7 +359,7 @@ post_verdict() {
   fi
   if [ "$POST" = 0 ]; then
     mkdir -p "$STATE/dry-run"
-    jq --arg c "$comment" --arg r "$review" '.comment = $c | .review = $r' <<< "$v" > "$STATE/dry-run/$n.json"
+    jq --arg c "$comment" --arg r "$review" --arg j "$jules" '.comment = $c | .review = $r | .jules = $j' <<< "$v" > "$STATE/dry-run/$n.json"
     logline "pr=#$n sha=$s8 verdict=$verdict result=dry-run usd=$cost models=$REVIEW_MODELS"
     echo dry-run; return 0
   fi
@@ -364,8 +379,7 @@ post_verdict() {
   fi
   gh api "repos/$REPO/pulls/$n/reviews" -f commit_id="$sha" -f event=COMMENT -f body="$review" > /dev/null ||
     say "pr #$n: COMMENT review failed (the comment is posted)"
-  if is_jules "$ref" && [ "$verdict" != PASS ] && [ -n "$jules" ]; then
-    [[ $jules == @jules* ]] || jules="@jules $jules"
+  if [ -n "$jules" ]; then
     gh api "repos/$REPO/issues/$n/comments" -f body="$jules" > /dev/null || say "pr #$n: @jules comment failed"
   fi
   logline "pr=#$n sha=$s8 verdict=$verdict result=posted usd=$cost models=$REVIEW_MODELS"

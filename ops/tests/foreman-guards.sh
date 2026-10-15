@@ -287,5 +287,36 @@ git -C "$DEL" rm -q app/src/pages/Page.tsx
 got=$(delcheck deleted_refs x $'app/src/components/old/Old.tsx\napp/src/components/old/index.ts')
 [ -z "$got" ] && ok "deleted_refs: no imports left" || bad "deleted_refs clean: '$got'"
 
+# reviewer: every verdict comment and review ends with the bot signature, once,
+# even when the model wrote the line itself.
+{ grep -E "^(BOT_SIGNATURE=|is_jules\(\))" "$HERE/../foreman/review.sh"; sed -n '/^post_verdict() {/,/^}/p' "$HERE/../foreman/review.sh"; } > "$TMP/pv-funcs.sh"
+mkdir -p "$TMP/pv"
+STATE=$TMP/pv bash -euo pipefail -c '
+  POST=0 REVIEW_MODELS=claude-sonnet-5-5
+  contains_env_secret() { return 1; }; has_secret_pattern() { return 1; }; logline() { :; }
+  . "$1"
+  post_verdict 5 0123456789abcdef x/y "{\"verdict\":\"PASS\",\"comment\":\"Strategist review — PASS at 01234567\\nLooks fine.\\n— posted by the foreman reviewer bot (Sonnet)\"}" 0.1 > /dev/null' _ "$TMP/pv-funcs.sh"
+sig='— posted by the foreman reviewer bot (Sonnet)'
+c=$(jq -r .comment "$TMP/pv/dry-run/5.json"); r=$(jq -r .review "$TMP/pv/dry-run/5.json")
+[ "$(tail -n 1 <<< "$c")" = "$sig" ] && [ "$(grep -cxF -- "$sig" <<< "$c")" = 1 ] && [ "$(head -n 1 <<< "$c")" = "Strategist review — PASS at 01234567" ] \
+  && ok "post_verdict: comment ends with the bot signature once" || bad "post_verdict comment: '$c'"
+[ "$(tail -n 1 <<< "$r")" = "$sig" ] && ok "post_verdict: review ends with the bot signature" || bad "post_verdict review: '$r'"
+# A Jules PR's FIX: the @jules note is signed once, even with a model copy
+# that has trailing spaces; a non-Jules PR posts no @jules note at all.
+STATE=$TMP/pv bash -euo pipefail -c '
+  POST=0 REVIEW_MODELS=claude-sonnet-5-5
+  contains_env_secret() { return 1; }; has_secret_pattern() { return 1; }; logline() { :; }
+  . "$1"
+  post_verdict 6 0123456789abcdef jules-123456789012345678 "{\"verdict\":\"FIX\",\"comment\":\"Fix the test.\",\"jules\":\"Please fix the test.\\n— posted by the foreman reviewer bot (Sonnet)  \"}" 0.1 > /dev/null
+  post_verdict 7 0123456789abcdef fix/x "{\"verdict\":\"FIX\",\"comment\":\"Fix it.\",\"jules\":\"Please fix.\"}" 0.1 > /dev/null' _ "$TMP/pv-funcs.sh"
+j=$(jq -r .jules "$TMP/pv/dry-run/6.json")
+[ "$(head -n 1 <<< "$j")" = "@jules Please fix the test." ] && [ "$(tail -n 1 <<< "$j")" = "$sig" ] && [ "$(grep -c -- "posted by the foreman" <<< "$j")" = 1 ] \
+  && ok "post_verdict: @jules note ends with the bot signature once" || bad "post_verdict jules: '$j'"
+[ "$(jq -r .jules "$TMP/pv/dry-run/7.json")" = "" ] && ok "post_verdict: no @jules note on a non-Jules PR" || bad "post_verdict non-jules: '$(jq -r .jules "$TMP/pv/dry-run/7.json")'"
+# The catjam runner does not pass the signature line on as a fix item.
+printf 'Strategist review — FIX at 01234567\nRequired:\n1. fix a\n\n— posted by the foreman reviewer bot (Sonnet)\n' > "$TMP/newest.txt"
+fx=$(awk "$(grep -o "'/^Required:/[^']*'" "$HERE/../foreman/catjam-runner.sh" | tr -d "'")" "$TMP/newest.txt")
+! grep -q "posted by the foreman" <<< "$fx" && grep -q "fix a" <<< "$fx" && ok "runner: fix items drop the bot signature" || bad "runner fix items: '$fx'"
+
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]

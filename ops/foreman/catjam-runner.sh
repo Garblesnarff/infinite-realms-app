@@ -475,7 +475,8 @@ run_job() {
     fi
     round=$((fixes + 1))
     fixfile=$OUT/fix-items.txt
-    awk '/^Required:/{f=1; next} f' "$OUT/newest.txt" > "$fixfile"
+    # The reviewer bot's signature line is not a fix item.
+    awk '/^Required:/{f=1; next} /^— posted by the foreman reviewer bot/{next} f' "$OUT/newest.txt" > "$fixfile"
     [ -s "$fixfile" ] || cp "$OUT/newest.txt" "$fixfile"
     start_ref=origin/$branch
   else
