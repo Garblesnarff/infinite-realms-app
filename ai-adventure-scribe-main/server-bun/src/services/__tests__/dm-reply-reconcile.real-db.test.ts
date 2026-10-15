@@ -10,7 +10,7 @@
  * dedicated local/CI Postgres because it writes fixtures.
  */
 import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 
 import {
   closeRealDb,
@@ -30,6 +30,7 @@ import {
   classFeaturesLibrary,
   classSpells,
   classes,
+  characterEquipment,
   characters,
   conditionsLibrary,
   dialogueHistory,
@@ -3334,6 +3335,60 @@ ${playerInput}
       }),
     });
     expect(await sheetInventory(turn.character.id)).toEqual([{ name: 'Torch', quantity: 3 }]);
+  });
+
+  test('#463: a story grant lands on character_equipment, the table the sheet Inventory reads', async () => {
+    const playerInput = 'I take the brass key.';
+    await playerSays(playerInput);
+    const turn = await dmTurn({
+      ...fighter,
+      playerInput,
+      reply: storyReply('A brass key glints in the lock.', {
+        items: [{ name: 'Brass Key', quantity: 1, change: 'gain' }],
+      }),
+    });
+    const characterId = turn.character.id;
+    // The ledger still gets its row.
+    expect(await sheetInventory(characterId)).toEqual([{ name: 'Brass Key', quantity: 1 }]);
+    // The sheet Inventory tab reads character_equipment via equipmentRowsToInventory:
+    // the grant must be mirrored there or the item never appears on the sheet.
+    const sheetRows = await database
+      .select({ itemName: characterEquipment.itemName, quantity: characterEquipment.quantity })
+      .from(characterEquipment)
+      .where(eq(characterEquipment.characterId, characterId));
+    expect(sheetRows).toEqual([{ itemName: 'Brass Key', quantity: 1 }]);
+  });
+
+  test('#463: a story loss removes the mirrored character_equipment row', async () => {
+    const playerInput = 'I take the brass key, then hand it to the guard.';
+    await playerSays(playerInput);
+    const first = await dmTurn({
+      ...fighter,
+      playerInput,
+      reply: storyReply('A brass key glints in the lock.', {
+        items: [{ name: 'Brass Key', quantity: 1, change: 'gain' }],
+      }),
+    });
+    const characterId = first.character.id;
+    await playerSays('I hand the brass key to the guard.');
+    await dmTurn({
+      ...fighter,
+      existingCharacter: first.character,
+      playerInput: 'I hand the brass key to the guard.',
+      reply: storyReply('The guard pockets the key.', {
+        items: [{ name: 'Brass Key', quantity: 1, change: 'lose' }],
+      }),
+    });
+    const sheetRows = await database
+      .select({ itemName: characterEquipment.itemName })
+      .from(characterEquipment)
+      .where(
+        and(
+          eq(characterEquipment.characterId, characterId),
+          eq(sql`lower(${characterEquipment.itemName})`, 'brass key'),
+        ),
+      );
+    expect(sheetRows).toEqual([]);
   });
 
   test('#218 FIX round 3: a cataloged find gets the right type and stats', async () => {
