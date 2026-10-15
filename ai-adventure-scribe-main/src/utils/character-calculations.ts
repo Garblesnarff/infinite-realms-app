@@ -1,4 +1,5 @@
-import { SPELLCASTING_ABILITY_MAP, FULL_CASTER_SLOTS_MAP } from './character-calculations-data';
+import { SPELLCASTING_ABILITY_MAP } from './character-calculations-data';
+// #617: spell-slot tables live in shared/spell-slot-tables.ts (epic #616).
 import {
   calculateSkillModifiers,
   calculateSavingThrowModifiers,
@@ -9,6 +10,7 @@ import {
   type SavingThrowModifiers,
 } from './character-proficiency-calculations';
 import { ENCUMBRANCE_THRESHOLDS } from '../../shared/carrying-capacity';
+import { FULL_CASTER_SLOTS } from '../../shared/spell-slot-tables';
 import { findSrdClass } from '../../shared/srd-class-data';
 
 import type { AbilityScores, Character, CharacterClass } from '@/types/character';
@@ -174,13 +176,60 @@ export const getSpellcastingAbility = (
 };
 
 const HALF_CASTER_CLASS_NAMES = new Set(['Paladin', 'Ranger']);
+const FULL_CASTER_CLASS_NAMES = new Set(['wizard', 'cleric', 'druid', 'sorcerer', 'bard']);
 
 /**
- * Calculate spell slots for a character (full-caster table, except the half-casters)
+ * Max spell slots from classLevels (multiclass-aware). Merged from
+ * spell-management.ts (#617): full caster levels add fully, half caster
+ * levels add floor(level/2) when multiclassed, ceil(level/2) when single.
+ */
+function calculateClassLevelsMaxSlots(
+  classLevels: Array<{ className: string; level: number }>,
+): { [level: number]: number } | undefined {
+  let fullCasterLevels = 0;
+  let halfCasterLevels = 0;
+  const isMulticlass = classLevels.length > 1;
+
+  for (const classLevel of classLevels) {
+    const name = classLevel.className.toLowerCase();
+    if (FULL_CASTER_CLASS_NAMES.has(name)) {
+      fullCasterLevels += classLevel.level;
+    } else if (name === 'paladin' || name === 'ranger') {
+      if (isMulticlass) {
+        halfCasterLevels += Math.floor(classLevel.level / 2);
+      } else if (classLevel.level >= 2) {
+        halfCasterLevels += Math.ceil(classLevel.level / 2);
+      }
+    }
+    // Warlocks use Pact Magic and don't contribute to the multiclass table.
+  }
+
+  const effectiveCasterLevel = Math.min(fullCasterLevels + halfCasterLevels, 20);
+  if (effectiveCasterLevel < 1) return undefined;
+  const table = FULL_CASTER_SLOTS[effectiveCasterLevel];
+  if (!table) return undefined;
+
+  const spellSlots: { [level: number]: number } = {};
+  table.forEach((count: number, index: number) => {
+    if (count > 0) spellSlots[index + 1] = count;
+  });
+  return spellSlots;
+}
+
+/**
+ * Calculate spell slots for a character.
+ *
+ * #617: the single owner (merged from spell-management.ts). When
+ * character.classLevels is present it drives the result (multiclass-aware);
+ * otherwise the single-class character.class path is used.
  */
 export const calculateSpellSlots = (
   character: Character,
 ): { [level: number]: number } | undefined => {
+  if (character.classLevels && character.classLevels.length > 0) {
+    return calculateClassLevelsMaxSlots(character.classLevels);
+  }
+
   const level = character.level || 1;
   const spellcastingAbility = getSpellcastingAbility(character.class, level);
   if (!spellcastingAbility) {
@@ -190,7 +239,7 @@ export const calculateSpellSlots = (
   const className = character.class?.name ?? '';
   const slots = HALF_CASTER_CLASS_NAMES.has(className)
     ? getSpellSlotsByLevel(className, level)
-    : FULL_CASTER_SLOTS_MAP[level];
+    : FULL_CASTER_SLOTS[level];
   if (!slots) {
     return undefined;
   }

@@ -8,7 +8,6 @@ import {
   apprenticeLevel2SpellLists,
   apprenticeSpellLists,
 } from '../../../../shared/test-fixtures/apprentice-spell-lists';
-import { premadeWizardSpellSlotsWireValue } from '../../../../shared/test-fixtures/premade-wizard-spell-slots';
 import { herbalistSpellLists } from '../../../../shared/test-fixtures/prepared-caster-spell-lists';
 import {
   buildStarterCharacterSeed,
@@ -440,16 +439,15 @@ describe('starter-character-seeding', () => {
     expect(hook.match(/seedStarterCharacter\(/g)).toHaveLength(1);
   });
 
-  describe('starter spell_slots wire shape (#2459)', () => {
-    it('emits spell_slots in the sheet-parsed { level: { max, current } } shape for a level-1 wizard premade', () => {
+  describe('starter spell_slots wire shape (#2459, #617)', () => {
+    it('emits no spell_slots key for a level-1 wizard premade (#617: legacy JSONB no longer written)', () => {
       // The Apprentice (academyTemplates[0]) is a level-1 Wizard.
       const seed = buildStarterCharacterSeed(
         academyTemplates[0] as unknown as StarterCharacterTemplateLike,
         'academy-of-arcane-gastronomy',
       );
 
-      expect(seed.spell_slots).toEqual(premadeWizardSpellSlotsWireValue);
-      expect(seed.spell_slots).toEqual({ '1': { max: 2, current: 2 } });
+      expect(seed.spell_slots).toBeUndefined();
     });
 
     it('emits no spell_slots key for a non-caster premade', () => {

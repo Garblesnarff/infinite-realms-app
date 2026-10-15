@@ -10,6 +10,9 @@
  * @module server/services/spell-slots/spell-slot-mechanics
  */
 
+// #617: the progression tables live in shared/spell-slot-tables.ts (epic #616).
+// This module owns the calculation logic, not the table values.
+import { FULL_CASTER_SLOTS, WARLOCK_PACT_MAGIC } from '../../../../shared/spell-slot-tables.js';
 import { ValidationError } from '../../lib/errors.js';
 
 import type {
@@ -20,60 +23,6 @@ import type {
   ClassSpellcasting,
   WarlockPactMagic,
 } from '../../types/spell-slots.js';
-
-/**
- * D&D 5E Full Caster Spell Slot Progression (PHB pg. 114)
- * Used by: Wizard, Sorcerer, Cleric, Druid, Bard
- */
-export const FULL_CASTER_SLOTS: Record<number, number[]> = {
-  1: [2, 0, 0, 0, 0, 0, 0, 0, 0],
-  2: [3, 0, 0, 0, 0, 0, 0, 0, 0],
-  3: [4, 2, 0, 0, 0, 0, 0, 0, 0],
-  4: [4, 3, 0, 0, 0, 0, 0, 0, 0],
-  5: [4, 3, 2, 0, 0, 0, 0, 0, 0],
-  6: [4, 3, 3, 0, 0, 0, 0, 0, 0],
-  7: [4, 3, 3, 1, 0, 0, 0, 0, 0],
-  8: [4, 3, 3, 2, 0, 0, 0, 0, 0],
-  9: [4, 3, 3, 3, 1, 0, 0, 0, 0],
-  10: [4, 3, 3, 3, 2, 0, 0, 0, 0],
-  11: [4, 3, 3, 3, 2, 1, 0, 0, 0],
-  12: [4, 3, 3, 3, 2, 1, 0, 0, 0],
-  13: [4, 3, 3, 3, 2, 1, 1, 0, 0],
-  14: [4, 3, 3, 3, 2, 1, 1, 0, 0],
-  15: [4, 3, 3, 3, 2, 1, 1, 1, 0],
-  16: [4, 3, 3, 3, 2, 1, 1, 1, 0],
-  17: [4, 3, 3, 3, 2, 1, 1, 1, 1],
-  18: [4, 3, 3, 3, 3, 1, 1, 1, 1],
-  19: [4, 3, 3, 3, 3, 2, 1, 1, 1],
-  20: [4, 3, 3, 3, 3, 2, 2, 1, 1],
-};
-
-/**
- * D&D 5E Warlock Pact Magic Progression (PHB pg. 107)
- * Warlocks use a different system - all slots are the same level
- */
-export const WARLOCK_PACT_MAGIC: Record<number, { slots: number; level: number }> = {
-  1: { slots: 1, level: 1 },
-  2: { slots: 2, level: 1 },
-  3: { slots: 2, level: 2 },
-  4: { slots: 2, level: 2 },
-  5: { slots: 2, level: 3 },
-  6: { slots: 2, level: 3 },
-  7: { slots: 2, level: 4 },
-  8: { slots: 2, level: 4 },
-  9: { slots: 2, level: 5 },
-  10: { slots: 2, level: 5 },
-  11: { slots: 3, level: 5 },
-  12: { slots: 3, level: 5 },
-  13: { slots: 3, level: 5 },
-  14: { slots: 3, level: 5 },
-  15: { slots: 3, level: 5 },
-  16: { slots: 3, level: 5 },
-  17: { slots: 4, level: 5 },
-  18: { slots: 4, level: 5 },
-  19: { slots: 4, level: 5 },
-  20: { slots: 4, level: 5 },
-};
 
 /**
  * Class spellcasting configuration

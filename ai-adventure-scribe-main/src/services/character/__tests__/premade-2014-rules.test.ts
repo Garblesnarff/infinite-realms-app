@@ -256,11 +256,11 @@ describe('premade starter templates follow 2014 rules (#2483)', () => {
   });
 
   describe('a caster premade is unchanged', () => {
-    it('The Scholar (Wizard) keeps its slots, spells, attack and save DC', () => {
+    it('The Scholar (Wizard) keeps its spells, attack and save DC (#617: no spell_slots)', () => {
       const row = premade('the-scholar');
       const { seed, sheet } = sheetFor(row);
 
-      expect(seed.spell_slots).toEqual({ '1': { max: 2, current: 2 } });
+      expect(seed.spell_slots).toBeUndefined();
       expect(seed.cantrips).toBe('acid-splash, chill-touch, dancing-lights');
       expect(seed.known_spells).toBe(
         'alarm, burning-hands, charm-person, color-spray, comprehend-languages, detect-magic',

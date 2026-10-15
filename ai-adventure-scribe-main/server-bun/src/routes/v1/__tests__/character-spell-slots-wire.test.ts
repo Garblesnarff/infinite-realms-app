@@ -3,11 +3,12 @@
  * through the real `POST /v1/characters` route schema and the real request
  * pipeline.
  *
- * The client test asserts the seeder emits exactly this value; this test
- * asserts the route accepts it and hands it to the service verbatim. Only auth
- * and the services are stubbed. A mocked API does not count: #2250's tests
- * mocked it, and the body they approved 422'd on every narrative roll in
- * production (#2280).
+ * #617: the legacy `characters.spell_slots` JSONB is no longer written.
+ * The route still accepts the field (schema) but ignores it — the service
+ * never receives spellSlots, and the response carries no spell_slots.
+ * Only auth and the services are stubbed. A mocked API does not count:
+ * #2250's tests mocked it, and the body they approved 422'd on every
+ * narrative roll in production (#2280).
  */
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 
@@ -96,7 +97,7 @@ describe('POST /v1/characters — premade spell_slots wire value (#2459)', () =>
     createdArgs = [];
   });
 
-  it('accepts the seeder spell_slots shape and passes it to the service verbatim', async () => {
+  it('ignores the seeder spell_slots shape and does not pass it to the service (#617)', async () => {
     const response = await post({
       name: 'The Scholar',
       race: 'Human',
@@ -108,8 +109,8 @@ describe('POST /v1/characters — premade spell_slots wire value (#2459)', () =>
 
     expect(response.status).toBe(201);
     const [, data] = createdArgs as [string, Record<string, unknown>];
-    expect(data.spellSlots).toEqual(premadeWizardSpellSlotsWireValue);
+    expect(data.spellSlots).toBeUndefined();
     const body = (await response.json()) as { spell_slots?: unknown };
-    expect(body.spell_slots).toEqual(premadeWizardSpellSlotsWireValue);
+    expect(body.spell_slots).toBeUndefined();
   });
 });
