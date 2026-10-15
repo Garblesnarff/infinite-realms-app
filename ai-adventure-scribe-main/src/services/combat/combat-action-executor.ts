@@ -85,6 +85,8 @@ export type ClientCombatIntent =
       disadvantage?: boolean;
       /** The player's own attack die, when the dice popup rolled it. Absent = engine rolls. */
       d20?: number;
+      /** Both popup dice `[kept, dropped]` when it rolled two for advantage/disadvantage (#263). */
+      d20Rolls?: [number, number];
     }
   | {
       type: 'spell';
@@ -96,6 +98,8 @@ export type ClientCombatIntent =
       expectedVersion?: number;
       /** Player's attack-roll die from the spell popup. Absent for saves and auto-hit. */
       d20?: number;
+      /** Both popup dice `[kept, dropped]` when it rolled two for advantage/disadvantage (#263). */
+      d20Rolls?: [number, number];
     }
   | { type: 'dash' | 'dodge' | 'disengage'; actorId: string; expectedVersion?: number }
   /** #2580: the player's own exits — the way out of a fight nothing else can end. */
@@ -313,6 +317,8 @@ export async function executeStructuredCombatActionWithBoundary(
   action: StructuredCombatAction,
   /** The natural d20 the player rolled for this action, when they rolled one. */
   providedD20?: number,
+  /** Both popup dice `[kept, dropped]` when it rolled two for advantage/disadvantage (#263). */
+  providedD20Rolls?: [number, number],
   /** Who produced the action; the server refuses a player action that no player input made. */
   origin?: CombatActionOrigin,
   signal?: AbortSignal,
@@ -338,6 +344,7 @@ export async function executeStructuredCombatActionWithBoundary(
         targetId: action.target_ids[0],
         weaponId: action.weapon_id || undefined,
         d20: providedD20,
+        ...(providedD20Rolls ? { d20Rolls: providedD20Rolls } : {}),
       },
       'dm',
       dmStartedAt,
@@ -358,6 +365,7 @@ export async function executeStructuredCombatActionWithBoundary(
           ? { slotLevel: action.slot_level }
           : {}),
         d20: providedD20,
+        ...(providedD20Rolls ? { d20Rolls: providedD20Rolls } : {}),
       },
       'dm',
       dmStartedAt,

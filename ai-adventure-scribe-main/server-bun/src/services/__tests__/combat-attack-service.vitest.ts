@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { db } from '../../../../db/client';
 import { NotFoundError } from '../../lib/errors.js';
 import { CombatAttackService } from '../combat-attack-service.js';
+import type { AttackRollInput } from '../../types/combat.js';
 import { CombatHPService } from '../combat-hp-service.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 
@@ -291,6 +292,105 @@ describe('CombatAttackService', () => {
       expect(result.isCritical).toBe(true);
       expect(result.targetAC).toBe(15);
       expect(result.transcriptLines).toEqual(['⚙️ Engine: The Professor turns hostile.']);
+    });
+
+    /**
+     * The popup settles `{ d20, d20Rolls: [kept, dropped] }` through the bridge, and
+     * `executeCombatIntent` forwards them as `providedD20` / `providedD20Rolls` on the
+     * `AttackRollInput` it builds from the wire intent — this input is shaped exactly like
+     * that dispatch (combat-intent-service.ts), not hand-written.
+     */
+    const playerDisadvantageInput: AttackRollInput = {
+      attackerId: 'attacker-123',
+      expectedVersion: 1,
+      targetId: 'target-123',
+      attackType: 'melee',
+      disadvantage: true,
+      providedD20: 8,
+      providedD20Rolls: [8, 14],
+    };
+
+    const mockPlayerAttackReads = () => {
+      (db.select as any)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          leftJoin: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([
+            {
+              participant: {
+                id: 'target-123',
+                name: 'The Professor',
+                armorClass: 15,
+                participantType: 'npc',
+                damageImmunities: [],
+                damageResistances: [],
+                damageVulnerabilities: [],
+              },
+              stats: { armorClass: 15 },
+              status: {
+                currentHp: 10,
+                maxHp: 10,
+                tempHp: 0,
+                isConscious: true,
+                deathSavesFailures: 0,
+              },
+              encounter: { currentRound: 1, sessionId: 'session-123' },
+            },
+            {
+              participant: { id: 'attacker-123', armorClass: 10, participantType: 'player' },
+              stats: null,
+              status: null,
+              encounter: {},
+            },
+          ]),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([]),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([]),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          orderBy: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue([]),
+        })
+        .mockReturnValueOnce(statusRead(true)) // attacker: getActiveConditionNames reads its status row
+        .mockReturnValueOnce(statusRead(true)); // target
+    };
+
+    it('names both dice when the popup supplies its dropped die (#263 CB-028)', async () => {
+      mockPlayerAttackReads();
+
+      const result = await service.resolveAttack(
+        'enc-123',
+        { ...playerDisadvantageInput },
+        mockUserId,
+      );
+
+      expect(result.d20).toBe(8);
+      expect(result.d20Rolls).toEqual([8, 14]);
+      expect(result.disadvantage).toBe(true);
+    });
+
+    it('ignores a provided pair that does not contain the kept die (#263)', async () => {
+      mockPlayerAttackReads();
+
+      const result = await service.resolveAttack(
+        'enc-123',
+        { ...playerDisadvantageInput, providedD20Rolls: [7, 14] },
+        mockUserId,
+      );
+
+      // The kept die still resolves; the foreign pair is dropped, not shown.
+      expect(result.d20).toBe(8);
+      expect(result.d20Rolls).toBeUndefined();
     });
 
     it('propagates death-save failures added by damage at 0 HP (#2457)', async () => {

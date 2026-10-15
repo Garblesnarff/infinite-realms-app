@@ -144,28 +144,3 @@ export const HIT_DICE_BY_CLASS: Record<string, HitDieType> = {
   Wizard: 'd6',
 };
 
-/**
- * Class features that restore on short rest
- */
-export const SHORT_REST_FEATURES = [
-  'Second Wind',
-  'Action Surge',
-  'Ki',
-  'Warlock Spell Slots',
-  'Bardic Inspiration',
-  'Channel Divinity (some)',
-  'Arcane Recovery',
-];
-
-/**
- * Class features that restore on long rest
- */
-export const LONG_REST_FEATURES = [
-  'All Spell Slots',
-  'All Class Features',
-  'Rage',
-  'Divine Sense',
-  'Lay on Hands',
-  'Wild Shape',
-  'Sorcery Points',
-];

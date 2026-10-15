@@ -287,6 +287,54 @@ describe('combat-action-executor', () => {
       ]);
     });
 
+    it('sends the popup’s dropped die with the kept one (#263 CB-028)', async () => {
+      const action = {
+        actor_id: 'actor-1',
+        action_type: 'attack' as const,
+        target_ids: ['target-1'],
+        weapon_id: 'weapon-longbow',
+        spell_id: null,
+        slot_level: null,
+        movement_feet: 0,
+      };
+
+      const intentResponse = {
+        ok: true,
+        json: async () => ({ result: { hit: true } }),
+      };
+      (globalThis.fetch as any).mockResolvedValue(intentResponse);
+
+      await executeStructuredCombatActionWithBoundary(encounterId, action, 8, [8, 14], 'dm');
+
+      const body = String((globalThis.fetch as any).mock.calls[0][1].body as string);
+      expect(body).toContain('"d20":8');
+      expect(body).toContain('"d20Rolls":[8,14]');
+    });
+
+    it('omits d20Rolls when the popup rolled a single die (#263)', async () => {
+      const action = {
+        actor_id: 'actor-1',
+        action_type: 'attack' as const,
+        target_ids: ['target-1'],
+        weapon_id: 'weapon-longbow',
+        spell_id: null,
+        slot_level: null,
+        movement_feet: 0,
+      };
+
+      const intentResponse = {
+        ok: true,
+        json: async () => ({ result: { hit: true } }),
+      };
+      (globalThis.fetch as any).mockResolvedValue(intentResponse);
+
+      await executeStructuredCombatActionWithBoundary(encounterId, action, 8, undefined, 'dm');
+
+      const body = String((globalThis.fetch as any).mock.calls[0][1].body as string);
+      expect(body).toContain('"d20":8');
+      expect(body).not.toContain('d20Rolls');
+    });
+
     it('should handle spell actions with multiple targets correctly', async () => {
       const action = {
         actor_id: 'actor-1',

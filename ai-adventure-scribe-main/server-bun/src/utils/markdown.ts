@@ -167,7 +167,7 @@ export function renderMarkdown(markdown: string | null | undefined): RenderedMar
   return { html: sanitizedHtml, text };
 }
 
-export function extractPlainText(html: string): string {
+function extractPlainText(html: string): string {
   const text = sanitizeHtml(html, { allowedTags: [], allowedAttributes: {} });
   return text.replace(/\s+/g, ' ').trim();
 }

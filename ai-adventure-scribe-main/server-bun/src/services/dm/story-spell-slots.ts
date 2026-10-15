@@ -30,7 +30,7 @@ const PACT_CLASSES = new Set(['warlock']);
  * is glued to a word character, so `\b` before it never matches and the negation would
  * be missed — "I don't cast Detect Magic as a ritual" must not count as a ritual cast.
  */
-export function isCastAsRitual(playerInput: string | undefined): boolean {
+function isCastAsRitual(playerInput: string | undefined): boolean {
   const input = playerInput ?? '';
   if (/(?:\bnot\b|n't\b|\bwithout\b|\bnever\b)[\w\s,]{0,24}\bas\s+a\s+ritual\b/i.test(input)) return false;
   return (
@@ -87,7 +87,7 @@ export async function playerMessage(
 }
 
 /** A spell the catalog does not hold has its level in the `spells` table, when it is there. */
-export async function storedSpellLevel(name: string): Promise<number | null> {
+async function storedSpellLevel(name: string): Promise<number | null> {
   const { db } = await import('../../../../db/client');
   const { eq, sql } = await import('drizzle-orm');
   const { spells } = await import('../../../../db/schema/index');

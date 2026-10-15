@@ -35,7 +35,7 @@ export function mapBlogCategory(row: BlogCategoryRow | null | undefined): BlogCa
   };
 }
 
-export function mapBlogTag(row: BlogTagRow | null | undefined): BlogTag | null {
+function mapBlogTag(row: BlogTagRow | null | undefined): BlogTag | null {
   if (!row) return null;
   return {
     id: row.id,

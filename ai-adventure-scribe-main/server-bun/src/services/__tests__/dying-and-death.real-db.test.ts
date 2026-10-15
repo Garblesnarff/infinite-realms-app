@@ -610,6 +610,41 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
     expect(facts).toContain('is DEAD');
   });
 
+  test('#261: third failed death save stamps vitalState dead on the character_stats mirror (read directly from DB)', async () => {
+    const scene = await dropHero();
+    for (const d20 of [5, 6]) {
+      await deathSave(scene, d20);
+      await giveTurnTo(scene.encounterId, scene.heroId);
+    }
+    const third = await deathSave(scene, 4);
+    expect(third.deathSaves[0]).toMatchObject({ failures: 3, isDead: true });
+
+    // Read the mirror row directly — not the participant derivation.
+    const [mirror] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, scene.characterId));
+    expect(mirror.vitalState).toBe('dead');
+    expect(mirror.deathSavesFailures).toBe(3);
+    expect(mirror.diedAt).not.toBeNull();
+  });
+
+  test('#261: massive-damage kill through applyDamage stamps vitalState dead on the mirror (read directly from DB)', async () => {
+    // Hero at 1 HP, max 12: spider crits (natural 20 doubles the dice: 2d1+12 = 14),
+    // overflow 13 >= max 12. A non-crit is capped to half max HP and can never
+    // overflow, so the crit is required for massive damage on this path.
+    // Uses spiderStrikes (real attack path → CombatHPService.applyDamage).
+    const scene = await seedScene({ heroHp: 1, heroMax: 12, spiderDamageBonus: 12 });
+    await spiderStrikes(scene, 20);
+
+    const [mirror] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, scene.characterId));
+    expect(mirror.vitalState).toBe('dead');
+    expect(mirror.diedAt).not.toBeNull();
+  });
+
   test('a death save out of turn, or from a character who is not dying, is refused', async () => {
     const scene = await dropHero();
     await giveTurnTo(scene.encounterId, scene.spiderId);

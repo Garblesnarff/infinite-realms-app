@@ -110,7 +110,9 @@ export const enhanceMemoryContext = (memories: Memory[]) => {
     recent: sortedMemories.slice(0, 5),
     important: sortedMemories.filter((m) => (m.importance || 0) >= 7),
     locations: sortedMemories.filter((m) => m.type === 'location'),
+    // @ts-expect-error #667 'character' is not a MemoryType
     characters: sortedMemories.filter((m) => m.type === 'character'),
+    // @ts-expect-error #667 'plot' is not a MemoryType
     plot: sortedMemories.filter((m) => m.type === 'plot'),
   };
 };

@@ -19,14 +19,24 @@ import {
 import { describeDamageAtZeroHp, describeInstantDeath } from '../../../../shared/death-save-lines';
 import { CharacterVitalsService, type CharacterVitals } from '../character-vitals-service.js';
 import { CombatHPService } from '../combat-hp-service.js';
+import {
+  checkConcentrationOnDamage,
+  describeConcentrationBroken,
+  describeConcentrationMaintained,
+  type ConcentrationCheckResult,
+} from './concentration-service.js';
 import { describeGoingDown } from './death-saves-service.js';
 import { instantDeathOutcome } from './hp-mechanics.js';
 import { recordDmTacticalFact } from './tactical-action-service.js';
+
+import type { DamageType } from '../../types/combat.js';
 
 export interface NonAttackDamageResult {
   vitals: CharacterVitals;
   /** Player-visible engine lines, in order. The DM receives the same sentences as tactical facts. */
   engineLines: string[];
+  /** The concentration outcome for this hit, when the character was concentrating. */
+  concentration?: ConcentrationCheckResult;
 }
 
 interface LiveParticipant {
@@ -98,7 +108,12 @@ export async function applyNonAttackDamage(
   userId: string,
   amount: number,
   sourceDescription = 'non-attack damage',
-  options: { critical?: boolean } = {},
+  options: {
+    critical?: boolean;
+    damageType?: DamageType;
+    /** Test hook: pins the d20 for the concentration save. Production omits it. */
+    concentrationRoll?: () => number;
+  } = {},
 ): Promise<NonAttackDamageResult> {
   const live = amount > 0 ? await findLiveParticipant(characterId) : null;
 
@@ -120,19 +135,41 @@ export async function applyNonAttackDamage(
       before.currentHitPoints === 0 && !alreadyDead
         ? Math.max(0, vitals.deathSavesFailures - before.deathSavesFailures)
         : 0;
-    return {
-      vitals,
-      engineLines: alreadyDead
-        ? []
-        : nonAttackDamageLines(name, {
-            droppedToZero: dropped && !outcome.massiveDamage,
-            instantDeath: outcome.massiveDamage,
-            failuresAdded: outcome.massiveDamage ? 0 : failuresAdded,
-            failures: vitals.deathSavesFailures,
-            overflow: outcome.overflow,
-            hpMax: before.maxHitPoints,
-          }),
-    };
+    const engineLines = alreadyDead
+      ? []
+      : nonAttackDamageLines(name, {
+          droppedToZero: dropped && !outcome.massiveDamage,
+          instantDeath: outcome.massiveDamage,
+          failuresAdded: outcome.massiveDamage ? 0 : failuresAdded,
+          failures: vitals.deathSavesFailures,
+          overflow: outcome.overflow,
+          hpMax: before.maxHitPoints,
+        });
+    // 2014 concentration: a concentrating character who takes damage rolls a
+    // CON save (DC max(10, half damage)); a failed save ends the spell. Dropping
+    // to 0 HP ends it outright — an unconscious character cannot concentrate.
+    const concentration = await checkConcentrationOnDamage(characterId, damage, {
+      rollD20Fn: options.concentrationRoll,
+      incapacitated: vitals.vitalState === 'dying' || vitals.vitalState === 'dead',
+    });
+    if (concentration.dropped) {
+      engineLines.push(describeConcentrationBroken(name, concentration.droppedSpell!));
+    } else if (
+      concentration.success &&
+      concentration.spellName &&
+      concentration.total !== undefined &&
+      concentration.dc !== undefined
+    ) {
+      engineLines.push(
+        describeConcentrationMaintained(
+          name,
+          concentration.spellName,
+          concentration.total,
+          concentration.dc,
+        ),
+      );
+    }
+    return { vitals, engineLines, concentration };
   }
 
   const result = await CombatHPService.applyDamage(
@@ -140,6 +177,7 @@ export async function applyNonAttackDamage(
     live.encounterId,
     {
       damageAmount: amount,
+      damageType: options.damageType,
       sourceDescription,
       uncapped: true,
       isCriticalHit: options.critical === true,
@@ -157,5 +195,32 @@ export async function applyNonAttackDamage(
   });
   for (const line of engineLines) await recordDmTacticalFact(live.sessionId, line);
 
-  return { vitals: await CharacterVitalsService.getVitals(characterId, userId), engineLines };
+  const vitals = await CharacterVitalsService.getVitals(characterId, userId);
+  // 2014: the CON save DC is based on the damage the character actually took
+  // (post-resistance/immunity via result.modifiedDamage), not the raw amount.
+  const concentration = await checkConcentrationOnDamage(characterId, result.modifiedDamage, {
+    rollD20Fn: options.concentrationRoll,
+    incapacitated: vitals.vitalState === 'dying' || vitals.vitalState === 'dead',
+  });
+  if (concentration.dropped) {
+    const line = describeConcentrationBroken(name, concentration.droppedSpell!);
+    engineLines.push(line);
+    await recordDmTacticalFact(live.sessionId, line);
+  } else if (
+    concentration.success &&
+    concentration.spellName &&
+    concentration.total !== undefined &&
+    concentration.dc !== undefined
+  ) {
+    const line = describeConcentrationMaintained(
+      name,
+      concentration.spellName,
+      concentration.total,
+      concentration.dc,
+    );
+    engineLines.push(line);
+    await recordDmTacticalFact(live.sessionId, line);
+  }
+
+  return { vitals, engineLines, concentration };
 }

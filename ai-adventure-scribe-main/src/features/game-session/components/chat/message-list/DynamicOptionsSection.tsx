@@ -366,6 +366,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
             encounter.id,
             structuredAction,
             die.d20,
+            die.d20Rolls,
             'action_bar',
           );
           const playerParts = [
@@ -450,6 +451,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
               encounter.id,
               structuredAction,
               cast.d20,
+              cast.d20Rolls,
               'action_bar',
             );
             // The cast's engine result persists like a weapon attack's (#2622): one row.

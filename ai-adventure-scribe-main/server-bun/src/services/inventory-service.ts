@@ -25,6 +25,7 @@ import type {
   EncumbranceStatus,
   InventorySummary,
   AttunementResult,
+  AttunedRecord,
   EquipResult,
   GetInventoryOptions,
   GetUsageHistoryInput,
@@ -250,7 +251,7 @@ export class InventoryService {
    * Get all attuned items for a character
    * @deprecated Use InventoryAttunementService.getAttunedItems directly
    */
-  static async getAttunedItems(characterId: string, userId: string): Promise<InventoryItem[]> {
+  static async getAttunedItems(characterId: string, userId: string): Promise<AttunedRecord[]> {
     return InventoryAttunementService.getAttunedItems(characterId, userId);
   }
 
@@ -274,7 +275,7 @@ export class InventoryService {
     itemId: string,
     characterId: string,
     userId: string,
-  ): Promise<InventoryItem | null> {
+  ): Promise<AttunedRecord | null> {
     return InventoryAttunementService.unattuneItem(itemId, characterId, userId);
   }
 

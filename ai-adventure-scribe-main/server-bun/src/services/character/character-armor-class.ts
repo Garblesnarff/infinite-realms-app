@@ -17,6 +17,7 @@
  */
 import { and, eq, inArray } from 'drizzle-orm';
 
+import { isAlreadyOnSheet, sheetItemNameSet } from './sheet-item-names.js';
 import { db } from '../../../../db/client';
 import { characterEquipment, characterStats, inventoryItems } from '../../../../db/schema/index';
 import { abilityModifier } from '../../../../shared/ability-modifier';
@@ -71,7 +72,11 @@ export async function recomputeStoredArmorClass(
 
   if (!stats) return null;
 
-  const rows = [...legacyRows, ...inventoryRows];
+  const sheetNames = sheetItemNameSet(legacyRows.map((row) => row.name));
+  const rows = [
+    ...legacyRows,
+    ...inventoryRows.filter((row) => !isAlreadyOnSheet(sheetNames, row.name)),
+  ];
   const ownsArmor = rows.some((row) =>
     ARMOR_ITEM_TYPES.includes((row.itemType ?? '').trim().toLowerCase()),
   );

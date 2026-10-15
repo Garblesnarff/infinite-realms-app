@@ -115,8 +115,6 @@ const UNARMED_CLAIMS = new Set([
 
 const UNARMED_ATTACK_VERBS = new Set([
   'punch',
-  'hit',
-  'strike',
   'kick',
   'headbutt',
   'shove',
@@ -124,6 +122,10 @@ const UNARMED_ATTACK_VERBS = new Set([
   'slap',
   'elbow',
 ]);
+// "hit" and "strike" are generic attack verbs, not body-part attacks: "I strike the dragon"
+// with a sword equipped is a sword strike, not an unarmed strike (#569). Only verbs that
+// name a body part stay unarmed; "hit"/"strike" fall through to the default equipped weapon
+// like a bare "attack".
 
 /** A bare attack verb describes the attack type, not the equipped weapon. */
 export function isUnarmedAttackVerb(value: string | null | undefined): boolean {

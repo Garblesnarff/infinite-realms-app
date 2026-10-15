@@ -1,7 +1,7 @@
 import { sql } from '../lib/db.js';
 import { env } from '../lib/env.js';
 
-export function getAllowedPricePlans(): ReadonlyMap<string, string> {
+function getAllowedPricePlans(): ReadonlyMap<string, string> {
   return new Map(
     [
       [env.STRIPE_PRICE_ID, 'pro'],

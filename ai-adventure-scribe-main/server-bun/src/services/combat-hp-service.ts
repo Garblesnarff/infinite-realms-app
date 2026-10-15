@@ -390,6 +390,9 @@ export class CombatHPService {
         // sequence and a hit on a stable creature makes it dying again.
         deathSavesSuccesses: result.newDeathSavesSuccesses ?? status.deathSavesSuccesses,
         deathSavesFailures: result.newDeathSavesFailures,
+        // #261: massive damage / overflow kills must name the state outright — the tallies
+        // alone don't reach the sheet's character_stats mirror (Hark D4-014).
+        ...(result.isDead ? { vitalState: 'dead' as const } : {}),
       },
     });
 
@@ -596,6 +599,10 @@ export class CombatHPService {
     // 🛡️ Sentinel: Atomic update with ownership check, now carrying the character record with it.
     // The progression rules are untouched: what the character row records is whatever
     // HPMechanics just decided.
+    // #261: stamp the death on the character mirror. The tallies alone (failures=3) let the
+    // participant derive 'dead', but the sheet's character_stats mirror — which the "has fallen"
+    // screen and the Conditions panel both read — needs the state named outright, or "Dead" is
+    // never shown (Hark D4-014).
     await this.writeThrough({
       participantId,
       encounterId,
@@ -612,6 +619,7 @@ export class CombatHPService {
         isConscious: result.wasRevived,
         deathSavesSuccesses: result.successes,
         deathSavesFailures: result.failures,
+        ...(result.isDead ? { vitalState: 'dead' as const } : {}),
       },
       expectedDying: expectedTallies ?? {
         successes: status.deathSavesSuccesses,

@@ -70,10 +70,10 @@ const GameContext = createContext<GameContextValue | undefined>(undefined);
  */
 export const GameProvider: React.FC<{ children: ReactNode; characterId?: string | null }> = ({ children, characterId }) => {
   const [state, dispatch] = useReducer(gameReducer, initialGameState);
-  const { state: combatState, dealDamage } = useCombat();
+  const { state: combatState, refreshCombatState } = useCombat();
 
   // Auto-apply damage from dice rolls using extracted hook
-  useDamageAutoApplication(state, combatState, dealDamage, characterId);
+  useDamageAutoApplication(state, characterId, refreshCombatState);
 
   // Track previous combat state values to prevent infinite loops
   // This ref stores the last combat state values we synchronized with GameContext
