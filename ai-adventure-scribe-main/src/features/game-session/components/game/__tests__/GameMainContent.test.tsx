@@ -85,12 +85,6 @@ vi.mock('@/contexts/GameContext', () => ({
     getCurrentDiceRoll: () => state.getterRoll,
   }),
 }));
-vi.mock('@/hooks/use-pending-rolls', () => ({
-  usePendingRolls: () => ({
-    hasPendingRolls: state.hasPendingRolls,
-    pendingRequests: state.pendingRequests,
-  }),
-}));
 vi.mock('../overhaul/useOverhaulViewModel', () => ({
   useOverhaulViewModel: ({
     sceneBlurb,
