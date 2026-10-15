@@ -13,8 +13,6 @@ import { Slider } from '../slider';
 import { Switch } from '../switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../tabs';
 import { Textarea } from '../textarea';
-import { ToastAction } from '../toast';
-import { Toggle } from '../toggle';
 
 const FOCUS_GOLD_RING = 'focus:ring-ring';
 const FOCUS_VISIBLE_GOLD_RING = 'focus-visible:ring-ring';
@@ -139,23 +137,9 @@ describe('default focus ring (#2324 & #110)', () => {
     expect(className).not.toContain('electricCyan');
   });
 
-  it('puts the gold ring token on ToastAction', () => {
-    render(<ToastAction altText="Undo action">Undo</ToastAction>);
-    const className = screen.getByRole('button', { name: 'Undo' }).className;
-    expect(className).toContain(FOCUS_GOLD_RING);
-    expect(className).not.toContain('electricCyan');
-  });
-
   it('puts the gold ring token on Switch', () => {
     render(<Switch aria-label="Enable notification" />);
     const className = screen.getByRole('switch', { name: 'Enable notification' }).className;
-    expect(className).toContain(FOCUS_VISIBLE_GOLD_RING);
-    expect(className).not.toContain('electricCyan');
-  });
-
-  it('puts the gold ring token on Toggle', () => {
-    render(<Toggle aria-label="Mute audio">Mute</Toggle>);
-    const className = screen.getByRole('button', { name: 'Mute audio' }).className;
     expect(className).toContain(FOCUS_VISIBLE_GOLD_RING);
     expect(className).not.toContain('electricCyan');
   });

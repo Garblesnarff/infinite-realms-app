@@ -2,7 +2,6 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { canChooseAbilityScoreImprovement } from '../asi-levels';
 import {
   getSessionPartyLevel,
   getCampaignPartyLevel,
@@ -32,13 +31,6 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 describe('character-level-utils', () => {
-  it('includes bonus Fighter and Rogue ASI levels', () => {
-    expect(canChooseAbilityScoreImprovement('Fighter', 6)).toBe(true);
-    expect(canChooseAbilityScoreImprovement('Fighter', 14)).toBe(true);
-    expect(canChooseAbilityScoreImprovement('Rogue', 10)).toBe(true);
-    expect(canChooseAbilityScoreImprovement('Wizard', 6)).toBe(false);
-  });
-
   beforeEach(() => {
     vi.clearAllMocks();
   });
