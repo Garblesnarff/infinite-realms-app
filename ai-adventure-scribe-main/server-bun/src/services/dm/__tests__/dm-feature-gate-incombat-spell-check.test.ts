@@ -7,7 +7,7 @@
  * roll request and no refusal. The player's own typed casts are now sheet-checked in
  * combat; only the DM's narration (NPC spells) is still skipped.
  */
-import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it, mock } from 'bun:test';
 
 const SESSION_ID = '0a1b2c3d-0000-4000-8000-000000000001';
 const CHARACTER_ID = '2733e680-0000-4000-8000-000000000003';
@@ -156,5 +156,6 @@ describe('GP-061 (#313): in-combat typed spell the sheet does not list is refuse
     });
     const parsed = JSON.parse(result.text);
     expect(parsed.text).toContain('Fireball');
+    expect(parsed.text.toLowerCase()).toContain("isn't on their character sheet");
   });
 });
