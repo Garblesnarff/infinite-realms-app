@@ -205,8 +205,10 @@ export const CharacterSheetHeader: React.FC<CharacterSheetHeaderProps> = ({ char
         </AlertDialogPortal>
       </AlertDialog>
 
-      {/* #693: campaign picker for the sheet Play button. */}
-      {character.id && (
+      {/* #693: campaign picker for the sheet Play button. Mounted only
+          when open — the modal uses react-query, and the header is also
+          rendered in tests without a QueryClientProvider. */}
+      {character.id && showPlayModal && (
         <CampaignSelectionModal
           isOpen={showPlayModal}
           onClose={() => setShowPlayModal(false)}
