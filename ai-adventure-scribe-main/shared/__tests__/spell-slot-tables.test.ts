@@ -1,3 +1,15 @@
+import { readFileSync } from 'node:fs';
+
+import { describe, it, expect } from 'vitest';
+
+import {
+  FULL_CASTER_SLOTS,
+  WARLOCK_PACT_MAGIC,
+  halfCasterSlots,
+  thirdCasterSlots,
+  slotsToMap,
+} from '../spell-slot-tables';
+
 /**
  * #617: one spell-slot table shared by client and server (epic #616).
  *
@@ -8,16 +20,6 @@
  *
  * Any difference vs the snapshot must be listed and justified in the PR body.
  */
-import { readFileSync } from 'node:fs';
-import { describe, it, expect } from 'vitest';
-
-import {
-  FULL_CASTER_SLOTS,
-  WARLOCK_PACT_MAGIC,
-  halfCasterSlots,
-  thirdCasterSlots,
-  slotsToMap,
-} from '../spell-slot-tables';
 
 const snapshot: Record<string, unknown> = JSON.parse(
   readFileSync('shared/__tests__/spell-slot-tables.snapshot.json', 'utf8'),
