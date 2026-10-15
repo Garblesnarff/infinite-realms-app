@@ -10,7 +10,7 @@ interface PendingAuthTokenPair {
   expiresAt: number;
 }
 
-export const AUTH_TOKEN_EXCHANGE_TTL_MS = 60_000;
+const AUTH_TOKEN_EXCHANGE_TTL_MS = 60_000;
 
 /**
  * Short-lived hand-off for OAuth tokens between the server callback and the SPA.

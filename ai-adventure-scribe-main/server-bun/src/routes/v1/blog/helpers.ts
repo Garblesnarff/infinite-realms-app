@@ -282,7 +282,7 @@ export function isUuid(value: string | null | undefined): value is string {
 /**
  * Fetch author ID for a user
  */
-export async function fetchAuthorIdForUser(userId: string): Promise<string | null> {
+async function fetchAuthorIdForUser(userId: string): Promise<string | null> {
   const { data, error } = await supabaseService
     .from('blog_authors')
     .select('id')

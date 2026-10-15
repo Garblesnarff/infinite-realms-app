@@ -11,9 +11,11 @@ vi.mock('@/contexts/AuthContext', () => ({
   useAuth: (...args: unknown[]) => useAuthMock(...args),
 }));
 
-vi.mock('@/services/auth/TokenService', () => ({
-  SESSION_ENDED_MESSAGE: 'Session ended — sign in again',
-}));
+vi.mock('@/services/auth/TokenService', async (importOriginal) =>
+  (await import('@/test/token-service-mock')).createTokenServiceMock(importOriginal, {
+    SESSION_ENDED_MESSAGE: 'Session ended — sign in again',
+  }),
+);
 
 const baseAuth = {
   user: null,

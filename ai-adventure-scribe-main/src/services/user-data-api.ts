@@ -11,6 +11,7 @@ import type {
   CharacterPayload,
   CharacterStatsPayload,
 } from '@/services/user-data-payload-helpers';
+import type { DamageType } from '@/types/combat-mechanics';
 
 export type {
   CampaignPayload,
@@ -611,6 +612,7 @@ export const userDataApi = {
   applyCharacterDamage: (
     characterId: string,
     amount: number,
+    damageType?: DamageType,
   ): Promise<{
     currentHitPoints: number;
     temporaryHitPoints: number;
@@ -619,7 +621,7 @@ export const userDataApi = {
   }> =>
     request(`/v1/characters/${encodeURIComponent(characterId)}/damage`, {
       method: 'POST',
-      body: JSON.stringify({ amount }),
+      body: JSON.stringify({ amount, ...(damageType ? { damageType } : {}) }),
     }),
   /**
    * #214: server-side heal delta. The server adds the amount and clamps to max

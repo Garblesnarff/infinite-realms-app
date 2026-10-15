@@ -15,6 +15,7 @@ import { listEquippedWeaponProfiles, verifyCharacterOwnership } from './data-acc
 import { UNARMED_STRIKE } from './weapon-catalog.js';
 import { db } from '../../../../db/client';
 import { characterEquipment, characterStats, inventoryItems } from '../../../../db/schema/index';
+import { isAlreadyOnSheet, sheetItemNameSet } from '../character/sheet-item-names.js';
 
 import type { WeaponRuleProfile } from './combat-rules.js';
 
@@ -78,9 +79,15 @@ export async function getEquippedLoadout(
     }),
   ]);
 
+  const sheetNames = sheetItemNameSet(legacyArmor.map((row) => row.name));
   return {
     weapons,
-    armor: [...inventoryArmor.map((row) => row.name), ...legacyArmor.map((row) => row.name)],
+    armor: [
+      ...legacyArmor.map((row) => row.name),
+      ...inventoryArmor
+        .filter((row) => !isAlreadyOnSheet(sheetNames, row.name))
+        .map((row) => row.name),
+    ],
     armorClass: stats?.armorClass ?? null,
   };
 }

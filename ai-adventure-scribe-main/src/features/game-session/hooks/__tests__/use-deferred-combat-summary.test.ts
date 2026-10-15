@@ -281,7 +281,7 @@ describe('server damage summary (#570)', () => {
           activeEncounter: props.isInCombat ? localEncounter : null,
           sendMessage,
         }),
-      { initialProps: { isInCombat: true, messages: [] } },
+      { initialProps: { isInCombat: true, messages: [] as ChatMessage[] } },
     );
 
     rerender({ isInCombat: false, messages: [dm('kill', true)] });

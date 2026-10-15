@@ -317,6 +317,18 @@ printf 'Strategist review — FIX at 01234567\nRequired:\n1. fix a\n\n— posted
 fx=$(awk "$(grep -o "'/^Required:/[^']*'" "$HERE/../foreman/catjam-runner.sh" | tr -d "'")" "$TMP/newest.txt")
 ! grep -q "posted by the foreman" <<< "$fx" && grep -q "fix a" <<< "$fx" && ok "runner: fix items drop the bot signature" || bad "runner fix items: '$fx'"
 
+# reviewer summary: merges per hour with the peak hour, median open→merge.
+eval "$(sed -n '/^merge_rate_lines() {/,/^}/p' "$HERE/../foreman/review.sh")"
+MERGE_TARGET_PER_HOUR=20
+rows=$(printf '%s\t%s\t%s\t%s\n' 11 0 600 2026-10-15T09 12 0 1800 2026-10-15T10 13 0 3600 2026-10-15T10 14 0 7200 2026-10-15T11)
+got=$(printf '%s\n' "$rows" | merge_rate_lines)
+want=$'Merge rate: 4 merged in 24 h = 0.2/hour (target 20/hour); peak hour 10:00Z with 2\nMedian open→merge: 0h 45m over 4 PRs'
+[ "$got" = "$want" ] && ok "merge_rate_lines: rate, peak hour, even median" || bad "merge_rate_lines: got '$got'"
+got=$(printf '%s\n' "$rows" | head -3 | merge_rate_lines | sed -n 2p)
+[ "$got" = "Median open→merge: 0h 30m over 3 PRs" ] && ok "merge_rate_lines: odd median" || bad "merge_rate_lines odd: '$got'"
+got=$(printf '\n' | merge_rate_lines)
+[ "$got" = $'Merge rate: 0 merged in 24 h = 0.0/hour (target 20/hour)\nMedian open→merge: n/a' ] && ok "merge_rate_lines: no merges" || bad "merge_rate_lines empty: '$got'"
+
 # reviewer tiers (#663 item 5): Haiku only for a small PR off the heavy paths.
 eval "$(grep -E "^(LIGHT_RE|HEAVY_RE|HEAVY_I_RE|SMALL_MAX_LINES|SMALL_MODEL|SMALL_EXPECT_MODEL_RE|MODEL|EXPECT_MODEL_RE|BOT_SIGNATURE_PREFIX)=" "$HERE/../foreman/review.sh")"
 eval "$(sed -n '/^pick_tier() {/,/^}/p;/^set_tier() {/,/^}/p' "$HERE/../foreman/review.sh")"

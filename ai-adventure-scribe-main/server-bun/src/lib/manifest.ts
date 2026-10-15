@@ -26,12 +26,7 @@ export interface ResolvedAssets {
 
 const DEFAULT_MANIFEST_PATH = path.resolve(process.cwd(), 'dist', 'manifest.json');
 
-export function clearManifestCache() {
-  cachedManifest = null;
-  manifestWarningLogged = false;
-}
-
-export async function getViteManifest(): Promise<ViteManifest> {
+async function getViteManifest(): Promise<ViteManifest> {
   if (cachedManifest) {
     return cachedManifest;
   }

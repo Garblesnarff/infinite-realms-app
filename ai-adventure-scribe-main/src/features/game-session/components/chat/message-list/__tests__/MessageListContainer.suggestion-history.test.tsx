@@ -43,10 +43,12 @@ vi.mock('../DMMessage', () => ({
 }));
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock('@/hooks/combat/use-player-roll-host', () => ({ usePlayerRollHost: vi.fn() }));
-vi.mock('@/services/auth/TokenService', () => ({
-  getAuthHeaders: vi.fn(() => ({ Authorization: 'Bearer test' })),
-  getAccessToken: vi.fn(() => 'test'),
-}));
+vi.mock('@/services/auth/TokenService', async (importOriginal) =>
+  (await import('@/test/token-service-mock')).createTokenServiceMock(importOriginal, {
+    getAuthHeaders: vi.fn(() => ({ Authorization: 'Bearer test' })),
+    getAccessToken: vi.fn(() => 'test'),
+  }),
+);
 
 const SESSION_ID = 'session-d9';
 

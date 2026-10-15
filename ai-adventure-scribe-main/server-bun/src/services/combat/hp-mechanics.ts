@@ -10,6 +10,8 @@
  * @module server/services/combat/hp-mechanics
  */
 
+import { DEATH_SAVE_LIMIT } from '../../../../shared/death-save-limit.js';
+
 import type {
   DamageResult,
   HealingResult,
@@ -76,9 +78,6 @@ export function instantDeathOutcome(
   const reducedToZero = hpBefore <= 0 || damageAfterTemp >= hpBefore;
   return { overflow, massiveDamage: reducedToZero && overflow >= hpMax };
 }
-
-/** Three successes stabilise, three failures kill (SRD 5.1). */
-const DEATH_SAVE_LIMIT = 3;
 
 /** Why a hit's damage was rewritten. Always reported; never silent. */
 export type DamageCapReason = 'per_hit_fraction' | 'critical_overkill_from_full_hp';

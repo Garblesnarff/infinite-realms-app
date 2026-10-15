@@ -69,6 +69,7 @@ CREDIT_START=${REVIEW_CREDIT_START:-2026-10-14}
 CREDIT_END=${REVIEW_CREDIT_END:-2026-11-02}
 SUMMARY_HOUR=${REVIEW_SUMMARY_HOUR_UTC:-11}
 OPS_LOG_ISSUE=${REVIEW_OPS_LOG_ISSUE:-230}
+MERGE_TARGET_PER_HOUR=${REVIEW_MERGE_TARGET_PER_HOUR:-20} # Rob's target (#586)
 WORK=${FOREMAN_WORK:-/work}
 STATE=$WORK/state
 RUNNER_LOG=${RUNNER_STATE:-/runner-state}/catjam-runner.log
@@ -483,11 +484,33 @@ search() { gh api -X GET search/issues -f q="$1" -f per_page=100 --jq '.items[].
 # Fine-grained tokens get HTTP 422 from search unless the query names is:issue or is:pr.
 search_both() { { search "$1 is:issue"; search "$1 is:pr"; } | sort -un; }
 since_iso() { date -u -d '24 hours ago' +%FT%TZ; }
+# merged_rows <since>: "number<TAB>merged epoch<TAB>open→merge seconds<TAB>merge hour"
+# for every PR merged since then. Paginated, so a busy day is not cut at 100.
+merged_rows() {
+  gh api -X GET search/issues -f q="repo:$REPO is:pr is:merged merged:>=$1" -f per_page=100 --paginate \
+    --jq '.items[] | (.pull_request.merged_at | fromdate) as $m
+      | [.number, $m, $m - (.created_at | fromdate), .pull_request.merged_at[0:13]] | @tsv'
+}
+# merge_rate_lines < merged_rows: merges per hour over 24 h with the peak hour,
+# and the median open→merge time.
+merge_rate_lines() {
+  sort -t$'\t' -k3,3n | awk -F'\t' -v target="$MERGE_TARGET_PER_HOUR" '
+    NF >= 4 { n++; lead[n] = $3; h[$4]++ }
+    END {
+      for (k in h) if (h[k] > peak || (h[k] == peak && k < ph)) { peak = h[k]; ph = k }
+      if (n == 0) { printf "Merge rate: 0 merged in 24 h = 0.0/hour (target %d/hour)\n", target; print "Median open→merge: n/a"; exit }
+      printf "Merge rate: %d merged in 24 h = %.1f/hour (target %d/hour); peak hour %s:00Z with %d\n", n, n / 24, target, substr(ph, 12, 2), peak
+      med = (n % 2) ? lead[(n + 1) / 2] : (lead[n / 2] + lead[n / 2 + 1]) / 2
+      m = int(med / 60 + 0.5)
+      printf "Median open→merge: %dh %02dm over %d PRs\n", int(m / 60), m % 60, n
+    }'
+}
 
 summary_text() {
-  local since merged pass needs_human p1 rob deploys live fixes runs mins
+  local since rows merged pass needs_human p1 rob deploys live fixes runs mins
   since=$(since_iso)
-  merged=$(search "repo:$REPO is:pr is:merged merged:>=$since")
+  rows=$(merged_rows "$since") || rows=FAILED
+  merged=$(printf '%s\n' "$rows" | awk -F'\t' 'NF >= 4 { print $1 }' | sort -n)
   pass=$(scan_prs | awk -F'\t' '$4 ~ /^Strategist review — PASS at / && index($4, substr($2, 1, 8)) { print $1 }')
   needs_human=$(search_both "repo:$REPO is:open label:needs-human")
   p1=$(search "repo:$REPO is:open is:issue label:P1")
@@ -501,6 +524,7 @@ summary_text() {
 
   echo "Realms strategist — last 24h"
   echo "Merged PRs ($(count "$merged")): $(printf '%s\n' "$merged" | nums)"
+  if [ "$rows" = FAILED ]; then echo "Merge rate: GitHub search failed"; else printf '%s\n' "$rows" | merge_rate_lines; fi
   echo "PASS waiting for merge ($(count "$pass")): $(printf '%s\n' "$pass" | nums)"
   echo "FIX rounds posted: $(printf '%s' "$fixes" | wc -w)${fixes:+ on $fixes}"
   echo "needs-human ($(count "$needs_human")): $(printf '%s\n' "$needs_human" | nums)"
