@@ -147,7 +147,11 @@ export interface FeatureGateInput {
   userId: string;
   sessionId: string | undefined;
   playerInput: string | undefined;
-  /** In combat the engine already refuses a spell not on the sheet; only features are checked. */
+  /**
+   * In combat the DM's narration skips the spell check (NPC spells), but the player's own
+   * typed casts are still sheet-checked (#313). The slot check and story spend never run in
+   * combat — the engine owns slot spends there.
+   */
   inCombat?: boolean;
   /** `combatEntry.player.characterId`: client-supplied, so it is logged, never trusted. */
   clientCharacterId?: string | null;
@@ -184,12 +188,17 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
 
   const catalogNames = (phrases: string[]): string[] =>
     phrases.map((phrase) => getSpellByName(phrase)?.name).filter(Boolean) as string[];
-  const named = input.inCombat ? [] : spellsNamed(input.playerInput ?? '', NAMED_CAST_PHRASE);
+  // GP-061 (#313) retest: the in-combat skip let "I cast Fireball" (not on the sheet)
+  // through — the engine never refused the typed cast, and the DM asked for a Quarterstaff
+  // roll instead. The player's own words are sheet-checked even in combat; the DM's
+  // narration (NPC spells) is still skipped in combat so the DM's own encounters are
+  // never refused for spells the player doesn't know.
+  const named = spellsNamed(input.playerInput ?? '', NAMED_CAST_PHRASE);
   // The player's own casts; a roll purpose can claim a spell, but only these are reported.
   const ownCasts = catalogNames(phrasesAfter(CAST_PHRASE, input.playerInput ?? ''));
   const playerCasts = new Set([...ownCasts, ...named.map((spell) => spell.name)]);
   let claimedSpells = input.inCombat
-    ? []
+    ? [...playerCasts]
     : [...new Set([...catalogNames(castPhrases), ...playerCasts])];
   // A class feature phrased as a cast needs the library even with no use verb (#252).
   const nonCatalogCasts = castPhrases.filter((phrase) => !getSpellByName(phrase));
@@ -304,8 +313,13 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
   // the reply is allowed, so it cannot refuse; the check lives in story-spell-slots. Dynamic
   // import: that module pulls in spell-slots-service, which imports db/client at load time,
   // and this module must stay loadable without an application database.
+  // #313: in combat the engine owns slot spends — the gate sheet-checks (above) but never
+  // refuses for slots or triggers the story spend, so a legal cast is never refused because
+  // of slot order.
   const slotModule =
-    !refused.length && spells.length ? await import('./story-spell-slots.js') : null;
+    !input.inCombat && !refused.length && spells.length
+      ? await import('./story-spell-slots.js')
+      : null;
   const noSlot = slotModule
     ? await slotModule.spellsWithNoSlot({
         character,
@@ -318,7 +332,7 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
     slotModule && noSlot[0]
       ? slotModule.slotRefusalLine(character.name, noSlot[0].name, noSlot[0].level)
       : null;
-  if (!refused.length && !noSlot.length && spells.length)
+  if (!refused.length && !noSlot.length && spells.length && !input.inCombat)
     input.onCastsAllowed?.({ character, spells });
   if (!refused.length && !noSlot.length) return result;
 
