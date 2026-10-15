@@ -9,6 +9,9 @@
 #      in both merge calls
 #   5. renames out of workflow/migration folders, the 3000-file cap, the PR
 #      argument check, perf: titles
+#   6. refusals before the merge: HOLD MERGES on #356/#230 (trusted authors
+#      only, newest wins, unreadable refuses) and main CI (newest push run
+#      must be completed/success); skip exits 3, refuse exits 1
 #
 #   bash ops/tests/merge-pr-queue.sh
 set -euo pipefail
@@ -26,6 +29,9 @@ export TMP
 #   $TMP/pr.json        PR object
 #   $TMP/files.json     files array
 #   $TMP/queue.json     GET rules/branches/main response (active rules)
+#   $TMP/c356.json, $TMP/c230.json  issue comments (hold state)
+#   $TMP/ci.json        GET actions/workflows/ci.yml/runs response
+# A fixture whose content is FAIL makes that call exit 1 (a read error).
 mkdir -p "$TMP/bin"
 cat > "$TMP/bin/gh" <<'STUB'
 #!/usr/bin/env bash
@@ -40,6 +46,13 @@ serve() {  # serve <file> -- [gh args...]
   if [ -n "$jqf" ]; then jq -r "$jqf" "$f"; else cat "$f"; fi
 }
 args="$*"
+for k in issues/356/comments:c356 issues/230/comments:c230 actions/workflows/ci.yml/runs:ci; do
+  if [[ "$args" == *"${k%%:*}"* ]]; then
+    f="$TMP/${k##*:}.json"
+    [ "$(cat "$f")" != FAIL ] || { echo "HTTP 502" >&2; exit 1; }
+    serve "$f" "$@"; exit 0
+  fi
+done
 if [[ "$args" == *"pulls/99/files"* ]]; then serve "$TMP/files.json" "$@"; exit 0; fi
 if [[ "$args" == *"pulls/99"* && "$args" != *"merge"* ]]; then serve "$TMP/pr.json" "$@"; exit 0; fi
 if [[ "$args" == *"rules/branches/main"* ]]; then serve "$TMP/queue.json" "$@"; exit 0; fi
@@ -62,6 +75,14 @@ SHA=deadbeef12345678deadbeef12345678deadbeef
 OTHER=0123456789abcdef0123456789abcdef01234567
 ok()   { pass=$((pass+1)); echo "ok: $1"; }
 notok(){ fail=$((fail+1)); echo "FAIL: $1"; }
+
+# Default: no hold, main CI green.
+echo '[]' > "$TMP/c356.json"; echo '[]' > "$TMP/c230.json"
+green() { echo '{"workflow_runs":[{"status":"completed","conclusion":"success","head_sha":"1111111122222222"}]}' > "$TMP/ci.json"; }
+green
+cmt() { # cmt <created_at> <author_association> <body> → one comment object
+  jq -n --arg t "$1" --arg a "$2" --arg b "$3" '{created_at: $t, author_association: $a, body: $b}'
+}
 
 mkpr() { # title author base state
   cat > "$TMP/pr.json" <<JSON
@@ -179,6 +200,55 @@ mkpr "perf(dm): faster thing" "someone" "main" "open"
 echo '[{"filename":"a.txt"}]' > "$TMP/files.json"
 out=$(bash "$SCRIPT" 99 "$SHA" --dry-run 2>&1) || true
 [[ "$out" == *"dry-run:"* ]] && ok "perf: title accepted" || notok "perf title: $out"
+
+# --- skip exit code ---------------------------------------------------------------
+mkpr "do stuff" "someone" "main" "open"
+rc=0; out=$(bash "$SCRIPT" 99 "$SHA" 2>&1) || rc=$?
+[ "$rc" = 3 ] && [[ "$out" == skip:* ]] && ok "skip exits 3" || notok "skip rc=$rc $out"
+for p in ai-adventure-scribe-main/supabase/migrations/20261015_x.sql ai-adventure-scribe-main/drizzle/meta/_journal.json; do
+  mkpr "fix(x): thing" "someone" "main" "open"; jq -n --arg f "$p" '[{filename: $f}]' > "$TMP/files.json"
+  out=$(bash "$SCRIPT" 99 "$SHA" 2>&1) || true
+  [[ "$out" == "skip: migration ($p)" ]] && ok "protected: $p" || notok "protected $p: $out"
+done
+
+# --- refusals: merge hold ------------------------------------------------------------
+mkpr "fix(x): thing" "someone" "main" "open"; echo '[{"filename":"a.txt"}]' > "$TMP/files.json"
+refused() { # refused <label> <expected refuse prefix>
+  local rc=0 out; : > "$STUB_LOG"
+  out=$(bash "$SCRIPT" 99 "$SHA" 2>&1) || rc=$?
+  if [ "$rc" = 1 ] && grep -q "^refuse: $2" <<< "$out" && ! grep -qE "pulls/99/merge|enqueuePullRequest" "$STUB_LOG"; then ok "$1"; else notok "$1: rc=$rc $out"; fi
+}
+merged() { # merged <label>
+  local rc=0 out; out=$(bash "$SCRIPT" 99 "$SHA" 2>&1) || rc=$?
+  [ "$rc" = 0 ] && [[ "$out" == *"merged: sha=abc123"* ]] && ok "$1" || notok "$1: rc=$rc $out"
+}
+{ cmt 2026-10-14T06:29:32Z OWNER $'HOLD MERGES \u2014 strategist 06:32Z. Prod returns 521.\nmore'; } | jq -s . > "$TMP/c356.json"
+refused "HOLD MERGES (with a reason after it) on #356 → refuse: hold" "hold"
+{ cmt 2026-10-14T06:29:32Z OWNER 'HOLD MERGES'; cmt 2026-10-14T06:47:54Z MEMBER '  RESUME MERGES  06:48Z: back'; } | jq -s . > "$TMP/c356.json"
+merged "RESUME MERGES after the hold → merges"
+{ cmt 2026-10-14T06:47:54Z OWNER 'RESUME MERGES'; } | jq -s . > "$TMP/c356.json"
+{ cmt 2026-10-14T07:00:00Z COLLABORATOR 'HOLD MERGES'; } | jq -s . > "$TMP/c230.json"
+refused "a newer HOLD MERGES on #230 beats an older RESUME on #356" "hold"
+{ cmt 2026-10-14T08:00:00Z NONE 'HOLD MERGES'; cmt 2026-10-14T08:00:01Z CONTRIBUTOR 'HOLD MERGES'; } | jq -s . > "$TMP/c230.json"
+merged "HOLD MERGES from an untrusted author is ignored"
+{ cmt 2026-10-14T08:00:00Z OWNER 'Status: we may need HOLD MERGES later'; cmt 2026-10-14T08:00:01Z OWNER 'HOLD MERGESX'; } | jq -s . > "$TMP/c230.json"
+merged "a HOLD MERGES mention that does not start the comment is ignored"
+echo FAIL > "$TMP/c230.json"
+refused "hold comments unreadable → refuse" "cannot read merge-hold comments"
+echo '[]' > "$TMP/c356.json"; echo '[]' > "$TMP/c230.json"
+
+# --- refusals: main CI -----------------------------------------------------------------
+echo '{"workflow_runs":[{"status":"in_progress","conclusion":null,"head_sha":"3333333344444444"}]}' > "$TMP/ci.json"
+refused "main CI in progress → refuse" "main CI is not green"
+echo '{"workflow_runs":[{"status":"completed","conclusion":"failure","head_sha":"3333333344444444"}]}' > "$TMP/ci.json"
+refused "main CI failed → refuse" "main CI is not green"
+echo FAIL > "$TMP/ci.json"
+refused "main CI unreadable → refuse" "cannot read main CI"
+echo '{"workflow_runs":[]}' > "$TMP/ci.json"
+refused "no main CI run → refuse" "no push CI run"
+green
+merged "main CI green and no hold → merges"
+grep -q "event=push" "$STUB_LOG" && grep -q "branch=main" "$STUB_LOG" && ok "main CI read is the push run on main" || notok "CI query: $(grep runs "$STUB_LOG")"
 
 echo "--- $pass passed, $fail failed ---"
 [ "$fail" = "0" ]
