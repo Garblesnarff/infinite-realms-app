@@ -2,7 +2,10 @@
 # realms-reviewer (#586): headless Sonnet reviewer + daily summary.
 #
 # Runs INSIDE the realms-foreman container (ops/foreman/Dockerfile), started by
-# realms-reviewer.service hourly at :50 UTC. It reviews every open same-repo PR
+# realms-reviewer.service every 2 minutes. Most ticks are idle: a cheap
+# pre-check (one GitHub API call for the open-PR list, plus cached CI checks)
+# exits when no open PR has green CI and no posted verdict at its head. It
+# reviews every open same-repo PR
 # (catjam, Jules, crew, hand-made, drafts) EXCEPT the ones the human strategist
 # keeps (scope_reason): release-please, a draft whose body says WIP, and any PR
 # that changes .github/, .husky/, ops/foreman/, ops/claude-hooks/, migrations or
@@ -22,7 +25,7 @@
 # It never closes, merges, approves or marks a PR ready. If the head moved
 # while the model was reviewing, the verdict is dropped.
 #
-# The 11:50Z run also posts "Realms strategist — last 24h" to Slack #last-24
+# The first 11:xx UTC tick also posts "Realms strategist — last 24h" to Slack #last-24
 # (SLACK_WEBHOOK_URL) and as a comment on #230.
 #
 #   review.sh                    # normal tick
@@ -130,6 +133,75 @@ ci_finished() { # 0 when every check at the head has completed (and at least one
 }
 
 is_jules() { [[ $1 == jules* || $1 =~ -[0-9]{15,}$ ]]; }
+
+# ---- 2-minute pre-check ----------------------------------------------------
+# The systemd timer fires every 2 minutes. Most ticks have nothing to do, so
+# before the expensive per-PR scan (one comments call per open PR) this gate
+# asks: is there any open PR whose head has green CI and no posted verdict at
+# that head? An idle tick costs the open-PR list call plus cached CI checks
+# and exits. The daily budget cap is unchanged (checked in review_tick).
+#
+# State: $STATE/ci-cache, lines "<pr> <sha8> <epoch> <green|not>". "green" at a
+# sha is final (checks are per-sha and immutable); "not" is re-checked after
+# 90s. Our own posted verdicts are read from the ledger (result=posted).
+
+ci_green() { # 0 when every check at the PR head finished and none failed
+  local buckets
+  buckets=$(gh pr checks "$1" --json bucket --jq '[.[].bucket] | join(",")' 2> /dev/null) || return 1
+  [ -n "$buckets" ] || return 1
+  [[ $buckets != *pending* ]] && [[ $buckets != *fail* ]] && [[ $buckets != *cancel* ]]
+}
+
+ci_green_cached() { # <pr> <sha8>: ci_green with a 90s negative cache
+  local n=$1 s8=$2 now epoch res cache=$STATE/ci-cache
+  now=$(date +%s)
+  if read -r _ _ epoch res < <(grep "^$n $s8 " "$cache" 2> /dev/null | tail -n 1); then
+    [ "$res" = green ] && return 0
+    [ $((now - epoch)) -lt 90 ] && return 1
+  fi
+  if ci_green "$n"; then
+    { grep -v "^$n $s8 " "$cache" 2> /dev/null; echo "$n $s8 $now green"; } > "$cache.tmp" && mv "$cache.tmp" "$cache"
+    return 0
+  fi
+  { grep -v "^$n $s8 " "$cache" 2> /dev/null; echo "$n $s8 $now not"; } > "$cache.tmp" && mv "$cache.tmp" "$cache"
+  return 1
+}
+
+verdict_posted() { # <pr> <sha8>: 0 when this script posted a verdict at the head
+  awk -v p="pr=$1" -v s="sha=$2" '$3 == p && $5 == s && $6 == "posted"' "$LEDGER" 2> /dev/null | grep -q .
+}
+
+trusted_review_at() { # <pr> <sha8>: 0 when a trusted "Strategist review" is at the head
+  local n=$1 s8=$2 first
+  first=$(gh api "repos/$REPO/issues/$n/comments?per_page=100" --jq \
+    --arg me "$OWNER_LOGIN" "$TRUSTED_REVIEWS_JQ"' | last | (.body // "") | split("\n")[0]' 2> /dev/null) || return 1
+  [[ $first == *" at $s8"* ]]
+}
+
+precheck() { # 0 = may have work (run review_tick); 1 = idle
+  local n sha s8 prs open_ns
+  prs=$(gh api "repos/$REPO/pulls?state=open&per_page=100" --jq '.[] | "\(.number) \(.head.sha)"' 2> /dev/null) ||
+    { say "pre-check: open-PR list failed"; return 1; }
+  # prune the CI cache to currently-open PRs
+  open_ns=$(awk '{print $1}' <<< "$prs" | paste -sd'|')
+  if [ -n "$open_ns" ]; then
+    grep -E "^($open_ns) " "$STATE/ci-cache" 2> /dev/null > "$STATE/ci-cache.tmp" &&
+      mv "$STATE/ci-cache.tmp" "$STATE/ci-cache"
+  fi
+  while read -r n sha; do
+    [ -n "$n" ] || continue
+    s8=${sha:0:8}
+    verdict_posted "$n" "$s8" && continue
+    ci_green_cached "$n" "$s8" || continue
+    # Green CI, no bot verdict: a human strategist review at this head also
+    # counts (one comments call; the full tick would find it anyway).
+    trusted_review_at "$n" "$s8" && continue
+    say "pre-check: pr #$n sha=$s8 has green CI and no review at head — running full tick"
+    return 0
+  done <<< "$prs"
+  say "pre-check: idle — no open PR with green CI and no review at head"
+  return 1
+}
 
 # ---- scope -----------------------------------------------------------------
 # Paths whose PRs the human strategist reviews (the bot's own code, CI, git
@@ -495,11 +567,14 @@ case $MODE in
   summary) post_summary ;;
   tick)
     : "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY missing from /etc/realms-foreman/env}"
-    # Decide at tick start: up to 12 reviews can run past the hour, and the
-    # 11:50Z summary must still post. It goes first, before the reviews.
+    # The daily summary posts on the first tick of the 11:xx UTC hour, before
+    # the reviews; a marker keeps it to once per day.
     run_summary=0
     if [ "$(date -u +%H)" = "$(printf '%02d' "$SUMMARY_HOUR")" ] && [ -z "$ONLY_PR" ]; then run_summary=1; fi
     if [ "$run_summary" = 1 ]; then post_summary || say "summary failed"; fi
+    # 2-minute timer: most ticks are idle. The pre-check exits cheaply when no
+    # open PR has green CI and no review at its head. --pr N bypasses it.
+    if [ -z "$ONLY_PR" ]; then precheck || exit 0; fi
     review_tick
     ;;
 esac
