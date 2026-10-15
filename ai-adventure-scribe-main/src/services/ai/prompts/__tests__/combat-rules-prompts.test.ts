@@ -310,9 +310,9 @@ describe('CombatRulesPrompts', () => {
 
       expect(CombatRulesPrompts.formatCombatContext(notCombat)).toBe('');
       const rules = RulesPrompts.buildRulesOfPlaySection();
-      expect(rules).toHaveLength(23777);
+      expect(rules).toHaveLength(24104);
       expect(sha256(rules)).toBe(
-        'f119ee187786252d48e7ebc27edce36870089a10e3297bcd55584c703cfb0797',
+        'c69196ff1f07a853b22a95f18369cc0ec540e51307f8818a88dd3880bf951664',
       );
     });
   });

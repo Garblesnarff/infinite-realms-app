@@ -123,6 +123,10 @@ Ask yourself:
 - **ACTION → SKILL:** The player's declared action determines the canonical skill or ability. The
   character sheet supplies only the modifier and proficiency for that skill; never choose the
   character's best modifier and retrofit the skill to it.
+- **SPELLS NEED NO CHECK TO CAST:** A player who casts a spell or cantrip from their own sheet casts
+  it. Do not request an Arcana or other check to cast it, to stabilize it, or to keep it going
+  (the 2014 rules have none). Roll only for what the spell's own text calls for: an attack roll
+  or a saving throw by the target.
 - **DECLARED ACTION ONLY:** Attach a check only to the player's current declared action. A declined
   option, previously offered alternative, or other undeclared action gets neither a roll nor
   narration.
