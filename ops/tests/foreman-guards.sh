@@ -287,5 +287,17 @@ git -C "$DEL" rm -q app/src/pages/Page.tsx
 got=$(delcheck deleted_refs x $'app/src/components/old/Old.tsx\napp/src/components/old/index.ts')
 [ -z "$got" ] && ok "deleted_refs: no imports left" || bad "deleted_refs clean: '$got'"
 
+# reviewer summary: merges per hour with the peak hour, median open→merge.
+eval "$(sed -n '/^merge_rate_lines() {/,/^}/p' "$HERE/../foreman/review.sh")"
+MERGE_TARGET_PER_HOUR=20
+rows=$(printf '%s\t%s\t%s\t%s\n' 11 0 600 2026-10-15T09 12 0 1800 2026-10-15T10 13 0 3600 2026-10-15T10 14 0 7200 2026-10-15T11)
+got=$(printf '%s\n' "$rows" | merge_rate_lines)
+want=$'Merge rate: 4 merged in 24 h = 0.2/hour (target 20/hour); peak hour 10:00Z with 2\nMedian open→merge: 0h 45m over 4 PRs'
+[ "$got" = "$want" ] && ok "merge_rate_lines: rate, peak hour, even median" || bad "merge_rate_lines: got '$got'"
+got=$(printf '%s\n' "$rows" | head -3 | merge_rate_lines | sed -n 2p)
+[ "$got" = "Median open→merge: 0h 30m over 3 PRs" ] && ok "merge_rate_lines: odd median" || bad "merge_rate_lines odd: '$got'"
+got=$(printf '\n' | merge_rate_lines)
+[ "$got" = $'Merge rate: 0 merged in 24 h = 0.0/hour (target 20/hour)\nMedian open→merge: n/a' ] && ok "merge_rate_lines: no merges" || bad "merge_rate_lines empty: '$got'"
+
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]
