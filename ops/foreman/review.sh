@@ -137,30 +137,32 @@ is_jules() { [[ $1 == jules* || $1 =~ -[0-9]{15,}$ ]]; }
 # ---- 2-minute pre-check ----------------------------------------------------
 # The systemd timer fires every 2 minutes. Most ticks have nothing to do, so
 # before the expensive per-PR scan (one comments call per open PR) this gate
-# asks: is there any open PR whose head has green CI and no posted verdict at
-# that head? An idle tick costs the open-PR list call plus cached CI checks
-# and exits. The daily budget cap is unchanged (checked in review_tick).
+# asks: is there any open PR whose CI has finished and which has no posted
+# verdict at its head? An idle tick costs the open-PR list call plus cached CI
+# checks and exits. The daily budget cap is unchanged (checked in review_tick).
 #
-# State: $STATE/ci-cache, lines "<pr> <sha8> <epoch> <green|not>". "green" at a
+# State: $STATE/ci-cache, lines "<pr> <sha8> <epoch> <done|not>". "done" at a
 # sha is final (checks are per-sha and immutable); "not" is re-checked after
-# 90s. Our own posted verdicts are read from the ledger (result=posted).
+# 300s. Our own posted verdicts are read from the ledger (result=posted).
 
-ci_green() { # 0 when every check at the PR head finished and none failed
-  local buckets
-  buckets=$(gh pr checks "$1" --json bucket --jq '[.[].bucket] | join(",")' 2> /dev/null) || return 1
-  [ -n "$buckets" ] || return 1
-  [[ $buckets != *pending* ]] && [[ $buckets != *fail* ]] && [[ $buckets != *cancel* ]]
+# ci_finished_at <pr>: 0 when CI finished at the head (one API call). Failures
+# are allowed — review_tick reviews finished-but-red PRs too (failed logs).
+ci_finished_at() {
+  local total pending
+  read -r total pending < <(gh pr checks "$1" --json bucket \
+    --jq 'length as $t | ([.[] | select(.bucket == "pending")] | length) as $p | "\($t) \($p)"' 2> /dev/null) || return 1
+  [[ $total =~ ^[0-9]+$ ]] && [ "$total" -gt 0 ] && [ "$pending" = 0 ]
 }
 
-ci_green_cached() { # <pr> <sha8>: ci_green with a 90s negative cache
+ci_finished_cached() { # <pr> <sha8>: ci_finished_at with a 300s negative cache
   local n=$1 s8=$2 now epoch res cache=$STATE/ci-cache
   now=$(date +%s)
   if read -r _ _ epoch res < <(grep "^$n $s8 " "$cache" 2> /dev/null | tail -n 1); then
-    [ "$res" = green ] && return 0
-    [ $((now - epoch)) -lt 90 ] && return 1
+    [ "$res" = done ] && return 0
+    [ $((now - epoch)) -lt 300 ] && return 1
   fi
-  if ci_green "$n"; then
-    { grep -v "^$n $s8 " "$cache" 2> /dev/null; echo "$n $s8 $now green"; } > "$cache.tmp" && mv "$cache.tmp" "$cache"
+  if ci_finished_at "$n"; then
+    { grep -v "^$n $s8 " "$cache" 2> /dev/null; echo "$n $s8 $now done"; } > "$cache.tmp" && mv "$cache.tmp" "$cache"
     return 0
   fi
   { grep -v "^$n $s8 " "$cache" 2> /dev/null; echo "$n $s8 $now not"; } > "$cache.tmp" && mv "$cache.tmp" "$cache"
@@ -171,10 +173,14 @@ verdict_posted() { # <pr> <sha8>: 0 when this script posted a verdict at the hea
   awk -v p="pr=$1" -v s="sha=$2" '$3 == p && $5 == s && $6 == "posted"' "$LEDGER" 2> /dev/null | grep -q .
 }
 
+scope_skipped() { # <pr> <sha8>: 0 when this head was scope-skipped (local log)
+  grep -q "^$1 $2 " "$STATE/scope-skips" 2> /dev/null
+}
+
 trusted_review_at() { # <pr> <sha8>: 0 when a trusted "Strategist review" is at the head
   local n=$1 s8=$2 first
-  first=$(gh api "repos/$REPO/issues/$n/comments?per_page=100" --jq \
-    --arg me "$OWNER_LOGIN" "$TRUSTED_REVIEWS_JQ"' | last | (.body // "") | split("\n")[0]' 2> /dev/null) || return 1
+  first=$(gh api "repos/$REPO/issues/$n/comments?per_page=100" --paginate 2> /dev/null |
+    jq -s --arg me "$OWNER_LOGIN" "$TRUSTED_REVIEWS_JQ"' | last | (.body // "") | split("\n")[0]') || return 1
   [[ $first == *" at $s8"* ]]
 }
 
@@ -192,14 +198,16 @@ precheck() { # 0 = may have work (run review_tick); 1 = idle
     [ -n "$n" ] || continue
     s8=${sha:0:8}
     verdict_posted "$n" "$s8" && continue
-    ci_green_cached "$n" "$s8" || continue
-    # Green CI, no bot verdict: a human strategist review at this head also
+    scope_skipped "$n" "$s8" && continue
+    [ "$(attempts "$n" "$s8")" -ge "$MAX_ATTEMPTS" ] 2> /dev/null && continue
+    ci_finished_cached "$n" "$s8" || continue
+    # CI finished, no bot verdict: a human strategist review at this head also
     # counts (one comments call; the full tick would find it anyway).
     trusted_review_at "$n" "$s8" && continue
-    say "pre-check: pr #$n sha=$s8 has green CI and no review at head — running full tick"
+    say "pre-check: pr #$n sha=$s8 CI finished, no review at head — running full tick"
     return 0
   done <<< "$prs"
-  say "pre-check: idle — no open PR with green CI and no review at head"
+  say "pre-check: idle — no open PR with finished CI and no review at head"
   return 1
 }
 
@@ -561,7 +569,7 @@ post_summary() {
 
 case $MODE in
   slack-test)
-    echo "Realms strategist — webhook test from realms-reviewer (#586). The daily summary will post here at 11:50Z." | slack_post
+    echo "Realms strategist — webhook test from realms-reviewer (#586). The daily summary will post here on the first 11:xx UTC tick." | slack_post
     logline "slack test line sent"
     ;;
   summary) post_summary ;;
