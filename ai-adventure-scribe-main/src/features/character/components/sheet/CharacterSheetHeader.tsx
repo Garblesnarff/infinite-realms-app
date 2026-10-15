@@ -2,12 +2,10 @@ import { Heart, Play, Shield, Sword, Trash2 } from 'lucide-react';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { ExportCharacterButton } from './ExportCharacterButton';
 import CampaignSelectionModal from '../list/campaign-selection-modal';
+import { ExportCharacterButton } from './ExportCharacterButton';
 
 import type { Character } from '@/types/character';
-
-import { Button } from '@/components/ui/button';
 
 import {
   AlertDialog,
@@ -21,6 +19,7 @@ import {
   AlertDialogPortal,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
 import { IRPanel, IRThumb } from '@/components/ui/ir-primitives';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
