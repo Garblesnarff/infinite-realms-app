@@ -19,9 +19,11 @@ vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock('@/services/auth/TokenService', () => ({
-  getAuthHeaders: vi.fn(() => ({ Authorization: 'Bearer jwt' })),
-}));
+vi.mock('@/services/auth/TokenService', async (importOriginal) =>
+  (await import('@/test/token-service-mock')).createTokenServiceMock(importOriginal, {
+    getAuthHeaders: vi.fn(() => ({ Authorization: 'Bearer jwt' })),
+  }),
+);
 
 import { VoiceProvider, useVoiceContext } from '@/contexts/VoiceContext';
 
