@@ -610,6 +610,44 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
     expect(facts).toContain('is DEAD');
   });
 
+  test('#261: third failed death save stamps vitalState dead on the character_stats mirror (read directly from DB)', async () => {
+    const scene = await dropHero();
+    for (const d20 of [5, 6]) {
+      await deathSave(scene, d20);
+      await giveTurnTo(scene.encounterId, scene.heroId);
+    }
+    const third = await deathSave(scene, 4);
+    expect(third.deathSaves[0]).toMatchObject({ failures: 3, isDead: true });
+
+    // Read the mirror row directly — not the participant derivation.
+    const [mirror] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, scene.characterId));
+    expect(mirror.vitalState).toBe('dead');
+    expect(mirror.deathSavesFailures).toBe(3);
+    expect(mirror.diedAt).not.toBeNull();
+  });
+
+  test('#261: massive-damage kill through applyDamage stamps vitalState dead on the mirror (read directly from DB)', async () => {
+    // Hero at 3 HP, max 12: 15 damage overflows the maximum (15 >= 12) → instant death.
+    const scene = await seedScene({ heroHp: 3, heroMax: 12 });
+    const result = await CombatHPService.applyDamage(
+      scene.heroId,
+      scene.encounterId,
+      { damageAmount: 15, damageType: 'slashing' },
+      userId,
+    );
+    expect(result.isDead).toBe(true);
+
+    const [mirror] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, scene.characterId));
+    expect(mirror.vitalState).toBe('dead');
+    expect(mirror.diedAt).not.toBeNull();
+  });
+
   test('a death save out of turn, or from a character who is not dying, is refused', async () => {
     const scene = await dropHero();
     await giveTurnTo(scene.encounterId, scene.spiderId);
