@@ -671,6 +671,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
           encounterId,
           action,
           playerDie?.d20,
+          playerDie?.d20Rolls,
           origin,
           signal,
         )
@@ -678,6 +679,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
           encounterId,
           action,
           playerDie?.d20,
+          playerDie?.d20Rolls,
           ...(origin ? [origin] : []),
         );
     if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError');

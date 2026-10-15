@@ -172,6 +172,7 @@ describe('run D5 round 2 through the handler (#2563)', () => {
       'encounter-d5',
       expect.objectContaining({ target_ids: [SWARM_1_ID], weapon_id: 'quarterstaff' }),
       15,
+      undefined,
     );
 
     // The end was evaluated only after the attack resolved, and the 409 keeps the

@@ -94,6 +94,18 @@ describe('the player attack die', () => {
       });
     });
 
+    it('carries the popup’s dropped die with the kept one (#263 CB-028)', async () => {
+      vi.mocked(proposeAuthoritativeAttack).mockResolvedValue(LEGAL_PROPOSAL as any);
+      vi.mocked(requestPlayerAttackRoll).mockResolvedValue({ d20: 8, d20Rolls: [8, 14] });
+
+      await expect(ask()).resolves.toEqual({
+        d20: 8,
+        d20Rolls: [8, 14],
+        autoRolled: false,
+        movementOnly: false,
+      });
+    });
+
     it('falls back to the engine when the player cancels', async () => {
       vi.mocked(proposeAuthoritativeAttack).mockResolvedValue(LEGAL_PROPOSAL as any);
       vi.mocked(requestPlayerAttackRoll).mockResolvedValue({ d20: null });

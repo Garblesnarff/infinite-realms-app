@@ -161,6 +161,7 @@ describe('a dismissed engine attack prompt (#2234)', () => {
       'encounter-1',
       UNARMED_STRIKE,
       undefined,
+      undefined,
     );
   });
 
@@ -173,6 +174,20 @@ describe('a dismissed engine attack prompt (#2234)', () => {
       'encounter-1',
       UNARMED_STRIKE,
       15,
+      undefined,
+    );
+  });
+
+  it("carries the popup's dropped die into the commit (#263 CB-028)", async () => {
+    setPlayerRollHost(hostThatAnswers({ d20: 8, d20Rolls: [8, 14] }));
+
+    await resolve();
+
+    expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledWith(
+      'encounter-1',
+      UNARMED_STRIKE,
+      8,
+      [8, 14],
     );
   });
 
