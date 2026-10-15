@@ -630,9 +630,9 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
   });
 
   test('#261: massive-damage kill through applyDamage stamps vitalState dead on the mirror (read directly from DB)', async () => {
-    // Hero at 1 HP, max 12: spider with +11 bonus hits for massive damage (overflow >= max).
+    // Hero at 1 HP, max 12: spider with +12 bonus hits for 13 (1d1+12), overflow 12 >= max 12.
     // Uses spiderStrikes (real attack path → CombatHPService.applyDamage).
-    const scene = await seedScene({ heroHp: 1, heroMax: 12, spiderDamageBonus: 11 });
+    const scene = await seedScene({ heroHp: 1, heroMax: 12, spiderDamageBonus: 12 });
     const result = await spiderStrikes(scene, 18);
     expect(result.instantDeath).toBe(true);
 
