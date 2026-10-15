@@ -38,6 +38,10 @@
 # summary tracks the $99 credit that expires 2026-11-02. Every ledger row ends
 # with models=<ids billed>, read from the claude JSON (modelUsage); if the
 # costliest model is not Sonnet the row says model-mismatch and the tick stops.
+# Author never judges (#662): when the costliest reviewer model is the same
+# family as the PR author's model (from the body's/commits' model line), the
+# verdict is skipped, the PR is labeled needs-other-reviewer, and the tick
+# continues. Rule recorded in PR-POLICY.md.
 set -euo pipefail
 # shellcheck source=ops/foreman/lib.sh
 . "$(dirname "$(readlink -f "$0")")/lib.sh"
@@ -248,6 +252,18 @@ skip_scope() {
 models_of() { jq -r '(.modelUsage // {}) | keys | if length == 0 then "none" else join(",") end' "$1" 2> /dev/null || echo none; }
 # top_model <claude json>: the model with the highest costUSD, or empty
 top_model() { jq -r '(.modelUsage // {}) | to_entries | max_by(.value.costUSD // 0) | .key // empty' "$1" 2> /dev/null || true; }
+# author_model_family <pr>: the model family of the PR's author, or empty when
+# the body and commit messages name none (#662 item 1: author never judges).
+# Reads the PR body's "model:" / "author-model:" / "Co-Authored-By:" lines and
+# the same lines in every commit message; the family mapping is pure and lives
+# in lib.sh (model_family_of_text). Fail-open: unknown author models do not
+# block review, they just skip the same-family check.
+author_model_family() {
+  local n=$1 body commits
+  body=$(gh api "repos/$REPO/pulls/$n" --jq '.body // ""' 2> /dev/null) || body=""
+  commits=$(gh api "repos/$REPO/pulls/$n/commits?per_page=100" --jq '.[].commit.message' 2> /dev/null) || commits=""
+  model_family_of_text "$body"$'\n'"$commits" || true
+}
 
 # ---- one review ------------------------------------------------------------
 # prefetch <pr> <sha> <ref> <dir>: everything the review needs, as files, so the
@@ -376,6 +392,9 @@ EOF
   local top
   REVIEW_MODELS=$(models_of "$out")
   top=$(top_model "$out")
+  local afam rfam
+  afam=""
+  rfam=""
 
   local verdicts=$dir/verdicts.json result v=""
   if ! jq -e 'type == "array"' "$verdicts" > /dev/null 2>&1; then
@@ -394,10 +413,25 @@ EOF
     result=model-mismatch
     MODEL_MISMATCH=1
     logline "pr=#$n sha=$s8 result=model-mismatch top=$top models=$REVIEW_MODELS usd=$cost (want /$EXPECT_MODEL_RE/); stopping this tick"
-  elif [ "$result" = verdict ]; then
-    result=$(post_verdict "$n" "$sha" "$ref" "$v" "$cost") || result=post-error
   else
-    logline "pr=#$n sha=$s8 result=$result claude_exit=$rc usd=$cost models=$REVIEW_MODELS"
+    # #662 item 1 (author never judges): when the costliest reviewer model is
+    # the same family as the PR author's model, skip and label
+    # needs-other-reviewer instead of posting. The tick continues with the
+    # next PR; when either family is unknown the review proceeds as before.
+    afam=$(author_model_family "$n")
+    rfam=$(model_family_of_text "model: $top" || true)
+    if [ -n "$afam" ] && [ -n "$rfam" ] && [ "$afam" = "$rfam" ]; then
+      result=author-model-skip
+      logline "pr=#$n sha=$s8 result=author-model-skip author=$afam reviewer=$rfam usd=$cost models=$REVIEW_MODELS; labeled needs-other-reviewer, no verdict posted"
+      if [ "$POST" = 1 ]; then
+        gh api -X POST "repos/$REPO/issues/$n/labels" -f 'labels[]=needs-other-reviewer' > /dev/null ||
+          say "pr #$n: adding needs-other-reviewer failed"
+      fi
+    elif [ "$result" = verdict ]; then
+      result=$(post_verdict "$n" "$sha" "$ref" "$v" "$cost") || result=post-error
+    else
+      logline "pr=#$n sha=$s8 result=$result claude_exit=$rc usd=$cost models=$REVIEW_MODELS"
+    fi
   fi
   [ "$POST" = 1 ] || result=dry-run-$result
   echo "$(date -u +%FT%TZ) $(today) pr=$n $cost sha=$s8 $result models=$REVIEW_MODELS" >> "$LEDGER"

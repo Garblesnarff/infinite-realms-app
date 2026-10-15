@@ -1,1 +1,1 @@
-../PR-POLICY.md
+Author never judges (#662): the foreman reviewer must not post a verdict on a PR whose author model is in the same family as the reviewer model; such PRs are labeled `needs-other-reviewer` and wait for a different-model reviewer.

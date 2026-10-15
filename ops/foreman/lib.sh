@@ -49,3 +49,28 @@ TRUSTED_REVIEWS_JQ='[.[] | select((.body // "" | startswith("Strategist review")
 # Use: jq -r --arg repo "$REPO" --arg pfx "catjam/$n-" "$CATJAM_PR_JQ"
 CATJAM_PR_JQ='[.[] | select(.head.repo.full_name == $repo and (.head.ref | startswith($pfx)))]
   | first // empty | "\(.number)\t\(.head.ref)"'
+
+# model_family_of_text <text>: the model family named in the text
+# (sonnet|opus|haiku|gpt|grok|gemini|catjam), or empty when none is named.
+# Recognizes "model: <id>" / "author-model: <id>" lines and the name part of
+# "Co-Authored-By: <name> <email>" lines, case-insensitively. First match wins.
+# Pure: safe for the guard tests in ops/foreman/ (#662 item 1).
+model_family_of_text() {
+  local line id low
+  while IFS= read -r line; do
+    id=$(sed -nE 's/^[[:space:]]*(model|author-model|author_model)[[:space:]]*:[[:space:]]*([^[:space:],;]+).*/\2/Ip' <<< "$line")
+    [ -n "$id" ] || id=$(sed -nE 's/^[[:space:]]*co-authored-by[[:space:]]*:[[:space:]]*(.*)/\1/Ip' <<< "$line")
+    [ -n "$id" ] || continue
+    low=${id,,}
+    case $low in
+      *opus*)   echo opus;   return 0 ;;
+      *sonnet*) echo sonnet; return 0 ;;
+      *haiku*)  echo haiku;  return 0 ;;
+      *gpt*)    echo gpt;    return 0 ;;
+      *grok*)   echo grok;   return 0 ;;
+      *gemini*|*jules*) echo gemini; return 0 ;;
+      *catjam*|*cat-jam*) echo catjam; return 0 ;;
+    esac
+  done <<< "$1"
+  return 1
+}
