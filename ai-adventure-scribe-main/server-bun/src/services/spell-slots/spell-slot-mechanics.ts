@@ -10,11 +10,10 @@
  * @module server/services/spell-slots/spell-slot-mechanics
  */
 
-import { ValidationError } from '../../lib/errors.js';
-
 // #617: the progression tables live in shared/spell-slot-tables.ts (epic #616).
 // This module owns the calculation logic, not the table values.
 import { FULL_CASTER_SLOTS, WARLOCK_PACT_MAGIC } from '../../../../shared/spell-slot-tables.js';
+import { ValidationError } from '../../lib/errors.js';
 
 import type {
   SpellSlotCalculation,

@@ -3,10 +3,11 @@
  * Extracted from src/utils/multiclassing.ts
  */
 
+import { FULL_CASTER_SLOTS } from '../../../shared/spell-slot-tables';
+
 import type { Character } from '@/types/character';
 
 // #617: spell-slot tables live in shared/spell-slot-tables.ts (epic #616).
-import { FULL_CASTER_SLOTS } from '../../../shared/spell-slot-tables';
 
 export interface MulticlassSpellcastingResult {
   spellcastingClasses: Array<{

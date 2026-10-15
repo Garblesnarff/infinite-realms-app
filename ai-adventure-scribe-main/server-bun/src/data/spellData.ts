@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, max-lines */
+import { FULL_CASTER_SLOTS, WARLOCK_PACT_MAGIC } from '../../../shared/spell-slot-tables.js';
 import nonSrdSupplement from '../../../src/data/spells/non-srd-supplement.json';
 import srdSpells from '../../../src/data/srd/spells.json';
 
@@ -385,8 +386,6 @@ export function getSpellsBySchool(school: string): Spell[] {
 // Spell progression data for D&D 5E classes
 // #617: spell_slots_N derive from shared/spell-slot-tables.ts (epic #616).
 // Cantrips/spells-known stay here — they are not slot tables.
-import { FULL_CASTER_SLOTS, WARLOCK_PACT_MAGIC } from '../../../shared/spell-slot-tables.js';
-
 const fullCasterRow = (character_level: number, extra: Record<string, number | string>) => {
   const slots = FULL_CASTER_SLOTS[character_level] ?? [0, 0, 0, 0, 0, 0, 0, 0, 0];
   return {

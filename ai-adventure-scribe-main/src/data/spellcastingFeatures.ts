@@ -1,3 +1,9 @@
+import {
+  FULL_CASTER_SLOTS,
+  WARLOCK_PACT_MAGIC,
+  halfCasterSlots,
+} from '../../shared/spell-slot-tables';
+
 import type { AbilityScores } from '@/types/character';
 
 /**
@@ -137,12 +143,6 @@ export const metamagicOptions: MetamagicOption[] = [
  * #617: slot arrays derive from shared/spell-slot-tables.ts (epic #616).
  * Cantrips/spells-known stay here — they are not slot tables.
  */
-import {
-  FULL_CASTER_SLOTS,
-  WARLOCK_PACT_MAGIC,
-  halfCasterSlots,
-} from '../../shared/spell-slot-tables';
-
 const fullCasterEntry = (level: number, cantrips: number) => ({
   cantrips,
   spells: [...(FULL_CASTER_SLOTS[level] ?? [])],

@@ -2,6 +2,7 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { calculateSpellSlots } from '../character-calculations';
 import {
   deductSpellSlot,
   restoreSpellSlots,
@@ -9,7 +10,6 @@ import {
   checkConcentration,
 } from '../spell-management';
 // #617: calculateSpellSlots merged into character-calculations.ts.
-import { calculateSpellSlots } from '../character-calculations';
 
 import type { Character } from '@/types/character';
 import type { CombatParticipant } from '@/types/combat';

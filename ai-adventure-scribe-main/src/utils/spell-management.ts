@@ -16,12 +16,13 @@
 // Imports
 // ===========================
 
+import { calculateSpellSlots } from './character-calculations';
+import { type SpellSlotLevel } from '../../shared/spell-slot-tables';
+
 import type { Character } from '@/types/character';
 
 // #617: spell-slot tables live in shared/spell-slot-tables.ts (epic #616);
 // the single calculateSpellSlots lives in character-calculations.ts.
-import { type SpellSlotLevel } from '../../shared/spell-slot-tables';
-import { calculateSpellSlots } from './character-calculations';
 
 export * from './combat/spellcasting-actions';
 

@@ -1,6 +1,5 @@
 import { SPELLCASTING_ABILITY_MAP } from './character-calculations-data';
 // #617: spell-slot tables live in shared/spell-slot-tables.ts (epic #616).
-import { FULL_CASTER_SLOTS } from '../../shared/spell-slot-tables';
 import {
   calculateSkillModifiers,
   calculateSavingThrowModifiers,
@@ -11,6 +10,7 @@ import {
   type SavingThrowModifiers,
 } from './character-proficiency-calculations';
 import { ENCUMBRANCE_THRESHOLDS } from '../../shared/carrying-capacity';
+import { FULL_CASTER_SLOTS } from '../../shared/spell-slot-tables';
 import { findSrdClass } from '../../shared/srd-class-data';
 
 import type { AbilityScores, Character, CharacterClass } from '@/types/character';

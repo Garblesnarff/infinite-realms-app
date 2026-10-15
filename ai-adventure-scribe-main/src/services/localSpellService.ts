@@ -1,7 +1,8 @@
+import { FULL_CASTER_SLOTS } from '../../shared/spell-slot-tables';
+
 import type { Spell } from '@/types/character';
 
 // #617: spell-slot tables live in shared/spell-slot-tables.ts (epic #616).
-import { FULL_CASTER_SLOTS } from '../../shared/spell-slot-tables';
 
 import { getClassSpells, allSpells } from '@/data/spellOptions';
 import {
