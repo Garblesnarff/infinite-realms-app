@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# realms-reviewer (#586): headless Sonnet reviewer + daily summary.
+# realms-reviewer (#586): headless Claude reviewer (Haiku or Sonnet by tier) + daily summary.
 #
 # Runs INSIDE the realms-foreman container (ops/foreman/Dockerfile), started by
 # realms-reviewer.service hourly at :50 UTC. It reviews every open same-repo PR
@@ -34,7 +34,13 @@
 # Spend: at most $1.50 per review and $5.00 per UTC day (DAILY_CAP_USD); the
 # summary tracks the $99 credit that expires 2026-11-02. Every ledger row ends
 # with models=<ids billed>, read from the claude JSON (modelUsage); if the
-# costliest model is not Sonnet the row says model-mismatch and the tick stops.
+# costliest model is not the tier's model the row says model-mismatch and the
+# tick stops.
+#
+# Tiers (#663 item 5): a PR of at most 300 changed lines (additions +
+# deletions) whose every path is on the light allow list (LIGHT_RE) and off the
+# deny lists (HEAVY_RE, HEAVY_I_RE) is reviewed by Haiku; every other PR by
+# Sonnet. Anything unreadable falls back to Sonnet.
 set -euo pipefail
 # shellcheck source=ops/foreman/lib.sh
 . "$(dirname "$(readlink -f "$0")")/lib.sh"
@@ -42,6 +48,18 @@ set -euo pipefail
 REPO=${REVIEW_REPO:-Garblesnarff/infinite-realms-app}
 MODEL=${REVIEW_MODEL:-sonnet}
 EXPECT_MODEL_RE=${REVIEW_EXPECT_MODEL_RE:-sonnet}  # the costliest billed model must match (case-insensitive)
+SMALL_MODEL=${REVIEW_SMALL_MODEL:-haiku}
+SMALL_EXPECT_MODEL_RE=${REVIEW_SMALL_EXPECT_MODEL_RE:-haiku}
+SMALL_MAX_LINES=${REVIEW_SMALL_MAX_LINES:-300}
+RUN_MODEL=$MODEL RUN_EXPECT_RE=$EXPECT_MODEL_RE  # per review, set by set_tier
+# Haiku is opt-in: every path must be on LIGHT_RE (docs, READMEs, UI kit
+# components, pages, styles, and the tests inside those folders) and none may
+# hit a deny pattern. Any other path gives Sonnet.
+LIGHT_RE='^(ai-adventure-scribe-main/)?docs/|(^|/)README\.md$|^ai-adventure-scribe-main/src/(components/ui|pages|styles)/'
+# Deny, case-sensitive: the DM by name (dm/, dm-*, *-dm-*, DMMessage, useDmX).
+HEAVY_RE='(^|/)([Dd]m|DM)([-_./A-Z]|$)|[a-z](Dm|DM)([A-Z._-]|$)|[-_.]dm([-_./]|$)'
+# Deny, case-insensitive: game rules, schema, money, auth, infra.
+HEAVY_I_RE='combat|tactical|dungeon[-_]?master|migrations/|(^|/)db/schema|drizzle|^ops/|auth|session|token|secret|crypto|stripe|billing|payment|pricing|checkout|subscription|webhook|middleware|rls|permission|polic(y|ies)|admin|dockerfile|deploy|(^|/)\.env|(^|/)(package\.json|bun\.lockb?)$|\.(sql|sh)$'
 MAX_PRS=${REVIEW_MAX_PRS:-12}
 DAILY_CAP_USD=${REVIEW_DAILY_CAP_USD:-5.00}
 PER_PR_USD=${REVIEW_PER_PR_USD:-1.50}
@@ -59,7 +77,9 @@ MAX_ATTEMPTS=${REVIEW_MAX_ATTEMPTS:-2}   # per (PR, head sha8) without a posted 
 CLAUDE_TIMEOUT=${REVIEW_CLAUDE_TIMEOUT:-20m}
 # Last line of every verdict comment and review, so Muse can tell bot verdicts
 # from the human strategist's (it waits for the strategist on protected paths).
-BOT_SIGNATURE='— posted by the foreman reviewer bot (Sonnet)'
+# The prefix is fixed; the model name in brackets follows the tier.
+BOT_SIGNATURE_PREFIX='— posted by the foreman reviewer bot'
+BOT_SIGNATURE="$BOT_SIGNATURE_PREFIX (Sonnet)"
 LEDGER=$STATE/spend.log  # "<iso> <utc date> pr=<n> <usd> sha=<sha8> <result> models=<id,id|none>"
 LOG=$STATE/review.log
 
@@ -166,6 +186,28 @@ skip_scope() {
   echo "$key" >> "$STATE/scope-skips"
   logline "pr=#$1 sha=$2 skip-scope $3"
 }
+# pick_tier <pr.json> <paths.txt>: "haiku <lines>" for a small PR off the heavy
+# paths, else "sonnet <reason>". Fails toward Sonnet.
+pick_tier() {
+  local lines hit
+  lines=$(jq -r '(.additions + .deletions) // empty' "$1" 2> /dev/null || true)
+  [[ $lines =~ ^[0-9]+$ ]] || { echo "sonnet lines-unknown"; return 0; }
+  [ -s "$2" ] || { echo "sonnet paths-unknown"; return 0; }
+  if [ "$lines" -gt "$SMALL_MAX_LINES" ]; then echo "sonnet lines=$lines"; return 0; fi
+  hit=$({ grep -E -- "$HEAVY_RE" "$2"; grep -iE -- "$HEAVY_I_RE" "$2"; } | awk 'NR == 1' || true)
+  if [ -n "$hit" ]; then echo "sonnet path=$hit"; return 0; fi
+  hit=$(grep -vE -- "$LIGHT_RE" "$2" | awk 'NR == 1' || true)
+  if [ -n "$hit" ]; then echo "sonnet not-light=$hit"; return 0; fi
+  echo "haiku lines=$lines"
+}
+# set_tier <tier>: the model, the billing check and the signature for one review
+set_tier() {
+  if [ "$1" = haiku ]; then
+    RUN_MODEL=$SMALL_MODEL RUN_EXPECT_RE=$SMALL_EXPECT_MODEL_RE BOT_SIGNATURE="$BOT_SIGNATURE_PREFIX (Haiku)"
+  else
+    RUN_MODEL=$MODEL RUN_EXPECT_RE=$EXPECT_MODEL_RE BOT_SIGNATURE="$BOT_SIGNATURE_PREFIX (Sonnet)"
+  fi
+}
 
 # ---- model ids -------------------------------------------------------------
 # models_of <claude json>: billed model ids, comma-separated, or "none"
@@ -183,6 +225,9 @@ prefetch() {
     --jq '{number, title, body, draft, state, mergeable, mergeable_state, author: .user.login,
            head_ref: .head.ref, head_sha: .head.sha, base_ref: .base.ref, additions, deletions, changed_files}' > "$d/pr.json"
   gh pr view "$n" --json files --jq '.files[] | "\(.additions)+ \(.deletions)- \(.path)"' > "$d/files.txt"
+  # Every path, old names of renames included, for the tier choice.
+  gh api "repos/$REPO/pulls/$n/files?per_page=100" --paginate --jq '.[] | .filename, (.previous_filename // empty)' > "$d/paths.txt" 2> /dev/null ||
+    : > "$d/paths.txt"
   gh pr diff "$n" > "$d/diff.patch" 2> /dev/null || : > "$d/diff.patch"
   gh pr checks "$n" --json name,workflow,state,bucket,link,startedAt,completedAt > "$d/checks.json" 2> /dev/null || true
   jq -e 'type == "array"' "$d/checks.json" > /dev/null 2>&1 || echo '[]' > "$d/checks.json"
@@ -224,7 +269,7 @@ run_claude() {
     # no CAP_KILL in this container).
     exec setpriv --reuid="$FUID" --regid="$FUID" --clear-groups --inh-caps=-all -- \
       timeout --kill-after=30 "$CLAUDE_TIMEOUT" \
-      claude -p --model "$MODEL" --max-budget-usd "$2" --output-format json \
+      claude -p --model "$RUN_MODEL" --max-budget-usd "$2" --output-format json \
       --no-session-persistence --strict-mcp-config --safe-mode \
       --tools Read,Grep,Glob,Write --permission-mode default \
       --allowedTools Read Grep Glob Write \
@@ -290,6 +335,10 @@ EOF
   } > "$dir/task.md"
   chown -R "$FUID:$FUID" "$dir"
 
+  local tier
+  tier=$(pick_tier "$dir/pr/pr.json" "$dir/pr/paths.txt")
+  set_tier "${tier%% *}"
+  logline "pr=#$n sha=$s8 tier=$tier model=$RUN_MODEL"
   run_claude "$dir" "$budget" > "$out" 2> "$STATE/claude-$n.err" || rc=$?
 
   # A failed attempt still costs money. With no reported cost, charge the
@@ -313,11 +362,11 @@ EOF
       '[.[] | select(.pr == $n and .sha == $sha and (.verdict | IN("PASS","FIX","CLOSE")))] | first // empty' "$verdicts")
     if [ -z "$v" ]; then result=no-valid-verdict-for-head; else result=verdict; fi
   fi
-  if [ -n "$top" ] && ! grep -qiE -- "$EXPECT_MODEL_RE" <<< "$top"; then
+  if [ -n "$top" ] && ! grep -qiE -- "$RUN_EXPECT_RE" <<< "$top"; then
     # Billed mostly by a model we did not ask for: post nothing, stop the tick.
     result=model-mismatch
     MODEL_MISMATCH=1
-    logline "pr=#$n sha=$s8 result=model-mismatch top=$top models=$REVIEW_MODELS usd=$cost (want /$EXPECT_MODEL_RE/); stopping this tick"
+    logline "pr=#$n sha=$s8 result=model-mismatch top=$top models=$REVIEW_MODELS usd=$cost (want /$RUN_EXPECT_RE/); stopping this tick"
   elif [ "$result" = verdict ]; then
     result=$(post_verdict "$n" "$sha" "$ref" "$v" "$cost") || result=post-error
   else
@@ -333,16 +382,16 @@ post_verdict() {
   verdict=$(jq -r .verdict <<< "$v")
   s8=${sha:0:8}
   comment=$(jq -r '.comment // ""' <<< "$v" | sed '1{/^Strategist review/d}')
-  # The model must not forge or double the signature; a copy with trailing
-  # spaces counts as a copy.
-  comment=$(awk -v s="$BOT_SIGNATURE" '{t = $0; sub(/[[:space:]]+$/, "", t)} t != s' <<< "$comment")
+  # The model must not forge or double the signature: any line that starts
+  # with the signature prefix (either tier, trailing spaces too) is removed.
+  comment=$(awk -v p="$BOT_SIGNATURE_PREFIX" 'index($0, p) != 1' <<< "$comment")
   comment="Strategist review — $verdict at $s8"$'\n'"$comment"$'\n\n'"$BOT_SIGNATURE"
   review="Strategist review — $verdict at $s8. Details in the PR comment of the same title."$'\n\n'"$BOT_SIGNATURE"
   jules=$(jq -r '.jules // ""' <<< "$v")
   # The @jules note (FIX/CLOSE on Jules PRs) is posted under the same account,
   # so it is signed too. Empty means no @jules comment is posted.
   if is_jules "$ref" && [ "$verdict" != PASS ] && [ -n "$jules" ]; then
-    jules=$(awk -v s="$BOT_SIGNATURE" '{t = $0; sub(/[[:space:]]+$/, "", t)} t != s' <<< "$jules")
+    jules=$(awk -v p="$BOT_SIGNATURE_PREFIX" 'index($0, p) != 1' <<< "$jules")
     [[ $jules == @jules* ]] || jules="@jules $jules"
     jules+=$'\n\n'"$BOT_SIGNATURE"
   else
