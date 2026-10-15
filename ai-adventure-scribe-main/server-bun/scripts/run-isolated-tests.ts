@@ -64,14 +64,28 @@ if (files.length === 0) {
 const total = emptyCounts();
 const failures: Array<{ file: string; output: string }> = [];
 
-for (const file of files) {
-  const result = Bun.spawnSync({
+// Each file still gets its own process (the whole point of this runner), but
+// several processes can run at once: the isolation is per process, so running
+// four of them side by side changes nothing about what each one sees.
+// ISOLATED_TEST_CONCURRENCY sets the width; the default is 1, the old serial
+// behaviour, so a local run is unchanged unless asked. CI sets 4 (the hosted
+// runner has 4 cores) and cut the step from ~32s to ~10s.
+const parsedConcurrency = Number.parseInt(process.env.ISOLATED_TEST_CONCURRENCY ?? '1', 10);
+const concurrency = Number.isFinite(parsedConcurrency) && parsedConcurrency > 0 ? parsedConcurrency : 1;
+
+async function runFile(file: string): Promise<void> {
+  const proc = Bun.spawn({
     cmd: [process.execPath, 'test', '--isolate', file],
     cwd: process.cwd(),
     stdout: 'pipe',
     stderr: 'pipe',
   });
-  const output = `${decode(result.stdout)}${decode(result.stderr)}`;
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  const output = `${decode(stdout)}${decode(stderr)}`;
   const counts = parseCounts(output);
 
   total.pass += counts.pass;
@@ -82,10 +96,24 @@ for (const file of files) {
   total.files += counts.files;
 
   const hasUnhandledError = /Unhandled error(?: between tests)?|error between tests/i.test(output);
-  if (result.exitCode !== 0 || counts.fail > 0 || counts.error > 0 || hasUnhandledError) {
+  if (exitCode !== 0 || counts.fail > 0 || counts.error > 0 || hasUnhandledError) {
     failures.push({ file, output });
   }
 }
+
+// A bounded pool: `concurrency` workers each pull the next file off one shared
+// queue until it is empty. Results are summed as they finish; the failure list
+// is printed at the end in whatever order the files completed.
+const queue = [...files];
+await Promise.all(
+  Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+    for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
+      await runFile(next);
+    }
+  }),
+);
+
+failures.sort((a, b) => a.file.localeCompare(b.file));
 
 console.log('server-vitest fresh-process runner');
 console.log(`Ran ${total.tests} tests across ${total.files} files.`);

@@ -7,9 +7,15 @@ name: CI
 # cancelled one, but the runner slots and the hosted `changes` job were still
 # spent (#2467). A branch with no PR gets no CI until its PR is opened, and a
 # PR with merge conflicts gets none either (`pull_request` needs a merge ref).
+#
+# `merge_group` is for GitHub's merge queue: the queue builds a temporary branch
+# from main plus the queued PRs and runs this workflow on it before merging.
+# The `changes` job treats a merge-group run as touching everything, so the
+# queue always runs the full suite even when PRs ran only their changed tests.
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  merge_group:
   push:
     branches: [main]
 
@@ -48,11 +54,13 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      frontend: ${{ steps.filter.outputs.frontend }}
-      server: ${{ steps.filter.outputs.server }}
+      # A merge-queue run has no single PR to diff, so it runs everything.
+      frontend: ${{ github.event_name == 'merge_group' || steps.filter.outputs.frontend == 'true' }}
+      server: ${{ github.event_name == 'merge_group' || steps.filter.outputs.server == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
+        if: ${{ github.event_name != 'merge_group' }}
         id: filter
         with:
           base: main
@@ -207,24 +215,87 @@ jobs:
         run: bun run typecheck && bun test test/
         working-directory: companion-mcp-server
 
-  frontend:
+  # The frontend work is three jobs that run side by side, plus a roll-up job
+  # named `frontend` so the check name the merge gate and the automerger watch
+  # does not change. Measured on 2026-10-14 (run 38645044068): the single
+  # `frontend` job took 6m20s, of which `vitest run` was 5m32s in one process.
+  # Four shards on four runners bring the slowest job to about 2 minutes.
+  #
+  # The `bunx tsc --noEmit` step that used to run here checked nothing: the root
+  # tsconfig.json is a solution file with `files: []`, so tsc had no program.
+  # Running it against tsconfig.app.json reports 37 errors on main today, so a
+  # real frontend typecheck gate needs a known-errors baseline first (same
+  # pattern as the server gate). That is a separate change (#664). A step
+  # that always passes is worse than no step, so it is gone rather than kept.
+  #
+  # Changed-only tests on PRs: when the repository variable CI_PR_CHANGED_ONLY
+  # is `true`, a `pull_request` run passes `--changed origin/main` so vitest
+  # runs only the test files whose import graph touches the PR's diff. Pushes
+  # to main and merge-queue runs always run everything, so a test that
+  # `--changed` misses is caught before the merge lands, not after. Leave the
+  # variable unset until the merge queue is on; with no queue the full suite
+  # on main is the first full run after the merge, which is too late.
+  frontend-test:
     needs: changes
     if: ${{ needs.changes.outputs.frontend == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # `--changed origin/main` needs main's history; a plain run does not.
+          fetch-depth: ${{ (github.event_name == 'pull_request' && vars.CI_PR_CHANGED_ONLY == 'true') && 0 || 1 }}
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      # Three timing-sensitive tests flaked at vitest's 5s default under CI load,
+      # so the ceiling is raised to 20s. `--passWithNoTests` only matters in
+      # changed-only mode, where a docs-adjacent PR can touch zero test files.
+      - name: vitest shard ${{ matrix.shard }} of 4
+        run: >-
+          bunx vitest run --shard=${{ matrix.shard }}/4
+          ${{ (github.event_name == 'pull_request' && vars.CI_PR_CHANGED_ONLY == 'true') && '--changed origin/main --passWithNoTests' || '' }}
+          --testTimeout=20000 --hookTimeout=20000
+
+  frontend-build:
+    needs: changes
+    if: ${{ needs.changes.outputs.frontend == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: bunx tsc --noEmit
-      # Three timing-sensitive tests flaked at vitest's 5s default under CI load,
-      # so the ceiling is raised to 20s.
-      - run: bunx vitest run --testTimeout=20000 --hookTimeout=20000
       - run: bun run build
       # The landing page must not preload three.js (#226). Reads the built index.html.
       - run: node scripts/ci/check-landing-preload.mjs
+
+  # Roll-up. Succeeds only when every shard and the build succeeded; skipped,
+  # like the jobs above, when the change touched no frontend path. Kept under
+  # the old job name so nothing that watches for a check called `frontend`
+  # (the run conclusion, the automerger, people) needs to change.
+  frontend:
+    needs: [changes, frontend-test, frontend-build]
+    if: ${{ always() && needs.changes.outputs.frontend == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Every frontend job must have succeeded
+        working-directory: .
+        run: |
+          echo "frontend-test: ${{ needs.frontend-test.result }}"
+          echo "frontend-build: ${{ needs.frontend-build.result }}"
+          test "${{ needs.frontend-test.result }}" = "success"
+          test "${{ needs.frontend-build.result }}" = "success"
 
   server-vitest:
     needs: changes
@@ -239,8 +310,14 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun install --frozen-lockfile
         working-directory: ai-adventure-scribe-main/server-bun
+      # Four test files at a time, each still in its own process (the runner's
+      # isolation is per process, so this changes nothing about what a file
+      # sees). Same 2708 tests, 265 files; the step drops from ~32s to ~10s on
+      # the 4-core hosted runner.
       - run: bun run test
         working-directory: ai-adventure-scribe-main/server-bun
+        env:
+          ISOLATED_TEST_CONCURRENCY: '4'
       # The job is named server-vitest but until now ran no Vitest at all. The
       # step above is `bun scripts/run-isolated-tests.ts`, whose glob is
       # `src/**/*.test.ts`; the 28 `src/**/*.vitest.ts` files import from
