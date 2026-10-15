@@ -196,14 +196,12 @@ export async function applyNonAttackDamage(
   for (const line of engineLines) await recordDmTacticalFact(live.sessionId, line);
 
   const vitals = await CharacterVitalsService.getVitals(characterId, userId);
-  const concentration = await checkConcentrationOnDamage(
-    characterId,
-    Math.max(0, Math.trunc(amount)),
-    {
-      rollD20Fn: options.concentrationRoll,
-      incapacitated: vitals.vitalState === 'dying' || vitals.vitalState === 'dead',
-    },
-  );
+  // 2014: the CON save DC is based on the damage the character actually took
+  // (post-resistance/immunity via result.modifiedDamage), not the raw amount.
+  const concentration = await checkConcentrationOnDamage(characterId, result.modifiedDamage, {
+    rollD20Fn: options.concentrationRoll,
+    incapacitated: vitals.vitalState === 'dying' || vitals.vitalState === 'dead',
+  });
   if (concentration.dropped) {
     const line = describeConcentrationBroken(name, concentration.droppedSpell!);
     engineLines.push(line);

@@ -308,6 +308,7 @@ describe('live route: POST /v1/characters/:id/damage forces the CON save (#621 R
   async function postDamageWithRoll(
     amount: number,
     randomValue: number,
+    extraBody: Record<string, unknown> = {},
   ): Promise<{ status: number; json: Record<string, unknown> }> {
     const realRandom = Math.random;
     Math.random = () => randomValue;
@@ -319,7 +320,7 @@ describe('live route: POST /v1/characters/:id/damage forces the CON save (#621 R
             authorization: `Bearer ${liveUserId}`,
             'content-type': 'application/json',
           },
-          body: JSON.stringify({ amount }),
+          body: JSON.stringify({ amount, ...extraBody }),
         }),
       );
       return { status: response.status, json: (await response.json()) as Record<string, unknown> };
@@ -415,6 +416,65 @@ describe('live route: POST /v1/characters/:id/damage forces the CON save (#621 R
       expect.stringContaining('maintains concentration on Bless (CON save 14 vs DC 10)'),
     );
     expect(await getConcentration(liveCharacterId)).not.toBeNull();
+  });
+
+  it('the live-encounter branch rolls the save against damage actually taken (resisted hit)', async () => {
+    // Rob's FIX: 2014 DC is based on damage TAKEN. Seat the caster in a live
+    // encounter with fire resistance, then POST 30 fire damage through the
+    // live route. 30 -> 15 taken -> DC max(10, 7) = 10. d20 pinned to 12
+    // (total 14): fails the old raw-amount DC 15, succeeds at the correct DC 10.
+    const [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ characterId: liveCharacterId, sessionNumber: 1, status: 'active' })
+      .returning({ id: gameSessions.id });
+    const [{ id: encounterId }] = await db
+      .insert(combatEncounters)
+      .values({ sessionId, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
+      .returning({ id: combatEncounters.id });
+    const [{ id: participantId }] = await db
+      .insert(combatParticipants)
+      .values({
+        encounterId,
+        characterId: liveCharacterId,
+        name: 'Live Caster',
+        participantType: 'player',
+        turnOrder: 0,
+        initiative: 10,
+        maxHp: MAX_HP,
+        damageResistances: ['fire'],
+      })
+      .returning({ id: combatParticipants.id });
+    await db.insert(combatParticipantStatus).values({
+      participantId,
+      currentHp: MAX_HP,
+      maxHp: MAX_HP,
+      isConscious: true,
+    });
+
+    try {
+      await startConcentration(liveCharacterId, { name: 'Bless' });
+      expect(await getConcentration(liveCharacterId)).not.toBeNull();
+
+      const { status, json } = await postDamageWithRoll(30, 0.55, { damageType: 'fire' });
+
+      expect(status).toBe(200);
+      // 15 actually taken (30 halved by resistance), mirrored to the sheet.
+      expect(json.currentHitPoints).toBe(MAX_HP - 15);
+      // DC 10 from damage taken, not DC 15 from the raw 30: total 14 succeeds.
+      expect(json.engineLines).toContainEqual(
+        expect.stringContaining('maintains concentration on Bless (CON save 14 vs DC 10)'),
+      );
+      expect(await getConcentration(liveCharacterId)).not.toBeNull();
+    } finally {
+      // Tear down the live seat so findLiveParticipant returns null for the
+      // other tests in this file.
+      await db
+        .delete(combatParticipantStatus)
+        .where(eq(combatParticipantStatus.participantId, participantId));
+      await db.delete(combatParticipants).where(eq(combatParticipants.id, participantId));
+      await db.delete(combatEncounters).where(eq(combatEncounters.id, encounterId));
+      await db.delete(gameSessions).where(eq(gameSessions.id, sessionId));
+    }
   });
 });
 });
