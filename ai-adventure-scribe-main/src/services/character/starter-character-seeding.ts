@@ -384,7 +384,8 @@ export function buildStarterCharacterSeed(
     cantrips: spellSeed.cantrips.join(', '),
     known_spells: spellSeed.knownSpells.join(', '),
     prepared_spells: spellSeed.preparedSpells.join(', '),
-    ...(spellSeed.spellSlots ? { spell_slots: spellSeed.spellSlots } : {}),
+    // #617: the legacy characters.spell_slots JSONB is no longer written;
+    // character_spell_slots is the single source of truth (#2459).
     total_level: level,
     stats: {
       ...abilityScores,

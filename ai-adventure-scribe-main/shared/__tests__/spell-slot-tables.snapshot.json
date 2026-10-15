@@ -1,0 +1,10802 @@
+{
+ "Wizard@1": {
+  "serverSlots": {
+   "1": 2
+  },
+  "warlockPact": {
+   "slots": 1,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 1,
+   "pactSlotLevel": 1,
+   "spellsKnown": 2
+  }
+ },
+ "Wizard@2": {
+  "serverSlots": {
+   "1": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 1,
+   "spellsKnown": 3
+  }
+ },
+ "Wizard@3": {
+  "serverSlots": {
+   "1": 4,
+   "2": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 4
+  }
+ },
+ "Wizard@4": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 5
+  }
+ },
+ "Wizard@5": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 6
+  }
+ },
+ "Wizard@6": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 7
+  }
+ },
+ "Wizard@7": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   1,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 8
+  }
+ },
+ "Wizard@8": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 9
+  }
+ },
+ "Wizard@9": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 1
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   1,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Wizard@10": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Wizard@11": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Wizard@12": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Wizard@13": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Wizard@14": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Wizard@15": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Wizard@16": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Wizard@17": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Wizard@18": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Wizard@19": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Wizard@20": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 2,
+   "8": 1,
+   "9": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 2,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   2,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Sorcerer@1": {
+  "serverSlots": {
+   "1": 2
+  },
+  "warlockPact": {
+   "slots": 1,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 1,
+   "pactSlotLevel": 1,
+   "spellsKnown": 2
+  }
+ },
+ "Sorcerer@2": {
+  "serverSlots": {
+   "1": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 1,
+   "spellsKnown": 3
+  }
+ },
+ "Sorcerer@3": {
+  "serverSlots": {
+   "1": 4,
+   "2": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 4
+  }
+ },
+ "Sorcerer@4": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 5
+  }
+ },
+ "Sorcerer@5": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 6
+  }
+ },
+ "Sorcerer@6": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 7
+  }
+ },
+ "Sorcerer@7": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   1,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 8
+  }
+ },
+ "Sorcerer@8": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 9
+  }
+ },
+ "Sorcerer@9": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 1
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   1,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Sorcerer@10": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Sorcerer@11": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Sorcerer@12": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Sorcerer@13": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Sorcerer@14": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Sorcerer@15": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Sorcerer@16": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Sorcerer@17": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Sorcerer@18": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Sorcerer@19": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Sorcerer@20": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 2,
+   "8": 1,
+   "9": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 2,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   2,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Cleric@1": {
+  "serverSlots": {
+   "1": 2
+  },
+  "warlockPact": {
+   "slots": 1,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 1,
+   "pactSlotLevel": 1,
+   "spellsKnown": 2
+  }
+ },
+ "Cleric@2": {
+  "serverSlots": {
+   "1": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 1,
+   "spellsKnown": 3
+  }
+ },
+ "Cleric@3": {
+  "serverSlots": {
+   "1": 4,
+   "2": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 4
+  }
+ },
+ "Cleric@4": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 5
+  }
+ },
+ "Cleric@5": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 6
+  }
+ },
+ "Cleric@6": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 7
+  }
+ },
+ "Cleric@7": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   1,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 8
+  }
+ },
+ "Cleric@8": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 9
+  }
+ },
+ "Cleric@9": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 1
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   1,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Cleric@10": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Cleric@11": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Cleric@12": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Cleric@13": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Cleric@14": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Cleric@15": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Cleric@16": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Cleric@17": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Cleric@18": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Cleric@19": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Cleric@20": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 2,
+   "8": 1,
+   "9": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 2,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   2,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Druid@1": {
+  "serverSlots": {
+   "1": 2
+  },
+  "warlockPact": {
+   "slots": 1,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 1,
+   "pactSlotLevel": 1,
+   "spellsKnown": 2
+  }
+ },
+ "Druid@2": {
+  "serverSlots": {
+   "1": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 1,
+   "spellsKnown": 3
+  }
+ },
+ "Druid@3": {
+  "serverSlots": {
+   "1": 4,
+   "2": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 4
+  }
+ },
+ "Druid@4": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 5
+  }
+ },
+ "Druid@5": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 6
+  }
+ },
+ "Druid@6": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 7
+  }
+ },
+ "Druid@7": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   1,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 8
+  }
+ },
+ "Druid@8": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 9
+  }
+ },
+ "Druid@9": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 1
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   1,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Druid@10": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Druid@11": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Druid@12": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Druid@13": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Druid@14": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Druid@15": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Druid@16": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Druid@17": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Druid@18": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Druid@19": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Druid@20": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 2,
+   "8": 1,
+   "9": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 2,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   2,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Bard@1": {
+  "serverSlots": {
+   "1": 2
+  },
+  "warlockPact": {
+   "slots": 1,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 1,
+   "pactSlotLevel": 1,
+   "spellsKnown": 2
+  }
+ },
+ "Bard@2": {
+  "serverSlots": {
+   "1": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 1,
+   "spellsKnown": 3
+  }
+ },
+ "Bard@3": {
+  "serverSlots": {
+   "1": 4,
+   "2": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 4
+  }
+ },
+ "Bard@4": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 5
+  }
+ },
+ "Bard@5": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 6
+  }
+ },
+ "Bard@6": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 7
+  }
+ },
+ "Bard@7": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   1,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 8
+  }
+ },
+ "Bard@8": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 9
+  }
+ },
+ "Bard@9": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 1
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   1,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Bard@10": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Bard@11": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Bard@12": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Bard@13": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Bard@14": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Bard@15": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Bard@16": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Bard@17": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Bard@18": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Bard@19": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Bard@20": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 2,
+   "8": 1,
+   "9": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 2,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   2,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Paladin@1": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 1,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   2
+  ],
+  "getSpellSlotsByLevel": [],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 1,
+   "pactSlotLevel": 1,
+   "spellsKnown": 2
+  }
+ },
+ "Paladin@2": {
+  "serverSlots": {
+   "1": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   2,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 1,
+   "spellsKnown": 3
+  }
+ },
+ "Paladin@3": {
+  "serverSlots": {
+   "1": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   3,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 4
+  }
+ },
+ "Paladin@4": {
+  "serverSlots": {
+   "1": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   3,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 5
+  }
+ },
+ "Paladin@5": {
+  "serverSlots": {
+   "1": 4,
+   "2": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   2,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 6
+  }
+ },
+ "Paladin@6": {
+  "serverSlots": {
+   "1": 4,
+   "2": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   2,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 7
+  }
+ },
+ "Paladin@7": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 8
+  }
+ },
+ "Paladin@8": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 9
+  }
+ },
+ "Paladin@9": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   2,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Paladin@10": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   2,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Paladin@11": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Paladin@12": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Paladin@13": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   1,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Paladin@14": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   1,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Paladin@15": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 2
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   2,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Paladin@16": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 2
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   2,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Paladin@17": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Paladin@18": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Paladin@19": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Paladin@20": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 2,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Ranger@1": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 1,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   2
+  ],
+  "getSpellSlotsByLevel": [],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 1,
+   "pactSlotLevel": 1,
+   "spellsKnown": 2
+  }
+ },
+ "Ranger@2": {
+  "serverSlots": {
+   "1": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   2,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 1,
+   "spellsKnown": 3
+  }
+ },
+ "Ranger@3": {
+  "serverSlots": {
+   "1": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   3,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 4
+  }
+ },
+ "Ranger@4": {
+  "serverSlots": {
+   "1": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   3,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 5
+  }
+ },
+ "Ranger@5": {
+  "serverSlots": {
+   "1": 4,
+   "2": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   2,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 6
+  }
+ },
+ "Ranger@6": {
+  "serverSlots": {
+   "1": 4,
+   "2": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   2,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 7
+  }
+ },
+ "Ranger@7": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 8
+  }
+ },
+ "Ranger@8": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 9
+  }
+ },
+ "Ranger@9": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   2,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Ranger@10": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   2,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Ranger@11": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Ranger@12": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Ranger@13": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   1,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Ranger@14": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   1,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Ranger@15": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 2
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   2,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Ranger@16": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 2
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   2,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Ranger@17": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Ranger@18": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Ranger@19": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Ranger@20": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 2,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Fighter@1": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 1,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 1,
+   "pactSlotLevel": 1,
+   "spellsKnown": 2
+  }
+ },
+ "Fighter@2": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 1,
+   "spellsKnown": 3
+  }
+ },
+ "Fighter@3": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 4
+  }
+ },
+ "Fighter@4": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 5
+  }
+ },
+ "Fighter@5": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 6
+  }
+ },
+ "Fighter@6": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 7
+  }
+ },
+ "Fighter@7": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   1,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 8
+  }
+ },
+ "Fighter@8": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 9
+  }
+ },
+ "Fighter@9": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   1,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Fighter@10": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Fighter@11": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Fighter@12": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Fighter@13": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Fighter@14": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Fighter@15": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Fighter@16": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Fighter@17": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Fighter@18": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Fighter@19": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Fighter@20": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 2,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   2,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Rogue@1": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 1,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 1,
+   "pactSlotLevel": 1,
+   "spellsKnown": 2
+  }
+ },
+ "Rogue@2": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 1,
+   "spellsKnown": 3
+  }
+ },
+ "Rogue@3": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 4
+  }
+ },
+ "Rogue@4": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 5
+  }
+ },
+ "Rogue@5": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 6
+  }
+ },
+ "Rogue@6": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 7
+  }
+ },
+ "Rogue@7": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   1,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 8
+  }
+ },
+ "Rogue@8": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 9
+  }
+ },
+ "Rogue@9": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   1,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Rogue@10": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Rogue@11": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Rogue@12": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Rogue@13": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Rogue@14": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Rogue@15": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Rogue@16": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Rogue@17": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Rogue@18": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Rogue@19": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Rogue@20": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 2,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   2,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Warlock@1": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 1,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   2
+  ],
+  "getSpellSlotsByLevel": [],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 1,
+   "pactSlotLevel": 1,
+   "spellsKnown": 2
+  }
+ },
+ "Warlock@2": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   3
+  ],
+  "getSpellSlotsByLevel": [],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 1,
+   "spellsKnown": 3
+  }
+ },
+ "Warlock@3": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   2
+  ],
+  "getSpellSlotsByLevel": [],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 4
+  }
+ },
+ "Warlock@4": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3
+  ],
+  "getSpellSlotsByLevel": [],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 5
+  }
+ },
+ "Warlock@5": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 6
+  }
+ },
+ "Warlock@6": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3
+  ],
+  "getSpellSlotsByLevel": [],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 7
+  }
+ },
+ "Warlock@7": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 8
+  }
+ },
+ "Warlock@8": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 9
+  }
+ },
+ "Warlock@9": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Warlock@10": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Warlock@11": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Warlock@12": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Warlock@13": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Warlock@14": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Warlock@15": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Warlock@16": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Warlock@17": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Warlock@18": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Warlock@19": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Warlock@20": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 2,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Eldritch Knight@1": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 1,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 1,
+   "pactSlotLevel": 1,
+   "spellsKnown": 2
+  }
+ },
+ "Eldritch Knight@2": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 1,
+   "spellsKnown": 3
+  }
+ },
+ "Eldritch Knight@3": {
+  "serverSlots": {
+   "1": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 4
+  }
+ },
+ "Eldritch Knight@4": {
+  "serverSlots": {
+   "1": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 5
+  }
+ },
+ "Eldritch Knight@5": {
+  "serverSlots": {
+   "1": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 6
+  }
+ },
+ "Eldritch Knight@6": {
+  "serverSlots": {
+   "1": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 7
+  }
+ },
+ "Eldritch Knight@7": {
+  "serverSlots": {
+   "1": 4,
+   "2": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   1,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 8
+  }
+ },
+ "Eldritch Knight@8": {
+  "serverSlots": {
+   "1": 4,
+   "2": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 9
+  }
+ },
+ "Eldritch Knight@9": {
+  "serverSlots": {
+   "1": 4,
+   "2": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   1,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Eldritch Knight@10": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Eldritch Knight@11": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Eldritch Knight@12": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Eldritch Knight@13": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Eldritch Knight@14": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Eldritch Knight@15": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Eldritch Knight@16": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Eldritch Knight@17": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Eldritch Knight@18": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Eldritch Knight@19": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Eldritch Knight@20": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 2,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   2,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Arcane Trickster@1": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 1,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 1,
+   "pactSlotLevel": 1,
+   "spellsKnown": 2
+  }
+ },
+ "Arcane Trickster@2": {
+  "serverSlots": {},
+  "warlockPact": {
+   "slots": 2,
+   "level": 1
+  },
+  "fullCasterProgression": {
+   "1": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 1,
+   "spellsKnown": 3
+  }
+ },
+ "Arcane Trickster@3": {
+  "serverSlots": {
+   "1": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 2,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 4
+  }
+ },
+ "Arcane Trickster@4": {
+  "serverSlots": {
+   "1": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 2
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 2,
+   "spellsKnown": 5
+  }
+ },
+ "Arcane Trickster@5": {
+  "serverSlots": {
+   "1": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 6
+  }
+ },
+ "Arcane Trickster@6": {
+  "serverSlots": {
+   "1": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 3
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 3,
+   "spellsKnown": 7
+  }
+ },
+ "Arcane Trickster@7": {
+  "serverSlots": {
+   "1": 4,
+   "2": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   1,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 8
+  }
+ },
+ "Arcane Trickster@8": {
+  "serverSlots": {
+   "1": 4,
+   "2": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 4
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 4,
+   "spellsKnown": 9
+  }
+ },
+ "Arcane Trickster@9": {
+  "serverSlots": {
+   "1": 4,
+   "2": 2
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   1,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 3,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Arcane Trickster@10": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3
+  },
+  "warlockPact": {
+   "slots": 2,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 2,
+   "pactSlotLevel": 5,
+   "spellsKnown": 10
+  }
+ },
+ "Arcane Trickster@11": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Arcane Trickster@12": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   0,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 11
+  }
+ },
+ "Arcane Trickster@13": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Arcane Trickster@14": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   0,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 12
+  }
+ },
+ "Arcane Trickster@15": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 2
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Arcane Trickster@16": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "warlockPact": {
+   "slots": 3,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   0
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 3,
+   "pactSlotLevel": 5,
+   "spellsKnown": 13
+  }
+ },
+ "Arcane Trickster@17": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 2,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Arcane Trickster@18": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 1,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   1,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 14
+  }
+ },
+ "Arcane Trickster@19": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 1,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "Arcane Trickster@20": {
+  "serverSlots": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 1
+  },
+  "warlockPact": {
+   "slots": 4,
+   "level": 5
+  },
+  "fullCasterProgression": {
+   "1": 4,
+   "2": 3,
+   "3": 3,
+   "4": 3,
+   "5": 3,
+   "6": 2,
+   "7": 2,
+   "8": 1,
+   "9": 1
+  },
+  "FULL_CASTER_SLOTS_MAP": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   2,
+   1,
+   1
+  ],
+  "getSpellSlotsByLevel": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   2,
+   1,
+   1
+  ],
+  "getPactMagicProgression": {
+   "cantrips": 4,
+   "pactSlots": 4,
+   "pactSlotLevel": 5,
+   "spellsKnown": 15
+  }
+ },
+ "clientSpellProgressionTables:Wizard": [
+  [
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   4,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   4,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   4,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ ],
+ "clientSpellProgressionTables:Sorcerer": [
+  [
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   4,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ ],
+ "clientSpellProgressionTables:Warlock": [
+  [
+   1,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ ],
+ "clientSpellProgressionTables:Bard": [
+  [
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ ],
+ "clientSpellProgressionTables:Cleric": [
+  [
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ ],
+ "clientSpellProgressionTables:Druid": [
+  [
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ ],
+ "serverSpellProgression:Bard": [
+  [
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   4,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   4,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   4,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ ],
+ "serverSpellProgression:Druid": [
+  [
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   4,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   4,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   4,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ ],
+ "serverSpellProgression:Cleric": [
+  [
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   4,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   4,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   4,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ ],
+ "serverSpellProgression:Sorcerer": [
+  [
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   4,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   4,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   4,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ ],
+ "serverSpellProgression:Warlock": [
+  [
+   1,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   0,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   0,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   0,
+   0,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ ],
+ "serverSpellProgression:Wizard": [
+  [
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   4,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   4,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   4,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ ],
+ "FULL_CASTER_SLOTS": {
+  "1": [
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "2": [
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "3": [
+   4,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "4": [
+   4,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "5": [
+   4,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "6": [
+   4,
+   3,
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "7": [
+   4,
+   3,
+   3,
+   1,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "8": [
+   4,
+   3,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "9": [
+   4,
+   3,
+   3,
+   3,
+   1,
+   0,
+   0,
+   0,
+   0
+  ],
+  "10": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   0,
+   0,
+   0,
+   0
+  ],
+  "11": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   0,
+   0,
+   0
+  ],
+  "12": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   0,
+   0,
+   0
+  ],
+  "13": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   0,
+   0
+  ],
+  "14": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   0,
+   0
+  ],
+  "15": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   0
+  ],
+  "16": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   0
+  ],
+  "17": [
+   4,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "18": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   1,
+   1,
+   1,
+   1
+  ],
+  "19": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   1,
+   1,
+   1
+  ],
+  "20": [
+   4,
+   3,
+   3,
+   3,
+   3,
+   2,
+   2,
+   1,
+   1
+  ]
+ },
+ "spellcastingProgression.halfCaster": {
+  "2": {
+   "cantrips": 0,
+   "spells": [
+    2,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  "3": {
+   "cantrips": 0,
+   "spells": [
+    3,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  "4": {
+   "cantrips": 0,
+   "spells": [
+    3,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  "5": {
+   "cantrips": 0,
+   "spells": [
+    4,
+    2,
+    0,
+    0,
+    0
+   ]
+  },
+  "6": {
+   "cantrips": 0,
+   "spells": [
+    4,
+    2,
+    0,
+    0,
+    0
+   ]
+  },
+  "7": {
+   "cantrips": 0,
+   "spells": [
+    4,
+    3,
+    0,
+    0,
+    0
+   ]
+  },
+  "8": {
+   "cantrips": 0,
+   "spells": [
+    4,
+    3,
+    0,
+    0,
+    0
+   ]
+  },
+  "9": {
+   "cantrips": 0,
+   "spells": [
+    4,
+    3,
+    2,
+    0,
+    0
+   ]
+  },
+  "10": {
+   "cantrips": 0,
+   "spells": [
+    4,
+    3,
+    2,
+    0,
+    0
+   ]
+  },
+  "11": {
+   "cantrips": 0,
+   "spells": [
+    4,
+    3,
+    3,
+    0,
+    0
+   ]
+  },
+  "12": {
+   "cantrips": 0,
+   "spells": [
+    4,
+    3,
+    3,
+    0,
+    0
+   ]
+  },
+  "13": {
+   "cantrips": 0,
+   "spells": [
+    4,
+    3,
+    3,
+    1,
+    0
+   ]
+  },
+  "14": {
+   "cantrips": 0,
+   "spells": [
+    4,
+    3,
+    3,
+    1,
+    0
+   ]
+  },
+  "15": {
+   "cantrips": 0,
+   "spells": [
+    4,
+    3,
+    3,
+    2,
+    0
+   ]
+  },
+  "16": {
+   "cantrips": 0,
+   "spells": [
+    4,
+    3,
+    3,
+    2,
+    0
+   ]
+  },
+  "17": {
+   "cantrips": 0,
+   "spells": [
+    4,
+    3,
+    3,
+    3,
+    1
+   ]
+  },
+  "18": {
+   "cantrips": 0,
+   "spells": [
+    4,
+    3,
+    3,
+    3,
+    1
+   ]
+  },
+  "19": {
+   "cantrips": 0,
+   "spells": [
+    4,
+    3,
+    3,
+    3,
+    2
+   ]
+  },
+  "20": {
+   "cantrips": 0,
+   "spells": [
+    4,
+    3,
+    3,
+    3,
+    2
+   ]
+  }
+ }
+}

@@ -3,7 +3,11 @@
  * Extracted from src/utils/multiclassing.ts
  */
 
+import { FULL_CASTER_SLOTS } from '../../../shared/spell-slot-tables';
+
 import type { Character } from '@/types/character';
+
+// #617: spell-slot tables live in shared/spell-slot-tables.ts (epic #616).
 
 export interface MulticlassSpellcastingResult {
   spellcastingClasses: Array<{
@@ -106,34 +110,16 @@ export function calculateMulticlassSpellcasting(
 }
 
 /**
- * Calculate spell slots based on caster level
+ * Calculate spell slots based on caster level.
+ * #617: the table lives in shared/spell-slot-tables.ts (epic #616).
  */
 function calculateSpellSlots(casterLevel: number): number[] {
   if (casterLevel <= 0) return [];
 
-  // Official Multiclass Spellcaster table
-  const table: Record<number, number[]> = {
-    1: [2],
-    2: [3],
-    3: [4, 2],
-    4: [4, 3],
-    5: [4, 3, 2],
-    6: [4, 3, 3],
-    7: [4, 3, 3, 1],
-    8: [4, 3, 3, 2],
-    9: [4, 3, 3, 3, 1],
-    10: [4, 3, 3, 3, 2],
-    11: [4, 3, 3, 3, 2, 1],
-    12: [4, 3, 3, 3, 2, 1],
-    13: [4, 3, 3, 3, 2, 1, 1],
-    14: [4, 3, 3, 3, 2, 1, 1],
-    15: [4, 3, 3, 3, 2, 1, 1, 1],
-    16: [4, 3, 3, 3, 2, 1, 1, 1],
-    17: [4, 3, 3, 3, 2, 1, 1, 1, 1],
-    18: [4, 3, 3, 3, 3, 1, 1, 1, 1],
-    19: [4, 3, 3, 3, 3, 2, 1, 1, 1],
-    20: [4, 3, 3, 3, 3, 2, 2, 1, 1],
-  };
-
-  return table[casterLevel] || table[20];
+  // Official Multiclass Spellcaster table (PHB pg. 165)
+  const slots = FULL_CASTER_SLOTS[casterLevel] ?? FULL_CASTER_SLOTS[20];
+  // Trim trailing zeros to preserve the legacy short-array shape.
+  let end = slots.length;
+  while (end > 0 && slots[end - 1] === 0) end--;
+  return slots.slice(0, end);
 }

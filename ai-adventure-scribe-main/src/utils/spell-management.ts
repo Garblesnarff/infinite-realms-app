@@ -16,9 +16,13 @@
 // Imports
 // ===========================
 
+import { calculateSpellSlots } from './character-calculations';
+import { type SpellSlotLevel } from '../../shared/spell-slot-tables';
+
 import type { Character } from '@/types/character';
 
-import { fullCasterProgression, type SpellSlotLevel } from '@/utils/spell-slots-table';
+// #617: spell-slot tables live in shared/spell-slot-tables.ts (epic #616);
+// the single calculateSpellSlots lives in character-calculations.ts.
 
 export * from './combat/spellcasting-actions';
 
@@ -37,95 +41,20 @@ export interface SpellSlotConfig {
 }
 
 /**
- * Calculates spell slots for a single class at a given level
- * Uses hardcoded PHB progression tables
- * @param className - The class name (e.g., 'wizard', 'cleric')
- * @param level - Character level in this class
- * @returns Spell slot counts per level
+ * #617: merged into character-calculations.ts. This adapter preserves the
+ * SpellSlotConfig shape for restoreSpellSlots.
  */
-function calculateClassSpellSlots(
-  _className: string,
-  level: number,
-): Partial<Record<SpellSlotLevel, number>> {
-  return fullCasterProgression[level] || { 1: 0 };
-}
-
-/**
- * Calculates total spell slots for a character, handling multiclassing
- * Sums slots from all classes, caps at multiclass spellcasting rules (half non-full caster levels)
- * @param character - The character object
- * @returns Spell slots record for levels 1-9
- */
-export function calculateSpellSlots(character: Character): Record<SpellSlotLevel, SpellSlotConfig> {
-  if (!character.classLevels || character.classLevels.length === 0) {
-    return {
-      1: { max: 0, current: 0 },
-      2: { max: 0, current: 0 },
-      3: { max: 0, current: 0 },
-      4: { max: 0, current: 0 },
-      5: { max: 0, current: 0 },
-      6: { max: 0, current: 0 },
-      7: { max: 0, current: 0 },
-      8: { max: 0, current: 0 },
-      9: { max: 0, current: 0 },
-    };
-  }
-
-  const totalSlots: Partial<Record<SpellSlotLevel, number>> = {};
-
-  // Determine caster levels
-  let fullCasterLevels = 0;
-  let halfCasterLevels = 0;
-  const isMulticlass = character.classLevels.length > 1;
-
-  character.classLevels.forEach((classLevel) => {
-    const className = classLevel.className.toLowerCase();
-
-    // Check for full casters
-    if (['wizard', 'cleric', 'druid', 'sorcerer', 'bard'].includes(className)) {
-      fullCasterLevels += classLevel.level;
-    }
-    // Check for half casters (Paladin, Ranger)
-    else if (['paladin', 'ranger'].includes(className)) {
-      if (isMulticlass) {
-        halfCasterLevels += Math.floor(classLevel.level / 2);
-      } else {
-        // Single class half casters get slots at level 2
-        // Their progression effectively matches full caster table at ceil(level/2)
-        // e.g. Paladin 2 -> FC 1, Paladin 5 -> FC 3
-        if (classLevel.level >= 2) {
-          halfCasterLevels += Math.ceil(classLevel.level / 2);
-        }
-      }
-    }
-    // Warlocks use Pact Magic and are handled separately in D&D,
-    // and don't contribute to the multiclass spellcasting table.
-  });
-
-  const effectiveCasterLevel = Math.min(fullCasterLevels + halfCasterLevels, 20);
-
-  // Use effective level to get slots from the unified table
-  const classSlots = calculateClassSpellSlots('', effectiveCasterLevel);
-
-  // Initialize total slots
+function toSlotConfigs(character: Character): Record<SpellSlotLevel, SpellSlotConfig> {
+  const maxMap = calculateSpellSlots(character) ?? {};
+  const slots = {} as Record<SpellSlotLevel, SpellSlotConfig>;
   for (let i = 1; i <= 9; i++) {
-    totalSlots[i as SpellSlotLevel] = classSlots[i as SpellSlotLevel] || 0;
-  }
-
-  // Ensure current doesn't exceed max
-  const slots: Record<SpellSlotLevel, SpellSlotConfig> = {} as Record<
-    SpellSlotLevel,
-    SpellSlotConfig
-  >;
-  for (let i = 1; i <= 9; i++) {
-    const max = totalSlots[i as SpellSlotLevel] || 0;
+    const max = maxMap[i] || 0;
     const currentFromChar = character.spellSlots?.[i as SpellSlotLevel]?.current;
     slots[i as SpellSlotLevel] = {
       max,
       current: Math.min(max, currentFromChar !== undefined ? currentFromChar : max),
     };
   }
-
   return slots;
 }
 
@@ -152,7 +81,7 @@ export function deductSpellSlot(character: Character, level: SpellSlotLevel): Ch
  * @returns Updated character with full slots
  */
 export function restoreSpellSlots(character: Character): Character {
-  const maxSlots = calculateSpellSlots(character);
+  const maxSlots = toSlotConfigs(character);
   const updatedSlots: Record<SpellSlotLevel, SpellSlotConfig> = {} as Record<
     SpellSlotLevel,
     SpellSlotConfig
