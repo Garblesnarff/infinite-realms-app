@@ -46,10 +46,17 @@ describe('#352 OpenRouter system message and cache accounting', () => {
 
     expect(bodies).toHaveLength(1);
     const body = bodies[0] as {
-      messages: { role: string; content: string }[];
+      messages: { role: string; content: unknown }[];
       usage: unknown;
     };
-    expect(body.messages[0]).toEqual({ role: 'system', content: 'stable system block' });
+    // #633 PR3: the system message is now an explicit text block carrying the
+    // prompt-cache breakpoint (the old flat-string shape is gone on purpose).
+    expect(body.messages[0]).toEqual({
+      role: 'system',
+      content: [
+        { type: 'text', text: 'stable system block', cache_control: { type: 'ephemeral' } },
+      ],
+    });
     expect(body.messages.at(-1)).toEqual({ role: 'user', content: 'volatile user prompt' });
     expect(body.usage).toEqual({ include: true });
     expect(result.provider).toBe('openrouter');

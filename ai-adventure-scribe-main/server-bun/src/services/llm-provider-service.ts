@@ -18,6 +18,26 @@ import { getCircuitBreaker, CircuitOpenError } from '../utils/circuit-breaker.js
 
 export type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 
+/**
+ * #633 PR3: an explicit text content block for the OpenRouter chat-completions
+ * wire. Only the stable system message uses this shape, so it can carry the
+ * Anthropic `cache_control` breakpoint: OpenRouter forwards the marker verbatim
+ * to Anthropic and translates it for Google/OpenAI-routed models (OpenRouter
+ * prompt-caching docs), so it is safe on every candidate model. Anthropic
+ * allows at most 4 breakpoints per request; this file sets exactly one.
+ */
+export type OpenRouterTextBlock = {
+  type: 'text';
+  text: string;
+  cache_control?: { type: 'ephemeral' };
+};
+
+/** An OpenRouter chat message: plain string content, or explicit text blocks. */
+export type OpenRouterChatMessage = {
+  role: ChatMessage['role'];
+  content: string | OpenRouterTextBlock[];
+};
+
 export interface LLMGenerateOptions {
   prompt: string;
   /**
@@ -443,12 +463,22 @@ export class LLMProviderService {
       }
       return allowed;
     });
-    const messages: ChatMessage[] = [];
+    const messages: OpenRouterChatMessage[] = [];
 
     // #352: the stable system block goes first so the provider caches on the
     // prompt prefix; history and the volatile user prompt follow.
+    // #633 PR3: the `cache_control` breakpoint below is the request's ONLY
+    // cache marker. It sits on the system block because that block is
+    // byte-identical across turns in the same combat state (see
+    // buildSystemPrompt in src/services/ai/prompt-assembly.ts) — the ~8k
+    // stable prefix the provider caches. History and the user message stay
+    // plain strings with no marker: they change every turn and must never be
+    // part of the cached prefix.
     if (typeof systemPrompt === 'string' && systemPrompt.length > 0) {
-      messages.push({ role: 'system', content: systemPrompt });
+      messages.push({
+        role: 'system',
+        content: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+      });
     }
     if (Array.isArray(history)) {
       for (const m of history) {
