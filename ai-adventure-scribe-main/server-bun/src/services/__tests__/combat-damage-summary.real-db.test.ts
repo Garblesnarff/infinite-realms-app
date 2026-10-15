@@ -1,11 +1,9 @@
 /**
- * Regression tests for #570: Combat Summary must show real damage numbers.
+ * Combat damage summary aggregation from the damage log.
  *
- * Hark D4-013: the death line was plain text, but the summary showed no damage
- * numbers. Root cause: getCombatDamageSummary fetched logs via the userId-scoped
- * join (through gameSessions/campaigns/characters), which can return zero rows
- * for an encounter the caller owns. The fix fetches by encounterId alone since
- * the route already verified ownership.
+ * Verifies that getCombatDamageSummary correctly aggregates per-participant
+ * damage dealt/taken and total damage from combat_damage_log rows, and maps
+ * vital states to summary statuses.
  *
  * Requires TEST_DATABASE_URL or DATABASE_URL -- see fixtures/real-db.ts.
  */
@@ -29,7 +27,7 @@ if (!hasRealDb) {
   console.warn('[combat-damage-summary] SKIPPED: set TEST_DATABASE_URL to a scratch Postgres to run these.');
 }
 
-describeWithDb('combat damage summary shows real damage (#570)', () => {
+describeWithDb('combat damage summary aggregation', () => {
   const db = hasRealDb ? realDb() : (null as never);
   const userId = testId('user');
 
