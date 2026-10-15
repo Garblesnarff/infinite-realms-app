@@ -1,8 +1,9 @@
-import { Heart, Shield, Sword, Trash2 } from 'lucide-react';
+import { Heart, Play, Shield, Sword, Trash2 } from 'lucide-react';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { ExportCharacterButton } from './ExportCharacterButton';
+import CampaignSelectionModal from '../list/campaign-selection-modal';
 
 import type { Character } from '@/types/character';
 
@@ -18,6 +19,7 @@ import {
   AlertDialogPortal,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
 import { IRPanel, IRThumb } from '@/components/ui/ir-primitives';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -43,6 +45,10 @@ export const CharacterSheetHeader: React.FC<CharacterSheetHeaderProps> = ({ char
   const { user } = useAuth();
   const isOwner = Boolean(user?.id && character.user_id && user.id === character.user_id);
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
+  // #693: the sheet is a character's own page — it gets the same Play
+  // affordance as the roster card hover, so a new character can start a
+  // session without going back to the list.
+  const [showPlayModal, setShowPlayModal] = React.useState(false);
   const portraitUrl = character.image_url ?? character.avatar_url;
   const hitPoints = getCharacterSheetHitPoints(character);
 
@@ -107,6 +113,23 @@ export const CharacterSheetHeader: React.FC<CharacterSheetHeaderProps> = ({ char
         </div>
 
         {character.id && isOwner && <ExportCharacterButton characterId={character.id} />}
+
+        {/* #693: Play on the sheet — same campaign picker as the roster
+            card, so a just-created character can start a session from its
+            own page without a trip back to the list. */}
+        {character.id && isOwner && (
+          <Button
+            size="sm"
+            data-testid="character-sheet-play"
+            className="bg-infinite-gold text-infinite-dark flex items-center gap-2 hover:bg-infinite-purple"
+            aria-label="Play as this character"
+            title="Play as this character"
+            onClick={() => setShowPlayModal(true)}
+          >
+            <Play className="w-4 h-4" aria-hidden="true" />
+            Play
+          </Button>
+        )}
 
         {/* Quick Stats */}
         <div className="hidden md:flex items-center gap-4 text-sm">
@@ -180,6 +203,17 @@ export const CharacterSheetHeader: React.FC<CharacterSheetHeaderProps> = ({ char
           </AlertDialogContent>
         </AlertDialogPortal>
       </AlertDialog>
+
+      {/* #693: campaign picker for the sheet Play button. Mounted only
+          when open — the modal uses react-query, and the header is also
+          rendered in tests without a QueryClientProvider. */}
+      {character.id && showPlayModal && (
+        <CampaignSelectionModal
+          isOpen={showPlayModal}
+          onClose={() => setShowPlayModal(false)}
+          characterId={character.id}
+        />
+      )}
     </IRPanel>
   );
 };
