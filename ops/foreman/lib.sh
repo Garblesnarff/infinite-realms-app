@@ -79,6 +79,15 @@ triage_route() {
   echo "$verdict files=$count"
 }
 
+# triage_files_ok <answer json>: 0 when every files[] entry is a plain repo path
+# (letters, digits and _ . / ( ) -, 1-200 characters). The entries are model-written
+# and go into the issue body, so a newline, a heading, an @mention or a non-string
+# entry sends the issue to the crew instead.
+triage_files_ok() {
+  jq -e '(.files | type == "array") and all(.files[]; type == "string" and test("^[A-Za-z0-9_./()-]{1,200}$"))' \
+    <<< "$1" > /dev/null 2>&1
+}
+
 # triage_clean <markdown>: the model's task text made safe to append to an issue.
 # Drops HTML comments, turns #/## headings into ### (so it cannot open a second
 # "## Task" section) and strips the @ from mentions (no pings, no "@jules").

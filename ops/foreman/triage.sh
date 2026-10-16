@@ -74,7 +74,6 @@ logline() { echo "$(date -u +%FT%TZ) $*" | tee -a "$LOG" >&2; }
 today() { date -u +%F; }
 spent_today() { awk -v d="$(today)" '$2 == d { s += $4 } END { printf "%.4f", s + 0 }' "$LEDGER" 2> /dev/null || echo 0; }
 lt() { awk -v a="$1" -v b="$2" 'BEGIN { exit !(a < b) }'; }
-min() { awk -v a="$1" -v b="$2" 'BEGIN { printf "%.2f", (a < b ? a : b) }'; }
 # attempts <issue>: paid calls on this issue that did not end in a decision
 attempts() { awk -v i="issue=$1" '$3 == i && $6 != "decided" && $6 !~ /^dry-run/ { n++ } END { print n + 0 }' "$LEDGER" 2> /dev/null || echo 0; }
 models_of() { jq -r '(.modelUsage // {}) | keys | if length == 0 then "none" else join(",") end' "$1" 2> /dev/null || echo none; }
@@ -221,8 +220,12 @@ triage_issue() { # triage_issue <issue> <budget>
   fi
   route=none
   if [ "$result" = decided ]; then
-    route=$(triage_route "$(jq -r .verdict <<< "$a")" "$(jq -r '.files[] | strings' <<< "$a")" \
-      "$(jq -r '.repro_test // ""' <<< "$a")" "$(cat "$RUN/open-pr-files.tsv")")
+    if ! triage_files_ok "$a"; then
+      route="crew bad-file-entry"
+    else
+      route=$(triage_route "$(jq -r .verdict <<< "$a")" "$(jq -r '.files[]' <<< "$a")" \
+        "$(jq -r '.repro_test // ""' <<< "$a")" "$(cat "$RUN/open-pr-files.tsv")")
+    fi
     if [ "$POST" = 1 ]; then
       apply_route "$n" "$route" "$a" || result=write-failed
     else
@@ -267,7 +270,7 @@ apply_route() {
       printf '\n\n%s\n\n' "$heading"
       triage_clean "$(jq -r '.task_markdown // ""' <<< "$a")"
       printf '\n\nRoot cause: %s\n' "$(triage_clean "$(jq -r '.root_cause // ""' <<< "$a" | tr '\n' ' ')")"
-      printf 'Files: %s\n' "$(jq -r '.files | map(strings) | join(", ")' <<< "$a")"
+      printf 'Files: %s\n' "$(triage_clean "$(jq -r '.files | join(", ")' <<< "$a")")"
       printf 'Reproducing test: %s\n\n' "$(triage_clean "$(jq -r '.repro_test // ""' <<< "$a" | tr '\n' ' ')")"
       printf '_Written by the foreman triager (%s) from main %s._\n' "$MODEL" "${MAIN_SHA:0:8}"
     } >> "$f"
@@ -279,7 +282,7 @@ apply_route() {
 
 main() {
   prepare_run
-  local n pr spent budget done_n=0 list
+  local n pr spent left done_n=0 list
   if [ -n "$ONLY" ]; then list=$ONLY; else list=$(candidates); fi
   for n in $list; do
     [ "$done_n" -lt "$MAX_ISSUES" ] || break
@@ -291,12 +294,12 @@ main() {
       say "issue #$n: $MAX_ATTEMPTS calls without a decision; skip (needs a human)"; continue
     fi
     spent=$(spent_today)
-    if ! lt "$spent" "$DAILY_CAP_USD"; then
-      logline "daily cap reached (\$$spent of \$$DAILY_CAP_USD); no triage until 00:00Z"; break
+    left=$(awk -v a="$DAILY_CAP_USD" -v b="$spent" 'BEGIN { printf "%.2f", a - b }')
+    if lt "$left" "$PER_ISSUE_USD"; then
+      logline "daily cap: \$$left left of \$$DAILY_CAP_USD, under the \$$PER_ISSUE_USD per issue; no triage until 00:00Z"; break
     fi
-    budget=$(min "$PER_ISSUE_USD" "$(awk -v a="$DAILY_CAP_USD" -v b="$spent" 'BEGIN { print a - b }')")
     done_n=$((done_n + 1))
-    triage_issue "$n" "$budget" || { logline "model mismatch; stopping this run"; break; }
+    triage_issue "$n" "$PER_ISSUE_USD" || { logline "model mismatch; stopping this run"; break; }
   done
   logline "run triaged=$((ROUTED_CATJAM + ROUTED_JULES + ROUTED_CREW)) catjam=$ROUTED_CATJAM jules=$ROUTED_JULES crew=$ROUTED_CREW calls=$done_n skipped-open-pr=$SKIPPED_PR usd=$RUN_USD main=${MAIN_SHA:0:8}$([ "$POST" = 1 ] || echo ' dry-run')"
 }
