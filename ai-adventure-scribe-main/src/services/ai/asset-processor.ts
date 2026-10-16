@@ -325,10 +325,46 @@ export function applyAssetPostProcessing<T extends { text: string }>(response: T
 }
 
 /**
+ * Normalize a character name for player-character matching: case, surrounding
+ * punctuation and a leading article are ignored, so "The Apprentice" matches
+ * "apprentice". Mirrors the server's PC-name comparison
+ * (server-bun/src/tactical/seating.ts `comparableName`, #2438).
+ */
+function normalizePcName(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^["'([{]+|["')\]}.,!?;:]+$/g, '')
+    .replace(/^(the|a|an)\s+/i, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/**
+ * #708: true when an asset line names the player's own character. The
+ * premade templates are the confirmed source; any same-named asset (e.g. an
+ * NPC chunk row) gets the same marking so the DM never introduces the PC as
+ * a separate NPC.
+ */
+function isPlayerCharacterAsset(assetName: string, playerCharacterName: string | undefined): boolean {
+  if (!playerCharacterName) return false;
+  const pc = normalizePcName(playerCharacterName);
+  return pc.length > 0 && normalizePcName(assetName) === pc;
+}
+
+/**
  * Fetch campaign assets for AI prompt injection
  * Returns a formatted string listing available visual assets
+ *
+ * #708: when `playerCharacterName` is given, the player's own premade
+ * template line is marked as the player's character so the DM does not
+ * introduce them as a separate NPC. The line (and its tag) stays: the tag
+ * is how the player's portrait renders.
  */
-export async function fetchCampaignAssetsForPrompt(starterCampaignId: string): Promise<string> {
+export async function fetchCampaignAssetsForPrompt(
+  starterCampaignId: string,
+  playerCharacterName?: string,
+): Promise<string> {
   const assets: AssetInfo[] = [];
 
   try {
@@ -408,7 +444,13 @@ CORRECT: "As you enter, [ASSET:npc:elara] Elara greets you."
 INCORRECT: "As you enter, Elara greets you [ASSET:npc:elara]."
 </MANDATORY_REQUIREMENT>
 
-${assets.map((a) => `- ${a.name} [ASSET:${a.type}:${a.key}]`).join('\n')}
+${assets
+    .map((a) =>
+      isPlayerCharacterAsset(a.name, playerCharacterName)
+        ? `- ${a.name} [ASSET:${a.type}:${a.key}] — THIS IS THE PLAYER'S OWN CHARACTER. Do NOT introduce them as an NPC; use this tag when the narration refers to the player.`
+        : `- ${a.name} [ASSET:${a.type}:${a.key}]`,
+    )
+    .join('\n')}
 </available_visual_assets>`;
 
   return prompt;

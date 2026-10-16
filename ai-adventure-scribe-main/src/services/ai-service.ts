@@ -291,7 +291,14 @@ export class AIService {
         }
         const [starterLoreData, sceneStateBlock, latestRollOutcome] = await Promise.all([
           (starterCampaignId
-            ? CampaignContextPrompts.fetchStarterCampaignLore(starterCampaignId)
+            ? CampaignContextPrompts.fetchStarterCampaignLore(
+                starterCampaignId,
+                // #708: mark the player's own premade in the assets section so
+                // the DM does not introduce them as a separate NPC.
+                typeof params.context.characterDetails?.name === 'string'
+                  ? params.context.characterDetails.name
+                  : undefined,
+              )
             : Promise.resolve(null)
           ).then((value) => {
             logger.info('TURN_GENERATE_PREPARATION_TIMING', {
