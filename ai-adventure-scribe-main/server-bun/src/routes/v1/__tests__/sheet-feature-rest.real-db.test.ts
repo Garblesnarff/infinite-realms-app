@@ -13,16 +13,19 @@ import {
   campaigns,
   characterConditions,
   characterEquipment,
+  characterFeatures,
   characterHitDice,
   characterSpellSlots,
   characterStats,
   characters,
+  classFeaturesLibrary,
   combatEncounters,
   combatParticipantConditions,
   combatParticipantStatus,
   combatParticipants,
   conditionsLibrary,
   dialogueHistory,
+  featureUsageLog,
   gameSessions,
   restEvents,
 } from '../../../../../db/schema/index';
@@ -137,6 +140,15 @@ const pipeline = await importWithRealDb(async () => {
     .use(issue1784DataRoutes)
     .use(llmRoutes);
 });
+
+// #712: the paladin pool services, imported lazily so the no-database run that
+// degrades every describeWithDb block to skip never loads db/client.
+const { layOnHandsPool, resolveLayOnHands, spendDivineSense } = await importWithRealDb(
+  () => import('../../../services/progression/paladin-features-service.js'),
+);
+const { ClassFeatureUsageService } = await importWithRealDb(
+  () => import('../../../services/progression/class-feature-usage-service.js'),
+);
 
 if (!hasRealDb) {
   console.warn(
@@ -1464,5 +1476,272 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
     await db.delete(characterHitDice).where(eq(characterHitDice.characterId, charId));
     await db.delete(characters).where(eq(characters.id, charId));
     await db.delete(campaigns).where(eq(campaigns.id, campId));
+  });
+});
+
+describeWithDb('paladin Lay on Hands pool and Divine Sense tracking (#712)', () => {
+  // Fresh client per block: earlier blocks close the shared one in afterAll.
+  let db: ReturnType<typeof realDb>;
+  const paladinUserId = testId('712-user');
+
+  let campaignId: string;
+  let sessionId: string;
+  let encounterId: string;
+  let paladinId: string;
+  let participantId: string;
+  let layOnHandsId: string;
+
+  /** The SRD seed shape: limited_use features with a NULL uses_count (#224). */
+  const ensureLibraryRow = async (featureName: string): Promise<string> => {
+    const existing = await db
+      .select({ id: classFeaturesLibrary.id })
+      .from(classFeaturesLibrary)
+      .where(
+        and(
+          eq(classFeaturesLibrary.className, 'Paladin'),
+          eq(classFeaturesLibrary.featureName, featureName),
+        ),
+      )
+      .limit(1);
+    if (existing.length > 0) return existing[0].id;
+    const [row] = await db
+      .insert(classFeaturesLibrary)
+      .values({
+        className: 'Paladin',
+        featureName,
+        levelAcquired: 1,
+        description: 'test',
+        usageType: 'action',
+        usesPerRest: 'long_rest',
+        usesCount: null,
+      })
+      .returning({ id: classFeaturesLibrary.id });
+    return row.id;
+  };
+
+  const poolRemaining = async (featureId: string): Promise<number | null> => {
+    const [row] = await db
+      .select({ usesRemaining: characterFeatures.usesRemaining })
+      .from(characterFeatures)
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, featureId),
+        ),
+      )
+      .limit(1);
+    return row?.usesRemaining ?? null;
+  };
+
+  beforeAll(async () => {
+    if (!hasRealDb) return;
+    db = realDb();
+
+    layOnHandsId = await ensureLibraryRow('Lay on Hands');
+    await ensureLibraryRow('Divine Sense');
+
+    [{ id: campaignId }] = await db
+      .insert(campaigns)
+      .values({ userId: paladinUserId, name: testId('712-camp') })
+      .returning({ id: campaigns.id });
+
+    // The QA character: a level-1 paladin with CHA 8 (Divine Sense: max(1, 1-1) = 1).
+    [{ id: paladinId }] = await db
+      .insert(characters)
+      .values({
+        userId: paladinUserId,
+        campaignId,
+        name: testId('712-paladin'),
+        class: 'Paladin',
+        level: 1,
+      })
+      .returning({ id: characters.id });
+
+    await db.insert(characterStats).values({
+      characterId: paladinId,
+      charisma: 8,
+      maxHitPoints: 12,
+      currentHitPoints: 7,
+      temporaryHitPoints: 0,
+      isConscious: true,
+      vitalState: 'standing',
+    });
+
+    [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId, characterId: paladinId, sessionNumber: 1, status: 'active' })
+      .returning({ id: gameSessions.id });
+
+    [{ id: encounterId }] = await db
+      .insert(combatEncounters)
+      .values({ sessionId, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
+      .returning({ id: combatEncounters.id });
+
+    [{ id: participantId }] = await db
+      .insert(combatParticipants)
+      .values({
+        encounterId,
+        characterId: paladinId,
+        name: 'Test Paladin',
+        participantType: 'player',
+        turnOrder: 0,
+        initiative: 10,
+        maxHp: 12,
+      })
+      .returning({ id: combatParticipants.id });
+
+    await db.insert(combatParticipantStatus).values({
+      participantId,
+      currentHp: 7,
+      maxHp: 12,
+      isConscious: true,
+    });
+  });
+
+  afterAll(async () => {
+    await closeRealDb();
+  });
+
+  it('Lay on Hands heals through the combat participant and decrements the pool', async () => {
+    
+
+    const pool = await layOnHandsPool(paladinId, paladinUserId);
+    expect(pool?.max).toBe(5);
+    expect(pool?.remaining).toBe(5);
+
+    const result = await resolveLayOnHands({
+      characterId: paladinId,
+      userId: paladinUserId,
+      participantId,
+      encounterId,
+      targetCharacterId: paladinId,
+      sessionId,
+      context: 'combat-turn',
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.healed).toBe(5);
+      expect(result.poolRemaining).toBe(0);
+      expect(result.poolMax).toBe(5);
+    }
+
+    // The participant row moved, and the write-through moved the sheet too.
+    const [status] = await db
+      .select()
+      .from(combatParticipantStatus)
+      .where(eq(combatParticipantStatus.participantId, participantId))
+      .limit(1);
+    expect(status.currentHp).toBe(12);
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, paladinId))
+      .limit(1);
+    expect(stats.currentHitPoints).toBe(12);
+
+    // The pool row the sheet reads is decremented, and the use was logged.
+    expect(await poolRemaining(layOnHandsId)).toBe(0);
+    const logs = await db
+      .select()
+      .from(featureUsageLog)
+      .where(
+        and(
+          eq(featureUsageLog.characterId, paladinId),
+          eq(featureUsageLog.featureId, layOnHandsId),
+        ),
+      );
+    expect(logs.length).toBeGreaterThan(0);
+  });
+
+  it('an empty Lay on Hands pool refuses clearly and spends nothing', async () => {
+    
+    // Deterministic regardless of test order: the pool is empty.
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: 0 })
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, layOnHandsId),
+        ),
+      );
+
+    const result = await resolveLayOnHands({
+      characterId: paladinId,
+      userId: paladinUserId,
+      participantId,
+      encounterId,
+      targetCharacterId: paladinId,
+      sessionId,
+      context: 'combat-turn',
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('empty_pool');
+      expect(result.message).toMatch(/empty/i);
+      expect(result.message).toMatch(/long rest/i);
+      expect(result.poolRemaining).toBe(0);
+    }
+    expect(await poolRemaining(layOnHandsId)).toBe(0);
+  });
+
+  it('Divine Sense decrements uses through the usage service (CHA 8 -> 1 use)', async () => {
+    const first = await spendDivineSense({
+      characterId: paladinId,
+      userId: paladinUserId,
+      sessionId,
+      context: 'story-turn',
+    });
+    expect(first.success).toBe(true);
+    expect(first.usesRemaining).toBe(0);
+
+    const second = await spendDivineSense({
+      characterId: paladinId,
+      userId: paladinUserId,
+      sessionId,
+      context: 'story-turn',
+    });
+    expect(second.success).toBe(false);
+    expect(second.usesRemaining).toBe(0);
+
+    // A long rest replenishes the Divine Sense pool.
+    const restored = await ClassFeatureUsageService.restoreFeatures({
+      characterId: paladinId,
+      restType: 'long',
+      userId: paladinUserId,
+    });
+    expect(restored.featuresRestored).toContain('Divine Sense');
+
+    const third = await spendDivineSense({
+      characterId: paladinId,
+      userId: paladinUserId,
+      sessionId,
+      context: 'story-turn',
+    });
+    expect(third.success).toBe(true);
+    expect(third.usesRemaining).toBe(0);
+  });
+
+  it('a long rest replenishes the Lay on Hands pool', async () => {
+    
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: 2 })
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, layOnHandsId),
+        ),
+      );
+
+    const restored = await ClassFeatureUsageService.restoreFeatures({
+      characterId: paladinId,
+      restType: 'long',
+      userId: paladinUserId,
+    });
+    expect(restored.featuresRestored).toContain('Lay on Hands');
+    expect(await poolRemaining(layOnHandsId)).toBe(5);
   });
 });

@@ -19,6 +19,7 @@ import {
   type FeatureUsageLog,
 } from '../../../../db/schema/index';
 import { NotFoundError } from '../../lib/errors.js';
+import { logger } from '../../lib/logger.js';
 
 import type {
   UseFeatureInput,
@@ -124,17 +125,27 @@ export class ClassFeatureUsageService {
 
     const feature = characterFeature.feature!;
 
-    // A NULL uses_count is unlimited, including rows seeded as limited_use
-    // with no number (#224). Do not invent a count for those rows.
-    if (feature.usesCount === null) {
-      await this.logFeatureUsage(characterId, featureId, userId, context, sessionId);
+    // A NULL uses_count with an explicitly tracked uses_remaining is a pool, not an
+    // unlimited feature (#712: Divine Sense tracks 1 + CHA mod, Lay on Hands tracks
+    // paladin level x 5 HP). Only a row with no remaining value at all is unlimited:
+    // a NULL uses_count with no tracking is never given an invented count (#224).
+    if (feature.usesCount === null && characterFeature.usesRemaining === null) {
+      // Dynamic import: paladin-features-service calls back into this service, so a
+      // static import would be a module cycle (same pattern as dm-feature-gate).
+      const { ensureTrackedPool } = await import('./paladin-features-service.js');
+      const ensured = await ensureTrackedPool(characterId, feature.id, userId);
+      if (ensured) {
+        characterFeature.usesRemaining = ensured.usesRemaining;
+      } else {
+        await this.logFeatureUsage(characterId, featureId, userId, context, sessionId);
 
-      return {
-        success: true,
-        usesRemaining: -1, // -1 indicates unlimited
-        effect: feature.mechanicalEffects || feature.description,
-        message: `${feature.featureName} activated`,
-      };
+        return {
+          success: true,
+          usesRemaining: -1, // -1 indicates unlimited
+          effect: feature.mechanicalEffects || feature.description,
+          message: `${feature.featureName} activated`,
+        };
+      }
     }
 
     // Check if feature has uses remaining
@@ -175,11 +186,17 @@ export class ClassFeatureUsageService {
     // Log the usage
     await this.logFeatureUsage(characterId, featureId, userId, context, sessionId);
 
+    // #712: a pooled feature (Lay on Hands) counts HP, not uses.
+    const { poolUnitLabel } = await import('./paladin-features-service.js');
+    const unit = poolUnitLabel(feature.featureName);
     return {
       success: true,
       usesRemaining: newUsesRemaining,
       effect: feature.mechanicalEffects || feature.description,
-      message: `${feature.featureName} used. ${newUsesRemaining} uses remaining.`,
+      message:
+        unit === 'HP'
+          ? `${feature.featureName} used. ${newUsesRemaining} HP remaining in the pool.`
+          : `${feature.featureName} used. ${newUsesRemaining} uses remaining.`,
     };
   }
 
@@ -216,6 +233,19 @@ export class ClassFeatureUsageService {
     `);
 
     const featuresRestored = restoredRows.map((row) => row.feature_name);
+
+    // #712: Divine Sense (1 + CHA mod) and Lay on Hands (paladin level x 5) are
+    // seeded with a NULL uses_count, so the SQL above skips them; their pools live
+    // in uses_remaining and are replenished here on a long rest. A failed reset is
+    // logged, never a failed rest.
+    if (restType === 'long') {
+      try {
+        const { replenishPaladinPools } = await import('./paladin-features-service.js');
+        featuresRestored.push(...(await replenishPaladinPools(characterId, userId)));
+      } catch (error) {
+        logger.warn({ msg: 'PALADIN_POOL_REPLENISH_FAILED', characterId, error });
+      }
+    }
 
     return {
       featuresRestored,
