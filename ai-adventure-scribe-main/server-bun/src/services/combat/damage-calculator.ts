@@ -12,6 +12,7 @@
  */
 
 import { ValidationError } from '../../lib/errors.js';
+import { rollDie } from '../../lib/rng.js';
 
 import type { DamageCalculationInput, DamageCalculationResult } from '../../types/combat.js';
 
@@ -136,7 +137,7 @@ export function rollDamageDice(damageDice: string, isCritical: boolean): number 
 
   let total = 0;
   for (let i = 0; i < diceToRoll; i++) {
-    total += Math.floor(Math.random() * sides) + 1;
+    total += rollDie(sides);
   }
 
   return total;

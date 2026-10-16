@@ -5,6 +5,7 @@
  */
 
 import { MAX_DICE_COUNT, MAX_DICE_MODIFIER, MAX_DIE_TYPE, clampDiceInteger } from './dice-bounds';
+import { rollDie } from './rng';
 
 import type { DiceRoll, DamageType } from '@/types/combat';
 
@@ -35,11 +36,11 @@ export function rollDice(
 
   // Roll base dice
   for (let i = 0; i < count; i++) {
-    let roll = Math.floor(Math.random() * dieType) + 1;
+    let roll = rollDie(dieType);
 
     // Halfling Lucky - reroll 1s
     if (halflingLucky && roll === 1) {
-      roll = Math.floor(Math.random() * dieType) + 1;
+      roll = rollDie(dieType);
     }
 
     results.push(roll);
@@ -48,11 +49,11 @@ export function rollDice(
   // Handle advantage/disadvantage for d20 rolls
   if ((hasAdvantage || hasDisadvantage) && dieType === 20) {
     // Roll second d20
-    let secondRoll = Math.floor(Math.random() * 20) + 1;
+    let secondRoll = rollDie(20);
 
     // Halfling Lucky on second roll too
     if (halflingLucky && secondRoll === 1) {
-      secondRoll = Math.floor(Math.random() * 20) + 1;
+      secondRoll = rollDie(20);
     }
 
     results.push(secondRoll);

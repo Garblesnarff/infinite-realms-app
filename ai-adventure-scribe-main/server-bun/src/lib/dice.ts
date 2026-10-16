@@ -1,3 +1,5 @@
+import { rollDie } from './rng.js';
+
 /**
  * Server-owned dice primitives.
  *
@@ -19,9 +21,9 @@ export function rollD20Pair(
   advantage = false,
   disadvantage = false,
 ): { kept: number; other?: number } {
-  const first = Math.floor(Math.random() * 20) + 1;
+  const first = rollDie(20);
   if (advantage === disadvantage) return { kept: first };
-  const second = Math.floor(Math.random() * 20) + 1;
+  const second = rollDie(20);
   return advantage
     ? { kept: Math.max(first, second), other: Math.min(first, second) }
     : { kept: Math.min(first, second), other: Math.max(first, second) };
