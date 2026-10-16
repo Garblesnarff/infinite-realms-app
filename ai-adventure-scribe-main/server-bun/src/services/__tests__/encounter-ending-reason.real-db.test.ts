@@ -816,10 +816,18 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
 
     // #273 untouched: a story award at level 20 still caps at 0 and writes nothing — and the
     // combat event above (source 'combat') does not count toward the story session total.
+    // #615: the victory guard scopes to the player message, so the cap check is keyed to
+    // a message from after the victory — keyed to before it, the guard (correctly)
+    // reports victory_already_paid instead of reaching the cap.
+    await db.insert(dialogueHistory).values({
+      sessionId: epicSessionId,
+      speakerType: 'player',
+      message: 'I savor the victory.',
+    });
     const storyOutcome = await awardStoryXpOnce({
       characterId: epicId,
       sessionId: epicSessionId,
-      since: new Date(Date.now() - 60_000),
+      since: await playerSince(epicSessionId),
       amount: 500,
       reason: 'epic deed',
     });
@@ -833,6 +841,105 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
     // The afterAll only knows the shared character; remove this test's own rows.
     await db.delete(experienceEvents).where(eq(experienceEvents.characterId, epicId));
     await db.delete(characters).where(eq(characters.id, epicId));
+  });
+
+  test('a combat kill awards XP exactly once even when the story path also tries (#615)', async () => {
+    // The #615 repro: the deterministic victory award lands, then the DM's reply
+    // disobeys the prompt-level "Never use for combat victories" rule and sets
+    // xp_award for the same kill. The story path must not duplicate the victory.
+    await db.insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'player',
+      message: 'I strike down the golem.',
+    });
+    const [sheetBefore] = await db
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+
+    const victory = await awardCombatVictoryXp({ encounterId, sessionId, userId });
+    expect(victory.awarded).toHaveLength(1);
+    // The fixture golem seats no XP: the level-3 medium threshold band pays 150.
+    expect(victory.awarded[0].xp).toBe(150);
+
+    // The DM's disobedient xp_award for the same kill, on the same player message.
+    const outcome = await awardStoryXp({
+      userId,
+      sessionId,
+      xpAward: { amount: 150, reason: 'Defeating the golem' },
+    });
+    expect(outcome).toBe('victory_already_paid');
+
+    // The sheet counts the kill exactly once: one combat event, no story event,
+    // the victory notice posted, no story notice.
+    const [sheetAfter] = await db
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect((sheetAfter.xp ?? 0) - (sheetBefore.xp ?? 0)).toBe(150);
+    const events = await db
+      .select({ source: experienceEvents.source })
+      .from(experienceEvents)
+      .where(
+        and(
+          eq(experienceEvents.characterId, characterId),
+          eq(experienceEvents.sessionId, sessionId),
+        ),
+      );
+    expect(events.filter((event) => event.source === 'combat')).toHaveLength(1);
+    expect(events.filter((event) => event.source === 'other')).toHaveLength(0);
+    expect(await victoryNotices(sessionId)).toHaveLength(1);
+    expect(await storyNotices(sessionId)).toHaveLength(0);
+  });
+
+  test('a story award for a later message still pays after an earlier combat victory (#615)', async () => {
+    // The guard is scoped to the player message: a victory from an earlier turn
+    // must not swallow legitimate story XP. The combat row below copies the exact
+    // shape `awardCombatVictoryXp` writes, backdated ten minutes to stand in for
+    // an earlier turn's victory.
+    await db.insert(experienceEvents).values({
+      characterId,
+      sessionId,
+      xpGained: 150,
+      source: 'combat',
+      description: `Victory XP [${encounterId}]: Ending Golem`,
+      timestamp: new Date(Date.now() - 10 * 60_000),
+    });
+    await db.insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'player',
+      message: 'I piece together the logbook.',
+    });
+    const [sheetBefore] = await db
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+
+    const grant = await awardStoryXpOnce({
+      characterId,
+      sessionId,
+      since: await playerSince(sessionId),
+      amount: 50,
+      reason: 'Solved the logbook',
+    });
+    expect(grant.outcome).toBe('awarded');
+    expect(grant.granted).toBe(50);
+    const [sheetAfter] = await db
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect((sheetAfter.xp ?? 0) - (sheetBefore.xp ?? 0)).toBe(50);
+    const storyEvents = await db
+      .select({ id: experienceEvents.id })
+      .from(experienceEvents)
+      .where(
+        and(
+          eq(experienceEvents.characterId, characterId),
+          eq(experienceEvents.sessionId, sessionId),
+          eq(experienceEvents.source, 'other'),
+        ),
+      );
+    expect(storyEvents).toHaveLength(1);
   });
 });
 

@@ -27,6 +27,7 @@ import { XP_THRESHOLDS } from '../progression/progression-mechanics.js';
 export type StoryXpOutcome =
   | 'awarded'
   | 'already_awarded'
+  | 'victory_already_paid'
   | 'invalid_amount'
   | 'no_character'
   | 'no_player_message'
@@ -50,7 +51,7 @@ export function storyXpSessionCap(level: number): number {
 }
 
 export interface StoryXpGrant {
-  outcome: 'awarded' | 'already_awarded' | 'no_character' | 'capped';
+  outcome: 'awarded' | 'already_awarded' | 'victory_already_paid' | 'no_character' | 'capped';
   /** XP actually written to the sheet by this call — 0 when nothing was written. */
   granted: number;
 }
@@ -58,8 +59,14 @@ export interface StoryXpGrant {
 /**
  * The single writer. Locks the character row, so two turns for one message cannot both read
  * "nothing awarded yet" and both add; then adds the award unless an XP event for this character
- * and session already exists at or after the player message (`since`, the DB clock). Only story
- * awards (source 'other') count: a later combat or milestone event must not swallow one.
+ * and session already exists at or after the player message (`since`, the DB clock). Story
+ * awards (source 'other') dedupe against each other. #615: a combat-victory award
+ * (source 'combat' with the `Victory XP [...]` description `awardCombatVictoryXp` writes)
+ * at or after the message also blocks the story award — the deterministic victory XP is
+ * authoritative, and the model demonstrably emits `xp_award` for the same kill despite the
+ * prompt-level "Never use for combat victories" rule, so the guard lives here, not in the
+ * prompt. A combat-source event from elsewhere (ProgressionService.awardXP's generic shape)
+ * still does not swallow one.
  */
 export async function awardStoryXpOnce(input: {
   characterId: string;
@@ -69,7 +76,7 @@ export async function awardStoryXpOnce(input: {
   reason: string;
 }): Promise<StoryXpGrant> {
   const { db } = await import('../../../../db/client');
-  const { and, eq, gte, sql } = await import('drizzle-orm');
+  const { and, eq, gte, like, sql } = await import('drizzle-orm');
   const { characters, experienceEvents } = await import('../../../../db/schema/index');
   const { characterId, sessionId, since, amount, reason } = input;
   return db.transaction(async (tx) => {
@@ -92,6 +99,29 @@ export async function awardStoryXpOnce(input: {
       )
       .limit(1);
     if (awarded) return { outcome: 'already_awarded', granted: 0 };
+    // #615: the kill already paid. A combat-victory award — the `Victory XP [...]`
+    // description `awardCombatVictoryXp` writes — at or after the player message means
+    // the deterministic victory XP covered this turn's kill; the DM's `xp_award` for it
+    // is the duplicate the issue reports, so nothing is written and no notice follows
+    // (`ensureStoryXpNotice` finds no story event). Only victory awards block: a
+    // combat-source event from elsewhere (ProgressionService.awardXP's generic shape)
+    // still does not swallow one (#218). Checked inside the same transaction as the
+    // story-event check above: in production the victory always lands before the
+    // DM's reply is processed, so the award it wrote is visible to this check.
+    const [victoryPaid] = await tx
+      .select({ id: experienceEvents.id })
+      .from(experienceEvents)
+      .where(
+        and(
+          eq(experienceEvents.characterId, characterId),
+          eq(experienceEvents.sessionId, sessionId),
+          eq(experienceEvents.source, 'combat'),
+          like(experienceEvents.description, 'Victory XP [%'),
+          gte(experienceEvents.timestamp, since),
+        ),
+      )
+      .limit(1);
+    if (victoryPaid) return { outcome: 'victory_already_paid', granted: 0 };
     // #273: one quarter of the level's milestone band per session, clamped and logged.
     // Only story awards (source 'other') count toward the session total, as above.
     const [sumRow] = await tx
