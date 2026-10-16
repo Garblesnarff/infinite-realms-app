@@ -1,0 +1,274 @@
+{
+  "responses": [
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"You arrive at the tavern and hear rumors of goblins in the hills.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"The bartender slides a frothy mug your way and whispers of old ruins.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"You study the town notice board and pick a quest.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[{\"monster_id\":\"srd:goblin\",\"name\":\"Goblin\",\"count\":2}],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Goblins ambush you from the bushes!\",\"combat_transition\":\"start\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[{\"actor_id\":\"hero\",\"action_type\":\"attack\",\"target_ids\":[\"goblin\"],\"weapon_id\":null,\"spell_id\":null,\"slot_level\":null,\"movement_feet\":0}],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"You swing your blade at the goblin.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"The goblin staggers, wounded.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"The last goblin falls. The fight is over.\",\"combat_transition\":\"none\",\"combat_end\":true}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"You settle by the campfire for a short rest.\",\"combat_transition\":\"none\",\"rest\":{\"type\":\"short\"}}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Turn 9: the adventure continues.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Turn 10: the adventure continues.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Turn 11: the adventure continues.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Turn 12: the adventure continues.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Turn 13: the adventure continues.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Turn 14: the adventure continues.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Turn 15: the adventure continues.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Turn 16: the adventure continues.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Turn 17: the adventure continues.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Turn 18: the adventure continues.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Turn 19: the adventure continues.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Turn 20: the adventure continues.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Turn 21: the adventure continues.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Turn 22: the adventure continues.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Turn 23: the adventure continues.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Turn 24: the adventure continues.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Turn 25: the adventure continues.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Turn 26: the adventure continues.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Turn 27: the adventure continues.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Turn 28: the adventure continues.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Turn 29: the adventure continues.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "{\"narration_segments\":[],\"roll_requests\":[],\"options\":[],\"combat_actions\":[],\"combatants\":[],\"map_actions\":[],\"handout_actions\":[],\"scene_spec\":null,\"text\":\"Turn 30: the adventure continues.\",\"combat_transition\":\"none\"}"
+          }
+        }
+      ]
+    }
+  ]
+}
