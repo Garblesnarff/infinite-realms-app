@@ -413,5 +413,44 @@ expect "has_pii: email" 0 has_pii "contact rob.tester@example.com about it"
 expect "has_pii: IPv4" 0 has_pii "request from 203.0.113.7 failed"
 expect "has_pii: version string and file:line are fine" 1 has_pii "bump to 1.2.3, see src/a.ts:42 and v5.90.20"
 
+# reviewer pre-check (#681 FIX): --paginate prints one JSON array per page;
+# the trusted-review filter must see one merged array, or it never matches.
+eval "$(sed -n '/^first_trusted_line() {/,/^}/p;/^verdict_posted() {/,/^}/p;/^precheck() {/,/^}/p;/^post_summary() {/,/^}/p' "$HERE/../foreman/review.sh")"
+OWNER_LOGIN=owner
+pages='[{"user":{"login":"owner"},"author_association":"OWNER","body":"Strategist review — FIX at 00000000\nold"}]
+[{"user":{"login":"someone"},"author_association":"NONE","body":"Strategist review — PASS at abcdef12"},{"user":{"login":"owner"},"author_association":"OWNER","body":"Strategist review — PASS at abcdef12\nok"}]'
+got=$(printf '%s\n' "$pages" | first_trusted_line 2> /dev/null || true)
+[ "$got" = "Strategist review — PASS at abcdef12" ] && ok "first_trusted_line: two pages, newest trusted review matches" || bad "first_trusted_line paginated: '$got'"
+got=$(printf '%s\n' '[]' | first_trusted_line 2> /dev/null || true)
+[[ $got != *" at "* ]] && ok "first_trusted_line: no comments, no match" || bad "first_trusted_line empty: '$got'"
+
+LEDGER=$TMP/ledger-vp.log
+printf '%s\n' "t 2026-10-15 pr=5 0.1 sha=abcdef12 posted models=x" "t 2026-10-15 pr=6 0.1 sha=11111111 no-verdict models=x" > "$LEDGER"
+verdict_posted 5 abcdef12 && ok "verdict_posted: posted row found" || bad "verdict_posted: missed posted row"
+! verdict_posted 6 11111111 && ! verdict_posted 7 abcdef12 && ok "verdict_posted: no posted row, not found" || bad "verdict_posted: false match"
+
+# precheck lists every page and skips fork PRs. gh is mocked: it applies the
+# --jq filter to a two-page fixture, like gh --paginate does.
+precheck_fixture=$TMP/pulls-pages.json
+printf '%s\n' '[{"number":1,"head":{"sha":"aaaaaaaa11","repo":{"full_name":"o/r"}}}]' \
+  '[{"number":2,"head":{"sha":"bbbbbbbb22","repo":{"full_name":"fork/r"}}},{"number":3,"head":{"sha":"cccccccc33","repo":{"full_name":"o/r"}}}]' > "$precheck_fixture"
+got=$(
+  REPO=o/r STATE=$TMP/pc MAX_ATTEMPTS=2; mkdir -p "$STATE"
+  gh() { local q="" pg=0; while [ $# -gt 0 ]; do case $1 in --jq) q=$2; shift ;; --paginate) pg=1 ;; esac; shift; done
+    if [ "$pg" = 1 ]; then jq -r "$q" "$precheck_fixture"; else head -n 1 "$precheck_fixture" | jq -r "$q"; fi; }
+  say() { :; }; scope_skipped() { return 1; }; attempts() { echo 0; }; trusted_review_at() { return 1; }
+  verdict_posted() { return 1; }
+  ci_finished_cached() { echo "$1" >> "$STATE/seen"; return 1; }
+  precheck || true; cat "$STATE/seen" 2> /dev/null | paste -sd' ')
+[ "$got" = "1 3" ] && ok "precheck: every page, fork PR #2 ignored" || bad "precheck pages/forks: saw '$got'"
+
+# post_summary: with today's marker present, the summary is not even built.
+got=$(
+  STATE=$TMP/ps POST=1; mkdir -p "$STATE"; today() { echo 2026-10-15; }; touch "$STATE/summary-2026-10-15"
+  summary_text() { echo built > "$STATE/built"; }; slack_post() { :; }; say() { :; }; logline() { :; }
+  gh() { :; }
+  post_summary; [ -e "$STATE/built" ] && echo built || echo skipped)
+[ "$got" = skipped ] && ok "post_summary: marker checked before summary_text" || bad "post_summary built the summary with the marker present"
+
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]
