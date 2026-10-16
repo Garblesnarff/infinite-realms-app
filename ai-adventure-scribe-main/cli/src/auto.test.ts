@@ -112,24 +112,30 @@ describe('fixture auto play', () => {
     });
   });
 
-  it('prefers resolving pending rolls over a scripted input for that turn', async () => {
+  it('resolves pending rolls first and defers the scripted input to the next turn', async () => {
     const inputs: string[] = [];
+    let pending: unknown[] = [{ purpose: 'Stealth' }];
     await runAutoTurns(
       {
-        pendingRolls: [{ purpose: 'Stealth' }],
+        get pendingRolls() {
+          return pending;
+        },
         availableOptions: [],
-        roll: () => ({ result: { total: 9 } }),
+        roll: () => {
+          pending = [];
+          return { result: { total: 9 } };
+        },
         play: async (input) => {
           inputs.push(input);
           return {};
         },
       },
-      1,
+      2,
       () => undefined,
-      { scriptedInputs: ['Ignored for this turn.'] },
+      { scriptedInputs: ['Deferred, not dropped.'] },
     );
 
-    expect(inputs).toEqual(['I completed all 1 pending roll.']);
+    expect(inputs).toEqual(['I completed all 1 pending roll.', 'Deferred, not dropped.']);
   });
 
   it('plays scripted inputs in order before falling back to auto selection', async () => {

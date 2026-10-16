@@ -32,6 +32,8 @@ describe('failVerdict', () => {
   });
 
   it('fails on a failed auto turn', () => {
-    expect(failVerdict({ errors: [], summary: { turnsFailed: 1 } })).toBe('lost turn');
+    expect(failVerdict({ errors: [], summary: { turnsFailed: 1 } })).toBe(
+      "failed turn (1 of the run's turns threw)",
+    );
   });
 });

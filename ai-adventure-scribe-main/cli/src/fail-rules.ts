@@ -33,6 +33,7 @@ export function failVerdict({ errors, summary }: FailVerdictInput): string | nul
     const reason = serverErrorReason(error);
     if (reason) return reason;
   }
-  if (summary && (summary.turnsFailed ?? 0) > 0) return 'lost turn';
+  if (summary && (summary.turnsFailed ?? 0) > 0)
+    return `failed turn (${summary.turnsFailed} of the run's turns threw)`;
   return null;
 }

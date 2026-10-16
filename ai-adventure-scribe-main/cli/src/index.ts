@@ -230,7 +230,7 @@ async function runPlay(args: Args): Promise<void> {
     recordError(error);
     printError(error, args.json, write);
   };
-  installRequestIdCapture();
+  if (transcript) installRequestIdCapture();
   const scriptedInputs = args.script ? parseScript(readFileSync(args.script, 'utf8')) : undefined;
   const random = seedRandom(args.seed);
   const sessionId = await selectSession(args, random);

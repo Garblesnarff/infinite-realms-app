@@ -8,12 +8,27 @@ import { getLastRequestId } from './request-id';
  * written up to the crash.
  *
  * Each line is prefixed with the request id of the response that produced it
- * (`[req <id>] `, or `[req -] ` when unknown). This applies to `--json` output
- * too: rather than special-casing a `requestId` field into JSON lines, the
- * writer prepends the same prefix so one format-agnostic path serves both.
+ * (`[req <id>] `, or `[req -] ` when unknown). A JSON-object line (`--json`
+ * events, the summary) instead gets a `requestId` field, so the file stays JSONL.
+ * The id is the latest `x-request-id` any response carried, not per-call.
  */
 export interface TranscriptWriter {
   write(line: string): void;
+}
+
+/** A JSON-object line (`--json`) gets a `requestId` field so it stays valid JSONL. */
+function withRequestId(line: string, requestId: string | null): string {
+  if (line.startsWith('{')) {
+    try {
+      const parsed: unknown = JSON.parse(line);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return JSON.stringify({ ...parsed, requestId });
+      }
+    } catch {
+      // Not JSON after all: fall through to the text prefix.
+    }
+  }
+  return `[req ${requestId ?? '-'}] ${line}`;
 }
 
 export function createTranscriptWriter(
@@ -23,7 +38,7 @@ export function createTranscriptWriter(
   writeFileSync(filePath, '');
   return {
     write(line: string): void {
-      appendFileSync(filePath, `[req ${getRequestId() ?? '-'}] ${line}\n`);
+      appendFileSync(filePath, `${withRequestId(line, getRequestId() ?? null)}\n`);
     },
   };
 }

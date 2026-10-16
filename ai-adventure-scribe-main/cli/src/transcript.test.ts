@@ -42,4 +42,12 @@ describe('createTranscriptWriter', () => {
     writer.write('fresh');
     expect(readFileSync(file, 'utf8')).toBe('[req -] fresh\n');
   });
+
+  it('adds requestId to a JSON-object line so --json transcripts stay JSONL', () => {
+    const file = tempFile();
+    const writer = createTranscriptWriter(file, () => 'req-9');
+    writer.write(JSON.stringify({ type: 'narration', text: 'Hi' }));
+    const line = readFileSync(file, 'utf8').trim();
+    expect(JSON.parse(line)).toEqual({ type: 'narration', text: 'Hi', requestId: 'req-9' });
+  });
 });
