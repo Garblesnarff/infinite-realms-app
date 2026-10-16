@@ -15,7 +15,7 @@ import type {
   TacticalMap,
 } from './types';
 
-export const CELL_FEET = 5;
+const CELL_FEET = 5;
 const sizeCells: Record<MapEntity['size'], number> = {
   tiny: 1,
   small: 1,

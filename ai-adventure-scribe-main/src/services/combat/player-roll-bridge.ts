@@ -84,8 +84,16 @@ export type PlayerRollSpec =
 /**
  * `null` means nobody rolled: the engine should roll this attack itself — unless `cancelled`,
  * which means the player dismissed the prompt and the action must not resolve at all.
+ *
+ * `d20Rolls` is both d20 faces `[kept, dropped]` when the popup rolled two dice for advantage
+ * or disadvantage (#263 CB-028). Absent for a hand-entered die, which has no dropped face.
  */
-export type PlayerRollOutcome = { d20: number | null; cancelled?: boolean; timedOut?: boolean };
+export type PlayerRollOutcome = {
+  d20: number | null;
+  d20Rolls?: [number, number];
+  cancelled?: boolean;
+  timedOut?: boolean;
+};
 
 export interface PlayerRollHostHandle {
   /** The queue id for the popup, used to commit a player-initiated roll before it settles. */

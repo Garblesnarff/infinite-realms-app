@@ -17,6 +17,7 @@
  */
 import { and, eq, inArray } from 'drizzle-orm';
 
+import { isAlreadyOnSheet, sheetItemNameSet } from './sheet-item-names.js';
 import { db } from '../../../../db/client';
 import { characterEquipment, characterStats, inventoryItems } from '../../../../db/schema/index';
 import { abilityModifier } from '../../../../shared/ability-modifier';
@@ -71,10 +72,24 @@ export async function recomputeStoredArmorClass(
 
   if (!stats) return null;
 
-  const rows = [...legacyRows, ...inventoryRows];
-  const ownsArmor = rows.some((row) =>
-    ARMOR_ITEM_TYPES.includes((row.itemType ?? '').trim().toLowerCase()),
+  const sheetNames = sheetItemNameSet(legacyRows.map((row) => row.name));
+  const rows = [
+    ...legacyRows,
+    ...inventoryRows.filter((row) => !isAlreadyOnSheet(sheetNames, row.name)),
+  ];
+  // Creation stores SRD armour as item_type "equipment". A type-only check
+  // skips Chain Mail and Shield, so Equip never moves the stored AC (#711).
+  const wornByName = computeArmorClass(
+    rows.map((row) => ({
+      item_name: row.name,
+      item_type: row.itemType,
+      equipped: true,
+    })),
+    0,
   );
+  const ownsArmor =
+    rows.some((row) => ARMOR_ITEM_TYPES.includes((row.itemType ?? '').trim().toLowerCase())) ||
+    wornByName !== computeArmorClass([], 0);
   if (!ownsArmor) return null;
 
   const equipment: ArmorClassEquipmentItem[] = rows.map((row) => ({

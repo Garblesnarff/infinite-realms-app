@@ -579,6 +579,12 @@ export interface AttackRollInput {
    */
   providedD20?: number;
   /**
+   * Both dice the popup rolled, `[kept, dropped]`, when advantage or disadvantage put two dice
+   * on the table (#263 CB-028). Lets the log name both dice and the kept one; absent for a
+   * hand-entered die, which has no dropped face.
+   */
+  providedD20Rolls?: [number, number];
+  /**
    * An opportunity attack: a reaction provoked on somebody else's turn (#2580). It skips the
    * current-turn gate and claims the attacker's Reaction rather than their Action, which is the
    * only difference from an ordinary attack the rules make.
@@ -691,6 +697,8 @@ export interface SpellAttackInput {
   slotLevel?: number | null;
   /** The player's kept natural d20 for attack-roll spells; absent means the engine rolls. */
   d20?: number;
+  /** Both dice the popup rolled, `[kept, dropped]` (#263 CB-028). */
+  d20Rolls?: [number, number];
 }
 
 /**

@@ -356,7 +356,16 @@ export function useMessageDiceRolls({
             return;
           }
         }
-        if (settleCombatAttackRoll(roll.id, naturalFace)) {
+        // The popup rolled two dice for advantage/disadvantage: carry the dropped face with
+        // the kept one so the engine line can name both (#263 CB-028). `details.results` is
+        // every face the animation showed; a hand-entered number has no details and no
+        // dropped face, so nothing is added and the typed-entry format is unchanged.
+        const faces = details?.results;
+        const d20Rolls =
+          faces?.length === 2 && faces.includes(naturalFace)
+            ? ([naturalFace, faces[0] === naturalFace ? faces[1] : faces[0]] as [number, number])
+            : undefined;
+        if (settleCombatAttackRoll(roll.id, naturalFace, d20Rolls ? { d20Rolls } : undefined)) {
           completeDiceRoll(roll.id, settledResult);
           logger.info('[useMessageDiceRolls] manual combat attack die returned to the engine');
           return;

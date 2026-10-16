@@ -3712,4 +3712,68 @@ ${playerInput}
       }
     });
   });
+  describe('#313 GP-061: in-combat typed spell sheet check on the live route', () => {
+    test('a sheet-unknown spell typed in combat is refused at once, not routed to a weapon roll', async () => {
+      // Hark D4-012 retest: "I cast Fireball at them." (Fireball not on the L1 Wizard's
+      // sheet) came back asking for a Quarterstaff roll. The gate must refuse at once.
+      const playerInput = 'I cast Fireball at them.';
+      await playerSays(playerInput);
+      const turn = await dmTurn({
+        ...apprentice(apprenticeSpellLists),
+        inCombat: true,
+        playerInput,
+        reply: envelopeOf({
+          text: 'Roll to hit with your quarterstaff.',
+          options: ['A. **Roll the attack**.', 'B. **Do something else**.'],
+          roll_requests: [
+            {
+              type: 'attack',
+              formula: '1d20+2',
+              purpose: 'Quarterstaff attack roll',
+              dc: null,
+              ac: null,
+              advantage: false,
+              disadvantage: false,
+            },
+          ],
+          combat_actions: [{ kind: 'attack', weapon: 'quarterstaff' }],
+        }),
+      });
+      const refusal = JSON.parse(String(turn.body.text)) as Record<string, unknown>;
+      expect(String(refusal.text)).toContain('Fireball');
+      expect(String(refusal.text).toLowerCase()).toContain("isn't on their character sheet");
+      expect(refusal.roll_requests).toEqual([]);
+      expect(refusal.combat_actions).toEqual([]);
+    });
+
+    test('a sheet-known spell typed in combat passes through and spends no story slot', async () => {
+      // The combat engine owns slot spends; the gate must not trigger the story spend.
+      const playerInput = 'I cast Burning Hands at them.';
+      await playerSays(playerInput);
+      const character = await wizardWithSlots(0, 2);
+      const replyText = 'Flames wash over the cultists.';
+      const turn = await dmTurn({
+        ...apprentice(apprenticeSpellLists),
+        existingCharacter: character,
+        inCombat: true,
+        playerInput,
+        reply: envelopeOf({
+          text: replyText,
+          options: ['A. **Press on**.', 'B. **Fall back**.'],
+          roll_requests: [],
+        }),
+      });
+      // Passes through unchanged: no refusal.
+      const body = JSON.parse(String(turn.body.text)) as Record<string, unknown>;
+      expect(body.text).toBe(replyText);
+      // No story slot spent: the ledger still reads 0 used.
+      const slots = await database
+        .select()
+        .from(characterSpellSlots)
+        .where(eq(characterSpellSlots.characterId, character.id));
+      expect(slots).toHaveLength(1);
+      expect(slots[0]?.usedSlots).toBe(0);
+    });
+  });
+
 });

@@ -26,7 +26,7 @@ import { alert } from '../lib/alerting.js';
 import { logger } from '../lib/logger.js';
 
 /** Distinct log code for a chain exhausted by a provider key/credit limit. */
-export const LLM_PROVIDER_KEY_LIMIT_CODE = 'LLM_PROVIDER_KEY_LIMIT';
+const LLM_PROVIDER_KEY_LIMIT_CODE = 'LLM_PROVIDER_KEY_LIMIT';
 
 /** Alert kind for the ops alert path. */
 export const KEY_LIMIT_ALERT_KIND = 'llm_provider_key_limit';

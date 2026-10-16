@@ -52,7 +52,6 @@ export const useMagicItemAttunement = (
           return { success: false, message: 'Character must be saved before attuning an item' };
         }
 
-        await restApi.shortRest(character.id);
         await restApi.attuneItem(character.id, itemId);
 
         // Create updated character with attuned item
@@ -69,7 +68,7 @@ export const useMagicItemAttunement = (
 
         return {
           success: true,
-          message: `Completed a short rest and attuned to ${item.itemId}`,
+          message: `Attuned to ${item.itemName ?? item.itemId}`,
         };
       } catch (error) {
         logger.error('Error attuning to item:', error);
@@ -156,26 +155,29 @@ export const useMagicItemAttunement = (
   const attunedItemCount = getAttunedItemCount(character);
   const canAttuneToMoreItems = attunedItemCount < 3;
 
-  return useMemo(() => ({
-    // State
-    isAttuning,
+  return useMemo(
+    () => ({
+      // State
+      isAttuning,
 
-    // Actions
-    attuneToItem,
-    removeAttunement,
-    getItemAttunementStatus,
-    getAttunementSummary,
+      // Actions
+      attuneToItem,
+      removeAttunement,
+      getItemAttunementStatus,
+      getAttunementSummary,
 
-    // Derived values
-    attunedItemCount,
-    canAttuneToMoreItems,
-  }), [
-    isAttuning,
-    attuneToItem,
-    removeAttunement,
-    getItemAttunementStatus,
-    getAttunementSummary,
-    attunedItemCount,
-    canAttuneToMoreItems,
-  ]);
+      // Derived values
+      attunedItemCount,
+      canAttuneToMoreItems,
+    }),
+    [
+      isAttuning,
+      attuneToItem,
+      removeAttunement,
+      getItemAttunementStatus,
+      getAttunementSummary,
+      attunedItemCount,
+      canAttuneToMoreItems,
+    ],
+  );
 };

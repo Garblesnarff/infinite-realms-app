@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# realms-reviewer (#586): headless Sonnet reviewer + daily summary.
+# realms-reviewer (#586): headless Claude reviewer (Haiku or Sonnet by tier) + daily summary.
 #
 # Runs INSIDE the realms-foreman container (ops/foreman/Dockerfile), started by
 # realms-reviewer.service every 2 minutes. Most ticks are idle: a cheap
@@ -37,7 +37,14 @@
 # Spend: at most $1.50 per review and $5.00 per UTC day (DAILY_CAP_USD); the
 # summary tracks the $99 credit that expires 2026-11-02. Every ledger row ends
 # with models=<ids billed>, read from the claude JSON (modelUsage); if the
-# costliest model is not Sonnet the row says model-mismatch and the tick stops.
+# costliest model is not the tier's model the row says model-mismatch and the
+# tick stops.
+#
+# Tiers (#663 item 5): a PR of at most 300 changed lines (additions +
+# deletions) whose every path is on the light allow list (LIGHT_RE) and off the
+# deny lists (HEAVY_RE, HEAVY_I_RE) is reviewed by Haiku; every other PR by
+# Sonnet. Anything unreadable falls back to Sonnet.
+#
 # Author never judges (#662): when the costliest reviewer model is the same
 # family as the PR author's model (from the body's/commits' model line), the
 # verdict is skipped, the PR is labeled needs-other-reviewer, and the tick
@@ -51,6 +58,18 @@ set -euo pipefail
 REPO=${REVIEW_REPO:-Garblesnarff/infinite-realms-app}
 MODEL=${REVIEW_MODEL:-sonnet}
 EXPECT_MODEL_RE=${REVIEW_EXPECT_MODEL_RE:-sonnet}  # the costliest billed model must match (case-insensitive)
+SMALL_MODEL=${REVIEW_SMALL_MODEL:-haiku}
+SMALL_EXPECT_MODEL_RE=${REVIEW_SMALL_EXPECT_MODEL_RE:-haiku}
+SMALL_MAX_LINES=${REVIEW_SMALL_MAX_LINES:-300}
+RUN_MODEL=$MODEL RUN_EXPECT_RE=$EXPECT_MODEL_RE  # per review, set by set_tier
+# Haiku is opt-in: every path must be on LIGHT_RE (docs, READMEs, UI kit
+# components, pages, styles, and the tests inside those folders) and none may
+# hit a deny pattern. Any other path gives Sonnet.
+LIGHT_RE='^(ai-adventure-scribe-main/)?docs/|(^|/)README\.md$|^ai-adventure-scribe-main/src/(components/ui|pages|styles)/'
+# Deny, case-sensitive: the DM by name (dm/, dm-*, *-dm-*, DMMessage, useDmX).
+HEAVY_RE='(^|/)([Dd]m|DM)([-_./A-Z]|$)|[a-z](Dm|DM)([A-Z._-]|$)|[-_.]dm([-_./]|$)'
+# Deny, case-insensitive: game rules, schema, money, auth, infra.
+HEAVY_I_RE='combat|tactical|dungeon[-_]?master|migrations/|(^|/)db/schema|drizzle|^ops/|auth|session|token|secret|crypto|stripe|billing|payment|pricing|checkout|subscription|webhook|middleware|rls|permission|polic(y|ies)|admin|dockerfile|deploy|(^|/)\.env|(^|/)(package\.json|bun\.lockb?)$|\.(sql|sh)$'
 MAX_PRS=${REVIEW_MAX_PRS:-12}
 DAILY_CAP_USD=${REVIEW_DAILY_CAP_USD:-5.00}
 PER_PR_USD=${REVIEW_PER_PR_USD:-1.50}
@@ -60,11 +79,17 @@ CREDIT_START=${REVIEW_CREDIT_START:-2026-10-14}
 CREDIT_END=${REVIEW_CREDIT_END:-2026-11-02}
 SUMMARY_HOUR=${REVIEW_SUMMARY_HOUR_UTC:-11}
 OPS_LOG_ISSUE=${REVIEW_OPS_LOG_ISSUE:-230}
+MERGE_TARGET_PER_HOUR=${REVIEW_MERGE_TARGET_PER_HOUR:-20} # Rob's target (#586)
 WORK=${FOREMAN_WORK:-/work}
 STATE=$WORK/state
 RUNNER_LOG=${RUNNER_STATE:-/runner-state}/catjam-runner.log
 MAX_ATTEMPTS=${REVIEW_MAX_ATTEMPTS:-2}   # per (PR, head sha8) without a posted verdict
 CLAUDE_TIMEOUT=${REVIEW_CLAUDE_TIMEOUT:-20m}
+# Last line of every verdict comment and review, so Muse can tell bot verdicts
+# from the human strategist's (it waits for the strategist on protected paths).
+# The prefix is fixed; the model name in brackets follows the tier.
+BOT_SIGNATURE_PREFIX='— posted by the foreman reviewer bot'
+BOT_SIGNATURE="$BOT_SIGNATURE_PREFIX (Sonnet)"
 LEDGER=$STATE/spend.log  # "<iso> <utc date> pr=<n> <usd> sha=<sha8> <result> models=<id,id|none>"
 LOG=$STATE/review.log
 
@@ -176,23 +201,33 @@ ci_finished_cached() { # <pr> <sha8>: ci_finished_at with a 300s negative cache
 }
 
 verdict_posted() { # <pr> <sha8>: 0 when this script posted a verdict at the head
-  awk -v p="pr=$1" -v s="sha=$2" '$3 == p && $5 == s && $6 == "posted"' "$LEDGER" 2> /dev/null | grep -q .
+  # awk's own exit status: no `| grep -q`, which can SIGPIPE awk under pipefail.
+  awk -v p="pr=$1" -v s="sha=$2" '$3 == p && $5 == s && $6 == "posted" { f = 1; exit } END { exit !f }' "$LEDGER" 2> /dev/null
 }
 
 scope_skipped() { # <pr> <sha8>: 0 when this head was scope-skipped (local log)
   grep -q "^$1 $2 " "$STATE/scope-skips" 2> /dev/null
 }
 
+# first_trusted_line < comment pages: the first line of the newest trusted
+# "Strategist review". --paginate prints one JSON array per page, so the pages
+# are merged first (as comments_json does) before the filter sees them.
+first_trusted_line() {
+  jq -s 'add // []' | jq -r --arg me "$OWNER_LOGIN" "$TRUSTED_REVIEWS_JQ"' | last | (.body // "") | split("\n")[0]'
+}
+
 trusted_review_at() { # <pr> <sha8>: 0 when a trusted "Strategist review" is at the head
   local n=$1 s8=$2 first
-  first=$(gh api "repos/$REPO/issues/$n/comments?per_page=100" --paginate 2> /dev/null |
-    jq -s --arg me "$OWNER_LOGIN" "$TRUSTED_REVIEWS_JQ"' | last | (.body // "") | split("\n")[0]') || return 1
+  first=$(gh api "repos/$REPO/issues/$n/comments?per_page=100" --paginate 2> /dev/null | first_trusted_line) || return 1
   [[ $first == *" at $s8"* ]]
 }
 
 precheck() { # 0 = may have work (run review_tick); 1 = idle
   local n sha s8 prs open_ns
-  prs=$(gh api "repos/$REPO/pulls?state=open&per_page=100" --jq '.[] | "\(.number) \(.head.sha)"' 2> /dev/null) ||
+  # Every page, and same-repo PRs only, as scan_prs: a fork PR is never
+  # reviewed, so it must not make every tick a full tick.
+  prs=$(gh api "repos/$REPO/pulls?state=open&per_page=100" --paginate \
+    --jq ".[] | select(.head.repo.full_name == \"$REPO\") | \"\(.number) \(.head.sha)\"" 2> /dev/null) ||
     { say "pre-check: open-PR list failed"; return 1; }
   # prune the CI cache to currently-open PRs
   open_ns=$(awk '{print $1}' <<< "$prs" | paste -sd'|')
@@ -248,6 +283,28 @@ skip_scope() {
   echo "$key" >> "$STATE/scope-skips"
   logline "pr=#$1 sha=$2 skip-scope $3"
 }
+# pick_tier <pr.json> <paths.txt>: "haiku <lines>" for a small PR off the heavy
+# paths, else "sonnet <reason>". Fails toward Sonnet.
+pick_tier() {
+  local lines hit
+  lines=$(jq -r '(.additions + .deletions) // empty' "$1" 2> /dev/null || true)
+  [[ $lines =~ ^[0-9]+$ ]] || { echo "sonnet lines-unknown"; return 0; }
+  [ -s "$2" ] || { echo "sonnet paths-unknown"; return 0; }
+  if [ "$lines" -gt "$SMALL_MAX_LINES" ]; then echo "sonnet lines=$lines"; return 0; fi
+  hit=$({ grep -E -- "$HEAVY_RE" "$2"; grep -iE -- "$HEAVY_I_RE" "$2"; } | awk 'NR == 1' || true)
+  if [ -n "$hit" ]; then echo "sonnet path=$hit"; return 0; fi
+  hit=$(grep -vE -- "$LIGHT_RE" "$2" | awk 'NR == 1' || true)
+  if [ -n "$hit" ]; then echo "sonnet not-light=$hit"; return 0; fi
+  echo "haiku lines=$lines"
+}
+# set_tier <tier>: the model, the billing check and the signature for one review
+set_tier() {
+  if [ "$1" = haiku ]; then
+    RUN_MODEL=$SMALL_MODEL RUN_EXPECT_RE=$SMALL_EXPECT_MODEL_RE BOT_SIGNATURE="$BOT_SIGNATURE_PREFIX (Haiku)"
+  else
+    RUN_MODEL=$MODEL RUN_EXPECT_RE=$EXPECT_MODEL_RE BOT_SIGNATURE="$BOT_SIGNATURE_PREFIX (Sonnet)"
+  fi
+}
 
 # ---- model ids -------------------------------------------------------------
 # models_of <claude json>: billed model ids, comma-separated, or "none"
@@ -297,6 +354,9 @@ prefetch() {
     --jq '{number, title, body, draft, state, mergeable, mergeable_state, author: .user.login,
            head_ref: .head.ref, head_sha: .head.sha, base_ref: .base.ref, additions, deletions, changed_files}' > "$d/pr.json"
   gh pr view "$n" --json files --jq '.files[] | "\(.additions)+ \(.deletions)- \(.path)"' > "$d/files.txt"
+  # Every path, old names of renames included, for the tier choice.
+  gh api "repos/$REPO/pulls/$n/files?per_page=100" --paginate --jq '.[] | .filename, (.previous_filename // empty)' > "$d/paths.txt" 2> /dev/null ||
+    : > "$d/paths.txt"
   gh pr diff "$n" > "$d/diff.patch" 2> /dev/null || : > "$d/diff.patch"
   gh pr checks "$n" --json name,workflow,state,bucket,link,startedAt,completedAt > "$d/checks.json" 2> /dev/null || true
   jq -e 'type == "array"' "$d/checks.json" > /dev/null 2>&1 || echo '[]' > "$d/checks.json"
@@ -338,7 +398,7 @@ run_claude() {
     # no CAP_KILL in this container).
     exec setpriv --reuid="$FUID" --regid="$FUID" --clear-groups --inh-caps=-all -- \
       timeout --kill-after=30 "$CLAUDE_TIMEOUT" \
-      claude -p --model "$MODEL" --max-budget-usd "$2" --output-format json \
+      claude -p --model "$RUN_MODEL" --max-budget-usd "$2" --output-format json \
       --no-session-persistence --strict-mcp-config --safe-mode \
       --tools Read,Grep,Glob,Write --permission-mode default \
       --allowedTools Read Grep Glob Write \
@@ -373,6 +433,12 @@ review_pr() {
     fi
     rm -rf "$dir"; return 0
   fi
+  # The tier decides the reviewer model, so it comes before the author check
+  # (author_skip compares against RUN_MODEL).
+  local tier
+  tier=$(pick_tier "$dir/pr/pr.json" "$dir/pr/paths.txt")
+  set_tier "${tier%% *}"
+  logline "pr=#$n sha=$s8 tier=$tier model=$RUN_MODEL"
   if author_skip "$n" "$s8"; then rm -rf "$dir"; return 0; fi
   {
     cat "$PROMPT_FILE"
@@ -431,11 +497,11 @@ EOF
       '[.[] | select(.pr == $n and .sha == $sha and (.verdict | IN("PASS","FIX","CLOSE")))] | first // empty' "$verdicts")
     if [ -z "$v" ]; then result=no-valid-verdict-for-head; else result=verdict; fi
   fi
-  if [ -n "$top" ] && ! grep -qiE -- "$EXPECT_MODEL_RE" <<< "$top"; then
+  if [ -n "$top" ] && ! grep -qiE -- "$RUN_EXPECT_RE" <<< "$top"; then
     # Billed mostly by a model we did not ask for: post nothing, stop the tick.
     result=model-mismatch
     MODEL_MISMATCH=1
-    logline "pr=#$n sha=$s8 result=model-mismatch top=$top models=$REVIEW_MODELS usd=$cost (want /$EXPECT_MODEL_RE/); stopping this tick"
+    logline "pr=#$n sha=$s8 result=model-mismatch top=$top models=$REVIEW_MODELS usd=$cost (want /$RUN_EXPECT_RE/); stopping this tick"
   else
     # #662 item 1 (author never judges), backstop for the billed model: when
     # the costliest reviewer model is the same family as the PR author's
@@ -467,9 +533,21 @@ post_verdict() {
   verdict=$(jq -r .verdict <<< "$v")
   s8=${sha:0:8}
   comment=$(jq -r '.comment // ""' <<< "$v" | sed '1{/^Strategist review/d}')
-  comment="Strategist review — $verdict at $s8"$'\n'"$comment"
-  review="Strategist review — $verdict at $s8. Details in the PR comment of the same title."
+  # The model must not forge or double the signature: any line that starts
+  # with the signature prefix (either tier, trailing spaces too) is removed.
+  comment=$(awk -v p="$BOT_SIGNATURE_PREFIX" 'index($0, p) != 1' <<< "$comment")
+  comment="Strategist review — $verdict at $s8"$'\n'"$comment"$'\n\n'"$BOT_SIGNATURE"
+  review="Strategist review — $verdict at $s8. Details in the PR comment of the same title."$'\n\n'"$BOT_SIGNATURE"
   jules=$(jq -r '.jules // ""' <<< "$v")
+  # The @jules note (FIX/CLOSE on Jules PRs) is posted under the same account,
+  # so it is signed too. Empty means no @jules comment is posted.
+  if is_jules "$ref" && [ "$verdict" != PASS ] && [ -n "$jules" ]; then
+    jules=$(awk -v p="$BOT_SIGNATURE_PREFIX" 'index($0, p) != 1' <<< "$jules")
+    [[ $jules == @jules* ]] || jules="@jules $jules"
+    jules+=$'\n\n'"$BOT_SIGNATURE"
+  else
+    jules=
+  fi
   # Literal env secret values first (compared in-shell, never on a command
   # line), then secret-shaped strings. Logs go to stderr; stdout is the result.
   if contains_env_secret "$comment"$'\n'"$jules"; then
@@ -482,7 +560,7 @@ post_verdict() {
   fi
   if [ "$POST" = 0 ]; then
     mkdir -p "$STATE/dry-run"
-    jq --arg c "$comment" --arg r "$review" '.comment = $c | .review = $r' <<< "$v" > "$STATE/dry-run/$n.json"
+    jq --arg c "$comment" --arg r "$review" --arg j "$jules" '.comment = $c | .review = $r | .jules = $j' <<< "$v" > "$STATE/dry-run/$n.json"
     logline "pr=#$n sha=$s8 verdict=$verdict result=dry-run usd=$cost models=$REVIEW_MODELS"
     echo dry-run; return 0
   fi
@@ -502,8 +580,7 @@ post_verdict() {
   fi
   gh api "repos/$REPO/pulls/$n/reviews" -f commit_id="$sha" -f event=COMMENT -f body="$review" > /dev/null ||
     say "pr #$n: COMMENT review failed (the comment is posted)"
-  if is_jules "$ref" && [ "$verdict" != PASS ] && [ -n "$jules" ]; then
-    [[ $jules == @jules* ]] || jules="@jules $jules"
+  if [ -n "$jules" ]; then
     gh api "repos/$REPO/issues/$n/comments" -f body="$jules" > /dev/null || say "pr #$n: @jules comment failed"
   fi
   logline "pr=#$n sha=$s8 verdict=$verdict result=posted usd=$cost models=$REVIEW_MODELS"
@@ -558,11 +635,33 @@ search() { gh api -X GET search/issues -f q="$1" -f per_page=100 --jq '.items[].
 # Fine-grained tokens get HTTP 422 from search unless the query names is:issue or is:pr.
 search_both() { { search "$1 is:issue"; search "$1 is:pr"; } | sort -un; }
 since_iso() { date -u -d '24 hours ago' +%FT%TZ; }
+# merged_rows <since>: "number<TAB>merged epoch<TAB>open→merge seconds<TAB>merge hour"
+# for every PR merged since then. Paginated, so a busy day is not cut at 100.
+merged_rows() {
+  gh api -X GET search/issues -f q="repo:$REPO is:pr is:merged merged:>=$1" -f per_page=100 --paginate \
+    --jq '.items[] | (.pull_request.merged_at | fromdate) as $m
+      | [.number, $m, $m - (.created_at | fromdate), .pull_request.merged_at[0:13]] | @tsv'
+}
+# merge_rate_lines < merged_rows: merges per hour over 24 h with the peak hour,
+# and the median open→merge time.
+merge_rate_lines() {
+  sort -t$'\t' -k3,3n | awk -F'\t' -v target="$MERGE_TARGET_PER_HOUR" '
+    NF >= 4 { n++; lead[n] = $3; h[$4]++ }
+    END {
+      for (k in h) if (h[k] > peak || (h[k] == peak && k < ph)) { peak = h[k]; ph = k }
+      if (n == 0) { printf "Merge rate: 0 merged in 24 h = 0.0/hour (target %d/hour)\n", target; print "Median open→merge: n/a"; exit }
+      printf "Merge rate: %d merged in 24 h = %.1f/hour (target %d/hour); peak hour %s:00Z with %d\n", n, n / 24, target, substr(ph, 12, 2), peak
+      med = (n % 2) ? lead[(n + 1) / 2] : (lead[n / 2] + lead[n / 2 + 1]) / 2
+      m = int(med / 60 + 0.5)
+      printf "Median open→merge: %dh %02dm over %d PRs\n", int(m / 60), m % 60, n
+    }'
+}
 
 summary_text() {
-  local since merged pass needs_human p1 rob deploys live fixes runs mins
+  local since rows merged pass needs_human p1 rob deploys live fixes runs mins
   since=$(since_iso)
-  merged=$(search "repo:$REPO is:pr is:merged merged:>=$since")
+  rows=$(merged_rows "$since") || rows=FAILED
+  merged=$(printf '%s\n' "$rows" | awk -F'\t' 'NF >= 4 { print $1 }' | sort -n)
   pass=$(scan_prs | awk -F'\t' '$4 ~ /^Strategist review — PASS at / && index($4, substr($2, 1, 8)) { print $1 }')
   needs_human=$(search_both "repo:$REPO is:open label:needs-human")
   p1=$(search "repo:$REPO is:open is:issue label:P1")
@@ -576,6 +675,7 @@ summary_text() {
 
   echo "Realms strategist — last 24h"
   echo "Merged PRs ($(count "$merged")): $(printf '%s\n' "$merged" | nums)"
+  if [ "$rows" = FAILED ]; then echo "Merge rate: GitHub search failed"; else printf '%s\n' "$rows" | merge_rate_lines; fi
   echo "PASS waiting for merge ($(count "$pass")): $(printf '%s\n' "$pass" | nums)"
   echo "FIX rounds posted: $(printf '%s' "$fixes" | wc -w)${fixes:+ on $fixes}"
   echo "needs-human ($(count "$needs_human")): $(printf '%s\n' "$needs_human" | nums)"
@@ -583,11 +683,20 @@ summary_text() {
   echo "Prod deploys: $deploys commits to main (auto-deploy ships each); live build $live"
   spend_lines "$(today)"
   echo "Runner: $runs jobs, $mins min"
+  triage_line "$since"
   if [ -n "$rob" ]; then
     echo "Rob: typed lines needed on $(printf '%s\n' "$rob" | nums)"
   else
     echo "Rob: none"
   fi
+}
+
+# triage_line <since>: the 24 h total of triage.sh's "run" lines (#717)
+triage_line() {
+  awk -v s="$1" '$1 >= s && $2 == "run" && !/ dry-run/ {
+      for (i = 3; i <= NF; i++) { split($i, kv, "="); v[kv[1]] += kv[2] } runs++ }
+    END { printf "Triage: triaged %d → catjam %d, jules %d, crew %d (%d runs)\n", v["triaged"], v["catjam"], v["jules"], v["crew"], runs }' \
+    "$STATE/triage.log" 2> /dev/null || echo "Triage: no log yet"
 }
 
 # spend_lines <utc date>: today's spend vs the cap, the models billed today, and
@@ -616,9 +725,11 @@ slack_post() { # text on stdin; webhook URL never appears on a command line
 
 post_summary() {
   local marker=$STATE/summary-$(today) text
+  # Marker first: on the 2-minute timer every 11:xx tick calls this, and
+  # building the summary costs a comments call per open PR plus searches.
+  if [ "$POST" = 1 ] && [ -e "$marker" ]; then return 0; fi
   text=$(summary_text)
   if [ "$POST" = 0 ]; then printf '%s\n' "$text"; return 0; fi
-  [ ! -e "$marker" ] || { say "summary already posted today"; return 0; }
   printf '%s\n' "$text" | slack_post || say "slack post failed"
   gh api "repos/$REPO/issues/$OPS_LOG_ISSUE/comments" -f body="$text" > /dev/null || say "#$OPS_LOG_ISSUE comment failed"
   touch "$marker"

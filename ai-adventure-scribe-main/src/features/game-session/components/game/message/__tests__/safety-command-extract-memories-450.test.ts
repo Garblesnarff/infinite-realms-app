@@ -20,7 +20,11 @@ vi.mock('@/contexts/CharacterContext', () => ({
 vi.mock('@/hooks/use-ai-response', () => ({
   useAIResponse: () => ({ getAIResponse: vi.fn() }),
 }));
-vi.mock('@/services/auth/TokenService', () => ({ clearPendingInput: vi.fn() }));
+vi.mock('@/services/auth/TokenService', async (importOriginal) =>
+  (await import('@/test/token-service-mock')).createTokenServiceMock(importOriginal, {
+    clearPendingInput: vi.fn(),
+  }),
+);
 vi.mock('@/lib/logger', () => ({
   default: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));

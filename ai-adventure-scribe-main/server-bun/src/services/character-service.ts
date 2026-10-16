@@ -26,7 +26,12 @@ import {
   characterStats,
   characters,
 } from '../../../db/schema/index';
-import { computeArmorClass, type ArmorClassEquipmentItem } from '../../../shared/armor-class';
+import {
+  computeArmorClass,
+  isSrdArmorOrShieldName,
+  type ArmorClassEquipmentItem,
+} from '../../../shared/armor-class';
+import { isCatalogWeaponName } from '../../../shared/equipment-weapon-resolver';
 import { InternalServerError } from '../lib/errors.js';
 import { SpellSlotMechanics } from './spell-slots/spell-slot-mechanics.js';
 import { abilityModifier } from '../../../shared/ability-modifier';
@@ -46,6 +51,34 @@ function toArmorClassItems(equipment: Array<Record<string, unknown>>): ArmorClas
     item_type: typeof item.item_type === 'string' ? item.item_type : null,
     equipped: Boolean(item.equipped),
   }));
+}
+
+function equipmentItemName(item: Record<string, unknown>): string {
+  return typeof item.item_name === 'string' ? item.item_name : '';
+}
+
+/**
+ * Starting packages arrive with equipped: false (#710). Wear SRD armour, a shield, and the
+ * first catalog weapon. Leave the rest carried. An item the caller already marked equipped
+ * stays that way, and a second weapon is not worn when one already is. Create only — an
+ * update that unequips must stick.
+ */
+function withStartingPackageEquipped(
+  equipment: Array<Record<string, unknown>>,
+): Array<Record<string, unknown>> {
+  let woreWeapon = equipment.some(
+    (item) => item.equipped === true && isCatalogWeaponName(equipmentItemName(item)),
+  );
+  return equipment.map((item) => {
+    if (item.equipped === true) return item;
+    const name = equipmentItemName(item);
+    if (isSrdArmorOrShieldName(name)) return { ...item, equipped: true };
+    if (!woreWeapon && isCatalogWeaponName(name)) {
+      woreWeapon = true;
+      return { ...item, equipped: true };
+    }
+    return item;
+  });
 }
 
 export class CharacterService {
@@ -172,6 +205,7 @@ export class CharacterService {
     equipment?: Array<Record<string, unknown>>,
     inventory?: Array<Record<string, unknown>>,
   ): Promise<Character> {
+    const seededEquipment = equipment?.length ? withStartingPackageEquipped(equipment) : equipment;
     return db.transaction(async (tx) => {
       const [character] = await tx
         .insert(characters)
@@ -219,10 +253,10 @@ export class CharacterService {
           // which is how equipped armour stopped counting for 76 characters (#1858). A create
           // that carries no equipment keeps whatever AC the caller sent — a hand-set NPC AC is
           // not ours to overwrite.
-          ...(equipment?.length
+          ...(seededEquipment?.length
             ? {
                 armorClass: computeArmorClass(
-                  toArmorClassItems(equipment),
+                  toArmorClassItems(seededEquipment),
                   abilityModifier(stats.dexterity ?? 10),
                 ),
               }
@@ -230,12 +264,12 @@ export class CharacterService {
         });
       }
 
-      if (equipment?.length) {
+      if (seededEquipment?.length) {
         // #388: starting kits list some items twice (the Fighter kit's two
         // handaxes), but character_equipment has UNIQUE(character_id, item_name).
         // Merge duplicates into one row with summed quantity before insert.
         const merged = new Map<string, Record<string, unknown>>();
-        for (const item of equipment) {
+        for (const item of seededEquipment) {
           const key = String(item.item_name || '');
           const prior = merged.get(key);
           if (prior) {
@@ -404,7 +438,7 @@ export class CharacterService {
       ...safeUpdates
     } = data as any;
 
-    return db.transaction(async (tx) => {
+    const saved = await db.transaction(async (tx) => {
       const [updated] = await tx
         .update(characters)
         .set({
@@ -517,6 +551,31 @@ export class CharacterService {
 
       return updated;
     });
+
+    // The sheet PUT writes equipped here and nowhere else (#711). Recompute
+    // after commit: sync reads the rows with db, not this transaction.
+    // Weapon-only payloads do not own armour, so they leave a hand-set AC alone.
+    const unarmored = computeArmorClass([], 0);
+    const armorInPayload = equipment?.some((item) => {
+      const itemType = String(item.item_type ?? '').trim().toLowerCase();
+      if (itemType === 'armor' || itemType === 'shield') return true;
+      return (
+        computeArmorClass(
+          [
+            {
+              item_name: typeof item.item_name === 'string' ? item.item_name : '',
+              item_type: itemType,
+              equipped: true,
+            },
+          ],
+          0,
+        ) !== unarmored
+      );
+    });
+    if (saved && armorInPayload) {
+      await syncArmorClassAfterEquipmentChange(characterId);
+    }
+    return saved;
   }
 
   /**

@@ -27,12 +27,14 @@ vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock('@/services/auth/TokenService', () => ({
-  getAuthHeaders: vi.fn(() => ({ Authorization: 'Bearer jwt' })),
-  loadCachedSession: vi.fn(() => null),
-  persistSession: vi.fn(),
-  refreshAccessTokenOnce: vi.fn(),
-}));
+vi.mock('@/services/auth/TokenService', async (importOriginal) =>
+  (await import('@/test/token-service-mock')).createTokenServiceMock(importOriginal, {
+    getAuthHeaders: vi.fn(() => ({ Authorization: 'Bearer jwt' })),
+    loadCachedSession: vi.fn(() => null),
+    persistSession: vi.fn(),
+    refreshAccessTokenOnce: vi.fn(),
+  }),
+);
 
 vi.mock('@/integrations/supabase/client', () => ({ supabase: {} }));
 vi.mock('@/lib/auth-gate', () => ({ waitForAuth: vi.fn() }));

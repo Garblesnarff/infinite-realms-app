@@ -39,3 +39,10 @@ it('requests bare d20s and leaves narrative roll modifiers to the character shee
   expect(prompt).toContain('"formula": "1d20"');
   expect(prompt).not.toMatch(/"type": "(?:check|save|initiative)", "formula": "1d20\+/);
 });
+
+it('tells the DM that casting a sheet spell needs no check (#714)', () => {
+  const prompt = RulesPrompts.buildRulesOfPlaySection().replace(/\s+/g, ' ');
+
+  expect(prompt).toContain('SPELLS NEED NO CHECK TO CAST');
+  expect(prompt).toContain('Do not request an Arcana or other check to cast it');
+});

@@ -55,10 +55,6 @@ vi.mock('../asset-processor', () => ({
   getCachedAssets: vi.fn(() => []),
 }));
 
-vi.mock('../shared/verbalized-sampling', () => ({
-  sampleFromVerbalizedResponse: vi.fn((text: string) => text),
-}));
-
 // ── Import SUT after mocks ────────────────────────────────────────────────────
 import { processDMResponse } from '../dm-response-processor';
 

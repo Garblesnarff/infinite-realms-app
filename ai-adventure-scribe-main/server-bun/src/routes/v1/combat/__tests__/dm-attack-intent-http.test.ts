@@ -309,6 +309,9 @@ const { executeStructuredCombatActionWithBoundary } = (await import(bridgeModule
   executeStructuredCombatActionWithBoundary(
     encounterId: string,
     action: DMTargetedCombatAction,
+    providedD20?: number,
+    providedD20Rolls?: [number, number],
+    origin?: string,
   ): Promise<unknown>;
 };
 
@@ -533,6 +536,7 @@ describe('typed dialog roll wire body (#2547)', () => {
         movement_feet: 0,
       },
       8,
+      undefined,
       'typed',
     );
     expect(sentRequests).toHaveLength(1);
@@ -544,6 +548,43 @@ describe('typed dialog roll wire body (#2547)', () => {
     });
     expect(attackInputs).toHaveLength(1);
     expect(attackInputs[0]).toMatchObject({ providedD20: 8 });
+  });
+});
+
+describe('popup disadvantage wire body (#263)', () => {
+  it('accepts the real client commit and forwards both dice', async () => {
+    activeParticipantId = 'the-seeker';
+    const { executeStructuredCombatActionWithBoundary } = await import(bridgeModule);
+    await executeStructuredCombatActionWithBoundary(
+      ENCOUNTER_ID,
+      {
+        actor_id: 'the-seeker',
+        action_type: 'attack',
+        target_ids: ['the-void-maw'],
+        weapon_id: null,
+        spell_id: null,
+        slot_level: null,
+        movement_feet: 0,
+      },
+      8,
+      [8, 14],
+      'typed',
+    );
+    expect(sentRequests).toHaveLength(1);
+    expect(sentRequests[0].body).toEqual({
+      intent: {
+        type: 'attack',
+        actorId: 'the-seeker',
+        targetId: 'the-void-maw',
+        d20: 8,
+        d20Rolls: [8, 14],
+      },
+      source: 'dm',
+      origin: 'typed',
+      dmStartedAt: expect.any(Number),
+    });
+    expect(attackInputs).toHaveLength(1);
+    expect(attackInputs[0]).toMatchObject({ providedD20: 8, providedD20Rolls: [8, 14] });
   });
 });
 

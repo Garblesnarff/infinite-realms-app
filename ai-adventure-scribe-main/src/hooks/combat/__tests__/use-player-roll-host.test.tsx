@@ -122,6 +122,25 @@ describe('usePlayerRollHost teardown', () => {
     expect(hasPendingPlayerRoll()).toBe(false);
   });
 
+  it('carries the popup’s dropped die through the bridge with the kept one (#263 CB-028)', async () => {
+    requestDiceRoll.mockReturnValueOnce('attack-roll-1');
+    renderHook(() => usePlayerRollHost());
+    const pending = requestPlayerAttackRoll({
+      actorLabel: 'The Apprentice',
+      targetLabel: 'Flavor-Elemental (Corrupted)',
+      weaponName: 'Unarmed Strike',
+      attackBonus: 1,
+      targetAc: 14,
+      advantage: false,
+      disadvantage: true,
+    });
+
+    expect(settleCombatAttackRoll('attack-roll-1', 8, { d20Rolls: [8, 14] })).toBe(true);
+
+    await expect(pending).resolves.toEqual({ d20: 8, d20Rolls: [8, 14] });
+    expect(hasPendingPlayerRoll()).toBe(false);
+  });
+
   it('uses the initiative modifier in the popup roll config and description', async () => {
     const { unmount } = renderHook(() => usePlayerRollHost());
     const pending = requestPlayerInitiativeRoll({

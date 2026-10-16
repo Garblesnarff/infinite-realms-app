@@ -307,5 +307,3 @@ export class ExhaustionService {
   }
 }
 
-// Export singleton-style access (class has all static methods)
-export const exhaustionService = ExhaustionService;

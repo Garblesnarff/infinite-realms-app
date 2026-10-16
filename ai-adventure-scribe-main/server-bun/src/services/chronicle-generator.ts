@@ -77,16 +77,16 @@ const IMAGE_TIMEOUT_MS = 120_000;
 
 // Row cap applied at the DB query level — keeps the query cheap even for very
 // long sessions; sampling/truncation below decides what actually makes the cut.
-export const TRANSCRIPT_ROW_LIMIT = 400;
+const TRANSCRIPT_ROW_LIMIT = 400;
 
 // Overall character budget for the sampled transcript fed into the prompt.
 export const TRANSCRIPT_CHAR_BUDGET = 15_000;
 // Number of turns at the very start of the session kept in full.
-export const TRANSCRIPT_FIRST_N = 5;
+const TRANSCRIPT_FIRST_N = 5;
 // Number of turns at the very end of the session kept in full.
-export const TRANSCRIPT_LAST_N = 10;
+const TRANSCRIPT_LAST_N = 10;
 // Per-message character cap applied to the evenly-sampled middle turns.
-export const TRANSCRIPT_MIDDLE_CAP = 600;
+const TRANSCRIPT_MIDDLE_CAP = 600;
 
 function speakerLabel(speakerType: string | null): string {
   if (speakerType === 'player') return 'Player';

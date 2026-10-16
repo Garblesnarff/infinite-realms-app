@@ -10,9 +10,11 @@ const mocks = vi.hoisted(() => ({
   mintWsTicket: vi.fn(),
 }));
 
-vi.mock('@/services/auth/TokenService', () => ({
-  getAccessToken: vi.fn(),
-}));
+vi.mock('@/services/auth/TokenService', async (importOriginal) =>
+  (await import('@/test/token-service-mock')).createTokenServiceMock(importOriginal, {
+    getAccessToken: vi.fn(),
+  }),
+);
 
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: { reportClientFailure: mocks.reportClientFailure },

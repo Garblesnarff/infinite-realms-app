@@ -142,8 +142,8 @@ describe('useMagicItemAttunement', () => {
       });
 
       expect(response.success).toBe(true);
-      expect(response.message).toContain('Completed a short rest');
-      expect(restApi.shortRest).toHaveBeenCalledWith('char-123');
+      expect(response.message).toBe('Attuned to magic-sword');
+      expect(restApi.shortRest).not.toHaveBeenCalled();
       expect(restApi.attuneItem).toHaveBeenCalledWith('char-123', 'magic-sword');
       expect(mockOnCharacterUpdate).toHaveBeenCalledWith(
         expect.objectContaining({

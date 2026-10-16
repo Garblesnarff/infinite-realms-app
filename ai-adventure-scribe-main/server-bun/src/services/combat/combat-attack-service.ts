@@ -80,6 +80,25 @@ function isProvidedD20(value: number | undefined): value is number {
 }
 
 /**
+ * The popup's dropped d20, when the client sent a real pair for this roll. The schema already
+ * bounds each face to 1-20; the pair is only this roll's when one face is the kept `d20` the
+ * client also submitted. Anything else is ignored, and the line shows the single kept die.
+ */
+function providedDroppedD20(
+  providedD20: number | undefined,
+  d20Rolls: [number, number] | undefined,
+): number | undefined {
+  if (!isProvidedD20(providedD20) || !Array.isArray(d20Rolls) || d20Rolls.length !== 2) {
+    return undefined;
+  }
+  const [first, second] = d20Rolls;
+  if (!isProvidedD20(first) || !isProvidedD20(second)) return undefined;
+  if (first === providedD20) return second;
+  if (second === providedD20) return first;
+  return undefined;
+}
+
+/**
  * The death-save failure fields the damage layer computed for a strike at 0 HP
  * (#2457). Spread onto the attack result only when a failure was actually added,
  * so the client can print the engine line and card for it.
@@ -392,7 +411,8 @@ export class CombatAttackService {
     input: AttackRollInput,
     userId: string,
   ): Promise<AttackResult> {
-    const { attackerId, expectedVersion, targetId, providedD20, isReaction } = input;
+    const { attackerId, expectedVersion, targetId, providedD20, providedD20Rolls, isReaction } =
+      input;
 
     const {
       attackerData,
@@ -425,11 +445,11 @@ export class CombatAttackService {
       const autoRolled = !isProvidedD20(providedD20);
       const pair = autoRolled
         ? rollD20Pair(rules.advantage, rules.disadvantage)
-        : { kept: providedD20 as number };
+        : { kept: providedD20 as number, other: providedDroppedD20(providedD20, providedD20Rolls) };
       const attackRoll = pair.kept;
-      // Both dice when the engine rolled two, so the log can show them and name the kept one
-      // (#263 CB-028). A player-supplied die is a single kept face: the popup already showed
-      // both dice to the roller.
+      // Both dice when two were rolled, so the log can show them and name the kept one
+      // (#263 CB-028). A player-supplied die without its pair is a single kept face: the
+      // popup already showed both dice to the roller.
       const bothDice =
         pair.other === undefined ? undefined : ([pair.kept, pair.other] as [number, number]);
 
@@ -817,7 +837,7 @@ export class CombatAttackService {
     input: SpellAttackInput,
     userId: string,
   ): Promise<SpellAttackResult> {
-    const { casterId, expectedVersion, targetIds, slotLevel, d20 } = input;
+    const { casterId, expectedVersion, targetIds, slotLevel, d20, d20Rolls } = input;
     const {
       spell,
       casterData,
@@ -1000,10 +1020,10 @@ export class CombatAttackService {
         } else if (spell.attackType) {
           // Spell attack roll
           const attackRules = spellRules.get(targetId);
-          // Both dice when the engine rolled two, so the log can show them (#263 CB-028).
-          // A player-supplied die is the single kept face from the popup.
+          // Both dice when two were rolled, so the log can show them (#263 CB-028).
+          // A player-supplied die without its pair is the single kept face from the popup.
           const spellPair = isProvidedD20(d20)
-            ? { kept: d20 as number }
+            ? { kept: d20 as number, other: providedDroppedD20(d20, d20Rolls) }
             : rollD20Pair(attackRules?.advantage, attackRules?.disadvantage);
           const attackRoll = spellPair.kept;
           const spellBothDice =

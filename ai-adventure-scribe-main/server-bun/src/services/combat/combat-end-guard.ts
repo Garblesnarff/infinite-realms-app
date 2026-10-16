@@ -42,7 +42,7 @@ export interface SceneEndParticipant {
 
 const EXIT_KINDS: ReadonlySet<string> = new Set(['fled', 'surrendered', 'withdrew']);
 
-export function isCombatExitDeclaration(value: unknown): value is CombatExitDeclaration {
+function isCombatExitDeclaration(value: unknown): value is CombatExitDeclaration {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as { participant_id?: unknown; exit?: unknown };
   return (

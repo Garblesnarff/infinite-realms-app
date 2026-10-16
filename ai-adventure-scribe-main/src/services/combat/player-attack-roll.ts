@@ -71,7 +71,13 @@ export interface PlayerAttackDieParams {
  */
 export async function askPlayerForAttackDie(
   params: PlayerAttackDieParams,
-): Promise<{ d20?: number; autoRolled: boolean; movementOnly: boolean; timedOut?: boolean }> {
+): Promise<{
+  d20?: number;
+  d20Rolls?: [number, number];
+  autoRolled: boolean;
+  movementOnly: boolean;
+  timedOut?: boolean;
+}> {
   const { encounterId, action, actorLabel } = params;
   const targetId = action.target_ids[0];
   if (!targetId) return { autoRolled: true, movementOnly: false };
@@ -121,7 +127,7 @@ export async function askPlayerForAttackDie(
         ...(outcome.timedOut === true ? { timedOut: true } : {}),
       };
     }
-    return { d20: outcome.d20, autoRolled: false, movementOnly: false };
+    return { d20: outcome.d20, d20Rolls: outcome.d20Rolls, autoRolled: false, movementOnly: false };
   } catch (error) {
     // A failed proposal must not cost the player their turn. The engine rolls it as it always
     // did, which is exactly the behaviour on `main`, so this path can never be a regression.

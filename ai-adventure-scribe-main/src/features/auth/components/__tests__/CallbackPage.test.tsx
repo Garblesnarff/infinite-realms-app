@@ -21,9 +21,11 @@ vi.mock('@/lib/logger', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock('@/services/auth/TokenService', () => ({
-  persistSession,
-}));
+vi.mock('@/services/auth/TokenService', async (importOriginal) =>
+  (await import('@/test/token-service-mock')).createTokenServiceMock(importOriginal, {
+    persistSession,
+  }),
+);
 
 describe('CallbackPage', () => {
   let fetchMock: ReturnType<typeof vi.fn>;

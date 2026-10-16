@@ -438,6 +438,7 @@ describe('a turn the engine accepted in full', () => {
       '10444307-0000-4000-8000-000000000003',
       sluggedAttack,
       17,
+      undefined,
     );
   });
 

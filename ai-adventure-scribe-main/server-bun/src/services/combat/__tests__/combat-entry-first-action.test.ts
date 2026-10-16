@@ -162,8 +162,8 @@ describe('deriveCombatEntryFirstAction', () => {
     });
   });
 
-  it.each(['punch', 'hit', 'strike'])(
-    'resolves a bare %s as Unarmed Strike even when a quarterstaff is equipped',
+  it.each(['punch'])(
+    'resolves a bare %s as Unarmed Strike even when a quarterstaff is equipped (#1807)',
     async (verb) => {
       const firstAction = await deriveCombatEntryFirstAction(
         {
@@ -182,6 +182,30 @@ describe('deriveCombatEntryFirstAction', () => {
         weaponId: 'unarmed-strike',
         weaponName: 'Unarmed Strike',
         combat_action: { weapon_id: 'unarmed-strike' },
+      });
+    },
+  );
+
+  it.each(['hit', 'strike'])(
+    'resolves a bare %s to the default equipped weapon, not Unarmed Strike (#569)',
+    async (verb) => {
+      const firstAction = await deriveCombatEntryFirstAction(
+        {
+          sessionId: 'session-1',
+          combatState: state,
+          player: { characterId: 'character-1', name: 'Rook' },
+          declaredAttack: { verb, actorName: 'Professor Emil Darkwater' },
+        },
+        { ...deps, listEquippedWeaponProfiles: async () => [quarterstaff] },
+      );
+
+      expect(firstAction).toMatchObject({
+        type: 'attack',
+        source: 'weapon',
+        attackSource: 'weapon',
+        weaponId: 'inventory-quarterstaff',
+        weaponName: 'Quarterstaff',
+        combat_action: { weapon_id: 'inventory-quarterstaff' },
       });
     },
   );
@@ -259,6 +283,58 @@ describe('deriveCombatEntryFirstAction', () => {
       { name: 'Dragon Goldscale' },
     ]);
     expect(declaredAttack).toMatchObject({ verb: 'attack', attackSource: 'weapon' });
+    expect(declaredAttack).not.toHaveProperty('weaponName');
+
+    const firstAction = await deriveCombatEntryFirstAction(
+      {
+        sessionId: 'session-1',
+        combatState: {
+          ...state,
+          participants: [
+            state.participants[0],
+            { ...state.participants[1], name: 'Dragon Goldscale' },
+          ],
+        },
+        player: { characterId: 'character-1', name: 'Rook' },
+        declaredAttack: declaredAttack!,
+      },
+      {
+        ...deps,
+        getParticipantAbilityProfile: async () => ({
+          level: 1,
+          scores: { str: 12, dex: 16 },
+          savingThrowProficiencies: [],
+          saveBonuses: {},
+          spellIds: [],
+        }),
+        listEquippedWeaponProfiles: async () => [shortsword],
+      },
+    );
+
+    expect(firstAction).toMatchObject({
+      type: 'attack',
+      source: 'weapon',
+      attackSource: 'weapon',
+      weaponId: 'inventory-shortsword',
+      weaponName: 'Shortsword',
+      roll_request: {
+        purpose: 'Shortsword attack against Dragon Goldscale',
+        formula: '1d20+5',
+        modifier: 5,
+      },
+      combat_action: { weapon_id: 'inventory-shortsword' },
+    });
+  });
+
+  it('offers the default equipped weapon for a bare strike declaration (#569)', async () => {
+    // Hark N2-109 / D4-027: "I strike the Dragon Goldscale" with a shortsword equipped must
+    // offer the Shortsword, not an Unarmed Strike. "strike" is a generic attack verb, not a
+    // body-part attack like "punch" (#1807). Built with the real parser like /declared-attack.
+    const declaredAttack = detectDeclaredAttack('I strike the Dragon Goldscale', [
+      { name: 'Rook' },
+      { name: 'Dragon Goldscale' },
+    ]);
+    expect(declaredAttack).toMatchObject({ verb: 'strike', attackSource: 'weapon' });
     expect(declaredAttack).not.toHaveProperty('weaponName');
 
     const firstAction = await deriveCombatEntryFirstAction(

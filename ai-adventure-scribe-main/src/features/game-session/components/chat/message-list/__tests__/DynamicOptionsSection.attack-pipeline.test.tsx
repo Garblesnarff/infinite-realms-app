@@ -184,6 +184,7 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
       'encounter-d5',
       expect.objectContaining({ target_ids: [SWARM_1_ID], weapon_id: 'quarterstaff' }),
       15,
+      undefined,
       'action_bar',
     );
     await waitFor(() =>
@@ -213,6 +214,7 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
     expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledWith(
       'encounter-d5',
       expect.objectContaining({ target_ids: [SWARM_1_ID], weapon_id: 'quarterstaff' }),
+      undefined,
       undefined,
       'action_bar',
     );
@@ -739,6 +741,7 @@ describe('the spell-attack option runs the declare pipeline, never DM text (#258
       'encounter-d5',
       expect.objectContaining({ action_type: 'cast_spell', target_ids: [SWARM_1_ID] }),
       15,
+      undefined,
       'action_bar',
     );
     await waitFor(() =>
@@ -824,6 +827,7 @@ describe('the spell-attack option runs the declare pipeline, never DM text (#258
     expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledWith(
       'encounter-d5',
       expect.objectContaining({ action_type: 'cast_spell', target_ids: [SWARM_1_ID] }),
+      undefined,
       undefined,
       'action_bar',
     );

@@ -39,6 +39,50 @@ describe('combat spell intent schema', () => {
   });
 });
 
+describe("the popup's dropped die (#263 CB-028)", () => {
+  const attack = {
+    type: 'attack' as const,
+    actorId: 'attacker-1',
+    targetId: 'target-1',
+    expectedVersion: 4,
+  };
+
+  it.each(['player', 'dm'] as const)(
+    'accepts d20Rolls [kept, dropped] on an %s attack intent',
+    (source) => {
+      expect(
+        combatIntentRequestValidator.Check({
+          source,
+          intent: { ...attack, d20: 8, d20Rolls: [8, 14] },
+        }),
+      ).toBe(true);
+    },
+  );
+
+  it('accepts d20Rolls on a spell intent', () => {
+    expect(
+      combatIntentRequestValidator.Check({
+        source: 'player',
+        intent: { ...cantrip, d20: 8, d20Rolls: [8, 14] },
+      }),
+    ).toBe(true);
+  });
+
+  it.each([
+    ['a single face', [8]],
+    ['three faces', [8, 14, 3]],
+    ['a face off the die', [8, 21]],
+    ['a zero face', [0, 14]],
+  ])('refuses d20Rolls with %s', (_label, d20Rolls) => {
+    expect(
+      combatIntentRequestValidator.Check({
+        source: 'player',
+        intent: { ...attack, d20: 8, d20Rolls },
+      }),
+    ).toBe(false);
+  });
+});
+
 describe('combat death save intent schema (#2518)', () => {
   it('accepts the exact body the client sends, with the die the player rolled', () => {
     expect(combatIntentRequestValidator.Check(deathSaveIntentWire('player-1', 14))).toBe(true);

@@ -31,7 +31,7 @@ import type { MapEntity } from '../../tactical/types.js';
 import type { CombatState } from '../../types/combat.js';
 
 /** How close to the edge of the board counts as having left the fight. */
-export const EXIT_EDGE_CELLS = 1;
+const EXIT_EDGE_CELLS = 1;
 
 /** The player-facing intent slugs, mapped onto the one exit vocabulary the guard knows. */
 const PLAYER_EXIT_INTENTS = {
@@ -41,11 +41,7 @@ const PLAYER_EXIT_INTENTS = {
 
 export type PlayerExitIntent = keyof typeof PLAYER_EXIT_INTENTS;
 
-export function isPlayerExitIntent(type: string): type is PlayerExitIntent {
-  return Object.hasOwn(PLAYER_EXIT_INTENTS, type);
-}
-
-export function exitKindFor(type: PlayerExitIntent): CombatExitKind {
+function exitKindFor(type: PlayerExitIntent): CombatExitKind {
   return PLAYER_EXIT_INTENTS[type];
 }
 

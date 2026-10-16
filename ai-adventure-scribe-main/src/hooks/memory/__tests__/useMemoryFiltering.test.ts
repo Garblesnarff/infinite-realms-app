@@ -148,7 +148,6 @@ describe('useMemoryFiltering', () => {
 
   it('should sanitize invalid filter options', () => {
     /* eslint-disable @typescript-eslint/no-explicit-any */
-    // @ts-expect-error - testing runtime sanitization of invalid types
     const { result } = renderHook(() => useMemoryFiltering(mockMemories, { types: ['invalid-type'] as any, subcategories: ['invalid-sub'] as any }));
     /* eslint-enable @typescript-eslint/no-explicit-any */
     // It should filter out invalid types/subcategories and return all since no valid filters left
@@ -157,7 +156,6 @@ describe('useMemoryFiltering', () => {
 
   it('should handle non-object options', () => {
     /* eslint-disable @typescript-eslint/no-explicit-any */
-    // @ts-expect-error - testing runtime handling of non-object options
     const { result } = renderHook(() => useMemoryFiltering(mockMemories, 'not-an-object' as any));
     /* eslint-enable @typescript-eslint/no-explicit-any */
     expect(result.current).toHaveLength(3);

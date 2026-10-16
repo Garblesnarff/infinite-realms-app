@@ -246,6 +246,34 @@ export const characterConditions = pgTable(
 );
 
 /**
+ * Character Concentration Table
+ * Server-side concentration tracking (2014 5e, #621 Round 4).
+ *
+ * One row per concentrating character: a caster can only concentrate on one
+ * spell at a time, so starting a new concentration replaces the old one.
+ * POST /v1/characters/:id/damage checks this table after every hit and forces
+ * the CON save (DC max(10, half damage)); a failed save deletes the row.
+ */
+export const characterConcentration = pgTable(
+  'character_concentration',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    characterId: uuid('character_id')
+      .notNull()
+      .references(() => characters.id, { onDelete: 'cascade' })
+      .unique(),
+    spellName: text('spell_name').notNull(),
+    spellId: text('spell_id'),
+    startedAt: timestamp('started_at', { withTimezone: true, mode: 'date' }).defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow(),
+  },
+  (table) => ({
+    characterIdIdx: index('idx_character_concentration_character_id').on(table.characterId),
+  }),
+);
+
+/**
  * Game Sessions Table
  * Individual play sessions within campaigns
  */
