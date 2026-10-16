@@ -10,7 +10,7 @@
  * dedicated local/CI Postgres because it writes fixtures.
  */
 import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
-import { and, asc, desc, eq, inArray, sql as drizzleSql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 
 import {
   closeRealDb,
