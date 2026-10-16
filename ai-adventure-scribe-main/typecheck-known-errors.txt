@@ -1,0 +1,28 @@
+# Frontend typecheck quarantine allowlist (#664).
+#
+# One entry per line: "<path> : <expected tsc error count>", relative to
+# ai-adventure-scribe-main/, followed by its tracking issue.
+# The gate (scripts/frontend-typecheck-gate.sh) fails when:
+#   - tsc exits non-zero with no per-file diagnostics (crash / bad config),
+#   - any tsc error is in a file NOT listed here,
+#   - a listed file's error count CHANGES (a new error slipped into a
+#     quarantined file, or the quarantine shrank / resolved — update the
+#     count, or remove the entry).
+#
+# Quarantine rule: a file stays listed only while its tracking issue is open.
+# "Pre-existing" is not an excuse once the file is clean.
+#
+# Seeded from `bunx tsc --noEmit -p tsconfig.app.json` on origin/main
+# feebbf763635499a1ca4cc946812e5c59639c012: 23 diagnostics in 8 files.
+# Issue #664 recorded 37 on 91330fb; main has burned 14 since then.
+# Paths under server-bun/ are here because a client import pulls them into
+# the tsconfig.app.json program.
+#
+server-bun/src/services/token-service.ts : 2 # #664
+src/contexts/GameContext.tsx : 1 # #664
+src/hooks/__tests__/use-character-data.sheet-update.test.ts : 1 # #664
+src/hooks/ai/combat-resolution-step.ts : 1 # #664
+src/hooks/use-ai-response.ts : 14 # #664
+src/hooks/use-character-data.ts : 1 # #664
+src/services/ai/__tests__/sheet-option-filter.test.ts : 2 # #664
+src/utils/character-converter.ts : 1 # #664
