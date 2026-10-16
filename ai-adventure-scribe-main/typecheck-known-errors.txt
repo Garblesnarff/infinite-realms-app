@@ -15,14 +15,13 @@
 # Seeded from `bunx tsc --noEmit -p tsconfig.app.json` on origin/main
 # feebbf763635499a1ca4cc946812e5c59639c012: 23 diagnostics in 8 files.
 # Issue #664 recorded 37 on 91330fb; main has burned 14 since then.
+# Cleared on this branch (5 diagnostics): token-service, GameContext,
+# use-character-data, and the sheet-update test.
+# Remaining: 18 diagnostics in 4 files.
 # Paths under server-bun/ are here because a client import pulls them into
 # the tsconfig.app.json program.
 #
-server-bun/src/services/token-service.ts : 2 # #664
-src/contexts/GameContext.tsx : 1 # #664
-src/hooks/__tests__/use-character-data.sheet-update.test.ts : 1 # #664
 src/hooks/ai/combat-resolution-step.ts : 1 # #664
 src/hooks/use-ai-response.ts : 14 # #664
-src/hooks/use-character-data.ts : 1 # #664
 src/services/ai/__tests__/sheet-option-filter.test.ts : 2 # #664
 src/utils/character-converter.ts : 1 # #664

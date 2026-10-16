@@ -106,6 +106,9 @@ export const buildSheetUpdatePayload = (
   // #711: Equip flips inventory locally, then this PUT is the only save.
   // The row id stays off the wire; item_name is the display name.
   if (JSON.stringify(prev.inventory ?? null) !== JSON.stringify(next.inventory ?? null)) {
+    if (!next.id) {
+      throw new Error('sheet equipment save needs a character id');
+    }
     payload.equipment = transformEquipmentForStorage(next, next.id);
   }
 
