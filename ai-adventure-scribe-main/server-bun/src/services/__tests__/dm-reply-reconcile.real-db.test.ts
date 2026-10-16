@@ -126,6 +126,7 @@ const { applyStoryItems, applyStoryItemsOnce } = await importWithRealDb(
 );
 const { applyStoryConditions, applyStoryConditionsOnce, getActiveCharacterConditions, SRD_2014_CONDITIONS } =
   await importWithRealDb(() => import('../dm/story-conditions.js'));
+const { applyStoryDamage } = await importWithRealDb(() => import('../dm/story-damage.js'));
 
 if (!hasRealDb) {
   console.warn(
@@ -3216,6 +3217,104 @@ ${playerInput}
       }),
     ).toBe('roll_pending');
     expect(await getActiveCharacterConditions(characterId)).toEqual([]);
+  });
+
+  test('#610 (#218 step 6): story damage reaches the sheet once, with a damage line', async () => {
+    // The issue's shape: a failed check's consequence narrated as injury. The model now
+    // declares it in the `damage` envelope field (dm-response-schema.ts); the reply below
+    // follows that producer exactly.
+    const setup = await dmTurn({
+      ...fighter,
+      playerInput: 'I take hold of the rope.',
+      reply: storyReply('A frayed rope hangs over the edge.', undefined),
+    });
+    const characterId = setup.character.id;
+    // The Veteran at 12/12, as in the issue.
+    await database
+      .insert(characterStats)
+      .values({ characterId, maxHitPoints: 12, currentHitPoints: 12 });
+    const playerInput = 'I grip the rope and hold on.';
+    await playerSays(playerInput);
+    const injuryReply = storyReply(
+      'The rope burns through your grip as the line goes taut and you are dragged to the edge.',
+      { damage: { amount: 3, source: 'rope burn' } },
+    );
+    const turn = await dmTurn({
+      ...fighter,
+      existingCharacter: setup.character,
+      playerInput,
+      reply: injuryReply,
+    });
+    expect(turn.status).toBe(200);
+    // The sheet shows the hurt: 12 -> 9.
+    expect((await sheetAfterReload(characterId)).stats).toMatchObject({
+      current_hit_points: 9,
+      max_hit_points: 12,
+    });
+    // The damage line is in chat.
+    const systemLines = async (): Promise<string[]> =>
+      (
+        await database
+          .select({ message: dialogueHistory.message })
+          .from(dialogueHistory)
+          .where(
+            and(
+              eq(dialogueHistory.sessionId, sessionId),
+              eq(dialogueHistory.speakerType, 'system'),
+            ),
+          )
+      ).map((row) => row.message);
+    expect((await systemLines()).join('\n')).toContain(
+      'story damage — rope burn deals 3 damage',
+    );
+    // Retry re-sends the same message: still 9 HP, still one damage line.
+    await dmTurn({
+      ...fighter,
+      existingCharacter: setup.character,
+      playerInput,
+      reply: injuryReply,
+    });
+    expect((await sheetAfterReload(characterId)).stats).toMatchObject({
+      current_hit_points: 9,
+    });
+    expect(
+      (await systemLines()).filter((message) => message.includes('story damage')),
+    ).toHaveLength(1);
+  });
+
+  test('#610: an invalid damage claim writes nothing, and a roll turn writes nothing yet', async () => {
+    const setup = await dmTurn({
+      ...fighter,
+      playerInput: 'I take hold of the rope.',
+      reply: storyReply('A frayed rope hangs over the edge.', undefined),
+    });
+    const characterId = setup.character.id;
+    await database
+      .insert(characterStats)
+      .values({ characterId, maxHitPoints: 12, currentHitPoints: 12 });
+    const playerInput = 'I grip the rope and hold on.';
+    await playerSays(playerInput);
+    const turn = await dmTurn({
+      ...fighter,
+      existingCharacter: setup.character,
+      playerInput,
+      reply: storyReply('The rope holds.', undefined),
+    });
+    expect(
+      await applyStoryDamage({ userId, sessionId, damage: { amount: 0, source: 'rope burn' } }),
+    ).toBe('invalid_damage');
+    expect(
+      await applyStoryDamage({
+        userId,
+        sessionId,
+        damage: { amount: 3, source: 'rope burn' },
+        rollRequested: true,
+      }),
+    ).toBe('roll_pending');
+    expect(turn.status).toBe(200);
+    expect((await sheetAfterReload(characterId)).stats).toMatchObject({
+      current_hit_points: 12,
+    });
   });
 
   test('#218 step 3: two concurrent movements for one player message move the items once (row lock)', async () => {

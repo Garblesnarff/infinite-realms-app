@@ -360,8 +360,8 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
 /**
  * The refusal envelope: every field the client acts on is emptied — no roll, no combat
  * action, no map or handout change, no combat start (the entry gate's pending handoff
- * included), no XP, no items, no conditions, no story rest. The refusal line is the whole
- * turn. Pure, so the safety property is unit-testable without a database.
+ * included), no XP, no items, no conditions, no story rest, no story damage. The refusal
+ * line is the whole turn. Pure, so the safety property is unit-testable without a database.
  */
 export function sanitizeRefusedEnvelope(
   envelope: Record<string, unknown>,
@@ -375,6 +375,8 @@ export function sanitizeRefusedEnvelope(
     conditions: _c,
     // #264: a refused turn must not apply a story rest the DM bundled with it.
     rest: _storyRest,
+    // #610: a refused turn must not deal story damage the DM bundled with it.
+    damage: _storyDamage,
     ...restFields
   } = envelope;
   return {

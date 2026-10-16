@@ -198,6 +198,31 @@ describe('dmResponseSchema story rest contract (#264)', () => {
   });
 });
 
+describe('dmResponseSchema story damage contract (#610)', () => {
+  test('the damage field carries a description telling the model when to populate it', () => {
+    // #610: the model narrated injury but left no damage signal, so the writer never
+    // ran. In the strict structured-output contract the property description is
+    // the in-schema signal for when to populate a nullable field (#463 precedent).
+    const properties = dmResponseSchema.properties as Record<string, Record<string, unknown>>;
+    const [objectVariant] = properties.damage.anyOf as Array<Record<string, unknown>>;
+
+    expect(typeof objectVariant.description).toBe('string');
+    const description = String(objectVariant.description);
+    expect(description).toContain('hurt');
+    expect(description).toContain('hit points');
+    expect(description).toContain('damage');
+    expect(description).toContain('null');
+  });
+
+  test('accepts a damage grant and the null damage on a plain turn', () => {
+    const granted = parseDmResponse(response({ damage: { amount: 3, source: 'rope burn' } }));
+    expect(granted.success).toBe(true);
+
+    const none = parseDmResponse(response({ damage: null }));
+    expect(none.success).toBe(true);
+  });
+});
+
 describe('dmResponseSchema story items contract (#463)', () => {
   test('the items field carries a description telling the model when to populate it', () => {
     // #463: the model narrated pickups but left `items` null, so the writer never

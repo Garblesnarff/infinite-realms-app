@@ -1109,6 +1109,30 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             logger.warn({ msg: 'DM_STORY_REST_APPLY_FAILED', sessionId: castSessionId, error });
           }
         }
+        // #610 (#218 step 6): damage the story deals out of combat reaches the sheet
+        // through applyNonAttackDamage — the same writer the client damage route uses —
+        // once per player message, with the same guards as the other story appliers. A
+        // failed write is logged; it never costs the player their turn.
+        if (
+          envelope?.damage &&
+          dmReply &&
+          dmReply.inCombat !== true &&
+          castSessionId &&
+          combatEntry &&
+          !envelope.combat_entry_pending
+        ) {
+          try {
+            const { applyStoryDamage } = await import('../../services/dm/story-damage.js');
+            await applyStoryDamage({
+              userId,
+              sessionId: castSessionId,
+              damage: envelope.damage,
+              rollRequested,
+            });
+          } catch (error) {
+            logger.warn({ msg: 'DM_STORY_DAMAGE_FAILED', sessionId: castSessionId, error });
+          }
+        }
         // sessionId must not come from combatEntry: that is only sent when combat
         // is NOT already active, so in-combat turns logged `sessionId: null` --
         // precisely the turns being debugged. (#2050 C)

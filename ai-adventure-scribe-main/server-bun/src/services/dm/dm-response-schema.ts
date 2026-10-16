@@ -208,6 +208,15 @@ export type DMResponse = {
    * story grants no rest.
    */
   rest?: { type: 'short' | 'long' } | null;
+  /**
+   * Damage the story deals the player's character this turn (#610, #218 step 6): a
+   * failed check's consequence, a hazard, a trap — anything the narration says hurt
+   * the character that the engine did not already resolve. The server subtracts it
+   * from the sheet's hit points once per player message, through the same writer the
+   * client damage route uses (`applyNonAttackDamage`); absent or null when the story
+   * deals no damage.
+   */
+  damage?: { amount: number; source: string } | null;
 };
 
 const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: 'null' }] });
@@ -518,12 +527,38 @@ const storyRestProperty = nullable({
   required: ['type'],
 });
 
+/**
+ * #610 (#218 step 6): damage the story deals the player's character this turn.
+ * Optional and nullable.
+ */
+const storyDamageProperty = nullable({
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    amount: { type: 'integer', minimum: 1, maximum: 999 },
+    source: { type: 'string', minLength: 1, maxLength: 120 },
+  },
+  required: ['amount', 'source'],
+  // #610: the model narrated injury ("the rope burns", "dragged to the edge") with no
+  // damage signal, so the writer never ran. Like #463's items description, this tells
+  // the model when to populate the nullable field inside the structured-output contract.
+  description:
+    '#610 story damage: when the story hurts the player\'s character this turn (a failed ' +
+    'check\'s consequence, a hazard, a trap — anything the engine did not already resolve), ' +
+    'set this field to `{"amount": <whole number of hit points>, "source": "<short source, ' +
+    'e.g. rope burn>"}` and narrate the hurt in `text`. The game subtracts the amount from ' +
+    'the character\'s hit points and posts a damage line in chat; do not narrate the ' +
+    'character being hurt or taking damage without setting this field (or requesting a ' +
+    '`damage` roll when the amount should be rolled). Otherwise leave it null.',
+});
+
 export const dmResponseSchema = createDmResponseSchema({
   combat_exits: combatExitsProperty,
   xp_award: xpAwardProperty,
   items: storyItemsProperty,
   conditions: storyConditionsProperty,
   rest: storyRestProperty,
+  damage: storyDamageProperty,
 });
 
 const isPoint = (value: unknown): value is Point =>
