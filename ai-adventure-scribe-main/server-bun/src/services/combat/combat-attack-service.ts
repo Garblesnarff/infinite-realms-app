@@ -185,6 +185,33 @@ function spellReachFeet(spell: {
   return 0;
 }
 
+/**
+ * #709: start concentration after a spell cast resolved in combat (2014).
+ *
+ * The resolve closure handed to claimTurnActionAndResolve throws on every
+ * failure mode -- claim/version errors, "produced no combat result", and
+ * damage-application failures -- so a returned resolution always represents
+ * a spell that was actually cast (a miss still casts; the slot is spent).
+ * The resolution-shape check makes that contract explicit and guards against
+ * a failure-shaped return, should one ever exist: concentration must never
+ * start for a spell that was not cast. Only a PC caster concentrates -- an
+ * NPC participant has no character row. Imported lazily so unit tests that
+ * mock the DB-facing leaves never load db/client at import time.
+ *
+ * Returns true when concentration was started.
+ */
+export async function maybeStartConcentrationOnCast(
+  resolution: unknown,
+  spell: { id: string; name: string; concentration?: boolean | null },
+  characterId: string | null | undefined,
+): Promise<boolean> {
+  if (!spell.concentration || !characterId) return false;
+  if (!resolution || typeof resolution !== 'object') return false;
+  const { startConcentration } = await import('./concentration-service.js');
+  await startConcentration(characterId, { name: spell.name, id: spell.id });
+  return true;
+}
+
 export class CombatAttackService {
   constructor() {
     // No database client needed - using global db instance
@@ -1275,17 +1302,7 @@ export class CombatAttackService {
       return { results };
     });
     // #709: a successfully cast concentration spell starts concentration (2014).
-    // A miss still casts the spell (the slot is spent), so this runs on any
-    // successful resolution. Only a PC caster concentrates: an NPC has no
-    // character row, so its casts are skipped. Imported lazily so unit tests
-    // that mock the DB-facing leaves never load db/client at import time.
-    if (spell.concentration && casterData.participant.characterId) {
-      const { startConcentration } = await import('./concentration-service.js');
-      await startConcentration(casterData.participant.characterId, {
-        name: spell.name,
-        id: spell.id,
-      });
-    }
+    await maybeStartConcentrationOnCast(resolution, spell, casterData.participant.characterId);
     return resolution;
   }
 

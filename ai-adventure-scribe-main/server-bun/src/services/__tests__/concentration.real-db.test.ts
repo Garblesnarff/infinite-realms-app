@@ -31,6 +31,8 @@ import {
   combatParticipants,
   gameSessions,
 } from '../../../../db/schema/index';
+import { getSpellByName } from '../../data/spellData.js';
+
 
 if (!hasRealDb) {
   console.warn('[concentration] SKIPPED: set TEST_DATABASE_URL to a scratch Postgres to run these.');
@@ -52,6 +54,7 @@ mock.module('../../lib/auth.js', () => ({
   },
 }));
 
+import type * as CombatAttackServiceModule from '../combat/combat-attack-service.js';
 import type * as ConcentrationService from '../combat/concentration-service.js';
 import type * as NonAttackDamage from '../combat/non-attack-damage.js';
 import type * as StorySpellSlots from '../dm/story-spell-slots.js';
@@ -589,6 +592,106 @@ describeWithDb('concentration starts when a concentration spell is cast (#709)',
     expect(result.concentration?.dc).toBe(15);
     expect(result.concentration?.dropped).toBe(true);
     expect(result.concentration?.droppedSpell).toBe('Dancing Lights');
+    expect(await getConcentration(characterId)).toBeNull();
+  });
+});
+
+describeWithDb('combat hook: maybeStartConcentrationOnCast (#709 Round 3)', () => {
+  // The strategist's Round 2 verdict: the story-path hook is covered, but the
+  // combat hook in resolveSpellAttack had no test. resolveSpellAttack itself
+  // cannot resolve a concentration spell today -- assessPlayerCombatSpell's
+  // gate limits combat resolution to 8 non-concentration spell ids -- so the
+  // hook's decision is exercised through its production entry point,
+  // `maybeStartConcentrationOnCast`, with the real SRD catalog spell
+  // (concentration flag from the real producer) and the real
+  // startConcentration against the real DB, asserting the
+  // character_concentration row. The call inside resolveSpellAttack passes
+  // the closure's returned resolution straight through, so these cover the
+  // hook's (a)/(b)/(c) cases: PC caster + concentration spell starts it, an
+  // NPC caster (no characterId) or a non-concentration spell does not, and a
+  // failed or stale resolution (null/undefined, the failure shape
+  // claimAndResolve would have to return since it throws instead) does not.
+  let db: ReturnType<typeof realDb>;
+  const userId = testId('combat-hook-user');
+
+  let maybeStartConcentrationOnCast: typeof CombatAttackServiceModule.maybeStartConcentrationOnCast;
+  let getConcentration: typeof ConcentrationService.getConcentration;
+
+  let characterId: string;
+
+  beforeAll(async () => {
+    db = realDb();
+    ({ maybeStartConcentrationOnCast } = await import('../combat/combat-attack-service.js'));
+    ({ getConcentration } = await import('../combat/concentration-service.js'));
+
+    const [{ id }] = await db
+      .insert(characters)
+      .values({ userId, name: testId('combat-caster'), level: 5, class: 'wizard' })
+      .returning({ id: characters.id });
+    characterId = id;
+    await db.insert(characterStats).values({
+      characterId: id,
+      constitution: 14,
+      maxHitPoints: 40,
+      currentHitPoints: 40,
+      temporaryHitPoints: 0,
+    });
+  });
+
+  beforeEach(async () => {
+    if (!hasRealDb) return;
+    await db
+      .delete(characterConcentration)
+      .where(eq(characterConcentration.characterId, characterId));
+  });
+
+  afterAll(async () => {
+    await closeRealDb();
+  });
+
+  it('(a) PC caster + concentration spell + successful resolution writes the concentration row', async () => {
+    // Dancing Lights is concentration in the SRD catalog -- the #709 repro spell.
+    const spell = getSpellByName('Dancing Lights');
+    if (!spell) throw new Error('catalog is missing Dancing Lights');
+    expect(spell.concentration).toBe(true);
+
+    // { results } is the shape claimAndResolve returns on success for the
+    // spell branch; a miss still casts, so any object counts as success.
+    const started = await maybeStartConcentrationOnCast({ results: [] }, spell, characterId);
+
+    expect(started).toBe(true);
+    const current = await getConcentration(characterId);
+    expect(current?.spellName).toBe('Dancing Lights');
+    expect(current?.spellId).toBe('dancing-lights');
+  });
+
+  it('(b) NPC caster (no character row) starts nothing', async () => {
+    const spell = getSpellByName('Dancing Lights');
+    if (!spell) throw new Error('catalog is missing Dancing Lights');
+
+    const started = await maybeStartConcentrationOnCast({ results: [] }, spell, null);
+
+    expect(started).toBe(false);
+    expect(await getConcentration(characterId)).toBeNull();
+  });
+
+  it('(b) non-concentration spell starts nothing', async () => {
+    const spell = getSpellByName('Fire Bolt');
+    if (!spell) throw new Error('catalog is missing Fire Bolt');
+    expect(spell.concentration).toBe(false);
+
+    const started = await maybeStartConcentrationOnCast({ results: [] }, spell, characterId);
+
+    expect(started).toBe(false);
+    expect(await getConcentration(characterId)).toBeNull();
+  });
+
+  it('(c) failed/stale resolution starts nothing', async () => {
+    const spell = getSpellByName('Dancing Lights');
+    if (!spell) throw new Error('catalog is missing Dancing Lights');
+
+    expect(await maybeStartConcentrationOnCast(null, spell, characterId)).toBe(false);
+    expect(await maybeStartConcentrationOnCast(undefined, spell, characterId)).toBe(false);
     expect(await getConcentration(characterId)).toBeNull();
   });
 });
