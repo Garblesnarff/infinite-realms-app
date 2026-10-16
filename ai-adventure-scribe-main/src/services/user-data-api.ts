@@ -198,7 +198,8 @@ export type ClientFailureKind =
   | 'missing_starter_campaign_id'
   | 'invalid_ability_score_key'
   | 'unhandled_promise_rejection'
-  | 'react_error_boundary';
+  | 'react_error_boundary'
+  | 'client_turn_failure';
 
 /** Optional context the server logs alongside a client failure (#2515). */
 export type ClientFailureDetails = {

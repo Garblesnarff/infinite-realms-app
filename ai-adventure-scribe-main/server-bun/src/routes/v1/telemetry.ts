@@ -42,6 +42,7 @@ const ALLOWED_CLIENT_FAILURE_KINDS = [
   'invalid_ability_score_key',
   'unhandled_promise_rejection',
   'react_error_boundary',
+  'client_turn_failure',
 ] as const;
 type ClientFailureKind = (typeof ALLOWED_CLIENT_FAILURE_KINDS)[number];
 

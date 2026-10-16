@@ -33,6 +33,7 @@ import {
   selectRecentMessagesWithinTokenBudget,
 } from './ai/shared/token-budget';
 import { buildCombatEntryPlayer } from './combat/structured-combat-payload';
+import { reportTurnFailure } from './client-failure-reporting';
 import { MemoryManager } from './memory-manager';
 import { fetchSceneState } from './narrative/scene-state-client';
 import { SessionStateService } from './session-state-service';
@@ -886,6 +887,17 @@ export class AIService {
 
         return processedResponse;
       } catch (processingError) {
+        if (processingError instanceof QuotaExceededError) throw processingError;
+        if (processingError instanceof PartyDefeatedError) throw processingError;
+        if (processingError instanceof SessionExpiredError) throw processingError;
+        if (processingError instanceof ApiClientError) throw processingError;
+        if (
+          processingError instanceof Error &&
+          processingError.name === 'AbortError'
+        ) {
+          throw processingError;
+        }
+
         const error =
           processingError instanceof Error ? processingError : new Error(String(processingError));
         logger.error('DM_RESPONSE_PROCESSING_FAILED', {
@@ -894,7 +906,16 @@ export class AIService {
           stackHead: error.stack?.split('\n').slice(0, 2).join('\n') ?? '',
           requestId: llmApiClient.lastRequestId,
         });
-        throw processingError;
+
+        reportTurnFailure(error, {
+          sessionId: params.context?.sessionId,
+          turnCount: params.turnCount,
+        });
+
+        throw new Error(
+          "Something went wrong processing the DM's reply. Your action was not resolved — try again.",
+          { cause: error },
+        );
       }
     })(); // End of the async promise wrapper
 
