@@ -32,8 +32,8 @@ import {
   DM_TURN_CANON_ENTITY_TOKEN_BUDGET,
   selectRecentMessagesWithinTokenBudget,
 } from './ai/shared/token-budget';
-import { buildCombatEntryPlayer } from './combat/structured-combat-payload';
 import { reportTurnFailure } from './client-failure-reporting';
+import { buildCombatEntryPlayer } from './combat/structured-combat-payload';
 import { MemoryManager } from './memory-manager';
 import { fetchSceneState } from './narrative/scene-state-client';
 import { SessionStateService } from './session-state-service';

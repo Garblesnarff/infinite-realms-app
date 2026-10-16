@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-import { AIService } from '../ai-service';
 import { processDMResponse } from '../ai/dm-response-processor';
+import { AIService } from '../ai-service';
 import { fetchSceneState } from '../narrative/scene-state-client';
 import { SessionStateService } from '../session-state-service';
-import { userDataApi } from '@/services/user-data-api';
+
 
 import { llmApiClient } from '@/infrastructure/api';
 import {
@@ -14,6 +14,7 @@ import {
   QuotaExceededError,
   SessionExpiredError,
 } from '@/infrastructure/api/rest-client';
+import { userDataApi } from '@/services/user-data-api';
 
 vi.mock('@/infrastructure/api', () => ({
   llmApiClient: {
@@ -178,11 +179,15 @@ describe('chatWithDM typed error passthrough (#2601)', () => {
 
     try {
       await AIService.chatWithDM(mockParams('Hello DM rate limit 1', 'session-rate-limit'));
-    } catch {}
+    } catch {
+      // Expected error
+    }
 
     try {
       await AIService.chatWithDM(mockParams('Hello DM rate limit 2', 'session-rate-limit'));
-    } catch {}
+    } catch {
+      // Expected error
+    }
 
     expect(userDataApi.reportClientFailure).toHaveBeenCalledTimes(1);
   });
