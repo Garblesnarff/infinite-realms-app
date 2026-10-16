@@ -31,7 +31,7 @@ export async function loadSessionEntityIndex(sessionId: string): Promise<Session
 }
 
 /** The pure core, so callers that already hold the entities do not reload the map. */
-export function sessionEntityIndex(entities: EntityRef[]): SessionEntityIndex {
+function sessionEntityIndex(entities: EntityRef[]): SessionEntityIndex {
   return {
     resolve: (token) => resolveEntityRef(entities, token)?.id || token,
     slugFor: (id) => {
@@ -41,12 +41,4 @@ export function sessionEntityIndex(entities: EntityRef[]): SessionEntityIndex {
     },
     roster: () => describeEntityRoster(entities),
   };
-}
-
-/**
- * Convenience for the routes that resolve exactly one token and hold nothing else. The gateway
- * uses the index directly, because it resolves an actor and its targets against one board read.
- */
-export async function resolveSessionEntityId(sessionId: string, token: string): Promise<string> {
-  return (await loadSessionEntityIndex(sessionId)).resolve(token);
 }
