@@ -1,3 +1,5 @@
+import { random } from './rng';
+
 /**
  * Simulates rolling a die with the specified number of sides
  * @param sides Number of sides on the die
@@ -5,7 +7,7 @@
  */
 export const rollDie = (sides: number): number => {
   if (sides <= 1) return 1;
-  return Math.floor(Math.random() * sides) + 1;
+  return Math.floor(random() * sides) + 1;
 };
 
 /**
@@ -133,5 +135,5 @@ export const rerollSingleScoreDetailed = (
  * @returns Random number between 1 and 20
  */
 export const d20 = (): number => {
-  return Math.floor(Math.random() * 20) + 1;
+  return rollDie(20);
 };
