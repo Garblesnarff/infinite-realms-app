@@ -622,11 +622,20 @@ summary_text() {
   echo "Prod deploys: $deploys commits to main (auto-deploy ships each); live build $live"
   spend_lines "$(today)"
   echo "Runner: $runs jobs, $mins min"
+  triage_line "$since"
   if [ -n "$rob" ]; then
     echo "Rob: typed lines needed on $(printf '%s\n' "$rob" | nums)"
   else
     echo "Rob: none"
   fi
+}
+
+# triage_line <since>: the 24 h total of triage.sh's "run" lines (#717)
+triage_line() {
+  awk -v s="$1" '$1 >= s && $2 == "run" && !/ dry-run/ {
+      for (i = 3; i <= NF; i++) { split($i, kv, "="); v[kv[1]] += kv[2] } runs++ }
+    END { printf "Triage: triaged %d → catjam %d, jules %d, crew %d (%d runs)\n", v["triaged"], v["catjam"], v["jules"], v["crew"], runs }' \
+    "$STATE/triage.log" 2> /dev/null || echo "Triage: no log yet"
 }
 
 # spend_lines <utc date>: today's spend vs the cap, the models billed today, and

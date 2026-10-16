@@ -1,0 +1,9 @@
+[Unit]
+Description=realms-triage every 30 min at :15 and :45 UTC (#717)
+
+[Timer]
+OnCalendar=*-*-* *:15/30:00 UTC
+Persistent=false
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=realms-pulse every 5 min 12:00Z-05:00Z (Rob's 7 AM to midnight); the pulse posts on :00 and :30, alerts on any tick
+
+[Timer]
+OnCalendar=*-*-* 12..23:00/5:00 UTC
+OnCalendar=*-*-* 00..04:00/5:00 UTC
+OnCalendar=*-*-* 05:00:00 UTC
+Persistent=false
+
+[Install]
+WantedBy=timers.target

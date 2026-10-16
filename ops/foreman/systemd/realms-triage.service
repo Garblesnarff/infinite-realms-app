@@ -1,0 +1,24 @@
+# realms-triage (#717). Install: see ops/foreman/README.md.
+# Same container caps and sandbox as the reviewer. It mounts the reviewer's
+# state dir so its spend lands in the same ledger and the same $5/day cap. The
+# env file is filtered through a pipe: ANTHROPIC_API_KEY and GH_TOKEN only, no
+# Slack webhook, and no copy is written.
+[Unit]
+Description=Infinite Realms realms-triage (claude -p Sonnet bug triager, #717)
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+Nice=10
+TimeoutStartSec=80min
+TimeoutStopSec=90s
+ExecStartPre=-/usr/bin/docker rm -f realms-triage
+ExecStart=/bin/bash -c 'exec /usr/bin/docker run --rm --init --name realms-triage --stop-timeout 60 \
+  --cpus 2 --memory 4g --memory-swap 4g --cpu-shares 256 --pids-limit 1024 \
+  --cap-drop ALL --cap-add CHOWN --cap-add DAC_OVERRIDE --cap-add FOWNER --cap-add SETUID --cap-add SETGID \
+  --security-opt no-new-privileges \
+  --env-file <(grep -E "^(ANTHROPIC_API_KEY|GH_TOKEN)=" /etc/realms-foreman/env) \
+  -v /var/lib/realms-foreman/reviewer:/work \
+  realms-foreman:pilot triage.sh'
+ExecStopPost=-/usr/bin/docker rm -f realms-triage

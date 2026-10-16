@@ -42,9 +42,13 @@ RUN useradd -o -u "${FOREMAN_UID}" -m -d /home/foreman -s /bin/bash foreman \
  && git config --system user.name 'catjam-runner' \
  && git config --system user.email 'catjam-runner@users.noreply.github.com'
 
-COPY catjam-runner.sh review.sh lib.sh /usr/local/bin/
-RUN chmod 755 /usr/local/bin/catjam-runner.sh /usr/local/bin/review.sh \
+COPY catjam-runner.sh review.sh triage.sh lib.sh /usr/local/bin/
+RUN chmod 755 /usr/local/bin/catjam-runner.sh /usr/local/bin/review.sh /usr/local/bin/triage.sh \
  && chmod 644 /usr/local/bin/lib.sh
 
 ENV FOREMAN_WORK=/work
 WORKDIR /work
+
+# realms-pulse: phone view of the pipeline (no model calls).
+COPY pulse.sh /usr/local/bin/
+RUN chmod 755 /usr/local/bin/pulse.sh

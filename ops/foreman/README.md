@@ -7,6 +7,7 @@ Spec: issue #586. Reviewer prompt: `docs/ops/review_prompt.md`.
 | Coder: opencode + the free "cat jam" model (`opencode/cat-jam-free`) | `catjam-runner.sh` | `realms-catjam-runner.timer`, every 30 min |
 | Reviewer: `claude -p`, Haiku or Sonnet by tier, API key | `review.sh` | `realms-reviewer.timer`, every 2 minutes; a cheap pre-check exits idle ticks |
 | Daily summary to Slack #last-24 and #230 | `review.sh` (first 11:xx UTC tick) | same timer |
+| Triager: `claude -p` Sonnet turns new `bug` issues into catjam / Jules tasks (#717) | `triage.sh` | `realms-triage.timer`, :15 and :45 UTC |
 | Sandbox image (opencode + Claude Code live only here) | `Dockerfile` | — |
 | Shared guards (secret checks, trusted-review and same-repo filters) | `lib.sh`, tested by `ops/tests/foreman-guards.sh` | — |
 
@@ -38,7 +39,7 @@ printf 'ANTHROPIC_API_KEY=\nGH_TOKEN=\nSLACK_WEBHOOK_URL=\n' | install -o forema
 # Rob types the values himself:  nano /etc/realms-foreman/env
 
 docker build --build-arg FOREMAN_UID=1500 -t realms-foreman:pilot ops/foreman
-install -m 644 ops/foreman/systemd/realms-*.{service,timer} /etc/systemd/system/
+install -m 644 ops/foreman/systemd/realms-*.{service,timer} /etc/systemd/system/   # includes realms-triage (#717)
 systemctl daemon-reload
 
 # Dry run: one issue, no push, no GitHub writes. Output goes to runner/state/dry-run-<N>/
@@ -48,6 +49,13 @@ bash -c 'exec docker run --rm --cpus 2 --memory 4g --env-file <(grep -E "^GH_TOK
   realms-foreman:pilot catjam-runner.sh --dry-run --issue 446'
 
 systemctl enable --now realms-catjam-runner.timer realms-reviewer.timer
+
+# Triager (#717): dry run on one issue first (no GitHub writes; result in reviewer/state/triage-dry-run/<N>.json)
+bash -c 'exec docker run --rm --env-file <(grep -E "^(ANTHROPIC_API_KEY|GH_TOKEN)=" /etc/realms-foreman/env) \
+  --cap-drop ALL --cap-add CHOWN --cap-add DAC_OVERRIDE --cap-add FOWNER --cap-add SETUID --cap-add SETGID \
+  --security-opt no-new-privileges -v /var/lib/realms-foreman/reviewer:/work \
+  realms-foreman:pilot triage.sh --dry-run --issue 568'
+systemctl enable --now realms-triage.timer
 ```
 
 Rebuild the image after any change to these scripts. The units run the copies baked into the image. The reviewer prompt is not baked in: it is read from `origin/main` on every run.
@@ -64,6 +72,40 @@ Rebuild the image after any change to these scripts. The units run the copies ba
 - Timeouts: opencode 45m, each bun install / tsc / test step 15m, `claude -p` 20m. On TERM/INT (unit timeout, `docker stop`) the runner kills its jobs, removes their worktrees, and moves `catjam-wip`/`catjam-fix` to `needs-human`. Each tick also recovers jobs left behind by a hard kill, and any `catjam-wip` issue with no open catjam PR.
 - The summary also shows the merge rate over the last 24 h, as merges per hour against the target (`REVIEW_MERGE_TARGET_PER_HOUR`, default 20) with the peak hour, and the median time from PR open to merge. Both come from one paginated GitHub search for merged PRs, so the merged list is no longer cut at 100.
 - The daily summary posts on the first tick of the 11:xx UTC hour, before the pre-check and the reviews. A per-day marker is checked before the summary is built, so the other 11:xx ticks cost nothing.
-- Pause: `systemctl stop realms-catjam-runner.timer realms-reviewer.timer`.
+- Triage (#717): open `bug` issues with no "## Task" heading and none of `catjam`, `jules`, `needs-crew`, `triaged`; oldest first, at most 6 per run (`TRIAGE_MAX_ISSUES`), $0.50 each (`TRIAGE_PER_ISSUE_USD`), inside the reviewer's $5/day cap (same `spend.log`, rows `issue=<n> ... triage=<route>`). A run stops when less than the per-issue $0.50 of the daily cap is left. The cap is soft: a triage run and a review can be in flight at the same time, so their in-flight budgets together can pass $5 by up to one call each. An issue cross-referenced by an open PR is skipped before any model call. Claude gets only Read/Grep/Glob over a read-only export of main (no `public/`, no images), the issue as data and the open PRs' file list. The script picks the route (`triage_route` in `lib.sh`): hot combat files (`combat-resolution-step.ts`, `DynamicOptionsSection.tsx`, `combat-intent-service.ts`), migrations, `.github/`, `ops/`, a file in an open PR, no files or no reproducing test give `needs-crew` plus a one-line comment; catjam over 4 files gives `jules`. Task text is appended under "## Task (catjam)" or "## Task for Jules" with headings demoted, @mentions and HTML comments stripped; every `files[]` entry must be a plain path (`triage_files_ok`), or the issue goes to `needs-crew`; an answer with a secret, an email or an IP is dropped. Every decided issue gets `triaged`. An issue with 2 paid calls and no decision (`TRIAGE_MAX_ATTEMPTS`) is skipped. Log: `reviewer/state/triage.log`, one line per issue and one `run triaged=N catjam=a jules=b crew=c` line per run; the daily summary adds the 24 h total.
+- Pause: `systemctl stop realms-catjam-runner.timer realms-reviewer.timer realms-triage.timer realms-pulse.timer`.
 - Overrides go in a unit drop-in as `-e` flags, e.g. `CATJAM_MODEL`, `CATJAM_MAX_JOBS` (2), `CATJAM_JOB_TIMEOUT` (45m), `CATJAM_MAX_FIX_ROUNDS` (3), `REVIEW_MODEL` (sonnet), `REVIEW_SMALL_MODEL` (haiku), `REVIEW_SMALL_MAX_LINES` (300), `REVIEW_MAX_PRS` (12), `REVIEW_PER_PR_USD` (1.50), `REVIEW_DAILY_CAP_USD` (5.00), `REVIEW_TICK_MINUTES` (40).
 - One-off: `review.sh --dry-run --pr N`, `review.sh --summary-dry-run`, `review.sh --slack-test`.
+
+## Pulse (Rob's phone view)
+
+`pulse.sh` makes no model calls and costs $0. `realms-pulse.timer` runs it every 5 min from 12:00Z to 05:00Z (Rob's 7 AM to midnight). It reads only the GitHub API, prod `/version` and the reviewer's `state/` (ledger and triage log, mounted read-only), and posts Slack-style `{"text": ...}` to `PULSE_WEBHOOK_URL`.
+
+- The pulse posts on the :00 and :30 ticks, at most 12 lines:
+  - merges in the last hour and 24 h against the 20/hour target, with the median open→merge time;
+  - PASS-at-head PRs not merged, with the oldest wait; PRs with no verdict at head; FIX PRs waiting on authors;
+  - open PRs by lane (`catjam/`, Jules, `lane-*` = Muse, `codex/`, other);
+  - open `catjam` / `jules` issues with no open PR;
+  - main CI at main's head, prod `/version` status and build age, the newest "Post-deploy smoke FAILED" comment on #229 in 7 days;
+  - foreman spend today, credit left, and the 24 h triage counts.
+- Alerts post on any tick, then at most once an hour while they last:
+  - main CI red;
+  - `/version` not 200;
+  - a PASS waiting more than 45 min (`PULSE_PASS_WAIT_MIN`; waits over 1 h are marked);
+  - no merge in 2 h while PASS PRs wait (`PULSE_NO_MERGE_MIN`);
+  - the foreman daily cap hit.
+- Alert state is kept in `/var/lib/realms-foreman/pulse/state/alerts.state`. A cleared alert is forgotten, so it posts at once the next time.
+- The container gets only `GH_TOKEN` and `PULSE_WEBHOOK_URL`, `--cap-drop ALL`, 1 CPU and 512 MB.
+
+```bash
+install -d -m 700 /var/lib/realms-foreman/pulse
+# Rob adds PULSE_WEBHOOK_URL=<url> to /etc/realms-foreman/env himself.
+docker build --build-arg FOREMAN_UID=1500 -t realms-foreman:pilot ops/foreman
+bash -c 'exec docker run --rm --env-file <(grep -E "^GH_TOKEN=" /etc/realms-foreman/env) \
+  -v /var/lib/realms-foreman/pulse:/work -v /var/lib/realms-foreman/reviewer/state:/reviewer-state:ro \
+  realms-foreman:pilot pulse.sh --dry-run'
+install -m 644 ops/foreman/systemd/realms-pulse.{service,timer} /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now realms-pulse.timer
+```
+
+Tests: `bash ops/tests/foreman-pulse.sh`.
