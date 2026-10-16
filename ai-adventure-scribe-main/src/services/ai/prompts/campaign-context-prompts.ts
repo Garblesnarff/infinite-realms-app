@@ -482,9 +482,13 @@ export class CampaignContextPrompts {
    * Fetch starter campaign lore without rendering it, so callers can render
    * with a token budget (relevance-ranked, capped) and measure the result.
    * Returns null when the campaign has no lore content or the fetch fails.
+   *
+   * #708: `playerCharacterName` marks the player's own premade template in
+   * the assets section so the DM does not introduce them as a separate NPC.
    */
   public static async fetchStarterCampaignLore(
     starterCampaignId: string,
+    playerCharacterName?: string,
   ): Promise<StarterCampaignLore | null> {
     try {
       const loreKeeper = getLoreKeeperService();
@@ -492,7 +496,7 @@ export class CampaignContextPrompts {
         [
           loreKeeper.getCampaignOverview(starterCampaignId),
           loreKeeper.getRules(starterCampaignId),
-          fetchCampaignAssetsForPrompt(starterCampaignId),
+          fetchCampaignAssetsForPrompt(starterCampaignId, playerCharacterName),
           loreKeeper.getEntities(starterCampaignId),
         ],
       );
@@ -754,8 +758,12 @@ export class CampaignContextPrompts {
   public static async buildStarterCampaignLoreSection(
     starterCampaignId: string,
     options: LoreRenderOptions = {},
+    playerCharacterName?: string,
   ): Promise<string> {
-    const lore = await CampaignContextPrompts.fetchStarterCampaignLore(starterCampaignId);
+    const lore = await CampaignContextPrompts.fetchStarterCampaignLore(
+      starterCampaignId,
+      playerCharacterName,
+    );
     if (!lore) {
       return '';
     }

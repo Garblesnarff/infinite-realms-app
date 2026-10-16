@@ -283,6 +283,47 @@ Include the tags.
     expect(result.section).toContain('- The Apprentice [ASSET:character:the-apprentice]');
     expect(result.section).toContain('- Tavern Interior [ASSET:scene:tavern-interior]');
   });
+
+  it('keeps the #708 player-character marking on a cut turn', () => {
+    const markedLine =
+      "- The Apprentice [ASSET:character:the-apprentice] — THIS IS THE PLAYER'S OWN CHARACTER. Do NOT introduce them as an NPC; use this tag when the narration refers to the player.";
+    const lore: StarterCampaignLore = {
+      ...smallLore,
+      rules: [],
+      entitiesByType: {
+        npcs: [
+          chunk('Kept One', 'Kept in recent turns. ' + 'x'.repeat(2000)),
+          chunk('Dropped Two', 'Never mentioned. ' + 'x'.repeat(2000)),
+        ],
+        locations: [],
+        factions: [],
+        items: [],
+        monsters: [],
+        handouts: [],
+      },
+      assetsSection: `<available_visual_assets>
+<MANDATORY_REQUIREMENT>
+Include the tags.
+</MANDATORY_REQUIREMENT>
+
+- Kept One [ASSET:npc:kept-one]
+- Dropped Two [ASSET:npc:dropped-two]
+${markedLine}
+</available_visual_assets>`,
+    };
+
+    const result = CampaignContextPrompts.renderStarterCampaignLore(lore, {
+      tokenBudget: 900,
+      recentTurnsText: 'Kept One waved at the party.',
+    });
+
+    expect(result.canonCut).toBe(true);
+    // The annotated PC line is not a bare `- Name [ASSET:...]` line, so the
+    // cut filter must keep it: the DM still needs the portrait tag and the
+    // do-not-introduce instruction on exactly the heavy turns.
+    expect(result.section).toContain(markedLine);
+    expect(result.section).not.toContain('- Dropped Two [ASSET:npc:dropped-two]');
+  });
 });
 
 describe('CampaignContextPrompts.extractSceneEntityNames', () => {

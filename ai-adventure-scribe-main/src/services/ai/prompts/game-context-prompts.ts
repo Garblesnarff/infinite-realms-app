@@ -75,7 +75,17 @@ DESCRIPTION: ${campaignDescription}
       }
 
       if (starterCampaignId) {
-        section += await CampaignContextPrompts.buildStarterCampaignLoreSection(starterCampaignId);
+        // #708: mark the player's own premade in the assets section so the DM
+        // does not introduce them as a separate NPC.
+        const playerCharacterName =
+          typeof context.characterDetails?.name === 'string'
+            ? context.characterDetails.name
+            : undefined;
+        section += await CampaignContextPrompts.buildStarterCampaignLoreSection(
+          starterCampaignId,
+          {},
+          playerCharacterName,
+        );
       }
     }
 
