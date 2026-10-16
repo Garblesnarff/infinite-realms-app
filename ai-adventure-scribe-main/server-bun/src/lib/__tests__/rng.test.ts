@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 
-import { rollD20 } from '../dice.js';
+import { rollDamageDice } from '../../services/combat/damage-calculator.js';
+import { RestMechanics } from '../../services/rest/rest-mechanics.js';
+import { rollD20, rollD20Pair } from '../dice.js';
 import { resetRngFromEnv, rollDie, setRngSeed } from '../rng.js';
 
 afterEach(() => {
@@ -48,5 +50,26 @@ describe('rng', () => {
     process.env.DICE_SEED = '20260726';
     resetRngFromEnv();
     expect(Array.from({ length: 100 }, () => rollD20())).toEqual(first);
+  });
+
+  it.each(['', '   ', 'abc', '12.5'])('stays unseeded when DICE_SEED is %p', (value) => {
+    setRngSeed(1234);
+    const seeded = sequence(100);
+    process.env.DICE_SEED = value;
+    resetRngFromEnv();
+    expect(sequence(100)).not.toEqual(seeded);
+  });
+
+  it('makes rollD20Pair, rollDamageDice and hit dice repeatable under one seed', () => {
+    const run = () => [
+      rollD20Pair(true, false),
+      rollD20Pair(false, true),
+      rollDamageDice('2d6', true),
+      RestMechanics.rollHitDie('d10'),
+    ];
+    setRngSeed(42);
+    const first = Array.from({ length: 20 }, run);
+    setRngSeed(42);
+    expect(Array.from({ length: 20 }, run)).toEqual(first);
   });
 });

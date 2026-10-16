@@ -14,6 +14,7 @@ import {
   equipOffHandWeapon,
 } from '@/utils/equipmentUtils';
 import { canUseRacialTrait } from '@/utils/racialTraits';
+import { rollDie } from '@/utils/rng';
 import {
   canUseTwoWeaponFighting,
   makeMainHandAttack,
@@ -216,7 +217,7 @@ export const useCombatMechanics = ({
       const conMod = participant.abilityScores?.constitution?.modifier ?? 0;
       const proficiencyBonus = calculateProficiencyBonus(participant.level || 1);
       const saveBonus = conMod + proficiencyBonus; // Assuming proficiency in Con saves
-      const rollResult = Math.floor(Math.random() * 20) + 1 + saveBonus;
+      const rollResult = rollDie(20) + saveBonus;
       const succeeded = rollResult >= dc;
       const description = `${participant.name} makes concentration save: ${rollResult} ${succeeded ? '(Success)' : '(Failure)'}`;
 

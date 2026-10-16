@@ -9,6 +9,7 @@
  */
 
 import { abilityModifier } from '../../../../shared/ability-modifier';
+import { rollDie } from '../../lib/rng.js';
 import { HIT_DICE_BY_CLASS } from '../../types/rest.js';
 
 import type { CharacterHitDice } from '../../../../db/schema/index';
@@ -34,7 +35,7 @@ export class RestMechanics {
    */
   static rollHitDie(dieType: HitDieType): number {
     const dieSize = parseInt(dieType.substring(1));
-    return Math.floor(Math.random() * dieSize) + 1;
+    return rollDie(dieSize);
   }
 
   /**
