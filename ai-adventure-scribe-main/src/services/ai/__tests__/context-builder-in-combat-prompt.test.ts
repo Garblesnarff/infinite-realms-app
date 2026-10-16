@@ -157,6 +157,7 @@ describe('the prompt outside combat (#2400)', () => {
    * The #264/#353 rebase re-pinned it again after keeping both fields.
  * #400 re-pinned the response-structure hash after constraining options to sheet spells/attacks.
  * #714 re-pinned the rules-of-play hash after adding the spell-cast rule.
+ * #610 re-pinned the response-structure hash after adding the out-of-combat story-damage field.
  */
   it('keeps the byte-identical sections it had before the combat variants existed', () => {
     const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -165,7 +166,7 @@ describe('the prompt outside combat (#2400)', () => {
       'c69196ff1f07a853b22a95f18369cc0ec540e51307f8818a88dd3880bf951664',
     );
     expect(sha256(ContextBuilderPrompts.buildResponseStructureSection())).toBe(
-      '35c0ddb64539afb0dbc80e4aff541b1e295ceb18d9b2aa4cd284ce1e17b0999f',
+      '04d8155608c5ec0baaff9f309a1887c8465c2b643bd7658a047cf4690f5659d8',
     );
     expect(sha256(ContextBuilderPrompts.buildFinalRemindersSection())).toBe(
       'f73f18110ce03c6aca6e4a04932ba834ce476d71c27392f86d1b4b81221fada2',

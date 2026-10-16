@@ -164,14 +164,11 @@ Inventory; do not narrate receiving an item without setting the field.
     // narrates — it must be in the `damage` field or a `damage` roll request.
     const storyDamageField = `<story_damage_field>
 <title>STORY DAMAGE</title>
-When the story hurts the player's character (a failed check's consequence, a hazard, a trap,
-an environmental blow the engine did not resolve), set the \`damage\` JSON field to
-\`{"amount": <whole number of hit points>, "source": "<short source, e.g. rope burn>"}\` and
-narrate the hurt in \`text\`. The game subtracts the amount from the character's hit points and
-posts a damage line in chat. When the amount should be rolled (a weapon blow, a spell), request
-a \`damage\` roll instead and set the field on the turn that reports the result. Do not narrate
-the character being hurt or taking damage without setting the field or requesting the roll.
-Otherwise set it to \`null\`. On a turn that requests a roll, leave it \`null\`.
+When the story hurts the player's character (a failed check's consequence, a hazard, a trap), set the
+\`damage\` field to \`{"amount": <hit points>, "source": "<short source>"}\` and narrate the hurt in \`text\`;
+the game subtracts it and posts a damage line. For a rolled amount, request a \`damage\` roll and set the
+field on the result turn. Never narrate hurt without the field or the roll; otherwise \`null\` (also on
+roll-request turns).
 </story_damage_field>
 
 `;
