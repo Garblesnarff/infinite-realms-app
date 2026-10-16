@@ -346,7 +346,7 @@ export function parseAuthoredStatBlock(rawContent: string): ParsedStatBlock {
 }
 
 /** The fields that decide whether a creature can fight at authored numbers at all. */
-export const CORE_STAT_FIELDS: AuthoredStatField[] = ['maxHp', 'armorClass'];
+const CORE_STAT_FIELDS: AuthoredStatField[] = ['maxHp', 'armorClass'];
 
 export type ParseCoverage = 'full' | 'partial' | 'none';
 

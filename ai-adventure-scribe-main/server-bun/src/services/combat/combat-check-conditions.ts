@@ -20,7 +20,7 @@ import { getDistance } from '../../tactical/engine.js';
 import { ConditionsService } from '../conditions-service.js';
 
 /** A grapple needs the grappler to reach the target; the SRD default reach is 5 feet. */
-export const GRAPPLE_REACH_FEET = 5;
+const GRAPPLE_REACH_FEET = 5;
 
 const INCAPACITATING = new Set([
   'Incapacitated',
