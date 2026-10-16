@@ -141,10 +141,10 @@ export async function castNpcVoices(
     }
     // Keep every scene's reservation in server-owned config rows. Ordinary session
     // PATCHes replace session_state, and must not erase casts or earlier scenes.
-    const occupancy = JSON.stringify({ npc_ids: [...sceneNpcIds] });
+    const occupancy = tx.json({ npc_ids: [...sceneNpcIds] });
     await tx`
       INSERT INTO session_config (session_id, config_key, config_value)
-      VALUES (${sessionId}, ${configKey}, ${occupancy}::jsonb)
+      VALUES (${sessionId}, ${configKey}, ${occupancy})
       ON CONFLICT (session_id, config_key) DO UPDATE SET config_value = EXCLUDED.config_value, updated_at = now()
     `;
     return segments.map((segment, index) => ({
