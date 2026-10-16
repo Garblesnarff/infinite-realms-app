@@ -112,6 +112,46 @@ describe('fixture auto play', () => {
     });
   });
 
+  it('prefers resolving pending rolls over a scripted input for that turn', async () => {
+    const inputs: string[] = [];
+    await runAutoTurns(
+      {
+        pendingRolls: [{ purpose: 'Stealth' }],
+        availableOptions: [],
+        roll: () => ({ result: { total: 9 } }),
+        play: async (input) => {
+          inputs.push(input);
+          return {};
+        },
+      },
+      1,
+      () => undefined,
+      { scriptedInputs: ['Ignored for this turn.'] },
+    );
+
+    expect(inputs).toEqual(['I completed all 1 pending roll.']);
+  });
+
+  it('plays scripted inputs in order before falling back to auto selection', async () => {
+    const inputs: string[] = [];
+    await runAutoTurns(
+      {
+        pendingRolls: [],
+        availableOptions: ['Open the door.'],
+        roll: () => ({ result: { total: 1 } }),
+        play: async (input) => {
+          inputs.push(input);
+          return {};
+        },
+      },
+      3,
+      () => undefined,
+      { scriptedInputs: ['Check the altar.', 'Pray for guidance.'] },
+    );
+
+    expect(inputs).toEqual(['Check the altar.', 'Pray for guidance.', 'Open the door.']);
+  });
+
   it('does not deadlock a 25-turn run on one unresolvable symbolic roll', async () => {
     let pending = true;
     let rollCalls = 0;

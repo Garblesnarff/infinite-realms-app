@@ -20,6 +20,8 @@ export interface AutoTurnOptions {
   sleep?: (delayMs: number) => Promise<void>;
   persona?: Persona;
   random?: () => number;
+  /** Fixed player inputs; turn i uses scriptedInputs[i] as a prefix, then auto-selection. */
+  scriptedInputs?: readonly string[];
 }
 
 export interface AutoTurnSummary {
@@ -170,7 +172,8 @@ export async function runAutoTurns(
         ? 'I attempt it.'
         : rolls.length
           ? `I completed all ${rolls.length} pending roll${rolls.length === 1 ? '' : 's'}.`
-          : selectAutoAction(client.availableOptions, options.persona, options.random);
+          : (options.scriptedInputs?.[turn] ??
+            selectAutoAction(client.availableOptions, options.persona, options.random));
       let attempt = 0;
       while (true) {
         try {
