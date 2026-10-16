@@ -2,7 +2,10 @@
 # realms-reviewer (#586): headless Claude reviewer (Haiku or Sonnet by tier) + daily summary.
 #
 # Runs INSIDE the realms-foreman container (ops/foreman/Dockerfile), started by
-# realms-reviewer.service hourly at :50 UTC. It reviews every open same-repo PR
+# realms-reviewer.service every 2 minutes. Most ticks are idle: a cheap
+# pre-check (one GitHub API call for the open-PR list, plus cached CI checks)
+# exits when no open PR has green CI and no posted verdict at its head. It
+# reviews every open same-repo PR
 # (catjam, Jules, crew, hand-made, drafts) EXCEPT the ones the human strategist
 # keeps (scope_reason): release-please, a draft whose body says WIP, and any PR
 # that changes .github/, .husky/, ops/foreman/, ops/claude-hooks/, migrations or
@@ -22,7 +25,7 @@
 # It never closes, merges, approves or marks a PR ready. If the head moved
 # while the model was reviewing, the verdict is dropped.
 #
-# The 11:50Z run also posts "Realms strategist — last 24h" to Slack #last-24
+# The first 11:xx UTC tick also posts "Realms strategist — last 24h" to Slack #last-24
 # (SLACK_WEBHOOK_URL) and as a comment on #230.
 #
 #   review.sh                    # normal tick
@@ -154,6 +157,93 @@ ci_finished() { # 0 when every check at the head has completed (and at least one
 }
 
 is_jules() { [[ $1 == jules* || $1 =~ -[0-9]{15,}$ ]]; }
+
+# ---- 2-minute pre-check ----------------------------------------------------
+# The systemd timer fires every 2 minutes. Most ticks have nothing to do, so
+# before the expensive per-PR scan (one comments call per open PR) this gate
+# asks: is there any open PR whose CI has finished and which has no posted
+# verdict at its head? An idle tick costs the open-PR list call plus cached CI
+# checks and exits. The daily budget cap is unchanged (checked in review_tick).
+#
+# State: $STATE/ci-cache, lines "<pr> <sha8> <epoch> <done|not>". "done" at a
+# sha is final (checks are per-sha and immutable); "not" is re-checked after
+# 300s. Our own posted verdicts are read from the ledger (result=posted).
+
+# ci_finished_at <pr>: 0 when CI finished at the head (one API call). Failures
+# are allowed — review_tick reviews finished-but-red PRs too (failed logs).
+ci_finished_at() {
+  local total pending
+  read -r total pending < <(gh pr checks "$1" --json bucket \
+    --jq 'length as $t | ([.[] | select(.bucket == "pending")] | length) as $p | "\($t) \($p)"' 2> /dev/null) || return 1
+  [[ $total =~ ^[0-9]+$ ]] && [ "$total" -gt 0 ] && [ "$pending" = 0 ]
+}
+
+ci_finished_cached() { # <pr> <sha8>: ci_finished_at with a 300s negative cache
+  local n=$1 s8=$2 now epoch res cache=$STATE/ci-cache
+  now=$(date +%s)
+  if read -r _ _ epoch res < <(grep "^$n $s8 " "$cache" 2> /dev/null | tail -n 1); then
+    [ "$res" = done ] && return 0
+    [ $((now - epoch)) -lt 300 ] && return 1
+  fi
+  if ci_finished_at "$n"; then
+    { grep -v "^$n $s8 " "$cache" 2> /dev/null; echo "$n $s8 $now done"; } > "$cache.tmp" && mv "$cache.tmp" "$cache"
+    return 0
+  fi
+  { grep -v "^$n $s8 " "$cache" 2> /dev/null; echo "$n $s8 $now not"; } > "$cache.tmp" && mv "$cache.tmp" "$cache"
+  return 1
+}
+
+verdict_posted() { # <pr> <sha8>: 0 when this script posted a verdict at the head
+  # awk's own exit status: no `| grep -q`, which can SIGPIPE awk under pipefail.
+  awk -v p="pr=$1" -v s="sha=$2" '$3 == p && $5 == s && $6 == "posted" { f = 1; exit } END { exit !f }' "$LEDGER" 2> /dev/null
+}
+
+scope_skipped() { # <pr> <sha8>: 0 when this head was scope-skipped (local log)
+  grep -q "^$1 $2 " "$STATE/scope-skips" 2> /dev/null
+}
+
+# first_trusted_line < comment pages: the first line of the newest trusted
+# "Strategist review". --paginate prints one JSON array per page, so the pages
+# are merged first (as comments_json does) before the filter sees them.
+first_trusted_line() {
+  jq -s 'add // []' | jq -r --arg me "$OWNER_LOGIN" "$TRUSTED_REVIEWS_JQ"' | last | (.body // "") | split("\n")[0]'
+}
+
+trusted_review_at() { # <pr> <sha8>: 0 when a trusted "Strategist review" is at the head
+  local n=$1 s8=$2 first
+  first=$(gh api "repos/$REPO/issues/$n/comments?per_page=100" --paginate 2> /dev/null | first_trusted_line) || return 1
+  [[ $first == *" at $s8"* ]]
+}
+
+precheck() { # 0 = may have work (run review_tick); 1 = idle
+  local n sha s8 prs open_ns
+  # Every page, and same-repo PRs only, as scan_prs: a fork PR is never
+  # reviewed, so it must not make every tick a full tick.
+  prs=$(gh api "repos/$REPO/pulls?state=open&per_page=100" --paginate \
+    --jq ".[] | select(.head.repo.full_name == \"$REPO\") | \"\(.number) \(.head.sha)\"" 2> /dev/null) ||
+    { say "pre-check: open-PR list failed"; return 1; }
+  # prune the CI cache to currently-open PRs
+  open_ns=$(awk '{print $1}' <<< "$prs" | paste -sd'|')
+  if [ -n "$open_ns" ]; then
+    grep -E "^($open_ns) " "$STATE/ci-cache" 2> /dev/null > "$STATE/ci-cache.tmp" &&
+      mv "$STATE/ci-cache.tmp" "$STATE/ci-cache"
+  fi
+  while read -r n sha; do
+    [ -n "$n" ] || continue
+    s8=${sha:0:8}
+    verdict_posted "$n" "$s8" && continue
+    scope_skipped "$n" "$s8" && continue
+    [ "$(attempts "$n" "$s8")" -ge "$MAX_ATTEMPTS" ] 2> /dev/null && continue
+    ci_finished_cached "$n" "$s8" || continue
+    # CI finished, no bot verdict: a human strategist review at this head also
+    # counts (one comments call; the full tick would find it anyway).
+    trusted_review_at "$n" "$s8" && continue
+    say "pre-check: pr #$n sha=$s8 CI finished, no review at head — running full tick"
+    return 0
+  done <<< "$prs"
+  say "pre-check: idle — no open PR with finished CI and no review at head"
+  return 1
+}
 
 # ---- scope -----------------------------------------------------------------
 # Paths whose PRs the human strategist reviews (the bot's own code, CI, git
@@ -574,9 +664,11 @@ slack_post() { # text on stdin; webhook URL never appears on a command line
 
 post_summary() {
   local marker=$STATE/summary-$(today) text
+  # Marker first: on the 2-minute timer every 11:xx tick calls this, and
+  # building the summary costs a comments call per open PR plus searches.
+  if [ "$POST" = 1 ] && [ -e "$marker" ]; then return 0; fi
   text=$(summary_text)
   if [ "$POST" = 0 ]; then printf '%s\n' "$text"; return 0; fi
-  [ ! -e "$marker" ] || { say "summary already posted today"; return 0; }
   printf '%s\n' "$text" | slack_post || say "slack post failed"
   gh api "repos/$REPO/issues/$OPS_LOG_ISSUE/comments" -f body="$text" > /dev/null || say "#$OPS_LOG_ISSUE comment failed"
   touch "$marker"
@@ -585,17 +677,20 @@ post_summary() {
 
 case $MODE in
   slack-test)
-    echo "Realms strategist — webhook test from realms-reviewer (#586). The daily summary will post here at 11:50Z." | slack_post
+    echo "Realms strategist — webhook test from realms-reviewer (#586). The daily summary will post here on the first 11:xx UTC tick." | slack_post
     logline "slack test line sent"
     ;;
   summary) post_summary ;;
   tick)
     : "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY missing from /etc/realms-foreman/env}"
-    # Decide at tick start: up to 12 reviews can run past the hour, and the
-    # 11:50Z summary must still post. It goes first, before the reviews.
+    # The daily summary posts on the first tick of the 11:xx UTC hour, before
+    # the reviews; a marker keeps it to once per day.
     run_summary=0
     if [ "$(date -u +%H)" = "$(printf '%02d' "$SUMMARY_HOUR")" ] && [ -z "$ONLY_PR" ]; then run_summary=1; fi
     if [ "$run_summary" = 1 ]; then post_summary || say "summary failed"; fi
+    # 2-minute timer: most ticks are idle. The pre-check exits cheaply when no
+    # open PR has green CI and no review at its head. --pr N bypasses it.
+    if [ -z "$ONLY_PR" ]; then precheck || exit 0; fi
     review_tick
     ;;
 esac
