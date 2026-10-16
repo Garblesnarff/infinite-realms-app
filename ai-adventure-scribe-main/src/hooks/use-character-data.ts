@@ -41,6 +41,7 @@ import {
   type CharacterStatsRow,
   type CharacterEquipmentRow,
 } from '@/utils/character/data-transformers';
+import { transformEquipmentForStorage } from '@/utils/characterTransformations';
 import { isValidUUID } from '@/utils/validation'; // Assuming kebab-case
 
 /**
@@ -51,7 +52,8 @@ import { isValidUUID } from '@/utils/validation'; // Assuming kebab-case
  * prepareCharacterPayload). This maps exactly the fields the sheet edits —
  * experience, level, notes, appearance, description, backstory, personality —
  * from the client shape to the DB columns, and only the fields that actually
- * changed. Feature uses travel as `class_features` (#224). Hit points and the
+ * changed. Equip travels as `equipment` (#711). Feature uses travel as
+ * `class_features` (#224). Hit points and the
  * other rest results stay on the rest route, so a hit-point-only diff is still
  * an empty payload: no write, just refresh.
  *
@@ -99,6 +101,12 @@ export const buildSheetUpdatePayload = (
     JSON.stringify(next.enhancementSelections ?? null)
   ) {
     payload.enhancement_selections = next.enhancementSelections ?? [];
+  }
+
+  // #711: Equip flips inventory locally, then this PUT is the only save.
+  // The row id stays off the wire; item_name is the display name.
+  if (JSON.stringify(prev.inventory ?? null) !== JSON.stringify(next.inventory ?? null)) {
+    payload.equipment = transformEquipmentForStorage(next, next.id);
   }
 
   return payload;

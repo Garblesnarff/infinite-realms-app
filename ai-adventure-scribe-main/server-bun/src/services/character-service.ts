@@ -404,7 +404,7 @@ export class CharacterService {
       ...safeUpdates
     } = data as any;
 
-    return db.transaction(async (tx) => {
+    const saved = await db.transaction(async (tx) => {
       const [updated] = await tx
         .update(characters)
         .set({
@@ -517,6 +517,31 @@ export class CharacterService {
 
       return updated;
     });
+
+    // The sheet PUT writes equipped here and nowhere else (#711). Recompute
+    // after commit: sync reads the rows with db, not this transaction.
+    // Weapon-only payloads do not own armour, so they leave a hand-set AC alone.
+    const unarmored = computeArmorClass([], 0);
+    const armorInPayload = equipment?.some((item) => {
+      const itemType = String(item.item_type ?? '').trim().toLowerCase();
+      if (itemType === 'armor' || itemType === 'shield') return true;
+      return (
+        computeArmorClass(
+          [
+            {
+              item_name: typeof item.item_name === 'string' ? item.item_name : '',
+              item_type: itemType,
+              equipped: true,
+            },
+          ],
+          0,
+        ) !== unarmored
+      );
+    });
+    if (saved && armorInPayload) {
+      await syncArmorClassAfterEquipmentChange(characterId);
+    }
+    return saved;
   }
 
   /**
