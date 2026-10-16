@@ -20,7 +20,6 @@ import {
 import { CharacterSpellService } from './character/character-spell-service.js';
 import { CharacterVitalsService } from './character-vitals-service.js';
 import { RestHitDiceService } from './rest/rest-hit-dice-service.js';
-import { logger } from '../lib/logger.js';
 import { db } from '../../../db/client';
 import {
   characterPermissions,
@@ -41,6 +40,7 @@ import { findSrdClass } from '../../../shared/srd-class-data';
 import { InternalServerError } from '../lib/errors.js';
 import { SpellSlotMechanics } from './spell-slots/spell-slot-mechanics.js';
 import { abilityModifier } from '../../../shared/ability-modifier';
+import { logger } from '../lib/logger.js';
 
 import type { Character, NewCharacter, NewCharacterStats } from '../../../db/schema/index';
 
