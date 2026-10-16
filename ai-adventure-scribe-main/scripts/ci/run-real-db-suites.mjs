@@ -207,7 +207,7 @@ function main() {
       console.error(`::error::${file} did not run clean`);
     }
     console.error('::error::The job fails rather than report a partial run.');
-    process.exit(1);
+    process.exitCode = 1;
   }
 }
 
