@@ -36,11 +36,13 @@ import {
   type ArmorClassEquipmentItem,
 } from '../../../shared/armor-class';
 import { isCatalogWeaponName } from '../../../shared/equipment-weapon-resolver';
-import { findSrdClass } from '../../../shared/srd-class-data';
+import {
+  computeLevel1MaxHitPoints,
+  findSrdClassForHitPoints,
+} from '../../../shared/level-1-hit-points';
 import { InternalServerError } from '../lib/errors.js';
 import { SpellSlotMechanics } from './spell-slots/spell-slot-mechanics.js';
 import { abilityModifier } from '../../../shared/ability-modifier';
-import { logger } from '../lib/logger.js';
 
 import type { Character, NewCharacter, NewCharacterStats } from '../../../db/schema/index';
 
@@ -64,47 +66,9 @@ function equipmentItemName(item: Record<string, unknown>): string {
 }
 
 /**
- * Subclasses the app stores as the character's class name (the same two the
- * spell-slot engine maps in THIRD_CASTER_SUBCLASSES); they use their parent's
- * hit die.
+ * Level-1 HP and armour class live in shared/ now (#620): the server and the
+ * creation preview call the same helpers, so the two cannot drift apart.
  */
-const SUBCLASS_PARENT_CLASS: Record<string, string> = {
-  'eldritch knight': 'Fighter',
-  'arcane trickster': 'Rogue',
-};
-
-/** Resolve the SRD class for HP, following a known subclass to its parent. */
-function findSrdClassForHitPoints(className: string | null | undefined) {
-  return (
-    findSrdClass(className) ??
-    findSrdClass(SUBCLASS_PARENT_CLASS[(className ?? '').trim().toLowerCase()] ?? '')
-  );
-}
-
-/**
- * Level-1 max HP, the one formula (#620): class hit die + CON modifier, +1
- * for Dwarven Toughness (Hill Dwarf, #203). Minimum 1 HP. The server is the
- * only place that computes it — callers send the class, the scores and the
- * subrace, never HP. An unresolvable class falls back to a d8 (the most
- * common hit die) instead of failing the create; the class column is
- * optional on the route, so a missing class is valid input.
- */
-function computeLevel1MaxHitPoints(
-  className: string | null | undefined,
-  constitutionScore: number | null | undefined,
-  subrace: string | null | undefined,
-): number {
-  const classData = findSrdClassForHitPoints(className);
-  if (!classData) {
-    logger.warn(
-      { className: className ?? null },
-      'computeLevel1MaxHitPoints: unresolvable SRD class; falling back to d8',
-    );
-  }
-  const hitDie = classData?.hitDie ?? 8;
-  const toughnessBonus = /hill dwarf/i.test(subrace ?? '') ? 1 : 0;
-  return Math.max(1, hitDie + abilityModifier(constitutionScore ?? 10) + toughnessBonus);
-}
 
 /**
  * Armour class, server-side (#620). Unarmoured Defence (Barbarian +CON, Monk
@@ -197,8 +161,8 @@ async function recomputeServerDerivedStats(characterId: string): Promise<void> {
 
   // A character without a resolvable class keeps its stored HP; only a
   // level-1 character of a known class gets the formula re-derived. (Create
-  // falls back to a d8 for an unresolvable class; the update path must not
-  // rewrite HP it cannot derive.)
+  // throws on a non-empty unresolvable class and falls back to a d8 only for
+  // a missing class; the update path must not rewrite HP it cannot derive.)
   if ((character.level ?? 1) === 1 && findSrdClassForHitPoints(character.class)) {
     const maxHitPoints = computeLevel1MaxHitPoints(
       character.class,

@@ -183,9 +183,8 @@ const wizardBody = (cls: { name: string; hitDie: string; baseHp: number }) => ({
     intelligence: 12,
     wisdom: 11,
     charisma: 8,
-    armor_class: 12,
-    max_hit_points: cls.baseHp,
-    current_hit_points: cls.baseHp,
+    // #620: no HP or AC — the server derives both from the inputs above.
+    // (temporary_hit_points and hit_dice are inputs, not derived values.)
     temporary_hit_points: 0,
     hit_dice: cls.hitDie,
   },
@@ -208,7 +207,8 @@ const wizardBody = (cls: { name: string; hitDie: string; baseHp: number }) => ({
 /**
  * #620: the server is the only place that computes level-1 HP and AC. These
  * cases send inputs only (class, ability scores, equipment) — no HP or AC —
- * and assert the server derives the right values.
+ * and assert the server derives the right values. `wizardBody` already sends
+ * no HP/AC; this only swaps in a custom name and equipment list.
  */
 const inputsOnlyBody = (
   cls: { name: string; hitDie: string; baseHp: number },
@@ -216,16 +216,9 @@ const inputsOnlyBody = (
   name: string,
 ) => {
   const body = wizardBody(cls) as Record<string, unknown>;
-  const {
-    armor_class: _ac,
-    max_hit_points: _max,
-    current_hit_points: _cur,
-    ...stats
-  } = body.stats as Record<string, unknown>;
   return {
     ...body,
     name,
-    stats,
     equipment: equipment.map(equipmentRow),
   };
 };
@@ -373,6 +366,33 @@ describeWithDb('character create every class (#388)', () => {
     expect(stats.armorClass).toBe(12);
     expect(stats.maxHitPoints).toBe(12);
     expect(stats.currentHitPoints).toBe(12);
+  });
+
+  it('computes Wizard HP/AC from inputs only on create (#620)', async () => {
+    // d6, no armour, no HP/AC sent: HP = 6 + CON (+3) + Dwarven
+    // Toughness (+1) = 10; AC = 10 + DEX (+2) = 12. A dagger and a
+    // quarterstaff are weapons, not armour, so they add nothing.
+    const res = await request(
+      '/v1/characters',
+      'POST',
+      inputsOnlyBody(
+        { name: 'Wizard', hitDie: '1d6', baseHp: 10 },
+        ['Dagger', 'Quarterstaff'],
+        'L1 Wizard 620',
+      ),
+    );
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    expect(stats.armorClass).toBe(12);
+    expect(stats.maxHitPoints).toBe(10);
+    expect(stats.currentHitPoints).toBe(10);
   });
 
   it('adds Dwarven Toughness to Hill Dwarf HP on create (#620)', async () => {

@@ -3,8 +3,8 @@ import React from 'react';
 
 import { CharacterPreviewAbilityScores } from './CharacterPreviewAbilityScores';
 import { CharacterPreviewHeader } from './CharacterPreviewHeader';
+import { computeLevel1MaxHitPoints } from '../../../../shared/level-1-hit-points';
 import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
-import { findSrdClass } from '../../../../shared/srd-class-data';
 
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -54,9 +54,9 @@ const CharacterPreview: React.FC = () => {
   const characterProficiencyBonus = proficiencyBonus(totalLevel);
 
   // #389: the creation summary must show a labeled HP that matches what the
-  // save will store. Mirror the server's level-1 HP derivation (#620: class
-  // hit die + post-racial CON modifier + Dwarven Toughness), which no longer
-  // lives in the client save path.
+  // save will store. The preview calls the same shared helper the server
+  // uses (#620: class hit die + post-racial CON modifier + Dwarven
+  // Toughness) — one owner for the rule, not a client copy.
   const race = typeof character.race === 'object' ? character.race : null;
   const subrace = typeof character.subrace === 'object' ? character.subrace : null;
   const finalScores: AbilityScores = applyRacialBonusesToAbilityScores(
@@ -65,12 +65,13 @@ const CharacterPreview: React.FC = () => {
     subrace,
     character.racialAbilityChoices,
   );
-  const constitutionModifier = finalScores.constitution?.modifier ?? 0;
-  const raceTraits = [...(race?.traits ?? []), ...(subrace?.traits ?? [])];
-  const toughnessBonus = raceTraits.includes('Dwarven Toughness') ? 1 : 0;
-  const hitDie = findSrdClass(character.class?.name)?.hitDie ?? character.class?.hitDie;
-  const hitPoints =
-    typeof hitDie === 'number' ? hitDie + constitutionModifier + toughnessBonus : null;
+  const hitPoints = character.class?.name
+    ? computeLevel1MaxHitPoints(
+        character.class.name,
+        finalScores.constitution?.score ?? 10,
+        subrace?.name ?? null,
+      )
+    : null;
 
   return (
     <Card className="glass-strong rounded-2xl hover-lift border-2 border-infinite-purple/20">
