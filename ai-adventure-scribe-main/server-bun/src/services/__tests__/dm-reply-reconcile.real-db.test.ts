@@ -113,6 +113,9 @@ const { LLMProviderService } = await importWithRealDb(() => import('../llm-provi
 const { createRequestPipelineApp } = await importWithRealDb(() => import('../../http-pipeline.js'));
 const { llmRoutes } = await importWithRealDb(() => import('../../routes/v1/llm.js'));
 const { charactersRoutes } = await importWithRealDb(() => import('../../routes/v1/characters.js'));
+const { issue1784DataRoutes } = await importWithRealDb(
+  () => import('../../routes/v1/issue-1784-data.js'),
+);
 const { SpellSlotsService } = await importWithRealDb(() => import('../spell-slots-service.js'));
 const { LevelUpService } = await importWithRealDb(() => import('../progression/level-up-service.js'));
 const { awardStoryXp, awardStoryXpOnce } = await importWithRealDb(
@@ -2127,6 +2130,29 @@ ${playerInput}
       auth.mockRestore();
     }
   };
+  /** The sheet's Inventory tab after a reload: GET /v1/characters/:id/equipment, which reads character_equipment. */
+  const sheetEquipment = async (
+    characterId: string,
+  ): Promise<Array<{ item_name: string; quantity: number }>> => {
+    const auth = spyOn(authModule, 'authenticateRequest').mockResolvedValue({
+      user: { userId, email: 'gp@example.test', plan: 'free' },
+      error: null,
+    } as never);
+    try {
+      const response = await createRequestPipelineApp()
+        .use(issue1784DataRoutes)
+        .handle(
+          new Request(`http://localhost/v1/characters/${characterId}/equipment`, {
+            headers: { authorization: 'Bearer <redacted>' },
+          }),
+        );
+      expect(response.status).toBe(200);
+      const rows = (await response.json()) as Array<{ item_name: string; quantity: number | null }>;
+      return rows.map((row) => ({ item_name: row.item_name, quantity: row.quantity ?? 0 }));
+    } finally {
+      auth.mockRestore();
+    }
+  };
   const slotSpends = async (characterId: string): Promise<Array<Record<string, unknown>>> =>
     database
       .select({
@@ -3350,13 +3376,11 @@ ${playerInput}
     const characterId = turn.character.id;
     // The ledger still gets its row.
     expect(await sheetInventory(characterId)).toEqual([{ name: 'Brass Key', quantity: 1 }]);
-    // The sheet Inventory tab reads character_equipment via equipmentRowsToInventory:
-    // the grant must be mirrored there or the item never appears on the sheet.
-    const sheetRows = await database
-      .select({ itemName: characterEquipment.itemName, quantity: characterEquipment.quantity })
-      .from(characterEquipment)
-      .where(eq(characterEquipment.characterId, characterId));
-    expect(sheetRows).toEqual([{ itemName: 'Brass Key', quantity: 1 }]);
+    // The sheet Inventory tab reads character_equipment via GET
+    // /v1/characters/:id/equipment: the grant must be visible there or the item
+    // never appears on the sheet. Read through the route, not the table, so a
+    // filter/mapping in the route would fail this test.
+    expect(await sheetEquipment(characterId)).toEqual([{ item_name: 'Brass Key', quantity: 1 }]);
   });
 
   test('#463: a story loss removes the mirrored character_equipment row', async () => {
@@ -3379,16 +3403,38 @@ ${playerInput}
         items: [{ name: 'Brass Key', quantity: 1, change: 'lose' }],
       }),
     });
-    const sheetRows = await database
-      .select({ itemName: characterEquipment.itemName })
-      .from(characterEquipment)
-      .where(
-        and(
-          eq(characterEquipment.characterId, characterId),
-          eq(drizzleSql`lower(${characterEquipment.itemName})`, 'brass key'),
-        ),
-      );
-    expect(sheetRows).toEqual([]);
+    // The loss must clear the mirrored row as the sheet reads it: read through
+    // GET /v1/characters/:id/equipment, not the table directly.
+    expect(await sheetEquipment(characterId)).toEqual([]);
+  });
+
+  test('#463: a story gain onto an existing starting-kit row bumps quantity, no duplicate', async () => {
+    // The common Hark case (rope, torches, rations): the character already has
+    // the item from creation, and a story gain must bump the row, not add one.
+    const playerInput = 'I take the torch from the sconce.';
+    await playerSays(playerInput);
+    const first = await dmTurn({ ...fighter, playerInput, reply: storyReply('A torch.', undefined) });
+    const characterId = first.character.id;
+    // Seed the starting-kit row as the creation wizard would.
+    await database.insert(characterEquipment).values({
+      characterId,
+      itemName: 'Torch',
+      itemType: 'equipment',
+      quantity: 1,
+    });
+    expect(await sheetEquipment(characterId)).toEqual([{ item_name: 'Torch', quantity: 1 }]);
+    // A story gain of "torch" (lowercase) bumps the existing row via the
+    // lower(name) match; the sheet route must return ONE row of quantity 3.
+    await playerSays('I take two more torches.');
+    await dmTurn({
+      ...fighter,
+      existingCharacter: first.character,
+      playerInput: 'I take two more torches.',
+      reply: storyReply('You take two torches.', {
+        items: [{ name: 'torch', quantity: 2, change: 'gain' }],
+      }),
+    });
+    expect(await sheetEquipment(characterId)).toEqual([{ item_name: 'Torch', quantity: 3 }]);
   });
 
   test('#218 FIX round 3: a cataloged find gets the right type and stats', async () => {
