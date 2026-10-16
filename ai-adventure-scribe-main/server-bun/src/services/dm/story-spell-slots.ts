@@ -148,6 +148,19 @@ export async function spendStorySpellSlots(input: {
       outcome,
     });
   }
+  // #709: a newly cast concentration spell starts concentration (2014). The loop
+  // is the gate-allowed cast list, so a refused cast never starts it. A dice-roll
+  // report replays a cast an earlier turn already spent for, so it is skipped —
+  // re-firing here would resurrect a concentration broken since. A new
+  // concentration replaces any previous one: one spell at a time.
+  const { startConcentration } = await import('../combat/concentration-service.js');
+  for (const [spellName, outcome] of outcomes) {
+    if (outcome === 'dice_roll') continue;
+    const catalog = resolveCatalogSpell(spellName, spellName);
+    if (catalog?.concentration) {
+      await startConcentration(casts.character.id, { name: catalog.name, id: catalog.id });
+    }
+  }
 }
 
 /**

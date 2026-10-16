@@ -54,6 +54,7 @@ mock.module('../../lib/auth.js', () => ({
 
 import type * as ConcentrationService from '../combat/concentration-service.js';
 import type * as NonAttackDamage from '../combat/non-attack-damage.js';
+import type * as StorySpellSlots from '../dm/story-spell-slots.js';
 
 describeWithDb('concentration', () => {
   let applyNonAttackDamage: typeof NonAttackDamage.applyNonAttackDamage;
@@ -477,4 +478,117 @@ describe('live route: POST /v1/characters/:id/damage forces the CON save (#621 R
     }
   });
 });
+});
+
+describeWithDb('concentration starts when a concentration spell is cast (#709)', () => {
+  // The story cast path: the DM turn's gate allowed the cast and
+  // `spendStorySpellSlots` spent the slot. The `casts` object below is the
+  // exact shape production builds (`AllowedCasts` in dm-feature-gate.ts): a
+  // real `characters` row plus the catalog-canonical spell names the gate
+  // resolved, so the SRD `concentration` flag is read from the real catalog.
+  // Fresh client per run: the fixture's shared client is closed by the
+  // earlier describe's afterAll, so a describe-body capture would be dead.
+  let db: ReturnType<typeof realDb>;
+  const userId = testId('cast-user');
+  const MAX_HP = 40;
+
+  let spendStorySpellSlots: typeof StorySpellSlots.spendStorySpellSlots;
+  let getConcentration: typeof ConcentrationService.getConcentration;
+  let applyNonAttackDamage: typeof NonAttackDamage.applyNonAttackDamage;
+
+  let characterId: string;
+  let sessionId: string;
+
+  beforeAll(async () => {
+    db = realDb();
+    ({ spendStorySpellSlots } = await import('../dm/story-spell-slots.js'));
+    ({ getConcentration } = await import('../combat/concentration-service.js'));
+    ({ applyNonAttackDamage } = await import('../combat/non-attack-damage.js'));
+
+    const [{ id }] = await db
+      .insert(characters)
+      .values({ userId, name: testId('story-caster'), level: 5, class: 'wizard' })
+      .returning({ id: characters.id });
+    characterId = id;
+    await db.insert(characterStats).values({
+      characterId: id,
+      constitution: 14,
+      maxHitPoints: MAX_HP,
+      currentHitPoints: MAX_HP,
+      temporaryHitPoints: 0,
+    });
+    // spendStorySpellSlots writes usage rows keyed to the session; the schema
+    // FKs those to a real game session.
+    const [{ id: sid }] = await db
+      .insert(gameSessions)
+      .values({ characterId: id, sessionNumber: 1, status: 'active' })
+      .returning({ id: gameSessions.id });
+    sessionId = sid;
+  });
+
+  beforeEach(async () => {
+    if (!hasRealDb) return;
+    await db
+      .delete(characterConcentration)
+      .where(eq(characterConcentration.characterId, characterId));
+    await db
+      .update(characterStats)
+      .set({ currentHitPoints: MAX_HP, temporaryHitPoints: 0 })
+      .where(eq(characterStats.characterId, characterId));
+  });
+
+  afterAll(async () => {
+    await closeRealDb();
+  });
+
+  async function castInStory(spellName: string): Promise<void> {
+    const [character] = await db
+      .select()
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    await spendStorySpellSlots({
+      userId,
+      sessionId,
+      playerInput: `I cast ${spellName}`,
+      casts: { character, spells: [spellName] },
+    });
+  }
+
+  it('casting a concentration spell in the story starts concentration', async () => {
+    // Dancing Lights is concentration in the SRD catalog — the #709 repro spell.
+    await castInStory('Dancing Lights');
+
+    const current = await getConcentration(characterId);
+    expect(current?.spellName).toBe('Dancing Lights');
+    expect(current?.spellId).toBe('dancing-lights');
+  });
+
+  it('casting a non-concentration spell starts nothing', async () => {
+    await castInStory('Fire Bolt');
+
+    expect(await getConcentration(characterId)).toBeNull();
+  });
+
+  it('casting over an existing concentration replaces it, one spell at a time', async () => {
+    await castInStory('Dancing Lights');
+    await castInStory('Bless');
+
+    expect((await getConcentration(characterId))?.spellName).toBe('Bless');
+  });
+
+  it('damage after the cast triggers the CON save at DC max(10, half damage)', async () => {
+    await castInStory('Dancing Lights');
+
+    // 30 damage -> DC max(10, 15) = 15. Roll 1 + 2 = 3 fails: the spell ends.
+    const result = await applyNonAttackDamage(characterId, userId, 30, 'test blow', {
+      concentrationRoll: () => 1,
+    });
+
+    expect(result.concentration?.hadConcentration).toBe(true);
+    expect(result.concentration?.saveTriggered).toBe(true);
+    expect(result.concentration?.dc).toBe(15);
+    expect(result.concentration?.dropped).toBe(true);
+    expect(result.concentration?.droppedSpell).toBe('Dancing Lights');
+    expect(await getConcentration(characterId)).toBeNull();
+  });
 });

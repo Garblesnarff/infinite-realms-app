@@ -22,6 +22,7 @@ import {
   claimTurnBonusActionAndResolve,
   claimTurnReactionAndResolve,
 } from './combat-turn-resources.js';
+import { startConcentration } from './concentration-service.js';
 import { calculateDamage, resolveCriticalHit } from './damage-calculator.js';
 import {
   getParticipantWithStats,
@@ -856,7 +857,7 @@ export class CombatAttackService {
     const claimAndResolve = usesBonusAction
       ? claimTurnBonusActionAndResolve
       : claimTurnActionAndResolve;
-    return claimAndResolve(casterId, encounterId, expectedVersion, async () => {
+    const resolution = await claimAndResolve(casterId, encounterId, expectedVersion, async () => {
       if (casterData.participant.characterId && spell.level > 0) {
         // Not a React hook: a static service method on a Bun server that happens to start with
         // "use". The rule matches on the name alone, and this file has no React in it at all.
@@ -1274,6 +1275,17 @@ export class CombatAttackService {
 
       return { results };
     });
+    // #709: a successfully cast concentration spell starts concentration (2014).
+    // A miss still casts the spell (the slot is spent), so this runs on any
+    // successful resolution. Only a PC caster concentrates: an NPC has no
+    // character row, so its casts are skipped.
+    if (spell.concentration && casterData.participant.characterId) {
+      await startConcentration(casterData.participant.characterId, {
+        name: spell.name,
+        id: spell.id,
+      });
+    }
+    return resolution;
   }
 
   /**
