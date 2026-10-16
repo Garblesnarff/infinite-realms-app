@@ -77,9 +77,19 @@ export async function recomputeStoredArmorClass(
     ...legacyRows,
     ...inventoryRows.filter((row) => !isAlreadyOnSheet(sheetNames, row.name)),
   ];
-  const ownsArmor = rows.some((row) =>
-    ARMOR_ITEM_TYPES.includes((row.itemType ?? '').trim().toLowerCase()),
+  // Creation stores SRD armour as item_type "equipment". A type-only check
+  // skips Chain Mail and Shield, so Equip never moves the stored AC (#711).
+  const wornByName = computeArmorClass(
+    rows.map((row) => ({
+      item_name: row.name,
+      item_type: row.itemType,
+      equipped: true,
+    })),
+    0,
   );
+  const ownsArmor =
+    rows.some((row) => ARMOR_ITEM_TYPES.includes((row.itemType ?? '').trim().toLowerCase())) ||
+    wornByName !== computeArmorClass([], 0);
   if (!ownsArmor) return null;
 
   const equipment: ArmorClassEquipmentItem[] = rows.map((row) => ({

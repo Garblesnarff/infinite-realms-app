@@ -7,6 +7,10 @@
  */
 import { describe, it, expect } from 'vitest';
 
+import {
+  sheetEquipInventory,
+  sheetEquipWireBody,
+} from '../../../shared/test-fixtures/sheet-equip-wire-body';
 import { buildSheetUpdatePayload } from '../use-character-data';
 
 import type { Character } from '@/types/character';
@@ -132,6 +136,20 @@ describe('buildSheetUpdatePayload (#2701)', () => {
 
   it('returns an empty payload when there is no previous character', () => {
     expect(buildSheetUpdatePayload(null, baseCharacter())).toEqual({});
+  });
+
+  it('equipping a shield PUTs the whole inventory with that row equipped (#711)', () => {
+    const prev = {
+      ...baseCharacter(),
+      inventory: sheetEquipInventory([]),
+    } as Character;
+    const next = {
+      ...prev,
+      inventory: sheetEquipInventory(['Shield']),
+    };
+    expect(buildSheetUpdatePayload(prev, next)).toEqual({
+      equipment: sheetEquipWireBody(prev.id, ['Shield']),
+    });
   });
 
   it('treats null and empty string as the same for text fields', () => {
