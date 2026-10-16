@@ -35,6 +35,8 @@ EXPECT_MODEL_RE=${TRIAGE_EXPECT_MODEL_RE:-sonnet}
 MAX_ISSUES=${TRIAGE_MAX_ISSUES:-6}
 PER_ISSUE_USD=${TRIAGE_PER_ISSUE_USD:-0.50}
 DAILY_CAP_USD=${REVIEW_DAILY_CAP_USD:-5.00} # the foreman cap, shared with review.sh
+CREDIT_START=${REVIEW_CREDIT_START:-2026-10-14}
+CREDIT_STOP_USD=${FOREMAN_CREDIT_STOP_USD:-94}  # hard stop, shared with review.sh (Rob, 2026-10-16)
 MAX_ATTEMPTS=${TRIAGE_MAX_ATTEMPTS:-2}      # per issue without a decision
 CLAUDE_TIMEOUT=${TRIAGE_CLAUDE_TIMEOUT:-10m}
 WORK=${FOREMAN_WORK:-/work}
@@ -292,6 +294,10 @@ main() {
     fi
     if [ "$(attempts "$n")" -ge "$MAX_ATTEMPTS" ]; then
       say "issue #$n: $MAX_ATTEMPTS calls without a decision; skip (needs a human)"; continue
+    fi
+    credit_left=$(credit_left_to_stop "$LEDGER" "$CREDIT_START" "$CREDIT_STOP_USD")
+    if lt "$credit_left" "$PER_ISSUE_USD"; then
+      logline "credit stop: \$$credit_left left before the \$$CREDIT_STOP_USD stop, under the \$$PER_ISSUE_USD per issue; no triage"; break
     fi
     spent=$(spent_today)
     left=$(awk -v a="$DAILY_CAP_USD" -v b="$spent" 'BEGIN { printf "%.2f", a - b }')

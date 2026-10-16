@@ -125,3 +125,20 @@ model_family_of_text() {
   done <<< "$1"
   return 1
 }
+
+# credit_spent <ledger> <start date>: USD spent since the credit started, over
+# every ledger row (reviewer and triager both write to it).
+credit_spent() { awk -v cs="$2" '$2 >= cs { s += $4 } END { printf "%.4f", s + 0 }' "$1" 2> /dev/null || echo 0; }
+
+# credit_left_to_stop <ledger> <start date> <stop usd>: USD left before the
+# credit hard stop (negative once past it).
+credit_left_to_stop() { awk -v a="$3" -v b="$(credit_spent "$1" "$2")" 'BEGIN { printf "%.4f", a - b }'; }
+
+# model_label <model>: the model family named in the bot signature.
+model_label() {
+  case "$1" in
+    *[Hh]aiku*) echo Haiku ;;
+    *[Oo]pus*) echo Opus ;;
+    *) echo Sonnet ;;
+  esac
+}

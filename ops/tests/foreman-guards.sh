@@ -288,7 +288,7 @@ got=$(delcheck deleted_refs x $'app/src/components/old/Old.tsx\napp/src/componen
 
 # reviewer: every verdict comment and review ends with the bot signature, once,
 # even when the model wrote the line itself.
-{ grep -E "^(BOT_SIGNATURE_PREFIX=|BOT_SIGNATURE=|is_jules\(\))" "$HERE/../foreman/review.sh"; sed -n '/^post_verdict() {/,/^}/p' "$HERE/../foreman/review.sh"; } > "$TMP/pv-funcs.sh"
+{ sed -n '/^model_label() {/,/^}/p' "$HERE/../foreman/lib.sh"; grep -E "^(MODEL=|BOT_SIGNATURE_PREFIX=|BOT_SIGNATURE=|is_jules\(\))" "$HERE/../foreman/review.sh"; sed -n '/^post_verdict() {/,/^}/p' "$HERE/../foreman/review.sh"; } > "$TMP/pv-funcs.sh"
 mkdir -p "$TMP/pv"
 STATE=$TMP/pv bash -euo pipefail -c '
   POST=0 REVIEW_MODELS=claude-sonnet-5-5
@@ -479,5 +479,28 @@ awk '/^review_pr\(\) \{/ { f = 1 } f && /author_skip "\$n" "\$s8"/ { a = NR } f 
 ts=$(grep -n 'set_tier "${tier%% \*}"' "$HERE/../foreman/review.sh" | cut -d: -f1); as=$(grep -n 'if author_skip "$n"' "$HERE/../foreman/review.sh" | cut -d: -f1)
 [ -n "$ts" ] && [ -n "$as" ] && [ "$ts" -lt "$as" ] && ok "review_pr: set_tier runs before author_skip" || bad "review_pr: set_tier line '$ts' not before author_skip line '$as'"
 
+# credit hard stop (Rob, 2026-10-16): $94 of the $99 credit, over every ledger row
+cl=$TMP/credit-ledger
+printf '%s\n' "2026-10-13T01:00:00Z 2026-10-13 pr=1 50 sha=aaaaaaaa posted models=x" \
+  "2026-10-14T01:00:00Z 2026-10-14 pr=2 40 sha=bbbbbbbb posted models=x" \
+  "2026-10-15T01:00:00Z 2026-10-15 issue=3 3.5 triage=crew decided models=x" > "$cl"
+[ "$(credit_spent "$cl" 2026-10-14)" = 43.5000 ] && ok "credit_spent: sums reviewer and triager rows since the start date" || bad "credit_spent: $(credit_spent "$cl" 2026-10-14)"
+[ "$(credit_left_to_stop "$cl" 2026-10-14 94)" = 50.5000 ] && ok "credit_left_to_stop: 94 - 43.5" || bad "credit_left_to_stop: $(credit_left_to_stop "$cl" 2026-10-14 94)"
+echo "2026-10-16T01:00:00Z 2026-10-16 pr=4 51 sha=cccccccc posted models=x" >> "$cl"
+[ "$(credit_left_to_stop "$cl" 2026-10-14 94)" = -0.5000 ] && ok "credit_left_to_stop: negative past the stop" || bad "credit_left_to_stop past: $(credit_left_to_stop "$cl" 2026-10-14 94)"
+[ "$(credit_spent "$TMP/no-such-ledger" 2026-10-14)" = 0 ] && ok "credit_spent: missing ledger is 0, like spent_today" || bad "credit_spent missing"
+grep -q '^CREDIT_STOP_USD=${FOREMAN_CREDIT_STOP_USD:-94}' "$HERE/../foreman/review.sh" && grep -q '^CREDIT_STOP_USD=${FOREMAN_CREDIT_STOP_USD:-94}' "$HERE/../foreman/triage.sh" \
+  && ok "credit stop: both scripts default to \$94" || bad "credit stop default"
+awk '/credit_left=\$\(credit_left_to_stop/ { c = NR } /spent=\$\(spent_today\)/ && c && !s { s = NR } /review_pr "\$n" "\$sha" "\$ref" "\$budget"/ { r = NR } END { exit !(c && s && r && c < s && s < r) }' "$HERE/../foreman/review.sh" \
+  && grep -q 'budget=$(min "$budget" "$credit_left")' "$HERE/../foreman/review.sh" \
+  && ok "review.sh: credit stop checked before each review and caps its budget" || bad "review.sh credit stop wiring"
+awk '/credit_left=\$\(credit_left_to_stop/ { c = NR } /triage_issue "\$n" "\$PER_ISSUE_USD"/ { t = NR } END { exit !(c && t && c < t) }' "$HERE/../foreman/triage.sh" \
+  && ok "triage.sh: credit stop checked before each issue" || bad "triage.sh credit stop wiring"
+# signature follows the configured model
+[ "$(model_label haiku)" = Haiku ] && [ "$(model_label claude-opus-5-5)" = Opus ] && [ "$(model_label sonnet)" = Sonnet ] \
+  && ok "model_label: haiku/opus/sonnet" || bad "model_label"
+sig_for() { bash -c 'set -eu; . "$1"; MODEL=$2 SMALL_MODEL=haiku; eval "$(grep -E "^(BOT_SIGNATURE_PREFIX=|EXPECT_MODEL_RE=|SMALL_EXPECT_MODEL_RE=)" "$3")"; eval "$(sed -n "/^set_tier() {/,/^}/p" "$3")"; set_tier sonnet; echo "$BOT_SIGNATURE"' _ "$HERE/../foreman/lib.sh" "$1" "$HERE/../foreman/review.sh"; }
+[ "$(sig_for haiku)" = "— posted by the foreman reviewer bot (Haiku)" ] && ok "set_tier: REVIEW_MODEL=haiku signs (Haiku) on the full tier" || bad "set_tier haiku sig: $(sig_for haiku)"
+[ "$(sig_for sonnet)" = "— posted by the foreman reviewer bot (Sonnet)" ] && ok "set_tier: default model still signs (Sonnet)" || bad "set_tier sonnet sig: $(sig_for sonnet)"
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]

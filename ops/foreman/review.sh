@@ -77,6 +77,7 @@ TICK_MINUTES=${REVIEW_TICK_MINUTES:-40}  # start no new review after this; the u
 CREDIT_USD=${REVIEW_CREDIT_USD:-99}
 CREDIT_START=${REVIEW_CREDIT_START:-2026-10-14}
 CREDIT_END=${REVIEW_CREDIT_END:-2026-11-02}
+CREDIT_STOP_USD=${FOREMAN_CREDIT_STOP_USD:-94}  # hard stop: no review once the credit spend reaches this (Rob, 2026-10-16)
 SUMMARY_HOUR=${REVIEW_SUMMARY_HOUR_UTC:-11}
 OPS_LOG_ISSUE=${REVIEW_OPS_LOG_ISSUE:-230}
 MERGE_TARGET_PER_HOUR=${REVIEW_MERGE_TARGET_PER_HOUR:-20} # Rob's target (#586)
@@ -89,7 +90,7 @@ CLAUDE_TIMEOUT=${REVIEW_CLAUDE_TIMEOUT:-20m}
 # from the human strategist's (it waits for the strategist on protected paths).
 # The prefix is fixed; the model name in brackets follows the tier.
 BOT_SIGNATURE_PREFIX='— posted by the foreman reviewer bot'
-BOT_SIGNATURE="$BOT_SIGNATURE_PREFIX (Sonnet)"
+BOT_SIGNATURE="$BOT_SIGNATURE_PREFIX ($(model_label "$MODEL"))"
 LEDGER=$STATE/spend.log  # "<iso> <utc date> pr=<n> <usd> sha=<sha8> <result> models=<id,id|none>"
 LOG=$STATE/review.log
 
@@ -300,9 +301,9 @@ pick_tier() {
 # set_tier <tier>: the model, the billing check and the signature for one review
 set_tier() {
   if [ "$1" = haiku ]; then
-    RUN_MODEL=$SMALL_MODEL RUN_EXPECT_RE=$SMALL_EXPECT_MODEL_RE BOT_SIGNATURE="$BOT_SIGNATURE_PREFIX (Haiku)"
+    RUN_MODEL=$SMALL_MODEL RUN_EXPECT_RE=$SMALL_EXPECT_MODEL_RE BOT_SIGNATURE="$BOT_SIGNATURE_PREFIX ($(model_label "$SMALL_MODEL"))"
   else
-    RUN_MODEL=$MODEL RUN_EXPECT_RE=$EXPECT_MODEL_RE BOT_SIGNATURE="$BOT_SIGNATURE_PREFIX (Sonnet)"
+    RUN_MODEL=$MODEL RUN_EXPECT_RE=$EXPECT_MODEL_RE BOT_SIGNATURE="$BOT_SIGNATURE_PREFIX ($(model_label "$MODEL"))"
   fi
 }
 
@@ -615,12 +616,18 @@ review_tick() {
       continue
     fi
     ci_finished "$n" || { say "pr #$n: CI not finished, skip"; continue; }
+    credit_left=$(credit_left_to_stop "$LEDGER" "$CREDIT_START" "$CREDIT_STOP_USD")
+    if ! lt 0 "$credit_left"; then
+      logline "credit stop reached (\$$(credit_spent "$LEDGER" "$CREDIT_START") spent since $CREDIT_START, stop at \$$CREDIT_STOP_USD of \$$CREDIT_USD); no reviews"
+      break
+    fi
     spent=$(spent_today)
     if ! lt "$spent" "$DAILY_CAP_USD"; then
       logline "daily cap reached (\$$spent of \$$DAILY_CAP_USD); stopping reviews until 00:00Z"
       break
     fi
     budget=$(min "$PER_PR_USD" "$(awk -v a="$DAILY_CAP_USD" -v b="$spent" 'BEGIN { print a - b }')")
+    budget=$(min "$budget" "$credit_left")
     review_pr "$n" "$sha" "$ref" "$budget"
     done_n=$((done_n + 1))
     [ "$MODEL_MISMATCH" = 0 ] || break
