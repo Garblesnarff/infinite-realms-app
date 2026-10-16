@@ -300,7 +300,15 @@ describe('AIService', () => {
       vi.mocked(llmApiClient.generateText).mockResolvedValue('AI RAW Response');
       vi.mocked(processDMResponse).mockRejectedValue(processingError);
 
-      await expect(AIService.chatWithDM(mockParams)).rejects.toBe(processingError);
+      try {
+        await AIService.chatWithDM(mockParams);
+        expect.unreachable();
+      } catch (e: any) {
+        expect(e.message).toBe(
+          "Something went wrong processing the DM's reply. Your action was not resolved — try again.",
+        );
+        expect(e.cause).toBe(processingError);
+      }
 
       expect(logger.error).toHaveBeenCalledWith('DM_RESPONSE_PROCESSING_FAILED', {
         name: 'Error',

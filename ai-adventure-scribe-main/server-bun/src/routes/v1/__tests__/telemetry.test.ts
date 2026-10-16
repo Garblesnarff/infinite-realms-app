@@ -167,6 +167,22 @@ describe('POST /v1/telemetry/client-failure', () => {
     }
   });
 
+  it('accepts client_turn_failure and logs it', async () => {
+    const response = await app.handle(
+      authedRequest({
+        kind: 'client_turn_failure',
+        sessionId: 'sess-turn-1',
+        error: 'turnCount=4; Error: DM_RESPONSE_PROCESSING_FAILED',
+        message: 'DM_RESPONSE_PROCESSING_FAILED',
+      }),
+    );
+    expect(response.status).toBe(204);
+
+    const line = loggedInfo.find((entry) => entry.msg === 'CLIENT_FAILURE' && entry.kind === 'client_turn_failure');
+    expect(line).toBeDefined();
+    expect(line?.sessionId).toBe('sess-turn-1');
+  });
+
   it('rejects a malformed payload (missing kind) with 400', async () => {
     const response = await app.handle(authedRequest({ sessionId: 'sess-1' }));
     expect(response.status).toBe(400);

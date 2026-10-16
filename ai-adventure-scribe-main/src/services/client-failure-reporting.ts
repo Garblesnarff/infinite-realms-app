@@ -82,6 +82,25 @@ export function reportReactErrorBoundaryFailure(
   );
 }
 
+export function reportTurnFailure(
+  error: Error,
+  { sessionId, turnCount }: { sessionId?: string; turnCount?: number },
+  now = Date.now(),
+): void {
+  const sessionKey = sessionId ?? activeSessionId();
+  if (!shouldReport(`client_turn_failure:${sessionKey ?? 'nosession'}`, now)) return;
+
+  const stackLines = error.stack
+    ? error.stack.split('\n').slice(0, 6).join('\n')
+    : `${error.name}: ${error.message}`;
+  const turnInfo = turnCount !== undefined ? `turnCount=${turnCount}; ` : '';
+  const errorString = `${turnInfo}${stackLines}`;
+
+  userDataApi.reportClientFailure('client_turn_failure', sessionKey, errorString, {
+    message: error.message,
+  });
+}
+
 let installedCleanup: (() => void) | null = null;
 
 /**
