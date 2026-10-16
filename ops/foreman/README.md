@@ -76,3 +76,36 @@ Rebuild the image after any change to these scripts. The units run the copies ba
 - Pause: `systemctl stop realms-catjam-runner.timer realms-reviewer.timer realms-triage.timer`.
 - Overrides go in a unit drop-in as `-e` flags, e.g. `CATJAM_MODEL`, `CATJAM_MAX_JOBS` (2), `CATJAM_JOB_TIMEOUT` (45m), `CATJAM_MAX_FIX_ROUNDS` (3), `REVIEW_MODEL` (sonnet), `REVIEW_SMALL_MODEL` (haiku), `REVIEW_SMALL_MAX_LINES` (300), `REVIEW_MAX_PRS` (12), `REVIEW_PER_PR_USD` (1.50), `REVIEW_DAILY_CAP_USD` (5.00), `REVIEW_TICK_MINUTES` (40).
 - One-off: `review.sh --dry-run --pr N`, `review.sh --summary-dry-run`, `review.sh --slack-test`.
+
+## Pulse (Rob's phone view)
+
+`pulse.sh` makes no model calls and costs $0. `realms-pulse.timer` runs it every 5 min from 12:00Z to 05:00Z (Rob's 7 AM to midnight). It reads only the GitHub API, prod `/version` and the reviewer's `state/` (ledger and triage log, mounted read-only), and posts Slack-style `{"text": ...}` to `PULSE_WEBHOOK_URL`.
+
+- The pulse posts on the :00 and :30 ticks, at most 12 lines:
+  - merges in the last hour and 24 h against the 20/hour target, with the median open→merge time;
+  - PASS-at-head PRs not merged, with the oldest wait; PRs with no verdict at head; FIX PRs waiting on authors;
+  - open PRs by lane (`catjam/`, Jules, `lane-*` = Muse, `codex/`, other);
+  - open `catjam` / `jules` issues with no open PR;
+  - main CI at main's head, prod `/version` status and build age, the newest "Post-deploy smoke FAILED" comment on #229 in 7 days;
+  - foreman spend today, credit left, and the 24 h triage counts.
+- Alerts post on any tick, then at most once an hour while they last:
+  - main CI red;
+  - `/version` not 200;
+  - a PASS waiting more than 45 min (`PULSE_PASS_WAIT_MIN`; waits over 1 h are marked);
+  - no merge in 2 h while PASS PRs wait (`PULSE_NO_MERGE_MIN`);
+  - the foreman daily cap hit.
+- Alert state is kept in `/var/lib/realms-foreman/pulse/state/alerts.state`. A cleared alert is forgotten, so it posts at once the next time.
+- The container gets only `GH_TOKEN` and `PULSE_WEBHOOK_URL`, `--cap-drop ALL`, 1 CPU and 512 MB.
+
+```bash
+install -d -m 700 /var/lib/realms-foreman/pulse
+# Rob adds PULSE_WEBHOOK_URL=<url> to /etc/realms-foreman/env himself.
+docker build --build-arg FOREMAN_UID=1500 -t realms-foreman:pilot ops/foreman
+bash -c 'exec docker run --rm --env-file <(grep -E "^GH_TOKEN=" /etc/realms-foreman/env) \
+  -v /var/lib/realms-foreman/pulse:/work -v /var/lib/realms-foreman/reviewer/state:/reviewer-state:ro \
+  realms-foreman:pilot pulse.sh --dry-run'
+install -m 644 ops/foreman/systemd/realms-pulse.{service,timer} /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now realms-pulse.timer
+```
+
+Tests: `bash ops/tests/foreman-pulse.sh`.

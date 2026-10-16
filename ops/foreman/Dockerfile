@@ -48,3 +48,7 @@ RUN chmod 755 /usr/local/bin/catjam-runner.sh /usr/local/bin/review.sh /usr/loca
 
 ENV FOREMAN_WORK=/work
 WORKDIR /work
+
+# realms-pulse: phone view of the pipeline (no model calls).
+COPY pulse.sh /usr/local/bin/
+RUN chmod 755 /usr/local/bin/pulse.sh
