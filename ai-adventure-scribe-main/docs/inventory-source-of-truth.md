@@ -12,11 +12,11 @@ The character wizard and the sheet write that table (`CharacterService.create` /
 
 ## Still on `inventory_items`
 
-- Story grants and losses (`dm/story-items.ts`). Do not change that writer here.
+- Story grants and losses (`dm/story-items.ts`) write the `inventory_items` ledger AND mirror to `character_equipment` in the same transaction (interim mirror, #463). The ledger remains the record of what the story granted; the mirror is what the sheet reads.
 - Consumables, ammunition, and carried weight (`inventory-consumable-service.ts`, `inventory-data-access.ts`). `character_equipment` has no weight column.
 - `POST /inventory/:itemId/equip`. The sheet's Equip button does not call it. Equip on the sheet is a character PUT, which writes `character_equipment.equipped`.
 - Character JSON export reads both tables so a download stays complete (`routes/v1/characters.ts`).
 
 ## Part B
 
-Copy story grants onto `character_equipment` (or the reverse), then drop the other table. No migration in the Part A pull request.
+Part B (copy story grants onto `character_equipment`) is implemented as an interim mirror: `applyStoryItemsOnce` in `dm/story-items.ts` upserts the mirrored row in the same transaction as the `inventory_items` write, matching on `lower(item_name)` to respect `UNIQUE(character_id, item_name)`. The sheet Inventory tab reads the mirrored rows via `GET /v1/characters/:id/equipment`. Dropping one of the tables is a later migration, not this change.

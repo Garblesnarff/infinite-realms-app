@@ -56,7 +56,7 @@ export async function applyStoryItemsOnce(input: {
 }): Promise<'applied' | 'already_applied'> {
   const { db } = await import('../../../../db/client');
   const { and, eq, sql } = await import('drizzle-orm');
-  const { characters, inventoryItems, storyItemEvents } = await import(
+  const { characters, inventoryItems, storyItemEvents, characterEquipment } = await import(
     '../../../../db/schema/index'
   );
   const { characterId, sessionId, playerMessageAt, items } = input;
@@ -148,6 +148,36 @@ export async function applyStoryItemsOnce(input: {
             requiresAttunement: catalog?.requiresAttunement ?? false,
           });
         }
+        // #463: the sheet Inventory tab reads character_equipment, not
+        // inventory_items (inventory-source-of-truth.md, Part B). Mirror the
+        // grant so a story pickup actually appears on the sheet.
+        const [sheetRow] = await tx
+          .select({ id: characterEquipment.id, quantity: characterEquipment.quantity })
+          .from(characterEquipment)
+          .where(
+            and(
+              eq(characterEquipment.characterId, characterId),
+              eq(sql`lower(${characterEquipment.itemName})`, canonicalName.toLowerCase()),
+            ),
+          )
+          .orderBy(characterEquipment.createdAt)
+          .limit(1);
+        if (sheetRow) {
+          await tx
+            .update(characterEquipment)
+            .set({
+              quantity: (sheetRow.quantity ?? 1) + item.quantity,
+              updatedAt: new Date(),
+            })
+            .where(eq(characterEquipment.id, sheetRow.id));
+        } else {
+          await tx.insert(characterEquipment).values({
+            characterId,
+            itemName: canonicalName,
+            itemType: catalog?.itemType ?? 'equipment',
+            quantity: item.quantity,
+          });
+        }
       } else {
         const rows = await tx
           .select({ id: inventoryItems.id, quantity: inventoryItems.quantity })
@@ -171,6 +201,32 @@ export async function applyStoryItemsOnce(input: {
               .set({ quantity: row.quantity - remaining, updatedAt: new Date() })
               .where(eq(inventoryItems.id, row.id));
             remaining = 0;
+          }
+        }
+        // #463: mirror the loss onto the sheet's table too.
+        const sheetRows = await tx
+          .select({ id: characterEquipment.id, quantity: characterEquipment.quantity })
+          .from(characterEquipment)
+          .where(
+            and(
+              eq(characterEquipment.characterId, characterId),
+              eq(sql`lower(${characterEquipment.itemName})`, canonicalName.toLowerCase()),
+            ),
+          )
+          .orderBy(characterEquipment.createdAt);
+        let sheetRemaining = item.quantity;
+        for (const row of sheetRows) {
+          if (sheetRemaining <= 0) break;
+          const q = row.quantity ?? 1;
+          if (q <= sheetRemaining) {
+            await tx.delete(characterEquipment).where(eq(characterEquipment.id, row.id));
+            sheetRemaining -= q;
+          } else {
+            await tx
+              .update(characterEquipment)
+              .set({ quantity: q - sheetRemaining, updatedAt: new Date() })
+              .where(eq(characterEquipment.id, row.id));
+            sheetRemaining = 0;
           }
         }
       }
