@@ -20,6 +20,7 @@
 
 import { and, eq, ilike, or } from 'drizzle-orm';
 
+import { ClassFeatureUsageService } from './class-feature-usage-service.js';
 import { db } from '../../../../db/client';
 import {
   characterConditions,
@@ -31,12 +32,11 @@ import {
   conditionsLibrary,
   type CharacterFeature,
 } from '../../../../db/schema/index';
+import { abilityModifier } from '../../../../shared/ability-modifier';
 import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
-import { abilityModifier } from '../../../../shared/ability-modifier';
 import { CharacterVitalsService } from '../character-vitals-service.js';
 import { CombatHPService } from '../combat-hp-service.js';
-import { ClassFeatureUsageService } from './class-feature-usage-service.js';
 
 const PALADIN_CLASS = 'Paladin';
 export const DIVINE_SENSE_NAME = 'Divine Sense';
