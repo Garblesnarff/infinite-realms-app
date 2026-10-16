@@ -64,6 +64,8 @@ esac
 TEST_DATABASE_URL="postgres://${DEV_PG_USER}:${DEV_PG_PASSWORD}@localhost:${DEV_PG_PORT}/${DEV_PG_DB}"
 
 if [[ "$DRY_RUN" == "1" ]]; then
+  DRY_CLI_ARGS="play --campaign the-eternal-feast --new --auto --turns 20"
+  if [[ ${#PASSTHROUGH[@]} -gt 0 ]]; then DRY_CLI_ARGS="${PASSTHROUGH[*]}"; fi
   cat <<EOF
 dev-session.sh [dry-run]
 
@@ -75,7 +77,7 @@ dev-session.sh [dry-run]
    (server DATABASE_URL = the replayed test_migrations_* database, kept via KEEP_TEST_DB=1)
    command: bun run dev; health: http://localhost:${SERVER_PORT}/health
 4. GET /v1/auth/test-login with header x-test-auth-secret (print success/fail only)
-5. Run: bun run cli/src/index.ts ${PASSTHROUGH[*]+${PASSTHROUGH[*]}}${PASSTHROUGH[*]-play --campaign the-eternal-feast --new --auto --turns 20}
+5. Run: bun run cli/src/index.ts ${DRY_CLI_ARGS}
 EOF
   exit 0
 fi
