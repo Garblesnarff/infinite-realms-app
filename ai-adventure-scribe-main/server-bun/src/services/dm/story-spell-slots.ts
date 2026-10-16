@@ -148,6 +148,21 @@ export async function spendStorySpellSlots(input: {
       outcome,
     });
   }
+  // #709: a newly cast concentration spell starts concentration (2014). The loop
+  // is the gate-allowed cast list, so a refused cast never starts it. An outcome
+  // that spent no slot starts nothing: a dice-roll report replays a cast an
+  // earlier turn already spent for, a Retry replays the same message (the spend
+  // reports `already_spent`), and `no_slot` means the ledger had nothing left
+  // to spend. Re-firing on any of them would resurrect a concentration broken
+  // since. A new concentration replaces any previous one: one spell at a time.
+  const { startConcentration } = await import('../combat/concentration-service.js');
+  for (const [spellName, outcome] of outcomes) {
+    if (outcome === 'dice_roll' || outcome === 'already_spent' || outcome === 'no_slot') continue;
+    const catalog = resolveCatalogSpell(spellName, spellName);
+    if (catalog?.concentration) {
+      await startConcentration(casts.character.id, { name: catalog.name, id: catalog.id });
+    }
+  }
 }
 
 /**
