@@ -1,4 +1,5 @@
 import { isRetryableUpstreamStatus, LLMUpstreamError } from './llm-errors.js';
+import { llmFetch } from './llm-fixture-fetch.js';
 import { alertProviderKeyLimit, isProviderKeyLimitError } from './llm-key-limit.js';
 import {
   DEFAULT_GEMINI_TEXT_MODEL,
@@ -145,11 +146,8 @@ export const resetProviderKeyLimitForTests = (): void => {
 // #350 N2: the chain-exhausted verdict ORs the key-limit signal across every
 // model attempt — the first 403 "Key limit exceeded" proves the key dead even
 // if a later attempt fails differently.
-const orKeyLimitSignal = (
-  seen: boolean,
-  status?: number,
-  details?: string,
-): boolean => seen || isProviderKeyLimitError({ upstreamStatus: status, details });
+const orKeyLimitSignal = (seen: boolean, status?: number, details?: string): boolean =>
+  seen || isProviderKeyLimitError({ upstreamStatus: status, details });
 
 export const validateStructuredResponseText = (
   text: string,
@@ -529,7 +527,7 @@ export class LLMProviderService {
       for (let retry = 0; retry < (responseSchema ? 2 : 1); retry += 1) {
         attempts.push(candidate);
         try {
-          const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          const response = await llmFetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
               Authorization: `Bearer ${apiKey}`,
@@ -741,7 +739,7 @@ export class LLMProviderService {
         attempts.push(`${candidate} [${version}]`);
         let response: Response;
         try {
-          response = await fetch(
+          response = await llmFetch(
             `https://generativelanguage.googleapis.com/${version}/models/${encodeURIComponent(candidate)}:generateContent?key=${encodeURIComponent(apiKey)}`,
             {
               method: 'POST',
@@ -940,7 +938,7 @@ export class LLMProviderService {
           temperature: 0.3, // Lower temp for structured extraction
         };
 
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        const response = await llmFetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${apiKey}`,
