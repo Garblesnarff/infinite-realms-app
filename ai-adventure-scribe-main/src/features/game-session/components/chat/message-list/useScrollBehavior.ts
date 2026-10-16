@@ -79,7 +79,8 @@ export const useScrollBehavior = (
   }, [isInCombat, messagesRef]);
 
   // Keep the newest line in view when the stream's box shrinks — the roll tray opening below
-  // it, for one (#2252). A shrink moves no scroll position, so nothing else would follow it.
+  // it, for one (#2252) — or its content grows after the auto-scroll, as the combat options do
+  // when they load below the DM message (#713). Neither moves the scroll position.
   useEffect(() => {
     const el = messagesRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
@@ -87,7 +88,24 @@ export const useScrollBehavior = (
       if (!isUserScrolledUpRef.current) el.scrollTop = el.scrollHeight;
     });
     observer.observe(el);
-    return () => observer.disconnect();
+    for (const child of Array.from(el.children)) observer.observe(child);
+
+    let childObserver: MutationObserver | null = null;
+    if (typeof MutationObserver !== 'undefined') {
+      childObserver = new MutationObserver((records) => {
+        for (const record of records) {
+          for (const node of record.addedNodes) {
+            if (node instanceof Element) observer.observe(node);
+          }
+        }
+      });
+      childObserver.observe(el, { childList: true });
+    }
+
+    return () => {
+      observer.disconnect();
+      childObserver?.disconnect();
+    };
   }, [messagesRef]);
 
   // Preserve scroll position after loading more messages
