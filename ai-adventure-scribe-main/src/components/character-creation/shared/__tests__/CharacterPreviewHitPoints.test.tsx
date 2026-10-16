@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import React, { useEffect } from 'react';
 import { describe, it, expect, vi } from 'vitest';
 
+import { findSrdClass } from '../../../../../shared/srd-class-data';
 import CharacterPreview from '../CharacterPreview';
 
 import type { AbilityScores, CharacterClass } from '@/types/character';
@@ -12,7 +13,6 @@ import { fighter } from '@/data/classes/fighter';
 import { dwarf } from '@/data/races/dwarf';
 import { applyRacialBonusesToAbilityScores } from '@/utils/racialAbilityBonuses';
 
-import { findSrdClass } from '../../../../../shared/srd-class-data';
 
 vi.mock('@/hooks/use-toast', () => ({
   useToast: () => ({ toast: vi.fn() }),

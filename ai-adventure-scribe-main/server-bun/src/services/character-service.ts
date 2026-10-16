@@ -20,6 +20,7 @@ import {
 import { CharacterSpellService } from './character/character-spell-service.js';
 import { CharacterVitalsService } from './character-vitals-service.js';
 import { RestHitDiceService } from './rest/rest-hit-dice-service.js';
+import { logger } from '../lib/logger.js';
 import { db } from '../../../db/client';
 import {
   characterPermissions,
@@ -84,7 +85,9 @@ function findSrdClassForHitPoints(className: string | null | undefined) {
  * Level-1 max HP, the one formula (#620): class hit die + CON modifier, +1
  * for Dwarven Toughness (Hill Dwarf, #203). Minimum 1 HP. The server is the
  * only place that computes it — callers send the class, the scores and the
- * subrace, never HP.
+ * subrace, never HP. An unresolvable class falls back to a d8 (the most
+ * common hit die) instead of failing the create; the class column is
+ * optional on the route, so a missing class is valid input.
  */
 function computeLevel1MaxHitPoints(
   className: string | null | undefined,
@@ -93,10 +96,14 @@ function computeLevel1MaxHitPoints(
 ): number {
   const classData = findSrdClassForHitPoints(className);
   if (!classData) {
-    throw new Error(`Unsupported SRD class "${className ?? ''}"; refusing HP initialization.`);
+    logger.warn(
+      { className: className ?? null },
+      'computeLevel1MaxHitPoints: unresolvable SRD class; falling back to d8',
+    );
   }
+  const hitDie = classData?.hitDie ?? 8;
   const toughnessBonus = /hill dwarf/i.test(subrace ?? '') ? 1 : 0;
-  return Math.max(1, classData.hitDie + abilityModifier(constitutionScore ?? 10) + toughnessBonus);
+  return Math.max(1, hitDie + abilityModifier(constitutionScore ?? 10) + toughnessBonus);
 }
 
 /**
@@ -189,9 +196,9 @@ async function recomputeServerDerivedStats(characterId: string): Promise<void> {
   const updates: Partial<NewCharacterStats> = { armorClass, updatedAt: new Date() };
 
   // A character without a resolvable class keeps its stored HP; only a
-  // level-1 character of a known class gets the formula. (Create refuses an
-  // unresolvable class outright; the update path must not 500 a save for a
-  // character created class-less through another route.)
+  // level-1 character of a known class gets the formula re-derived. (Create
+  // falls back to a d8 for an unresolvable class; the update path must not
+  // rewrite HP it cannot derive.)
   if ((character.level ?? 1) === 1 && findSrdClassForHitPoints(character.class)) {
     const maxHitPoints = computeLevel1MaxHitPoints(
       character.class,
