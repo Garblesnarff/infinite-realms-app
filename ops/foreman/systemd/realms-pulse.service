@@ -1,0 +1,23 @@
+# realms-pulse: the pipeline on Rob's phone. Install: see ops/foreman/README.md.
+# No model calls. The env file is filtered through a pipe: GH_TOKEN and
+# PULSE_WEBHOOK_URL only. The reviewer state (ledger, triage log) is mounted
+# read-only; the pulse keeps its alert state in its own dir.
+[Unit]
+Description=Infinite Realms realms-pulse (pipeline pulse + alerts to PULSE_WEBHOOK_URL)
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+Nice=10
+TimeoutStartSec=4min
+TimeoutStopSec=30s
+ExecStartPre=-/usr/bin/docker rm -f realms-pulse
+ExecStart=/bin/bash -c 'exec /usr/bin/docker run --rm --init --name realms-pulse --stop-timeout 20 \
+  --cpus 1 --memory 512m --memory-swap 512m --cpu-shares 256 --pids-limit 256 \
+  --cap-drop ALL --security-opt no-new-privileges \
+  --env-file <(grep -E "^(GH_TOKEN|PULSE_WEBHOOK_URL)=" /etc/realms-foreman/env) \
+  -v /var/lib/realms-foreman/pulse:/work \
+  -v /var/lib/realms-foreman/reviewer/state:/reviewer-state:ro \
+  realms-foreman:pilot pulse.sh'
+ExecStopPost=-/usr/bin/docker rm -f realms-pulse
