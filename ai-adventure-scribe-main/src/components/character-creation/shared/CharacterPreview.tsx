@@ -54,9 +54,9 @@ const CharacterPreview: React.FC = () => {
   const characterProficiencyBonus = proficiencyBonus(totalLevel);
 
   // #389: the creation summary must show a labeled HP that matches what the
-  // save will store. Mirror transformAbilityScoresForStorage's level-1 HP
-  // derivation (class hit die + post-racial CON modifier + Dwarven Toughness),
-  // the same producer the save path uses.
+  // save will store. Mirror the server's level-1 HP derivation (#620: class
+  // hit die + post-racial CON modifier + Dwarven Toughness), which no longer
+  // lives in the client save path.
   const race = typeof character.race === 'object' ? character.race : null;
   const subrace = typeof character.subrace === 'object' ? character.subrace : null;
   const finalScores: AbilityScores = applyRacialBonusesToAbilityScores(

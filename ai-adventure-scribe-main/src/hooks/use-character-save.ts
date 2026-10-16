@@ -32,23 +32,6 @@ import { convertSpellIdsToDatabase } from '@/utils/spell-id-mapping';
  */
 const LOCAL_USER_ID = '00000000-0000-0000-0000-000000000000';
 
-type StoredCharacterStats = {
-  max_hit_points?: number;
-  current_hit_points?: number;
-};
-
-/**
- * The character sheet hydrates stats as an object, while the API list path
- * normalizes them to a one-item array. Accept both runtime shapes until every
- * caller shares one representation.
- */
-const getStoredCharacterStats = (character: Character): StoredCharacterStats | undefined => {
-  const stats = character.character_stats as unknown;
-  if (Array.isArray(stats)) return stats[0] as StoredCharacterStats | undefined;
-  if (stats && typeof stats === 'object') return stats as StoredCharacterStats;
-  return undefined;
-};
-
 /**
  * #2710: Maps the wizard's equipment (string[]) to inventory form.
  * The wizard writes equipment as string[]; the save path expects inventory.
@@ -228,7 +211,9 @@ export const useCharacterSave = (): {
         let savedCharacter: Character;
         if (!characterData.id) {
           // The wizard holds base scores. Store final scores (racial bonus applied once, here)
-          // so AC, HP and saves derive from what is persisted and reads never re-add the bonus.
+          // so saves derive from what is persisted and reads never re-add the bonus.
+          // #620: HP and AC are server-computed from these scores, the class and
+          // the equipment; the client sends inputs only.
           const finalAbilityScores = applyRacialBonusesToAbilityScores(
             character.abilityScores!,
             character.race || null,
@@ -236,18 +221,10 @@ export const useCharacterSave = (): {
             character.racialAbilityChoices,
           );
 
-          // Dwarven Toughness (Hill Dwarf): +1 max HP per level, applied where HP is derived.
-          const raceTraits = [
-            ...(character.race?.traits || []),
-            ...(character.subrace?.traits || []),
-          ];
-
           // Transform stats data
           const statsData = transformAbilityScoresForStorage(
             finalAbilityScores,
             '00000000-0000-0000-0000-000000000000', // Temporary ID, will be replaced
-            character.class?.name,
-            raceTraits,
           );
 
           // Transform equipment data if present
@@ -270,9 +247,6 @@ export const useCharacterSave = (): {
               intelligence: statsData.intelligence,
               wisdom: statsData.wisdom,
               charisma: statsData.charisma,
-              armor_class: statsData.armor_class,
-              current_hit_points: statsData.current_hit_points,
-              max_hit_points: statsData.max_hit_points,
             },
             equipment: equipmentData || undefined,
           });
@@ -290,38 +264,16 @@ export const useCharacterSave = (): {
 
           // ⚡ Bolt: Parallelize all database operations for existing characters.
           // This reduces database round-trips and improves save performance.
-          // Dwarven Toughness: apply at save where max HP is derived (level-1 edits
-          // re-derive HP, so the bonus must be present here too).
-          const updateRaceTraits = [
-            ...(character.race?.traits || []),
-            ...(character.subrace?.traits || []),
-          ];
+          // #620: ability scores are inputs; HP and AC are server-computed on
+          // the upsert (level-1 max HP re-derives there, current HP keeps
+          // damage already taken), so the client sends no derived values.
           const transformedStatsData = transformAbilityScoresForStorage(
             character.abilityScores!,
             characterData.id,
-            character.class?.name,
-            updateRaceTraits,
           );
           const { character_id: _characterId, ...rawStatsData } = transformedStatsData;
           const statsData: Partial<Omit<typeof transformedStatsData, 'character_id'>> =
             rawStatsData;
-          const storedStats = getStoredCharacterStats(character);
-
-          if (character.level === 1 && storedStats) {
-            const oldMax = storedStats.max_hit_points;
-            const oldCurrent = storedStats.current_hit_points;
-            if (typeof oldMax === 'number' && typeof oldCurrent === 'number') {
-              statsData.current_hit_points =
-                oldCurrent === oldMax
-                  ? transformedStatsData.max_hit_points
-                  : Math.min(oldCurrent, transformedStatsData.max_hit_points);
-            }
-          } else if (character.level !== 1) {
-            // HP belongs to the vitals/combat engine once a character has advanced beyond
-            // creation. Do not send formula-derived values on ordinary sheet edits.
-            delete statsData.max_hit_points;
-            delete statsData.current_hit_points;
-          }
 
           // #2710: the wizard writes equipment as string[] (never inventory).
           // Map it to inventory form so the rows are saved.

@@ -6,7 +6,6 @@ export { shields } from './equipment/shields';
 export { adventuringGear } from './equipment/gear';
 export { allEquipment, EQUIPMENT_LOOKUP } from './equipment';
 export {
-  calculateArmorClass,
   getEquipmentByCategory,
   getWeaponsByType,
   getArmorByType,

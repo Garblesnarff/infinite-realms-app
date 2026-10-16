@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { abilityModifier } from '../../../../shared/ability-modifier';
+import { findSrdClass } from '../../../../shared/srd-class-data';
 import { calculateHitPoints } from '../basic-math';
 import {
   formatCharacterSheetHitPoints,
@@ -14,6 +16,7 @@ import { transformCharacterData } from '../data-transformers';
 import type { Character } from '@/types/character';
 
 import { buildStarterCharacterSeed } from '@/services/character/starter-character-seeding';
+
 
 const testDirectory = dirname(fileURLToPath(import.meta.url));
 /*
@@ -114,9 +117,13 @@ describe('getCharacterSheetHitPoints', () => {
       },
       'abyssal-descent',
     );
-    const stats = seed.stats as {
-      current_hit_points: number;
-      max_hit_points: number;
+    // #620: the seed sends inputs only; the server derives level-1 HP at
+    // create (Fighter d10 + CON modifier). Mirror that stored value here.
+    const maxHitPoints = (findSrdClass('Fighter')?.hitDie ?? 0) + abilityModifier(14);
+    const stats = {
+      ...(seed.stats as Record<string, number>),
+      current_hit_points: maxHitPoints,
+      max_hit_points: maxHitPoints,
     };
     const character = { id: 'fresh-premade', character_stats: stats } as Character;
 

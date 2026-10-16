@@ -65,10 +65,7 @@
     "constitution": 16,
     "intelligence": 12,
     "wisdom": 11,
-    "charisma": 8,
-    "armor_class": 12,
-    "current_hit_points": 14,
-    "max_hit_points": 14
+    "charisma": 8
   },
   "equipment": [
     {

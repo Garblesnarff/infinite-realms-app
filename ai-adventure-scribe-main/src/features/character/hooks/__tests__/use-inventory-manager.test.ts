@@ -11,7 +11,6 @@ vi.mock('@/hooks/use-toast', () => ({
 }));
 
 vi.mock('@/data/equipmentOptions', () => ({
-  calculateArmorClass: vi.fn(() => 10),
   convertCurrency: vi.fn((amount, from, to) => {
     if (from === to) return amount;
     // Simple mock conversion for testing: 1gp = 1gp
@@ -186,34 +185,6 @@ describe('useInventoryManager', () => {
 
     expect(result.current.inventory.find((i) => i.id === mockShield.id)?.equipped).toBe(false);
     expect(result.current.inventory.find((i) => i.id === shield2.id)?.equipped).toBe(true);
-  });
-
-  it('should calculate AC correctly', async () => {
-    const { result } = renderHook(() => useInventoryManager(mockCharacter));
-
-    vi.mocked(equipmentOptions.calculateArmorClass).mockReturnValue(15);
-
-    await act(async () => {
-      result.current.addToInventory(mockArmor);
-    });
-
-    await act(async () => {
-      result.current.toggleEquipped(mockArmor.id);
-    });
-
-    expect(result.current.inventory.find((i) => i.id === mockArmor.id)?.equipped).toBe(true);
-    expect(result.current.equippedArmor?.id).toBe(mockArmor.id);
-
-    expect(equipmentOptions.calculateArmorClass).toHaveBeenLastCalledWith(
-      expect.objectContaining({ id: mockArmor.id }),
-      null, // shield
-      2, // dex
-      0, // bonus
-      'Fighter',
-      1, // con
-      0, // wis
-    );
-    expect(result.current.calculatedAC).toBe(15);
   });
 
   it('should purchase items if enough currency', () => {

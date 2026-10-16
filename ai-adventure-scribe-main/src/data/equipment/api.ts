@@ -12,45 +12,6 @@ import logger from '@/lib/logger';
 
 export const magicItems = magicItemData as Equipment[];
 
-export function calculateArmorClass(
-  equippedArmor: Equipment | null,
-  equippedShield: Equipment | null,
-  dexModifier: number,
-  otherBonuses: number = 0,
-  characterClass?: string,
-  conModifier: number = 0,
-  wisModifier: number = 0,
-): number {
-  const hasUnarmoredDefense =
-    characterClass &&
-    (characterClass.toLowerCase() === 'barbarian' || characterClass.toLowerCase() === 'monk');
-  const isWearingArmor = equippedArmor !== null;
-  if (hasUnarmoredDefense && !isWearingArmor) {
-    let ac = 10 + dexModifier;
-    switch (characterClass!.toLowerCase()) {
-      case 'barbarian':
-        ac += conModifier;
-        break;
-      case 'monk':
-        ac += wisModifier;
-        break;
-    }
-    if (equippedShield && equippedShield.armorClass) ac += equippedShield.armorClass.base;
-    return ac + otherBonuses;
-  }
-  let ac = 10 + dexModifier;
-  if (equippedArmor && equippedArmor.armorClass) {
-    const armorAC = equippedArmor.armorClass;
-    ac = armorAC.base;
-    if (armorAC.dexModifier) {
-      const maxDex = armorAC.maxDexModifier !== undefined ? armorAC.maxDexModifier : Infinity;
-      ac += Math.min(dexModifier, maxDex);
-    }
-  }
-  if (equippedShield && equippedShield.armorClass) ac += equippedShield.armorClass.base;
-  return ac + otherBonuses;
-}
-
 export function getEquipmentByCategory(category: Equipment['category']): Equipment[] {
   return allEquipment.filter((item) => item.category === category);
 }

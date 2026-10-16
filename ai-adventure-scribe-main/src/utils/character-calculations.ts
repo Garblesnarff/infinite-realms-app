@@ -21,7 +21,6 @@ import {
   SKILLS_MAP,
   calculateProficiencyBonus,
   calculateHitPoints,
-  calculateArmorClass,
   calculateCarryingCapacity,
 } from '@/utils/character/basic-math';
 import { getCharacterSheetArmorClass } from '@/utils/character/character-sheet-armor-class';
@@ -95,7 +94,6 @@ export {
   SKILLS_MAP,
   calculateProficiencyBonus,
   calculateHitPoints,
-  calculateArmorClass,
   calculateCarryingCapacity,
 };
 

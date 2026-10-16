@@ -368,23 +368,19 @@ describe('starter-character-seeding', () => {
     expect(fallbackSeed.knownSpells).not.toContain('arms-of-hadar');
   });
 
-  it.each([
-    ['Cleric', 10],
-    ['Fighter', 12],
-  ])('stores level-1 %s HP from the shared hit die', (characterClass, expectedMaxHitPoints) => {
-    const seed = buildStarterCharacterSeed(
-      { ...clericTemplate, class: characterClass },
-      'campaign-id',
-    );
+  it.each([['Cleric'], ['Fighter']])(
+    'sends no HP for a level-1 %s; the server computes it (#620)',
+    (characterClass) => {
+      const seed = buildStarterCharacterSeed(
+        { ...clericTemplate, class: characterClass },
+        'campaign-id',
+      );
 
-    expect((seed.stats as { max_hit_points: number }).max_hit_points).toBe(expectedMaxHitPoints);
-  });
-
-  it('throws for an unsupported class instead of fabricating HP', () => {
-    expect(() =>
-      buildStarterCharacterSeed({ ...clericTemplate, class: 'Artificer' }, 'campaign-id'),
-    ).toThrow('Unsupported SRD class "Artificer"; refusing HP initialization.');
-  });
+      const stats = seed.stats as Record<string, unknown>;
+      expect(stats).not.toHaveProperty('max_hit_points');
+      expect(stats).not.toHaveProperty('current_hit_points');
+    },
+  );
 
   it('sets both portrait fields and the server-facing spell/equipment fields', () => {
     const seed = buildStarterCharacterSeed(clericTemplate, 'campaign-id');
@@ -400,16 +396,20 @@ describe('starter-character-seeding', () => {
     );
   });
 
-  it('computes armour class from the equipment it just built, not 10 + DEX', () => {
-    // #1858: The Faithful shipped at AC 10 in Scale Mail and a Shield. Scale Mail 14, DEX +0
-    // (capped at +2 for medium armour anyway), shield +2 — the sheet says 16.
+  it('sends no armour class; the server derives it from the equipment (#620)', () => {
+    // #1858: The Faithful shipped at AC 10 in Scale Mail and a Shield because
+    // the seeder sent 10 + DEX. The seeder no longer sends AC at all — the
+    // server computes it from the equipment rows in the same payload.
     const seed = buildStarterCharacterSeed(clericTemplate, 'campaign-id');
-    const stats = seed.stats as { armor_class: number };
+    const stats = seed.stats as Record<string, unknown>;
 
-    expect(stats.armor_class).toBe(16);
+    expect(stats).not.toHaveProperty('armor_class');
+    expect(seed.equipment).toEqual(
+      expect.arrayContaining([expect.objectContaining({ item_name: 'Scale Mail' })]),
+    );
   });
 
-  it('still falls back to 10 + DEX for a template that carries no armour', () => {
+  it('sends no armour class for a template that carries no armour either (#620)', () => {
     const seed = buildStarterCharacterSeed(
       {
         ...clericTemplate,
@@ -418,9 +418,9 @@ describe('starter-character-seeding', () => {
       },
       'campaign-id',
     );
-    const stats = seed.stats as { armor_class: number };
+    const stats = seed.stats as Record<string, unknown>;
 
-    expect(stats.armor_class).toBe(13);
+    expect(stats).not.toHaveProperty('armor_class');
   });
 
   it('keeps both starter creation call sites on the shared helper', () => {

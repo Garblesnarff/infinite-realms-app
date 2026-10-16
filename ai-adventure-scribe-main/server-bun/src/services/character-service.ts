@@ -13,7 +13,10 @@
 import { TRPCError } from '@trpc/server';
 import { and, desc, eq, exists, inArray, or, sql } from 'drizzle-orm';
 
-import { syncArmorClassAfterEquipmentChange } from './character/character-armor-class.js';
+import {
+  readArmorClassEquipment,
+  syncArmorClassAfterEquipmentChange,
+} from './character/character-armor-class.js';
 import { CharacterSpellService } from './character/character-spell-service.js';
 import { CharacterVitalsService } from './character-vitals-service.js';
 import { RestHitDiceService } from './rest/rest-hit-dice-service.js';
@@ -28,10 +31,12 @@ import {
 } from '../../../db/schema/index';
 import {
   computeArmorClass,
+  describeArmorClass,
   isSrdArmorOrShieldName,
   type ArmorClassEquipmentItem,
 } from '../../../shared/armor-class';
 import { isCatalogWeaponName } from '../../../shared/equipment-weapon-resolver';
+import { findSrdClass } from '../../../shared/srd-class-data';
 import { InternalServerError } from '../lib/errors.js';
 import { SpellSlotMechanics } from './spell-slots/spell-slot-mechanics.js';
 import { abilityModifier } from '../../../shared/ability-modifier';
@@ -58,6 +63,71 @@ function equipmentItemName(item: Record<string, unknown>): string {
 }
 
 /**
+ * Subclasses the app stores as the character's class name (the same two the
+ * spell-slot engine maps in THIRD_CASTER_SUBCLASSES); they use their parent's
+ * hit die.
+ */
+const SUBCLASS_PARENT_CLASS: Record<string, string> = {
+  'eldritch knight': 'Fighter',
+  'arcane trickster': 'Rogue',
+};
+
+/** Resolve the SRD class for HP, following a known subclass to its parent. */
+function findSrdClassForHitPoints(className: string | null | undefined) {
+  return (
+    findSrdClass(className) ??
+    findSrdClass(SUBCLASS_PARENT_CLASS[(className ?? '').trim().toLowerCase()] ?? '')
+  );
+}
+
+/**
+ * Level-1 max HP, the one formula (#620): class hit die + CON modifier, +1
+ * for Dwarven Toughness (Hill Dwarf, #203). Minimum 1 HP. The server is the
+ * only place that computes it — callers send the class, the scores and the
+ * subrace, never HP.
+ */
+function computeLevel1MaxHitPoints(
+  className: string | null | undefined,
+  constitutionScore: number | null | undefined,
+  subrace: string | null | undefined,
+): number {
+  const classData = findSrdClassForHitPoints(className);
+  if (!classData) {
+    throw new Error(`Unsupported SRD class "${className ?? ''}"; refusing HP initialization.`);
+  }
+  const toughnessBonus = /hill dwarf/i.test(subrace ?? '') ? 1 : 0;
+  return Math.max(1, classData.hitDie + abilityModifier(constitutionScore ?? 10) + toughnessBonus);
+}
+
+/**
+ * Armour class, server-side (#620). Unarmoured Defence (Barbarian +CON, Monk
+ * +WIS) applies only when no armour is worn; a Monk also loses it while
+ * using a shield. Everything else defers to the shared equipment rule.
+ */
+function computeServerArmorClass(
+  className: string | null | undefined,
+  scores: {
+    dexterity?: number | null;
+    constitution?: number | null;
+    wisdom?: number | null;
+  },
+  equipment: ArmorClassEquipmentItem[],
+): number {
+  const breakdown = describeArmorClass(equipment, abilityModifier(scores.dexterity ?? 10));
+  const normalized = (className ?? '').trim().toLowerCase();
+  const hasUnarmoredDefense =
+    !breakdown.armor && (normalized === 'barbarian' || normalized === 'monk');
+  if (!hasUnarmoredDefense) return breakdown.armorClass;
+  // A Monk's Unarmoured Defence stops working with a shield; the shield's +2
+  // from the equipment rule still applies.
+  if (normalized === 'monk' && breakdown.shieldBonus > 0) return breakdown.armorClass;
+  return (
+    breakdown.armorClass +
+    abilityModifier((normalized === 'barbarian' ? scores.constitution : scores.wisdom) ?? 10)
+  );
+}
+
+/**
  * Starting packages arrive with equipped: false (#710). Wear SRD armour, a shield, and the
  * first catalog weapon. Leave the rest carried. An item the caller already marked equipped
  * stays that way, and a second weapon is not worn when one already is. Create only — an
@@ -79,6 +149,66 @@ function withStartingPackageEquipped(
     }
     return item;
   });
+}
+
+/**
+ * Recompute the server-owned derived stats after a stats upsert (#620): the
+ * armour class (equipment + Unarmoured Defence) always, and max HP for
+ * level-1 characters. Higher-level characters keep their stored max HP — it
+ * belongs to the vitals engine once level-ups have happened. Current HP keeps
+ * the damage already taken: a full-health character stays full, otherwise the
+ * stored value is capped at the new max.
+ */
+async function recomputeServerDerivedStats(characterId: string): Promise<void> {
+  const [character] = await db
+    .select({
+      class: characters.class,
+      level: characters.level,
+      subrace: characters.subrace,
+    })
+    .from(characters)
+    .where(eq(characters.id, characterId))
+    .limit(1);
+  if (!character) return;
+  const [stats] = await db
+    .select()
+    .from(characterStats)
+    .where(eq(characterStats.characterId, characterId))
+    .limit(1);
+  if (!stats) return;
+
+  const armorClass = computeServerArmorClass(
+    character.class,
+    {
+      dexterity: stats.dexterity,
+      constitution: stats.constitution,
+      wisdom: stats.wisdom,
+    },
+    await readArmorClassEquipment(characterId),
+  );
+  const updates: Partial<NewCharacterStats> = { armorClass, updatedAt: new Date() };
+
+  // A character without a resolvable class keeps its stored HP; only a
+  // level-1 character of a known class gets the formula. (Create refuses an
+  // unresolvable class outright; the update path must not 500 a save for a
+  // character created class-less through another route.)
+  if ((character.level ?? 1) === 1 && findSrdClassForHitPoints(character.class)) {
+    const maxHitPoints = computeLevel1MaxHitPoints(
+      character.class,
+      stats.constitution,
+      character.subrace,
+    );
+    const storedMax = stats.maxHitPoints ?? maxHitPoints;
+    const storedCurrent = stats.currentHitPoints ?? maxHitPoints;
+    updates.maxHitPoints = maxHitPoints;
+    updates.currentHitPoints =
+      storedCurrent === storedMax ? maxHitPoints : Math.min(storedCurrent, maxHitPoints);
+  }
+
+  await db
+    .update(characterStats)
+    .set(updates)
+    .where(eq(characterStats.characterId, characterId));
 }
 
 export class CharacterService {
@@ -244,23 +374,24 @@ export class CharacterService {
       }
 
       if (stats) {
+        // #620: the server is the only place that computes level-1 HP and AC.
+        // The client sends inputs (class, ability scores, equipment); any
+        // armor_class or hit-point values it sent are ignored.
+        const maxHitPoints = computeLevel1MaxHitPoints(data.class, stats.constitution, data.subrace);
         await tx.insert(characterStats).values({
           ...stats,
           characterId: character.id,
-          // The equipment lands in this same transaction, so the armour class is derived from
-          // the payload rather than by re-reading rows that are not committed yet. Callers
-          // send `10 + DEX` (the starter seeder used to, the character wizard still does),
-          // which is how equipped armour stopped counting for 76 characters (#1858). A create
-          // that carries no equipment keeps whatever AC the caller sent — a hand-set NPC AC is
-          // not ours to overwrite.
-          ...(seededEquipment?.length
-            ? {
-                armorClass: computeArmorClass(
-                  toArmorClassItems(seededEquipment),
-                  abilityModifier(stats.dexterity ?? 10),
-                ),
-              }
-            : {}),
+          armorClass: computeServerArmorClass(
+            data.class,
+            {
+              dexterity: stats.dexterity,
+              constitution: stats.constitution,
+              wisdom: stats.wisdom,
+            },
+            seededEquipment ? toArmorClassItems(seededEquipment) : [],
+          ),
+          maxHitPoints,
+          currentHitPoints: maxHitPoints,
         });
       }
 
@@ -347,9 +478,6 @@ export class CharacterService {
             intelligence = COALESCE(${data.intelligence ?? null}, cs.intelligence),
             wisdom = COALESCE(${data.wisdom ?? null}, cs.wisdom),
             charisma = COALESCE(${data.charisma ?? null}, cs.charisma),
-            armor_class = COALESCE(${data.armorClass ?? null}, cs.armor_class),
-            max_hit_points = COALESCE(${data.maxHitPoints ?? null}, cs.max_hit_points),
-            current_hit_points = COALESCE(${data.currentHitPoints ?? null}, cs.current_hit_points),
             temporary_hit_points = COALESCE(${data.temporaryHitPoints ?? null}, cs.temporary_hit_points),
             initiative_bonus = COALESCE(${data.initiativeBonus ?? null}, cs.initiative_bonus),
             speed = COALESCE(${data.speed ?? null}, cs.speed),
@@ -366,9 +494,6 @@ export class CharacterService {
           intelligence,
           wisdom,
           charisma,
-          armor_class,
-          max_hit_points,
-          current_hit_points,
           temporary_hit_points,
           initiative_bonus,
           speed
@@ -381,9 +506,6 @@ export class CharacterService {
           COALESCE(${data.intelligence ?? null}, 10),
           COALESCE(${data.wisdom ?? null}, 10),
           COALESCE(${data.charisma ?? null}, 10),
-          COALESCE(${data.armorClass ?? null}, 10),
-          COALESCE(${data.maxHitPoints ?? null}, 10),
-          COALESCE(${data.currentHitPoints ?? null}, 10),
           COALESCE(${data.temporaryHitPoints ?? null}, 0),
           COALESCE(${data.initiativeBonus ?? null}, 0),
           COALESCE(${data.speed ?? null}, 30)
@@ -400,11 +522,10 @@ export class CharacterService {
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Character not found' });
     }
 
-    // The character sheet computes its armour class from ability scores alone, so every save
-    // would otherwise write `10 + DEX` over an equipment-derived value — the same defect the
-    // seeder had (#1858). Re-derive from the stored equipment and let the rule have the last
-    // word. Characters who own no armour or shield are left exactly as the caller sent them.
-    await syncArmorClassAfterEquipmentChange(characterId);
+    // #620: HP and AC are server-computed; the client sends inputs only, so no
+    // client value can win. Recompute from the stored row, the character's
+    // class and the stored equipment.
+    await recomputeServerDerivedStats(characterId);
   }
 
   /**
