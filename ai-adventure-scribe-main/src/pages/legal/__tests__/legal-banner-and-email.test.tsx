@@ -11,6 +11,10 @@ vi.mock('@/config/legal', () => ({
   LEGAL_LAST_UPDATED: 'test date',
 }));
 
+vi.mock('@/contexts/AuthContext', () => ({
+  useAuth: () => ({ user: null, userPlan: null, isBlogAdmin: false, signOut: vi.fn() }),
+}));
+
 import ContactPage from '../ContactPage';
 
 const renderContact = () =>

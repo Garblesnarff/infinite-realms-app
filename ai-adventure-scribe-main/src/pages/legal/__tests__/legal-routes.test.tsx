@@ -2,11 +2,15 @@ import { render, screen } from '@testing-library/react';
 import { Suspense } from 'react';
 import { HelmetProvider } from 'react-helmet-async';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { LEGAL_ROUTES } from '../legal-routes';
 
 import { FooterSection } from '@/components/launch/FooterSection';
+
+vi.mock('@/contexts/AuthContext', () => ({
+  useAuth: () => ({ user: null, userPlan: null, isBlogAdmin: false, signOut: vi.fn() }),
+}));
 
 const HEADINGS: Record<string, string> = {
   '/privacy': 'Privacy Policy',
