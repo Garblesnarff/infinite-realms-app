@@ -1,17 +1,23 @@
 #!/usr/bin/env bun
 /* eslint-disable max-lines -- single CLI entrypoint: arg parsing, prompts, and rendering. */
+import { readFileSync } from 'node:fs';
 import { stdin as input, stdout as output } from 'node:process';
 import { createInterface } from 'node:readline/promises';
 
 import { config } from 'dotenv';
 
-import { runAutoTurns } from './auto';
+import { runAutoTurns, type AutoTurnSummary, type Persona } from './auto';
 import { applyCliEnvironment } from './env';
+import { failVerdict, type FailError } from './fail-rules';
 import { selectPlaySession, templateListRows, type StarterTemplate } from './play-session';
+import { installRequestIdCapture } from './request-id';
+import { parseScript } from './script';
+import { createTranscriptWriter } from './transcript';
 import { loginWithPassword } from '../../shared/auth/headless-auth';
 
-import type { Persona } from './auto';
 import type { CompletedHeadlessRoll, HeadlessEvent } from '@/services/headless-game-client';
+
+import { mulberry32, setRngSeed } from '@/utils/rng';
 
 type Args = {
   command?: string;
@@ -25,6 +31,8 @@ type Args = {
   delay: number;
   transcript?: string;
   persona?: Persona;
+  seed?: number;
+  script?: string;
 };
 
 function parseArgs(argv: string[]): Args {
@@ -49,7 +57,12 @@ function parseArgs(argv: string[]): Args {
     else if (flag === '--turns') args.turns = Number(flags[++i] || 20);
     else if (flag === '--delay') args.delay = Number(flags[++i] || 2_000);
     else if (flag === '--transcript') args.transcript = flags[++i];
-    else if (flag === '--persona') {
+    else if (flag === '--script') args.script = flags[++i];
+    else if (flag === '--seed') {
+      const seed = Number(flags[++i]);
+      if (!Number.isInteger(seed)) throw new Error('--seed must be an integer');
+      args.seed = seed;
+    } else if (flag === '--persona') {
       const persona = flags[++i];
       if (!['careful', 'aggressive', 'chaotic'].includes(persona)) {
         throw new Error('--persona must be careful, aggressive, or chaotic');
@@ -58,6 +71,17 @@ function parseArgs(argv: string[]): Args {
     }
   }
   return args;
+}
+
+/**
+ * Build a random source for a run. With `--seed` it seeds the shared dice RNG
+ * (and the dice engine) and returns the same reproducible stream. The server's
+ * dice are seeded separately by its `DICE_SEED` env.
+ */
+function seedRandom(seed: number | undefined): () => number {
+  if (seed === undefined) return Math.random;
+  setRngSeed(seed);
+  return mulberry32(seed);
 }
 
 async function authenticate(): Promise<void> {
@@ -108,9 +132,10 @@ async function getStarterCampaign(slug: string) {
 async function chooseStarterTemplate(
   args: Args,
   templates: StarterTemplate[],
+  random: () => number,
 ): Promise<StarterTemplate> {
   if (args.auto) {
-    const template = templates[Math.floor(Math.random() * templates.length)];
+    const template = templates[Math.floor(random() * templates.length)];
     console.log(
       `Auto-selected starter template ${template.template_key} (${template.name}, ${template.class}).`,
     );
@@ -134,11 +159,11 @@ async function chooseStarterTemplate(
   }
 }
 
-async function selectSession(args: Args): Promise<string> {
+async function selectSession(args: Args, random: () => number): Promise<string> {
   const { userDataApi } = await import('@/services/user-data-api');
   return selectPlaySession(args, userDataApi, {
     getStarterCampaign,
-    chooseTemplate: (templates) => chooseStarterTemplate(args, templates),
+    chooseTemplate: (templates) => chooseStarterTemplate(args, templates, random),
     log: (message) => console.log(message),
   });
 }
@@ -183,15 +208,35 @@ function printEvent(event: HeadlessEvent, json: boolean, write: (line: string) =
 }
 
 async function runPlay(args: Args): Promise<void> {
-  const sessionId = await selectSession(args);
+  const transcript = args.transcript ? createTranscriptWriter(args.transcript) : undefined;
+  const write = (line: string) => {
+    console.log(line);
+    transcript?.write(line);
+  };
+  const errors: FailError[] = [];
+  const recordError = (error: unknown): void => {
+    const candidate = error as { status?: unknown; message?: unknown };
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof candidate?.message === 'string'
+          ? candidate.message
+          : String(error);
+    errors.push(
+      typeof candidate?.status === 'number' ? { status: candidate.status, message } : { message },
+    );
+  };
+  const onError = (error: unknown): void => {
+    recordError(error);
+    printError(error, args.json, write);
+  };
+  if (transcript) installRequestIdCapture();
+  const scriptedInputs = args.script ? parseScript(readFileSync(args.script, 'utf8')) : undefined;
+  const random = seedRandom(args.seed);
+  const sessionId = await selectSession(args, random);
   const { HeadlessGameClient } = await import('@/services/headless-game-client');
   const client = new HeadlessGameClient(sessionId);
   await client.load();
-  const lines: string[] = [];
-  const write = (line: string) => {
-    lines.push(line);
-    console.log(line);
-  };
   const run = async (message: string, rolls?: readonly CompletedHeadlessRoll[]) => {
     const events = await client.play(message, rolls);
     events.forEach((event) => printEvent(event, args.json, write));
@@ -207,8 +252,49 @@ async function runPlay(args: Args): Promise<void> {
       ? { provider: narration.provider, model: narration.model }
       : {};
   };
+  const handleInput = async (line: string): Promise<boolean> => {
+    if (line === 'quit' || line === 'exit') return false;
+    const move = /^move\s+(\S+)\s+(\d+)\s+(\d+)$/i.exec(line);
+    if (move) {
+      try {
+        write(
+          JSON.stringify(await client.move(move[1], Number(move[2]), Number(move[3])), null, 2),
+        );
+      } catch (error) {
+        onError(error);
+      }
+      return true;
+    }
+    if (line === 'roll') {
+      const roll = client.roll();
+      if (roll.skipped) {
+        recordError(roll.error);
+        printEvent({ type: 'error', message: roll.error.message }, args.json, write);
+        try {
+          await run('I attempt it.');
+        } catch (error) {
+          onError(error);
+        }
+        return true;
+      }
+      try {
+        await run(`I rolled ${roll.result.total}.`, [roll]);
+      } catch (error) {
+        onError(error);
+      }
+      return true;
+    }
+    try {
+      await run(line);
+    } catch (error) {
+      onError(error);
+    }
+    return true;
+  };
+
+  let summary: AutoTurnSummary | undefined;
   if (args.auto) {
-    const summary = await runAutoTurns(
+    summary = await runAutoTurns(
       {
         get pendingRolls() {
           return client.pendingRolls;
@@ -221,56 +307,31 @@ async function runPlay(args: Args): Promise<void> {
           run(message, rolls as readonly CompletedHeadlessRoll[] | undefined),
       },
       args.turns,
-      (error) => printError(error, args.json, write),
+      onError,
       {
         delayMs: args.delay,
         persona: args.persona,
+        random,
+        scriptedInputs,
       },
     );
     write(JSON.stringify({ type: 'summary', ...summary }));
     if (summary.verdict) write(`VERDICT: ${summary.verdict}`);
+  } else if (scriptedInputs) {
+    for (const line of scriptedInputs) {
+      if (!(await handleInput(line))) break;
+    }
   } else {
     const readline = createInterface({ input, output });
     for await (const line of readline) {
-      if (line === 'quit' || line === 'exit') break;
-      const move = /^move\s+(\S+)\s+(\d+)\s+(\d+)$/i.exec(line);
-      if (move) {
-        try {
-          write(
-            JSON.stringify(await client.move(move[1], Number(move[2]), Number(move[3])), null, 2),
-          );
-        } catch (error) {
-          printError(error, args.json, write);
-        }
-        continue;
-      }
-      if (line === 'roll') {
-        const roll = client.roll();
-        if (roll.skipped) {
-          printEvent({ type: 'error', message: roll.error.message }, args.json, write);
-          try {
-            await run('I attempt it.');
-          } catch (error) {
-            printError(error, args.json, write);
-          }
-          continue;
-        }
-        try {
-          await run(`I rolled ${roll.result.total}.`, [roll]);
-        } catch (error) {
-          printError(error, args.json, write);
-        }
-        continue;
-      }
-      try {
-        await run(line);
-      } catch (error) {
-        printError(error, args.json, write);
-      }
+      if (!(await handleInput(line))) break;
     }
     readline.close();
   }
-  if (args.transcript) await Bun.write(args.transcript, `${lines.join('\n')}\n`);
+
+  const fail = failVerdict({ errors, ...(summary ? { summary } : {}) });
+  write(fail ? `RESULT: FAIL ${fail}` : 'RESULT: PASS');
+  if (fail) process.exitCode = 1;
 }
 
 const args = parseArgs(process.argv.slice(2));
@@ -287,7 +348,7 @@ try {
   } else if (args.command === 'play') await runPlay(args);
   else
     throw new Error(
-      'Usage: ir templates list --campaign the-eternal-feast | ir play --campaign the-eternal-feast [--new] [--template <key>] [--character <id|template-key>] [--json] [--auto --turns 20 --delay 2000 --persona <careful|aggressive|chaotic>] | ir sessions list',
+      'Usage: ir templates list --campaign the-eternal-feast | ir play --campaign the-eternal-feast [--new] [--template <key>] [--character <id|template-key>] [--json] [--auto --turns 20 --delay 2000 --persona <careful|aggressive|chaotic>] [--seed <int>] [--script <file>] [--transcript <file>] | ir sessions list. The client RNG is seeded by --seed; the server rolls its own dice from DICE_SEED.',
     );
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);

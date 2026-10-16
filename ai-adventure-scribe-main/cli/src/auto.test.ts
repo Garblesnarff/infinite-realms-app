@@ -112,6 +112,52 @@ describe('fixture auto play', () => {
     });
   });
 
+  it('resolves pending rolls first and defers the scripted input to the next turn', async () => {
+    const inputs: string[] = [];
+    let pending: unknown[] = [{ purpose: 'Stealth' }];
+    await runAutoTurns(
+      {
+        get pendingRolls() {
+          return pending;
+        },
+        availableOptions: [],
+        roll: () => {
+          pending = [];
+          return { result: { total: 9 } };
+        },
+        play: async (input) => {
+          inputs.push(input);
+          return {};
+        },
+      },
+      2,
+      () => undefined,
+      { scriptedInputs: ['Deferred, not dropped.'] },
+    );
+
+    expect(inputs).toEqual(['I completed all 1 pending roll.', 'Deferred, not dropped.']);
+  });
+
+  it('plays scripted inputs in order before falling back to auto selection', async () => {
+    const inputs: string[] = [];
+    await runAutoTurns(
+      {
+        pendingRolls: [],
+        availableOptions: ['Open the door.'],
+        roll: () => ({ result: { total: 1 } }),
+        play: async (input) => {
+          inputs.push(input);
+          return {};
+        },
+      },
+      3,
+      () => undefined,
+      { scriptedInputs: ['Check the altar.', 'Pray for guidance.'] },
+    );
+
+    expect(inputs).toEqual(['Check the altar.', 'Pray for guidance.', 'Open the door.']);
+  });
+
   it('does not deadlock a 25-turn run on one unresolvable symbolic roll', async () => {
     let pending = true;
     let rollCalls = 0;

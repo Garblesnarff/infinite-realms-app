@@ -20,6 +20,8 @@ export interface AutoTurnOptions {
   sleep?: (delayMs: number) => Promise<void>;
   persona?: Persona;
   random?: () => number;
+  /** Fixed player inputs played in order as a prefix (a roll turn defers the next one), then auto-selection. */
+  scriptedInputs?: readonly string[];
 }
 
 export interface AutoTurnSummary {
@@ -141,6 +143,7 @@ export async function runAutoTurns(
   let turnsSkipped = 0;
   let verdict: string | undefined;
   const failureStreak = new FailureStreak();
+  let scriptIndex = 0;
   const providerCounts: Record<string, number> = {};
   const providerModelCounts: Record<string, number> = {};
   const countTelemetry = (telemetry: { provider?: string; model?: string }): void => {
@@ -170,7 +173,8 @@ export async function runAutoTurns(
         ? 'I attempt it.'
         : rolls.length
           ? `I completed all ${rolls.length} pending roll${rolls.length === 1 ? '' : 's'}.`
-          : selectAutoAction(client.availableOptions, options.persona, options.random);
+          : (options.scriptedInputs?.[scriptIndex++] ??
+            selectAutoAction(client.availableOptions, options.persona, options.random));
       let attempt = 0;
       while (true) {
         try {
