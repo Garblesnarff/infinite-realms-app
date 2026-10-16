@@ -1603,8 +1603,6 @@ describeWithDb('paladin Lay on Hands pool and Divine Sense tracking (#712)', () 
   });
 
   it('Lay on Hands heals through the combat participant and decrements the pool', async () => {
-    
-
     const pool = await layOnHandsPool(paladinId, paladinUserId);
     expect(pool?.max).toBe(5);
     expect(pool?.remaining).toBe(5);
@@ -1654,8 +1652,86 @@ describeWithDb('paladin Lay on Hands pool and Divine Sense tracking (#712)', () 
     expect(logs.length).toBeGreaterThan(0);
   });
 
+  it('a named amount larger than the missing HP draws only the missing HP', async () => {
+    // Deterministic regardless of test order: full pool, target missing 3 HP.
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: 5 })
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, layOnHandsId),
+        ),
+      );
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 9 })
+      .where(eq(combatParticipantStatus.participantId, participantId));
+
+    const result = await resolveLayOnHands({
+      characterId: paladinId,
+      userId: paladinUserId,
+      participantId,
+      encounterId,
+      targetCharacterId: paladinId,
+      amount: 20,
+      sessionId,
+      context: 'combat-turn',
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // "for 20" on a target missing 3: the pool loses exactly 3, never 20.
+      expect(result.healed).toBe(3);
+      expect(result.poolRemaining).toBe(2);
+      expect(result.poolMax).toBe(5);
+    }
+    const [status] = await db
+      .select()
+      .from(combatParticipantStatus)
+      .where(eq(combatParticipantStatus.participantId, participantId))
+      .limit(1);
+    expect(status.currentHp).toBe(12);
+    expect(await poolRemaining(layOnHandsId)).toBe(2);
+  });
+
+  it('a named amount on a full-HP target spends nothing', async () => {
+    // Deterministic regardless of test order: pool at 4, target at full HP.
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: 4 })
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, layOnHandsId),
+        ),
+      );
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 12 })
+      .where(eq(combatParticipantStatus.participantId, participantId));
+
+    const result = await resolveLayOnHands({
+      characterId: paladinId,
+      userId: paladinUserId,
+      participantId,
+      encounterId,
+      targetCharacterId: paladinId,
+      amount: 20,
+      sessionId,
+      context: 'combat-turn',
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.healed).toBe(0);
+      expect(result.poolRemaining).toBe(4);
+      expect(result.poolMax).toBe(5);
+    }
+    expect(await poolRemaining(layOnHandsId)).toBe(4);
+  });
+
   it('an empty Lay on Hands pool refuses clearly and spends nothing', async () => {
-    
     // Deterministic regardless of test order: the pool is empty.
     await db
       .update(characterFeatures)
@@ -1725,7 +1801,6 @@ describeWithDb('paladin Lay on Hands pool and Divine Sense tracking (#712)', () 
   });
 
   it('a long rest replenishes the Lay on Hands pool', async () => {
-    
     await db
       .update(characterFeatures)
       .set({ usesRemaining: 2 })

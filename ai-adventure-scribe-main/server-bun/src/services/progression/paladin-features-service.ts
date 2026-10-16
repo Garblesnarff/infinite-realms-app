@@ -229,8 +229,8 @@ export async function spendDivineSense(input: {
   if (!pool) {
     return { success: false, usesRemaining: 0, message: 'Divine Sense is a paladin feature.' };
   }
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const result = await ClassFeatureUsageService.useFeature({    characterId,
+  const result = await ClassFeatureUsageService.spendFeatureUse({
+    characterId,
     featureId: pool.featureId,
     userId,
     sessionId,
@@ -263,7 +263,7 @@ export type LayOnHandsResult =
 export interface ResolveLayOnHandsInput {
   characterId: string;
   userId: string;
-  /** HP to draw from the pool. Defaults to the target's missing HP. */
+  /** HP to draw from the pool, capped at the target's missing HP. Defaults to the target's missing HP. */
   amount?: number;
   /** Defaults to the paladin themself. */
   targetCharacterId?: string;
@@ -423,11 +423,13 @@ export async function resolveLayOnHands(
     };
   }
 
-  const missing =
-    typeof input.amount === 'number' && input.amount > 0
-      ? Math.trunc(input.amount)
-      : await missingHitPoints(targetId, participantId, encounterId);
-  const draw = Math.min(Math.max(0, missing), pool.remaining);
+  const missing = await missingHitPoints(targetId, participantId, encounterId);
+  // A named amount ("for 20") may exceed what the target can actually receive:
+  // healing clamps at max HP (hp-mechanics.ts), so cap the draw at the target's
+  // missing HP — otherwise the pool pays for healing that never lands (#712).
+  const requested =
+    typeof input.amount === 'number' && input.amount > 0 ? Math.trunc(input.amount) : missing;
+  const draw = Math.min(requested, missing, pool.remaining);
   if (draw <= 0) {
     return {
       ok: true,
@@ -473,7 +475,7 @@ export async function resolveLayOnHands(
  * Initialize the tracked pool for a feature the seed left with a NULL uses_count
  * (Divine Sense, Lay on Hands). Returns the pool's remaining value and its unit
  * label, or null when the feature is not a pooled paladin feature. Shared by
- * ClassFeatureUsageService.useFeature so the sheet's manual use button and the
+ * ClassFeatureUsageService.spendFeatureUse so the sheet's manual use button and the
  * turn path initialize the same row the same way.
  */
 export async function ensureTrackedPool(
