@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import React, { useEffect } from 'react';
 import { describe, it, expect, vi } from 'vitest';
 
+import { findSrdClass } from '../../../../../shared/srd-class-data';
 import CharacterPreview from '../CharacterPreview';
 
 import type { AbilityScores, CharacterClass } from '@/types/character';
@@ -10,8 +11,8 @@ import { CharacterProvider, useCharacter } from '@/contexts/CharacterContext';
 import { cleric } from '@/data/classes/cleric';
 import { fighter } from '@/data/classes/fighter';
 import { dwarf } from '@/data/races/dwarf';
-import { transformAbilityScoresForStorage } from '@/utils/characterTransformations';
 import { applyRacialBonusesToAbilityScores } from '@/utils/racialAbilityBonuses';
+
 
 vi.mock('@/hooks/use-toast', () => ({
   useToast: () => ({ toast: vi.fn() }),
@@ -67,18 +68,20 @@ const cellTextFor = (label: string): string => {
 };
 
 /**
- * The save-time HP producer: post-racial scores + class hit die + traits.
- * The preview must show exactly this number.
+ * #620: the server is the save-time HP producer now — class hit die + CON
+ * modifier + Dwarven Toughness. The preview must show exactly this number.
  */
 const expectedSaveHp = (subraceId: string, className: string): number => {
   const subrace = dwarf.subraces?.find((s) => s.id === subraceId) ?? null;
   const finalScores = applyRacialBonusesToAbilityScores(baseScores, dwarf, subrace);
-  return transformAbilityScoresForStorage(
-    finalScores,
-    'test-character-id',
-    className,
-    [...(dwarf.traits ?? []), ...(subrace?.traits ?? [])],
-  ).max_hit_points;
+  const hitDie = findSrdClass(className)?.hitDie;
+  if (typeof hitDie !== 'number') throw new Error(`no hit die for ${className}`);
+  const toughnessBonus = [...(dwarf.traits ?? []), ...(subrace?.traits ?? [])].includes(
+    'Dwarven Toughness',
+  )
+    ? 1
+    : 0;
+  return hitDie + (finalScores.constitution?.modifier ?? 0) + toughnessBonus;
 };
 
 describe('CharacterPreview HP label (#389)', () => {

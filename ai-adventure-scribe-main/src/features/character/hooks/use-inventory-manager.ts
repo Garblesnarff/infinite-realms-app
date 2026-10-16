@@ -5,7 +5,7 @@ import { carryingCapacityForStrength } from '../../../../shared/carrying-capacit
 import type { Equipment } from '@/data/equipmentOptions';
 import type { Character } from '@/types/character';
 
-import { calculateArmorClass, convertCurrency, formatCurrency } from '@/data/equipmentOptions';
+import { convertCurrency, formatCurrency } from '@/data/equipmentOptions';
 import { useToast } from '@/hooks/use-toast';
 
 export interface InventoryItem extends Equipment {
@@ -58,7 +58,6 @@ export const useInventoryManager = (
   equippedArmor: InventoryItem | undefined;
   equippedShield: InventoryItem | undefined;
   equippedWeapons: InventoryItem[];
-  calculatedAC: number;
   totalWeight: number;
   carryingCapacity: number;
   addToInventory: (equipment: Equipment, quantity?: number) => void;
@@ -84,21 +83,7 @@ export const useInventoryManager = (
   const equippedShield = inventory.find((item) => item.equipped && item.category === 'shield');
   const equippedWeapons = inventory.filter((item) => item.equipped && item.category === 'weapon');
 
-  // Calculate AC with unarmored defense support
-  const dexModifier = character?.abilityScores?.dexterity?.modifier || 0;
-  const conModifier = character?.abilityScores?.constitution?.modifier || 0;
-  const wisModifier = character?.abilityScores?.wisdom?.modifier || 0;
-  const characterClass = character?.class?.name || '';
-
-  const calculatedAC = calculateArmorClass(
-    equippedArmor || null,
-    equippedShield || null,
-    dexModifier,
-    0, // otherBonuses
-    characterClass,
-    conModifier,
-    wisModifier,
-  );
+  // #620: armour class is server-computed; this dead-code hook no longer derives one.
 
   // Calculate total weight
   const totalWeight = inventory.reduce(
@@ -262,7 +247,6 @@ export const useInventoryManager = (
     equippedArmor,
     equippedShield,
     equippedWeapons,
-    calculatedAC,
     totalWeight,
     carryingCapacity,
     addToInventory,

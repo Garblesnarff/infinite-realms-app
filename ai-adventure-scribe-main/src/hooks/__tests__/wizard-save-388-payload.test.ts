@@ -94,14 +94,10 @@ function buildCreatePayload(character: Character): Record<string, unknown> {
     character.racialAbilityChoices,
   );
 
-  const raceTraits = [...(character.race?.traits || []), ...(character.subrace?.traits || [])];
-
-  const statsData = transformAbilityScoresForStorage(
-    finalAbilityScores,
-    TEMP_ID,
-    character.class?.name,
-    raceTraits,
-  );
+  // #620: the transform sends ability scores only; HP and AC are server-computed.
+  // raceTraits now unused by the transform; the server derives Dwarven
+  // Toughness from the subrace the payload still carries.
+  const statsData = transformAbilityScoresForStorage(finalAbilityScores, TEMP_ID);
 
   const equipmentData = transformEquipmentForStorage(
     { ...character, inventory: mapWizardEquipmentToInventory(character) },
@@ -117,9 +113,6 @@ function buildCreatePayload(character: Character): Record<string, unknown> {
       intelligence: statsData.intelligence,
       wisdom: statsData.wisdom,
       charisma: statsData.charisma,
-      armor_class: statsData.armor_class,
-      current_hit_points: statsData.current_hit_points,
-      max_hit_points: statsData.max_hit_points,
     },
     equipment: equipmentData,
   }) as Record<string, unknown>;
@@ -131,12 +124,14 @@ describe('wizard create payload (#388)', () => {
     const stats = payload.stats as Record<string, unknown>;
     const equipment = payload.equipment as Array<Record<string, unknown>>;
 
-    // 2014 rules, computed by the real transforms from base CON 14:
-    // Hill Dwarf +2 CON -> 16 (+3); Fighter L1 = 10 (d10) + 3 + 1 (Dwarven Toughness).
+    // 2014 rules, from the real transforms: Hill Dwarf +2 CON -> 16 (+3), +1 WIS -> 11.
+    // #620: the payload carries no HP or AC; the server computes them
+    // (Fighter L1 = 10 (d10) + 3 + 1 (Dwarven Toughness) = 14).
     expect(stats.constitution).toBe(16);
     expect(stats.wisdom).toBe(11);
-    expect(stats.max_hit_points).toBe(14);
-    expect(stats.current_hit_points).toBe(14);
+    expect(stats).not.toHaveProperty('max_hit_points');
+    expect(stats).not.toHaveProperty('current_hit_points');
+    expect(stats).not.toHaveProperty('armor_class');
 
     // The real Fighter kit shape that 500'd: two Handaxe rows, quantity 1 each.
     const handaxes = equipment.filter((row) => row.item_name === 'Handaxe');

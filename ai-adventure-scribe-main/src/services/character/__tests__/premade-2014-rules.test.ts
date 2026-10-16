@@ -404,8 +404,9 @@ describe('The Exile template is reset to the seed Ranger (#2483)', () => {
     expect(stats.spellSlots).toBeUndefined();
     expect(sheet.spellcasting).toBeNull();
     expect(sheet.spells).toEqual({ cantrips: [], known: [], prepared: [] });
-    expect((seed.stats as { max_hit_points: number }).max_hit_points).toBe(11);
-    expect((seed.stats as { armor_class: number }).armor_class).toBe(15);
+    // #620: the seed sends inputs only; the server computes HP and AC.
+    expect(seed.stats).not.toHaveProperty('max_hit_points');
+    expect(seed.stats).not.toHaveProperty('armor_class');
   });
 });
 

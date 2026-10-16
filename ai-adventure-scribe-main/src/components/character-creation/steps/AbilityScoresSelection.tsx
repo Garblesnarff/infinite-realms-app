@@ -6,6 +6,7 @@ import RollDetails from './ability-scores/RollDetails';
 import SummaryCard from './ability-scores/SummaryCard';
 import ValidationAlerts from './ability-scores/ValidationAlerts';
 import { abilityModifier } from '../../../../shared/ability-modifier';
+import { computeLevel1MaxHitPoints } from '../../../../shared/level-1-hit-points';
 
 import type { AbilityScoreName } from '@/utils/racialAbilityBonuses';
 
@@ -51,22 +52,17 @@ const AbilityScoresSelection: React.FC = () => {
     totalModifier,
   } = useAbilityScoreSelection();
 
+  // #620: the preview calls the same shared helper the server uses — one
+  // owner for the level-1 HP rule, not a client copy.
   const hitPoints = React.useMemo(() => {
-    const hitDie = state.character?.class?.hitDie;
-    if (!hitDie) return null;
-
-    const raceTraits = [
-      ...(state.character?.race?.traits || []),
-      ...(state.character?.subrace?.traits || []),
-    ];
-    const toughnessBonus = raceTraits.includes('Dwarven Toughness') ? 1 : 0;
-    return hitDie + abilityModifier(getFinalScore('constitution')) + toughnessBonus;
-  }, [
-    getFinalScore,
-    state.character?.class?.hitDie,
-    state.character?.race?.traits,
-    state.character?.subrace?.traits,
-  ]);
+    const className = state.character?.class?.name;
+    if (!className) return null;
+    return computeLevel1MaxHitPoints(
+      className,
+      getFinalScore('constitution'),
+      state.character?.subrace?.name ?? null,
+    );
+  }, [getFinalScore, state.character?.class?.name, state.character?.subrace?.name]);
 
   return (
     <TooltipProvider delayDuration={300}>

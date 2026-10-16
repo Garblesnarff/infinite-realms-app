@@ -11,10 +11,13 @@ import { act, renderHook } from '@testing-library/react';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { abilityModifier } from '../../../shared/ability-modifier';
+import { computeArmorClass } from '../../../shared/armor-class';
 import { useCharacterSave } from '../use-character-save';
 import { useCharacterStats, useEffectiveAbilityScores } from '../use-character-stats';
 
 import type { AbilityScores, Character } from '@/types/character';
+
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
@@ -97,18 +100,24 @@ const wizardCharacter = (): Character =>
     inventory: [],
   }) as unknown as Character;
 
-/** Rebuild a character from stored stats, as a reload does: scores are final, read as-is. */
+/** Rebuild a character from stored stats, as a reload does: scores are final, read as-is.
+ *
+ * #620: HP/AC are server-computed at create; the reload carries the stored
+ * values. Mirror the server's derivation for this unarmoured Fighter (no
+ * Unarmoured Defence): 10 + DEX.
+ */
 const reloadFromStats = (character: Character, stats: Record<string, number>): Character => {
   const abilityScores = toAbilityScores(
     Object.fromEntries(
       Object.keys(BASE_SCORES).map((ability) => [ability, stats[ability]]),
     ) as Scores,
   );
+  const armorClass = computeArmorClass([], abilityModifier(stats.dexterity ?? 10));
   return {
     ...character,
     id: 'char-1',
     abilityScores,
-    character_stats: [{ ...stats, current_hit_points: stats.max_hit_points }],
+    character_stats: [{ ...stats, armor_class: armorClass }],
   } as unknown as Character;
 };
 
@@ -135,7 +144,7 @@ describe('#203 racial ability bonuses survive save', () => {
     expect(hillDwarf).toBeDefined();
   });
 
-  it('creates with final scores, AC and HP, and reload does not double count', async () => {
+  it('creates with final scores only (#620: HP/AC are server-computed), and reload does not double count', async () => {
     const { result } = renderHook(() => useCharacterSave(), { wrapper });
 
     await act(async () => {
@@ -150,10 +159,11 @@ describe('#203 racial ability bonuses survive save', () => {
       intelligence: 12,
       wisdom: 11, // 10 + Hill Dwarf +1
       charisma: 8,
-      armor_class: 12, // 10 + DEX mod (+2)
-      max_hit_points: 13, // Fighter d10 + CON mod (+2) + Dwarven Toughness (+1)
-      current_hit_points: 13,
     });
+    // #620: the client sends inputs only; HP and armour class are server-computed.
+    expect(created.stats).not.toHaveProperty('armor_class');
+    expect(created.stats).not.toHaveProperty('max_hit_points');
+    expect(created.stats).not.toHaveProperty('current_hit_points');
 
     const reloaded = reloadFromStats(wizardCharacter(), created.stats);
 
@@ -187,8 +197,10 @@ describe('#203 racial ability bonuses survive save', () => {
     const update = vi.mocked(userDataApi.updateCharacterStats).mock.calls[0][1] as any;
     expect(update.constitution).toBe(15);
     expect(update.wisdom).toBe(11);
-    expect(update.armor_class).toBe(12);
-    expect(update.max_hit_points).toBe(13);
+    // #620: level-1 max HP re-derives on the server and current HP keeps
+    // damage there; the client sends no derived values.
+    expect(update).not.toHaveProperty('armor_class');
+    expect(update).not.toHaveProperty('max_hit_points');
   });
 
   it('a level-up save keeps final scores and does not re-add the bonus', async () => {

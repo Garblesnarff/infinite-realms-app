@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { abilityModifier } from '../../../../shared/ability-modifier';
+import { computeArmorClass } from '../../../../shared/armor-class';
 import { getCharacterSheetArmorClass } from '../character-sheet-armor-class';
 import {
   type CharacterEquipmentRow,
@@ -8,6 +10,7 @@ import {
 } from '../data-transformers';
 
 import type { Character } from '@/types/character';
+
 
 import { buildCharacterSheet } from '@/features/game-session/components/game/overhaul/useOverhaulViewModel';
 import logger from '@/lib/logger';
@@ -49,7 +52,22 @@ describe('character sheet armor class', () => {
       },
       'abyssal-descent',
     );
-    const stats = seed.stats as CharacterStatsRow;
+    // #620: the seed sends inputs only; the server derives AC at create from
+    // the equipment and DEX. Mirror that stored value here.
+    const armorClass = computeArmorClass(
+      (
+        seed.equipment as { item_name: string; item_type: string; equipped: boolean }[]
+      ).map((item) => ({
+        item_name: item.item_name ?? '',
+        item_type: item.item_type ?? '',
+        equipped: item.equipped ?? false,
+      })),
+      abilityModifier(12),
+    );
+    const stats = {
+      ...(seed.stats as Record<string, number>),
+      armor_class: armorClass,
+    } as CharacterStatsRow;
     const character = buildCharacter(stats);
 
     expect(stats.armor_class).toBe(18);

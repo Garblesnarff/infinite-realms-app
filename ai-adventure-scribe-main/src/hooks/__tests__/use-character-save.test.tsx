@@ -96,23 +96,13 @@ const makeCharacter = (overrides: Record<string, unknown> = {}): Character =>
     ...overrides,
   }) as unknown as Character;
 
-const expectedAbilityPayload = (
-  constitution: number,
-  hp?: { current: number; maximum: number },
-): Record<string, number> => ({
+const expectedAbilityPayload = (constitution: number): Record<string, number> => ({
   strength: 10,
   dexterity: 10,
   constitution,
   intelligence: 10,
   wisdom: 10,
   charisma: 10,
-  armor_class: 10,
-  ...(hp
-    ? {
-        current_hit_points: hp.current,
-        max_hit_points: hp.maximum,
-      }
-    : {}),
 });
 
 describe('useCharacterSave', () => {
@@ -209,7 +199,9 @@ describe('useCharacterSave', () => {
     expect(mockInvalidateQueries).toHaveBeenCalled();
   });
 
-  it('preserves stored HP when a level-2 character saves a sheet edit', async () => {
+  // HP/AC payload-shape coverage: the client sends ability scores only (#620);
+  // the server computes HP and AC on the upsert.
+  it('sends ability scores only when a level-2 character saves a sheet edit', async () => {
     const character = makeCharacter({
       id: 'existing-id',
       name: 'Renamed Veteran',
@@ -410,7 +402,7 @@ describe('useCharacterSave', () => {
   });
 
   // HP payload-shape coverage uses the production transformer and real class formula.
-  it('recomputes level-1 HP and fully heals when the stored row was full', async () => {
+  it('sends ability scores only for a level-1 sheet edit; the server re-derives HP', async () => {
     await save(
       makeCharacter({
         id: 'level-one-full',
@@ -421,11 +413,11 @@ describe('useCharacterSave', () => {
 
     expect(userDataApi.updateCharacterStats).toHaveBeenCalledWith(
       'level-one-full',
-      expectedAbilityPayload(14, { current: 8, maximum: 8 }),
+      expectedAbilityPayload(14),
     );
   });
 
-  it('preserves a wounded level-1 current value while capping it at a reduced maximum', async () => {
+  it('sends ability scores only for a wounded level-1 character; the server caps current HP', async () => {
     await save(
       makeCharacter({
         id: 'level-one-wounded',
@@ -436,11 +428,11 @@ describe('useCharacterSave', () => {
 
     expect(userDataApi.updateCharacterStats).toHaveBeenCalledWith(
       'level-one-wounded',
-      expectedAbilityPayload(8, { current: 5, maximum: 5 }),
+      expectedAbilityPayload(8),
     );
   });
 
-  it('fully heals a level-1 character when a full stored row gets a lower maximum', async () => {
+  it('sends ability scores only when a full level-1 row gets a lower maximum', async () => {
     await save(
       makeCharacter({
         id: 'level-one-full-decrease',
@@ -451,11 +443,11 @@ describe('useCharacterSave', () => {
 
     expect(userDataApi.updateCharacterStats).toHaveBeenCalledWith(
       'level-one-full-decrease',
-      expectedAbilityPayload(8, { current: 5, maximum: 5 }),
+      expectedAbilityPayload(8),
     );
   });
 
-  it('omits HP keys from a level-2 sheet update', async () => {
+  it('omits HP and AC keys from a level-2 sheet update', async () => {
     await save(
       makeCharacter({
         id: 'level-two',
@@ -471,7 +463,7 @@ describe('useCharacterSave', () => {
     );
   });
 
-  it('sends full computed HP when a level-1 character has no stats row', async () => {
+  it('sends ability scores only when a level-1 character has no stats row', async () => {
     await save(
       makeCharacter({
         id: 'level-one-no-stats',
@@ -482,11 +474,11 @@ describe('useCharacterSave', () => {
 
     expect(userDataApi.updateCharacterStats).toHaveBeenCalledWith(
       'level-one-no-stats',
-      expectedAbilityPayload(14, { current: 8, maximum: 8 }),
+      expectedAbilityPayload(14),
     );
   });
 
-  it('sends exact class-based HP values when creating a character', async () => {
+  it('sends ability scores only (no HP or AC) when creating a character', async () => {
     await save(
       makeCharacter({
         id: undefined,
@@ -505,9 +497,6 @@ describe('useCharacterSave', () => {
           intelligence: 10,
           wisdom: 10,
           charisma: 10,
-          armor_class: 10,
-          current_hit_points: 8,
-          max_hit_points: 8,
         },
       }),
     );

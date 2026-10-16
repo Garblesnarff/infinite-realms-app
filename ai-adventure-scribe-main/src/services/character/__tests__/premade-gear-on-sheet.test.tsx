@@ -21,12 +21,15 @@ import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { readSeededPremadeTemplates } from './seeded-premade-templates';
+import { abilityModifier } from '../../../../shared/ability-modifier';
+import { computeArmorClass } from '../../../../shared/armor-class';
 import { buildStarterCharacterSeed } from '../starter-character-seeding';
 
 import type { SeededPremadeTemplate } from './seeded-premade-templates';
 import type { StarterCharacterCreatePayload } from '../starter-character-seeding';
 import type { Issue1784EquipmentRow } from '@/services/issue-1784-api';
 import type { Character } from '@/types/character';
+
 
 import { resolveEquipmentByName } from '@/data/equipment/resolver';
 import { RightSheet } from '@/features/game-session/components/game/overhaul/RightSheet';
@@ -77,8 +80,24 @@ function persistedEquipmentRow(record: SeededRecord, index: number): Issue1784Eq
   };
 }
 
-/** The `GET /v1/characters/:id` record for a character created from the seed payload. */
+/** The `GET /v1/characters/:id` record for a character created from the seed payload.
+ *
+ * #620: the seed no longer carries HP/AC; the server derives them from the
+ * class, the scores and the equipment at create time. The mock persistence
+ * mirrors that derivation (none of these templates is a Barbarian or Monk,
+ * so Unarmoured Defence does not apply) so the sheet loads what the real
+ * server would have stored.
+ */
 function persistedCharacter(seed: StarterCharacterCreatePayload): Record<string, unknown> {
+  const stats = seed.stats as Record<string, number>;
+  const armorClass = computeArmorClass(
+    (seed.equipment as SeededRecord[]).map((item) => ({
+      item_name: item.item_name ?? '',
+      item_type: item.item_type ?? '',
+      equipped: item.equipped ?? false,
+    })),
+    abilityModifier(stats.dexterity ?? 10),
+  );
   return {
     id: CHARACTER_ID,
     user_id: 'user-2531',
@@ -95,7 +114,7 @@ function persistedCharacter(seed: StarterCharacterCreatePayload): Record<string,
     prepared_spells: seed.prepared_spells,
     ritual_spells: '',
     experience_points: 0,
-    character_stats: [seed.stats],
+    character_stats: [{ ...stats, armor_class: armorClass }],
   };
 }
 

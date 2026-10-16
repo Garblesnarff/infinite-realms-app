@@ -17,7 +17,7 @@ import type { AbilityScores, Character } from '@/types/character';
 
 describe('characterTransformations', () => {
   describe('transformAbilityScoresForStorage', () => {
-    it('should correctly transform ability scores and calculate base AC and HP', () => {
+    it('should transform ability scores without computing HP or AC (#620)', () => {
       const abilityScores: AbilityScores = {
         strength: { score: 14, modifier: 2, savingThrow: false },
         dexterity: { score: 16, modifier: 3, savingThrow: false },
@@ -28,8 +28,10 @@ describe('characterTransformations', () => {
       };
       const characterId = 'test-char-id';
 
-      const result = transformAbilityScoresForStorage(abilityScores, characterId, 'Cleric');
+      const result = transformAbilityScoresForStorage(abilityScores, characterId);
 
+      // The server is the only place that computes HP and AC; the client
+      // sends the scores as inputs and nothing derived.
       expect(result).toEqual({
         character_id: characterId,
         strength: 14,
@@ -38,13 +40,13 @@ describe('characterTransformations', () => {
         intelligence: 10,
         wisdom: 8,
         charisma: 13,
-        armor_class: 13, // 10 + 3 (DEX modifier)
-        current_hit_points: 9, // 8 + 1 (CON modifier)
-        max_hit_points: 9,
       });
+      expect(result).not.toHaveProperty('armor_class');
+      expect(result).not.toHaveProperty('max_hit_points');
+      expect(result).not.toHaveProperty('current_hit_points');
     });
 
-    it('should handle missing modifiers by defaulting to 0', () => {
+    it('should pass scores through when modifiers are missing', () => {
       const abilityScores: any = {
         strength: { score: 10 },
         dexterity: { score: 10 },
@@ -53,43 +55,16 @@ describe('characterTransformations', () => {
         wisdom: { score: 10 },
         charisma: { score: 10 },
       };
-      const result = transformAbilityScoresForStorage(abilityScores, 'id', 'Wizard');
-      expect(result.armor_class).toBe(10);
-      expect(result.max_hit_points).toBe(6);
-    });
-
-    it.each([
-      ['Wizard', 7],
-      ['Fighter', 11],
-      ['Barbarian', 13],
-    ])('stores level-1 %s HP from the shared hit die', (characterClass, expectedMaxHitPoints) => {
-      const abilityScores: AbilityScores = {
-        strength: { score: 10, modifier: 0, savingThrow: false },
-        dexterity: { score: 10, modifier: 0, savingThrow: false },
-        constitution: { score: 12, modifier: 1, savingThrow: false },
-        intelligence: { score: 10, modifier: 0, savingThrow: false },
-        wisdom: { score: 10, modifier: 0, savingThrow: false },
-        charisma: { score: 10, modifier: 0, savingThrow: false },
-      };
-
-      const result = transformAbilityScoresForStorage(abilityScores, 'id', characterClass);
-
-      expect(result.max_hit_points).toBe(expectedMaxHitPoints);
-    });
-
-    it('throws for an unsupported class instead of fabricating HP', () => {
-      const abilityScores: AbilityScores = {
-        strength: { score: 10, modifier: 0, savingThrow: false },
-        dexterity: { score: 10, modifier: 0, savingThrow: false },
-        constitution: { score: 12, modifier: 1, savingThrow: false },
-        intelligence: { score: 10, modifier: 0, savingThrow: false },
-        wisdom: { score: 10, modifier: 0, savingThrow: false },
-        charisma: { score: 10, modifier: 0, savingThrow: false },
-      };
-
-      expect(() => transformAbilityScoresForStorage(abilityScores, 'id', 'Artificer')).toThrow(
-        'Unsupported SRD class "Artificer"; refusing HP initialization.',
-      );
+      const result = transformAbilityScoresForStorage(abilityScores, 'id');
+      expect(result).toEqual({
+        character_id: 'id',
+        strength: 10,
+        dexterity: 10,
+        constitution: 10,
+        intelligence: 10,
+        wisdom: 10,
+        charisma: 10,
+      });
     });
   });
 

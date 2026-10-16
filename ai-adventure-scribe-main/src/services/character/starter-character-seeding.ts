@@ -1,7 +1,6 @@
 /* eslint-disable max-lines */
 import { normalizeAbilityScores } from './ability-score-normalization';
 import { abilityModifier } from '../../../shared/ability-modifier';
-import { computeArmorClass } from '../../../shared/armor-class';
 import { findSrdClass, getSrdSpellQuotas } from '../../../shared/srd-class-data';
 
 import type { CharacterClass } from '@/types/character';
@@ -80,14 +79,6 @@ export function getAbilityScores(template: StarterCharacterTemplateLike): Record
 
 function getModifier(score: number): number {
   return abilityModifier(score);
-}
-
-function getClassHitDie(className: string): number {
-  const classData = findSrdClass(className);
-  if (!classData) {
-    throw new Error(`Unsupported SRD class "${className}"; refusing HP initialization.`);
-  }
-  return classData.hitDie;
 }
 
 function findClass(className: string): CharacterClass | undefined {
@@ -364,7 +355,6 @@ export function buildStarterCharacterSeed(
   const languages = template.languages || [];
   const equipment = transformStarterEquipment(template.equipment || []);
   const inventoryItems = transformStarterInventory(template.equipment || []);
-  const hitPoints = getClassHitDie(template.class) + getModifier(abilityScores.constitution);
 
   return {
     name: template.name,
@@ -387,13 +377,10 @@ export function buildStarterCharacterSeed(
     // #617: the legacy characters.spell_slots JSONB is no longer written;
     // character_spell_slots is the single source of truth (#2459).
     total_level: level,
+    // #620: HP and armour class are server-computed; the seed sends inputs
+    // (ability scores, class, equipment) only.
     stats: {
       ...abilityScores,
-      max_hit_points: hitPoints,
-      current_hit_points: hitPoints,
-      // The equipment built two lines up decides this. It used to be `10 + DEX`, which is how
-      // 76 characters ended up wearing armour that did nothing (#1858).
-      armor_class: computeArmorClass(equipment, getModifier(abilityScores.dexterity)),
     },
     equipment,
     ...(inventoryItems.length > 0 ? { inventory_items: inventoryItems } : {}),

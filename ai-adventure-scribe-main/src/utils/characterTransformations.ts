@@ -1,10 +1,10 @@
-import { findSrdClass } from '../../shared/srd-class-data';
-
 import type { Character, AbilityScores } from '@/types/character';
 
 /**
  * Transforms ability scores for database storage
- * Adds required fields and converts from ability score object to flat structure
+ * Converts from ability score object to flat structure. HP and armour class
+ * are NOT computed here (#620): the server is the only place that derives
+ * them, from the class, the scores and the equipment the client sends.
  * @param abilityScores - The character's ability scores
  * @param characterId - The unique identifier of the character
  * @returns Object formatted for character_stats table
@@ -12,23 +12,7 @@ import type { Character, AbilityScores } from '@/types/character';
 export const transformAbilityScoresForStorage = (
   abilityScores: AbilityScores,
   characterId: string,
-  characterClass: string | null | undefined,
-  raceTraits: string[] = [],
 ) => {
-  // Calculate base armor class (10 + dexterity modifier)
-  const baseArmorClass = 10 + (abilityScores.dexterity.modifier || 0);
-
-  const classData = findSrdClass(characterClass);
-  if (!classData) {
-    throw new Error(`Unsupported SRD class "${characterClass || ''}"; refusing HP initialization.`);
-  }
-
-  // Level-1 HP is the class hit die plus the Constitution modifier.
-  // Dwarven Toughness (Hill Dwarf): +1 max HP per level (#203).
-  const toughnessBonus = raceTraits.includes('Dwarven Toughness') ? 1 : 0;
-  const baseHitPoints =
-    classData.hitDie + (abilityScores.constitution.modifier || 0) + toughnessBonus;
-
   return {
     character_id: characterId,
     strength: abilityScores.strength.score,
@@ -37,9 +21,6 @@ export const transformAbilityScoresForStorage = (
     intelligence: abilityScores.intelligence.score,
     wisdom: abilityScores.wisdom.score,
     charisma: abilityScores.charisma.score,
-    armor_class: baseArmorClass,
-    current_hit_points: baseHitPoints,
-    max_hit_points: baseHitPoints,
   };
 };
 

@@ -183,9 +183,8 @@ const wizardBody = (cls: { name: string; hitDie: string; baseHp: number }) => ({
     intelligence: 12,
     wisdom: 11,
     charisma: 8,
-    armor_class: 12,
-    max_hit_points: cls.baseHp,
-    current_hit_points: cls.baseHp,
+    // #620: no HP or AC — the server derives both from the inputs above.
+    // (temporary_hit_points and hit_dice are inputs, not derived values.)
     temporary_hit_points: 0,
     hit_dice: cls.hitDie,
   },
@@ -204,6 +203,25 @@ const wizardBody = (cls: { name: string; hitDie: string; baseHp: number }) => ({
   // ('weapon','armor','consumable','ammunition','equipment','treasure').
   inventory_items: [{ name: 'Backpack', item_type: 'equipment', quantity: 1 }],
 });
+
+/**
+ * #620: the server is the only place that computes level-1 HP and AC. These
+ * cases send inputs only (class, ability scores, equipment) — no HP or AC —
+ * and assert the server derives the right values. `wizardBody` already sends
+ * no HP/AC; this only swaps in a custom name and equipment list.
+ */
+const inputsOnlyBody = (
+  cls: { name: string; hitDie: string; baseHp: number },
+  equipment: string[],
+  name: string,
+) => {
+  const body = wizardBody(cls) as Record<string, unknown>;
+  return {
+    ...body,
+    name,
+    equipment: equipment.map(equipmentRow),
+  };
+};
 
 describeWithDb('character create every class (#388)', () => {
   let app: any;
@@ -256,11 +274,9 @@ describeWithDb('character create every class (#388)', () => {
       .from(characterStats)
       .where(eq(characterStats.characterId, id));
     expect(stats).toBeDefined();
-    // Non-circular: the fixture's stats block was computed by the real client
-    // transforms from base CON 14 (pinned in the client vitest); the server
-    // must persist exactly what the client sent.
-    const fixtureStats = fighterPayload.stats as Record<string, unknown>;
-    expect(stats.maxHitPoints).toBe(fixtureStats.max_hit_points);
+    // #620: the fixture no longer carries HP or AC — the client sends inputs
+    // only. The server computes level-1 HP itself: d10 + CON (+3) + Dwarven
+    // Toughness (+1) = 14.
     expect(stats.maxHitPoints).toBe(14);
 
     // #388 root cause: the two Handaxe kit rows must merge into one row
@@ -307,4 +323,154 @@ describeWithDb('character create every class (#388)', () => {
       for (const [, count] of byName) expect(count).toBe(1);
     });
   }
+
+  it('computes Barbarian Unarmoured Defence on create (#620)', async () => {
+    // No armour in the payload and no HP/AC sent: 10 + DEX (+2) + CON (+3) = 15.
+    // HP: d12 + 3 (CON) + 1 (Dwarven Toughness) = 16.
+    const res = await request(
+      '/v1/characters',
+      'POST',
+      inputsOnlyBody({ name: 'Barbarian', hitDie: '1d12', baseHp: 16 }, [], 'L1 Barbarian 620'),
+    );
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    expect(stats.armorClass).toBe(15);
+    expect(stats.maxHitPoints).toBe(16);
+    expect(stats.currentHitPoints).toBe(16);
+  });
+
+  it('computes Monk Unarmoured Defence on create (#620)', async () => {
+    // A dagger is a weapon, not armour: 10 + DEX (+2) + WIS (+0) = 12.
+    // HP: d8 + 3 (CON) + 1 (Dwarven Toughness) = 12.
+    const res = await request(
+      '/v1/characters',
+      'POST',
+      inputsOnlyBody({ name: 'Monk', hitDie: '1d8', baseHp: 12 }, ['Dagger'], 'L1 Monk 620'),
+    );
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    expect(stats.armorClass).toBe(12);
+    expect(stats.maxHitPoints).toBe(12);
+    expect(stats.currentHitPoints).toBe(12);
+  });
+
+  it('computes Wizard HP/AC from inputs only on create (#620)', async () => {
+    // d6, no armour, no HP/AC sent: HP = 6 + CON (+3) + Dwarven
+    // Toughness (+1) = 10; AC = 10 + DEX (+2) = 12. A dagger and a
+    // quarterstaff are weapons, not armour, so they add nothing.
+    const res = await request(
+      '/v1/characters',
+      'POST',
+      inputsOnlyBody(
+        { name: 'Wizard', hitDie: '1d6', baseHp: 10 },
+        ['Dagger', 'Quarterstaff'],
+        'L1 Wizard 620',
+      ),
+    );
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    expect(stats.armorClass).toBe(12);
+    expect(stats.maxHitPoints).toBe(10);
+    expect(stats.currentHitPoints).toBe(10);
+  });
+
+  it('adds Dwarven Toughness to Hill Dwarf HP on create (#620)', async () => {
+    // Bard, no armour, no HP/AC sent: d8 + 3 (CON) + 1 (Dwarven Toughness) = 12.
+    const res = await request(
+      '/v1/characters',
+      'POST',
+      inputsOnlyBody({ name: 'Bard', hitDie: '1d8', baseHp: 12 }, [], 'L1 Bard 620'),
+    );
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    expect(stats.maxHitPoints).toBe(12);
+    expect(stats.currentHitPoints).toBe(12);
+  });
+
+  it('derives AC from armour in the create payload (#620)', async () => {
+    // Chain Mail (16, heavy) + shield (+2), DEX ignored: AC 18.
+    // HP: d10 + 3 (CON) + 1 (Dwarven Toughness) = 14.
+    const res = await request(
+      '/v1/characters',
+      'POST',
+      inputsOnlyBody(
+        { name: 'Fighter', hitDie: '1d10', baseHp: 14 },
+        ['Chain Mail', 'Shield', 'Longsword'],
+        'L1 Fighter 620',
+      ),
+    );
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    expect(stats.armorClass).toBe(18);
+    expect(stats.maxHitPoints).toBe(14);
+    expect(stats.currentHitPoints).toBe(14);
+  });
+
+  it('ignores client HP/AC on stats update and recomputes (#620)', async () => {
+    // Create a Barbarian with no armour: AC 15 (10 + DEX 2 + CON 3), HP 16.
+    const createRes = await request(
+      '/v1/characters',
+      'POST',
+      inputsOnlyBody({ name: 'Barbarian', hitDie: '1d12', baseHp: 16 }, [], 'L1 Barbarian 620u'),
+    );
+    const createText = await createRes.text();
+    expect(createRes.status, createText.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(createText) as { id: string };
+    createdIds.push(id);
+
+    // A stale/malicious client sends wrong HP/AC with a real DEX increase.
+    // The server must ignore the derived values and recompute from inputs:
+    // AC = 10 + DEX (+3) + CON (+3) = 16; HP stays d12 + 3 + 1 = 16, full.
+    const updateRes = await request(`/v1/characters/${id}/stats`, 'PUT', {
+      dexterity: 16,
+      armor_class: 99,
+      max_hit_points: 99,
+      current_hit_points: 99,
+    });
+    expect(updateRes.status, (await updateRes.text()).slice(0, 300)).toBe(200);
+
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    expect(stats.dexterity).toBe(16);
+    expect(stats.armorClass).toBe(16);
+    expect(stats.maxHitPoints).toBe(16);
+    expect(stats.currentHitPoints).toBe(16);
+  });
 });

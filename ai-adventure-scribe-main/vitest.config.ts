@@ -192,6 +192,7 @@ export default defineConfig({
       'src/utils/__tests__/character-proficiency-calculations.test.ts',
       'cli/src/**/*.{test,spec}.{ts,tsx}',
       'shared/__tests__/spell-slot-tables.test.ts',  // #617 single-source spell-slot table
+      'shared/__tests__/level-1-hit-points.test.ts',  // #620 single-owner level-1 HP formula
       'src/**/*.{test,spec}.{ts,tsx}',
       'tests/**/*.{test,spec}.{ts,tsx}',
     ],
