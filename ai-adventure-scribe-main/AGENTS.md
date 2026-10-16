@@ -40,7 +40,9 @@ Authored monster attack lines (name, reach, and range) are in `docs/content/stat
 
 - Do not delete a test. Do not add `.skip` or `.only` to a test.
 - For time-based tests, use `dialogue_history.created_at` as the server clock; `timestamp` is client-supplied display data only.
-- Do not paste secret values into code, commits, comments, logs, or PR bodies. Reference env var names only. If you accidentally see a secret, do not repeat it.
+- Do not paste secret values into code, commits, comments, logs, or PR bodies. Reference env var names only. Never commit `.env`, `.env.local`, `server/.env`, or `server-bun/.env`. `.env.example` may be committed only when it holds no secret values.
+- If a secret value appears in code, a log, a chat, or a diff, do not repeat it. Tell Rob, and recommend rotating the key.
+- RLS is off, so every query on user-owned rows filters by the owner. `campaigns` and `characters` have `user_id`; filter those by `user_id`. `game_sessions`, `quests`, `npcs`, and `locations` have no `user_id` column (`db/schema/game.ts`, `db/schema/world.ts`). Limit those queries to a campaign or character that belongs to the user.
 - A PR that changes what the client sends to a server route must include a test that sends that exact body through the real route: `createRequestPipelineApp().use(<routes>)` or the real-DB suite. A mocked API does not count: #2250's tests mocked it, and the body they approved 422'd on every narrative roll in production (#2280). Pattern: #2286, where one shared fixture (`shared/test-fixtures/dm-roll-reply-saves.ts`) holds the wire body, the client test asserts the client sends exactly it, and the server test posts it through the real route schema.
 
 ## 5. Respect in-flight work
