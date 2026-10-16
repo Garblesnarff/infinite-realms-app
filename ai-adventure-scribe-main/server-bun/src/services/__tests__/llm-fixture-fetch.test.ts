@@ -99,6 +99,27 @@ describe('llm-fixture-fetch', () => {
     expect(noNetwork).not.toHaveBeenCalled();
   });
 
+  it('a recorded 429 replays its status and retry-after', async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response('rate limited', { status: 429, headers: { 'retry-after': '7' } }),
+      ) as any;
+    const url = 'https://openrouter.ai/api/v1/chat/completions';
+    const init = { method: 'POST', body: JSON.stringify({ model: 'm', messages: [] }) };
+    process.env.LLM_RECORD_DIR = tempDir;
+    await llmFetch(url, init);
+    delete process.env.LLM_RECORD_DIR;
+    globalThis.fetch = vi.fn().mockImplementation(() => {
+      throw new Error('should not be called');
+    }) as any;
+    process.env.LLM_FIXTURE_DIR = tempDir;
+    const replayed = await llmFetch(url, init);
+    expect(replayed.status).toBe(429);
+    expect(replayed.headers.get('retry-after')).toBe('7');
+    expect(await replayed.text()).toBe('rate limited');
+  });
+
   it('replay returns fixture and does not call fetch', async () => {
     const mockFetch = vi.fn().mockImplementation(() => {
       throw new Error('should not be called');

@@ -4,7 +4,7 @@ import { join } from 'path';
 
 /**
  * #660 item 2: record/replay at the LLM provider fetch seam.
- * LLM_FIXTURE_DIR set: responses come from <dir>/<key>.json and the network is never called.
+ * LLM_FIXTURE_DIR set: the wrapped provider calls (OpenRouter chat, Gemini generateContent) read <dir>/<key>.json and never touch the network.
  * LLM_RECORD_DIR set: real responses are written to <dir>/<key>.json.
  * The key and the recording never include request headers or the URL query (Gemini sends its key as ?key=).
  */
@@ -14,6 +14,7 @@ export interface LLMFixtureRecord {
   request: unknown;
   status: number;
   contentType: string;
+  retryAfter?: string;
   body: string;
 }
 
@@ -48,7 +49,10 @@ export async function llmFetch(url: string, init: RequestInit): Promise<Response
     const fixture = JSON.parse(readFileSync(fixturePath, 'utf8')) as LLMFixtureRecord;
     return new Response(fixture.body, {
       status: fixture.status,
-      headers: { 'content-type': fixture.contentType },
+      headers: {
+        'content-type': fixture.contentType,
+        ...(fixture.retryAfter ? { 'retry-after': fixture.retryAfter } : {}),
+      },
     });
   }
 
@@ -60,6 +64,9 @@ export async function llmFetch(url: string, init: RequestInit): Promise<Response
       request,
       status: response.status,
       contentType: response.headers.get('content-type') || 'application/json',
+      ...(response.headers.get('retry-after')
+        ? { retryAfter: response.headers.get('retry-after') as string }
+        : {}),
       body: await response.clone().text(),
     };
     mkdirSync(recordDir, { recursive: true });
