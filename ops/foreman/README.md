@@ -7,6 +7,7 @@ Spec: issue #586. Reviewer prompt: `docs/ops/review_prompt.md`.
 | Coder: opencode + the free "cat jam" model (`opencode/cat-jam-free`) | `catjam-runner.sh` | `realms-catjam-runner.timer`, every 30 min |
 | Reviewer: `claude -p`, Haiku or Sonnet by tier, API key | `review.sh` | `realms-reviewer.timer`, hourly at :50 UTC |
 | Daily summary to Slack #last-24 and #230 | `review.sh` (11:50Z run) | same timer |
+| Triager: `claude -p` Sonnet turns new `bug` issues into catjam / Jules tasks (#717) | `triage.sh` | `realms-triage.timer`, :15 and :45 UTC |
 | Sandbox image (opencode + Claude Code live only here) | `Dockerfile` | — |
 | Shared guards (secret checks, trusted-review and same-repo filters) | `lib.sh`, tested by `ops/tests/foreman-guards.sh` | — |
 
@@ -38,7 +39,7 @@ printf 'ANTHROPIC_API_KEY=\nGH_TOKEN=\nSLACK_WEBHOOK_URL=\n' | install -o forema
 # Rob types the values himself:  nano /etc/realms-foreman/env
 
 docker build --build-arg FOREMAN_UID=1500 -t realms-foreman:pilot ops/foreman
-install -m 644 ops/foreman/systemd/realms-*.{service,timer} /etc/systemd/system/
+install -m 644 ops/foreman/systemd/realms-*.{service,timer} /etc/systemd/system/   # includes realms-triage (#717)
 systemctl daemon-reload
 
 # Dry run: one issue, no push, no GitHub writes. Output goes to runner/state/dry-run-<N>/
@@ -48,6 +49,13 @@ bash -c 'exec docker run --rm --cpus 2 --memory 4g --env-file <(grep -E "^GH_TOK
   realms-foreman:pilot catjam-runner.sh --dry-run --issue 446'
 
 systemctl enable --now realms-catjam-runner.timer realms-reviewer.timer
+
+# Triager (#717): dry run on one issue first (no GitHub writes; result in reviewer/state/triage-dry-run/<N>.json)
+bash -c 'exec docker run --rm --env-file <(grep -E "^(ANTHROPIC_API_KEY|GH_TOKEN)=" /etc/realms-foreman/env) \
+  --cap-drop ALL --cap-add CHOWN --cap-add DAC_OVERRIDE --cap-add FOWNER --cap-add SETUID --cap-add SETGID \
+  --security-opt no-new-privileges -v /var/lib/realms-foreman/reviewer:/work \
+  realms-foreman:pilot triage.sh --dry-run --issue 568'
+systemctl enable --now realms-triage.timer
 ```
 
 Rebuild the image after any change to these scripts. The units run the copies baked into the image. The reviewer prompt is not baked in: it is read from `origin/main` on every run.
@@ -64,6 +72,7 @@ Rebuild the image after any change to these scripts. The units run the copies ba
 - Timeouts: opencode 45m, each bun install / tsc / test step 15m, `claude -p` 20m. On TERM/INT (unit timeout, `docker stop`) the runner kills its jobs, removes their worktrees, and moves `catjam-wip`/`catjam-fix` to `needs-human`. Each tick also recovers jobs left behind by a hard kill, and any `catjam-wip` issue with no open catjam PR.
 - The summary also shows the merge rate over the last 24 h, as merges per hour against the target (`REVIEW_MERGE_TARGET_PER_HOUR`, default 20) with the peak hour, and the median time from PR open to merge. Both come from one paginated GitHub search for merged PRs, so the merged list is no longer cut at 100.
 - The 11:50Z summary is decided when the tick starts and posts before the reviews, so long reviews cannot push it past the hour.
-- Pause: `systemctl stop realms-catjam-runner.timer realms-reviewer.timer`.
+- Triage (#717): open `bug` issues with no "## Task" heading and none of `catjam`, `jules`, `needs-crew`, `triaged`; oldest first, at most 6 per run (`TRIAGE_MAX_ISSUES`), $0.50 each (`TRIAGE_PER_ISSUE_USD`), inside the reviewer's $5/day cap (same `spend.log`, rows `issue=<n> ... triage=<route>`). An issue cross-referenced by an open PR is skipped before any model call. Claude gets only Read/Grep/Glob over a read-only export of main (no `public/`, no images), the issue as data and the open PRs' file list. The script picks the route (`triage_route` in `lib.sh`): hot combat files (`combat-resolution-step.ts`, `DynamicOptionsSection.tsx`, `combat-intent-service.ts`), migrations, `.github/`, `ops/`, a file in an open PR, no files or no reproducing test give `needs-crew` plus a one-line comment; catjam over 4 files gives `jules`. Task text is appended under "## Task (catjam)" or "## Task for Jules" with headings demoted, @mentions and HTML comments stripped; an answer with a secret, an email or an IP is dropped. Every decided issue gets `triaged`. An issue with 2 paid calls and no decision (`TRIAGE_MAX_ATTEMPTS`) is skipped. Log: `reviewer/state/triage.log`, one line per issue and one `run triaged=N catjam=a jules=b crew=c` line per run; the daily summary adds the 24 h total.
+- Pause: `systemctl stop realms-catjam-runner.timer realms-reviewer.timer realms-triage.timer`.
 - Overrides go in a unit drop-in as `-e` flags, e.g. `CATJAM_MODEL`, `CATJAM_MAX_JOBS` (2), `CATJAM_JOB_TIMEOUT` (45m), `CATJAM_MAX_FIX_ROUNDS` (3), `REVIEW_MODEL` (sonnet), `REVIEW_SMALL_MODEL` (haiku), `REVIEW_SMALL_MAX_LINES` (300), `REVIEW_MAX_PRS` (12), `REVIEW_PER_PR_USD` (1.50), `REVIEW_DAILY_CAP_USD` (5.00), `REVIEW_TICK_MINUTES` (40).
 - One-off: `review.sh --dry-run --pr N`, `review.sh --summary-dry-run`, `review.sh --slack-test`.

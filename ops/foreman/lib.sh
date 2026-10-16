@@ -49,3 +49,45 @@ TRUSTED_REVIEWS_JQ='[.[] | select((.body // "" | startswith("Strategist review")
 # Use: jq -r --arg repo "$REPO" --arg pfx "catjam/$n-" "$CATJAM_PR_JQ"
 CATJAM_PR_JQ='[.[] | select(.head.repo.full_name == $repo and (.head.ref | startswith($pfx)))]
   | first // empty | "\(.number)\t\(.head.ref)"'
+
+# ---- triage.sh (#717) --------------------------------------------------------
+# Files a catjam or Jules task may never touch; an issue whose fix needs one goes
+# to the crew. Paths may come with or without the ai-adventure-scribe-main/ prefix.
+TRIAGE_HOT_RE='(^|/)(combat-resolution-step\.ts|DynamicOptionsSection\.tsx|combat-intent-service\.ts)$'
+TRIAGE_CREW_RE='(^|/)migrations/|(^|/)\.github/|(^|/)ops/'
+TRIAGE_CATJAM_MAX_FILES=4
+
+# triage_route <verdict> <files, one per line> <repro test> <open PR files, "path<TAB>#n" per line>
+# Prints "<catjam|jules|crew> <reason>". The model proposes; this decides.
+triage_route() {
+  local verdict=$1 files=$2 repro=$3 open=$4 f count=0 p pr
+  if [ "$verdict" = crew ]; then echo "crew model"; return 0; fi
+  case $verdict in catjam | jules) ;; *) echo "crew bad-verdict"; return 0 ;; esac
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    count=$((count + 1))
+    if grep -qE -- "$TRIAGE_HOT_RE" <<< "$f"; then echo "crew hot-file $f"; return 0; fi
+    if grep -qE -- "$TRIAGE_CREW_RE" <<< "$f"; then echo "crew protected-path $f"; return 0; fi
+    while IFS=$'\t' read -r p pr; do
+      [ -n "$p" ] || continue
+      if [ "$p" = "$f" ] || [[ $p == */"$f" ]] || [[ $f == */"$p" ]]; then echo "crew open-pr $pr $f"; return 0; fi
+    done <<< "$open"
+  done <<< "$files"
+  if [ "$count" = 0 ]; then echo "crew no-files"; return 0; fi
+  if [ -z "${repro//[[:space:]]/}" ]; then echo "crew no-repro-test"; return 0; fi
+  if [ "$verdict" = catjam ] && [ "$count" -gt "$TRIAGE_CATJAM_MAX_FILES" ]; then echo "jules files=$count"; return 0; fi
+  echo "$verdict files=$count"
+}
+
+# triage_clean <markdown>: the model's task text made safe to append to an issue.
+# Drops HTML comments, turns #/## headings into ### (so it cannot open a second
+# "## Task" section) and strips the @ from mentions (no pings, no "@jules").
+# Capped at 8000 characters.
+triage_clean() {
+  local t
+  t=$(perl -0pe 's/<!--.*?-->//gs; s/^#{1,2}(?=\s)/###/mg; s/(^|[^\w`])@(?=[A-Za-z0-9])/$1/g' <<< "$1")
+  printf '%s' "${t:0:8000}"
+}
+
+# has_pii <text>: 0 when the text holds an email address or an IPv4 address.
+has_pii() { grep -qE -- '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|(^|[^0-9.])([0-9]{1,3}\.){3}[0-9]{1,3}([^0-9.]|$)' <<< "$1"; }
