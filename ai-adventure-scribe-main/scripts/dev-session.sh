@@ -75,7 +75,7 @@ dev-session.sh [dry-run]
    (server DATABASE_URL = the replayed test_migrations_* database, kept via KEEP_TEST_DB=1)
    command: bun run dev; health: http://localhost:${SERVER_PORT}/health
 4. GET /v1/auth/test-login with header x-test-auth-secret (print success/fail only)
-5. Run: bun run cli/src/index.ts ${PASSTHROUGH[*]:-play --campaign the-eternal-feast --new --auto --turns 20}
+5. Run: bun run cli/src/index.ts ${PASSTHROUGH[*]+${PASSTHROUGH[*]}}${PASSTHROUGH[*]-play --campaign the-eternal-feast --new --auto --turns 20}
 EOF
   exit 0
 fi
@@ -156,6 +156,10 @@ for _ in $(seq 1 60); do
   if curl -fsS "http://localhost:${SERVER_PORT}/health" >/dev/null 2>&1; then
     break
   fi
+  if ! kill -0 "${SERVER_PID}" 2>/dev/null; then
+    echo "Server process exited; see ${SERVER_LOG}"
+    exit 1
+  fi
   sleep 1
 done
 if ! curl -fsS "http://localhost:${SERVER_PORT}/health" >/dev/null 2>&1; then
@@ -170,6 +174,7 @@ if [[ "${LOGIN_CODE}" =~ ^[23][0-9][0-9]$ ]]; then
   echo "Smoke account test-login: success"
 else
   echo "Smoke account test-login: FAILED (HTTP ${LOGIN_CODE})"
+  exit 1
 fi
 
 # 5. Run CLI
@@ -192,7 +197,7 @@ EOF
   exit 1
 fi
 
-CLI_ARGS=("${PASSTHROUGH[@]}")
+CLI_ARGS=(${PASSTHROUGH[@]+"${PASSTHROUGH[@]}"})
 if [[ ${#CLI_ARGS[@]} -eq 0 ]]; then
   CLI_ARGS=(play --campaign the-eternal-feast --new --auto --turns 20)
 fi
@@ -201,4 +206,3 @@ export CLI_API_URL="http://localhost:${SERVER_PORT}"
 echo "Running playtest CLI against ${CLI_API_URL}..."
 cd "${PROJECT_ROOT}"
 bun run cli/src/index.ts "${CLI_ARGS[@]}"
-EOF
