@@ -29,6 +29,7 @@ import {
   combatEncounters,
   combatParticipantStatus,
   combatParticipants,
+  dialogueHistory,
   gameSessions,
 } from '../../../../db/schema/index';
 import { getSpellByName } from '../../data/spellData.js';
@@ -592,6 +593,34 @@ describeWithDb('concentration starts when a concentration spell is cast (#709)',
     expect(result.concentration?.dc).toBe(15);
     expect(result.concentration?.dropped).toBe(true);
     expect(result.concentration?.droppedSpell).toBe('Dancing Lights');
+    expect(await getConcentration(characterId)).toBeNull();
+  });
+
+  it('a Retry after a failed CON save does not restart concentration (already_spent)', async () => {
+    // Retry re-sends the same saved player message, so the production
+    // `playerMessage` lookup needs a real row: its `createdAt` is the spend's
+    // `since`. Bless is level 1 + concentration in the SRD catalog, so the
+    // first cast really spends a slot and the retry's spend reports
+    // `already_spent` — concentration must not restart.
+    await db.insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'player',
+      message: 'I cast Bless',
+    });
+
+    await castInStory('Bless');
+    expect((await getConcentration(characterId))?.spellName).toBe('Bless');
+
+    // 30 damage -> DC max(10, 15) = 15. Roll 1 + 2 = 3 fails: the spell ends.
+    const result = await applyNonAttackDamage(characterId, userId, 30, 'test blow', {
+      concentrationRoll: () => 1,
+    });
+    expect(result.concentration?.dropped).toBe(true);
+    expect(await getConcentration(characterId)).toBeNull();
+
+    // The Retry replays the same message: no new slot is spent, so the
+    // concentration stays dropped.
+    await castInStory('Bless');
     expect(await getConcentration(characterId)).toBeNull();
   });
 });
