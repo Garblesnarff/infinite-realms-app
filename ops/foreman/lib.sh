@@ -99,15 +99,18 @@ TRIAGE_TASK_HEADING_RE='(?m)^ {0,3}## Task'
 # pings, no "@jules"). Capped at 8000 characters.
 triage_clean() {
   local t
-  t=$(perl -0pe '1 while s/<!--.*?-->//gs; s/<!--|-->//g; s/^ {0,3}#{1,2}(?=\s)/###/mg; s/(^|[^\w`])@(?=[A-Za-z0-9])/$1/g' <<< "$1")
+  t=$(perl -0pe '1 while s/<!--.*?-->//gs || s/<!--|-->//g; s/^ {0,3}#{1,2}(?=\s)/###/mg; s/(^|[^\w`])@(?=[A-Za-z0-9])/$1/g' <<< "$1")
   printf '%s' "${t:0:8000}"
 }
 
 # triage_task_deletes_tests <task text>: 0 when the model-written task asks to
 # delete or remove tests. The catjam runner allows a test deletion only when the
 # task lists it, so a model-written task must never do that; the crew decides.
+# Matches over the whole text (dots and newlines included): rm/remove/delete/drop
+# followed within 80 characters by a test word or a test path. It errs towards
+# the crew: "remove X and add a test" also matches.
 triage_task_deletes_tests() {
-  grep -qiE -- '\b(delet|remov|drop)[a-z]*\b[^.]{0,60}\b(tests?|specs?|\.test\.|\.spec\.)' <<< "$1"
+  perl -0e 'exit(($ARGV[0] =~ /\b(?:rm|remov\w*|delet\w*|drop\w*)\b.{0,80}?(?:\btests?\b|\bspecs?\b|\.test\.|\.spec\.|__tests__\/|\btests\/)/is) ? 0 : 1)' -- "$1"
 }
 
 # has_pii <text>: 0 when the text holds an email address or an IPv4 address.

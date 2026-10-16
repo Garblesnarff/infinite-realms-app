@@ -76,6 +76,20 @@ run_main 0 && r=0 || r=$?
 check "main: GitHub down + good post exits 0" "$r" 0
 grep -q 'version-down' "$TMP/main/alerts.state" 2> /dev/null && r=marked || r=unmarked
 check "main: good post marks version-down" "$r" marked
+# user lookup works, the open PR list fails: the tick goes on and /version still alerts
+rm -rf "$TMP/main"
+(
+  STATE=$TMP/main POST=1 MODE=now PULSE_WEBHOOK_URL=http://127.0.0.1:9/ LEDGER=$TMP/none TRIAGE_LOG=$TMP/none
+  gh() { case "$*" in "api user"*) echo someone ;; *) echo '{"message":"Server Error"}'; return 1 ;; esac; }
+  curl() { printf '{}\n503'; }
+  post() { cat > /dev/null; }
+  main
+) 2> "$TMP/main.err" && r=0 || r=$?
+check "main: failed PR list + good post exits 0" "$r" 0
+grep -q 'open PR list failed' "$TMP/main.err" && r=yes || r=no; check "main: failed PR list is logged" "$r" yes
+grep -q 'PR checks skipped' "$TMP/main.err" && r=yes || r=no; check "main: user lookup worked, so no owner-skip line" "$r" no
+grep -q 'version-down' "$TMP/main/alerts.state" 2> /dev/null && r=marked || r=unmarked
+check "main: failed PR list still posts the /version alert" "$r" marked
 
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]

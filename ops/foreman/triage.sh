@@ -6,7 +6,7 @@
 # same ledger (state/spend.log) and counts against the same $5/day cap.
 #
 # Picks open issues labeled `bug` with no "## Task" heading in the body and none
-# of the labels catjam, jules, needs-crew, triaged; oldest first, at most 6 per
+# of the labels catjam, jules, needs-crew, needs-human, triaged; oldest first, at most 6 per
 # run. An issue with an open PR (a cross-reference from an open PR) is skipped
 # and costs nothing. For each other issue, `claude -p` (Sonnet) reads the issue
 # and a read-only export of main and answers with JSON:

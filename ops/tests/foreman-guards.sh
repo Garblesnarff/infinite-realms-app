@@ -416,6 +416,8 @@ want=$'### Task (catjam)\n### Big\n    ## code block stays'
 [ "$got" = "$want" ] && ok "triage_clean: headings with up to 3 leading spaces are demoted" || bad "triage_clean indent: '$got'"
 got=$(triage_clean $'a <!-<!-- x -->- y --> b\nc <!-- unclosed ## Task')
 [ "$got" = $'a  b\nc  unclosed ## Task' ] && ok "triage_clean: rebuilt and unclosed HTML comments" || bad "triage_clean comments: '$got'"
+got=$(triage_clean '<!<!----')
+[ -z "$got" ] && ok "triage_clean: '<!<!----' leaves no comment opener" || bad "triage_clean nested opener: '$got'"
 gate() { jq -e --arg re "$TRIAGE_TASK_HEADING_RE" '.body | test($re)' <<< "$(jq -cn --arg b "$1" '{body: $b}')" > /dev/null; }
 expect "task gate: '## Task' at column 0" 0 gate $'intro\n## Task (catjam)\nx'
 expect "task gate: '   ## Task' with 3 spaces" 0 gate $'intro\n   ## Task for Jules'
@@ -425,6 +427,10 @@ grep -q 'test(\\"\$TRIAGE_TASK_HEADING_RE\\")' "$HERE/../foreman/triage.sh" && [
 expect "task deletes tests: 'Delete the old combat tests'" 0 triage_task_deletes_tests "Delete the old combat tests in src/__tests__."
 expect "task deletes tests: 'remove src/a.test.ts'" 0 triage_task_deletes_tests "Then remove src/a.test.ts as well"
 expect "task deletes tests: adding a test is fine" 1 triage_task_deletes_tests "Add a test that fails before the fix. Remove the dead branch."
+expect "task deletes tests: dot in a path before 'tests'" 0 triage_task_deletes_tests "Delete src/old.ts and its tests."
+expect "task deletes tests: 'rm' on a .test. file" 0 triage_task_deletes_tests "rm src/combat.test.ts"
+expect "task deletes tests: __tests__/ path" 0 triage_task_deletes_tests "Delete src/__tests__/combat.ts"
+expect "task deletes tests: verb and noun on separate lines" 0 triage_task_deletes_tests $'Delete the following files:\n- src/combat-old.spec.ts'
 grep -q 'route="crew task-deletes-tests"' "$HERE/../foreman/triage.sh" && grep -q "labels\[\]=needs-human" "$HERE/../foreman/triage.sh" \
   && grep -q '\[ "\$prepared" = 1 \] || { prepare_run; prepared=1; }' "$HERE/../foreman/triage.sh" \
   && ok "triage.sh: test-deletion route, needs-human on the last attempt, lazy prepare_run" || bad "triage.sh: #724 wiring"
