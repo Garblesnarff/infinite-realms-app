@@ -80,13 +80,13 @@ models_of() { jq -r '(.modelUsage // {}) | keys | if length == 0 then "none" els
 top_model() { jq -r '(.modelUsage // {}) | to_entries | max_by(.value.costUSD // 0) | .key // empty' "$1" 2> /dev/null || true; }
 
 # ---- candidates ------------------------------------------------------------
-SKIP_LABELS='["catjam","jules","needs-crew","triaged"]'
+SKIP_LABELS='["catjam","jules","needs-crew","triaged","needs-human"]'
 # candidates: open bug issues, oldest first, without a Task section or a triage label
 candidates() {
   gh api "repos/$REPO/issues?state=open&labels=bug&sort=created&direction=asc&per_page=100" --paginate \
     --jq ".[] | select(.pull_request | not)
       | select([.labels[].name] - $SKIP_LABELS == [.labels[].name])
-      | select((.body // \"\") | test(\"(?m)^## Task\") | not) | .number"
+      | select((.body // \"\") | test(\"$TRIAGE_TASK_HEADING_RE\") | not) | .number"
 }
 # open_pr_for <issue>: the first open PR that cross-references the issue, if any
 open_pr_for() {
@@ -99,7 +99,7 @@ still_eligible() {
   local ok
   ok=$(gh api "repos/$REPO/issues/$1" --jq "
     .state == \"open\" and ([.labels[].name] - $SKIP_LABELS == [.labels[].name])
-    and ((.body // \"\") | test(\"(?m)^## Task\") | not)") || return 1
+    and ((.body // \"\") | test(\"$TRIAGE_TASK_HEADING_RE\") | not)") || return 1
   [ "$ok" = true ]
 }
 
@@ -222,6 +222,8 @@ triage_issue() { # triage_issue <issue> <budget>
   if [ "$result" = decided ]; then
     if ! triage_files_ok "$a"; then
       route="crew bad-file-entry"
+    elif triage_task_deletes_tests "$(jq -r '.task_markdown // ""' <<< "$a")"; then
+      route="crew task-deletes-tests"
     else
       route=$(triage_route "$(jq -r .verdict <<< "$a")" "$(jq -r '.files[]' <<< "$a")" \
         "$(jq -r '.repro_test // ""' <<< "$a")" "$(cat "$RUN/open-pr-files.tsv")")
@@ -244,6 +246,13 @@ triage_issue() { # triage_issue <issue> <budget>
   echo "$(date -u +%FT%TZ) $(today) issue=$n $cost triage=${route%% *} $result models=$models" >> "$LEDGER"
   reason=${route#* }
   logline "issue=#$n route=${route%% *} reason=${reason// /_} result=$result claude_exit=$rc usd=$cost models=$models"
+  # The last attempt without a decision hands the issue to a human, not a silent skip.
+  if [ "$POST" = 1 ] && [ "$result" != decided ] && [ "$result" != model-mismatch ] \
+    && [ "$(attempts "$n")" -ge "$MAX_ATTEMPTS" ]; then
+    gh api -X POST "repos/$REPO/issues/$n/labels" -f 'labels[]=needs-human' > /dev/null \
+      && say "issue #$n: $MAX_ATTEMPTS calls without a decision; labelled needs-human" \
+      || say "issue #$n: needs-human label failed"
+  fi
   [ "$result" != model-mismatch ] # stop the run on a model mismatch
 }
 
@@ -281,8 +290,7 @@ apply_route() {
 }
 
 main() {
-  prepare_run
-  local n pr spent left done_n=0 list
+  local n pr spent left done_n=0 list prepared=0
   if [ -n "$ONLY" ]; then list=$ONLY; else list=$(candidates); fi
   for n in $list; do
     [ "$done_n" -lt "$MAX_ISSUES" ] || break
@@ -298,10 +306,12 @@ main() {
     if lt "$left" "$PER_ISSUE_USD"; then
       logline "daily cap: \$$left left of \$$DAILY_CAP_USD, under the \$$PER_ISSUE_USD per issue; no triage until 00:00Z"; break
     fi
+    # The clone, archive and PR file list only when there is an issue to triage.
+    [ "$prepared" = 1 ] || { prepare_run; prepared=1; }
     done_n=$((done_n + 1))
     triage_issue "$n" "$PER_ISSUE_USD" || { logline "model mismatch; stopping this run"; break; }
   done
-  logline "run triaged=$((ROUTED_CATJAM + ROUTED_JULES + ROUTED_CREW)) catjam=$ROUTED_CATJAM jules=$ROUTED_JULES crew=$ROUTED_CREW calls=$done_n skipped-open-pr=$SKIPPED_PR usd=$RUN_USD main=${MAIN_SHA:0:8}$([ "$POST" = 1 ] || echo ' dry-run')"
+  logline "run triaged=$((ROUTED_CATJAM + ROUTED_JULES + ROUTED_CREW)) catjam=$ROUTED_CATJAM jules=$ROUTED_JULES crew=$ROUTED_CREW calls=$done_n skipped-open-pr=$SKIPPED_PR usd=$RUN_USD main=$(printf %.8s "${MAIN_SHA:-none}")$([ "$POST" = 1 ] || echo ' dry-run')"
 }
 
 main

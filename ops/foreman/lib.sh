@@ -84,18 +84,30 @@ triage_route() {
 # and go into the issue body, so a newline, a heading, an @mention or a non-string
 # entry sends the issue to the crew instead.
 triage_files_ok() {
-  jq -e '(.files | type == "array") and all(.files[]; type == "string" and test("^[A-Za-z0-9_./()-]{1,200}$"))' \
+  jq -e '(.files | type == "array") and all(.files[]; type == "string" and test("\\A[A-Za-z0-9_./()-]{1,200}\\z"))' \
     <<< "$1" > /dev/null 2>&1
 }
 
+# TRIAGE_TASK_HEADING_RE: a "## Task" heading as Markdown reads it (up to 3
+# leading spaces). The candidate gate and the re-check before a write use it.
+TRIAGE_TASK_HEADING_RE='(?m)^ {0,3}## Task'
+
 # triage_clean <markdown>: the model's task text made safe to append to an issue.
-# Drops HTML comments, turns #/## headings into ### (so it cannot open a second
-# "## Task" section) and strips the @ from mentions (no pings, no "@jules").
-# Capped at 8000 characters.
+# Drops HTML comments (repeated until none is left, then any unclosed "<!--" or
+# stray "-->"), turns #/## headings (up to 3 leading spaces) into ### so it
+# cannot open a second "## Task" section, and strips the @ from mentions (no
+# pings, no "@jules"). Capped at 8000 characters.
 triage_clean() {
   local t
-  t=$(perl -0pe 's/<!--.*?-->//gs; s/^#{1,2}(?=\s)/###/mg; s/(^|[^\w`])@(?=[A-Za-z0-9])/$1/g' <<< "$1")
+  t=$(perl -0pe '1 while s/<!--.*?-->//gs; s/<!--|-->//g; s/^ {0,3}#{1,2}(?=\s)/###/mg; s/(^|[^\w`])@(?=[A-Za-z0-9])/$1/g' <<< "$1")
   printf '%s' "${t:0:8000}"
+}
+
+# triage_task_deletes_tests <task text>: 0 when the model-written task asks to
+# delete or remove tests. The catjam runner allows a test deletion only when the
+# task lists it, so a model-written task must never do that; the crew decides.
+triage_task_deletes_tests() {
+  grep -qiE -- '\b(delet|remov|drop)[a-z]*\b[^.]{0,60}\b(tests?|specs?|\.test\.|\.spec\.)' <<< "$1"
 }
 
 # has_pii <text>: 0 when the text holds an email address or an IPv4 address.
