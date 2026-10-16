@@ -22,7 +22,6 @@ import {
   claimTurnBonusActionAndResolve,
   claimTurnReactionAndResolve,
 } from './combat-turn-resources.js';
-import { startConcentration } from './concentration-service.js';
 import { calculateDamage, resolveCriticalHit } from './damage-calculator.js';
 import {
   getParticipantWithStats,
@@ -1278,8 +1277,10 @@ export class CombatAttackService {
     // #709: a successfully cast concentration spell starts concentration (2014).
     // A miss still casts the spell (the slot is spent), so this runs on any
     // successful resolution. Only a PC caster concentrates: an NPC has no
-    // character row, so its casts are skipped.
+    // character row, so its casts are skipped. Imported lazily so unit tests
+    // that mock the DB-facing leaves never load db/client at import time.
     if (spell.concentration && casterData.participant.characterId) {
+      const { startConcentration } = await import('./concentration-service.js');
       await startConcentration(casterData.participant.characterId, {
         name: spell.name,
         id: spell.id,
