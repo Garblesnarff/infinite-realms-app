@@ -37,3 +37,13 @@ Interactive commands are free text, `roll` for a pending request, `move <entityI
 ## For agents: NDJSON
 
 Use `--json`. Every output line is a JSON object with a `type` of `narration`, `options`, `roll_request`, `roll_result`, `map_state`, or `error`. Send one input line at a time on stdin: option/free text, `roll`, or `move <entityId> <x> <y>`. `--auto --turns N` selects the real text of a structured or lettered DM option at random and resolves every pending roll before continuing. Symbolic ability formulas use the loaded character modifier; an unresolvable formula is counted as a contract violation and skipped with an `I attempt it.` continuation so it cannot deadlock play. `--persona careful|aggressive|chaotic` biases option selection and free-text actions; aggressive deliberately escalates toward confrontation. Auto mode respects server retry hints and retries a retryable turn at most twice. `--delay <ms>` sets its initial backoff (default `2000`). The final `summary` reports clean `turnsCompleted`, `turnsFailed`, `rollsMade`, genuine `contractViolations`, separate `transportErrors`, and provider/model counts for completed turns.
+
+## Local dev session (no WorkOS)
+
+`scripts/dev-session.sh` boots a throwaway pgvector Postgres container (reuses
+`ir-dev-session-pg`), replays migrations via `scripts/test-migrations.sh`, starts
+the Bun server with `ENABLE_TEST_AUTH=1`, smoke-checks the test account via
+`GET /v1/auth/test-login`, and then launches this CLI. It never uses WorkOS
+password auth for the smoke check; the CLI still needs its own
+`cli/.env.cli` credentials (see above). Use `--dry-run` to print the plan and
+`DEV_SESSION_KEEP_DB=1` to keep the container after exit.
