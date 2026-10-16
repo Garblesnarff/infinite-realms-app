@@ -123,8 +123,13 @@ for (const [alias, name] of Object.entries(ARMOR_NAME_ALIASES)) {
   if (entry) ARMOR_BY_KEY.set(normalizeArmorKey(alias), entry);
 }
 
+/** True for an SRD armour name, a catalog alias, or a shield. Display names and dashed ids both match. */
+export function isSrdArmorOrShieldName(value: string): boolean {
+  const key = normalizeArmorKey(value);
+  return key === SHIELD_KEY || ARMOR_BY_KEY.has(key);
+}
+
 const defaultWarn: ArmorClassWarning = (message, context) => {
-  // eslint-disable-next-line no-console -- shared code has no logger of its own; every caller
   // that has one passes it in through `options.warn`.
   console.warn(message, context);
 };
