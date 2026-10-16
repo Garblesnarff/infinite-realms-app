@@ -1,3 +1,5 @@
+import type { CastingSegment, CastSegment } from '../../shared/npc-voices';
+
 import { waitForAuth } from '@/lib/auth-gate';
 import { logger } from '@/lib/logger';
 import {
@@ -133,6 +135,12 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 export const issue1784Api = {
   getCharacterEquipment: (characterId: string): Promise<Issue1784EquipmentRow[]> =>
     request(`/v1/characters/${encodeURIComponent(characterId)}/equipment`),
+
+  castVoices: (sessionId: string, segments: CastingSegment[]): Promise<CastSegment[]> =>
+    request(`/v1/sessions/${encodeURIComponent(sessionId)}/voice-cast`, {
+      method: 'POST',
+      body: JSON.stringify({ segments }),
+    }),
 
   getVoiceMappings: (sessionId: string): Promise<Issue1784VoiceMappingRow[]> =>
     request(`/v1/sessions/${encodeURIComponent(sessionId)}/voice-mappings`),
