@@ -147,9 +147,26 @@ describe('buildSheetUpdatePayload (#2701)', () => {
       ...prev,
       inventory: sheetEquipInventory(['Shield']),
     };
+    const characterId = prev.id;
+    if (!characterId) {
+      throw new Error('fixture character has no id');
+    }
     expect(buildSheetUpdatePayload(prev, next)).toEqual({
-      equipment: sheetEquipWireBody(prev.id, ['Shield']),
+      equipment: sheetEquipWireBody(characterId, ['Shield']),
     });
+  });
+
+  it('refuses an equipment save when the character has no id', () => {
+    const prev = {
+      ...baseCharacter(),
+      id: undefined,
+      inventory: sheetEquipInventory([]),
+    } as Character;
+    const next = {
+      ...prev,
+      inventory: sheetEquipInventory(['Shield']),
+    };
+    expect(() => buildSheetUpdatePayload(prev, next)).toThrow(/character id/);
   });
 
   it('treats null and empty string as the same for text fields', () => {
