@@ -56,35 +56,6 @@ export type { TokenVisionConfig, TokenLightConfig };
 
 export class TokenService {
   /**
-   * Verify user has access to a scene.
-   * Returns NOT_FOUND for both missing and unauthorized scenes to avoid existence leaks.
-   */
-  private static async verifySceneAccess(sceneId: string, userId: string): Promise<boolean> {
-    const scene = await db.query.scenes.findFirst({
-      where: and(eq(scenes.id, sceneId), eq(scenes.userId, userId)),
-      columns: { id: true },
-    });
-
-    if (!scene) {
-      // 🛡️ Sentinel: Throw NOT_FOUND instead of FORBIDDEN to mask resource existence
-      throw new TRPCError({ code: 'NOT_FOUND', message: 'Scene not found' });
-    }
-
-    return true;
-  }
-
-  /**
-   * Verify user owns a character
-   * @deprecated Use TokenLinkService.verifyCharacterOwnership directly
-   */
-  private static async verifyCharacterOwnership(
-    characterId: string,
-    userId: string,
-  ): Promise<boolean> {
-    return TokenLinkService.verifyCharacterOwnership(characterId, userId);
-  }
-
-  /**
    * List all tokens for a scene
    */
   static async listTokensForScene(

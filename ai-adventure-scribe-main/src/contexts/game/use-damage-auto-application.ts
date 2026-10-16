@@ -13,7 +13,8 @@ import { userDataApi } from '@/services/user-data-api';
 export const useDamageAutoApplication = (
   state: GameState,
   characterId?: string | null,
-  refreshCombatState?: () => Promise<void>,
+  // The combat sync returns the encounter it just read. This hook only waits for it.
+  refreshCombatState?: (signal?: AbortSignal) => Promise<unknown>,
 ): void => {
   // Track which damage_taken rolls have been applied to prevent double-application
   const appliedDamageRollsRef = useRef<Set<string>>(new Set());
