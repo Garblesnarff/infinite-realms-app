@@ -45,5 +45,22 @@ alert_clear main-ci-red "$f"
 alert_due main-ci-red "$f" 4601 && r=yes || r=no; check "alert: cleared key posts at once next time" "$r" yes
 alert_due pass-wait "$f" 1500 && r=yes || r=no; check "alert: clearing one key keeps the other" "$r" no
 
+# post_and_mark: an alert counts as sent only after the post succeeds
+g=$TMP/post.state
+POST=1
+post() { cat > /dev/null; return 1; }
+echo x | post_and_mark "$g" 1000 main-ci-red && r=ok || r=failed
+check "post_and_mark: failed post returns 1" "$r" failed
+alert_due main-ci-red "$g" 1060 && r=yes || r=no; check "post_and_mark: failed post leaves the alert due" "$r" yes
+post() { cat > /dev/null; }
+echo x | post_and_mark "$g" 1000 main-ci-red cap-hit && r=ok || r=failed
+check "post_and_mark: good post returns 0" "$r" ok
+alert_due cap-hit "$g" 1060 && r=yes || r=no; check "post_and_mark: good post marks every key" "$r" no
+POST=0
+grep -q 'return "$post_failed" # a failed post' "$HERE/../foreman/pulse.sh" && grep -q 'post_failed=1; }' "$HERE/../foreman/pulse.sh" \
+  && r=yes || r=no; check "main: a failed post makes the run exit 1" "$r" yes
+grep -q 'prs=$(open_prs) || { prs=""; prs_ok=0;' "$HERE/../foreman/pulse.sh" && r=yes || r=no
+check "main: a failed PR list does not stop the tick" "$r" yes
+
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]

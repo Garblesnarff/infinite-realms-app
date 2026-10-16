@@ -103,6 +103,7 @@ queued_no_pr() {
   local n
   for n in $(gh api "repos/$REPO/issues?state=open&labels=$1&per_page=50" \
     --jq '.[] | select(.pull_request | not) | select([.labels[].name] | any(IN("catjam-done","catjam-wip","needs-human","jules-stuck")) | not) | .number'); do
+    [[ $n =~ ^[0-9]+$ ]] || return 1 # gh prints the error body on stdout when a call fails
     if [ -z "$(gh api "repos/$REPO/issues/$n/timeline?per_page=100" --paginate \
       --jq '.[] | select(.event == "cross-referenced" and .source.issue.pull_request != null and .source.issue.state == "open") | .source.issue.number')" ]; then
       echo "$n"
@@ -112,7 +113,8 @@ queued_no_pr() {
 # main_ci: "green|red|running|none <sha8> [failed workflow names]" for the push runs at main's head
 main_ci() {
   local sha
-  sha=$(gh api "repos/$REPO/commits/main" --jq .sha)
+  sha=$(gh api "repos/$REPO/commits/main" --jq .sha) || return 1
+  [[ $sha =~ ^[0-9a-f]{40}$ ]] || return 1
   gh api "repos/$REPO/actions/runs?head_sha=$sha&event=push&per_page=50" --jq '.workflow_runs' |
     jq -r --arg s8 "${sha:0:8}" '
       [.[] | select(.conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "startup_failure") | .name] as $red
@@ -147,6 +149,14 @@ post() { # text on stdin; the webhook URL never appears on a command line
   jq -Rs '{text: .}' | curl -fsS -m 20 -o /dev/null -H 'Content-Type: application/json' \
     --data-binary @- -K <(printf 'url = "%s"\n' "$PULSE_WEBHOOK_URL")
 }
+# post_and_mark <state file> <now> <key>...: post stdin; mark the keys as sent only
+# when the post succeeded, so a failed post retries on the next tick
+post_and_mark() {
+  local afile=$1 now=$2 k; shift 2
+  post || return 1
+  [ "$POST" = 0 ] && return 0
+  for k in "$@"; do alert_mark "$k" "$afile" "$now"; done
+}
 
 main() {
   mkdir -p "$STATE"
@@ -154,15 +164,16 @@ main() {
   if ! flock -n 9; then say "another pulse.sh holds the lock; exiting"; exit 0; fi
   OWNER_LOGIN=$(gh api user --jq .login)
 
-  local prs merged ci vstatus vjson vshort vbuilt smoke spent
-  prs=$(open_prs)
+  local prs prs_ok=1 merged ci vstatus vjson vshort vbuilt smoke spent post_failed=0
+  # A failed PR list must not stop the tick: the /version, CI and cap alerts still run.
+  prs=$(open_prs) || { prs=""; prs_ok=0; say "open PR list failed"; }
   merged=$(merged_rows) || merged=FAILED
   ci=$(main_ci) || ci="unknown"
   vjson=$(curl -sS -m 10 -w '\n%{http_code}' "$VERSION_URL" 2> /dev/null) || true
   vstatus=$(tail -1 <<< "$vjson"); [[ $vstatus =~ ^[0-9]{3}$ ]] || vstatus=000
   vshort=$(sed '$d' <<< "$vjson" | jq -r '.short // "?"' 2> /dev/null || echo "?")
   vbuilt=$(sed '$d' <<< "$vjson" | jq -r '(.builtAt // "") | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601? // empty' 2> /dev/null || true)
-  smoke=$(last_smoke_fail || true)
+  smoke=$(last_smoke_fail) && [[ -z $smoke || $smoke =~ ^[0-9]+\  ]] || smoke=FAILED
   spent=$(spent_today)
 
   # Waiting: verdicts at head, release-please left out (it needs only green CI).
@@ -197,23 +208,27 @@ main() {
   if [ "$spent" != "?" ] && awk -v a="$spent" -v b="$DAILY_CAP_USD" 'BEGIN { exit !(a >= b) }'; then
     keys+=(cap-hit); alerts+=("🟠 foreman daily cap hit: \$$spent of \$$DAILY_CAP_USD")
   fi
-  local afile=$STATE/alerts.state i out=()
+  local afile=$STATE/alerts.state i out=() due=()
   for k in main-ci-red version-down pass-wait no-merge cap-hit; do
+    # Without the PR list the PASS alerts are unknown, not cleared.
+    if [ "$prs_ok" = 0 ] && { [ "$k" = pass-wait ] || [ "$k" = no-merge ]; }; then continue; fi
     [[ " ${keys[*]} " == *" $k "* ]] || { [ "$POST" = 0 ] || alert_clear "$k" "$afile"; }
   done
   for i in "${!keys[@]}"; do
     if alert_due "${keys[$i]}" "$afile" "$NOW"; then
-      out+=("${alerts[$i]}")
-      [ "$POST" = 0 ] || alert_mark "${keys[$i]}" "$afile" "$NOW"
+      out+=("${alerts[$i]}"); due+=("${keys[$i]}")
     fi
   done
   if [ "${#out[@]}" -gt 0 ]; then
-    { echo "Realms ALERT $(date -u +%H:%MZ)"; printf '%s\n' "${out[@]}"; } | head -12 | post || say "alert post failed"
-    [ "$POST" = 0 ] || say "alerts posted: ${keys[*]}"
+    if { echo "Realms ALERT $(date -u +%H:%MZ)"; printf '%s\n' "${out[@]}"; } | head -12 | post_and_mark "$afile" "$NOW" "${due[@]}"; then
+      [ "$POST" = 0 ] || say "alerts posted: ${due[*]}"
+    else
+      say "alert post failed: ${due[*]}"; post_failed=1
+    fi
   fi
 
   # ---- pulse ----
-  if [ "$MODE" = tick ] && ! pulse_due "$(date -u +%M)"; then return 0; fi
+  if [ "$MODE" = tick ] && ! pulse_due "$(date -u +%M)"; then return "$post_failed"; fi
   local lanes l ln queued_c queued_j smoke_txt built_txt
   lanes=$(for l in catjam jules muse codex other; do
     ln=$(awk -F'\t' '{ print $1 "\t" $3 }' <<< "$prs" | while IFS=$'\t' read -r n ref; do [ -n "$n" ] && [ "$(lane_of "$ref")" = "$l" ] && echo "$n"; done || true)
@@ -223,23 +238,25 @@ main() {
   done | sed 's/ · $//')
   queued_c=$(queued_no_pr catjam || true)
   queued_j=$(queued_no_pr jules || true)
-  if [ -n "$smoke" ]; then smoke_txt="last smoke FAILED comment $(mins $((NOW - ${smoke%% *}))) ago on #$OPS_ISSUE"; else smoke_txt="no smoke FAILED on #$OPS_ISSUE in 7 d"; fi
+  if [ "$smoke" = FAILED ]; then smoke_txt="smoke check failed (GitHub)"; elif [ -n "$smoke" ]; then smoke_txt="last smoke FAILED comment $(mins $((NOW - ${smoke%% *}))) ago on #$OPS_ISSUE"; else smoke_txt="no smoke FAILED on #$OPS_ISSUE in 7 d"; fi
   if [ -n "$vbuilt" ]; then built_txt=", built $(mins $((NOW - vbuilt))) ago"; else built_txt=""; fi
   {
     echo "Realms pulse $(date -u +%H:%MZ)"
     if [ "$merged" = FAILED ]; then echo "Merged: GitHub search failed"; else
       echo "Merged: $m1 last hour / $m24 in 24 h (target $TARGET_PER_HOUR/hour); median open→merge $med"; fi
+    if [ "$prs_ok" = 0 ]; then echo "Open PRs: GitHub PR list failed"; else
     echo "PASS at head, not merged: $pass_n$([ "$pass_n" = 0 ] || echo " ($(awk -F'\t' '{ print $1 }' <<< "$pass_rows" | nums); oldest $(mins "$oldest"))")"
     echo "No verdict at head: $(awk 'NF' <<< "$nov" | wc -l)$([ -z "$nov" ] || echo " ($(nums <<< "$nov"))") · FIX on authors: $(awk 'NF' <<< "$fix" | wc -l)$([ -z "$fix" ] || echo " ($(nums <<< "$fix"))")"
-    echo "Open PRs: $lanes"
+    echo "Open PRs: $lanes"; fi
     echo "Queued, no PR: catjam $(awk 'NF' <<< "$queued_c" | wc -l)$([ -z "$queued_c" ] || echo " ($(nums <<< "$queued_c"))") · jules $(awk 'NF' <<< "$queued_j" | wc -l)$([ -z "$queued_j" ] || echo " ($(nums <<< "$queued_j"))")"
     echo "Main CI: $ci"
     echo "Prod: /version $vstatus, build $vshort$built_txt; $smoke_txt"
     echo "Foreman: \$$spent of \$$DAILY_CAP_USD today; $(credit_line)"
     triage_line
     if [ "${#keys[@]}" -gt 0 ]; then echo "Alerts open: ${keys[*]}"; else echo "Alerts open: none"; fi
-  } | head -12 | post || say "pulse post failed"
-  [ "$POST" = 0 ] || say "pulse posted"
+  } | head -12 | post || { say "pulse post failed"; post_failed=1; }
+  [ "$POST" = 0 ] || [ "$post_failed" = 1 ] || say "pulse posted"
+  return "$post_failed" # a failed post marks the unit failed; --dry-run never posts
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then main; fi
