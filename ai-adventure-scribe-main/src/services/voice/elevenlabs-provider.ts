@@ -1,3 +1,4 @@
+import { irVoice } from '../../../shared/npc-voices';
 import { ELEVENLABS_MODEL } from '../voice-routing';
 import { type VoiceProvider, voiceErrorForStatus } from './voice-provider';
 
@@ -11,13 +12,13 @@ export const ElevenLabsProvider: VoiceProvider = {
   id: 'elevenlabs',
 
   resolveVoiceId(voice) {
-    return voice.voiceId;
+    return irVoice(voice.voiceId)?.premium ?? voice.voiceId;
   },
 
   async generateAudio(text, voice, settings, signal, sessionId) {
     const apiBase = import.meta.env.VITE_API_URL || '';
     const response = await fetch(
-      `${apiBase}/v1/ai-proxy/voice/${encodeURIComponent(voice.voiceId)}`,
+      `${apiBase}/v1/ai-proxy/voice/${encodeURIComponent(ElevenLabsProvider.resolveVoiceId(voice))}`,
       {
         method: 'POST',
         headers: {

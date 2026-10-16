@@ -12,6 +12,7 @@ import {
   type VoiceMappingInput,
   type VoiceProfileInput,
 } from '../../services/issue-1784-data-service.js';
+import { castNpcVoices } from '../../services/npc-voice-casting.js';
 
 const resourceIdParams = t.Object({
   id: t.String({ minLength: 1, maxLength: 255 }),
@@ -193,6 +194,31 @@ export const issue1784DataRoutes = new Elysia({ name: 'issue-1784-data-routes' }
       }
     },
     { params: resourceIdParams, body: voiceProfileBody },
+  )
+  .post(
+    '/v1/sessions/:id/voice-cast',
+    async ({ params, body, user, set }) => {
+      try {
+        return await castNpcVoices(params.id, user.userId, body.segments);
+      } catch (error) {
+        return handleRouteError(set, error, 'Failed to cast NPC voices');
+      }
+    },
+    {
+      params: resourceIdParams,
+      body: t.Object({
+        segments: t.Array(
+          t.Object({
+            type: t.Union([t.Literal('dm'), t.Literal('character'), t.Literal('transition')]),
+            text: t.String({ maxLength: 20000 }),
+            character: t.Optional(t.Nullable(t.String({ maxLength: 255 }))),
+            voice_category: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
+            npc_id: t.Optional(t.Nullable(t.String({ format: 'uuid' }))),
+          }),
+          { maxItems: 200 },
+        ),
+      }),
+    },
   )
   .get(
     '/v1/sessions/:id/voice-mappings',

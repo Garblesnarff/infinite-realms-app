@@ -13,73 +13,20 @@
  */
 
 import { VoiceConsistencyRepository } from './voice/voice-consistency-repository';
-import { inferVoiceCategory, normalizeCharacterName } from './voice/voice-utils';
+import { normalizeCharacterName } from './voice/voice-utils';
 import { VoiceMapper } from './voice-mapper';
 import { voiceProfileService, type VoiceProfile } from './voice-profile-service';
 import {
   VOICE_CATEGORY_VALUES,
   getCanonicalVoiceCategory,
-  isUnknownSpeaker,
   setCharacterVoiceMapping,
 } from './voice-routing';
+import { irVoice } from '../../shared/npc-voices';
 
 import type { VoiceConfig } from './voice/voice-types';
 
 import logger from '@/lib/logger';
 import { stripEngineGeneratedLinesFromSegments } from '@/utils/engine-lines';
-
-const LEGACY_NARRATOR_VOICE_ID = 'bIHbv24MWmeRgasZH58o';
-
-type ResolvedVoice = {
-  voiceCategory: string;
-  voiceConfig: VoiceConfig;
-  isCacheable: boolean;
-};
-
-function resolveVoiceCategory(category: string | null): ResolvedVoice {
-  const canonicalCategory = getCanonicalVoiceCategory(category ?? '');
-  const voiceConfig = VoiceMapper.getVoiceForCategory(category ?? '');
-
-  if (!canonicalCategory) {
-    return {
-      voiceCategory: 'narrator',
-      voiceConfig,
-      isCacheable: false,
-    };
-  }
-
-  return {
-    voiceCategory: canonicalCategory,
-    voiceConfig,
-    isCacheable: true,
-  };
-}
-
-function resolvePersistedVoiceConfig(mapping: {
-  voiceCategory: string | null;
-  voiceId: string | null;
-}): ResolvedVoice {
-  const resolved = resolveVoiceCategory(mapping.voiceCategory);
-  if (!resolved.isCacheable) {
-    return resolved;
-  }
-
-  const { voiceConfig } = resolved;
-  const persistedVoiceId = mapping.voiceId?.trim();
-
-  // Older assignments stored the narrator ID when an AI label was not found
-  // (notably "gruff"). Do not let that stale fallback overwrite a now-valid
-  // category mapping; retain non-fallback custom IDs for canonical categories.
-  if (
-    !persistedVoiceId ||
-    persistedVoiceId === LEGACY_NARRATOR_VOICE_ID ||
-    persistedVoiceId === VoiceMapper.getNarratorVoice().id
-  ) {
-    return resolved;
-  }
-
-  return { ...resolved, voiceConfig: { ...voiceConfig, id: persistedVoiceId } };
-}
 
 export { type VoiceProfile };
 
@@ -182,131 +129,22 @@ export class VoiceConsistencyService {
   ): Promise<VoiceAssignment[]> {
     if (signal?.aborted) return [];
     const cleanSegments = stripEngineGeneratedLinesFromSegments(segments);
-    logger.info('🎪 Processing voice assignments for', cleanSegments.length, 'segments');
-
-    const assignments: VoiceAssignment[] = [];
-    const existingMappings = await VoiceConsistencyRepository.getSessionMappings(sessionId);
+    const cast = await VoiceConsistencyRepository.castSegments(sessionId, cleanSegments);
     if (signal?.aborted) return [];
-    const mappingLookup = new Map(existingMappings.map((m) => [m.characterName, m]));
-
-    // ⚡ Bolt: Track appearance counts for aggregation to avoid redundant sequential updates.
-    const updatesNeeded = new Map<string, number>(); // mappingId -> count
-    const insertsNeeded = new Map<
-      string,
-      { characterName: string; voiceCategory: string; voiceId: string; count: number }
-    >();
-    const pendingAssignments = new Map<
-      string,
-      { voiceCategory: string; voiceConfig: VoiceConfig }
-    >();
-
-    for (const segment of cleanSegments) {
-      if (signal?.aborted) return assignments;
-      if (!segment.character || isUnknownSpeaker(segment.character)) {
-        assignments.push({
-          character: 'narrator',
-          voiceCategory: 'narrator',
-          voiceConfig: VoiceMapper.getNarratorVoice(),
-          isNewCharacter: false,
-        });
-        continue;
-      }
-
-      const cleanCharacter = normalizeCharacterName(segment.character);
-      const existingMapping = mappingLookup.get(cleanCharacter);
-
-      if (existingMapping) {
-        const resolved = resolvePersistedVoiceConfig(existingMapping);
-        if (resolved.isCacheable) {
-          setCharacterVoiceMapping(cleanCharacter, resolved.voiceConfig);
-          updatesNeeded.set(existingMapping.id, (updatesNeeded.get(existingMapping.id) || 0) + 1);
-          assignments.push({
-            character: cleanCharacter,
-            voiceCategory: resolved.voiceCategory,
-            voiceConfig: resolved.voiceConfig,
-            isNewCharacter: false,
-          });
-          continue;
+    return cast
+      .filter((segment) => !segment.voice_muted)
+      .map((segment) => {
+        const voiceCategory = getCanonicalVoiceCategory(segment.voice_category || '') || 'default';
+        const voiceConfig = {
+          ...VoiceMapper.getVoiceForCategory(voiceCategory),
+          id: segment.voice_id || 'narrator',
+        };
+        const character = normalizeCharacterName(segment.character || 'narrator');
+        if (segment.type === 'character' && irVoice(voiceConfig.id)) {
+          setCharacterVoiceMapping(character, voiceConfig);
         }
-        mappingLookup.delete(cleanCharacter);
-      }
-
-      const pending = pendingAssignments.get(cleanCharacter);
-      const resolved = pending
-        ? { ...pending, isCacheable: true }
-        : resolveVoiceCategory(segment.voice_category || inferVoiceCategory(cleanCharacter));
-
-      if (resolved.isCacheable) {
-        pendingAssignments.set(cleanCharacter, {
-          voiceCategory: resolved.voiceCategory,
-          voiceConfig: resolved.voiceConfig,
-        });
-        setCharacterVoiceMapping(cleanCharacter, resolved.voiceConfig);
-      }
-
-      assignments.push({
-        character: cleanCharacter,
-        voiceCategory: resolved.voiceCategory,
-        voiceConfig: resolved.voiceConfig,
-        isNewCharacter: true,
+        return { character, voiceCategory, voiceConfig, isNewCharacter: false };
       });
-
-      if (resolved.isCacheable) {
-        const pendingInsert = insertsNeeded.get(cleanCharacter);
-        if (pendingInsert) {
-          pendingInsert.count++;
-        } else {
-          insertsNeeded.set(cleanCharacter, {
-            characterName: cleanCharacter,
-            voiceCategory: resolved.voiceCategory,
-            voiceId: resolved.voiceConfig.id,
-            count: 1,
-          });
-        }
-      }
-    }
-
-    // ⚡ Bolt: Execute aggregated database operations in parallel to minimize total latency.
-    const tasks: Promise<unknown>[] = [];
-
-    // Aggregated updates
-    for (const [id, increment] of updatesNeeded.entries()) {
-      if (signal?.aborted) return assignments;
-      // ⚡ Bolt: Use the cached appearanceCount from existingMappings to calculate the new count,
-      // avoiding a redundant SELECT query per unique character.
-      const mapping = existingMappings.find((m) => m.id === id);
-      if (mapping) {
-        const newCount = mapping.appearanceCount + increment;
-        tasks.push(VoiceConsistencyRepository.updateCharacterUsage(id, newCount));
-      }
-    }
-
-    // Aggregated inserts
-    for (const data of insertsNeeded.values()) {
-      if (signal?.aborted) return assignments;
-      tasks.push(
-        VoiceConsistencyRepository.saveCharacterVoiceMapping(
-          sessionId,
-          data.characterName,
-          data.voiceCategory,
-          data.voiceId,
-          data.count,
-        ),
-      );
-    }
-
-    if (tasks.length > 0) {
-      await Promise.all(tasks);
-    }
-
-    if (signal?.aborted) return assignments;
-
-    logger.info(
-      '🎯 Voice assignments completed:',
-      assignments.map((a) => `${a.character}(${a.voiceCategory})`).join(', '),
-    );
-
-    return assignments;
   }
 
   /**

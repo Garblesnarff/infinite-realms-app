@@ -297,7 +297,8 @@ export const useVoiceProcessing = ({
         logger.info('⚠️ Aborting previous audio processing');
         abortController.current.abort();
       }
-      abortController.current = new AbortController();
+      const controller = new AbortController();
+      abortController.current = controller;
       logger.info('🆕 Created new abort controller for audio processing');
 
       // Stop current audio only if actually playing or processing
@@ -319,10 +320,18 @@ export const useVoiceProcessing = ({
         const validatedSegments = VoiceDirector.validateAISegments(aiSegments);
         logger.info('📝 Validated segments:', validatedSegments.length);
 
-        const voiceSegments = VoiceDirector.processAISegments(validatedSegments);
+        const castSegments = sessionId
+          ? await VoiceDirector.castAISegments(validatedSegments, sessionId)
+          : validatedSegments;
+        if (controller.signal.aborted || abortController.current !== controller) return;
+        const voiceSegments = VoiceDirector.processAISegments(castSegments);
         logger.info('🎵 Voice segments created:', voiceSegments.length);
 
         if (voiceSegments.length === 0) {
+          if (validatedSegments.length > 0 && castSegments.length === 0) {
+            setState((prev) => ({ ...prev, isProcessing: false }));
+            return;
+          }
           throw new Error('No valid voice segments created');
         }
 
@@ -336,6 +345,7 @@ export const useVoiceProcessing = ({
         // Step 3: Start progressive generation and playback
         await processSegmentsProgressively(voiceSegments);
       } catch (error) {
+        if (controller.signal.aborted || abortController.current !== controller) return;
         logger.error('❌ Error in speakAISegments:', error);
         const errorMessage =
           error instanceof Error ? error.message : 'Failed to process voice segments';
@@ -362,6 +372,7 @@ export const useVoiceProcessing = ({
       stopPlayback,
       processSegmentsProgressively,
       currentAudio,
+      sessionId,
       setState,
     ],
   );

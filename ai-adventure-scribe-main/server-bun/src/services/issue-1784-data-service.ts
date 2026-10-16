@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { sql } from '../lib/db.js';
-import { NotFoundError } from '../lib/errors.js';
+import { ForbiddenError, NotFoundError } from '../lib/errors.js';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -379,69 +379,8 @@ export class Issue1784DataService {
     input: VoiceMappingInput,
   ): Promise<VoiceMappingRow> {
     await this.assertSessionOwnership(sessionId, userId);
-    const characterName = input.character_name.trim();
-    const voiceId = input.voice_id.trim();
-    const row = await sql.begin(async (tx) => {
-      const existing = await tx`
-        SELECT id, voice_category, voice_id, appearance_count, metadata
-        FROM public.character_voice_mappings
-        WHERE session_id = ${sessionId} AND character_name = ${characterName}
-        ORDER BY created_at NULLS LAST, id
-        LIMIT 1
-        FOR UPDATE
-      `;
-
-      let mappingId: string;
-      if (existing[0]) {
-        mappingId = String(existing[0].id);
-        await tx`
-          UPDATE public.character_voice_mappings
-          SET
-            voice_id = ${voiceId || existing[0].voice_id},
-            voice_category = ${input.voice_category ?? existing[0].voice_category ?? null},
-            appearance_count = ${input.appearance_count ?? existing[0].appearance_count ?? 1},
-            metadata = ${JSON.stringify(input.metadata ?? existing[0].metadata ?? {})}::jsonb,
-            last_used = now(),
-            updated_at = now()
-          WHERE id = ${mappingId} AND session_id = ${sessionId}
-        `;
-      } else {
-        const inserted = await tx`
-          INSERT INTO public.character_voice_mappings (
-            session_id,
-            character_name,
-            voice_id,
-            voice_category,
-            appearance_count,
-            first_appearance,
-            last_used,
-            metadata
-          ) VALUES (
-            ${sessionId},
-            ${characterName},
-            ${voiceId},
-            ${input.voice_category ?? null},
-            ${input.appearance_count ?? 1},
-            now(),
-            now(),
-            ${JSON.stringify(input.metadata ?? {})}::jsonb
-          )
-          RETURNING id
-        `;
-        const insertedRow = inserted[0];
-        if (!insertedRow) throw new Error('Voice mapping insert returned no row');
-        mappingId = String(insertedRow.id);
-      }
-
-      const [updated] = await tx`
-        ${selectVoiceMappingColumns}
-        WHERE id = ${mappingId} AND session_id = ${sessionId}
-        LIMIT 1
-      `;
-      return updated as unknown as VoiceMappingRow;
-    });
-
-    return row;
+    void input;
+    throw new ForbiddenError('Legacy session voice mappings are read-only; use NPC casting');
   }
 
   static async updateVoiceMapping(
@@ -449,47 +388,11 @@ export class Issue1784DataService {
     userId: string,
     appearanceCount: number,
   ): Promise<VoiceMappingRow> {
-    const rows = await sql`
-      SELECT
-        m.id,
-        m.session_id,
-        COALESCE(
-          c.user_id = ${userId}
-          OR c.owner_id = ${userId}
-          OR ca.user_id = ${userId},
-          false
-        ) AS owned
-      FROM public.character_voice_mappings AS m
-      JOIN public.game_sessions AS gs ON gs.id = m.session_id
-      LEFT JOIN public.characters AS c ON c.id = gs.character_id
-      LEFT JOIN public.campaigns AS ca ON ca.id = gs.campaign_id
-      WHERE m.id = ${mappingId}
-      LIMIT 1
-    `;
-    const mapping = rows[0] as { id: string; session_id: string; owned: boolean } | undefined;
-    if (!mapping || !mapping.owned) throw new NotFoundError('Voice mapping', mappingId);
-
-    const [updated] = await sql`
-      UPDATE public.character_voice_mappings AS m
-      SET appearance_count = ${Math.trunc(appearanceCount)}, last_used = now(), updated_at = now()
-      WHERE m.id = ${mappingId}
-        AND EXISTS (
-          SELECT 1
-          FROM public.game_sessions AS gs
-          LEFT JOIN public.characters AS c ON c.id = gs.character_id
-          LEFT JOIN public.campaigns AS ca ON ca.id = gs.campaign_id
-          WHERE gs.id = m.session_id
-            AND (
-              c.user_id = ${userId}
-              OR c.owner_id = ${userId}
-              OR ca.user_id = ${userId}
-            )
-        )
-      RETURNING m.id, m.session_id, m.character_name, m.voice_id, m.voice_category,
-        m.appearance_count, m.first_appearance, m.last_used, m.metadata, m.created_at, m.updated_at
-    `;
-    if (!updated) throw new NotFoundError('Voice mapping', mappingId);
-    return updated as unknown as VoiceMappingRow;
+    void appearanceCount;
+    const rows = await sql`SELECT session_id FROM character_voice_mappings WHERE id = ${mappingId}`;
+    if (!rows[0]) throw new NotFoundError('Voice mapping', mappingId);
+    await this.assertSessionOwnership(String(rows[0].session_id), userId);
+    throw new ForbiddenError('Legacy session voice mappings are read-only');
   }
 
   static async getVoiceProfile(
@@ -675,6 +578,7 @@ export class Issue1784DataService {
         updated_at
       FROM public.session_config
       WHERE session_id = ${sessionId}
+        AND config_key NOT LIKE 'npc-voice-scene:%'
       ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id
       LIMIT 1
     `;
