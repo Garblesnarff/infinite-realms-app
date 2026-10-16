@@ -1,0 +1,33 @@
+{
+  "key": "344af2ff3fbcfa4658d84616b988ce04a28c610f5953a357941827aa9806c775",
+  "url": "https://openrouter.ai/api/v1/chat/completions",
+  "request": {
+    "model": "google/gemini-3.1-flash-lite",
+    "messages": [
+      {
+        "role": "system",
+        "content": [
+          {
+            "type": "text",
+            "text": "You are the Dungeon Master. Narrate only what the engine resolved.",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": "{\"authoritativeCombatResults\":[{\"actor\":\"Captain Sarah Reeves\",\"action\":\"attack\",\"targets\":[\"The Scholar\"],\"hit\":true}],\"turnHandoff\":\"End your response with: \\\"The Scholar, what do you do?\\\"\"}"
+      }
+    ],
+    "max_tokens": 600,
+    "temperature": 0.8,
+    "usage": {
+      "include": true
+    }
+  },
+  "status": 200,
+  "contentType": "application/json",
+  "body": "{\"id\":\"gen-716-stub\",\"object\":\"chat.completion\",\"model\":\"google/gemini-3.1-flash-lite\",\"choices\":[{\"index\":0,\"finish_reason\":\"stop\",\"message\":{\"role\":\"assistant\",\"content\":\"Captain Reeves's blade flashes out and catches you across the forearm, a hot line of pain. Before you can recover your footing, a second strike lands against your shoulder and drives you back a step toward the shelves. The Scholar, what do you do?\"}}],\"usage\":{\"prompt_tokens\":812,\"completion_tokens\":61,\"total_tokens\":873}}"
+}

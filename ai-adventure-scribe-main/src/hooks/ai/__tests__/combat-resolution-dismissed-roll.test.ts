@@ -48,6 +48,7 @@ vi.mock('@/services/combat/spell-target-save-bridge', () => ({
 }));
 vi.mock('../narration-gate', () => ({
   enforceNarrationGate: (...args: any[]) => enforceNarrationGate(...args),
+  gateInventedExtraStrike: async ({ narration }: any) => narration,
 }));
 
 const { resolveDeclaredCombatActions } = await import('../combat-resolution-step');
