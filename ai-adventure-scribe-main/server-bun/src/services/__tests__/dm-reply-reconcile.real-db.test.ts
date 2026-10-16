@@ -3394,6 +3394,10 @@ ${playerInput}
       }),
     });
     const characterId = first.character.id;
+    // Prove the gain landed on the sheet BEFORE the loss turn: without this,
+    // the final toEqual([]) would also pass on main (nothing mirrored there),
+    // and the loss mirror would be unproven.
+    expect(await sheetEquipment(characterId)).toEqual([{ item_name: 'Brass Key', quantity: 1 }]);
     await playerSays('I hand the brass key to the guard.');
     await dmTurn({
       ...fighter,
