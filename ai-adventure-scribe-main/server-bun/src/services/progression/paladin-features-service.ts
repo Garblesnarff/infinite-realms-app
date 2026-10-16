@@ -33,6 +33,7 @@ import {
 } from '../../../../db/schema/index';
 import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
+import { abilityModifier } from '../../../../shared/ability-modifier';
 import { CharacterVitalsService } from '../character-vitals-service.js';
 import { CombatHPService } from '../combat-hp-service.js';
 import { ClassFeatureUsageService } from './class-feature-usage-service.js';
@@ -67,10 +68,6 @@ export function paladinLevelOf(character: {
   }
   if (multiclass > 0) return multiclass;
   return (character.class ?? '').toLowerCase() === 'paladin' ? (character.level ?? 0) : 0;
-}
-
-export function abilityModifier(score: number): number {
-  return Math.floor((score - 10) / 2);
 }
 
 async function ownedCharacter(characterId: string, userId: string): Promise<CharacterRow | null> {
