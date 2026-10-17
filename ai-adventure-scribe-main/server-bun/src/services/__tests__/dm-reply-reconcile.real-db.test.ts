@@ -3317,6 +3317,102 @@ ${playerInput}
     });
   });
 
+  test('#610 (#768 FIX): an inflated story-damage claim is capped at current HP minus 1 — 25 on 12 lands at 1, still standing; a later 999 at 1 HP drops to 0 and the dying state', async () => {
+    // The per-hit half-max net is off on this path, so without the cap the model could
+    // kill a full-HP hero outright with one inflated claim. The cap makes story damage
+    // unable to kill: it drops a hero to 1 at worst, and only a hero already at 1 HP
+    // can go down (dying, death saves).
+    const setup = await dmTurn({
+      ...fighter,
+      playerInput: 'I take hold of the rope.',
+      reply: storyReply('A frayed rope hangs over the edge.', undefined),
+    });
+    const characterId = setup.character.id;
+    // The Veteran at 12/12, as in the issue.
+    await database
+      .insert(characterStats)
+      .values({ characterId, maxHitPoints: 12, currentHitPoints: 12 });
+    const vitalOf = async (): Promise<string | null> =>
+      (
+        await database
+          .select({ vitalState: characterStats.vitalState })
+          .from(characterStats)
+          .where(eq(characterStats.characterId, characterId))
+      )[0]?.vitalState ?? null;
+    const systemLines = async (): Promise<string[]> =>
+      (
+        await database
+          .select({ message: dialogueHistory.message })
+          .from(dialogueHistory)
+          .where(
+            and(
+              eq(dialogueHistory.sessionId, sessionId),
+              eq(dialogueHistory.speakerType, 'system'),
+            ),
+          )
+      ).map((row) => row.message);
+
+    // First message: 25 claimed on 12 HP. Capped at 11, the hero stands at 1/12.
+    const playerInput = 'I grip the rope and hold on.';
+    await playerSays(playerInput);
+    const first = await dmTurn({
+      ...fighter,
+      existingCharacter: setup.character,
+      playerInput,
+      reply: storyReply(
+        'The rocks come down and a boulder slams into you.',
+        { damage: { amount: 25, source: 'rockslide' } },
+      ),
+    });
+    expect(first.status).toBe(200);
+    expect((await sheetAfterReload(characterId)).stats).toMatchObject({
+      current_hit_points: 1,
+      max_hit_points: 12,
+    });
+    expect(await vitalOf()).toBe('standing');
+    expect((await systemLines()).join('\n')).toContain(
+      'story damage — rockslide deals 11 damage',
+    );
+    // Retry re-sends the same message: still 1 HP, still one damage line.
+    await dmTurn({
+      ...fighter,
+      existingCharacter: setup.character,
+      playerInput,
+      reply: storyReply(
+        'The rocks come down and a boulder slams into you.',
+        { damage: { amount: 25, source: 'rockslide' } },
+      ),
+    });
+    expect((await sheetAfterReload(characterId)).stats).toMatchObject({
+      current_hit_points: 1,
+    });
+    expect(
+      (await systemLines()).filter((message) => message.includes('story damage')),
+    ).toHaveLength(1);
+
+    // Second message: 999 claimed at 1 HP. Capped at 1, the hero drops to 0 — dying,
+    // with death saves to roll. Without the cap this would have been instant death
+    // (overflow 998 >= max 12).
+    const secondInput = 'I keep climbing.';
+    await playerSays(secondInput);
+    const second = await dmTurn({
+      ...fighter,
+      existingCharacter: setup.character,
+      playerInput: secondInput,
+      reply: storyReply(
+        'Another boulder crashes down on you.',
+        { damage: { amount: 999, source: 'rockslide' } },
+      ),
+    });
+    expect(second.status).toBe(200);
+    expect((await sheetAfterReload(characterId)).stats).toMatchObject({
+      current_hit_points: 0,
+      max_hit_points: 12,
+    });
+    expect(await vitalOf()).toBe('dying');
+    expect((await systemLines()).join('\n')).toContain('deals 1 damage');
+  });
+
   test('#218 step 3: two concurrent movements for one player message move the items once (row lock)', async () => {
     const playerInput = 'I grab the charts.';
     await playerSays(playerInput);

@@ -36,6 +36,24 @@ export interface StoryDamage {
 /** One story beat never deals more than this; larger is a prompt bug, not narration. */
 export const MAX_STORY_DAMAGE = 999;
 
+/**
+ * The strategist's bound (#768 FIX): story damage never kills outright. Above 1 HP the
+ * claim is capped at current HP minus 1, so the worst it can do is drop the hero to 1;
+ * at 1 HP it is capped at 1, so it may drop the hero to 0 (dying, death saves) but can
+ * never overflow into instant death. At 0 HP the claim is capped below the maximum, so
+ * the SRD at-zero rule applies (one failure per hit) and an inflated claim cannot
+ * overflow into instant death there either.
+ */
+export function capStoryDamage(
+  amount: number,
+  currentHitPoints: number,
+  maxHitPoints: number,
+): number {
+  if (currentHitPoints > 1) return Math.min(amount, currentHitPoints - 1);
+  if (currentHitPoints === 1) return Math.min(amount, 1);
+  return Math.min(amount, Math.max(1, maxHitPoints - 1));
+}
+
 export function validDamage(damage: unknown): damage is StoryDamage {
   if (!damage || typeof damage !== 'object') return false;
   const d = damage as Record<string, unknown>;
@@ -71,16 +89,34 @@ export async function applyStoryDamageOnce(input: {
   const { engineChatLineExists, postEngineChatLine } = await import('../engine-chat-line.js');
   const idSeed = damageIdSeed(sessionId, characterId, since);
   if (await engineChatLineExists(idSeed)) return 'already_applied';
+  // The per-hit half-max net is off on this path (character-vitals-service.ts deliberately
+  // leaves `targetIsPlayer` unset for DM-resolved damage), so an uncapped claim of 25 on a
+  // 12 HP hero — or 999 — would be massive damage and kill outright. The cap makes story
+  // damage unable to kill: it can drop a hero to 1, never past it.
+  const { CharacterVitalsService } = await import('../character-vitals-service.js');
+  const before = await CharacterVitalsService.getVitals(characterId, userId);
+  const capped = capStoryDamage(amount, before.currentHitPoints, before.maxHitPoints);
+  if (capped !== amount) {
+    logger.info({
+      msg: 'DM_STORY_DAMAGE_CAPPED',
+      sessionId,
+      characterId,
+      claimed: amount,
+      capped,
+      currentHitPoints: before.currentHitPoints,
+    });
+  }
   const { applyNonAttackDamage } = await import('../combat/non-attack-damage.js');
   const { vitals, engineLines } = await applyNonAttackDamage(
     characterId,
     userId,
-    amount,
+    capped,
     `story: ${source.trim()}`,
   );
   const lines = [
-    `⚙️ Engine: story damage — ${source.trim()} deals ${amount} damage to ${characterName}. ` +
-      `HP ${vitals.currentHitPoints}/${vitals.maxHitPoints}.`,
+    `⚙️ Engine: story damage — ${source.trim()} deals ${capped} damage to ${characterName}` +
+      (capped !== amount ? ` (capped from a claim of ${amount})` : '') +
+      `. HP ${vitals.currentHitPoints}/${vitals.maxHitPoints}.`,
     ...engineLines,
   ];
   try {
