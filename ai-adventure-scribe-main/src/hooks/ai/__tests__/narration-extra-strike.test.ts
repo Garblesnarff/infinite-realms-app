@@ -78,6 +78,10 @@ describe('narration-extra-strike', () => {
       );
     });
 
+    it('does not flag "another" strike aimed at a companion', () => {
+      expect(inventedExtraStrikeClaims('Another blow hits your companion Mira.', 0)).toEqual([]);
+    });
+
     it('flags "A second strike lands on you"', () => {
       const claims = inventedExtraStrikeClaims('A second strike lands on you.', 1);
       expect(claims.length).toBe(1);

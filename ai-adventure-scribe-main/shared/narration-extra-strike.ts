@@ -69,7 +69,7 @@ const EXTRA_STRIKE_PATTERNS: RegExp[] = [
   new RegExp(`\\ba\\s+second\\s+(?:${ATTACK_NOUN})\\b[^.!?]{0,40}?\\b(?:${REACH_YOU})\\b`, 'gi'),
   // "another strike slams into you", "another blow finds your side".
   new RegExp(
-    `\\banother\\s+(?:${ATTACK_NOUN})\\b[^.!?]{0,60}?\\b(?:lands|connects|catches|finds|slams\\s+into|strikes|hits)\\s+(?:with\\s+)?(?:you|your)\\b`,
+    `\\banother\\s+(?:${ATTACK_NOUN})\\b[^.!?]{0,60}?\\b(?:lands|connects|catches|finds|slams\\s+into|strikes|hits)\\s+(?:with\\s+)?(?:you\\b|your\\s+(?!(?:${COMPANION_AFTER_YOUR})\\b)\\w+)`,
     'gi',
   ),
   // "the goblin hits you again", "it slashes you again".
