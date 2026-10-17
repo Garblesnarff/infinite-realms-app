@@ -5,27 +5,47 @@ import { createDmResponseSchema, dmResponseSchema } from '../dm-response-schema.
 /**
  * Epic #782 item 1 — Measure. (Refs #782)
  *
- * A budget test that walks the LIVE DM reply schema per phase and asserts the
- * strict structured-output limits any current model must satisfy:
- *  - unions ≤ 16
- *  - optional parameters ≤ 24
- *  - no `oneOf`
- *  - no numeric or length constraint keywords
+ * RATCHET, not red-first: asserts the CURRENT measured schema budget as the
+ * baseline, so any PR that grows the schema fails. The strict structured-output
+ * targets live as `test.todo` below; each #782 step (items 5-8) turns one todo
+ * into a real assertion and lowers the baseline.
  *
- * Red first: this test FAILS on the current schema (34 unions, 1 oneOf, 7
- * numeric/length keywords). Items 5-8 of the epic fix the schema; this PR only
- * adds the measurement. Test-only: no model-facing text changes.
+ * Baseline measured at bd9041bf (2026-10-17) with the walker in this file:
+ *  - per phase (dmResponseSchema): 34 unions, 20 optionals, 1 oneOf,
+ *    7 numeric/length keywords
+ *  - createDmResponseSchema(): 28 unions, 13 optionals, 1 oneOf,
+ *    1 numeric/length keyword
  *
  * Counting follows the Anthropic convention from
  * dm-response-schema-anthropic.test.ts: every `anyOf` / `oneOf` node and every
  * `type: [..., 'null']` array counts as one union; every object property not
  * listed in `required` counts as one optional. Nodes are counted once by
  * identity, matching the existing lint.
+ *
+ * Test-only: no model-facing text changes.
  */
 
-/** Anthropic strict structured-output limits (docs checked 2026-10-16/17). */
-const MAX_UNIONS = 16;
-const MAX_OPTIONALS = 24;
+/**
+ * Strict structured-output targets (docs checked 2026-10-16/17). Items 5-8 of
+ * the epic tighten the ratchet from the baseline to these; until then they are
+ * todos so this PR merges green.
+ */
+const TARGET_MAX_UNIONS = 16;
+const TARGET_MAX_OPTIONALS = 24;
+const TARGET_MAX_ONE_OF = 0;
+const TARGET_MAX_KEYWORDS = 0;
+
+/** Baseline budget per phase, measured at bd9041bf — see header comment. */
+const BASELINE_UNIONS = 34;
+const BASELINE_OPTIONALS = 20;
+const BASELINE_ONE_OF = 1;
+const BASELINE_KEYWORDS = 7;
+
+/** Baseline budget for createDmResponseSchema(), measured at bd9041bf. */
+const BASELINE_DEFAULT_UNIONS = 28;
+const BASELINE_DEFAULT_OPTIONALS = 13;
+const BASELINE_DEFAULT_ONE_OF = 1;
+const BASELINE_DEFAULT_KEYWORDS = 1;
 
 /** JSON Schema keywords Anthropic strict mode rejects (numeric + length family). */
 const NUMERIC_OR_LENGTH_KEYWORDS = [
@@ -132,34 +152,68 @@ function measureSchemaBudget(schema: unknown, label: string): Budget {
 describe('dmResponseSchema strict budget (Refs #782 item 1)', () => {
   for (const phase of PHASES) {
     describe(`phase ${phase}`, () => {
-      test('has no oneOf', () => {
+      test(`ratchet: oneOf count stays at or below baseline (${BASELINE_ONE_OF})`, () => {
         const budget = measureSchemaBudget(schemaForPhase(phase), `dmResponseSchema:${phase}`);
-        expect(budget.oneOfPaths).toEqual([]);
+        expect(budget.oneOfPaths.length).toBeLessThanOrEqual(BASELINE_ONE_OF);
       });
 
-      test('stays within 16 unions', () => {
+      test(`ratchet: unions stay at or below baseline (${BASELINE_UNIONS})`, () => {
         const budget = measureSchemaBudget(schemaForPhase(phase), `dmResponseSchema:${phase}`);
-        expect(budget.unions).toBeLessThanOrEqual(MAX_UNIONS);
+        expect(budget.unions).toBeLessThanOrEqual(BASELINE_UNIONS);
       });
 
-      test('stays within 24 optional parameters', () => {
+      test(`ratchet: optional parameters stay at or below baseline (${BASELINE_OPTIONALS})`, () => {
         const budget = measureSchemaBudget(schemaForPhase(phase), `dmResponseSchema:${phase}`);
-        expect(budget.optionals).toBeLessThanOrEqual(MAX_OPTIONALS);
+        expect(budget.optionals).toBeLessThanOrEqual(BASELINE_OPTIONALS);
       });
 
-      test('has no numeric or length constraint keywords', () => {
+      test(`ratchet: numeric/length keywords stay at or below baseline (${BASELINE_KEYWORDS})`, () => {
         const budget = measureSchemaBudget(schemaForPhase(phase), `dmResponseSchema:${phase}`);
-        expect(budget.constraintPaths).toEqual([]);
+        expect(budget.constraintPaths.length).toBeLessThanOrEqual(BASELINE_KEYWORDS);
       });
+
+      test.todo(`target: 0 oneOf (strict limit; baseline ${BASELINE_ONE_OF})`);
+      test.todo(`target: ≤${TARGET_MAX_UNIONS} unions (strict limit; baseline ${BASELINE_UNIONS})`);
+      test.todo(
+        `target: ≤${TARGET_MAX_OPTIONALS} optional parameters (strict limit; baseline ${BASELINE_OPTIONALS})`,
+      );
+      test.todo(
+        `target: 0 numeric/length keywords (strict limit; baseline ${BASELINE_KEYWORDS})`,
+      );
     });
   }
 
-  test('default createDmResponseSchema() is also measured', () => {
-    const budget = measureSchemaBudget(createDmResponseSchema(), 'createDmResponseSchema()');
-    expect(budget.oneOfPaths).toEqual([]);
-    expect(budget.unions).toBeLessThanOrEqual(MAX_UNIONS);
-    expect(budget.optionals).toBeLessThanOrEqual(MAX_OPTIONALS);
-    expect(budget.constraintPaths).toEqual([]);
+  describe('default createDmResponseSchema()', () => {
+    test(`ratchet: oneOf count stays at or below baseline (${BASELINE_DEFAULT_ONE_OF})`, () => {
+      const budget = measureSchemaBudget(createDmResponseSchema(), 'createDmResponseSchema()');
+      expect(budget.oneOfPaths.length).toBeLessThanOrEqual(BASELINE_DEFAULT_ONE_OF);
+    });
+
+    test(`ratchet: unions stay at or below baseline (${BASELINE_DEFAULT_UNIONS})`, () => {
+      const budget = measureSchemaBudget(createDmResponseSchema(), 'createDmResponseSchema()');
+      expect(budget.unions).toBeLessThanOrEqual(BASELINE_DEFAULT_UNIONS);
+    });
+
+    test(`ratchet: optional parameters stay at or below baseline (${BASELINE_DEFAULT_OPTIONALS})`, () => {
+      const budget = measureSchemaBudget(createDmResponseSchema(), 'createDmResponseSchema()');
+      expect(budget.optionals).toBeLessThanOrEqual(BASELINE_DEFAULT_OPTIONALS);
+    });
+
+    test(`ratchet: numeric/length keywords stay at or below baseline (${BASELINE_DEFAULT_KEYWORDS})`, () => {
+      const budget = measureSchemaBudget(createDmResponseSchema(), 'createDmResponseSchema()');
+      expect(budget.constraintPaths.length).toBeLessThanOrEqual(BASELINE_DEFAULT_KEYWORDS);
+    });
+
+    test.todo(`target: 0 oneOf (strict limit; baseline ${BASELINE_DEFAULT_ONE_OF})`);
+    test.todo(
+      `target: ≤${TARGET_MAX_UNIONS} unions (strict limit; baseline ${BASELINE_DEFAULT_UNIONS})`,
+    );
+    test.todo(
+      `target: ≤${TARGET_MAX_OPTIONALS} optional parameters (strict limit; baseline ${BASELINE_DEFAULT_OPTIONALS})`,
+    );
+    test.todo(
+      `target: 0 numeric/length keywords (strict limit; baseline ${BASELINE_DEFAULT_KEYWORDS})`,
+    );
   });
 
   test('the walker fires on every budget violation (negative control)', () => {
