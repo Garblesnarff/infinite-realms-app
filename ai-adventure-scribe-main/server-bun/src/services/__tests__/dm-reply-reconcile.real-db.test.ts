@@ -1127,7 +1127,6 @@ ${playerInput}
       'A crackling arc leaps from your hand toward the cultist. Your first-level slot is expended.',
       [],
     );
-    );
     const turn = await dmTurn({
       ...apprentice(apprenticeSpellLists),
       playerInput: 'I cast Witch Bolt at the cultist.',

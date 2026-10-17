@@ -170,7 +170,7 @@ describe('LLM_GENERATE_ENVELOPE_SHAPE', () => {
     expect(line?.rollRequestDcs).toEqual([]);
   });
 
-  it('distinguishes an absent array from an empty one', async () => {
+  it('distinguishes an empty array from a populated one (#782 item 3: schema requires the field)', async () => {
     // #782 item 3: the server-built schema requires roll_requests, so the
     // provider always sends it. The log still distinguishes empty (0) from
     // the pre-schema absent case (null); with the schema enforced, absent
