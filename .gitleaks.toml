@@ -16,3 +16,7 @@ paths = [
   '''^ai-adventure-scribe-main/docs/SESSION_ARCHIVAL\.md$''',
   '''^ai-adventure-scribe-main/supabase/migrations/README_SESSION_ARCHIVAL\.md$''',
 ]
+
+[allowlist]
+description = "LLM replay fixtures (#734): the `key` field is the sha256 llmFetch writes, not a credential. Scoped to the fixture directory only."
+paths = ['''^ai-adventure-scribe-main/server-bun/src/services/__tests__/fixtures/llm/''']

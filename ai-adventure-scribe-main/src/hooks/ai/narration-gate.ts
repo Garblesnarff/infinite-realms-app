@@ -1,3 +1,6 @@
+import { inventedExtraStrikeClaims } from '../../../shared/narration-extra-strike';
+import { spliceContradictingSentences } from '../../../shared/narration-harm';
+
 import type { ChatMessage } from '@/services/ai-service';
 import type { PlayerInputOrigin } from '@/services/combat/combat-action-origin';
 import type { PersistedRollOutcome } from '@/types/session-state';
@@ -33,6 +36,7 @@ export const NARRATION_REJECTED_REASON = 'harm_claim_without_engine_event';
 
 /** #266: the reply contradicted the engine's authoritative verdict for the turn. */
 export const NARRATION_OUTCOME_REJECTED_REASON = 'outcome_contradicts_engine';
+export const EXTRA_STRIKE_REJECTED_REASON = 'invented_extra_strike';
 
 /** What the DM is told about the reply it just wrote. */
 export function narrationViolationNote(claims: string[]): string {
@@ -56,6 +60,13 @@ export function engineOutcomeViolationNote(outcome: EngineOutcome, claims: strin
       : 'the attempt failed; do not describe it succeeding.') +
     ' Do not mention this correction.'
   );
+}
+
+/** What the DM is told when it invented a second strike against the player. */
+export function extraStrikeViolationNote(engineHits: number, claims: string[]): string {
+  return `Your previous reply for this turn was rejected. The engine resolved exactly ${engineHits} hit(s) on the player this turn. It claimed ${claims
+    .map((claim) => `"${claim}"`)
+    .join(', ')}. No second strike landed. Rewrite without it. Do not mention this correction.`;
 }
 
 interface GatedNarration {
@@ -167,6 +178,57 @@ export async function enforceNarrationGate<T extends GatedNarration>(
     },
     outcome: 'replaced',
   };
+}
+
+export interface ExtraStrikeGateParams<T extends GatedNarration> {
+  narration: T;
+  engineHits: number;
+  sessionId?: string;
+  encounterId?: string;
+  regenerate: (violation: string) => Promise<T>;
+}
+
+export async function gateInventedExtraStrike<T extends GatedNarration>(
+  params: ExtraStrikeGateParams<T>,
+): Promise<T> {
+  const { narration, engineHits, sessionId, encounterId, regenerate } = params;
+  const claims = inventedExtraStrikeClaims(narration.text, engineHits).map((c) => c.match);
+  if (!claims.length) {
+    releaseHeldSideEffects(narration);
+    return narration;
+  }
+  logger.warn('DM_NARRATION_REJECTED', {
+    reason: EXTRA_STRIKE_REJECTED_REASON,
+    sessionId,
+    requestId: AIService.lastRequestId(),
+    branch: 'combat',
+    attempt: 1,
+    claims,
+    ...(encounterId ? { encounterId } : {}),
+  });
+
+  const retry = await regenerate(extraStrikeViolationNote(engineHits, claims));
+  const retryClaims = inventedExtraStrikeClaims(retry.text, engineHits);
+  if (!retryClaims.length) {
+    releaseHeldSideEffects(retry);
+    return retry;
+  }
+  logger.warn('DM_NARRATION_REJECTED', {
+    reason: EXTRA_STRIKE_REJECTED_REASON,
+    sessionId,
+    requestId: AIService.lastRequestId(),
+    branch: 'combat',
+    attempt: 2,
+    claims: retryClaims.map((c) => c.match),
+    ...(encounterId ? { encounterId } : {}),
+  });
+  // A repeat: drop only the sentences that land the invented strike.
+  const stripped: T = {
+    ...retry,
+    text: spliceContradictingSentences(retry.text ?? '', retryClaims, ''),
+  };
+  releaseHeldSideEffects(stripped);
+  return stripped;
 }
 
 export interface NarrativeTurn {

@@ -11,13 +11,14 @@ import {
   turnNotice,
   unresolvedTargetNotice,
 } from './combat-notice';
-import { enforceNarrationGate } from './narration-gate';
+import { enforceNarrationGate, gateInventedExtraStrike } from './narration-gate';
 import { SILENT_PLAYER_TURN_SETUP, silentPlayerTurnPayload } from './silent-player-turn';
 import {
   facingName,
   playerFacingWeaponName,
   type EngineRosterEntry,
 } from '../../../shared/engine-display-name';
+import { engineHitsOnPlayer } from '../../../shared/narration-extra-strike';
 
 import type { CombatEngineResult } from '../../../shared/combat-outcome-transcript';
 import type { DMAoESpellAction } from '@/services/ai/dm-response-schema';
@@ -1401,6 +1402,16 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         regenerate: narrate,
       })
     ).narration;
+    if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError');
+  } else if (orderedEngineTranscriptLines.length > 0) {
+    const engineHits = engineHitsOnPlayer(orderedEngineBlocks.flatMap((b) => b.cards ?? []));
+    narration = await gateInventedExtraStrike({
+      narration,
+      engineHits,
+      sessionId,
+      encounterId,
+      regenerate: narrate,
+    });
     if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError');
   }
 
