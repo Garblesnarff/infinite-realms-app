@@ -210,13 +210,14 @@ export function TacticalMapCanvas({
       ctx.setLineDash([]);
     }
     map.entities.forEach((entity) => {
-      const animated = animation?.entityId === entity.id ? animation.path[animation.step] : null;
+      const animated =
+        animation && animation.entityId === entity.id ? animation.path[animation.step] : null;
       const pos = animated ?? entity;
       const footprint = entityFootprint(entity.size),
         diameter = size * footprint;
       const cx = px + (pos.x + footprint / 2) * size,
         cy = py + (pos.y + footprint / 2) * size;
-      if (animation?.entityId === entity.id && animation.forced) {
+      if (animation && animation.entityId === entity.id && animation.forced) {
         ctx.beginPath();
         ctx.arc(cx, cy, Math.max(10, diameter * 0.5), 0, Math.PI * 2);
         ctx.strokeStyle = 'rgb(245,148,120)';

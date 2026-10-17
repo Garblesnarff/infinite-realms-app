@@ -11,7 +11,7 @@ import { getAoETargets, getDistance } from '../engine.js';
 import { tacticalSizeForParticipant } from '../participant-size.js';
 import { buildTacticalPrompt } from '../prompt.js';
 
-import type { TacticalMap } from '../types.js';
+import type { MapEntity, TacticalMap } from '../types.js';
 
 const map = (): TacticalMap => ({
   id: 'map',
@@ -328,5 +328,81 @@ describe('CM-2 tactical dispatch', () => {
       }).applied,
     ).toBe(true);
     expect(state.cells[1][4].terrain).toBe('door_open');
+  });
+  test('refuses a place with no id and leaves the board unchanged (#748)', () => {
+    const state = map();
+    // Free the target cell so only the missing id can refuse the placement.
+    state.entities[1].x = 10;
+    state.entities[1].y = 10;
+    const before = state.entities.length;
+    const result = dispatchMapAction(state, {
+      action: 'place',
+      entityId: null,
+      x: 5,
+      y: 5,
+      changes: {
+        x: 5,
+        y: 5,
+        size: 'medium',
+        type: 'monster',
+        speedFeet: 30,
+        movementRemaining: 30,
+        name: 'Bitter End Mercenary',
+      } as unknown as MapEntity,
+    });
+    expect(result.applied).toBe(false);
+    if (!result.applied) expect(result.refusal.reason).toBe('invalid_placement');
+    expect(state.entities.length).toBe(before);
+  });
+  test('refuses a place with an empty id and leaves the board unchanged (#748)', () => {
+    const state = map();
+    // Free the target cell so only the missing id can refuse the placement.
+    state.entities[1].x = 10;
+    state.entities[1].y = 10;
+    const before = state.entities.length;
+    const result = dispatchMapAction(state, {
+      action: 'place',
+      entityId: null,
+      x: 5,
+      y: 5,
+      changes: {
+        id: '',
+        x: 5,
+        y: 5,
+        size: 'medium',
+        type: 'monster',
+        speedFeet: 30,
+        movementRemaining: 30,
+        name: 'Bitter End Mercenary',
+      },
+    });
+    expect(result.applied).toBe(false);
+    if (!result.applied) expect(result.refusal.reason).toBe('invalid_placement');
+    expect(state.entities.length).toBe(before);
+  });
+  test('places the same entity when it carries a valid id (#748)', () => {
+    const state = map();
+    state.entities[1].x = 10;
+    state.entities[1].y = 10;
+    const before = state.entities.length;
+    const result = dispatchMapAction(state, {
+      action: 'place',
+      entityId: null,
+      x: 5,
+      y: 5,
+      changes: {
+        id: 'merc-1',
+        x: 5,
+        y: 5,
+        size: 'medium',
+        type: 'monster',
+        speedFeet: 30,
+        movementRemaining: 30,
+        name: 'Bitter End Mercenary',
+      },
+    });
+    expect(result.applied).toBe(true);
+    expect(state.entities.length).toBe(before + 1);
+    expect(state.entities.some((entity) => entity.id === 'merc-1')).toBe(true);
   });
 });

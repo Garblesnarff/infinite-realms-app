@@ -62,7 +62,7 @@ export type TacticalDelta =
   | {
       type: 'entity_moved';
       entityId: string;
-      path: Point[];
+      path?: Point[] | null;
       movementReset?: boolean;
       movementRemaining?: number;
       forced?: boolean;
@@ -87,7 +87,7 @@ export function applyTacticalDelta(
   if (delta.type === 'map_created') return delta.map;
   if (delta.type === 'map_destroyed' || !map) return delta.type === 'map_destroyed' ? null : map;
   if (delta.type === 'entity_moved') {
-    const destination = delta.path.at(-1);
+    const destination = (delta.path ?? []).at(-1);
     if (!destination) return map;
     return {
       ...map,
