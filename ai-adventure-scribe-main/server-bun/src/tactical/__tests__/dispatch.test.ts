@@ -406,3 +406,20 @@ describe('CM-2 tactical dispatch', () => {
     expect(state.entities.some((entity) => entity.id === 'merc-1')).toBe(true);
   });
 });
+
+describe('validateCombatTransitionContract defensive guards (#782 item 3)', () => {
+  test('treats a missing roll_requests as empty instead of crashing', () => {
+    // #782 item 3: the route now always enforces the server-built schema, so
+    // validateCombatTransitionContract runs on every turn. A parsed envelope
+    // that is not schema-complete (e.g. missing roll_requests) must not crash.
+    const response = {
+      text: 'You continue down the corridor.',
+      combat_transition: 'none' as const,
+      scene_spec: null,
+      combatants: [],
+      // roll_requests intentionally omitted
+    } as unknown as Parameters<typeof validateCombatTransitionContract>[0];
+    expect(() => validateCombatTransitionContract(response, false)).not.toThrow();
+    expect(validateCombatTransitionContract(response, false)).toBeNull();
+  });
+});
