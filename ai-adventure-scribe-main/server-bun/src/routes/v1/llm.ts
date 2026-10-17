@@ -1061,6 +1061,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // spend's `since` rule, on the feature usage log). Out of combat only (in combat
         // the engine resolves Lay on Hands pre-generation), and never on a turn that
         // opens combat. A spend that fails is logged; it never costs the player their turn.
+        // Polarity note: `combatEntry` is the client-sent entry context, present only when
+        // combat is NOT already active; `combat_entry_pending` marks the turn that opens
+        // combat. So `combatEntry && !envelope?.combat_entry_pending` is an ordinary story turn.
         const featuresToSpend = allowedFeatures as AllowedFeatures | null;
         if (featuresToSpend && castSessionId && combatEntry && !envelope?.combat_entry_pending) {
           try {

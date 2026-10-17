@@ -1494,6 +1494,15 @@ describeWithDb('paladin Lay on Hands pool and Divine Sense tracking (#712)', () 
   let participantId: string;
   let layOnHandsId: string;
 
+  const request = (path: string, method: string, body?: unknown): Promise<Response> =>
+    pipeline.handle(
+      new Request(`http://localhost${path}`, {
+        method,
+        headers: authHeaders,
+        body: body === undefined ? undefined : JSON.stringify(body),
+      }),
+    );
+
   /** The SRD seed shape: limited_use features with a NULL uses_count (#224). */
   const ensureLibraryRow = async (featureName: string): Promise<string> => {
     const existing = await db
@@ -1894,5 +1903,132 @@ describeWithDb('paladin Lay on Hands pool and Divine Sense tracking (#712)', () 
     expect(await poolRemaining(layOnHandsId)).toBe(2);
     // One usage-log row for the replayed message, not two.
     expect((await logCount()) - logsBefore).toBe(1);
+  });
+
+  it('the llm.ts wiring spends on an ordinary story turn, not on a combat-opening turn (#712)', async () => {
+    // Deterministic regardless of test order: full pool, paladin missing 5 HP.
+    const reset = async () => {
+      await db
+        .update(characterFeatures)
+        .set({ usesRemaining: 5 })
+        .where(
+          and(
+            eq(characterFeatures.characterId, paladinId),
+            eq(characterFeatures.featureId, layOnHandsId),
+          ),
+        );
+      await db
+        .update(characterStats)
+        .set({ currentHitPoints: 7 })
+        .where(eq(characterStats.characterId, paladinId));
+    };
+    const logCount = async (): Promise<number> =>
+      (
+        await db
+          .select({ id: featureUsageLog.id })
+          .from(featureUsageLog)
+          .where(
+            and(
+              eq(featureUsageLog.characterId, paladinId),
+              eq(featureUsageLog.featureId, layOnHandsId),
+              eq(featureUsageLog.sessionId, sessionId),
+            ),
+          )
+      ).length;
+    const hp = async (): Promise<number | null> =>
+      (
+        await db
+          .select({ currentHitPoints: characterStats.currentHitPoints })
+          .from(characterStats)
+          .where(eq(characterStats.characterId, paladinId))
+          .limit(1)
+      )[0]?.currentHitPoints ?? null;
+
+    // The route authenticates as the module-level userId; the paladin belongs
+    // to paladinUserId, so borrow it for the requests below.
+    const savedUserId = userId;
+    userId = paladinUserId;
+    try {
+      // The block's shared encounter is 'active'; an ordinary story turn has
+      // no live encounter, and the combat Lay on Hands path would otherwise
+      // steal the spend before the story condition is reached. Mark it
+      // completed (no endedReason, so the party-defeated branch stays out).
+      await db
+        .update(combatEncounters)
+        .set({ status: 'completed' })
+        .where(eq(combatEncounters.id, encounterId));
+
+      const playerInput = 'I use Lay on Hands to heal myself for 3 hit points';
+      await reset();
+      await db.insert(dialogueHistory).values({
+        sessionId,
+        speakerType: 'player',
+        speakerId: paladinId,
+        message: playerInput,
+      });
+      const logsBefore = await logCount();
+
+      // Ordinary story turn: combatEntry present (combat not active), no
+      // combat_entry_pending. The body shape mirrors the #264 route test.
+      generatedText = JSON.stringify({
+        text: 'Warmth spreads through your wounds as you lay on hands.',
+      });
+      const res = await request('/v1/llm/generate', 'POST', {
+        prompt: 'The paladin tends their wounds. What happens?',
+        player_input: playerInput,
+        sessionId,
+        dmReply: { messageId: '22222222-3333-4444-8555-666666666666', inCombat: false },
+        combatEntry: {
+          sessionId,
+          player: { name: 'Test Paladin', initiativeModifier: 2 },
+        },
+        provider: 'openrouter',
+        requestType: 'user',
+        maxTokens: 8192,
+        temperature: 0.9,
+      });
+      expect(res.status).toBe(200);
+
+      // The llm.ts condition ran the spend: one heal and one pool draw.
+      expect(await hp()).toBe(10);
+      expect(await poolRemaining(layOnHandsId)).toBe(2);
+      expect((await logCount()) - logsBefore).toBe(1);
+
+      // A turn that opens combat: the envelope carries combat_entry_pending,
+      // so the same declaration spends nothing. Fresh message so the
+      // once-per-message guard is not what blocks it.
+      await reset();
+      await db.insert(dialogueHistory).values({
+        sessionId,
+        speakerType: 'player',
+        speakerId: paladinId,
+        message: playerInput,
+      });
+      const logsBeforeEntry = await logCount();
+      generatedText = JSON.stringify({
+        text: 'A goblin bursts from the treeline!',
+        combat_entry_pending: { encounterId: '33333333-4444-5555-8666-777777777777' },
+      });
+      const res2 = await request('/v1/llm/generate', 'POST', {
+        prompt: 'The paladin tends their wounds. What happens?',
+        player_input: playerInput,
+        sessionId,
+        dmReply: { messageId: '44444444-5555-6666-8777-888888888888', inCombat: false },
+        combatEntry: {
+          sessionId,
+          player: { name: 'Test Paladin', initiativeModifier: 2 },
+        },
+        provider: 'openrouter',
+        requestType: 'user',
+        maxTokens: 8192,
+        temperature: 0.9,
+      });
+      expect(res2.status).toBe(200);
+      expect(await hp()).toBe(7);
+      expect(await poolRemaining(layOnHandsId)).toBe(5);
+      expect((await logCount()) - logsBeforeEntry).toBe(0);
+    } finally {
+      userId = savedUserId;
+    }
   });
 });
