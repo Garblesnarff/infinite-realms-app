@@ -1909,7 +1909,11 @@ describeWithDb('paladin Lay on Hands pool and Divine Sense tracking (#712)', () 
     // Self-contained: a fresh paladin and session owned by the current auth
     // user, so there is no userId swap and no shared-encounter state. A fresh
     // session has no encounter, which is what an ordinary story turn looks
-    // like — the combat Lay on Hands path cannot steal the spend.
+    // like — the combat Lay on Hands path cannot steal the spend. (Round 5:
+    // the first version of this test reused the block's shared fixtures and
+    // CI's server-real-db job died in the shared process with a
+    // dialogue_history lock timeout before this file's invocation ran; the
+    // self-contained rewrite removes the test as a suspect.)
     const owner = userId;
     const [{ id: routeCampaignId }] = await db
       .insert(campaigns)
