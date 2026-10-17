@@ -12,15 +12,15 @@ Authored monster attack lines (name, reach, and range) are in `docs/content/stat
 
 # Worker rules
 
-## 1. Merging pull requests is Rob's call
+## 1. Who merges
 
-- Only Rob merges. Green CI, your own PR, a "trivial" change, or a PR another agent asked you to review does not change that.
-- Workers do not run `gh pr merge` or `gh pr ready`, do not enable auto-merge, and do not merge their own PRs. Merges happen only in a session where Rob has pasted explicit permission naming the PR number.
-- The single exception: Rob pastes an explicit list of PR numbers into your session with the words "you have my permission to merge". Merge exactly that list, nothing else. Permission given to another session is not permission given to you.
+- A pull request merges only after a strategist or foreman-bot comment that starts `Strategist review — PASS at <sha>`, and a green pull_request CI run, both at the same head. A PASS or a green run on an earlier commit does not cover a later push.
+- Muse (the standing merger) or the Hetzner ops session merges it. Workers never merge. Workers do not run `gh pr merge` or `gh pr ready`, do not enable auto-merge, and do not merge their own PRs.
+- Green CI, your own PR, a "trivial" change, or a review request from another agent does not make a worker the merger.
 - Merges to `main` auto-deploy to production within ~15 minutes. An unauthorized merge is an unauthorized production deploy.
 - On 2026-08-11, five PRs (#1702, #1716, #1719, #1723, #1725) were merged by an unidentified agent session.
 - On 2026-08-30, #1945 and #1946 were merged by an unidentified agent session. Two incidents so far; these rules exist so there is no third.
-- When you do hold that permission, check stacked-PR rules before merging — if the PR is a stack parent, merging it the normal way closes its children. Then follow the pre-merge check procedure below.
+- When Muse or the Hetzner ops session merges, check stacked-PR rules first. If the PR is a stack parent, merging it the normal way closes its children. Then follow the pre-merge check procedure below.
 
 ## 2. Do not push directly to `main`
 
@@ -42,7 +42,7 @@ Authored monster attack lines (name, reach, and range) are in `docs/content/stat
 - For time-based tests, use `dialogue_history.created_at` as the server clock; `timestamp` is client-supplied display data only.
 - Do not paste secret values into code, commits, comments, logs, or PR bodies. Reference env var names only. Never commit `.env`, `.env.local`, `server/.env`, or `server-bun/.env`. `.env.example` may be committed only when it holds no secret values.
 - If a secret value appears in code, a log, a chat, or a diff, do not repeat it. Tell Rob, and recommend rotating the key.
-- RLS is off, so every query on user-owned rows filters by the owner. `campaigns` and `characters` have `user_id`; filter those by `user_id`. `game_sessions`, `quests`, `npcs`, and `locations` have no `user_id` column (`db/schema/game.ts`, `db/schema/world.ts`). Limit those queries to a campaign or character that belongs to the user.
+- RLS is off, so every query on user-owned rows filters by the owner. `campaigns` and `characters` have `user_id`; filter those by `user_id`. `game_sessions`, `quests`, `npcs`, and `locations` have no `user_id` column (`ai-adventure-scribe-main/db/schema/game.ts`, `ai-adventure-scribe-main/db/schema/world.ts`). Limit those queries to a campaign or character that belongs to the user.
 - A PR that changes what the client sends to a server route must include a test that sends that exact body through the real route: `createRequestPipelineApp().use(<routes>)` or the real-DB suite. A mocked API does not count: #2250's tests mocked it, and the body they approved 422'd on every narrative roll in production (#2280). Pattern: #2286, where one shared fixture (`shared/test-fixtures/dm-roll-reply-saves.ts`) holds the wire body, the client test asserts the client sends exactly it, and the server test posts it through the real route schema.
 
 ## 5. Respect in-flight work
@@ -141,14 +141,13 @@ Rob often pastes a task and walks away. A turn that ends with a summary, a list 
 
 # Hetzner (ops) rules
 
-Hetzner is the only merger. Workers open draft PRs; they do not merge, even when CI is green. Section 13 (finish the task, then stop) applies to Hetzner sessions too.
+Muse (the standing merger) or the Hetzner ops session merges, and only under the rule in §1. Workers open draft PRs; they do not merge, even when CI is green. Section 13 (finish the task, then stop) applies to Muse and Hetzner sessions too.
 
-- **Permission line at an exact SHA.** Rob's "you have my permission to merge" paste must name the PR number and the head SHA. Permission for a PR at a different SHA is not permission for the SHA in front of you. After a new push, you need a new line.
-- **CI green + strategist code-PASS at the same SHA.** Merge only when hosted CI is green on that SHA and the strategist has posted `PASS` (code review) on that SHA. A PASS on an earlier commit does not cover a later push. A green check on a cancelled-then-rerun SHA is not a green check on this SHA.
+- **PASS and green CI at the same head.** Merge only when a strategist or foreman-bot comment starts `Strategist review — PASS at <sha>` for this head and the pull_request CI run at that same head is green. A PASS or a green run on an earlier commit does not cover a later push. A green check on a cancelled-then-rerun SHA is not a green check on this SHA.
 - **No deploys during a stranger-test run.** Merges to `main` auto-deploy. Between Playtest's `run N started` and `run N ended` comments, hold merges. A deploy mid-run drops in-flight turns (#2093).
 - **Prod config changes need an approval line.** Host files such as `ops/auto-deploy.sh` (and other prod-only config) are not "drive-by" edits. Do not change them without an explicit approval line from Rob naming the file and the change.
 - **Revert on Rob's line.** On Rob's line "You have my permission to revert #X", revert that PR's squash commit on `main` through a PR (`git revert <squash sha>` on a branch off current `origin/main`), merge it, and let it deploy (or `ops/auto-deploy.sh --deploy-now`). This does not need a strategist PASS on the revert. Every other rule still applies: no merge during a stranger-test run, and the revert PR's CI must be green. Then confirm with `curl -s https://api.infiniterealms.app/version` that the revert's commit is live, and say so on #X.
-- **`gh pr ready` only as part of an authorized merge.** Hetzner may run `gh pr ready` on a PR only when Rob's permission line is present, the strategist has posted a code-PASS at the same SHA, and the pull_request CI run is green. Workers never mark a PR ready.
+- **`gh pr ready` only as part of the merge.** Muse or the Hetzner ops session may run `gh pr ready` only when the PASS line and the green pull_request CI run are at the same head. Workers never mark a PR ready.
 
 Cancelled GitHub Actions runs are not failures. See the pre-merge procedure for how to read check conclusions.
 
