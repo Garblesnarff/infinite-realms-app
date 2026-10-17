@@ -17,7 +17,7 @@ import { trpc } from './trpc-client';
  * import { useTRPC } from '@/infrastructure/api';
  *
  * function BlogList() {
- *   const { data, isLoading } = useTRPC().blog.getPosts.useQuery();
+ *   const { data, isLoading } = useTRPC().chronicles.getBySessionId.useQuery({ sessionId });
  *   // ...
  * }
  * ```
@@ -36,13 +36,13 @@ export const useTRPC = () => trpc;
  *
  *   const handleRefresh = () => {
  *     // Invalidate cache to refetch
- *     utils.blog.getPosts.invalidate();
+ *     utils.chronicles.getBySessionId.invalidate();
  *   };
  *
  *   const handleOptimisticUpdate = async (newPost) => {
  *     // Optimistically update cache
- *     await utils.blog.getPosts.cancel();
- *     utils.blog.getPosts.setData(undefined, (old) => [...old, newPost]);
+ *     await utils.chronicles.getBySessionId.cancel();
+ *     utils.chronicles.getBySessionId.setData(undefined, (old) => old);
  *   };
  * }
  * ```
@@ -59,8 +59,8 @@ export const useTRPCUtils = () => trpc.useUtils();
  *
  * function BlogPost({ id }: { id: string }) {
  *   const { data, error, isLoading } = useQuery(
- *     ['blog.getPost', { id }],
- *     () => trpc.blog.getPost.query({ id })
+ *     ['chronicles.getBySessionId', { sessionId }],
+ *     () => trpc.chronicles.getBySessionId.query({ sessionId })
  *   );
  * }
  * ```
