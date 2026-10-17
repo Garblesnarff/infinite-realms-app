@@ -205,8 +205,11 @@ const compiledSchemaValidator = (schema: Record<string, unknown>): ValidateFunct
   return validate;
 };
 
-/** #633: text:string check, then the full schema (instructed branch only). */
-const validateInstructedSchemaText = (
+/** #782 item 2: text:string check, then the full schema. Runs on every path
+ * (Anthropic instructed branch, OpenRouter strict branch, direct Gemini) —
+ * providers may silently ignore unsupported keywords, so the schema is
+ * enforced here regardless of what was sent. */
+const validateFullSchemaText = (
   text: string,
   responseSchema: Record<string, unknown>,
 ): void => {
@@ -627,11 +630,10 @@ export class LLMProviderService {
             }
             if (responseSchema) {
               try {
-                if (strictSchema) {
-                  validateStructuredResponseText(text, responseSchema);
-                } else {
-                  validateInstructedSchemaText(text, responseSchema);
-                }
+                // #782 item 2: full schema on every path. The strict branch
+                // used to trust the provider's enforcement; providers may
+                // silently ignore unsupported keywords, so validate here too.
+                validateFullSchemaText(text, responseSchema);
               } catch (validationError) {
                 lastFailure = {
                   status: 502,
@@ -831,7 +833,7 @@ export class LLMProviderService {
               .filter(Boolean)
               .join('\n');
             try {
-              validateStructuredResponseText(candidateText, responseSchema);
+              validateFullSchemaText(candidateText, responseSchema);
             } catch (validationError) {
               lastFailure = {
                 status: 502,
