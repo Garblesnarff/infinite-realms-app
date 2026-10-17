@@ -95,7 +95,7 @@ const { SessionMessageService } = await importWithRealDb(
   () => import('../session/session-message-service.js'),
 );
 const dmReplyPersistence = await importWithRealDb(() => import('../dm/dm-reply-persistence.js'));
-const { dmRowExistsSince, persistGeneratedDmReply, provisionalDmText } = dmReplyPersistence;
+const { dmReplyRowExists, persistGeneratedDmReply, provisionalDmText } = dmReplyPersistence;
 const { AIUsageService } = await importWithRealDb(() => import('../ai-usage-service.js'));
 const { sql } = await importWithRealDb(() => import('../../lib/db.js'));
 // #2718: the DM turn is driven through the real route. Only the sign-in and the model are
@@ -210,7 +210,7 @@ describeWithDb('DM reply: server provisional row + client save = one row (#2218)
       [{ id: playerId, sessionId, speakerType: 'player', message: 'I look down the stairwell.' }],
       userId,
     );
-    const generatedAt = new Date(Date.now() - 1000);
+    const _generatedAt = new Date(Date.now() - 1000);
 
     const result = await persistGeneratedDmReply({
       userId,
@@ -228,7 +228,7 @@ describeWithDb('DM reply: server provisional row + client save = one row (#2218)
     expect(rows[1]?.message).toBe(provisionalDmText(explorationEnvelope));
     expect(rows[1]?.context).toEqual(expect.objectContaining({ provisional: true }));
     // The watchdog's own query sees it, so a persisted turn never reports as lost.
-    expect(await dmRowExistsSince(sessionId, generatedAt)).toBe(true);
+    expect(await dmReplyRowExists(dmId)).toBe(true);
   });
 
   test('the client save of the same id replaces the provisional row in place: one row, final text, one turn', async () => {
