@@ -145,13 +145,14 @@ model_family_of_text() {
 # every ledger row (reviewer and triager both write to it). A missing ledger is
 # $0 (a fresh install). An unreadable ledger, or a non-empty row whose date or
 # amount does not parse, prints "unreadable" or "unparsable" and returns 1.
+# No {n} regex intervals: the image's awk is mawk 1.3.4, which ignores them.
 credit_spent() {
   [ -e "$1" ] || { echo 0; return 0; }
   [ -f "$1" ] && [ -r "$1" ] || { echo unreadable; return 1; }
   local out
   if ! out=$(awk -v cs="$2" '
       NF == 0 { next }
-      $2 !~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/ { bad = 1; next }
+      $2 !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ { bad = 1; next }
       $2 >= cs { if ($4 !~ /^[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?$/) bad = 1; else s += $4 }
       END { if (bad) { print "unparsable"; exit 1 } printf "%.4f", s + 0 }' "$1" 2> /dev/null); then
     echo "${out:-unreadable}"; return 1
