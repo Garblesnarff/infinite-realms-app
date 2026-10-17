@@ -555,6 +555,23 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
     expect((await encounterOf(scene.encounterId)).status).toBe('active');
   });
 
+  test('#261: player-source death_save intent (client Roll button) rolls and does not surrender', async () => {
+    const scene = await dropHero();
+    // The client now sends source 'player' with origin 'action_bar' (was: local-only roll).
+    const result = (await executeCombatIntent(
+      scene.encounterId,
+      { type: 'death_save', actorId: scene.heroId, d20: 14 },
+      userId,
+      'player',
+      undefined,
+      'action_bar',
+    )) as Record<string, any>;
+    expect(result.deathSaves).toHaveLength(1);
+    expect(result.deathSaves[0]).toMatchObject({ roll: 14, isSuccess: true });
+    // Not a surrender: the encounter is still active, not ended.
+    expect((await encounterOf(scene.encounterId)).status).toBe('active');
+  });
+
   test('9 or lower is a failure; a natural 1 is two failures', async () => {
     const scene = await dropHero();
     const nine = await deathSave(scene, 9);
