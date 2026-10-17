@@ -3370,10 +3370,14 @@ ${playerInput}
       max_hit_points: 12,
     });
     expect(await vitalOf()).toBe('standing');
-    expect((await systemLines()).join('\n')).toContain(
+    // The session is shared across this file's tests, so scope the line count to
+    // this test's damage source.
+    const rockslideLines = async (): Promise<string[]> =>
+      (await systemLines()).filter((message) => message.includes('rockslide'));
+    expect((await rockslideLines()).join('\n')).toContain(
       'story damage — rockslide deals 11 damage',
     );
-    // Retry re-sends the same message: still 1 HP, still one damage line.
+    // Retry re-sends the same message: still 1 HP, still one rockslide line.
     await dmTurn({
       ...fighter,
       existingCharacter: setup.character,
@@ -3386,9 +3390,7 @@ ${playerInput}
     expect((await sheetAfterReload(characterId)).stats).toMatchObject({
       current_hit_points: 1,
     });
-    expect(
-      (await systemLines()).filter((message) => message.includes('story damage')),
-    ).toHaveLength(1);
+    expect(await rockslideLines()).toHaveLength(1);
 
     // Second message: 999 claimed at 1 HP. Capped at 1, the hero drops to 0 — dying,
     // with death saves to roll. Without the cap this would have been instant death
@@ -3410,7 +3412,10 @@ ${playerInput}
       max_hit_points: 12,
     });
     expect(await vitalOf()).toBe('dying');
-    expect((await systemLines()).join('\n')).toContain('deals 1 damage');
+    expect(await rockslideLines()).toHaveLength(2);
+    expect((await rockslideLines()).join('\n')).toContain(
+      'story damage — rockslide deals 1 damage',
+    );
   });
 
   test('#218 step 3: two concurrent movements for one player message move the items once (row lock)', async () => {
