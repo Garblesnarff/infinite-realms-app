@@ -107,10 +107,10 @@ triage_clean() {
 # delete or remove tests. The catjam runner allows a test deletion only when the
 # task lists it, so a model-written task must never do that; the crew decides.
 # Matches over the whole text (dots and newlines included): rm/remove/delete/drop
-# followed within 80 characters by a test word or a test path. It errs towards
-# the crew: "remove X and add a test" also matches.
+# followed anywhere later by a test word or a test path. It errs towards the
+# crew: "remove X, then make sure the tests pass" also matches.
 triage_task_deletes_tests() {
-  perl -0e 'exit(($ARGV[0] =~ /\b(?:rm|remov\w*|delet\w*|drop\w*)\b.{0,80}?(?:\btests?\b|\bspecs?\b|\.test\.|\.spec\.|__tests__\/|\btests\/)/is) ? 0 : 1)' -- "$1"
+  perl -0e 'exit(($ARGV[0] =~ /\b(?:rm|remov\w*|delet\w*|drop\w*)\b.*?(?:\btests?\b|\bspecs?\b|\.test\.|\.spec\.|__tests__\/|\btests\/)/is) ? 0 : 1)' -- "$1"
 }
 
 # has_pii <text>: 0 when the text holds an email address or an IPv4 address.

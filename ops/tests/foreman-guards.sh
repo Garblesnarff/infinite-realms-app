@@ -431,6 +431,7 @@ expect "task deletes tests: dot in a path before 'tests'" 0 triage_task_deletes_
 expect "task deletes tests: 'rm' on a .test. file" 0 triage_task_deletes_tests "rm src/combat.test.ts"
 expect "task deletes tests: __tests__/ path" 0 triage_task_deletes_tests "Delete src/__tests__/combat.ts"
 expect "task deletes tests: verb and noun on separate lines" 0 triage_task_deletes_tests $'Delete the following files:\n- src/combat-old.spec.ts'
+expect "task deletes tests: long sentence, verb far before 'tests'" 0 triage_task_deletes_tests "Delete the legacy combat engine directory, its helper modules, the adjacent configuration files and the barrel exports, then update imports so the build stays green and the unit tests pass"
 grep -q 'route="crew task-deletes-tests"' "$HERE/../foreman/triage.sh" && grep -q "labels\[\]=needs-human" "$HERE/../foreman/triage.sh" \
   && grep -q '\[ "\$prepared" = 1 \] || { prepare_run; prepared=1; }' "$HERE/../foreman/triage.sh" \
   && ok "triage.sh: test-deletion route, needs-human on the last attempt, lazy prepare_run" || bad "triage.sh: #724 wiring"
