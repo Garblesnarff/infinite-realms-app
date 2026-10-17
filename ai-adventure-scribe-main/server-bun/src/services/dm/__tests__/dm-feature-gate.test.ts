@@ -21,6 +21,8 @@ describe('sanitizeRefusedEnvelope', () => {
     conditions: [{ name: 'Poisoned' }],
     // #264: a rest the DM bundled with the refused turn must not survive.
     rest: { type: 'long' },
+    // #610: story damage the DM bundled with the refused turn must not survive.
+    damage: { amount: 3, source: 'rope burn' },
     someFutureField: 'kept',
   };
 
@@ -43,6 +45,7 @@ describe('sanitizeRefusedEnvelope', () => {
     expect('items' in sanitized).toBe(false);
     expect('conditions' in sanitized).toBe(false);
     expect('rest' in sanitized).toBe(false);
+    expect('damage' in sanitized).toBe(false);
   });
 
   test('keeps non-actionable envelope fields', () => {

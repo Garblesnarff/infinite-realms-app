@@ -549,7 +549,17 @@ describe('narrativeTurnHasNoEngineEvent', () => {
     ['a combat start', { result: { text: CLEAN, combat_transition: 'start' } }],
     ['a pending entry', { result: { text: CLEAN, combat_entry_pending: {} } }],
     ['a seated entry', { result: { text: CLEAN, combat_entry: { entered: true } } }],
+    [
+      'declared story damage',
+      { result: { text: CLEAN, damage: { amount: 3, source: 'rope burn' } } },
+    ],
   ])('does not hold for %s', (_label, overrides) => {
     expect(narrativeTurnHasNoEngineEvent({ ...turn, ...overrides })).toBe(false);
+  });
+
+  it('holds when the damage field is null (nothing declared)', () => {
+    expect(
+      narrativeTurnHasNoEngineEvent({ ...turn, result: { text: CLEAN, damage: null } }),
+    ).toBe(true);
   });
 });

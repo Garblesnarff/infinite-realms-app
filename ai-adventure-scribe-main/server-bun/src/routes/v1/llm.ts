@@ -1109,6 +1109,41 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             logger.warn({ msg: 'DM_STORY_REST_APPLY_FAILED', sessionId: castSessionId, error });
           }
         }
+        // #610 (#218 step 6): damage the story deals out of combat reaches the sheet
+        // through applyNonAttackDamage — the same writer the client damage route uses —
+        // once per player message, with the same guards as the other story appliers. A
+        // failed write is logged; it never costs the player their turn.
+        // #768 FIX round 5: the client's narration gate treats a populated `damage`
+        // field as "the engine applied this". Track whether the applier applied; any
+        // turn where it did not — skipped gate, rejected claim, deferred roll, throw —
+        // ends with the field nulled, so the client never treats an unapplied claim
+        // as engine-applied. The response text is the parsed envelope, so the client
+        // sees the nulled field.
+        let storyDamageApplied = false;
+        if (
+          envelope?.damage &&
+          dmReply &&
+          dmReply.inCombat !== true &&
+          castSessionId &&
+          combatEntry &&
+          !envelope.combat_entry_pending
+        ) {
+          try {
+            const { applyStoryDamage } = await import('../../services/dm/story-damage.js');
+            const outcome = await applyStoryDamage({
+              userId,
+              sessionId: castSessionId,
+              damage: envelope.damage,
+              rollRequested,
+            });
+            storyDamageApplied = outcome === 'applied' || outcome === 'already_applied';
+          } catch (error) {
+            logger.warn({ msg: 'DM_STORY_DAMAGE_FAILED', sessionId: castSessionId, error });
+          }
+        }
+        if (envelope?.damage && !storyDamageApplied) {
+          envelope.damage = null;
+        }
         // sessionId must not come from combatEntry: that is only sent when combat
         // is NOT already active, so in-combat turns logged `sessionId: null` --
         // precisely the turns being debugged. (#2050 C)

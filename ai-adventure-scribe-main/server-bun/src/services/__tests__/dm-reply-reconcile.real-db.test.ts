@@ -126,6 +126,7 @@ const { applyStoryItems, applyStoryItemsOnce } = await importWithRealDb(
 );
 const { applyStoryConditions, applyStoryConditionsOnce, getActiveCharacterConditions, SRD_2014_CONDITIONS } =
   await importWithRealDb(() => import('../dm/story-conditions.js'));
+const { applyStoryDamage } = await importWithRealDb(() => import('../dm/story-damage.js'));
 
 if (!hasRealDb) {
   console.warn(
@@ -3216,6 +3217,284 @@ ${playerInput}
       }),
     ).toBe('roll_pending');
     expect(await getActiveCharacterConditions(characterId)).toEqual([]);
+  });
+
+  test('#610 (#218 step 6): story damage reaches the sheet once, with a damage line', async () => {
+    // The issue's shape: a failed check's consequence narrated as injury. The model now
+    // declares it in the `damage` envelope field (dm-response-schema.ts); the reply below
+    // follows that producer exactly.
+    const setup = await dmTurn({
+      ...fighter,
+      playerInput: 'I take hold of the rope.',
+      reply: storyReply('A frayed rope hangs over the edge.', undefined),
+    });
+    const characterId = setup.character.id;
+    // The Veteran at 12/12, as in the issue.
+    await database
+      .insert(characterStats)
+      .values({ characterId, maxHitPoints: 12, currentHitPoints: 12 });
+    const playerInput = 'I grip the rope and hold on.';
+    await playerSays(playerInput);
+    const injuryReply = storyReply(
+      'The rope burns through your grip as the line goes taut and you are dragged to the edge.',
+      { damage: { amount: 3, source: 'rope burn' } },
+    );
+    const turn = await dmTurn({
+      ...fighter,
+      existingCharacter: setup.character,
+      playerInput,
+      reply: injuryReply,
+    });
+    expect(turn.status).toBe(200);
+    // The sheet shows the hurt: 12 -> 9.
+    expect((await sheetAfterReload(characterId)).stats).toMatchObject({
+      current_hit_points: 9,
+      max_hit_points: 12,
+    });
+    // The damage line is in chat.
+    const systemLines = async (): Promise<string[]> =>
+      (
+        await database
+          .select({ message: dialogueHistory.message })
+          .from(dialogueHistory)
+          .where(
+            and(
+              eq(dialogueHistory.sessionId, sessionId),
+              eq(dialogueHistory.speakerType, 'system'),
+            ),
+          )
+      ).map((row) => row.message);
+    expect((await systemLines()).join('\n')).toContain(
+      'story damage — rope burn deals 3 damage',
+    );
+    // Retry re-sends the same message: still 9 HP, still one damage line.
+    await dmTurn({
+      ...fighter,
+      existingCharacter: setup.character,
+      playerInput,
+      reply: injuryReply,
+    });
+    expect((await sheetAfterReload(characterId)).stats).toMatchObject({
+      current_hit_points: 9,
+    });
+    expect(
+      (await systemLines()).filter((message) => message.includes('story damage')),
+    ).toHaveLength(1);
+  });
+
+  test('#610: an invalid damage claim writes nothing, and a roll turn writes nothing yet', async () => {
+    const setup = await dmTurn({
+      ...fighter,
+      playerInput: 'I take hold of the rope.',
+      reply: storyReply('A frayed rope hangs over the edge.', undefined),
+    });
+    const characterId = setup.character.id;
+    await database
+      .insert(characterStats)
+      .values({ characterId, maxHitPoints: 12, currentHitPoints: 12 });
+    const playerInput = 'I grip the rope and hold on.';
+    await playerSays(playerInput);
+    const turn = await dmTurn({
+      ...fighter,
+      existingCharacter: setup.character,
+      playerInput,
+      reply: storyReply('The rope holds.', undefined),
+    });
+    expect(
+      await applyStoryDamage({ userId, sessionId, damage: { amount: 0, source: 'rope burn' } }),
+    ).toBe('invalid_damage');
+    expect(
+      await applyStoryDamage({
+        userId,
+        sessionId,
+        damage: { amount: 3, source: 'rope burn' },
+        rollRequested: true,
+      }),
+    ).toBe('roll_pending');
+    expect(turn.status).toBe(200);
+    expect((await sheetAfterReload(characterId)).stats).toMatchObject({
+      current_hit_points: 12,
+    });
+  });
+
+  test('#610 (#768 FIX): an inflated story-damage claim is capped at current HP minus 1 — 25 on 12 lands at 1, still standing; a later 999 at 1 HP drops to 0 and the dying state', async () => {
+    // The per-hit half-max net is off on this path, so without the cap the model could
+    // kill a full-HP hero outright with one inflated claim. The cap makes story damage
+    // unable to kill: it drops a hero to 1 at worst, and only a hero already at 1 HP
+    // can go down (dying, death saves).
+    const setup = await dmTurn({
+      ...fighter,
+      playerInput: 'I take hold of the rope.',
+      reply: storyReply('A frayed rope hangs over the edge.', undefined),
+    });
+    const characterId = setup.character.id;
+    // The Veteran at 12/12, as in the issue.
+    await database
+      .insert(characterStats)
+      .values({ characterId, maxHitPoints: 12, currentHitPoints: 12 });
+    const vitalOf = async (): Promise<string | null> =>
+      (
+        await database
+          .select({ vitalState: characterStats.vitalState })
+          .from(characterStats)
+          .where(eq(characterStats.characterId, characterId))
+      )[0]?.vitalState ?? null;
+    const systemLines = async (): Promise<string[]> =>
+      (
+        await database
+          .select({ message: dialogueHistory.message })
+          .from(dialogueHistory)
+          .where(
+            and(
+              eq(dialogueHistory.sessionId, sessionId),
+              eq(dialogueHistory.speakerType, 'system'),
+            ),
+          )
+      ).map((row) => row.message);
+
+    // First message: 25 claimed on 12 HP. Capped at 11, the hero stands at 1/12.
+    const playerInput = 'I grip the rope and hold on.';
+    await playerSays(playerInput);
+    const first = await dmTurn({
+      ...fighter,
+      existingCharacter: setup.character,
+      playerInput,
+      reply: storyReply(
+        'The rocks come down and a boulder slams into you.',
+        { damage: { amount: 25, source: 'rockslide' } },
+      ),
+    });
+    expect(first.status).toBe(200);
+    expect((await sheetAfterReload(characterId)).stats).toMatchObject({
+      current_hit_points: 1,
+      max_hit_points: 12,
+    });
+    expect(await vitalOf()).toBe('standing');
+    // The session is shared across this file's tests, so scope the line count to
+    // this test's damage source.
+    const rockslideLines = async (): Promise<string[]> =>
+      (await systemLines()).filter((message) => message.includes('rockslide'));
+    expect((await rockslideLines()).join('\n')).toContain(
+      'story damage — rockslide deals 11 damage',
+    );
+    // Retry re-sends the same message: still 1 HP, still one rockslide line.
+    await dmTurn({
+      ...fighter,
+      existingCharacter: setup.character,
+      playerInput,
+      reply: storyReply(
+        'The rocks come down and a boulder slams into you.',
+        { damage: { amount: 25, source: 'rockslide' } },
+      ),
+    });
+    expect((await sheetAfterReload(characterId)).stats).toMatchObject({
+      current_hit_points: 1,
+    });
+    expect(await rockslideLines()).toHaveLength(1);
+
+    // Second message: 999 claimed at 1 HP. Capped at 1, the hero drops to 0 — dying,
+    // with death saves to roll. Without the cap this would have been instant death
+    // (overflow 998 >= max 12).
+    const secondInput = 'I keep climbing.';
+    await playerSays(secondInput);
+    const second = await dmTurn({
+      ...fighter,
+      existingCharacter: setup.character,
+      playerInput: secondInput,
+      reply: storyReply(
+        'Another boulder crashes down on you.',
+        { damage: { amount: 999, source: 'rockslide' } },
+      ),
+    });
+    expect(second.status).toBe(200);
+    expect((await sheetAfterReload(characterId)).stats).toMatchObject({
+      current_hit_points: 0,
+      max_hit_points: 12,
+    });
+    expect(await vitalOf()).toBe('dying');
+    expect(await rockslideLines()).toHaveLength(2);
+    expect((await rockslideLines()).join('\n')).toContain(
+      'story damage — rockslide deals 1 damage',
+    );
+  });
+
+  test('#610 (#768 FIX round 4): a damage claim the server does not apply is nulled in the response envelope, so the client gate cannot treat it as engine-applied', async () => {
+    // The client's narration gate treats a populated `damage` field as "the engine
+    // applied this". The server nulls it unless the outcome was applied/already_applied;
+    // the response text is the parsed envelope, so the client sees the nulled field.
+    const setup = await dmTurn({
+      ...fighter,
+      playerInput: 'I take hold of the rope.',
+      reply: storyReply('A frayed rope hangs over the edge.', undefined),
+    });
+    const characterId = setup.character.id;
+    await database
+      .insert(characterStats)
+      .values({ characterId, maxHitPoints: 12, currentHitPoints: 12 });
+    const responseDamageOf = (turn: { body: Record<string, unknown> }): unknown =>
+      (JSON.parse(String(turn.body.text)) as Record<string, unknown>).damage;
+
+    // Invalid claim (amount 0): rejected, HP untouched, envelope nulled.
+    const invalidInput = 'I touch the cold stone.';
+    await playerSays(invalidInput);
+    const invalid = await dmTurn({
+      ...fighter,
+      existingCharacter: setup.character,
+      playerInput: invalidInput,
+      reply: storyReply('The stone is cold.', { damage: { amount: 0, source: 'cold' } }),
+    });
+    expect(invalid.status).toBe(200);
+    expect(responseDamageOf(invalid)).toBeNull();
+    expect((await sheetAfterReload(characterId)).stats).toMatchObject({
+      current_hit_points: 12,
+    });
+
+    // Roll turn: a valid-shaped claim the server defers (roll_pending) is also nulled.
+    const rollInput = 'I leap across the gap.';
+    await playerSays(rollInput);
+    const roll = await dmTurn({
+      ...fighter,
+      existingCharacter: setup.character,
+      playerInput: rollInput,
+      reply: storyReply('Roll to see if you make it.', {
+        damage: { amount: 3, source: 'fall' },
+        roll_requests: [
+          {
+            type: 'check',
+            formula: '1d20+2',
+            purpose: 'Athletics check to clear the gap',
+            dc: 12,
+            ac: null,
+            advantage: false,
+            disadvantage: false,
+          },
+        ],
+      }),
+    });
+    expect(roll.status).toBe(200);
+    expect(responseDamageOf(roll)).toBeNull();
+    expect((await sheetAfterReload(characterId)).stats).toMatchObject({
+      current_hit_points: 12,
+    });
+
+    // Skip path (#768 FIX round 5): the applier does not run without a combatEntry,
+    // so the raw claim must not survive in the response either.
+    const noEntryInput = 'I step back from the ledge.';
+    await playerSays(noEntryInput);
+    const noEntry = await dmTurn({
+      ...fighter,
+      existingCharacter: setup.character,
+      omitCombatEntry: true,
+      playerInput: noEntryInput,
+      reply: storyReply('You step back, but a loose stone clips you.', {
+        damage: { amount: 3, source: 'falling stone' },
+      }),
+    });
+    expect(noEntry.status).toBe(200);
+    expect(responseDamageOf(noEntry)).toBeNull();
+    expect((await sheetAfterReload(characterId)).stats).toMatchObject({
+      current_hit_points: 12,
+    });
   });
 
   test('#218 step 3: two concurrent movements for one player message move the items once (row lock)', async () => {

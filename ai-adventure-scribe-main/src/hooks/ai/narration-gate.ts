@@ -182,6 +182,8 @@ export interface NarrativeTurn {
     combat_transition?: string;
     combat_entry_pending?: unknown;
     combat_entry?: unknown;
+    /** #610: declared story damage the server applied in /generate. */
+    damage?: unknown;
   };
 }
 
@@ -189,6 +191,10 @@ export interface NarrativeTurn {
  * A turn outside combat that the engine has nothing to resolve: a player message, no dice result,
  * no roll request, no combat declaration or entry. The DM's prose is the only account of it.
  * Each clause is a turn where the engine does have something to say, or where nobody spoke.
+ *
+ * #610: declared story damage counts as engine-resolved — the server applied it in /generate
+ * before the reply reached the client, so harm the narration describes was not fabricated
+ * and the gate (and the early-render suppression) must not treat this turn as unresolved.
  */
 export function narrativeTurnHasNoEngineEvent({
   isInCombat,
@@ -206,8 +212,14 @@ export function narrativeTurnHasNoEngineEvent({
     (!result.combat_transition || result.combat_transition === 'none') &&
     !result.combat_entry_pending &&
     !result.combat_entry &&
+    !isDeclaredStoryDamage(result.damage) &&
     !/```ROLL_REQUESTS_V1/.test(result.text ?? '')
   );
+}
+
+/** The envelope's `damage` field populated: the DM declared story damage this turn. */
+function isDeclaredStoryDamage(damage: unknown): boolean {
+  return damage !== null && damage !== undefined && typeof damage === 'object';
 }
 
 export interface RollOutcomeGateParams<T extends GatedNarration> {

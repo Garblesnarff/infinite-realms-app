@@ -159,6 +159,19 @@ Inventory; do not narrate receiving an item without setting the field.
 </story_items_field>
 
 `;
+    // #610 (#218 step 6): the server subtracts this from the sheet (once per player
+    // message, out of combat). The story engine never sees damage the DM only
+    // narrates — it must be in the `damage` field or a `damage` roll request.
+    const storyDamageField = `<story_damage_field>
+<title>STORY DAMAGE</title>
+When the story hurts the player's character (a failed check's consequence, a hazard, a trap), set the
+\`damage\` field to \`{"amount": <hit points>, "source": "<short source>"}\` and narrate the hurt in \`text\`;
+the game subtracts it and posts a damage line. For a rolled amount, request a \`damage\` roll and set the
+field on the result turn. Never narrate hurt without the field or the roll; otherwise \`null\` (also on
+roll-request turns).
+</story_damage_field>
+
+`;
 
     const principlesRules = inCombat
       ? `- Use D&D 5e mechanics when appropriate. The engine resolves attacks, spells and saves during
@@ -195,7 +208,7 @@ from their sheet, or a spell they have prepared or known (see the character shee
 spell or attack the character does not have (#400).
 </options_field>
 
-${inCombat ? '' : xpAwardField}${inCombat ? '' : restField}${inCombat ? '' : storyItemsField}<visual_prompt_rule>
+${inCombat ? '' : xpAwardField}${inCombat ? '' : restField}${inCombat ? '' : storyItemsField}${inCombat ? '' : storyDamageField}<visual_prompt_rule>
 **OPTIONAL** - At the very end, if the scene would benefit from an illustration:
 VISUAL PROMPT: <short art prompt focusing on key visual elements>
 </visual_prompt_rule>
