@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import CharacterCardHoverContent from '../CharacterCardHoverContent';
@@ -59,7 +60,8 @@ describe('CharacterCardHoverContent', () => {
     expect(screen.getByText('HP:').parentElement).toHaveTextContent('0/10');
   });
 
-  it('#2517: a fallen character is read-only — Fallen shown, no Play, no Delete', () => {
+  it('#209: a fallen character is unplayable — no Play, but Delete is offered', async () => {
+    const onDelete = vi.fn();
     render(
       <CharacterCardHoverContent
         character={{
@@ -75,14 +77,21 @@ describe('CharacterCardHoverContent', () => {
         fallen
         onPlay={vi.fn()}
         onViewDetails={vi.fn()}
-        onDelete={vi.fn()}
+        onDelete={onDelete}
       />,
     );
 
     expect(screen.getByText('Fallen')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Play as this character' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Delete character' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Play as this character' }),
+    ).not.toBeInTheDocument();
+    const deleteButton = screen.getByRole('button', { name: 'Delete character' });
+    expect(deleteButton).toBeInTheDocument();
     // Opening the character remains: it shows the end state.
     expect(screen.getByRole('button', { name: 'View character details' })).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(deleteButton);
+    expect(onDelete).toHaveBeenCalledTimes(1);
   });
 });
