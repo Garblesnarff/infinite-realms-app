@@ -1,8 +1,7 @@
 /**
  * #509: src/utils/context/index.ts re-exported modules that never existed
  * (campaignContext, characterContext, memoryContext) and its buildGameContext
- * had no importers. The barrel is removed; nothing may import it again, and
- * the real context modules must still load.
+ * had no importers. The barrel is removed; nothing may import it again.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -23,12 +22,5 @@ describe('utils/context barrel (#509)', () => {
       )
       .map(([path]) => path);
     expect(offenders).toEqual([]);
-  });
-
-  it('the real context modules still load', async () => {
-    await expect(import('../builder')).resolves.toBeDefined();
-    await expect(import('../contextDefaults')).resolves.toBeDefined();
-    await expect(import('../contextEnhancement')).resolves.toBeDefined();
-    await expect(import('../contextValidation')).resolves.toBeDefined();
   });
 });

@@ -14,11 +14,11 @@ The key is `OPENROUTER_API_KEY`. The script reads that name and never prints the
 
 Fixtures are quoted from the "Report — run" issues (#2230, #2231, #2189, #2188) and from the narration quoted on #2236 / #2249. No production user rows.
 
-| | Fixture | What one call asks |
-|---|---|---|
-| A | `fixtures/narration.jsonl` (33 rows) | Six yes/no questions about one narration plus the engine facts |
-| B | `fixtures/memory-rerank.jsonl` (22 rows) | One yes/no "relevant?" per candidate (12 each). Candidates live in `fixtures/memory-pool.jsonl` |
-| C | `fixtures/importance.jsonl` (24 rows) | One Score per memory, batched 20 per call. Levels 0–4 are reported as 1–5 |
+|     | Fixture                                  | What one call asks                                                                              |
+| --- | ---------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| A   | `fixtures/narration.jsonl` (33 rows)     | Six yes/no questions about one narration plus the engine facts                                  |
+| B   | `fixtures/memory-rerank.jsonl` (22 rows) | One yes/no "relevant?" per candidate (12 each). Candidates live in `fixtures/memory-pool.jsonl` |
+| C   | `fixtures/importance.jsonl` (24 rows)    | One Score per memory, batched 20 per call. Levels 0–4 are reported as 1–5                       |
 
 ### A. Narration
 
@@ -56,7 +56,7 @@ The ledger stops **before** a request whose conservative estimate (about 3 chara
 
 ## Regex checker
 
-#2249 is not merged. `origin/main` at the branch point has no `src/services/ai/narration-contract-check.ts`. Experiment A looks for that file under `--app-root` (default: the app root, three levels up). If it is missing, the result says `regex_checker: not-on-ref` and does not invent a comparison. When the file is present it must export `checkNarrationAgainstContract`.
+Experiment A loads `src/services/ai/narration-contract-check.ts` under `--app-root` (default: the app root, three levels up). Current main includes the checker. When comparing an older checkout without it, the result says `regex_checker: not-on-ref` and does not invent a comparison. When the file is present it must export `checkNarrationAgainstContract`.
 
 ## Run
 

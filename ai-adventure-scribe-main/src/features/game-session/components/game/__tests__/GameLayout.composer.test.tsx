@@ -51,7 +51,6 @@ vi.mock('../../chat/MessageList', () => ({
 }));
 vi.mock('../TimelineRail', () => ({ TimelineRail: () => null }));
 vi.mock('../StatsBar', () => ({ StatsBar: () => null }));
-vi.mock('@/components/combat/CombatStatus', () => ({ CombatStatus: () => null }));
 vi.mock('@/components/safety/SafetyBanner', () => ({ SafetyBanner: () => null }));
 vi.mock('../../chat/ChatInput', () => ({
   ChatInput: () => <textarea data-testid="composer" aria-label="Message the DM" />,

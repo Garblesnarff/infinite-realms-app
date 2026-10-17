@@ -1,3 +1,5 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import { describe, expect, it } from 'bun:test';
@@ -54,8 +56,25 @@ describe('starter fixtures', () => {
     expect(JSON.stringify(request).includes('chat/completions')).toBe(false);
   });
 
-  it('does not find the #2249 checker on this ref', async () => {
-    expect(await loadRegexChecker(appRoot)).toBeNull();
+  it('loads the current narration checker and detects an engine contradiction', async () => {
+    const checker = await loadRegexChecker(appRoot);
+    const contract = {
+      currentTurn: { slug: 'hero', isPlayer: true, round: 1 },
+      actions: [],
+      sceneDescription: null,
+    };
+    const violations = checker?.('Not your turn.', contract);
+    expect(violations?.map(({ rule }) => rule)).toEqual(['false_turn_denial']);
+    expect(checker?.('The torch flickers.', contract)).toEqual([]);
+  });
+
+  it('reports no checker when the selected app root has none', async () => {
+    const missingRoot = mkdtempSync(path.join(os.tmpdir(), 'jev-no-checker-'));
+    try {
+      expect(await loadRegexChecker(missingRoot)).toBeNull();
+    } finally {
+      rmSync(missingRoot, { recursive: true, force: true });
+    }
   });
 });
 
