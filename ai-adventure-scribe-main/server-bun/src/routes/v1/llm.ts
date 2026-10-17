@@ -1123,14 +1123,24 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         ) {
           try {
             const { applyStoryDamage } = await import('../../services/dm/story-damage.js');
-            await applyStoryDamage({
+            const outcome = await applyStoryDamage({
               userId,
               sessionId: castSessionId,
               damage: envelope.damage,
               rollRequested,
             });
+            // #768 FIX round 4: the client's narration gate treats a populated `damage`
+            // field as "the engine applied this". Null it unless the server actually
+            // applied it, so a claim the server rejected (invalid shape) or deferred
+            // (roll_pending) cannot bypass the fabrication gate for injury the engine
+            // never dealt. The response text is the parsed envelope, so the client sees
+            // the nulled field.
+            if (outcome !== 'applied' && outcome !== 'already_applied') {
+              envelope.damage = null;
+            }
           } catch (error) {
             logger.warn({ msg: 'DM_STORY_DAMAGE_FAILED', sessionId: castSessionId, error });
+            envelope.damage = null;
           }
         }
         // sessionId must not come from combatEntry: that is only sent when combat

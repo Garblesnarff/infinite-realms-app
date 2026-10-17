@@ -3418,6 +3418,66 @@ ${playerInput}
     );
   });
 
+  test('#610 (#768 FIX round 4): a damage claim the server does not apply is nulled in the response envelope, so the client gate cannot treat it as engine-applied', async () => {
+    // The client's narration gate treats a populated `damage` field as "the engine
+    // applied this". The server nulls it unless the outcome was applied/already_applied;
+    // the response text is the parsed envelope, so the client sees the nulled field.
+    const setup = await dmTurn({
+      ...fighter,
+      playerInput: 'I take hold of the rope.',
+      reply: storyReply('A frayed rope hangs over the edge.', undefined),
+    });
+    const characterId = setup.character.id;
+    await database
+      .insert(characterStats)
+      .values({ characterId, maxHitPoints: 12, currentHitPoints: 12 });
+    const responseDamageOf = (turn: { body: Record<string, unknown> }): unknown =>
+      (JSON.parse(String(turn.body.text)) as Record<string, unknown>).damage;
+
+    // Invalid claim (amount 0): rejected, HP untouched, envelope nulled.
+    const invalidInput = 'I touch the cold stone.';
+    await playerSays(invalidInput);
+    const invalid = await dmTurn({
+      ...fighter,
+      existingCharacter: setup.character,
+      playerInput: invalidInput,
+      reply: storyReply('The stone is cold.', { damage: { amount: 0, source: 'cold' } }),
+    });
+    expect(invalid.status).toBe(200);
+    expect(responseDamageOf(invalid)).toBeNull();
+    expect((await sheetAfterReload(characterId)).stats).toMatchObject({
+      current_hit_points: 12,
+    });
+
+    // Roll turn: a valid-shaped claim the server defers (roll_pending) is also nulled.
+    const rollInput = 'I leap across the gap.';
+    await playerSays(rollInput);
+    const roll = await dmTurn({
+      ...fighter,
+      existingCharacter: setup.character,
+      playerInput: rollInput,
+      reply: storyReply('Roll to see if you make it.', {
+        damage: { amount: 3, source: 'fall' },
+        roll_requests: [
+          {
+            type: 'check',
+            formula: '1d20+2',
+            purpose: 'Athletics check to clear the gap',
+            dc: 12,
+            ac: null,
+            advantage: false,
+            disadvantage: false,
+          },
+        ],
+      }),
+    });
+    expect(roll.status).toBe(200);
+    expect(responseDamageOf(roll)).toBeNull();
+    expect((await sheetAfterReload(characterId)).stats).toMatchObject({
+      current_hit_points: 12,
+    });
+  });
+
   test('#218 step 3: two concurrent movements for one player message move the items once (row lock)', async () => {
     const playerInput = 'I grab the charts.';
     await playerSays(playerInput);
