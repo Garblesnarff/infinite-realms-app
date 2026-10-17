@@ -55,6 +55,34 @@ describe('narration-extra-strike', () => {
       expect(claims.length).toBe(0);
     });
 
+    it('does not flag a strike that never names the player', () => {
+      expect(inventedExtraStrikeClaims('A second strike lands on the goblin.', 0)).toEqual([]);
+      expect(inventedExtraStrikeClaims('A second strike lands on the goblin.', 1)).toEqual([]);
+    });
+
+    it('does not flag a recap of an earlier strike', () => {
+      expect(
+        inventedExtraStrikeClaims('Earlier, a second blow landed across your ribs.', 0),
+      ).toEqual([]);
+      expect(
+        inventedExtraStrikeClaims('Earlier, a second blow landed across your ribs.', 1),
+      ).toEqual([]);
+    });
+
+    it('does not flag a strike aimed at a companion', () => {
+      expect(inventedExtraStrikeClaims('A second blow lands on your companion Mira.', 0)).toEqual(
+        [],
+      );
+      expect(inventedExtraStrikeClaims('A second blow lands on your companion Mira.', 1)).toEqual(
+        [],
+      );
+    });
+
+    it('flags "A second strike lands on you"', () => {
+      const claims = inventedExtraStrikeClaims('A second strike lands on you.', 1);
+      expect(claims.length).toBe(1);
+    });
+
     it('does not flag negated prose', () => {
       const claims = inventedExtraStrikeClaims(
         'Before a second strike can land, you step back.',

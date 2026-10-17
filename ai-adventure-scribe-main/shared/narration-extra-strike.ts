@@ -7,9 +7,12 @@
  * EngineResultCard type.
  *
  * Every pattern is explicit repeat language ("a second", "another", "again", "twice", "follow-up")
- * aimed at the player ("you"/"your"), so a single legitimately-narrated hit is never flagged. A
- * false positive costs a regeneration, so negations ("before a second strike can land") and
- * hypotheticals ("would have landed a second blow") are skipped.
+ * aimed at the player ("you"/"your"), so a single legitimately-narrated hit is never flagged. The
+ * reach verbs "land"/"connect" carry no object of their own, so the same clause must name the
+ * player ("lands across your ribs", "connects with your shoulder", "lands on you") and must not
+ * aim at a companion ("on your companion Mira"). A false positive costs a regeneration, so
+ * negations ("before a second strike can land"), hypotheticals ("would have landed a second
+ * blow"), and recaps ("Earlier, a second blow landed across your ribs") are skipped.
  */
 import type { EngineResultCard } from './engine-result-card';
 
@@ -43,9 +46,22 @@ export function engineHitsOnPlayer(cards: EngineResultCard[]): number {
 const ATTACK_NOUN = 'strike|blow|hit|attack|slash|swing|bite|claw';
 const ATTACK_VERB = 'strikes|struck|hits|slashes|swings|bites|claws';
 
+/** After "your", these name someone other than the player: the strike is not aimed at the player. */
+const COMPANION_AFTER_YOUR =
+  'companion|ally|friend|party|ward|familiar|mount|horse|ranger|cleric|wizard|fighter|rogue';
+
+/**
+ * "land"/"connect" carry no object on their own, so they only reach the player when the same
+ * clause names the player: "lands across your ribs", "connects with your shoulder", "lands on
+ * you". A "your <companion>" target is someone else, not the player.
+ */
+const REACH_LAND_CONNECT =
+  `(?:land(?:s|ed)?|connect(?:s|ed)?)\\s+(?:on|across|into|against|with)\\s+` +
+  `(?:you\\b|your\\s+(?!(?:${COMPANION_AFTER_YOUR})\\b)\\w+)`;
+
 /** The verbs a repeat strike uses when it reaches the player. */
 const REACH_YOU =
-  'land(?:s|ed)?|connect(?:s|ed)?|catch(?:es|ing)?\\s+you|caught\\s+you|find(?:s)?\\s+you|' +
+  `${REACH_LAND_CONNECT}|catch(?:es|ing)?\\s+you|caught\\s+you|find(?:s)?\\s+you|` +
   'found\\s+you|hit(?:s)?\\s+you|strikes?\\s+you|struck\\s+you';
 
 const EXTRA_STRIKE_PATTERNS: RegExp[] = [
@@ -60,9 +76,9 @@ const EXTRA_STRIKE_PATTERNS: RegExp[] = [
   new RegExp(`\\b(?:${ATTACK_VERB})\\s+you\\s+again\\b`, 'gi'),
   // "it strikes you twice".
   /\b(?:strikes|hits)\s+you\s+twice\b/gi,
-  // "a follow-up strike lands", "a follow-up blow catches you".
+  // "a follow-up strike lands on you", "a follow-up blow catches you".
   new RegExp(
-    `\\ba\\s+follow-up\\s+(?:${ATTACK_NOUN})\\b[^.!?]{0,30}?\\b(?:lands|catches\\s+you|hits\\s+you)\\b`,
+    `\\ba\\s+follow-up\\s+(?:${ATTACK_NOUN})\\b[^.!?]{0,30}?\\b(?:${REACH_LAND_CONNECT}|catches\\s+you|hits\\s+you)\\b`,
     'gi',
   ),
 ];
@@ -72,6 +88,10 @@ const NEGATOR = /\b(?:no|not|never|without|nor|neither|cannot|fails?|failed|fail
 const CLAUSE_BREAK = /[,;:]|\b(?:but|though|although|yet|however|before|if|unless)\b/i;
 /** "would have landed a second strike", "could land a second blow": a warning, not a claim. */
 const HYPOTHETICAL = /\b(?:would|could|might|can|may)\b/i;
+/** "Earlier, a second blow landed": the strike already happened, so the DM is recapping it. */
+const RECAP = /\b(?:earlier|previously|last turn|last round|before that|a moment ago|had)\b/i;
+/** "the goblin had landed a second strike": the reach verb is a justified past-tense recap. */
+const HAD_REACH = /\bhad\s+(?:landed|connected)\b/i;
 
 export interface ExtraStrikeClaim {
   match: string;
@@ -133,7 +153,9 @@ export function inventedExtraStrikeClaims(
       if (isNegated(source, index)) continue;
       // Only the claim's own clause: "Before you can recover, a second strike lands" is a claim.
       const span = sentenceSpan(source, index);
-      const clause = source.slice(span.start, index).split(CLAUSE_BREAK).pop() ?? '';
+      const before = source.slice(span.start, index);
+      if (RECAP.test(before) || HAD_REACH.test(match[0])) continue;
+      const clause = before.split(CLAUSE_BREAK).pop() ?? '';
       if (HYPOTHETICAL.test(`${clause}${match[0]}`)) continue;
       seen.add(index);
       claims.push({ match: match[0].trim().toLowerCase().slice(0, 120), index });
