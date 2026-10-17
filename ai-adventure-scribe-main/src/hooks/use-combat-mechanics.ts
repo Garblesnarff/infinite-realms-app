@@ -6,7 +6,7 @@ import logger from '@/lib/logger';
 import { executeAuthoritativeCombatIntent } from '@/services/combat/combat-action-executor';
 import { calculateProficiencyBonus } from '@/utils/character-calculations';
 import { canUseClassFeature } from '@/utils/classFeatures';
-import { needsDeathSaves, rollDeathSave } from '@/utils/combat/deathSaves';
+import { needsDeathSaves } from '@/utils/combat/deathSaves';
 import { rollDice } from '@/utils/diceUtils';
 import {
   createDefaultLightWeapons,
@@ -165,7 +165,8 @@ export const useCombatMechanics = ({
     [activeEncounter, handleCombatAction],
   );
 
-  // Handle death saving throw
+  // Handle death saving throw — via the server's authoritative intent, not a local
+  // roll. The engine owns the tallies; a local roll never reaches it (#261).
   const handleDeathSave = useCallback(
     async (participantId: string) => {
       if (!activeEncounter) return;
@@ -173,37 +174,15 @@ export const useCombatMechanics = ({
       const participant = activeEncounter.participants.find((p) => p.id === participantId);
       if (!participant || !needsDeathSaves(participant)) return;
 
-      const { updatedParticipant, roll } = rollDeathSave(participant);
-
-      // Update participant state
-      updateParticipant(participantId, {
-        deathSaves: updatedParticipant.deathSaves,
-        isStable: updatedParticipant.isStable,
-        isDead: updatedParticipant.isDead,
-        currentHitPoints: updatedParticipant.currentHitPoints,
-        isUnconscious: updatedParticipant.isUnconscious,
-      });
-
-      const description = `${participant.name} death save: ${roll.total} ${roll.total >= 10 ? '(Success)' : '(Failure)'} (${updatedParticipant.deathSaves.successes}/3, ${updatedParticipant.deathSaves.failures}/3)`;
-
-      const action = {
-        participantId,
-        actionType: 'death_save' as ActionType,
-        description,
-        deathSaveResult: {
-          roll: roll.total,
-          result: roll.total >= 10 ? 'success' : 'failure',
-          successes: updatedParticipant.deathSaves.successes,
-          failures: updatedParticipant.deathSaves.failures,
-          isStable: updatedParticipant.isStable,
-          isDead: updatedParticipant.isDead,
-          isCritical: roll.critical,
-        },
-      };
-
-      await takeAction(action);
+      await executeAuthoritativeCombatIntent(
+        activeEncounter.id,
+        { type: 'death_save', actorId: participantId },
+        'player',
+        undefined,
+        'action_bar',
+      );
     },
-    [activeEncounter, takeAction, updateParticipant],
+    [activeEncounter],
   );
 
   // Handle concentration save
