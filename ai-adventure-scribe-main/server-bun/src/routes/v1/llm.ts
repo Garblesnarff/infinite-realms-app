@@ -50,6 +50,7 @@ import {
   scheduleDmReplyWatchdog,
 } from '../../services/dm/dm-reply-persistence.js';
 import {
+  dmResponseSchema,
   parseLlmEnvelope,
   rewriteNarrationSegmentsFromEnvelope,
 } from '../../services/dm/dm-response-schema.js';
@@ -540,7 +541,6 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         history,
         provider = 'openrouter',
         requestType: rawRequestType = 'user',
-        responseSchema,
         metrics,
         combatEntry,
         sessionId,
@@ -548,6 +548,10 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         dmReply: requestedDmReply,
         stream,
       } = body || {};
+      // #782 item 3: the DM reply schema is built server-side from the canonical
+      // module. The client no longer sends `responseSchema`; a client-sent value
+      // is ignored during the transition (the body type still accepts it).
+      const responseSchema = dmResponseSchema;
       let dmReply = requestedDmReply;
       const safeModel = allowlistedModel(model);
       const safeMaxTokens = clampMaxTokens(maxTokens, 1000, MAX_GENERATE_TOKENS);

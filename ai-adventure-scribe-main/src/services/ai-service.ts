@@ -34,7 +34,6 @@ import { buildCombatEntryPlayer } from './combat/structured-combat-payload';
 import { MemoryManager } from './memory-manager';
 import { fetchSceneState } from './narrative/scene-state-client';
 import { SessionStateService } from './session-state-service';
-import { dmResponseSchema } from '../../server-bun/src/services/dm/dm-response-schema';
 
 import type { AIResponse, ChatMessage, GameContext } from './ai/shared/types';
 import type { Memory } from './memory-manager';
@@ -767,7 +766,8 @@ export class AIService {
           player_input: params.message,
           temperature: 0.9,
           maxTokens: 8192,
-          responseSchema: dmResponseSchema,
+          // #782 item 3: the route builds the DM reply schema server-side; the
+          // client no longer sends it.
           onResponseMetadata: (metadata) => {
             canonicalDmMessageId = metadata.dmReplyMessageId;
             params.onProviderResponse?.(metadata);
