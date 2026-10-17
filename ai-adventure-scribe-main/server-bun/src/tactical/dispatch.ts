@@ -62,13 +62,15 @@ export function dispatchMapAction(map: TacticalMap, action: MapAction): Dispatch
     const entity = resolveEntityRef(map.entities, action.target);
     if (!entity) return unknownEntity(map, action, action.target);
     const resolved: MapAction = { ...action, target: entity.id };
+    // #633 PR 4: origin/distance/destination are optional in the DM schema
+    // (omitted when unused); the engine takes null, so coerce absent to null.
     const result = forceMoveEntity(
       map,
       entity.id,
       action.mode,
-      action.origin,
-      action.distance,
-      action.destination,
+      action.origin ?? null,
+      action.distance ?? null,
+      action.destination ?? null,
     );
     return result.success
       ? { applied: true, action: resolved, path: result.path }
