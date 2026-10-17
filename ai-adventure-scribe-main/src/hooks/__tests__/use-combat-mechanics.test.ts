@@ -499,10 +499,11 @@ describe('useCombatMechanics', () => {
   });
 
   describe('handleDeathSave', () => {
-    it('should execute death save and update participant', async () => {
+    it('should call the authoritative death_save intent (#261)', async () => {
       const dyingProps = {
         ...defaultProps,
         activeEncounter: {
+          id: 'enc1',
           participants: [
             {
               id: 'p1',
@@ -517,34 +518,28 @@ describe('useCombatMechanics', () => {
       const { result } = renderHook(() => useCombatMechanics(dyingProps));
 
       vi.mocked(deathSaves.needsDeathSaves).mockReturnValue(true);
-      vi.mocked(deathSaves.rollDeathSave).mockReturnValue({
-        roll: { total: 15, critical: false },
-        updatedParticipant: {
-          deathSaves: { successes: 1, failures: 0 },
-          isStable: false,
-          isDead: false,
-          currentHitPoints: 0,
-          isUnconscious: true,
-        },
-      } as any);
+
+      const { executeAuthoritativeCombatIntent } = await import(
+        '@/services/combat/combat-action-executor'
+      );
 
       await act(async () => {
         await result.current.handleDeathSave('p1');
       });
 
-      expect(mockUpdateParticipant).toHaveBeenCalledWith(
-        'p1',
-        expect.objectContaining({
-          deathSaves: { successes: 1, failures: 0 },
-        }),
+      // #261: the Roll button must hit the server's authoritative intent, not a
+      // local roll. The engine owns the tallies.
+      expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith(
+        'enc1',
+        { type: 'death_save', actorId: 'p1' },
+        'player',
+        undefined,
+        'action_bar',
       );
-
-      expect(mockTakeAction).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actionType: 'death_save',
-          description: 'Dying Hero death save: 15 (Success) (1/3, 0/3)',
-        }),
-      );
+      // The old local-only path is gone: no local roll, no local state update.
+      expect(deathSaves.rollDeathSave).not.toHaveBeenCalled();
+      expect(mockUpdateParticipant).not.toHaveBeenCalled();
+      expect(mockTakeAction).not.toHaveBeenCalled();
     });
 
     it('should return early if participant not found', async () => {
