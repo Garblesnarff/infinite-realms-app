@@ -15,22 +15,14 @@
  *
  * export const appRouter = router({
  *   campaign: campaignRouter,
- *   blog: blogRouter,
+ *   auth: authRouter,
  * });
  * ```
  */
 
 import { authRouter } from './routers/auth.js';
-import { blogRouter } from './routers/blog.js';
-import { characterFoldersRouter } from './routers/character-folders.js';
-import { charactersRouter } from './routers/characters.js';
 import { chroniclesRouter } from './routers/chronicles.js';
-import { drawingsRouter } from './routers/drawings.js';
-import { fogOfWarRouter } from './routers/fog-of-war.js';
-import { measurementsRouter } from './routers/measurements.js';
 import { scenesRouter } from './routers/scenes.js';
-import { tokensRouter } from './routers/tokens.js';
-import { visionBlockersRouter } from './routers/vision-blockers.js';
 import { router } from './trpc.js';
 
 /**
@@ -39,15 +31,8 @@ import { router } from './trpc.js';
  *
  * Active routers:
  * - auth: WorkOS AuthKit authentication and user management
- * - blog: Blog CMS operations
- * - scenes: Scene/map management for Foundry VTT-style virtual tabletop
- * - tokens: Token management for Foundry VTT-style virtual tabletop
- * - drawings: Scene drawing operations (annotations, shapes, text)
- * - measurements: Measurement template operations (AoE templates for spells)
- * - characters: Character management, sharing, permissions, export/import
- * - characterFolders: Character folder organization
- * - fogOfWar: User-specific fog of war revelation tracking
- * - visionBlockers: Vision-blocking shapes (walls, doors, windows, terrain)
+ * - chronicles: session chronicle reads and generation
+ * - scenes: scene and map calls still used by the client scene files
  *
  * Future routers to be added:
  * - campaign: Campaign CRUD operations
@@ -56,16 +41,8 @@ import { router } from './trpc.js';
  */
 export const appRouter = router({
   auth: authRouter,
-  blog: blogRouter,
-  scenes: scenesRouter,
-  tokens: tokensRouter,
-  drawings: drawingsRouter,
-  measurements: measurementsRouter,
-  characters: charactersRouter,
-  characterFolders: characterFoldersRouter,
-  fogOfWar: fogOfWarRouter,
-  visionBlockers: visionBlockersRouter,
   chronicles: chroniclesRouter,
+  scenes: scenesRouter,
 });
 
 /**

@@ -15,8 +15,8 @@ import type { AppRouter } from './trpc-types';
  * Type-safe tRPC React client
  *
  * This client provides hooks like:
- * - trpc.blog.getPosts.useQuery()
- * - trpc.blog.createPost.useMutation()
+ * - trpc.chronicles.getBySessionId.useQuery()
+ * - trpc.chronicles.generate.useMutation()
  *
  * The types are inferred from the backend AppRouter, ensuring
  * compile-time safety for all API calls.
@@ -26,8 +26,8 @@ import type { AppRouter } from './trpc-types';
  * import { trpc } from '@/infrastructure/api';
  *
  * function MyComponent() {
- *   const { data, isLoading } = trpc.blog.getPosts.useQuery();
- *   return <div>{data?.map(post => post.title)}</div>;
+ *   const { data, isLoading } = trpc.chronicles.getBySessionId.useQuery({ sessionId });
+ *   return <div>{data?.title}</div>;
  * }
  * ```
  */
