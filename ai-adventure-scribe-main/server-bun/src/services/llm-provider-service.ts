@@ -209,10 +209,7 @@ const compiledSchemaValidator = (schema: Record<string, unknown>): ValidateFunct
  * (Anthropic instructed branch, OpenRouter strict branch, direct Gemini) —
  * providers may silently ignore unsupported keywords, so the schema is
  * enforced here regardless of what was sent. */
-const validateFullSchemaText = (
-  text: string,
-  responseSchema: Record<string, unknown>,
-): void => {
+const validateFullSchemaText = (text: string, responseSchema: Record<string, unknown>): void => {
   const parsed = validateStructuredResponseText(text, responseSchema);
   const validate = compiledSchemaValidator(responseSchema);
   if (!validate(parsed)) {
