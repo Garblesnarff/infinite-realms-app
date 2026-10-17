@@ -1113,6 +1113,13 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // through applyNonAttackDamage — the same writer the client damage route uses —
         // once per player message, with the same guards as the other story appliers. A
         // failed write is logged; it never costs the player their turn.
+        // #768 FIX round 5: the client's narration gate treats a populated `damage`
+        // field as "the engine applied this". Track whether the applier applied; any
+        // turn where it did not — skipped gate, rejected claim, deferred roll, throw —
+        // ends with the field nulled, so the client never treats an unapplied claim
+        // as engine-applied. The response text is the parsed envelope, so the client
+        // sees the nulled field.
+        let storyDamageApplied = false;
         if (
           envelope?.damage &&
           dmReply &&
@@ -1129,19 +1136,13 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
               damage: envelope.damage,
               rollRequested,
             });
-            // #768 FIX round 4: the client's narration gate treats a populated `damage`
-            // field as "the engine applied this". Null it unless the server actually
-            // applied it, so a claim the server rejected (invalid shape) or deferred
-            // (roll_pending) cannot bypass the fabrication gate for injury the engine
-            // never dealt. The response text is the parsed envelope, so the client sees
-            // the nulled field.
-            if (outcome !== 'applied' && outcome !== 'already_applied') {
-              envelope.damage = null;
-            }
+            storyDamageApplied = outcome === 'applied' || outcome === 'already_applied';
           } catch (error) {
             logger.warn({ msg: 'DM_STORY_DAMAGE_FAILED', sessionId: castSessionId, error });
-            envelope.damage = null;
           }
+        }
+        if (envelope?.damage && !storyDamageApplied) {
+          envelope.damage = null;
         }
         // sessionId must not come from combatEntry: that is only sent when combat
         // is NOT already active, so in-combat turns logged `sessionId: null` --

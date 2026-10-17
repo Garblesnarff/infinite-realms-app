@@ -3476,6 +3476,25 @@ ${playerInput}
     expect((await sheetAfterReload(characterId)).stats).toMatchObject({
       current_hit_points: 12,
     });
+
+    // Skip path (#768 FIX round 5): the applier does not run without a combatEntry,
+    // so the raw claim must not survive in the response either.
+    const noEntryInput = 'I step back from the ledge.';
+    await playerSays(noEntryInput);
+    const noEntry = await dmTurn({
+      ...fighter,
+      existingCharacter: setup.character,
+      omitCombatEntry: true,
+      playerInput: noEntryInput,
+      reply: storyReply('You step back, but a loose stone clips you.', {
+        damage: { amount: 3, source: 'falling stone' },
+      }),
+    });
+    expect(noEntry.status).toBe(200);
+    expect(responseDamageOf(noEntry)).toBeNull();
+    expect((await sheetAfterReload(characterId)).stats).toMatchObject({
+      current_hit_points: 12,
+    });
   });
 
   test('#218 step 3: two concurrent movements for one player message move the items once (row lock)', async () => {
