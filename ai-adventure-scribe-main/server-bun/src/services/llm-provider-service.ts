@@ -114,6 +114,8 @@ export const TEXT_PROVIDER_TIMEOUT_MS = 60_000;
 /** #633: instruction line sent ahead of the schema for models without strict json_schema. */
 const SCHEMA_INSTRUCTION_LINE =
   'Reply with exactly one JSON object that matches this JSON Schema. No prose, no code fences.';
+// #783: reminder on the last user message of the non-strict (prefill) branch.
+const JSON_REMINDER_LINE = 'Answer with the JSON object only. Start with `{`.';
 let geminiModelCache: { ids: Set<string>; fetchedAt: number } | null = null;
 
 const failoverReason = (status?: number): string =>
@@ -209,10 +211,7 @@ const compiledSchemaValidator = (schema: Record<string, unknown>): ValidateFunct
  * (Anthropic instructed branch, OpenRouter strict branch, direct Gemini) —
  * providers may silently ignore unsupported keywords, so the schema is
  * enforced here regardless of what was sent. */
-const validateFullSchemaText = (
-  text: string,
-  responseSchema: Record<string, unknown>,
-): void => {
+const validateFullSchemaText = (text: string, responseSchema: Record<string, unknown>): void => {
   const parsed = validateStructuredResponseText(text, responseSchema);
   const validate = compiledSchemaValidator(responseSchema);
   if (!validate(parsed)) {
@@ -375,6 +374,21 @@ const consumeOpenRouterStream = async (
   buffer += decoder.decode();
   if (buffer.length > 0) handleBlock(buffer);
   return result;
+};
+
+// #783: per-attempt onToken wrapper for the non-strict (prefill) branch.
+// Before the first non-empty delta, if it does not already open a JSON object
+// or code fence, emit '{' so the caller's accumulated raw text starts with it.
+const wrapPrefillToken = (onToken: (deltaText: string) => void) => {
+  let started = false;
+  return (deltaText: string): void => {
+    if (!started) {
+      started = true;
+      const trimmed = deltaText.trimStart();
+      if (!trimmed.startsWith('{') && !trimmed.startsWith('`')) onToken('{');
+    }
+    onToken(deltaText);
+  };
 };
 
 export class LLMProviderService {
@@ -541,12 +555,22 @@ export class LLMProviderService {
     // #633: Anthropic candidates cannot take strict json_schema, so the schema
     // rides in the stable system text instead (same cache block, so it is
     // byte-identical across turns). Built once; candidates pick, never mutate.
-    const instructedMessages = responseSchema
-      ? buildMessages(
-          [systemPrompt, `${SCHEMA_INSTRUCTION_LINE}\n${JSON.stringify(responseSchema)}`]
-            .filter((part): part is string => typeof part === 'string' && part.length > 0)
-            .join('\n\n'),
-        )
+    // #783: the volatile user message carries a JSON reminder and is followed
+    // by an assistant prefill of '{' so the model continues the object.
+    const instructedMessages: OpenRouterChatMessage[] = responseSchema
+      ? ((): OpenRouterChatMessage[] => {
+          const built = buildMessages(
+            [systemPrompt, `${SCHEMA_INSTRUCTION_LINE}\n${JSON.stringify(responseSchema)}`]
+              .filter((part): part is string => typeof part === 'string' && part.length > 0)
+              .join('\n\n'),
+          );
+          built[built.length - 1] = {
+            role: 'user',
+            content: `${prompt}\n\n${JSON_REMINDER_LINE}`,
+          };
+          built.push({ role: 'assistant', content: '{' });
+          return built;
+        })()
       : messages;
 
     type ORChatResp = {
@@ -610,7 +634,10 @@ export class LLMProviderService {
               // #633 PR2: accumulate the streamed completion, firing the
               // token callback per delta. Everything below (validation,
               // retry, usage accounting) is shared with the non-stream path.
-              const streamed = await consumeOpenRouterStream(response, onToken);
+              // #783: the prefill branch injects a leading '{' into the
+              // caller's stream before the first delta when needed.
+              const attemptToken = strictSchema ? onToken : wrapPrefillToken(onToken);
+              const streamed = await consumeOpenRouterStream(response, attemptToken);
               if (streamed.streamError) {
                 lastFailure = { status: 502, details: streamed.streamError };
                 logger.warn({
@@ -627,6 +654,12 @@ export class LLMProviderService {
               const data = (await response.json()) as ORChatResp;
               text = data.choices?.[0]?.message?.content ?? '';
               usage = data.usage;
+            }
+            if (!strictSchema) {
+              // #783: the model continues after the '{' prefill; if the reply
+              // does not already open a JSON object or fence, restore the brace.
+              const trimmed = text.trimStart();
+              if (!trimmed.startsWith('{') && !trimmed.startsWith('`')) text = `{${text}`;
             }
             if (responseSchema) {
               try {
@@ -646,12 +679,19 @@ export class LLMProviderService {
                 // never feed it into the key-limit verdict (a model reply
                 // containing "limit" must not page). The 502 status also gates
                 // message matching in isProviderKeyLimitError.
+                // #783: a prose reply on the prefill branch will not improve on
+                // a same-prompt retry — fail over to the next candidate now.
+                const proseReply =
+                  !strictSchema &&
+                  lastFailure.details.startsWith('Structured response is not valid JSON');
                 logger.warn({
                   msg: 'LLM_OPENROUTER_STRUCTURED_RESPONSE_INVALID',
                   model: candidate,
                   retry: retry + 1,
                   error: lastFailure.details,
+                  ...(proseReply ? { proseReply: true } : {}),
                 });
+                if (proseReply) break;
                 continue;
               }
             }
