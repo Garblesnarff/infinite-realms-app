@@ -224,6 +224,8 @@ describe('llm-fixture-fetch e2e', () => {
       max_tokens: 1000,
       temperature: 0.8,
       usage: { include: true },
+      // #782 item 4: the provider path now sets this on every OpenRouter call.
+      provider: { require_parameters: true },
     };
     const key = llmFixtureKey(url, requestBody);
     const fixturePath = join(tempDir, `${key}.json`);
