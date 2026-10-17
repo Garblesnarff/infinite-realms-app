@@ -439,10 +439,8 @@ describe('POST /v1/llm/generate HTTP contract', () => {
         headers: { authorization: 'Bearer smoke-token', 'content-type': 'application/json' },
         body: JSON.stringify({
           prompt: '<immutable_game_state>{"isInCombat":false}</immutable_game_state>',
-          responseSchema: {
-            type: 'object',
-            properties: { combat_transition: {}, roll_requests: {} },
-          },
+          // #782 item 3: the route builds the schema server-side and ignores
+          // a client-sent responseSchema; the test no longer sends one.
         }),
       }),
     );
@@ -488,10 +486,8 @@ describe('POST /v1/llm/generate HTTP contract', () => {
         headers: { authorization: 'Bearer smoke-token', 'content-type': 'application/json' },
         body: JSON.stringify({
           prompt: '<immutable_game_state>{"isInCombat":false}</immutable_game_state>',
-          responseSchema: {
-            type: 'object',
-            properties: { combat_transition: {}, roll_requests: {} },
-          },
+          // #782 item 3: the route builds the schema server-side and ignores
+          // a client-sent responseSchema; the test no longer sends one.
         }),
       }),
     );
