@@ -54,3 +54,10 @@ export const getGeminiModelCandidates = (preferred?: string): string[] => {
 };
 
 export const getConfiguredGeminiModels = (): string[] => getGeminiModelCandidates();
+
+/**
+ * #633: Anthropic models reject OpenRouter's strict `json_schema` response_format
+ * (HTTP 400). Those candidates get the schema as system-prompt instructions instead.
+ */
+export const modelSupportsStrictSchema = (model: string): boolean =>
+  !model.trim().startsWith('anthropic/');

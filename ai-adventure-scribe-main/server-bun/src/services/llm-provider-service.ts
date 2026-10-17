@@ -1,3 +1,5 @@
+import Ajv, { type ValidateFunction } from 'ajv';
+
 import { isRetryableUpstreamStatus, LLMUpstreamError } from './llm-errors.js';
 import { llmFetch } from './llm-fixture-fetch.js';
 import { alertProviderKeyLimit, isProviderKeyLimitError } from './llm-key-limit.js';
@@ -7,6 +9,7 @@ import {
   getGeminiModelCandidates,
   getOpenRouterExtractionModelCandidates,
   getOpenRouterModelCandidates,
+  modelSupportsStrictSchema,
 } from './llm-model-config.js';
 import { getStructuredOutputUnsupportedModels } from './model-health.js';
 import { logger } from '../lib/logger.js';
@@ -59,6 +62,12 @@ export interface LLMGenerateOptions {
    * retry and every downstream step behave exactly as non-streaming.
    */
   onToken?: (deltaText: string) => void;
+  /**
+   * #633: fires before every provider attempt (each retry and each failover
+   * candidate). Streamed deltas from a rejected attempt are discarded by the
+   * caller, so it can reset its preview here.
+   */
+  onAttemptStart?: () => void;
 }
 
 export interface LLMExtractOptions {
@@ -102,6 +111,9 @@ export interface LLMResponse {
 
 const GEMINI_MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
 export const TEXT_PROVIDER_TIMEOUT_MS = 60_000;
+/** #633: instruction line sent ahead of the schema for models without strict json_schema. */
+const SCHEMA_INSTRUCTION_LINE =
+  'Reply with exactly one JSON object that matches this JSON Schema. No prose, no code fences.';
 let geminiModelCache: { ids: Set<string>; fetchedAt: number } | null = null;
 
 const failoverReason = (status?: number): string =>
@@ -152,8 +164,8 @@ const orKeyLimitSignal = (seen: boolean, status?: number, details?: string): boo
 export const validateStructuredResponseText = (
   text: string,
   responseSchema?: Record<string, unknown>,
-): void => {
-  if (!responseSchema) return;
+): unknown => {
+  if (!responseSchema) return undefined;
   let parsed: unknown;
   try {
     const cleaned = text
@@ -173,6 +185,37 @@ export const validateStructuredResponseText = (
     typeof (parsed as { text?: unknown }).text !== 'string'
   ) {
     throw new Error('Structured response must be an object containing text:string');
+  }
+  return parsed;
+};
+
+// #633: ajv checks the full schema on the anthropic/ branch, where the schema
+// is sent as instructions and nothing else enforces it. strict:false lets the
+// existing keywords (anyOf, oneOf, min/max) compile. Compiled once per schema
+// object; the DM schema is a module constant, so this is one compile per process.
+const schemaAjv = new Ajv({ strict: false, allErrors: false });
+const compiledSchemaValidators = new WeakMap<Record<string, unknown>, ValidateFunction>();
+
+const compiledSchemaValidator = (schema: Record<string, unknown>): ValidateFunction => {
+  let validate = compiledSchemaValidators.get(schema);
+  if (!validate) {
+    validate = schemaAjv.compile(schema);
+    compiledSchemaValidators.set(schema, validate);
+  }
+  return validate;
+};
+
+/** #633: text:string check, then the full schema (instructed branch only). */
+const validateInstructedSchemaText = (
+  text: string,
+  responseSchema: Record<string, unknown>,
+): void => {
+  const parsed = validateStructuredResponseText(text, responseSchema);
+  const validate = compiledSchemaValidator(responseSchema);
+  if (!validate(parsed)) {
+    throw new Error(
+      `Structured response does not match schema: ${schemaAjv.errorsText(validate.errors)}`,
+    );
   }
 };
 
@@ -346,6 +389,7 @@ export class LLMProviderService {
       provider = 'openrouter',
       responseSchema,
       onToken,
+      onAttemptStart,
     } = options;
 
     try {
@@ -359,6 +403,7 @@ export class LLMProviderService {
           responseSchema,
           systemPrompt,
           onToken,
+          onAttemptStart,
         );
       }
 
@@ -439,6 +484,7 @@ export class LLMProviderService {
     responseSchema?: Record<string, unknown>,
     systemPrompt?: string,
     onToken?: (deltaText: string) => void,
+    onAttemptStart?: () => void,
   ): Promise<LLMResponse> {
     const breaker = getCircuitBreaker('llm:openrouter');
     breaker.allowOrThrow();
@@ -461,8 +507,6 @@ export class LLMProviderService {
       }
       return allowed;
     });
-    const messages: OpenRouterChatMessage[] = [];
-
     // #352: the stable system block goes first so the provider caches on the
     // prompt prefix; history and the volatile user prompt follow.
     // #633 PR3: the `cache_control` breakpoint below is the request's ONLY
@@ -472,20 +516,35 @@ export class LLMProviderService {
     // stable prefix the provider caches. History and the user message stay
     // plain strings with no marker: they change every turn and must never be
     // part of the cached prefix.
-    if (typeof systemPrompt === 'string' && systemPrompt.length > 0) {
-      messages.push({
-        role: 'system',
-        content: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
-      });
-    }
-    if (Array.isArray(history)) {
-      for (const m of history) {
-        if (m && m.role && typeof m.content === 'string') {
-          messages.push(m);
+    const buildMessages = (systemText: string | undefined): OpenRouterChatMessage[] => {
+      const built: OpenRouterChatMessage[] = [];
+      if (typeof systemText === 'string' && systemText.length > 0) {
+        built.push({
+          role: 'system',
+          content: [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral' } }],
+        });
+      }
+      if (Array.isArray(history)) {
+        for (const m of history) {
+          if (m && m.role && typeof m.content === 'string') {
+            built.push(m);
+          }
         }
       }
-    }
-    messages.push({ role: 'user', content: prompt });
+      built.push({ role: 'user', content: prompt });
+      return built;
+    };
+    const messages = buildMessages(systemPrompt);
+    // #633: Anthropic candidates cannot take strict json_schema, so the schema
+    // rides in the stable system text instead (same cache block, so it is
+    // byte-identical across turns). Built once; candidates pick, never mutate.
+    const instructedMessages = responseSchema
+      ? buildMessages(
+          [systemPrompt, `${SCHEMA_INSTRUCTION_LINE}\n${JSON.stringify(responseSchema)}`]
+            .filter((part): part is string => typeof part === 'string' && part.length > 0)
+            .join('\n\n'),
+        )
+      : messages;
 
     type ORChatResp = {
       choices?: { message?: { content?: string } }[];
@@ -503,9 +562,10 @@ export class LLMProviderService {
 
     for (let index = 0; index < candidateModels.length; index += 1) {
       const candidate = candidateModels[index];
+      const strictSchema = !responseSchema || modelSupportsStrictSchema(candidate);
       const reqBody = {
         model: candidate,
-        messages,
+        messages: strictSchema ? messages : instructedMessages,
         max_tokens: maxTokens,
         temperature,
         // #352: ask OpenRouter for the usage detail object so cache hits are
@@ -514,7 +574,7 @@ export class LLMProviderService {
         // #633 PR2: stream tokens when the caller wants progress callbacks.
         // Usage rides the final stream chunk automatically.
         ...(onToken ? { stream: true } : {}),
-        ...(responseSchema
+        ...(responseSchema && strictSchema
           ? {
               response_format: {
                 type: 'json_schema',
@@ -526,6 +586,7 @@ export class LLMProviderService {
 
       for (let retry = 0; retry < (responseSchema ? 2 : 1); retry += 1) {
         attempts.push(candidate);
+        onAttemptStart?.();
         try {
           const response = await llmFetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
@@ -566,7 +627,11 @@ export class LLMProviderService {
             }
             if (responseSchema) {
               try {
-                validateStructuredResponseText(text, responseSchema);
+                if (strictSchema) {
+                  validateStructuredResponseText(text, responseSchema);
+                } else {
+                  validateInstructedSchemaText(text, responseSchema);
+                }
               } catch (validationError) {
                 lastFailure = {
                   status: 502,

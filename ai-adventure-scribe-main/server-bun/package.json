@@ -15,6 +15,7 @@
     "@elysiajs/trpc": "^1.0.0",
     "@trpc/server": "^11.7.1",
     "@workos-inc/node": "^7.77.0",
+    "ajv": "^8.20.0",
     "bcryptjs": "^3.0.3",
     "elysia": "^1.0.0",
     "highlight.js": "^11.11.1",

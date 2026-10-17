@@ -293,7 +293,9 @@ export async function fetchWithAuth(
     timeoutMs === undefined ? undefined : startRequestTimeout(timeoutMs, requestInit.signal);
   // The timeout signal replaces the caller's signal on the wire: it fires on
   // timeout AND when the caller's signal aborts (see startRequestTimeout).
-  const effectiveInit = timeoutHandle ? { ...requestInit, signal: timeoutHandle.signal } : requestInit;
+  const effectiveInit = timeoutHandle
+    ? { ...requestInit, signal: timeoutHandle.signal }
+    : requestInit;
   const request = (accessToken?: string): Promise<Response> =>
     requestWithNetworkRetry(
       path,
@@ -377,6 +379,8 @@ export interface GenerateTextParams {
    * call behaves exactly like the non-streaming path.
    */
   onStream?: (chunk: string) => void;
+  /** #633: the server discarded the streamed attempt (retry or failover); clear the preview. */
+  onStreamReset?: () => void;
   requestType?: 'user' | 'system';
   onResponseMetadata?: (metadata: {
     provider?: 'openrouter' | 'gemini';
@@ -581,6 +585,7 @@ class LlmApiClient {
   private async readGenerateStream(
     res: Response,
     onStream: (chunk: string) => void,
+    onStreamReset?: () => void,
   ): Promise<GenerateStreamPayload | null> {
     const contentType = res.headers.get('content-type') ?? '';
     if (!contentType.includes('text/event-stream') || !res.body) return null;
@@ -603,6 +608,8 @@ class LlmApiClient {
       }
       if (event.type === 'delta' && typeof event.text === 'string') {
         onStream(event.text);
+      } else if (event.type === 'reset') {
+        onStreamReset?.();
       } else if (event.type === 'done' && event.payload && typeof event.payload === 'object') {
         payload = event.payload;
       } else if (event.type === 'error') {
@@ -679,7 +686,7 @@ class LlmApiClient {
       // #633 PR2: when the caller passed onStream, the server answers
       // text/event-stream. Anything else falls through to the JSON path.
       if (params.onStream) {
-        const streamed = await this.readGenerateStream(res, params.onStream);
+        const streamed = await this.readGenerateStream(res, params.onStream, params.onStreamReset);
         if (streamed) {
           // #2456: the party was defeated. This is a handled terminal state,
           // not a DM reply — throw so callers can render the death screen

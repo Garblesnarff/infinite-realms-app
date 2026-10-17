@@ -497,10 +497,10 @@ const storyItemsProperty = nullable({
   // writer never ran. Like #310's xp_award description, this tells the model when
   // to populate the nullable field inside the structured-output contract.
   description:
-    '#463 story items: when the story gives the player\'s character an item (found, gifted, ' +
+    "#463 story items: when the story gives the player's character an item (found, gifted, " +
     'looted, purchased) or takes one away (spent, lost, stolen, broken), set this field to an ' +
     'array of `{"name": "<exact item name>", "quantity": <whole number>, "change": "gain"|"lose"}`. ' +
-    'The game updates the character\'s Inventory; do not narrate receiving or losing an item ' +
+    "The game updates the character's Inventory; do not narrate receiving or losing an item " +
     'without setting the field. Otherwise leave it null.',
 });
 
@@ -757,6 +757,12 @@ export function rewriteNarrationSegmentsFromEnvelope(
   originalText: string,
 ): string {
   if (!envelope || typeof envelope.text !== 'string') return originalText;
-  const parsed = parseDmResponse(envelope);
-  return parsed.success ? JSON.stringify(parsed.data) : originalText;
+  // #633: a malformed segment (null entry, non-string character) throws inside
+  // segment derivation. The reply is already saved, so keep the original text.
+  try {
+    const parsed = parseDmResponse(envelope);
+    return parsed.success ? JSON.stringify(parsed.data) : originalText;
+  } catch {
+    return originalText;
+  }
 }
