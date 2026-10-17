@@ -97,9 +97,7 @@ function measureNode(node: unknown, path: string, budget: Budget, seen: Set<obje
 
   // Keyed on `properties` being present rather than `type === 'object'`, so
   // nullable-object (`type: ['object', 'null']`) and typeless property bags count
-  // their optionals too. No `return` here: sibling subtrees on the same node
-  // (oneOf/anyOf/items/$defs/…) must still be walked; the `seen` set above
-  // keeps already-visited nodes from being counted twice.
+  // their optionals too.
   if (record['properties'] && typeof record['properties'] === 'object') {
     const required = Array.isArray(record['required']) ? (record['required'] as unknown[]) : [];
     const properties = record['properties'] as Record<string, unknown>;
@@ -109,6 +107,15 @@ function measureNode(node: unknown, path: string, budget: Budget, seen: Set<obje
       }
       measureNode(properties[key], `${path}.${key}`, budget, seen);
     }
+    // Sibling subtrees on the same node (oneOf/anyOf/items/$defs/…) must still
+    // be walked, but the properties map itself is not a schema node: a property
+    // literally named `anyOf`, `minimum`, … must not be miscounted as a keyword.
+    // (`type`/`required` are primitives and walking them is a no-op.)
+    for (const [key, value] of Object.entries(record)) {
+      if (key === 'properties' || key === 'required' || key === 'type') continue;
+      measureNode(value, `${path}.${key}`, budget, seen);
+    }
+    return;
   }
 
   for (const [key, value] of Object.entries(record)) {
@@ -179,15 +186,22 @@ describe('dmResponseSchema strict budget (Refs #782 item 1)', () => {
           properties: { maybe: { type: 'string' } },
           required: [],
         },
+        // A property literally named like a keyword is not a keyword.
+        tricky: {
+          type: 'object',
+          properties: { minimum: { type: 'integer' } },
+          required: [],
+        },
       },
       required: ['discriminated'],
     };
     const budget = measureSchemaBudget(bad, 'bad');
     expect(budget.oneOfPaths).toEqual(['bad.discriminated', 'bad.sibling']);
     expect(budget.unions).toBe(5);
-    // discriminated and sibling.inner are required; the six other top-level
-    // properties plus oneOf[0].deep and nullableObject.maybe are optional.
-    expect(budget.optionals).toBe(8);
+    // discriminated and sibling.inner are required; the seven other top-level
+    // properties plus oneOf[0].deep, nullableObject.maybe and tricky.minimum
+    // are optional.
+    expect(budget.optionals).toBe(10);
     expect(budget.constraintPaths).toEqual([
       'bad.ranged.minimum',
       'bad.ranged.maximum',
