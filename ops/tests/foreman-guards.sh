@@ -295,7 +295,7 @@ STATE=$TMP/pv bash -euo pipefail -c '
   contains_env_secret() { return 1; }; has_secret_pattern() { return 1; }; logline() { :; }
   . "$1"
   post_verdict 5 0123456789abcdef x/y "{\"verdict\":\"PASS\",\"comment\":\"Strategist review — PASS at 01234567\\nLooks fine.\\n— posted by the foreman reviewer bot (Sonnet)\"}" 0.1 > /dev/null' _ "$TMP/pv-funcs.sh"
-sig='— posted by the foreman reviewer bot (Sonnet)'
+sig='— posted by the foreman reviewer bot (Haiku)'  # default REVIEW_MODEL is haiku
 c=$(jq -r .comment "$TMP/pv/dry-run/5.json"); r=$(jq -r .review "$TMP/pv/dry-run/5.json")
 [ "$(tail -n 1 <<< "$c")" = "$sig" ] && [ "$(grep -cxF -- "$sig" <<< "$c")" = 1 ] && [ "$(head -n 1 <<< "$c")" = "Strategist review — PASS at 01234567" ] \
   && ok "post_verdict: comment ends with the bot signature once" || bad "post_verdict comment: '$c'"
@@ -368,8 +368,13 @@ printf '{"additions":null}' > "$TMP/tier-pr.json"
 [ "$(pick_tier "$TMP/tier-pr.json" "$TMP/tier-empty.txt")" = "sonnet paths-unknown" ] && ok "pick_tier: no path list -> sonnet" || bad "pick_tier empty paths"
 set_tier haiku; [ "$RUN_MODEL" = haiku ] && [ "$RUN_EXPECT_RE" = haiku ] && [ "$BOT_SIGNATURE" = "— posted by the foreman reviewer bot (Haiku)" ] \
   && ok "set_tier haiku: model, billing check, signature" || bad "set_tier haiku: $RUN_MODEL $RUN_EXPECT_RE $BOT_SIGNATURE"
-set_tier sonnet; [ "$RUN_MODEL" = sonnet ] && [ "$RUN_EXPECT_RE" = sonnet ] && [ "$BOT_SIGNATURE" = "— posted by the foreman reviewer bot (Sonnet)" ] \
-  && ok "set_tier sonnet: model, billing check, signature" || bad "set_tier sonnet: $RUN_MODEL $RUN_EXPECT_RE $BOT_SIGNATURE"
+set_tier sonnet; [ "$RUN_MODEL" = haiku ] && [ "$RUN_EXPECT_RE" = haiku ] && [ "$BOT_SIGNATURE" = "— posted by the foreman reviewer bot (Haiku)" ] \
+  && ok "set_tier full tier: default REVIEW_MODEL is haiku (model, billing check, signature)" || bad "set_tier full tier default: $RUN_MODEL $RUN_EXPECT_RE $BOT_SIGNATURE"
+grep -q '^MODEL=${REVIEW_MODEL:-haiku}$' "$HERE/../foreman/review.sh" && grep -q '^EXPECT_MODEL_RE=${REVIEW_EXPECT_MODEL_RE:-haiku}' "$HERE/../foreman/review.sh" \
+  && grep -q '^MODEL=${TRIAGE_MODEL:-haiku}$' "$HERE/../foreman/triage.sh" && grep -q '^EXPECT_MODEL_RE=${TRIAGE_EXPECT_MODEL_RE:-haiku}$' "$HERE/../foreman/triage.sh" \
+  && ok "defaults: reviewer and triager models default to haiku" || bad "model defaults"
+grep -q 'grep -E "^(ANTHROPIC_API_KEY|GH_TOKEN|TRIAGE_MODEL|TRIAGE_EXPECT_MODEL_RE)=" /etc/realms-foreman/env' "$HERE/../foreman/systemd/realms-triage.service" \
+  && ok "realms-triage.service: env filter passes the triage model settings" || bad "triage unit env filter"
 grep -q 'claude -p --model "$RUN_MODEL"' "$HERE/../foreman/review.sh" && grep -q 'grep -qiE -- "$RUN_EXPECT_RE" <<< "$top"' "$HERE/../foreman/review.sh" \
   && ok "review_pr: claude and the billing check use the tier's model" || bad "review_pr: tier model not wired"
 
@@ -489,6 +494,19 @@ printf '%s\n' "2026-10-13T01:00:00Z 2026-10-13 pr=1 50 sha=aaaaaaaa posted model
 echo "2026-10-16T01:00:00Z 2026-10-16 pr=4 51 sha=cccccccc posted models=x" >> "$cl"
 [ "$(credit_left_to_stop "$cl" 2026-10-14 94)" = -0.5000 ] && ok "credit_left_to_stop: negative past the stop" || bad "credit_left_to_stop past: $(credit_left_to_stop "$cl" 2026-10-14 94)"
 [ "$(credit_spent "$TMP/no-such-ledger" 2026-10-14)" = 0 ] && ok "credit_spent: missing ledger is 0, like spent_today" || bad "credit_spent missing"
+mkdir -p "$TMP/ledger-dir"
+r=$(credit_spent "$TMP/ledger-dir" 2026-10-14) && rc=0 || rc=$?
+[ "$rc" = 1 ] && [ "$r" = unreadable ] && [ "$(credit_left_to_stop "$TMP/ledger-dir" 2026-10-14 94)" = 0 ] \
+  && ok "credit stop: unreadable ledger fails closed (0 left)" || bad "credit unreadable: rc=$rc out=$r left=$(credit_left_to_stop "$TMP/ledger-dir" 2026-10-14 94)"
+printf '%s\n' "2026-10-15T01:00:00Z 2026-10-15 pr=2 4.5 sha=bbbbbbbb posted models=x" "2026-10-15T02:00:00Z 2026-10-15 pr=3 n/a sha=cccccccc posted models=x" > "$TMP/ledger-bad"
+r=$(credit_spent "$TMP/ledger-bad" 2026-10-14) && rc=0 || rc=$?
+[ "$rc" = 1 ] && [ "$r" = unparsable ] && [ "$(credit_left_to_stop "$TMP/ledger-bad" 2026-10-14 94)" = 0 ] \
+  && ok "credit stop: unparsable amount fails closed (0 left)" || bad "credit unparsable amount: rc=$rc out=$r"
+printf '%s\n' "2026-10-15T01:00:00Z 2026-10-15 pr=2 4.5 sha=bbbbbbbb posted models=x" "garbage line" > "$TMP/ledger-bad2"
+r=$(credit_spent "$TMP/ledger-bad2" 2026-10-14) && rc=0 || rc=$?
+[ "$rc" = 1 ] && [ "$r" = unparsable ] && ok "credit stop: a row without a date fails closed" || bad "credit unparsable date: rc=$rc out=$r"
+printf '%s\n' "2026-10-15T01:00:00Z 2026-10-15 pr=2 1.2e-05 sha=bbbbbbbb posted models=x" "" > "$TMP/ledger-ok"
+[ "$(credit_spent "$TMP/ledger-ok" 2026-10-14)" = 0.0000 ] && ok "credit_spent: e-notation amounts and blank lines parse" || bad "credit e-notation: $(credit_spent "$TMP/ledger-ok" 2026-10-14)"
 grep -q '^CREDIT_STOP_USD=${FOREMAN_CREDIT_STOP_USD:-94}' "$HERE/../foreman/review.sh" && grep -q '^CREDIT_STOP_USD=${FOREMAN_CREDIT_STOP_USD:-94}' "$HERE/../foreman/triage.sh" \
   && ok "credit stop: both scripts default to \$94" || bad "credit stop default"
 awk '/credit_left=\$\(credit_left_to_stop/ { c = NR } /spent=\$\(spent_today\)/ && c && !s { s = NR } /review_pr "\$n" "\$sha" "\$ref" "\$budget"/ { r = NR } END { exit !(c && s && r && c < s && s < r) }' "$HERE/../foreman/review.sh" \

@@ -56,8 +56,8 @@ set -euo pipefail
 . "$(dirname "$(readlink -f "$0")")/lib.sh"
 
 REPO=${REVIEW_REPO:-Garblesnarff/infinite-realms-app}
-MODEL=${REVIEW_MODEL:-sonnet}
-EXPECT_MODEL_RE=${REVIEW_EXPECT_MODEL_RE:-sonnet}  # the costliest billed model must match (case-insensitive)
+MODEL=${REVIEW_MODEL:-haiku}
+EXPECT_MODEL_RE=${REVIEW_EXPECT_MODEL_RE:-haiku}  # the costliest billed model must match (case-insensitive)
 SMALL_MODEL=${REVIEW_SMALL_MODEL:-haiku}
 SMALL_EXPECT_MODEL_RE=${REVIEW_SMALL_EXPECT_MODEL_RE:-haiku}
 SMALL_MAX_LINES=${REVIEW_SMALL_MAX_LINES:-300}
@@ -618,7 +618,8 @@ review_tick() {
     ci_finished "$n" || { say "pr #$n: CI not finished, skip"; continue; }
     credit_left=$(credit_left_to_stop "$LEDGER" "$CREDIT_START" "$CREDIT_STOP_USD")
     if ! lt 0 "$credit_left"; then
-      logline "credit stop reached (\$$(credit_spent "$LEDGER" "$CREDIT_START") spent since $CREDIT_START, stop at \$$CREDIT_STOP_USD of \$$CREDIT_USD); no reviews"
+      credit_now=$(credit_spent "$LEDGER" "$CREDIT_START") || true
+      logline "credit stop reached (ledger since $CREDIT_START: $credit_now; stop at \$$CREDIT_STOP_USD of \$$CREDIT_USD); no reviews"
       break
     fi
     spent=$(spent_today)

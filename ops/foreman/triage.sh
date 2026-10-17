@@ -8,7 +8,7 @@
 # Picks open issues labeled `bug` with no "## Task" heading in the body and none
 # of the labels catjam, jules, needs-crew, triaged; oldest first, at most 6 per
 # run. An issue with an open PR (a cross-reference from an open PR) is skipped
-# and costs nothing. For each other issue, `claude -p` (Sonnet) reads the issue
+# and costs nothing. For each other issue, `claude -p` (Haiku by default) reads the issue
 # and a read-only export of main and answers with JSON:
 #   {verdict: catjam|jules|crew, root_cause, files[], repro_test, task_markdown, crew_reason}
 # Claude gets ONLY ANTHROPIC_API_KEY, Read/Grep/Glob and no shell, web or Write
@@ -30,8 +30,8 @@ set -euo pipefail
 . "$(dirname "$(readlink -f "$0")")/lib.sh"
 
 REPO=${TRIAGE_REPO:-Garblesnarff/infinite-realms-app}
-MODEL=${TRIAGE_MODEL:-sonnet}
-EXPECT_MODEL_RE=${TRIAGE_EXPECT_MODEL_RE:-sonnet}
+MODEL=${TRIAGE_MODEL:-haiku}
+EXPECT_MODEL_RE=${TRIAGE_EXPECT_MODEL_RE:-haiku}
 MAX_ISSUES=${TRIAGE_MAX_ISSUES:-6}
 PER_ISSUE_USD=${TRIAGE_PER_ISSUE_USD:-0.50}
 DAILY_CAP_USD=${REVIEW_DAILY_CAP_USD:-5.00} # the foreman cap, shared with review.sh
@@ -297,7 +297,8 @@ main() {
     fi
     credit_left=$(credit_left_to_stop "$LEDGER" "$CREDIT_START" "$CREDIT_STOP_USD")
     if lt "$credit_left" "$PER_ISSUE_USD"; then
-      logline "credit stop: \$$credit_left left before the \$$CREDIT_STOP_USD stop, under the \$$PER_ISSUE_USD per issue; no triage"; break
+      credit_now=$(credit_spent "$LEDGER" "$CREDIT_START") || true
+      logline "credit stop: ledger since $CREDIT_START: $credit_now, \$$credit_left left before the \$$CREDIT_STOP_USD stop, under the \$$PER_ISSUE_USD per issue; no triage"; break
     fi
     spent=$(spent_today)
     left=$(awk -v a="$DAILY_CAP_USD" -v b="$spent" 'BEGIN { printf "%.2f", a - b }')

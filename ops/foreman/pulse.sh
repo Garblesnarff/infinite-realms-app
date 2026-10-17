@@ -28,6 +28,7 @@ DAILY_CAP_USD=${REVIEW_DAILY_CAP_USD:-5.00}
 CREDIT_USD=${REVIEW_CREDIT_USD:-99}
 CREDIT_START=${REVIEW_CREDIT_START:-2026-10-14}
 CREDIT_END=${REVIEW_CREDIT_END:-2026-11-02}
+CREDIT_STOP_USD=${FOREMAN_CREDIT_STOP_USD:-94}  # the reviewer/triager hard stop (review.sh)
 TARGET_PER_HOUR=${REVIEW_MERGE_TARGET_PER_HOUR:-20}
 PASS_WAIT_MIN=${PULSE_PASS_WAIT_MIN:-45}
 NO_MERGE_MIN=${PULSE_NO_MERGE_MIN:-120}
@@ -208,8 +209,14 @@ main() {
   if [ "$spent" != "?" ] && awk -v a="$spent" -v b="$DAILY_CAP_USD" 'BEGIN { exit !(a >= b) }'; then
     keys+=(cap-hit); alerts+=("🟠 foreman daily cap hit: \$$spent of \$$DAILY_CAP_USD")
   fi
+  local credit_now credit_left
+  credit_now=$(credit_spent "$LEDGER" "$CREDIT_START") || true
+  credit_left=$(credit_left_to_stop "$LEDGER" "$CREDIT_START" "$CREDIT_STOP_USD")
+  if ! awk -v l="$credit_left" 'BEGIN { exit !(l > 0) }'; then
+    keys+=(credit-stop); alerts+=("🔴 foreman credit stop: ledger since $CREDIT_START $credit_now, stop at \$$CREDIT_STOP_USD of \$$CREDIT_USD; no reviews or triage")
+  fi
   local afile=$STATE/alerts.state i out=() due=()
-  for k in main-ci-red version-down pass-wait no-merge cap-hit; do
+  for k in main-ci-red version-down pass-wait no-merge cap-hit credit-stop; do
     # Without the PR list the PASS alerts are unknown, not cleared.
     if [ "$prs_ok" = 0 ] && { [ "$k" = pass-wait ] || [ "$k" = no-merge ]; }; then continue; fi
     [[ " ${keys[*]} " == *" $k "* ]] || { [ "$POST" = 0 ] || alert_clear "$k" "$afile"; }

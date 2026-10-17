@@ -62,5 +62,44 @@ grep -q 'return "$post_failed" # a failed post' "$HERE/../foreman/pulse.sh" && g
 grep -q 'prs=$(open_prs) || { prs=""; prs_ok=0;' "$HERE/../foreman/pulse.sh" && r=yes || r=no
 check "main: a failed PR list does not stop the tick" "$r" yes
 
+# credit stop: ledger past $94 since the credit start -> credit-stop alert posts and is marked
+rm -rf "$TMP/main"; : > "$TMP/posted.txt"
+printf '%s\n' "2026-10-15T01:00:00Z 2026-10-15 pr=1 60 sha=aaaaaaaa posted models=x" \
+  "2026-10-16T01:00:00Z 2026-10-16 issue=2 34.5 triage=crew decided models=x" > "$TMP/credit-ledger"
+(
+  STATE=$TMP/main POST=1 MODE=now PULSE_WEBHOOK_URL=http://127.0.0.1:9/ LEDGER=$TMP/credit-ledger TRIAGE_LOG=$TMP/none CREDIT_START=2026-10-14
+  gh() { case "$*" in "api user"*) echo someone ;; *) : ;; esac; }
+  curl() { printf '{}\n200'; }
+  post() { cat >> "$TMP/posted.txt"; }
+  main
+) 2> "$TMP/main.err" && r=0 || r=$?
+check "main: credit stop run exits 0" "$r" 0
+grep -q '🔴 foreman credit stop: ledger since 2026-10-14 94.5000, stop at \$94' "$TMP/posted.txt" 2> /dev/null && r=yes || r=no
+check "main: credit stop posts the credit-stop alert" "$r" yes
+grep -q 'credit-stop' "$TMP/main/alerts.state" 2> /dev/null && r=marked || r=unmarked
+check "main: credit-stop alert is marked" "$r" marked
+# unreadable ledger: the alert fires too (fail closed)
+rm -rf "$TMP/main"; : > "$TMP/posted.txt"; mkdir -p "$TMP/ledger-dir"
+(
+  STATE=$TMP/main POST=1 MODE=now PULSE_WEBHOOK_URL=http://127.0.0.1:9/ LEDGER=$TMP/ledger-dir TRIAGE_LOG=$TMP/none
+  gh() { case "$*" in "api user"*) echo someone ;; *) : ;; esac; }
+  curl() { printf '{}\n200'; }
+  post() { cat >> "$TMP/posted.txt"; }
+  main
+) 2> "$TMP/main.err" || true
+grep -q 'foreman credit stop: ledger since [0-9-]* unreadable' "$TMP/posted.txt" 2> /dev/null && r=yes || r=no
+check "main: unreadable ledger posts the credit-stop alert" "$r" yes
+# below the stop: no credit-stop alert
+rm -rf "$TMP/main"; : > "$TMP/posted.txt"
+printf '%s\n' "2026-10-15T01:00:00Z 2026-10-15 pr=1 11.81 sha=aaaaaaaa posted models=x" > "$TMP/credit-low"
+(
+  STATE=$TMP/main POST=1 MODE=now PULSE_WEBHOOK_URL=http://127.0.0.1:9/ LEDGER=$TMP/credit-low TRIAGE_LOG=$TMP/none CREDIT_START=2026-10-14
+  gh() { case "$*" in "api user"*) echo someone ;; *) : ;; esac; }
+  curl() { printf '{}\n200'; }
+  post() { cat >> "$TMP/posted.txt"; }
+  main
+) 2> "$TMP/main.err" || true
+grep -q 'credit stop' "$TMP/posted.txt" 2> /dev/null && r=yes || r=no
+check "main: \$11.81 of credit spent posts no credit-stop alert" "$r" no
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]
