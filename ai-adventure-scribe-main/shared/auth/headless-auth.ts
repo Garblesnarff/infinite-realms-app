@@ -18,7 +18,7 @@ export interface TestAuthOptions {
 
 /** True only for infiniterealms.app and its subdomains (e.g. api.infiniterealms.app). */
 export function isProductionApiHost(baseUrl: string): boolean {
-  const { hostname } = new URL(baseUrl);
+  const hostname = new URL(baseUrl).hostname.replace(/\.$/, '');
   return hostname === 'infiniterealms.app' || hostname.endsWith('.infiniterealms.app');
 }
 

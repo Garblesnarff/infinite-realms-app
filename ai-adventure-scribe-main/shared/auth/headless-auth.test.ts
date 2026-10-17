@@ -32,12 +32,19 @@ describe('isProductionApiHost', () => {
   it('is true for the production host and its subdomains', () => {
     expect(isProductionApiHost('https://infiniterealms.app')).toBe(true);
     expect(isProductionApiHost('https://api.infiniterealms.app')).toBe(true);
+    expect(isProductionApiHost('https://api.infiniterealms.app./')).toBe(true);
+    expect(isProductionApiHost('https://INFINITEREALMS.APP/')).toBe(true);
   });
 });
 
 describe('loginWithTestAuth', () => {
   it('refuses the production API host without calling fetch', async () => {
-    for (const baseUrl of ['https://api.infiniterealms.app', 'https://infiniterealms.app']) {
+    for (const baseUrl of [
+      'https://api.infiniterealms.app',
+      'https://infiniterealms.app',
+      'https://api.infiniterealms.app./',
+      'https://INFINITEREALMS.APP/',
+    ]) {
       const calls: string[] = [];
       const fetchImpl = (async (url) => {
         calls.push(String(url));
