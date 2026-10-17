@@ -47,6 +47,14 @@ const BASELINE_DEFAULT_OPTIONALS = 13;
 const BASELINE_DEFAULT_ONE_OF = 1;
 const BASELINE_DEFAULT_KEYWORDS = 1;
 
+/**
+ * Placeholder body for the target todos. bun-types requires test.todo to take
+ * a function; #782 items 5-8 turn each todo into a real assertion.
+ */
+const todoStub = (): void => {
+  // Intentionally empty: the strict target is not yet implemented.
+};
+
 /** JSON Schema keywords Anthropic strict mode rejects (numeric + length family). */
 const NUMERIC_OR_LENGTH_KEYWORDS = [
   'minimum',
@@ -172,13 +180,21 @@ describe('dmResponseSchema strict budget (Refs #782 item 1)', () => {
         expect(budget.constraintPaths.length).toBeLessThanOrEqual(BASELINE_KEYWORDS);
       });
 
-      test.todo(`target: 0 oneOf (strict limit; baseline ${BASELINE_ONE_OF})`);
-      test.todo(`target: ≤${TARGET_MAX_UNIONS} unions (strict limit; baseline ${BASELINE_UNIONS})`);
       test.todo(
-        `target: ≤${TARGET_MAX_OPTIONALS} optional parameters (strict limit; baseline ${BASELINE_OPTIONALS})`,
+        `target: ${TARGET_MAX_ONE_OF} oneOf (strict limit; baseline ${BASELINE_ONE_OF})`,
+        todoStub,
       );
       test.todo(
-        `target: 0 numeric/length keywords (strict limit; baseline ${BASELINE_KEYWORDS})`,
+        `target: ≤${TARGET_MAX_UNIONS} unions (strict limit; baseline ${BASELINE_UNIONS})`,
+        todoStub,
+      );
+      test.todo(
+        `target: ≤${TARGET_MAX_OPTIONALS} optional parameters (strict limit; baseline ${BASELINE_OPTIONALS})`,
+        todoStub,
+      );
+      test.todo(
+        `target: ${TARGET_MAX_KEYWORDS} numeric/length keywords (strict limit; baseline ${BASELINE_KEYWORDS})`,
+        todoStub,
       );
     });
   }
@@ -204,15 +220,21 @@ describe('dmResponseSchema strict budget (Refs #782 item 1)', () => {
       expect(budget.constraintPaths.length).toBeLessThanOrEqual(BASELINE_DEFAULT_KEYWORDS);
     });
 
-    test.todo(`target: 0 oneOf (strict limit; baseline ${BASELINE_DEFAULT_ONE_OF})`);
+    test.todo(
+      `target: ${TARGET_MAX_ONE_OF} oneOf (strict limit; baseline ${BASELINE_DEFAULT_ONE_OF})`,
+      todoStub,
+    );
     test.todo(
       `target: ≤${TARGET_MAX_UNIONS} unions (strict limit; baseline ${BASELINE_DEFAULT_UNIONS})`,
+      todoStub,
     );
     test.todo(
       `target: ≤${TARGET_MAX_OPTIONALS} optional parameters (strict limit; baseline ${BASELINE_DEFAULT_OPTIONALS})`,
+      todoStub,
     );
     test.todo(
-      `target: 0 numeric/length keywords (strict limit; baseline ${BASELINE_DEFAULT_KEYWORDS})`,
+      `target: ${TARGET_MAX_KEYWORDS} numeric/length keywords (strict limit; baseline ${BASELINE_DEFAULT_KEYWORDS})`,
+      todoStub,
     );
   });
 
