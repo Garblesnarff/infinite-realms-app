@@ -149,6 +149,9 @@ const { layOnHandsPool, resolveLayOnHands, spendDivineSense } = await importWith
 const { ClassFeatureUsageService } = await importWithRealDb(
   () => import('../../../services/progression/class-feature-usage-service.js'),
 );
+const { spendStoryFeatureUses } = await importWithRealDb(
+  () => import('../../../services/dm/story-feature-uses.js'),
+);
 
 if (!hasRealDb) {
   console.warn(
@@ -1818,5 +1821,78 @@ describeWithDb('paladin Lay on Hands pool and Divine Sense tracking (#712)', () 
     });
     expect(restored.featuresRestored).toContain('Lay on Hands');
     expect(await poolRemaining(layOnHandsId)).toBe(5);
+  });
+
+  it('a retried story turn spends Lay on Hands once — one heal, one pool draw (#712)', async () => {
+    // Deterministic regardless of test order: full pool, paladin missing 5 HP.
+    // The declared amount (3) is smaller than both the missing HP and the pool,
+    // so a replay without the guard would visibly heal and draw again.
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: 5 })
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, layOnHandsId),
+        ),
+      );
+    await db
+      .update(characterStats)
+      .set({ currentHitPoints: 7 })
+      .where(eq(characterStats.characterId, paladinId));
+
+    // The client saves the player message before the DM turn starts; a Retry
+    // re-sends that saved message without saving a new one.
+    const playerInput = 'I lay on hands to heal myself for 3 hit points';
+    await db.insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'player',
+      speakerId: paladinId,
+      message: playerInput,
+    });
+
+    const [character] = await db
+      .select()
+      .from(characters)
+      .where(eq(characters.id, paladinId))
+      .limit(1);
+
+    const logCount = async (): Promise<number> =>
+      (
+        await db
+          .select({ id: featureUsageLog.id })
+          .from(featureUsageLog)
+          .where(
+            and(
+              eq(featureUsageLog.characterId, paladinId),
+              eq(featureUsageLog.featureId, layOnHandsId),
+              eq(featureUsageLog.sessionId, sessionId),
+            ),
+          )
+      ).length;
+    const logsBefore = await logCount();
+
+    const spend = () =>
+      spendStoryFeatureUses({
+        userId: paladinUserId,
+        sessionId,
+        playerInput,
+        character,
+        features: ['Lay on Hands'],
+      });
+    await spend();
+    await spend(); // Retry: the same message, no new row.
+
+    // One heal: 7 + 3 = 10. Without the guard the replay would heal 2 more (12).
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, paladinId))
+      .limit(1);
+    expect(stats.currentHitPoints).toBe(10);
+    // One pool draw: 5 - 3 = 2. Without the guard the replay would draw 2 more (0).
+    expect(await poolRemaining(layOnHandsId)).toBe(2);
+    // One usage-log row for the replayed message, not two.
+    expect((await logCount()) - logsBefore).toBe(1);
   });
 });

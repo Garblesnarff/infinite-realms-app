@@ -18,7 +18,7 @@
  * @module server/services/progression/paladin-features-service
  */
 
-import { and, eq, ilike, or } from 'drizzle-orm';
+import { and, eq, gte, ilike, or } from 'drizzle-orm';
 
 import { ClassFeatureUsageService } from './class-feature-usage-service.js';
 import { db } from '../../../../db/client';
@@ -30,6 +30,7 @@ import {
   classFeaturesLibrary,
   combatParticipantConditions,
   conditionsLibrary,
+  featureUsageLog,
   type CharacterFeature,
 } from '../../../../db/schema/index';
 import { abilityModifier } from '../../../../shared/ability-modifier';
@@ -211,6 +212,40 @@ export async function divineSenseUses(
   const ensured = await ensurePoolRow(characterId, userId, DIVINE_SENSE_NAME, max);
   if (!ensured) return null;
   return { max, remaining: ensured.row.usesRemaining ?? max, row: ensured.row, featureId: ensured.featureId };
+}
+
+/**
+ * #712 FIX round 4: once-per-player-message guard — the slot spend's `since`
+ * rule, for feature usage. A Retry replays the same saved player message without
+ * saving a new one; a feature-usage row for this character, feature and session
+ * at or after the message means this message already spent it, so the replay
+ * spends nothing again. Scoped to the single feature: one feature's spend never
+ * blocks another feature's in the same turn. Fail open when there is no message
+ * (a null `since`): the spend's own pool checks still apply.
+ */
+export async function featureSpentSinceMessage(input: {
+  characterId: string;
+  featureName: string;
+  sessionId: string;
+  since: Date | null;
+}): Promise<boolean> {
+  const { characterId, featureName, sessionId, since } = input;
+  if (!since) return false;
+  const featureId = await libraryFeatureId(featureName);
+  if (!featureId) return false;
+  const [row] = await db
+    .select({ id: featureUsageLog.id })
+    .from(featureUsageLog)
+    .where(
+      and(
+        eq(featureUsageLog.characterId, characterId),
+        eq(featureUsageLog.featureId, featureId),
+        eq(featureUsageLog.sessionId, sessionId),
+        gte(featureUsageLog.usedAt, since),
+      ),
+    )
+    .limit(1);
+  return !!row;
 }
 
 /**

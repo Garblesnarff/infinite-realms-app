@@ -43,6 +43,28 @@ export async function resolveCombatLayOnHands(input: {
     if (!encounter) return null;
     const character = await ownedSessionCharacter(sessionId, userId);
     if (!character) return null;
+
+    const { resolveLayOnHands, featureSpentSinceMessage, LAY_ON_HANDS_NAME } = await import(
+      '../progression/paladin-features-service.js'
+    );
+    const { playerMessage } = await import('./story-spell-slots.js');
+    // #712 FIX round 4: a Retry replays the same saved player message without
+    // saving a new one. A Lay on Hands usage-log row at or after that message
+    // means this message already resolved — the slot spend's `since` rule — so
+    // the replay resolves nothing again.
+    const message = await playerMessage(sessionId);
+    if (
+      await featureSpentSinceMessage({
+        characterId: character.id,
+        featureName: LAY_ON_HANDS_NAME,
+        sessionId,
+        since: message?.createdAt ?? null,
+      })
+    ) {
+      logger.info({ msg: 'COMBAT_LAY_ON_HANDS_ALREADY_SPENT', sessionId });
+      return null;
+    }
+
     const state = await CombatEncounterService.getCombatState(encounter.id, userId);
 
     const playerParticipant = state.participants.find(
@@ -73,9 +95,6 @@ export async function resolveCombatLayOnHands(input: {
       targetParticipant = matches[0];
     }
 
-    const { resolveLayOnHands } = await import(
-      '../progression/paladin-features-service.js'
-    );
     const result = await resolveLayOnHands({
       characterId: character.id,
       userId,

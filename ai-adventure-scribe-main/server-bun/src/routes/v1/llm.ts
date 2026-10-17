@@ -1056,7 +1056,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           }
         }
         // #712: a feature the gate allowed spends its uses, server-side, once per player
-        // message. Same guards as the slot spend above: out of combat only (in combat
+        // message — a Retry replays the same saved player message, and a usage-log row
+        // for the feature at or after it means the message already spent it (the slot
+        // spend's `since` rule, on the feature usage log). Out of combat only (in combat
         // the engine resolves Lay on Hands pre-generation), and never on a turn that
         // opens combat. A spend that fails is logged; it never costs the player their turn.
         const featuresToSpend = allowedFeatures as AllowedFeatures | null;

@@ -61,13 +61,47 @@ export async function spendStoryFeatureUses(input: {
   // Dynamic import: the paladin service pulls in db/client at load time, and this
   // module is itself dynamically imported by the generate route (same pattern as
   // the story slot spend), so route contract tests stay database-free.
-  const { spendDivineSense, resolveLayOnHands } = await import(
-    '../progression/paladin-features-service.js'
-  );
+  const {
+    spendDivineSense,
+    resolveLayOnHands,
+    featureSpentSinceMessage,
+    DIVINE_SENSE_NAME,
+    LAY_ON_HANDS_NAME,
+  } = await import('../progression/paladin-features-service.js');
+  const { playerMessage } = await import('./story-spell-slots.js');
+  // #712 FIX round 4: a Retry replays the same saved player message without
+  // saving a new one. A usage-log row for the feature at or after that message
+  // means this message already spent it — the slot spend's `since` rule — so a
+  // replay spends nothing again.
+  const message = await playerMessage(sessionId);
+  const since = message?.createdAt ?? null;
 
   for (const name of features) {
     const key = name.toLowerCase();
     try {
+      const featureName =
+        key === DIVINE_SENSE
+          ? DIVINE_SENSE_NAME
+          : key === LAY_ON_HANDS
+            ? LAY_ON_HANDS_NAME
+            : null;
+      if (!featureName) {
+        // The gate allowed the claim, but only the two pooled paladin features
+        // spend here; anything else reaching this point is a wiring gap.
+        logger.debug({ msg: 'DM_STORY_FEATURE_SPEND_UNHANDLED', sessionId, feature: name });
+        continue;
+      }
+      if (
+        await featureSpentSinceMessage({
+          characterId: character.id,
+          featureName,
+          sessionId,
+          since,
+        })
+      ) {
+        logger.info({ msg: 'DM_STORY_FEATURE_SPEND_ALREADY_SPENT', sessionId, feature: name });
+        continue;
+      }
       if (key === DIVINE_SENSE) {
         await spendDivineSense({
           characterId: character.id,
@@ -100,10 +134,6 @@ export async function spendStoryFeatureUses(input: {
           sessionId,
           context: 'story-turn',
         });
-      } else {
-        // The gate allowed the claim, but only the two pooled paladin features
-        // spend here; anything else reaching this point is a wiring gap.
-        logger.debug({ msg: 'DM_STORY_FEATURE_SPEND_UNHANDLED', sessionId, feature: name });
       }
     } catch (error) {
       logger.warn({ msg: 'DM_STORY_FEATURE_SPEND_FAILED', sessionId, feature: name, error });
