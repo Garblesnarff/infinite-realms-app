@@ -27,12 +27,13 @@ export function useTacticalMap(sessionId: string) {
   const [aoeTemplate, setAoeTemplate] = useState<AoETemplate | null>(null);
   const frameRef = useRef<number>();
 
-  const applyDelta = useCallback((delta: TacticalDelta) => {
+  const applyDelta = useCallback((delta: TacticalDelta | null) => {
+    if (!delta) return;
     setMap((current) => applyTacticalDelta(current, delta));
-    if (delta.type === 'entity_moved' && delta.path.length > 1)
+    if (delta.type === 'entity_moved' && (delta.path?.length ?? 0) > 1)
       setAnimation({
         entityId: delta.entityId,
-        path: delta.path,
+        path: delta.path ?? [],
         step: 0,
         forced: delta.forced,
         mode: delta.mode,
@@ -75,8 +76,22 @@ export function useTacticalMap(sessionId: string) {
           | TacticalDelta
           | { type: 'tactical_action_queue'; actions: TacticalDelta[] }
           | { type: 'tactical_degraded'; text: string }
-          | { type: 'aoe_preview'; state: 'player-pending' | 'hostile-telegraph'; actorId: string; spellId: string; slotLevel: number | null; geometry: AoETemplate['geometry'] }
-          | { type: 'aoe_cast'; state: 'player-confirmed' | 'hostile-telegraph'; actorId: string; spellId: string; geometry: AoETemplate['geometry']; forcedMoves: Array<{ entityId: string; path: Point[] }> }
+          | {
+              type: 'aoe_preview';
+              state: 'player-pending' | 'hostile-telegraph';
+              actorId: string;
+              spellId: string;
+              slotLevel: number | null;
+              geometry: AoETemplate['geometry'];
+            }
+          | {
+              type: 'aoe_cast';
+              state: 'player-confirmed' | 'hostile-telegraph';
+              actorId: string;
+              spellId: string;
+              geometry: AoETemplate['geometry'];
+              forcedMoves: Array<{ entityId: string; path?: Point[] | null } | null>;
+            }
         >
       ).detail;
       if (detail.type === 'tactical_action_queue')
@@ -86,17 +101,17 @@ export function useTacticalMap(sessionId: string) {
       else if (detail.type === 'aoe_cast') {
         setAoeTemplate({ ...detail, slotLevel: null });
         for (const move of detail.forcedMoves) {
+          if (!move) continue;
           const delta: TacticalDelta = {
             type: 'entity_moved',
             entityId: move.entityId,
-            path: move.path,
+            path: move.path ?? [],
             forced: true,
             mode: 'shove',
           };
           applyDelta(delta);
         }
-      }
-      else applyDelta(detail);
+      } else applyDelta(detail);
     };
     window.addEventListener('tactical-map-delta', listener);
     return () => window.removeEventListener('tactical-map-delta', listener);

@@ -63,6 +63,14 @@ describe('applyTacticalDelta', () => {
       })?.entities[0],
     ).toMatchObject({ x: 0, y: 1 });
   });
+  it('ignores an entity_moved delta whose path is null instead of throwing (#748)', () => {
+    expect(() =>
+      applyTacticalDelta(map(), { type: 'entity_moved', entityId: 'pc', path: null }),
+    ).not.toThrow();
+    expect(applyTacticalDelta(map(), { type: 'entity_moved', entityId: 'pc', path: null })).toEqual(
+      map(),
+    );
+  });
   it('applies a cell delta without mutating adjacent cells', () => {
     const next = applyTacticalDelta(map(), {
       type: 'cell_updated',

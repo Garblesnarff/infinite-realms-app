@@ -389,6 +389,8 @@ export function resetMovement(map: TacticalMap, entityId: string): boolean {
 }
 /** Placement is the one point where an entity joins the board, so slugs are minted here. */
 export function placeEntity(map: TacticalMap, entity: MapEntity): boolean {
+  // #748: an id-less entity matches a null animation on the client and crashes the board.
+  if (typeof entity.id !== 'string' || entity.id.trim() === '') return false;
   if (getEntity(map, entity.id) || !canOccupy(map, entity, entity.x, entity.y)) return false;
   if (!entity.slug) entity.slug = nextEntitySlug(map.entities, entity);
   map.entities.push(entity);
