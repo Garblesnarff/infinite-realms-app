@@ -1,0 +1,252 @@
+./ai-adventure-scribe-main/eslint.config.js:536:      'src/services/combat/CombatSequenceValidator.ts',
+./ai-adventure-scribe-main/eslint.config.js:537:      'src/services/combat/CombatResponseValidator.ts',
+./ai-adventure-scribe-main/server-bun/src/types/combat.ts:272:export type CombatStatus = 'active' | 'paused' | 'completed';
+./ai-adventure-scribe-main/server-bun/src/types/combat.ts:326:  status: string; // CombatStatus but stored as text in DB
+./ai-adventure-scribe-main/server-bun/src/types/combat.ts:341:  status?: CombatStatus;
+./ai-adventure-scribe-main/server-bun/src/services/combat/combat-persistence-service.ts:198:export async function getCharacterCombatStatus(
+./ai-adventure-scribe-main/src/utils/context/contextValidation.ts:9:export const validateCampaignSetting = (setting: unknown) => {
+./ai-adventure-scribe-main/src/utils/context/contextValidation.ts:21:export const validateThematicElements = (elements: unknown) => {
+./ai-adventure-scribe-main/src/utils/context/contextValidation.ts:36:export const sortMemoriesByRelevance = (memories: Memory[]): Memory[] => {
+./ai-adventure-scribe-main/src/utils/context/contextValidation.ts:43:export const validateGameContext = (context: GameContext): boolean => {
+./ai-adventure-scribe-main/src/utils/context/contextEnhancement.ts:6:  validateCampaignSetting,
+./ai-adventure-scribe-main/src/utils/context/contextEnhancement.ts:7:  validateThematicElements,
+./ai-adventure-scribe-main/src/utils/context/contextEnhancement.ts:8:  sortMemoriesByRelevance,
+./ai-adventure-scribe-main/src/utils/context/contextEnhancement.ts:74:export const enhanceCampaignContext = (campaign: Campaign) => {
+./ai-adventure-scribe-main/src/utils/context/contextEnhancement.ts:75:  const setting = validateCampaignSetting(campaign.setting);
+./ai-adventure-scribe-main/src/utils/context/contextEnhancement.ts:76:  const themes = validateThematicElements(campaign.thematic_elements);
+./ai-adventure-scribe-main/src/utils/context/contextEnhancement.ts:95:export const enhanceMemoryContext = (memories: Memory[]) => {
+./ai-adventure-scribe-main/src/utils/context/contextEnhancement.ts:107:  const sortedMemories = sortMemoriesByRelevance(enhancedMemories);
+./ai-adventure-scribe-main/src/utils/context/contextEnhancement.ts:128:export const buildEnhancedGameContext = (
+./ai-adventure-scribe-main/src/utils/context/contextEnhancement.ts:176:    campaign: enhanceCampaignContext(campaignContext),
+./ai-adventure-scribe-main/src/utils/context/contextEnhancement.ts:178:    memories: enhanceMemoryContext(memories),
+./ai-adventure-scribe-main/src/utils/context/contextDefaults.ts:6:export const createDefaultContext = (): GameContext => ({
+./ai-adventure-scribe-main/src/utils/context/builder.ts:1:import { createDefaultContext } from './contextDefaults';
+./ai-adventure-scribe-main/src/utils/context/builder.ts:18:class GameContextBuilder {
+./ai-adventure-scribe-main/src/utils/context/builder.ts:55:    const context = createDefaultContext();
+./ai-adventure-scribe-main/src/utils/context/builder.ts:137:      logger.error('[GameContextBuilder] Error building context:', error);
+./ai-adventure-scribe-main/src/utils/context/builder.ts:138:      return createDefaultContext();
+./ai-adventure-scribe-main/src/utils/context/builder.ts:143:export const gameContextBuilder = new GameContextBuilder();
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:7:  enhanceCampaignContext,
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:8:  enhanceMemoryContext,
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:9:  buildEnhancedGameContext,
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:12:  validateCampaignSetting,
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:13:  validateThematicElements,
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:14:  sortMemoriesByRelevance,
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:15:  validateGameContext,
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:51:    describe('validateCampaignSetting', () => {
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:53:        expect(validateCampaignSetting(null)).toEqual({
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:58:        expect(validateCampaignSetting(undefined)).toEqual({
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:63:        expect(validateCampaignSetting('string')).toEqual({
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:76:        expect(validateCampaignSetting(input)).toEqual(input);
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:84:        expect(validateCampaignSetting(input)).toEqual({
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:92:    describe('validateThematicElements', () => {
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:100:        expect(validateThematicElements(null)).toEqual(expected);
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:101:        expect(validateThematicElements(undefined)).toEqual(expected);
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:109:        expect(validateThematicElements(input)).toEqual({
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:118:    describe('sortMemoriesByRelevance', () => {
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:125:        const sorted = sortMemoriesByRelevance(memories);
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:137:        const sorted = sortMemoriesByRelevance(memories);
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:144:    describe('validateGameContext', () => {
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:156:        expect(validateGameContext(context)).toBe(true);
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:167:        expect(validateGameContext(context)).toBe(false);
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:182:        expect(validateGameContext(context)).toBe(false);
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:196:        expect(validateGameContext(context2)).toBe(false);
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:205:        expect(validateGameContext(context)).toBe(false);
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:213:        expect(validateGameContext(context2)).toBe(false);
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:224:        expect(validateGameContext(context)).toBe(false);
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:230:    describe('enhanceCampaignContext', () => {
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:239:        const enhanced = enhanceCampaignContext(rawCampaign);
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:247:    describe('enhanceMemoryContext', () => {
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:255:        const enhanced = enhanceMemoryContext(memories);
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:265:        const enhanced = enhanceMemoryContext(memories);
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:270:    describe('buildEnhancedGameContext', () => {
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:287:        const fullContext = buildEnhancedGameContext(campaign, character, memories, quests);
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:299:        const fullContext = buildEnhancedGameContext(campaign);
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:311:        const fullContext = buildEnhancedGameContext(campaign, character);
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:326:        const fullContext = buildEnhancedGameContext(campaign, character);
+./ai-adventure-scribe-main/src/utils/context/__tests__/context-utils.test.ts:338:        const fullContext = buildEnhancedGameContext(campaign, undefined, [], quests);
+./ai-adventure-scribe-main/src/utils/context/__tests__/builder.test.ts:4:import { gameContextBuilder } from '../builder';
+./ai-adventure-scribe-main/src/utils/context/__tests__/builder.test.ts:10:// GameContextBuilder gets campaign/character/memory entities from userDataApi,
+./ai-adventure-scribe-main/src/utils/context/__tests__/builder.test.ts:72:describe('GameContextBuilder', () => {
+./ai-adventure-scribe-main/src/utils/context/__tests__/builder.test.ts:138:    const context = await gameContextBuilder.build(mockParams);
+./ai-adventure-scribe-main/src/utils/context/__tests__/builder.test.ts:153:    const contextNoStats = await gameContextBuilder.build(mockParams);
+./ai-adventure-scribe-main/src/utils/context/__tests__/builder.test.ts:165:    const contextPartial = await gameContextBuilder.build(mockParams);
+./ai-adventure-scribe-main/src/utils/context/__tests__/builder.test.ts:208:    const context = await gameContextBuilder.build(mockParams);
+./ai-adventure-scribe-main/src/utils/context/__tests__/builder.test.ts:225:    // Wait, GameContextBuilder is exported as a singleton. We can't easily mock private methods.
+./ai-adventure-scribe-main/src/utils/context/__tests__/builder.test.ts:233:    const context = await gameContextBuilder.build(mockParams);
+./ai-adventure-scribe-main/src/utils/context/__tests__/builder.test.ts:254:    const context = await gameContextBuilder.build(mockParams);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:8:import { combatSequenceValidator } from '../services/combat/CombatSequenceValidator';
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:10:import { combatAuditSystem } from '../services/combat-audit';
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:22:    combatSequenceValidator.clearAllState();
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:334:      combatSequenceValidator.clearAllState();
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:339:      combatSequenceValidator.addInitiativeEntry(combatId, 'player1', 'Ranger', 18, 3, true);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:340:      combatSequenceValidator.addInitiativeEntry(combatId, 'npc1', 'Orc Warrior', 12, 1, false);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:341:      combatSequenceValidator.addInitiativeEntry(combatId, 'player2', 'Wizard', 15, 2, true);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:342:      combatSequenceValidator.addInitiativeEntry(combatId, 'npc2', 'Goblin Scout', 16, 3, false);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:344:      const turnOrder = combatSequenceValidator.completeInitiativePhase(combatId);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:358:      combatSequenceValidator.addInitiativeEntry(combatId, 'player1', 'Fighter', 15, 1, true);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:359:      combatSequenceValidator.addInitiativeEntry(combatId, 'player2', 'Rogue', 15, 4, true);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:361:      const turnOrder = combatSequenceValidator.completeInitiativePhase(combatId);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:369:      combatSequenceValidator.addInitiativeEntry(combatId, 'player1', 'Paladin', 14, 0, true);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:370:      combatSequenceValidator.addInitiativeEntry(combatId, 'npc1', 'Dragon', 20, 2, false);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:372:      combatSequenceValidator.completeInitiativePhase(combatId);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:375:      const currentActor = combatSequenceValidator.getCurrentActor(combatId);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:380:      const nextActor = combatSequenceValidator.nextTurn(combatId);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:385:      combatSequenceValidator.addInitiativeEntry(combatId, 'player1', 'Bard', 12, 3, true);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:386:      combatSequenceValidator.addInitiativeEntry(combatId, 'player2', 'Cleric', 16, 1, true);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:388:      const turnOrder = combatSequenceValidator.completeInitiativePhase(combatId);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:394:      const currentActor = combatSequenceValidator.getCurrentActor(combatId);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:398:      const secondActor = combatSequenceValidator.nextTurn(combatId);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:402:      const newRoundActor = combatSequenceValidator.nextTurn(combatId);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:405:      const updatedTurnOrder = combatSequenceValidator.getTurnOrder(combatId);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:410:      expect(combatSequenceValidator.isCombatActive(combatId)).toBe(false);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:412:      combatSequenceValidator.addInitiativeEntry(combatId, 'player1', 'Monk', 18, 4, true);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:413:      expect(combatSequenceValidator.isCombatActive(combatId)).toBe(true);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:415:      combatSequenceValidator.endCombat(combatId);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:416:      expect(combatSequenceValidator.isCombatActive(combatId)).toBe(false);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:421:      combatSequenceValidator.addInitiativeEntry(combatId, 'player1', 'Sorcerer', 14, 2, true);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:423:      const combatValidation = combatSequenceValidator.validateCombatState(combatId, 'attack');
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:428:      combatSequenceValidator.completeInitiativePhase(combatId);
+./ai-adventure-scribe-main/src/test/combat-roll-flow.test.ts:430:      const updatedValidation = combatSequenceValidator.validateCombatState(combatId, 'attack');
+./ai-adventure-scribe-main/server-bun/src/routes/v1/combat/persistence.ts:8:  getCharacterCombatStatus,
+./ai-adventure-scribe-main/server-bun/src/routes/v1/combat/persistence.ts:128:        return await getCharacterCombatStatus(params.characterId, user.userId);
+./ai-adventure-scribe-main/server-bun/src/routes/v1/combat/__tests__/combat-persistence-http.test.ts:59:  getCharacterCombatStatus: (...args: unknown[]) => readImplementation(...args),
+./ai-adventure-scribe-main/src/components/combat/CombatStatus.tsx:28:interface CombatStatusProps {
+./ai-adventure-scribe-main/src/components/combat/CombatStatus.tsx:36:export const CombatStatus: React.FC<CombatStatusProps> = React.memo(({ className }) => {
+./ai-adventure-scribe-main/src/components/combat/__tests__/CombatStatus.test.tsx:5:import { CombatStatus } from '../CombatStatus';
+./ai-adventure-scribe-main/src/components/combat/__tests__/CombatStatus.test.tsx:19:describe('CombatStatus', () => {
+./ai-adventure-scribe-main/src/components/combat/__tests__/CombatStatus.test.tsx:40:    render(<CombatStatus />);
+./ai-adventure-scribe-main/src/components/combat/__tests__/CombatStatus.test.tsx:70:      const { unmount } = render(<CombatStatus />);
+./ai-adventure-scribe-main/src/components/combat/__tests__/CombatStatus.test.tsx:101:    render(<CombatStatus />);
+./ai-adventure-scribe-main/src/components/combat/__tests__/CombatStatus.test.tsx:144:    render(<CombatStatus />);
+./ai-adventure-scribe-main/src/components/combat/__tests__/CombatStatus.test.tsx:165:    render(<CombatStatus />);
+./ai-adventure-scribe-main/src/components/combat/__tests__/CombatStatus.test.tsx:177:    render(<CombatStatus />);
+./ai-adventure-scribe-main/src/features/game-session/components/game/use-combat-hp.ts:33:    const fetchCombatStatus = async (): Promise<void> => {
+./ai-adventure-scribe-main/src/features/game-session/components/game/use-combat-hp.ts:35:        const status = await userDataApi.getCharacterCombatStatus(characterId);
+./ai-adventure-scribe-main/src/features/game-session/components/game/use-combat-hp.ts:55:    void fetchCombatStatus();
+./ai-adventure-scribe-main/src/features/game-session/components/game/use-combat-hp.ts:56:    const interval = setInterval(() => void fetchCombatStatus(), COMBAT_STATUS_POLL_MS);
+./ai-adventure-scribe-main/src/services/user-data-api.ts:429:  getCharacterCombatStatus: (
+./ai-adventure-scribe-main/src/features/game-session/components/game/__tests__/CompactCharacterHeader.test.tsx:26:    getCharacterCombatStatus: vi.fn(),
+./ai-adventure-scribe-main/src/features/game-session/components/game/__tests__/CompactCharacterHeader.test.tsx:182:    vi.mocked(userDataApi.getCharacterCombatStatus).mockResolvedValue({
+./ai-adventure-scribe-main/src/features/game-session/components/game/__tests__/CompactCharacterHeader.test.tsx:216:    vi.mocked(userDataApi.getCharacterCombatStatus).mockResolvedValue({
+./ai-adventure-scribe-main/src/features/game-session/components/game/__tests__/CompactCharacterHeader.test.tsx:236:    expect(userDataApi.getCharacterCombatStatus).toHaveBeenCalledWith('char-realtime');
+./ai-adventure-scribe-main/src/features/game-session/components/game/__tests__/GameMainContent.test.tsx:164:vi.mock('@/components/combat/CombatStatus', () => ({
+./ai-adventure-scribe-main/src/features/game-session/components/game/__tests__/GameMainContent.test.tsx:165:  CombatStatus: () => <div>Combat status</div>,
+./ai-adventure-scribe-main/src/features/game-session/components/game/__tests__/GameLayout.composer.test.tsx:54:vi.mock('@/components/combat/CombatStatus', () => ({ CombatStatus: () => null }));
+./ai-adventure-scribe-main/src/services/combat-audit/__tests__/rules.test.ts:7:describe('combat-audit rules', () => {
+./ai-adventure-scribe-main/src/services/combat-audit/__tests__/reporter.test.ts:7:describe('combat-audit reporter', () => {
+./ai-adventure-scribe-main/src/services/combat/dm-response-patterns.ts:5: * in DM narrative text. Extracted from CombatSequenceValidator for
+./ai-adventure-scribe-main/src/services/combat/__tests__/participant-status.test.ts:30:    expect(await userDataApi.getCharacterCombatStatus('participant-1')).toEqual(statusResponse);
+./ai-adventure-scribe-main/src/services/combat/__tests__/participant-status.test.ts:41:    await expect(userDataApi.getCharacterCombatStatus('missing')).rejects.toThrow(
+./ai-adventure-scribe-main/src/services/combat/__tests__/participant-status.test.ts:48:    await expect(userDataApi.getCharacterCombatStatus('participant-1')).rejects.toThrow(
+./ai-adventure-scribe-main/src/services/combat/__tests__/dm-response-patterns.test.ts:12:} from '../dm-response-patterns';
+./ai-adventure-scribe-main/src/services/combat/__tests__/dm-response-patterns.test.ts:14:describe('dm-response-patterns', () => {
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatTurnManager.test.ts:3:import { combatAuditSystem } from '../../combat-audit';
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatTurnManager.test.ts:4:import { CombatTurnManager } from '../CombatTurnManager';
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatTurnManager.test.ts:16:vi.mock('../../combat-audit', () => ({
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatTurnManager.test.ts:23:describe('CombatTurnManager', () => {
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatTurnManager.test.ts:24:  let manager: CombatTurnManager;
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatTurnManager.test.ts:29:    manager = new CombatTurnManager();
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:3:import { combatAuditSystem } from '../../combat-audit';
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:4:import { combatSequenceValidator } from '../CombatSequenceValidator';
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:8:describe('CombatSequenceValidator', () => {
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:12:    combatSequenceValidator.clearAllState();
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:18:      combatSequenceValidator.startCombat(combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:19:      expect(combatSequenceValidator.isCombatActive(combatId)).toBe(true);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:24:      combatSequenceValidator.startCombat(combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:25:      combatSequenceValidator.endCombat(combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:27:      expect(combatSequenceValidator.isCombatActive(combatId)).toBe(false);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:32:      combatSequenceValidator.startCombat(combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:46:      combatSequenceValidator.endCombat(combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:54:      combatSequenceValidator.startCombat(combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:56:      combatSequenceValidator.recordAttackRequest(combatId, 'p1', 'Sword 1');
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:58:      const attackId = combatSequenceValidator.recordAttackRequest(combatId, 'p1', 'Sword 2');
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:59:      combatSequenceValidator.recordAttackResult(attackId, 20, 10, 'p1', 'P1'); // Awaiting damage
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:61:      expect(combatSequenceValidator.isAwaitingDamage(combatId)).toBe(true);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:63:      combatSequenceValidator.endCombat(combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:65:      expect(combatSequenceValidator.isAwaitingDamage(combatId)).toBe(false);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:73:      combatSequenceValidator.addInitiativeEntry(combatId, 'p1', 'Player 1', 15, 2);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:74:      combatSequenceValidator.addInitiativeEntry(combatId, 'p2', 'Player 2', 20, 3);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:75:      combatSequenceValidator.addInitiativeEntry(combatId, 'p3', 'Player 3', 15, 4);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:77:      const turnOrder = combatSequenceValidator.completeInitiativePhase(combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:86:      combatSequenceValidator.addInitiativeEntry(combatId, 'p1', 'Player 1', 10, 0);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:87:      combatSequenceValidator.addInitiativeEntry(combatId, 'p2', 'Player 2', 20, 0);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:88:      combatSequenceValidator.completeInitiativePhase(combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:90:      expect(combatSequenceValidator.getCurrentActor(combatId)?.actorId).toBe('p2');
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:92:      const next = combatSequenceValidator.nextTurn(combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:95:      const nextRound = combatSequenceValidator.nextTurn(combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:97:      expect(combatSequenceValidator.getTurnOrder(combatId)?.round).toBe(2);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:103:      const attackId = combatSequenceValidator.recordAttackRequest(combatId, 'p1', 'Longsword', 15);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:106:      const isHit = combatSequenceValidator.recordAttackResult(attackId, 18, 15, 'p1', 'Player 1');
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:108:      expect(combatSequenceValidator.isAwaitingDamage(combatId)).toBe(true);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:110:      const damageInfo = combatSequenceValidator.getAwaitingDamage(combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:113:      combatSequenceValidator.recordDamageRoll(attackId, 10, '1d8+2', 'p1', 'Player 1');
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:114:      expect(combatSequenceValidator.isAwaitingDamage(combatId)).toBe(false);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:118:      const attackId = combatSequenceValidator.recordAttackRequest(combatId, 'p1', 'Sword');
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:119:      combatSequenceValidator.recordAttackResult(attackId, 15, 10);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:121:      expect(combatSequenceValidator.isAwaitingDamage()).toBe(true);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:122:      expect(combatSequenceValidator.getAwaitingDamage()).not.toBeNull();
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:126:      const otherAttackId = combatSequenceValidator.recordAttackRequest(
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:131:      combatSequenceValidator.recordAttackResult(otherAttackId, 15, 10);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:132:      expect(combatSequenceValidator.isAwaitingDamage(combatId)).toBe(false);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:136:      const otherAttackId = combatSequenceValidator.recordAttackRequest(
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:141:      combatSequenceValidator.recordAttackResult(otherAttackId, 15, 10);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:142:      expect(combatSequenceValidator.getAwaitingDamage(combatId)).toBeNull();
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:149:      const result = combatSequenceValidator.validateDMResponse(response, combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:157:      const result = combatSequenceValidator.validateDMResponse(response, combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:164:      combatSequenceValidator.startCombat(combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:166:      const result = combatSequenceValidator.validateDMResponse(response, combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:174:      const result = combatSequenceValidator.validateDMResponse(response, combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:181:      const result = combatSequenceValidator.validateDMResponse(response, combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:188:      const result = combatSequenceValidator.validateDMResponse(response, combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:195:      const result = combatSequenceValidator.validateDMResponse(response);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:200:      combatSequenceValidator.addInitiativeEntry(combatId, 'p1', 'P1', 10, 0);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:201:      combatSequenceValidator.completeInitiativePhase(combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:204:      const result = combatSequenceValidator.validateDMResponse(response, combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:212:      const result = combatSequenceValidator.validateCombatState(combatId, 'attack');
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:218:      combatSequenceValidator.startCombat(combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:219:      const result = combatSequenceValidator.validateCombatState(combatId, 'attack');
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:225:      combatSequenceValidator.startCombat(combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:226:      combatSequenceValidator.addInitiativeEntry(combatId, 'p1', 'P1', 10, 0);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:227:      combatSequenceValidator.completeInitiativePhase(combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:229:      const result = combatSequenceValidator.validateCombatState(combatId, 'attack');
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:234:      combatSequenceValidator.startCombat(combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:237:      ((combatSequenceValidator as any).turnManager as any).initiativeRolled.add(combatId);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:238:      const result = combatSequenceValidator.validateCombatState(combatId, 'attack');
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:246:      combatSequenceValidator.addInitiativeEntry(combatId, 'p1', 'P1', 10, 0);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:247:      expect(combatSequenceValidator.isInitiativeComplete(combatId, ['p1'])).toBe(true);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:248:      expect(combatSequenceValidator.isInitiativeComplete(combatId, ['p1', 'p2'])).toBe(false);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:252:      const suggestion = combatSequenceValidator.getSuggestion('Roll 1d8 damage');
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatSequenceValidator.test.ts:257:      const suggestion = combatSequenceValidator.getSuggestion('Hello');
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatResponseValidator.test.ts:4:import { CombatResponseValidator, type CombatStateProvider } from '../CombatResponseValidator';
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatResponseValidator.test.ts:6:describe('CombatResponseValidator', () => {
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatResponseValidator.test.ts:7:  let validator: CombatResponseValidator;
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatResponseValidator.test.ts:18:    validator = new CombatResponseValidator(mockStateProvider);
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatActionTracker.test.ts:4:import { combatAuditSystem } from '../../combat-audit';
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatActionTracker.test.ts:5:import { CombatActionTracker } from '../CombatActionTracker';
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatActionTracker.test.ts:9:vi.mock('../../combat-audit', () => ({
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatActionTracker.test.ts:24:describe('CombatActionTracker', () => {
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatActionTracker.test.ts:25:  let tracker: CombatActionTracker;
+./ai-adventure-scribe-main/src/services/combat/__tests__/CombatActionTracker.test.ts:31:    tracker = new CombatActionTracker();
+./ai-adventure-scribe-main/src/services/combat/CombatTurnManager.ts:1:import { combatAuditSystem } from '../combat-audit';
+./ai-adventure-scribe-main/src/services/combat/CombatTurnManager.ts:22:export class CombatTurnManager {
+./ai-adventure-scribe-main/src/services/combat/CombatSequenceValidator.ts:7:import { combatAuditSystem } from '../combat-audit';
+./ai-adventure-scribe-main/src/services/combat/CombatSequenceValidator.ts:8:import { CombatActionTracker } from './CombatActionTracker';
+./ai-adventure-scribe-main/src/services/combat/CombatSequenceValidator.ts:10:  CombatResponseValidator,
+./ai-adventure-scribe-main/src/services/combat/CombatSequenceValidator.ts:14:} from './CombatResponseValidator';
+./ai-adventure-scribe-main/src/services/combat/CombatSequenceValidator.ts:15:import { CombatTurnManager, type InitiativeEntry, type TurnOrder } from './CombatTurnManager';
+./ai-adventure-scribe-main/src/services/combat/CombatSequenceValidator.ts:33:export class CombatSequenceValidator implements CombatStateProvider {
+./ai-adventure-scribe-main/src/services/combat/CombatSequenceValidator.ts:34:  private static instance: CombatSequenceValidator;
+./ai-adventure-scribe-main/src/services/combat/CombatSequenceValidator.ts:35:  private turnManager: CombatTurnManager = new CombatTurnManager();
+./ai-adventure-scribe-main/src/services/combat/CombatSequenceValidator.ts:36:  private actionTracker: CombatActionTracker = new CombatActionTracker();
+./ai-adventure-scribe-main/src/services/combat/CombatSequenceValidator.ts:37:  private responseValidator: CombatResponseValidator;
+./ai-adventure-scribe-main/src/services/combat/CombatSequenceValidator.ts:44:    this.responseValidator = new CombatResponseValidator(this);
+./ai-adventure-scribe-main/src/services/combat/CombatSequenceValidator.ts:47:  static getInstance(): CombatSequenceValidator {
+./ai-adventure-scribe-main/src/services/combat/CombatSequenceValidator.ts:48:    if (!CombatSequenceValidator.instance) {
+./ai-adventure-scribe-main/src/services/combat/CombatSequenceValidator.ts:49:      CombatSequenceValidator.instance = new CombatSequenceValidator();
+./ai-adventure-scribe-main/src/services/combat/CombatSequenceValidator.ts:51:    return CombatSequenceValidator.instance;
+./ai-adventure-scribe-main/src/services/combat/CombatSequenceValidator.ts:346:export const combatSequenceValidator = CombatSequenceValidator.getInstance();
+./ai-adventure-scribe-main/src/services/combat/CombatResponseValidator.ts:10:} from '@/services/combat/dm-response-patterns';
+./ai-adventure-scribe-main/src/services/combat/CombatResponseValidator.ts:42:export class CombatResponseValidator {
+./ai-adventure-scribe-main/src/services/combat/CombatActionTracker.ts:1:import { combatAuditSystem } from '../combat-audit';
+./ai-adventure-scribe-main/src/services/combat/CombatActionTracker.ts:20:export class CombatActionTracker {

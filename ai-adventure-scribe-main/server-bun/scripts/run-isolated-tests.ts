@@ -53,12 +53,12 @@ function parseCounts(output: string): TestCounts {
   };
 }
 
-const files = Array.from(new Bun.Glob('src/**/*.test.ts').scanSync({ cwd: process.cwd() }))
+const files = Array.from(new Bun.Glob('src/**/*.test.{ts,tsx}').scanSync({ cwd: process.cwd() }))
   .filter((file) => !isAppleDoubleSidecar(file))
   .sort();
 
 if (files.length === 0) {
-  throw new Error('server-vitest isolated runner found no src/**/*.test.ts files');
+  throw new Error('server-vitest isolated runner found no src/**/*.test.{ts,tsx} files');
 }
 
 const total = emptyCounts();
@@ -71,7 +71,8 @@ const failures: Array<{ file: string; output: string }> = [];
 // behaviour, so a local run is unchanged unless asked. CI sets 4 (the hosted
 // runner has 4 cores) and cut the step from ~32s to ~10s.
 const parsedConcurrency = Number.parseInt(process.env.ISOLATED_TEST_CONCURRENCY ?? '1', 10);
-const concurrency = Number.isFinite(parsedConcurrency) && parsedConcurrency > 0 ? parsedConcurrency : 1;
+const concurrency =
+  Number.isFinite(parsedConcurrency) && parsedConcurrency > 0 ? parsedConcurrency : 1;
 
 async function runFile(file: string): Promise<void> {
   const proc = Bun.spawn({
@@ -96,8 +97,12 @@ async function runFile(file: string): Promise<void> {
   total.files += counts.files;
 
   const hasUnhandledError = /Unhandled error(?: between tests)?|error between tests/i.test(output);
-  if (exitCode !== 0 || counts.fail > 0 || counts.error > 0 || hasUnhandledError) {
-    failures.push({ file, output });
+  const missingTests = counts.tests === 0 || counts.files !== 1;
+  if (exitCode !== 0 || counts.fail > 0 || counts.error > 0 || hasUnhandledError || missingTests) {
+    const reason = missingTests
+      ? `\n${file} did not report any tests from exactly one file (reported ${counts.tests} tests across ${counts.files} files).\n`
+      : '';
+    failures.push({ file, output: `${reason}${output}` });
   }
 }
 

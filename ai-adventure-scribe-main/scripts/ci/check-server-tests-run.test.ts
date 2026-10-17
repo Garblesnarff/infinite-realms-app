@@ -17,7 +17,7 @@ import {
   usesDescribeWithDb,
 } from './check-server-tests-run.mjs';
 
-const ISOLATED = 'src/**/*.test.ts';
+const ISOLATED = 'src/**/*.test.{ts,tsx}';
 const VITEST = ['src/**/*.vitest.ts'];
 const REAL_DB = 'src/spell-slot-single-source.real-db.test.ts';
 
@@ -35,7 +35,13 @@ const compare = (over: Record<string, unknown> = {}): { unrun: string[] } =>
 describe('compareServerTestsRun', () => {
   it('covers an ordinary test by the isolated glob and a vitest file by vitest include', () => {
     const result = compare({
-      onDisk: ['src/rules.test.ts', 'src/slots.vitest.ts', REAL_DB, 'scripts/orphan.test.ts'],
+      onDisk: [
+        'src/rules.test.ts',
+        'src/view.test.tsx',
+        'src/slots.vitest.ts',
+        REAL_DB,
+        'scripts/orphan.test.ts',
+      ],
       explicitPaths: [REAL_DB],
     });
 
@@ -67,6 +73,12 @@ describe('compareServerTestsRun', () => {
     );
   });
 
+  it('reports a TSX test when the runner only discovers TypeScript files', () => {
+    expect(
+      compare({ onDisk: ['src/view.test.tsx'], isolatedGlob: 'src/**/*.test.ts' }).unrun,
+    ).toEqual(['src/view.test.tsx']);
+  });
+
   it('does not treat a describeWithDb file as run by the isolated suite', () => {
     const pg = 'src/campaign-monster-resolution.pg.test.ts';
     expect(compare({ onDisk: [pg], skippedWithoutDb: [pg] }).unrun).toEqual([pg]);
@@ -85,6 +97,8 @@ describe('compareServerTestsRun', () => {
 describe('matchSimpleGlob', () => {
   it('matches a file under the directory and rejects a different suffix and a dotfile', () => {
     expect(matchSimpleGlob('src/rules.test.ts', ISOLATED)).toBe(true);
+    expect(matchSimpleGlob('src/view.test.tsx', ISOLATED)).toBe(true);
+    expect(matchSimpleGlob('src/view.test.tsxx', ISOLATED)).toBe(false);
     expect(matchSimpleGlob('src/slots.vitest.ts', ISOLATED)).toBe(false);
     expect(matchSimpleGlob('src/._rules.test.ts', ISOLATED)).toBe(false);
   });
@@ -187,6 +201,7 @@ describe('collectServerTestFiles', () => {
       mkdirSync(path.join(root, 'src'), { recursive: true });
       mkdirSync(path.join(root, 'scripts'), { recursive: true });
       writeFileSync(path.join(root, 'src', 'rules.test.ts'), '');
+      writeFileSync(path.join(root, 'src', 'view.test.tsx'), '');
       writeFileSync(path.join(root, 'src', 'slots.vitest.ts'), '');
       writeFileSync(path.join(root, 'src', '._rules.test.ts'), '');
       writeFileSync(path.join(root, 'scripts', 'orphan.test.ts'), '');
@@ -198,6 +213,7 @@ describe('collectServerTestFiles', () => {
         'scripts/orphan.test.ts',
         'src/rules.test.ts',
         'src/slots.vitest.ts',
+        'src/view.test.tsx',
       ]);
     } finally {
       rmSync(root, { recursive: true, force: true });

@@ -177,13 +177,16 @@ jobs:
         working-directory: ai-adventure-scribe-main/server-bun
       - if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: bun run lint
-      # The guard above is only trustworthy if its comparison function is tested,
-      # and scripts/ is outside every test glob (vitest includes src/**, tests/**
-      # and cli/src/** only), so this file is run explicitly. Same reason
-      # security-lint.test.ts has never run in CI -- see the T09 audit note.
-      - name: Test-list guard unit tests
+      # Bun suites outside the server runner need an explicit owner; these paths
+      # are outside frontend Vitest discovery and import bun:test.
+      - name: Guard, shared utility and offline pilot tests
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: bun test scripts/ci/check-real-db-test-list.test.ts scripts/ci/run-real-db-suites.test.ts scripts/ci/check-server-tests-run.test.ts scripts/ci/check-landing-preload.test.ts
+        run: >-
+          bun test scripts/ci/check-real-db-test-list.test.ts
+          scripts/ci/run-real-db-suites.test.ts scripts/ci/check-server-tests-run.test.ts
+          scripts/ci/check-landing-preload.test.ts scripts/security-lint.test.ts
+          shared/auth/headless-auth.test.ts shared/__tests__/bounded-integer.test.ts
+          tools/jev-pilot/src/
         working-directory: ai-adventure-scribe-main
       # Server typecheck gate (#2313). Runs tsc over the server program and
       # fails on any error in a file not quarantined in

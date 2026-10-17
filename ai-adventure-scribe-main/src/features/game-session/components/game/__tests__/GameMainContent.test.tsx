@@ -161,9 +161,6 @@ vi.mock('../StatsBar', () => ({ StatsBar: () => <div>Stats</div> }));
 vi.mock('../../tactical/TacticalMapBoard', () => ({
   TacticalMapBoard: () => <div data-testid="tactical-map-board" />,
 }));
-vi.mock('@/components/combat/CombatStatus', () => ({
-  CombatStatus: () => <div>Combat status</div>,
-}));
 vi.mock('@/components/safety/SafetyBanner', () => ({ SafetyBanner: () => <div>Safety</div> }));
 // #2456: DeathScreen uses useNavigate; mock it for terminal-state tests.
 vi.mock('react-router-dom', () => ({

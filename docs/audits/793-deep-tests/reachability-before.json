@@ -1,0 +1,398 @@
+{
+  "baseline": "dff923b19e47813be84d971d0bfcb28b7acf8b50",
+  "roots": [
+    "src/main.tsx",
+    "src/blog-client.ts",
+    "src/landing-client.ts",
+    "src/workers/vision-worker.ts",
+    "src/workers/kokoro-worker.ts",
+    "server-bun/src/index.ts",
+    "cli/src/index.ts"
+  ],
+  "files": 2688,
+  "reachable": 1357,
+  "deletions": [
+    {
+      "file": "src/components/combat/CombatStatus.tsx",
+      "isTest": false,
+      "reachable": false,
+      "inbound": [
+        {
+          "file": "src/components/combat/__tests__/CombatStatus.test.tsx",
+          "isTest": true,
+          "reachable": false
+        }
+      ]
+    },
+    {
+      "file": "src/components/combat/__tests__/CombatStatus.test.tsx",
+      "isTest": true,
+      "reachable": false,
+      "inbound": []
+    },
+    {
+      "file": "src/services/combat-audit/__tests__/CombatAuditSystem.test.ts",
+      "isTest": true,
+      "reachable": false,
+      "inbound": []
+    },
+    {
+      "file": "src/services/combat-audit/__tests__/reporter.test.ts",
+      "isTest": true,
+      "reachable": false,
+      "inbound": []
+    },
+    {
+      "file": "src/services/combat-audit/__tests__/rules.test.ts",
+      "isTest": true,
+      "reachable": false,
+      "inbound": []
+    },
+    {
+      "file": "src/services/combat-audit/index.ts",
+      "isTest": false,
+      "reachable": false,
+      "inbound": [
+        {
+          "file": "src/services/combat-audit/__tests__/CombatAuditSystem.test.ts",
+          "isTest": true,
+          "reachable": false
+        },
+        {
+          "file": "src/services/combat/CombatActionTracker.ts",
+          "isTest": false,
+          "reachable": false
+        },
+        {
+          "file": "src/services/combat/CombatSequenceValidator.ts",
+          "isTest": false,
+          "reachable": false
+        },
+        {
+          "file": "src/services/combat/CombatTurnManager.ts",
+          "isTest": false,
+          "reachable": false
+        },
+        {
+          "file": "src/services/combat/__tests__/CombatActionTracker.test.ts",
+          "isTest": true,
+          "reachable": false
+        },
+        {
+          "file": "src/services/combat/__tests__/CombatSequenceValidator.test.ts",
+          "isTest": true,
+          "reachable": false
+        },
+        {
+          "file": "src/services/combat/__tests__/CombatTurnManager.test.ts",
+          "isTest": true,
+          "reachable": false
+        },
+        {
+          "file": "src/test/combat-roll-flow.test.ts",
+          "isTest": true,
+          "reachable": false
+        }
+      ]
+    },
+    {
+      "file": "src/services/combat-audit/reporter.ts",
+      "isTest": false,
+      "reachable": false,
+      "inbound": [
+        {
+          "file": "src/services/combat-audit/__tests__/reporter.test.ts",
+          "isTest": true,
+          "reachable": false
+        },
+        {
+          "file": "src/services/combat-audit/index.ts",
+          "isTest": false,
+          "reachable": false
+        }
+      ]
+    },
+    {
+      "file": "src/services/combat-audit/rules.ts",
+      "isTest": false,
+      "reachable": false,
+      "inbound": [
+        {
+          "file": "src/services/combat-audit/__tests__/rules.test.ts",
+          "isTest": true,
+          "reachable": false
+        },
+        {
+          "file": "src/services/combat-audit/index.ts",
+          "isTest": false,
+          "reachable": false
+        }
+      ]
+    },
+    {
+      "file": "src/services/combat-audit/types.ts",
+      "isTest": false,
+      "reachable": false,
+      "inbound": [
+        {
+          "file": "src/services/combat-audit/__tests__/reporter.test.ts",
+          "isTest": true,
+          "reachable": false
+        },
+        {
+          "file": "src/services/combat-audit/__tests__/rules.test.ts",
+          "isTest": true,
+          "reachable": false
+        },
+        {
+          "file": "src/services/combat-audit/index.ts",
+          "isTest": false,
+          "reachable": false
+        },
+        {
+          "file": "src/services/combat-audit/reporter.ts",
+          "isTest": false,
+          "reachable": false
+        },
+        {
+          "file": "src/services/combat-audit/rules.ts",
+          "isTest": false,
+          "reachable": false
+        }
+      ]
+    },
+    {
+      "file": "src/services/combat/CombatActionTracker.ts",
+      "isTest": false,
+      "reachable": false,
+      "inbound": [
+        {
+          "file": "src/services/combat/CombatSequenceValidator.ts",
+          "isTest": false,
+          "reachable": false
+        },
+        {
+          "file": "src/services/combat/__tests__/CombatActionTracker.test.ts",
+          "isTest": true,
+          "reachable": false
+        }
+      ]
+    },
+    {
+      "file": "src/services/combat/CombatResponseValidator.ts",
+      "isTest": false,
+      "reachable": false,
+      "inbound": [
+        {
+          "file": "src/services/combat/CombatSequenceValidator.ts",
+          "isTest": false,
+          "reachable": false
+        },
+        {
+          "file": "src/services/combat/__tests__/CombatResponseValidator.test.ts",
+          "isTest": true,
+          "reachable": false
+        }
+      ]
+    },
+    {
+      "file": "src/services/combat/CombatSequenceValidator.ts",
+      "isTest": false,
+      "reachable": false,
+      "inbound": [
+        {
+          "file": "src/services/combat/__tests__/CombatSequenceValidator.test.ts",
+          "isTest": true,
+          "reachable": false
+        },
+        {
+          "file": "src/test/combat-roll-flow.test.ts",
+          "isTest": true,
+          "reachable": false
+        }
+      ]
+    },
+    {
+      "file": "src/services/combat/CombatTurnManager.ts",
+      "isTest": false,
+      "reachable": false,
+      "inbound": [
+        {
+          "file": "src/services/combat/CombatSequenceValidator.ts",
+          "isTest": false,
+          "reachable": false
+        },
+        {
+          "file": "src/services/combat/__tests__/CombatTurnManager.test.ts",
+          "isTest": true,
+          "reachable": false
+        }
+      ]
+    },
+    {
+      "file": "src/services/combat/__tests__/CombatActionTracker.test.ts",
+      "isTest": true,
+      "reachable": false,
+      "inbound": []
+    },
+    {
+      "file": "src/services/combat/__tests__/CombatResponseValidator.test.ts",
+      "isTest": true,
+      "reachable": false,
+      "inbound": []
+    },
+    {
+      "file": "src/services/combat/__tests__/CombatSequenceValidator.test.ts",
+      "isTest": true,
+      "reachable": false,
+      "inbound": []
+    },
+    {
+      "file": "src/services/combat/__tests__/CombatTurnManager.test.ts",
+      "isTest": true,
+      "reachable": false,
+      "inbound": []
+    },
+    {
+      "file": "src/services/combat/__tests__/dm-response-patterns.test.ts",
+      "isTest": true,
+      "reachable": false,
+      "inbound": []
+    },
+    {
+      "file": "src/services/combat/dm-response-patterns.ts",
+      "isTest": false,
+      "reachable": false,
+      "inbound": [
+        {
+          "file": "src/services/combat/CombatResponseValidator.ts",
+          "isTest": false,
+          "reachable": false
+        },
+        {
+          "file": "src/services/combat/__tests__/dm-response-patterns.test.ts",
+          "isTest": true,
+          "reachable": false
+        }
+      ]
+    },
+    {
+      "file": "src/utils/context/__tests__/builder.test.ts",
+      "isTest": true,
+      "reachable": false,
+      "inbound": []
+    },
+    {
+      "file": "src/utils/context/__tests__/context-utils.test.ts",
+      "isTest": true,
+      "reachable": false,
+      "inbound": []
+    },
+    {
+      "file": "src/utils/context/builder.ts",
+      "isTest": false,
+      "reachable": false,
+      "inbound": [
+        {
+          "file": "src/utils/context/__tests__/builder.test.ts",
+          "isTest": true,
+          "reachable": false
+        },
+        {
+          "file": "src/utils/context/__tests__/context-utils.test.ts",
+          "isTest": true,
+          "reachable": false
+        },
+        {
+          "file": "src/utils/context/__tests__/no-dead-barrel-509.test.ts",
+          "isTest": true,
+          "reachable": false
+        }
+      ]
+    },
+    {
+      "file": "src/utils/context/contextDefaults.ts",
+      "isTest": false,
+      "reachable": false,
+      "inbound": [
+        {
+          "file": "src/utils/context/__tests__/no-dead-barrel-509.test.ts",
+          "isTest": true,
+          "reachable": false
+        },
+        {
+          "file": "src/utils/context/builder.ts",
+          "isTest": false,
+          "reachable": false
+        }
+      ]
+    },
+    {
+      "file": "src/utils/context/contextEnhancement.ts",
+      "isTest": false,
+      "reachable": false,
+      "inbound": [
+        {
+          "file": "src/utils/context/__tests__/context-utils.test.ts",
+          "isTest": true,
+          "reachable": false
+        },
+        {
+          "file": "src/utils/context/__tests__/no-dead-barrel-509.test.ts",
+          "isTest": true,
+          "reachable": false
+        }
+      ]
+    },
+    {
+      "file": "src/utils/context/contextValidation.ts",
+      "isTest": false,
+      "reachable": false,
+      "inbound": [
+        {
+          "file": "src/utils/context/__tests__/context-utils.test.ts",
+          "isTest": true,
+          "reachable": false
+        },
+        {
+          "file": "src/utils/context/__tests__/no-dead-barrel-509.test.ts",
+          "isTest": true,
+          "reachable": false
+        },
+        {
+          "file": "src/utils/context/contextEnhancement.ts",
+          "isTest": false,
+          "reachable": false
+        }
+      ]
+    }
+  ],
+  "productionNonliteral": [
+    {
+      "source": "tools/jev-pilot/src/regex-checker.ts",
+      "expression": "import(filePath)"
+    }
+  ],
+  "productionUnresolved": [
+    {
+      "source": "docs/examples/db/example-queries.ts",
+      "spec": "./client"
+    },
+    {
+      "source": "docs/examples/db/example-queries.ts",
+      "spec": "./schema"
+    },
+    {
+      "source": "server-bun/src/services/combat/tactical-action-service.ts",
+      "spec": "../../../../node_modules/drizzle-orm/index.js"
+    },
+    {
+      "source": "server-bun/src/services/combat/tactical-map-store.ts",
+      "spec": "../../../../node_modules/drizzle-orm/index.js"
+    },
+    {
+      "source": "src/hooks/use-ai-response.ts",
+      "spec": "../../../server-bun/src/tactical/types"
+    }
+  ]
+}

@@ -1,0 +1,161 @@
+Retained baseline test cases: 74
+Removed obsolete cases: 159
+src/components/combat/__tests__/CombatStatus.test.tsx > CombatStatus > displays active participant info when in combat with accessibility labels
+src/components/combat/__tests__/CombatStatus.test.tsx > CombatStatus > displays different phases correctly
+src/components/combat/__tests__/CombatStatus.test.tsx > CombatStatus > displays pending rolls count with accessibility label
+src/components/combat/__tests__/CombatStatus.test.tsx > CombatStatus > handles unknown phase
+src/components/combat/__tests__/CombatStatus.test.tsx > CombatStatus > renders exploration phase by default with accessibility attributes
+src/components/combat/__tests__/CombatStatus.test.tsx > CombatStatus > renders health label Health: 20 of 20 for active turn participant
+src/services/combat-audit/__tests__/CombatAuditSystem.test.ts > CombatAuditSystem > endCombatAudit > should end the audit and return final report
+src/services/combat-audit/__tests__/CombatAuditSystem.test.ts > CombatAuditSystem > generateAuditReport > should calculate lower compliance score for violations
+src/services/combat-audit/__tests__/CombatAuditSystem.test.ts > CombatAuditSystem > generateAuditReport > should generate a report with compliance score
+src/services/combat-audit/__tests__/CombatAuditSystem.test.ts > CombatAuditSystem > recordAction > should record an action and trigger validation
+src/services/combat-audit/__tests__/CombatAuditSystem.test.ts > CombatAuditSystem > recordAction > should record initiative and not flag it
+src/services/combat-audit/__tests__/CombatAuditSystem.test.ts > CombatAuditSystem > should be a singleton
+src/services/combat-audit/__tests__/CombatAuditSystem.test.ts > CombatAuditSystem > startCombatAudit > should initialize audit data for a combat encounter
+src/services/combat-audit/__tests__/reporter.test.ts > combat-audit reporter > should calculate compliance score based on violation severity
+src/services/combat-audit/__tests__/reporter.test.ts > combat-audit reporter > should generate a report with no violations
+src/services/combat-audit/__tests__/reporter.test.ts > combat-audit reporter > should generate correct recommendations based on violations
+src/services/combat-audit/__tests__/reporter.test.ts > combat-audit reporter > should handle empty actions list
+src/services/combat-audit/__tests__/reporter.test.ts > combat-audit reporter > should handle ongoing combat with no end time
+src/services/combat-audit/__tests__/rules.test.ts > combat-audit rules > Rule 1: Initiative must be rolled first > should flag a violation if first action is not initiative
+src/services/combat-audit/__tests__/rules.test.ts > combat-audit rules > Rule 1: Initiative must be rolled first > should not flag if action is pre-combat
+src/services/combat-audit/__tests__/rules.test.ts > combat-audit rules > Rule 1: Initiative must be rolled first > should not flag if initiative was already rolled
+src/services/combat-audit/__tests__/rules.test.ts > combat-audit rules > Rule 2: Damage rolls must follow successful attack > should flag damage after failed attack
+src/services/combat-audit/__tests__/rules.test.ts > combat-audit rules > Rule 2: Damage rolls must follow successful attack > should flag damage without attack
+src/services/combat-audit/__tests__/rules.test.ts > combat-audit rules > Rule 2: Damage rolls must follow successful attack > should not flag damage after successful attack
+src/services/combat-audit/__tests__/rules.test.ts > combat-audit rules > Rule 3: Attack rolls must specify target AC > should flag missing target AC
+src/services/combat-audit/__tests__/rules.test.ts > combat-audit rules > Rule 4: Saving throws must specify DC > should flag missing DC
+src/services/combat-audit/__tests__/rules.test.ts > combat-audit rules > Rule 5 & 6: Dice Formula Validation > should accept valid complex formulas
+src/services/combat-audit/__tests__/rules.test.ts > combat-audit rules > Rule 5 & 6: Dice Formula Validation > should flag invalid formula
+src/services/combat-audit/__tests__/rules.test.ts > combat-audit rules > Rule 5 & 6: Dice Formula Validation > should flag missing modifiers for attack rolls
+src/services/combat/__tests__/CombatActionTracker.test.ts > CombatActionTracker > Cleanup > clearActionState should only clear state for specific combat
+src/services/combat/__tests__/CombatActionTracker.test.ts > CombatActionTracker > Cleanup > clearAllState should clear everything
+src/services/combat/__tests__/CombatActionTracker.test.ts > CombatActionTracker > State checks > getAwaitingDamage should return first awaiting damage info
+src/services/combat/__tests__/CombatActionTracker.test.ts > CombatActionTracker > State checks > getAwaitingDamage should work without combatId
+src/services/combat/__tests__/CombatActionTracker.test.ts > CombatActionTracker > State checks > hasPendingAttack should work with and without combatId
+src/services/combat/__tests__/CombatActionTracker.test.ts > CombatActionTracker > State checks > isAwaitingDamage should work with and without combatId
+src/services/combat/__tests__/CombatActionTracker.test.ts > CombatActionTracker > recordAttackRequest > should record an attack request and return an attackId
+src/services/combat/__tests__/CombatActionTracker.test.ts > CombatActionTracker > recordAttackResult > should handle critical hits
+src/services/combat/__tests__/CombatActionTracker.test.ts > CombatActionTracker > recordAttackResult > should record a hit and set awaiting damage
+src/services/combat/__tests__/CombatActionTracker.test.ts > CombatActionTracker > recordAttackResult > should record a miss and not set awaiting damage
+src/services/combat/__tests__/CombatActionTracker.test.ts > CombatActionTracker > recordAttackResult > should return false if attackId is not found
+src/services/combat/__tests__/CombatActionTracker.test.ts > CombatActionTracker > recordAttackResult > should return false if targetAC is missing and not provided in result
+src/services/combat/__tests__/CombatActionTracker.test.ts > CombatActionTracker > recordAttackResult > should use provided targetAC over recorded one
+src/services/combat/__tests__/CombatActionTracker.test.ts > CombatActionTracker > recordDamageRoll > should handle missing formula
+src/services/combat/__tests__/CombatActionTracker.test.ts > CombatActionTracker > recordDamageRoll > should not record action if no damageInfo found
+src/services/combat/__tests__/CombatActionTracker.test.ts > CombatActionTracker > recordDamageRoll > should record damage and clear awaiting state
+src/services/combat/__tests__/CombatResponseValidator.test.ts > CombatResponseValidator > Attack Request Validation > should be valid when attack is requested with target AC
+src/services/combat/__tests__/CombatResponseValidator.test.ts > CombatResponseValidator > Attack Request Validation > should return error when attack is requested without target AC
+src/services/combat/__tests__/CombatResponseValidator.test.ts > CombatResponseValidator > Combat Start Validation > should be valid when combat starts and initiative has been rolled
+src/services/combat/__tests__/CombatResponseValidator.test.ts > CombatResponseValidator > Combat Start Validation > should return error when combat starts without initiative being rolled
+src/services/combat/__tests__/CombatResponseValidator.test.ts > CombatResponseValidator > Damage Request Validation > should be valid when damage is requested with modifier
+src/services/combat/__tests__/CombatResponseValidator.test.ts > CombatResponseValidator > Damage Request Validation > should return warning when damage is requested without modifier
+src/services/combat/__tests__/CombatResponseValidator.test.ts > CombatResponseValidator > Direct Damage Validation > should be valid when direct damage is detected and there is a pending attack
+src/services/combat/__tests__/CombatResponseValidator.test.ts > CombatResponseValidator > Direct Damage Validation > should return error when direct damage is detected without a pending attack
+src/services/combat/__tests__/CombatResponseValidator.test.ts > CombatResponseValidator > Next Action and Suggested Response > should provide suggested response for errors
+src/services/combat/__tests__/CombatResponseValidator.test.ts > CombatResponseValidator > Next Action and Suggested Response > should suggest requesting damage when awaiting damage
+src/services/combat/__tests__/CombatResponseValidator.test.ts > CombatResponseValidator > Next Action and Suggested Response > should suggest requesting initiative when needed
+src/services/combat/__tests__/CombatResponseValidator.test.ts > CombatResponseValidator > Sequence Validation > should be valid when action is attempted and initiative is complete
+src/services/combat/__tests__/CombatResponseValidator.test.ts > CombatResponseValidator > Sequence Validation > should return error when action is attempted before initiative is complete
+src/services/combat/__tests__/CombatResponseValidator.test.ts > CombatResponseValidator > Skill Check Validation > should be valid when skill check is requested with DC
+src/services/combat/__tests__/CombatResponseValidator.test.ts > CombatResponseValidator > Skill Check Validation > should return error when skill check is requested without DC
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > Attack and Damage Sequencing > getAwaitingDamage should return null if no attacks for combatId
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > Attack and Damage Sequencing > isAwaitingDamage should return false if no attacks for combatId
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > Attack and Damage Sequencing > should handle undefined combatId in awaiting damage checks
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > Attack and Damage Sequencing > should track attack and awaiting damage state
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > Combat Lifecycle > should clean up pending attacks and damage on end combat
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > Combat Lifecycle > should end combat correctly and generate audit report
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > Combat Lifecycle > should log violations when ending combat
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > Combat Lifecycle > should start combat correctly
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > DM Response Validation > should detect action before initiative is complete
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > DM Response Validation > should detect missing AC in attack request
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > DM Response Validation > should detect missing DC in skill check
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > DM Response Validation > should detect missing attack roll when damage is requested
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > DM Response Validation > should detect missing initiative when combat starts
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > DM Response Validation > should detect missing modifier in damage request
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > DM Response Validation > should handle undefined combatId in validateDMResponse
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > DM Response Validation > should validate correctly when all info is present
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > Helper methods > getSuggestion should return null for valid response
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > Helper methods > getSuggestion should return suggestion for errors
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > Helper methods > isInitiativeComplete should work correctly
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > Initiative and Turn Order > should handle turn advancement and rounds
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > Initiative and Turn Order > should track initiative entries and sort them correctly
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > validateCombatState > should return invalid if combat is not active
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > validateCombatState > should return invalid if initiative is not complete
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > validateCombatState > should return invalid if turnOrder is missing even if initiativeRolled is true
+src/services/combat/__tests__/CombatSequenceValidator.test.ts > CombatSequenceValidator > validateCombatState > should return valid if initiative is complete
+src/services/combat/__tests__/CombatTurnManager.test.ts > CombatTurnManager > addInitiativeEntry > should add a new initiative entry and start audit if it is the first entry
+src/services/combat/__tests__/CombatTurnManager.test.ts > CombatTurnManager > addInitiativeEntry > should replace an existing entry for the same actor (re-roll)
+src/services/combat/__tests__/CombatTurnManager.test.ts > CombatTurnManager > completeInitiativePhase > should return null if no entries exist for the combat
+src/services/combat/__tests__/CombatTurnManager.test.ts > CombatTurnManager > completeInitiativePhase > should sort entries by initiative descending
+src/services/combat/__tests__/CombatTurnManager.test.ts > CombatTurnManager > completeInitiativePhase > should use dexModifier as a tiebreaker for equal initiative
+src/services/combat/__tests__/CombatTurnManager.test.ts > CombatTurnManager > isInitiativeComplete > should return false when no initiative entries exist for the combat
+src/services/combat/__tests__/CombatTurnManager.test.ts > CombatTurnManager > isInitiativeComplete > should return false when some expected actors are missing
+src/services/combat/__tests__/CombatTurnManager.test.ts > CombatTurnManager > isInitiativeComplete > should return true when all expected actors have rolled
+src/services/combat/__tests__/CombatTurnManager.test.ts > CombatTurnManager > state clearing > should clear all state
+src/services/combat/__tests__/CombatTurnManager.test.ts > CombatTurnManager > state clearing > should clear state for a specific encounter
+src/services/combat/__tests__/CombatTurnManager.test.ts > CombatTurnManager > turn management > should advance to next turn
+src/services/combat/__tests__/CombatTurnManager.test.ts > CombatTurnManager > turn management > should get current actor
+src/services/combat/__tests__/CombatTurnManager.test.ts > CombatTurnManager > turn management > should return null for current actor if initiative is not complete
+src/services/combat/__tests__/CombatTurnManager.test.ts > CombatTurnManager > turn management > should return null for current actor if turn index is out of bounds
+src/services/combat/__tests__/CombatTurnManager.test.ts > CombatTurnManager > turn management > should return null for next turn if turn order is missing
+src/services/combat/__tests__/CombatTurnManager.test.ts > CombatTurnManager > turn management > should start a new round after all actors have gone
+src/services/combat/__tests__/dm-response-patterns.test.ts > dm-response-patterns > containsAC > should detect Armor Class mentions
+src/services/combat/__tests__/dm-response-patterns.test.ts > dm-response-patterns > containsAC > should handle colons and other separators
+src/services/combat/__tests__/dm-response-patterns.test.ts > dm-response-patterns > containsDC > should detect Difficulty Class mentions
+src/services/combat/__tests__/dm-response-patterns.test.ts > dm-response-patterns > containsDC > should handle colons
+src/services/combat/__tests__/dm-response-patterns.test.ts > dm-response-patterns > containsModifier > should detect negative modifiers
+src/services/combat/__tests__/dm-response-patterns.test.ts > dm-response-patterns > containsModifier > should detect positive modifiers
+src/services/combat/__tests__/dm-response-patterns.test.ts > dm-response-patterns > detectsAttackRequest > should detect requests for attack rolls
+src/services/combat/__tests__/dm-response-patterns.test.ts > dm-response-patterns > detectsCombatStart > should be case-insensitive
+src/services/combat/__tests__/dm-response-patterns.test.ts > dm-response-patterns > detectsCombatStart > should detect phrases that start combat
+src/services/combat/__tests__/dm-response-patterns.test.ts > dm-response-patterns > detectsDamageRequest > should detect damage requests
+src/services/combat/__tests__/dm-response-patterns.test.ts > dm-response-patterns > detectsDirectDamage > should detect damage requests without specific dice
+src/services/combat/__tests__/dm-response-patterns.test.ts > dm-response-patterns > detectsDirectDamage > should detect dice formulas with subtraction
+src/services/combat/__tests__/dm-response-patterns.test.ts > dm-response-patterns > detectsDirectDamage > should detect plain numbers as damage
+src/services/combat/__tests__/dm-response-patterns.test.ts > dm-response-patterns > detectsDirectDamage > should detect standard dice damage formulas
+src/services/combat/__tests__/dm-response-patterns.test.ts > dm-response-patterns > detectsDirectDamage > should handle variations in spacing and case
+src/services/combat/__tests__/dm-response-patterns.test.ts > dm-response-patterns > detectsSkillCheck > should detect multi-word skill checks
+src/services/combat/__tests__/dm-response-patterns.test.ts > dm-response-patterns > detectsSkillCheck > should detect simple skill checks
+src/services/combat/__tests__/dm-response-patterns.test.ts > dm-response-patterns > detectsSkillCheck > should detect skill checks with ability scores in parentheses
+src/test/combat-roll-flow.test.ts > Combat Roll Flow Integration > Combat Audit System > should calculate compliance scores correctly
+src/test/combat-roll-flow.test.ts > Combat Roll Flow Integration > Combat Audit System > should detect damage without attack violations
+src/test/combat-roll-flow.test.ts > Combat Roll Flow Integration > Combat Audit System > should detect missing AC and DC violations
+src/test/combat-roll-flow.test.ts > Combat Roll Flow Integration > Combat Audit System > should generate comprehensive audit report
+src/test/combat-roll-flow.test.ts > Combat Roll Flow Integration > Combat Audit System > should provide proper rule references and suggestions
+src/test/combat-roll-flow.test.ts > Combat Roll Flow Integration > Combat Audit System > should track combat actions and detect violations
+src/test/combat-roll-flow.test.ts > Combat Roll Flow Integration > Combat Audit System > should validate dice formulas
+src/test/combat-roll-flow.test.ts > Combat Roll Flow Integration > Initiative Tracking and Turn Order > should cycle through rounds correctly
+src/test/combat-roll-flow.test.ts > Combat Roll Flow Integration > Initiative Tracking and Turn Order > should detect combat state correctly
+src/test/combat-roll-flow.test.ts > Combat Roll Flow Integration > Initiative Tracking and Turn Order > should handle initiative ties with dex modifier tiebreaker
+src/test/combat-roll-flow.test.ts > Combat Roll Flow Integration > Initiative Tracking and Turn Order > should track current actor and advance turns
+src/test/combat-roll-flow.test.ts > Combat Roll Flow Integration > Initiative Tracking and Turn Order > should track initiative entries and create turn order
+src/test/combat-roll-flow.test.ts > Combat Roll Flow Integration > Initiative Tracking and Turn Order > should validate initiative phase completion
+src/utils/context/__tests__/builder.test.ts > GameContextBuilder > should build a complete game context when all data is available
+src/utils/context/__tests__/builder.test.ts > GameContextBuilder > should handle fetch level errors and return default context
+src/utils/context/__tests__/builder.test.ts > GameContextBuilder > should handle missing data gracefully
+src/utils/context/__tests__/builder.test.ts > GameContextBuilder > should handle partial failures gracefully
+src/utils/context/__tests__/context-utils.test.ts > Context Utilities > contextEnhancement > buildEnhancedGameContext > should build full game context
+src/utils/context/__tests__/context-utils.test.ts > Context Utilities > contextEnhancement > buildEnhancedGameContext > should filter invalid equipment
+src/utils/context/__tests__/context-utils.test.ts > Context Utilities > contextEnhancement > buildEnhancedGameContext > should handle malformed character data
+src/utils/context/__tests__/context-utils.test.ts > Context Utilities > contextEnhancement > buildEnhancedGameContext > should handle malformed quest data
+src/utils/context/__tests__/context-utils.test.ts > Context Utilities > contextEnhancement > buildEnhancedGameContext > should handle missing optional data
+src/utils/context/__tests__/context-utils.test.ts > Context Utilities > contextEnhancement > enhanceCampaignContext > should enhance raw campaign data
+src/utils/context/__tests__/context-utils.test.ts > Context Utilities > contextEnhancement > enhanceMemoryContext > should cap importance at 10
+src/utils/context/__tests__/context-utils.test.ts > Context Utilities > contextEnhancement > enhanceMemoryContext > should enhance importance and categorize memories
+src/utils/context/__tests__/context-utils.test.ts > Context Utilities > contextValidation > sortMemoriesByRelevance > should handle memories with missing importance
+src/utils/context/__tests__/context-utils.test.ts > Context Utilities > contextValidation > sortMemoriesByRelevance > should sort memories by importance descending
+src/utils/context/__tests__/context-utils.test.ts > Context Utilities > contextValidation > validateCampaignSetting > should fallback for partial or invalid type fields
+src/utils/context/__tests__/context-utils.test.ts > Context Utilities > contextValidation > validateCampaignSetting > should return default values for null/undefined/non-object input
+src/utils/context/__tests__/context-utils.test.ts > Context Utilities > contextValidation > validateCampaignSetting > should return provided values for valid input
+src/utils/context/__tests__/context-utils.test.ts > Context Utilities > contextValidation > validateGameContext > should return false if campaign name is missing
+src/utils/context/__tests__/context-utils.test.ts > Context Utilities > contextValidation > validateGameContext > should return false if character data is incomplete
+src/utils/context/__tests__/context-utils.test.ts > Context Utilities > contextValidation > validateGameContext > should return false if memories array is missing
+src/utils/context/__tests__/context-utils.test.ts > Context Utilities > contextValidation > validateGameContext > should return false if setting or thematicElements are missing
+src/utils/context/__tests__/context-utils.test.ts > Context Utilities > contextValidation > validateGameContext > should return true for a valid context
+src/utils/context/__tests__/context-utils.test.ts > Context Utilities > contextValidation > validateThematicElements > should filter non-string values from arrays
+src/utils/context/__tests__/context-utils.test.ts > Context Utilities > contextValidation > validateThematicElements > should return empty arrays for null/undefined input
+src/utils/context/__tests__/context-utils.test.ts > Context Utilities > equipment prompt context > keeps standard equipment categories concise
+src/utils/context/__tests__/context-utils.test.ts > Context Utilities > equipment prompt context > uses trinket names and descriptions instead of custom category labels
+src/utils/context/__tests__/no-dead-barrel-509.test.ts > utils/context barrel (#509) > the real context modules still load
