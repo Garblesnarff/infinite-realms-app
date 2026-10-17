@@ -45,12 +45,14 @@ import {
 import { processRollRequests } from '@/hooks/ai/roll-processor';
 import { logIncomingRolls, logRollRequests } from '@/hooks/ai/session-logger';
 import { suspectsFabricatedOutcome } from '@/hooks/ai/silent-player-turn';
+import { isTypedEndTurn } from '@/hooks/ai/typed-end-turn';
 import logger from '@/lib/logger';
 import {
   extractSheetCombatNames,
   filterOptionsAgainstSheet,
 } from '@/services/ai/sheet-option-filter';
 import { AIService, isRollOutcomeStale } from '@/services/ai-service';
+import { executeAuthoritativeCombatIntent } from '@/services/combat/combat-action-executor';
 import { playerInputOriginOf } from '@/services/combat/combat-action-origin';
 import { consumeCombatEntryTypedAnswer } from '@/services/combat/combat-entry-confirmation-bridge';
 import { participantVital } from '@/services/combat/participant-vital';
@@ -584,6 +586,41 @@ export const useAIResponse = (): {
           };
         }
 
+        const playerInputOrigin = playerInputOriginOf(latestMessage);
+
+        // #784: a typed message that is nothing but an end-of-turn takes the End turn intent,
+        // before the DM is called. The DM model cannot emit `end_turn` (the `combat_actions`
+        // vocabulary has no such action type), so routing the phrase through it produced "that was
+        // not a combat action" and left the turn open. This is the same intent the button posts,
+        // and the server writes the boundary row and the creatures that follow onto the response
+        // (#2658).
+        const endTurnPlayer =
+          isInCombat && playerInputOrigin === 'typed'
+            ? playerParticipantForCharacter(activeEncounter, characterId)
+            : undefined;
+        if (
+          endTurnPlayer &&
+          activeEncounter?.id &&
+          activeEncounter.currentTurnParticipantId === endTurnPlayer.id &&
+          isTypedEndTurn(latestMessage.text)
+        ) {
+          await executeAuthoritativeCombatIntent(activeEncounter.id, {
+            type: 'end_turn',
+            actorId: endTurnPlayer.id,
+            actionId: crypto.randomUUID(),
+          });
+          await rejectWhenAborted(refreshCombatState(signal), signal);
+          setCombatTurnUiState(
+            combatTurnUiStateForEncounter(activeEncounter, isInCombat, characterId),
+          );
+          return {
+            text: '',
+            sender: 'dm',
+            timestamp: new Date().toISOString(),
+            context: { emotion: 'neutral', intent: 'response' },
+          };
+        }
+
         setCombatTurnUiState(
           combatTurnUiStateForEncounter(activeEncounter, isInCombat, characterId, 'running'),
         );
@@ -718,7 +755,6 @@ export const useAIResponse = (): {
         if (heldEntry?.decision === 'declined') {
           aiContext.gameState.combatEntryDeclined = heldEntry.label;
         }
-        const playerInputOrigin = playerInputOriginOf(latestMessage);
         // A declined entry's reply is checked as a plain narrative turn: its combat fields are
         // blanked below, whatever the model asked for. A turn that began in combat is never
         // narrative: its resolution can end the fight and clear `isInCombat`, and the DM is then
