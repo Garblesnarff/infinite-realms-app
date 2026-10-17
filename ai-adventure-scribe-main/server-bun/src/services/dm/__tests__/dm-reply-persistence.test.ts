@@ -34,8 +34,13 @@ mock.module('../../../lib/logger.js', () => ({
   default: testLogger,
 }));
 
-const { dmReplySkipReason, persistGeneratedDmReply, provisionalDmText, scheduleDmReplyWatchdog } =
-  await import('../dm-reply-persistence.js');
+const {
+  dmReplySkipReason,
+  persistFallbackDmReply,
+  persistGeneratedDmReply,
+  provisionalDmText,
+  scheduleDmReplyWatchdog,
+} = await import('../dm-reply-persistence.js');
 
 // The shape the model actually returns on an ordinary exploration turn: every array present,
 // most of them empty (dmResponseSchema requires them).
@@ -233,26 +238,44 @@ describe('persistGeneratedDmReply', () => {
 });
 
 describe('scheduleDmReplyWatchdog', () => {
-  test('logs DM_REPLY_UNPERSISTED when no dm row followed the generation', async () => {
-    const generatedAt = new Date('2026-08-26T09:53:49.900Z');
-    let checked = null as { sessionId: string; since: Date } | null;
+  test('persists a server-side fallback and logs DM_REPLY_UNPERSISTED when this turn was never saved', async () => {
+    let checked: string | undefined;
 
     await scheduleDmReplyWatchdog({
       sessionId: '175d1a5c-0000-4000-8000-000000000000',
       messageId: MESSAGE_ID,
       reason: 'roll_requests',
-      generatedAt,
+      generatedAt: new Date('2026-08-26T09:53:49.900Z'),
+      envelope: explorationEnvelope({
+        text: 'Dust coats every surface. Something glints under the desk.',
+        roll_requests: [{ type: 'check', formula: '1d20', purpose: 'Search the room', dc: 15 }],
+      }),
+      userId: 'user-1',
       delayMs: 5,
-      hasDmRowSince: async (sessionId, since) => {
-        checked = { sessionId, since };
+      hasDmRow: async (messageId) => {
+        checked = messageId;
         return false;
       },
     });
 
-    expect(checked).toEqual({
+    // Turn-granular: a later turn's row must not mask this turn's loss (#783).
+    expect(checked).toBe(MESSAGE_ID);
+    // The fallback row carries the reply under the turn's id, with the roll
+    // requests in context so a reload restores the popup (#783).
+    expect(addMessageCalls).toHaveLength(1);
+    expect(addMessageCalls[0]?.data).toMatchObject({
+      id: MESSAGE_ID,
       sessionId: '175d1a5c-0000-4000-8000-000000000000',
-      since: generatedAt,
+      speakerType: 'dm',
+      message:
+        'Dust coats every surface. Something glints under the desk.\n\nA. **Descend carefully**, testing each step.\nB. **Listen**, hold still and wait for another sound.',
+      context: expect.objectContaining({
+        intent: 'response',
+        provisional: true,
+        rollRequests: [{ type: 'check', formula: '1d20', purpose: 'Search the room', dc: 15 }],
+      }),
     });
+    expect(addMessageCalls[0]?.userId).toBe('user-1');
     expect(warnings).toEqual([
       {
         msg: 'DM_REPLY_UNPERSISTED',
@@ -260,7 +283,94 @@ describe('scheduleDmReplyWatchdog', () => {
         messageId: MESSAGE_ID,
         reason: 'roll_requests',
         waitedMs: 5,
+        fallbackPersisted: true,
       },
+    ]);
+  });
+
+  test('names the rolls when the envelope has no prose', async () => {
+    await scheduleDmReplyWatchdog({
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      reason: 'roll_requests',
+      generatedAt: new Date(),
+      envelope: explorationEnvelope({
+        text: '  ',
+        roll_requests: [{ type: 'save', formula: '1d20+2', purpose: 'Dodge the falling rocks' }],
+      }),
+      userId: 'user-1',
+      delayMs: 5,
+      hasDmRow: async () => false,
+    });
+
+    expect(addMessageCalls).toHaveLength(1);
+    expect(addMessageCalls[0]?.data).toMatchObject({
+      message: 'The DM asks for a roll: Dodge the falling rocks.',
+    });
+    expect(warnings).toEqual([
+      expect.objectContaining({ msg: 'DM_REPLY_UNPERSISTED', fallbackPersisted: true }),
+    ]);
+  });
+
+  test('logs without a fallback when there is no envelope to persist', async () => {
+    await scheduleDmReplyWatchdog({
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      reason: 'unparsed_envelope',
+      generatedAt: new Date(),
+      envelope: null,
+      userId: 'user-1',
+      delayMs: 5,
+      hasDmRow: async () => false,
+    });
+
+    expect(addMessageCalls).toHaveLength(0);
+    expect(warnings).toEqual([
+      expect.objectContaining({ msg: 'DM_REPLY_UNPERSISTED', fallbackPersisted: false }),
+    ]);
+  });
+
+  test('logs without a fallback for gate-rejected prose', async () => {
+    await scheduleDmReplyWatchdog({
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      reason: 'unverified_harm_claim',
+      generatedAt: new Date(),
+      envelope: explorationEnvelope({
+        text: 'The blow leaves you wounded and bleeding.',
+        roll_requests: [{ type: 'check', formula: '1d20', purpose: 'Stay conscious' }],
+      }),
+      userId: 'user-1',
+      delayMs: 5,
+      hasDmRow: async () => false,
+    });
+
+    // The narration gate rejected this prose; the fallback must not resurrect it (#2373).
+    expect(addMessageCalls).toHaveLength(0);
+    expect(warnings).toEqual([
+      expect.objectContaining({ msg: 'DM_REPLY_UNPERSISTED', fallbackPersisted: false }),
+    ]);
+  });
+
+  test('logs without a fallback for combat turns', async () => {
+    await scheduleDmReplyWatchdog({
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      reason: 'combat_start',
+      generatedAt: new Date(),
+      envelope: explorationEnvelope({
+        text: 'The goblin raises its blade.',
+        combat_transition: 'start',
+        roll_requests: [{ type: 'check', formula: '1d20', purpose: 'Spot the ambush' }],
+      }),
+      userId: 'user-1',
+      delayMs: 5,
+      hasDmRow: async () => false,
+    });
+
+    expect(addMessageCalls).toHaveLength(0);
+    expect(warnings).toEqual([
+      expect.objectContaining({ msg: 'DM_REPLY_UNPERSISTED', fallbackPersisted: false }),
     ]);
   });
 
@@ -268,13 +378,14 @@ describe('scheduleDmReplyWatchdog', () => {
     await scheduleDmReplyWatchdog({
       sessionId: 'session-1',
       messageId: MESSAGE_ID,
-      reason: 'client_in_combat',
+      reason: 'roll_requests',
       generatedAt: new Date(),
       delayMs: 5,
-      hasDmRowSince: async () => true,
+      hasDmRow: async () => true,
     });
 
     expect(warnings).toEqual([]);
+    expect(addMessageCalls).toHaveLength(0);
   });
 
   test('a failing check is reported, not thrown', async () => {
@@ -284,13 +395,108 @@ describe('scheduleDmReplyWatchdog', () => {
       reason: 'roll_requests',
       generatedAt: new Date(),
       delayMs: 5,
-      hasDmRowSince: async () => {
+      hasDmRow: async () => {
         throw new Error('connection reset');
       },
     });
 
     expect(warnings).toEqual([
       expect.objectContaining({ msg: 'DM_REPLY_WATCHDOG_FAILED', sessionId: 'session-1' }),
+    ]);
+  });
+});
+
+describe('persistFallbackDmReply', () => {
+  test('writes nothing without an envelope', async () => {
+    const result = await persistFallbackDmReply({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      reason: 'roll_requests',
+      envelope: null,
+    });
+    expect(result).toEqual({ persisted: false });
+    expect(addMessageCalls).toHaveLength(0);
+  });
+
+  test('writes nothing without roll requests', async () => {
+    const result = await persistFallbackDmReply({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      reason: 'roll_requests',
+      envelope: explorationEnvelope(),
+    });
+    expect(result).toEqual({ persisted: false });
+    expect(addMessageCalls).toHaveLength(0);
+  });
+
+  test('skips gate-rejected prose', async () => {
+    const result = await persistFallbackDmReply({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      reason: 'unverified_harm_claim',
+      envelope: explorationEnvelope({
+        roll_requests: [{ type: 'check', formula: '1d20', purpose: 'Stay conscious' }],
+      }),
+    });
+    expect(result).toEqual({ persisted: false, skipped: 'unverified_harm_claim' });
+    expect(addMessageCalls).toHaveLength(0);
+  });
+
+  test('skips combat turns', async () => {
+    const result = await persistFallbackDmReply({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      reason: 'combat_start',
+      envelope: explorationEnvelope({
+        combat_transition: 'start',
+        roll_requests: [{ type: 'check', formula: '1d20', purpose: 'Spot the ambush' }],
+      }),
+    });
+    expect(result).toEqual({ persisted: false, skipped: 'combat_start' });
+    expect(addMessageCalls).toHaveLength(0);
+  });
+
+  test('a combat envelope with roll requests is skipped even when the reason is roll_requests', async () => {
+    // dmReplySkipReason returns 'roll_requests' before the combat checks, so the
+    // watchdog arrives with reason 'roll_requests'; the envelope conditions must
+    // still hold the fallback back.
+    const result = await persistFallbackDmReply({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      reason: 'roll_requests',
+      envelope: explorationEnvelope({
+        combat_transition: 'start',
+        roll_requests: [{ type: 'check', formula: '1d20', purpose: 'Spot the ambush' }],
+      }),
+    });
+    expect(result).toEqual({ persisted: false, skipped: 'combat_start' });
+    expect(addMessageCalls).toHaveLength(0);
+  });
+
+  test('a failed write never throws, and is logged at error', async () => {
+    addMessageImpl = async () => {
+      throw new Error('Session not found');
+    };
+    const result = await persistFallbackDmReply({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      reason: 'roll_requests',
+      envelope: explorationEnvelope({
+        roll_requests: [{ type: 'check', formula: '1d20', purpose: 'Search the room' }],
+      }),
+    });
+    expect(result).toEqual({ persisted: false });
+    expect(errors).toEqual([
+      expect.objectContaining({
+        msg: 'DM_REPLY_FALLBACK_PERSIST_FAILED',
+        sessionId: 'session-1',
+      }),
     ]);
   });
 });
