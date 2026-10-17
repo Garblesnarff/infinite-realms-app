@@ -15,27 +15,65 @@ export type ForcedMoveAction = {
   action: 'forced_move';
   target: string;
   mode: ForcedMoveMode;
-  origin: Point | null;
-  distance: number | null;
-  destination: Point | null;
+  origin?: Point | null;
+  distance?: number | null;
+  destination?: Point | null;
 };
 
+/**
+ * Fields only relevant to some map action kinds are optional in the wire schema
+ * (#633 PR 4): Anthropic structured output caps union-typed parameters at 16,
+ * so rarely-used nullables are omitted instead of sent as explicit null. The
+ * runtime validator treats an absent field like null.
+ */
 export type DMMapAction =
-  | { action: 'move'; entityId: string | null; x: number | null; y: number | null; changes: null }
+  | {
+      action: 'move';
+      entityId: string | null;
+      x: number | null;
+      y: number | null;
+      changes: null;
+      target?: string | null;
+      mode?: ForcedMoveMode | null;
+      origin?: Point | null;
+      distance?: number | null;
+      destination?: Point | null;
+    }
   | {
       action: 'place';
       entityId: string | null;
       x: number | null;
       y: number | null;
       changes: MapEntity | null;
+      target?: string | null;
+      mode?: ForcedMoveMode | null;
+      origin?: Point | null;
+      distance?: number | null;
+      destination?: Point | null;
     }
-  | { action: 'remove'; entityId: string | null; x: number | null; y: number | null; changes: null }
+  | {
+      action: 'remove';
+      entityId: string | null;
+      x: number | null;
+      y: number | null;
+      changes: null;
+      target?: string | null;
+      mode?: ForcedMoveMode | null;
+      origin?: Point | null;
+      distance?: number | null;
+      destination?: Point | null;
+    }
   | {
       action: 'update_cell';
       entityId: string | null;
       x: number | null;
       y: number | null;
       changes: Partial<Cell> | null;
+      target?: string | null;
+      mode?: ForcedMoveMode | null;
+      origin?: Point | null;
+      distance?: number | null;
+      destination?: Point | null;
     }
   | ForcedMoveAction;
 
@@ -178,36 +216,36 @@ export type DMResponse = {
   }>;
   /**
    * XP the story awards the player's character this turn (#218 step 2): a challenge overcome
-   * out of combat. The server adds it to the sheet once per player message; absent or null
-   * when nothing is earned.
+   * out of combat. The server adds it to the sheet once per player message; absent when
+   * nothing is earned. Optional (never nullable) since #633 PR 4: Anthropic caps unions at 16.
    */
-  xp_award?: { amount: number; reason: string } | null;
+  xp_award?: { amount: number; reason: string };
   /**
    * Items the story grants or takes this turn (#218 step 3): found loot, spent supplies.
-   * The server applies them to the inventory once per player message; absent or null when
-   * nothing changes hands.
+   * The server applies them to the inventory once per player message; absent when nothing
+   * changes hands. Optional (never nullable) since #633 PR 4.
    */
-  items?: Array<{ name: string; quantity: number; change: 'gain' | 'lose' }> | null;
+  items?: Array<{ name: string; quantity: number; change: 'gain' | 'lose' }>;
   /**
    * Conditions the story applies or removes out of combat (#218 step 4). Names must be
    * 2014 5e conditions; the server validates them against the conditions library. The
-   * server applies them to the sheet once per player message; absent or null when nothing
-   * changes.
+   * server applies them to the sheet once per player message; absent when nothing
+   * changes. Optional (never nullable) since #633 PR 4.
    */
   conditions?: Array<{
     name: string;
     change: 'apply' | 'remove';
-    duration_minutes?: number | null;
-  }> | null;
+    duration_minutes: number | null;
+  }>;
   /**
    * A rest the story grants this turn (#264, #218 step 5): the DM narrates the party
    * resting and the server applies it through RestService — the same ruleset the
    * sheet's rest buttons use. A short rest spends no hit dice on its own (the player
    * spends them from the sheet); a long rest restores HP and regains half the hit
-   * dice. The server applies it once per player message; absent or null when the
-   * story grants no rest.
+   * dice. The server applies it once per player message; absent when the story grants
+   * no rest. Optional (never nullable) since #633 PR 4.
    */
-  rest?: { type: 'short' | 'long' } | null;
+  rest?: { type: 'short' | 'long' };
   /**
    * Damage the story deals the player's character this turn (#610, #218 step 6): a
    * failed check's consequence, a hazard, a trap — anything the narration says hurt
@@ -258,27 +296,30 @@ const mapActionSchema = {
     x: nullable({ type: 'number' }),
     y: nullable({ type: 'number' }),
     changes: nullable(changesSchema),
-    target: nullable({ type: 'string' }),
-    mode: nullable({ type: 'string', enum: ['shove', 'pull', 'teleport'] }),
-    origin: nullable(pointSchema),
-    distance: nullable({ type: 'number', minimum: 0 }),
-    destination: nullable(pointSchema),
+    // #633 PR 4: forced-move-only fields are optional (omitted when unused) instead of
+    // nullable — Anthropic structured output caps union-typed parameters at 16.
+    // #633 PR 4 round 6: distance is required (Anthropic caps optional parameters
+    // at 24); the model emits 0 when the action does not force-move anything.
+    // The engine only reads distance for forced_move actions.
+    target: { type: 'string' },
+    mode: { type: 'string', enum: ['shove', 'pull', 'teleport'] },
+    origin: pointSchema,
+    distance: { type: 'number', minimum: 0 },
+    destination: pointSchema,
   },
-  required: [
-    'action',
-    'entityId',
-    'x',
-    'y',
-    'changes',
-    'target',
-    'mode',
-    'origin',
-    'distance',
-    'destination',
-  ],
+  required: ['action', 'entityId', 'x', 'y', 'changes', 'distance'],
 } as const;
 
-const targetedCombatActionSchema = {
+/**
+ * #633 PR 4: flat combat action schema replacing the `oneOf:
+ * [targetedCombatActionSchema, aoeCombatActionSchema]` union — Anthropic structured
+ * output does not support `oneOf` at all. One object covers both shapes: targeted
+ * actions set target_ids/weapon_id/movement_feet and omit origin; AoE cast_spell
+ * actions set origin (the engine derives AoE targets itself) and emit empty
+ * target_ids / 0 movement_feet as explicit defaults. The runtime `isCombatAction`
+ * validator still discriminates on `action_type === 'cast_spell' && origin != null`.
+ */
+const combatActionSchema = {
   type: 'object',
   additionalProperties: false,
   properties: {
@@ -305,6 +346,9 @@ const targetedCombatActionSchema = {
     spell_id: nullable({ type: 'string' }),
     slot_level: nullable({ type: 'number' }),
     movement_feet: { type: 'number' },
+    // Optional: present only on AoE cast_spell actions.
+    origin: pointSchema,
+    direction: nullable(pointSchema),
   },
   required: [
     'actor_id',
@@ -314,22 +358,8 @@ const targetedCombatActionSchema = {
     'spell_id',
     'slot_level',
     'movement_feet',
+    'direction',
   ],
-} as const;
-
-/** AoE target membership is always derived by the tactical engine, never the LLM. */
-const aoeCombatActionSchema = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    actor_id: { type: 'string' },
-    action_type: { type: 'string', enum: ['cast_spell'] },
-    spell_id: { type: 'string' },
-    origin: pointSchema,
-    direction: nullable(pointSchema),
-    slot_level: nullable({ type: 'number' }),
-  },
-  required: ['actor_id', 'action_type', 'spell_id', 'origin', 'direction', 'slot_level'],
 } as const;
 
 const handoutActionSchema = {
@@ -356,7 +386,13 @@ const baseProperties = {
       properties: {
         type: { type: 'string', enum: ['dm', 'character', 'transition'] },
         text: { type: 'string' },
-        character: nullable({ type: 'string' }),
+        // #633 PR 4 round 6: required non-nullable (was nullable) — every segment
+        // has a speaker; the model emits 'narrator' for dm/transition narration.
+        // Anthropic structured output caps union-typed parameters at 16.
+        character: {
+          type: 'string',
+          description: "Speaker name for 'character' segments; 'narrator' for dm/transition narration.",
+        },
         voice_category: nullable({
           type: 'string',
           enum: [...VOICE_CATEGORY_VALUES],
@@ -387,8 +423,9 @@ const baseProperties = {
     type: 'object',
     additionalProperties: false,
     properties: {
-      id: nullable({ type: 'string' }),
-      sessionId: nullable({ type: 'string' }),
+      // #633 PR 4: all fields required (no unions, no optionals) — when the model
+      // emits a scene_spec it is generating a scene and provides every field.
+      // `id`/`sessionId` were removed: the sanitizer always discards/replaces them.
       environment: {
         type: 'string',
         enum: [
@@ -403,20 +440,12 @@ const baseProperties = {
           'corridor',
         ],
       },
-      size: nullable({ type: 'string', enum: ['small', 'medium', 'large'] }),
-      sceneDescription: nullable({ type: 'string' }),
-      seed: nullable({ type: 'number' }),
-      enemyPlacement: nullable({ type: 'string', enum: ['ambush', 'guarding', 'formation'] }),
+      size: { type: 'string', enum: ['small', 'medium', 'large'] },
+      sceneDescription: { type: 'string' },
+      seed: { type: 'number' },
+      enemyPlacement: { type: 'string', enum: ['ambush', 'guarding', 'formation'] },
     },
-    required: [
-      'id',
-      'sessionId',
-      'environment',
-      'size',
-      'sceneDescription',
-      'seed',
-      'enemyPlacement',
-    ],
+    required: ['environment', 'size', 'sceneDescription', 'seed', 'enemyPlacement'],
   }),
   map_actions: { type: 'array', items: mapActionSchema },
   handout_actions: { type: 'array', items: handoutActionSchema },
@@ -435,7 +464,7 @@ const baseProperties = {
   },
   combat_actions: {
     type: 'array',
-    items: { oneOf: [targetedCombatActionSchema, aoeCombatActionSchema] },
+    items: combatActionSchema,
   },
 } as const;
 
@@ -467,21 +496,16 @@ const combatExitsProperty = {
   },
 } as const;
 
-/** #218 step 2: XP the story awards this turn. Optional and nullable, like `combat_exits`. */
-const xpAwardProperty = nullable({
+/** #218 step 2: XP the story awards this turn. Optional and non-nullable (#633 PR 4). */
+const xpAwardProperty = {
   type: 'object',
   additionalProperties: false,
   properties: { amount: { type: 'integer' }, reason: { type: 'string' } },
   required: ['amount', 'reason'],
-  description:
-    '#310 story-win XP: when the party achieves a story win or milestone out of combat — ' +
-    'solves the mystery, completes the objective, turns the arc — award XP here. The game ' +
-    'adds it to the sheet and posts it in chat; state the award in your narration too. ' +
-    'Never use for combat victories: the game awards those itself.',
-});
+} as const;
 
-/** #218 step 3: items the story grants or takes this turn. Optional and nullable. */
-const storyItemsProperty = nullable({
+/** #218 step 3: items the story grants or takes this turn. Optional and non-nullable. */
+const storyItemsProperty = {
   type: 'array',
   items: {
     type: 'object',
@@ -495,17 +519,17 @@ const storyItemsProperty = nullable({
   },
   // #463: the model narrated pickups but left `items` null on 18 Hark rows, so the
   // writer never ran. Like #310's xp_award description, this tells the model when
-  // to populate the nullable field inside the structured-output contract.
+  // to populate the field inside the structured-output contract.
   description:
     "#463 story items: when the story gives the player's character an item (found, gifted, " +
     'looted, purchased) or takes one away (spent, lost, stolen, broken), set this field to an ' +
     'array of `{"name": "<exact item name>", "quantity": <whole number>, "change": "gain"|"lose"}`. ' +
     "The game updates the character's Inventory; do not narrate receiving or losing an item " +
-    'without setting the field. Otherwise leave it null.',
-});
+    'without setting the field. Otherwise omit it.',
+} as const;
 
-/** #218 step 4: conditions the story applies or removes out of combat. Optional and nullable. */
-const storyConditionsProperty = nullable({
+/** #218 step 4: conditions the story applies or removes out of combat. Optional and non-nullable. */
+const storyConditionsProperty = {
   type: 'array',
   items: {
     type: 'object',
@@ -513,19 +537,21 @@ const storyConditionsProperty = nullable({
     properties: {
       name: { type: 'string' },
       change: { type: 'string', enum: ['apply', 'remove'] },
+      // #633 PR 4: required+nullable (not optional) — explicit null for permanent
+      // conditions keeps it out of the 24-optional budget; uses 1 union slot.
       duration_minutes: nullable({ type: 'integer', minimum: 1 }),
     },
-    required: ['name', 'change'],
+    required: ['name', 'change', 'duration_minutes'],
   },
-});
+} as const;
 
-/** #264: a rest the story grants this turn. Optional and nullable, like `combat_exits`. */
-const storyRestProperty = nullable({
+/** #264: a rest the story grants this turn. Optional and non-nullable, like `combat_exits`. */
+const storyRestProperty = {
   type: 'object',
   additionalProperties: false,
   properties: { type: { type: 'string', enum: ['short', 'long'] } },
   required: ['type'],
-});
+} as const;
 
 /**
  * #610 (#218 step 6): damage the story deals the player's character this turn.
@@ -575,9 +601,11 @@ const isMapAction = (value: unknown): value is DMMapAction => {
     return (
       typeof action.target === 'string' &&
       ['shove', 'pull', 'teleport'].includes(String(action.mode)) &&
-      (action.origin === null || isPoint(action.origin)) &&
-      (action.destination === null || isPoint(action.destination)) &&
-      (action.distance === null || (typeof action.distance === 'number' && action.distance >= 0))
+      // #633 PR 4: origin/destination/distance are optional (omitted when unused),
+      // so absent counts like null here.
+      (action.origin == null || isPoint(action.origin)) &&
+      (action.destination == null || isPoint(action.destination)) &&
+      (action.distance == null || (typeof action.distance === 'number' && action.distance >= 0))
     );
   return (
     (action.entityId === null || typeof action.entityId === 'string') &&
@@ -589,21 +617,30 @@ const isMapAction = (value: unknown): value is DMMapAction => {
 const isCombatAction = (value: unknown): value is DMCombatAction => {
   if (!value || typeof value !== 'object') return false;
   const action = value as Record<string, unknown>;
-  if (action.action_type === 'cast_spell' && 'origin' in action) {
+  // #633 PR 4: the wire schema is flat (no oneOf). AoE is still discriminated the
+  // same way: cast_spell with a present origin. target_ids is required by the flat
+  // schema (empty array for AoE) but the engine derives AoE targets itself, so a
+  // non-empty target_ids on an AoE intent is rejected — the LLM must not dictate
+  // AoE membership.
+  if (action.action_type === 'cast_spell' && action.origin != null) {
     return (
       typeof action.actor_id === 'string' &&
       typeof action.spell_id === 'string' &&
       isPoint(action.origin) &&
-      (action.direction === null || isPoint(action.direction)) &&
-      (action.slot_level === null || typeof action.slot_level === 'number') &&
-      !('target_ids' in action)
+      (action.direction == null || isPoint(action.direction)) &&
+      (action.slot_level == null || typeof action.slot_level === 'number') &&
+      (action.target_ids === undefined ||
+        (Array.isArray(action.target_ids) && action.target_ids.length === 0))
     );
   }
   return (
     typeof action.actor_id === 'string' &&
     typeof action.action_type === 'string' &&
     Array.isArray(action.target_ids) &&
-    action.target_ids.every((target) => typeof target === 'string')
+    action.target_ids.every((target) => typeof target === 'string') &&
+    // #633 PR 4: origin is optional in the flat schema; Gemini (less strict than
+    // Haiku) may still emit explicit null, so accept both absent and null here.
+    action.origin == null
   );
 };
 
@@ -692,6 +729,19 @@ export function parseDmResponse(
   if (handoutIssue) return { success: false, issues: [handoutIssue] };
   if (!Array.isArray(response.combat_actions) || !response.combat_actions.every(isCombatAction))
     return { success: false, issues: ['combat_actions contains an invalid action'] };
+
+  // #633 PR 4: the flat wire schema requires target_ids/movement_feet on every
+  // action (empty/0 for AoE), but downstream discriminates AoE vs targeted with
+  // `'target_ids' in action` (combat-resolution-step.ts, headless-game-client.ts).
+  // Strip those keys from AoE intents so the parsed shape matches the
+  // DMCombatAction union (DMAoESpellAction has neither field) and downstream
+  // keeps working unchanged.
+  for (const action of response.combat_actions as Record<string, unknown>[]) {
+    if (action.action_type === 'cast_spell' && action.origin != null) {
+      delete action.target_ids;
+      delete action.movement_feet;
+    }
+  }
 
   if (Array.isArray(response.narration_segments)) {
     response.narration_segments = response.narration_segments.map((segment) => {

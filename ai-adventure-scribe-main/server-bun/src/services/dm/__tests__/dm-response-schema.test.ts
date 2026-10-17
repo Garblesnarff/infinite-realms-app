@@ -173,19 +173,14 @@ describe('dmResponseSchema speaker-split contract', () => {
 });
 
 describe('dmResponseSchema story rest contract (#264)', () => {
-  test('exposes the nullable rest field with the short/long enum', () => {
+  test('exposes the optional rest field with the short/long enum (#633 PR 4: non-nullable)', () => {
     const properties = dmResponseSchema.properties as Record<string, Record<string, unknown>>;
 
     expect(properties.rest).toEqual({
-      anyOf: [
-        {
-          type: 'object',
-          additionalProperties: false,
-          properties: { type: { type: 'string', enum: ['short', 'long'] } },
-          required: ['type'],
-        },
-        { type: 'null' },
-      ],
+      type: 'object',
+      additionalProperties: false,
+      properties: { type: { type: 'string', enum: ['short', 'long'] } },
+      required: ['type'],
     });
   });
 
@@ -227,16 +222,18 @@ describe('dmResponseSchema story items contract (#463)', () => {
   test('the items field carries a description telling the model when to populate it', () => {
     // #463: the model narrated pickups but left `items` null, so the writer never
     // ran. In the strict structured-output contract the property description is
-    // the in-schema signal for when to populate a nullable field (#310 precedent).
+    // the in-schema signal for when to populate the field (#310 precedent).
+    // #633 PR 4: the field is optional (not nullable); the model omits it when
+    // nothing changes hands.
     const properties = dmResponseSchema.properties as Record<string, Record<string, unknown>>;
-    const [objectVariant] = properties.items.anyOf as Array<Record<string, unknown>>;
+    const itemsSchema = properties.items as Record<string, unknown>;
 
-    expect(typeof objectVariant.description).toBe('string');
-    const description = String(objectVariant.description);
+    expect(typeof itemsSchema.description).toBe('string');
+    const description = String(itemsSchema.description);
     expect(description).toContain('gain');
     expect(description).toContain('lose');
     expect(description).toContain('Inventory');
-    expect(description).toContain('null');
+    expect(description).toContain('omit');
   });
 
   test('accepts an item grant and the null items on a plain turn', () => {
