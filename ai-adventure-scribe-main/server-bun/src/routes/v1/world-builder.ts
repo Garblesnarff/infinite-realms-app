@@ -23,7 +23,6 @@ const npcBody = t.Object({
   relationship: t.Optional(t.Nullable(t.String())),
   location: t.Optional(t.Nullable(t.String())),
   image_url: t.Optional(t.Nullable(t.String())),
-  voice_id: t.Optional(t.Nullable(t.String())),
   stats: t.Optional(t.Nullable(t.Any())),
 });
 
@@ -161,7 +160,6 @@ export const worldBuilderRoutes = new Elysia({ prefix: '/v1/world-builder' })
           relationship: body.relationship,
           location: body.location,
           imageUrl: body.image_url,
-          voiceId: body.voice_id,
           stats: body.stats,
         })
         .returning();

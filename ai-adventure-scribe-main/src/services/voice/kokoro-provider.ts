@@ -20,6 +20,7 @@ import {
   setStandardVoiceDownload,
 } from './voice-mode-store';
 import { type VoiceProvider } from './voice-provider';
+import { irVoice } from '../../../shared/npc-voices';
 
 import type { KokoroWorkerMessage, KokoroWorkerResponse } from '@/workers/kokoro-worker';
 
@@ -216,11 +217,11 @@ export const KokoroProvider: VoiceProvider = {
   id: 'kokoro',
 
   resolveVoiceId(voice) {
-    return getKokoroVoiceForCategory(voice.category);
+    return irVoice(voice.voiceId)?.kokoro ?? getKokoroVoiceForCategory(voice.category);
   },
 
   async generateAudio(text, voice, _settings, signal) {
-    const { wav } = await client.generate(text, getKokoroVoiceForCategory(voice.category), signal);
+    const { wav } = await client.generate(text, KokoroProvider.resolveVoiceId(voice), signal);
     const audioBlob = new Blob([wav], { type: 'audio/wav' });
     return { audioBlob, audioUrl: URL.createObjectURL(audioBlob) };
   },

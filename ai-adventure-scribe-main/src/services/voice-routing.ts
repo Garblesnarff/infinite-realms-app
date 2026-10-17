@@ -7,6 +7,7 @@ import {
 } from './voice/voice-classification';
 import { type VoicePool, VOICE_POOLS } from './voice/voice-pools';
 import { normalizeCharacterName } from './voice/voice-utils';
+import { irVoice } from '../../shared/npc-voices';
 
 import type { VoiceProviderId } from './voice/voice-provider';
 
@@ -68,6 +69,9 @@ export interface AISegment {
   text: string;
   character?: string;
   voice_category?: string;
+  npc_id?: string;
+  voice_id?: string;
+  voice_muted?: boolean;
 }
 
 const UNKNOWN_SPEAKER_NAMES = new Set([
@@ -140,6 +144,13 @@ export function getCharacterVoiceMappings(): Record<string, string> {
  * Assign voice to a segment based on character and type
  */
 export function assignVoice(segment: AISegment): VoiceConfig {
+  if (segment.voice_id && irVoice(segment.voice_id)) {
+    return {
+      ...getVoiceConfigByCategory(segment.voice_category || 'default'),
+      id: segment.voice_id,
+    };
+  }
+
   // Narration and unknown speakers stay audible as the narrator voice.
   if (segment.type === 'dm' || isUnknownSpeaker(segment.character)) {
     return getVoiceConfigByCategory('narrator');
