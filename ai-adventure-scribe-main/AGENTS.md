@@ -12,15 +12,15 @@ Authored monster attack lines (name, reach, and range) are in `docs/content/stat
 
 # Worker rules
 
-## 1. Merging pull requests is Rob's call
+## 1. Who merges
 
-- Only Rob merges. Green CI, your own PR, a "trivial" change, or a PR another agent asked you to review does not change that.
-- Workers do not run `gh pr merge` or `gh pr ready`, do not enable auto-merge, and do not merge their own PRs. Merges happen only in a session where Rob has pasted explicit permission naming the PR number.
-- The single exception: Rob pastes an explicit list of PR numbers into your session with the words "you have my permission to merge". Merge exactly that list, nothing else. Permission given to another session is not permission given to you.
+- A pull request merges only after a strategist or foreman-bot comment that starts `Strategist review — PASS at <sha>`, and a green pull_request CI run, both at the same head. A PASS or a green run on an earlier commit does not cover a later push.
+- Muse (the standing merger) or the Hetzner ops session merges it. Workers never merge. Workers do not run `gh pr merge` or `gh pr ready`, do not enable auto-merge, and do not merge their own PRs.
+- Green CI, your own PR, a "trivial" change, or a review request from another agent does not make a worker the merger.
 - Merges to `main` auto-deploy to production within ~15 minutes. An unauthorized merge is an unauthorized production deploy.
 - On 2026-08-11, five PRs (#1702, #1716, #1719, #1723, #1725) were merged by an unidentified agent session.
 - On 2026-08-30, #1945 and #1946 were merged by an unidentified agent session. Two incidents so far; these rules exist so there is no third.
-- When you do hold that permission, check stacked-PR rules before merging — if the PR is a stack parent, merging it the normal way closes its children. Then follow the pre-merge check procedure below.
+- When Muse or the Hetzner ops session merges, check stacked-PR rules first. If the PR is a stack parent, merging it the normal way closes its children. Then follow the pre-merge check procedure below.
 
 ## 2. Do not push directly to `main`
 
@@ -40,7 +40,9 @@ Authored monster attack lines (name, reach, and range) are in `docs/content/stat
 
 - Do not delete a test. Do not add `.skip` or `.only` to a test.
 - For time-based tests, use `dialogue_history.created_at` as the server clock; `timestamp` is client-supplied display data only.
-- Do not paste secret values into code, commits, comments, logs, or PR bodies. Reference env var names only. If you accidentally see a secret, do not repeat it.
+- Do not paste secret values into code, commits, comments, logs, or PR bodies. Reference env var names only. Never commit `.env`, `.env.local`, `server/.env`, or `server-bun/.env`. `.env.example` may be committed only when it holds no secret values.
+- If a secret value appears in code, a log, a chat, or a diff, do not repeat it. Tell Rob, and recommend rotating the key.
+- RLS is off, so every query on user-owned rows filters by the owner. `campaigns` and `characters` have `user_id`; filter those by `user_id`. `game_sessions`, `quests`, `npcs`, and `locations` have no `user_id` column (`ai-adventure-scribe-main/db/schema/game.ts`, `ai-adventure-scribe-main/db/schema/world.ts`). Limit those queries to a campaign or character that belongs to the user.
 - A PR that changes what the client sends to a server route must include a test that sends that exact body through the real route: `createRequestPipelineApp().use(<routes>)` or the real-DB suite. A mocked API does not count: #2250's tests mocked it, and the body they approved 422'd on every narrative roll in production (#2280). Pattern: #2286, where one shared fixture (`shared/test-fixtures/dm-roll-reply-saves.ts`) holds the wire body, the client test asserts the client sends exactly it, and the server test posts it through the real route schema.
 
 ## 5. Respect in-flight work
@@ -56,7 +58,7 @@ Before editing, check open PRs (`gh pr list`). Do not modify files that an unrel
 
 ## 7. Migrations
 
-One migration tree owns each table's DDL (see docs/memory-system-design-v2.md §6). Do not create the same table's DDL in both `db/migrations/` and `supabase/migrations/`. Manual prod applies must be recorded (see issue #1703).
+One migration tree owns each table's DDL (see `ai-adventure-scribe-main/docs/memory-system-design-v2.md` §6). Do not create the same table's DDL in both `db/migrations/` and `supabase/migrations/`. Manual prod applies must be recorded (see issue #1703).
 
 ## 8. Stacked PRs: retarget children before merging the parent
 
@@ -123,7 +125,8 @@ Keep the body under 8k characters, one line per item, 15 words maximum, each lin
 ## 11. Typecheck gates (#2313)
 
 - A PR is red if either typecheck fails; "pre-existing" is not an excuse once main is green.
-- Server: CI job `server-typecheck` runs `scripts/server-typecheck-gate.sh` (tsc over `server-bun/tsconfig.typecheck.json` with per-file, per-count quarantine in `server-bun/typecheck-known-errors.txt`). Root `bun run type-check` runs both halves and reports both even if one fails.
+- Server: CI job `checks`, step "Server typecheck gate", runs `scripts/server-typecheck-gate.sh` (tsc over `server-bun/tsconfig.typecheck.json` with per-file, per-count quarantine in `server-bun/typecheck-known-errors.txt`).
+- Root `bun run type-check` runs both halves and reports both even if one fails. The client half is `bun x tsc --noEmit` against `ai-adventure-scribe-main/tsconfig.json`, which has `files: []`, so that half checks nothing until #664 lands. The server half is the gate above.
 - A quarantined file stays listed only while its tracking issue is open; the gate fails on any non-zero tsc exit it cannot attribute to a quarantined file, on any error in a non-quarantined file, and when a quarantined file's error count changes (a new error can't hide in a quarantined file; a resolved quarantine can't linger).
 
 ## 12. Scope discipline
@@ -138,14 +141,13 @@ Rob often pastes a task and walks away. A turn that ends with a summary, a list 
 
 # Hetzner (ops) rules
 
-Hetzner is the only merger. Workers open draft PRs; they do not merge, even when CI is green. Section 13 (finish the task, then stop) applies to Hetzner sessions too.
+Muse (the standing merger) or the Hetzner ops session merges, and only under the rule in §1. Workers open draft PRs; they do not merge, even when CI is green. Section 13 (finish the task, then stop) applies to Muse and Hetzner sessions too.
 
-- **Permission line at an exact SHA.** Rob's "you have my permission to merge" paste must name the PR number and the head SHA. Permission for a PR at a different SHA is not permission for the SHA in front of you. After a new push, you need a new line.
-- **CI green + strategist code-PASS at the same SHA.** Merge only when hosted CI is green on that SHA and the strategist has posted `PASS` (code review) on that SHA. A PASS on an earlier commit does not cover a later push. A green check on a cancelled-then-rerun SHA is not a green check on this SHA.
+- **PASS and green CI at the same head.** Merge only when a strategist or foreman-bot comment starts `Strategist review — PASS at <sha>` for this head and the pull_request CI run at that same head is green. A PASS or a green run on an earlier commit does not cover a later push. A green check on a cancelled-then-rerun SHA is not a green check on this SHA.
 - **No deploys during a stranger-test run.** Merges to `main` auto-deploy. Between Playtest's `run N started` and `run N ended` comments, hold merges. A deploy mid-run drops in-flight turns (#2093).
-- **Prod config changes need an approval line.** Host files such as `scripts/auto-deploy.sh` (and other prod-only config) are not "drive-by" edits. Do not change them without an explicit approval line from Rob naming the file and the change.
+- **Prod config changes need an approval line.** Host files such as `ops/auto-deploy.sh` (and other prod-only config) are not "drive-by" edits. Do not change them without an explicit approval line from Rob naming the file and the change.
 - **Revert on Rob's line.** On Rob's line "You have my permission to revert #X", revert that PR's squash commit on `main` through a PR (`git revert <squash sha>` on a branch off current `origin/main`), merge it, and let it deploy (or `ops/auto-deploy.sh --deploy-now`). This does not need a strategist PASS on the revert. Every other rule still applies: no merge during a stranger-test run, and the revert PR's CI must be green. Then confirm with `curl -s https://api.infiniterealms.app/version` that the revert's commit is live, and say so on #X.
-- **`gh pr ready` only as part of an authorized merge.** Hetzner may run `gh pr ready` on a PR only when Rob's permission line is present, the strategist has posted a code-PASS at the same SHA, and the pull_request CI run is green. Workers never mark a PR ready.
+- **`gh pr ready` only as part of the merge.** Muse or the Hetzner ops session may run `gh pr ready` only when the PASS line and the green pull_request CI run are at the same head. Workers never mark a PR ready.
 
 Cancelled GitHub Actions runs are not failures. See the pre-merge procedure for how to read check conclusions.
 
@@ -189,37 +191,9 @@ Do not merge, restart, or change prod config from a Playtest session.
 
 # Pre-merge check procedure (#2056)
 
-Two checks that look authoritative are not. Both produced false negatives on #2053 — they agreed with each other and both were wrong, which is the worst failure shape.
+Two checks that look authoritative are not. `git show --stat` abbreviates long paths, so a grep for the full path misses a collision. `git merge-tree` without `--write-tree` can report a conflict with no `<<<<<<<` markers, so counting markers reads clean on a branch that does not merge. Both produced false negatives on #2053.
 
-Do not use these:
-
-```bash
-# LIES: --stat abbreviates long paths to ".../src/services/ai-service.ts",
-# so grep -F against full paths never matches and every collision reads clean.
-git show --stat --format="" <commit> | grep -Ff <pr-files.txt>
-
-# LIES: this git emits "changed in both" but no inline "<<<<<<<" markers,
-# so counting markers returns 0 on a branch that genuinely conflicts.
-git merge-tree $(git merge-base origin/main <head>) origin/main <head> | grep -c '^<<<<<<<'
-```
-
-Use these instead:
-
-```bash
-# Collisions: full paths on both sides, compared as sets.
-gh pr diff <pr> --name-only | sort > /tmp/pr-files.txt
-for c in $(git rev-list <head>..origin/main); do
-  git show --name-only --format="" "$c" | sort | comm -12 - /tmp/pr-files.txt
-done
-
-# Conflicts: perform the merge; only a real merge knows.
-git worktree add --detach /tmp/conflict-test <head>
-cd /tmp/conflict-test && git merge origin/main --no-commit --no-ff
-git diff --name-only --diff-filter=U        # empty == clean
-git merge --abort && cd - && git worktree remove --force /tmp/conflict-test
-```
-
-A clean result from the second command is the only evidence that a branch merges. `mergeable` from the GitHub API is also not evidence: it is `UNKNOWN` while GitHub recomputes, which is exactly when you are asking.
+Use `scripts/pre-merge-check.sh` (documented in `docs/pre-merge-check.md`). It compares full paths and runs `git merge-tree --write-tree`. Do not keep a second hand procedure beside it. `mergeable` from the GitHub API is also not evidence: it is `UNKNOWN` while GitHub recomputes, which is exactly when you are asking.
 
 ## Read run conclusions, not `gh pr checks` row colors
 

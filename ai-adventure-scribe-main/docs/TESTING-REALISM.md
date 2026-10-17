@@ -63,7 +63,7 @@ Some of this project's schema had never been created by any committed migration:
 
 Six migrations still cannot replay, all because they depend on `campaign_characters`, `starter_character_templates` or `character_creation_metrics` — tables that drizzle does not model, so there is no trustworthy source for their DDL. They are listed with reasons in `db/migrations/.replay-known-gaps`, and can only be cleared by dumping the real definitions out of production (`pg_dump --schema-only -t <table>`) and committing them. **That list only ever shrinks — never add a new migration to it.** A migration not on the list that fails to replay fails the build.
 
-Running it locally needs a PostgreSQL server; `TEST_DATABASE_URL` overrides the default of `postgres://localhost:5432/postgres`. Without pgvector some migrations cannot run, so the schema-completeness findings are downgraded to warnings rather than reporting a failure the environment caused. CI runs on `pgvector/pgvector:pg16`, where nothing is skipped.
+Running it locally needs a PostgreSQL server; `TEST_DATABASE_URL` overrides the default of `postgres://localhost:5432/postgres`. Without pgvector some migrations cannot run, so the schema-completeness findings are downgraded to warnings rather than reporting a failure the environment caused. CI runs on `pgvector/pgvector:pg15`, where nothing is skipped.
 
 ## Permanent incident regressions
 
