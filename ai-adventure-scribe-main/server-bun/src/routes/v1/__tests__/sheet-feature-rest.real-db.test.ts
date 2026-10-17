@@ -1906,21 +1906,60 @@ describeWithDb('paladin Lay on Hands pool and Divine Sense tracking (#712)', () 
   });
 
   it('the llm.ts wiring spends on an ordinary story turn, not on a combat-opening turn (#712)', async () => {
-    // Deterministic regardless of test order: full pool, paladin missing 5 HP.
+    // Self-contained: a fresh paladin and session owned by the current auth
+    // user, so there is no userId swap and no shared-encounter state. A fresh
+    // session has no encounter, which is what an ordinary story turn looks
+    // like — the combat Lay on Hands path cannot steal the spend.
+    const owner = userId;
+    const [{ id: routeCampaignId }] = await db
+      .insert(campaigns)
+      .values({ userId: owner, name: testId('712-route-camp') })
+      .returning({ id: campaigns.id });
+    const [{ id: routePaladinId }] = await db
+      .insert(characters)
+      .values({
+        userId: owner,
+        campaignId: routeCampaignId,
+        name: testId('712-route-pal'),
+        class: 'Paladin',
+        level: 1,
+      })
+      .returning({ id: characters.id });
+    await db.insert(characterStats).values({
+      characterId: routePaladinId,
+      charisma: 10,
+      maxHitPoints: 12,
+      currentHitPoints: 7,
+      temporaryHitPoints: 0,
+      isConscious: true,
+      vitalState: 'standing',
+    });
+    const [{ id: routeSessionId }] = await db
+      .insert(gameSessions)
+      .values({
+        campaignId: routeCampaignId,
+        characterId: routePaladinId,
+        sessionNumber: 1,
+        status: 'active',
+      })
+      .returning({ id: gameSessions.id });
+    const routeLayOnHandsId = await ensureLibraryRow('Lay on Hands');
+    // Lazily create the pool row, then reset to full pool / missing 5 HP.
+    await layOnHandsPool(routePaladinId, owner);
     const reset = async () => {
       await db
         .update(characterFeatures)
         .set({ usesRemaining: 5 })
         .where(
           and(
-            eq(characterFeatures.characterId, paladinId),
-            eq(characterFeatures.featureId, layOnHandsId),
+            eq(characterFeatures.characterId, routePaladinId),
+            eq(characterFeatures.featureId, routeLayOnHandsId),
           ),
         );
       await db
         .update(characterStats)
         .set({ currentHitPoints: 7 })
-        .where(eq(characterStats.characterId, paladinId));
+        .where(eq(characterStats.characterId, routePaladinId));
     };
     const logCount = async (): Promise<number> =>
       (
@@ -1929,9 +1968,9 @@ describeWithDb('paladin Lay on Hands pool and Divine Sense tracking (#712)', () 
           .from(featureUsageLog)
           .where(
             and(
-              eq(featureUsageLog.characterId, paladinId),
-              eq(featureUsageLog.featureId, layOnHandsId),
-              eq(featureUsageLog.sessionId, sessionId),
+              eq(featureUsageLog.characterId, routePaladinId),
+              eq(featureUsageLog.featureId, routeLayOnHandsId),
+              eq(featureUsageLog.sessionId, routeSessionId),
             ),
           )
       ).length;
@@ -1940,95 +1979,91 @@ describeWithDb('paladin Lay on Hands pool and Divine Sense tracking (#712)', () 
         await db
           .select({ currentHitPoints: characterStats.currentHitPoints })
           .from(characterStats)
-          .where(eq(characterStats.characterId, paladinId))
+          .where(eq(characterStats.characterId, routePaladinId))
           .limit(1)
       )[0]?.currentHitPoints ?? null;
+    const pool = async (): Promise<number | null> =>
+      (
+        await db
+          .select({ usesRemaining: characterFeatures.usesRemaining })
+          .from(characterFeatures)
+          .where(
+            and(
+              eq(characterFeatures.characterId, routePaladinId),
+              eq(characterFeatures.featureId, routeLayOnHandsId),
+            ),
+          )
+          .limit(1)
+      )[0]?.usesRemaining ?? null;
 
-    // The route authenticates as the module-level userId; the paladin belongs
-    // to paladinUserId, so borrow it for the requests below.
-    const savedUserId = userId;
-    userId = paladinUserId;
-    try {
-      // The block's shared encounter is 'active'; an ordinary story turn has
-      // no live encounter, and the combat Lay on Hands path would otherwise
-      // steal the spend before the story condition is reached. Mark it
-      // completed (no endedReason, so the party-defeated branch stays out).
-      await db
-        .update(combatEncounters)
-        .set({ status: 'completed' })
-        .where(eq(combatEncounters.id, encounterId));
+    const playerInput = 'I use Lay on Hands to heal myself for 3 hit points';
+    await reset();
+    await db.insert(dialogueHistory).values({
+      sessionId: routeSessionId,
+      speakerType: 'player',
+      speakerId: routePaladinId,
+      message: playerInput,
+    });
+    const logsBefore = await logCount();
 
-      const playerInput = 'I use Lay on Hands to heal myself for 3 hit points';
-      await reset();
-      await db.insert(dialogueHistory).values({
-        sessionId,
-        speakerType: 'player',
-        speakerId: paladinId,
-        message: playerInput,
-      });
-      const logsBefore = await logCount();
+    // Ordinary story turn: combatEntry present (combat not active), no
+    // combat_entry_pending. The body shape mirrors the #264 route test.
+    generatedText = JSON.stringify({
+      text: 'Warmth spreads through your wounds as you lay on hands.',
+    });
+    const res = await request('/v1/llm/generate', 'POST', {
+      prompt: 'The paladin tends their wounds. What happens?',
+      player_input: playerInput,
+      sessionId: routeSessionId,
+      dmReply: { messageId: '22222222-3333-4444-8555-666666666666', inCombat: false },
+      combatEntry: {
+        sessionId: routeSessionId,
+        player: { name: 'Test Paladin', initiativeModifier: 2 },
+      },
+      provider: 'openrouter',
+      requestType: 'user',
+      maxTokens: 8192,
+      temperature: 0.9,
+    });
+    expect(res.status).toBe(200);
 
-      // Ordinary story turn: combatEntry present (combat not active), no
-      // combat_entry_pending. The body shape mirrors the #264 route test.
-      generatedText = JSON.stringify({
-        text: 'Warmth spreads through your wounds as you lay on hands.',
-      });
-      const res = await request('/v1/llm/generate', 'POST', {
-        prompt: 'The paladin tends their wounds. What happens?',
-        player_input: playerInput,
-        sessionId,
-        dmReply: { messageId: '22222222-3333-4444-8555-666666666666', inCombat: false },
-        combatEntry: {
-          sessionId,
-          player: { name: 'Test Paladin', initiativeModifier: 2 },
-        },
-        provider: 'openrouter',
-        requestType: 'user',
-        maxTokens: 8192,
-        temperature: 0.9,
-      });
-      expect(res.status).toBe(200);
+    // The llm.ts condition ran the spend: one heal and one pool draw.
+    expect(await hp()).toBe(10);
+    expect(await pool()).toBe(2);
+    expect((await logCount()) - logsBefore).toBe(1);
 
-      // The llm.ts condition ran the spend: one heal and one pool draw.
-      expect(await hp()).toBe(10);
-      expect(await poolRemaining(layOnHandsId)).toBe(2);
-      expect((await logCount()) - logsBefore).toBe(1);
-
-      // A turn that opens combat: the envelope carries combat_entry_pending,
-      // so the same declaration spends nothing. Fresh message so the
-      // once-per-message guard is not what blocks it.
-      await reset();
-      await db.insert(dialogueHistory).values({
-        sessionId,
-        speakerType: 'player',
-        speakerId: paladinId,
-        message: playerInput,
-      });
-      const logsBeforeEntry = await logCount();
-      generatedText = JSON.stringify({
-        text: 'A goblin bursts from the treeline!',
-        combat_entry_pending: { encounterId: '33333333-4444-5555-8666-777777777777' },
-      });
-      const res2 = await request('/v1/llm/generate', 'POST', {
-        prompt: 'The paladin tends their wounds. What happens?',
-        player_input: playerInput,
-        sessionId,
-        dmReply: { messageId: '44444444-5555-6666-8777-888888888888', inCombat: false },
-        combatEntry: {
-          sessionId,
-          player: { name: 'Test Paladin', initiativeModifier: 2 },
-        },
-        provider: 'openrouter',
-        requestType: 'user',
-        maxTokens: 8192,
-        temperature: 0.9,
-      });
-      expect(res2.status).toBe(200);
-      expect(await hp()).toBe(7);
-      expect(await poolRemaining(layOnHandsId)).toBe(5);
-      expect((await logCount()) - logsBeforeEntry).toBe(0);
-    } finally {
-      userId = savedUserId;
-    }
+    // A turn that opens combat: the envelope carries combat_entry_pending,
+    // so the same declaration spends nothing. Fresh message so the
+    // once-per-message guard is not what blocks it.
+    await reset();
+    await db.insert(dialogueHistory).values({
+      sessionId: routeSessionId,
+      speakerType: 'player',
+      speakerId: routePaladinId,
+      message: playerInput,
+    });
+    const logsBeforeEntry = await logCount();
+    generatedText = JSON.stringify({
+      text: 'A goblin bursts from the treeline!',
+      combat_entry_pending: { encounterId: '33333333-4444-5555-8666-777777777777' },
+    });
+    const res2 = await request('/v1/llm/generate', 'POST', {
+      prompt: 'The paladin tends their wounds. What happens?',
+      player_input: playerInput,
+      sessionId: routeSessionId,
+      dmReply: { messageId: '44444444-5555-6666-8777-888888888888', inCombat: false },
+      combatEntry: {
+        sessionId: routeSessionId,
+        player: { name: 'Test Paladin', initiativeModifier: 2 },
+      },
+      provider: 'openrouter',
+      requestType: 'user',
+      maxTokens: 8192,
+      temperature: 0.9,
+    });
+    expect(res2.status).toBe(200);
+    expect(await hp()).toBe(7);
+    expect(await pool()).toBe(5);
+    expect((await logCount()) - logsBeforeEntry).toBe(0);
   });
 });
