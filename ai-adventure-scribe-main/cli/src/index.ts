@@ -13,7 +13,7 @@ import { selectPlaySession, templateListRows, type StarterTemplate } from './pla
 import { installRequestIdCapture } from './request-id';
 import { parseScript } from './script';
 import { createTranscriptWriter } from './transcript';
-import { loginWithPassword } from '../../shared/auth/headless-auth';
+import { loginWithPassword, loginWithTestAuth } from '../../shared/auth/headless-auth';
 
 import type { CompletedHeadlessRoll, HeadlessEvent } from '@/services/headless-game-client';
 
@@ -27,6 +27,7 @@ type Args = {
   fresh: boolean;
   json: boolean;
   auto: boolean;
+  testAuth: boolean;
   turns: number;
   delay: number;
   transcript?: string;
@@ -36,7 +37,14 @@ type Args = {
 };
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { fresh: false, json: false, auto: false, turns: 20, delay: 2_000 };
+  const args: Args = {
+    fresh: false,
+    json: false,
+    auto: false,
+    testAuth: false,
+    turns: 20,
+    delay: 2_000,
+  };
   const [command, subcommand, ...rest] = argv;
   args.command =
     command === 'sessions' || command === 'templates'
@@ -54,6 +62,7 @@ function parseArgs(argv: string[]): Args {
     else if (flag === '--new') args.fresh = true;
     else if (flag === '--json') args.json = true;
     else if (flag === '--auto') args.auto = true;
+    else if (flag === '--test-auth') args.testAuth = true;
     else if (flag === '--turns') args.turns = Number(flags[++i] || 20);
     else if (flag === '--delay') args.delay = Number(flags[++i] || 2_000);
     else if (flag === '--transcript') args.transcript = flags[++i];
@@ -84,19 +93,26 @@ function seedRandom(seed: number | undefined): () => number {
   return mulberry32(seed);
 }
 
-async function authenticate(): Promise<void> {
+async function authenticate(testAuth: boolean): Promise<void> {
   config({ path: new URL('../.env.cli', import.meta.url).pathname, override: false });
   const { apiUrl: baseUrl, supabaseUrl, supabaseAnonKey } = applyCliEnvironment();
-  const email = process.env.SMOKE_EMAIL;
-  const password = process.env.SMOKE_PASSWORD;
-  if (!email || !password)
-    throw new Error('SMOKE_EMAIL and SMOKE_PASSWORD are required (see cli/.env.cli.example)');
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error(
       'CLI_SUPABASE_URL and CLI_SUPABASE_ANON_KEY are required (see cli/.env.cli.example)',
     );
   }
-  const tokens = await loginWithPassword({ baseUrl, email, password });
+  let tokens;
+  if (testAuth) {
+    const secret = process.env.TEST_AUTH_SECRET;
+    if (!secret) throw new Error('TEST_AUTH_SECRET is required for --test-auth');
+    tokens = await loginWithTestAuth({ baseUrl, secret });
+  } else {
+    const email = process.env.SMOKE_EMAIL;
+    const password = process.env.SMOKE_PASSWORD;
+    if (!email || !password)
+      throw new Error('SMOKE_EMAIL and SMOKE_PASSWORD are required (see cli/.env.cli.example)');
+    tokens = await loginWithPassword({ baseUrl, email, password });
+  }
   const { configureHeadlessSession } = await import('@/services/auth/TokenService');
   const { markAuthReady } = await import('@/lib/auth-gate');
   configureHeadlessSession({
@@ -336,7 +352,7 @@ async function runPlay(args: Args): Promise<void> {
 
 const args = parseArgs(process.argv.slice(2));
 try {
-  await authenticate();
+  await authenticate(args.testAuth);
   if (args.command === 'sessions list') {
     const { userDataApi } = await import('@/services/user-data-api');
     console.table(await userDataApi.listSessions({ status: 'active' }));
@@ -348,7 +364,7 @@ try {
   } else if (args.command === 'play') await runPlay(args);
   else
     throw new Error(
-      'Usage: ir templates list --campaign the-eternal-feast | ir play --campaign the-eternal-feast [--new] [--template <key>] [--character <id|template-key>] [--json] [--auto --turns 20 --delay 2000 --persona <careful|aggressive|chaotic>] [--seed <int>] [--script <file>] [--transcript <file>] | ir sessions list. The client RNG is seeded by --seed; the server rolls its own dice from DICE_SEED.',
+      'Usage: ir templates list --campaign the-eternal-feast | ir play --campaign the-eternal-feast [--new] [--template <key>] [--character <id|template-key>] [--json] [--auto --turns 20 --delay 2000 --persona <careful|aggressive|chaotic>] [--seed <int>] [--script <file>] [--transcript <file>] [--test-auth] | ir sessions list. The client RNG is seeded by --seed; the server rolls its own dice from DICE_SEED.',
     );
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
