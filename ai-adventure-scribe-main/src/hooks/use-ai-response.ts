@@ -248,6 +248,7 @@ export const useAIResponse = (): {
      * existing path).
      */
     onStreamChunk?: (chunk: string) => void,
+    onStreamReset?: () => void,
   ) => Promise<EnhancedChatMessage>;
   combatTurnUiState: CombatTurnUiState;
   resumeCombatTurn: () => Promise<void>;
@@ -378,6 +379,7 @@ export const useAIResponse = (): {
       onEngineNotice?: (notice: LocalNotice) => void,
       signal?: AbortSignal,
       onStreamChunk?: (chunk: string) => void,
+      onStreamReset?: () => void,
     ): Promise<EnhancedChatMessage> => {
       try {
         let timingCheckpoint = performance.now();
@@ -775,6 +777,9 @@ export const useAIResponse = (): {
           // preview while combat is active: the early render suppresses those
           // turns (#2139), so the preview follows the same contract.
           ...(onStreamChunk && !combatWasActiveAtRequestStart ? { onStream: onStreamChunk } : {}),
+          ...(onStreamReset && onStreamChunk && !combatWasActiveAtRequestStart
+            ? { onStreamReset }
+            : {}),
           context: aiContext,
           conversationHistory,
           userPlan: userPlan || undefined,

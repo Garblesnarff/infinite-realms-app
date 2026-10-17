@@ -9,14 +9,12 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { fetchMock, loadCachedSessionMock, persistSessionMock, refreshMock } = vi.hoisted(
-  () => ({
-    fetchMock: vi.fn(),
-    loadCachedSessionMock: vi.fn(),
-    persistSessionMock: vi.fn(),
-    refreshMock: vi.fn(),
-  }),
-);
+const { fetchMock, loadCachedSessionMock, persistSessionMock, refreshMock } = vi.hoisted(() => ({
+  fetchMock: vi.fn(),
+  loadCachedSessionMock: vi.fn(),
+  persistSessionMock: vi.fn(),
+  refreshMock: vi.fn(),
+}));
 
 vi.mock('@/lib/logger', () => ({
   default: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -110,6 +108,30 @@ describe('generateText streaming (#633 PR2)', () => {
     expect(requestBody().stream).toBe(true);
     expect(metadata).toEqual([
       { provider: 'openrouter', model: 'x-ai/grok-4.1-fast', dmReplyMessageId: 'dm-1' },
+    ]);
+  });
+
+  it('calls onStreamReset when the server discards a streamed attempt, before the next deltas', async () => {
+    fetchMock.mockResolvedValueOnce(
+      sseResponse([
+        { type: 'delta', text: 'rejected prose ' },
+        { type: 'reset' },
+        { type: 'delta', text: 'The tavern door swings open.' },
+        { type: 'done', payload: DONE_PAYLOAD },
+      ]),
+    );
+    const events: string[] = [];
+
+    await llmApiClient.generateText({
+      prompt: 'hello',
+      onStream: (chunk) => events.push(`delta:${chunk}`),
+      onStreamReset: () => events.push('reset'),
+    });
+
+    expect(events).toEqual([
+      'delta:rejected prose ',
+      'reset',
+      'delta:The tavern door swings open.',
     ]);
   });
 

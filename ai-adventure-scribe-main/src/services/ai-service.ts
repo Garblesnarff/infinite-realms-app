@@ -17,10 +17,7 @@ import {
   SECURITY_RULES_BASE_TEXT,
 } from './ai/prompt-assembly';
 import { CampaignContextPrompts } from './ai/prompts/campaign-context-prompts';
-import {
-  GameContextPrompts,
-  resolveStarterCampaignId,
-} from './ai/prompts/game-context-prompts';
+import { GameContextPrompts, resolveStarterCampaignId } from './ai/prompts/game-context-prompts';
 import { formatConversationHistoryMessage } from './ai/shared/conversation-history';
 import { measurePromptSections } from './ai/shared/prompt-metrics';
 import {
@@ -195,6 +192,7 @@ export class AIService {
      * final text.
      */
     onStream?: (chunk: string) => void;
+    onStreamReset?: () => void;
   }): Promise<AIResponse> {
     // Dedupe in-flight chat calls (2s TTL)
     const key = keyFor(
@@ -385,7 +383,9 @@ export class AIService {
         // combat state flips only on combat start/end, so the system message
         // stays byte-identical across turns within a scene.
         const inCombat = params.context.gameState?.isInCombat === true;
-        const { campaignName, campaignDescription, hasCampaignDetails } = extractCampaignDetails(params.context);
+        const { campaignName, campaignDescription, hasCampaignDetails } = extractCampaignDetails(
+          params.context,
+        );
         // The opening turn keeps the legacy single-prompt assembly (no system
         // message): it has no scene yet and must see the whole campaign to
         // stage it. Every later turn splits stable -> volatile for caching.
@@ -778,6 +778,7 @@ export class AIService {
           signal: params.signal,
           // #633 PR2: opt the DM turn into server-sent narration deltas.
           ...(params.onStream ? { onStream: params.onStream } : {}),
+          ...(params.onStreamReset ? { onStreamReset: params.onStreamReset } : {}),
         });
         reportTurnPhase(
           params.onTurnPhase,
@@ -898,10 +899,7 @@ export class AIService {
         if (processingError instanceof PartyDefeatedError) throw processingError;
         if (processingError instanceof SessionExpiredError) throw processingError;
         if (processingError instanceof ApiClientError) throw processingError;
-        if (
-          processingError instanceof Error &&
-          processingError.name === 'AbortError'
-        ) {
+        if (processingError instanceof Error && processingError.name === 'AbortError') {
           throw processingError;
         }
 

@@ -59,10 +59,7 @@ import {
   getConfiguredGeminiModels,
   getConfiguredOpenRouterModels,
 } from '../../services/llm-model-config.js';
-import {
-  LLMProviderService,
-  type LLMResponse,
-} from '../../services/llm-provider-service.js';
+import { LLMProviderService, type LLMResponse } from '../../services/llm-provider-service.js';
 import { countPromptSections } from '../../services/prompt-section-counter.js';
 
 /**
@@ -378,7 +375,7 @@ export function attachUntargetedSpellAttack(
     ...envelope,
     combat_entry_pending: { ...pending, declaredAttack: declareSpellAttackOn(spell, actor) },
   });
-};
+}
 
 /**
  * #262: the player declared a defensive action in plain text ("I dodge"). The DM's
@@ -566,7 +563,11 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         return { error: 'Missing prompt' };
       }
 
-      const generateTurn = async (canonicalMessageId?: string, onToken?: (text: string) => void) => {
+      const generateTurn = async (
+        canonicalMessageId?: string,
+        onToken?: (text: string) => void,
+        onAttemptStart?: () => void,
+      ) => {
         // Phase 0.6 (#1688): per-section prompt token telemetry, log-only. No storage --
         // one structured log line per turn, WARN instead of INFO when the total estimate
         // is large enough to matter for the Phase 4 bounded-prompt work. Absent `metrics`
@@ -761,9 +762,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             // Dynamic import: CombatEncounterService pulls in the database client at
             // import time. Loading it lazily keeps the route importable in tests that
             // don't mock the database (same pattern as the party-defeated check above).
-            const { CombatEncounterService } = await import(
-              '../../services/combat/combat-encounter-service.js'
-            );
+            const { CombatEncounterService } =
+              await import('../../services/combat/combat-encounter-service.js');
             const activeEncounter = await CombatEncounterService.getActiveEncounter(
               defenseSessionId,
               userId,
@@ -828,6 +828,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             // full text still accumulates, so retry and everything downstream
             // behave exactly as non-streaming.
             ...(onToken ? { onToken } : {}),
+            ...(onAttemptStart ? { onAttemptStart } : {}),
           });
         let result = await generateOnce();
         // #312: one bounded retry on a retryable storyteller failure before the turn degrades.
@@ -927,7 +928,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             model: result.model,
             ...(keyLimit ? { keyLimit: true } : {}),
           });
-          const degradedEnvelope = keyLimit ? keyLimitDegradedEnvelope() : degradedGenerateEnvelope();
+          const degradedEnvelope = keyLimit
+            ? keyLimitDegradedEnvelope()
+            : degradedGenerateEnvelope();
           if (keyLimit) {
             try {
               await AIUsageService.refundQuota({ userId, plan, type: quotaType, units: 1 });
@@ -981,11 +984,14 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // engine hit narrated as a miss), only the contradicting sentences are replaced with
         // the engine's truth — the rest of the reply is the DM's legitimate prose and stays.
         // Fails open: a check that cannot run keeps the reply.
-        if (envelope && typeof envelope.text === 'string' && (sessionId ?? combatEntry?.sessionId)) {
+        if (
+          envelope &&
+          typeof envelope.text === 'string' &&
+          (sessionId ?? combatEntry?.sessionId)
+        ) {
           try {
-            const { repairNarrationContradiction } = await import(
-              '../../services/dm/narration-outcome.js'
-            );
+            const { repairNarrationContradiction } =
+              await import('../../services/dm/narration-outcome.js');
             const repaired = await repairNarrationContradiction({
               sessionId: (sessionId ?? combatEntry?.sessionId) as string,
               text: envelope.text,
@@ -1073,7 +1079,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
               });
             }
             if (envelope.conditions) {
-              const { applyStoryConditions } = await import('../../services/dm/story-conditions.js');
+              const { applyStoryConditions } =
+                await import('../../services/dm/story-conditions.js');
               await applyStoryConditions({
                 userId,
                 sessionId: castSessionId,
@@ -1170,8 +1177,11 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           ...(canonicalMessageId ? { dmReplyMessageId: canonicalMessageId } : {}),
         };
       };
-      const runTurn = (onToken?: (text: string) => void) => {
-        if (sessionId && (dmReply || requestedPlayerInput || extractPlayerInputFromPrompt(prompt))) {
+      const runTurn = (onToken?: (text: string) => void, onAttemptStart?: () => void) => {
+        if (
+          sessionId &&
+          (dmReply || requestedPlayerInput || extractPlayerInputFromPrompt(prompt))
+        ) {
           return (async () => {
             const { SessionMessageService } =
               await import('../../services/session/session-message-service.js');
@@ -1184,7 +1194,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
                 dmReply?.messageId,
                 (replyId) => {
                   if (replyId) dmReply = { ...dmReply, messageId: replyId };
-                  return generateTurn(replyId, onToken);
+                  return generateTurn(replyId, onToken, onAttemptStart);
                 },
               );
             } catch (error) {
@@ -1198,7 +1208,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             }
           })();
         }
-        return generateTurn(undefined, onToken);
+        return generateTurn(undefined, onToken, onAttemptStart);
       };
       // #633 PR2: opt-in streaming. Provider tokens stream out as narration
       // `delta` events while the full response accumulates and runs the
@@ -1210,14 +1220,19 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
         const writer = writable.getWriter();
         const sendEvent = (event: Record<string, unknown>): void => {
-          void writer
-            .write(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
-            .catch(() => {
-              // The client went away; the turn still completes server-side.
-            });
+          void writer.write(encoder.encode(`data: ${JSON.stringify(event)}\n\n`)).catch(() => {
+            // The client went away; the turn still completes server-side.
+          });
         };
         let streamedRaw = '';
         let emittedNarration = '';
+        // #633: a rejected attempt's deltas must not stay in the preview. Reset
+        // the server accumulators and tell the client to clear its preview.
+        const onAttemptStart = (): void => {
+          streamedRaw = '';
+          emittedNarration = '';
+          sendEvent({ type: 'reset' });
+        };
         const onToken = (delta: string): void => {
           streamedRaw += delta;
           const narration = extractPartialNarration(streamedRaw);
@@ -1233,7 +1248,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         };
         void (async () => {
           try {
-            const payload = await runTurn(onToken);
+            const payload = await runTurn(onToken, onAttemptStart);
             sendEvent({ type: 'done', payload });
           } catch (error) {
             const { AppError } = await import('../../lib/errors.js');

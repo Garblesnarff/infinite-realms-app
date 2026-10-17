@@ -24,9 +24,14 @@ afterEach(() => {
 const VALID_DM_REPLY = JSON.stringify({
   text: 'The lantern flickers over a wet cobblestone street.',
   options: [],
+  narration_segments: [],
+  roll_requests: [],
+  combat_transition: 'none',
+  scene_spec: null,
   map_actions: [],
-  combat_actions: [],
   handout_actions: [],
+  combatants: [],
+  combat_actions: [],
 });
 
 type Reply = { status?: number; content: string };
@@ -37,6 +42,13 @@ function stubOpenRouter(replies: Reply[]) {
   globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
     bodies.push(JSON.parse(String(init?.body)));
     const reply = replies[Math.min(bodies.length - 1, replies.length - 1)];
+    if (bodies.at(-1)?.stream === true) {
+      const sse = `data: ${JSON.stringify({ choices: [{ delta: { content: reply.content } }] })}\n\ndata: [DONE]\n\n`;
+      return new Response(sse, {
+        status: reply.status ?? 200,
+        headers: { 'content-type': 'text/event-stream' },
+      });
+    }
     return new Response(
       JSON.stringify({
         choices: [{ message: { content: reply.content } }],
@@ -198,5 +210,71 @@ describe('#633 schema as instructions for Anthropic candidates', () => {
     });
     expect(fallback.messages.at(-1)).toEqual({ role: 'user', content: 'volatile user prompt' });
     expect(result.model).toBe('google/gemini-3.1-flash-lite');
+  });
+});
+
+// A reply that is valid JSON with `text` but fails the DM schema.
+const BAD_DM_REPLY = JSON.stringify({
+  ...JSON.parse(VALID_DM_REPLY),
+  roll_requests: [null],
+  xp_award: { amount: '50', reason: 'opened the door' },
+  combat_transition: 'boom',
+});
+
+describe('#633 full-schema validation on the instructed branch', () => {
+  it('rejects a bad-field reply, retries, then fails over to strict Gemini', async () => {
+    useAnthropicThenGemini();
+    const bodies = stubOpenRouter([
+      { content: BAD_DM_REPLY },
+      { content: BAD_DM_REPLY },
+      { content: VALID_DM_REPLY },
+    ]);
+
+    const result = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      responseSchema: dmResponseSchema,
+      maxTokens: 100,
+    });
+
+    expect(bodies.map((b) => (b as unknown as Body).model)).toEqual([
+      'anthropic/claude-haiku-5.5',
+      'anthropic/claude-haiku-5.5',
+      'google/gemini-3.1-flash-lite',
+    ]);
+    expect(result.model).toBe('google/gemini-3.1-flash-lite');
+    expect((bodies[2] as unknown as Body).response_format).toBeDefined();
+  });
+
+  it('does the same when onToken is set, and signals a reset before each attempt', async () => {
+    useAnthropicThenGemini();
+    const bodies = stubOpenRouter([
+      { content: BAD_DM_REPLY },
+      { content: BAD_DM_REPLY },
+      { content: VALID_DM_REPLY },
+    ]);
+    const deltas: string[] = [];
+    let resets = 0;
+
+    const result = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      responseSchema: dmResponseSchema,
+      maxTokens: 100,
+      onToken: (delta) => deltas.push(delta),
+      onAttemptStart: () => {
+        resets += 1;
+      },
+    });
+
+    expect(bodies.map((b) => (b as unknown as Body).model)).toEqual([
+      'anthropic/claude-haiku-5.5',
+      'anthropic/claude-haiku-5.5',
+      'google/gemini-3.1-flash-lite',
+    ]);
+    expect(resets).toBe(3);
+    expect(result.model).toBe('google/gemini-3.1-flash-lite');
+    expect(result.text).toBe(VALID_DM_REPLY);
+    expect(deltas.length).toBeGreaterThan(0);
   });
 });

@@ -1,3 +1,5 @@
+import Ajv, { type ValidateFunction } from 'ajv';
+
 import { isRetryableUpstreamStatus, LLMUpstreamError } from './llm-errors.js';
 import { llmFetch } from './llm-fixture-fetch.js';
 import { alertProviderKeyLimit, isProviderKeyLimitError } from './llm-key-limit.js';
@@ -60,6 +62,12 @@ export interface LLMGenerateOptions {
    * retry and every downstream step behave exactly as non-streaming.
    */
   onToken?: (deltaText: string) => void;
+  /**
+   * #633: fires before every provider attempt (each retry and each failover
+   * candidate). Streamed deltas from a rejected attempt are discarded by the
+   * caller, so it can reset its preview here.
+   */
+  onAttemptStart?: () => void;
 }
 
 export interface LLMExtractOptions {
@@ -156,8 +164,8 @@ const orKeyLimitSignal = (seen: boolean, status?: number, details?: string): boo
 export const validateStructuredResponseText = (
   text: string,
   responseSchema?: Record<string, unknown>,
-): void => {
-  if (!responseSchema) return;
+): unknown => {
+  if (!responseSchema) return undefined;
   let parsed: unknown;
   try {
     const cleaned = text
@@ -177,6 +185,37 @@ export const validateStructuredResponseText = (
     typeof (parsed as { text?: unknown }).text !== 'string'
   ) {
     throw new Error('Structured response must be an object containing text:string');
+  }
+  return parsed;
+};
+
+// #633: ajv checks the full schema on the anthropic/ branch, where the schema
+// is sent as instructions and nothing else enforces it. strict:false lets the
+// existing keywords (anyOf, oneOf, min/max) compile. Compiled once per schema
+// object; the DM schema is a module constant, so this is one compile per process.
+const schemaAjv = new Ajv({ strict: false, allErrors: false });
+const compiledSchemaValidators = new WeakMap<Record<string, unknown>, ValidateFunction>();
+
+const compiledSchemaValidator = (schema: Record<string, unknown>): ValidateFunction => {
+  let validate = compiledSchemaValidators.get(schema);
+  if (!validate) {
+    validate = schemaAjv.compile(schema);
+    compiledSchemaValidators.set(schema, validate);
+  }
+  return validate;
+};
+
+/** #633: text:string check, then the full schema (instructed branch only). */
+const validateInstructedSchemaText = (
+  text: string,
+  responseSchema: Record<string, unknown>,
+): void => {
+  const parsed = validateStructuredResponseText(text, responseSchema);
+  const validate = compiledSchemaValidator(responseSchema);
+  if (!validate(parsed)) {
+    throw new Error(
+      `Structured response does not match schema: ${schemaAjv.errorsText(validate.errors)}`,
+    );
   }
 };
 
@@ -350,6 +389,7 @@ export class LLMProviderService {
       provider = 'openrouter',
       responseSchema,
       onToken,
+      onAttemptStart,
     } = options;
 
     try {
@@ -363,6 +403,7 @@ export class LLMProviderService {
           responseSchema,
           systemPrompt,
           onToken,
+          onAttemptStart,
         );
       }
 
@@ -443,6 +484,7 @@ export class LLMProviderService {
     responseSchema?: Record<string, unknown>,
     systemPrompt?: string,
     onToken?: (deltaText: string) => void,
+    onAttemptStart?: () => void,
   ): Promise<LLMResponse> {
     const breaker = getCircuitBreaker('llm:openrouter');
     breaker.allowOrThrow();
@@ -544,6 +586,7 @@ export class LLMProviderService {
 
       for (let retry = 0; retry < (responseSchema ? 2 : 1); retry += 1) {
         attempts.push(candidate);
+        onAttemptStart?.();
         try {
           const response = await llmFetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
@@ -584,7 +627,11 @@ export class LLMProviderService {
             }
             if (responseSchema) {
               try {
-                validateStructuredResponseText(text, responseSchema);
+                if (strictSchema) {
+                  validateStructuredResponseText(text, responseSchema);
+                } else {
+                  validateInstructedSchemaText(text, responseSchema);
+                }
               } catch (validationError) {
                 lastFailure = {
                   status: 502,

@@ -666,6 +666,19 @@ export const useMessageHandlerLogic = ({
           context: { intent: 'response' },
         });
       };
+      // #633: a rejected attempt (retry or failover) is discarded server-side;
+      // clear the preview so its prose does not prefix the next attempt.
+      const onStreamReset = (): void => {
+        if (abortController.signal.aborted || previewWithdrawn) return;
+        streamedNarration = '';
+        updateMessage({
+          id: previewRowId,
+          text: '',
+          sender: 'dm',
+          timestamp: new Date().toISOString(),
+          context: { intent: 'response' },
+        });
+      };
       const withdrawPreview = (): void => {
         if (previewWithdrawn) return;
         previewWithdrawn = true;
@@ -794,6 +807,7 @@ export const useMessageHandlerLogic = ({
           showEngineNotice,
           abortController.signal,
           onStreamChunk,
+          onStreamReset,
         ),
         turnSignal,
       );
