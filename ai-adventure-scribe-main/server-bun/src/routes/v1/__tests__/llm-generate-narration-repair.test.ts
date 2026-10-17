@@ -140,9 +140,17 @@ const dmEnvelope = (text: string): string =>
   JSON.stringify({
     text,
     options: ['Sneak past the guards', 'Climb back down'],
-    narration_segments: [{ type: 'dm', text }],
+    // #782 item 3: the route enforces the server-built schema; the mock must
+    // return a complete envelope. narration_segments items require character
+    // and voice_category.
+    narration_segments: [{ type: 'dm', text, character: null, voice_category: null }],
+    roll_requests: [],
     combat_transition: 'none',
-    dice_rolls: [],
+    scene_spec: null,
+    map_actions: [],
+    handout_actions: [],
+    combatants: [],
+    combat_actions: [],
   });
 
 const postGenerate = async (narration: string): Promise<Record<string, unknown>> => {

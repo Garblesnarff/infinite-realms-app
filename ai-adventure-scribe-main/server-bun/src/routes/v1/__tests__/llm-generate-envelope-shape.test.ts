@@ -71,7 +71,31 @@ const PLAYER_INPUT = 'i take a swing and attempt to punch the professor';
 
 async function generate(text: string) {
   loggedObjects = [];
-  generatedResult = { text, provider: 'openrouter', model: 't/m' };
+  // #782 item 3: the route enforces the server-built schema, so the mock
+  // provider must return a complete envelope. Merge the test's partial JSON
+  // with base defaults; the test's fields win.
+  let completeText = text;
+  try {
+    const partial = JSON.parse(text);
+    if (partial && typeof partial === 'object' && !Array.isArray(partial)) {
+      completeText = JSON.stringify({
+        text: '',
+        options: [],
+        narration_segments: [],
+        roll_requests: [],
+        combat_transition: 'none',
+        scene_spec: null,
+        map_actions: [],
+        handout_actions: [],
+        combatants: [],
+        combat_actions: [],
+        ...partial,
+      });
+    }
+  } catch {
+    // Non-JSON prose passes through unchanged (tested by 'text-only' case).
+  }
+  generatedResult = { text: completeText, provider: 'openrouter', model: 't/m' };
   await app.handle(
     new Request('http://localhost/v1/llm/generate', {
       method: 'POST',
@@ -100,11 +124,18 @@ describe('LLM_GENERATE_ENVELOPE_SHAPE', () => {
     );
     expect(line).toBeDefined();
     expect(line?.parsed).toBe(true);
+    // #782 item 3: the mock is merged with the complete base envelope, so the
+    // log records all schema keys, not just the test's partial set.
     expect(line?.keys).toEqual([
       'combat_actions',
       'combat_transition',
+      'combatants',
+      'handout_actions',
+      'map_actions',
+      'narration_segments',
       'options',
       'roll_requests',
+      'scene_spec',
       'text',
     ]);
     expect(line?.combatActions).toBe(2);
@@ -140,9 +171,13 @@ describe('LLM_GENERATE_ENVELOPE_SHAPE', () => {
   });
 
   it('distinguishes an absent array from an empty one', async () => {
+    // #782 item 3: the server-built schema requires roll_requests, so the
+    // provider always sends it. The log still distinguishes empty (0) from
+    // the pre-schema absent case (null); with the schema enforced, absent
+    // no longer occurs, so we assert the empty-array path.
     const line = await generate(JSON.stringify({ text: NARRATION, combat_actions: [] }));
     expect(line?.combatActions).toBe(0);
-    expect(line?.rollRequests).toBeNull();
+    expect(line?.rollRequests).toBe(0);
   });
 
   it('records a text-only (non-JSON) response rather than throwing', async () => {
@@ -188,7 +223,20 @@ describe('LLM_GENERATE_ENVELOPE_SHAPE', () => {
   it('returns x-request-id and logs the same id on start and end (#2050 D)', async () => {
     loggedObjects = [];
     generatedResult = {
-      text: JSON.stringify({ text: NARRATION }),
+      // #782 item 3: the route enforces the server-built schema; the mock
+      // must return a complete envelope.
+      text: JSON.stringify({
+        text: NARRATION,
+        options: [],
+        narration_segments: [],
+        roll_requests: [],
+        combat_transition: 'none',
+        scene_spec: null,
+        map_actions: [],
+        handout_actions: [],
+        combatants: [],
+        combat_actions: [],
+      }),
       provider: 'openrouter',
       model: 't/m',
     };
