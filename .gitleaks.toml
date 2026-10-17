@@ -17,10 +17,6 @@ paths = [
   '''^ai-adventure-scribe-main/supabase/migrations/README_SESSION_ARCHIVAL\.md$''',
 ]
 
-[[allowlists]]
-description = "LLM replay fixture key: the sha256 llmFetch writes as `key` (#734), not a credential"
-targetRules = ["generic-api-key"]
-condition = "AND"
-regexTarget = "line"
-regexes = ['''^\+?\s*"key":\s*"[0-9a-f]{64}",?\s*$''']
+[allowlist]
+description = "LLM replay fixtures (#734): the `key` field is the sha256 llmFetch writes, not a credential. Scoped to the fixture directory only."
 paths = ['''^ai-adventure-scribe-main/server-bun/src/services/__tests__/fixtures/llm/''']
