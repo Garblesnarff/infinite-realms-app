@@ -162,11 +162,14 @@ main() {
   mkdir -p "$STATE"
   exec 9> "$STATE/pulse.lock"
   if ! flock -n 9; then say "another pulse.sh holds the lock; exiting"; exit 0; fi
-  OWNER_LOGIN=$(gh api user --jq .login)
-
-  local prs prs_ok=1 merged ci vstatus vjson vshort vbuilt smoke spent post_failed=0
-  # A failed PR list must not stop the tick: the /version, CI and cap alerts still run.
-  prs=$(open_prs) || { prs=""; prs_ok=0; say "open PR list failed"; }
+  local prs="" prs_ok=1 merged ci vstatus vjson vshort vbuilt smoke spent post_failed=0
+  # A GitHub failure here must not stop the tick: the /version, CI and cap alerts
+  # still run, and only the PR-based checks are skipped.
+  if OWNER_LOGIN=$(gh api user --jq .login) && [ -n "$OWNER_LOGIN" ]; then
+    prs=$(open_prs) || { prs=""; prs_ok=0; say "open PR list failed"; }
+  else
+    OWNER_LOGIN=""; prs_ok=0; say "GitHub user lookup failed; PR checks skipped"
+  fi
   merged=$(merged_rows) || merged=FAILED
   ci=$(main_ci) || ci="unknown"
   vjson=$(curl -sS -m 10 -w '\n%{http_code}' "$VERSION_URL" 2> /dev/null) || true

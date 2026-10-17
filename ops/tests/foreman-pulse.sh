@@ -57,10 +57,39 @@ echo x | post_and_mark "$g" 1000 main-ci-red cap-hit && r=ok || r=failed
 check "post_and_mark: good post returns 0" "$r" ok
 alert_due cap-hit "$g" 1060 && r=yes || r=no; check "post_and_mark: good post marks every key" "$r" no
 POST=0
-grep -q 'return "$post_failed" # a failed post' "$HERE/../foreman/pulse.sh" && grep -q 'post_failed=1; }' "$HERE/../foreman/pulse.sh" \
-  && r=yes || r=no; check "main: a failed post makes the run exit 1" "$r" yes
-grep -q 'prs=$(open_prs) || { prs=""; prs_ok=0;' "$HERE/../foreman/pulse.sh" && r=yes || r=no
-check "main: a failed PR list does not stop the tick" "$r" yes
+# main end to end: GitHub down (every gh call fails), /version 503, then the post fails or works
+run_main() { # run_main <post rc>: exit status of main; state in $TMP/main
+  (
+    STATE=$TMP/main POST=1 MODE=now PULSE_WEBHOOK_URL=http://127.0.0.1:9/ LEDGER=$TMP/none TRIAGE_LOG=$TMP/none
+    gh() { echo '{"message":"Server Error"}'; return 1; }
+    curl() { printf '{}\n503'; }
+    post() { cat > /dev/null; return "$POST_RC"; }
+    POST_RC=$1 main
+  ) 2> "$TMP/main.err"
+}
+rm -rf "$TMP/main"; run_main 1 && r=0 || r=$?
+check "main: GitHub down + failed post exits 1" "$r" 1
+grep -q 'version-down' "$TMP/main/alerts.state" 2> /dev/null && r=marked || r=unmarked
+check "main: failed post leaves version-down unmarked" "$r" unmarked
+grep -q 'PR checks skipped' "$TMP/main.err" && r=yes || r=no; check "main: owner lookup failure skips only the PR checks" "$r" yes
+run_main 0 && r=0 || r=$?
+check "main: GitHub down + good post exits 0" "$r" 0
+grep -q 'version-down' "$TMP/main/alerts.state" 2> /dev/null && r=marked || r=unmarked
+check "main: good post marks version-down" "$r" marked
+# user lookup works, the open PR list fails: the tick goes on and /version still alerts
+rm -rf "$TMP/main"
+(
+  STATE=$TMP/main POST=1 MODE=now PULSE_WEBHOOK_URL=http://127.0.0.1:9/ LEDGER=$TMP/none TRIAGE_LOG=$TMP/none
+  gh() { case "$*" in "api user"*) echo someone ;; *) echo '{"message":"Server Error"}'; return 1 ;; esac; }
+  curl() { printf '{}\n503'; }
+  post() { cat > /dev/null; }
+  main
+) 2> "$TMP/main.err" && r=0 || r=$?
+check "main: failed PR list + good post exits 0" "$r" 0
+grep -q 'open PR list failed' "$TMP/main.err" && r=yes || r=no; check "main: failed PR list is logged" "$r" yes
+grep -q 'PR checks skipped' "$TMP/main.err" && r=yes || r=no; check "main: user lookup worked, so no owner-skip line" "$r" no
+grep -q 'version-down' "$TMP/main/alerts.state" 2> /dev/null && r=marked || r=unmarked
+check "main: failed PR list still posts the /version alert" "$r" marked
 
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]
