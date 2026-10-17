@@ -7,6 +7,7 @@ import {
   getGeminiModelCandidates,
   getOpenRouterExtractionModelCandidates,
   getOpenRouterModelCandidates,
+  modelSupportsStrictSchema,
 } from './llm-model-config.js';
 import { getStructuredOutputUnsupportedModels } from './model-health.js';
 import { logger } from '../lib/logger.js';
@@ -102,6 +103,9 @@ export interface LLMResponse {
 
 const GEMINI_MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
 export const TEXT_PROVIDER_TIMEOUT_MS = 60_000;
+/** #633: instruction line sent ahead of the schema for models without strict json_schema. */
+const SCHEMA_INSTRUCTION_LINE =
+  'Reply with exactly one JSON object that matches this JSON Schema. No prose, no code fences.';
 let geminiModelCache: { ids: Set<string>; fetchedAt: number } | null = null;
 
 const failoverReason = (status?: number): string =>
@@ -461,8 +465,6 @@ export class LLMProviderService {
       }
       return allowed;
     });
-    const messages: OpenRouterChatMessage[] = [];
-
     // #352: the stable system block goes first so the provider caches on the
     // prompt prefix; history and the volatile user prompt follow.
     // #633 PR3: the `cache_control` breakpoint below is the request's ONLY
@@ -472,20 +474,35 @@ export class LLMProviderService {
     // stable prefix the provider caches. History and the user message stay
     // plain strings with no marker: they change every turn and must never be
     // part of the cached prefix.
-    if (typeof systemPrompt === 'string' && systemPrompt.length > 0) {
-      messages.push({
-        role: 'system',
-        content: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
-      });
-    }
-    if (Array.isArray(history)) {
-      for (const m of history) {
-        if (m && m.role && typeof m.content === 'string') {
-          messages.push(m);
+    const buildMessages = (systemText: string | undefined): OpenRouterChatMessage[] => {
+      const built: OpenRouterChatMessage[] = [];
+      if (typeof systemText === 'string' && systemText.length > 0) {
+        built.push({
+          role: 'system',
+          content: [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral' } }],
+        });
+      }
+      if (Array.isArray(history)) {
+        for (const m of history) {
+          if (m && m.role && typeof m.content === 'string') {
+            built.push(m);
+          }
         }
       }
-    }
-    messages.push({ role: 'user', content: prompt });
+      built.push({ role: 'user', content: prompt });
+      return built;
+    };
+    const messages = buildMessages(systemPrompt);
+    // #633: Anthropic candidates cannot take strict json_schema, so the schema
+    // rides in the stable system text instead (same cache block, so it is
+    // byte-identical across turns). Built once; candidates pick, never mutate.
+    const instructedMessages = responseSchema
+      ? buildMessages(
+          [systemPrompt, `${SCHEMA_INSTRUCTION_LINE}\n${JSON.stringify(responseSchema)}`]
+            .filter((part): part is string => typeof part === 'string' && part.length > 0)
+            .join('\n\n'),
+        )
+      : messages;
 
     type ORChatResp = {
       choices?: { message?: { content?: string } }[];
@@ -503,9 +520,10 @@ export class LLMProviderService {
 
     for (let index = 0; index < candidateModels.length; index += 1) {
       const candidate = candidateModels[index];
+      const strictSchema = !responseSchema || modelSupportsStrictSchema(candidate);
       const reqBody = {
         model: candidate,
-        messages,
+        messages: strictSchema ? messages : instructedMessages,
         max_tokens: maxTokens,
         temperature,
         // #352: ask OpenRouter for the usage detail object so cache hits are
@@ -514,7 +532,7 @@ export class LLMProviderService {
         // #633 PR2: stream tokens when the caller wants progress callbacks.
         // Usage rides the final stream chunk automatically.
         ...(onToken ? { stream: true } : {}),
-        ...(responseSchema
+        ...(responseSchema && strictSchema
           ? {
               response_format: {
                 type: 'json_schema',
