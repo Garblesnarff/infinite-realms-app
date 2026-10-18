@@ -590,7 +590,15 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
     expect(save.roll).toBeLessThanOrEqual(20);
     expect(deathSaveLogs).toHaveLength(1);
     const status = await statusOf(scene.heroId);
-    if (save.isSuccess) {
+    if (save.roll === 20) {
+      // Natural 20: revived at 1 HP, conscious, tallies reset.
+      expect(status).toMatchObject({
+        currentHp: 1,
+        isConscious: true,
+        deathSavesSuccesses: 0,
+        deathSavesFailures: 0,
+      });
+    } else if (save.isSuccess) {
       expect(status.deathSavesSuccesses).toBe(1);
     } else {
       expect(status.deathSavesFailures).toBeGreaterThanOrEqual(1);
