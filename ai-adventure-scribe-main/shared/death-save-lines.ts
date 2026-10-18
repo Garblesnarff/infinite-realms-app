@@ -14,6 +14,13 @@
  * Pure text in, a sentence out; no imports.
  */
 
+/**
+ * The chat line the dying tray sends for the death-save turn (#261). The
+ * client's DyingComposerSlot posts exactly this text; the server's llm route
+ * recognizes it and resolves the save through the engine instead of the DM.
+ */
+export const DEATH_SAVE_TURN_TEXT = 'Death saving throw.';
+
 /** The fields a death-save description needs; both `DeathSaveResult` (server) and `EngineDeathSave` (client) satisfy it. */
 export interface DeathSaveFacts {
   roll?: number;

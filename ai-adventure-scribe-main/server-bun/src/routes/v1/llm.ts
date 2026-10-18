@@ -14,6 +14,7 @@ import { Elysia, t } from 'elysia';
 
 import { SSE_HEADERS, extractPartialNarration } from './llm-streaming.js';
 import { deferUntilCommit } from '../../../../db/transaction-context';
+import { DEATH_SAVE_TURN_TEXT, describeDeathSave } from '../../../../shared/death-save-lines.js';
 import { authenticateRequest, type AuthUser } from '../../lib/auth.js';
 import { logger } from '../../lib/logger.js';
 import { isAdmin } from '../../middleware/admin.js';
@@ -420,6 +421,113 @@ function constantTimeEqual(a: string, b: string): boolean {
   return timingSafeEqual(ab, bb);
 }
 
+/**
+ * Resolves the dying tray's turn (#261). The client posts "Death saving throw."
+ * as a chat line; the engine must roll the d20 on it. Returns the turn payload
+ * when an active encounter has a dying player holding the turn.
+ *
+ * Returns null only when there is no session or no active encounter (the caller
+ * falls through to normal generation). When an encounter is active but the turn
+ * is not a dying turn — e.g. a retry after the save already resolved and the
+ * turn advanced — returns an engine message instead of null, so the DM never
+ * narrates the raw "Death saving throw." line as prose (the original #261 bug).
+ *
+ * The engine rolls the die here (rollOwedDeathSave rolls when no d20 is
+ * given) and advances the turn, so the save is recorded even when the client's
+ * dice prompt never fires. The narration line comes from describeDeathSave.
+ */
+async function resolveDeathSaveTurn(
+  sessionId: string | undefined,
+  userId: string,
+): Promise<Record<string, unknown> | null> {
+  if (!sessionId) return null;
+  try {
+    // Dynamic imports: these services pull in the database client at import
+    // time. Loading them lazily keeps the route importable in tests that don't
+    // mock the database (same pattern as the party-defeated check).
+    const { CombatEncounterService } = await import(
+      '../../services/combat/combat-encounter-service.js'
+    );
+    const activeEncounter = await CombatEncounterService.getActiveEncounter(sessionId, userId);
+    if (!activeEncounter) return null;
+    const { executeCombatIntent } = await import(
+      '../../services/combat/combat-intent-service.js'
+    );
+    const state = await CombatEncounterService.getCombatState(activeEncounter.id, userId);
+    const currentRef = state.currentParticipant;
+    const current = currentRef
+      ? state.participants.find((p) => p.id === currentRef.id)
+      : undefined;
+    const { vitalStateOf } = await import('../../services/combat/vital-state.js');
+    // Not a dying turn (turn advanced after a resolved save, or the text was
+    // sent when no save was owed): answer from the engine so the DM never sees
+    // the raw line. This is the retry path — the d20 already rolled.
+    if (!current || vitalStateOf(current) !== 'dying') {
+      logger.info({
+        msg: 'LLM_GENERATE_DEATH_SAVE_ALREADY_RESOLVED',
+        sessionId,
+        encounterId: activeEncounter.id,
+      });
+      return {
+        parsed: true,
+        text: 'The death saving throw has already been resolved.',
+        provider: 'engine',
+        model: 'engine',
+        deathSave: null,
+      };
+    }
+    const result = (await executeCombatIntent(
+      activeEncounter.id,
+      { type: 'death_save', actorId: current.id },
+      userId,
+      'player',
+    )) as { deathSaves?: Array<Record<string, unknown>> };
+    const save = result?.deathSaves?.[0];
+    const actorName =
+      typeof current.name === 'string' && current.name.length > 0 ? current.name : 'The hero';
+    logger.info({
+      msg: 'LLM_GENERATE_DEATH_SAVE_TURN',
+      sessionId,
+      encounterId: activeEncounter.id,
+      participantId: current.id,
+      roll: save?.roll,
+      successes: save?.successes,
+      failures: save?.failures,
+      isDead: save?.isDead,
+      isStabilized: save?.isStabilized,
+    });
+    return {
+      parsed: true,
+      text: save ? describeDeathSave(actorName, save) : `${actorName} makes a death saving throw.`,
+      provider: 'engine',
+      model: 'engine',
+      deathSave: save ?? null,
+    };
+  } catch (error) {
+    // Only the engine's refusal (BusinessLogicError: not the turn holder,
+    // already recorded) maps to "already resolved". Other errors (DB outage in
+    // getActiveEncounter/getCombatState, etc.) are rethrown so the request
+    // fails and the client can show it — never tell the dying player the save
+    // is done when nothing was rolled or recorded.
+    const { BusinessLogicError } = await import('../../lib/errors.js');
+    if (error instanceof BusinessLogicError) {
+      logger.warn({
+        msg: 'LLM_GENERATE_DEATH_SAVE_REFUSED',
+        sessionId,
+        error: error.message,
+      });
+      return {
+        parsed: true,
+        text: 'The death saving throw has already been resolved.',
+        provider: 'engine',
+        model: 'engine',
+        deathSave: null,
+      };
+    }
+    throw error;
+  }
+}
+
 export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
   .use(planRateLimit('llm'))
 
@@ -712,6 +820,17 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           typeof requestedPlayerInput === 'string'
             ? requestedPlayerInput
             : extractPlayerInputFromPrompt(prompt);
+        // #261: the dying tray's turn arrives as the chat line "Death saving throw."
+        // (DEATH_SAVE_TURN_TEXT). The DM must not be asked to narrate it: the engine
+        // owns the d20 and the tallies. Resolve the save here so the roll happens on
+        // the hero's turn even when the client's dice prompt never fires.
+        if (typeof playerInput === 'string' && playerInput.trim() === DEATH_SAVE_TURN_TEXT) {
+          const deathSaveOutcome = await resolveDeathSaveTurn(sessionId, userId);
+          if (deathSaveOutcome) return deathSaveOutcome;
+          // No active dying turn: fall through to normal generation rather than
+          // erroring. The DM will see an out-of-context line and can ask for
+          // clarification.
+        }
         const combatIntentPrefilterMatched =
           typeof playerInput === 'string' && looksLikeCombatIntent(playerInput);
         let declaredAttack: Awaited<ReturnType<typeof detectDeclaredAttack>> = null;
