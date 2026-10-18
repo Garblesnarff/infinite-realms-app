@@ -1191,6 +1191,10 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
               messageId: dmReply.messageId,
               reason: persistence.reason ?? 'unknown',
               generatedAt,
+              // #783: the server keeps the envelope so the watchdog can persist
+              // a fallback row if the client never saves this reply.
+              envelope,
+              userId,
             };
             const schedule = () => {
               void scheduleDmReplyWatchdog(watchdog);
