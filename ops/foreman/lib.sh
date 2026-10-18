@@ -151,7 +151,7 @@ credit_spent() {
   local out
   if ! out=$(awk -v cs="$2" '
       NF == 0 { next }
-      $2 !~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/ { bad = 1; next }
+      $2 !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ { bad = 1; next }
       $2 >= cs { if ($4 !~ /^[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?$/) bad = 1; else s += $4 }
       END { if (bad) { print "unparsable"; exit 1 } printf "%.4f", s + 0 }' "$1" 2> /dev/null); then
     echo "${out:-unreadable}"; return 1

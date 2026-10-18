@@ -533,6 +533,10 @@ r=$(credit_spent "$TMP/ledger-bad2" 2026-10-14) && rc=0 || rc=$?
 [ "$rc" = 1 ] && [ "$r" = unparsable ] && ok "credit stop: a row without a date fails closed" || bad "credit unparsable date: rc=$rc out=$r"
 printf '%s\n' "2026-10-15T01:00:00Z 2026-10-15 pr=2 1.2e-05 sha=bbbbbbbb posted models=x" "" > "$TMP/ledger-ok"
 [ "$(credit_spent "$TMP/ledger-ok" 2026-10-14)" = 0.0000 ] && ok "credit_spent: e-notation amounts and blank lines parse" || bad "credit e-notation: $(credit_spent "$TMP/ledger-ok" 2026-10-14)"
+# the image's awk is mawk 1.3.4 20200120, which has no {n} repeats: every row
+# then failed the date check and the stop fired on a $15 ledger (2026-10-18)
+awk '/^credit_spent\(\)/,/^}/' "$HERE/../foreman/lib.sh" | grep -qE '\{[0-9]+(,[0-9]*)?\}' \
+  && bad "credit_spent: awk program uses {n} repeats, which the image's mawk does not support" || ok "credit_spent: awk program has no {n} repeats (image mawk)"
 grep -q '^CREDIT_STOP_USD=${FOREMAN_CREDIT_STOP_USD:-94}' "$HERE/../foreman/review.sh" && grep -q '^CREDIT_STOP_USD=${FOREMAN_CREDIT_STOP_USD:-94}' "$HERE/../foreman/triage.sh" \
   && ok "credit stop: both scripts default to \$94" || bad "credit stop default"
 awk '/credit_left=\$\(credit_left_to_stop/ { c = NR } /spent=\$\(spent_today\)/ && c && !s { s = NR } /review_pr "\$n" "\$sha" "\$ref" "\$budget"/ { r = NR } END { exit !(c && s && r && c < s && s < r) }' "$HERE/../foreman/review.sh" \
