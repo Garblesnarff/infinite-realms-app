@@ -424,8 +424,13 @@ function constantTimeEqual(a: string, b: string): boolean {
 /**
  * Resolves the dying tray's turn (#261). The client posts "Death saving throw."
  * as a chat line; the engine must roll the d20 on it. Returns the turn payload
- * when an active encounter has a dying player holding the turn, null otherwise
- * (the caller falls through to normal generation).
+ * when an active encounter has a dying player holding the turn.
+ *
+ * Returns null only when there is no session or no active encounter (the caller
+ * falls through to normal generation). When an encounter is active but the turn
+ * is not a dying turn — e.g. a retry after the save already resolved and the
+ * turn advanced — returns an engine message instead of null, so the DM never
+ * narrates the raw "Death saving throw." line as prose (the original #261 bug).
  *
  * The engine rolls the die here (rollOwedDeathSave rolls when no d20 is
  * given) and advances the turn, so the save is recorded even when the client's
@@ -450,11 +455,27 @@ async function resolveDeathSaveTurn(
     );
     const state = await CombatEncounterService.getCombatState(activeEncounter.id, userId);
     const currentRef = state.currentParticipant;
-    if (!currentRef) return null;
-    const current = state.participants.find((p) => p.id === currentRef.id);
-    if (!current) return null;
+    const current = currentRef
+      ? state.participants.find((p) => p.id === currentRef.id)
+      : undefined;
     const { vitalStateOf } = await import('../../services/combat/vital-state.js');
-    if (vitalStateOf(current) !== 'dying') return null;
+    // Not a dying turn (turn advanced after a resolved save, or the text was
+    // sent when no save was owed): answer from the engine so the DM never sees
+    // the raw line. This is the retry path — the d20 already rolled.
+    if (!current || vitalStateOf(current) !== 'dying') {
+      logger.info({
+        msg: 'LLM_GENERATE_DEATH_SAVE_ALREADY_RESOLVED',
+        sessionId,
+        encounterId: activeEncounter.id,
+      });
+      return {
+        parsed: true,
+        text: 'The death saving throw has already been resolved.',
+        provider: 'engine',
+        model: 'engine',
+        deathSave: null,
+      };
+    }
     const result = (await executeCombatIntent(
       activeEncounter.id,
       { type: 'death_save', actorId: current.id },
@@ -483,15 +504,22 @@ async function resolveDeathSaveTurn(
       deathSave: save ?? null,
     };
   } catch (error) {
-    // A refused save (not the turn holder, not dying, already recorded) or a
-    // lookup failure falls through to normal generation rather than erroring
-    // the turn. The engine's BusinessLogicError carries the reason.
+    // The encounter exists but the save could not be resolved (engine refused:
+    // not the turn holder, already recorded — or a lookup failure). Never fall
+    // through to the DM with the raw "Death saving throw." line; that is the
+    // original #261 bug. The engine's BusinessLogicError carries the reason.
     logger.warn({
-      msg: 'LLM_GENERATE_DEATH_SAVE_FALLTHROUGH',
+      msg: 'LLM_GENERATE_DEATH_SAVE_REFUSED',
       sessionId,
       error: error instanceof Error ? error.message : String(error),
     });
-    return null;
+    return {
+      parsed: true,
+      text: 'The death saving throw has already been resolved.',
+      provider: 'engine',
+      model: 'engine',
+      deathSave: null,
+    };
   }
 }
 

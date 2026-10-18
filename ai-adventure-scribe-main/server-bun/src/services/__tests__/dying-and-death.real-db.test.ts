@@ -572,6 +572,33 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
     expect((await encounterOf(scene.encounterId)).status).toBe('active');
   });
 
+  test('#261 dying tray: server resolves "Death saving throw." via engine roll (no d20)', async () => {
+    // The dying tray posts "Death saving throw." as a chat line; the llm route's
+    // resolveDeathSaveTurn calls executeCombatIntent WITHOUT a d20, so the
+    // engine rolls via rollOwedDeathSave. This is the exact call the route makes.
+    const scene = await dropHero();
+    const result = (await executeCombatIntent(
+      scene.encounterId,
+      { type: 'death_save', actorId: scene.heroId },
+      userId,
+      'player',
+    )) as Record<string, any>;
+    // The engine rolled: roll is 1-20, committed to state, and logged.
+    expect(result.deathSaves).toHaveLength(1);
+    const save = result.deathSaves[0];
+    expect(save.roll).toBeGreaterThanOrEqual(1);
+    expect(save.roll).toBeLessThanOrEqual(20);
+    expect(deathSaveLogs).toHaveLength(1);
+    const status = await statusOf(scene.heroId);
+    if (save.isSuccess) {
+      expect(status.deathSavesSuccesses).toBe(1);
+    } else {
+      expect(status.deathSavesFailures).toBeGreaterThanOrEqual(1);
+    }
+    // The turn advanced: the save was the whole turn.
+    expect(result.currentParticipant.id).toBe(scene.spiderId);
+  });
+
   test('9 or lower is a failure; a natural 1 is two failures', async () => {
     const scene = await dropHero();
     const nine = await deathSave(scene, 9);

@@ -7,6 +7,7 @@ import { Elysia } from 'elysia';
 
 let generatedCalls = 0;
 let executeIntentCalls: Array<{ encounterId: string; intent: unknown }> = [];
+let executeIntentImpl: (() => Promise<unknown>) | undefined;
 
 // The encounter the mocked service returns. Tests set `mockEncounterState`
 // before each request. Follows the real producer,
@@ -22,9 +23,12 @@ let mockCombatState:
         id: string;
         name: string;
         participantType: string;
-        hp: number;
         maxHp: number;
-        status?: { deathSavesSuccesses: number; deathSavesFailures: number };
+        status?: {
+          currentHp: number;
+          deathSavesSuccesses: number;
+          deathSavesFailures: number;
+        };
       }>;
       currentParticipant: { id: string; name: string } | null;
     }
@@ -81,6 +85,7 @@ mock.module('../../../services/combat/combat-encounter-service.js', () => ({
 mock.module('../../../services/combat/combat-intent-service.js', () => ({
   executeCombatIntent: async (encounterId: string, intent: unknown) => {
     executeIntentCalls.push({ encounterId, intent });
+    if (executeIntentImpl) return executeIntentImpl();
     // Follows the real death_save branch
     // (server-bun/src/services/combat/combat-intent-service.ts): the engine
     // rolls the d20 and advances the turn.
@@ -102,10 +107,10 @@ mock.module('../../../services/combat/combat-intent-service.js', () => ({
     };
   },
 }));
-mock.module('../../../services/combat/vital-state.js', () => ({
-  vitalStateOf: (participant: { hp: number }) => (participant.hp <= 0 ? 'dying' : 'standing'),
-}));
-// Route contract tests stub persistence; roll serialization is exercised with real PostgreSQL.
+// The real vitalStateOf is used (not stubbed): it reads status.currentHp,
+// participantType, and death-save tallies, so the test checks the production
+// dying rule. Fixtures carry those fields per
+// CombatEncounterService.getCombatState.
 mock.module('../../../services/session/session-message-service.js', () => ({
   SessionMessageService: {
     withRollTurn: async (
@@ -151,9 +156,8 @@ const dyingEncounter = () => {
         id: 'player-1',
         name: 'The Apprentice',
         participantType: 'player',
-        hp: 0,
         maxHp: 8,
-        status: { deathSavesSuccesses: 0, deathSavesFailures: 0 },
+        status: { currentHp: 0, deathSavesSuccesses: 0, deathSavesFailures: 0 },
       },
     ],
     currentParticipant: { id: 'player-1', name: 'The Apprentice' },
@@ -164,6 +168,7 @@ describe('llm generate death-save turn (#261)', () => {
   it('resolves "Death saving throw." through the engine, not the DM', async () => {
     dyingEncounter();
     executeIntentCalls = [];
+    executeIntentImpl = undefined;
     generatedCalls = 0;
 
     const res = await postGenerate(deathSaveTurnBody());
@@ -188,8 +193,10 @@ describe('llm generate death-save turn (#261)', () => {
     expect(deathSave.failures).toBe(0);
   });
 
-  it('falls through to the DM when no dying turn is owed', async () => {
-    // Active encounter, but the current participant is standing.
+  it('returns already-resolved from the engine when no dying turn is owed', async () => {
+    // Active encounter, but the current participant is standing (e.g. a retry
+    // after the save resolved and the turn advanced). The engine answers; the
+    // DM never sees the raw line.
     mockActiveEncounter = { id: 'encounter-1', sessionId: 'session-1' };
     mockCombatState = {
       encounter: { id: 'encounter-1', status: 'active' },
@@ -198,27 +205,54 @@ describe('llm generate death-save turn (#261)', () => {
           id: 'player-1',
           name: 'The Apprentice',
           participantType: 'player',
-          hp: 8,
           maxHp: 8,
+          status: { currentHp: 8, deathSavesSuccesses: 0, deathSavesFailures: 0 },
         },
       ],
       currentParticipant: { id: 'player-1', name: 'The Apprentice' },
     };
     executeIntentCalls = [];
+    executeIntentImpl = undefined;
     generatedCalls = 0;
 
     const res = await postGenerate(deathSaveTurnBody());
     expect(res.status).toBe(200);
+    const body = await res.json();
 
-    // Not a dying turn: the engine was not asked, the DM handled the line.
+    // Not a dying turn: the engine was not asked to roll, the DM was not called.
     expect(executeIntentCalls).toHaveLength(0);
-    expect(generatedCalls).toBe(1);
+    expect(generatedCalls).toBe(0);
+    expect(body.provider).toBe('engine');
+    expect(body.text).toContain('already been resolved');
+  });
+
+  it('returns already-resolved when the engine refuses the save', async () => {
+    // The dying player holds the turn, but executeCombatIntent refuses (e.g.
+    // "already recorded" on a double-submit). The engine answers; the DM never
+    // narrates the raw line as prose.
+    dyingEncounter();
+    executeIntentCalls = [];
+    executeIntentImpl = undefined;
+    generatedCalls = 0;
+    executeIntentImpl = async () => {
+      throw new Error('Death save already recorded for this turn');
+    };
+
+    const res = await postGenerate(deathSaveTurnBody());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    expect(executeIntentCalls).toHaveLength(1);
+    expect(generatedCalls).toBe(0);
+    expect(body.provider).toBe('engine');
+    expect(body.text).toContain('already been resolved');
   });
 
   it('falls through to the DM when no encounter is active', async () => {
     mockActiveEncounter = undefined;
     mockCombatState = undefined;
     executeIntentCalls = [];
+    executeIntentImpl = undefined;
     generatedCalls = 0;
 
     const res = await postGenerate(deathSaveTurnBody());
