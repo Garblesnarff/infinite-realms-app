@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Guard: every server-bun `*.test.ts` / `*.vitest.ts` is executed by a CI job
+ * Guard: every server-bun `*.test.ts(x)` / `*.vitest.ts` is executed by a CI job
  * (#2602). The real-DB list guard only sees `*.real-db.test.ts`. A file outside
  * the isolated runner's glob, outside server-bun's vitest include, and absent
  * from the `server-real-db` file list runs nowhere, and both jobs stay green.
@@ -29,7 +29,7 @@ const VITEST_CONFIG_PATH = path.join(SERVER_DIR, 'vitest.config.ts');
 const SERVER_PACKAGE_PATH = path.join(SERVER_DIR, 'package.json');
 
 const JOB_KEY = (name) => new RegExp(`^(\\s*)${name}:\\s*$`);
-const TEST_PATH = /(?<=^|\s)[\w./-]+\.(?:vitest\.ts|test\.ts)(?=\s|\\|$)/g;
+const TEST_PATH = /(?<=^|\s)[\w./-]+\.(?:vitest\.ts|test\.tsx?)(?=\s|\\|$)/g;
 const SIMPLE_GLOB = /^(.+)\/\*\*\/\*(.+)$/;
 
 export function sliceJob(workflowYaml, jobName) {
@@ -127,7 +127,11 @@ export function matchSimpleGlob(file, glob) {
   }
   const [, dir, suffix] = parsed;
   if (file.split('/').some((segment) => segment.startsWith('.'))) return false;
-  return file.startsWith(`${dir}/`) && file.endsWith(suffix);
+  const braceSuffix = suffix.match(/^(.*)\{([^{}]+)\}$/);
+  const suffixes = braceSuffix
+    ? braceSuffix[2].split(',').map((extension) => `${braceSuffix[1]}${extension}`)
+    : [suffix];
+  return file.startsWith(`${dir}/`) && suffixes.some((ending) => file.endsWith(ending));
 }
 
 /**
@@ -182,7 +186,7 @@ export function collectServerTestFiles(dir = SERVER_DIR, prefix = '') {
     const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
     if (entry.isDirectory()) {
       found.push(...collectServerTestFiles(path.join(dir, entry.name), relative));
-    } else if (entry.name.endsWith('.test.ts') || entry.name.endsWith('.vitest.ts')) {
+    } else if (/\.(?:test\.tsx?|vitest\.ts)$/.test(entry.name)) {
       found.push(relative);
     }
   }
@@ -232,13 +236,20 @@ function main() {
     console.error(
       `::error::${file} is a server-bun test file that no CI job runs. ` +
         `A *.real-db.test.ts file, or any file that uses describeWithDb, counts only when ` +
-        `the server-real-db list names it (the isolated suite skips it). Other *.test.ts files ` +
+        `the server-real-db list names it (the isolated suite skips it). Other *.test.ts(x) files ` +
         `must match the isolated glob (${isolatedGlob}); *.vitest.ts files must match ` +
         `server-bun vitest include (${include.join(', ')}).`,
     );
   }
   if (result.unrun.length > 0) process.exit(1);
-  console.log('Server test discovery matches: every server-bun test file is run by a CI job.');
+  const knownUnrun = onDisk.filter((file) => file in knownUnlisted);
+  console.log(
+    `Server test discovery matches: ${onDisk.length - knownUnrun.length} suite(s) assigned to a CI job; ` +
+      `${knownUnrun.length} known-unrun suite(s).`,
+  );
+  for (const file of knownUnrun) {
+    console.log(`  known-unrun: ${file} — ${knownUnlisted[file]}`);
+  }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
