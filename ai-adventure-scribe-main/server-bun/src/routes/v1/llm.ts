@@ -504,22 +504,27 @@ async function resolveDeathSaveTurn(
       deathSave: save ?? null,
     };
   } catch (error) {
-    // The encounter exists but the save could not be resolved (engine refused:
-    // not the turn holder, already recorded — or a lookup failure). Never fall
-    // through to the DM with the raw "Death saving throw." line; that is the
-    // original #261 bug. The engine's BusinessLogicError carries the reason.
-    logger.warn({
-      msg: 'LLM_GENERATE_DEATH_SAVE_REFUSED',
-      sessionId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return {
-      parsed: true,
-      text: 'The death saving throw has already been resolved.',
-      provider: 'engine',
-      model: 'engine',
-      deathSave: null,
-    };
+    // Only the engine's refusal (BusinessLogicError: not the turn holder,
+    // already recorded) maps to "already resolved". Other errors (DB outage in
+    // getActiveEncounter/getCombatState, etc.) are rethrown so the request
+    // fails and the client can show it — never tell the dying player the save
+    // is done when nothing was rolled or recorded.
+    const { BusinessLogicError } = await import('../../lib/errors.js');
+    if (error instanceof BusinessLogicError) {
+      logger.warn({
+        msg: 'LLM_GENERATE_DEATH_SAVE_REFUSED',
+        sessionId,
+        error: error.message,
+      });
+      return {
+        parsed: true,
+        text: 'The death saving throw has already been resolved.',
+        provider: 'engine',
+        model: 'engine',
+        deathSave: null,
+      };
+    }
+    throw error;
   }
 }
 

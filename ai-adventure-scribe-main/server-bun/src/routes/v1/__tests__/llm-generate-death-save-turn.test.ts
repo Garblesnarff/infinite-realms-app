@@ -1,6 +1,8 @@
 import { describe, expect, it, mock } from 'bun:test';
 import { Elysia } from 'elysia';
 
+import { BusinessLogicError } from '../../../lib/errors.js';
+
 // #261: the dying tray posts "Death saving throw." as a chat line. The llm
 // route must resolve it through the engine (d20 rolled, tallies updated) on
 // the hero's turn, instead of sending it to the DM as prose.
@@ -8,6 +10,7 @@ import { Elysia } from 'elysia';
 let generatedCalls = 0;
 let executeIntentCalls: Array<{ encounterId: string; intent: unknown }> = [];
 let executeIntentImpl: (() => Promise<unknown>) | undefined;
+let getActiveEncounterImpl: (() => Promise<unknown>) | undefined;
 
 // The encounter the mocked service returns. Tests set `mockEncounterState`
 // before each request. Follows the real producer,
@@ -78,7 +81,10 @@ mock.module('../../../services/llm-provider-service.js', () => ({
 mock.module('../../../services/combat/combat-encounter-service.js', () => ({
   CombatEncounterService: {
     getLatestConcludedEncounter: async () => undefined,
-    getActiveEncounter: async () => mockActiveEncounter,
+    getActiveEncounter: async () => {
+      if (getActiveEncounterImpl) return getActiveEncounterImpl();
+      return mockActiveEncounter;
+    },
     getCombatState: async () => mockCombatState,
   },
 }));
@@ -169,6 +175,7 @@ describe('llm generate death-save turn (#261)', () => {
     dyingEncounter();
     executeIntentCalls = [];
     executeIntentImpl = undefined;
+    getActiveEncounterImpl = undefined;
     generatedCalls = 0;
 
     const res = await postGenerate(deathSaveTurnBody());
@@ -213,6 +220,7 @@ describe('llm generate death-save turn (#261)', () => {
     };
     executeIntentCalls = [];
     executeIntentImpl = undefined;
+    getActiveEncounterImpl = undefined;
     generatedCalls = 0;
 
     const res = await postGenerate(deathSaveTurnBody());
@@ -233,9 +241,11 @@ describe('llm generate death-save turn (#261)', () => {
     dyingEncounter();
     executeIntentCalls = [];
     executeIntentImpl = undefined;
+    getActiveEncounterImpl = undefined;
+    getActiveEncounterImpl = undefined;
     generatedCalls = 0;
     executeIntentImpl = async () => {
-      throw new Error('Death save already recorded for this turn');
+      throw new BusinessLogicError('Death save already recorded for this turn');
     };
 
     const res = await postGenerate(deathSaveTurnBody());
@@ -248,11 +258,33 @@ describe('llm generate death-save turn (#261)', () => {
     expect(body.text).toContain('already been resolved');
   });
 
+  it('rethrows DB errors instead of claiming the save resolved', async () => {
+    // A DB outage in getActiveEncounter must NOT tell the player the save is
+    // done when nothing was rolled. The error propagates; the client shows it.
+    dyingEncounter();
+    executeIntentCalls = [];
+    executeIntentImpl = undefined;
+    getActiveEncounterImpl = undefined;
+    generatedCalls = 0;
+    getActiveEncounterImpl = async () => {
+      throw new Error('database connection failed');
+    };
+
+    const res = await postGenerate(deathSaveTurnBody());
+    // Not 200 with "already been resolved": the request fails.
+    expect(res.status).not.toBe(200);
+    const body = await res.json();
+    expect(JSON.stringify(body)).not.toContain('already been resolved');
+    expect(executeIntentCalls).toHaveLength(0);
+    expect(generatedCalls).toBe(0);
+  });
+
   it('falls through to the DM when no encounter is active', async () => {
     mockActiveEncounter = undefined;
     mockCombatState = undefined;
     executeIntentCalls = [];
     executeIntentImpl = undefined;
+    getActiveEncounterImpl = undefined;
     generatedCalls = 0;
 
     const res = await postGenerate(deathSaveTurnBody());
