@@ -14,20 +14,23 @@ import crypto from 'crypto';
 
 import { eq } from 'drizzle-orm';
 import { Elysia, t } from 'elysia';
-import jwt from 'jsonwebtoken';
 
 import { authTokenExchangeRoutes } from './auth-token-exchange.js';
 import { users } from '../../../../db/schema/index';
 import { db } from '../../lib/drizzle';
 import { logger } from '../../lib/logger';
+import {
+  TEST_AUTH_USER_ID,
+  isTestAuthEnabled,
+  isTestAuthFlagOn,
+  mintTestTokens,
+  verifyTestRefreshToken,
+} from '../../lib/test-auth.js';
 import { createSimpleRateLimit } from '../../middleware/rate-limit.js';
 import { authTokenExchangeCodes } from '../../services/auth-token-exchange.js';
 import { authenticatePassword } from '../../services/password-login.js';
 import { workos, authConfig } from '../../services/workos';
 
-// Test auth configuration
-const TEST_AUTH_SECRET = process.env.TEST_AUTH_SECRET;
-const TEST_USER_ID = 'user_TEST_AUTOMATION_BOT_001';
 const OAUTH_STATE_COOKIE = 'ir_oauth_state';
 const OAUTH_STATE_MAX_AGE_SECONDS = 60 * 10; // 10 minutes
 
@@ -212,6 +215,20 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
       return { error: 'Missing refresh token' };
     }
 
+    const testUserId = verifyTestRefreshToken(refreshToken);
+    if (testUserId) {
+      const testUser = await db.query.users.findFirst({
+        where: eq(users.id, testUserId),
+      });
+
+      if (!testUser) {
+        set.status = 401;
+        return { error: 'Failed to refresh token - please log in again' };
+      }
+
+      return mintTestTokens(testUser);
+    }
+
     try {
       // Exchange refresh token for new access token
       const { accessToken, refreshToken: newRefreshToken } =
@@ -266,16 +283,17 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
    * SECURITY: Available only outside production when ENABLE_TEST_AUTH is set.
    */
   .get('/test-login', async ({ query, headers, redirect, set }) => {
-    // SECURITY: Never expose this route in production, regardless of configuration.
-    if (process.env.NODE_ENV === 'production' || !process.env.ENABLE_TEST_AUTH) {
-      set.status = 404;
-      return { error: 'Not found' };
-    }
+    // SECURITY: Never expose this route unless test auth is fully enabled.
+    // Production and any non-enabled configuration look like a missing route;
+    // a running server that enabled test auth but has no secret keeps its 401.
+    if (!isTestAuthEnabled()) {
+      const secretMissing =
+        process.env.NODE_ENV !== 'production' &&
+        isTestAuthFlagOn() &&
+        !process.env.TEST_AUTH_SECRET;
 
-    // SECURITY: Require the secret to be explicitly set
-    if (!TEST_AUTH_SECRET) {
-      set.status = 401;
-      return { error: 'Unauthorized' };
+      set.status = secretMissing ? 401 : 404;
+      return { error: secretMissing ? 'Unauthorized' : 'Not found' };
     }
 
     const headerSecret = headers['x-test-auth-secret'];
@@ -286,7 +304,7 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
     }
 
     // Verify test auth secret
-    if (headerSecret !== TEST_AUTH_SECRET) {
+    if (headerSecret !== process.env.TEST_AUTH_SECRET) {
       set.status = 401;
       return { error: 'Unauthorized' };
     }
@@ -294,7 +312,7 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
     try {
       // Get test user from database
       const testUser = await db.query.users.findFirst({
-        where: eq(users.id, TEST_USER_ID),
+        where: eq(users.id, TEST_AUTH_USER_ID),
       });
 
       if (!testUser) {
@@ -302,22 +320,7 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
         return { error: 'Unauthorized' };
       }
 
-      // Generate pseudo-JWT tokens
-      const accessToken = jwt.sign(
-        {
-          sub: testUser.id,
-          email: testUser.email,
-          iat: Math.floor(Date.now() / 1000),
-          exp: Math.floor(Date.now() / 1000) + 24 * 60 * 60, // 24 hours
-        },
-        TEST_AUTH_SECRET,
-        { algorithm: 'HS256' },
-      );
-
-      const refreshToken = jwt.sign({ sub: testUser.id, type: 'refresh' }, TEST_AUTH_SECRET, {
-        algorithm: 'HS256',
-        expiresIn: '7d',
-      });
+      const { accessToken, refreshToken } = mintTestTokens(testUser);
 
       logger.info({ msg: '[TEST AUTH] Generated tokens for test user', email: testUser.email });
       return redirect(createFrontendTokenExchangeRedirect(accessToken, refreshToken));
