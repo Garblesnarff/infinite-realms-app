@@ -378,6 +378,50 @@ describe('deriveCombatEntryFirstAction', () => {
     });
   });
 
+  it('resolves a romanized declaration onto an accented seat (#798)', async () => {
+    // The DM's map seats the NPC romanized ("House Flambe Student" / slug
+    // "house-flambe-student") while the encounter participant keeps the accent
+    // ("House Flambé Student"). The declared strike must still find the seat.
+    const declaredAttack = detectDeclaredAttack('I strike House Flambe Student', [
+      { name: 'Rook' },
+      { name: 'House Flambe Student', actorSlug: 'house-flambe-student' },
+    ]);
+    expect(declaredAttack).toMatchObject({ verb: 'strike', actorSlug: 'house-flambe-student' });
+
+    const firstAction = await deriveCombatEntryFirstAction(
+      {
+        sessionId: 'session-1',
+        combatState: {
+          ...state,
+          participants: [
+            state.participants[0],
+            { ...state.participants[1], name: 'House Flambé Student' },
+          ],
+        },
+        player: { characterId: 'character-1', name: 'Rook' },
+        declaredAttack: declaredAttack!,
+      },
+      {
+        ...deps,
+        getParticipantAbilityProfile: async () => ({
+          level: 1,
+          scores: { str: 12, dex: 16 },
+          savingThrowProficiencies: [],
+          saveBonuses: {},
+          spellIds: [],
+        }),
+        listEquippedWeaponProfiles: async () => [shortsword],
+      },
+    );
+
+    expect(firstAction).toMatchObject({
+      type: 'attack',
+      target: 'participant-professor',
+      targetLabel: 'House Flambé Student',
+      roll_request: { purpose: 'Shortsword attack against House Flambé Student' },
+    });
+  });
+
   it('derives a punch as an unarmed attack with the engine modifier', async () => {
     const firstAction = await deriveCombatEntryFirstAction(
       {

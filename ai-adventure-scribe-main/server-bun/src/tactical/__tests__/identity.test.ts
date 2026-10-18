@@ -80,6 +80,27 @@ describe('slug-based entity identity', () => {
     expect(normalizeEntityToken('  SHADOW-ROACH-1  ')).toBe('shadow-roach-1');
   });
 
+  // #798: the seat keeps the accent ("House Flambé Student") while the DM romanizes the
+  // slug ("house-flambe-student"). Folding accents to their base letter makes them one token;
+  // the old rule turned `é` into a separator and the two spellings never met.
+  test('folds an accented name onto its romanized slug', () => {
+    expect(normalizeEntityToken('House Flambé Student')).toBe('house-flambe-student');
+    expect(normalizeEntityToken('House Flambe Student')).toBe('house-flambe-student');
+  });
+
+  test('resolves an accented scene NPC from its romanized slug and numbered form (#798)', () => {
+    const FLAMBE_UUID = 'e5f6a7b8-c9d0-4e12-8345-67a89bcd0123';
+    const entities = [
+      entity(SEEKER_UUID, 'The Seeker', 1, 1, 'pc'),
+      entity(FLAMBE_UUID, 'House Flambé Student', 8, 5, 'monster'),
+    ];
+    assignEntitySlugs(entities);
+    expect(entitySlug(entities[1])).toBe('house-flambe-student');
+    expect(resolveEntityRef(entities, 'house-flambe-student')?.id).toBe(FLAMBE_UUID);
+    expect(resolveEntityRef(entities, 'House Flambe Student')?.id).toBe(FLAMBE_UUID);
+    expect(resolveEntityRef(entities, 'house-flambe-student-1')?.id).toBe(FLAMBE_UUID);
+  });
+
   // These are the exact strings the DM emitted in run 6, verbatim.
   test.each(['shadow-roach-1', 'shadow_roach_1', 'Shadow-Roach-1', 'SHADOW_ROACH_1'])(
     'resolves the run 6 spelling %p to the roach UUID',

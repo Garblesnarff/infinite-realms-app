@@ -14,11 +14,19 @@ export type EntityRef = { id: string; slug?: string; name?: string };
 const LEADING_ARTICLE = /^(?:the|a|an)-/;
 
 /**
+ * Diacritics are noise too: the DM romanizes `House Flambé Student` as
+ * `house-flambe-student` while the seat keeps the accent, and the old rule turned
+ * `é` into a separator (`house-flamb-student`) so the two spellings never met (#798).
+ */
+const foldDiacritics = (value: string): string =>
+  value.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+/**
  * Case, spacing, and separator differences are all noise: `Shadow_Roach 1` and
  * `shadow-roach-1` name the same creature. UUIDs survive this unchanged apart from case.
  */
 export function normalizeEntityToken(token: string): string {
-  return token
+  return foldDiacritics(token)
     .trim()
     .toLowerCase()
     .replace(/[\s_]+/g, '-')

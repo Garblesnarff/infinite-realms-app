@@ -31,6 +31,45 @@ const castAt = (target: string) => ({
   targetIds: [target],
 });
 
+describe('an accented scene name as a combat target (#798)', () => {
+  const PLAYER = {
+    id: '465816e1-0000-4000-8000-000000000001',
+    name: 'Rook',
+    participantType: 'player',
+  };
+  const FLAMBE = {
+    id: 'e5f6a7b8-c9d0-4e12-8345-67a89bcd0123',
+    name: 'House Flambé Student',
+    participantType: 'monster',
+  };
+
+  const strikeAt = (target: string) => ({
+    type: 'attack',
+    actorId: PLAYER.id,
+    targetId: target,
+  });
+
+  it('resolves the romanized slug the DM copied onto the accented seat', () => {
+    const resolved = resolveCombatIntentRefs(
+      strikeAt('house-flambe-student'),
+      emptyBoard,
+      state([PLAYER, FLAMBE]),
+    );
+
+    expect(resolved.targetId).toBe(FLAMBE.id);
+  });
+
+  it('resolves the numbered romanized slug onto the lone accented seat', () => {
+    const resolved = resolveCombatIntentRefs(
+      strikeAt('house-flambe-student-1'),
+      emptyBoard,
+      state([PLAYER, FLAMBE]),
+    );
+
+    expect(resolved.targetId).toBe(FLAMBE.id);
+  });
+});
+
 describe('a catalog ref as a combat target', () => {
   it('resolves to the one participant seated from that stat block', () => {
     const warnings: Array<Record<string, unknown>> = [];

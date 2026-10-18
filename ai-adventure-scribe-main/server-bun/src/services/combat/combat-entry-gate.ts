@@ -129,14 +129,18 @@ export function detectCombatEntryTrigger(response: CombatEntryResponse): CombatE
   return null;
 }
 
+/** Accents are noise: a seat spelled `House Flambé Student` matches its romanized slug (#798). */
+const foldDiacritics = (value: string): string =>
+  value.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
 const slugify = (value: string): string =>
-  value
+  foldDiacritics(value)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
 
 const normalize = (value: string): string =>
-  value
+  foldDiacritics(value)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
@@ -490,10 +494,7 @@ export interface CombatEntryGateDeps {
    * one-creature entry to the difficulty-sized encounter before seating.
    * `startCombat` re-applies the same sizing as a backstop.
    */
-  loadEncounterContext?: (
-    sessionId: string,
-    userId: string,
-  ) => Promise<EncounterContext | null>;
+  loadEncounterContext?: (sessionId: string, userId: string) => Promise<EncounterContext | null>;
   logger: {
     info: (data: unknown) => void;
     warn: (data: unknown) => void;
