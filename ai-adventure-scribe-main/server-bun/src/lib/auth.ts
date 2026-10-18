@@ -11,6 +11,7 @@
 import { sql } from './db.js';
 import { getBearerToken } from './jwt.js';
 import { logger } from './logger.js';
+import { verifyTestAccessToken } from './test-auth.js';
 import { UserPlanCache } from './user-plan-cache.js';
 import { verifyWorkOSToken } from '../services/workos.js';
 
@@ -77,6 +78,18 @@ export async function authenticateRequest(request: Request): Promise<AuthResult>
   }
 
   try {
+    const testUser = verifyTestAccessToken(token);
+    if (testUser) {
+      return {
+        user: {
+          userId: testUser.userId,
+          email: testUser.email,
+          plan: await resolveUserPlan(testUser.userId),
+        },
+        error: null,
+      };
+    }
+
     const workosUser = await verifyWorkOSToken(token);
     if (!workosUser) {
       return { user: null, error: 'Unauthorized' };
