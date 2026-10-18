@@ -92,6 +92,8 @@ export interface LLMResponse {
     cachedInputTokens?: number;
     /** #352: prompt tokens written to the cache on this turn. */
     cacheWriteTokens?: number;
+    /** LLM_STRICT_BRANCH_VALIDATION=shadow: accepted replies that failed the full schema. Absent when zero. */
+    schemaShadowInvalid?: number;
   };
   error?: string;
   status?: number;
@@ -209,10 +211,7 @@ const compiledSchemaValidator = (schema: Record<string, unknown>): ValidateFunct
  * (Anthropic instructed branch, OpenRouter strict branch, direct Gemini) —
  * providers may silently ignore unsupported keywords, so the schema is
  * enforced here regardless of what was sent. */
-const validateFullSchemaText = (
-  text: string,
-  responseSchema: Record<string, unknown>,
-): void => {
+const validateFullSchemaText = (text: string, responseSchema: Record<string, unknown>): void => {
   const parsed = validateStructuredResponseText(text, responseSchema);
   const validate = compiledSchemaValidator(responseSchema);
   if (!validate(parsed)) {
@@ -220,6 +219,52 @@ const validateFullSchemaText = (
       `Structured response does not match schema: ${schemaAjv.errorsText(validate.errors)}`,
     );
   }
+};
+
+/**
+ * Strict-branch schema check mode, read once from LLM_STRICT_BRANCH_VALIDATION.
+ * `shadow` (default): text:string is a hard check; the full schema is checked
+ * and mismatches are logged (LLM_SCHEMA_SHADOW_INVALID) but the reply is kept.
+ * `enforce`: the full schema is a hard check on the strict branch too.
+ */
+export type StrictBranchValidationMode = 'shadow' | 'enforce';
+let strictBranchValidationMode: StrictBranchValidationMode =
+  process.env.LLM_STRICT_BRANCH_VALIDATION?.trim().toLowerCase() === 'enforce'
+    ? 'enforce'
+    : 'shadow';
+
+/** Test hook: switch the mode without reloading the module. */
+export const setStrictBranchValidationModeForTests = (mode: StrictBranchValidationMode): void => {
+  strictBranchValidationMode = mode;
+};
+
+/**
+ * Strict branch (OpenRouter json_schema candidates, direct Gemini). Returns the
+ * number of shadow-mode schema mismatches (0 or 1). Throws on a hard failure.
+ * The shadow log carries no reply text: model plus the first ajv error's
+ * instancePath, keyword and message.
+ */
+const validateStrictBranchText = (
+  text: string,
+  responseSchema: Record<string, unknown>,
+  model: string,
+): number => {
+  if (strictBranchValidationMode === 'enforce') {
+    validateFullSchemaText(text, responseSchema);
+    return 0;
+  }
+  const parsed = validateStructuredResponseText(text, responseSchema);
+  const validate = compiledSchemaValidator(responseSchema);
+  if (validate(parsed)) return 0;
+  const first = validate.errors?.[0];
+  logger.warn({
+    msg: 'LLM_SCHEMA_SHADOW_INVALID',
+    model,
+    instancePath: first?.instancePath ?? '',
+    keyword: first?.keyword ?? '',
+    message: first?.message ?? '',
+  });
+  return 1;
 };
 
 /**
@@ -562,6 +607,8 @@ export class LLMProviderService {
     let lastFailure: { status: number; details: string; retryAfter?: number } | null = null;
     // #350 N2: OR the key-limit signal across attempts (see orKeyLimitSignal).
     let keyLimitSeen = false;
+    // LLM_STRICT_BRANCH_VALIDATION=shadow: count of accepted replies that failed the full schema.
+    let schemaShadowInvalid = 0;
 
     for (let index = 0; index < candidateModels.length; index += 1) {
       const candidate = candidateModels[index];
@@ -633,7 +680,13 @@ export class LLMProviderService {
                 // #782 item 2: full schema on every path. The strict branch
                 // used to trust the provider's enforcement; providers may
                 // silently ignore unsupported keywords, so validate here too.
-                validateFullSchemaText(text, responseSchema);
+                // The strict branch runs in shadow mode by default (see
+                // validateStrictBranchText); the instructed branch is always hard.
+                if (strictSchema) {
+                  schemaShadowInvalid += validateStrictBranchText(text, responseSchema, candidate);
+                } else {
+                  validateFullSchemaText(text, responseSchema);
+                }
               } catch (validationError) {
                 lastFailure = {
                   status: 502,
@@ -675,6 +728,7 @@ export class LLMProviderService {
                 totalTokens: usage?.total_tokens ?? inputTokens + outputTokens,
                 cachedInputTokens,
                 cacheWriteTokens,
+                ...(schemaShadowInvalid > 0 ? { schemaShadowInvalid } : {}),
               },
             };
           }
@@ -798,6 +852,8 @@ export class LLMProviderService {
     // #350 N2: OR the key-limit signal across attempts (see orKeyLimitSignal).
     let keyLimitSeen = false;
     let availableModels: Set<string> | null = null;
+    // LLM_STRICT_BRANCH_VALIDATION=shadow: count of accepted replies that failed the full schema.
+    let schemaShadowInvalid = 0;
 
     for (let index = 0; index < candidateModels.length; index += 1) {
       const candidate = candidateModels[index];
@@ -833,7 +889,11 @@ export class LLMProviderService {
               .filter(Boolean)
               .join('\n');
             try {
-              validateFullSchemaText(candidateText, responseSchema);
+              schemaShadowInvalid += validateStrictBranchText(
+                candidateText,
+                responseSchema,
+                candidate,
+              );
             } catch (validationError) {
               lastFailure = {
                 status: 502,
@@ -975,6 +1035,7 @@ export class LLMProviderService {
         totalTokens: Number(metadata.totalTokenCount || inputTokens + outputTokens),
         // #352: Gemini's implicit cache read count for this turn.
         cachedInputTokens: Number(metadata.cachedContentTokenCount || 0),
+        ...(schemaShadowInvalid > 0 ? { schemaShadowInvalid } : {}),
       },
     };
   }

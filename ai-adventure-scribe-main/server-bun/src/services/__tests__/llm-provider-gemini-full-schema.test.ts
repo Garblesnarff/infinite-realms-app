@@ -4,11 +4,14 @@
  * just the text:string check. Invalid → retry → failover, like Anthropic.
  * No live provider calls: fetch is stubbed.
  */
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 
 import { resetCircuitBreakersForTests } from '../../utils/circuit-breaker.js';
 import { dmResponseSchema } from '../dm/dm-response-schema.js';
-import { LLMProviderService } from '../llm-provider-service.js';
+import {
+  LLMProviderService,
+  setStrictBranchValidationModeForTests,
+} from '../llm-provider-service.js';
 import { resetModelHealthForTests } from '../model-health.js';
 
 const originalFetch = globalThis.fetch;
@@ -72,6 +75,11 @@ function useGeminiThenAnthropic(): void {
 }
 
 describe('#782 item 2: full-schema validation on the Gemini (strict) path', () => {
+  // #789 behaviour: the strict branch is a hard full-schema check. The default
+  // mode is shadow (see llm-provider-strict-shadow.test.ts), so pin enforce here.
+  beforeEach(() => setStrictBranchValidationModeForTests('enforce'));
+  afterEach(() => setStrictBranchValidationModeForTests('shadow'));
+
   it('accepts a current envelope for google/gemini-3.1-flash-lite', async () => {
     useGeminiThenAnthropic();
     const bodies = stubOpenRouter([{ content: VALID_DM_REPLY }]);
