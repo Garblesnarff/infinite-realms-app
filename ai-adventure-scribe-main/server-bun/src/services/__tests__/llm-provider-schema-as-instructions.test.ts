@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'bun:test';
 import { resetCircuitBreakersForTests } from '../../utils/circuit-breaker.js';
 import { dmResponseSchema, parseDmResponse, parseLlmEnvelope } from '../dm/dm-response-schema.js';
 import { modelSupportsStrictSchema } from '../llm-model-config.js';
-import { LLMProviderService } from '../llm-provider-service.js';
+import { LLMProviderService, wrapPrefillToken } from '../llm-provider-service.js';
 import { resetModelHealthForTests } from '../model-health.js';
 
 const originalFetch = globalThis.fetch;
@@ -359,5 +359,87 @@ describe('#633 full-schema validation on the instructed branch', () => {
     expect(result.model).toBe('google/gemini-3.1-flash-lite');
     expect(result.text).toBe(VALID_DM_REPLY);
     expect(deltas.length).toBeGreaterThan(0);
+  });
+});
+
+describe('#783 prefill handling is gated on responseSchema', () => {
+  it('leaves a no-schema Anthropic reply unchanged and adds no assistant prefill', async () => {
+    useAnthropicThenGemini();
+    const bodies = stubOpenRouter([{ content: 'The lantern gutters as you step inside.' }]);
+
+    const result = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      maxTokens: 100,
+    });
+
+    expect(result.text).toBe('The lantern gutters as you step inside.');
+    expect((bodies[0] as unknown as Body).messages.some((m) => m.role === 'assistant')).toBe(false);
+  });
+
+  it('leaves a no-schema Anthropic reply unchanged with onToken (no injected brace)', async () => {
+    useAnthropicThenGemini();
+    stubOpenRouter([{ content: 'The lantern gutters as you step inside.' }]);
+    const deltas: string[] = [];
+
+    const result = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      maxTokens: 100,
+      onToken: (delta) => deltas.push(delta),
+    });
+
+    expect(result.text).toBe('The lantern gutters as you step inside.');
+    expect(deltas.join('')).toBe('The lantern gutters as you step inside.');
+  });
+
+  it('wrapPrefillToken ignores leading empty deltas and injects the brace before the first non-empty one', () => {
+    const emitted: string[] = [];
+    const wrapped = wrapPrefillToken((delta) => emitted.push(delta));
+
+    wrapped('');
+    wrapped('"text":"x"}');
+
+    expect(emitted.join('')).toBe('{"text":"x"}');
+    expect(emitted.indexOf('{')).toBeLessThan(emitted.indexOf('"text":"x"}'));
+  });
+
+  it('wrapPrefillToken lets the first non-empty delta decide, so an empty delta cannot add a second brace', () => {
+    // A model that ignores the prefill opens its own object. If an empty delta came first,
+    // the wrapper used to decide on '' and inject a brace anyway: '{{...'.
+    const emitted: string[] = [];
+    const wrapped = wrapPrefillToken((delta) => emitted.push(delta));
+
+    wrapped('');
+    wrapped('{"text":"x"}');
+
+    expect(emitted.join('')).toBe('{"text":"x"}');
+  });
+
+  it('injects the brace when the SSE stream opens with an empty content delta', async () => {
+    useAnthropicThenGemini();
+    globalThis.fetch = (async () => {
+      const first = JSON.stringify({
+        choices: [{ delta: { role: 'assistant', content: '' } }],
+      });
+      const second = JSON.stringify({ choices: [{ delta: { content: VALID_DM_REPLY.slice(1) } }] });
+      const sse = `data: ${first}\n\ndata: ${second}\n\ndata: [DONE]\n\n`;
+      return new Response(sse, {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      });
+    }) as unknown as typeof fetch;
+
+    const deltas: string[] = [];
+    const result = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      responseSchema: dmResponseSchema,
+      maxTokens: 100,
+      onToken: (delta) => deltas.push(delta),
+    });
+
+    expect(deltas.join('')).toBe(VALID_DM_REPLY);
+    expect(result.text).toBe(VALID_DM_REPLY);
   });
 });

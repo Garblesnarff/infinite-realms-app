@@ -379,10 +379,10 @@ const consumeOpenRouterStream = async (
 // #783: per-attempt onToken wrapper for the non-strict (prefill) branch.
 // Before the first non-empty delta, if it does not already open a JSON object
 // or code fence, emit '{' so the caller's accumulated raw text starts with it.
-const wrapPrefillToken = (onToken: (deltaText: string) => void) => {
+export const wrapPrefillToken = (onToken: (deltaText: string) => void) => {
   let started = false;
   return (deltaText: string): void => {
-    if (!started) {
+    if (!started && deltaText.length > 0) {
       started = true;
       const trimmed = deltaText.trimStart();
       if (!trimmed.startsWith('{') && !trimmed.startsWith('`')) onToken('{');
@@ -636,7 +636,8 @@ export class LLMProviderService {
               // retry, usage accounting) is shared with the non-stream path.
               // #783: the prefill branch injects a leading '{' into the
               // caller's stream before the first delta when needed.
-              const attemptToken = strictSchema ? onToken : wrapPrefillToken(onToken);
+              const attemptToken =
+                responseSchema && !strictSchema ? wrapPrefillToken(onToken) : onToken;
               const streamed = await consumeOpenRouterStream(response, attemptToken);
               if (streamed.streamError) {
                 lastFailure = { status: 502, details: streamed.streamError };
@@ -655,7 +656,7 @@ export class LLMProviderService {
               text = data.choices?.[0]?.message?.content ?? '';
               usage = data.usage;
             }
-            if (!strictSchema) {
+            if (responseSchema && !strictSchema) {
               // #783: the model continues after the '{' prefill; if the reply
               // does not already open a JSON object or fence, restore the brace.
               const trimmed = text.trimStart();
