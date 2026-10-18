@@ -21,6 +21,7 @@ Authored monster attack lines (name, reach, and range) are in `docs/content/stat
 - On 2026-08-11, five PRs (#1702, #1716, #1719, #1723, #1725) were merged by an unidentified agent session.
 - On 2026-08-30, #1945 and #1946 were merged by an unidentified agent session. Two incidents so far; these rules exist so there is no third.
 - When Muse or the Hetzner ops session merges, check stacked-PR rules first. If the PR is a stack parent, merging it the normal way closes its children. Then follow the pre-merge check procedure below.
+- Rob's own typed line is required for prod config or data changes, any `.github/workflows/*` edit, repo settings, and reverts.
 
 ## 2. Do not push directly to `main`
 
@@ -42,7 +43,7 @@ Authored monster attack lines (name, reach, and range) are in `docs/content/stat
 - For time-based tests, use `dialogue_history.created_at` as the server clock; `timestamp` is client-supplied display data only.
 - Do not paste secret values into code, commits, comments, logs, or PR bodies. Reference env var names only. Never commit `.env`, `.env.local`, `server/.env`, or `server-bun/.env`. `.env.example` may be committed only when it holds no secret values.
 - If a secret value appears in code, a log, a chat, or a diff, do not repeat it. Tell Rob, and recommend rotating the key.
-- RLS is off, so every query on user-owned rows filters by the owner. `campaigns` and `characters` have `user_id`; filter those by `user_id`. `game_sessions`, `quests`, `npcs`, and `locations` have no `user_id` column (`ai-adventure-scribe-main/db/schema/game.ts`, `ai-adventure-scribe-main/db/schema/world.ts`). Limit those queries to a campaign or character that belongs to the user.
+- RLS is off, so every query on user-owned rows filters by the owner. `campaigns`, `characters`, and `sessionChronicles` have `user_id` (`sessionChronicles.userId` in `ai-adventure-scribe-main/db/schema/game.ts`); filter those by `user_id`. `game_sessions`, `quests`, `npcs`, and `locations` have no `user_id` column (`ai-adventure-scribe-main/db/schema/game.ts`, `ai-adventure-scribe-main/db/schema/world.ts`). Limit those queries to a campaign or character that belongs to the user.
 - A PR that changes what the client sends to a server route must include a test that sends that exact body through the real route: `createRequestPipelineApp().use(<routes>)` or the real-DB suite. A mocked API does not count: #2250's tests mocked it, and the body they approved 422'd on every narrative roll in production (#2280). Pattern: #2286, where one shared fixture (`shared/test-fixtures/dm-roll-reply-saves.ts`) holds the wire body, the client test asserts the client sends exactly it, and the server test posts it through the real route schema.
 
 ## 5. Respect in-flight work
@@ -125,7 +126,7 @@ Keep the body under 8k characters, one line per item, 15 words maximum, each lin
 ## 11. Typecheck gates (#2313)
 
 - A PR is red if either typecheck fails; "pre-existing" is not an excuse once main is green.
-- Server: CI job `checks`, step "Server typecheck gate", runs `scripts/server-typecheck-gate.sh` (tsc over `server-bun/tsconfig.typecheck.json` with per-file, per-count quarantine in `server-bun/typecheck-known-errors.txt`).
+- Server: CI job `checks`, step "Server typecheck gate", runs `ai-adventure-scribe-main/scripts/server-typecheck-gate.sh` (tsc over `server-bun/tsconfig.typecheck.json` with per-file, per-count quarantine in `server-bun/typecheck-known-errors.txt`).
 - Root `bun run type-check` runs both halves and reports both even if one fails. The client half is `bun x tsc --noEmit` against `ai-adventure-scribe-main/tsconfig.json`, which has `files: []`, so that half checks nothing until #664 lands. The server half is the gate above.
 - A quarantined file stays listed only while its tracking issue is open; the gate fails on any non-zero tsc exit it cannot attribute to a quarantined file, on any error in a non-quarantined file, and when a quarantined file's error count changes (a new error can't hide in a quarantined file; a resolved quarantine can't linger).
 
