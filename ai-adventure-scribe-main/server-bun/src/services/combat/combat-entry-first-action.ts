@@ -139,14 +139,18 @@ const defaultDeps: CombatEntryFirstActionDeps = {
   logger: combatLogger,
 };
 
+/** Accents are noise: the seat keeps `é` while the declaration romanizes it (#798). */
+const foldDiacritics = (value: string): string =>
+  value.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
 const slugify = (value: string): string =>
-  value
+  foldDiacritics(value)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
 
 const normalize = (value: string): string =>
-  value
+  foldDiacritics(value)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
