@@ -39,6 +39,7 @@ import {
   countStandingMooks,
 } from './data-access.js';
 import { healthConditionForCombat } from './health-condition.js';
+import { appliesHexRider } from './hex-rider.js';
 import { autoCritReason, checkHit, checkAutoCrit } from './hit-check.js';
 import { markPlayerDamageProvocation } from './npc-provocation.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
@@ -72,6 +73,13 @@ import type {
   DamageType,
   DamageResult,
 } from '../../types/combat.js';
+
+/**
+ * An attack result that also carries Hex's rider damage (#754). Kept local rather than added to
+ * the shared AttackResult so this change does not overlap the open boss-moves PR touching
+ * types/combat.ts; `hexDamage` is optional and the narration reads it from the result object.
+ */
+type HexAttackResult = AttackResult & { hexDamage?: number };
 
 /**
  * Whether the caller supplied a real d20 face. Guards the whole player-rolled path against a
@@ -207,11 +215,12 @@ export async function maybeStartConcentrationOnCast(
   resolution: unknown,
   spell: { id: string; name: string; concentration?: boolean | null },
   characterId: string | null | undefined,
+  targetId?: string | null,
 ): Promise<boolean> {
   if (!spell.concentration || !characterId) return false;
   if (!resolution || typeof resolution !== 'object') return false;
   const { startConcentration } = await import('./concentration-service.js');
-  await startConcentration(characterId, { name: spell.name, id: spell.id });
+  await startConcentration(characterId, { name: spell.name, id: spell.id }, targetId ?? null);
   return true;
 }
 
@@ -368,6 +377,35 @@ export class CombatAttackService {
    */
   resolveCriticalHit(damageDice: string, damageBonus: number, damageRoll?: number): number {
     return resolveCriticalHit(damageDice, damageBonus, damageRoll);
+  }
+
+  /**
+   * The extra 1d6 necrotic Hex deals to its cursed target on a hit (#754), or 0 when the
+   * attacker is not concentrating on Hex or this is not the Hexed participant.
+   *
+   * The rider is rolled with the same damage calculator as every other term, so necrotic
+   * resistance and immunity apply to it on its own rather than to the weapon's damage type.
+   * `getConcentration` is imported lazily so the unit tests that mock the database leaves
+   * never load db/client at import time.
+   */
+  private async hexRiderDamage(
+    attackerCharacterId: string | null | undefined,
+    targetParticipantId: string | null | undefined,
+    defenses: ReturnType<typeof aggregateResistances>,
+  ): Promise<number> {
+    if (!attackerCharacterId || !targetParticipantId) return 0;
+    const { getConcentration } = await import('./concentration-service.js');
+    const concentration = await getConcentration(attackerCharacterId);
+    if (!appliesHexRider(concentration, targetParticipantId)) return 0;
+    return calculateDamage({
+      damageDice: '1d6',
+      damageBonus: 0,
+      damageType: 'necrotic',
+      isCritical: false,
+      resistances: defenses.resistances,
+      vulnerabilities: defenses.vulnerabilities,
+      immunities: defenses.immunities,
+    }).finalDamage;
   }
 
   /**
@@ -671,6 +709,14 @@ export class CombatAttackService {
         immunities: defenses.immunities,
       });
 
+      // #754: Hex adds 1d6 necrotic to a hit on its cursed target, resisted separately.
+      const hexDamage = await this.hexRiderDamage(
+        attackerData.participant.characterId,
+        targetId,
+        defenses,
+      );
+      const totalDamage = damageCalc.finalDamage + hexDamage;
+
       // Apply damage to target HP
       try {
         // 🛡️ Sentinel: Pass userId to applyDamage to maintain atomic ownership verification chain.
@@ -678,7 +724,7 @@ export class CombatAttackService {
           targetId,
           encounterId,
           {
-            damageAmount: damageCalc.finalDamage,
+            damageAmount: totalDamage,
             damageType: weapon.damageType as DamageType,
             sourceParticipantId: attackerId,
             sourceDescription: weapon.name || 'attack',
@@ -696,7 +742,7 @@ export class CombatAttackService {
         // The applied figure is what the HP layer actually took, which is not always what the
         // dice said: the per-hit cap can rewrite it. Reporting the rolled number here would
         // put a damage figure in the telemetry that the target's HP never reflects.
-        const appliedDamage = hpResult.damageDealt ?? damageCalc.finalDamage;
+        const appliedDamage = hpResult.damageDealt ?? totalDamage;
 
         // Logged after the HP write, with the post-write HP included: damage that is
         // calculated but never persisted -- the exact failure mode this telemetry exists to
@@ -727,7 +773,7 @@ export class CombatAttackService {
           });
         transcriptLines.push(...concentrationLines);
 
-        return {
+        const attackResult: HexAttackResult = {
           hit: true,
           d20: attackRoll,
           ...(bothDice ? { d20Rolls: bothDice } : {}),
@@ -744,6 +790,7 @@ export class CombatAttackService {
           effectiveVulnerability: damageCalc.effectiveVulnerability,
           effectiveImmunity: damageCalc.effectiveImmunity,
           finalDamage: appliedDamage,
+          ...(hexDamage > 0 ? { hexDamage } : {}),
           targetNewHp: hpResult.newCurrentHp,
           targetIsConscious: hpResult.isConscious,
           targetIsDead: hpResult.isDead,
@@ -763,6 +810,7 @@ export class CombatAttackService {
           ...(concentration ? { concentration } : {}),
           ...(transcriptLines.length ? { transcriptLines } : {}),
         };
+        return attackResult;
       } catch (error) {
         logger.error({ msg: 'Failed to apply damage to HP', error });
         throw new InternalServerError('Attack succeeded but damage application failed', { error });
@@ -1064,6 +1112,28 @@ export class CombatAttackService {
         // Aggregate resistances using the extracted module
         const defenses = aggregateResistances(targetParticipant, targetStats);
 
+        // #754: Hex is a no-damage bonus-action curse. The engine acknowledges the cast here;
+        // the shared path below spends the slot and claims the bonus action (castingTime is
+        // "1 bonus action"), and resolveSpellAttack starts concentration on targetIds[0] when
+        // it returns. The 1d6 necrotic rider is added by later hits, not by this cast.
+        if (spell.id === 'hex') {
+          return {
+            hit: true,
+            targetAC: 0,
+            totalAttackRoll: 0,
+            finalDamage: 0,
+            effectiveResistance: false,
+            effectiveVulnerability: false,
+            effectiveImmunity: false,
+            isCritical: false,
+            isNaturalOne: false,
+            isNaturalTwenty: false,
+            autoHit: true,
+            spellName: spell.name,
+            hexCurse: true,
+          };
+        }
+
         if (spell.id === 'magic-missile') {
           if (!damageProfile || !damageType) {
             throw new BusinessLogicError(`Spell refused: ${spell.name} has no damage profile`, {
@@ -1212,6 +1282,14 @@ export class CombatAttackService {
               immunities: defenses.immunities,
             });
 
+            // #754: Hex adds 1d6 necrotic to a spell-attack hit on its cursed target.
+            const hexDamage = await this.hexRiderDamage(
+              casterData.participant.characterId,
+              targetId,
+              defenses,
+            );
+            const totalDamage = damageCalc.finalDamage + hexDamage;
+
             // Apply damage to target HP
             try {
               // 🛡️ Sentinel: Pass userId to applyDamage to maintain atomic ownership verification chain.
@@ -1219,7 +1297,7 @@ export class CombatAttackService {
                 targetId,
                 encounterId,
                 {
-                  damageAmount: damageCalc.finalDamage,
+                  damageAmount: totalDamage,
                   damageType,
                   sourceParticipantId: casterId,
                   sourceDescription: spell.name,
@@ -1231,7 +1309,7 @@ export class CombatAttackService {
                 targetParticipant,
               );
 
-              const attackResult: AttackResult = {
+              const attackResult: HexAttackResult = {
                 hit: true,
                 d20: attackRoll,
                 ...(spellBothDice ? { d20Rolls: spellBothDice } : {}),
@@ -1246,7 +1324,8 @@ export class CombatAttackService {
                 effectiveResistance: damageCalc.effectiveResistance,
                 effectiveVulnerability: damageCalc.effectiveVulnerability,
                 effectiveImmunity: damageCalc.effectiveImmunity,
-                finalDamage: hpResult.damageDealt ?? damageCalc.finalDamage,
+                finalDamage: hpResult.damageDealt ?? totalDamage,
+                ...(hexDamage > 0 ? { hexDamage } : {}),
                 targetNewHp: hpResult.newCurrentHp,
                 targetIsConscious: hpResult.isConscious,
                 targetIsDead: hpResult.isDead,
@@ -1430,7 +1509,13 @@ export class CombatAttackService {
       return { results };
     });
     // #709: a successfully cast concentration spell starts concentration (2014).
-    await maybeStartConcentrationOnCast(resolution, spell, casterData.participant.characterId);
+    // #754: the target is stored too, so Hex's rider knows which participant it applies to.
+    await maybeStartConcentrationOnCast(
+      resolution,
+      spell,
+      casterData.participant.characterId,
+      targetIds[0] ?? null,
+    );
     return resolution;
   }
 
