@@ -13,14 +13,13 @@
  * This runs on player intent (the cast was declared), not on DM narration --
  * in 5e you start concentrating when you cast the spell.
  *
+ * DB imports are lazy (inside the function, after early returns) so unit tests
+ * that mock the DB-facing leaves never load db/client at import time -- the
+ * same pattern as maybeStartConcentrationOnCast in combat-attack-service.ts.
+ *
  * @module server/services/combat/spell-cast-concentration
  */
-import { eq } from 'drizzle-orm';
-
-import { db } from '../../../../db/client';
-import { gameSessions } from '../../../../db/schema/index';
 import { resolveCatalogSpell } from '../../data/spellData.js';
-import { getConcentration, startConcentration } from './concentration-service.js';
 import { extractSpellIdFromPrompt } from './spell-cast-tag.js';
 
 export { extractSpellIdFromPrompt };
@@ -44,6 +43,12 @@ export async function maybeStartConcentrationFromSpellCast(
 
   const spell = resolveCatalogSpell(spellId);
   if (!spell?.concentration) return false;
+
+  // Lazy DB imports: only load db/client when we actually need it.
+  const { eq } = await import('drizzle-orm');
+  const { db } = await import('../../../../db/client');
+  const { gameSessions } = await import('../../../../db/schema/index');
+  const { getConcentration, startConcentration } = await import('./concentration-service.js');
 
   // One character per session; the session owns the concentration state.
   const [session] = await db
