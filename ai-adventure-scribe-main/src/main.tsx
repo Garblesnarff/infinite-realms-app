@@ -2,11 +2,14 @@ import { createRoot } from 'react-dom/client';
 import { v4 as uuidv4 } from 'uuid';
 
 import App from './App.tsx';
+import { installChunkReloadListener } from './routes/chunk-reload';
 import { APP_BUILD_VERSION } from './services/app-version';
 import { initializeAnalytics } from './utils/analytics';
 import { validateEnvironment } from './utils/env-validation';
 
 import './index.css';
+
+installChunkReloadListener();
 
 // Basic frontend observability: request-id propagation and error reporting
 (function setupObservability() {

@@ -5,6 +5,7 @@ import type { ErrorInfo, ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import logger from '@/lib/logger';
+import { reloadOnceForChunkError } from '@/routes/chunk-reload';
 import { APP_BUILD_SHORT } from '@/services/app-version';
 import {
   activeSessionId,
@@ -89,6 +90,9 @@ export class ErrorBoundary extends Component<Props, State> {
     // Report it to the server too (#2515): a boundary catch is exactly the
     // silent dead-end that otherwise only exists in this console log.
     reportReactErrorBoundaryFailure(error, errorInfo.componentStack);
+
+    // A missing hashed chunk after a deploy. One reload, then the card stays.
+    reloadOnceForChunkError(error);
 
     // Call custom error handler if provided
     onError?.(error, errorInfo);
