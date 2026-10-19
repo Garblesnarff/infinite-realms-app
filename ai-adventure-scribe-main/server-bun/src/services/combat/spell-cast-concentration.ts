@@ -3,14 +3,14 @@
  *
  * Combat spells go through `CombatAttackService.resolveSpellAttack`, which calls
  * `maybeStartConcentrationOnCast`. But utility spells (Dancing Lights, Bless, etc.)
- * are narrated by the DM without touching the combat engine — the cast never
+ * are narrated by the DM without touching the combat engine -- the cast never
  * reaches `resolveSpellAttack`, so no `character_concentration` row is created and
  * the damage route has nothing to check.
  *
  * The sheet's Cast button appends `[spell_id=<id>, spell_level=<level>]` to the
  * player's message (see `buildSpellCastMessage`). When the llm route sees that
  * tag for a spell with `concentration: true`, the caster starts concentrating.
- * This runs on player intent (the cast was declared), not on DM narration —
+ * This runs on player intent (the cast was declared), not on DM narration --
  * in 5e you start concentrating when you cast the spell.
  *
  * @module server/services/combat/spell-cast-concentration
@@ -34,7 +34,7 @@ export function extractSpellIdFromPrompt(prompt: string): string | null {
  * Returns true when concentration was started.
  *
  * Safe to call when there is no tag, the spell is unknown, or the spell does
- * not require concentration — all are no-ops returning false. Throws nothing;
+ * not require concentration -- all are no-ops returning false. Throws nothing;
  * callers wrap it so a DB failure never breaks the chat route.
  */
 export async function maybeStartConcentrationFromSpellCast(
