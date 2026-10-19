@@ -206,6 +206,11 @@ export const useMessageQueue = (sessionId: string | null) => {
                 ...(Array.isArray(message.context.engineCards)
                   ? { engineCards: message.context.engineCards }
                   : {}),
+                // #570: the Combat Summary card lives in context.combatData; stripping it
+                // makes the summary render optimistically then vanish on refetch.
+                ...(message.context.combatData
+                  ? { combatData: message.context.combatData }
+                  : {}),
               }
             : narrationSegments
               ? {
@@ -355,6 +360,11 @@ export const useMessageQueue = (sessionId: string | null) => {
                 ...(message.context.previouslyOn === true ? { previously_on: true } : {}),
                 ...(Array.isArray(message.context.engineCards)
                   ? { engineCards: message.context.engineCards }
+                  : {}),
+                // #570: the Combat Summary card lives in context.combatData; stripping it
+                // makes the summary render optimistically then vanish on refetch.
+                ...(message.context.combatData
+                  ? { combatData: message.context.combatData }
                   : {}),
               }
             : narrationSegments
