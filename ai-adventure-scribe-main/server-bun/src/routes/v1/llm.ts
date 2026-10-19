@@ -32,6 +32,7 @@ import {
   type UntargetedAttackSpell,
 } from '../../services/combat/combat-intent-gate.js';
 import { loadCombatIntentActorRoster } from '../../services/combat/combat-intent-roster.js';
+import { maybeStartConcentrationFromSpellCast } from '../../services/combat/spell-cast-concentration.js';
 import {
   buildEncounterSizeDirective,
   expandDerivedCombatants,
@@ -669,6 +670,24 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       if (!prompt || typeof prompt !== 'string') {
         set.status = 400;
         return { error: 'Missing prompt' };
+      }
+
+      // #709: a concentration spell cast via the sheet's Cast button (or typed
+      // with the [spell_id=...] tag) starts concentration. The DM narrates
+      // utility spells without touching the combat engine, so without this the
+      // character_concentration row is never created and damage never prompts
+      // a CON save. Runs on player intent; a DB failure must not break chat.
+      try {
+        await maybeStartConcentrationFromSpellCast(prompt, sessionId);
+      } catch (concentrationError) {
+        logger.warn({
+          msg: 'LLM_GENERATE_CONCENTRATION_START_FAILED',
+          sessionId: sessionId ?? null,
+          error:
+            concentrationError instanceof Error
+              ? concentrationError.message
+              : String(concentrationError),
+        });
       }
 
       const generateTurn = async (
