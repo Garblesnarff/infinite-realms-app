@@ -9,6 +9,7 @@ import {
 } from '../../../shared/npc-voices.js';
 import { sql } from '../lib/db.js';
 import { ConflictError, NotFoundError } from '../lib/errors.js';
+import { logger } from '../lib/logger.js';
 
 type Npc = {
   id: string;
@@ -56,6 +57,7 @@ export async function castNpcVoices(
     );
     const resolved: Array<Npc | null> = [];
     const muted = new Set<number>();
+    const ambiguous = new Set<number>();
     for (const [index, segment] of segments.entries()) {
       if (segment.type !== 'character') {
         resolved.push(null);
@@ -77,8 +79,13 @@ export async function castNpcVoices(
         if (!npc) throw new NotFoundError('NPC', segment.npc_id);
       } else {
         const matches = npcs.filter((row) => normalizeSpeaker(row.name) === normalized);
-        if (matches.length > 1)
-          throw new ConflictError('Ambiguous speaker; supply its campaign NPC id');
+        if (matches.length > 1) {
+          // Without an NPC id the line cannot be attributed; it keeps its category voice.
+          logger.warn({ msg: 'NPC_VOICE_AMBIGUOUS_SPEAKER', session_id: sessionId, index });
+          resolved.push(null);
+          ambiguous.add(index);
+          continue;
+        }
         npc = matches[0];
       }
       if (!npc) {
@@ -151,7 +158,8 @@ export async function castNpcVoices(
       ...segment,
       character: resolved[index]?.name ?? segment.character,
       npc_id: resolved[index]?.id ?? null,
-      voice_id: muted.has(index) ? null : (resolved[index]?.voice_id ?? 'narrator'),
+      voice_id:
+        muted.has(index) || ambiguous.has(index) ? null : (resolved[index]?.voice_id ?? 'narrator'),
       voice_muted: muted.has(index),
     }));
   });

@@ -260,6 +260,31 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
     await database.delete(characters).where(like(characters.userId, `${USER_PREFIX}%`));
   };
 
+  test('two same-named NPCs do not fail the cast turn; the ambiguous line keeps its category voice (#729)', async () => {
+    const hero = await database
+      .insert(characters)
+      .values({ userId, ownerId: userId, campaignId, name: 'Guard Hero' })
+      .returning();
+    const session = await startFirstSession(hero[0].id);
+    const { sql } = await import('../../../lib/db.js');
+    await sql`INSERT INTO npcs (campaign_id, name, description) VALUES
+      (${campaignId}, 'Guard', 'Gate guard at the north wall'),
+      (${campaignId}, 'Guard', 'Guard captain at the keep')`;
+    const turn = await call('POST', `/v1/sessions/${session}/voice-cast`, {
+      segments: [
+        { type: 'dm', text: 'Torches gutter at the gate.' },
+        { type: 'character', text: 'Halt!', character: 'Guard', voice_category: 'guard' },
+      ],
+    });
+    expect(turn.status).toBe(200);
+    const [narration, guard] = turn.json as unknown as CastSegment[];
+    expect(narration.voice_id).toBe('narrator');
+    expect(guard.npc_id).toBeNull();
+    expect(guard.voice_id).toBeNull();
+    expect(guard.voice_muted).toBe(false);
+    expect(guard.character).toBe('Guard');
+  });
+
   test('campaign NPC voices persist through the real route across two sessions (#729)', async () => {
     const hero = await database
       .insert(characters)
