@@ -14,6 +14,12 @@ import { characterLoaderService } from '@/services/character-loader';
  * spell slots stay aligned with the tracker. The event comes from the session socket and from
  * `refreshCombatState` (the pull after an End turn, and the read that ends a fight), so a hit
  * that arrives by either route lands in the header too (#2641).
+ *
+ * #130: Story damage and item grants are applied server-side during the DM turn
+ * (applyStoryDamageOnce, applyStoryItemsOnce) with no combat event. The
+ * `character-state-updated` event covers those non-combat state changes: the
+ * server notifies (via socket or SSE done payload), the client dispatches this
+ * window event, and the same refetch runs.
  */
 export function useCharacterRefreshOnCombatUpdate(
   characterId: string | null,
@@ -53,9 +59,12 @@ export function useCharacterRefreshOnCombatUpdate(
     };
 
     window.addEventListener('combat-state-updated', refreshCharacter);
+    // #130: non-combat state changes (story damage, item grants) use the same refetch.
+    window.addEventListener('character-state-updated', refreshCharacter);
     return () => {
       cancelled = true;
       window.removeEventListener('combat-state-updated', refreshCharacter);
+      window.removeEventListener('character-state-updated', refreshCharacter);
     };
   }, [characterId, characterDispatch, userId]);
 }

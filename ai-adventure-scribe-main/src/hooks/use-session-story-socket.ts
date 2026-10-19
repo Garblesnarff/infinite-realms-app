@@ -64,6 +64,13 @@ export function useSessionStorySocket(sessionId: string | null, onRemoteMessage:
                 );
               }
             }
+            // #130: story damage, item grants, and other non-combat state changes
+            // applied server-side during the DM turn. The server sends this after
+            // applyStoryDamageOnce / applyStoryItemsOnce succeed, so the live
+            // sheet refetches instead of showing stale HP/inventory.
+            if (message.type === 'character_updated') {
+              window.dispatchEvent(new CustomEvent('character-state-updated', { detail: message }));
+            }
           } catch (error) {
             reportMalformedPeerFrame(malformedFrameStateRef.current, {
               channel: 'session-story',
