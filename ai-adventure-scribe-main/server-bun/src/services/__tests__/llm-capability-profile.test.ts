@@ -330,6 +330,9 @@ describe('#782 item 4 OpenRouter request bodies', () => {
       json_schema: { name: 'structured_response', strict: true, schema: dmResponseSchema },
     });
     expect(body.provider).toEqual({ require_parameters: true });
+    // The ~ alias itself rides on the wire untouched — OpenRouter needs it
+    // for vendor pinning; only the capability lookup normalizes it.
+    expect(body.model).toBe('~google/gemini-3.1-flash-lite');
     expect(result.usage?.schemaDelivery).toBe('strict-json-schema');
   });
 
