@@ -141,6 +141,17 @@ model_family_of_text() {
   return 1
 }
 
+# catjam_pick_model <`opencode models` output> <model>...: the first model the
+# list names, or rc 1 when it names none of them. Pure: tested in the guards.
+catjam_pick_model() {
+  local list=$1 m
+  shift
+  for m in "$@"; do
+    grep -qxF -- "$m" <<< "$list" && { echo "$m"; return 0; }
+  done
+  return 1
+}
+
 # credit_spent <ledger> <start date>: USD spent since the credit started, over
 # every ledger row (reviewer and triager both write to it). A missing ledger is
 # $0 (a fresh install). An unreadable ledger, or a non-empty row whose date or

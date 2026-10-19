@@ -510,6 +510,17 @@ awk '/^review_pr\(\) \{/ { f = 1 } f && /author_skip "\$n" "\$s8"/ { a = NR } f 
 ts=$(grep -n 'set_tier "${tier%% \*}"' "$HERE/../foreman/review.sh" | cut -d: -f1); as=$(grep -n 'if author_skip "$n"' "$HERE/../foreman/review.sh" | cut -d: -f1)
 [ -n "$ts" ] && [ -n "$as" ] && [ "$ts" -lt "$as" ] && ok "review_pr: set_tier runs before author_skip" || bad "review_pr: set_tier line '$ts' not before author_skip line '$as'"
 
+# catjam model list (2026-10-19): opencode/cat-jam-free left the free list
+ml=$'opencode/big-pickle\nopencode/glm-5.3-flash-free\nopencode/deepseek-v4.1-flash-free'
+[ "$(catjam_pick_model "$ml" opencode/deepseek-v4.1-flash-free opencode/glm-5.3-flash-free)" = opencode/deepseek-v4.1-flash-free ] \
+  && ok "catjam_pick_model: first listed preference wins" || bad "catjam_pick_model first"
+[ "$(catjam_pick_model "$ml" opencode/cat-jam-free opencode/glm-5.3-flash-free)" = opencode/glm-5.3-flash-free ] \
+  && ok "catjam_pick_model: falls back when the first is gone" || bad "catjam_pick_model fallback"
+catjam_pick_model "$ml" opencode/cat-jam-free > /dev/null && bad "catjam_pick_model: none listed should fail" || ok "catjam_pick_model: none listed -> rc 1"
+catjam_pick_model "$ml" opencode/glm-5.3-flash > /dev/null && bad "catjam_pick_model: prefix must not match" || ok "catjam_pick_model: whole-line match only"
+grep -q '^MODELS=${CATJAM_MODELS:-${CATJAM_MODEL:-opencode/deepseek-v4.1-flash-free opencode/glm-5.3-flash-free}}' "$HERE/../foreman/catjam-runner.sh" \
+  && ok "catjam-runner: defaults to deepseek, then glm" || bad "catjam-runner model default"
+
 # credit hard stop (Rob, 2026-10-16): $94 of the $99 credit, over every ledger row
 cl=$TMP/credit-ledger
 printf '%s\n' "2026-10-13T01:00:00Z 2026-10-13 pr=1 50 sha=aaaaaaaa posted models=x" \

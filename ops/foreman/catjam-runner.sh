@@ -22,7 +22,11 @@
 set -euo pipefail
 
 REPO=${CATJAM_REPO:-Garblesnarff/infinite-realms-app}
-MODEL=${CATJAM_MODEL:-opencode/cat-jam-free}
+# Free opencode models in order of preference; each tick uses the first one
+# `opencode models` still lists. Free entries rotate (cat-jam-free vanished
+# 2026-10-18), so keep a fallback. CATJAM_MODEL pins a single model.
+MODELS=${CATJAM_MODELS:-${CATJAM_MODEL:-opencode/deepseek-v4.1-flash-free opencode/glm-5.3-flash-free}}
+MODEL=
 MAX_JOBS=${CATJAM_MAX_JOBS:-2}
 JOB_TIMEOUT=${CATJAM_JOB_TIMEOUT:-45m}
 MAX_FIX_ROUNDS=${CATJAM_MAX_FIX_ROUNDS:-3}
@@ -576,10 +580,12 @@ main() {
   chown -R "$FUID:$FUID" "$FHOME/.config"
   local models
   models=$(as_foreman opencode models --refresh 2> /dev/null || true)
-  if ! grep -qxF -- "$MODEL" <<< "$models"; then
-    say "model $MODEL is not in 'opencode models'; nothing to do until the runner config is fixed"
+  # shellcheck disable=SC2086 # MODELS is a space-separated list
+  if ! MODEL=$(catjam_pick_model "$models" $MODELS); then
+    say "none of the models ($MODELS) is in 'opencode models'; nothing to do until the runner config is fixed"
     exit 1
   fi
+  say "model $MODEL"
 
   local jobs
   if [ -n "$ONLY_ISSUE" ]; then
