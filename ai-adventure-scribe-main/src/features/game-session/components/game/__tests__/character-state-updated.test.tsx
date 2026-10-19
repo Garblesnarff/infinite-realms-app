@@ -6,13 +6,14 @@
  * the sheet stays stale.
  *
  * The fix: a `character-state-updated` window event that triggers the same
- * refetch path. The server sends `character_updated` on the session socket
- * after story state is applied; `use-session-story-socket` dispatches this
- * window event; the hook refetches via `characterLoaderService`.
+ * refetch path. The server publishes `character_state_updated` on the session
+ * socket after a story applier (damage, items, XP) writes;
+ * `use-session-story-socket` dispatches this window event; the hook refetches
+ * via `characterLoaderService`.
  *
  * Real: CharacterProvider, the character reducer, the refresh hook, StatsBar.
- * Stubbed: `fetch` for the character loader (the API edge) answering with what
- * the server's stats row holds after story damage.
+ * Stubbed: `characterLoaderService.loadCharacterWithSpells` (the API edge)
+ * answering with what the server's stats row holds after story damage.
  */
 import { act, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';

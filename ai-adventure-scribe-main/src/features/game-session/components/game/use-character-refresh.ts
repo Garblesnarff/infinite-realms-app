@@ -18,8 +18,8 @@ import { characterLoaderService } from '@/services/character-loader';
  * #130: Story damage and item grants are applied server-side during the DM turn
  * (applyStoryDamageOnce, applyStoryItemsOnce) with no combat event. The
  * `character-state-updated` event covers those non-combat state changes: the
- * server notifies (via socket or SSE done payload), the client dispatches this
- * window event, and the same refetch runs.
+ * server sends `character_updated` on the session socket, `use-session-story-socket`
+ * dispatches this window event, and the same refetch runs.
  */
 export function useCharacterRefreshOnCombatUpdate(
   characterId: string | null,
