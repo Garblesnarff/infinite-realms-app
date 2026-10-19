@@ -668,6 +668,8 @@ export const useMessageHandlerLogic = ({
       let previewWithdrawn = false;
       const onStreamChunk = (chunk: string): void => {
         if (abortController.signal.aborted || previewWithdrawn) return;
+        // #783: track that we received stream deltas for the beacon.
+        lastSseEventRef.current = 'delta';
         streamedNarration += chunk;
         updateMessage({
           id: previewRowId,
@@ -1159,9 +1161,13 @@ export const useMessageHandlerLogic = ({
       ) {
         const elapsedMs =
           turnStartTimeRef.current !== null ? Date.now() - turnStartTimeRef.current : undefined;
+        // #783: prefer the DM message id from a completed response; fall back
+        // to the client-reserved dmMessageId (the id the server stamps on the
+        // provisional row) for early failures.
+        const beaconMessageId = beaconDmMessageIdRef.current ?? dmMessageId;
         userDataApi.reportClientFailure('client_turn_failure', sessionId, errorMessage, {
           message: errorMessage,
-          messageId: beaconDmMessageIdRef.current ?? undefined,
+          messageId: beaconMessageId,
           lastEventType: lastSseEventRef.current ?? undefined,
           elapsedMs,
           provisionalFetched: false,
@@ -1223,26 +1229,16 @@ export const useMessageHandlerLogic = ({
   // turn-count increment.
   const offerRetryForSavedMessage = React.useCallback(
     (message: ChatMessage) => {
-      // #783: if a provisional DM row exists for this turn, prefer it over the
-      // error chip. The #795 fallback persists the envelope as a provisional
-      // row; rendering it gives the player the reply instead of a dead-end.
-      const hasProvisionalReply = messagesRef.current.some(
-        (m) => m.sender === 'dm' && (m.context as Record<string, unknown> | undefined)?.provisional === true,
-      );
-      if (hasProvisionalReply) {
-        // The provisional row is in the message list and will render. Send a
-        // beacon noting it was fetched, so the server log shows the recovery.
-        userDataApi.reportClientFailure('client_turn_failure', sessionId, DM_PROCESSING_ERROR_MESSAGE, {
-          message: DM_PROCESSING_ERROR_MESSAGE,
-          messageId: message.id,
-          provisionalFetched: true,
-        });
-        return;
-      }
+      // #783: This runs only when useHeldEntryRecovery determines the player
+      // message is still the newest on the server (no DM reply, provisional or
+      // otherwise, exists). The hook's gating already prefers a provisional
+      // row over the chip; if we reach here, there is none to render.
       retryInputRef.current = message.text;
       retryContextRef.current = { intent: 'resume_unanswered' };
       setSendError(DM_PROCESSING_ERROR_MESSAGE);
-      // #783: beacon for the reload-time chip (no turn timing available).
+      // #783: beacon for the reload-time chip. messageId is the player row id
+      // (the DM reply id was never assigned); provisionalFetched is false
+      // because the hook confirmed no newer server row exists.
       userDataApi.reportClientFailure('client_turn_failure', sessionId, DM_PROCESSING_ERROR_MESSAGE, {
         message: DM_PROCESSING_ERROR_MESSAGE,
         messageId: message.id,

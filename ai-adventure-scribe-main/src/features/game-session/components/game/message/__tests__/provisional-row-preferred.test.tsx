@@ -1,10 +1,11 @@
 /**
- * #783 task A(c): provisional row preferred over the error chip on reload.
+ * #783 task A(b,c): reload-time turn-failure beacon.
  *
- * When the client reloads after a failed turn, if the #795 fallback wrote a
- * provisional DM row, the chat must render that reply instead of the
- * "The DM could not finish this turn" chip. With no provisional row, the chip
- * still shows (and the beacon fires).
+ * When useHeldEntryRecovery determines the player message is still the newest
+ * on the server (no DM reply exists), offerRetryForSavedMessage shows the
+ * "could not finish" chip and sends a ONE-shot beacon with provisionalFetched:
+ * false. (If a provisional DM row existed, the hook's gating would prevent the
+ * offer from running at all — the row renders via the normal message fetch.)
  */
 import { act, render } from '@testing-library/react';
 import React from 'react';
@@ -113,7 +114,7 @@ function renderHandler() {
   return captured;
 }
 
-describe('provisional row preferred over error chip (#783)', () => {
+describe('reload-time turn-failure beacon (#783)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     contextState.messages = [];
@@ -121,49 +122,13 @@ describe('provisional row preferred over error chip (#783)', () => {
     // No combat: the recovery hook proceeds to the orphaned-message check.
     mockReadCombat.mockResolvedValue({ state: 'none' });
     mockCheckDeclaredAttack.mockResolvedValue(false);
-    // The player message is the newest server-side row.
-    mockListSessionMessages.mockResolvedValue({ total: 1, messages: [] });
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it('does not show the chip when a provisional DM row is present', async () => {
-    const playerMessage = {
-      id: 'player-1',
-      sender: 'player',
-      text: 'I look around the tavern.',
-      timestamp: '2026-10-19T01:00:00.000Z',
-    };
-    const provisionalDmRow = {
-      id: 'dm-provisional-1',
-      sender: 'dm',
-      text: 'The tavern door creaks open.',
-      timestamp: '2026-10-19T01:00:05.000Z',
-      context: { provisional: true },
-    };
-    contextState.messages = [playerMessage, provisionalDmRow];
-
-    const captured = renderHandler();
-    // Let the recovery hook's async check run.
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    // No error chip: the provisional reply renders instead.
-    expect(captured.sendError).toBeNull();
-    // A beacon notes the provisional row was fetched.
-    expect(mockReportClientFailure).toHaveBeenCalledWith(
-      'client_turn_failure',
-      SESSION_ID,
-      expect.any(String),
-      expect.objectContaining({ provisionalFetched: true }),
-    );
-  });
-
-  it('shows the chip when no provisional DM row exists', async () => {
+  it('shows the chip and sends the beacon when the player message is still newest', async () => {
     const playerMessage = {
       id: 'player-1',
       sender: 'player',
@@ -171,23 +136,36 @@ describe('provisional row preferred over error chip (#783)', () => {
       timestamp: '2026-10-19T01:00:00.000Z',
     };
     contextState.messages = [playerMessage];
+    // Server confirms the player message is still the newest row: the hook
+    // will call offerRetryForSavedMessage. Shape follows the real
+    // listSessionMessages response (speaker_type, not sender).
+    mockListSessionMessages.mockResolvedValue({
+      total: 1,
+      messages: [{ id: 'player-1', speaker_type: 'player', text: 'I look around the tavern.' }],
+    });
 
     const captured = renderHandler();
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
+      // Allow the async playerMessageIsStillNewest to resolve.
+      await new Promise((r) => setTimeout(r, 10));
     });
 
-    // The chip shows: no provisional reply to render.
+    // The chip shows: no DM reply (provisional or otherwise) exists.
     expect(captured.sendError).toBe(
       'The DM could not finish this turn. Your message is still here. Retry to continue.',
     );
-    // Beacon fires with provisionalFetched: false.
+    // ONE beacon fires with provisionalFetched: false.
+    expect(mockReportClientFailure).toHaveBeenCalledTimes(1);
     expect(mockReportClientFailure).toHaveBeenCalledWith(
       'client_turn_failure',
       SESSION_ID,
-      expect.any(String),
-      expect.objectContaining({ provisionalFetched: false }),
+      'The DM could not finish this turn. Your message is still here. Retry to continue.',
+      expect.objectContaining({
+        messageId: 'player-1',
+        provisionalFetched: false,
+      }),
     );
   });
 });
