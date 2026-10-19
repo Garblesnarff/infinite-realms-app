@@ -19,6 +19,8 @@ export interface CombatAttackProposal {
   targetAc?: number;
   advantage?: boolean;
   disadvantage?: boolean;
+  advantageSources?: string[];
+  disadvantageSources?: string[];
   targetLabel?: string;
   requestedWeapon?: string | null;
   weaponSubstituted?: boolean;
@@ -67,6 +69,8 @@ export interface CombatSpellProposal {
   targetAc: number;
   advantage: boolean;
   disadvantage: boolean;
+  advantageSources?: string[];
+  disadvantageSources?: string[];
   targetLabel?: string;
 }
 

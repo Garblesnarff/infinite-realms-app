@@ -4,6 +4,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { describeAttackRoll } from '../../../../shared/describe-attack-roll';
 import { DiceRollRequest } from '../DiceRollRequest';
 
 import { useCharacter } from '@/contexts/CharacterContext';
@@ -92,6 +93,30 @@ describe('DiceRollRequest', () => {
     expect(screen.getByText(/Ability Check Requested/i)).toBeInTheDocument();
     expect(screen.getByText(/Test purpose/i)).toBeInTheDocument();
     expect(screen.getByText('1d20+2')).toBeInTheDocument();
+  });
+
+  it('shows the engine’s disadvantage reason in the tray (#603)', () => {
+    const attackRequest = {
+      type: 'attack' as const,
+      formula: '1d20+3',
+      purpose: describeAttackRoll({
+        actorLabel: 'The Seeker',
+        targetLabel: 'Sentient Glaze',
+        weaponName: 'Crossbow, light',
+        attackBonus: 3,
+        targetAc: 15,
+        advantage: false,
+        disadvantage: true,
+        disadvantageSources: ['ranged attack with a hostile within 5 ft'],
+      }),
+      disadvantage: true,
+    };
+
+    render(<DiceRollRequest request={attackRequest} onResult={mockOnManualResult} />);
+
+    expect(
+      screen.getByText(/disadvantage: ranged attack with a hostile within 5 ft/i),
+    ).toBeInTheDocument();
   });
 
   it('names the purpose without a bare "Purpose:" label (#2292)', () => {

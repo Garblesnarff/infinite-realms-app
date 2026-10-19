@@ -612,6 +612,10 @@ export interface AttackProposal {
   cover: number | null;
   advantage: boolean;
   disadvantage: boolean;
+  /** Short player-facing reasons behind each advantage source, so the popup can show why. */
+  advantageSources: string[];
+  /** Short player-facing reasons behind each disadvantage source, so the popup can show why. */
+  disadvantageSources: string[];
 }
 
 /**
