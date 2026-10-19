@@ -18,7 +18,7 @@ const characterState = vi.hoisted(() => ({
 }));
 
 vi.mock('@/contexts/CharacterContext', () => ({
-  useCharacter: () => ({ state: characterState, dispatch: vi.fn() }),
+  useOptionalCharacter: () => ({ state: characterState, dispatch: vi.fn() }),
 }));
 
 vi.mock('@/hooks/use-combat-actions', () => ({ useCombatActions: vi.fn() }));

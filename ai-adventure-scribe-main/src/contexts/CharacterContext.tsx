@@ -79,4 +79,12 @@ export function useCharacter() {
   return context;
 }
 
+/**
+ * Read-only access that does not throw outside a CharacterProvider (#752): the combat
+ * tracker only needs the active character's name and also renders in isolated trees.
+ */
+export function useOptionalCharacter() {
+  return useContext(CharacterContext);
+}
+
 // Remove the saveCharacterDraft function as it's now handled by useCharacterSave hook

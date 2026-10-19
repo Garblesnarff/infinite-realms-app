@@ -32,7 +32,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useCharacter } from '@/contexts/CharacterContext';
+import { useOptionalCharacter } from '@/contexts/CharacterContext';
 import { RightSheetLive } from '@/features/game-session/components/game/overhaul/RightSheetLive';
 import { useCombatActions } from '@/hooks/use-combat-actions';
 
@@ -91,8 +91,7 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({
     setPendingAttack: _setPendingAttack,
   } = useCombatActions(isDM);
 
-  const { state: characterState } = useCharacter();
-  const activeCharacterName = characterState.character?.name;
+  const activeCharacterName = useOptionalCharacter()?.state.character?.name;
 
   const { showCombatLog = false } = state;
 
