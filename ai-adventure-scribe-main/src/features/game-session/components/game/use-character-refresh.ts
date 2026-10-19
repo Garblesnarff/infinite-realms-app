@@ -60,9 +60,9 @@ export function useCharacterRefreshOnCombatUpdate(
     };
 
     window.addEventListener('combat-state-updated', refreshCharacter);
-    // #130: story appliers write character state out of combat; the server
-    // publishes character_state_updated for those writes and the session
-    // socket forwards it as this event.
+    // #130: story appliers write character state out of combat. The
+    // `character_updated` server broadcast lands with #831 (not in this PR);
+    // the session socket forwards it as this event.
     window.addEventListener('character-state-updated', refreshCharacter);
     return () => {
       cancelled = true;
