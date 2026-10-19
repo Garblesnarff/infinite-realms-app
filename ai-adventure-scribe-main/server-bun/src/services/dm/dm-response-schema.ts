@@ -387,8 +387,6 @@ const baseProperties = {
     type: 'object',
     additionalProperties: false,
     properties: {
-      id: nullable({ type: 'string' }),
-      sessionId: nullable({ type: 'string' }),
       environment: {
         type: 'string',
         enum: [
@@ -409,8 +407,6 @@ const baseProperties = {
       enemyPlacement: nullable({ type: 'string', enum: ['ambush', 'guarding', 'formation'] }),
     },
     required: [
-      'id',
-      'sessionId',
       'environment',
       'size',
       'sceneDescription',

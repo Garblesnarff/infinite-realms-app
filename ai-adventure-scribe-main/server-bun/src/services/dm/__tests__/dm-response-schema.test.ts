@@ -249,3 +249,22 @@ describe('dmResponseSchema story items contract (#463)', () => {
     expect(none.success).toBe(true);
   });
 });
+
+describe('dmResponseSchema scene_spec contract (#782 item 6)', () => {
+  test('scene_spec has no id and no sessionId, but keeps seed', () => {
+    // #782 item 6: the model-authored id and sessionId were dead weight — the
+    // sanitizer discards the model's id and always replaces sessionId with the
+    // route parameter. The wire schema no longer asks the model for them.
+    const properties = dmResponseSchema.properties as Record<string, Record<string, unknown>>;
+    const [objectVariant] = properties.scene_spec.anyOf as Array<Record<string, unknown>>;
+    const sceneProps = objectVariant.properties as Record<string, unknown>;
+    const required = objectVariant.required as string[];
+
+    expect(sceneProps).not.toHaveProperty('id');
+    expect(sceneProps).not.toHaveProperty('sessionId');
+    expect(required).not.toContain('id');
+    expect(required).not.toContain('sessionId');
+    expect(sceneProps).toHaveProperty('seed');
+    expect(required).toContain('seed');
+  });
+});
