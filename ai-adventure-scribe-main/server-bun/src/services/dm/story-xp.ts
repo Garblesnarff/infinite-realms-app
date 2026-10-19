@@ -79,7 +79,7 @@ export async function awardStoryXpOnce(input: {
   const { and, eq, gte, like, sql } = await import('drizzle-orm');
   const { characters, experienceEvents } = await import('../../../../db/schema/index');
   const { characterId, sessionId, since, amount, reason } = input;
-  return db.transaction(async (tx) => {
+  const grant = await db.transaction(async (tx) => {
     const [locked] = await tx
       .select({ id: characters.id, level: characters.level })
       .from(characters)
@@ -163,6 +163,24 @@ export async function awardStoryXpOnce(input: {
     });
     return { outcome: granted < amount ? 'capped' : 'awarded', granted };
   });
+  // #130: broadcast after the transaction commits, so the sheet's refetch
+  // sees the new XP total. 'capped' with granted 0 wrote nothing. A failed
+  // broadcast must not fail the award: the write already landed.
+  if (grant.granted > 0) {
+    try {
+      const { publishStoryCharacterUpdate } = await import('./story-broadcast.js');
+      publishStoryCharacterUpdate(sessionId, 'story_xp');
+    } catch (broadcastError) {
+      logger.warn({
+        msg: 'DM_STORY_XP_BROADCAST_FAILED',
+        sessionId,
+        characterId,
+        error:
+          broadcastError instanceof Error ? broadcastError.message : String(broadcastError),
+      });
+    }
+  }
+  return grant;
 }
 
 /**
