@@ -583,3 +583,77 @@ export function actorsMentionedIn(
     return distinctive.some((word) => word && word.length >= 4 && haystack.includes(` ${word} `));
   });
 }
+
+/**
+ * A player declaring Lay on Hands in plain text (#712): "I call on my Lay on
+ * Hands, laying my hand on myself", "I use Lay on Hands on Mira for 5".
+ *
+ * Unlike the defensive declarations this is not whole-input strict: the QA case
+ * combined it with an attack ("...Then I take the Attack action..."), so the
+ * clause carrying the phrase is parsed on its own. Returns the declaration, or
+ * null when the input never names the feature.
+ */
+export interface DeclaredLayOnHands {
+  /** The target phrase as typed, or 'self' when the paladin names themself or no one. */
+  target: string;
+  targetIsSelf: boolean;
+  /** HP to draw from the pool, when the player stated a number. */
+  amount: number | null;
+  /** Cure a disease / neutralize a poison instead of healing. */
+  cure: 'disease' | 'poison' | null;
+}
+
+const LAY_ON_HANDS_PHRASE = /\blay\s+on\s+hands\b/i;
+const SELF_TARGET = /^(?:myself|me|themselves)\b/i;
+
+/** The sentence carrying the phrase, so a number in a later attack clause is not read as HP. */
+const sentenceWith = (text: string, index: number): string => {
+  const before = text.slice(0, index);
+  const after = text.slice(index);
+  const start = Math.max(
+    before.lastIndexOf('.'),
+    before.lastIndexOf('!'),
+    before.lastIndexOf('?'),
+    before.lastIndexOf(';'),
+  );
+  const endMatch = /[.!?;]/.exec(after);
+  const end = endMatch ? index + (endMatch.index ?? after.length) : text.length;
+  return text.slice(start + 1, end);
+};
+
+export function detectDeclaredLayOnHands(playerInput: string): DeclaredLayOnHands | null {
+  if (typeof playerInput !== 'string' || !playerInput.trim()) return null;
+  const phrase = LAY_ON_HANDS_PHRASE.exec(playerInput);
+  if (!phrase) return null;
+  const clause = sentenceWith(playerInput, phrase.index ?? 0);
+
+  const cure = /\bcure\b[\s\S]{0,40}\bdisease\b/i.test(clause)
+    ? 'disease'
+    : /\bcure\b[\s\S]{0,40}\bpoison\b/i.test(clause) ||
+        /\bneutraliz\w*\b[\s\S]{0,40}\bpoison\b/i.test(clause)
+      ? 'poison'
+      : null;
+
+  const amountMatch = /(\d+)\s*(?:hit points|hp)\b/i.exec(clause) ?? /\bfor\s+(\d+)\b/i.exec(clause);
+  const amount = amountMatch ? Math.max(0, Math.trunc(Number(amountMatch[1]))) : null;
+
+  const targetMatch =
+    /\b(?:on|to|upon)\s+(myself|me|themselves)\b/i.exec(clause) ??
+    // A named target: not a determiner, not the feature's own name ("Lay on Hands"),
+    // not the cure/heal verbs ("to cure the poison"), and not running into a
+    // preposition ("on Mira for 5" targets Mira, not "Mira for").
+    new RegExp(
+      '\\b(?:on|to|upon)\\s+(?!my\\b|the\\b|a\\b|an\\b|hands?\\b|cure\\b|heal\\b)' +
+        "([A-Za-z][\\w'-]*(?:\\s+(?!for\\b|to\\b|with\\b|and\\b|then\\b|as\\b|of\\b|at\\b)[A-Za-z][\\w'-]*){0,2})",
+      'i',
+    ).exec(clause);
+  const targetText = targetMatch ? targetMatch[1].trim() : '';
+  const targetIsSelf = !targetText || SELF_TARGET.test(targetText);
+
+  return {
+    target: targetIsSelf ? 'self' : targetText,
+    targetIsSelf,
+    amount,
+    cure,
+  };
+}

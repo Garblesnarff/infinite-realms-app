@@ -296,8 +296,7 @@ export class ClassFeaturesService {
    * Use a limited-use feature
    */
   static async useFeature(input: UseFeatureInput & { userId: string }): Promise<UseFeatureResult> {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    return ClassFeatureUsageService.useFeature(input);
+    return ClassFeatureUsageService.spendFeatureUse(input);
   }
 
   /**

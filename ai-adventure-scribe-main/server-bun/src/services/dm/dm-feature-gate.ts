@@ -157,9 +157,17 @@ export interface FeatureGateInput {
   clientCharacterId?: string | null;
   /** Told the spells the player cast in their own words and the check allowed (#218 step 1). */
   onCastsAllowed?: (casts: AllowedCasts) => void;
+  /**
+   * Told the class features the player claimed in their own words and the check
+   * allowed (#712). The story spends their uses after the reply is allowed.
+   */
+  onFeaturesAllowed?: (features: AllowedFeatures) => void;
 }
 
 export type AllowedCasts = { character: CharacterRow; spells: string[] };
+
+/** A feature the player's own words claimed and the sheet allowed. */
+export type AllowedFeatures = { character: CharacterRow; features: string[] };
 
 /**
  * Fails open: the generation is already paid for, so a check that cannot run logs and lets the
@@ -334,6 +342,10 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
       : null;
   if (!refused.length && !noSlot.length && spells.length && !input.inCombat)
     input.onCastsAllowed?.({ character, spells });
+  // #712: the story spends allowed feature uses (Divine Sense, Lay on Hands) after
+  // the reply is allowed. In combat the engine resolves them instead.
+  if (!refused.length && !noSlot.length && allClaimedFeatures.length && !input.inCombat)
+    input.onFeaturesAllowed?.({ character, features: allClaimedFeatures });
   if (!refused.length && !noSlot.length) return result;
 
   logger.warn({
