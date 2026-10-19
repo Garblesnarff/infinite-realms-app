@@ -191,8 +191,9 @@ export default defineConfig({
       'src/utils/combat/__tests__/spellcasting-actions.test.ts',
       'src/utils/__tests__/character-proficiency-calculations.test.ts',
       'cli/src/**/*.{test,spec}.{ts,tsx}',
-      'shared/__tests__/spell-slot-tables.test.ts',  // #617 single-source spell-slot table
-      'shared/__tests__/level-1-hit-points.test.ts',  // #620 single-owner level-1 HP formula
+      'shared/__tests__/spell-slot-tables.test.ts', // #617 single-source spell-slot table
+      'shared/__tests__/level-1-hit-points.test.ts', // #620 single-owner level-1 HP formula
+      'shared/__tests__/player-exit-wording.test.ts', // #749 free-text movement is not an exit
       'src/**/*.{test,spec}.{ts,tsx}',
       'tests/**/*.{test,spec}.{ts,tsx}',
     ],

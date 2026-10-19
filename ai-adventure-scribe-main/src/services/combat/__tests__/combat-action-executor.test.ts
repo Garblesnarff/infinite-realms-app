@@ -9,7 +9,11 @@ import {
   HIDE_CHECK_UNROUTABLE_REASON,
   executeAuthoritativeCombatIntent,
   executeStructuredCombatActionWithBoundary,
+  type StructuredCombatAction,
+  type StructuredCombatActionExecution,
 } from '../combat-action-executor';
+
+import logger from '@/lib/logger';
 
 const { mockReportClientFailure, mockToast } = vi.hoisted(() => ({
   mockReportClientFailure: vi.fn(),
@@ -745,6 +749,98 @@ describe('combat-action-executor', () => {
           isCritical: false,
         },
       ]);
+    });
+  });
+
+  describe('a DM-declared player exit needs the player wording (#749)', () => {
+    const exitAction = (actionType: 'flee' | 'yield' | 'disengage'): StructuredCombatAction => ({
+      actor_id: 'player-1',
+      action_type: actionType,
+      target_ids: [],
+      weapon_id: null,
+      spell_id: null,
+      slot_level: null,
+      movement_feet: 0,
+    });
+    const intentBody = (): any => JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+
+    const run = (
+      actionType: 'flee' | 'yield' | 'disengage',
+      playerInput?: string,
+    ): Promise<StructuredCombatActionExecution> =>
+      executeStructuredCombatActionWithBoundary(
+        encounterId,
+        exitAction(actionType),
+        undefined,
+        undefined,
+        'typed',
+        undefined,
+        playerInput,
+      );
+
+    it.each([
+      'I back away slowly, keeping my dagger hand up, edging back toward Kaelen.',
+      'I step back.',
+      'I edge toward Kaelen.',
+    ])('skips a DM-declared flee for free-text movement: %s', async (playerInput) => {
+      const warn = vi.spyOn(logger, 'warn');
+
+      const execution = await run('flee', playerInput);
+
+      expect(execution).toEqual({ outcomes: [], boundary: null, skipped: true });
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith(
+        '[CombatActionExecutor] DM exit action without player wording; skipped',
+        { actionType: 'flee' },
+      );
+      warn.mockRestore();
+    });
+
+    it.each([
+      'I back away slowly, keeping my dagger hand up, edging back toward Kaelen.',
+      'I step back.',
+      'I edge toward Kaelen.',
+    ])('skips a DM-declared disengage for free-text movement: %s', async (playerInput) => {
+      const execution = await run('disengage', playerInput);
+
+      expect(execution.skipped).toBe(true);
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it('skips a DM-declared yield the player did not ask for', async () => {
+      const execution = await run('yield', 'I back away slowly.');
+
+      expect(execution.skipped).toBe(true);
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['flee', 'I flee!'],
+      ['flee', 'I run away'],
+      ['disengage', 'I disengage and move back'],
+    ] as const)('still sends an explicit %s: %s', async (actionType, playerInput) => {
+      (globalThis.fetch as any).mockResolvedValue({
+        ok: true,
+        json: async () => ({ result: {} }),
+      });
+
+      const execution = await run(actionType, playerInput);
+
+      expect(execution.skipped).toBeUndefined();
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      expect(intentBody().intent).toMatchObject({ type: actionType, actorId: 'player-1' });
+    });
+
+    it('keeps the old behaviour when no player text is supplied (the inline option path)', async () => {
+      (globalThis.fetch as any).mockResolvedValue({
+        ok: true,
+        json: async () => ({ result: {} }),
+      });
+
+      const execution = await run('flee', undefined);
+
+      expect(execution.skipped).toBeUndefined();
+      expect(intentBody().intent.type).toBe('flee');
     });
   });
 });

@@ -667,6 +667,15 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     if (withdrawnBySheetCancel(action, origin, targetId ? labelFor(targetId) : undefined)) {
       return 'turn_ended';
     }
+    // The player's own words only govern an exit the DM declares for the player's character.
+    // An NPC's exit is the DM's to declare, and no player text is passed for it (#749).
+    const playerExitInput =
+      (action.action_type === 'flee' ||
+        action.action_type === 'yield' ||
+        action.action_type === 'disengage') &&
+      isPlayerActor(action.actor_id, participants)
+        ? playerMessage
+        : undefined;
     const execution = signal
       ? await executeStructuredCombatActionWithBoundary(
           encounterId,
@@ -675,15 +684,29 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
           playerDie?.d20Rolls,
           origin,
           signal,
+          playerExitInput,
         )
-      : await executeStructuredCombatActionWithBoundary(
-          encounterId,
-          action,
-          playerDie?.d20,
-          playerDie?.d20Rolls,
-          ...(origin ? [origin] : []),
-        );
+      : playerExitInput !== undefined
+        ? await executeStructuredCombatActionWithBoundary(
+            encounterId,
+            action,
+            playerDie?.d20,
+            playerDie?.d20Rolls,
+            origin,
+            undefined,
+            playerExitInput,
+          )
+        : await executeStructuredCombatActionWithBoundary(
+            encounterId,
+            action,
+            playerDie?.d20,
+            playerDie?.d20Rolls,
+            ...(origin ? [origin] : []),
+          );
     if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError');
+    // The DM declared a player exit the player's own words did not. Nothing was sent to the
+    // engine, so the turn stays open and the rest of the batch — a move, say — still runs (#749).
+    if (execution.skipped) return null;
     // A retry that arrived after victory is a clean server no-op, not an outcome to narrate.
     // The batch is over either way; do not submit the next action against the dissolved board.
     if (execution.boundary === 'encounter_already_concluded') {

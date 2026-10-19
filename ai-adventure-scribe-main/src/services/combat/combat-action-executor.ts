@@ -4,6 +4,7 @@ import {
   type StructuredCombatActionExecution,
 } from './combat-action-boundary';
 import { reportCombatIntentFailure } from './combat-intent-failure';
+import { playerTextDeclares } from '../../../shared/player-exit-wording';
 
 export {
   combatBoundaryFromResult,
@@ -15,6 +16,7 @@ import type { CombatActionOrigin } from './combat-action-origin';
 import type { DamageType } from '@/types/combat';
 
 import { logServerRequestId } from '@/infrastructure/api/request-id-log';
+import logger from '@/lib/logger';
 import { getAuthHeaders } from '@/services/auth/TokenService';
 import { playerCombatSpellLabel } from '@/services/combat/player-combat-spell';
 
@@ -322,8 +324,25 @@ export async function executeStructuredCombatActionWithBoundary(
   /** Who produced the action; the server refuses a player action that no player input made. */
   origin?: CombatActionOrigin,
   signal?: AbortSignal,
+  /**
+   * The player's own words for this turn, passed only for a player-actor action. A DM-declared
+   * flee/yield/disengage is skipped unless those words explicitly ask for that exit (#749).
+   */
+  playerInput?: string,
 ): Promise<StructuredCombatActionExecution> {
   const dmStartedAt = Date.now();
+  if (
+    (action.action_type === 'flee' ||
+      action.action_type === 'yield' ||
+      action.action_type === 'disengage') &&
+    typeof playerInput === 'string' &&
+    !playerTextDeclares(action.action_type, playerInput)
+  ) {
+    logger.warn('[CombatActionExecutor] DM exit action without player wording; skipped', {
+      actionType: action.action_type,
+    });
+    return { outcomes: [], boundary: null, skipped: true };
+  }
   let result: unknown;
   if (action.action_type === 'attack') {
     if (!action.target_ids[0]) {
