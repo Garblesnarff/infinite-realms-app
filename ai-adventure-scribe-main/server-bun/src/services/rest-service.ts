@@ -157,6 +157,12 @@ export class RestService {
    */
   static afterStoryClaimForTests: (() => Promise<void> | void) | undefined;
 
+  /**
+   * Test-only. Runs at the start of the story-rest effect snapshot.
+   * A throw here is a failed read before any restore. Production leaves it unset.
+   */
+  static storyRestSnapshotForTests: (() => Promise<void> | void) | undefined;
+
   private static async throwIfStoryRestHook(claimedEventId: string | undefined): Promise<void> {
     if (!claimedEventId || !RestService.afterStoryClaimForTests) return;
     await RestService.afterStoryClaimForTests();
@@ -167,6 +173,9 @@ export class RestService {
    * updated_at. The claim row is not part of this. A later write changes it.
    */
   private static async storyRestEffectKey(characterId: string): Promise<string> {
+    if (RestService.storyRestSnapshotForTests) {
+      await RestService.storyRestSnapshotForTests();
+    }
     const [stats] = await db
       .select({
         hp: characterStats.currentHitPoints,
@@ -225,6 +234,24 @@ export class RestService {
       return;
     }
     await db.delete(restEvents).where(eq(restEvents.id, claimedEventId));
+  }
+
+  /**
+   * A throw before the snapshot finishes restored nothing. Delete the claim
+   * directly. Re-reading the effect key on that path would keep the row,
+   * and every Retry would return already_applied.
+   */
+  private static async releaseStoryClaimAfterThrow(
+    claimedEventId: string | undefined,
+    characterId: string,
+    effectBefore: string | undefined,
+  ): Promise<void> {
+    if (!claimedEventId) return;
+    if (effectBefore === undefined) {
+      await db.delete(restEvents).where(eq(restEvents.id, claimedEventId));
+      return;
+    }
+    await this.releaseStoryRestClaim(claimedEventId, characterId, effectBefore);
   }
 
   /** Fill the claimed event, or insert one for a sheet rest that has no claim. */
@@ -589,9 +616,7 @@ export class RestService {
         restEventId: restEvent.id,
       };
     } catch (error) {
-      if (claimedEventId && effectBefore !== undefined) {
-        await this.releaseStoryRestClaim(claimedEventId, characterId, effectBefore);
-      }
+      await this.releaseStoryClaimAfterThrow(claimedEventId, characterId, effectBefore);
       throw error;
     }
   }
@@ -800,9 +825,7 @@ export class RestService {
         restEventId: restEvent.id,
       };
     } catch (error) {
-      if (claimedEventId && effectBefore !== undefined) {
-        await this.releaseStoryRestClaim(claimedEventId, characterId, effectBefore);
-      }
+      await this.releaseStoryClaimAfterThrow(claimedEventId, characterId, effectBefore);
       throw error;
     }
   }
