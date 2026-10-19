@@ -10,7 +10,8 @@
  * story-spell-slots.ts: Retry re-sends the same saved message, so a second rest for it is
  * not applied. The claim is inside RestService (#777): it locks the character, re-checks
  * rest_events for this character, session, and player message, and inserts the event
- * before any restore. A rest RestService refuses (dying, dead, long rest at 0 HP) is
+ * before any restore. A throw that leaves HP unchanged deletes that event, so a
+ * retry can apply once. A rest RestService refuses (dying, dead, long rest at 0 HP) is
  * logged and reported, never thrown: a failed write never costs the player their turn.
  *
  * Database imports stay inside the functions, as in story-xp.ts: /v1/llm/generate imports
