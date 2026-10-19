@@ -9,7 +9,7 @@ import {
   getGeminiModelCandidates,
   getOpenRouterExtractionModelCandidates,
   getOpenRouterModelCandidates,
-  modelSupportsStrictSchema,
+  getVendorCapabilityProfile,
 } from './llm-model-config.js';
 import { getStructuredOutputUnsupportedModels } from './model-health.js';
 import { logger } from '../lib/logger.js';
@@ -92,6 +92,13 @@ export interface LLMResponse {
     cachedInputTokens?: number;
     /** #352: prompt tokens written to the cache on this turn. */
     cacheWriteTokens?: number;
+    /**
+     * #782 item 4: which schema-delivery path the winning candidate used —
+     * strict structured output, or schema-as-instructions with ajv
+     * enforcement. Only set when `responseSchema` was requested; absent on
+     * schema-less turns.
+     */
+    schemaDelivery?: 'strict-json-schema' | 'schema-as-instructions';
     /** LLM_STRICT_BRANCH_VALIDATION=shadow: accepted replies that failed the full schema. Absent when zero. */
     schemaShadowInvalid?: number;
   };
@@ -639,7 +646,10 @@ export class LLMProviderService {
 
     for (let index = 0; index < candidateModels.length; index += 1) {
       const candidate = candidateModels[index];
-      const strictSchema = !responseSchema || modelSupportsStrictSchema(candidate);
+      // #782 item 4: the capability profile replaces the scattered
+      // modelSupportsStrictSchema conditional.
+      const strictSchema =
+        !responseSchema || getVendorCapabilityProfile(candidate).strictJsonSchema;
       const reqBody = {
         model: candidate,
         messages: strictSchema ? messages : instructedMessages,
@@ -648,6 +658,9 @@ export class LLMProviderService {
         // #352: ask OpenRouter for the usage detail object so cache hits are
         // visible (`usage.prompt_tokens_details.cached_tokens`).
         usage: { include: true },
+        // #782 item 4: only route to providers that support the parameters
+        // this request sets (notably strict json_schema when asked for).
+        provider: { require_parameters: true },
         // #633 PR2: stream tokens when the caller wants progress callbacks.
         // Usage rides the final stream chunk automatically.
         ...(onToken ? { stream: true } : {}),
@@ -772,6 +785,15 @@ export class LLMProviderService {
                 totalTokens: usage?.total_tokens ?? inputTokens + outputTokens,
                 cachedInputTokens,
                 cacheWriteTokens,
+                // #782 item 4: log which schema-delivery path this turn used.
+                // Only meaningful when a schema was requested.
+                ...(responseSchema
+                  ? {
+                      schemaDelivery: strictSchema
+                        ? ('strict-json-schema' as const)
+                        : ('schema-as-instructions' as const),
+                    }
+                  : {}),
                 ...(schemaShadowInvalid > 0 ? { schemaShadowInvalid } : {}),
               },
             };
@@ -1079,6 +1101,9 @@ export class LLMProviderService {
         totalTokens: Number(metadata.totalTokenCount || inputTokens + outputTokens),
         // #352: Gemini's implicit cache read count for this turn.
         cachedInputTokens: Number(metadata.cachedContentTokenCount || 0),
+        // #782 item 4: Gemini always takes the strict schema path, when a
+        // schema was requested.
+        ...(responseSchema ? { schemaDelivery: 'strict-json-schema' as const } : {}),
         ...(schemaShadowInvalid > 0 ? { schemaShadowInvalid } : {}),
       },
     };
