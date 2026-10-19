@@ -5,12 +5,7 @@ import type { CombatParticipant } from '@/types/combat';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface CombatReadyCardProps {
   isDM: boolean;
@@ -19,6 +14,8 @@ interface CombatReadyCardProps {
   isStartingCombat: boolean;
   onAddEnemy: () => void;
   onStartCombat: () => void;
+  /** The active character's name, for the pre-combat view before any encounter exists. */
+  activeCharacterName?: string;
 }
 
 /**
@@ -34,6 +31,7 @@ export const CombatReadyCard: React.FC<CombatReadyCardProps> = ({
   isStartingCombat,
   onAddEnemy,
   onStartCombat,
+  activeCharacterName,
 }) => {
   return (
     <TooltipProvider>
@@ -50,14 +48,17 @@ export const CombatReadyCard: React.FC<CombatReadyCardProps> = ({
               Prepare for battle! Your party is ready to engage enemies.
             </div>
 
-            {playerParticipants.length === 0 ? (
+            {playerParticipants.length === 0 && !activeCharacterName ? (
               <div className="text-destructive mb-4">
                 No player characters found. Please ensure your character is selected.
               </div>
             ) : (
               <div className="space-y-2 mb-4">
                 <p className="text-sm text-muted-foreground">
-                  Party: {playerParticipants.map((p) => p.name).join(', ')}
+                  Party:{' '}
+                  {playerParticipants.length > 0
+                    ? playerParticipants.map((p) => p.name).join(', ')
+                    : activeCharacterName}
                 </p>
                 {enemyParticipants.length > 0 && (
                   <p className="text-sm text-destructive">

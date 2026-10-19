@@ -32,6 +32,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useOptionalCharacter } from '@/contexts/CharacterContext';
 import { RightSheetLive } from '@/features/game-session/components/game/overhaul/RightSheetLive';
 import { useCombatActions } from '@/hooks/use-combat-actions';
 
@@ -90,6 +91,8 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({
     setPendingAttack: _setPendingAttack,
   } = useCombatActions(isDM);
 
+  const activeCharacterName = useOptionalCharacter()?.state.character?.name;
+
   const { showCombatLog = false } = state;
 
   const handleEnemyKeyDown = (enemyId: string) => (e: React.KeyboardEvent) => {
@@ -109,6 +112,7 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({
         isStartingCombat={isStartingCombat}
         onAddEnemy={addEnemy}
         onStartCombat={handleStartCombat}
+        activeCharacterName={activeCharacterName}
       />
     );
   }

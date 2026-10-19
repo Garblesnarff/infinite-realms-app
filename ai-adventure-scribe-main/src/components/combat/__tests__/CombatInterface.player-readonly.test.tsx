@@ -19,6 +19,7 @@ import { convertCharacterDetailsToCharacter } from '@/utils/character-converter'
 
 vi.mock('@/contexts/CharacterContext', () => ({
   useCharacter: () => ({ state: { character: casterCharacter }, dispatch: vi.fn() }),
+  useOptionalCharacter: () => ({ state: { character: casterCharacter }, dispatch: vi.fn() }),
 }));
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({ state: { campaign: null } }),
