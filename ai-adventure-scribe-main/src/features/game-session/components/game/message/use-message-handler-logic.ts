@@ -25,6 +25,7 @@ import {
 } from '@/hooks/ai/combat-turn-preflight';
 import { useAIResponse } from '@/hooks/use-ai-response';
 import { useToast } from '@/hooks/use-toast';
+import { userDataApi } from '@/services/user-data-api';
 import {
   createTurnPhaseReporter,
   isNetworkError,
@@ -232,6 +233,12 @@ export const useMessageHandlerLogic = ({
   const [sendError, setSendError] = React.useState<string | null>(null);
   const retryInputRef = React.useRef<string | null>(null);
   const retryContextRef = React.useRef<MessageSendContext | undefined>(undefined);
+  // #783: turn-failure beacon tracking. Records when the turn started and the
+  // last SSE event type seen, so the beacon sent when the error chip shows can
+  // be correlated with the server log.
+  const turnStartTimeRef = React.useRef<number | null>(null);
+  const lastSseEventRef = React.useRef<string | null>(null);
+  const beaconDmMessageIdRef = React.useRef<string | null>(null);
 
   const inFlightRollsRef = React.useRef(new Map<string, Promise<void>>());
   const [retryInFlight, setRetryInFlight] = React.useState(false);
@@ -370,6 +377,10 @@ export const useMessageHandlerLogic = ({
     const abortController = new AbortController();
     const turnSignal = abortController.signal as TurnAbortSignal;
     let timedOut = false;
+    // #783: record the turn start for the failure beacon.
+    turnStartTimeRef.current = Date.now();
+    lastSseEventRef.current = null;
+    beaconDmMessageIdRef.current = null;
     let playerMessagePersisted = providedContext?.intent === 'resume_unanswered';
     let turnTimeoutRemaining = DM_TURN_TIMEOUT_MS;
     let activeSegmentStartedAt = performance.now();
@@ -669,6 +680,8 @@ export const useMessageHandlerLogic = ({
       // #633: a rejected attempt (retry or failover) is discarded server-side;
       // clear the preview so its prose does not prefix the next attempt.
       const onStreamReset = (): void => {
+        // #783: track the last SSE event for the failure beacon.
+        lastSseEventRef.current = 'reset';
         if (abortController.signal.aborted || previewWithdrawn) return;
         streamedNarration = '';
         updateMessage({
@@ -818,7 +831,13 @@ export const useMessageHandlerLogic = ({
       // #2456: the party was defeated. The hook has already surfaced the death
       // screen state and settled the combat preflight. Skip ordinary DM-reply
       // processing — no sanitizing, no persistence, no generic error text.
-      if (aiResponseMessage.id) dmMessageId = aiResponseMessage.id;
+      if (aiResponseMessage.id) {
+        dmMessageId = aiResponseMessage.id;
+        // #783: track for the failure beacon.
+        beaconDmMessageIdRef.current = aiResponseMessage.id;
+        // #783: the turn completed; record the done event.
+        lastSseEventRef.current = 'done';
+      }
       if (aiResponseMessage.context?.terminalState === 'party_defeated') {
         setComposerBlocked(false);
         // The killing round's paragraph (#2518) is the one thing a terminal turn can carry: save
@@ -1119,19 +1138,35 @@ export const useMessageHandlerLogic = ({
       retryContextRef.current = playerMessagePersisted
         ? { intent: 'resume_unanswered', retryInput: playerInput }
         : providedContext;
-      setSendError(
-        timedOut
-          ? DM_TIMEOUT_MESSAGE
-          : networkError
-            ? DM_NETWORK_ERROR_MESSAGE
-            : sessionExpired
-              ? SESSION_EXPIRED_MESSAGE
-              : quotaExceeded
+      const errorMessage = timedOut
+        ? DM_TIMEOUT_MESSAGE
+        : networkError
+          ? DM_NETWORK_ERROR_MESSAGE
+          : sessionExpired
+            ? SESSION_EXPIRED_MESSAGE
+            : quotaExceeded
+              ? recoveryMessage
+              : combatIntentFailure
                 ? recoveryMessage
-                : combatIntentFailure
-                  ? recoveryMessage
-                  : DM_PROCESSING_ERROR_MESSAGE,
-      );
+                : DM_PROCESSING_ERROR_MESSAGE;
+      setSendError(errorMessage);
+
+      // #783: send a beacon when the turn-failure chip shows, so the failed
+      // turn can be correlated with the server log. One beacon per chip-show.
+      if (
+        errorMessage === DM_PROCESSING_ERROR_MESSAGE ||
+        errorMessage === DM_NETWORK_ERROR_MESSAGE
+      ) {
+        const elapsedMs =
+          turnStartTimeRef.current !== null ? Date.now() - turnStartTimeRef.current : undefined;
+        userDataApi.reportClientFailure('client_turn_failure', sessionId, errorMessage, {
+          message: errorMessage,
+          messageId: beaconDmMessageIdRef.current ?? undefined,
+          lastEventType: lastSseEventRef.current ?? undefined,
+          elapsedMs,
+          provisionalFetched: false,
+        });
+      }
 
       toast({
         title: sessionExpired
@@ -1186,11 +1221,36 @@ export const useMessageHandlerLogic = ({
   // never landed, or a plain message orphaned by a dropped turn) gets the same Retry
   // setup — resume_unanswered re-sends the saved row with no duplicate save and no
   // turn-count increment.
-  const offerRetryForSavedMessage = React.useCallback((message: ChatMessage) => {
-    retryInputRef.current = message.text;
-    retryContextRef.current = { intent: 'resume_unanswered' };
-    setSendError(DM_PROCESSING_ERROR_MESSAGE);
-  }, []);
+  const offerRetryForSavedMessage = React.useCallback(
+    (message: ChatMessage) => {
+      // #783: if a provisional DM row exists for this turn, prefer it over the
+      // error chip. The #795 fallback persists the envelope as a provisional
+      // row; rendering it gives the player the reply instead of a dead-end.
+      const hasProvisionalReply = messagesRef.current.some(
+        (m) => m.sender === 'dm' && (m.context as Record<string, unknown> | undefined)?.provisional === true,
+      );
+      if (hasProvisionalReply) {
+        // The provisional row is in the message list and will render. Send a
+        // beacon noting it was fetched, so the server log shows the recovery.
+        userDataApi.reportClientFailure('client_turn_failure', sessionId, DM_PROCESSING_ERROR_MESSAGE, {
+          message: DM_PROCESSING_ERROR_MESSAGE,
+          messageId: message.id,
+          provisionalFetched: true,
+        });
+        return;
+      }
+      retryInputRef.current = message.text;
+      retryContextRef.current = { intent: 'resume_unanswered' };
+      setSendError(DM_PROCESSING_ERROR_MESSAGE);
+      // #783: beacon for the reload-time chip (no turn timing available).
+      userDataApi.reportClientFailure('client_turn_failure', sessionId, DM_PROCESSING_ERROR_MESSAGE, {
+        message: DM_PROCESSING_ERROR_MESSAGE,
+        messageId: message.id,
+        provisionalFetched: false,
+      });
+    },
+    [sessionId],
+  );
 
   useHeldEntryRecovery({
     sessionId,

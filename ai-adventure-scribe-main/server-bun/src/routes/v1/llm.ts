@@ -1411,9 +1411,24 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           } catch (error) {
             const { AppError } = await import('../../lib/errors.js');
             if (error instanceof AppError) {
+              // #783: AppError turns had no log line — the SSE error event was
+              // invisible in the server logs. Log it here with the session id.
+              logger.error({
+                msg: 'LLM_GENERATE_SSE_ERROR',
+                sessionId: sessionId ?? null,
+                statusCode: error.statusCode,
+                message: error.message,
+              });
               sendEvent({ type: 'error', message: error.message, statusCode: error.statusCode });
             } else {
               logger.error({ msg: 'LLM_GENERATE_STREAM_FAILED', error });
+              // #783: log the SSE error event for non-AppError failures too.
+              logger.error({
+                msg: 'LLM_GENERATE_SSE_ERROR',
+                sessionId: sessionId ?? null,
+                statusCode: 500,
+                message: 'Generation failed',
+              });
               sendEvent({ type: 'error', message: 'Generation failed', statusCode: 500 });
             }
           } finally {

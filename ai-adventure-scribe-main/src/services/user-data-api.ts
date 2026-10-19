@@ -211,6 +211,14 @@ export type ClientFailureDetails = {
   componentStack?: string;
   /** Client route (path) active when the failure happened. */
   route?: string;
+  /** #783: DM message id for the failed turn (turn-failure beacon). */
+  messageId?: string;
+  /** #783: last SSE event type seen before the failure (turn-failure beacon). */
+  lastEventType?: string;
+  /** #783: ms from turn start to the failure (turn-failure beacon). */
+  elapsedMs?: number;
+  /** #783: whether a provisional DM row was fetched on reload (turn-failure beacon). */
+  provisionalFetched?: boolean;
 };
 
 export type NarrativeSceneStateResponse = {
@@ -698,6 +706,11 @@ export const userDataApi = {
           details?.route ?? (typeof window !== 'undefined' ? window.location.pathname : undefined),
         bundle: APP_BUILD_VERSION,
         clientTimestamp: new Date().toISOString(),
+        // #783: turn-failure beacon fields (only sent for client_turn_failure).
+        messageId: details?.messageId,
+        lastEventType: details?.lastEventType,
+        elapsedMs: details?.elapsedMs,
+        provisionalFetched: details?.provisionalFetched,
       }),
     }).catch(() => {
       // Swallow: a failed failure-report must never itself fail anything.
