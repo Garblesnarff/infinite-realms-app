@@ -284,6 +284,9 @@ export function engineAttackRollResult(
   };
 }
 
+/** The action types whose server handling reads the player's own words (#749). */
+const PLAYER_WORDING_ACTION_TYPES = new Set(['flee', 'yield', 'disengage', 'move']);
+
 /**
  * Resolves targeted actions until the first turn or combat boundary, then asks the DM to narrate
  * the outcomes the engine produced — and only those. Refused actions travel into the narration
@@ -667,23 +670,45 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     if (withdrawnBySheetCancel(action, origin, targetId ? labelFor(targetId) : undefined)) {
       return 'turn_ended';
     }
-    const execution = signal
-      ? await executeStructuredCombatActionWithBoundary(
-          encounterId,
-          action,
-          playerDie?.d20,
-          playerDie?.d20Rolls,
-          origin,
-          signal,
-        )
-      : await executeStructuredCombatActionWithBoundary(
-          encounterId,
-          action,
-          playerDie?.d20,
-          playerDie?.d20Rolls,
-          ...(origin ? [origin] : []),
-        );
+    // The player's own words travel only with the player-actor actions the server reads them on
+    // (#749): a DM-declared exit stands only on those words, and the Disengage-then-move path
+    // reads them on the move that follows. Every other wire is unchanged; an NPC's action
+    // carries none — its exit is the DM's.
+    const readsPlayerWords = PLAYER_WORDING_ACTION_TYPES.has(action.action_type);
+    const playerInput =
+      readsPlayerWords && isPlayerActor(action.actor_id, participants) ? playerMessage : undefined;
+    const execution =
+      playerInput !== undefined
+        ? await executeStructuredCombatActionWithBoundary(
+            encounterId,
+            action,
+            playerDie?.d20,
+            playerDie?.d20Rolls,
+            origin,
+            signal,
+            playerInput,
+          )
+        : signal
+          ? await executeStructuredCombatActionWithBoundary(
+              encounterId,
+              action,
+              playerDie?.d20,
+              playerDie?.d20Rolls,
+              origin,
+              signal,
+            )
+          : await executeStructuredCombatActionWithBoundary(
+              encounterId,
+              action,
+              playerDie?.d20,
+              playerDie?.d20Rolls,
+              ...(origin ? [origin] : []),
+            );
     if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError');
+    // The server refused a DM-declared player exit the player's own words did not support.
+    // Nothing was applied, so the turn stays open and the rest of the batch — a move, say —
+    // still runs (#749).
+    if (execution.skipped) return null;
     // A retry that arrived after victory is a clean server no-op, not an outcome to narrate.
     // The batch is over either way; do not submit the next action against the dissolved board.
     if (execution.boundary === 'encounter_already_concluded') {

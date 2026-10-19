@@ -8,6 +8,8 @@ export interface StructuredCombatActionExecution {
   result?: unknown;
   /** A batch must drop every action after either kind of combat boundary. */
   boundary: CombatActionBoundary;
+  /** A DM-declared player exit the player's own words did not support; nothing was sent (#749). */
+  skipped?: boolean;
 }
 
 /** Boundary metadata returned by the server without coupling the browser to server types. */

@@ -199,6 +199,11 @@ export async function executeAuthoritativeCombatIntent(
   dmStartedAt?: number,
   origin?: CombatActionOrigin,
   signal?: AbortSignal,
+  /**
+   * The player's own words for this turn (#749). Sent so the server can tell a DM-declared exit
+   * the player asked for from one declared over free-text movement. Blank is omitted.
+   */
+  playerInput?: string,
 ): Promise<unknown> {
   try {
     const headers = { 'Content-Type': 'application/json', ...getAuthHeaders() };
@@ -232,6 +237,8 @@ export async function executeAuthoritativeCombatIntent(
           source,
           dmStartedAt,
           ...(origin ? { origin } : {}),
+          // Blank/whitespace is omitted so an inline option sends no wording (#749).
+          ...(playerInput && playerInput.trim() ? { playerInput } : {}),
         }),
         ...(signal ? { signal } : {}),
       },
@@ -322,6 +329,12 @@ export async function executeStructuredCombatActionWithBoundary(
   /** Who produced the action; the server refuses a player action that no player input made. */
   origin?: CombatActionOrigin,
   signal?: AbortSignal,
+  /**
+   * The player's own words for this turn, passed for a player-actor action. Forwarded to the
+   * server, which lets a DM-declared flee/yield/disengage stand only when those words asked for
+   * that exit, and reports `exit_without_player_wording` (handled below) when they did not (#749).
+   */
+  playerInput?: string,
 ): Promise<StructuredCombatActionExecution> {
   const dmStartedAt = Date.now();
   let result: unknown;
@@ -350,6 +363,7 @@ export async function executeStructuredCombatActionWithBoundary(
       dmStartedAt,
       origin,
       signal,
+      playerInput,
     );
   } else if (action.action_type === 'cast_spell') {
     const spellName = playerCombatSpellLabel(action.spell_id, action.spell_id);
@@ -371,6 +385,7 @@ export async function executeStructuredCombatActionWithBoundary(
       dmStartedAt,
       origin,
       signal,
+      playerInput,
     );
   } else if (action.action_type === 'death_save') {
     result = await executeAuthoritativeCombatIntent(
@@ -380,6 +395,7 @@ export async function executeStructuredCombatActionWithBoundary(
       dmStartedAt,
       origin,
       signal,
+      playerInput,
     );
   } else if (['dash', 'dodge', 'disengage'].includes(action.action_type)) {
     result = await executeAuthoritativeCombatIntent(
@@ -392,6 +408,7 @@ export async function executeStructuredCombatActionWithBoundary(
       dmStartedAt,
       origin,
       signal,
+      playerInput,
     );
   } else if (action.action_type === 'yield' || action.action_type === 'flee') {
     // #262: a typed yield/flee the DM declared. The same intent the inline option
@@ -409,6 +426,7 @@ export async function executeStructuredCombatActionWithBoundary(
       dmStartedAt,
       origin,
       signal,
+      playerInput,
     );
   } else if (action.action_type === 'move') {
     if (typeof action.x !== 'number' || typeof action.y !== 'number') {
@@ -427,6 +445,7 @@ export async function executeStructuredCombatActionWithBoundary(
       dmStartedAt,
       origin,
       signal,
+      playerInput,
     );
   } else if (action.action_type === 'hide') {
     // A DM-declared hide is a Stealth check: post the check intent the player-initiated
@@ -440,6 +459,7 @@ export async function executeStructuredCombatActionWithBoundary(
         dmStartedAt,
         origin,
         signal,
+        playerInput,
       );
     } catch (error) {
       if (!(error instanceof CombatIntentRefusedError)) throw error;
@@ -474,6 +494,11 @@ export async function executeStructuredCombatActionWithBoundary(
       reason: ACTION_NOT_SUPPORTED_REASON,
       intentType: String(action.action_type),
     });
+  }
+  // The server refused a DM-declared player exit the player's own words did not support (#749).
+  // Nothing was applied and no turn was spent: report it as skipped so the batch keeps going.
+  if (isRecord(result) && result.skipped === 'exit_without_player_wording') {
+    return { outcomes: [], boundary: null, skipped: true };
   }
   const boundary = combatBoundaryFromResult(result);
   // A post-conclusion no-op has no engine outcome. In particular, do not turn the marker into a

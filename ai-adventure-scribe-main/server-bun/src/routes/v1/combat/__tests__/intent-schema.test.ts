@@ -121,6 +121,21 @@ describe('the player exit intents (flee / yield)', () => {
     expect(combatIntentRequestValidator.Check(playerExitIntentBody(type))).toBe(true);
   });
 
+  it.each(['player', 'dm'] as const)(
+    'accepts the playerInput the client adds for a typed exit, as %s (#749)',
+    (source) => {
+      const body = playerExitIntentBody('flee');
+      expect(
+        combatIntentRequestValidator.Check({
+          ...body,
+          source,
+          ...(source === 'dm' ? { intent: { type: 'flee', actorId: body.intent.actorId } } : {}),
+          playerInput: 'I disengage and run for the door',
+        }),
+      ).toBe(true);
+    },
+  );
+
   it.each(['flee', 'yield'] as const)(
     'refuses %s without expectedVersion, like every versioned player intent',
     (type) => {

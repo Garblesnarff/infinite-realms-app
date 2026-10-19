@@ -161,6 +161,13 @@ export const COMBAT_ACTION_ORIGINS = [
 export type CombatActionOrigin = (typeof COMBAT_ACTION_ORIGINS)[number];
 const originField = t.Optional(t.Union(COMBAT_ACTION_ORIGINS.map((origin) => t.Literal(origin))));
 
+/**
+ * The player's own words for this turn (#749). Optional and additive: an inline action bar carries
+ * none, and an older client that predates the field is unaffected. The server reads it to let a
+ * DM-declared player exit stand only when the player's text asked for one.
+ */
+const playerInputField = t.Optional(t.String({ maxLength: 4000 }));
+
 /** The contract. Which dialect applies is decided by `source`, and by nothing else. */
 const combatIntentRequestSchema = t.Union([
   t.Object({
@@ -170,6 +177,7 @@ const combatIntentRequestSchema = t.Union([
     dmStartedAt: t.Optional(t.Number({ minimum: 0 })),
     phase: t.Optional(t.Union([t.Literal('propose'), t.Literal('commit')])),
     origin: originField,
+    playerInput: playerInputField,
   }),
   t.Object({
     source: t.Optional(t.Literal('player')),
@@ -177,6 +185,7 @@ const combatIntentRequestSchema = t.Union([
     dmStartedAt: t.Optional(t.Number({ minimum: 0 })),
     phase: t.Optional(t.Union([t.Literal('propose'), t.Literal('commit')])),
     origin: originField,
+    playerInput: playerInputField,
   }),
 ]);
 
@@ -192,6 +201,7 @@ export const combatIntentEnvelopeSchema = t.Object({
   dmStartedAt: t.Optional(t.Unknown()),
   phase: t.Optional(t.Unknown()),
   origin: t.Optional(t.Unknown()),
+  playerInput: t.Optional(t.Unknown()),
 });
 
 export const combatIntentRequestValidator = getSchemaValidator(combatIntentRequestSchema, {});
