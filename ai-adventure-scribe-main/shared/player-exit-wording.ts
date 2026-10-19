@@ -9,7 +9,7 @@
 export type PlayerExitKind = 'flee' | 'yield' | 'disengage';
 
 const EXIT_WORDING: Record<PlayerExitKind, RegExp> = {
-  flee: /\b(flee|flees|fleeing|run away|escape|bolt for|make a run for)\b/i,
+  flee: /\b(flee|flees|fleeing|run away|run for|escape|bolt for|make a run for)\b/i,
   yield: /\b(yield|surrender|give up)\b/i,
   disengage: /\bdisengag/i,
 };

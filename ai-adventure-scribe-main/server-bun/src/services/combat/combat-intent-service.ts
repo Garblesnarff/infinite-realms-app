@@ -1207,10 +1207,11 @@ export async function executeCombatIntent(
           encounter.sessionId,
           `${actor.name ?? 'The player'} moved to (${destination.x}, ${destination.y}) by the engine. Describe the movement and keep the action unused.`,
         );
-        // #2580 option 2, narrowed by #749: a Disengage that actually leaves the board records
-        // the same exit the Flee chip would, with no chip. But reaching the outer ring is only a
-        // departure when the player's own words said so — a "step back" that lands there is a
-        // move, and the fight goes on with the player still in it.
+        // #2580 option 2: a Disengage that actually leaves the board records the same exit the
+        // Flee chip would, with no chip. The inline Disengage + move is an explicit player action
+        // and keeps that behaviour (no playerInput). #749: when the turn came from typed text,
+        // reaching the outer ring is a departure only if those words said so — a "step back"
+        // that lands there is a move, and the fight goes on.
         const map = await loadActiveTacticalMap(encounter.sessionId);
         const actorDisengaged = (actor as unknown as { isDisengaged?: boolean | null })
           .isDisengaged;
@@ -1218,8 +1219,7 @@ export async function executeCombatIntent(
           actorDisengaged &&
           map &&
           hasLeftTheBoard(map, destination) &&
-          playerInput !== undefined &&
-          playerTextDeclaresLeaving(playerInput)
+          (playerInput === undefined || playerTextDeclaresLeaving(playerInput))
         ) {
           await resolvePlayerExit({
             encounterId,

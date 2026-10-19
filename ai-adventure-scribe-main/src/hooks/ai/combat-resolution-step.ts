@@ -284,6 +284,9 @@ export function engineAttackRollResult(
   };
 }
 
+/** The action types whose server handling reads the player's own words (#749). */
+const PLAYER_WORDING_ACTION_TYPES = new Set(['flee', 'yield', 'disengage', 'move']);
+
 /**
  * Resolves targeted actions until the first turn or combat boundary, then asks the DM to narrate
  * the outcomes the engine produced — and only those. Refused actions travel into the narration
@@ -291,9 +294,6 @@ export function engineAttackRollResult(
  * stated by this layer rather than left to the model. A refusal that leaves the turn with nothing
  * at all to report is rethrown.
  */
-/** The action types whose server handling reads the player's own words (#749). */
-const PLAYER_WORDING_ACTION_TYPES = new Set(['flee', 'yield', 'disengage', 'move']);
-
 export async function resolveDeclaredCombatActions(params: CombatResolutionParams): Promise<any> {
   const {
     encounterId,

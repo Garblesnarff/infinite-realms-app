@@ -534,8 +534,7 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
     );
     await consumeDmTacticalFacts(sessionId);
     // Then the move off the board. x=0 is the map's outer ring, which is the engine's own
-    // definition of having left (see `hasLeftTheBoard`). #749: the exit now also needs the
-    // player's own words to say they are leaving, so the move carries them.
+    // definition of having left (see `hasLeftTheBoard`).
     await executeCombatIntent(
       encounterId,
       { type: 'move', actorId: heroId, x: 0, y: 4 },
@@ -543,7 +542,6 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
       'player',
       Date.now(),
       'action_bar',
-      'I disengage and flee to the door',
     );
 
     expect(await heroRow()).toMatchObject({ isActive: false });
@@ -858,8 +856,9 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
     expect(await consumeDmTacticalFacts(sessionId)).toEqual([]);
   });
 
-  test('Disengage then a move to the edge with only the button word records no exit (#749)', async () => {
-    // The Disengage chip, then the move. "Disengage" is the button's own label, not a departure.
+  test('typed "I disengage and step back" then a move to the edge records no exit (#749)', async () => {
+    // A typed turn: the words name a disengage and a step, not a departure. (The inline chip
+    // sends no words and keeps #2580 option 2 — see the test above.)
     await executeCombatIntent(
       encounterId,
       { type: 'disengage', actorId: heroId, expectedVersion: 1 },
@@ -875,8 +874,8 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
       userId,
       'player',
       Date.now(),
-      'action_bar',
-      'Disengage',
+      'typed',
+      'I disengage and step back',
     );
 
     expect(await heroRow()).toMatchObject({ isActive: true });
