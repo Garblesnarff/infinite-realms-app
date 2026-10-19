@@ -53,6 +53,14 @@ export function scoresOf(character: Character): AbilityScores {
   return scores;
 }
 
+/** #759: a level-1 Rogue's sheet — DEX 14, proficient with Thieves' Tools. */
+export function rogueCharacter(toolProficiencies: string[] = ["Thieves' Tools"]): Character {
+  return {
+    ...sheetCharacter(),
+    toolProficiencies,
+  } as Character;
+}
+
 function storedStats(character: Character): StoredRollStats {
   const scores = scoresOf(character);
   return {

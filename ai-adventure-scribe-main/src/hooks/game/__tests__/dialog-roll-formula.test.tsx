@@ -14,6 +14,7 @@ import {
   dialogRequestFromQueue,
   expectTotalEqualsEngine,
   queueRoll,
+  rogueCharacter,
   scoresOf,
   sheetCharacter,
 } from './dialog-roll-formula.fixture';
@@ -108,6 +109,31 @@ describe('dialog roll formula (#2614)', () => {
       queued.rollConfig.modifier,
     );
     expectTotalEqualsEngine(formula, queued.rollConfig.modifier);
+  });
+
+  it("rolls a Thieves' Tools check with the tool proficiency (#759)", () => {
+    const rogue = rogueCharacter();
+    const queued = queueRoll(rogue, {
+      type: 'check',
+      formula: '1d20',
+      purpose: "Thieves' Tools check to pick the pantry door lock",
+    });
+    expect(queued.rollConfig.modifier).toBe(4);
+    const request = dialogRequestFromQueue(queued);
+    expect(request.formula).toBe('1d20+4');
+    expect(dialogFormula(rogue, request)).toBe('1d20+4');
+  });
+
+  it('keeps the bare DEX modifier for a tool check without proficiency (#759)', () => {
+    const rogue = rogueCharacter([]);
+    const queued = queueRoll(rogue, {
+      type: 'check',
+      formula: '1d20',
+      purpose: "Thieves' Tools check to pick the pantry door lock",
+    });
+    expect(queued.rollConfig.modifier).toBe(2);
+    const request = dialogRequestFromQueue(queued);
+    expect(dialogFormula(rogue, request)).toBe('1d20+2');
   });
 
   it('rolls an attack with the attack bonus', () => {

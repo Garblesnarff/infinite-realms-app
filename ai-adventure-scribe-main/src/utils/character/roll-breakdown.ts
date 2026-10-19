@@ -14,6 +14,7 @@ import {
   SKILL_ALIASES,
   getAbilityModifier,
   getProficiencyBonus,
+  getToolAbility,
   isSkillProficient,
   isSaveProficient,
 } from './basic-modifiers';
@@ -91,26 +92,28 @@ export function calculateRollWithBreakdown(
       }
       break;
 
-    case 'check':
-      if (!ability) {
+    case 'check': {
+      // A check may name a tool instead of an ability ("Thieves' Tools check").
+      // Use the named ability when the request has one, otherwise the tool's.
+      const toolAbility = skillName ? getToolAbility(skillName) : undefined;
+      const checkAbility = ability || toolAbility;
+      if (!checkAbility) {
         throw new Error('Ability required for ability check');
       }
-      usedAbility = ability;
-      abilityMod = getAbilityModifier(character, ability);
-      if (
-        skillName &&
-        character.toolProficiencies?.some((tool) => tool.toLowerCase() === skillName.toLowerCase())
-      ) {
+      usedAbility = checkAbility;
+      abilityMod = getAbilityModifier(character, usedAbility);
+      if (skillName && hasProficiency(character.toolProficiencies, skillName)) {
         isProficient = true;
         proficiencyBonus = getProficiencyBonus(character);
       }
       breakdown.push(
-        `${ability.slice(0, 3).toUpperCase()} ${abilityMod >= 0 ? '+' : ''}${abilityMod}`,
+        `${usedAbility.slice(0, 3).toUpperCase()} ${abilityMod >= 0 ? '+' : ''}${abilityMod}`,
       );
       if (isProficient) {
         breakdown.push(`${skillName} Prof +${proficiencyBonus}`);
       }
       break;
+    }
 
     case 'skill': {
       if (!skillName) {

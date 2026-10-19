@@ -1,8 +1,10 @@
 import {
   SKILL_ABILITIES,
   SKILL_ALIASES,
+  TOOL_ABILITIES,
   type AbilityName,
 } from '@/utils/character/basic-modifiers';
+import { canonicalProficiencyKey } from '@/utils/character/parse-proficiency-list';
 
 /** The text a DM roll request uses to name a skill or an ability. */
 export interface DeclaredRollText {
@@ -42,4 +44,16 @@ export function findDeclaredAbility(request: DeclaredRollText): AbilityName | un
     if (terms.some((term) => containsTerm(text, term))) return ability;
   }
   return undefined;
+}
+
+const TOOL_TERMS = Object.keys(TOOL_ABILITIES).sort((a, b) => b.length - a.length);
+
+/**
+ * The tool a roll request names ("Thieves' Tools check"), or undefined.
+ * Canonicalised, so "Thieves' Tools", "thieves-tools" and "thieves tools" all match.
+ */
+export function findDeclaredTool(request: DeclaredRollText): string | undefined {
+  const text = canonicalProficiencyKey(`${request.purpose || ''} ${request.formula || ''}`);
+  if (!text) return undefined;
+  return TOOL_TERMS.find((tool) => text.includes(canonicalProficiencyKey(tool)));
 }
