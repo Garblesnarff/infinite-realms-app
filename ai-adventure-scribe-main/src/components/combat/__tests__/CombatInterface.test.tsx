@@ -5,6 +5,10 @@ import CombatInterface from '../CombatInterface';
 
 import { useCombatActions } from '@/hooks/use-combat-actions';
 
+vi.mock('@/contexts/CharacterContext', () => ({
+  useCharacter: () => ({ state: { character: null }, dispatch: vi.fn() }),
+}));
+
 vi.mock('@/hooks/use-combat-actions', () => ({
   useCombatActions: vi.fn(),
 }));
