@@ -124,6 +124,13 @@ export const useMessageQueue = (sessionId: string | null) => {
    * Handles message persistence with enhanced retry logic and backoff
    * Generates message IDs on the frontend to avoid race conditions with database replication
    */
+  /**
+   * #570: the Combat Summary card lives in context.combatData; stripping it
+   * makes the summary render optimistically then vanish on refetch.
+   */
+  const persistableCombatData = (context: ChatMessage['context']) =>
+    context?.combatData ? { combatData: context.combatData } : {};
+
   const messageMutation = useMutation({
     onMutate: async (newMessage: ChatMessage) => {
       if (!sessionId) return;
@@ -206,11 +213,7 @@ export const useMessageQueue = (sessionId: string | null) => {
                 ...(Array.isArray(message.context.engineCards)
                   ? { engineCards: message.context.engineCards }
                   : {}),
-                // #570: the Combat Summary card lives in context.combatData; stripping it
-                // makes the summary render optimistically then vanish on refetch.
-                ...(message.context.combatData
-                  ? { combatData: message.context.combatData }
-                  : {}),
+                ...persistableCombatData(message.context),
               }
             : narrationSegments
               ? {
@@ -361,11 +364,7 @@ export const useMessageQueue = (sessionId: string | null) => {
                 ...(Array.isArray(message.context.engineCards)
                   ? { engineCards: message.context.engineCards }
                   : {}),
-                // #570: the Combat Summary card lives in context.combatData; stripping it
-                // makes the summary render optimistically then vanish on refetch.
-                ...(message.context.combatData
-                  ? { combatData: message.context.combatData }
-                  : {}),
+                ...persistableCombatData(message.context),
               }
             : narrationSegments
               ? {

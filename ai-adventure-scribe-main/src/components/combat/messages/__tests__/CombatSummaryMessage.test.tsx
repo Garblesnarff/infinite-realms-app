@@ -25,10 +25,11 @@ describe('CombatSummaryMessage', () => {
   it('renders the summary header, rounds, total damage and outcome', () => {
     render(<CombatSummaryMessage summary={summary} />);
     expect(screen.getByText('Combat Summary')).toBeInTheDocument();
-    expect(screen.getByText('2', { selector: 'div' })).toBeInTheDocument();
-    // Rounds / Total Damage labels with values
-    expect(screen.getByText(/Rounds:/)).toBeInTheDocument();
-    expect(screen.getByText(/Total Damage:/)).toBeInTheDocument();
+    // Rounds / Total Damage labels with values (values are in the same div as the label)
+    const roundsDiv = screen.getByText(/Rounds:/).closest('div');
+    expect(roundsDiv).toHaveTextContent('2');
+    const damageDiv = screen.getByText(/Total Damage:/).closest('div');
+    expect(damageDiv).toHaveTextContent('15');
     expect(screen.getByText('Combat concluded')).toBeInTheDocument();
   });
 
