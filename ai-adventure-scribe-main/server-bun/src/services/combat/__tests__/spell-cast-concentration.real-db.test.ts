@@ -31,11 +31,8 @@ import {
   characters,
   gameSessions,
 } from '../../../../../db/schema/index';
-import { getConcentration } from '../concentration-service.js';
-import {
-  extractSpellIdFromPrompt,
-  maybeStartConcentrationFromSpellCast,
-} from '../spell-cast-concentration.js';
+import type * as ConcentrationService from '../concentration-service.js';
+import type * as SpellCastConcentration from '../spell-cast-concentration.js';
 
 if (!hasRealDb) {
   console.warn('[spell-cast-concentration] SKIPPED: set TEST_DATABASE_URL to a scratch Postgres to run these.');
@@ -50,8 +47,13 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
   let sessionId: string;
   let sessionWithoutCharacterId: string;
 
+  let getConcentration: typeof ConcentrationService.getConcentration;
+  let maybeStartConcentrationFromSpellCast: typeof SpellCastConcentration.maybeStartConcentrationFromSpellCast;
+
   beforeAll(async () => {
     if (!hasRealDb) return;
+    ({ getConcentration } = await import('../concentration-service.js'));
+    ({ maybeStartConcentrationFromSpellCast } = await import('../spell-cast-concentration.js'));
     const [{ id }] = await db
       .insert(characters)
       .values({ userId, name: testId('caster'), level: 3 })
