@@ -21,12 +21,9 @@ import { db } from '../../../../db/client';
 import { gameSessions } from '../../../../db/schema/index';
 import { resolveCatalogSpell } from '../../data/spellData.js';
 import { getConcentration, startConcentration } from './concentration-service.js';
+import { extractSpellIdFromPrompt } from './spell-cast-tag.js';
 
-/** Extract the spell_id from a `[spell_id=<id>, ...]` tag, if present. */
-export function extractSpellIdFromPrompt(prompt: string): string | null {
-  const match = prompt.match(/\[spell_id=([^\],\s]+)/);
-  return match?.[1] ?? null;
-}
+export { extractSpellIdFromPrompt };
 
 /**
  * If the prompt declares a concentration spell cast (via the sheet's

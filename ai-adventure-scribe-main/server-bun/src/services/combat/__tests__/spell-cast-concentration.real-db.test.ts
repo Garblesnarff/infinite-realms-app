@@ -41,25 +41,7 @@ if (!hasRealDb) {
   console.warn('[spell-cast-concentration] SKIPPED: set TEST_DATABASE_URL to a scratch Postgres to run these.');
 }
 
-describe('extractSpellIdFromPrompt', () => {
-  it('extracts the spell id from the sheet Cast tag', () => {
-    expect(
-      extractSpellIdFromPrompt('I cast Dancing Lights [spell_id=dancing-lights, spell_level=cantrip].'),
-    ).toBe('dancing-lights');
-  });
 
-  it('extracts the spell id when the tag has no trailing comma', () => {
-    expect(extractSpellIdFromPrompt('I cast Bless [spell_id=bless]')).toBe('bless');
-  });
-
-  it('returns null when there is no tag', () => {
-    expect(extractSpellIdFromPrompt('I cast Dancing Lights')).toBeNull();
-  });
-
-  it('returns null for an empty prompt', () => {
-    expect(extractSpellIdFromPrompt('')).toBeNull();
-  });
-});
 
 describeWithDb('maybeStartConcentrationFromSpellCast', () => {
   const db = hasRealDb ? realDb() : (null as never);
