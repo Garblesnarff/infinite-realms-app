@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'bun:test';
 import { resetCircuitBreakersForTests } from '../../utils/circuit-breaker.js';
 import { dmResponseSchema, parseDmResponse, parseLlmEnvelope } from '../dm/dm-response-schema.js';
 import { modelSupportsStrictSchema } from '../llm-model-config.js';
-import { LLMProviderService, wrapPrefillToken } from '../llm-provider-service.js';
+import { LLMProviderService } from '../llm-provider-service.js';
 import { resetModelHealthForTests } from '../model-health.js';
 
 const originalFetch = globalThis.fetch;
@@ -107,11 +107,12 @@ describe('#633 schema as instructions for Anthropic candidates', () => {
       'Reply with exactly one JSON object that matches this JSON Schema. No prose, no code fences.',
     );
     expect(system).toContain(JSON.stringify(dmResponseSchema));
-    expect(body.messages.at(-2)).toEqual({
+    expect(body.messages.at(-1)).toEqual({
       role: 'user',
-      content: 'volatile user prompt\n\nAnswer with the JSON object only. Start with `{`.',
+      content:
+        'volatile user prompt\n\nReply with the JSON object only. The first character of your reply must be {.',
     });
-    expect(body.messages.at(-1)).toEqual({ role: 'assistant', content: '{' });
+    expect(body.messages.some((m) => m.role === 'assistant')).toBe(false);
   });
 
   it('keeps the schema text byte-identical across turns so the cache block still hits', async () => {
@@ -181,9 +182,9 @@ describe('#633 schema as instructions for Anthropic candidates', () => {
     expect(body.messages.some((m) => m.role === 'assistant')).toBe(false);
   });
 
-  it('completes an Anthropic prefill continuation into the full reply', async () => {
+  it('accepts a Haiku reply that starts with { as-is, with no prepended brace', async () => {
     useAnthropicThenGemini();
-    const bodies = stubOpenRouter([{ content: VALID_DM_REPLY.slice(1) }]);
+    const bodies = stubOpenRouter([{ content: VALID_DM_REPLY }]);
 
     const result = await LLMProviderService.generate({
       prompt: 'volatile user prompt',
@@ -198,9 +199,9 @@ describe('#633 schema as instructions for Anthropic candidates', () => {
     expect(result.text).toBe(VALID_DM_REPLY);
   });
 
-  it('same prefill continuation with onToken: the joined deltas start with the injected brace', async () => {
+  it('streams a Haiku reply that starts with { through onToken unchanged', async () => {
     useAnthropicThenGemini();
-    stubOpenRouter([{ content: VALID_DM_REPLY.slice(1) }]);
+    stubOpenRouter([{ content: VALID_DM_REPLY }]);
     const deltas: string[] = [];
 
     const result = await LLMProviderService.generate({
@@ -212,7 +213,6 @@ describe('#633 schema as instructions for Anthropic candidates', () => {
     });
 
     expect(result.model).toBe('anthropic/claude-haiku-5.5');
-    expect(deltas.join('').startsWith('{')).toBe(true);
     expect(deltas.join('')).toBe(VALID_DM_REPLY);
     expect(result.text).toBe(VALID_DM_REPLY);
   });
@@ -393,36 +393,13 @@ describe('#783 prefill handling is gated on responseSchema', () => {
     expect(deltas.join('')).toBe('The lantern gutters as you step inside.');
   });
 
-  it('wrapPrefillToken ignores leading empty deltas and injects the brace before the first non-empty one', () => {
-    const emitted: string[] = [];
-    const wrapped = wrapPrefillToken((delta) => emitted.push(delta));
-
-    wrapped('');
-    wrapped('"text":"x"}');
-
-    expect(emitted.join('')).toBe('{"text":"x"}');
-    expect(emitted.indexOf('{')).toBeLessThan(emitted.indexOf('"text":"x"}'));
-  });
-
-  it('wrapPrefillToken lets the first non-empty delta decide, so an empty delta cannot add a second brace', () => {
-    // A model that ignores the prefill opens its own object. If an empty delta came first,
-    // the wrapper used to decide on '' and inject a brace anyway: '{{...'.
-    const emitted: string[] = [];
-    const wrapped = wrapPrefillToken((delta) => emitted.push(delta));
-
-    wrapped('');
-    wrapped('{"text":"x"}');
-
-    expect(emitted.join('')).toBe('{"text":"x"}');
-  });
-
-  it('injects the brace when the SSE stream opens with an empty content delta', async () => {
+  it('does not add a brace when the SSE stream opens with an empty content delta', async () => {
     useAnthropicThenGemini();
     globalThis.fetch = (async () => {
       const first = JSON.stringify({
         choices: [{ delta: { role: 'assistant', content: '' } }],
       });
-      const second = JSON.stringify({ choices: [{ delta: { content: VALID_DM_REPLY.slice(1) } }] });
+      const second = JSON.stringify({ choices: [{ delta: { content: VALID_DM_REPLY } }] });
       const sse = `data: ${first}\n\ndata: ${second}\n\ndata: [DONE]\n\n`;
       return new Response(sse, {
         status: 200,

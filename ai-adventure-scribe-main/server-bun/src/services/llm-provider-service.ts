@@ -135,8 +135,9 @@ export const TEXT_PROVIDER_TIMEOUT_MS = 60_000;
 /** #633: instruction line sent ahead of the schema for models without strict json_schema. */
 const SCHEMA_INSTRUCTION_LINE =
   'Reply with exactly one JSON object that matches this JSON Schema. No prose, no code fences.';
-// #783: reminder on the last user message of the non-strict (prefill) branch.
-const JSON_REMINDER_LINE = 'Answer with the JSON object only. Start with `{`.';
+// #783: reminder on the last user message of the non-strict branch.
+const JSON_REMINDER_LINE =
+  'Reply with the JSON object only. The first character of your reply must be {.';
 let geminiModelCache: { ids: Set<string>; fetchedAt: number } | null = null;
 
 const failoverReason = (status?: number): string =>
@@ -449,21 +450,6 @@ const consumeOpenRouterStream = async (
   return result;
 };
 
-// #783: per-attempt onToken wrapper for the non-strict (prefill) branch.
-// Before the first non-empty delta, if it does not already open a JSON object
-// or code fence, emit '{' so the caller's accumulated raw text starts with it.
-export const wrapPrefillToken = (onToken: (deltaText: string) => void) => {
-  let started = false;
-  return (deltaText: string): void => {
-    if (!started && deltaText.length > 0) {
-      started = true;
-      const trimmed = deltaText.trimStart();
-      if (!trimmed.startsWith('{') && !trimmed.startsWith('`')) onToken('{');
-    }
-    onToken(deltaText);
-  };
-};
-
 export class LLMProviderService {
   /**
    * Generate text via OpenRouter or Gemini
@@ -628,8 +614,8 @@ export class LLMProviderService {
     // #633: Anthropic candidates cannot take strict json_schema, so the schema
     // rides in the stable system text instead (same cache block, so it is
     // byte-identical across turns). Built once; candidates pick, never mutate.
-    // #783: the volatile user message carries a JSON reminder and is followed
-    // by an assistant prefill of '{' so the model continues the object.
+    // #783: the volatile user message carries a JSON reminder. The conversation
+    // still ends with that user message: Haiku 5.5 rejects an assistant prefill.
     const instructedMessages: OpenRouterChatMessage[] = responseSchema
       ? ((): OpenRouterChatMessage[] => {
           const built = buildMessages(
@@ -641,7 +627,6 @@ export class LLMProviderService {
             role: 'user',
             content: `${prompt}\n\n${JSON_REMINDER_LINE}`,
           };
-          built.push({ role: 'assistant', content: '{' });
           return built;
         })()
       : messages;
@@ -716,11 +701,7 @@ export class LLMProviderService {
               // #633 PR2: accumulate the streamed completion, firing the
               // token callback per delta. Everything below (validation,
               // retry, usage accounting) is shared with the non-stream path.
-              // #783: the prefill branch injects a leading '{' into the
-              // caller's stream before the first delta when needed.
-              const attemptToken =
-                responseSchema && !strictSchema ? wrapPrefillToken(onToken) : onToken;
-              const streamed = await consumeOpenRouterStream(response, attemptToken);
+              const streamed = await consumeOpenRouterStream(response, onToken);
               if (streamed.streamError) {
                 lastFailure = { status: 502, details: streamed.streamError };
                 logger.warn({
@@ -739,12 +720,6 @@ export class LLMProviderService {
               text = data.choices?.[0]?.message?.content ?? '';
               usage = data.usage;
               finishReason = data.choices?.[0]?.finish_reason;
-            }
-            if (responseSchema && !strictSchema) {
-              // #783: the model continues after the '{' prefill; if the reply
-              // does not already open a JSON object or fence, restore the brace.
-              const trimmed = text.trimStart();
-              if (!trimmed.startsWith('{') && !trimmed.startsWith('`')) text = `{${text}`;
             }
             if (responseSchema) {
               try {
@@ -770,7 +745,7 @@ export class LLMProviderService {
                 // never feed it into the key-limit verdict (a model reply
                 // containing "limit" must not page). The 502 status also gates
                 // message matching in isProviderKeyLimitError.
-                // #783: a prose reply on the prefill branch will not improve on
+                // #783: a prose reply on the instructed branch will not improve on
                 // a same-prompt retry — fail over to the next candidate now.
                 const proseReply =
                   !strictSchema &&
