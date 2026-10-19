@@ -37,12 +37,15 @@ async function ownedCharacterByName(userId: string, name: string): Promise<strin
     .limit(2);
   if (exact.length === 1) return exact[0].id;
   if (exact.length > 1) return null;
+  // Escape LIKE wildcards in the typed name so a literal % or _ cannot widen
+  // the match (#744 nit). Backslash is the default LIKE escape in Postgres.
+  const escapedName = name.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
   const partial = await db
     .select({ id: characters.id })
     .from(characters)
     .where(
       and(
-        ilike(characters.name, `%${name}%`),
+        ilike(characters.name, `%${escapedName}%`),
         or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
       ),
     )
