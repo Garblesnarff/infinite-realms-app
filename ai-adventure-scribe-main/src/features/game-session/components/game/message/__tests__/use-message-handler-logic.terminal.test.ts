@@ -137,6 +137,7 @@ vi.mock('@/services/user-data-api', async (importOriginal) => {
       applyDmHandoutActions: vi.fn(),
       clearPendingCombatIntent: vi.fn(),
       fetchSessionFallenState: vi.fn(),
+      reportClientFailure: vi.fn(),
     },
   };
 });
