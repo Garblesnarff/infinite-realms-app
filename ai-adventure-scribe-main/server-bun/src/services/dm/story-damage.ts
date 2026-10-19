@@ -134,6 +134,21 @@ export async function applyStoryDamageOnce(input: {
       capped,
       `story: ${sourceText}`,
     );
+    // #130: the live sheet only refreshes on combat-state-updated (#2641), but
+    // story damage lands out of combat — publish the invalidation so the
+    // sheet's CharacterContext refetches instead of showing the stale HP.
+    // A failed broadcast must not fail the damage: the write already landed.
+    try {
+      const { publishStoryCharacterUpdate } = await import('./story-broadcast.js');
+      publishStoryCharacterUpdate(sessionId, 'story_damage');
+    } catch (broadcastError) {
+      logger.warn({
+        msg: 'DM_STORY_DAMAGE_BROADCAST_FAILED',
+        sessionId,
+        characterId,
+        error: broadcastError instanceof Error ? broadcastError.message : String(broadcastError),
+      });
+    }
     const lines = [
       `${damageSentence}. HP ${vitals.currentHitPoints}/${vitals.maxHitPoints}.`,
       ...engineLines,

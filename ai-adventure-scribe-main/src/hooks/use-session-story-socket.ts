@@ -64,6 +64,15 @@ export function useSessionStorySocket(sessionId: string | null, onRemoteMessage:
                 );
               }
             }
+            // #130: story appliers (damage, items, XP) write character state
+            // out of combat, where no combat_state_updated follows. The server
+            // publishes character_state_updated for those writes; it becomes
+            // the character-state-updated window event the sheet refreshes on.
+            if (message.type === 'character_state_updated') {
+              window.dispatchEvent(
+                new CustomEvent('character-state-updated', { detail: message }),
+              );
+            }
           } catch (error) {
             reportMalformedPeerFrame(malformedFrameStateRef.current, {
               channel: 'session-story',

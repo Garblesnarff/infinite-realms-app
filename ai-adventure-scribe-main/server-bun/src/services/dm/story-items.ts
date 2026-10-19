@@ -60,7 +60,7 @@ export async function applyStoryItemsOnce(input: {
     '../../../../db/schema/index'
   );
   const { characterId, sessionId, playerMessageAt, items } = input;
-  return db.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx) => {
     // Lock the character row: two turns for one message cannot both read
     // "nothing applied yet" and both move the items.
     const [locked] = await tx
@@ -242,6 +242,24 @@ export async function applyStoryItemsOnce(input: {
     }
     return anyApplied ? 'applied' : 'already_applied';
   });
+  // #130: broadcast after the transaction commits, so the sheet's refetch
+  // sees the new inventory instead of the stale one. A failed broadcast must
+  // not fail the apply: the write already landed.
+  if (outcome === 'applied') {
+    try {
+      const { publishStoryCharacterUpdate } = await import('./story-broadcast.js');
+      publishStoryCharacterUpdate(sessionId, 'story_items');
+    } catch (broadcastError) {
+      logger.warn({
+        msg: 'DM_STORY_ITEMS_BROADCAST_FAILED',
+        sessionId,
+        characterId,
+        error:
+          broadcastError instanceof Error ? broadcastError.message : String(broadcastError),
+      });
+    }
+  }
+  return outcome;
 }
 
 /** Reads the reply's `items` and applies them for the session's own character. */
