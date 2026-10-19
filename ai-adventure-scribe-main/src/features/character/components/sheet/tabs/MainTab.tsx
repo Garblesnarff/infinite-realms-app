@@ -16,6 +16,7 @@ import {
   MISSING_ARMOR_CLASS_LABEL,
 } from '@/utils/character/character-sheet-armor-class';
 import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
+import { getBaseSpeed } from '@/utils/character-calculations';
 
 interface MainTabProps {
   character: Character;
@@ -132,7 +133,7 @@ const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate, onCha
               <div className="flex items-center justify-center w-12 h-12 mx-auto mb-2 bg-emerald-500/15 rounded-full">
                 <Clock className="w-6 h-6 text-emerald-400" />
               </div>
-              <div className="text-2xl font-bold">{character.race?.speed || 30}</div>
+              <div className="text-2xl font-bold">{getBaseSpeed(character)}</div>
               <div className="text-xs text-muted-foreground">Speed (ft)</div>
             </div>
           </div>

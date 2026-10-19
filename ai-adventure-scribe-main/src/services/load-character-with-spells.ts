@@ -8,16 +8,12 @@ import { characterSpellService } from './characterSpellApi';
 import { hydrateCharacterStats } from './hydrate-character-stats';
 
 import type { CharacterSpellData } from './characterSpellApi';
-import type {
-  Character,
-  CharacterRace,
-  CharacterClass,
-  CharacterBackground,
-} from '@/types/character';
+import type { Character, CharacterClass, CharacterBackground } from '@/types/character';
 
 import logger from '@/lib/logger';
 import { issue1784Api } from '@/services/issue-1784-api';
 import { userDataApi } from '@/services/user-data-api';
+import { resolveRace, resolveSubrace } from '@/utils/character/data-transformers';
 import { equipmentRowsToInventory } from '@/utils/character/equipment-rows-to-inventory';
 import {
   parseOptionalProficiencyList,
@@ -63,9 +59,12 @@ export async function loadCharacterWithSpells(
       ? characterData.character_stats[0]
       : characterData.character_stats;
 
-    const characterRace = characterData.race
-      ? ({ name: characterData.race } as Partial<CharacterRace>)
-      : null;
+    // #757: resolve the full race/subrace record from the data tables. Building a
+    // name-only race here dropped `speed`, so the game panel's derivation fell back
+    // to the default 30 while the standalone sheet (which resolves the record) showed
+    // the race's real speed.
+    const characterRace = resolveRace(characterData.race);
+    const characterSubrace = resolveSubrace(characterRace, characterData.subrace);
     const characterClass = characterData.class
       ? ({ name: characterData.class } as Partial<CharacterClass>)
       : null;
@@ -209,7 +208,8 @@ export async function loadCharacterWithSpells(
       id: characterData.id,
       user_id: characterData.user_id || '',
       name: characterData.name,
-      race: characterRace as CharacterRace | null,
+      race: characterRace,
+      subrace: characterSubrace,
       class: characterClass as CharacterClass | null,
       level: characterData.level || 1,
       background: characterBackground as CharacterBackground | null,
