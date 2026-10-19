@@ -188,7 +188,7 @@ const resolveCharacterData = <T extends NamedCharacterData>(
 const resolveClass = (storedName: string | null | undefined): CharacterClass | null =>
   resolveCharacterData('class', classes, storedName);
 
-const resolveSubrace = (
+export const resolveSubrace = (
   race: CharacterRace | null,
   storedName: string | null | undefined,
 ): Subrace | null => {
@@ -229,7 +229,7 @@ const placeholderBackground = (label: string): CharacterBackground => ({
   feature: { name: label, description: '' },
 });
 
-const resolveRace = (storedName: string | null | undefined): CharacterRace | null => {
+export const resolveRace = (storedName: string | null | undefined): CharacterRace | null => {
   const label = storedLabel(storedName);
   if (!label) return null;
   return resolveCharacterData('race', lookupRaces, label) ?? placeholderRace(label);
