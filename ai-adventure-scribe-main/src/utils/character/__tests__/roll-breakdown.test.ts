@@ -8,7 +8,6 @@ import {
   getCharacterStatsForAI,
 } from '../roll-breakdown';
 
-
 describe('roll-breakdown', () => {
   describe('generateDiceFormula', () => {
     it('should generate formula with positive modifiers', () => {
@@ -44,7 +43,7 @@ describe('roll-breakdown', () => {
       },
       savingThrowProficiencies: ['strength', 'constitution'],
       skillProficiencies: ['athletics', 'perception'],
-      toolProficiencies: ['Thieves\' Tools'],
+      toolProficiencies: ["Thieves' Tools"],
       expertiseProficiencies: ['athletics'],
     };
 
@@ -116,13 +115,77 @@ describe('roll-breakdown', () => {
       });
 
       it('should calculate ability check with tool proficiency', () => {
-        const result = calculateRollWithBreakdown(mockCharacter, 'check', 'dexterity', 'Thieves\' Tools');
+        const result = calculateRollWithBreakdown(
+          mockCharacter,
+          'check',
+          'dexterity',
+          "Thieves' Tools",
+        );
         expect(result.ability).toBe('dexterity');
         expect(result.abilityModifier).toBe(2);
         expect(result.proficiencyBonus).toBe(3);
         expect(result.totalModifier).toBe(5);
         expect(result.isProficient).toBe(true);
-        expect(result.breakdown).toEqual(['1d20', 'DEX +2', 'Thieves\' Tools Prof +3']);
+        expect(result.breakdown).toEqual(['1d20', 'DEX +2', "Thieves' Tools Prof +3"]);
+      });
+
+      it('should use the tool ability when the request names no ability (#759)', () => {
+        const rogue: any = {
+          level: 1,
+          abilityScores: {
+            strength: { score: 10, modifier: 0 },
+            dexterity: { score: 14, modifier: 2 },
+            constitution: { score: 10, modifier: 0 },
+            intelligence: { score: 10, modifier: 0 },
+            wisdom: { score: 10, modifier: 0 },
+            charisma: { score: 10, modifier: 0 },
+          },
+          toolProficiencies: ["Thieves' Tools"],
+        };
+        const result = calculateRollWithBreakdown(rogue, 'check', undefined, "Thieves' Tools");
+        expect(result.ability).toBe('dexterity');
+        expect(result.abilityModifier).toBe(2);
+        expect(result.proficiencyBonus).toBe(2);
+        expect(result.totalModifier).toBe(4);
+        expect(result.formula).toBe('1d20+4');
+        expect(result.isProficient).toBe(true);
+      });
+
+      it('should not add proficiency when the character lacks the tool (#759)', () => {
+        const rogue: any = {
+          level: 1,
+          abilityScores: {
+            strength: { score: 10, modifier: 0 },
+            dexterity: { score: 14, modifier: 2 },
+            constitution: { score: 10, modifier: 0 },
+            intelligence: { score: 10, modifier: 0 },
+            wisdom: { score: 10, modifier: 0 },
+            charisma: { score: 10, modifier: 0 },
+          },
+          toolProficiencies: [],
+        };
+        const result = calculateRollWithBreakdown(rogue, 'check', undefined, "Thieves' Tools");
+        expect(result.totalModifier).toBe(2);
+        expect(result.formula).toBe('1d20+2');
+        expect(result.isProficient).toBe(false);
+      });
+
+      it('should match a tool name across case, apostrophe and hyphen (#759)', () => {
+        const rogue: any = {
+          level: 1,
+          abilityScores: {
+            strength: { score: 10, modifier: 0 },
+            dexterity: { score: 14, modifier: 2 },
+            constitution: { score: 10, modifier: 0 },
+            intelligence: { score: 10, modifier: 0 },
+            wisdom: { score: 10, modifier: 0 },
+            charisma: { score: 10, modifier: 0 },
+          },
+          toolProficiencies: ['thieves-tools'],
+        };
+        const result = calculateRollWithBreakdown(rogue, 'check', undefined, "Thieves' Tools");
+        expect(result.totalModifier).toBe(4);
+        expect(result.isProficient).toBe(true);
       });
     });
 
@@ -134,9 +197,9 @@ describe('roll-breakdown', () => {
       });
 
       it('should throw error for unknown skill', () => {
-        expect(() => calculateRollWithBreakdown(mockCharacter, 'skill', undefined, 'cooking')).toThrow(
-          'Unknown skill: cooking',
-        );
+        expect(() =>
+          calculateRollWithBreakdown(mockCharacter, 'skill', undefined, 'cooking'),
+        ).toThrow('Unknown skill: cooking');
       });
 
       it('should calculate skill check with expertise', () => {
@@ -174,7 +237,12 @@ describe('roll-breakdown', () => {
           ...mockCharacter,
           skillProficiencies: ['sleight of hand'],
         };
-        const result = calculateRollWithBreakdown(characterWithSleight, 'skill', undefined, 'sleight');
+        const result = calculateRollWithBreakdown(
+          characterWithSleight,
+          'skill',
+          undefined,
+          'sleight',
+        );
         expect(result.ability).toBe('dexterity');
         expect(result.isProficient).toBe(true);
       });
@@ -216,7 +284,9 @@ describe('roll-breakdown', () => {
 
       const result = getCharacterStatsForAI(character);
       expect(result).toContain('Level 4 Dwarf Cleric');
-      expect(result).toContain('Ability Scores: STR 14(+2), DEX 10(+0), CON 16(+3), INT 8(-1), WIS 15(+2), CHA 12(+1)');
+      expect(result).toContain(
+        'Ability Scores: STR 14(+2), DEX 10(+0), CON 16(+3), INT 8(-1), WIS 15(+2), CHA 12(+1)',
+      );
       expect(result).toContain('Proficiency Bonus: +2');
     });
 

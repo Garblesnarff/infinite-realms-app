@@ -13,7 +13,7 @@ import { abilityModifier } from '../../../shared/ability-modifier';
 import type { Character } from '@/types/character';
 
 import { calculateProficiencyBonus as calculateBasicProficiencyBonus } from '@/utils/character/basic-math';
-import { hasProficiency } from '@/utils/character/parse-proficiency-list';
+import { canonicalProficiencyKey, hasProficiency } from '@/utils/character/parse-proficiency-list';
 
 // D&D 5e ability names
 export type AbilityName =
@@ -61,6 +61,29 @@ export const SKILL_ALIASES: Record<string, string> = {
   animal: 'animal handling',
   handle: 'animal handling',
 };
+
+// D&D 5e tools whose check has a fixed ability (2014 SRD 5.1). A tool check with
+// one of these resolves to that ability even when the request names none.
+export const TOOL_ABILITIES: Record<string, AbilityName> = {
+  "thieves' tools": 'dexterity',
+  'disguise kit': 'charisma',
+  'forgery kit': 'dexterity',
+  'herbalism kit': 'intelligence',
+  "navigator's tools": 'wisdom',
+};
+
+/**
+ * The ability a tool check uses, or undefined when the tool has no fixed ability.
+ * Comparison is case/apostrophe/hyphen-insensitive ("Thieves' Tools" == "thieves-tools").
+ */
+export function getToolAbility(toolName: string): AbilityName | undefined {
+  const key = canonicalProficiencyKey(toolName);
+  if (!key) return undefined;
+  for (const [tool, ability] of Object.entries(TOOL_ABILITIES)) {
+    if (canonicalProficiencyKey(tool) === key) return ability;
+  }
+  return undefined;
+}
 
 /**
  * Calculate proficiency bonus based on character level
