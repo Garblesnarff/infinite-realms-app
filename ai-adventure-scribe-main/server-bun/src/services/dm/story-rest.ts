@@ -20,6 +20,7 @@
 
 import { ownedSessionCharacter } from './dm-feature-gate.js';
 import { playerMessage } from './story-spell-slots.js';
+import { typedRestType } from './typed-rest.js';
 import { logger } from '../../lib/logger.js';
 import { StoryRestAlreadyRecorded } from '../story-rest-already-recorded.js';
 
@@ -32,7 +33,7 @@ export type StoryRestOutcome =
   | 'roll_pending'
   | 'rest_failed';
 
-/** Reads the reply's `rest` and applies it for the session's own character. */
+/** Reads the reply's `rest` (or the player's typed rest) and applies it for the session's own character. */
 export async function applyStoryRest(input: {
   userId: string;
   sessionId: string;
@@ -42,9 +43,12 @@ export async function applyStoryRest(input: {
 }): Promise<StoryRestOutcome> {
   const { userId, sessionId } = input;
   const rest = (input.rest ?? {}) as { type?: unknown };
-  const restType = rest.type === 'short' || rest.type === 'long' ? rest.type : null;
+  const dmRestType = rest.type === 'short' || rest.type === 'long' ? rest.type : null;
   const character = await ownedSessionCharacter(sessionId, userId);
   const message = character ? await playerMessage(sessionId) : null;
+  const typedType = dmRestType ? null : typedRestType(message?.message ?? '');
+  const restType = dmRestType ?? typedType;
+  const restSource = dmRestType ? 'dm' : typedType ? 'typed' : null;
   let outcome: StoryRestOutcome;
   if (!character) outcome = 'no_character';
   // The rest belongs to the roll's result, which arrives as its own player message.
@@ -90,6 +94,7 @@ export async function applyStoryRest(input: {
     sessionId,
     characterId: character?.id ?? null,
     restType,
+    restSource,
     outcome,
   });
   return outcome;

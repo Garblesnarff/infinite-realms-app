@@ -369,9 +369,9 @@ describeWithDb('sheet feature uses and rests persist (#224)', () => {
     // Names landed in the DB; nothing UUID-shaped.
     const uuidish = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const names = async () =>
-      (await db.select().from(characterEquipment).where(eq(characterEquipment.characterId, charId))).map(
-        (r) => r.itemName,
-      );
+      (
+        await db.select().from(characterEquipment).where(eq(characterEquipment.characterId, charId))
+      ).map((r) => r.itemName);
     expect((await names()).sort()).toEqual(['Chain Mail', 'Longsword']);
 
     // A second save from a reloaded sheet sends the same names (item_name from
@@ -630,14 +630,9 @@ describeWithDb('sheet feature uses and rests persist (#224)', () => {
       enhancement_selections: newQuirks,
     });
     expect(put.status).toBe(200);
-    const [afterPut] = await db
-      .select()
-      .from(characters)
-      .where(eq(characters.id, created.id));
+    const [afterPut] = await db.select().from(characters).where(eq(characters.id, created.id));
     expect(afterPut.enhancementSelections).toEqual(newQuirks);
-    const gotAfterPut = (await (
-      await request(`/v1/characters/${created.id}`, 'GET')
-    ).json()) as {
+    const gotAfterPut = (await (await request(`/v1/characters/${created.id}`, 'GET')).json()) as {
       enhancement_selections: Array<{ optionId: string; value: string }>;
     };
     expect(gotAfterPut.enhancement_selections).toEqual(newQuirks);
@@ -850,19 +845,31 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
         .where(eq(combatParticipantConditions.participantId, participantId)),
     );
     await drop(() =>
-      db.delete(combatParticipantStatus).where(eq(combatParticipantStatus.participantId, participantId)),
+      db
+        .delete(combatParticipantStatus)
+        .where(eq(combatParticipantStatus.participantId, participantId)),
     );
     await drop(() => db.delete(combatParticipants).where(eq(combatParticipants.id, participantId)));
     await drop(() =>
-      db.delete(combatParticipantStatus).where(eq(combatParticipantStatus.participantId, endedParticipantId)),
+      db
+        .delete(combatParticipantStatus)
+        .where(eq(combatParticipantStatus.participantId, endedParticipantId)),
     );
-    await drop(() => db.delete(combatParticipants).where(eq(combatParticipants.id, endedParticipantId)));
+    await drop(() =>
+      db.delete(combatParticipants).where(eq(combatParticipants.id, endedParticipantId)),
+    );
     await drop(() => db.delete(combatEncounters).where(eq(combatEncounters.id, endedEncounterId)));
     await drop(() => db.delete(combatEncounters).where(eq(combatEncounters.id, activeEncounterId)));
     await drop(() => db.delete(gameSessions).where(eq(gameSessions.id, sessionId)));
-    await drop(() => db.delete(characterConditions).where(eq(characterConditions.characterId, characterId)));
-    await drop(() => db.delete(characterHitDice).where(eq(characterHitDice.characterId, characterId)));
-    await drop(() => db.delete(characterSpellSlots).where(eq(characterSpellSlots.characterId, characterId)));
+    await drop(() =>
+      db.delete(characterConditions).where(eq(characterConditions.characterId, characterId)),
+    );
+    await drop(() =>
+      db.delete(characterHitDice).where(eq(characterHitDice.characterId, characterId)),
+    );
+    await drop(() =>
+      db.delete(characterSpellSlots).where(eq(characterSpellSlots.characterId, characterId)),
+    );
     await drop(() => db.delete(characterStats).where(eq(characterStats.characterId, characterId)));
     await drop(() => db.delete(characters).where(eq(characters.id, characterId)));
     await drop(() => db.delete(campaigns).where(eq(campaigns.id, campaignId)));
@@ -921,7 +928,9 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
     return {
       ...rest,
       hitDiceRemaining: ((hitDiceRemaining ?? []) as Array<Record<string, unknown>>)
-        .map(({ id: _id, characterId: _characterId, createdAt: _ca, updatedAt: _ua, ...die }) => die)
+        .map(
+          ({ id: _id, characterId: _characterId, createdAt: _ca, updatedAt: _ua, ...die }) => die,
+        )
         .sort((a, b) => String(a.dieType).localeCompare(String(b.dieType))),
     };
   };
@@ -975,15 +984,18 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
     // Unconscious is cleared by the rest; poisoned survives it — on the
     // character and on the participant in the active encounter.
     const characterConditionStates = await db
-      .select({ conditionId: characterConditions.conditionId, isActive: characterConditions.isActive })
+      .select({
+        conditionId: characterConditions.conditionId,
+        isActive: characterConditions.isActive,
+      })
       .from(characterConditions)
       .where(eq(characterConditions.characterId, characterId));
     expect(
       characterConditionStates.find((row) => row.conditionId === unconsciousId)?.isActive,
     ).toBe(false);
-    expect(
-      characterConditionStates.find((row) => row.conditionId === poisonedId)?.isActive,
-    ).toBe(true);
+    expect(characterConditionStates.find((row) => row.conditionId === poisonedId)?.isActive).toBe(
+      true,
+    );
 
     const participantConditionStates = await db
       .select({
@@ -995,9 +1007,9 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
     expect(
       participantConditionStates.find((row) => row.conditionId === unconsciousId)?.isActive,
     ).toBe(false);
-    expect(
-      participantConditionStates.find((row) => row.conditionId === poisonedId)?.isActive,
-    ).toBe(true);
+    expect(participantConditionStates.find((row) => row.conditionId === poisonedId)?.isActive).toBe(
+      true,
+    );
 
     const [participantStatus] = await db
       .select()
@@ -1207,9 +1219,7 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
     );
 
     // An invalid rest type is rejected, not applied.
-    expect(await applyStoryRest({ userId, sessionId, rest: { type: 'nap' } })).toBe(
-      'invalid_rest',
-    );
+    expect(await applyStoryRest({ userId, sessionId, rest: { type: 'nap' } })).toBe('invalid_rest');
 
     // A long rest the story grants on a later turn: HP to full through the same service.
     await playerMessage('We bar the door and sleep until dawn.');
@@ -1362,11 +1372,86 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
     });
     const res2 = await request('/v1/llm/generate', 'POST', generateBody);
     expect(res2.status).toBe(200);
-    const restsAfter = await db
-      .select()
-      .from(restEvents)
-      .where(eq(restEvents.characterId, charId));
+    const restsAfter = await db.select().from(restEvents).where(eq(restEvents.characterId, charId));
     expect(restsAfter).toHaveLength(1);
+
+    await db.delete(restEvents).where(eq(restEvents.characterId, charId));
+    await db.delete(characterHitDice).where(eq(characterHitDice.characterId, charId));
+    await db.delete(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId));
+    await db.delete(gameSessions).where(eq(gameSessions.id, sessionId));
+    await db.delete(characterStats).where(eq(characterStats.characterId, charId));
+    await db.delete(characters).where(eq(characters.id, charId));
+    await db.delete(campaigns).where(eq(campaigns.id, campId));
+  });
+
+  it('#751: a long rest typed in chat applies through POST /v1/llm/generate with no `rest` in the reply', async () => {
+    if (!hasRealDb) return;
+
+    const [{ id: campId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('751-typed-camp') })
+      .returning({ id: campaigns.id });
+    const [{ id: charId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId: campId,
+        name: testId('751-typed-hero'),
+        level: 1,
+        class: 'Fighter',
+      })
+      .returning({ id: characters.id });
+    await db.insert(characterStats).values({
+      characterId: charId,
+      maxHitPoints: 8,
+      currentHitPoints: 1,
+      temporaryHitPoints: 0,
+      constitution: 12,
+      isConscious: true,
+      vitalState: 'standing',
+    });
+    const [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId: campId, characterId: charId })
+      .returning({ id: gameSessions.id });
+    // Hark P1016-029's line (#751), saved as the client saves the player turn.
+    const typed = 'I take a full long rest - eight hours sleeping and tending my wounds.';
+    await db.insert(dialogueHistory).values({ sessionId, speakerType: 'player', message: typed });
+
+    const generateBody = {
+      prompt: 'The party rests in the chasm. What happens?',
+      player_input: typed,
+      sessionId,
+      dmReply: { messageId: '11111111-2222-4333-8444-666666666666', inCombat: false },
+      combatEntry: {
+        sessionId,
+        player: { name: testId('751-typed-hero'), initiativeModifier: 2 },
+      },
+      provider: 'openrouter',
+      requestType: 'user',
+      maxTokens: 8192,
+      temperature: 0.9,
+    };
+    // The DM narrates the rest but omits `rest`, as in the playtest.
+    generatedText = JSON.stringify({ text: 'You settle against the stone and sleep.' });
+    const res = await request('/v1/llm/generate', 'POST', generateBody);
+    expect(res.status).toBe(200);
+
+    const [stats] = await db
+      .select({ hp: characterStats.currentHitPoints })
+      .from(characterStats)
+      .where(eq(characterStats.characterId, charId));
+    expect(stats?.hp).toBe(8);
+    const rests = await db.select().from(restEvents).where(eq(restEvents.characterId, charId));
+    expect(rests).toHaveLength(1);
+    expect(rests[0].restType).toBe('long');
+
+    // Retry re-sends the same saved message: the #777 claim keeps it to one rest.
+    const res2 = await request('/v1/llm/generate', 'POST', generateBody);
+    expect(res2.status).toBe(200);
+    expect(
+      await db.select().from(restEvents).where(eq(restEvents.characterId, charId)),
+    ).toHaveLength(1);
 
     await db.delete(restEvents).where(eq(restEvents.characterId, charId));
     await db.delete(characterHitDice).where(eq(characterHitDice.characterId, charId));
@@ -1403,9 +1488,9 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
       Array.from({ length: 5 }, () => request(`/v1/characters/${charId}`, 'GET')),
     );
     for (const res of responses) expect(res.status).toBe(200);
-    const sheets = (await Promise.all(
-      responses.map((res) => res.json()),
-    )) as Array<{ hit_dice?: unknown[] }>;
+    const sheets = (await Promise.all(responses.map((res) => res.json()))) as Array<{
+      hit_dice?: unknown[];
+    }>;
     for (const sheet of sheets) expect(sheet.hit_dice).toHaveLength(1);
 
     const rows = await db
@@ -1423,9 +1508,7 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
 
   it('#264: five concurrent ensureHitDice calls create exactly one hit-dice row set', async () => {
     if (!hasRealDb) return;
-    const { RestHitDiceService } = await import(
-      '../../../services/rest/rest-hit-dice-service.js'
-    );
+    const { RestHitDiceService } = await import('../../../services/rest/rest-hit-dice-service.js');
 
     const [{ id: campId }] = await db
       .insert(campaigns)

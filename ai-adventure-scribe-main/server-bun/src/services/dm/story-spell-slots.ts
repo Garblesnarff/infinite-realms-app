@@ -32,7 +32,8 @@ const PACT_CLASSES = new Set(['warlock']);
  */
 function isCastAsRitual(playerInput: string | undefined): boolean {
   const input = playerInput ?? '';
-  if (/(?:\bnot\b|n't\b|\bwithout\b|\bnever\b)[\w\s,]{0,24}\bas\s+a\s+ritual\b/i.test(input)) return false;
+  if (/(?:\bnot\b|n't\b|\bwithout\b|\bnever\b)[\w\s,]{0,24}\bas\s+a\s+ritual\b/i.test(input))
+    return false;
   return (
     /\bas\s+a\s+ritual\b/i.test(input) ||
     /\britually\b/i.test(input) ||
@@ -73,12 +74,16 @@ async function castingClassName(
  */
 export async function playerMessage(
   sessionId: string,
-): Promise<{ createdAt: Date | null; context: unknown } | null> {
+): Promise<{ createdAt: Date | null; context: unknown; message: string } | null> {
   const { db } = await import('../../../../db/client');
   const { and, desc, eq } = await import('drizzle-orm');
   const { dialogueHistory } = await import('../../../../db/schema/index');
   const [row] = await db
-    .select({ createdAt: dialogueHistory.createdAt, context: dialogueHistory.context })
+    .select({
+      createdAt: dialogueHistory.createdAt,
+      context: dialogueHistory.context,
+      message: dialogueHistory.message,
+    })
     .from(dialogueHistory)
     .where(and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'player')))
     .orderBy(desc(dialogueHistory.createdAt))
@@ -118,7 +123,11 @@ export async function spendStorySpellSlots(input: {
     // The ritual exemption must match the gate's (spellsWithNoSlot below): a ritual cast
     // as a ritual spends nothing only for a class with ritual casting. Anything else
     // falls through to the slot spend.
-    const castingClass = await castingClassName(casts.character.id, casts.character.class, spellName);
+    const castingClass = await castingClassName(
+      casts.character.id,
+      casts.character.class,
+      spellName,
+    );
     const ritualExempt =
       (catalog?.ritual ?? false) &&
       isCastAsRitual(playerInput) &&
