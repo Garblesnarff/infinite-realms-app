@@ -91,6 +91,13 @@ export interface VendorCapabilityProfile {
   streaming: boolean;
   /** The `cache_control` prompt-cache breakpoint. Set for every candidate today. */
   promptCache: boolean;
+  /**
+   * The vendor accepts a `temperature` field on OpenRouter. False means the
+   * field is omitted from the request body: OpenRouter has no anthropic/
+   * endpoint that accepts `temperature` together with `require_parameters`,
+   * so sending both returns 404 (#783).
+   */
+  supportsTemperature: boolean;
 }
 
 /** #782 target budgets, shared by every vendor until items 5-8 tighten them. */
@@ -108,6 +115,7 @@ const DEFAULT_VENDOR_CAPABILITIES: Record<string, VendorCapabilityProfile> = {
     requiresAllProperties: false,
     streaming: true,
     promptCache: true,
+    supportsTemperature: true,
   },
   'anthropic/': {
     strictJsonSchema: false,
@@ -115,6 +123,7 @@ const DEFAULT_VENDOR_CAPABILITIES: Record<string, VendorCapabilityProfile> = {
     requiresAllProperties: false,
     streaming: true,
     promptCache: true,
+    supportsTemperature: false,
   },
   'openai/': {
     strictJsonSchema: true,
@@ -122,6 +131,7 @@ const DEFAULT_VENDOR_CAPABILITIES: Record<string, VendorCapabilityProfile> = {
     requiresAllProperties: false,
     streaming: true,
     promptCache: true,
+    supportsTemperature: true,
   },
   'mistralai/': {
     strictJsonSchema: true,
@@ -129,6 +139,7 @@ const DEFAULT_VENDOR_CAPABILITIES: Record<string, VendorCapabilityProfile> = {
     requiresAllProperties: false,
     streaming: true,
     promptCache: true,
+    supportsTemperature: true,
   },
   'meta-llama/': {
     strictJsonSchema: true,
@@ -136,6 +147,7 @@ const DEFAULT_VENDOR_CAPABILITIES: Record<string, VendorCapabilityProfile> = {
     requiresAllProperties: false,
     streaming: true,
     promptCache: true,
+    supportsTemperature: true,
   },
 };
 
@@ -150,6 +162,7 @@ const CONSERVATIVE_CAPABILITIES: VendorCapabilityProfile = {
   requiresAllProperties: false,
   streaming: true,
   promptCache: true,
+  supportsTemperature: true,
 };
 
 const CAPABILITY_FIELDS: (keyof VendorCapabilityProfile)[] = [
@@ -161,6 +174,7 @@ const CAPABILITY_FIELDS: (keyof VendorCapabilityProfile)[] = [
   'requiresAllProperties',
   'streaming',
   'promptCache',
+  'supportsTemperature',
 ];
 
 /** Keep only known fields with the right value types; drop everything else. */

@@ -133,9 +133,7 @@ describe('#782 item 4 getVendorCapabilityProfile', () => {
     // ~google/ must resolve to the google/ profile (strict), not the
     // conservative fallback — an alias silently dropping the strict schema
     // was the #797 FIX.
-    expect(getVendorCapabilityProfile('~google/gemini-3.1-flash-lite').strictJsonSchema).toBe(
-      true,
-    );
+    expect(getVendorCapabilityProfile('~google/gemini-3.1-flash-lite').strictJsonSchema).toBe(true);
     expect(getVendorCapabilityProfile('~anthropic/claude-haiku-5.5').strictJsonSchema).toBe(false);
   });
 
@@ -207,9 +205,11 @@ describe('#782 item 4 OpenRouter request bodies', () => {
       type: 'json_schema',
       json_schema: { name: 'structured_response', strict: true, schema: dmResponseSchema },
     });
-    expect(JSON.stringify((body.response_format as { json_schema: { schema: unknown } }).json_schema.schema)).toBe(
-      JSON.stringify(dmResponseSchema),
-    );
+    expect(
+      JSON.stringify(
+        (body.response_format as { json_schema: { schema: unknown } }).json_schema.schema,
+      ),
+    ).toBe(JSON.stringify(dmResponseSchema));
     // The only wire change: OpenRouter must route to a provider that
     // supports the requested parameters.
     expect(body.provider).toEqual({ require_parameters: true });
@@ -234,6 +234,7 @@ describe('#782 item 4 OpenRouter request bodies', () => {
         json_schema: { name: 'structured_response', strict: true, schema: dmResponseSchema },
       },
     });
+    expect(body.temperature).toBe(0.8);
     expect(result.usage?.schemaDelivery).toBe('strict-json-schema');
   });
 
@@ -251,7 +252,9 @@ describe('#782 item 4 OpenRouter request bodies', () => {
     expect(result.error).toBeUndefined();
     const body = bodies[0] as unknown as Body;
     expect(body.response_format).toBeUndefined();
-    expect(body.provider).toEqual({ require_parameters: true });
+    // #783: the instructed path sends no provider routing and no temperature.
+    expect('provider' in body).toBe(false);
+    expect('temperature' in body).toBe(false);
     expect(systemText(body)).toBe(
       `stable system block\n\n${SCHEMA_INSTRUCTION_LINE}\n${JSON.stringify(dmResponseSchema)}`,
     );
@@ -273,7 +276,7 @@ describe('#782 item 4 OpenRouter request bodies', () => {
     expect(result.model).toBe('xai/grok-4');
     const body = bodies[0] as unknown as Body;
     expect(body.response_format).toBeUndefined();
-    expect(body.provider).toEqual({ require_parameters: true });
+    expect('provider' in body).toBe(false);
     expect(systemText(body)).toContain(SCHEMA_INSTRUCTION_LINE);
     expect(systemText(body)).toContain(JSON.stringify(dmResponseSchema));
     expect(result.usage?.schemaDelivery).toBe('schema-as-instructions');
@@ -336,7 +339,7 @@ describe('#782 item 4 OpenRouter request bodies', () => {
     expect(result.usage?.schemaDelivery).toBe('strict-json-schema');
   });
 
-  it('falls through when the strict candidate is refused, keeping require_parameters', async () => {
+  it('falls through when the strict candidate is refused, keeping require_parameters on strict attempts', async () => {
     // #797 FIX: provider.require_parameters is a live routing change — when
     // OpenRouter has no endpoint with structured_outputs for the strict
     // candidate, the chain must fall through to the next candidate.
@@ -361,12 +364,101 @@ describe('#782 item 4 OpenRouter request bodies', () => {
     // fell through to the instructed candidate.
     expect(bodies.length).toBe(3);
     expect(result.model).toBe('anthropic/claude-haiku-5.5');
-    // require_parameters rides on every OpenRouter call, including the
-    // refused strict attempts.
-    for (const body of bodies) {
-      expect((body as Body).provider).toEqual({ require_parameters: true });
-    }
+    // require_parameters rides only on the strict json_schema attempts (the
+    // two refused google/ calls). The instructed anthropic/ attempt has none (#783).
+    expect((bodies[0] as Body).provider).toEqual({ require_parameters: true });
+    expect((bodies[1] as Body).provider).toEqual({ require_parameters: true });
+    expect('provider' in (bodies[2] as Body)).toBe(false);
+    expect('temperature' in (bodies[2] as Body)).toBe(false);
     // The winning candidate's delivery path is logged on the usage object.
     expect(result.usage?.schemaDelivery).toBe('schema-as-instructions');
+  });
+});
+
+describe('#783 temperature and require_parameters gating on OpenRouter', () => {
+  it('anthropic/ bodies carry neither temperature nor provider, with or without a schema', async () => {
+    useModel('anthropic/claude-haiku-5.5');
+    const bodies = stubOpenRouter([{ content: VALID_DM_REPLY }, { content: 'plain text reply' }]);
+
+    const withSchema = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      responseSchema: dmResponseSchema,
+      maxTokens: 100,
+    });
+    const schemaless = await LLMProviderService.generate({
+      prompt: 'hello',
+      maxTokens: 100,
+    });
+
+    expect(withSchema.error).toBeUndefined();
+    expect(schemaless.error).toBeUndefined();
+    for (const body of bodies as unknown as Body[]) {
+      expect('temperature' in body).toBe(false);
+      expect('provider' in body).toBe(false);
+    }
+  });
+
+  it('google/ strict bodies carry temperature and provider require_parameters', async () => {
+    useModel('google/gemini-3.1-flash-lite');
+    const bodies = stubOpenRouter([{ content: VALID_DM_REPLY }]);
+
+    const result = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      responseSchema: dmResponseSchema,
+      maxTokens: 100,
+    });
+
+    expect(result.error).toBeUndefined();
+    const body = bodies[0] as unknown as Body;
+    expect(body.temperature).toBe(0.8);
+    expect(body.provider).toEqual({ require_parameters: true });
+    expect(result.usage?.schemaDelivery).toBe('strict-json-schema');
+  });
+
+  it('google/ non-strict (shadow) bodies carry temperature but no provider', async () => {
+    process.env.LLM_VENDOR_CAPABILITIES = '{"google/": {"strictJsonSchema": false}}';
+    useModel('google/gemini-3.1-flash-lite');
+    const bodies = stubOpenRouter([{ content: VALID_DM_REPLY }]);
+
+    const result = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      responseSchema: dmResponseSchema,
+      maxTokens: 100,
+    });
+
+    expect(result.error).toBeUndefined();
+    const body = bodies[0] as unknown as Body;
+    expect(body.response_format).toBeUndefined();
+    expect(body.temperature).toBe(0.8);
+    expect('provider' in body).toBe(false);
+    expect(result.usage?.schemaDelivery).toBe('schema-as-instructions');
+  });
+
+  it('schema-less google/ bodies send no provider field', async () => {
+    useModel('google/gemini-3.1-flash-lite');
+    const bodies = stubOpenRouter([{ content: 'plain text reply' }]);
+
+    await LLMProviderService.generate({ prompt: 'hello', maxTokens: 100 });
+
+    const body = bodies[0] as unknown as Body;
+    expect(body.temperature).toBe(0.8);
+    expect('provider' in body).toBe(false);
+  });
+
+  it('extraction omits temperature for an anthropic/ extraction model', async () => {
+    process.env.OPENROUTER_API_KEY = 'test-key-for-stubbed-provider';
+    process.env.OPENROUTER_EXTRACTION_MODEL = 'anthropic/claude-haiku-5.5';
+    process.env.OPENROUTER_EXTRACTION_FALLBACK_MODEL = 'anthropic/claude-haiku-5.5';
+    const bodies = stubOpenRouter([{ content: '{}' }]);
+
+    const result = await LLMProviderService.extract({ prompt: 'extract this', maxTokens: 100 });
+
+    expect(result.error).toBeUndefined();
+    const body = bodies[0] as unknown as Body;
+    expect('temperature' in body).toBe(false);
+    expect('provider' in body).toBe(false);
   });
 });

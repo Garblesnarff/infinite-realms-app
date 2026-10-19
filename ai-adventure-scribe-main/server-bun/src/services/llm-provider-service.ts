@@ -651,23 +651,30 @@ export class LLMProviderService {
       const candidate = candidateModels[index];
       // #782 item 4: the capability profile replaces the scattered
       // modelSupportsStrictSchema conditional.
-      const strictSchema =
-        !responseSchema || getVendorCapabilityProfile(candidate).strictJsonSchema;
+      const profile = getVendorCapabilityProfile(candidate);
+      const strictSchema = !responseSchema || profile.strictJsonSchema;
+      // #783: only the strict json_schema request needs provider routing
+      // constrained. The instructed-schema and schema-less paths send no
+      // `provider` field.
+      const strictRequest = Boolean(responseSchema && strictSchema);
       const reqBody = {
         model: candidate,
         messages: strictSchema ? messages : instructedMessages,
         max_tokens: maxTokens,
-        temperature,
+        // #783: omitted for vendors whose OpenRouter endpoints reject
+        // `temperature` alongside require_parameters (anthropic/).
+        ...(profile.supportsTemperature ? { temperature } : {}),
         // #352: ask OpenRouter for the usage detail object so cache hits are
         // visible (`usage.prompt_tokens_details.cached_tokens`).
         usage: { include: true },
-        // #782 item 4: only route to providers that support the parameters
-        // this request sets (notably strict json_schema when asked for).
-        provider: { require_parameters: true },
+        // #782 item 4 / #783: route the strict json_schema request only to
+        // providers that support its parameters, so the schema is never
+        // silently dropped.
+        ...(strictRequest ? { provider: { require_parameters: true } } : {}),
         // #633 PR2: stream tokens when the caller wants progress callbacks.
         // Usage rides the final stream chunk automatically.
         ...(onToken ? { stream: true } : {}),
-        ...(responseSchema && strictSchema
+        ...(strictRequest
           ? {
               response_format: {
                 type: 'json_schema',
@@ -1153,7 +1160,9 @@ export class LLMProviderService {
           model,
           messages,
           max_tokens: maxTokens,
-          temperature: 0.3, // Lower temp for structured extraction
+          // Lower temp for structured extraction. #783: omitted for vendors
+          // that reject `temperature` (same gate as the chat path).
+          ...(getVendorCapabilityProfile(model).supportsTemperature ? { temperature: 0.3 } : {}),
         };
 
         const response = await llmFetch('https://openrouter.ai/api/v1/chat/completions', {
