@@ -12,8 +12,8 @@
  * via `characterLoaderService`.
  *
  * Real: CharacterProvider, the character reducer, the refresh hook, StatsBar.
- * Stubbed: `fetch` for the character loader (the API edge) answering with what
- * the server's stats row holds after story damage.
+ * Stubbed: `characterLoaderService.loadCharacterWithSpells` (the API edge)
+ * answering with what the server's stats row holds after story damage.
  */
 import { act, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';

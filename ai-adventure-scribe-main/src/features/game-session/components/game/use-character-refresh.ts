@@ -14,6 +14,11 @@ import { characterLoaderService } from '@/services/character-loader';
  * spell slots stay aligned with the tracker. The event comes from the session socket and from
  * `refreshCombatState` (the pull after an End turn, and the read that ends a fight), so a hit
  * that arrives by either route lands in the header too (#2641).
+ *
+ * #130: story appliers (damage, items, XP) write character state out of combat, where no
+ * combat_state_updated follows — the sheet showed the stale value until a hard reload.
+ * The server publishes `character_state_updated` for those writes, which the session
+ * socket forwards as `character-state-updated`; this hook refetches on that too.
  */
 export function useCharacterRefreshOnCombatUpdate(
   characterId: string | null,
@@ -53,9 +58,14 @@ export function useCharacterRefreshOnCombatUpdate(
     };
 
     window.addEventListener('combat-state-updated', refreshCharacter);
+    // #130: story appliers write character state out of combat; the server
+    // publishes character_state_updated for those writes and the session
+    // socket forwards it as this event.
+    window.addEventListener('character-state-updated', refreshCharacter);
     return () => {
       cancelled = true;
       window.removeEventListener('combat-state-updated', refreshCharacter);
+      window.removeEventListener('character-state-updated', refreshCharacter);
     };
   }, [characterId, characterDispatch, userId]);
 }
