@@ -14,7 +14,8 @@ interface CharacterCardHoverContentProps {
   character: Partial<Character> & Required<Pick<Character, 'id' | 'name'>>;
   isHovered: boolean;
   imageLoading: boolean;
-  /** #2517: a fallen character is read-only — no Play, no Delete. */
+  /** #2517: a fallen character is unplayable — Play stays hidden, but Delete
+   *  is offered so a fallen roster entry can still be removed (#209). */
   fallen?: boolean;
   onPlay: (e: React.MouseEvent) => void;
   onViewDetails: (e: React.MouseEvent) => void;
@@ -193,18 +194,16 @@ const CharacterCardHoverContent = ({
           >
             View Details
           </Button>
-          {!fallen && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 hover:border-infinite-dark/20"
-              onClick={onDelete}
-              aria-label="Delete character"
-              title="Delete character"
-            >
-              <Trash2 className="w-4 h-4" aria-hidden="true" />
-            </Button>
-          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 hover:border-infinite-dark/20"
+            onClick={onDelete}
+            aria-label="Delete character"
+            title="Delete character"
+          >
+            <Trash2 className="w-4 h-4" aria-hidden="true" />
+          </Button>
         </div>
       </div>
     </div>
