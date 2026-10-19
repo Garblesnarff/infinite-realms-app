@@ -259,6 +259,40 @@ describe('useMessageQueue', () => {
     );
   });
 
+  it('#570: persists combatData with the session message so the Combat Summary card survives refetch', async () => {
+    const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+    const combatData = {
+      type: 'summary',
+      summary: {
+        rounds: 2,
+        totalDamage: 15,
+        participants: [
+          { name: 'Hero', damageDealt: 15, damageTaken: 3, status: 'ok' },
+          { name: 'Goblin', damageDealt: 3, damageTaken: 15, status: 'dead' },
+        ],
+        outcome: 'Combat concluded',
+      },
+    };
+
+    await act(async () => {
+      await result.current.messageMutation.mutateAsync({
+        text: 'Combat has ended.',
+        sender: 'system',
+        context: { combatData },
+      } as any);
+    });
+
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        speaker_type: 'system',
+        message: 'Combat has ended.',
+        context: expect.objectContaining({
+          combatData,
+        }),
+      }),
+    );
+  });
+
   it('does not persist an already-persisted seating transcript', async () => {
     const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
     const seatingTranscript = '⚙️ Engine: Initiative — You: 16 + 2 = 18 (you rolled).';
