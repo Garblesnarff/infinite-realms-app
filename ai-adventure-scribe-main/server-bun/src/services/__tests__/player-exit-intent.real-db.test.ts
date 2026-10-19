@@ -56,6 +56,9 @@ const { concludeEncounter } = await importWithRealDb(() => import('../combat/com
 const { executeCombatIntent } = await importWithRealDb(
   () => import('../combat/combat-intent-service.js'),
 );
+const { CombatEncounterService } = await importWithRealDb(
+  () => import('../combat/combat-encounter-service.js'),
+);
 const { buildTurnOrderBlock } = await importWithRealDb(
   () => import('../combat/turn-order-block.js'),
 );
@@ -262,6 +265,25 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
       'action_bar',
     );
 
+  /**
+   * #749: an exit the DM declared for the player. The client sends source 'dm' (the DM's batch),
+   * the origin of the turn's player input, and the player's own words as `playerInput`.
+   */
+  const declaredExit = (type: 'flee' | 'yield' | 'disengage', playerInput: string) =>
+    executeCombatIntent(
+      encounterId,
+      { type, actorId: heroId, expectedVersion: 1 },
+      userId,
+      'dm',
+      Date.now(),
+      'typed',
+      playerInput,
+    );
+
+  const currentParticipantId = async (): Promise<string | null> =>
+    (await CombatEncounterService.getCombatState(encounterId, userId)).currentParticipant?.id ??
+    null;
+
   /** Move the Swarm to `cells` away, so a case can choose whether it can reach the hero. */
   const setGap = async (cells: number): Promise<void> => {
     const map = await loadActiveTacticalMap(sessionId);
@@ -442,8 +464,7 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
     expect(facts).toContain('The Scholar yields.');
     expect(
       facts.some(
-        (fact) =>
-          fact.includes('THE FIGHT IS OVER') && fact.toLowerCase().includes('surrender'),
+        (fact) => fact.includes('THE FIGHT IS OVER') && fact.toLowerCase().includes('surrender'),
       ),
     ).toBe(true);
   });
@@ -513,7 +534,8 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
     );
     await consumeDmTacticalFacts(sessionId);
     // Then the move off the board. x=0 is the map's outer ring, which is the engine's own
-    // definition of having left (see `hasLeftTheBoard`).
+    // definition of having left (see `hasLeftTheBoard`). #749: the exit now also needs the
+    // player's own words to say they are leaving, so the move carries them.
     await executeCombatIntent(
       encounterId,
       { type: 'move', actorId: heroId, x: 0, y: 4 },
@@ -521,6 +543,7 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
       'player',
       Date.now(),
       'action_bar',
+      'I disengage and flee to the door',
     );
 
     expect(await heroRow()).toMatchObject({ isActive: false });
@@ -806,6 +829,92 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
 
     expect(await heroRow()).toMatchObject({ isActive: true });
     expect(await consumeDmTacticalFacts(sessionId)).not.toContain('The Scholar flees the fight.');
+  });
+
+  test('a DM-declared flee over free-text movement is a no-op, not an exit (#749)', async () => {
+    for (const words of [
+      'I back away slowly, keeping my dagger hand up, edging back toward Kaelen.',
+      'I step back.',
+      'I edge toward Kaelen.',
+    ]) {
+      await consumeDmTacticalFacts(sessionId);
+      const result = await declaredExit('flee', words);
+
+      // Nothing reached the engine: the result is the marker, not an exit.
+      expect(result).toEqual({ skipped: 'exit_without_player_wording' });
+      expect(await heroRow()).toMatchObject({ isActive: true });
+      expect(await encounterRow()).toMatchObject({ status: 'active', endedReason: null });
+      // The skipped exit spent no turn, so the player still holds it.
+      expect(await currentParticipantId()).toBe(heroId);
+      expect(await consumeDmTacticalFacts(sessionId)).toEqual([]);
+    }
+  });
+
+  test('a DM-declared disengage over free-text movement is a no-op (#749)', async () => {
+    const result = await declaredExit('disengage', 'I step back.');
+
+    expect(result).toEqual({ skipped: 'exit_without_player_wording' });
+    expect(await heroRow()).toMatchObject({ isActive: true });
+    expect(await consumeDmTacticalFacts(sessionId)).toEqual([]);
+  });
+
+  test('Disengage then a move to the edge with only the button word records no exit (#749)', async () => {
+    // The Disengage chip, then the move. "Disengage" is the button's own label, not a departure.
+    await executeCombatIntent(
+      encounterId,
+      { type: 'disengage', actorId: heroId, expectedVersion: 1 },
+      userId,
+      'player',
+      Date.now(),
+      'action_bar',
+    );
+    await consumeDmTacticalFacts(sessionId);
+    await executeCombatIntent(
+      encounterId,
+      { type: 'move', actorId: heroId, x: 0, y: 4 },
+      userId,
+      'player',
+      Date.now(),
+      'action_bar',
+      'Disengage',
+    );
+
+    expect(await heroRow()).toMatchObject({ isActive: true });
+    expect(await encounterRow()).toMatchObject({ status: 'active', endedReason: null });
+    expect(await consumeDmTacticalFacts(sessionId)).not.toContain('The Scholar flees the fight.');
+  });
+
+  test('Disengage then a move to the edge with explicit leaving words records the flee (#749)', async () => {
+    await executeCombatIntent(
+      encounterId,
+      { type: 'disengage', actorId: heroId, expectedVersion: 1 },
+      userId,
+      'player',
+      Date.now(),
+      'action_bar',
+    );
+    await consumeDmTacticalFacts(sessionId);
+    await executeCombatIntent(
+      encounterId,
+      { type: 'move', actorId: heroId, x: 0, y: 4 },
+      userId,
+      'player',
+      Date.now(),
+      'action_bar',
+      'I disengage and run for the door',
+    );
+
+    expect(await heroRow()).toMatchObject({ isActive: false });
+    expect(await consumeDmTacticalFacts(sessionId)).toContain('The Scholar flees the fight.');
+  });
+
+  test('an explicit player flee is recorded (#749)', async () => {
+    // Out of reach, so the case measures the exit and not a dice-dependent opportunity attack.
+    await setGap(3);
+    await declaredExit('flee', 'I flee!');
+
+    expect(await heroRow()).toMatchObject({ isActive: false });
+    expect(await consumeDmTacticalFacts(sessionId)).toEqual(['The Scholar flees the fight.']);
   });
 
   test('the generation-time guard lets the DM end stand once the player has left, and defers it before', async () => {

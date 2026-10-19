@@ -180,6 +180,7 @@ export const intentRoutes = new Elysia()
         dmStartedAt?: number;
         phase?: 'propose' | 'commit';
         origin?: CombatActionOrigin;
+        playerInput?: unknown;
       };
       if (!payload.intent?.type || !payload.intent.actorId) {
         set.status = 400;
@@ -229,6 +230,12 @@ export const intentRoutes = new Elysia()
           user.userId,
           payload.intent.actorId,
         );
+        // The player's own words, when this turn started from typed input (#749). A blank string
+        // is the same as none: an inline option that carries no text must not be read as one.
+        const playerInput =
+          typeof payload.playerInput === 'string' && payload.playerInput.trim().length > 0
+            ? payload.playerInput
+            : undefined;
         const result = await executeCombatIntent(
           params.encounterId,
           payload.intent,
@@ -236,6 +243,7 @@ export const intentRoutes = new Elysia()
           payload.source === 'dm' ? 'dm' : 'player',
           payload.dmStartedAt,
           payload.origin,
+          playerInput,
         );
         // The turn never waits on a browser: whatever creatures now hold it act here (#2658).
         const npcTurnsAfter = await runNpcTurnsIfNpcHolds(params.encounterId, user.userId);

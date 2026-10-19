@@ -1,13 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveDeclaredCombatActions } from '../combat-resolution-step';
 
 /**
  * #749, through the real caller path: the DM's `combat_actions` are handed to the real
- * `executeStructuredCombatActionWithBoundary`, which is where a player exit is gated on the
- * player's own words. Only the network is stubbed, so the assertion is that no flee intent ever
- * reaches the wire — not that some mock was called a particular way.
+ * `executeStructuredCombatActionWithBoundary`, which forwards the player's own words as
+ * `playerInput`. The check itself now lives on the server, so this test asserts the wording
+ * reaches the request body for a player action — not that the client withholds the intent.
  */
 vi.mock('@/services/ai-service', () => ({
   AIService: {
@@ -44,15 +44,26 @@ const resolve = (playerMessage: string) =>
     playerMessage,
   });
 
-describe('a DM-declared flee follows the player words (#749)', () => {
-  const originalFetch = globalThis.fetch;
+const sentBody = (): any => JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
 
-  beforeEach(() => {
-    globalThis.fetch = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({ result: {} }),
-    })) as unknown as typeof fetch;
-  });
+/** The server's answer for a player exit its owner's words did not support (#749). */
+const stubSkippedExit = (): void => {
+  globalThis.fetch = vi.fn(async () => ({
+    ok: true,
+    json: async () => ({ result: { skipped: 'exit_without_player_wording' } }),
+  })) as unknown as typeof fetch;
+};
+
+/** The server accepted the exit and ended the turn, so the batch also crosses the boundary. */
+const stubAcceptedExit = (): void => {
+  globalThis.fetch = vi.fn(async () => ({
+    ok: true,
+    json: async () => ({ result: {} }),
+  })) as unknown as typeof fetch;
+};
+
+describe('a DM-declared flee carries the player words (#749)', () => {
+  const originalFetch = globalThis.fetch;
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
@@ -63,24 +74,39 @@ describe('a DM-declared flee follows the player words (#749)', () => {
     'I back away slowly, keeping my dagger hand up, edging back toward Kaelen.',
     'I step back.',
     'I edge toward Kaelen.',
-  ])('never sends the flee intent for movement: %s', async (playerMessage) => {
-    await resolve(playerMessage);
+  ])(
+    'forwards free-text movement unchanged, for the server to judge: %s',
+    async (playerMessage) => {
+      // The server will not stand a DM-declared exit on these words, so it answers with the skip
+      // marker: one request, no boundary turn, and the player's words travelled with it.
+      stubSkippedExit();
 
-    expect(globalThis.fetch).not.toHaveBeenCalled();
-  });
+      await resolve(playerMessage);
 
-  it('sends the flee intent when the player explicitly flees', async () => {
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      expect(sentBody().intent).toMatchObject({ type: 'flee', actorId: PLAYER_ID });
+      expect(sentBody().playerInput).toBe(playerMessage);
+    },
+  );
+
+  it('forwards the words with an explicit flee', async () => {
+    stubAcceptedExit();
+
     await resolve('I flee!');
 
-    const intents: Array<{ url: string; body: { intent?: { type?: string } } }> = (
-      globalThis.fetch as any
-    ).mock.calls.map(([url, init]: [string, { body: string }]) => ({
-      url: String(url),
-      body: JSON.parse(init.body),
-    }));
-    const flee = intents.find(({ body }) => body.intent?.type === 'flee');
-    expect(flee).toBeDefined();
-    expect(flee?.url).toContain('/v1/combat/encounter-1/intent');
-    expect(flee?.body.intent).toMatchObject({ type: 'flee', actorId: PLAYER_ID });
+    expect(sentBody().intent).toMatchObject({ type: 'flee', actorId: PLAYER_ID });
+    expect(sentBody().playerInput).toBe('I flee!');
+    expect((globalThis.fetch as any).mock.calls[0][0]).toContain('/v1/combat/encounter-1/intent');
+  });
+
+  it('keeps the turn open when the server skips the exit for missing wording', async () => {
+    stubSkippedExit();
+
+    const resolved = await resolve('I step back.');
+
+    // The client sent the action and the server refused it as a no-op; the batch still
+    // resolves (the turn stays open) rather than throwing or reporting an outcome.
+    expect(resolved).toBeDefined();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 });

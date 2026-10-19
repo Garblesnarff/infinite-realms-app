@@ -18,3 +18,18 @@ const EXIT_WORDING: Record<PlayerExitKind, RegExp> = {
 export function playerTextDeclares(kind: PlayerExitKind, text: string): boolean {
   return EXIT_WORDING[kind].test(text);
 }
+
+/**
+ * Whether the player's own text explicitly says they are leaving: flee, run, leave, or escape.
+ *
+ * The edge rule (#749) reads this: a Disengaged move that ends on the board's outer ring is only
+ * a flee when the player's words named a departure. "I step back" is a move, however close to the
+ * door it lands.
+ */
+const LEAVING_WORDING =
+  /\b(flee|flees|fleeing|run|runs|running|leave|leaves|leaving|escape|escapes)\b/i;
+
+/** Whether the player's own text explicitly asks to leave the fight. */
+export function playerTextDeclaresLeaving(text: string): boolean {
+  return LEAVING_WORDING.test(text);
+}

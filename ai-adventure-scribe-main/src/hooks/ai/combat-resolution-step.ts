@@ -291,6 +291,9 @@ export function engineAttackRollResult(
  * stated by this layer rather than left to the model. A refusal that leaves the turn with nothing
  * at all to report is rethrown.
  */
+/** The action types whose server handling reads the player's own words (#749). */
+const PLAYER_WORDING_ACTION_TYPES = new Set(['flee', 'yield', 'disengage', 'move']);
+
 export async function resolveDeclaredCombatActions(params: CombatResolutionParams): Promise<any> {
   const {
     encounterId,
@@ -667,45 +670,44 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     if (withdrawnBySheetCancel(action, origin, targetId ? labelFor(targetId) : undefined)) {
       return 'turn_ended';
     }
-    // The player's own words only govern an exit the DM declares for the player's character.
-    // An NPC's exit is the DM's to declare, and no player text is passed for it (#749).
-    const playerExitInput =
-      (action.action_type === 'flee' ||
-        action.action_type === 'yield' ||
-        action.action_type === 'disengage') &&
-      isPlayerActor(action.actor_id, participants)
-        ? playerMessage
-        : undefined;
-    const execution = signal
-      ? await executeStructuredCombatActionWithBoundary(
-          encounterId,
-          action,
-          playerDie?.d20,
-          playerDie?.d20Rolls,
-          origin,
-          signal,
-          playerExitInput,
-        )
-      : playerExitInput !== undefined
+    // The player's own words travel only with the player-actor actions the server reads them on
+    // (#749): a DM-declared exit stands only on those words, and the Disengage-then-move path
+    // reads them on the move that follows. Every other wire is unchanged; an NPC's action
+    // carries none — its exit is the DM's.
+    const readsPlayerWords = PLAYER_WORDING_ACTION_TYPES.has(action.action_type);
+    const playerInput =
+      readsPlayerWords && isPlayerActor(action.actor_id, participants) ? playerMessage : undefined;
+    const execution =
+      playerInput !== undefined
         ? await executeStructuredCombatActionWithBoundary(
             encounterId,
             action,
             playerDie?.d20,
             playerDie?.d20Rolls,
             origin,
-            undefined,
-            playerExitInput,
+            signal,
+            playerInput,
           )
-        : await executeStructuredCombatActionWithBoundary(
-            encounterId,
-            action,
-            playerDie?.d20,
-            playerDie?.d20Rolls,
-            ...(origin ? [origin] : []),
-          );
+        : signal
+          ? await executeStructuredCombatActionWithBoundary(
+              encounterId,
+              action,
+              playerDie?.d20,
+              playerDie?.d20Rolls,
+              origin,
+              signal,
+            )
+          : await executeStructuredCombatActionWithBoundary(
+              encounterId,
+              action,
+              playerDie?.d20,
+              playerDie?.d20Rolls,
+              ...(origin ? [origin] : []),
+            );
     if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError');
-    // The DM declared a player exit the player's own words did not. Nothing was sent to the
-    // engine, so the turn stays open and the rest of the batch — a move, say — still runs (#749).
+    // The server refused a DM-declared player exit the player's own words did not support.
+    // Nothing was applied, so the turn stays open and the rest of the batch — a move, say —
+    // still runs (#749).
     if (execution.skipped) return null;
     // A retry that arrived after victory is a clean server no-op, not an outcome to narrate.
     // The batch is over either way; do not submit the next action against the dissolved board.

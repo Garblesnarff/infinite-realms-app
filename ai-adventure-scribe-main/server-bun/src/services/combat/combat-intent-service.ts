@@ -29,7 +29,12 @@ import {
   type WakeOutcome,
 } from './death-saves-service.js';
 import { grantTacticalDash, resetTacticalMovementForTurn } from './tactical-combat-lifecycle.js';
-import { findCatalogWeapon, findMagicBaseWeapon, isUnarmedWeaponClaim, UNARMED_STRIKE } from './weapon-catalog.js';
+import {
+  findCatalogWeapon,
+  findMagicBaseWeapon,
+  isUnarmedWeaponClaim,
+  UNARMED_STRIKE,
+} from './weapon-catalog.js';
 import { groundRequestedWeapon, type GroundedWeapon } from './weapon-grounding.js';
 import { logger } from '../../lib/logger.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
@@ -64,6 +69,10 @@ import {
   playerFacingWeaponName,
   type EngineRosterEntry,
 } from '../../../../shared/engine-display-name';
+import {
+  playerTextDeclares,
+  playerTextDeclaresLeaving,
+} from '../../../../shared/player-exit-wording';
 import { isPlayerCombatSpell, resolveCatalogSpell } from '../../data/spellData.js';
 import { BusinessLogicError, NotFoundError, ValidationError } from '../../lib/errors.js';
 import { planApproach } from '../../tactical/approach.js';
@@ -746,8 +755,7 @@ function alreadyEndedTurn(
  */
 
 /** `inventory_items.id` is a uuid; a claim shaped like one names a specific row, not a phrase. */
-const INVENTORY_ROW_ID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const INVENTORY_ROW_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * #260 / RG-014: refuse a player-sourced intent that names a weapon the sheet does
@@ -1022,6 +1030,12 @@ export async function executeCombatIntent(
   source: CombatActionSource,
   dmStartedAt?: number,
   origin?: CombatActionOrigin,
+  /**
+   * The player's own words for this turn (#749). A DM-declared flee/yield/disengage for a player
+   * is only applied when these words ask for that exit; undefined means the inline option path and
+   * is unchanged.
+   */
+  playerInput?: string,
   inNpcTransaction = false,
 ): Promise<unknown> {
   let stateForUnresolved: CombatState | null = null;
@@ -1099,6 +1113,25 @@ export async function executeCombatIntent(
       });
       return stale;
     }
+    // #749: a DM may declare the player's exit, but only the player's own words authorise it.
+    // Free-text movement ("I step back", "I edge toward Kaelen") is a move, and treating it as a
+    // flee took the player out of a fight they were still in. Before the turn gate, so a skipped
+    // exit changes no turn and provokes no opportunity attack. No playerInput (the inline
+    // Flee / Yield / Disengage options) leaves the exit path unchanged.
+    if (
+      (resolved.type === 'flee' || resolved.type === 'yield' || resolved.type === 'disengage') &&
+      state.participants.find((participant) => participant.id === resolved.actorId)
+        ?.participantType === 'player' &&
+      playerInput !== undefined &&
+      !playerTextDeclares(resolved.type, playerInput)
+    ) {
+      logger.warn({
+        msg: 'COMBAT_EXIT_WITHOUT_PLAYER_WORDING',
+        intentType: resolved.type,
+        encounterId,
+      });
+      return { skipped: 'exit_without_player_wording' };
+    }
     const { actor, encounter } = await resolveActorTurn(
       encounterId,
       state,
@@ -1117,7 +1150,16 @@ export async function executeCombatIntent(
     if (!inNpcTransaction && writesEngineRow) {
       const { withNpcActionTransaction } = await import('../../../../db/client');
       return await withNpcActionTransaction(encounterId, () =>
-        executeCombatIntent(encounterId, submitted, userId, source, dmStartedAt, origin, true),
+        executeCombatIntent(
+          encounterId,
+          submitted,
+          userId,
+          source,
+          dmStartedAt,
+          origin,
+          playerInput,
+          true,
+        ),
       );
     }
     // An unconscious creature cannot act (SRD 5.1): the only thing a downed player's turn
@@ -1165,13 +1207,20 @@ export async function executeCombatIntent(
           encounter.sessionId,
           `${actor.name ?? 'The player'} moved to (${destination.x}, ${destination.y}) by the engine. Describe the movement and keep the action unused.`,
         );
-        // #2580 option 2: a Disengage that actually leaves the board is an exit, with no chip.
-        // Moving to the edge is the same decision the Flee chip makes, so it records the same
-        // exit rather than leaving the player off the map and still counted as fighting.
+        // #2580 option 2, narrowed by #749: a Disengage that actually leaves the board records
+        // the same exit the Flee chip would, with no chip. But reaching the outer ring is only a
+        // departure when the player's own words said so — a "step back" that lands there is a
+        // move, and the fight goes on with the player still in it.
         const map = await loadActiveTacticalMap(encounter.sessionId);
         const actorDisengaged = (actor as unknown as { isDisengaged?: boolean | null })
           .isDisengaged;
-        if (actorDisengaged && map && hasLeftTheBoard(map, destination)) {
+        if (
+          actorDisengaged &&
+          map &&
+          hasLeftTheBoard(map, destination) &&
+          playerInput !== undefined &&
+          playerTextDeclaresLeaving(playerInput)
+        ) {
           await resolvePlayerExit({
             encounterId,
             sessionId: encounter.sessionId,
@@ -1483,7 +1532,11 @@ export async function executeCombatIntent(
       result = exitResult;
       // No discrete-action fact here: `describePlayerExit` is the engine line, and a second
       // "dashed" line under it would tell the DM the player ran and then dashed.
-      if (intent.type === 'yield' && exitResult.exit !== null && actor.participantType === 'player') {
+      if (
+        intent.type === 'yield' &&
+        exitResult.exit !== null &&
+        actor.participantType === 'player'
+      ) {
         // #262: the surrender is the ending, with its own reason — the engine end line names
         // it, so a typed or clicked yield can never again read as "Combat has ended." with no
         // reason. Flee keeps the #2580 design: the player leaves and the DM ends the scene.
@@ -1593,12 +1646,11 @@ export async function executeCombatIntent(
     // `end_turn` joins damage as a trigger because a character can now die without any damage
     // being dealt: three failed death saving throws end a campaign, and the check that ends
     // the encounter has to run on the turn that produced the third failure.
-    let ending: CombatEnding | null =
-      yieldEndedCombat
-        ? { reason: 'player_surrendered', wake: [] }
-        : damage > 0 || intent.type === 'end_turn' || intent.type === 'death_save'
-          ? await endCombatIfResolved(encounterId, userId)
-          : null;
+    let ending: CombatEnding | null = yieldEndedCombat
+      ? { reason: 'player_surrendered', wake: [] }
+      : damage > 0 || intent.type === 'end_turn' || intent.type === 'death_save'
+        ? await endCombatIfResolved(encounterId, userId)
+        : null;
     let combatBoundary = ending !== null;
     if (!ending) {
       // After the end check, never before: a killing blow ends the fight, and there is no next
@@ -1782,9 +1834,7 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
         ? (targetId: string, weapon: WeaponRuleProfile): boolean => {
             const plan = planApproach(map, actor.id, targetId, weapon.normalRange ?? 5);
             const destination = plan?.destination;
-            return (
-              !!destination && (destination.x !== mapActor.x || destination.y !== mapActor.y)
-            );
+            return !!destination && (destination.x !== mapActor.x || destination.y !== mapActor.y);
           }
         : undefined;
     actions.push(
