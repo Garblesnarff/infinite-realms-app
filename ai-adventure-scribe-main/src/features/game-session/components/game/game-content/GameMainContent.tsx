@@ -39,6 +39,81 @@ import { useDmWaiting } from '@/services/ai/dm-wait';
 import { useSheetCastProgress } from '@/services/combat/sheet-cast-progress';
 import { stripEngineGeneratedLines } from '@/utils/engine-lines';
 
+function composerTurnStatus(input: {
+  rollPillLabel: string | null;
+  isCombatDetected: boolean;
+  preflight: CombatTurnPreflightStatus;
+  error?: string;
+  dmWaiting: boolean;
+  queueProcessing: boolean;
+  onResumeTurn: () => void | Promise<void>;
+}): {
+  text: string;
+  actionLabel?: string;
+  actionDisabled?: boolean;
+  onAction?: () => void;
+} | null {
+  if (input.rollPillLabel) return null;
+  // #219: recovery copy is a combat-turn concept. Out of combat the composer
+  // lock is enough; this line used to read as a story row (#825).
+  if (
+    input.isCombatDetected &&
+    (input.preflight === 'unknown' || input.preflight === 'failed' || input.preflight === 'running')
+  ) {
+    const text =
+      input.preflight === 'running'
+        ? 'Checking whose turn it is…'
+        : input.preflight === 'failed'
+          ? `Combat turn refresh failed: ${input.error ?? 'Unknown error.'}`
+          : 'Combat turn state needs to be refreshed.';
+    return {
+      text,
+      actionLabel: input.preflight === 'running' ? 'Resuming…' : 'Resume turn',
+      actionDisabled: input.preflight === 'running',
+      onAction: () => void input.onResumeTurn(),
+    };
+  }
+  if (input.dmWaiting || input.queueProcessing) {
+    return { text: 'The DM is thinking…' };
+  }
+  return null;
+}
+
+function TurnStatusLine(props: {
+  rollPillLabel: string | null;
+  isCombatDetected: boolean;
+  preflight: CombatTurnPreflightStatus;
+  error?: string;
+  dmWaiting: boolean;
+  queueProcessing: boolean;
+  onResumeTurn: () => void | Promise<void>;
+}): React.ReactElement | null {
+  const turnStatus = composerTurnStatus(props);
+  if (!turnStatus) return null;
+  return (
+    <div
+      className="flex items-center justify-between gap-3 px-3 pt-2 text-sm text-muted-foreground"
+      role="status"
+      aria-live="polite"
+      data-testid="composer-status"
+    >
+      <span>{turnStatus.text}</span>
+      {turnStatus.actionLabel && turnStatus.onAction && (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          aria-label="Resume turn"
+          onClick={turnStatus.onAction}
+          disabled={turnStatus.actionDisabled}
+        >
+          {turnStatus.actionLabel}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 /**
  * #2517: the fallen end state for the live game screen. Kept as a separate
  * component so GameMainContent itself never calls the character/campaign
@@ -457,66 +532,6 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                     </div>
                   )}
 
-                  {/* A pending roll's status sits with the tray below; this is only the DM wait. */}
-                  {!rollPillLabel && (dmWaiting || queueStatus === 'processing') && (
-                    <div
-                      className="absolute bottom-24 left-6 animate-in slide-in-from-left-2 duration-300 md:bottom-20"
-                      style={{ zIndex: Z_INDEX.DROPDOWN }}
-                    >
-                      <div className="flex items-center gap-3 px-4 py-2 bg-card/90 backdrop-blur-sm border border-border/60 rounded-full shadow-lg">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-infinite-gold to-infinite-teal flex items-center justify-center">
-                          <span className="text-xs font-medium text-white">DM</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <div className="w-1.5 h-1.5 bg-infinite-gold rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                          <div className="w-1.5 h-1.5 bg-infinite-teal rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                          <div className="w-1.5 h-1.5 bg-infinite-gold rounded-full animate-bounce"></div>
-                        </div>
-                        <span className="text-xs text-muted-foreground font-medium">
-                          Dungeon Master is thinking...
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {!rollPillLabel &&
-                    // #219: the preflight banner ("Checking whose turn it is…"
-                    // / "Resuming…") is a combat-turn concept. Out of combat the
-                    // turn's loading state lives in the composer area; showing
-                    // this here on every turn reads as story lines.
-                    isCombatDetected &&
-                    (['unknown', 'failed', 'running'] as CombatTurnPreflightStatus[]).includes(
-                      combatTurnUiState.preflight,
-                    ) && (
-                      <div
-                        className="border-t border-amber-200 bg-amber-50 p-3"
-                        role="status"
-                        aria-live="polite"
-                      >
-                        <div className="flex items-center justify-between gap-3 text-amber-800">
-                          <span className="text-sm font-medium">
-                            {combatTurnUiState.preflight === 'running'
-                              ? 'Checking whose turn it is…'
-                              : combatTurnUiState.preflight === 'failed'
-                                ? `Combat turn refresh failed: ${combatTurnUiState.error ?? 'Unknown error.'}`
-                                : 'Combat turn state needs to be refreshed.'}
-                          </span>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            aria-label="Resume turn"
-                            onClick={() => void onResumeTurn()}
-                            disabled={combatTurnUiState.preflight === 'running'}
-                          >
-                            {combatTurnUiState.preflight === 'running'
-                              ? 'Resuming…'
-                              : 'Resume turn'}
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-
                   {/* The dock: roll tray, roll status and chat box, in flow at the bottom. */}
                   <div ref={dockRef} className="shrink-0">
                     {/* The roll tray: the dice prompt is portaled in here (see roll-tray-slot). */}
@@ -556,6 +571,15 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                         isProcessing={isProcessing}
                         promptOpen={rollBlocksInput}
                       >
+                        <TurnStatusLine
+                          rollPillLabel={rollPillLabel}
+                          isCombatDetected={isCombatDetected}
+                          preflight={combatTurnUiState.preflight}
+                          error={combatTurnUiState.error}
+                          dmWaiting={dmWaiting}
+                          queueProcessing={queueStatus === 'processing'}
+                          onResumeTurn={onResumeTurn}
+                        />
                         <ChatInput
                           onSendMessage={handleSendMessage}
                           isReconnecting={isReconnecting}

@@ -273,7 +273,9 @@ describe('GameMainContent overhaul behavior contract', () => {
     state.queueStatus = 'processing';
     render(<GameMainContent {...baseProps} isGeneratingGreeting />);
 
-    expect(screen.getByText('Dungeon Master is thinking...')).toBeInTheDocument();
+    expect(screen.getByTestId('composer-status')).toHaveTextContent('The DM is thinking…');
+    expect(screen.getByTestId('message-list')).not.toHaveTextContent('The DM is thinking');
+    expect(screen.getByTestId('story-box')).not.toHaveTextContent('Checking whose turn');
     expect(screen.getByText('Crafting Opening Scene')).toBeInTheDocument();
     expect(screen.getByTestId('message-list')).toHaveAttribute('data-suppress-empty', 'true');
   });
@@ -287,22 +289,22 @@ describe('GameMainContent overhaul behavior contract', () => {
       answer = resolve;
     });
     const { rerender } = render(<GameMainContent {...baseProps} {...handlerRef} />);
-    expect(screen.queryByText('Dungeon Master is thinking...')).not.toBeInTheDocument();
+    expect(screen.queryByText('The DM is thinking…')).not.toBeInTheDocument();
 
     act(() => {
       void trackDmWait(call);
     });
-    expect(screen.getByText('Dungeon Master is thinking...')).toBeInTheDocument();
+    expect(screen.getByText('The DM is thinking…')).toBeInTheDocument();
     // The queue write finishes long before the reply: the pill stays.
     state.queueStatus = 'idle';
     rerender(<GameMainContent {...baseProps} {...handlerRef} />);
-    expect(screen.getByText('Dungeon Master is thinking...')).toBeInTheDocument();
+    expect(screen.getByText('The DM is thinking…')).toBeInTheDocument();
 
     await act(async () => {
       answer();
       await call;
     });
-    expect(screen.queryByText('Dungeon Master is thinking...')).not.toBeInTheDocument();
+    expect(screen.queryByText('The DM is thinking…')).not.toBeInTheDocument();
   });
 
   it('scrolls the feed to its newest card when a cast resolves (#2418)', () => {
@@ -341,7 +343,7 @@ describe('GameMainContent overhaul behavior contract', () => {
     act(() => {
       void trackDmWait(call);
     });
-    expect(screen.queryByText('Dungeon Master is thinking...')).not.toBeInTheDocument();
+    expect(screen.queryByText('The DM is thinking…')).not.toBeInTheDocument();
 
     await act(async () => {
       answer();
@@ -510,6 +512,9 @@ describe('GameMainContent overhaul behavior contract', () => {
     render(<GameMainContent {...baseProps} isCombatDetected />);
 
     const resumeButton = screen.getByRole('button', { name: 'Resume turn' });
+    expect(screen.getByTestId('composer-status')).toContainElement(resumeButton);
+    expect(screen.getByTestId('message-list')).not.toHaveTextContent('Resume turn');
+    expect(screen.getByTestId('story-box')).not.toHaveTextContent('Checking whose turn');
     expect(resumeButton).toBeInTheDocument();
     expect(screen.getByTestId('chat-input')).toBeDisabled();
 
