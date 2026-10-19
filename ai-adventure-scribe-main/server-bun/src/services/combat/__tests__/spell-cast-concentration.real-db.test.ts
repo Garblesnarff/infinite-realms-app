@@ -42,7 +42,6 @@ if (!hasRealDb) {
 }
 
 
-
 describeWithDb('maybeStartConcentrationFromSpellCast', () => {
   const db = hasRealDb ? realDb() : (null as never);
   const userId = testId('user');
