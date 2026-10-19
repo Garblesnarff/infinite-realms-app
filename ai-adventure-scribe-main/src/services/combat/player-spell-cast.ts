@@ -3,7 +3,10 @@ import type { StructuredCombatAction } from '@/services/combat/combat-action-exe
 import logger from '@/lib/logger';
 import { proposeAuthoritativeSpell } from '@/services/combat/combat-attack-proposal';
 import { resolvePlayerCombatSpell } from '@/services/combat/player-combat-spell';
-import { requestPlayerAttackRoll } from '@/services/combat/player-roll-bridge';
+import {
+  requestPlayerAttackRoll,
+  type PlayerAttackRollSpec,
+} from '@/services/combat/player-roll-bridge';
 import { askTargetSave, withSheetCastRoll } from '@/services/combat/sheet-cast-progress';
 import { consumeHeldSaveCard } from '@/services/combat/sheet-cast-save-hold';
 
@@ -92,7 +95,7 @@ export async function askPlayerForSpellCast(
   // The engine names the spell and its numbers. Without a proposal the popup would have to
   // guess them, and a guessed "+0" is how #2233 showed a +5 caster the wrong roll; a refused or
   // failed proposal therefore opens no popup and lets the commit resolve or refuse by itself.
-  let rollSpec = {
+  let rollSpec: Omit<PlayerAttackRollSpec, 'actorLabel' | 'targetLabel'> = {
     weaponName: spell.name,
     attackBonus: 0,
     targetAc: 0,
@@ -124,6 +127,8 @@ export async function askPlayerForSpellCast(
         targetAc: proposal.targetAc,
         advantage: proposal.advantage,
         disadvantage: proposal.disadvantage,
+        advantageSources: proposal.advantageSources,
+        disadvantageSources: proposal.disadvantageSources,
       };
     } catch (error) {
       // A silent engine roll here would look like a popup that never opened, so say why (no

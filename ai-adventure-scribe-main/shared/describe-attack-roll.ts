@@ -18,8 +18,21 @@ export interface AttackRollDescriptionSpec {
   targetAc: number;
   advantage: boolean;
   disadvantage: boolean;
+  /** Short player-facing reasons for the advantage state the engine proposed (#603). */
+  advantageSources?: string[];
+  /** Short player-facing reasons for the disadvantage state the engine proposed (#603). */
+  disadvantageSources?: string[];
   /** Spell attacks reuse this popup but must not claim a weapon AC line. */
   kind?: 'weapon' | 'spell-attack';
+}
+
+/**
+ * The edge label beside the formula, with the engine's reasons when it named any (#603).
+ * A flat "(disadvantage)" with no reason is what made a ranged-in-melee penalty read as a bug.
+ */
+function edgeLabel(kind: 'advantage' | 'disadvantage', sources: string[] | undefined): string {
+  const reason = sources?.filter((source) => source.length > 0).join('; ');
+  return reason ? ` (${kind}: ${reason})` : ` (${kind})`;
 }
 
 /**
@@ -33,7 +46,11 @@ export function describeAttackRoll(
   spec: AttackRollDescriptionSpec,
   showTargetNumbers = true,
 ): string {
-  const edge = spec.advantage ? ' (advantage)' : spec.disadvantage ? ' (disadvantage)' : '';
+  const edge = spec.advantage
+    ? edgeLabel('advantage', spec.advantageSources)
+    : spec.disadvantage
+      ? edgeLabel('disadvantage', spec.disadvantageSources)
+      : '';
   if (spec.kind === 'spell-attack') {
     return `${spec.weaponName} spell attack vs ${spec.targetLabel}${edge}`;
   }
@@ -46,6 +63,8 @@ export function describeAttackRoll(
 }
 
 /** The popup text and displayed total must use the exact modifier sent to the roll queue. */
-export function attackModifierForRoll(spec: Pick<AttackRollDescriptionSpec, 'attackBonus'>): number {
+export function attackModifierForRoll(
+  spec: Pick<AttackRollDescriptionSpec, 'attackBonus'>,
+): number {
   return spec.attackBonus;
 }

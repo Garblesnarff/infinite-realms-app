@@ -1,4 +1,6 @@
-import { describe, expect, it, mock } from 'bun:test';
+import { beforeEach, describe, expect, it, mock } from 'bun:test';
+
+import type { TacticalMap } from '../../../tactical/types.js';
 
 /**
  * #313 / GP-061: the sheet check must run before the combat-spell assessment, and before
@@ -16,13 +18,66 @@ import { describe, expect, it, mock } from 'bun:test';
  */
 
 mock.module('../../../../../db/client', () => ({
-  db: new Proxy({}, { get: () => { throw new Error('db.client used in test'); } }),
+  db: new Proxy(
+    {},
+    {
+      get: () => {
+        throw new Error('db.client used in test');
+      },
+    },
+  ),
 }));
 
 const CASTER_ID = 'caster-scholar-1';
 const TARGET_ID = 'target-spider-1';
 // The L1 Wizard's sheet: Fire Bolt (combat) and Light (utility). No Fireball.
 const KNOWN_SPELL_IDS = ['fire-bolt', 'light'];
+
+// #603: the propose success path reads the same geometry and conditions the commit would, so
+// these are per-test inputs rather than constants baked into the module mocks below.
+let activeTacticalMap: TacticalMap | null = null;
+let attackerConditions: string[] = [];
+
+/** Caster and target adjacent on a clear field: a ranged attack within 5 feet (#603). */
+const adjacentMap = (): TacticalMap => ({
+  id: 'map-603',
+  sessionId: 'session-313-1',
+  width: 6,
+  height: 6,
+  round: 1,
+  sceneDescription: 'test',
+  cells: Array.from({ length: 6 }, () =>
+    Array.from({ length: 6 }, () => ({
+      terrain: 'floor' as const,
+      blocksMovement: false,
+      blocksSight: false,
+      cover: 0 as const,
+      elevation: 0,
+    })),
+  ),
+  entities: [
+    {
+      id: CASTER_ID,
+      name: 'The Scholar',
+      x: 1,
+      y: 1,
+      size: 'medium',
+      type: 'pc',
+      speedFeet: 30,
+      movementRemaining: 30,
+    },
+    {
+      id: TARGET_ID,
+      name: 'The Spider',
+      x: 2,
+      y: 1,
+      size: 'medium',
+      type: 'monster',
+      speedFeet: 30,
+      movementRemaining: 30,
+    },
+  ],
+});
 
 const silentLogger = {
   debug: () => {},
@@ -73,7 +128,7 @@ mock.module('../data-access.js', () => ({
     className: 'Wizard',
     scores: { str: 8, dex: 14, con: 13, int: 16, wis: 12, cha: 10 },
   }),
-  getActiveConditionNames: async () => [],
+  getActiveConditionNames: async () => attackerConditions,
   getEquippedWeaponProfile: async () => null,
   monsterAttackSource: () => 'generic',
   // Not used by this suite, but `hp-data-access.js` imports it, and the death-save
@@ -83,7 +138,7 @@ mock.module('../data-access.js', () => ({
 }));
 
 mock.module('../tactical-map-store.js', () => ({
-  loadActiveTacticalMap: async () => null,
+  loadActiveTacticalMap: async () => activeTacticalMap,
   // Stubbed rather than omitted: an absent export is a hard "not found" for every
   // importer in the graph.
   loadLatestTacticalMapRow: async () => null,
@@ -120,5 +175,50 @@ describe('#313 GP-061 sheet check order through the real proposeSpellAttack', ()
     expect(error).toBeInstanceOf(Error);
     const err = error as Error & { details?: { reason?: string } };
     expect(err.details?.reason).toBe('unsupported_spell');
+  });
+});
+
+/**
+ * #603: the spell popup opened "(disadvantage)" with no reason. The proposal now carries the
+ * engine's reasons, so the tray can say why. These run Fire Bolt (an attack-roll cantrip on the
+ * caster's sheet) through the real `proposeSpellAttack`.
+ */
+describe('#603 spell proposal disadvantage sources', () => {
+  beforeEach(() => {
+    activeTacticalMap = null;
+    attackerConditions = [];
+  });
+
+  it('names a ranged attack within 5 feet of a hostile', async () => {
+    activeTacticalMap = adjacentMap();
+    const proposal = (await propose('Fire Bolt', 'fire-bolt')) as {
+      disadvantage: boolean;
+      disadvantageSources: string[];
+    };
+    expect(proposal.disadvantage).toBe(true);
+    expect(proposal.disadvantageSources).toEqual(['ranged attack with a hostile within 5 ft']);
+  });
+
+  it('names an attacker condition', async () => {
+    attackerConditions = ['poisoned'];
+    const proposal = (await propose('Fire Bolt', 'fire-bolt')) as {
+      disadvantage: boolean;
+      disadvantageSources: string[];
+    };
+    expect(proposal.disadvantage).toBe(true);
+    expect(proposal.disadvantageSources).toEqual(['you are poisoned']);
+  });
+
+  it('reports no sources with no geometry and no conditions', async () => {
+    const proposal = (await propose('Fire Bolt', 'fire-bolt')) as {
+      advantage: boolean;
+      disadvantage: boolean;
+      advantageSources: string[];
+      disadvantageSources: string[];
+    };
+    expect(proposal.advantage).toBe(false);
+    expect(proposal.disadvantage).toBe(false);
+    expect(proposal.advantageSources).toEqual([]);
+    expect(proposal.disadvantageSources).toEqual([]);
   });
 });

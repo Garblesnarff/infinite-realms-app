@@ -373,7 +373,8 @@ export class CombatAttackService {
       weapon,
       geometry,
       requestedAdvantage: advantage,
-      requestedDisadvantage: disadvantage || targetParticipant.isDodging,
+      requestedDisadvantage: disadvantage,
+      targetDodging: targetParticipant.isDodging,
       attackerConditions,
       targetConditions,
     });
@@ -427,6 +428,8 @@ export class CombatAttackService {
       cover: geometry?.cover ?? null,
       advantage: rules.advantage,
       disadvantage: rules.disadvantage,
+      advantageSources: rules.advantageSources,
+      disadvantageSources: rules.disadvantageSources,
     };
   }
 
@@ -837,6 +840,8 @@ export class CombatAttackService {
     targetAc: number;
     advantage: boolean;
     disadvantage: boolean;
+    advantageSources: string[];
+    disadvantageSources: string[];
   }> {
     const { spell, spellRules, seatedAcByTarget, spellAttackBonus } = await this.prepareSpellCast(
       encounterId,
@@ -853,6 +858,8 @@ export class CombatAttackService {
       targetAc: seatedAcByTarget.get(input.targetIds[0] ?? '')?.effective ?? 0,
       advantage: rules?.advantage ?? false,
       disadvantage: rules?.disadvantage ?? false,
+      advantageSources: rules?.advantageSources ?? [],
+      disadvantageSources: rules?.disadvantageSources ?? [],
     };
   }
 

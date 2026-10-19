@@ -69,9 +69,7 @@ export interface PlayerAttackDieParams {
  * (#566). The action-bar caller lets a timed-out attack commit with no player die (the engine
  * rolls); a dismissed or refused popup reports plain `autoRolled: true` and still stops there.
  */
-export async function askPlayerForAttackDie(
-  params: PlayerAttackDieParams,
-): Promise<{
+export async function askPlayerForAttackDie(params: PlayerAttackDieParams): Promise<{
   d20?: number;
   d20Rolls?: [number, number];
   autoRolled: boolean;
@@ -116,6 +114,8 @@ export async function askPlayerForAttackDie(
       targetAc: proposal.targetAc ?? 10,
       advantage: !!proposal.advantage,
       disadvantage: !!proposal.disadvantage,
+      advantageSources: proposal.advantageSources,
+      disadvantageSources: proposal.disadvantageSources,
     });
     if (outcome.d20 === null) {
       // The bridge's 45 s timer is the one auto-roll the popup promised ("Rolls for you in

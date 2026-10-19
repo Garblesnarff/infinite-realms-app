@@ -33,6 +33,10 @@ export interface PlayerAttackRollSpec {
   targetAc: number;
   advantage: boolean;
   disadvantage: boolean;
+  /** Short player-facing reasons for the advantage state the engine proposed (#603). */
+  advantageSources?: string[];
+  /** Short player-facing reasons for the disadvantage state the engine proposed (#603). */
+  disadvantageSources?: string[];
   /** Spell attacks reuse this popup but must not claim a weapon AC line. */
   kind?: 'weapon' | 'spell-attack';
 }

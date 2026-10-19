@@ -185,6 +185,31 @@ describe('usePlayerRollHost teardown', () => {
     unmount();
   });
 
+  it('shows the engine’s reason beside the disadvantage label (#603)', async () => {
+    const { unmount } = renderHook(() => usePlayerRollHost());
+    const pending = requestPlayerAttackRoll({
+      actorLabel: 'The Seeker',
+      targetLabel: 'Sentient Glaze',
+      weaponName: 'Crossbow, light',
+      attackBonus: 3,
+      targetAc: 15,
+      advantage: false,
+      disadvantage: true,
+      disadvantageSources: ['ranged attack with a hostile within 5 ft'],
+    });
+
+    expect(requestDiceRoll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description:
+          'Crossbow, light attack vs Sentient Glaze — 1d20+3 vs AC 15 (disadvantage: ranged attack with a hostile within 5 ft)',
+      }),
+    );
+
+    settlePendingPlayerRoll({ d20: 12 });
+    await expect(pending).resolves.toEqual({ d20: 12 });
+    unmount();
+  });
+
   it('describes a spell-attack popup without claiming an AC line', async () => {
     const { unmount } = renderHook(() => usePlayerRollHost());
     const pending = requestPlayerAttackRoll({

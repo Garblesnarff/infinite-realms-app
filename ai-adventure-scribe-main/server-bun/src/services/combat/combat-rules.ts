@@ -48,6 +48,11 @@ export type AttackRuleInput = {
   geometry?: AttackGeometry;
   requestedAdvantage?: boolean;
   requestedDisadvantage?: boolean;
+  /**
+   * The target took the Dodge action. Dodge imposes disadvantage on attacks against it, and
+   * it is its own player-facing reason rather than a second "requested" source (#603).
+   */
+  targetDodging?: boolean;
   attackerConditions?: string[];
   targetConditions?: string[];
 };
@@ -63,10 +68,26 @@ export type AttackRuleResolution = {
   targetAc: number;
   advantage: boolean;
   disadvantage: boolean;
+  /** Short player-facing reasons behind each advantage source, in the order they applied. */
+  advantageSources: string[];
+  /** Short player-facing reasons behind each disadvantage source, in the order they applied. */
+  disadvantageSources: string[];
 };
 
 export { abilityModifier };
 export { proficiencyBonus };
+
+/** Conditions that impose disadvantage on the attacker's own attacks (2014 5e). */
+const ATTACKER_DISADVANTAGE_CONDITIONS = ['blinded', 'poisoned', 'frightened', 'restrained'];
+/** Conditions on the target that grant the attacker advantage (2014 5e). */
+const TARGET_ADVANTAGE_CONDITIONS = [
+  'blinded',
+  'paralyzed',
+  'petrified',
+  'restrained',
+  'stunned',
+  'unconscious',
+];
 
 const includes = (conditions: string[], names: string[]): boolean =>
   conditions.some((condition) => names.includes(condition.toLowerCase()));
@@ -94,24 +115,24 @@ export function resolveAttackRules(input: AttackRuleInput): AttackRuleResolution
     return illegal('out_of_range', ability, modifier, proficiency, input);
   }
 
-  let hasAdvantage = Boolean(input.requestedAdvantage);
-  let hasDisadvantage = Boolean(input.requestedDisadvantage);
-  if (geometry && geometry.distanceFeet > weapon.normalRange) hasDisadvantage = true;
+  const advantageSources: string[] = [];
+  const disadvantageSources: string[] = [];
+  if (input.requestedAdvantage) advantageSources.push('requested');
+  if (input.requestedDisadvantage) disadvantageSources.push('requested');
+  if (input.targetDodging) disadvantageSources.push('target is dodging');
+  if (geometry && geometry.distanceFeet > weapon.normalRange)
+    disadvantageSources.push('long range');
   // Ranged attacks made while an enemy is within 5 feet are disadvantaged.
-  if (geometry && weapon.ranged && geometry.distanceFeet <= 5) hasDisadvantage = true;
-  if (includes(attackerConditions, ['blinded', 'poisoned', 'frightened', 'restrained']))
-    hasDisadvantage = true;
-  if (
-    includes(targetConditions, [
-      'blinded',
-      'paralyzed',
-      'petrified',
-      'restrained',
-      'stunned',
-      'unconscious',
-    ])
-  )
-    hasAdvantage = true;
+  if (geometry && weapon.ranged && geometry.distanceFeet <= 5)
+    disadvantageSources.push('ranged attack with a hostile within 5 ft');
+  for (const condition of ATTACKER_DISADVANTAGE_CONDITIONS) {
+    if (includes(attackerConditions, [condition])) disadvantageSources.push(`you are ${condition}`);
+  }
+  for (const condition of TARGET_ADVANTAGE_CONDITIONS) {
+    if (includes(targetConditions, [condition])) advantageSources.push(`target is ${condition}`);
+  }
+  const hasAdvantage = advantageSources.length > 0;
+  const hasDisadvantage = disadvantageSources.length > 0;
   // Advantage and disadvantage cancel regardless of how many sources apply.
   const advantage = hasAdvantage && !hasDisadvantage;
   const disadvantage = hasDisadvantage && !hasAdvantage;
@@ -127,6 +148,8 @@ export function resolveAttackRules(input: AttackRuleInput): AttackRuleResolution
     targetAc: input.baseTargetAc + coverBonus,
     advantage,
     disadvantage,
+    advantageSources,
+    disadvantageSources,
   };
 }
 
@@ -148,5 +171,7 @@ function illegal(
     targetAc: input.baseTargetAc,
     advantage: false,
     disadvantage: false,
+    advantageSources: [],
+    disadvantageSources: [],
   };
 }
