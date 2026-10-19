@@ -79,7 +79,9 @@ export async function awardStoryXpOnce(input: {
   const { and, eq, gte, like, sql } = await import('drizzle-orm');
   const { characters, experienceEvents } = await import('../../../../db/schema/index');
   const { characterId, sessionId, since, amount, reason } = input;
-  const grant = await db.transaction(async (tx) => {
+  // #130: captured (not returned directly) so the invalidation broadcast below
+  // runs after the transaction commits.
+  const grant = await db.transaction(async (tx): Promise<StoryXpGrant> => {
     const [locked] = await tx
       .select({ id: characters.id, level: characters.level })
       .from(characters)
