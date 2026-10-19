@@ -8,8 +8,10 @@
  * A story short rest spends no hit dice on its own — spending is the player's choice, made
  * from the sheet's hit-dice prompt. Once per player message, as the slot spend in
  * story-spell-slots.ts: Retry re-sends the same saved message, so a second rest for it is
- * not applied. A rest RestService refuses (dying, dead, long rest at 0 HP) is logged and
- * reported, never thrown: a failed write never costs the player their turn.
+ * not applied. The claim is inside RestService (#777): it locks the character, re-checks
+ * rest_events for this character, session, and player message, and inserts the event
+ * before any restore. A rest RestService refuses (dying, dead, long rest at 0 HP) is
+ * logged and reported, never thrown: a failed write never costs the player their turn.
  *
  * Database imports stay inside the functions, as in story-xp.ts: /v1/llm/generate imports
  * this module, and its route contract tests load without an application database.
@@ -18,6 +20,7 @@
 import { ownedSessionCharacter } from './dm-feature-gate.js';
 import { playerMessage } from './story-spell-slots.js';
 import { logger } from '../../lib/logger.js';
+import { StoryRestAlreadyRecorded } from '../story-rest-already-recorded.js';
 
 export type StoryRestOutcome =
   | 'applied'
@@ -28,29 +31,6 @@ export type StoryRestOutcome =
   | 'roll_pending'
   | 'rest_failed';
 
-/** A rest already recorded for this character and session at or after the player message. */
-async function restAlreadyApplied(
-  characterId: string,
-  sessionId: string,
-  since: Date,
-): Promise<boolean> {
-  const { db } = await import('../../../../db/client');
-  const { and, eq, gte } = await import('drizzle-orm');
-  const { restEvents } = await import('../../../../db/schema/index');
-  const [row] = await db
-    .select({ id: restEvents.id })
-    .from(restEvents)
-    .where(
-      and(
-        eq(restEvents.characterId, characterId),
-        eq(restEvents.sessionId, sessionId),
-        gte(restEvents.startedAt, since),
-      ),
-    )
-    .limit(1);
-  return !!row;
-}
-
 /** Reads the reply's `rest` and applies it for the session's own character. */
 export async function applyStoryRest(input: {
   userId: string;
@@ -60,7 +40,7 @@ export async function applyStoryRest(input: {
   rollRequested?: boolean;
 }): Promise<StoryRestOutcome> {
   const { userId, sessionId } = input;
-  const rest = ((input.rest ?? {}) as { type?: unknown });
+  const rest = (input.rest ?? {}) as { type?: unknown };
   const restType = rest.type === 'short' || rest.type === 'long' ? rest.type : null;
   const character = await ownedSessionCharacter(sessionId, userId);
   const message = character ? await playerMessage(sessionId) : null;
@@ -71,20 +51,37 @@ export async function applyStoryRest(input: {
   else if (!restType) outcome = 'invalid_rest';
   // No saved player message, no key to apply once against: the turn answers nothing the player did.
   else if (!message?.createdAt) outcome = 'no_player_message';
-  else if (await restAlreadyApplied(character.id, sessionId, message.createdAt)) {
-    outcome = 'already_applied';
-  } else {
+  else {
     try {
       const { RestService } = await import('../rest-service.js');
+      // The outside read is not the claim. RestService locks, re-checks, and
+      // inserts the event before it restores anything.
       if (restType === 'short') {
-        await RestService.takeShortRest(character.id, userId, 0, sessionId, 'story rest');
+        await RestService.takeShortRest(
+          character.id,
+          userId,
+          0,
+          sessionId,
+          'story rest',
+          message.createdAt,
+        );
       } else {
-        await RestService.takeLongRest(character.id, userId, sessionId, 'story rest');
+        await RestService.takeLongRest(
+          character.id,
+          userId,
+          sessionId,
+          'story rest',
+          message.createdAt,
+        );
       }
       outcome = 'applied';
     } catch (error) {
-      logger.warn({ msg: 'DM_STORY_REST_FAILED', sessionId, characterId: character.id, error });
-      outcome = 'rest_failed';
+      if (error instanceof StoryRestAlreadyRecorded) {
+        outcome = 'already_applied';
+      } else {
+        logger.warn({ msg: 'DM_STORY_REST_FAILED', sessionId, characterId: character.id, error });
+        outcome = 'rest_failed';
+      }
     }
   }
   logger.info({

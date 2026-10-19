@@ -8,10 +8,12 @@
  *
  * Once per player message, as the slot spend in story-spell-slots.ts: the deterministic
  * engine chat line (`story-damage:<session>:<character>:<message time>`) is the
- * applied-record — a retried turn finds it and stops, so a second application for the
- * same message cannot land. No migration: the line lives in dialogue_history, like the
- * #310 story-XP notice. The notice doubles as the "damage line" #610's reporter looked
- * for: it is posted in chat and broadcast, so a live session sees it without a refresh.
+ * applied-record. The insert is the claim (#777): `onConflictDoNothing` on
+ * dialogue_history's primary key, and zero rows means already applied, so HP does
+ * not move. No migration. The notice doubles as the "damage line" #610's reporter
+ * looked for: after the HP write it is rewritten with the result and broadcast, so a
+ * live session sees it without a refresh. A crash after the insert and before the HP
+ * write skips a retry instead of applying twice.
  *
  * Module stays importable without DATABASE_URL (db/client throws at load without it), so
  * the pure validator tests run outside the real-DB suite: every DB-touching import is
@@ -72,9 +74,8 @@ const damageIdSeed = (sessionId: string, characterId: string, since: Date): stri
   `story-damage:${sessionId}:${characterId}:${since.getTime()}`;
 
 /**
- * The single writer. The deterministic engine line is the applied-record: a retried turn
- * finds it and stops before any HP moves, so the same player message cannot deal its
- * damage twice.
+ * The single writer. The dialogue_history primary key is the claim (#777): the insert
+ * runs before any HP write, and a conflict means this message already applied.
  */
 export async function applyStoryDamageOnce(input: {
   characterId: string;
@@ -86,9 +87,8 @@ export async function applyStoryDamageOnce(input: {
   source: string;
 }): Promise<'applied' | 'already_applied'> {
   const { characterId, userId, sessionId, characterName, since, amount, source } = input;
-  const { engineChatLineExists, postEngineChatLine } = await import('../engine-chat-line.js');
+  const { claimEngineChatLine, rewriteEngineChatLine } = await import('../engine-chat-line.js');
   const idSeed = damageIdSeed(sessionId, characterId, since);
-  if (await engineChatLineExists(idSeed)) return 'already_applied';
   // The per-hit half-max net is off on this path (character-vitals-service.ts deliberately
   // leaves `targetIsPlayer` unset for DM-resolved damage), so an uncapped claim of 25 on a
   // 12 HP hero — or 999 — would be massive damage and kill outright. The cap makes story
@@ -96,6 +96,18 @@ export async function applyStoryDamageOnce(input: {
   const { CharacterVitalsService } = await import('../character-vitals-service.js');
   const before = await CharacterVitalsService.getVitals(characterId, userId);
   const capped = capStoryDamage(amount, before.currentHitPoints, before.maxHitPoints);
+  const sourceText = source.trim();
+  const damageSentence =
+    `⚙️ Engine: story damage — ${sourceText} deals ${capped} damage to ${characterName}` +
+    (capped !== amount ? ` (capped from a claim of ${amount})` : '');
+  const claimed = await claimEngineChatLine({
+    sessionId,
+    userId,
+    idSeed,
+    text: `${damageSentence}.`,
+    context: { intent: 'story_damage', claim: true },
+  });
+  if (!claimed) return 'already_applied';
   if (capped !== amount) {
     logger.info({
       msg: 'DM_STORY_DAMAGE_CAPPED',
@@ -111,16 +123,14 @@ export async function applyStoryDamageOnce(input: {
     characterId,
     userId,
     capped,
-    `story: ${source.trim()}`,
+    `story: ${sourceText}`,
   );
   const lines = [
-    `⚙️ Engine: story damage — ${source.trim()} deals ${capped} damage to ${characterName}` +
-      (capped !== amount ? ` (capped from a claim of ${amount})` : '') +
-      `. HP ${vitals.currentHitPoints}/${vitals.maxHitPoints}.`,
+    `${damageSentence}. HP ${vitals.currentHitPoints}/${vitals.maxHitPoints}.`,
     ...engineLines,
   ];
   try {
-    await postEngineChatLine({
+    await rewriteEngineChatLine({
       sessionId,
       userId,
       idSeed,
@@ -131,11 +141,8 @@ export async function applyStoryDamageOnce(input: {
       },
     });
   } catch (error) {
-    // The damage already landed and the sheet shows it; the notice is cosmetic.
-    // Residual: a notice write that fails leaves no applied-record, so a retry of the
-    // same player message would apply the damage again — the same failure mode as the
-    // client damage route's own retry. Logged for the #218 follow-up (a damage-events
-    // table would close it the way experienceEvents closed it for XP).
+    // The damage already landed and the claim row is the applied-record, so a retry
+    // must not apply again. The notice text is cosmetic.
     logger.warn({
       msg: 'STORY_DAMAGE_NOTICE_FAILED',
       sessionId,

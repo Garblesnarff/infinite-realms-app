@@ -8,7 +8,7 @@
  */
 
 /* eslint-disable max-lines */
-import { and, desc, eq, exists, inArray, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, gte, inArray, or, sql } from 'drizzle-orm';
 
 import { CharacterVitalsService } from './character-vitals-service.js';
 import { ClassFeaturesService } from './class-features-service.js';
@@ -32,6 +32,7 @@ import {
 import { BusinessLogicError, NotFoundError } from '../lib/errors.js';
 import { RestMechanics } from './rest/rest-mechanics.js';
 import { SpellSlotsService } from './spell-slots-service.js';
+import { StoryRestAlreadyRecorded } from './story-rest-already-recorded.js';
 
 import type {
   HitDieType,
@@ -76,10 +77,7 @@ export class RestService {
    * no stats row predate the vitals system; without hit points to read, the
    * guard cannot fire and the legacy behavior stands.
    */
-  private static assertRestAllowed(
-    stats: CharacterStats | null,
-    restType: RestType,
-  ): void {
+  private static assertRestAllowed(stats: CharacterStats | null, restType: RestType): void {
     if (!stats) return;
     if (stats.vitalState === 'dead') {
       throw new BusinessLogicError(`Cannot take a ${restType} rest while dead.`);
@@ -92,6 +90,110 @@ export class RestService {
         'A long rest requires at least 1 hit point to grant its benefits.',
       );
     }
+  }
+
+  /**
+   * #777: the story once-per-message claim. Locks the character, re-checks
+   * rest_events for this character, session, and player message, and inserts
+   * the event on that transaction before any restore. A second caller waits
+   * on the lock, sees the event, and does not restore.
+   */
+  private static async claimStoryRest(input: {
+    characterId: string;
+    sessionId: string;
+    since: Date;
+    restType: RestType;
+    notes?: string;
+  }): Promise<string> {
+    const { characterId, sessionId, since, restType, notes } = input;
+    return db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select({ id: characters.id })
+        .from(characters)
+        .where(eq(characters.id, characterId))
+        .for('update');
+      if (!locked) throw new NotFoundError('Character', characterId);
+      const [existing] = await tx
+        .select({ id: restEvents.id })
+        .from(restEvents)
+        .where(
+          and(
+            eq(restEvents.characterId, characterId),
+            eq(restEvents.sessionId, sessionId),
+            gte(restEvents.startedAt, since),
+          ),
+        )
+        .limit(1);
+      if (existing) throw new StoryRestAlreadyRecorded();
+      // started_at is the re-check key, compared to dialogue_history.created_at.
+      // Both must be the database clock. new Date() can fall before that row,
+      // and the waiter would insert a second event.
+      const [restEvent] = await tx
+        .insert(restEvents)
+        .values({
+          characterId,
+          sessionId,
+          restType,
+          startedAt: sql`now()`,
+          completedAt: sql`now()`,
+          hpRestored: 0,
+          hitDiceSpent: 0,
+          resourcesRestored: '[]',
+          interrupted: false,
+          notes: notes || null,
+        })
+        .returning();
+      if (!restEvent) throw new NotFoundError('Character', characterId);
+      return restEvent.id;
+    });
+  }
+
+  /** Fill the claimed event, or insert one for a sheet rest that has no claim. */
+  private static async finishRestEvent(
+    claimedEventId: string | undefined,
+    values: {
+      characterId: string;
+      sessionId?: string;
+      restType: RestType;
+      hpRestored: number;
+      hitDiceSpent: number;
+      resourcesRestored: string;
+      notes?: string;
+    },
+  ): Promise<RestEvent> {
+    const now = new Date();
+    if (claimedEventId) {
+      const [restEvent] = await db
+        .update(restEvents)
+        .set({
+          hpRestored: values.hpRestored,
+          hitDiceSpent: values.hitDiceSpent,
+          resourcesRestored: values.resourcesRestored,
+          completedAt: now,
+          updatedAt: now,
+        })
+        .where(eq(restEvents.id, claimedEventId))
+        .returning();
+      if (!restEvent) throw new NotFoundError('Character', values.characterId);
+      return restEvent;
+    }
+    const [restEvent] = await db
+      .insert(restEvents)
+      .values({
+        characterId: values.characterId,
+        sessionId: values.sessionId || null,
+        restType: values.restType,
+        startedAt: now,
+        completedAt: now,
+        hpRestored: values.hpRestored,
+        hitDiceSpent: values.hitDiceSpent,
+        resourcesRestored: values.resourcesRestored,
+        interrupted: false,
+        notes: values.notes || null,
+      })
+      .returning();
+    if (!restEvent) throw new NotFoundError('Character', values.characterId);
+    return restEvent;
   }
 
   /**
@@ -275,6 +377,8 @@ export class RestService {
     hitDiceToSpend: number = 0,
     sessionId?: string,
     notes?: string,
+    /** Story once-per-message key. Sheet rests omit it. */
+    since?: Date,
   ): Promise<ShortRestResult> {
     // ⚡ Bolt: Consolidated character ownership verification, stats fetching, and hit dice retrieval
     // into a single database round-trip. This reduces sequential latency from 3-4 down to 1.
@@ -293,8 +397,18 @@ export class RestService {
       throw new NotFoundError('Character', characterId);
     }
 
-    // #180: refuse before anything is spent or written.
+    // #180: refuse before anything is spent or written. A refused rest is not a claim.
     this.assertRestAllowed(character.stats, 'short');
+    const claimedEventId =
+      since && sessionId
+        ? await this.claimStoryRest({
+            characterId,
+            sessionId,
+            since,
+            restType: 'short',
+            notes,
+          })
+        : undefined;
 
     // #264: characters predating the rest system have no hit-dice rows; create
     // them lazily so the sheet has dice to see and the rest has dice to spend.
@@ -356,32 +470,17 @@ export class RestService {
     }
     await ClassFeaturesService.restoreFeatures({ characterId, restType: 'short', userId });
 
-    // Create rest event.
-    // The insert-select re-ran, verbatim, the ownership filter the character lookup
-    // at the top of this method already applied -- and since its projection covered
-    // 10 of rest_events' 13 columns, Drizzle threw before sending anything, so no
-    // short rest was ever recorded. Reaching this line already proves ownership.
-    const now = new Date();
-    const [restEvent] = await db
-      .insert(restEvents)
-      .values({
-        characterId,
-        sessionId: sessionId || null,
-        restType: 'short',
-        startedAt: now,
-        completedAt: now,
-        hpRestored,
-        hitDiceSpent,
-        resourcesRestored: JSON.stringify(resourcesRestored),
-        interrupted: false,
-        notes: notes || null,
-      })
-      .returning();
-
-    if (!restEvent) {
-      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
-      throw new NotFoundError('Character', characterId);
-    }
+    // Story rests already inserted the claim. Sheet rests insert here.
+    // Reaching this line already proves ownership (the lookup at the top).
+    const restEvent = await this.finishRestEvent(claimedEventId, {
+      characterId,
+      sessionId,
+      restType: 'short',
+      hpRestored,
+      hitDiceSpent,
+      resourcesRestored: JSON.stringify(resourcesRestored),
+      notes,
+    });
 
     return {
       characterId,
@@ -412,6 +511,8 @@ export class RestService {
     userId: string,
     sessionId?: string,
     notes?: string,
+    /** Story once-per-message key. Sheet rests omit it. */
+    since?: Date,
   ): Promise<LongRestResult> {
     // ⚡ Bolt: Consolidated character ownership verification, stats fetching, and hit dice retrieval
     // into a single database round-trip. This reduces sequential latency from 3-4 down to 1.
@@ -432,6 +533,16 @@ export class RestService {
 
     // #180: refuse before anything is healed, restored, or recorded.
     this.assertRestAllowed(character.stats, 'long');
+    const claimedEventId =
+      since && sessionId
+        ? await this.claimStoryRest({
+            characterId,
+            sessionId,
+            since,
+            restType: 'long',
+            notes,
+          })
+        : undefined;
 
     // #264: same lazy hit-dice creation as takeShortRest above.
     let hitDice = character.hitDice || [];
@@ -555,36 +666,20 @@ export class RestService {
           userId,
         );
       } catch (error: unknown) {
-        console.warn(
-          `[rest-service] healDamage failed for participant ${participant.id}:`,
-          error,
-        );
+        console.warn(`[rest-service] healDamage failed for participant ${participant.id}:`, error);
       }
     }
 
-    // Create rest event. Same conversion as takeShortRest above: ownership is
-    // established by the character lookup at the top of this method.
-    const now = new Date();
-    const [restEvent] = await db
-      .insert(restEvents)
-      .values({
-        characterId,
-        sessionId: sessionId || null,
-        restType: 'long',
-        startedAt: now,
-        completedAt: now,
-        hpRestored,
-        hitDiceSpent: 0,
-        resourcesRestored: JSON.stringify(resourcesRestored),
-        interrupted: false,
-        notes: notes || null,
-      })
-      .returning();
-
-    if (!restEvent) {
-      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
-      throw new NotFoundError('Character', characterId);
-    }
+    // Story rests already inserted the claim. Sheet rests insert here.
+    const restEvent = await this.finishRestEvent(claimedEventId, {
+      characterId,
+      sessionId,
+      restType: 'long',
+      hpRestored,
+      hitDiceSpent: 0,
+      resourcesRestored: JSON.stringify(resourcesRestored),
+      notes,
+    });
 
     return {
       characterId,
