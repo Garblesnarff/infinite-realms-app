@@ -1160,10 +1160,9 @@ export const useMessageHandlerLogic = ({
       ) {
         const elapsedMs =
           turnStartTimeRef.current !== null ? Date.now() - turnStartTimeRef.current : undefined;
-        // #783: prefer the DM message id from a completed response; fall back
-        // to the client-reserved dmMessageId (the id the server stamps on the
-        // provisional row) for early failures.
-        const beaconMessageId = beaconDmMessageIdRef.current ?? dmMessageId;
+        // #783: the DM message id from a completed response, if any. For early
+        // failures the ref is null and the beacon carries no message id.
+        const beaconMessageId = beaconDmMessageIdRef.current ?? undefined;
         userDataApi.reportClientFailure('client_turn_failure', sessionId, displayErrorMessage, {
           message: displayErrorMessage,
           messageId: beaconMessageId,
