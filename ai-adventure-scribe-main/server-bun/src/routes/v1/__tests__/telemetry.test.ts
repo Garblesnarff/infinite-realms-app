@@ -286,4 +286,27 @@ describe('POST /v1/telemetry/client-failure', () => {
     expect(line?.message).toBe('fetch returned null');
     expect(line?.sessionId).toBe('sess-1');
   });
+
+  it('accepts the #783 turn-failure beacon fields and logs them', async () => {
+    const response = await app.handle(
+      authedRequest({
+        kind: 'client_turn_failure',
+        sessionId: 'sess-beacon',
+        messageId: 'dm-msg-123',
+        lastEventType: 'reset',
+        elapsedMs: 45230,
+        provisionalFetched: false,
+        message: 'The DM could not finish this turn.',
+      }),
+    );
+    expect(response.status).toBe(204);
+
+    const line = loggedInfo.find((entry) => entry.msg === 'CLIENT_FAILURE');
+    expect(line?.kind).toBe('client_turn_failure');
+    expect(line?.sessionId).toBe('sess-beacon');
+    expect(line?.messageId).toBe('dm-msg-123');
+    expect(line?.lastEventType).toBe('reset');
+    expect(line?.elapsedMs).toBe(45230);
+    expect(line?.provisionalFetched).toBe(false);
+  });
 });

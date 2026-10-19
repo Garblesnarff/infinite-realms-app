@@ -42,7 +42,10 @@ vi.mock('@/contexts/combat/use-authoritative-combat-sync', () => ({
   readAuthoritativeCombat: mockReadCombat,
 }));
 vi.mock('@/services/user-data-api', () => ({
-  userDataApi: { listSessionMessages: mockListSessionMessages },
+  userDataApi: {
+    listSessionMessages: mockListSessionMessages,
+    reportClientFailure: vi.fn(),
+  },
   isTerminalDefeatError: () => false,
 }));
 vi.mock('@/contexts/MessageContext', () => ({

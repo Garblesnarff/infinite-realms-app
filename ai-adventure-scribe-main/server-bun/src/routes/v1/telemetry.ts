@@ -78,6 +78,14 @@ const clientFailurePayloadSchema = z.object({
   route: z.string().max(500).optional(),
   bundle: z.string().max(200).optional(),
   clientTimestamp: z.string().max(64).optional(),
+  // #783: turn-failure beacon fields. The client sends these when the
+  // "could not finish" / "connection lost" chip shows, so a failed turn can
+  // be correlated with the server log (last SSE event, elapsed time, and
+  // whether a provisional row was available on reload).
+  messageId: z.string().max(200).optional(),
+  lastEventType: z.string().max(50).optional(),
+  elapsedMs: z.number().int().nonnegative().max(3_600_000).optional(),
+  provisionalFetched: z.boolean().optional(),
 });
 
 export const telemetryRoutes = new Elysia({ prefix: '/v1/telemetry' })
@@ -113,6 +121,11 @@ export const telemetryRoutes = new Elysia({ prefix: '/v1/telemetry' })
       route: payload.route,
       bundle: payload.bundle,
       clientTimestamp: payload.clientTimestamp,
+      // #783: turn-failure beacon fields (only present for client_turn_failure).
+      messageId: payload.messageId,
+      lastEventType: payload.lastEventType,
+      elapsedMs: payload.elapsedMs,
+      provisionalFetched: payload.provisionalFetched,
     });
 
     alert(payload.kind, {
