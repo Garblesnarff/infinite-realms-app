@@ -174,13 +174,13 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
 
   it('a CON save fires on damage after the spell-cast started concentration', async () => {
     await db.delete(characterConcentration).where(eq(characterConcentration.characterId, characterId));
-    // The caster needs CON 14 (+2) for the save math; reuse the characters row.
+    // Default CON 10 (+0); DC 10 for 2 damage.
     const { checkConcentrationOnDamage } = await import('../concentration-service.js');
     await maybeStartConcentrationFromSpellCast(
       'I cast Dancing Lights [spell_id=dancing-lights, spell_level=cantrip].',
       sessionId,
     );
-    // Pin the d20 to 10: 10 + 2 = 12 vs DC 10 (2 damage) -> success, kept.
+    // Pin the d20 to 10: 10 + 0 = 10 vs DC 10 -> success, kept.
     const result = await checkConcentrationOnDamage(characterId, 2, { rollD20Fn: () => 10 });
     expect(result.hadConcentration).toBe(true);
     expect(result.saveTriggered).toBe(true);
@@ -198,7 +198,7 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
       'I cast Dancing Lights [spell_id=dancing-lights, spell_level=cantrip].',
       sessionId,
     );
-    // Pin the d20 to 1: 1 + 2 = 3 vs DC 10 -> fail, dropped.
+    // Pin the d20 to 1: 1 + 0 = 1 vs DC 10 -> fail, dropped.
     const result = await checkConcentrationOnDamage(characterId, 2, { rollD20Fn: () => 1 });
     expect(result.saveTriggered).toBe(true);
     expect(result.success).toBe(false);
