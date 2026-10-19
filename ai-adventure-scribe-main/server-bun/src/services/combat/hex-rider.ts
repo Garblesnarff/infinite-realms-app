@@ -32,3 +32,8 @@ export function appliesHexRider(
   if (!targetParticipantId) return false;
   return concentration.targetParticipantId === targetParticipantId;
 }
+
+/** Hex's rider dice: 1d6, doubled to 2d6 on a critical hit (2014: a crit doubles all the hit's damage dice). */
+export function hexRiderDice(isCritical: boolean): string {
+  return isCritical ? '2d6' : '1d6';
+}

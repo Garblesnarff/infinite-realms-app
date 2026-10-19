@@ -16,7 +16,11 @@ import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { isUnarmedAttackVerb, isUnarmedWeaponClaim, UNARMED_STRIKE } from './weapon-catalog.js';
 import { groundRequestedWeapon } from './weapon-grounding.js';
-import { isPlayerCombatSpell, resolveCatalogSpell } from '../../data/spellData.js';
+import {
+  isPlayerCombatCurseSpell,
+  isPlayerCombatSpell,
+  resolveCatalogSpell,
+} from '../../data/spellData.js';
 import { combatLogger } from '../../lib/logger.js';
 import { planApproach } from '../../tactical/approach.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
@@ -305,7 +309,11 @@ export async function deriveCombatEntryFirstAction(
       params.declaredAttack.spellName || params.declaredAttack.verb.replace(/^cast\s+/i, ''),
     );
     profile = await deps.getParticipantAbilityProfile(playerParticipant);
-    if (spell && isPlayerCombatSpell(spell) && spell.damage && profileKnowsSpell(profile, spell)) {
+    if (
+      spell &&
+      ((isPlayerCombatSpell(spell) && spell.damage) || isPlayerCombatCurseSpell(spell)) &&
+      profileKnowsSpell(profile, spell)
+    ) {
       const slotLevel = spell.level > 0 ? spell.level : null;
       return {
         type: 'spell',

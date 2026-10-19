@@ -332,3 +332,23 @@ describe('detectDeclaredLayOnHands (#712)', () => {
     expect(detectDeclaredLayOnHands('')).toBeNull();
   });
 });
+
+describe('typed Hex (#754 FIX item 3)', () => {
+  const scavengers = [{ name: 'Psychic Scavenger 1' }, { name: 'Psychic Scavenger 2' }];
+
+  it('the #754 repro text declares a Hex cast on the named creature', () => {
+    const declared = detectDeclaredAttack(
+      'Using my pact magic, I cast Hex as a bonus action on Psychic Scavenger 1',
+      scavengers,
+    );
+    expect(declared?.attackSource).toBe('spell');
+    expect(declared?.spellId).toBe('hex');
+    expect(declared?.actorName).toBe('Psychic Scavenger 1');
+  });
+
+  it('a plain "cast Hex on X" declares the same cast', () => {
+    const declared = detectDeclaredAttack('I cast Hex on Psychic Scavenger 2', scavengers);
+    expect(declared?.spellId).toBe('hex');
+    expect(declared?.actorName).toBe('Psychic Scavenger 2');
+  });
+});

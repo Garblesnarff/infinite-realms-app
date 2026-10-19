@@ -3,7 +3,11 @@ import {
   COMBAT_INTENT_VERBS,
   looksLikeCombatIntent,
 } from '../../../../shared/combat-intent-prefilter';
-import { getSpellByName, isPlayerCombatSpell } from '../../data/spellData.js';
+import {
+  getSpellByName,
+  isPlayerCombatCurseSpell,
+  isPlayerCombatSpell,
+} from '../../data/spellData.js';
 import { logger } from '../../lib/logger.js';
 
 /** The actor identity the intent gate is allowed to resolve against. */
@@ -356,7 +360,11 @@ const matchClauseHead = (clause: string): ClauseAttackMatch | null => {
     clause,
   );
   if (spellVerbMatch) {
-    const spellName = stripTrailingPunctuation(spellVerbMatch[2]);
+    // "cast Hex as a bonus action on X" (#754): the action-economy phrase is not the spell name.
+    const spellName = stripTrailingPunctuation(spellVerbMatch[2]).replace(
+      /\s+as\s+(?:a|my)\s+bonus\s+action$/i,
+      '',
+    );
     const verb = spellVerbMatch[1].toLowerCase();
     // "cast" always names a spell; "hurl Acid Splash" does, "hurl a rock" is a thrown weapon.
     if (verb === 'cast' || getSpellByName(spellName)) {
@@ -427,7 +435,10 @@ const resolveClauseAttack = (
 
   if (match.spellName) {
     const spell = getSpellByName(match.spellName);
-    if (!spell?.damage || !isPlayerCombatSpell(spell)) return null;
+    // #754: Hex deals no damage of its own but is a targeted combat cast all the same.
+    const castable =
+      (spell?.damage && isPlayerCombatSpell(spell)) || isPlayerCombatCurseSpell(spell);
+    if (!spell || !castable) return null;
     const actor = matchGoverningActor(match.targetText, actors);
     return actor ? declareSpellAttackOn(spell, actor) : null;
   }

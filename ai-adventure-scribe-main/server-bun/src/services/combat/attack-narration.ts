@@ -47,9 +47,11 @@ export function describeResolvedAttack(
       : 'CRITICAL HIT'
     : 'HIT';
   const damage = Number(outcome.finalDamage ?? 0);
-  // Hex's rider as its own term, so the DM can tell the curse's contribution from the blow's.
+  // Hex's rider is already inside finalDamage; say so, so it is not read as extra damage.
   const hex =
-    outcome.hexDamage && outcome.hexDamage > 0 ? ` (+ ${outcome.hexDamage} necrotic (Hex))` : '';
+    outcome.hexDamage && outcome.hexDamage > 0
+      ? ` (including ${outcome.hexDamage} necrotic from Hex)`
+      : '';
   const hp =
     outcome.targetNewHp == null ? '' : ` ${targetLabel} is now at ${outcome.targetNewHp} HP`;
   const state = outcome.targetIsDead
@@ -170,16 +172,19 @@ export function describeResolvedSpell(
       showTargetNumbers && outcome.targetAC != null && Number.isFinite(outcome.targetAC)
         ? ` ${formatVersusArmorClass(outcome)}`
         : '';
-    // Hex's rider as its own term (#754).
+    // Hex's rider is already inside finalDamage (#754); name it on the damage line, not as extra.
     const hex =
-      outcome.hexDamage && outcome.hexDamage > 0 ? ` + ${outcome.hexDamage} necrotic (Hex)` : '';
-    return resolvedSpellLine(
+      outcome.hexDamage && outcome.hexDamage > 0
+        ? ` (including ${outcome.hexDamage} necrotic from Hex)`
+        : '';
+    const line = resolvedSpellLine(
       targetLabel,
       outcome,
       `${actorLabel} cast ${spellName} at ${targetLabel} — spell attack ${outcome.d20} + ${
         outcome.attackBonus
-      } = ${outcome.totalAttackRoll}${versus} — ${result}${hex}.`,
+      } = ${outcome.totalAttackRoll}${versus} — ${result}.`,
     );
+    return hex ? line.replace(/ damage\. /, ` damage${hex}. `) : line;
   }
   return resolvedSpellLine(
     targetLabel,

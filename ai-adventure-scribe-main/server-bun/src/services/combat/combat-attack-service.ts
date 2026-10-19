@@ -39,7 +39,7 @@ import {
   countStandingMooks,
 } from './data-access.js';
 import { healthConditionForCombat } from './health-condition.js';
-import { appliesHexRider } from './hex-rider.js';
+import { appliesHexRider, hexRiderDice } from './hex-rider.js';
 import { autoCritReason, checkHit, checkAutoCrit } from './hit-check.js';
 import { markPlayerDamageProvocation } from './npc-provocation.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
@@ -392,13 +392,15 @@ export class CombatAttackService {
     attackerCharacterId: string | null | undefined,
     targetParticipantId: string | null | undefined,
     defenses: ReturnType<typeof aggregateResistances>,
+    isCritical = false,
   ): Promise<number> {
     if (!attackerCharacterId || !targetParticipantId) return 0;
     const { getConcentration } = await import('./concentration-service.js');
     const concentration = await getConcentration(attackerCharacterId);
     if (!appliesHexRider(concentration, targetParticipantId)) return 0;
     return calculateDamage({
-      damageDice: '1d6',
+      // A critical hit doubles every damage die of the hit, Hex's included (2014 crit rule).
+      damageDice: hexRiderDice(isCritical),
       damageBonus: 0,
       damageType: 'necrotic',
       isCritical: false,
@@ -714,6 +716,7 @@ export class CombatAttackService {
         attackerData.participant.characterId,
         targetId,
         defenses,
+        isCrit,
       );
       const totalDamage = damageCalc.finalDamage + hexDamage;
 
@@ -1016,6 +1019,13 @@ export class CombatAttackService {
       spellModifier,
       spellAttackBonus,
     } = await this.prepareSpellCast(encounterId, input, userId);
+    // #754: Hex curses one creature; refuse a multi-target cast before anything is spent.
+    if (spell.id === 'hex' && targetIds.length !== 1) {
+      throw new BusinessLogicError(`Spell refused: ${spell.name} targets exactly one creature`, {
+        reason: 'hex_single_target',
+        targetCount: targetIds.length,
+      });
+    }
     const usesBonusAction = spell.castingTime.toLowerCase().includes('bonus action');
     // Same release-on-throw wrapper as resolveAttack. It matters more here: the
     // claim is made once and then damage is applied to every target in turn, so
@@ -1287,6 +1297,7 @@ export class CombatAttackService {
               casterData.participant.characterId,
               targetId,
               defenses,
+              spellIsCrit,
             );
             const totalDamage = damageCalc.finalDamage + hexDamage;
 

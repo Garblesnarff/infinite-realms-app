@@ -327,6 +327,35 @@ describeWithDb('Hex (#754)', () => {
 
     expect(result.hexDamage).toBeUndefined();
   });
+  test('Hex with more than one target is refused and spends nothing (#754 FIX item 2)', async () => {
+    const expectedVersion = await giveTurnTo(warlockId);
+    await expect(
+      combatAttackService!.resolveSpellAttack(
+        encounterId,
+        {
+          casterId: warlockId,
+          targetIds: [cursedId, bystanderId],
+          spellId: 'hex',
+          spellName: 'Hex',
+          slotLevel: 2,
+          expectedVersion,
+        },
+        userId,
+      ),
+    ).rejects.toThrow(/targets exactly one creature/);
+
+    const [warlock] = await db
+      .select({ bonusActionUsed: combatParticipants.bonusActionUsed })
+      .from(combatParticipants)
+      .where(eq(combatParticipants.id, warlockId));
+    expect(warlock.bonusActionUsed).toBe(false);
+    expect(await getConcentration!(characterId)).toBeNull();
+    const slots = await db
+      .select({ usedSlots: characterSpellSlots.usedSlots })
+      .from(characterSpellSlots)
+      .where(eq(characterSpellSlots.characterId, characterId));
+    expect(slots.reduce((total, row) => total + row.usedSlots, 0)).toBe(0);
+  });
 });
 
 /**
