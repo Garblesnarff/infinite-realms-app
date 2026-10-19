@@ -19,6 +19,8 @@
  *
  * @module server/services/combat/spell-cast-concentration
  */
+import { eq } from 'drizzle-orm';
+
 import { resolveCatalogSpell } from '../../data/spellData.js';
 import { extractSpellIdFromPrompt } from './spell-cast-tag.js';
 
@@ -45,7 +47,6 @@ export async function maybeStartConcentrationFromSpellCast(
   if (!spell?.concentration) return false;
 
   // Lazy DB imports: only load db/client when we actually need it.
-  const { eq } = await import('drizzle-orm');
   const { db } = await import('../../../../db/client');
   const { gameSessions } = await import('../../../../db/schema/index');
   const { getConcentration, startConcentration } = await import('./concentration-service.js');
