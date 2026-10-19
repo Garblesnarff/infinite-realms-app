@@ -118,6 +118,18 @@ export interface LLMResponse {
   providerKeyLimit?: boolean;
 }
 
+/**
+ * #750 step 2: provider finish reasons that mean the model stopped because it
+ * hit the output token ceiling, not because it chose to: OpenRouter `length`,
+ * Anthropic `max_tokens`, Gemini `MAX_TOKENS`. The comparison is
+ * case-insensitive.
+ */
+export const isTruncatedFinishReason = (reason: string | null | undefined): boolean => {
+  if (typeof reason !== 'string') return false;
+  const normalized = reason.trim().toLowerCase();
+  return normalized === 'length' || normalized === 'max_tokens';
+};
+
 const GEMINI_MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
 export const TEXT_PROVIDER_TIMEOUT_MS = 60_000;
 /** #633: instruction line sent ahead of the schema for models without strict json_schema. */
@@ -363,6 +375,8 @@ type OpenRouterStreamUsage = {
 type OpenRouterStreamResult = {
   text: string;
   usage?: OpenRouterStreamUsage;
+  /** #750 step 2: the last non-null `choices[0].finish_reason` seen on the stream. */
+  finishReason?: string;
   /** A provider `error` event arrived on the stream after HTTP 200. */
   streamError?: string;
 };
@@ -386,7 +400,7 @@ const consumeOpenRouterStream = async (
   const handleData = (data: string): void => {
     if (data === '[DONE]') return;
     let chunk: {
-      choices?: Array<{ delta?: { content?: string } }>;
+      choices?: Array<{ delta?: { content?: string }; finish_reason?: string | null }>;
       usage?: OpenRouterStreamUsage;
       error?: { message?: string } | string;
     };
@@ -404,6 +418,10 @@ const consumeOpenRouterStream = async (
     if (typeof delta === 'string' && delta.length > 0) {
       result.text += delta;
       onToken(delta);
+    }
+    const finishReason = chunk.choices?.[0]?.finish_reason;
+    if (typeof finishReason === 'string' && finishReason.length > 0) {
+      result.finishReason = finishReason;
     }
     if (chunk.usage) result.usage = chunk.usage;
   };
@@ -629,7 +647,7 @@ export class LLMProviderService {
       : messages;
 
     type ORChatResp = {
-      choices?: { message?: { content?: string } }[];
+      choices?: { message?: { content?: string }; finish_reason?: string | null }[];
       usage?: {
         prompt_tokens?: number;
         completion_tokens?: number;
@@ -693,6 +711,7 @@ export class LLMProviderService {
           if (response.ok) {
             let text: string;
             let usage: ORChatResp['usage'] | undefined;
+            let finishReason: string | null | undefined;
             if (onToken) {
               // #633 PR2: accumulate the streamed completion, firing the
               // token callback per delta. Everything below (validation,
@@ -714,10 +733,12 @@ export class LLMProviderService {
               }
               text = streamed.text;
               usage = streamed.usage;
+              finishReason = streamed.finishReason;
             } else {
               const data = (await response.json()) as ORChatResp;
               text = data.choices?.[0]?.message?.content ?? '';
               usage = data.usage;
+              finishReason = data.choices?.[0]?.finish_reason;
             }
             if (responseSchema && !strictSchema) {
               // #783: the model continues after the '{' prefill; if the reply
@@ -771,6 +792,19 @@ export class LLMProviderService {
             setProviderKeyLimitActive('openrouter', false);
             const inputTokens = usage?.prompt_tokens ?? 0;
             const outputTokens = usage?.completion_tokens ?? 0;
+            // #750 step 2: surface a provider-truncated reply (hit the token
+            // ceiling) so a cut-off turn is visible in logs. Never logs reply
+            // or prompt text.
+            if (isTruncatedFinishReason(finishReason)) {
+              logger.warn({
+                msg: 'LLM_REPLY_TRUNCATED',
+                provider: 'openrouter',
+                model: candidate,
+                finishReason,
+                maxTokens,
+                ...(outputTokens > 0 ? { outputTokens } : {}),
+              });
+            }
             // #352: prompt-cache accounting. Absent details mean no cache
             // information (older path or provider without caching).
             const cachedInputTokens = usage?.prompt_tokens_details?.cached_tokens ?? 0;
@@ -1091,6 +1125,18 @@ export class LLMProviderService {
     const metadata = data?.usageMetadata || {};
     const inputTokens = Number(metadata.promptTokenCount || 0);
     const outputTokens = Number(metadata.candidatesTokenCount || 0);
+    // #750 step 2: Gemini reports `candidates[0].finishReason`; MAX_TOKENS
+    // means the reply was cut at maxOutputTokens. Never logs reply text.
+    if (isTruncatedFinishReason(first?.finishReason)) {
+      logger.warn({
+        msg: 'LLM_REPLY_TRUNCATED',
+        provider: 'gemini',
+        model: successModel,
+        finishReason: first.finishReason,
+        maxTokens,
+        ...(outputTokens > 0 ? { outputTokens } : {}),
+      });
+    }
     return {
       text: text || '',
       model: successModel,
