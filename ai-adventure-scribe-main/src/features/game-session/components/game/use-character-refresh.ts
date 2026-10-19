@@ -15,11 +15,12 @@ import { characterLoaderService } from '@/services/character-loader';
  * `refreshCombatState` (the pull after an End turn, and the read that ends a fight), so a hit
  * that arrives by either route lands in the header too (#2641).
  *
- * #130: Story damage and item grants are applied server-side during the DM turn
- * (applyStoryDamageOnce, applyStoryItemsOnce) with no combat event. The
- * `character-state-updated` event covers those non-combat state changes: the
- * server sends `character_updated` on the session socket, `use-session-story-socket`
- * dispatches this window event, and the same refetch runs.
+ * #130: story appliers (damage, items, XP) write character state out of combat, where no
+ * combat_state_updated follows — the sheet showed the stale value until a hard reload.
+ * This hook also refetches on `character-state-updated`, which the session socket
+ * dispatches on a `character_updated` message. The server broadcast of
+ * `character_updated` is not in this PR; it lands with #831 (or a follow-up).
+ * Until then, the listener is in place but never fires in production.
  */
 export function useCharacterRefreshOnCombatUpdate(
   characterId: string | null,
@@ -59,7 +60,9 @@ export function useCharacterRefreshOnCombatUpdate(
     };
 
     window.addEventListener('combat-state-updated', refreshCharacter);
-    // #130: non-combat state changes (story damage, item grants) use the same refetch.
+    // #130: story appliers write character state out of combat; the server
+    // publishes character_state_updated for those writes and the session
+    // socket forwards it as this event.
     window.addEventListener('character-state-updated', refreshCharacter);
     return () => {
       cancelled = true;

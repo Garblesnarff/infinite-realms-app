@@ -1,14 +1,16 @@
 /**
- * #130 regression test (issue ask 3): engine applies 3 damage to the player
- * → sheet query/selector returns 9/12, not 12/12.
+ * #130 coverage (not a regression test): engine applies 3 damage to the player
+ * → sheet shows 9/12.
  *
  * This is the combat damage path (the issue's evidence: tracker 9/12, sheet
  * 12/12 during an NPC turn). The combat path is already covered by
- * `character-hp-follows-encounter.test.tsx` (#2641): the `combat-state-updated`
- * event triggers a refetch via `useCharacterRefreshOnCombatUpdate`.
+ * `character-hp-follows-encounter.test.tsx` (#2641) and passes on main: the
+ * `combat-state-updated` event triggers a refetch via
+ * `useCharacterRefreshOnCombatUpdate`.
  *
- * This test verifies the same refetch mechanism works for the specific
+ * This test documents that the same refetch mechanism handles the specific
  * 12→9 HP divergence from the issue, using the real hook and event path.
+ * It is coverage, not a regression test (it passes on main).
  *
  * Real: CharacterProvider, the character reducer, the refresh hook, StatsBar.
  * Stubbed: `characterLoaderService.loadCharacterWithSpells` answering with the
@@ -98,7 +100,7 @@ function TestHarness() {
   return <StatsBar />;
 }
 
-describe('#130 regression: engine applies 3 damage, sheet shows 9/12', () => {
+describe('#130 coverage: engine applies 3 damage, sheet shows 9/12', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -107,7 +109,7 @@ describe('#130 regression: engine applies 3 damage, sheet shows 9/12', () => {
     vi.restoreAllMocks();
   });
 
-  it('sheet reflects 9/12 after the engine applies 3 damage (was 12/12 on main)', async () => {
+  it('sheet reflects 9/12 after the engine applies 3 damage (coverage, passes on main)', async () => {
     // The server's stats row after the engine applies 3 damage: 9/12.
     const afterDamage = loadedCharacter(9);
     vi.mocked(characterLoaderService.loadCharacterWithSpells).mockResolvedValue(afterDamage);
