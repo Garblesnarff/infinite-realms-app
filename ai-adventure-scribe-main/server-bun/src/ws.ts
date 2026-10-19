@@ -10,12 +10,10 @@ import { Elysia, t } from 'elysia';
 
 import { logger } from './lib/logger.js';
 import {
-  rooms,
   joinRoom,
   leaveRoom,
   broadcastToRoom,
   type WSConnection,
-  type FoundryMessage,
 } from './services/collaboration/room-manager.js';
 import { decodeWsFrame } from './services/collaboration/ws-frame.js';
 import { consumeWsTicket, WS_UNAUTHORIZED_CLOSE_MS } from './services/ws-ticket.js';
@@ -127,22 +125,6 @@ async function handleMessage(ws: WSConnection, rawMessage: unknown) {
       return;
     }
 
-    // Handle Foundry VTT messages
-    const { isValidFoundryMessage, handleFoundryMessage } =
-      await import('./services/collaboration/foundry-vtt-handler.js');
-    if (!isValidFoundryMessage(msg)) {
-      logger.error(
-        {
-          requestId,
-          userId: user.userId,
-          messageType: msg?.type,
-        },
-        'ws.invalid_message',
-      );
-      return;
-    }
-
-    await handleFoundryMessage(ws, msg, requestId);
   } catch (e: any) {
     logger.error(
       {
@@ -166,41 +148,6 @@ function handleClose(ws: WSConnection) {
 
   // Clean up: remove user from session room
   leaveRoom(roomId, ws);
-
-  // Clean up: remove user from all scene rooms they're in
-  const sceneRoomsToCleanup: string[] = [];
-  for (const [roomId, clients] of rooms.entries()) {
-    if (roomId.startsWith('scene:') && clients.has(ws)) {
-      sceneRoomsToCleanup.push(roomId);
-    }
-  }
-
-  // Leave all scene rooms and notify other users
-  for (const sceneRoomId of sceneRoomsToCleanup) {
-    const sceneId = sceneRoomId.replace('scene:', '');
-
-    // Notify other users in the scene before leaving
-    const leavePayload: FoundryMessage = {
-      type: 'scene:leave',
-      sceneId,
-      userId: user.userId,
-      timestamp: Date.now(),
-      data: { reason: 'disconnect' },
-    };
-    broadcastToRoom(sceneRoomId, ws, leavePayload);
-
-    // Remove from the scene room
-    leaveRoom(sceneRoomId, ws);
-
-    logger.info(
-      {
-        requestId,
-        sceneId,
-        userId: user.userId,
-      },
-      'ws.scene_cleanup',
-    );
-  }
 
   logger.info(
     {
