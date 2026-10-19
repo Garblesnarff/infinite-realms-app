@@ -15,6 +15,7 @@
 
 import { VoiceAudioService } from './voice/voice-audio-service';
 import { getVoiceCategoryKey } from './voice/voice-classification';
+import { VoiceConsistencyRepository } from './voice/voice-consistency-repository';
 import { VoiceDialogueParser } from './voice/voice-dialogue-parser';
 import { type VoicePool } from './voice/voice-pools';
 import { cleanSegmentText } from './voice/voice-utils';
@@ -35,6 +36,20 @@ import { stripEngineGeneratedLinesFromSegments } from '@/utils/engine-lines';
 export type { VoiceSegment, VoicePool, VoiceConfig, AISegment };
 
 export class VoiceDirector {
+  static async castAISegments(segments: AISegment[], sessionId: string): Promise<AISegment[]> {
+    const cast = await VoiceConsistencyRepository.castSegments(sessionId, segments);
+    return cast
+      .filter((segment) => !segment.voice_muted)
+      .map((segment) => ({
+        ...segment,
+        type: segment.type === 'character' ? 'character' : 'dm',
+        character: segment.character ?? undefined,
+        voice_category: segment.voice_category ?? undefined,
+        npc_id: segment.npc_id ?? undefined,
+        voice_id: segment.voice_id ?? undefined,
+      }));
+  }
+
   /**
    * Convert AI segments to voice-ready segments
    * This is the main entry point - replaces the complex parsing chain
@@ -52,6 +67,7 @@ export class VoiceDirector {
 
     for (let i = 0; i < narratableSegments.length; i++) {
       const segment = narratableSegments[i];
+      if (segment.voice_muted) continue;
 
       try {
         // Clean and validate text
@@ -169,6 +185,9 @@ export class VoiceDirector {
         text: segment.text,
         character: segment.character || undefined,
         voice_category: segment.voice_category || undefined,
+        npc_id: segment.npc_id,
+        voice_id: segment.voice_id,
+        voice_muted: segment.voice_muted,
       });
     });
 

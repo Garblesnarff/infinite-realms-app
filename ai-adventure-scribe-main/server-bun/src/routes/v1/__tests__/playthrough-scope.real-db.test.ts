@@ -36,8 +36,10 @@ import {
   sessionChronicles,
   spellSlotUsageLog,
 } from '../../../../../db/schema/index';
+import { IR_VOICES } from '../../../../../shared/npc-voices';
 import { initialMemoryWireBodies } from '../../../../../shared/test-fixtures/continuation-session-init-save';
 import { initialGreetingWireBody } from '../../../../../shared/test-fixtures/initial-greeting-save';
+import { npcVoiceCastSegments } from '../../../../../shared/test-fixtures/npc-voice-cast';
 import {
   closeRealDb,
   describeWithDb,
@@ -48,6 +50,7 @@ import {
   testId,
 } from '../../../services/__tests__/fixtures/real-db.js';
 
+import type { CastSegment } from '../../../../../shared/npc-voices';
 import type { TacticalMap } from '../../../tactical/types.js';
 
 if (hasRealDb) {
@@ -81,6 +84,8 @@ mock.module('../../../lib/auth.js', () => ({
 const { createRequestPipelineApp } = await importWithRealDb(
   () => import('../../../http-pipeline.js'),
 );
+const { worldBuilderRoutes } = await importWithRealDb(() => import('../world-builder.js'));
+const { issue1784DataRoutes } = await importWithRealDb(() => import('../issue-1784-data.js'));
 const { sessionsRoutes } = await importWithRealDb(() => import('../sessions.js'));
 const { sessionMessageRoutes } = await importWithRealDb(() => import('../session-messages.js'));
 const { memoryRoutes } = await importWithRealDb(() => import('../memories.js'));
@@ -255,6 +260,199 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
     await database.delete(characters).where(like(characters.userId, `${USER_PREFIX}%`));
   };
 
+  test('two same-named NPCs do not fail the cast turn; the ambiguous line keeps its category voice (#729)', async () => {
+    const hero = await database
+      .insert(characters)
+      .values({ userId, ownerId: userId, campaignId, name: 'Guard Hero' })
+      .returning();
+    const session = await startFirstSession(hero[0].id);
+    const { sql } = await import('../../../lib/db.js');
+    await sql`INSERT INTO npcs (campaign_id, name, description) VALUES
+      (${campaignId}, 'Guard', 'Gate guard at the north wall'),
+      (${campaignId}, 'Guard', 'Guard captain at the keep')`;
+    const turn = await call('POST', `/v1/sessions/${session}/voice-cast`, {
+      segments: [
+        { type: 'dm', text: 'Torches gutter at the gate.' },
+        { type: 'character', text: 'Halt!', character: 'Guard', voice_category: 'guard' },
+      ],
+    });
+    expect(turn.status).toBe(200);
+    const [narration, guard] = turn.json as unknown as CastSegment[];
+    expect(narration.voice_id).toBe('narrator');
+    expect(guard.npc_id).toBeNull();
+    expect(guard.voice_id).toBeNull();
+    expect(guard.voice_muted).toBe(false);
+    expect(guard.character).toBe('Guard');
+  });
+
+  test('campaign NPC voices persist through the real route across two sessions (#729)', async () => {
+    const hero = await database
+      .insert(characters)
+      .values({ userId, ownerId: userId, campaignId, name: 'Player Hero' })
+      .returning();
+    const firstSession = await startFirstSession(hero[0].id);
+    const nextSession = await continueSession(hero[0].id, 1);
+    const { sql } = await import('../../../lib/db.js');
+    // SceneService creates maps with these fields and activates one per campaign.
+    const activateScene = async (name: string) => {
+      await sql`UPDATE scenes SET is_active = false WHERE campaign_id = ${campaignId}`;
+      const [created] =
+        await sql`INSERT INTO scenes (campaign_id, user_id, name, width, height, is_active)
+        VALUES (${campaignId}, ${userId}, ${name}, 20, 20, true) RETURNING id`;
+      return String(created.id);
+    };
+    const squareId = await activateScene('The square');
+
+    const first = await call('POST', `/v1/sessions/${firstSession}/voice-cast`, {
+      segments: npcVoiceCastSegments,
+    });
+    expect(first.status).toBe(200);
+    const cast = first.json as unknown as CastSegment[];
+    expect(cast[0].voice_id).toBe('narrator');
+    expect(cast[4].voice_muted).toBe(true);
+    expect(cast[4].npc_id).toBeNull();
+    const speakers = cast.slice(1, 4);
+    expect(new Set(speakers.map((s) => s.voice_id)).size).toBe(3);
+    expect(speakers.every((s) => s.npc_id && s.voice_id !== 'narrator')).toBe(true);
+    const second = await call('POST', `/v1/sessions/${nextSession}/voice-cast`, {
+      segments: npcVoiceCastSegments.map((segment) => ({
+        ...segment,
+        voice_category: 'villain_female',
+      })),
+    });
+    expect(second.status).toBe(200);
+    expect((second.json as unknown as CastSegment[]).map((s) => [s.npc_id, s.voice_id])).toEqual(
+      cast.map((s) => [s.npc_id, s.voice_id]),
+    );
+    const rows = await sql`SELECT id, voice_id FROM npcs WHERE campaign_id = ${campaignId}`;
+    for (const speaker of speakers) {
+      expect(rows.find((row) => row.id === speaker.npc_id)?.voice_id).toBe(speaker.voice_id);
+      expect(Object.keys(IR_VOICES)).toContain(speaker.voice_id!);
+    }
+    const unauthorized = await call(
+      'POST',
+      `/v1/sessions/${firstSession}/voice-cast`,
+      { segments: npcVoiceCastSegments },
+      `${USER_PREFIX}foreign`,
+    );
+    expect(unauthorized.status).toBe(404);
+    const legacyWrite = await call('POST', `/v1/sessions/${firstSession}/voice-mappings`, {
+      character_name: 'Mara',
+      voice_id: 'client-selected-voice',
+    });
+    expect(legacyWrite.status).toBe(403);
+    const creation = await call('POST', '/v1/world-builder/npcs', {
+      campaign_id: campaignId,
+      name: 'Authored Elder',
+      occupation: 'elder',
+      personality: 'wise',
+      voice_id: 'narrator',
+    });
+    expect(creation.status).toBe(201);
+    expect(creation.json.voice_id).toBeNull();
+    const stalePatch = await call('PATCH', `/v1/sessions/${firstSession}`, {
+      current_scene_description: 'A new header after a reply',
+      session_state: {},
+    });
+    expect(stalePatch.status).toBe(200);
+    const authored = await call('POST', `/v1/sessions/${firstSession}/voice-cast`, {
+      segments: [
+        {
+          type: 'character',
+          text: 'Listen.',
+          character: 'Authored Elder',
+          npc_id: creation.json.id,
+        },
+      ],
+    });
+    expect(authored.status).toBe(200);
+    expect((authored.json as unknown as CastSegment[])[0].voice_id).not.toBe('narrator');
+    const foreignNpc = await call('POST', `/v1/sessions/${firstSession}/voice-cast`, {
+      segments: [{ type: 'character', text: 'Hi', character: 'Mara', npc_id: crypto.randomUUID() }],
+    });
+    expect(foreignNpc.status).toBe(404);
+    const beforeOverflow =
+      await sql`SELECT count(*)::int AS count FROM npcs WHERE campaign_id = ${campaignId}`;
+    const overflow = await call('POST', `/v1/sessions/${firstSession}/voice-cast`, {
+      segments: Array.from({ length: 11 }, (_, i) => ({
+        type: 'character',
+        text: 'Hi',
+        character: `Overflow ${i}`,
+      })),
+    });
+    expect(overflow.status).toBe(409);
+    // The first scene still contains its earlier speakers after a stale client state PATCH.
+    const config =
+      await sql`SELECT config_value FROM session_config WHERE session_id = ${firstSession} AND config_key LIKE 'npc-voice-scene:%'`;
+    expect((config[0].config_value as { npc_ids: string[] }).npc_ids).toContain(
+      speakers[0].npc_id!,
+    );
+
+    const afterOverflow =
+      await sql`SELECT count(*)::int AS count FROM npcs WHERE campaign_id = ${campaignId}`;
+    expect(afterOverflow[0].count).toBe(beforeOverflow[0].count);
+    // Other scenes can reuse the finite pool without recasting anyone in this scene.
+    await activateScene('A different scene');
+    const distant = await call('POST', `/v1/sessions/${nextSession}/voice-cast`, {
+      segments: Array.from({ length: 10 }, (_, i) => ({
+        type: 'character',
+        text: 'Hi',
+        character: `Distant ${i}`,
+      })),
+    });
+    expect(distant.status).toBe(200);
+    expect(
+      new Set((distant.json as unknown as CastSegment[]).map((row) => row.voice_id)).size,
+    ).toBe(10);
+    // Concurrent sessions in one scene must resolve one provisional NPC and one cast.
+    await activateScene('Concurrent scene');
+    const concurrent = await Promise.all(
+      [firstSession, nextSession].map((id) =>
+        call('POST', `/v1/sessions/${id}/voice-cast`, {
+          segments: [{ type: 'character', text: 'Hello', character: 'Concurrent Stranger' }],
+        }),
+      ),
+    );
+    expect(concurrent.map((r) => r.status)).toEqual([200, 200]);
+    expect(concurrent[0].json).toEqual(concurrent[1].json);
+    const strangers =
+      await sql`SELECT id FROM npcs WHERE campaign_id = ${campaignId} AND name = 'Concurrent Stranger'`;
+    expect(strangers).toHaveLength(1);
+    await sql`UPDATE scenes SET is_active = (id = ${squareId}) WHERE campaign_id = ${campaignId}`;
+    const revisit = await call('POST', `/v1/sessions/${firstSession}/voice-cast`, {
+      segments: [
+        {
+          type: 'character',
+          text: 'Another stall.',
+          character: 'New Square Merchant',
+          voice_category: 'merchant',
+        },
+      ],
+    });
+    expect(revisit.status).toBe(200);
+    expect(speakers.map((s) => s.voice_id)).not.toContain(
+      (revisit.json as unknown as CastSegment[])[0].voice_id,
+    );
+
+    await activateScene('Legacy fallback scene');
+    const [legacy] =
+      await sql`INSERT INTO character_voice_mappings (session_id, character_name, voice_id, voice_category)
+      VALUES (${firstSession}, 'Legacy Merchant', ${IR_VOICES.nathan.premium}, 'merchant') RETURNING id`;
+    const legacyCast = await call('POST', `/v1/sessions/${firstSession}/voice-cast`, {
+      segments: [{ type: 'character', text: 'Welcome back.', character: 'Legacy Merchant' }],
+    });
+    expect(legacyCast.status).toBe(200);
+    expect((legacyCast.json as unknown as CastSegment[])[0].voice_id).toBe('nathan');
+    const [unchanged] =
+      await sql`SELECT voice_id FROM character_voice_mappings WHERE id = ${legacy.id}`;
+    expect(unchanged.voice_id).toBe(IR_VOICES.nathan.premium);
+    const legacyRead = await call('GET', `/v1/sessions/${firstSession}/voice-mappings`);
+    expect(legacyRead.status).toBe(200);
+    expect(
+      (legacyRead.json as unknown as Array<{ id: string }>).some((row) => row.id === legacy.id),
+    ).toBe(true);
+  });
+
   beforeAll(async () => {
     for (const key of EMBEDDING_ENV) {
       savedEnv.set(key, process.env[key]);
@@ -264,6 +462,8 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
 
     app = createRequestPipelineApp()
       .use(sessionsRoutes)
+      .use(issue1784DataRoutes)
+      .use(worldBuilderRoutes)
       .use(sessionMessageRoutes)
       .use(memoryRoutes)
       .use(handoutRoutes)
@@ -1065,8 +1265,6 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
       .select({ id: characters.id })
       .from(characters)
       .where(eq(characters.userId, userId));
-    expect(after.map((c) => c.id).sort()).toEqual(
-      before.map((c) => c.id).sort(),
-    );
+    expect(after.map((c) => c.id).sort()).toEqual(before.map((c) => c.id).sort());
   });
 });

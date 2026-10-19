@@ -1,3 +1,4 @@
+import { IR_VOICES } from '../../../shared/npc-voices';
 /**
  * Kokoro-82M voice for each VOICE_CONFIGS category key.
  *
@@ -6,19 +7,19 @@
  * Kokoro's own overallGrade. A test asserts every VOICE_CONFIGS key is mapped.
  */
 export const KOKORO_VOICE_BY_CATEGORY = {
-  narrator: 'bm_fable', // British male storyteller (C)
-  hero_male: 'am_michael', // (C+)
-  hero_female: 'af_bella', // (A-)
-  villain_male: 'bm_george', // (C)
-  villain_female: 'bf_emma', // (B-)
-  monster: 'am_fenrir', // deepest male (C+)
-  goblin: 'am_puck', // light, comic (C+)
+  narrator: IR_VOICES.narrator.kokoro, // British male storyteller (C)
+  hero_male: IR_VOICES.thomas.kokoro, // (C+)
+  hero_female: IR_VOICES.fena.kokoro, // (A-)
+  villain_male: IR_VOICES.oxley.kokoro, // (C)
+  villain_female: IR_VOICES.jessica.kokoro, // (B-)
+  monster: IR_VOICES.kallixis.kokoro, // deepest male (C+)
+  goblin: IR_VOICES.mouse.kokoro, // light, comic (C+)
   guard: 'bm_lewis', // (D+)
-  merchant: 'am_echo', // (D)
-  innkeeper: 'af_heart', // warmest, best-graded (A)
-  child: 'af_sky', // lightest (C-)
-  elder: 'bm_daniel', // (D)
-  default: 'bm_fable', // same as narrator, mirroring VOICE_CONFIGS
+  merchant: IR_VOICES.nathan.kokoro, // (D)
+  innkeeper: IR_VOICES.serena.kokoro, // warmest, best-graded (A)
+  child: IR_VOICES.billy.kokoro, // lightest (C-)
+  elder: IR_VOICES.sam.kokoro, // (D)
+  default: IR_VOICES.narrator.kokoro, // same as narrator, mirroring VOICE_CONFIGS
 } as const satisfies Record<string, string>;
 
 export type KokoroVoiceId =

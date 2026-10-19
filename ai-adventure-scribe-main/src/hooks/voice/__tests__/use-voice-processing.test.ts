@@ -20,6 +20,7 @@ vi.mock('@/services/voice-director', () => ({
     generateAudio: vi.fn(),
     validateAISegments: vi.fn(),
     processAISegments: vi.fn(),
+    castAISegments: vi.fn(async (segments) => segments),
     processPlainText: vi.fn(),
   },
 }));
@@ -122,6 +123,43 @@ describe('useVoiceProcessing', () => {
       expect.any(AbortSignal),
       'session-2269',
     );
+  });
+
+  it('does not play a stale cast after Stop and a newer request', async () => {
+    const segments = [{ type: 'dm' as const, text: 'First' }];
+    let finishFirst!: (value: typeof segments) => void;
+    vi.mocked(VoiceDirector.castAISegments).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishFirst = resolve;
+        }),
+    );
+    vi.mocked(VoiceDirector.validateAISegments).mockImplementation((segments) => segments as any);
+    vi.mocked(VoiceDirector.processAISegments).mockReturnValue([
+      { type: 'dm', text: 'Second', voiceId: 'narrator' } as any,
+    ]);
+    vi.mocked(VoiceDirector.generateAudio).mockImplementation(async (segment) => ({
+      ...segment,
+      audioUrl: 'mock:second',
+    }));
+    const { result } = renderHook(() =>
+      useVoiceProcessing({ ...defaultProps, sessionId: 'session' }),
+    );
+    let first!: Promise<void>;
+    await act(async () => {
+      first = result.current.speakAISegments(segments);
+    });
+    result.current.abortController.current?.abort();
+    await act(async () => {
+      await result.current.speakAISegments([{ type: 'dm', text: 'Second' }]);
+    });
+    await act(async () => {
+      finishFirst(segments);
+      await first;
+    });
+    expect(VoiceDirector.processAISegments).toHaveBeenCalledTimes(1);
+    expect(VoiceDirector.generateAudio).toHaveBeenCalledTimes(1);
+    expect(mockToast).not.toHaveBeenCalled();
   });
 
   it('should pass each segment voice ID through generation and playback', async () => {

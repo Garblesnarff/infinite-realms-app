@@ -16,10 +16,8 @@ import type { VoiceSegment } from '../voice-routing';
 export type VoiceProviderId = 'elevenlabs' | 'kokoro' | 'speech-synthesis';
 
 /**
- * The voice a segment asked for. `category` is a VOICE_CONFIGS key (narrator,
- * goblin, ...). `voiceId` is the ElevenLabs id assignVoice picked; it is not
- * derivable from the category (pool voices, and hero_male/guard share an id),
- * so both travel together and each provider uses the one it understands.
+ * Campaign voices carry a stable IR voice ID. Providers resolve it through
+ * shared/npc-voices; older saves can still carry a premium ID plus a category.
  */
 export interface VoiceRef {
   category: string;

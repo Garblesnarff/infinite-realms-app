@@ -1,3 +1,4 @@
+import type { CastingSegment, CastSegment } from '../../../shared/npc-voices';
 /**
  * Voice Consistency Repository
  *
@@ -37,6 +38,24 @@ function readVoiceMappingsPayload(value: unknown, sessionId: string): Issue1784V
 }
 
 export class VoiceConsistencyRepository {
+  static castSegments(sessionId: string, segments: CastingSegment[]): Promise<CastSegment[]> {
+    return issue1784Api.castVoices(
+      sessionId,
+      segments.map((segment) => ({
+        type:
+          segment.type === 'dialogue'
+            ? 'character'
+            : segment.type === 'narration'
+              ? 'dm'
+              : segment.type,
+        text: segment.text,
+        character: segment.character,
+        voice_category: segment.voice_category,
+        npc_id: segment.npc_id,
+      })),
+    );
+  }
+
   /**
    * Get voice mappings for a session
    * Retrieves all character voice mappings for this specific session

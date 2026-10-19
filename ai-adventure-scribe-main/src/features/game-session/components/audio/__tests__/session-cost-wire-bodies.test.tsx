@@ -26,13 +26,29 @@ vi.mock('@/services/auth/TokenService', async (importOriginal) =>
 );
 
 import { VoiceProvider, useVoiceContext } from '@/contexts/VoiceContext';
+import { markAuthReady } from '@/lib/auth-gate';
 
 type Posted = { url: string; body: Record<string, unknown> };
 
 let posted: Posted[];
 
 const fetchStub = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-  posted.push({ url: String(input), body: JSON.parse(String(init?.body ?? '{}')) });
+  const url = String(input);
+  const body = JSON.parse(String(init?.body ?? '{}'));
+  if (url.includes('/voice-cast')) {
+    // The NPC cast batch returns each segment unchanged, with no NPC voice assigned.
+    const cast = (body.segments as Record<string, unknown>[]).map((segment) => ({
+      ...segment,
+      npc_id: segment.npc_id ?? null,
+      voice_id: null,
+      voice_muted: false,
+    }));
+    return new Response(JSON.stringify(cast), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+  posted.push({ url, body });
   return new Response(new Uint8Array([1, 2, 3]), {
     status: 200,
     headers: { 'content-type': 'audio/mpeg' },
@@ -54,6 +70,8 @@ class FakeAudio {
 }
 
 beforeEach(() => {
+  // The auth gate starts blocked and only AuthContext unblocks it; this test mounts no AuthContext.
+  markAuthReady();
   posted = [];
   fetchStub.mockClear();
   vi.stubGlobal('fetch', fetchStub);
