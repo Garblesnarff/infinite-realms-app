@@ -8,7 +8,7 @@
  */
 
 /* eslint-disable max-lines */
-import { and, desc, eq, exists, inArray, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, gte, inArray, or, sql } from 'drizzle-orm';
 
 import { CharacterVitalsService } from './character-vitals-service.js';
 import { ClassFeaturesService } from './class-features-service.js';
@@ -19,6 +19,9 @@ import { SpellSlotMechanics } from './spell-slots/spell-slot-mechanics.js';
 import { db } from '../../../db/client';
 import {
   characterConditions,
+  characterHitDice,
+  characterSpellSlots,
+  characterStats,
   characters,
   combatParticipantConditions,
   combatParticipants,
@@ -32,6 +35,7 @@ import {
 import { BusinessLogicError, NotFoundError } from '../lib/errors.js';
 import { RestMechanics } from './rest/rest-mechanics.js';
 import { SpellSlotsService } from './spell-slots-service.js';
+import { StoryRestAlreadyRecorded } from './story-rest-already-recorded.js';
 
 import type {
   HitDieType,
@@ -76,10 +80,7 @@ export class RestService {
    * no stats row predate the vitals system; without hit points to read, the
    * guard cannot fire and the legacy behavior stands.
    */
-  private static assertRestAllowed(
-    stats: CharacterStats | null,
-    restType: RestType,
-  ): void {
+  private static assertRestAllowed(stats: CharacterStats | null, restType: RestType): void {
     if (!stats) return;
     if (stats.vitalState === 'dead') {
       throw new BusinessLogicError(`Cannot take a ${restType} rest while dead.`);
@@ -92,6 +93,213 @@ export class RestService {
         'A long rest requires at least 1 hit point to grant its benefits.',
       );
     }
+  }
+
+  /**
+   * #777: the story once-per-message claim. Locks the character, re-checks
+   * rest_events for this character, session, and player message, and inserts
+   * the event on that transaction before any restore. A second caller waits
+   * on the lock, sees the event, and does not restore.
+   */
+  private static async claimStoryRest(input: {
+    characterId: string;
+    sessionId: string;
+    since: Date;
+    restType: RestType;
+    notes?: string;
+  }): Promise<string> {
+    const { characterId, sessionId, since, restType, notes } = input;
+    return db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select({ id: characters.id })
+        .from(characters)
+        .where(eq(characters.id, characterId))
+        .for('update');
+      if (!locked) throw new NotFoundError('Character', characterId);
+      const [existing] = await tx
+        .select({ id: restEvents.id })
+        .from(restEvents)
+        .where(
+          and(
+            eq(restEvents.characterId, characterId),
+            eq(restEvents.sessionId, sessionId),
+            gte(restEvents.startedAt, since),
+          ),
+        )
+        .limit(1);
+      if (existing) throw new StoryRestAlreadyRecorded();
+      // started_at is the re-check key, compared to dialogue_history.created_at.
+      // Both must be the database clock. new Date() can fall before that row,
+      // and the waiter would insert a second event.
+      const [restEvent] = await tx
+        .insert(restEvents)
+        .values({
+          characterId,
+          sessionId,
+          restType,
+          startedAt: sql`now()`,
+          completedAt: sql`now()`,
+          hpRestored: 0,
+          hitDiceSpent: 0,
+          resourcesRestored: '[]',
+          interrupted: false,
+          notes: notes || null,
+        })
+        .returning();
+      if (!restEvent) throw new NotFoundError('Character', characterId);
+      return restEvent.id;
+    });
+  }
+
+  /**
+   * Test-only. Runs after a story claim commits and before the restore.
+   * Production leaves it unset.
+   */
+  static afterStoryClaimForTests: (() => Promise<void> | void) | undefined;
+
+  /**
+   * Test-only. Runs at the start of the story-rest effect snapshot.
+   * A throw here is a failed read before any restore. Production leaves it unset.
+   */
+  static storyRestSnapshotForTests: (() => Promise<void> | void) | undefined;
+
+  private static async throwIfStoryRestHook(claimedEventId: string | undefined): Promise<void> {
+    if (!claimedEventId || !RestService.afterStoryClaimForTests) return;
+    await RestService.afterStoryClaimForTests();
+  }
+
+  /**
+   * HP, hit dice, spell slots, concentration, and the character row's
+   * updated_at. The claim row is not part of this. A later write changes it.
+   */
+  private static async storyRestEffectKey(characterId: string): Promise<string> {
+    if (RestService.storyRestSnapshotForTests) {
+      await RestService.storyRestSnapshotForTests();
+    }
+    const [stats] = await db
+      .select({
+        hp: characterStats.currentHitPoints,
+        temp: characterStats.temporaryHitPoints,
+        state: characterStats.vitalState,
+      })
+      .from(characterStats)
+      .where(eq(characterStats.characterId, characterId));
+    const dice = await db
+      .select({
+        className: characterHitDice.className,
+        used: characterHitDice.usedDice,
+        total: characterHitDice.totalDice,
+      })
+      .from(characterHitDice)
+      .where(eq(characterHitDice.characterId, characterId));
+    const slots = await db
+      .select({
+        level: characterSpellSlots.spellLevel,
+        used: characterSpellSlots.usedSlots,
+      })
+      .from(characterSpellSlots)
+      .where(eq(characterSpellSlots.characterId, characterId));
+    const [character] = await db
+      .select({
+        updatedAt: characters.updatedAt,
+        concentration: characters.activeConcentration,
+      })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    return JSON.stringify({
+      stats: stats ?? null,
+      dice: dice.slice().sort((a, b) => a.className.localeCompare(b.className)),
+      slots: slots.slice().sort((a, b) => a.level - b.level),
+      updatedAt: character?.updatedAt?.toISOString() ?? null,
+      concentration: character?.concentration ?? null,
+    });
+  }
+
+  /**
+   * A throw that changed nothing must not block Retry. The restore helpers
+   * use their own connections. Holding this claim's FOR UPDATE across them
+   * waits: a spell-slot insert takes FOR KEY SHARE on the character row.
+   * The claim commits first. Delete it only when the effect key still
+   * matches. A throw after hit dice, slots, or HP moved keeps the row.
+   */
+  private static async releaseStoryRestClaim(
+    claimedEventId: string,
+    characterId: string,
+    effectBefore: string,
+  ): Promise<void> {
+    try {
+      const effectAfter = await this.storyRestEffectKey(characterId);
+      if (effectBefore !== effectAfter) return;
+    } catch {
+      return;
+    }
+    await db.delete(restEvents).where(eq(restEvents.id, claimedEventId));
+  }
+
+  /**
+   * A throw before the snapshot finishes restored nothing. Delete the claim
+   * directly. Re-reading the effect key on that path would keep the row,
+   * and every Retry would return already_applied.
+   */
+  private static async releaseStoryClaimAfterThrow(
+    claimedEventId: string | undefined,
+    characterId: string,
+    effectBefore: string | undefined,
+  ): Promise<void> {
+    if (!claimedEventId) return;
+    if (effectBefore === undefined) {
+      await db.delete(restEvents).where(eq(restEvents.id, claimedEventId));
+      return;
+    }
+    await this.releaseStoryRestClaim(claimedEventId, characterId, effectBefore);
+  }
+
+  /** Fill the claimed event, or insert one for a sheet rest that has no claim. */
+  private static async finishRestEvent(
+    claimedEventId: string | undefined,
+    values: {
+      characterId: string;
+      sessionId?: string;
+      restType: RestType;
+      hpRestored: number;
+      hitDiceSpent: number;
+      resourcesRestored: string;
+      notes?: string;
+    },
+  ): Promise<RestEvent> {
+    const now = new Date();
+    if (claimedEventId) {
+      const [restEvent] = await db
+        .update(restEvents)
+        .set({
+          hpRestored: values.hpRestored,
+          hitDiceSpent: values.hitDiceSpent,
+          resourcesRestored: values.resourcesRestored,
+          completedAt: now,
+          updatedAt: now,
+        })
+        .where(eq(restEvents.id, claimedEventId))
+        .returning();
+      if (!restEvent) throw new NotFoundError('Character', values.characterId);
+      return restEvent;
+    }
+    const [restEvent] = await db
+      .insert(restEvents)
+      .values({
+        characterId: values.characterId,
+        sessionId: values.sessionId || null,
+        restType: values.restType,
+        startedAt: now,
+        completedAt: now,
+        hpRestored: values.hpRestored,
+        hitDiceSpent: values.hitDiceSpent,
+        resourcesRestored: values.resourcesRestored,
+        interrupted: false,
+        notes: values.notes || null,
+      })
+      .returning();
+    if (!restEvent) throw new NotFoundError('Character', values.characterId);
+    return restEvent;
   }
 
   /**
@@ -275,6 +483,8 @@ export class RestService {
     hitDiceToSpend: number = 0,
     sessionId?: string,
     notes?: string,
+    /** Story once-per-message key. Sheet rests omit it. */
+    since?: Date,
   ): Promise<ShortRestResult> {
     // ⚡ Bolt: Consolidated character ownership verification, stats fetching, and hit dice retrieval
     // into a single database round-trip. This reduces sequential latency from 3-4 down to 1.
@@ -293,114 +503,122 @@ export class RestService {
       throw new NotFoundError('Character', characterId);
     }
 
-    // #180: refuse before anything is spent or written.
+    // #180: refuse before anything is spent or written. A refused rest is not a claim.
     this.assertRestAllowed(character.stats, 'short');
+    const claimedEventId =
+      since && sessionId
+        ? await this.claimStoryRest({
+            characterId,
+            sessionId,
+            since,
+            restType: 'short',
+            notes,
+          })
+        : undefined;
+    let effectBefore: string | undefined;
+    try {
+      if (claimedEventId) effectBefore = await this.storyRestEffectKey(characterId);
+      await this.throwIfStoryRestHook(claimedEventId);
 
-    // #264: characters predating the rest system have no hit-dice rows; create
-    // them lazily so the sheet has dice to see and the rest has dice to spend.
-    let hitDice = character.hitDice || [];
-    if (hitDice.length === 0) {
-      hitDice = await RestHitDiceService.ensureHitDice(
+      // #264: characters predating the rest system have no hit-dice rows; create
+      // them lazily so the sheet has dice to see and the rest has dice to spend.
+      let hitDice = character.hitDice || [];
+      if (hitDice.length === 0) {
+        hitDice = await RestHitDiceService.ensureHitDice(
+          characterId,
+          userId,
+          character.class,
+          character.level ?? 1,
+          character.classLevels,
+        );
+      }
+
+      // Spend hit dice if requested
+      let hpRestored = 0;
+      let hitDiceSpent = 0;
+      let updatedHitDice: HitDice[] = hitDice;
+
+      if (hitDiceToSpend > 0) {
+        const result = await this.spendHitDice(characterId, userId, hitDiceToSpend, undefined, {
+          character,
+          hitDice,
+        });
+        hpRestored = result.hpRestored;
+        hitDiceSpent = result.hitDiceSpent;
+        updatedHitDice = result.hitDiceRemaining;
+      }
+
+      // Get restorable resources
+      const resourcesRestored = await this.getRestorableResources(
         characterId,
         userId,
-        character.class,
-        character.level ?? 1,
-        character.classLevels,
+        'short',
+        true,
       );
-    }
 
-    // Spend hit dice if requested
-    let hpRestored = 0;
-    let hitDiceSpent = 0;
-    let updatedHitDice: HitDice[] = hitDice;
+      const pactSlots = character.pactSlots as {
+        maximum?: number;
+        max?: number;
+        current?: number;
+      } | null;
+      const updatedPactSlots = pactSlots
+        ? { ...pactSlots, current: pactSlots.maximum ?? pactSlots.max ?? pactSlots.current }
+        : pactSlots;
+      const updatedClassFeatures = RestMechanics.restoreClassFeatures(
+        character.classFeatures,
+        'short',
+      );
+      await db
+        .update(characters)
+        .set({
+          pactSlots: updatedPactSlots,
+          classFeatures: updatedClassFeatures,
+          updatedAt: new Date(),
+        })
+        .where(eq(characters.id, characterId));
+      // #397: a single-class warlock's engine-table rows are pact slots, which
+      // recover on a short rest (2014 PHB pg. 107). The legacy
+      // characters.pactSlots JSONB restore above is unchanged; the engine rows
+      // are restored here.
+      if (SpellSlotMechanics.isPactSlotCharacter(character.class, character.classLevels)) {
+        await SpellSlotsService.restoreSpellSlots({ characterId }, userId);
+      }
+      await ClassFeaturesService.restoreFeatures({ characterId, restType: 'short', userId });
 
-    if (hitDiceToSpend > 0) {
-      const result = await this.spendHitDice(characterId, userId, hitDiceToSpend, undefined, {
-        character,
-        hitDice,
-      });
-      hpRestored = result.hpRestored;
-      hitDiceSpent = result.hitDiceSpent;
-      updatedHitDice = result.hitDiceRemaining;
-    }
-
-    // Get restorable resources
-    const resourcesRestored = await this.getRestorableResources(characterId, userId, 'short', true);
-
-    const pactSlots = character.pactSlots as {
-      maximum?: number;
-      max?: number;
-      current?: number;
-    } | null;
-    const updatedPactSlots = pactSlots
-      ? { ...pactSlots, current: pactSlots.maximum ?? pactSlots.max ?? pactSlots.current }
-      : pactSlots;
-    const updatedClassFeatures = RestMechanics.restoreClassFeatures(
-      character.classFeatures,
-      'short',
-    );
-    await db
-      .update(characters)
-      .set({
-        pactSlots: updatedPactSlots,
-        classFeatures: updatedClassFeatures,
-        updatedAt: new Date(),
-      })
-      .where(eq(characters.id, characterId));
-    // #397: a single-class warlock's engine-table rows are pact slots, which
-    // recover on a short rest (2014 PHB pg. 107). The legacy
-    // characters.pactSlots JSONB restore above is unchanged; the engine rows
-    // are restored here.
-    if (SpellSlotMechanics.isPactSlotCharacter(character.class, character.classLevels)) {
-      await SpellSlotsService.restoreSpellSlots({ characterId }, userId);
-    }
-    await ClassFeaturesService.restoreFeatures({ characterId, restType: 'short', userId });
-
-    // Create rest event.
-    // The insert-select re-ran, verbatim, the ownership filter the character lookup
-    // at the top of this method already applied -- and since its projection covered
-    // 10 of rest_events' 13 columns, Drizzle threw before sending anything, so no
-    // short rest was ever recorded. Reaching this line already proves ownership.
-    const now = new Date();
-    const [restEvent] = await db
-      .insert(restEvents)
-      .values({
+      // Story rests already inserted the claim. Sheet rests insert here.
+      // Reaching this line already proves ownership (the lookup at the top).
+      const restEvent = await this.finishRestEvent(claimedEventId, {
         characterId,
-        sessionId: sessionId || null,
+        sessionId,
         restType: 'short',
-        startedAt: now,
-        completedAt: now,
         hpRestored,
         hitDiceSpent,
         resourcesRestored: JSON.stringify(resourcesRestored),
-        interrupted: false,
-        notes: notes || null,
-      })
-      .returning();
+        notes,
+      });
 
-    if (!restEvent) {
-      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
-      throw new NotFoundError('Character', characterId);
+      return {
+        characterId,
+        restType: 'short',
+        hpRestored,
+        hitDiceSpent,
+        hitDiceRemaining: updatedHitDice,
+        resourcesRestored,
+        // The engine's slot table is the single source of truth (#2598): the
+        // result serves the table's rows, never the legacy JSONB. A short rest
+        // restores only pact rows (single-class warlocks, #397); other rows are
+        // read as-is.
+        spellSlots: toRestSpellSlots(
+          (await SpellSlotsService.getCharacterSpellSlots(characterId, userId)).slots,
+        ),
+        pactSlots: updatedPactSlots,
+        classFeatures: updatedClassFeatures,
+        restEventId: restEvent.id,
+      };
+    } catch (error) {
+      await this.releaseStoryClaimAfterThrow(claimedEventId, characterId, effectBefore);
+      throw error;
     }
-
-    return {
-      characterId,
-      restType: 'short',
-      hpRestored,
-      hitDiceSpent,
-      hitDiceRemaining: updatedHitDice,
-      resourcesRestored,
-      // The engine's slot table is the single source of truth (#2598): the
-      // result serves the table's rows, never the legacy JSONB. A short rest
-      // restores only pact rows (single-class warlocks, #397); other rows are
-      // read as-is.
-      spellSlots: toRestSpellSlots(
-        (await SpellSlotsService.getCharacterSpellSlots(characterId, userId)).slots,
-      ),
-      pactSlots: updatedPactSlots,
-      classFeatures: updatedClassFeatures,
-      restEventId: restEvent.id,
-    };
   }
 
   /**
@@ -412,6 +630,8 @@ export class RestService {
     userId: string,
     sessionId?: string,
     notes?: string,
+    /** Story once-per-message key. Sheet rests omit it. */
+    since?: Date,
   ): Promise<LongRestResult> {
     // ⚡ Bolt: Consolidated character ownership verification, stats fetching, and hit dice retrieval
     // into a single database round-trip. This reduces sequential latency from 3-4 down to 1.
@@ -432,172 +652,182 @@ export class RestService {
 
     // #180: refuse before anything is healed, restored, or recorded.
     this.assertRestAllowed(character.stats, 'long');
+    const claimedEventId =
+      since && sessionId
+        ? await this.claimStoryRest({
+            characterId,
+            sessionId,
+            since,
+            restType: 'long',
+            notes,
+          })
+        : undefined;
+    let effectBefore: string | undefined;
+    try {
+      if (claimedEventId) effectBefore = await this.storyRestEffectKey(characterId);
+      await this.throwIfStoryRestHook(claimedEventId);
 
-    // #264: same lazy hit-dice creation as takeShortRest above.
-    let hitDice = character.hitDice || [];
-    if (hitDice.length === 0) {
-      hitDice = await RestHitDiceService.ensureHitDice(
-        characterId,
-        userId,
-        character.class,
-        character.level ?? 1,
-        character.classLevels,
-      );
-    }
-
-    const hpRestored = character.stats
-      ? Math.max(0, character.stats.maxHitPoints - character.stats.currentHitPoints)
-      : 0;
-
-    if (character.stats) {
-      // #2600: heal through CharacterVitalsService so vitalState, isConscious
-      // and the death-save tallies move with the HP (#2618) instead of a raw
-      // currentHitPoints update that left the sheet saying "dying" at full HP.
-      // Dead characters are left alone by heal.
-      await CharacterVitalsService.heal(characterId, userId, hpRestored);
-    }
-
-    // Restore hit dice (half total, minimum 1)
-    const { restoredCount: hitDiceRestored, updatedHitDice } = await this.restoreHitDice(
-      characterId,
-      userId,
-      undefined,
-      hitDice,
-    );
-
-    // Get restorable resources
-    const resourcesRestored = await this.getRestorableResources(characterId, userId, 'long', true);
-
-    const pactSlots = character.pactSlots as {
-      maximum?: number;
-      max?: number;
-      current?: number;
-    } | null;
-    const updatedPactSlots = pactSlots
-      ? { ...pactSlots, current: pactSlots.maximum ?? pactSlots.max ?? pactSlots.current }
-      : pactSlots;
-    const updatedClassFeatures = RestMechanics.restoreClassFeatures(
-      character.classFeatures,
-      'long',
-    );
-    await db
-      .update(characters)
-      .set({
-        pactSlots: updatedPactSlots,
-        classFeatures: updatedClassFeatures,
-        // #170: a long rest ends concentration, server-side, so the sheet path
-        // and the combat path end it persistently — not just in local state.
-        activeConcentration: null,
-        updatedAt: new Date(),
-      })
-      .where(eq(characters.id, characterId));
-    // The engine's slot table is the single source the sheet reads (#2459), so
-    // a long rest resets it here. The legacy characters.spell_slots JSONB is
-    // neither read nor written anymore (#2598).
-    await SpellSlotsService.restoreSpellSlots({ characterId }, userId);
-    // Serve the restored table rows in the result, not the stale JSONB.
-    const spellSlots = toRestSpellSlots(
-      (await SpellSlotsService.getCharacterSpellSlots(characterId, userId)).slots,
-    );
-    await ClassFeaturesService.restoreFeatures({ characterId, restType: 'long', userId });
-
-    const participants = await db.query.combatParticipants.findMany({
-      where: eq(combatParticipants.characterId, characterId),
-      columns: { id: true, encounterId: true },
-      with: {
-        status: {
-          columns: { maxHp: true },
-        },
-        encounter: {
-          columns: { status: true },
-        },
-      },
-    });
-    // #2600: only heal participants in ACTIVE encounters. Ended encounters
-    // have stale status.maxHp (e.g., from before a level-up); healing them
-    // would mirror the stale HP onto the sheet via CharacterVitalsService.
-    // The sheet is the source of truth for ended encounters.
-    const activeParticipants = participants.filter(
-      (participant) => participant.encounter?.status === 'active',
-    );
-    // #170: clear the conditions a long rest clears, server-side, so both
-    // rest paths clear the same conditions.
-    await this.clearLongRestConditions(
-      characterId,
-      activeParticipants.map((participant) => participant.id),
-    );
-    await Promise.all(
-      activeParticipants.map((participant) =>
-        ExhaustionService.reduceExhaustion(participant.id, userId).catch((error: unknown) => {
-          console.warn(
-            `[rest-service] reduceExhaustion failed for participant ${participant.id}:`,
-            error,
-          );
-        }),
-      ),
-    );
-
-    // #2600: heal each active participant through CombatHPService so HP,
-    // isConscious and death-save tallies move together (#2618) instead of a
-    // raw tally reset that left the participant "dying" at 0 HP. Dead
-    // participants are left alone by the heal. Ended encounters are skipped
-    // (see above) — healing them is not harmless, because the write-through
-    // mirror would overwrite the sheet HP with the stale encounter max.
-    // Healed sequentially (not in Promise.all) so the sheet write order is
-    // fixed and does not depend on which heal lands last.
-    for (const participant of activeParticipants) {
-      try {
-        await CombatHPService.healDamage(
-          participant.id,
-          participant.encounterId,
-          participant.status?.maxHp ?? 0,
-          'long rest',
+      // #264: same lazy hit-dice creation as takeShortRest above.
+      let hitDice = character.hitDice || [];
+      if (hitDice.length === 0) {
+        hitDice = await RestHitDiceService.ensureHitDice(
+          characterId,
           userId,
-        );
-      } catch (error: unknown) {
-        console.warn(
-          `[rest-service] healDamage failed for participant ${participant.id}:`,
-          error,
+          character.class,
+          character.level ?? 1,
+          character.classLevels,
         );
       }
-    }
 
-    // Create rest event. Same conversion as takeShortRest above: ownership is
-    // established by the character lookup at the top of this method.
-    const now = new Date();
-    const [restEvent] = await db
-      .insert(restEvents)
-      .values({
+      const hpRestored = character.stats
+        ? Math.max(0, character.stats.maxHitPoints - character.stats.currentHitPoints)
+        : 0;
+
+      if (character.stats) {
+        // #2600: heal through CharacterVitalsService so vitalState, isConscious
+        // and the death-save tallies move with the HP (#2618) instead of a raw
+        // currentHitPoints update that left the sheet saying "dying" at full HP.
+        // Dead characters are left alone by heal.
+        await CharacterVitalsService.heal(characterId, userId, hpRestored);
+      }
+
+      // Restore hit dice (half total, minimum 1)
+      const { restoredCount: hitDiceRestored, updatedHitDice } = await this.restoreHitDice(
         characterId,
-        sessionId: sessionId || null,
+        userId,
+        undefined,
+        hitDice,
+      );
+
+      // Get restorable resources
+      const resourcesRestored = await this.getRestorableResources(
+        characterId,
+        userId,
+        'long',
+        true,
+      );
+
+      const pactSlots = character.pactSlots as {
+        maximum?: number;
+        max?: number;
+        current?: number;
+      } | null;
+      const updatedPactSlots = pactSlots
+        ? { ...pactSlots, current: pactSlots.maximum ?? pactSlots.max ?? pactSlots.current }
+        : pactSlots;
+      const updatedClassFeatures = RestMechanics.restoreClassFeatures(
+        character.classFeatures,
+        'long',
+      );
+      await db
+        .update(characters)
+        .set({
+          pactSlots: updatedPactSlots,
+          classFeatures: updatedClassFeatures,
+          // #170: a long rest ends concentration, server-side, so the sheet path
+          // and the combat path end it persistently — not just in local state.
+          activeConcentration: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(characters.id, characterId));
+      // The engine's slot table is the single source the sheet reads (#2459), so
+      // a long rest resets it here. The legacy characters.spell_slots JSONB is
+      // neither read nor written anymore (#2598).
+      await SpellSlotsService.restoreSpellSlots({ characterId }, userId);
+      // Serve the restored table rows in the result, not the stale JSONB.
+      const spellSlots = toRestSpellSlots(
+        (await SpellSlotsService.getCharacterSpellSlots(characterId, userId)).slots,
+      );
+      await ClassFeaturesService.restoreFeatures({ characterId, restType: 'long', userId });
+
+      const participants = await db.query.combatParticipants.findMany({
+        where: eq(combatParticipants.characterId, characterId),
+        columns: { id: true, encounterId: true },
+        with: {
+          status: {
+            columns: { maxHp: true },
+          },
+          encounter: {
+            columns: { status: true },
+          },
+        },
+      });
+      // #2600: only heal participants in ACTIVE encounters. Ended encounters
+      // have stale status.maxHp (e.g., from before a level-up); healing them
+      // would mirror the stale HP onto the sheet via CharacterVitalsService.
+      // The sheet is the source of truth for ended encounters.
+      const activeParticipants = participants.filter(
+        (participant) => participant.encounter?.status === 'active',
+      );
+      // #170: clear the conditions a long rest clears, server-side, so both
+      // rest paths clear the same conditions.
+      await this.clearLongRestConditions(
+        characterId,
+        activeParticipants.map((participant) => participant.id),
+      );
+      await Promise.all(
+        activeParticipants.map((participant) =>
+          ExhaustionService.reduceExhaustion(participant.id, userId).catch((error: unknown) => {
+            console.warn(
+              `[rest-service] reduceExhaustion failed for participant ${participant.id}:`,
+              error,
+            );
+          }),
+        ),
+      );
+
+      // #2600: heal each active participant through CombatHPService so HP,
+      // isConscious and death-save tallies move together (#2618) instead of a
+      // raw tally reset that left the participant "dying" at 0 HP. Dead
+      // participants are left alone by the heal. Ended encounters are skipped
+      // (see above) — healing them is not harmless, because the write-through
+      // mirror would overwrite the sheet HP with the stale encounter max.
+      // Healed sequentially (not in Promise.all) so the sheet write order is
+      // fixed and does not depend on which heal lands last.
+      for (const participant of activeParticipants) {
+        try {
+          await CombatHPService.healDamage(
+            participant.id,
+            participant.encounterId,
+            participant.status?.maxHp ?? 0,
+            'long rest',
+            userId,
+          );
+        } catch (error: unknown) {
+          console.warn(
+            `[rest-service] healDamage failed for participant ${participant.id}:`,
+            error,
+          );
+        }
+      }
+
+      // Story rests already inserted the claim. Sheet rests insert here.
+      const restEvent = await this.finishRestEvent(claimedEventId, {
+        characterId,
+        sessionId,
         restType: 'long',
-        startedAt: now,
-        completedAt: now,
         hpRestored,
         hitDiceSpent: 0,
         resourcesRestored: JSON.stringify(resourcesRestored),
-        interrupted: false,
-        notes: notes || null,
-      })
-      .returning();
+        notes,
+      });
 
-    if (!restEvent) {
-      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
-      throw new NotFoundError('Character', characterId);
+      return {
+        characterId,
+        restType: 'long',
+        hpRestored,
+        hitDiceRestored,
+        hitDiceRemaining: updatedHitDice,
+        resourcesRestored,
+        spellSlots,
+        pactSlots: updatedPactSlots,
+        classFeatures: updatedClassFeatures,
+        restEventId: restEvent.id,
+      };
+    } catch (error) {
+      await this.releaseStoryClaimAfterThrow(claimedEventId, characterId, effectBefore);
+      throw error;
     }
-
-    return {
-      characterId,
-      restType: 'long',
-      hpRestored,
-      hitDiceRestored,
-      hitDiceRemaining: updatedHitDice,
-      resourcesRestored,
-      spellSlots,
-      pactSlots: updatedPactSlots,
-      classFeatures: updatedClassFeatures,
-      restEventId: restEvent.id,
-    };
   }
 
   /**

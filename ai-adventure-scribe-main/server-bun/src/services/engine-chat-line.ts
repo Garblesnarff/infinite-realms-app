@@ -53,9 +53,75 @@ export async function postEngineChatLine(input: EngineChatLineInput): Promise<vo
       text: row.message,
       kind: 'system',
       sessionId,
-      timestamp: row.timestamp!.toISOString(),
+      timestamp: (row.timestamp ?? new Date()).toISOString(),
       context: row.context,
     })),
+  });
+}
+
+/**
+ * Insert the engine line and report whether this call won the primary key.
+ * Zero rows means the id was already stored. Does not broadcast: the caller
+ * rewrites the text once the effect has landed, then broadcasts that text.
+ */
+export async function claimEngineChatLine(input: EngineChatLineInput): Promise<boolean> {
+  const id = engineLineUuid(input.idSeed);
+  const stored = await SessionMessageService.addMessages(
+    [
+      {
+        id,
+        sessionId: input.sessionId,
+        speakerType: 'system',
+        message: input.text,
+        context: input.context,
+      },
+    ],
+    input.userId,
+  );
+  return stored.some((row) => row.id === id);
+}
+
+/**
+ * Drop a claim that never became an effect. The row was not broadcast.
+ * Callers use this only after they have checked that the HP write did not land.
+ */
+export async function releaseEngineChatLine(idSeed: string): Promise<void> {
+  const { db } = await import('../../../db/client');
+  const { eq } = await import('drizzle-orm');
+  const { dialogueHistory } = await import('../../../db/schema/index');
+  await db.delete(dialogueHistory).where(eq(dialogueHistory.id, engineLineUuid(idSeed)));
+}
+
+/** Replace a claimed engine line with the text from the effect, and broadcast it. */
+export async function rewriteEngineChatLine(input: EngineChatLineInput): Promise<void> {
+  const { db } = await import('../../../db/client');
+  const { eq } = await import('drizzle-orm');
+  const { dialogueHistory } = await import('../../../db/schema/index');
+  const id = engineLineUuid(input.idSeed);
+  const [row] = await db
+    .update(dialogueHistory)
+    .set({
+      message: input.text,
+      context: input.context,
+      updatedAt: new Date(),
+    })
+    .where(eq(dialogueHistory.id, id))
+    .returning();
+  if (!row) return;
+  broadcastToRoom(input.sessionId, null as never, {
+    type: 'chat',
+    sessionId: input.sessionId,
+    engineRows: [
+      {
+        id: row.id,
+        sequence: row.sequenceNumber,
+        text: row.message,
+        kind: 'system',
+        sessionId: input.sessionId,
+        timestamp: (row.timestamp ?? new Date()).toISOString(),
+        context: row.context,
+      },
+    ],
   });
 }
 
