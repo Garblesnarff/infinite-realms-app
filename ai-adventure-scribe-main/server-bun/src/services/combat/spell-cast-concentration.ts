@@ -24,8 +24,6 @@ import { eq } from 'drizzle-orm';
 import { resolveCatalogSpell } from '../../data/spellData.js';
 import { extractSpellIdFromPrompt } from './spell-cast-tag.js';
 
-export { extractSpellIdFromPrompt };
-
 /**
  * If the prompt declares a concentration spell cast (via the sheet's
  * `[spell_id=...]` tag), start concentration for the session's character.
