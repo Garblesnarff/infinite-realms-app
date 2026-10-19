@@ -25,7 +25,6 @@ import {
 } from '@/hooks/ai/combat-turn-preflight';
 import { useAIResponse } from '@/hooks/use-ai-response';
 import { useToast } from '@/hooks/use-toast';
-import { userDataApi } from '@/services/user-data-api';
 import {
   createTurnPhaseReporter,
   isNetworkError,
@@ -45,7 +44,7 @@ import {
 } from '@/services/combat/combat-entry-confirmation-bridge';
 import { settlePendingPlayerRoll } from '@/services/combat/player-roll-bridge';
 import { settlePendingSpellTargetSave } from '@/services/combat/spell-target-save-bridge';
-import { isTerminalDefeatError } from '@/services/user-data-api';
+import { isTerminalDefeatError, userDataApi } from '@/services/user-data-api';
 import { sanitizeDMText } from '@/utils/chatSanitizer';
 import { identifyDmRollRequests } from '@/utils/dm-roll-recovery';
 import { stripEngineGeneratedLines } from '@/utils/engine-lines';
@@ -1140,7 +1139,7 @@ export const useMessageHandlerLogic = ({
       retryContextRef.current = playerMessagePersisted
         ? { intent: 'resume_unanswered', retryInput: playerInput }
         : providedContext;
-      const errorMessage = timedOut
+      const displayErrorMessage = timedOut
         ? DM_TIMEOUT_MESSAGE
         : networkError
           ? DM_NETWORK_ERROR_MESSAGE
@@ -1151,13 +1150,13 @@ export const useMessageHandlerLogic = ({
               : combatIntentFailure
                 ? recoveryMessage
                 : DM_PROCESSING_ERROR_MESSAGE;
-      setSendError(errorMessage);
+      setSendError(displayErrorMessage);
 
       // #783: send a beacon when the turn-failure chip shows, so the failed
       // turn can be correlated with the server log. One beacon per chip-show.
       if (
-        errorMessage === DM_PROCESSING_ERROR_MESSAGE ||
-        errorMessage === DM_NETWORK_ERROR_MESSAGE
+        displayErrorMessage === DM_PROCESSING_ERROR_MESSAGE ||
+        displayErrorMessage === DM_NETWORK_ERROR_MESSAGE
       ) {
         const elapsedMs =
           turnStartTimeRef.current !== null ? Date.now() - turnStartTimeRef.current : undefined;
@@ -1165,8 +1164,8 @@ export const useMessageHandlerLogic = ({
         // to the client-reserved dmMessageId (the id the server stamps on the
         // provisional row) for early failures.
         const beaconMessageId = beaconDmMessageIdRef.current ?? dmMessageId;
-        userDataApi.reportClientFailure('client_turn_failure', sessionId, errorMessage, {
-          message: errorMessage,
+        userDataApi.reportClientFailure('client_turn_failure', sessionId, displayErrorMessage, {
+          message: displayErrorMessage,
           messageId: beaconMessageId,
           lastEventType: lastSseEventRef.current ?? undefined,
           elapsedMs,

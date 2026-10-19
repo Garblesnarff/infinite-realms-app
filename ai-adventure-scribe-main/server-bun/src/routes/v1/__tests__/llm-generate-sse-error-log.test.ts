@@ -59,7 +59,7 @@ const { AppError } = await import('../../../lib/errors.js');
 mock.module('../../../services/llm-provider-service.js', () => ({
   LLMProviderService: {
     generate: async () => {
-      throw new AppError('Provider overloaded', 503);
+      throw new AppError(503, 'Provider overloaded');
     },
   },
 }));

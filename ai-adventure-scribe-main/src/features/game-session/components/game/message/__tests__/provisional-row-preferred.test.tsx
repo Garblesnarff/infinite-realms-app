@@ -96,7 +96,7 @@ import { MessageHandler } from '../MessageHandler';
 const SESSION_ID = 'sess-provisional-783';
 
 function renderHandler() {
-  let captured: { sendError: string | null } = { sendError: null };
+  const captured: { sendError: string | null } = { sendError: null };
   render(
     <MessageHandler
       sessionId={SESSION_ID}
