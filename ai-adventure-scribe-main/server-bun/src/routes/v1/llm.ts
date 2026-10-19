@@ -672,24 +672,6 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         return { error: 'Missing prompt' };
       }
 
-      // #709: a concentration spell cast via the sheet's Cast button (or typed
-      // with the [spell_id=...] tag) starts concentration. The DM narrates
-      // utility spells without touching the combat engine, so without this the
-      // character_concentration row is never created and damage never prompts
-      // a CON save. Runs on player intent; a DB failure must not break chat.
-      try {
-        await maybeStartConcentrationFromSpellCast(prompt, sessionId);
-      } catch (concentrationError) {
-        logger.warn({
-          msg: 'LLM_GENERATE_CONCENTRATION_START_FAILED',
-          sessionId: sessionId ?? null,
-          error:
-            concentrationError instanceof Error
-              ? concentrationError.message
-              : String(concentrationError),
-        });
-      }
-
       const generateTurn = async (
         canonicalMessageId?: string,
         onToken?: (text: string) => void,
@@ -834,6 +816,26 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // the quota consume (and the party-defeated terminal return above it)
         // so requests that never reach a provider call are not logged as turns.
         logPromptSections(prompt, history, sessionId ?? combatEntry?.sessionId, Boolean(dmReply));
+
+        // #709: a concentration spell cast via the sheet's Cast button (or typed
+        // with the [spell_id=...] tag) starts concentration. The DM narrates
+        // utility spells without touching the combat engine, so without this the
+        // character_concentration row is never created and damage never prompts
+        // a CON save. Placed after the quota and terminal gates so a refused
+        // request never starts concentration. Runs on player intent; a DB
+        // failure must not break chat.
+        try {
+          await maybeStartConcentrationFromSpellCast(prompt, sessionId);
+        } catch (concentrationError) {
+          logger.warn({
+            msg: 'LLM_GENERATE_CONCENTRATION_START_FAILED',
+            sessionId: sessionId ?? null,
+            error:
+              concentrationError instanceof Error
+                ? concentrationError.message
+                : String(concentrationError),
+          });
+        }
 
         const playerInput =
           typeof requestedPlayerInput === 'string'
