@@ -319,7 +319,7 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
 
   it('the real #2718 refusal reaches the hook decision through onCastsRefused', async () => {
     // This test runs the actual gate (no mock.module) against the real DB:
-    // the test character lacks Bless, so claiming it is refused. The test
+    // the test character lacks Bane, so claiming it is refused. The test
     // then feeds the gate's own outcome into the route's decision function —
     // the same two calls the route wires together at llm.ts:1026 and
     // llm.ts:1082.
@@ -338,13 +338,13 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
     // The gate reads cast claims by NAME from the player's words (a typed
     // claim); the [spell_id=] tag is the hook's input, fed to the decision
     // below — the route passes the same message to both.
-    const prompt = 'I cast Bless [spell_id=bless, spell_level=level 1].';
+    const prompt = 'I cast Bane [spell_id=bane, spell_level=level 1].';
     let gateRefused = false;
     const result = await refuseFeaturesCharacterLacks({
-      result: { text: JSON.stringify({ text: 'A holy light answers.', narration_segments: [] }) },
+      result: { text: JSON.stringify({ text: 'A curse takes hold.', narration_segments: [] }) },
       userId,
       sessionId: gateSessionId,
-      playerInput: 'I cast Bless.',
+      playerInput: 'I cast Bane.',
       inCombat: false,
       clientCharacterId: null,
       onCastsRefused: () => {
