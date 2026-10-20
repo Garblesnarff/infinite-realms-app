@@ -200,7 +200,9 @@ function emitError(text) {
 
 function runInvocation(files) {
   // --no-orphans kills bun's descendants on exit, so a crashed file cannot
-  // keep a row lock into the next process (#852).
+  // keep a row lock into the next process (#852). bun 1.4.3 accepts the flag:
+  // `bun test --no-orphans src/lib/__tests__/rng.test.ts` from server-bun
+  // printed "10 pass" and "0 fail".
   const result = spawnSync('bun', ['test', '--no-orphans', ...files], {
     cwd: SERVER_DIR,
     env: process.env,
