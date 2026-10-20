@@ -66,9 +66,9 @@ export function dispatchMapAction(map: TacticalMap, action: MapAction): Dispatch
       map,
       entity.id,
       action.mode,
-      action.origin,
-      action.distance,
-      action.destination,
+      action.origin ?? null,
+      action.distance ?? null,
+      action.destination ?? null,
     );
     return result.success
       ? { applied: true, action: resolved, path: result.path }

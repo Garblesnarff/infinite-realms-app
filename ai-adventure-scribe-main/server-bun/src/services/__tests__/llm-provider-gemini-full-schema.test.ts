@@ -31,7 +31,6 @@ const VALID_DM_REPLY = JSON.stringify({
   narration_segments: [],
   roll_requests: [],
   combat_transition: 'none',
-  scene_spec: null,
   map_actions: [],
   handout_actions: [],
   combatants: [],
@@ -102,15 +101,43 @@ describe('#782 item 2: full-schema validation on the Gemini (strict) path', () =
     });
   });
 
+  it('rejects a legacy null-padded envelope (scene_spec: null), retries, then fails over', async () => {
+    // #782 item 7: scene_spec is a plain optional now — a model still padding
+    // it with null fails the hard full-schema check, so the retry/failover
+    // path fires instead of the turn going through.
+    useGeminiThenAnthropic();
+    const LEGACY_NULL_REPLY = JSON.stringify({ ...JSON.parse(VALID_DM_REPLY), scene_spec: null });
+    const bodies = stubOpenRouter([
+      { content: LEGACY_NULL_REPLY },
+      { content: LEGACY_NULL_REPLY },
+      { content: VALID_DM_REPLY },
+    ]);
+
+    const result = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      responseSchema: dmResponseSchema,
+      maxTokens: 100,
+    });
+
+    // Two attempts on Gemini (retry), then failover to Anthropic.
+    expect(bodies.map((b) => (b as unknown as Body).model)).toEqual([
+      'google/gemini-3.1-flash-lite',
+      'google/gemini-3.1-flash-lite',
+      'anthropic/claude-haiku-5.5',
+    ]);
+    expect(result.model).toBe('anthropic/claude-haiku-5.5');
+    expect(result.error).toBeUndefined();
+    expect(result.text).toBe(VALID_DM_REPLY);
+  });
+
   it('rejects a text-only reply missing required sections, retries, then fails over', async () => {
     useGeminiThenAnthropic();
     const bodies = stubOpenRouter([
       { content: MISSING_SECTIONS_REPLY },
       { content: MISSING_SECTIONS_REPLY },
       { content: VALID_DM_REPLY },
-    ]);
-
-    const result = await LLMProviderService.generate({
+    ]);    const result = await LLMProviderService.generate({
       prompt: 'volatile user prompt',
       systemPrompt: 'stable system block',
       responseSchema: dmResponseSchema,

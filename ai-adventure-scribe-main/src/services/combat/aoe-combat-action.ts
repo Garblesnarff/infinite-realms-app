@@ -38,7 +38,7 @@ type AoECastResponse = {
 };
 
 /** The wire's `slotLevel` is a slot (1-9) or `null`: a cantrip spends none, whatever the DM wrote. */
-export const slotLevelOf = (slotLevel: number | null): number | null =>
+export const slotLevelOf = (slotLevel: number | null | undefined): number | null =>
   typeof slotLevel === 'number' && slotLevel >= 1 ? slotLevel : null;
 
 /**

@@ -65,7 +65,8 @@ describe('dmResponseSchema voice category contract', () => {
     ).items.properties;
 
     expect(narrationSegmentProperties.voice_category).toEqual({
-      anyOf: [{ type: 'string', enum: [...VOICE_CATEGORY_VALUES] }, { type: 'null' }],
+      type: 'string',
+      enum: [...VOICE_CATEGORY_VALUES],
     });
   });
 
@@ -174,19 +175,14 @@ describe('dmResponseSchema speaker-split contract', () => {
 });
 
 describe('dmResponseSchema story rest contract (#264)', () => {
-  test('exposes the nullable rest field with the short/long enum', () => {
+  test('exposes the rest field with the short/long enum as a plain optional', () => {
     const properties = dmResponseSchema.properties as Record<string, Record<string, unknown>>;
 
     expect(properties.rest).toEqual({
-      anyOf: [
-        {
-          type: 'object',
-          additionalProperties: false,
-          properties: { type: { type: 'string', enum: ['short', 'long'] } },
-          required: ['type'],
-        },
-        { type: 'null' },
-      ],
+      type: 'object',
+      additionalProperties: false,
+      properties: { type: { type: 'string', enum: ['short', 'long'] } },
+      required: ['type'],
     });
   });
 
@@ -203,16 +199,18 @@ describe('dmResponseSchema story damage contract (#610)', () => {
   test('the damage field carries a description telling the model when to populate it', () => {
     // #610: the model narrated injury but left no damage signal, so the writer never
     // ran. In the strict structured-output contract the property description is
-    // the in-schema signal for when to populate a nullable field (#463 precedent).
+    // the in-schema signal for when to populate the field (#463 precedent).
     const properties = dmResponseSchema.properties as Record<string, Record<string, unknown>>;
-    const [objectVariant] = properties.damage.anyOf as Array<Record<string, unknown>>;
+    const damage = properties.damage as unknown as Record<string, unknown>;
 
-    expect(typeof objectVariant.description).toBe('string');
-    const description = String(objectVariant.description);
+    expect(typeof damage.description).toBe('string');
+    const description = String(damage.description);
     expect(description).toContain('hurt');
     expect(description).toContain('hit points');
     expect(description).toContain('damage');
-    expect(description).toContain('null');
+    // #782 item 7: the pad collapsed to a plain optional — the model omits
+    // the field instead of sending null.
+    expect(description).toContain('omit');
   });
 
   test('accepts a damage grant and the null damage on a plain turn', () => {
@@ -228,16 +226,18 @@ describe('dmResponseSchema story items contract (#463)', () => {
   test('the items field carries a description telling the model when to populate it', () => {
     // #463: the model narrated pickups but left `items` null, so the writer never
     // ran. In the strict structured-output contract the property description is
-    // the in-schema signal for when to populate a nullable field (#310 precedent).
+    // the in-schema signal for when to populate the field (#310 precedent).
     const properties = dmResponseSchema.properties as Record<string, Record<string, unknown>>;
-    const [objectVariant] = properties.items.anyOf as Array<Record<string, unknown>>;
+    const items = properties.items as unknown as Record<string, unknown>;
 
-    expect(typeof objectVariant.description).toBe('string');
-    const description = String(objectVariant.description);
+    expect(typeof items.description).toBe('string');
+    const description = String(items.description);
     expect(description).toContain('gain');
     expect(description).toContain('lose');
     expect(description).toContain('Inventory');
-    expect(description).toContain('null');
+    // #782 item 7: the pad collapsed to a plain optional — the model omits
+    // the field instead of sending null.
+    expect(description).toContain('omit');
   });
 
   test('accepts an item grant and the null items on a plain turn', () => {
@@ -256,10 +256,11 @@ describe('dmResponseSchema scene_spec contract (#782 item 6)', () => {
     // #782 item 6: the model-authored id and sessionId were dead weight — the
     // sanitizer discards the model's id and always replaces sessionId with the
     // route parameter. The wire schema no longer asks the model for them.
+    // #782 item 7: the scene_spec pad collapsed to a plain optional object.
     const properties = dmResponseSchema.properties as Record<string, Record<string, unknown>>;
-    const [objectVariant] = properties.scene_spec.anyOf as Array<Record<string, unknown>>;
-    const sceneProps = objectVariant.properties as Record<string, unknown>;
-    const required = objectVariant.required as string[];
+    const sceneSpec = properties.scene_spec as unknown as Record<string, unknown>;
+    const sceneProps = sceneSpec.properties as Record<string, unknown>;
+    const required = sceneSpec.required as string[];
 
     expect(sceneProps).not.toHaveProperty('id');
     expect(sceneProps).not.toHaveProperty('sessionId');
@@ -267,6 +268,12 @@ describe('dmResponseSchema scene_spec contract (#782 item 6)', () => {
     expect(required).not.toContain('sessionId');
     expect(sceneProps).toHaveProperty('seed');
     expect(required).toContain('seed');
+  });
+
+  test('scene_spec is a plain optional top-level property (#782 item 7)', () => {
+    // The model omits it on turns that do not start combat; combat-entry-gate
+    // truthiness-guards the read, and sanitizeRefusedEnvelope re-emits null.
+    expect(dmResponseSchema.required).not.toContain('scene_spec');
   });
 });
 
@@ -291,13 +298,14 @@ describe('dmResponseSchema combat_actions anyOf contract (#782 item 8)', () => {
     items: { anyOf: variants },
   });
 
+  // #782 item 7: weapon_id/spell_id/slot_level are plain optionals now, so
+  // the corpus omits them rather than padding with null (an explicit null
+  // fails full-schema validation, proven in llm-provider-gemini-full-schema).
   const targetedAction = {
     actor_id: 'enemy-goblin-1',
     action_type: 'attack',
     target_ids: ['pc-artha'],
     weapon_id: 'scimitar',
-    spell_id: null,
-    slot_level: null,
     movement_feet: 30,
   };
   const aoeAction = {
@@ -315,8 +323,6 @@ describe('dmResponseSchema combat_actions anyOf contract (#782 item 8)', () => {
     actor_id: 'enemy-goblin-1',
     action_type: 'attack',
     weapon_id: 'scimitar',
-    spell_id: null,
-    slot_level: null,
     movement_feet: 30,
   };
   const aoeMissingOrigin = {
@@ -383,6 +389,51 @@ describe('dmResponseSchema combat_actions anyOf contract (#782 item 8)', () => {
 
   test('parseDmResponse accepts a full reply carrying both action kinds', () => {
     const parsed = parseDmResponse(response({ combat_actions: [targetedAction, aoeAction] }));
+    expect(parsed.success).toBe(true);
+  });
+});
+
+describe('dmResponseSchema map action contract (#782 item 7)', () => {
+  test('a forced_move without target/mode is rejected by the parser', () => {
+    // The flat schema only requires `action`; target/mode are mandatory for
+    // forced_move via isMapAction (and their descriptions say so). A model
+    // that omits them fails loudly here, not silently at dispatch.
+    const parsed = parseDmResponse(
+      response({
+        map_actions: [{ action: 'forced_move' }],
+      }),
+    );
+    expect(parsed).toEqual({
+      success: false,
+      issues: ['map_actions contains an invalid action'],
+    });
+  });
+
+  test('a forced_move with target/mode and no other pads parses', () => {
+    const parsed = parseDmResponse(
+      response({
+        map_actions: [
+          {
+            action: 'forced_move',
+            target: 'goblin-1',
+            mode: 'shove',
+            origin: { x: 1, y: 1 },
+            distance: 5,
+          },
+        ],
+      }),
+    );
+    expect(parsed.success).toBe(true);
+  });
+
+  test('a move action with omitted entityId still parses', () => {
+    // #782 item 7: entityId is a plain optional; dispatch refuses the missing
+    // entity with an invalid_action refusal instead of a parse failure.
+    const parsed = parseDmResponse(
+      response({
+        map_actions: [{ action: 'move', x: 3, y: 4 }],
+      }),
+    );
     expect(parsed.success).toBe(true);
   });
 });
