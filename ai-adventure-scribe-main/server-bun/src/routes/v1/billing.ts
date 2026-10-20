@@ -398,11 +398,28 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
           }
 
           if (userId) {
+            // The session payload carries no price, so read the purchased price off the
+            // subscription (same pattern as charge.dispute.closed). #848
+            const subscription = subscriptionId
+              ? await stripeClient.subscriptions.retrieve(subscriptionId)
+              : null;
+            const priceId = subscription?.items.data[0]?.price.id;
+            const plan = getPlanFromPriceId(priceId);
+            if (subscriptionId && plan === 'free') {
+              logger.warn({
+                msg: 'STRIPE_CHECKOUT_UNKNOWN_PRICE',
+                eventId: event.id,
+                userId,
+                subscriptionId,
+                priceId,
+              });
+            }
+
             // Update user with subscription info
             const updated = await sql`
               UPDATE users
               SET
-                plan = 'pro',
+                plan = ${plan},
                 stripe_customer_id = ${customerId},
                 stripe_subscription_id = ${subscriptionId},
                 subscription_status = 'active',
@@ -416,6 +433,7 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
               msg: 'SUBSCRIPTION_ACTIVATED',
               userId,
               subscriptionId,
+              plan,
             });
 
             // Log conversion event for analytics
