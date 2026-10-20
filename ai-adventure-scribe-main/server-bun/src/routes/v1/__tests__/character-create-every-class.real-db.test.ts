@@ -29,11 +29,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
 import { eq } from 'drizzle-orm';
 
-import {
-  characters,
-  characterEquipment,
-  characterStats,
-} from '../../../../../db/schema/index';
+import { characters, characterEquipment, characterStats } from '../../../../../db/schema/index';
 import {
   closeRealDb,
   describeWithDb,
@@ -253,7 +249,10 @@ describeWithDb('character create every class (#388)', () => {
       await db.delete(characters).where(eq(characters.id, createdIds[0]));
       // Clean up the rest; ignore errors if already gone.
       for (const id of createdIds.slice(1)) {
-        await db.delete(characters).where(eq(characters.id, id)).catch(() => {});
+        await db
+          .delete(characters)
+          .where(eq(characters.id, id))
+          .catch(() => {});
       }
     }
     await closeRealDb();
@@ -416,7 +415,7 @@ describeWithDb('character create every class (#388)', () => {
   });
 
   it('derives AC from armour in the create payload (#620)', async () => {
-    // Chain Mail (16, heavy) + shield (+2), DEX ignored: AC 18.
+    // Chain Mail (16, heavy) + shield (+2) + Defense (+1), DEX ignored: AC 19.
     // HP: d10 + 3 (CON) + 1 (Dwarven Toughness) = 14.
     const res = await request(
       '/v1/characters',
@@ -436,7 +435,7 @@ describeWithDb('character create every class (#388)', () => {
       .select()
       .from(characterStats)
       .where(eq(characterStats.characterId, id));
-    expect(stats.armorClass).toBe(18);
+    expect(stats.armorClass).toBe(19);
     expect(stats.maxHitPoints).toBe(14);
     expect(stats.currentHitPoints).toBe(14);
   });

@@ -132,3 +132,29 @@ describe('the shared SRD armour table', () => {
     expect(SRD_ARMOR).toHaveLength(equipmentCatalogArmor.length);
   });
 });
+
+describe('Defense fighting style (#824)', () => {
+  it('adds one for worn armor, including case variants, without stacking duplicate styles', () => {
+    expect(
+      computeArmorClass([worn('Chain Mail', 'armor')], 2, {
+        fightingStyles: ['Defense', 'defense'],
+      }),
+    ).toBe(17);
+  });
+  it('does not apply to an unarmored character or shield alone', () => {
+    expect(computeArmorClass([], 2, { fightingStyles: ['defense'] })).toBe(12);
+    expect(computeArmorClass([worn('Shield', 'shield')], 2, { fightingStyles: ['defense'] })).toBe(
+      14,
+    );
+  });
+  it('does not apply when the armor is unequipped or another style is selected', () => {
+    expect(
+      computeArmorClass([{ ...worn('Chain Mail', 'armor'), equipped: false }], 2, {
+        fightingStyles: ['defense'],
+      }),
+    ).toBe(12);
+    expect(
+      computeArmorClass([worn('Chain Mail', 'armor')], 2, { fightingStyles: ['archery'] }),
+    ).toBe(16);
+  });
+});

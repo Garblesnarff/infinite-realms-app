@@ -92,6 +92,7 @@ export interface CharacterRow {
    * Stored class-feature uses. Hydrated so a silent refresh after Use Feature
    * or a rest does not snap the tracker back to the template counts.
    */
+  fighting_styles?: string[] | string | null;
   class_features?: string | Record<string, unknown> | null;
   /**
    * #204: wizard step-12 quirk picks as JSON (array of OptionSelection).
@@ -403,6 +404,10 @@ export const transformCharacterData = (
   equipmentData: CharacterEquipmentRow[] | null,
 ): Character => {
   const race = resolveRace(characterData.race);
+  const fightingStyles =
+    typeof characterData.fighting_styles === 'string'
+      ? parseJsonField<unknown>(characterData.fighting_styles, [])
+      : characterData.fighting_styles;
   // #2701: personality envelope (traits/ideals/bonds/flaws + inspiration).
   const personalityEnvelope = parsePersonalityEnvelope(characterData.personality_notes);
 
@@ -524,6 +529,11 @@ export const transformCharacterData = (
     preparedSpells: parseSpellListField(characterData.prepared_spells),
     ritualSpells: parseSpellListField(characterData.ritual_spells),
     classFeatures: readStoredClassFeatures(characterData.class_features),
+    fightingStyles: Array.isArray(fightingStyles)
+      ? fightingStyles
+          .filter((style): style is string => typeof style === 'string')
+          .map((style) => style.toLowerCase().replace(/\s+/g, '_'))
+      : [],
     enhancementSelections: readStoredEnhancementSelections(characterData.enhancement_selections),
     // #264: hit dice folded from the GET's hit_dice rows. Dropped here, the
     // sheet's short-rest prompt never saw dice to spend and every short rest

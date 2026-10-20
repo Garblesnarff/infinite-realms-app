@@ -83,8 +83,11 @@ function computeServerArmorClass(
     wisdom?: number | null;
   },
   equipment: ArmorClassEquipmentItem[],
+  fightingStyles?: unknown,
 ): number {
-  const breakdown = describeArmorClass(equipment, abilityModifier(scores.dexterity ?? 10));
+  const breakdown = describeArmorClass(equipment, abilityModifier(scores.dexterity ?? 10), {
+    fightingStyles,
+  });
   const normalized = (className ?? '').trim().toLowerCase();
   const hasUnarmoredDefense =
     !breakdown.armor && (normalized === 'barbarian' || normalized === 'monk');
@@ -136,6 +139,7 @@ async function recomputeServerDerivedStats(characterId: string): Promise<void> {
       class: characters.class,
       level: characters.level,
       subrace: characters.subrace,
+      fightingStyles: characters.fightingStyles,
     })
     .from(characters)
     .where(eq(characters.id, characterId))
@@ -156,6 +160,7 @@ async function recomputeServerDerivedStats(characterId: string): Promise<void> {
       wisdom: stats.wisdom,
     },
     await readArmorClassEquipment(characterId),
+    character.fightingStyles,
   );
   const updates: Partial<NewCharacterStats> = { armorClass, updatedAt: new Date() };
 
@@ -176,10 +181,7 @@ async function recomputeServerDerivedStats(characterId: string): Promise<void> {
       storedCurrent === storedMax ? maxHitPoints : Math.min(storedCurrent, maxHitPoints);
   }
 
-  await db
-    .update(characterStats)
-    .set(updates)
-    .where(eq(characterStats.characterId, characterId));
+  await db.update(characterStats).set(updates).where(eq(characterStats.characterId, characterId));
 }
 
 export class CharacterService {
@@ -348,7 +350,11 @@ export class CharacterService {
         // #620: the server is the only place that computes level-1 HP and AC.
         // The client sends inputs (class, ability scores, equipment); any
         // armor_class or hit-point values it sent are ignored.
-        const maxHitPoints = computeLevel1MaxHitPoints(data.class, stats.constitution, data.subrace);
+        const maxHitPoints = computeLevel1MaxHitPoints(
+          data.class,
+          stats.constitution,
+          data.subrace,
+        );
         await tx.insert(characterStats).values({
           ...stats,
           characterId: character.id,
@@ -360,6 +366,7 @@ export class CharacterService {
               wisdom: stats.wisdom,
             },
             seededEquipment ? toArmorClassItems(seededEquipment) : [],
+            data.fightingStyles,
           ),
           maxHitPoints,
           currentHitPoints: maxHitPoints,
@@ -649,7 +656,9 @@ export class CharacterService {
     // Weapon-only payloads do not own armour, so they leave a hand-set AC alone.
     const unarmored = computeArmorClass([], 0);
     const armorInPayload = equipment?.some((item) => {
-      const itemType = String(item.item_type ?? '').trim().toLowerCase();
+      const itemType = String(item.item_type ?? '')
+        .trim()
+        .toLowerCase();
       if (itemType === 'armor' || itemType === 'shield') return true;
       return (
         computeArmorClass(
@@ -664,7 +673,7 @@ export class CharacterService {
         ) !== unarmored
       );
     });
-    if (saved && armorInPayload) {
+    if (saved && (armorInPayload || data.fightingStyles !== undefined)) {
       await syncArmorClassAfterEquipmentChange(characterId);
     }
     return saved;
