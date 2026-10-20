@@ -7,6 +7,7 @@ import { reportCombatIntentFailure } from './combat-intent-failure';
 
 export {
   combatBoundaryFromResult,
+  resultCarriesPersistedPlayerRow,
   type CombatActionBoundary,
   type StructuredCombatActionExecution,
 } from './combat-action-boundary';

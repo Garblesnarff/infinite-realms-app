@@ -6,7 +6,10 @@ import type { ActionOption } from '@/utils/parseMessageOptions';
 import { ActionOptions } from '@/components/game/ActionOptions';
 import { useCombat } from '@/contexts/CombatContext';
 import { getAuthHeaders } from '@/services/auth/TokenService';
-import { combatBoundaryFromResult } from '@/services/combat/combat-action-boundary';
+import {
+  combatBoundaryFromResult,
+  resultCarriesPersistedPlayerRow,
+} from '@/services/combat/combat-action-boundary';
 import {
   executeAuthoritativeCombatIntent,
   executeStructuredCombatActionWithBoundary,
@@ -380,13 +383,17 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
                   (execution.result as { endedReason?: string | null } | null)?.endedReason,
                 )
               : null;
-          await sendEngineNotice(onSendMessage, {
-            text: [
-              ...playerParts.map((part) => part.line),
-              ...(playerEndLine ? [playerEndLine] : []),
-            ].join('\n\n'),
-            cards: playerParts.map((part) => part.card),
-          });
+          // #570: a killing attack's row is already persisted by the server (the
+          // Victory notice posts behind it); this notice would print the blow twice.
+          if (!resultCarriesPersistedPlayerRow(execution.result)) {
+            await sendEngineNotice(onSendMessage, {
+              text: [
+                ...playerParts.map((part) => part.line),
+                ...(playerEndLine ? [playerEndLine] : []),
+              ].join('\n\n'),
+              cards: playerParts.map((part) => part.card),
+            });
+          }
           const movementOnly =
             die.movementOnly ||
             (execution.result as { resolvedAs?: string } | null)?.resolvedAs === 'movement_only';
@@ -466,13 +473,17 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
                     (execution.result as { endedReason?: string | null } | null)?.endedReason,
                   )
                 : null;
-            await sendEngineNotice(onSendMessage, {
-              text: [
-                ...playerParts.map((part) => part.line),
-                ...(playerEndLine ? [playerEndLine] : []),
-              ].join('\n\n'),
-              cards: playerParts.map((part) => part.card),
-            });
+            // #570: same as the attack branch — a killing cast's row is already
+            // persisted by the server; this notice would print the cast twice.
+            if (!resultCarriesPersistedPlayerRow(execution.result)) {
+              await sendEngineNotice(onSendMessage, {
+                text: [
+                  ...playerParts.map((part) => part.line),
+                  ...(playerEndLine ? [playerEndLine] : []),
+                ].join('\n\n'),
+                cards: playerParts.map((part) => part.card),
+              });
+            }
             const movementOnly =
               (execution.result as { resolvedAs?: string } | null)?.resolvedAs === 'movement_only';
             // A resolved cast settles the turn only when the player has nothing left to do

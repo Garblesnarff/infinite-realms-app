@@ -43,6 +43,7 @@ import {
   executeAuthoritativeCombatIntent,
   executeStructuredCombatActionWithBoundary,
   HIDE_CHECK_UNROUTABLE_REASON,
+  resultCarriesPersistedPlayerRow,
 } from '@/services/combat/combat-action-executor';
 import {
   isPlayerInputOrigin,
@@ -946,18 +947,25 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         serverSequence: combatSequenceFrom(execution.result),
       });
     }
-    appendEngineBlock({
-      source: isPlayerActor(action.actor_id, participants) ? 'player' : 'npc',
-      actorId: action.actor_id,
-      lines: engineParts.length ? [engineParts.map((part) => part.line).join('\n\n')] : [],
-      cards: engineParts.map((part) => part.card),
-      round: combatRoundFrom(execution.result, playerRound ?? 1),
-      serverSequence: combatSequenceFrom(execution.result),
-    });
+    // #570: when the action ended the fight, the server persisted the actor's own
+    // engine row (action lines, death-save lines, wake lines and the end line) so
+    // the Victory notice could post behind it. Appending the same parts to this
+    // reply would print the blow twice; the row is the transcript record.
+    const persistedOwnRow = resultCarriesPersistedPlayerRow(execution.result);
+    if (!persistedOwnRow) {
+      appendEngineBlock({
+        source: isPlayerActor(action.actor_id, participants) ? 'player' : 'npc',
+        actorId: action.actor_id,
+        lines: engineParts.length ? [engineParts.map((part) => part.line).join('\n\n')] : [],
+        cards: engineParts.map((part) => part.card),
+        round: combatRoundFrom(execution.result, playerRound ?? 1),
+        serverSequence: combatSequenceFrom(execution.result),
+      });
+    }
     // A stable hero waking after the fight ended on them (#2518): the hours the engine rolled,
     // printed before the boundary check below so the line survives the fight ending.
     const wakeParts = formatWakeParts(execution.result);
-    if (wakeParts.length) {
+    if (wakeParts.length && !persistedOwnRow) {
       appendEngineBlock({
         source: 'player',
         actorId: action.actor_id,
