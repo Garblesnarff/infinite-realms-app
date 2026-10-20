@@ -83,15 +83,18 @@ describe('dmResponseSchema Anthropic input_schema lint', () => {
     expect(violations).toEqual([]);
   });
 
-  test('scene_spec enums use the nullable() anyOf form', () => {
+  test('scene_spec enums use a single-type form (no union)', () => {
+    // #782 item 7: the size/enemyPlacement null pads collapsed to plain
+    // optional enums — still no enum-on-union, which is what #633's 400 was about.
     const properties = dmResponseSchema.properties as Record<string, Record<string, unknown>>;
-    const sceneSpec = (properties.scene_spec as { anyOf: Array<{ properties: Record<string, unknown> }> }).anyOf[0]
-      .properties;
+    const sceneSpec = (properties.scene_spec as { properties: Record<string, unknown> }).properties;
     expect(sceneSpec.size).toEqual({
-      anyOf: [{ type: 'string', enum: ['small', 'medium', 'large'] }, { type: 'null' }],
+      type: 'string',
+      enum: ['small', 'medium', 'large'],
     });
     expect(sceneSpec.enemyPlacement).toEqual({
-      anyOf: [{ type: 'string', enum: ['ambush', 'guarding', 'formation'] }, { type: 'null' }],
+      type: 'string',
+      enum: ['ambush', 'guarding', 'formation'],
     });
   });
 

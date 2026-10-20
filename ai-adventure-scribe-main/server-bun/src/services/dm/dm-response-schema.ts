@@ -15,27 +15,33 @@ export type ForcedMoveAction = {
   action: 'forced_move';
   target: string;
   mode: ForcedMoveMode;
-  origin: Point | null;
-  distance: number | null;
-  destination: Point | null;
+  origin?: Point | null;
+  distance?: number | null;
+  destination?: Point | null;
 };
 
 export type DMMapAction =
-  | { action: 'move'; entityId: string | null; x: number | null; y: number | null; changes: null }
+  | { action: 'move'; entityId?: string | null; x?: number | null; y?: number | null; changes?: null }
   | {
       action: 'place';
-      entityId: string | null;
-      x: number | null;
-      y: number | null;
-      changes: MapEntity | null;
+      entityId?: string | null;
+      x?: number | null;
+      y?: number | null;
+      changes?: MapEntity | null;
     }
-  | { action: 'remove'; entityId: string | null; x: number | null; y: number | null; changes: null }
+  | {
+      action: 'remove';
+      entityId?: string | null;
+      x?: number | null;
+      y?: number | null;
+      changes?: null;
+    }
   | {
       action: 'update_cell';
-      entityId: string | null;
-      x: number | null;
-      y: number | null;
-      changes: Partial<Cell> | null;
+      entityId?: string | null;
+      x?: number | null;
+      y?: number | null;
+      changes?: Partial<Cell> | null;
     }
   | ForcedMoveAction;
 
@@ -45,7 +51,7 @@ export type DMAoESpellAction = {
   spell_id: string;
   origin: Point;
   direction: Point | null;
-  slot_level: number | null;
+  slot_level?: number | null;
 };
 
 export type DMTargetedCombatAction = {
@@ -67,9 +73,9 @@ export type DMTargetedCombatAction = {
     | 'yield'
     | 'flee';
   target_ids: string[];
-  weapon_id: string | null;
-  spell_id: string | null;
-  slot_level: number | null;
+  weapon_id?: string | null;
+  spell_id?: string | null;
+  slot_level?: number | null;
   movement_feet: number;
 };
 
@@ -149,8 +155,8 @@ export type DMResponse = {
   narration_segments: Array<{
     type: 'dm' | 'character' | 'transition';
     text: string;
-    character: string | null;
-    voice_category: VoiceCategory | null;
+    character?: string | null;
+    voice_category?: VoiceCategory | null;
   }>;
   roll_requests: Array<{
     type: 'check' | 'save' | 'attack' | 'damage' | 'initiative';
@@ -162,7 +168,7 @@ export type DMResponse = {
     disadvantage: boolean;
   }>;
   combat_transition: 'none' | 'start' | 'end';
-  scene_spec: Record<string, unknown> | null;
+  scene_spec?: Record<string, unknown> | null;
   map_actions: DMMapAction[];
   handout_actions: DMHandoutAction[];
   combatants: Array<{ monster_id: string; name: string; count: number }>;
@@ -254,28 +260,21 @@ const mapActionSchema = {
   additionalProperties: false,
   properties: {
     action: { type: 'string', enum: ['move', 'place', 'remove', 'update_cell', 'forced_move'] },
-    entityId: nullable({ type: 'string' }),
-    x: nullable({ type: 'number' }),
-    y: nullable({ type: 'number' }),
-    changes: nullable(changesSchema),
-    target: nullable({ type: 'string' }),
-    mode: nullable({ type: 'string', enum: ['shove', 'pull', 'teleport'] }),
-    origin: nullable(pointSchema),
-    distance: nullable({ type: 'number', minimum: 0 }),
-    destination: nullable(pointSchema),
+    entityId: { type: 'string' },
+    x: { type: 'number' },
+    y: { type: 'number' },
+    changes: changesSchema,
+    target: { type: 'string', description: "Required when action is 'forced_move'." },
+    mode: {
+      type: 'string',
+      enum: ['shove', 'pull', 'teleport'],
+      description: "Required when action is 'forced_move'.",
+    },
+    origin: pointSchema,
+    distance: { type: 'number', minimum: 0 },
+    destination: pointSchema,
   },
-  required: [
-    'action',
-    'entityId',
-    'x',
-    'y',
-    'changes',
-    'target',
-    'mode',
-    'origin',
-    'distance',
-    'destination',
-  ],
+  required: ['action'],
 } as const;
 
 const targetedCombatActionSchema = {
@@ -301,20 +300,12 @@ const targetedCombatActionSchema = {
       ],
     },
     target_ids: { type: 'array', items: { type: 'string' } },
-    weapon_id: nullable({ type: 'string' }),
-    spell_id: nullable({ type: 'string' }),
-    slot_level: nullable({ type: 'number' }),
+    weapon_id: { type: 'string' },
+    spell_id: { type: 'string' },
+    slot_level: { type: 'number' },
     movement_feet: { type: 'number' },
   },
-  required: [
-    'actor_id',
-    'action_type',
-    'target_ids',
-    'weapon_id',
-    'spell_id',
-    'slot_level',
-    'movement_feet',
-  ],
+  required: ['actor_id', 'action_type', 'target_ids', 'movement_feet'],
 } as const;
 
 /** AoE target membership is always derived by the tactical engine, never the LLM. */
@@ -327,9 +318,9 @@ const aoeCombatActionSchema = {
     spell_id: { type: 'string' },
     origin: pointSchema,
     direction: nullable(pointSchema),
-    slot_level: nullable({ type: 'number' }),
+    slot_level: { type: 'number' },
   },
-  required: ['actor_id', 'action_type', 'spell_id', 'origin', 'direction', 'slot_level'],
+  required: ['actor_id', 'action_type', 'spell_id', 'origin', 'direction'],
 } as const;
 
 const handoutActionSchema = {
@@ -356,13 +347,13 @@ const baseProperties = {
       properties: {
         type: { type: 'string', enum: ['dm', 'character', 'transition'] },
         text: { type: 'string' },
-        character: nullable({ type: 'string' }),
-        voice_category: nullable({
+        character: { type: 'string' },
+        voice_category: {
           type: 'string',
           enum: [...VOICE_CATEGORY_VALUES],
-        }),
+        },
       },
-      required: ['type', 'text', 'character', 'voice_category'],
+      required: ['type', 'text'],
     },
   },
   roll_requests: {
@@ -383,7 +374,7 @@ const baseProperties = {
     },
   },
   combat_transition: { type: 'string', enum: ['none', 'start', 'end'] },
-  scene_spec: nullable({
+  scene_spec: {
     type: 'object',
     additionalProperties: false,
     properties: {
@@ -401,19 +392,13 @@ const baseProperties = {
           'corridor',
         ],
       },
-      size: nullable({ type: 'string', enum: ['small', 'medium', 'large'] }),
-      sceneDescription: nullable({ type: 'string' }),
+      size: { type: 'string', enum: ['small', 'medium', 'large'] },
+      sceneDescription: { type: 'string' },
       seed: nullable({ type: 'number' }),
-      enemyPlacement: nullable({ type: 'string', enum: ['ambush', 'guarding', 'formation'] }),
+      enemyPlacement: { type: 'string', enum: ['ambush', 'guarding', 'formation'] },
     },
-    required: [
-      'environment',
-      'size',
-      'sceneDescription',
-      'seed',
-      'enemyPlacement',
-    ],
-  }),
+    required: ['environment', 'seed'],
+  },
   map_actions: { type: 'array', items: mapActionSchema },
   handout_actions: { type: 'array', items: handoutActionSchema },
   combatants: {
@@ -448,7 +433,12 @@ export function createDmResponseSchema(
     type: 'object',
     additionalProperties: false,
     properties: { ...baseProperties, ...extensionProperties },
-    required: [...Object.keys(baseProperties), ...extensionRequired],
+    // #782 item 7: scene_spec is a plain optional — the model omits it on
+    // turns that do not start combat; every other base property stays required.
+    required: [
+      ...Object.keys(baseProperties).filter((key) => key !== 'scene_spec'),
+      ...extensionRequired,
+    ],
   };
 }
 
@@ -467,8 +457,8 @@ const combatExitsProperty = {
   },
 } as const;
 
-/** #218 step 2: XP the story awards this turn. Optional and nullable, like `combat_exits`. */
-const xpAwardProperty = nullable({
+/** #218 step 2: XP the story awards this turn. Optional, like `combat_exits`. */
+const xpAwardProperty = {
   type: 'object',
   additionalProperties: false,
   properties: { amount: { type: 'integer' }, reason: { type: 'string' } },
@@ -478,10 +468,10 @@ const xpAwardProperty = nullable({
     'solves the mystery, completes the objective, turns the arc — award XP here. The game ' +
     'adds it to the sheet and posts it in chat; state the award in your narration too. ' +
     'Never use for combat victories: the game awards those itself.',
-});
+};
 
-/** #218 step 3: items the story grants or takes this turn. Optional and nullable. */
-const storyItemsProperty = nullable({
+/** #218 step 3: items the story grants or takes this turn. Optional. */
+const storyItemsProperty = {
   type: 'array',
   items: {
     type: 'object',
@@ -495,17 +485,17 @@ const storyItemsProperty = nullable({
   },
   // #463: the model narrated pickups but left `items` null on 18 Hark rows, so the
   // writer never ran. Like #310's xp_award description, this tells the model when
-  // to populate the nullable field inside the structured-output contract.
+  // to populate the field inside the structured-output contract.
   description:
     "#463 story items: when the story gives the player's character an item (found, gifted, " +
     'looted, purchased) or takes one away (spent, lost, stolen, broken), set this field to an ' +
     'array of `{"name": "<exact item name>", "quantity": <whole number>, "change": "gain"|"lose"}`. ' +
     "The game updates the character's Inventory; do not narrate receiving or losing an item " +
-    'without setting the field. Otherwise leave it null.',
-});
+    'without setting the field. Otherwise omit it.',
+};
 
-/** #218 step 4: conditions the story applies or removes out of combat. Optional and nullable. */
-const storyConditionsProperty = nullable({
+/** #218 step 4: conditions the story applies or removes out of combat. Optional. */
+const storyConditionsProperty = {
   type: 'array',
   items: {
     type: 'object',
@@ -513,25 +503,25 @@ const storyConditionsProperty = nullable({
     properties: {
       name: { type: 'string' },
       change: { type: 'string', enum: ['apply', 'remove'] },
-      duration_minutes: nullable({ type: 'integer', minimum: 1 }),
+      duration_minutes: { type: 'integer', minimum: 1 },
     },
     required: ['name', 'change'],
   },
-});
+};
 
-/** #264: a rest the story grants this turn. Optional and nullable, like `combat_exits`. */
-const storyRestProperty = nullable({
+/** #264: a rest the story grants this turn. Optional, like `combat_exits`. */
+const storyRestProperty = {
   type: 'object',
   additionalProperties: false,
   properties: { type: { type: 'string', enum: ['short', 'long'] } },
   required: ['type'],
-});
+};
 
 /**
  * #610 (#218 step 6): damage the story deals the player's character this turn.
- * Optional and nullable.
+ * Optional.
  */
-const storyDamageProperty = nullable({
+const storyDamageProperty = {
   type: 'object',
   additionalProperties: false,
   properties: {
@@ -541,7 +531,7 @@ const storyDamageProperty = nullable({
   required: ['amount', 'source'],
   // #610: the model narrated injury ("the rope burns", "dragged to the edge") with no
   // damage signal, so the writer never ran. Like #463's items description, this tells
-  // the model when to populate the nullable field inside the structured-output contract.
+  // the model when to populate the field inside the structured-output contract.
   description:
     '#610 story damage: when the story hurts the player\'s character this turn (a failed ' +
     'check\'s consequence, a hazard, a trap — anything the engine did not already resolve), ' +
@@ -549,8 +539,8 @@ const storyDamageProperty = nullable({
     'e.g. rope burn>"}` and narrate the hurt in `text`. The game subtracts the amount from ' +
     'the character\'s hit points and posts a damage line in chat; do not narrate the ' +
     'character being hurt or taking damage without setting this field (or requesting a ' +
-    '`damage` roll when the amount should be rolled). Otherwise leave it null.',
-});
+    '`damage` roll when the amount should be rolled). Otherwise omit it.',
+};
 
 export const dmResponseSchema = createDmResponseSchema({
   combat_exits: combatExitsProperty,
@@ -575,14 +565,14 @@ const isMapAction = (value: unknown): value is DMMapAction => {
     return (
       typeof action.target === 'string' &&
       ['shove', 'pull', 'teleport'].includes(String(action.mode)) &&
-      (action.origin === null || isPoint(action.origin)) &&
-      (action.destination === null || isPoint(action.destination)) &&
-      (action.distance === null || (typeof action.distance === 'number' && action.distance >= 0))
+      (action.origin == null || isPoint(action.origin)) &&
+      (action.destination == null || isPoint(action.destination)) &&
+      (action.distance == null || (typeof action.distance === 'number' && action.distance >= 0))
     );
   return (
-    (action.entityId === null || typeof action.entityId === 'string') &&
-    (action.x === null || typeof action.x === 'number') &&
-    (action.y === null || typeof action.y === 'number')
+    (action.entityId == null || typeof action.entityId === 'string') &&
+    (action.x == null || typeof action.x === 'number') &&
+    (action.y == null || typeof action.y === 'number')
   );
 };
 
@@ -595,7 +585,7 @@ const isCombatAction = (value: unknown): value is DMCombatAction => {
       typeof action.spell_id === 'string' &&
       isPoint(action.origin) &&
       (action.direction === null || isPoint(action.direction)) &&
-      (action.slot_level === null || typeof action.slot_level === 'number') &&
+      (action.slot_level == null || typeof action.slot_level === 'number') &&
       !('target_ids' in action)
     );
   }

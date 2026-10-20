@@ -197,10 +197,19 @@ const asTargeted = (action: DeclaredCombatAction): StructuredCombatAction =>
         target_ids: [],
         weapon_id: null,
         spell_id: action.spell_id,
-        slot_level: action.slot_level,
+        // #782 item 7: slot_level is now optional on the wire — normalize absent to null.
+        slot_level: action.slot_level ?? null,
         movement_feet: 0,
       }
-    : action;
+    : {
+        // #782 item 7: targeted weapon_id/spell_id/slot_level are plain
+        // optionals on the wire — normalize absent to null so strict
+        // comparisons (sameAction) treat omission like an explicit null.
+        ...action,
+        weapon_id: action.weapon_id ?? null,
+        spell_id: action.spell_id ?? null,
+        slot_level: action.slot_level ?? null,
+      };
 
 const isDeclaredCombatAction = (action: unknown): action is DeclaredCombatAction =>
   Boolean(action && typeof action === 'object' && 'target_ids' in action) ||

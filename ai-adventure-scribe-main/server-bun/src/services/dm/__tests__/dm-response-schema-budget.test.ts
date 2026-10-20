@@ -20,6 +20,14 @@ import { createDmResponseSchema, dmResponseSchema } from '../dm-response-schema.
  * between two disjoint variants); the oneOf target todos below are now real
  * assertions.
  *
+ * #782 item 7 re-measured the unions and optionals (null-pad collapse):
+ * 25 of the 31 null pads became plain optionals — a collapsed pad trades one
+ * union for one optional. Six pads remain (handout key/body, scene_spec seed,
+ * roll dc/ac, AoE direction): per phase 7 unions, 39 optionals;
+ * createDmResponseSchema() 7 unions, 32 optionals. Measured at main
+ * 063b58d9 with the item-8 schema. The ≤24 optionals target is item 8's
+ * per-phase schema work (narrative phase holds a strict subset).
+ *
  * Counting follows the Anthropic convention from
  * dm-response-schema-anthropic.test.ts: every `anyOf` / `oneOf` node and every
  * `type: [..., 'null']` array counts as one union; every object property not
@@ -40,17 +48,17 @@ const TARGET_MAX_OPTIONALS = 24;
 const TARGET_MAX_ONE_OF = 0;
 const TARGET_MAX_KEYWORDS = 0;
 
-/** Baseline budget per phase, measured at bd9041bf — see header comment.
- *  ONE_OF lowered to 0 by #782 item 8 (was 1). */
-const BASELINE_UNIONS = 34;
-const BASELINE_OPTIONALS = 20;
+/** Baseline budget per phase: unions/optionals re-measured for #782 item 7 —
+ *  see header comment. ONE_OF lowered to 0 by #782 item 8 (was 1). */
+const BASELINE_UNIONS = 7;
+const BASELINE_OPTIONALS = 39;
 const BASELINE_ONE_OF = 0;
 const BASELINE_KEYWORDS = 7;
 
-/** Baseline budget for createDmResponseSchema(), measured at bd9041bf.
+/** Baseline budget for createDmResponseSchema(): re-measured for #782 item 7.
  *  ONE_OF lowered to 0 by #782 item 8 (was 1). */
-const BASELINE_DEFAULT_UNIONS = 28;
-const BASELINE_DEFAULT_OPTIONALS = 13;
+const BASELINE_DEFAULT_UNIONS = 7;
+const BASELINE_DEFAULT_OPTIONALS = 32;
 const BASELINE_DEFAULT_ONE_OF = 0;
 const BASELINE_DEFAULT_KEYWORDS = 1;
 

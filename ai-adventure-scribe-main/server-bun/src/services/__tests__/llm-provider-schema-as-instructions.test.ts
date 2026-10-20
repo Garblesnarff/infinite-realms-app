@@ -27,7 +27,6 @@ const VALID_DM_REPLY = JSON.stringify({
   narration_segments: [],
   roll_requests: [],
   combat_transition: 'none',
-  scene_spec: null,
   map_actions: [],
   handout_actions: [],
   combatants: [],
