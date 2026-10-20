@@ -53,7 +53,7 @@ export function playerFacingRefusal(
 }
 
 export function turnNotice(
-  turnHolder: { id?: string; name?: string } | null,
+  turnHolder: { id?: string; name?: string; displayName?: string | null } | null,
   holderIsPlayer: boolean,
   reason?: string,
 ): string {
@@ -62,7 +62,7 @@ export function turnNotice(
   }
   if (holderIsPlayer)
     return '*(Your action was declared out of turn and was not resolved — it is your turn now.)*';
-  const who = turnHolder?.name ?? turnHolder?.id;
+  const who = turnHolder?.displayName ?? turnHolder?.name ?? turnHolder?.id;
   return who
     ? `*(Your declared action has not been resolved — it is ${who}'s turn.)*`
     : '*(Your declared action has not been resolved — it is not your turn yet.)*';
@@ -85,7 +85,10 @@ export function stillYourTurnNotice(reason?: string): string {
  */
 export function unresolvedTargetNotice(
   creatures: readonly string[],
-  turn: { holder: { id?: string; name?: string } | null; holderIsPlayer: boolean },
+  turn: {
+    holder: { id?: string; name?: string; displayName?: string | null } | null;
+    holderIsPlayer: boolean;
+  },
   resolvedEarlier: boolean,
 ): string {
   const lead = 'No creature by that name is in this fight';
@@ -114,8 +117,10 @@ export function noMechanicalActionNotice(hadEngineLines = false): string {
  * is still not the player's. Nothing was "declared out of turn" from the player's point of view
  * any more — they only need to know who acts before them.
  */
-export function repairedTurnNotice(turnHolder: { id?: string; name?: string } | null): string {
-  const who = turnHolder?.name ?? turnHolder?.id;
+export function repairedTurnNotice(
+  turnHolder: { id?: string; name?: string; displayName?: string | null } | null,
+): string {
+  const who = turnHolder?.displayName ?? turnHolder?.name ?? turnHolder?.id;
   return who ? `*(${who} acts next.)*` : '*(It is not your turn yet.)*';
 }
 

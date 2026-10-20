@@ -288,6 +288,38 @@ describe('engine result card data (#2417)', () => {
     ]);
     expect(card?.detail).toBe('The Scholar acts first.');
   });
+
+  // #876: the seated rows the entry payload carries keep the DM's label in `name` and the
+  // bestiary heading on the attack profile. The seating card must read the heading, like
+  // every other result card, not the label the tracker used to show.
+  it('names a renamed creature by its bestiary heading on the seating card', () => {
+    const card = initiativeCard(
+      [
+        {
+          id: 'avatar-1',
+          name: 'The Pale Shape 1',
+          monsterAttack: { displayName: 'The Thing Below (Avatar) 1' },
+          initiative: 12,
+          turnOrder: 0,
+          participantType: 'enemy',
+        },
+        {
+          id: SCHOLAR.id,
+          name: SCHOLAR.name,
+          initiative: 9,
+          turnOrder: 1,
+          participantType: 'player',
+        },
+      ],
+      '⚙️ Engine: Initiative — The Thing Below (Avatar) 1: 12 + 0 = 12. You: 9 + 0 = 9.',
+    );
+
+    expect(card?.initiative?.order.map((entry) => entry.name)).toEqual([
+      'The Thing Below (Avatar) 1',
+      'The Scholar',
+    ]);
+    expect(card?.detail).toBe('The Thing Below (Avatar) 1 acts first.');
+  });
 });
 
 describe('target numbers (#2417)', () => {

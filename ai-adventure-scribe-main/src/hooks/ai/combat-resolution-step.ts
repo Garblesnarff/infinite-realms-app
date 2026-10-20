@@ -133,6 +133,8 @@ export interface CombatResolutionParams {
     id: string;
     characterId?: string | null;
     name?: string;
+    /** Player-facing name when it differs from `name` (bestiary heading, #2398). */
+    displayName?: string | null;
     participantType?: string;
     turnOrder?: number;
     initiative?: number;
@@ -407,7 +409,12 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     return playerInputOrigin ?? 'dm';
   };
   /** Whose turn it is once everything the engine accepted has been applied. */
-  let turnHolder: { id?: string; name?: string; vitalState?: string } | null = null;
+  let turnHolder: {
+    id?: string;
+    name?: string;
+    displayName?: string | null;
+    vitalState?: string;
+  } | null = null;
   let encounterAlreadyConcluded = false;
   let playerDeclarationWasRefused = false;
   /**
@@ -571,11 +578,27 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   };
   type BatchBoundary = 'turn_ended' | 'combat_ended';
 
+  /**
+   * A wire projection names the turn holder by its seating label; the encounter roster
+   * the client holds carries the name the cards show for the same seat. Fill it in, so
+   * the notices below name the holder the way every other surface does (#876).
+   */
+  const withCardName = (
+    holder: { id?: string; name?: string; displayName?: string | null } | null | undefined,
+  ): typeof turnHolder => {
+    if (!holder) return null;
+    if (holder.displayName) return holder as typeof turnHolder;
+    const seated = participants?.find((participant) => participant.id === holder.id);
+    return seated?.displayName
+      ? { ...holder, displayName: seated.displayName }
+      : (holder as typeof turnHolder);
+  };
+
   const retainNpcResults = (advanced: AdvanceNpcTurnsResponse): BatchBoundary => {
     for (const { transcriptLines: _printedLines, ...result } of advanced.results) {
       resolvedActions.push({ ...result, actorIsPlayer: false });
     }
-    if (advanced.currentParticipant) turnHolder = advanced.currentParticipant;
+    if (advanced.currentParticipant) turnHolder = withCardName(advanced.currentParticipant);
     return advanced.combatEnded ? 'combat_ended' : 'turn_ended';
   };
   const preflightBoundary = preResolvedNpcTurns ? retainNpcResults(preResolvedNpcTurns) : null;
@@ -866,8 +889,10 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
           );
     // The boundary's death saves, wake and ending are in the row the server wrote for it.
     if (combatBoundaryFromResult(turn)) return 'combat_ended';
-    const turnState = turn as { currentParticipant?: { id?: string; name?: string } | null } | null;
-    if (turnState?.currentParticipant) turnHolder = turnState.currentParticipant;
+    const turnState = turn as {
+      currentParticipant?: { id?: string; name?: string; displayName?: string | null } | null;
+    } | null;
+    if (turnState?.currentParticipant) turnHolder = withCardName(turnState.currentParticipant);
     // The server ran the creatures that followed before it answered (#2658).
     const npcTurns = (turn as { npcTurns?: AdvanceNpcTurnsResponse } | null)?.npcTurns;
     return npcTurns ? retainNpcResults(npcTurns) : 'turn_ended';
@@ -1264,7 +1289,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   const unrepairablePlayerRefusal = refusedPlayerActions.find((refusal) =>
     isUnrepairableDeclarationReason(refusal.refusalReason),
   );
-  if (keptBy) turnHolder = { id: keptBy.id, name: keptBy.name };
+  if (keptBy) turnHolder = { id: keptBy.id, name: keptBy.name, displayName: keptBy.displayName };
   const unrepairableKeepsTurn =
     Boolean(unrepairablePlayerRefusal) &&
     !combatOver &&
@@ -1279,10 +1304,14 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     pendingPlayerAreaSpells.length === 0 &&
     (!turnHolder || isPlayerActor(turnHolder.id ?? '', participants));
   if (silentTurn && !turnHolder && playerParticipant) {
-    turnHolder = { id: playerParticipant.id, name: playerParticipant.name };
+    turnHolder = {
+      id: playerParticipant.id,
+      name: playerParticipant.name,
+      displayName: playerParticipant.displayName,
+    };
   }
   const stillTheirTurn = playerKeepsTurn
-    ? ` It is still ${keptBy?.name ?? turnHolder?.name ?? 'the player'}'s turn.`
+    ? ` It is still ${keptBy?.displayName ?? keptBy?.name ?? turnHolder?.displayName ?? turnHolder?.name ?? 'the player'}'s turn.`
     : '';
   /** What the narration pass is told, in words, about the player's own unresolved action. */
   const unresolvedPlayerAction = refusedPlayerActions.length
@@ -1399,7 +1428,9 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
           ? silentPlayerTurnPayload(silentPlayerTurn.playerMessage, hadEngineLines)
           : {}),
         ...(pendingPlayerAction ? { pendingPlayerAction } : {}),
-        ...(turnHolder ? { currentTurn: turnHolder.name ?? turnHolder.id } : {}),
+        ...(turnHolder
+          ? { currentTurn: turnHolder.displayName ?? turnHolder.name ?? turnHolder.id }
+          : {}),
         ...(playerTurn
           ? {
               turnHandoff: `End your response with: "${playerName}, what do you do?"`,
@@ -1533,9 +1564,12 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     (refusal) => refusal.refusalReason === COMBAT_INTENT_UNRESOLVED_TARGET,
   )
     ? unresolvedTargetNotice(
-        standingHostiles(participants ?? []).flatMap((participant) =>
-          participant.name ? [participant.name] : [],
-        ),
+        // List the names the player has actually seen — the ones on the result cards —
+        // not the seating labels only the engine knows (#876).
+        standingHostiles(participants ?? []).flatMap((participant) => {
+          const label = participant.displayName ?? participant.name;
+          return label ? [label] : [];
+        }),
         { holder: turnHolder, holderIsPlayer: playerTurn },
         resolvedActions.length > 0,
       )

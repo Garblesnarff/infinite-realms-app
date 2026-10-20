@@ -51,7 +51,7 @@ const ReactionOpportunityPanel: React.FC<ReactionOpportunityPanelProps> = ({
           return (
             <div key={opportunity.id} className="p-3 bg-white rounded-lg border border-amber-200">
               <div className="text-sm font-medium text-amber-900 mb-2">
-                {participant.name}: {opportunity.triggerDescription}
+                {participant.displayName ?? participant.name}: {opportunity.triggerDescription}
               </div>
               <div className="flex gap-2 flex-wrap">
                 {opportunity.availableReactions.map((reaction) => (

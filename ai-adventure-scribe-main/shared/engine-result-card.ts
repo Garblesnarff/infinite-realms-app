@@ -288,6 +288,10 @@ export function initiativeCard(
   participants: ReadonlyArray<{
     id?: string;
     name?: string;
+    /** Player-facing name when it differs from `name` (bestiary heading, #2398). */
+    displayName?: string | null;
+    /** Stored attack profile; carries the bestiary `displayName` (#2398). */
+    monsterAttack?: unknown;
     initiative?: number;
     turnOrder?: number;
     participantType?: string;
@@ -302,6 +306,8 @@ export function initiativeCard(
     rosterEntryForParticipant({
       id: participant.id ?? participant.name ?? '',
       name: participant.name,
+      displayName: participant.displayName,
+      monsterAttack: participant.monsterAttack,
     }),
   );
   const order = seated.map((participant) => ({

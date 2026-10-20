@@ -39,6 +39,10 @@ const EnemyCard: React.FC<EnemyCardProps> = React.memo(({ enemyId, className = '
     return null;
   }
 
+  // The name the rest of combat shows for this creature (#876): the bestiary
+  // heading when the seat carries one, so the card agrees with the tracker.
+  const label = enemy.displayName ?? enemy.name;
+
   // Look up portrait from campaign assets
   const assetKey = enemy.name.toLowerCase().replace(/\s+/g, '-');
   const portraitUrl = enemy.portraitUrl || getAssetImageUrl('monster', assetKey);
@@ -91,7 +95,7 @@ const EnemyCard: React.FC<EnemyCardProps> = React.memo(({ enemyId, className = '
           {/* Portrait thumbnail */}
           {portraitUrl ? (
             <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-red-500/50 shadow-lg flex-shrink-0">
-              <img src={portraitUrl} alt={enemy.name} className="w-full h-full object-cover" />
+              <img src={portraitUrl} alt={label} className="w-full h-full object-cover" />
             </div>
           ) : (
             <div className="w-12 h-12 rounded-full bg-red-900/30 border-2 border-red-500/30 flex items-center justify-center flex-shrink-0">
@@ -102,7 +106,7 @@ const EnemyCard: React.FC<EnemyCardProps> = React.memo(({ enemyId, className = '
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg font-semibold text-red-400 flex items-center gap-2">
-                {enemy.name}
+                {label}
               </CardTitle>
 
               {enemy.monsterData?.challengeRating && (
@@ -133,7 +137,7 @@ const EnemyCard: React.FC<EnemyCardProps> = React.memo(({ enemyId, className = '
           <span className="flex items-center gap-1">
             <Heart className="w-4 h-4" aria-hidden="true" />
             <span aria-live="polite">
-              <span className="sr-only">{enemy.name} health: </span>
+              <span className="sr-only">{label} health: </span>
               {getEnemyHealthTier(enemy.currentHitPoints, enemy.maxHitPoints)}
             </span>
           </span>

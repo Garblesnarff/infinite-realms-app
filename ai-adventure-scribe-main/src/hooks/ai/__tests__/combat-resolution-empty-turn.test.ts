@@ -110,6 +110,31 @@ describe('a combat turn never goes out with nothing in it (#2641)', () => {
     expect(result.text).toContain('The Silent Monk 1');
   });
 
+  it('names the creature by its card name when the batch names it by its seating label (#876)', async () => {
+    const result = await resolveDeclaredCombatActions({
+      encounterId: 'encounter-1',
+      sessionId: 'session-1',
+      combatActions: [],
+      declarationText: '',
+      aiContext: { gameState: {} },
+      conversationHistory: [],
+      participants: [
+        { id: PLAYER_ID, name: 'The Veteran', participantType: 'player' },
+        {
+          id: MONK_ID,
+          name: 'The Silent Monk 1',
+          displayName: 'The Thing Below (Avatar) 1',
+          participantType: 'monster',
+        },
+      ],
+      combatRound: 3,
+      preResolvedNpcTurns: CAPPED_NPC_BATCH as any,
+    });
+
+    expect(result.text).toContain('The Thing Below (Avatar) 1');
+    expect(result.text).not.toContain('The Silent Monk 1');
+  });
+
   it('does not say a creature acts next when the downed player holds the turn', async () => {
     const result = await resolveDeclaredCombatActions({
       encounterId: 'encounter-1',

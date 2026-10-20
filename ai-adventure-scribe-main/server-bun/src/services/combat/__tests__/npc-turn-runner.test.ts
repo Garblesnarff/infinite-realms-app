@@ -774,3 +774,23 @@ describe('advanceNpcTurns round labels (#2393)', () => {
     expect(bodies).toEqual(THREE_ACTOR_PLAYER_MIDDLE_NPC_BATCHES);
   });
 });
+
+describe('the turn holder the batch reports (#876)', () => {
+  it('projects the card name of the creature still holding the turn', async () => {
+    const player = participant('p1', 'player');
+    const avatar = {
+      ...participant('npc1', 'monster'),
+      name: 'The Pale Shape 1',
+      monsterAttack: { displayName: 'The Thing Below (Avatar) 1', attacks: [] },
+    };
+    const { dependencies } = harness([avatar, player], 'npc1', () => ({
+      currentParticipant: avatar,
+    }));
+
+    const result = await advanceNpcTurns('encounter-1', 'user-1', dependencies);
+
+    expect(result.currentParticipant?.id).toBe('npc1');
+    expect(result.currentParticipant?.name).toBe('The Pale Shape 1');
+    expect(result.currentParticipant?.displayName).toBe('The Thing Below (Avatar) 1');
+  });
+});

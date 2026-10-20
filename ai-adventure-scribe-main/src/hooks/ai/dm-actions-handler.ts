@@ -93,7 +93,10 @@ function findParticipantForActor(
   if (!actorId) return undefined;
   return participants?.find(
     (participant) =>
-      participant.id === actorId || slugify(participant.name || '') === slugify(actorId),
+      participant.id === actorId ||
+      slugify(participant.name || '') === slugify(actorId) ||
+      // The name on the creature's result card (its bestiary heading) names it too (#876).
+      (participant.displayName && slugify(participant.displayName) === slugify(actorId)),
   );
 }
 

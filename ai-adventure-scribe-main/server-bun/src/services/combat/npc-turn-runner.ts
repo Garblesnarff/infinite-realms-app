@@ -1,5 +1,6 @@
 import { heroTurnJustEnded } from './boss-moves.js';
 import { grappleOf } from './grapple-source.js';
+import { displayNameOf } from '../../../../shared/engine-display-name';
 import { combatLogger } from '../../lib/logger.js';
 
 import type { BossMoveWindowResult } from './boss-move-window.js';
@@ -41,6 +42,8 @@ export type AdvanceNpcTurnsResult = {
   currentParticipant: {
     id: string;
     name: string;
+    /** The name the result cards show for this seat, when it differs from `name` (#876). */
+    displayName?: string;
     participantType: string;
     /** Where the turn holder stands (`vitalStateOf`): a dying player owes a death save. */
     vitalState?: string;
@@ -482,6 +485,7 @@ export async function advanceNpcTurns(
       ? {
           id: finalState.currentParticipant.id,
           name: finalState.currentParticipant.name,
+          displayName: displayNameOf(finalState.currentParticipant) ?? undefined,
           participantType: finalState.currentParticipant.participantType,
           vitalState: (finalState.currentParticipant as { vitalState?: string }).vitalState,
         }

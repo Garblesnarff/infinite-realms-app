@@ -152,6 +152,8 @@ export type AdvanceNpcTurnsResponse = {
   currentParticipant: {
     id: string;
     name: string;
+    /** The name the result cards show for this seat, when it differs from `name` (#876). */
+    displayName?: string | null;
     participantType: string;
     /** `standing`, `dying`, `stabilized` or `dead`: the server's state machine (#2518). */
     vitalState?: string;

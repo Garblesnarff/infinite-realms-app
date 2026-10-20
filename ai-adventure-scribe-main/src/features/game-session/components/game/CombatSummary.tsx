@@ -18,6 +18,9 @@ const ParticipantListItem = React.memo(
   ({ participant, isCurrentTurn }: { participant: CombatParticipant; isCurrentTurn: boolean }) => {
     const hpPercent = (participant.currentHitPoints / participant.maxHitPoints) * 100;
     const isPlayer = participant.participantType === 'player';
+    // The name the result cards show: a creature seated under a DM label reads by its
+    // bestiary heading here too, so the tracker and the cards never disagree (#876).
+    const label = participant.displayName ?? participant.name;
 
     return (
       <div
@@ -28,11 +31,11 @@ const ParticipantListItem = React.memo(
               ? 'border-blue-200 bg-blue-50'
               : 'border-red-200 bg-red-50'
         }`}
-        aria-label={`${isCurrentTurn ? 'Current Turn: ' : ''}${participant.name}`}
+        aria-label={`${isCurrentTurn ? 'Current Turn: ' : ''}${label}`}
       >
         <div className="flex items-center justify-between text-xs">
           <span className={`font-medium ${isPlayer ? 'text-blue-800' : 'text-red-800'}`}>
-            {participant.name}
+            {label}
           </span>
           <span className="text-muted-foreground">Init: {participant.initiative}</span>
         </div>
@@ -49,7 +52,7 @@ const ParticipantListItem = React.memo(
             value={hpPercent}
             className="h-1"
             indicatorClassName={getHPColor(hpPercent)}
-            aria-label={`${participant.name} Health percentage`}
+            aria-label={`${label} Health percentage`}
           />
         </div>
         {participant.conditions.length > 0 && (
@@ -159,7 +162,7 @@ export const CombatSummary: React.FC = React.memo(() => {
       {/* Turn Summary */}
       {currentParticipant && (
         <div className="pt-2 border-t text-xs text-muted-foreground">
-          <div>Current: {currentParticipant.name}</div>
+          <div>Current: {currentParticipant.displayName ?? currentParticipant.name}</div>
           <div className="ir-text-min">
             Action: {currentParticipant.actionTaken ? 'Used' : 'Available'} | Bonus:{' '}
             {currentParticipant.bonusActionTaken ? 'Used' : 'Available'} | Reaction:{' '}
