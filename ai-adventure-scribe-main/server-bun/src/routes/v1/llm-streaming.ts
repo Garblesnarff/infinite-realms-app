@@ -1,3 +1,5 @@
+import { stripOptionsAppendix } from '../../services/dm/narration-text.js';
+
 /**
  * SSE streaming support for POST /v1/llm/generate (#633 PR2).
  *
@@ -106,7 +108,18 @@ export function extractPartialNarration(accumulated: string): string | null {
           j += 1;
           while (j < n && isWhitespace(accumulated[j])) j += 1;
           if (j >= n || accumulated[j] !== '"') return null;
-          return decodePartialString(accumulated, j);
+          const narration = decodePartialString(accumulated, j);
+          if (narration === null) return null;
+          const clean = stripOptionsAppendix(narration);
+          const lastLine = clean.slice(clean.lastIndexOf('\n') + 1).trimStart();
+          const key = lastLine.replace(/^["']/, '').toLowerCase();
+          if (
+            clean.includes('\n') &&
+            ('options'.startsWith(key) || /^options["']?\s*:/.test(key))
+          ) {
+            return clean.slice(0, clean.lastIndexOf('\n')).trimEnd();
+          }
+          return clean;
         }
       }
       i = end;

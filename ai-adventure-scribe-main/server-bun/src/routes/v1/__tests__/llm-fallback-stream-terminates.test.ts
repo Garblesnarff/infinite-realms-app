@@ -67,8 +67,7 @@ const app = createRequestPipelineApp().use(llmRoutes);
 // validation on the instructed branch fails every time.
 const HAIKU_PROSE = 'The tavern door creaks open on rusted hinges.';
 
-const sseBodyFor = (prose: string): string =>
-  `${sseChunk(prose)}data: [DONE]\n\n`;
+const sseBodyFor = (prose: string): string => `${sseChunk(prose)}data: [DONE]\n\n`;
 
 /** One forced-tool argument fragment chunk — the real #855 Haiku reply shape
  * (delta.tool_calls[0].function.arguments); no [DONE] is needed mid-list. */
@@ -110,6 +109,50 @@ describe('POST /v1/llm/generate fallback chain closes the SSE stream (#783)', ()
   afterEach(() => {
     globalThis.fetch = originalFetch;
     process.env = { ...originalEnv };
+  });
+
+  it('#875 keeps tool options out of preview and final narration through the real provider', async () => {
+    const story = 'She says "Welcome" and opens the door.';
+    const raw = JSON.stringify({
+      options: ['A. Enter', 'B. Wait'],
+      text: story + '\noptions: ["A. Enter", "B.',
+      narration_segments: [],
+      roll_requests: [],
+      combat_transition: 'none',
+      map_actions: [],
+      handout_actions: [],
+      combatants: [],
+      combat_actions: [],
+    });
+    globalThis.fetch = (async () =>
+      new Response(
+        Array.from(raw, (fragment) =>
+          sseToolCallFor(fragment).replace('data: [DONE]\n\n', ''),
+        ).join('') + 'data: [DONE]\n\n',
+        { headers: { 'content-type': 'text/event-stream' } },
+      )) as unknown as typeof fetch;
+    const response = await app.handle(
+      new Request('http://localhost/v1/llm/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'Continue', stream: true }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    const wire = await response.text();
+    const events = wire
+      .split('\n')
+      .filter((line) => line.startsWith('data: '))
+      .map((line) => JSON.parse(line.slice(6)));
+    const preview = events
+      .filter((event) => event.type === 'delta')
+      .map((event) => event.text)
+      .join('');
+    expect(preview).toBe(story);
+    const done = events.find((event) => event.type === 'done');
+    expect(done).toBeDefined();
+    expect(JSON.parse(done.payload.text).text).toBe(story);
+    expect(JSON.parse(done.payload.text).options).toEqual(['A. Enter', 'B. Wait']);
   });
 
   it('terminates the SSE stream after the last candidate fails ajv validation', async () => {
@@ -164,9 +207,7 @@ describe('POST /v1/llm/generate fallback chain closes the SSE stream (#783)', ()
     expect(fetchCalls).toBe(2);
     // The chain exhausted by validation failures: every attempt answered in
     // prose, so the server logs the chain-exhausted line.
-    expect(
-      loggedErrors.some((e) => e.msg === 'LLM_OPENROUTER_CHAIN_EXHAUSTED'),
-    ).toBe(true);
+    expect(loggedErrors.some((e) => e.msg === 'LLM_OPENROUTER_CHAIN_EXHAUSTED')).toBe(true);
     // The stream carries a terminal event.
     expect(text.includes('"type":"done"') || text.includes('"type":"error"')).toBe(true);
   }, 30_000);
@@ -219,9 +260,7 @@ describe('POST /v1/llm/generate fallback chain closes the SSE stream (#783)', ()
     // instructed branch retries a schema mismatch once), and the route
     // retries the failed generation once (#312): 2 attempts x 2 runs = 4.
     expect(fetchCalls).toBe(4);
-    expect(
-      loggedErrors.some((e) => e.msg === 'LLM_OPENROUTER_CHAIN_EXHAUSTED'),
-    ).toBe(true);
+    expect(loggedErrors.some((e) => e.msg === 'LLM_OPENROUTER_CHAIN_EXHAUSTED')).toBe(true);
     expect(text.includes('"type":"done"') || text.includes('"type":"error"')).toBe(true);
   }, 30_000);
 
@@ -231,7 +270,7 @@ describe('POST /v1/llm/generate fallback chain closes the SSE stream (#783)', ()
     // when the fetch signal aborts (the pending read() rejects); mirror
     // that boundary so the 250ms abort deadline fails the attempt.
     let fetchCalls = 0;
-    globalThis.fetch = ((async (input: unknown, init?: RequestInit) => {
+    globalThis.fetch = (async (input: unknown, init?: RequestInit) => {
       fetchCalls += 1;
       const signal = init?.signal;
       const body = new ReadableStream<Uint8Array>({
@@ -250,7 +289,7 @@ describe('POST /v1/llm/generate fallback chain closes the SSE stream (#783)', ()
         status: 200,
         headers: { 'content-type': 'text/event-stream' },
       });
-    }) as unknown as typeof fetch);
+    }) as unknown as typeof fetch;
 
     const response = await app.handle(
       new Request('http://localhost/v1/llm/generate', {
@@ -284,9 +323,7 @@ describe('POST /v1/llm/generate fallback chain closes the SSE stream (#783)', ()
     // once when a schema is present), and the route retries the failed
     // generation once (#312): 2 attempts x 2 runs = 4.
     expect(fetchCalls).toBe(4);
-    expect(
-      loggedErrors.some((e) => e.msg === 'LLM_OPENROUTER_CHAIN_EXHAUSTED'),
-    ).toBe(true);
+    expect(loggedErrors.some((e) => e.msg === 'LLM_OPENROUTER_CHAIN_EXHAUSTED')).toBe(true);
     expect(text.includes('"type":"done"') || text.includes('"type":"error"')).toBe(true);
   }, 30_000);
 });

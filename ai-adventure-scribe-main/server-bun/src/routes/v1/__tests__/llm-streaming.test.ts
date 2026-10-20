@@ -31,9 +31,9 @@ describe('extractPartialNarration', () => {
   });
 
   it('ignores a nested "text" key before the top-level one', () => {
-    expect(
-      extractPartialNarration('{"scene": {"text": "nested"}, "text": "top-level'),
-    ).toBe('top-level');
+    expect(extractPartialNarration('{"scene": {"text": "nested"}, "text": "top-level')).toBe(
+      'top-level',
+    );
   });
 
   it('tolerates whitespace around the colon', () => {
@@ -52,5 +52,24 @@ describe('extractPartialNarration', () => {
   it('returns null for a value that never opens', () => {
     expect(extractPartialNarration('{"text": ')).toBeNull();
     expect(extractPartialNarration('{"text": 42')).toBeNull();
+  });
+});
+
+describe('#875 options never enter the preview', () => {
+  it('stops at text with reordered keys and escaped quotes at every chunk boundary', () => {
+    const story = 'She says "Welcome" and waits.';
+    const raw = JSON.stringify({ options: ['A. Sit'], text: story, scene: { text: 'nested' } });
+    for (let i = 0; i <= raw.length; i++) {
+      const preview = extractPartialNarration(raw.slice(0, i));
+      if (preview !== null) expect(story.startsWith(preview)).toBe(true);
+    }
+    expect(extractPartialNarration(raw)).toBe(story);
+  });
+  it('removes an options appendix authored inside text, including a truncated array', () => {
+    expect(
+      extractPartialNarration(
+        JSON.stringify({ text: 'The door opens.\noptions: ["A. Enter", "B.' }),
+      ),
+    ).toBe('The door opens.');
   });
 });

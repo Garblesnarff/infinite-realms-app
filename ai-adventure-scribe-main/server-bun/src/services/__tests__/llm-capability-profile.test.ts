@@ -303,7 +303,9 @@ describe('#782 item 4 OpenRouter request bodies', () => {
     expect('provider' in body).toBe(false);
     expect('temperature' in body).toBe(false);
     // The schema rides only in tools: no instruction line, no schema text in system.
-    expect(systemText(body)).toBe('stable system block');
+    expect(systemText(body)).toBe(
+      'stable system block\nThe options belong only in the options field; never append an options block to text.',
+    );
     expect(JSON.stringify(body.messages)).not.toContain(SCHEMA_INSTRUCTION_LINE);
     expect(body.messages.at(-1)).toEqual({ role: 'user', content: 'volatile user prompt' });
     expect(result.text).toBe(VALID_DM_REPLY);
@@ -610,6 +612,24 @@ describe('#783 forced-tool delivery for anthropic/', () => {
     expect(result.model).toBe('anthropic/claude-haiku-5.5');
     expect(result.text).toBe(VALID_DM_REPLY);
     expect(JSON.parse(result.text)).not.toHaveProperty('visual_prompt');
+  });
+
+  it('#875 strips an options appendix inside tool text and keeps structured options', async () => {
+    useModel('anthropic/claude-haiku-5.5');
+    const reply = JSON.parse(VALID_DM_REPLY);
+    const story = reply.text;
+    reply.text += '\noptions: ["A. Sit", "B.';
+    const bodies = stubOpenRouter([{ toolArguments: JSON.stringify(reply) }]);
+    const result = await LLMProviderService.generate({
+      prompt: 'Continue',
+      responseSchema: dmResponseSchema,
+    });
+    expect(result.error).toBeUndefined();
+    expect(JSON.parse(result.text).text).toBe(story);
+    expect(JSON.parse(result.text).options).toEqual(reply.options);
+    expect(JSON.stringify(bodies[0].messages)).toContain(
+      'The options belong only in the options field',
+    );
   });
 
   it('a tool-call reply missing a required key fails validation and falls over to the next candidate', async () => {
