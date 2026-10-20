@@ -1,7 +1,19 @@
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 
 import { AIUsageService } from './ai-usage-service.js';
 import { LLMProviderService } from './llm-provider-service.js';
+import {
+  claimMemoryExtractionJob,
+  completeMemoryExtractionJob,
+  failExhaustedMemoryExtractionJobs,
+  failMemoryExtractionJob,
+  getMemoryExtractionJob,
+  listRunnableMemoryExtractionJobs,
+  markMemoryExtractionJobCharged,
+  persistMemoryExtractionJob,
+  releaseMemoryExtractionJob,
+  type MemoryExtractionJobRow,
+} from './memory-extraction-job-store.js';
 import { MemoryService } from './memory-service.js';
 import { alert } from '../lib/alerting.js';
 import { logger } from '../lib/logger.js';
@@ -19,8 +31,11 @@ import type { NewMemory } from '../../../db/schema/index';
  * model, parse, and write the rows. Nothing waits on it. The rows reach the next turn the way
  * memories always have — the client reads them from the DB.
  *
- * The job lives in this process only. A restart mid-job loses that one extraction, which is
- * no worse than today, where every extraction is lost.
+ * #846: the accepted job is persisted to memory_extraction_jobs before the 202, so a restart
+ * (every deploy) loses nothing. On startup the server resumes pending jobs and reclaims
+ * orphaned running ones. Quota is charged when a job completes, never when it is accepted, so
+ * a job that never runs is never charged — and completion wins a guarded status transition
+ * first, so a raced job can never charge twice.
  */
 
 export type MemoryExtractionKind = 'memories' | 'summary';
@@ -36,6 +51,12 @@ export interface MemoryExtractionJobInput {
   maxTokens: number;
   turn?: number;
 }
+
+/** How many executions a job gets before it is terminally failed. */
+export const MAX_MEMORY_EXTRACTION_ATTEMPTS = 3;
+
+/** Backoff between attempts: 30 s, 60 s. Timers are unref'd, so they never hold the process. */
+export const MEMORY_EXTRACTION_RETRY_BASE_DELAY_MS = 30_000;
 
 const ALLOWED_MEMORY_TYPES = new Set([
   'general',
@@ -183,6 +204,13 @@ export function parseExtractionText(
   return rows;
 }
 
+export interface MemoryExtractionOutcome {
+  inserted: number;
+  status: 'completed' | 'failed';
+  /** Present when status is 'failed': the reason recorded on the job row. */
+  error?: string;
+}
+
 /**
  * Run one extraction to completion. Never throws: this runs with no caller to throw to.
  *
@@ -192,7 +220,7 @@ export function parseExtractionText(
 export async function runMemoryExtractionJob(
   jobId: string,
   input: MemoryExtractionJobInput,
-): Promise<{ inserted: number; status: 'completed' | 'failed' }> {
+): Promise<MemoryExtractionOutcome> {
   const startedAt = performance.now();
   const logBase = {
     jobId,
@@ -217,7 +245,7 @@ export async function runMemoryExtractionJob(
         error: result.error,
         durationMs: elapsed(),
       });
-      return { inserted: 0, status: 'failed' };
+      return { inserted: 0, status: 'failed', error: result.error };
     }
 
     if (result.usage && result.provider) {
@@ -253,35 +281,310 @@ export async function runMemoryExtractionJob(
     });
     return { inserted: rows.length, status: 'completed' };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     logger.error({
       ...logBase,
       msg: 'memory_extraction.failed',
       stage: 'exception',
-      error: error instanceof Error ? error.message : String(error),
+      error: message,
       durationMs: elapsed(),
     });
-    return { inserted: 0, status: 'failed' };
+    return { inserted: 0, status: 'failed', error: message };
   }
 }
 
-// Jobs accepted but not yet finished. A restart drops them; shutdown logs how many (#2186).
-let inFlightJobs = 0;
+// Jobs accepted but not yet finished in this process, with their execution promises.
+const inFlightJobIds = new Set<string>();
+const inFlightExecutions = new Map<string, Promise<MemoryExtractionOutcome>>();
 
 export function inFlightMemoryExtractionJobs(): number {
-  return inFlightJobs;
+  return inFlightJobIds.size;
 }
 
-/** Shutdown hook: record the jobs this process is about to drop, so a lost extraction is visible. */
-export function logAbandonedMemoryExtractionJobs(signal: string): void {
-  if (inFlightJobs === 0) return;
-  logger.warn({ msg: 'memory_extraction.abandoned', count: inFlightJobs, signal });
+function payloadHash(input: MemoryExtractionJobInput): string {
+  const canonical = {
+    sessionId: input.sessionId,
+    campaignId: input.campaignId ?? null,
+    characterId: input.characterId ?? null,
+    kind: input.kind,
+    prompt: input.prompt,
+    maxTokens: input.maxTokens,
+    turn: input.turn ?? null,
+  };
+  return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
 }
 
-/** Start a job without waiting for it. Returns the id the 202 hands back. */
-export function startMemoryExtractionJob(input: MemoryExtractionJobInput): {
+function rowToInput(row: MemoryExtractionJobRow): MemoryExtractionJobInput {
+  return {
+    userId: row.userId,
+    plan: row.plan,
+    sessionId: row.sessionId,
+    campaignId: row.campaignId ?? undefined,
+    characterId: row.characterId ?? undefined,
+    kind: row.kind as MemoryExtractionKind,
+    prompt: row.prompt,
+    maxTokens: row.maxTokens,
+    turn: row.turn ?? undefined,
+  };
+}
+
+/** How many charge attempts a completed job gets before the leak is alerted. */
+export const MAX_MEMORY_EXTRACTION_CHARGE_ATTEMPTS = 3;
+
+/**
+ * The three ways a charge attempt can end. 'ambiguous' is the dangerous one:
+ * checkQuotaAndConsume threw — and a throw can mean the consume COMMITTED with
+ * a lost ack (QuotaUnavailableError out of sql.begin after the insert landed).
+ * Retrying an ambiguous charge can consume twice, so it is never retried: it
+ * alerts instead. Only 'not-consumed' (a definite allowed:false — nothing was
+ * written) is safe to retry.
+ */
+type ChargeOutcome = 'consumed' | 'not-consumed' | 'ambiguous';
+
+/**
+ * One charge attempt: consume the unit, then flag the row. The flag write is
+ * best-effort — once the consume has landed, a failed flag write must not
+ * trigger a retry (the retry would consume twice); the flag is diagnostic and
+ * its own failure is logged on its own line.
+ */
+async function attemptCharge(
+  claimed: MemoryExtractionJobRow,
+  logBase: Record<string, unknown>,
+  chargeAttempt: number,
+): Promise<ChargeOutcome> {
+  try {
+    const quota = await AIUsageService.checkQuotaAndConsume({
+      userId: claimed.userId,
+      plan: claimed.plan,
+      type: 'llm_system',
+      units: 1,
+    });
+    if (!quota.allowed) {
+      logger.warn({ ...logBase, msg: 'memory_extraction.charge_quota_exhausted', chargeAttempt });
+      return 'not-consumed';
+    }
+  } catch (error: unknown) {
+    logger.error({
+      ...logBase,
+      msg: 'memory_extraction.charge_ambiguous',
+      chargeAttempt,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return 'ambiguous';
+  }
+  await markMemoryExtractionJobCharged(claimed.id).catch((error: unknown) => {
+    logger.error({
+      ...logBase,
+      msg: 'memory_extraction.charge_mark_failed',
+      error: error instanceof Error ? error.message : String(error),
+      note: 'quota was consumed; the charged flag is stale, do not re-charge',
+    });
+  });
+  return 'consumed';
+}
+
+/** Surface an uncharged completed job. Completed + charged=false after this alert is an accounting fact, not a silent leak. */
+function alertChargeFailed(
+  claimed: MemoryExtractionJobRow,
+  logBase: Record<string, unknown>,
+  reason: string,
+): void {
+  logger.error({ ...logBase, msg: 'memory_extraction.charge_failed_alert', reason });
+  alert('memory_extraction_charge_failed', {
+    sessionId: claimed.sessionId,
+    error: `job ${claimed.id} completed but its quota unit was not charged (${reason})`,
+  });
+}
+
+/**
+ * Retry a charge that definitely did not land (allowed:false — quota exhausted
+ * between the accept pre-check and completion). Scheduled with backoff on an
+ * unref'd timer, like execution retries. An ambiguous attempt (a throw) stops
+ * the chain and alerts: the consume may already have landed, and a retry could
+ * charge twice. When the safe attempts run out, the leak is alerted.
+ */
+function scheduleChargeRetry(
+  claimed: MemoryExtractionJobRow,
+  logBase: Record<string, unknown>,
+  chargeAttempt: number,
+): void {
+  if (chargeAttempt >= MAX_MEMORY_EXTRACTION_CHARGE_ATTEMPTS) {
+    alertChargeFailed(claimed, logBase, 'charge retries exhausted');
+    return;
+  }
+  const delay = MEMORY_EXTRACTION_RETRY_BASE_DELAY_MS * chargeAttempt;
+  logger.info({ ...logBase, msg: 'memory_extraction.charge_retry_scheduled', chargeAttempt, delayMs: delay });
+  const timer = setTimeout(() => {
+    void (async () => {
+      const outcome = await attemptCharge(claimed, logBase, chargeAttempt + 1);
+      if (outcome === 'not-consumed') scheduleChargeRetry(claimed, logBase, chargeAttempt + 1);
+      if (outcome === 'ambiguous') {
+        alertChargeFailed(claimed, logBase, 'charge outcome ambiguous after a throw; not retried');
+      }
+    })().catch((retryError: unknown) => {
+      logger.error({
+        ...logBase,
+        msg: 'memory_extraction.charge_retry_crashed',
+        error: retryError instanceof Error ? retryError.message : String(retryError),
+      });
+      scheduleChargeRetry(claimed, logBase, chargeAttempt + 1);
+    });
+  }, delay);
+  // The charge must never hold the process open; uncharged rows are visible in the table.
+  timer.unref?.();
+}
+
+/**
+ * Execute one claimed job: run the extraction, then settle the row. Never throws —
+ * every store call in the settle phase is guarded, and a settle failure releases the
+ * row back to pending so startup resume or the stale reclaim retries it instead of
+ * stranding it in 'running'.
+ *
+ * The completed transition is guarded on status='running' and happens before the quota
+ * charge, so a job that loses a race (shutdown release, a reclaiming process) is never
+ * charged, and the job that won the transition charges exactly once.
+ */
+async function executeClaimedJob(
+  claimed: MemoryExtractionJobRow,
+): Promise<MemoryExtractionOutcome> {
+  const logBase = { jobId: claimed.id, sessionId: claimed.sessionId, attempt: claimed.attempts };
+
+  // Idempotency: a previous execution may already have written this job's rows
+  // (crash, or a shutdown release that lost the completion race below). Then there
+  // is nothing to run — settle straight to completed; the charge still lands once.
+  let alreadyWritten = false;
+  try {
+    alreadyWritten = await MemoryService.existsByExtractionJobId(claimed.id, claimed.sessionId);
+  } catch (error: unknown) {
+    logger.warn({
+      ...logBase,
+      msg: 'memory_extraction.dedup_check_failed',
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  const outcome = alreadyWritten
+    ? { inserted: 0, status: 'completed' as const }
+    : await runMemoryExtractionJob(claimed.id, rowToInput(claimed));
+
+  const settle = async (fn: () => Promise<unknown>): Promise<boolean> => {
+    try {
+      await fn();
+      return true;
+    } catch (error: unknown) {
+      logger.error({
+        ...logBase,
+        msg: 'memory_extraction.settle_failed',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Best-effort recovery: back to pending so the job is retried, never stranded.
+      await releaseMemoryExtractionJob(claimed.id, 'settle failed').catch(() => {});
+      return false;
+    }
+  };
+
+  if (outcome.status === 'completed') {
+    let transitioned: boolean | null = null;
+    await settle(async () => {
+      transitioned = await completeMemoryExtractionJob(claimed.id, false);
+    });
+    if (transitioned === null) {
+      // Settle failed ambiguously: the guarded UPDATE may have committed with a
+      // lost ack. Read the row: only a completed row is owed a charge (the
+      // charge never ran in this path), and only then schedule it.
+      const current = await getMemoryExtractionJob(claimed.id).catch(() => null);
+      if (current?.status === 'completed') {
+        logger.warn({ ...logBase, msg: 'memory_extraction.settle_ambiguous_completed' });
+        scheduleChargeRetry(claimed, logBase, 1);
+      }
+      // Otherwise the recovery release already put the row back to pending (or
+      // it is gone): resume reclaims it, and its executor charges once.
+      return outcome;
+    }
+    if (!transitioned) {
+      logger.warn({ ...logBase, msg: 'memory_extraction.complete_race_lost' });
+      return outcome;
+    }
+    // This process owns the completed row: charge the unit now, exactly once.
+    const charge = await attemptCharge(claimed, logBase, 1);
+    if (charge === 'not-consumed') {
+      // Definitely nothing consumed: safe to retry with backoff, then alert.
+      scheduleChargeRetry(claimed, logBase, 1);
+    } else if (charge === 'ambiguous') {
+      // The consume may have landed despite the throw: never retry, alert.
+      alertChargeFailed(claimed, logBase, 'charge outcome ambiguous after a throw; not retried');
+    }
+    return outcome;
+  }
+
+  const error = outcome.error ?? 'unknown failure';
+  if (claimed.attempts < MAX_MEMORY_EXTRACTION_ATTEMPTS) {
+    const released = await settle(() => releaseMemoryExtractionJob(claimed.id, error));
+    if (!released) return outcome; // a retry was already scheduled by the settle recovery
+    const delay = MEMORY_EXTRACTION_RETRY_BASE_DELAY_MS * claimed.attempts;
+    logger.info({ ...logBase, msg: 'memory_extraction.retry_scheduled', delayMs: delay, error });
+    const timer = setTimeout(() => {
+      void claimAndExecuteById(claimed.id, 'pending').catch((retryError: unknown) => {
+        logger.error({
+          ...logBase,
+          msg: 'memory_extraction.retry_crashed',
+          error: retryError instanceof Error ? retryError.message : String(retryError),
+        });
+      });
+    }, delay);
+    // A retry must never hold the process open; a restart reclaims the row instead.
+    timer.unref?.();
+  } else {
+    logger.warn({ ...logBase, msg: 'memory_extraction.attempts_exhausted', error });
+    await settle(() => failMemoryExtractionJob(claimed.id, error));
+    // Terminal failure is never charged: the job never completed.
+  }
+  return outcome;
+}
+
+/**
+ * Claim a persisted job and execute it. Returns null when another process holds the claim.
+ * Never throws: the store calls are the only fallible part and they run first.
+ */
+async function claimAndExecuteById(
+  jobId: string,
+  expectedStatus: 'pending' | 'running',
+): Promise<MemoryExtractionOutcome | null> {
+  let claimed: MemoryExtractionJobRow | null;
+  try {
+    claimed = await claimMemoryExtractionJob(jobId, expectedStatus);
+  } catch (error: unknown) {
+    logger.error({
+      msg: 'memory_extraction.claim_failed',
+      jobId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+  if (!claimed) {
+    logger.warn({ msg: 'memory_extraction.claim_lost', jobId });
+    return null;
+  }
+  inFlightJobIds.add(claimed.id);
+  const execution = executeClaimedJob(claimed);
+  inFlightExecutions.set(claimed.id, execution);
+  try {
+    return await execution;
+  } finally {
+    inFlightJobIds.delete(claimed.id);
+    inFlightExecutions.delete(claimed.id);
+  }
+}
+
+/**
+ * Start a job: persist the row first, then execute it without waiting.
+ * The row must exist before the 202 goes out, so a crash after the response
+ * still leaves a resumable job. Throws when persistence fails — the route must
+ * not 202 a job it could not store.
+ */
+export async function startMemoryExtractionJob(input: MemoryExtractionJobInput): Promise<{
   jobId: string;
-  done: Promise<{ inserted: number; status: 'completed' | 'failed' }>;
-} {
+  done: Promise<MemoryExtractionOutcome>;
+}> {
   const jobId = randomUUID();
   logger.info({
     jobId,
@@ -291,10 +594,112 @@ export function startMemoryExtractionJob(input: MemoryExtractionJobInput): {
     promptLength: input.prompt.length,
     msg: 'memory_extraction.accepted',
   });
-  inFlightJobs += 1;
-  // runMemoryExtractionJob never rejects, so finally always runs exactly once per job.
-  const done = runMemoryExtractionJob(jobId, input).finally(() => {
-    inFlightJobs -= 1;
+  const persisted = await persistMemoryExtractionJob({
+    id: jobId,
+    userId: input.userId,
+    plan: input.plan,
+    sessionId: input.sessionId,
+    campaignId: input.campaignId ?? null,
+    characterId: input.characterId ?? null,
+    kind: input.kind,
+    prompt: input.prompt,
+    payloadHash: payloadHash(input),
+    maxTokens: input.maxTokens,
+    turn: input.turn ?? null,
+    status: 'pending',
+    attempts: 0,
+    charged: false,
+    error: null,
   });
+  // The claim cannot lose here: nothing else knows the id yet. If it somehow
+  // does, a sweep picks up the still-pending row so it is not stranded for the
+  // process's whole lifetime.
+  const done = claimAndExecuteById(persisted.id, 'pending')
+    .then((outcome) => {
+      if (outcome) return outcome;
+      void resumePendingMemoryExtractionJobs();
+      return { inserted: 0, status: 'failed' as const, error: 'claim lost' };
+    })
+    .catch((error: unknown) => {
+      logger.error({
+        msg: 'memory_extraction.execute_crashed',
+        jobId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return { inserted: 0, status: 'failed' as const, error: 'executor crashed' };
+    });
   return { jobId, done };
+}
+
+/**
+ * Resume jobs that survived a restart: anything still pending, plus running jobs whose
+ * heartbeat went stale (their process died mid-execution). Called once at startup by the
+ * non-standby process. Never throws: a failed claim logs and the sweep continues.
+ */
+export async function resumePendingMemoryExtractionJobs(
+  limit = 100,
+): Promise<{ resumed: number }> {
+  let resumed = 0;
+  // Rows that burned their whole attempts budget (a job that kept killing its
+  // process mid-run) are terminally failed first, so resume never loops on them.
+  try {
+    const exhausted = await failExhaustedMemoryExtractionJobs();
+    if (exhausted > 0) {
+      logger.warn({ msg: 'memory_extraction.exhausted_failed', count: exhausted });
+    }
+  } catch (error: unknown) {
+    logger.error({
+      msg: 'memory_extraction.exhausted_sweep_failed',
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  let rows: MemoryExtractionJobRow[];
+  try {
+    rows = await listRunnableMemoryExtractionJobs(limit);
+  } catch (error: unknown) {
+    logger.error({
+      msg: 'memory_extraction.resume_list_failed',
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { resumed: 0 };
+  }
+  for (const row of rows) {
+    if (inFlightJobIds.has(row.id)) continue;
+    resumed += 1;
+    void claimAndExecuteById(row.id, row.status === 'running' ? 'running' : 'pending').catch(
+      (error: unknown) => {
+        logger.error({
+          msg: 'memory_extraction.resume_failed',
+          jobId: row.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      },
+    );
+  }
+  if (resumed > 0) {
+    logger.info({ msg: 'memory_extraction.resumed', count: resumed });
+  }
+  return { resumed };
+}
+
+/**
+ * Shutdown hook (#846): give this process's in-flight executions a bounded chance
+ * to finish before the process exits — and NEVER flip a still-running row back
+ * to pending. A released row is claimable by the handoff process while this
+ * process's model call is still live, and two live executors can both pass the
+ * check-then-insert dedup and write duplicate memories. Rows still running at
+ * exit stay 'running': their heartbeat goes stale and the next process reclaims
+ * them once this process is provably dead. Bounded by the caller's race in
+ * index.ts; never throws.
+ */
+export async function settleInFlightMemoryExtractionJobs(signal: string): Promise<void> {
+  const executions = [...inFlightExecutions.values()];
+  if (executions.length === 0) return;
+  logger.warn({
+    msg: 'memory_extraction.shutdown_settle',
+    count: executions.length,
+    signal,
+    note: 'awaiting in-flight executions; unfinished rows stay running and are reclaimed after the stale window',
+  });
+  await Promise.allSettled(executions);
 }

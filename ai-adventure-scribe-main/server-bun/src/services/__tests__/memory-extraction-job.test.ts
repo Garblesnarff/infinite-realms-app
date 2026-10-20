@@ -21,13 +21,140 @@ const warnings: Array<Record<string, unknown>> = [];
 // When set, the model call waits for it, so a test can hold jobs in flight.
 let extractGate: Promise<void> | null = null;
 
+// #846: in-memory stand-in for memory_extraction_jobs, with the same guarded
+// claim semantics as the real store (a claim only wins on the expected status,
+// and a running claim only wins when the heartbeat is stale).
+const STALE_MS = 15 * 60 * 1000;
+const jobRows = new Map<string, Record<string, any>>();
+// Fault injection for the settle-phase tests: when true, the next
+// completeMemoryExtractionJob call throws (a transient DB error).
+let completeThrowsOnce = false;
+// When true, the next completeMemoryExtractionJob mutates the row to completed
+// and then throws — a committed transition with a lost ack.
+let completeAmbiguous = false;
+const row = (id: string, overrides: Record<string, unknown> = {}) => ({
+  id,
+  userId: 'user-1',
+  plan: 'free',
+  sessionId: SESSION,
+  campaignId: CAMPAIGN,
+  characterId: 'char-1',
+  kind: 'memories',
+  prompt: 'extract: Sergeant Vance guards the gate. The bridge is out. memory',
+  payloadHash: 'a'.repeat(64),
+  maxTokens: 1000,
+  turn: null,
+  status: 'pending',
+  attempts: 0,
+  charged: false,
+  error: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  completedAt: null,
+  ...overrides,
+});
+mock.module('../memory-extraction-job-store.js', () => ({
+  STALE_RUNNING_JOB_MS: STALE_MS,
+  MAX_MEMORY_EXTRACTION_JOB_ATTEMPTS: 3,
+  persistMemoryExtractionJob: async (r: Record<string, unknown>) => {
+    const stored = { ...row(r.id as string), ...r };
+    jobRows.set(stored.id, stored);
+    return { ...stored };
+  },
+  claimMemoryExtractionJob: async (id: string, expected: 'pending' | 'running') => {
+    const r = jobRows.get(id);
+    if (!r || r.status !== expected) return null;
+    if (r.attempts >= 3) return null; // attempts cap: never claimable again
+    if (expected === 'running' && Date.now() - new Date(r.updatedAt).getTime() < STALE_MS)
+      return null;
+    const claimed = { ...r, status: 'running', attempts: r.attempts + 1, updatedAt: new Date() };
+    jobRows.set(id, claimed);
+    return { ...claimed };
+  },
+  failExhaustedMemoryExtractionJobs: async () => {
+    let failed = 0;
+    for (const [id, r] of jobRows) {
+      const stale = Date.now() - new Date(r.updatedAt).getTime() >= STALE_MS;
+      if (
+        r.attempts >= 3 &&
+        (r.status === 'pending' || (r.status === 'running' && stale))
+      ) {
+        jobRows.set(id, { ...r, status: 'failed', error: 'attempts exhausted', updatedAt: new Date() });
+        failed += 1;
+      }
+    }
+    return failed;
+  },
+  listRunnableMemoryExtractionJobs: async (limit: number) =>
+    [...jobRows.values()]
+      .filter(
+        (r) =>
+          r.attempts < 3 &&
+          (r.status === 'pending' ||
+            (r.status === 'running' && Date.now() - new Date(r.updatedAt).getTime() >= STALE_MS)),
+      )
+      .sort((a, b) => +a.createdAt - +b.createdAt)
+      .slice(0, limit)
+      .map((r) => ({ ...r })),
+  getMemoryExtractionJob: async (id: string) => {
+    const r = jobRows.get(id);
+    return r ? { ...r } : null;
+  },
+  completeMemoryExtractionJob: async (id: string, charged: boolean) => {
+    if (completeAmbiguous) {
+      completeAmbiguous = false;
+      const r = jobRows.get(id);
+      if (r && r.status === 'running') {
+        jobRows.set(id, { ...r, status: 'completed', charged, updatedAt: new Date() });
+      }
+      throw new Error('ack lost after commit');
+    }
+    if (completeThrowsOnce) {
+      completeThrowsOnce = false;
+      throw new Error('connection reset during settle');
+    }
+    const r = jobRows.get(id);
+    if (!r || r.status !== 'running') return false;
+    jobRows.set(id, {
+      ...r,
+      status: 'completed',
+      charged,
+      error: null,
+      completedAt: new Date(),
+      updatedAt: new Date(),
+    });
+    return true;
+  },
+  markMemoryExtractionJobCharged: async (id: string) => {
+    const r = jobRows.get(id);
+    if (!r || r.status !== 'completed' || r.charged) return false;
+    jobRows.set(id, { ...r, charged: true, updatedAt: new Date() });
+    return true;
+  },
+  releaseMemoryExtractionJob: async (id: string, error: string) => {
+    const r = jobRows.get(id);
+    if (!r || r.status !== 'running') return false;
+    jobRows.set(id, { ...r, status: 'pending', error, updatedAt: new Date() });
+    return true;
+  },
+  failMemoryExtractionJob: async (id: string, error: string) => {
+    const r = jobRows.get(id);
+    if (!r || r.status !== 'running') return false;
+    jobRows.set(id, { ...r, status: 'failed', error, updatedAt: new Date() });
+    return true;
+  },
+}));
+
+const errorLogs: Array<Record<string, unknown>> = [];
 const testLogger = {
   debug: () => {},
   info: () => {},
   warn: (entry: Record<string, unknown>) => {
     warnings.push(entry);
   },
-  error: () => {},
+  error: (entry: Record<string, unknown>) => {
+    errorLogs.push(entry);
+  },
   child: () => testLogger,
 };
 mock.module('../../lib/logger.js', () => ({ logger: testLogger, default: testLogger }));
@@ -44,20 +171,50 @@ mock.module('../llm-provider-service.js', () => ({
     },
   },
 }));
+let quotaRemaining = 10;
+// When set, the completion-time charge throws (the usage store failing closed).
+let quotaConsumeError: Error | null = null;
+const quotaConsumeCalls: unknown[] = [];
 mock.module('../ai-usage-service.js', () => ({
   AIUsageService: {
     recordProviderUsage: async (opts: unknown) => {
       usageCalls.push(opts);
     },
+    getQuotaStatus: async () => ({
+      plan: 'free',
+      limits: { daily: { llm: 15, llm_system: 500, image: 1, voice: 0 } },
+      usage: 500 - quotaRemaining,
+      remaining: quotaRemaining,
+      resetAt: '2026-10-20T00:00:00.000Z',
+    }),
+    checkQuotaAndConsume: async (opts: unknown) => {
+      quotaConsumeCalls.push(opts);
+      if (quotaConsumeError) throw quotaConsumeError;
+      return {
+        allowed: quotaRemaining > 0,
+        remaining: Math.max(0, quotaRemaining - 1),
+        resetAt: '2026-10-20T00:00:00.000Z',
+        usageId: 1,
+      };
+    },
+    assertUsageStoreAvailable: async () => {},
   },
 }));
+// Job ids whose memory rows already exist — the dedup source for
+// MemoryService.existsByExtractionJobId, fed by the insert mock below.
+const writtenJobIds = new Set<string>();
 mock.module('../memory-service.js', () => ({
   MemoryService: {
     insert: async (rows: Array<Record<string, unknown>>, userId: string) => {
       if (insertError) throw insertError;
       insertCalls.push({ rows, userId });
+      for (const r of rows) {
+        const jid = (r.metadata as Record<string, unknown> | undefined)?.jobId;
+        if (typeof jid === 'string') writtenJobIds.add(jid);
+      }
       return rows;
     },
+    existsByExtractionJobId: async (jobId: string) => writtenJobIds.has(jobId),
   },
 }));
 
@@ -66,8 +223,27 @@ const {
   parseExtractionText,
   startMemoryExtractionJob,
   inFlightMemoryExtractionJobs,
-  logAbandonedMemoryExtractionJobs,
+  settleInFlightMemoryExtractionJobs,
+  resumePendingMemoryExtractionJobs,
 } = await import('../memory-extraction-job.js');
+
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+// Polls the fake store until the row matches, so fire-and-forget executions
+// (resume, retries) can be awaited without knowing their internals.
+const waitForRow = async (
+  id: string,
+  predicate: (r: Record<string, any>) => boolean,
+  label: string,
+) => {
+  const deadline = Date.now() + 5000;
+  for (;;) {
+    const r = jobRows.get(id);
+    if (r && predicate(r)) return r;
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${label} on ${id}`);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+};
 
 const SESSION = '11111111-1111-4111-8111-111111111111';
 const CAMPAIGN = '22222222-2222-4222-8222-222222222222';
@@ -92,6 +268,14 @@ describe('runMemoryExtractionJob (#2148)', () => {
     alerts.length = 0;
     usageCalls.length = 0;
     warnings.length = 0;
+    errorLogs.length = 0;
+    quotaConsumeCalls.length = 0;
+    quotaRemaining = 10;
+    quotaConsumeError = null;
+    completeThrowsOnce = false;
+    completeAmbiguous = false;
+    jobRows.clear();
+    writtenJobIds.clear();
     extractGate = null;
     insertError = null;
     extractResult = {
@@ -137,7 +321,12 @@ describe('runMemoryExtractionJob (#2148)', () => {
 
     const outcome = await runMemoryExtractionJob('job-2', job());
 
-    expect(outcome).toEqual({ inserted: 0, status: 'failed' });
+    // #846: the failure reason rides the outcome so the job row can record it.
+    expect(outcome).toEqual({
+      inserted: 0,
+      status: 'failed',
+      error: 'All extraction models failed',
+    });
     expect(insertCalls).toHaveLength(0);
     expect(alerts).toEqual(['llm_extraction_degraded']);
   });
@@ -147,7 +336,7 @@ describe('runMemoryExtractionJob (#2148)', () => {
 
     const outcome = await runMemoryExtractionJob('job-3', job());
 
-    expect(outcome).toEqual({ inserted: 0, status: 'failed' });
+    expect(outcome).toEqual({ inserted: 0, status: 'failed', error: 'connection reset' });
     expect(insertCalls).toHaveLength(0);
   });
 
@@ -197,28 +386,288 @@ describe('runMemoryExtractionJob (#2148)', () => {
     expect(rows.map((row) => row.importance)).toEqual([10, 1, 1, 8, 10, 1]);
   });
 
-  it('counts jobs in flight and logs them as abandoned on shutdown (#2186)', async () => {
+  it('shutdown awaits in-flight executions and never releases a live row (#846)', async () => {
     let release!: () => void;
     extractGate = new Promise((resolve) => {
       release = resolve;
     });
 
-    const a = startMemoryExtractionJob(job());
-    const b = startMemoryExtractionJob(job({ kind: 'summary' }));
+    const a = await startMemoryExtractionJob(job());
+    const b = await startMemoryExtractionJob(job({ kind: 'summary' }));
+    // startMemoryExtractionJob is async now; the claim lands a few microtasks later.
+    await flush();
+    await flush();
     expect(inFlightMemoryExtractionJobs()).toBe(2);
 
-    logAbandonedMemoryExtractionJobs('SIGTERM');
+    // The settle hook starts but cannot return while the model calls are live.
+    let settledShutdown = false;
+    const shutdown = settleInFlightMemoryExtractionJobs('SIGTERM').then(() => {
+      settledShutdown = true;
+    });
+    await flush();
+    expect(settledShutdown).toBe(false);
     expect(warnings).toContainEqual(
-      expect.objectContaining({ msg: 'memory_extraction.abandoned', count: 2, signal: 'SIGTERM' }),
+      expect.objectContaining({
+        msg: 'memory_extraction.shutdown_settle',
+        count: 2,
+        signal: 'SIGTERM',
+      }),
     );
+    // The rows stay 'running' while their executors are live: a handoff process
+    // can never claim a job whose model call is still in flight (two live
+    // executors could both pass the check-then-insert dedup and write
+    // duplicate memories).
+    expect(jobRows.size).toBe(2);
+    for (const stored of jobRows.values()) {
+      expect(stored.status).toBe('running');
+    }
 
     release();
+    await shutdown;
+    expect(settledShutdown).toBe(true);
     await Promise.all([a.done, b.done]);
     expect(inFlightMemoryExtractionJobs()).toBe(0);
 
+    // The executors finished inside the shutdown window: rows completed and
+    // charged exactly once each, memories written exactly once each.
+    for (const id of [a.jobId, b.jobId]) {
+      const settled = await waitForRow(id, (r) => r.status === 'completed', 'settled completion');
+      expect(settled.charged).toBe(true);
+    }
+    expect(insertCalls).toHaveLength(2);
+    expect(quotaConsumeCalls).toHaveLength(2);
+
     // Nothing in flight: shutdown stays quiet.
     warnings.length = 0;
-    logAbandonedMemoryExtractionJobs('SIGTERM');
+    await settleInFlightMemoryExtractionJobs('SIGTERM');
     expect(warnings).toHaveLength(0);
+  });
+
+  it('persists the row synchronously with accept, before the execution finishes (#846)', async () => {
+    const pending = startMemoryExtractionJob(job({ turn: 12 }));
+
+    // The row exists before the returned promise settles: a crash after the
+    // 202 still leaves a resumable job.
+    expect(jobRows.size).toBe(1);
+
+    const { jobId, done } = await pending;
+    const stored = jobRows.get(jobId)!;
+    expect(stored).toMatchObject({
+      sessionId: SESSION,
+      campaignId: CAMPAIGN,
+      kind: 'memories',
+      prompt: expect.stringContaining('Sergeant Vance'),
+      turn: 12,
+      charged: false,
+      error: null,
+    });
+    expect(stored.payloadHash).toMatch(/^[0-9a-f]{64}$/);
+
+    const outcome = await done;
+    expect(outcome.status).toBe('completed');
+    expect(jobRows.get(jobId)).toMatchObject({ status: 'completed', charged: true });
+  });
+
+  it('charges quota exactly once on completion, and never for a job that fails (#846)', async () => {
+    const { done } = await startMemoryExtractionJob(job());
+    await done;
+
+    expect(quotaConsumeCalls).toHaveLength(1);
+    expect(quotaConsumeCalls[0]).toMatchObject({
+      userId: 'user-1',
+      plan: 'free',
+      type: 'llm_system',
+      units: 1,
+    });
+
+    extractResult = { error: 'All extraction models failed', text: '' };
+    const failed = await startMemoryExtractionJob(job());
+    await failed.done;
+
+    // The failure path is never charged; the unit is only consumed on completion.
+    // The job is released back to pending for its next attempt, uncharged.
+    expect(quotaConsumeCalls).toHaveLength(1);
+    const failedRow = jobRows.get(failed.jobId)!;
+    expect(failedRow.status).toBe('pending');
+    expect(failedRow.attempts).toBe(1);
+    expect(failedRow.charged).toBe(false);
+    // Remove the row so the scheduled retry timer stands down quietly.
+    jobRows.delete(failed.jobId);
+  });
+
+  it('a job accepted before a simulated restart runs after it (#846)', async () => {
+    // "Process 1": the route accepted the job (the row exists) and died before
+    // executing it. "Process 2" boots and resumes.
+    const id = 'restart-job-1';
+    jobRows.set(id, row(id));
+
+    const { resumed } = await resumePendingMemoryExtractionJobs();
+    expect(resumed).toBe(1);
+
+    const completed = await waitForRow(id, (r) => r.status === 'completed', 'completion');
+    expect(completed.charged).toBe(true);
+    expect(quotaConsumeCalls).toHaveLength(1);
+    expect(insertCalls).toHaveLength(1);
+    expect(insertCalls[0].rows[0]).toMatchObject({
+      sessionId: SESSION,
+      metadata: expect.objectContaining({ source: 'llm_extraction', jobId: id }),
+    });
+  });
+
+  it('resume never double-runs a job that is already executing (#846)', async () => {
+    const id = 'inflight-job-1';
+    jobRows.set(id, row(id, { status: 'running', attempts: 1, updatedAt: new Date() }));
+
+    const { resumed } = await resumePendingMemoryExtractionJobs();
+    // A running row with a fresh heartbeat is not even listed, let alone claimed.
+    expect(resumed).toBe(0);
+    await flush();
+    await flush();
+
+    expect(jobRows.get(id)).toMatchObject({ status: 'running', attempts: 1 });
+    expect(insertCalls).toHaveLength(0);
+    expect(quotaConsumeCalls).toHaveLength(0);
+  });
+
+  it('reclaims a stale running job and charges it exactly once (#846)', async () => {
+    const id = 'stale-job-1';
+    jobRows.set(
+      id,
+      row(id, { status: 'running', attempts: 1, updatedAt: new Date(Date.now() - 20 * 60 * 1000) }),
+    );
+
+    await resumePendingMemoryExtractionJobs();
+    const completed = await waitForRow(id, (r) => r.status === 'completed', 'completion');
+
+    expect(completed.attempts).toBe(2);
+    expect(completed.charged).toBe(true);
+    expect(quotaConsumeCalls).toHaveLength(1);
+    expect(insertCalls).toHaveLength(1);
+  });
+
+  it('a store error during settle never rejects done; the row is released for retry (#846)', async () => {
+    completeThrowsOnce = true;
+
+    const { jobId, done } = await startMemoryExtractionJob(job());
+    const outcome = await done;
+
+    // No unhandled rejection: the settle guard recovered by releasing the row.
+    expect(outcome.status).toBe('completed');
+    expect(errorLogs).toContainEqual(
+      expect.objectContaining({ msg: 'memory_extraction.settle_failed', jobId }),
+    );
+    const recovered = await waitForRow(jobId, (r) => r.status === 'pending', 'settle recovery');
+    expect(recovered.error).toBe('settle failed');
+
+    // A subsequent resume completes it normally: memories written once, charged once.
+    completeThrowsOnce = false;
+    await resumePendingMemoryExtractionJobs();
+    const settled = await waitForRow(jobId, (r) => r.status === 'completed', 'resume completion');
+    expect(settled.charged).toBe(true);
+    expect(insertCalls).toHaveLength(1);
+    expect(quotaConsumeCalls).toHaveLength(1);
+  });
+
+  it('a completed transition with a lost ack is still charged exactly once (#846)', async () => {
+    const realSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = ((fn: () => void) => realSetTimeout(fn, 1)) as typeof setTimeout;
+    try {
+      completeAmbiguous = true;
+
+      const { jobId, done } = await startMemoryExtractionJob(job());
+      const outcome = await done;
+
+      expect(outcome.status).toBe('completed');
+      // The ack was lost but the row did commit; the executor must not charge
+      // it twice and must not leave it uncharged: the scheduled retry lands
+      // the unit exactly once.
+      const chargedRow = await waitForRow(jobId, (r) => r.charged === true, 'charge after ack loss');
+      expect(chargedRow.status).toBe('completed');
+      expect(quotaConsumeCalls).toHaveLength(1);
+      expect(insertCalls).toHaveLength(1);
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+    }
+  });
+
+  it('a charge that throws at completion is never retried; it alerts instead (#846)', async () => {
+    // Cap timer delays so any scheduled retry would fire at once if one existed.
+    const realSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = ((fn: () => void) =>
+      realSetTimeout(fn, 1)) as typeof setTimeout;
+    try {
+      // A throw out of checkQuotaAndConsume is ambiguous: the consume may have
+      // COMMITTED with a lost ack (QuotaUnavailableError out of sql.begin after
+      // the insert landed). Retrying could consume twice, so the executor must
+      // alert instead — the one outcome worse than a missed unit.
+      quotaConsumeError = new Error('QuotaUnavailableError: store down');
+
+      const { jobId, done } = await startMemoryExtractionJob(job());
+      const outcome = await done;
+
+      expect(outcome.status).toBe('completed');
+      const row = jobRows.get(jobId)!;
+      expect(row.status).toBe('completed');
+      expect(row.charged).toBe(false);
+      expect(quotaConsumeCalls).toHaveLength(1);
+      expect(insertCalls).toHaveLength(1);
+      expect(alerts).toContain('memory_extraction_charge_failed');
+
+      // The store comes back; still no retry fires — the alert is the record.
+      quotaConsumeError = null;
+      await flush();
+      await flush();
+      expect(quotaConsumeCalls).toHaveLength(1);
+      expect(jobRows.get(jobId)!.charged).toBe(false);
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+    }
+  });
+
+  it('a job at the attempts cap is terminally failed on resume, never reclaimed (#846)', async () => {
+    // A job that killed its process mid-run three times: attempts=3, still
+    // 'running' with a stale heartbeat. Without a cap, every restart would
+    // reclaim it forever.
+    const id = 'crasher-job-1';
+    jobRows.set(
+      id,
+      row(id, { status: 'running', attempts: 3, updatedAt: new Date(Date.now() - 20 * 60 * 1000) }),
+    );
+
+    const { resumed } = await resumePendingMemoryExtractionJobs();
+    expect(resumed).toBe(0);
+
+    const failed = await waitForRow(id, (r) => r.status === 'failed', 'exhaustion failure');
+    expect(failed.error).toContain('attempts exhausted');
+    expect(failed.charged).toBe(false);
+    expect(quotaConsumeCalls).toHaveLength(0);
+    expect(insertCalls).toHaveLength(0);
+  });
+
+  it('a job that keeps failing is retried, then terminally failed and never charged (#846)', async () => {
+    extractResult = { error: 'persistent outage', text: '' };
+    const id = 'flaky-job-1';
+    jobRows.set(id, row(id));
+
+    for (const expectedAttempts of [1, 2]) {
+      await resumePendingMemoryExtractionJobs();
+      await waitForRow(
+        id,
+        (r) => r.status === 'pending' && r.attempts === expectedAttempts,
+        `release after attempt ${expectedAttempts}`,
+      );
+      // Clear the in-process retry timer's target so it stands down quietly.
+      jobRows.delete(id);
+      jobRows.set(id, row(id, { status: 'pending', attempts: expectedAttempts }));
+    }
+
+    await resumePendingMemoryExtractionJobs();
+    const failed = await waitForRow(id, (r) => r.status === 'failed', 'terminal failure');
+
+    expect(failed.attempts).toBe(3);
+    expect(failed.error).toBe('persistent outage');
+    expect(failed.charged).toBe(false);
+    expect(quotaConsumeCalls).toHaveLength(0);
+    expect(insertCalls).toHaveLength(0);
   });
 });

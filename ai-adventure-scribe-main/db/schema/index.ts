@@ -73,3 +73,6 @@ export * from './narrative-state';
 
 // Player feedback submitted from the Send feedback modal.
 export * from './feedback';
+
+// Persisted memory extraction job queue (#846).
+export * from './memory-extraction-jobs';

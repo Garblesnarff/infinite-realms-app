@@ -164,6 +164,22 @@ export class MemoryService {
     });
   }
 
+  /**
+   * #846: extraction writes stamp every row with their job id (`metadata.jobId`).
+   * A job whose execution was interrupted after the insert landed — a crash, or a
+   * shutdown release that lost the completion race — is resumed or reclaimed, and
+   * its executor asks this first so the same memories are never written twice.
+   * Session-scoped: the caller owns the session, verified at job accept.
+   */
+  static async existsByExtractionJobId(jobId: string, sessionId: string): Promise<boolean> {
+    const rows = await db
+      .select({ id: memories.id })
+      .from(memories)
+      .where(and(eq(memories.sessionId, sessionId), sql`metadata ->> 'jobId' = ${jobId}`))
+      .limit(1);
+    return rows.length > 0;
+  }
+
   static async insert(records: NewMemory[], userId: string) {
     if (records.length === 0) return [];
 

@@ -4,6 +4,7 @@ import { NotFoundError } from '../../lib/errors.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { AIUsageService } from '../../services/ai-usage-service.js';
+import { countActiveMemoryExtractionJobs } from '../../services/memory-extraction-job-store.js';
 import { startMemoryExtractionJob } from '../../services/memory-extraction-job.js';
 import { SessionService } from '../../services/session-service.js';
 
@@ -24,8 +25,11 @@ export const MEMORY_EXTRACTION_PROMPT_MAX_CHARS = 80_000;
  * browser aborted at 10 s and the model took 13–44 s. Here the server owns the whole job and
  * writes the memories itself when the model finishes; see services/memory-extraction-job.ts.
  *
- * Everything that can be refused is refused before the 202 — auth, session ownership, quota —
- * so an accepted job only fails on the model or the write, and both are logged by job id.
+ * Everything that can be refused is refused before the 202 — auth, session ownership, and a
+ * quota-availability check — so an accepted job only fails on the model or the write, and both
+ * are logged by job id. The quota unit itself is charged when the job completes (#846), never
+ * at accept, so a job that never runs is never charged. The accepted row is persisted before
+ * the 202, so a restart loses nothing; the next startup resumes it.
  *
  * The per-minute limit is the same 'llm' bucket /v1/llm/extract sat behind, and the bucket is
  * shared with it: a burst of extractions and chat turns draw on one budget, as before (#2186).
@@ -49,18 +53,28 @@ export const memoryExtractionRoutes = new Elysia({ prefix: '/v1/memory-extractio
       }
 
       // System quota, as /v1/llm/extract used: extraction does not count against chat quota.
-      const quota = await AIUsageService.checkQuotaAndConsume({
+      // #846: the accept path checks availability without consuming; the unit is consumed
+      // when the job completes, so a job that never runs is never charged. The check stays
+      // fail-closed (#2673): getQuotaStatus has a display fallback to a stale memory counter
+      // on a DB read error, so probe the store first — an unreachable usage store refuses
+      // the request (throws QuotaUnavailableError), exactly as checkQuotaAndConsume did.
+      // The remaining budget also reserves one unit per accepted-but-unfinished job, so a
+      // burst of 202s cannot promise more extractions than the quota will pay for.
+      await AIUsageService.assertUsageStoreAvailable();
+      const quotaStatus = await AIUsageService.getQuotaStatus({
         userId: user!.userId,
         plan: user!.plan ?? 'free',
         type: 'llm_system',
-        units: 1,
       });
-      if (!quota.allowed) {
+      const reserved = await countActiveMemoryExtractionJobs(user!.userId);
+      if (quotaStatus.remaining - reserved < 1) {
         set.status = 402;
-        return { error: 'AI quota exceeded', resetAt: quota.resetAt };
+        return { error: 'AI quota exceeded', resetAt: quotaStatus.resetAt };
       }
 
-      const { jobId } = startMemoryExtractionJob({
+      // Persists the job row before the 202 (#846). A persistence failure throws,
+      // so an unstored job is never acknowledged.
+      const { jobId } = await startMemoryExtractionJob({
         userId: user!.userId,
         plan: user!.plan ?? 'free',
         sessionId: session.id,

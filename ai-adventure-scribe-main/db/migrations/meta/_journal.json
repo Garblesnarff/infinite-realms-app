@@ -162,6 +162,13 @@
       "when": 1792004488979,
       "tag": "0022_perpetual_malice",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792465366588,
+      "tag": "0025_persist_memory_extraction_jobs",
+      "breakpoints": true
     }
   ]
 }

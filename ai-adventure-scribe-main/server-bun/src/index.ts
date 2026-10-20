@@ -4,7 +4,10 @@ import { getEnv } from './lib/env.js';
 import { logger } from './lib/logger';
 import { startIdleEncounterSweep } from './services/combat/idle-encounter-sweeper.js';
 import { startNpcTurnSweep } from './services/combat/npc-turn-drain.js';
-import { logAbandonedMemoryExtractionJobs } from './services/memory-extraction-job.js';
+import {
+  resumePendingMemoryExtractionJobs,
+  settleInFlightMemoryExtractionJobs,
+} from './services/memory-extraction-job.js';
 import { startModelHealthChecks, validateConfiguredModels } from './services/model-health.js';
 
 // Validate the environment at startup. lib/env.ts validates lazily, so the server
@@ -26,8 +29,20 @@ function shutdown(signal: string): Promise<void> {
 
   shutdownPromise = (async () => {
     logger.info({ msg: `Received ${signal}, shutting down gracefully...` });
-    // Extraction jobs run after their 202, so no open request holds them; they die with the process.
-    logAbandonedMemoryExtractionJobs(signal);
+    // Extraction jobs run after their 202, so no open request holds them. They are persisted
+    // (#846): give in-flight executions up to 3 s to finish on their own. Rows still running
+    // at exit are NOT released — a released row is claimable by the handoff process while
+    // this process's model call is still live, and two live executors can write duplicate
+    // memories. The stale-running reclaim picks the leftovers up; they are never dropped.
+    await Promise.race([
+      settleInFlightMemoryExtractionJobs(signal).catch((error: unknown) => {
+        logger.error({
+          msg: 'Failed to settle in-flight memory extraction jobs',
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }),
+      new Promise((resolve) => setTimeout(resolve, 3000)),
+    ]);
 
     const server = app.server;
     const forceCloseTimer = setTimeout(() => {
@@ -95,6 +110,15 @@ app.listen({ port: PORT, reusePort: true }, () => {
     return;
   }
   startModelHealthChecks();
+  // Extraction jobs are persisted before their 202 (#846), so the ones a restart
+  // interrupted are still in the table: resume them now. Fire-and-forget with the
+  // failure logged — serving traffic matters more than the backlog draining first.
+  void resumePendingMemoryExtractionJobs().catch((error: unknown) => {
+    logger.error({
+      msg: 'Failed to resume pending memory extraction jobs',
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
   // The server's existing scheduled path, same as the model health checks above: hourly in
   // this process rather than a crontab entry, so it needs no host change (#2556).
   startIdleEncounterSweep();
