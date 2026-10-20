@@ -18,12 +18,12 @@
  */
 import { afterAll, beforeAll, expect, it } from 'bun:test';
 import { eq } from 'drizzle-orm';
+
 import {
   characterConcentration,
   characters,
   gameSessions,
 } from '../../../../../db/schema/index';
-
 import {
   closeRealDb,
   describeWithDb,
@@ -31,6 +31,7 @@ import {
   realDb,
   testId,
 } from '../../__tests__/fixtures/real-db.js';
+
 import type * as ConcentrationService from '../concentration-service.js';
 import type * as SpellCastConcentration from '../spell-cast-concentration.js';
 
