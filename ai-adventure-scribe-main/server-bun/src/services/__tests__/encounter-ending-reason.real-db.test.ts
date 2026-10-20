@@ -47,6 +47,7 @@ import {
   dialogueHistory,
   experienceEvents,
   gameSessions,
+  inventoryItems,
   tacticalMaps,
 } from '../../../../db/schema/index';
 
@@ -66,6 +67,9 @@ const { saveTacticalMap } = await importWithRealDb(() => import('../combat/tacti
 const { awardStoryXp, awardStoryXpOnce } = await importWithRealDb(() => import('../dm/story-xp.js'));
 const { executeCombatIntent } = await importWithRealDb(
   () => import('../combat/combat-intent-service.js'),
+);
+const { getCombatDamageSummary } = await importWithRealDb(
+  () => import('../combat/combat-damage-summary.js'),
 );
 
 if (!hasRealDb) {
@@ -1157,5 +1161,253 @@ describeWithDb('combat victory XP uses the XP seated on each monster (#374)', ()
     } finally {
       loggerModule.logger.info = info;
     }
+  });
+});
+
+describeWithDb('a won fight reads blow first, Victory second (#570)', () => {
+  const db = hasRealDb ? realDb() : (null as never);
+  const userId = testId('victory-order-user');
+
+  const created = {
+    campaignId: '',
+    characterIds: [] as string[],
+    sessionIds: [] as string[],
+  };
+
+  /**
+   * One hero (or a companion) holding the turn over a golem on its last hit point.
+   * The killer is a real character with an equipped Longsword — the weapon the
+   * production attack resolves from inventory — exactly as in
+   * npc-turn-auto-advance.real-db.test.ts. No tactical map: attacks resolve in
+   * place there too.
+   */
+  const seedFight = async (killer: 'hero' | 'companion') => {
+    if (!created.campaignId) {
+      [{ id: created.campaignId }] = await db
+        .insert(campaigns)
+        .values({ userId, name: testId('victory-order-camp') })
+        .returning({ id: campaigns.id });
+    }
+    const mkCharacter = async (name: string) => {
+      const [{ id }] = await db
+        .insert(characters)
+        .values({ userId, campaignId: created.campaignId, name, level: 5, class: 'Fighter' })
+        .returning({ id: characters.id });
+      created.characterIds.push(id);
+      await db.insert(characterStats).values({
+        characterId: id,
+        strength: 20,
+        armorClass: 15,
+        maxHitPoints: 40,
+        currentHitPoints: 40,
+        speed: 30,
+      });
+      await db
+        .insert(inventoryItems)
+        .values({ characterId: id, name: 'Longsword', itemType: 'weapon', isEquipped: true });
+      return id;
+    };
+    const heroCharId = await mkCharacter(testId('victory-hero'));
+    const companionCharId = killer === 'companion' ? await mkCharacter(testId('victory-companion')) : null;
+
+    const [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId: created.campaignId, characterId: heroCharId, sessionNumber: 1, status: 'active' })
+      .returning({ id: gameSessions.id });
+    created.sessionIds.push(sessionId);
+
+    const [{ id: encounterId }] = await db
+      .insert(combatEncounters)
+      .values({ sessionId, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
+      .returning({ id: combatEncounters.id });
+
+    // Turn order: the killer holds the opening turn, the hero second (when the
+    // companion kills), the golem last.
+    const killerCharId = companionCharId ?? heroCharId;
+    const parts = await db
+      .insert(combatParticipants)
+      .values([
+        {
+          encounterId,
+          characterId: killerCharId,
+          name: killer === 'companion' ? 'Victory Companion' : 'Victory Hero',
+          participantType: 'player',
+          turnOrder: 0,
+          initiative: 20,
+          armorClass: 15,
+          maxHp: 40,
+          speed: 30,
+        },
+        ...(companionCharId
+          ? [
+              {
+                encounterId,
+                characterId: heroCharId,
+                name: 'Victory Hero',
+                participantType: 'player' as const,
+                turnOrder: 1,
+                initiative: 15,
+                armorClass: 15,
+                maxHp: 40,
+                speed: 30,
+              },
+            ]
+          : []),
+        {
+          encounterId,
+          name: 'Victory Golem',
+          participantType: 'monster',
+          turnOrder: companionCharId ? 2 : 1,
+          initiative: 10,
+          armorClass: 12,
+          maxHp: 11,
+          speed: 30,
+        },
+      ])
+      .returning({ id: combatParticipants.id, turnOrder: combatParticipants.turnOrder });
+    const byOrder = new Map(parts.map((part) => [part.turnOrder, part.id]));
+    const killerId = byOrder.get(0)!;
+    const golemId = byOrder.get(companionCharId ? 2 : 1)!;
+    await db.insert(combatParticipantStatus).values([
+      { participantId: killerId, currentHp: 40, maxHp: 40, isConscious: true },
+      ...(companionCharId
+        ? [{ participantId: byOrder.get(1)!, currentHp: 40, maxHp: 40, isConscious: true }]
+        : []),
+      { participantId: golemId, currentHp: 1, maxHp: 11, isConscious: true },
+    ]);
+    return { sessionId, encounterId, killerId, golemId };
+  };
+
+  /** The session's persisted chat rows in the order the client renders them. */
+  const chatRows = async (sid: string) => {
+    const rows = await db
+      .select({
+        message: dialogueHistory.message,
+        context: dialogueHistory.context,
+        sequenceNumber: dialogueHistory.sequenceNumber,
+      })
+      .from(dialogueHistory)
+      .where(eq(dialogueHistory.sessionId, sid))
+      .orderBy(dialogueHistory.sequenceNumber);
+    return rows.map((row) => ({
+      message: row.message,
+      intent: (row.context as { intent?: string } | null)?.intent ?? null,
+      sequenceNumber: row.sequenceNumber,
+    }));
+  };
+
+  const killingBlow = async (fight: Awaited<ReturnType<typeof seedFight>>) => {
+    // A provided d20 of 15 with +8 to hit lands on AC 12 at any damage draw; the
+    // scripted draw keeps the Longsword's damage die off the RNG for repeatability
+    // (any result kills a 1-HP golem).
+    const realRandom = Math.random;
+    Math.random = () => 0.5;
+    try {
+      return (await executeCombatIntent(
+        fight.encounterId,
+        { type: 'attack', actorId: fight.killerId, targetId: fight.golemId, d20: 15 },
+        userId,
+        'dm',
+        undefined,
+        'action_bar',
+      )) as Record<string, any>;
+    } finally {
+      Math.random = realRandom;
+    }
+  };
+
+  afterAll(async () => {
+    if (!hasRealDb) return;
+    const rows = await db
+      .select({ id: combatParticipants.id })
+      .from(combatParticipants)
+      .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
+      .where(inArray(combatEncounters.sessionId, created.sessionIds));
+    await db.delete(combatParticipantStatus).where(
+      inArray(
+        combatParticipantStatus.participantId,
+        rows.map((row) => row.id),
+      ),
+    );
+    for (const row of await db
+      .select({ id: combatEncounters.id })
+      .from(combatEncounters)
+      .where(inArray(combatEncounters.sessionId, created.sessionIds))) {
+      await db.delete(combatParticipants).where(eq(combatParticipants.encounterId, row.id));
+    }
+    await db.delete(combatEncounters).where(inArray(combatEncounters.sessionId, created.sessionIds));
+    await db.delete(gameSessions).where(inArray(gameSessions.id, created.sessionIds));
+    await db.delete(experienceEvents).where(inArray(experienceEvents.characterId, created.characterIds));
+    await db.delete(inventoryItems).where(inArray(inventoryItems.characterId, created.characterIds));
+    await db.delete(characterStats).where(inArray(characterStats.characterId, created.characterIds));
+    await db.delete(characters).where(inArray(characters.id, created.characterIds));
+    if (created.campaignId) await db.delete(campaigns).where(eq(campaigns.id, created.campaignId));
+  });
+
+  test('the killing blow\'s engine row is inserted before the Victory notice (player kill)', async () => {
+    const fight = await seedFight('hero');
+    const result = await killingBlow(fight);
+
+    expect(result.combatEnded).toBe(true);
+    expect(result.endedReason).toBe('last_hostile_defeated');
+    // The intent result carries the actor's persisted row for the client to render.
+    const ownRows = (result.engineRows ?? []) as Array<{ kind?: string; text?: string }>;
+    expect(ownRows).toHaveLength(1);
+    expect(ownRows[0].kind).toBe('player');
+    expect(ownRows[0].text).toContain('Combat ended');
+
+    const rows = await chatRows(fight.sessionId);
+    const blow = rows.find((row) => row.intent === 'combat_npc_result');
+    const victories = rows.filter((row) => row.intent === 'combat_victory_xp');
+    expect(blow).toBeTruthy();
+    expect(blow!.message).toContain('Combat ended');
+    expect(victories).toHaveLength(1);
+    expect(blow!.sequenceNumber).not.toBeNull();
+    expect(victories[0].sequenceNumber).not.toBeNull();
+    expect(blow!.sequenceNumber!).toBeLessThan(victories[0].sequenceNumber!);
+
+    // The summary the client fetches on this path carries the real damage log.
+    const summary = await getCombatDamageSummary(fight.encounterId, userId);
+    expect(summary.totalDamage).toBeGreaterThan(0);
+    const golem = summary.participants.find((p) => p.participantId === fight.golemId);
+    const hero = summary.participants.find((p) => p.participantId === fight.killerId);
+    expect(golem?.status).toBe('dead');
+    expect(golem?.damageTaken).toBe(summary.totalDamage);
+    expect(hero?.damageDealt).toBe(summary.totalDamage);
+  });
+
+  test('the killing blow\'s engine row is inserted before the Victory notice (companion kill)', async () => {
+    const fight = await seedFight('companion');
+    const result = await killingBlow(fight);
+
+    expect(result.combatEnded).toBe(true);
+    expect(result.endedReason).toBe('last_hostile_defeated');
+    const rows = await chatRows(fight.sessionId);
+    const blow = rows.find((row) => row.intent === 'combat_npc_result');
+    const victories = rows.filter((row) => row.intent === 'combat_victory_xp');
+    expect(blow).toBeTruthy();
+    expect(victories).toHaveLength(1);
+    expect(blow!.sequenceNumber!).toBeLessThan(victories[0].sequenceNumber!);
+  });
+
+  test('a non-killing attack writes no engine row and posts no Victory notice', async () => {
+    const fight = await seedFight('hero');
+    // A full-health golem: the same swing wounds but does not end the fight.
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 11 })
+      .where(eq(combatParticipantStatus.participantId, fight.golemId));
+    const result = await killingBlow(fight);
+
+    expect(result.combatEnded).toBeFalsy();
+    expect((result.engineRows ?? []) as unknown[]).toHaveLength(0);
+    const rows = await chatRows(fight.sessionId);
+    expect(rows.filter((row) => row.intent === 'combat_victory_xp')).toHaveLength(0);
+    expect(rows.filter((row) => row.intent === 'combat_npc_result')).toHaveLength(0);
+    const [encounter] = await db
+      .select({ status: combatEncounters.status })
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, fight.encounterId));
+    expect(encounter.status).toBe('active');
   });
 });

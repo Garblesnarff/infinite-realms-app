@@ -351,6 +351,7 @@ type CombatEnding = { reason: CombatEndReason; wake: WakeOutcome[] };
 async function endCombatIfResolved(
   encounterId: string,
   userId: string,
+  options: { deferVictoryNotice?: boolean } = {},
 ): Promise<CombatEnding | null> {
   const state = await CombatEncounterService.getCombatState(encounterId, userId);
   // A player who fled or yielded has left the fight, not lost it (#2580). With nobody of the
@@ -419,6 +420,7 @@ async function endCombatIfResolved(
   await concludeEncounter(encounterId, state.encounter.sessionId, userId, reason, {
     wake: plan,
     claim,
+    ...(options.deferVictoryNotice ? { deferVictoryNotice: true } : {}),
   });
   // Only the call that claimed the ending wakes anyone: a lost or refused claim wakes nobody.
   const wake = claim.claimed && plan.length ? await applyStableWake(encounterId, userId, plan) : [];
@@ -1646,10 +1648,14 @@ export async function executeCombatIntent(
     // `end_turn` joins damage as a trigger because a character can now die without any damage
     // being dealt: three failed death saving throws end a campaign, and the check that ends
     // the encounter has to run on the turn that produced the third failure.
+    // #570: the conclusion defers its victory notice to the return block below. The
+    // notice is a chat row like any other, and chat order is insertion order — posted
+    // inside the conclusion it would land ahead of this action's own row, which is
+    // only written once the settled result exists.
     let ending: CombatEnding | null = yieldEndedCombat
       ? { reason: 'player_surrendered', wake: [] }
       : damage > 0 || intent.type === 'end_turn' || intent.type === 'death_save'
-        ? await endCombatIfResolved(encounterId, userId)
+        ? await endCombatIfResolved(encounterId, userId, { deferVictoryNotice: true })
         : null;
     let combatBoundary = ending !== null;
     if (!ending) {
@@ -1668,17 +1674,65 @@ export async function executeCombatIntent(
       // The advance settles death saves for anyone the order reaches on the floor, and a third
       // failure ends a campaign without a point of damage being dealt. Same reason `end_turn`
       // triggers the check above.
-      ending = advanced ? await endCombatIfResolved(encounterId, userId) : null;
+      ending = advanced
+        ? await endCombatIfResolved(encounterId, userId, { deferVictoryNotice: true })
+        : null;
       combatBoundary = ending !== null;
       if (!ending) await publishCombatState(encounterId, userId, intent.type);
     }
     const settled = combatBoundary ? markCombatEnded(result, ending) : result;
+    // #570: the deferred victory notice goes out only once the killing action has a
+    // chat row of its own, so the transcript reads blow first, Victory second. The
+    // flush reads the award the conclusion stored; it is idempotent, and on a call
+    // that did not claim the ending it simply re-posts a lost notice, as before.
+    const flushVictoryNotice = async (): Promise<void> => {
+      if (ending?.reason !== 'last_hostile_defeated') return;
+      // The notice is transcript, not resolution: the fight is already over and
+      // the award already stored. A failed post must never fail the completed
+      // action — the catch below reads every throw as a refused action — so it
+      // is swallowed here and left to the notice's recovery points (#310).
+      try {
+        const { ensureCombatVictoryXpNotice } = await import('./combat-xp.js');
+        await ensureCombatVictoryXpNotice({
+          encounterId,
+          sessionId: encounter.sessionId,
+          userId,
+        });
+      } catch (flushError) {
+        logger.warn({ msg: 'VICTORY_NOTICE_FLUSH_FAILED', encounterId, flushError });
+      }
+    };
     if (writesEngineRow) {
       const { writeNpcEngineRow } = await import('./npc-engine-row.js');
       const actionId = submitted.actionId ?? randomUUID();
       const npcResult = { ...(settled as Record<string, unknown>), actionId };
       const engineRows = await writeNpcEngineRow(state, intent, actionId, npcResult, userId);
+      await flushVictoryNotice();
       return { ...npcResult, engineRows, sessionId: encounter.sessionId };
+    }
+    if (ending?.reason === 'last_hostile_defeated') {
+      // A player's own killing action wrote no row above: its only transcript record
+      // was the notice the client posts from this result, which is inserted after
+      // the response — behind a Victory posted here. So the actor's row is written
+      // from the settled result, exactly as a creature's is (the message builder
+      // already renders a player's row, end line included), the notice flushes
+      // behind it, and the client renders the row instead of its own notice.
+      const { writeNpcEngineRow } = await import('./npc-engine-row.js');
+      const actionId = submitted.actionId ?? randomUUID();
+      const npcResult = { ...(settled as Record<string, unknown>), actionId };
+      let engineRows: Awaited<ReturnType<typeof writeNpcEngineRow>> | null = null;
+      try {
+        engineRows = await writeNpcEngineRow(state, intent, actionId, npcResult, userId);
+      } catch (rowError) {
+        // Same reasoning as the flush: the blow landed and the ending is claimed,
+        // so a failed transcript write must not reach the catch below and be
+        // recorded as a refused action. Log it and fall through row-less: the
+        // notice still flushes, and the client posts its own notice for the
+        // blow, as it did before this row existed.
+        logger.warn({ msg: 'VICTORY_ACTOR_ROW_WRITE_FAILED', encounterId, rowError });
+      }
+      await flushVictoryNotice();
+      return engineRows ? { ...npcResult, engineRows, sessionId: encounter.sessionId } : settled;
     }
     return settled;
   } catch (error) {

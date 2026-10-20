@@ -1,4 +1,4 @@
-import { render, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, render, fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 
 import { buildNpcEngineMessage } from '../../../../../../../shared/npc-engine-message';
@@ -333,6 +333,105 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
     } finally {
       window.removeEventListener('session-engine-rows', capture);
     }
+  });
+
+  it('posts no notice of its own when the server persisted the killing attack row (#570)', async () => {
+    // The killing blow: the server now writes the actor's engine row itself and
+    // posts the Victory notice behind it, so the result carries the row
+    // (kind 'player', built by the real producer like every server row here).
+    // This section's own notice would print the same lines a second time.
+    const killResult = {
+      actorName: 'The Scholar',
+      targetName: 'Light-Eater Swarm 1',
+      hit: true,
+      finalDamage: 7,
+      targetNewHp: 0,
+      targetIsConscious: false,
+      combatEnded: true,
+      endedReason: 'last_hostile_defeated',
+    };
+    const playerRow = {
+      ...serverRow(
+        'player-row-kill',
+        'kill-action',
+        { type: 'attack', actorId: SCHOLAR_ID, targetIds: [SWARM_1_ID] },
+        killResult,
+      ),
+      kind: 'player' as const,
+    };
+    expect(playerRow.text).toContain('Combat ended');
+    vi.mocked(executeStructuredCombatActionWithBoundary).mockResolvedValue({
+      outcomes: [{ participantId: SWARM_1_ID, hit: true, finalDamage: 7, newHp: 0 }],
+      boundary: 'combat_ended',
+      result: { ...killResult, engineRows: [playerRow] },
+    } as any);
+    render(
+      <DynamicOptionsSection
+        options={[]}
+        onOptionSelect={onOptionSelect}
+        onSendMessage={onSendMessage}
+        hasDynamicOverlay
+      />,
+    );
+    fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
+
+    await waitFor(() =>
+      expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledTimes(1),
+    );
+    // Let the branch run to its finally: a macrotask drains the whole chain of
+    // already-resolved mocked promises the branch awaits after the execution.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(onSendMessage).not.toHaveBeenCalled();
+    // The fight is over: no end_turn settle follows a combat_ended boundary.
+    expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
+    expect(onOptionSelect).not.toHaveBeenCalled();
+  });
+
+  it('still posts its notice when the result carries only creature rows (#570)', async () => {
+    // Control for the case above: rows for OTHER actors (the drain) do not
+    // suppress the player's own notice — only the actor's persisted row does.
+    const npcRow = serverRow(
+      'npc-row-drain',
+      'drain-action',
+      { type: 'attack', actorId: 'a0ee13a2-0000-4000-8000-000000000003', targetIds: [SCHOLAR_ID] },
+      {
+        actorName: 'Light-Eater Swarm 2',
+        targetName: 'The Scholar',
+        hit: true,
+        finalDamage: 2,
+        targetNewHp: 8,
+        targetIsConscious: true,
+      },
+    );
+    vi.mocked(executeStructuredCombatActionWithBoundary).mockResolvedValue({
+      outcomes: [{ participantId: SWARM_1_ID, hit: true, finalDamage: 7, newHp: 0 }],
+      boundary: 'combat_ended',
+      result: {
+        actorName: 'The Scholar',
+        targetName: 'Light-Eater Swarm 1',
+        hit: true,
+        finalDamage: 7,
+        targetNewHp: 0,
+        targetIsConscious: false,
+        combatEnded: true,
+        endedReason: 'last_hostile_defeated',
+        engineRows: [npcRow],
+      },
+    } as any);
+    render(
+      <DynamicOptionsSection
+        options={[]}
+        onOptionSelect={onOptionSelect}
+        onSendMessage={onSendMessage}
+        hasDynamicOverlay
+      />,
+    );
+    fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
+
+    await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(1));
+    expect((onSendMessage.mock.calls[0][0] as { text: string }).text).toContain('Combat ended');
   });
 
   it('a movement-only approach spends no Action and keeps the turn open', async () => {

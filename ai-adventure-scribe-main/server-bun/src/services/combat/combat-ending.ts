@@ -241,6 +241,16 @@ export async function concludeEncounter(
      * wake anyone (the claimer owns the ending's side effects).
      */
     claim?: { claimed: boolean };
+    /**
+     * #570: hold the victory-XP chat line back. The award is still stored (the notice's
+     * recovery source), but no chat row is written here: the caller owns a row for the
+     * killing action that is only inserted after this returns, and the notice inserted
+     * first would sort ahead of the blow that won the fight. The caller MUST flush with
+     * `ensureCombatVictoryXpNotice` once its row exists; a caller that never does leaves
+     * the notice to the recovery points (the next conclusion of this encounter re-posts
+     * it from the stored award, as before).
+     */
+    deferVictoryNotice?: boolean;
   } = {},
 ): Promise<boolean> {
   // The live-hostile guard (#2524) sits at this one choke point: every path that sets
@@ -304,7 +314,9 @@ export async function concludeEncounter(
   // #310: recover a lost victory-XP notice before the claim. A retry that returns on
   // the already-concluded encounter re-posts the notice from the stored award without
   // re-awarding; on the first call there is no stored award yet, so this is a no-op.
-  if (reason === 'last_hostile_defeated') {
+  // Skipped when the caller defers the notice (#570): the recovery then happens at the
+  // caller's flush, so a recovered notice cannot jump ahead of the killing blow either.
+  if (reason === 'last_hostile_defeated' && !options.deferVictoryNotice) {
     await ensureCombatVictoryXpNotice({ encounterId, sessionId, userId });
   }
 
@@ -404,7 +416,10 @@ export async function concludeEncounter(
   // by the game, so the DM must not set xp_award for this victory on top of it. Recorded
   // after the victory sentence so the DM reads the outcome before the award.
   if (reason === 'last_hostile_defeated') {
-    const { awarded } = await awardCombatVictoryXp({ encounterId, sessionId, userId });
+    const { awarded } = await awardCombatVictoryXp(
+      { encounterId, sessionId, userId },
+      options.deferVictoryNotice ? { postNotice: false } : {},
+    );
     if (awarded.length) {
       const total = awarded.reduce((sum, entry) => sum + entry.xp, 0);
       const breakdown = awarded.map((entry) => `${entry.name}: +${entry.xp} XP`).join('; ');

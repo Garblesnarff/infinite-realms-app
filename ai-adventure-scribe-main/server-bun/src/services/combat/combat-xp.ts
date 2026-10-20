@@ -52,7 +52,7 @@ export async function awardCombatVictoryXp(
     sessionId: string;
     userId: string;
   },
-  deps: { noticeWriter?: EngineChatLineWriter } = {},
+  deps: { noticeWriter?: EngineChatLineWriter; postNotice?: boolean } = {},
 ): Promise<{ awarded: CombatXpAward[]; defeatedNames: string[] }> {
   const { encounterId, sessionId, userId } = input;
   try {
@@ -167,7 +167,12 @@ export async function awardCombatVictoryXp(
     }
     // The notice is recoverable, not fire-and-forget: on a retry (awarded empty because an
     // earlier call stored the award) this re-posts the lost notice from the stored award.
-    await ensureCombatVictoryXpNotice({ encounterId, sessionId, userId }, deps.noticeWriter);
+    // #570: a caller that still owes the chat a row for the killing action itself (the
+    // intent pipeline) defers the notice so the blow's row is inserted first; it flushes
+    // with `ensureCombatVictoryXpNotice` once the row exists, from this same stored award.
+    if (deps.postNotice !== false) {
+      await ensureCombatVictoryXpNotice({ encounterId, sessionId, userId }, deps.noticeWriter);
+    }
     return { awarded, defeatedNames };
   } catch (error) {
     logger.warn({
