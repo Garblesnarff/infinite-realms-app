@@ -119,6 +119,29 @@ function buildLimits(): Record<string, PlanRateConfig> {
         },
       },
     },
+    // #841: per-turn action batches (handout-actions, tactical-map/dm-actions).
+    // A turn legitimately produces up to two of these POSTs right after its
+    // /llm/generate call, so they get their own bucket instead of drawing
+    // down the 'llm' generate budget (free: 10/min) and 429ing mid-combat.
+    'dm-actions': {
+      key: 'dm-actions',
+      perIp: {
+        windowMs: getRateWindow('RATE_LIMIT_DM_ACTIONS_IP_WINDOW', 60_000),
+        maxByPlan: {
+          free: getRateMax('RATE_LIMIT_DM_ACTIONS_IP_FREE', 120),
+          pro: getRateMax('RATE_LIMIT_DM_ACTIONS_IP_PRO', 600),
+          enterprise: getRateMax('RATE_LIMIT_DM_ACTIONS_IP_ENTERPRISE', 2000),
+        },
+      },
+      perUser: {
+        windowMs: getRateWindow('RATE_LIMIT_DM_ACTIONS_USER_WINDOW', 60_000),
+        maxByPlan: {
+          free: getRateMax('RATE_LIMIT_DM_ACTIONS_USER_FREE', 60),
+          pro: getRateMax('RATE_LIMIT_DM_ACTIONS_USER_PRO', 300),
+          enterprise: getRateMax('RATE_LIMIT_DM_ACTIONS_USER_ENTERPRISE', 1000),
+        },
+      },
+    },
     default: {
       key: 'global',
       perIp: {

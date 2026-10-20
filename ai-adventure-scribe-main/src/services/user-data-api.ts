@@ -483,11 +483,14 @@ export const userDataApi = {
     sessionId: string,
     actions: TacticalMapActionPayload[],
     signal?: AbortSignal,
+    // #841: the DM reply these actions came from. The server binds its
+    // corrective model call to a reply the session owns.
+    dmReplyId?: string,
   ): Promise<Response> =>
     requestResponse(`/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/dm-actions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ actions }),
+      body: JSON.stringify({ actions, ...(dmReplyId ? { dmReplyId } : {}) }),
       ...(signal ? { signal } : {}),
     }),
   applyDmHandoutActions: (
@@ -500,11 +503,14 @@ export const userDataApi = {
       giver: string;
     }>,
     signal?: AbortSignal,
+    // #841: the DM reply these actions came from. The server binds its
+    // corrective model call to a reply the session owns.
+    dmReplyId?: string,
   ): Promise<Response> =>
     requestResponse(`/v1/sessions/${encodeURIComponent(sessionId)}/handout-actions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ actions }),
+      body: JSON.stringify({ actions, ...(dmReplyId ? { dmReplyId } : {}) }),
       ...(signal ? { signal } : {}),
     }),
   getSessionJournal: (sessionId: string): Promise<{ entries: JournalHandoutEntry[] }> =>

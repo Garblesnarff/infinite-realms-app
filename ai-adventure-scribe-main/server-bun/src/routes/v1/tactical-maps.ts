@@ -7,6 +7,7 @@ import { requestIdOf } from './combat/intents.js';
 import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
+import { planRateLimit } from '../../middleware/rate-limit.js';
 import {
   proposeAoECast,
   resolveAoECast,
@@ -25,6 +26,10 @@ import {
 import { destroyTacticalCombatMap } from '../../services/combat/tactical-combat-lifecycle.js';
 import { loadActiveTacticalMap } from '../../services/combat/tactical-map-store.js';
 import { buildTurnOrderBlock, getCurrentTurnInfo } from '../../services/combat/turn-order-block.js';
+import {
+  prepareCorrectiveCall,
+  type CorrectiveUsageService,
+} from '../../services/dm/corrective-model-guard.js';
 import { dmResponseSchema, parseDmResponse } from '../../services/dm/dm-response-schema.js';
 import { LLMProviderService } from '../../services/llm-provider-service.js';
 import { checkLineOfSight, getCover, getDistance, getValidMoves } from '../../tactical/engine.js';
@@ -67,12 +72,20 @@ async function buildNarrationContractBlock(params: {
   );
 }
 
+/**
+ * #841: one DM turn's map-action batch is bounded. A busy combat turn moves
+ * every entity once; 100 allows several full-board turns of headroom while
+ * stopping oversized-batch abuse.
+ */
+export const MAX_TACTICAL_MAP_ACTIONS_PER_REQUEST = 100;
+
 /** Session-scoped tactical API; all writes delegate to the shared engine dispatcher. */
 export interface TacticalMapRouteOptions {
   auth?: typeof requireAuth;
   sessionOwnership?: typeof verifySessionOwnership;
   activeMapLoader?: typeof loadActiveTacticalMap;
   dmTacticalActions?: typeof applyDmTacticalActions;
+  usageService?: CorrectiveUsageService;
 }
 
 export function createTacticalMapRoutes({
@@ -80,6 +93,7 @@ export function createTacticalMapRoutes({
   sessionOwnership = verifySessionOwnership,
   activeMapLoader = loadActiveTacticalMap,
   dmTacticalActions = applyDmTacticalActions,
+  usageService,
 }: TacticalMapRouteOptions = {}) {
   return (
     new Elysia({ prefix: '/v1/sessions' })
@@ -209,55 +223,6 @@ export function createTacticalMapRoutes({
             })),
         };
       })
-      .post(
-        '/:id/tactical-map/dm-actions',
-        async ({ params, body, user, set }) => {
-          const access = await sessionOwnership(params.id, user.userId);
-          if (!access.success) {
-            set.status = access.error!.status;
-            return { error: access.error!.message };
-          }
-          // Every array the canonical parser validates must be present: a missing one (this
-          // endpoint omitted `handout_actions`) rejected every DM map-action batch with a 422.
-          const parsed = parseDmResponse({
-            text: '',
-            map_actions: body.actions,
-            narration_segments: [],
-            roll_requests: [],
-            combat_transition: 'none',
-            scene_spec: null,
-            combatants: [],
-            combat_actions: [],
-            handout_actions: [],
-          });
-          if (!parsed.success) {
-            set.status = 422;
-            return { error: 'Invalid DM map action batch', issues: parsed.issues };
-          }
-          const applied = await dmTacticalActions(
-            params.id,
-            parsed.data.map_actions,
-            async (refusal) => {
-              const prompt = `You are correcting one rejected tactical map action. Return a complete DM structured response with ONLY one legal replacement in map_actions and all other arrays empty. Do not write prose. If the rejection lists current entities, copy one of those entityId values verbatim.\n\n<rejection>${JSON.stringify(refusal)}</rejection>`;
-              const response = await LLMProviderService.generate({
-                prompt,
-                maxTokens: 700,
-                temperature: 0,
-                responseSchema: dmResponseSchema,
-              });
-              if (response.error) return null;
-              try {
-                const correction = parseDmResponse(JSON.parse(response.text));
-                return correction.success ? (correction.data.map_actions[0] ?? null) : null;
-              } catch {
-                return null;
-              }
-            },
-          );
-          return applied;
-        },
-        { body: t.Object({ actions: t.Array(t.Any()) }) },
-      )
       .post(
         '/:id/tactical-map/aoe-cast',
         async (context) => {
@@ -400,6 +365,101 @@ export function createTacticalMapRoutes({
               ),
             }),
           ),
+        },
+      )
+      // #841: the dm-actions corrective reprompt is a paid model call, so this route
+      // sits behind the plan rate limiter — in its own 'dm-actions' bucket,
+      // not the shared 'llm' generate bucket, so a turn's action batches
+      // never 429 legit turns mid-combat. It is registered last because a
+      // mid-chain limiter would also throttle the reads, aoe-cast and end
+      // above; paths are distinct, so the order changes nothing else.
+      .use(planRateLimit('dm-actions'))
+      .post(
+        '/:id/tactical-map/dm-actions',
+        async ({ params, body, user, set }) => {
+          const access = await sessionOwnership(params.id, user.userId);
+          if (!access.success) {
+            set.status = access.error!.status;
+            return { error: access.error!.message };
+          }
+          // Every array the canonical parser validates must be present: a missing one (this
+          // endpoint omitted `handout_actions`) rejected every DM map-action batch with a 422.
+          const parsed = parseDmResponse({
+            text: '',
+            map_actions: body.actions,
+            narration_segments: [],
+            roll_requests: [],
+            combat_transition: 'none',
+            scene_spec: null,
+            combatants: [],
+            combat_actions: [],
+            handout_actions: [],
+          });
+          if (!parsed.success) {
+            set.status = 422;
+            return { error: 'Invalid DM map action batch', issues: parsed.issues };
+          }
+          const applied = await dmTacticalActions(
+            params.id,
+            parsed.data.map_actions,
+            async (refusal) => {
+              // #841: the correction is a paid model call. It runs only when
+              // the refused action came from a DM reply this session owns
+              // and the caller's llm_system quota is not exhausted; the
+              // charge lands after a usable correction (#196). A denied gate
+              // degrades the refusal with no provider call.
+              const corrective = await prepareCorrectiveCall({
+                usageService,
+                userId: user.userId,
+                plan: user.plan,
+                sessionId: params.id,
+                kind: 'tactical_map',
+                dmReplyId: body.dmReplyId ?? null,
+              });
+              if (!corrective.ok) return null;
+              const prompt = `You are correcting one rejected tactical map action. Return a complete DM structured response with ONLY one legal replacement in map_actions and all other arrays empty. Do not write prose. If the rejection lists current entities, copy one of those entityId values verbatim.\n\n<rejection>${JSON.stringify(refusal)}</rejection>`;
+              // The provider may fail (timeout, network): that is a refused
+              // correction, not a 500 — the engine already logged the dropped
+              // action, and a charge only ever follows a usable correction
+              // (#196).
+              let response: Awaited<ReturnType<typeof LLMProviderService.generate>>;
+              try {
+                response = await LLMProviderService.generate({
+                  prompt,
+                  maxTokens: 700,
+                  temperature: 0,
+                  responseSchema: dmResponseSchema,
+                });
+              } catch {
+                return null;
+              }
+              if (response.error) return null;
+              try {
+                const correction = parseDmResponse(JSON.parse(response.text));
+                if (!correction.success) return null;
+                const action = correction.data.map_actions[0] ?? null;
+                if (!action) return null;
+                await corrective.recordUsage({
+                  provider: response.provider,
+                  model: response.model,
+                  inputTokens: response.usage?.inputTokens,
+                  outputTokens: response.usage?.outputTokens,
+                });
+                return action;
+              } catch {
+                return null;
+              }
+            },
+          );
+          return applied;
+        },
+        {
+          body: t.Object({
+            actions: t.Array(t.Any(), { maxItems: MAX_TACTICAL_MAP_ACTIONS_PER_REQUEST }),
+            // #841: the DM reply whose actions this batch corrects. The
+            // corrective model call is bound to a reply the session owns.
+            dmReplyId: t.Optional(t.String({ maxLength: 255 })),
+          }),
         },
       )
   );

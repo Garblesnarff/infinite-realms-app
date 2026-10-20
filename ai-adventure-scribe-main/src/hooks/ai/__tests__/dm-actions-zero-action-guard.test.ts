@@ -298,6 +298,9 @@ describe('the zero-action guard inside the DM action pipeline', () => {
       activeEncounter: null,
       result: {
         text: 'The journal is yours.',
+        // #841: the reply these actions came from; the server binds its
+        // corrective model call to it.
+        dmMessageId: 'reply-1',
         handout_actions: [
           authored,
           { mode: 'authored', key: 'broken', title: 'Broken', giver: 'Darkwater' },
@@ -305,6 +308,11 @@ describe('the zero-action guard inside the DM action pipeline', () => {
       },
     });
 
-    expect(userDataApi.applyDmHandoutActions).toHaveBeenCalledWith('session-1', [authored]);
+    expect(userDataApi.applyDmHandoutActions).toHaveBeenCalledWith(
+      'session-1',
+      [authored],
+      undefined,
+      'reply-1',
+    );
   });
 });

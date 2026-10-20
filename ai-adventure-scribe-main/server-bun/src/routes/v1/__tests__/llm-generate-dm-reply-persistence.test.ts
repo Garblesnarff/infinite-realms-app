@@ -182,6 +182,16 @@ describe('POST /v1/llm/generate — the server keeps the DM reply it generated (
     });
   });
 
+  it('echoes the DM reply id on an ordinary turn, so the action routes can bind corrections to it (#841)', async () => {
+    // withRollTurn above takes the unguarded branch for ordinary turns (no
+    // canonicalMessageId): the response must still carry the reply id, or the
+    // handout/tactical dm-actions posts can never bind a corrective call.
+    const response = await generate(explorationReply);
+
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body.dmReplyMessageId).toBe(DM_MESSAGE_ID);
+  });
+
   it('records the DM turn in ai_usage with its session, so "did the DM reply?" is one query', async () => {
     await generate(explorationReply);
 

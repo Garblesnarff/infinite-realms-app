@@ -620,11 +620,23 @@ export async function handleDmActionsAndTransitions(
 
   // DM map intents are one authenticated server batch. The server owns
   // legality, the single corrective LLM retry, persistence, and broadcast.
+  // #841: bind the server's corrective model call to the DM reply these
+  // actions came from by passing its message id.
   if (sessionId && result.map_actions?.length) {
     const mapActions = result.map_actions as TacticalMapActionPayload[];
     const actionResponse = signal
-      ? await userDataApi.applyDmTacticalActions(sessionId, mapActions, signal)
-      : await userDataApi.applyDmTacticalActions(sessionId, mapActions);
+      ? await userDataApi.applyDmTacticalActions(
+          sessionId,
+          mapActions,
+          signal,
+          result.dmMessageId as string | undefined,
+        )
+      : await userDataApi.applyDmTacticalActions(
+          sessionId,
+          mapActions,
+          undefined,
+          result.dmMessageId as string | undefined,
+        );
     if (!actionResponse.ok) {
       logger.warn('Server refused DM tactical action batch', await actionResponse.json());
     }
@@ -641,8 +653,18 @@ export async function handleDmActionsAndTransitions(
     }
     if (handoutActions.length > 0) {
       const handoutResponse = signal
-        ? await userDataApi.applyDmHandoutActions(sessionId, handoutActions, signal)
-        : await userDataApi.applyDmHandoutActions(sessionId, handoutActions);
+        ? await userDataApi.applyDmHandoutActions(
+            sessionId,
+            handoutActions,
+            signal,
+            result.dmMessageId as string | undefined,
+          )
+        : await userDataApi.applyDmHandoutActions(
+            sessionId,
+            handoutActions,
+            undefined,
+            result.dmMessageId as string | undefined,
+          );
       if (handoutResponse.ok) {
         const payload = (await handoutResponse.json()) as { entries?: JournalHandoutEntry[] };
         deliveredHandouts = payload.entries;
