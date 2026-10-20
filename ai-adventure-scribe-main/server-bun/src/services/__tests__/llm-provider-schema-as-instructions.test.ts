@@ -76,6 +76,9 @@ function useAnthropicThenGemini(): void {
   process.env.OPENROUTER_API_KEY = 'test-key-for-stubbed-provider';
   process.env.OPENROUTER_TEXT_MODEL = 'anthropic/claude-haiku-5.5';
   process.env.OPENROUTER_FALLBACK_MODELS = 'google/gemini-3.1-flash-lite';
+  // #783: anthropic/ defaults to the forced-tool path. These tests pin the
+  // instructed path (schema as system text) explicitly, the path they cover.
+  process.env.LLM_VENDOR_CAPABILITIES = '{"anthropic/": {"schemaDelivery": "instructed"}}';
 }
 
 describe('#633 modelSupportsStrictSchema', () => {

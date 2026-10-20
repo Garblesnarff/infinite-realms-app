@@ -63,6 +63,8 @@ export const getConfiguredGeminiModels = (): string[] => getGeminiModelCandidate
 export const modelSupportsStrictSchema = (model: string): boolean =>
   getVendorCapabilityProfile(model).strictJsonSchema;
 
+export type SchemaDelivery = 'strict' | 'instructed' | 'tool';
+
 /**
  * #782 item 4: per-vendor capability profile for DM schema delivery.
  * Keyed by vendor prefix — the part of an OpenRouter model id before the
@@ -70,9 +72,17 @@ export const modelSupportsStrictSchema = (model: string): boolean =>
  */
 export interface VendorCapabilityProfile {
   /**
-   * The vendor accepts OpenRouter's strict `json_schema` response_format.
-   * False means the schema rides as system-prompt instructions and the
-   * reply is enforced locally with ajv instead.
+   * #783: how the DM schema reaches the model.
+   * - `strict`: OpenRouter `response_format` json_schema (+ require_parameters).
+   * - `instructed`: schema as system-prompt text; reply enforced locally with ajv.
+   * - `tool`: schema as ONE forced tool (`tool_choice` names it); the reply is
+   *   the tool call's arguments. Validated after stripping keys the schema does
+   *   not name. Used by anthropic/, where the instructed path answers in prose.
+   */
+  schemaDelivery: SchemaDelivery;
+  /**
+   * Derived from `schemaDelivery` (true only for `strict`). Kept so existing
+   * callers and the `LLM_VENDOR_CAPABILITIES` override keep working.
    */
   strictJsonSchema: boolean;
   /**
@@ -110,6 +120,7 @@ const EPIC_SCHEMA_BUDGET = {
 
 const DEFAULT_VENDOR_CAPABILITIES: Record<string, VendorCapabilityProfile> = {
   'google/': {
+    schemaDelivery: 'strict',
     strictJsonSchema: true,
     ...EPIC_SCHEMA_BUDGET,
     requiresAllProperties: false,
@@ -118,6 +129,7 @@ const DEFAULT_VENDOR_CAPABILITIES: Record<string, VendorCapabilityProfile> = {
     supportsTemperature: true,
   },
   'anthropic/': {
+    schemaDelivery: 'tool',
     strictJsonSchema: false,
     ...EPIC_SCHEMA_BUDGET,
     requiresAllProperties: false,
@@ -126,6 +138,7 @@ const DEFAULT_VENDOR_CAPABILITIES: Record<string, VendorCapabilityProfile> = {
     supportsTemperature: false,
   },
   'openai/': {
+    schemaDelivery: 'strict',
     strictJsonSchema: true,
     ...EPIC_SCHEMA_BUDGET,
     requiresAllProperties: false,
@@ -134,6 +147,7 @@ const DEFAULT_VENDOR_CAPABILITIES: Record<string, VendorCapabilityProfile> = {
     supportsTemperature: true,
   },
   'mistralai/': {
+    schemaDelivery: 'strict',
     strictJsonSchema: true,
     ...EPIC_SCHEMA_BUDGET,
     requiresAllProperties: false,
@@ -142,6 +156,7 @@ const DEFAULT_VENDOR_CAPABILITIES: Record<string, VendorCapabilityProfile> = {
     supportsTemperature: true,
   },
   'meta-llama/': {
+    schemaDelivery: 'strict',
     strictJsonSchema: true,
     ...EPIC_SCHEMA_BUDGET,
     requiresAllProperties: false,
@@ -157,6 +172,7 @@ const DEFAULT_VENDOR_CAPABILITIES: Record<string, VendorCapabilityProfile> = {
  * output.
  */
 const CONSERVATIVE_CAPABILITIES: VendorCapabilityProfile = {
+  schemaDelivery: 'instructed',
   strictJsonSchema: false,
   ...EPIC_SCHEMA_BUDGET,
   requiresAllProperties: false,
@@ -165,7 +181,10 @@ const CONSERVATIVE_CAPABILITIES: VendorCapabilityProfile = {
   supportsTemperature: true,
 };
 
+const SCHEMA_DELIVERY_VALUES: readonly SchemaDelivery[] = ['strict', 'instructed', 'tool'];
+
 const CAPABILITY_FIELDS: (keyof VendorCapabilityProfile)[] = [
+  'schemaDelivery',
   'strictJsonSchema',
   'maxUnions',
   'maxOptional',
@@ -184,6 +203,11 @@ const sanitizeCapabilityOverride = (value: unknown): Partial<VendorCapabilityPro
   const record = value as Record<string, unknown>;
   for (const field of CAPABILITY_FIELDS) {
     const v = record[field];
+    if (field === 'schemaDelivery') {
+      if (SCHEMA_DELIVERY_VALUES.includes(v as SchemaDelivery))
+        out.schemaDelivery = v as SchemaDelivery;
+      continue;
+    }
     if (typeof v === typeof CONSERVATIVE_CAPABILITIES[field]) {
       (out as Record<string, unknown>)[field] = v;
     }
@@ -233,5 +257,19 @@ export const getVendorCapabilityProfile = (model: string): VendorCapabilityProfi
   const prefix = slash > 0 ? normalized.slice(0, slash + 1) : '';
   const base = (prefix && DEFAULT_VENDOR_CAPABILITIES[prefix]) || CONSERVATIVE_CAPABILITIES;
   const override = prefix ? readCapabilityOverrides()[prefix] : undefined;
-  return { ...base, ...override };
+  const merged: VendorCapabilityProfile = { ...base, ...override };
+  // #783: keep schemaDelivery and strictJsonSchema in agreement. An override
+  // naming schemaDelivery wins; an override naming only strictJsonSchema
+  // flips the delivery only when it changes the strict flag.
+  if (override?.schemaDelivery !== undefined) {
+    merged.strictJsonSchema = merged.schemaDelivery === 'strict';
+  } else if (override?.strictJsonSchema !== undefined) {
+    if (override.strictJsonSchema !== base.strictJsonSchema) {
+      merged.schemaDelivery = override.strictJsonSchema ? 'strict' : 'instructed';
+    }
+    merged.strictJsonSchema = merged.schemaDelivery === 'strict';
+  } else {
+    merged.strictJsonSchema = merged.schemaDelivery === 'strict';
+  }
+  return merged;
 };
