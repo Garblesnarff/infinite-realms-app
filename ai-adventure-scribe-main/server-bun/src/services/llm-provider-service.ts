@@ -132,6 +132,16 @@ export const isTruncatedFinishReason = (reason: string | null | undefined): bool
 
 const GEMINI_MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
 export const TEXT_PROVIDER_TIMEOUT_MS = 60_000;
+/**
+ * #783: short-timeout seam for tests. Read lazily (not a module-load
+ * constant) so a test can shrink the 60s abort deadline via
+ * LLM_TEXT_PROVIDER_TIMEOUT_MS without touching production behavior;
+ * when unset, the default above applies exactly as before.
+ */
+const textProviderTimeoutMs = (): number => {
+  const raw = Number(process.env.LLM_TEXT_PROVIDER_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : TEXT_PROVIDER_TIMEOUT_MS;
+};
 /** #783: name of the single forced tool that carries the DM schema on the tool path. */
 const DM_REPLY_TOOL_NAME = 'dm_reply';
 /** #633: instruction line sent ahead of the schema for models without strict json_schema. */
@@ -371,7 +381,7 @@ const getGeminiModelIds = async (apiKey: string): Promise<Set<string>> => {
       if (pageToken) url.searchParams.set('pageToken', pageToken);
 
       const resp = await fetch(url.toString(), {
-        signal: AbortSignal.timeout(TEXT_PROVIDER_TIMEOUT_MS),
+        signal: AbortSignal.timeout(textProviderTimeoutMs()),
       });
       if (!resp.ok) break;
       const data = (await resp.json()) as {
@@ -775,7 +785,7 @@ export class LLMProviderService {
               'X-Title': 'AI Adventure Scribe',
             },
             body: JSON.stringify(reqBody),
-            signal: AbortSignal.timeout(TEXT_PROVIDER_TIMEOUT_MS),
+            signal: AbortSignal.timeout(textProviderTimeoutMs()),
           });
 
           if (response.ok) {
@@ -1046,7 +1056,7 @@ export class LLMProviderService {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(geminiBody),
-              signal: AbortSignal.timeout(TEXT_PROVIDER_TIMEOUT_MS),
+              signal: AbortSignal.timeout(textProviderTimeoutMs()),
             },
           );
         } catch (error) {
@@ -1270,7 +1280,7 @@ export class LLMProviderService {
             'X-Title': 'AI Adventure Scribe - Memory Extraction',
           },
           body: JSON.stringify(reqBody),
-          signal: AbortSignal.timeout(TEXT_PROVIDER_TIMEOUT_MS),
+          signal: AbortSignal.timeout(textProviderTimeoutMs()),
         });
 
         if (!response.ok) {
