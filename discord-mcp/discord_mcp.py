@@ -12,6 +12,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
 import aiohttp
 from dotenv import load_dotenv
@@ -251,9 +252,11 @@ async def search_members(query: str, limit: int = 10) -> str:
 
     limit = max(1, min(100, limit))
 
+    # #850 (audit F21): encode the query — a name like "A&B #C" would
+    # otherwise change the query and move limit into the fragment.
     data = await discord_request(
         "GET",
-        f"/guilds/{DISCORD_GUILD_ID}/members/search?query={query}&limit={limit}"
+        f"/guilds/{DISCORD_GUILD_ID}/members/search?query={quote(query, safe='')}&limit={limit}"
     )
 
     if isinstance(data, dict) and "error" in data:
