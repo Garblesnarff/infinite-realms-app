@@ -20,7 +20,7 @@ export const paladin: CharacterClass = {
       id: 'divine-sense',
       name: 'Divine Sense',
       description:
-        'You can use your action to detect good and evil. Until the end of your next turn, you know the location of any celestial, fiend, or undead within 60 feet that is not behind total cover. You can use this feature once per long rest.',
+        'You can use your action to detect good and evil. Until the end of your next turn, you know the location of any celestial, fiend, or undead within 60 feet that is not behind total cover. You can use this feature a number of times equal to 1 + your Charisma modifier, regaining all uses when you finish a long rest.',
     },
     {
       id: 'lay-on-hands',

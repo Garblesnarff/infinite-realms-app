@@ -2,6 +2,7 @@ import { Loader2, Sparkles, Image as ImageIcon, Wand2, CheckCircle, ImageOff } f
 import React, { useId } from 'react';
 
 import { useCharacterFinalization } from './character-finalization/use-character-finalization';
+import { isDraconicBloodline } from '../../../../shared/class-feature-choices';
 import {
   computeServerArmorClass,
   withStartingPackageEquipped,
@@ -65,6 +66,7 @@ const CharacterFinalization: React.FC = () => {
         },
         creationArmor,
         character?.fightingStyles,
+        isDraconicBloodline(character?.classFeatures),
       )
     : null;
   return (

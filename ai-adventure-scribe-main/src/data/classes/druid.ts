@@ -36,6 +36,8 @@ export const druid: CharacterClass = {
     'Spears',
   ],
   toolProficiencies: ['Herbalism kit'],
+  // Druids know Druidic, the secret language of druids, from 1st level.
+  languages: ['Druidic'],
   spellcasting: {
     ability: 'wisdom' as keyof AbilityScores,
     cantripsKnown: 2,
@@ -43,10 +45,10 @@ export const druid: CharacterClass = {
   },
   classFeatures: [
     {
-      id: 'druidcraft',
-      name: 'Druidcraft',
+      id: 'druidic',
+      name: 'Druidic',
       description:
-        "You know the druidcraft cantrip. It doesn't count against your number of cantrips known.",
+        'You know Druidic, the secret language of druids. You can speak the language and use it to leave hidden messages. You can also use it to communicate basic ideas with other druids without speaking aloud.',
     },
     {
       id: 'spellcasting',

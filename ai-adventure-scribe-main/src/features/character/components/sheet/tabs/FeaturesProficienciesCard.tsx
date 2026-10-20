@@ -4,6 +4,7 @@ import type { Character } from '@/types/character';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { getSubclassArmorProficiencies } from '@/utils/character/subclass-grants';
 
 interface FeaturesProficienciesCardProps {
   character: Character;
@@ -11,13 +12,20 @@ interface FeaturesProficienciesCardProps {
 
 /**
  * Proficiencies card rendering the character's actual proficiencies (#214).
- * Armor and weapons come from the character's class; languages and tools from
- * the stored character record. Empty sections render "None", never placeholders.
+ * Armor and weapons come from the character's class, plus any armor the
+ * chosen subclass grants (e.g. a Life Domain cleric's heavy armor);
+ * languages and tools from the stored character record. Empty sections
+ * render "None", never placeholders.
  */
 export const FeaturesProficienciesCard: React.FC<FeaturesProficienciesCardProps> = ({
   character,
 }) => {
-  const armor = character.class?.armorProficiencies ?? [];
+  const armor = [
+    ...new Set([
+      ...(character.class?.armorProficiencies ?? []),
+      ...getSubclassArmorProficiencies(character),
+    ]),
+  ];
   const weapons = character.class?.weaponProficiencies ?? [];
   const languages = character.languages ?? [];
   const tools = character.toolProficiencies ?? [];

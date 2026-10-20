@@ -49,10 +49,21 @@ export type ArmorClassWarning = (message: string, context: Record<string, unknow
 export interface ArmorClassOptions {
   fightingStyles?: unknown;
   warn?: ArmorClassWarning;
+  /**
+   * Draconic Resilience (Draconic Bloodline sorcerer): while wearing no
+   * armour, the character's base AC is 13 instead of 10. A shield still
+   * adds its bonus on top. Callers resolve the origin from the stored
+   * class-feature choices (`isDraconicBloodline` in
+   * shared/class-feature-choices.ts).
+   */
+  draconicResilience?: boolean;
 }
 
 /** Unarmoured AC before any dexterity bonus (PHB pg. 14). */
 export const UNARMORED_ARMOR_CLASS = 10;
+
+/** Draconic Resilience unarmoured base AC before any dexterity bonus. */
+export const DRACONIC_RESILIENCE_ARMOR_CLASS = 13;
 
 /** Medium armour caps the dexterity bonus; heavy armour allows none. */
 export const MEDIUM_ARMOR_MAX_DEXTERITY_BONUS = 2;
@@ -213,7 +224,11 @@ export function describeArmorClass(
   const dexterityBonus = armor
     ? dexterityBonusFor(armor.category, dexterityModifier)
     : dexterityModifier;
-  const base = armor ? armor.base : UNARMORED_ARMOR_CLASS;
+  const base = armor
+    ? armor.base
+    : options.draconicResilience
+      ? DRACONIC_RESILIENCE_ARMOR_CLASS
+      : UNARMORED_ARMOR_CLASS;
 
   return {
     armorClass:

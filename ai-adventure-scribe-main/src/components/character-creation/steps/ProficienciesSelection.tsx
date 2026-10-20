@@ -53,7 +53,12 @@ const ProficienciesSelection: React.FC<ProficienciesSelectionProps> = ({ effecti
 
   // Compute fixed proficiencies
   const fixedSkills = [
-    ...(currentBackground?.skillProficiencies || []),
+    ...new Set([
+      ...(currentBackground?.skillProficiencies || []),
+      // Racial skill proficiencies (e.g. a half-orc's Menacing grants
+      // Intimidation) are fixed grants, never class choices.
+      ...(currentRace?.skillProficiencies || []),
+    ]),
     // Note: Saving throws are separate, handled in savingThrowProficiencies
   ];
   const fixedTools = [
@@ -62,7 +67,13 @@ const ProficienciesSelection: React.FC<ProficienciesSelectionProps> = ({ effecti
       ...(currentBackground?.toolProficiencies || []),
     ]),
   ];
-  const fixedLanguages = currentRace?.languages || [];
+  const fixedLanguages = [
+    ...new Set([
+      ...(currentRace?.languages || []),
+      // Class-granted languages (e.g. Druidic for druids) come with the class.
+      ...(currentClass?.languages || []),
+    ]),
+  ];
   const fixedSavingThrows = currentClass?.savingThrowProficiencies || [];
 
   // Skill choices from class

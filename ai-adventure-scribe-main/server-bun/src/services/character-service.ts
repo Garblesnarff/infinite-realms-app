@@ -30,6 +30,7 @@ import {
   characters,
 } from '../../../db/schema/index';
 import { computeArmorClass, type ArmorClassEquipmentItem } from '../../../shared/armor-class';
+import { isDraconicBloodline } from '../../../shared/class-feature-choices';
 import {
   computeServerArmorClass,
   withStartingPackageEquipped,
@@ -73,6 +74,7 @@ async function recomputeServerDerivedStats(characterId: string): Promise<void> {
       level: characters.level,
       subrace: characters.subrace,
       fightingStyles: characters.fightingStyles,
+      classFeatures: characters.classFeatures,
     })
     .from(characters)
     .where(eq(characters.id, characterId))
@@ -85,6 +87,7 @@ async function recomputeServerDerivedStats(characterId: string): Promise<void> {
     .limit(1);
   if (!stats) return;
 
+  const draconicBloodline = isDraconicBloodline(character.classFeatures);
   const armorClass = computeServerArmorClass(
     character.class,
     {
@@ -94,6 +97,7 @@ async function recomputeServerDerivedStats(characterId: string): Promise<void> {
     },
     await readArmorClassEquipment(characterId),
     character.fightingStyles,
+    draconicBloodline,
   );
   const updates: Partial<NewCharacterStats> = { armorClass, updatedAt: new Date() };
 
@@ -106,6 +110,7 @@ async function recomputeServerDerivedStats(characterId: string): Promise<void> {
       character.class,
       stats.constitution,
       character.subrace,
+      { draconicBloodline },
     );
     const storedMax = stats.maxHitPoints ?? maxHitPoints;
     const storedCurrent = stats.currentHitPoints ?? maxHitPoints;
@@ -283,10 +288,12 @@ export class CharacterService {
         // #620: the server is the only place that computes level-1 HP and AC.
         // The client sends inputs (class, ability scores, equipment); any
         // armor_class or hit-point values it sent are ignored.
+        const draconicBloodline = isDraconicBloodline(data.classFeatures);
         const maxHitPoints = computeLevel1MaxHitPoints(
           data.class,
           stats.constitution,
           data.subrace,
+          { draconicBloodline },
         );
         await tx.insert(characterStats).values({
           ...stats,
@@ -300,6 +307,7 @@ export class CharacterService {
             },
             seededEquipment ? toArmorClassItems(seededEquipment) : [],
             data.fightingStyles,
+            draconicBloodline,
           ),
           maxHitPoints,
           currentHitPoints: maxHitPoints,

@@ -3,6 +3,7 @@ import React from 'react';
 
 import { CharacterPreviewAbilityScores } from './CharacterPreviewAbilityScores';
 import { CharacterPreviewHeader } from './CharacterPreviewHeader';
+import { isDraconicBloodline } from '../../../../shared/class-feature-choices';
 import { computeLevel1MaxHitPoints } from '../../../../shared/level-1-hit-points';
 import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
 
@@ -70,6 +71,7 @@ const CharacterPreview: React.FC = () => {
         character.class.name,
         finalScores.constitution?.score ?? 10,
         subrace?.name ?? null,
+        { draconicBloodline: isDraconicBloodline(character.classFeatures) },
       )
     : null;
 

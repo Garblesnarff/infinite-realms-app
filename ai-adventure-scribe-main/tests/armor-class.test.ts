@@ -158,3 +158,28 @@ describe('Defense fighting style (#824)', () => {
     ).toBe(16);
   });
 });
+
+describe('Draconic Resilience (#899)', () => {
+  it('uses base 13 + DEX while unarmoured', () => {
+    // Hark D20-011: a DEX +2 Draconic sorcerer showed AC 12; the PHB
+    // Draconic Resilience base makes it 13 + 2 = 15.
+    expect(computeArmorClass([], 2, { draconicResilience: true })).toBe(15);
+    expect(describeArmorClass([], 2, { draconicResilience: true }).armorClass).toBe(15);
+    expect(computeArmorClass([], 2)).toBe(12);
+  });
+
+  it('still adds a shield on top of the 13 base', () => {
+    expect(computeArmorClass([worn('Shield', 'shield')], 2, { draconicResilience: true })).toBe(
+      17,
+    );
+  });
+
+  it('does not apply while wearing armour — the armour base wins', () => {
+    expect(
+      computeArmorClass([worn('Leather Armor', 'armor')], 2, { draconicResilience: true }),
+    ).toBe(13);
+    expect(
+      computeArmorClass([worn('Chain Mail', 'armor')], 2, { draconicResilience: true }),
+    ).toBe(16);
+  });
+});

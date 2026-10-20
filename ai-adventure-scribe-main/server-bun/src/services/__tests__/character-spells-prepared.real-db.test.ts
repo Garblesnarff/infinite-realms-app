@@ -338,3 +338,157 @@ describeWithDb('character spell prepared flags (#211 QA-041)', () => {
     expect(sheet.cantrips).toHaveLength(1);
   });
 });
+
+describeWithDb('Life Domain domain spells (#899)', () => {
+  // Lazily (re)created in beforeAll: the suite above closes the shared
+  // fixture client in its afterAll, and realDb() recreates it on demand.
+  let db: ReturnType<typeof realDb>;
+  const userId = testId('life-domain-user');
+
+  let campaignId: string;
+  let clericClassId: string;
+  let characterId = '';
+  const spellIdsByName = new Map<string, string>();
+
+  // The L1 Life Domain cleric from the audit (D20-003): WIS 16, so the
+  // preparation cap is WIS mod (+3) + level (1) = 4 chosen spells. The
+  // domain spells Bless and Cure Wounds are always prepared ON TOP of the
+  // cap — the saved character carries 6 prepared spells, not 4.
+  const CHOSEN = ['Guiding Bolt', 'Healing Word', 'Sanctuary', 'Shield of Faith'];
+  const DOMAIN = ['Bless', 'Cure Wounds'];
+
+  beforeAll(async () => {
+    db = realDb();
+    httpUserId = userId;
+    [{ id: campaignId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: 'Life Domain Test Campaign' })
+      .returning({ id: campaigns.id });
+
+    // saveCharacterSpells resolves the class by the name the client sends.
+    [{ id: clericClassId }] = await db
+      .insert(classes)
+      .values({ name: 'Cleric', hitDie: 8 })
+      .returning({ id: classes.id });
+
+    const spellDefs = [
+      { name: 'Guidance', level: 0, school: 'Divination', castingTime: '1 action', rangeText: 'Touch', duration: 'Concentration, up to 1 minute', description: 'Test cantrip' },
+      ...[...CHOSEN, ...DOMAIN].map((name) => ({
+        name,
+        level: 1,
+        school: 'Abjuration',
+        castingTime: '1 action',
+        rangeText: '30 feet',
+        duration: 'Instantaneous',
+        description: 'Test spell',
+      })),
+    ];
+    for (const def of spellDefs) {
+      const [{ id }] = await db
+        .insert(spells)
+        .values(def)
+        .returning({ id: spells.id });
+      spellIdsByName.set(def.name, id);
+      await db
+        .insert(classSpells)
+        .values({ classId: clericClassId, spellId: id, spellLevel: def.level })
+        .onConflictDoNothing();
+    }
+  });
+
+  afterAll(async () => {
+    if (characterId) {
+      await db.delete(characterSpells).where(eq(characterSpells.characterId, characterId));
+      await db.delete(characterStats).where(eq(characterStats.characterId, characterId));
+      await db.delete(characters).where(eq(characters.id, characterId));
+    }
+    const ids = [...spellIdsByName.values()];
+    if (ids.length > 0) {
+      await db.delete(classSpells).where(inArray(classSpells.spellId, ids));
+      await db.delete(spells).where(inArray(spells.id, ids));
+    }
+    if (clericClassId) {
+      await db.delete(classes).where(eq(classes.id, clericClassId));
+    }
+    if (campaignId) {
+      await db.delete(campaigns).where(eq(campaigns.id, campaignId));
+    }
+  });
+
+  it('persists chosen + domain spells as prepared: 6 prepared, none duplicated, cap untouched', async () => {
+    const app = await pipeline;
+    expect(app).toBeTruthy();
+
+    // 1. Wizard "Complete": the create payload carries the prepared list the
+    //    advanced-spellcasting step produced — 4 chosen + 2 domain names.
+    const allPreparedNames = [...CHOSEN, ...DOMAIN];
+    const createRes = await app.handle(
+      new Request('http://localhost/v1/characters', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          name: 'Life Cleric 899',
+          class: 'Cleric',
+          level: 1,
+          campaign_id: campaignId,
+          cantrips: 'Guidance',
+          known_spells: allPreparedNames.join(','),
+          prepared_spells: allPreparedNames.join(','),
+        }),
+      }),
+    );
+    expect(createRes.status).toBe(201);
+    characterId = ((await createRes.json()) as { id: string }).id;
+
+    // 2. The wizard's spell save: the client sends every spell id with the
+    //    prepared set — chosen and domain ids alike (the hook appends the
+    //    domain ids to preparedSpellIds, deduped).
+    const allIds = [...spellIdsByName.values()];
+    const preparedIds = allPreparedNames.map((name) => {
+      const id = spellIdsByName.get(name);
+      if (!id) throw new Error(`spell not seeded: ${name}`);
+      return id;
+    });
+    const saveRes = await app.handle(
+      new Request(`http://localhost/v1/characters/${characterId}/spells`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ spells: allIds, className: 'Cleric', prepared: preparedIds }),
+      }),
+    );
+    expect(saveRes.status).toBe(200);
+    expect(((await saveRes.json()) as { success: boolean }).success).toBe(true);
+
+    // 3. Junction rows: one row per spell (no duplicates), the 6 leveled
+    //    spells prepared, the cantrip never prepared.
+    const rows = await db
+      .select({ spellId: characterSpells.spellId, isPrepared: characterSpells.isPrepared })
+      .from(characterSpells)
+      .where(eq(characterSpells.characterId, characterId));
+    expect(rows).toHaveLength(7);
+    expect(new Set(rows.map((r) => r.spellId)).size).toBe(7);
+    const preparedRows = rows.filter((r) => r.isPrepared);
+    expect(preparedRows).toHaveLength(6);
+    expect(preparedRows.map((r) => r.spellId).sort()).toEqual([...preparedIds].sort());
+
+    // 4. The sheet's read: exactly the 6 prepared spells come back prepared —
+    //    the 4 chosen (the cap) plus both domain spells on top of it.
+    const getRes = await app.handle(
+      new Request(`http://localhost/v1/characters/${characterId}/spells`, {
+        headers: authHeaders,
+      }),
+    );
+    expect(getRes.status).toBe(200);
+    const sheet = (await getRes.json()) as {
+      spells: Array<{ name: string; is_prepared: boolean }>;
+      cantrips: Array<{ name: string }>;
+    };
+    expect(sheet.spells).toHaveLength(6);
+    const preparedNames = sheet.spells.filter((s) => s.is_prepared).map((s) => s.name);
+    expect(new Set(preparedNames).size).toBe(6);
+    expect(preparedNames.sort()).toEqual([...allPreparedNames].sort());
+    expect(preparedNames.filter((n) => !DOMAIN.includes(n))).toHaveLength(4);
+    expect(preparedNames.filter((n) => DOMAIN.includes(n)).sort()).toEqual([...DOMAIN].sort());
+    expect(sheet.cantrips).toHaveLength(1);
+  });
+});
