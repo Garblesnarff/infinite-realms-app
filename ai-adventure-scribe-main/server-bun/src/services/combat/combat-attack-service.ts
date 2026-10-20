@@ -16,6 +16,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { logAttackResolution, participantSlug } from './attack-telemetry.js';
+import { mookGroupAttackBonus } from './boss-moves.js';
 import { resolveAttackRules } from './combat-rules.js';
 import {
   claimTurnActionAndResolve,
@@ -35,13 +36,16 @@ import {
   getActiveConditionNames,
   getEquippedWeaponProfile,
   monsterAttackSource,
+  countStandingMooks,
 } from './data-access.js';
 import { healthConditionForCombat } from './health-condition.js';
 import { autoCritReason, checkHit, checkAutoCrit } from './hit-check.js';
+import { markPlayerDamageProvocation } from './npc-provocation.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { aggregateResistances } from './resistance-resolver.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { abilityModifier } from '../../../../shared/ability-modifier';
+import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
 import { assessPlayerCombatSpell, resolveCatalogSpell } from '../../data/spellData.js';
 import { rollD20, rollD20Pair } from '../../lib/dice.js';
 import { NotFoundError, InternalServerError, BusinessLogicError } from '../../lib/errors.js';
@@ -51,8 +55,6 @@ import { entitySlug } from '../../tactical/identity.js';
 import { CombatHPService } from '../combat-hp-service.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { SpellSlotsService } from '../spell-slots-service.js';
-import { markPlayerDamageProvocation } from './npc-provocation.js';
-import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
 
 import type { WeaponAttack, CreatureStats } from '../../../../db/schema/index';
 import type {
@@ -365,7 +367,7 @@ export class CombatAttackService {
             cover: getCover(tacticalMap, attackerId, targetId),
           }
         : undefined;
-    const rules = resolveAttackRules({
+    const baseRules = resolveAttackRules({
       strength: attackerProfile.scores.str ?? 10,
       dexterity: attackerProfile.scores.dex ?? 10,
       level: attackerProfile.level,
@@ -378,6 +380,17 @@ export class CombatAttackService {
       attackerConditions,
       targetConditions,
     });
+    // #728 (house rule): a mook attacking with its pack gets +1 to hit for each extra standing
+    // mook, to a maximum of +3. Applied here, inside prepareAttack, so the proposal popup and
+    // the resolution promise and use the same number.
+    let mookGroupBonus = 0;
+    if (attackerData.participant.isMook === true) {
+      mookGroupBonus = mookGroupAttackBonus(await countStandingMooks(encounterId));
+    }
+    const rules =
+      mookGroupBonus > 0
+        ? { ...baseRules, attackBonus: baseRules.attackBonus + mookGroupBonus }
+        : baseRules;
 
     return {
       attackerData,
@@ -389,6 +402,7 @@ export class CombatAttackService {
       targetConditions,
       tacticalMap,
       rules,
+      mookGroupBonus,
     };
   }
 
@@ -454,6 +468,7 @@ export class CombatAttackService {
       targetConditions,
       tacticalMap,
       rules,
+      mookGroupBonus,
     } = await this.prepareAttack(encounterId, input, userId);
 
     if (!rules.legal) {
@@ -559,6 +574,7 @@ export class CombatAttackService {
           advantage: rules.advantage,
           disadvantage: rules.disadvantage,
           attackBonus: rules.attackBonus,
+          ...(mookGroupBonus > 0 ? { mookGroupBonus } : {}),
           ...acFacts,
           totalAttackRoll: hitCheck.totalAttackRoll,
           effectiveResistance: false,
@@ -650,6 +666,7 @@ export class CombatAttackService {
           advantage: rules.advantage,
           disadvantage: rules.disadvantage,
           attackBonus: rules.attackBonus,
+          ...(mookGroupBonus > 0 ? { mookGroupBonus } : {}),
           ...acFacts,
           totalAttackRoll: hitCheck.totalAttackRoll,
           damage: damageCalc.baseDamage,
@@ -1242,6 +1259,8 @@ export class CombatAttackService {
                   sourceDescription: spell.name,
                   ignoreResistances: true, // Already applied in damage calculation
                   ignoreImmunities: true, // Already applied in damage calculation
+                  // #810: a mook that saves does not drop on the halved damage.
+                  saveSucceeded: savedSuccessfully,
                 },
                 userId,
                 targetParticipant,

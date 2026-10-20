@@ -169,6 +169,13 @@
       "when": 1792465366588,
       "tag": "0025_persist_memory_extraction_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792490751234,
+      "tag": "0026_boss_moves",
+      "breakpoints": true
     }
   ]
 }

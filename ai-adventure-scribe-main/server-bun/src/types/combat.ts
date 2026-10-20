@@ -636,6 +636,11 @@ export interface AttackResult {
   disadvantage?: boolean;
   /** The engine's attack modifier, kept beside the die so the total can be audited. */
   attackBonus?: number;
+  /**
+   * #728 (house rule): the pack bonus included in `attackBonus` when a mook attacked with
+   * other standing mooks (+1 per extra mook, max +3). Present only when greater than 0.
+   */
+  mookGroupBonus?: number;
   targetAC: number;
   /** Seated armor class before cover. Present when the line should explain the bonus. */
   baseAc?: number;
@@ -1136,6 +1141,16 @@ export interface ApplyDamageOptions {
    * by callers, so no call site can forget it.
    */
   targetIsPlayer?: boolean;
+  /**
+   * #728 (house rule): a mook has no HP track. Any damage it takes from a hit or a failed save
+   * drops it to 0. Set from the participant row by CombatHPService.applyDamage.
+   */
+  targetIsMook?: boolean;
+  /**
+   * The target succeeded on a saving throw against this damage (#810). A mook that saves
+   * does not drop even when the halved damage lands. Set by callers that resolve saves.
+   */
+  saveSucceeded?: boolean;
   /**
    * Skip the per-hit cap. For damage that is not an attack roll (a hazard, a trap, a DM-resolved
    * blow): the cap exists to keep one monster roll from ending a run, and applying a different

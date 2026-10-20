@@ -324,7 +324,11 @@ export class CombatHPService {
         damageResistances: participant.damageResistances,
         damageVulnerabilities: participant.damageVulnerabilities,
       },
-      { ...options, targetIsPlayer: participant.participantType === 'player' },
+      {
+        ...options,
+        targetIsPlayer: participant.participantType === 'player',
+        targetIsMook: participant.isMook === true,
+      },
     );
 
     // Every application of the cap is announced. A cap that silently rewrote damage would be

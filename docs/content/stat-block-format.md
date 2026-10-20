@@ -40,3 +40,22 @@ Plain unnamed attack. No parenthetical, and no reach or range, so the swing is `
 - Damage on this line is unchanged: dice as `NdN` or `NdN+N`, then one damage type. Save-based abilities (a breath weapon, a gaze, "DC 14 or be stunned") are still not executed.
 
 The name parenthetical is the form added for #2213 (draft PR #2220). It is not on `main` yet. Until that parser is merged, `Attack` has to be followed directly by the colon. A parenthetical between them is not skipped, and the `+N` is not read. `range` / `reach` words are safe to write before that merge; they do not change distance until the same parser is on `main`.
+
+## Boss Moves and mooks (#728)
+
+A boss can author three scripted moves, one line each: `Opener`, `Turnabout`, and `Finale`. Each line has five parts separated by `|`, and every part is required:
+
+```text
+**Opener:** Starlit Lash | effect: strike | tell: The geometry folds toward one point. | telegraph: none | counterplay: Keep out of reach.
+**Turnabout:** Gaze of the Void | effect: frighten wis | tell: Every torch in the chasm dims. | telegraph: none | counterplay: Hold to the rope.
+**Finale:** Reality Break | effect: burst int | tell: Your thoughts echo back a half-beat wrong. | telegraph: The walls take on a deeper shade of dark. | counterplay: Take the Dodge action while it is telegraphed.
+```
+
+- The first part is the move's name: letters, spaces, hyphens, and apostrophes.
+- `effect` is a closed list. `strike` is an attack roll. `burst <ability>` is a save for half damage. `frighten <ability>` is a save, and a failed save leaves the hero frightened for one round. Ability is one of `str dex con int wis cha`. Any other effect is refused, and that move is not used.
+- `telegraph` is `none` for Opener and Turnabout. A Finale needs a real telegraph, because it is announced one round before it fires.
+- A line that breaks this shape is refused whole and its label is reported as unparsed. Nothing is guessed.
+
+A boss uses at most one move per round, each move once per fight. Damage comes from the boss's own attack line: Opener is half of it, Turnabout is all of it, and Finale is one and a half times. No move averages more than 40% of the hero's max HP.
+
+`Mook: yes` marks a minion with no HP track (a house rule, not SRD 5.1). Any damage that lands on a mook drops it.

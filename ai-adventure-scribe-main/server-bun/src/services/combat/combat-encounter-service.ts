@@ -611,6 +611,9 @@ export class CombatEncounterService {
           // last_hostile_defeated. From the authored stat block's XP field, else the SRD
           // catalog entry it resolved to, else NULL. Never re-derived from the display name.
           xpValue: monster?.xp ?? null,
+          // #728: a mook has no HP track (house rule); a boss carries its three authored moves.
+          isMook: monster?.mook === true,
+          bossMoves: monster?.bossMoves ?? null,
           // Which rung of the resolution ladder the XP came from (SRD catalog id or bible
           // key), for auditing.
           monsterRef: monster?.monsterId ?? input.monsterId ?? null,

@@ -146,6 +146,9 @@ mock.module('../../../services/combat/data-access.js', () => ({
   verifyCharacterOwnership: async () => {},
   verifyEncounterAccess: async () => {},
   getParticipantInEncounter: async () => null,
+  // combat-attack-service imports it for the mook pack bonus (#728); a mocked
+  // module missing an export is a hard SyntaxError for every importer.
+  countStandingMooks: async () => 0,
 }));
 mock.module('../../../services/combat/combat-turn-resources.js', () => ({
   consumeAction: async () => {},

@@ -196,6 +196,10 @@ build_replay_list() {
         # as 0005 above: a bare drizzle index prefix sorts before every date-named migration,
         # so without this it replays against a database with no combat tables yet.
         0006_record_why_an_encounter_ended.sql) echo "20260727_000000	$f"; continue;;
+        # ALTERs combat_participants and references combat_encounters (#728 Boss Moves). Pinned
+        # after the newest supabase migration (20261012_combat_participants_xp.sql), so the
+        # combat tables exist before it runs.
+        0026_boss_moves.sql) echo "20261013_000000	$f"; continue;;
         # Deliberate no-op snapshot re-baseline; safe anywhere, pinned last.
         0004_schema_baseline.sql) echo "99999999_999999	$f"; continue;;
       esac

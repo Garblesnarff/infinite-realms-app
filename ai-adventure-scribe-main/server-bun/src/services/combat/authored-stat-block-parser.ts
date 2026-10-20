@@ -1,3 +1,11 @@
+import {
+  BOSS_MOVE_ABILITIES,
+  BOSS_MOVE_SLOTS,
+  type AuthoredBossMove,
+  type BossMoveEffect,
+  type BossMoveSlot,
+} from './boss-moves.js';
+
 /**
  * Parser for campaign-authored monster stat blocks.
  *
@@ -30,7 +38,9 @@ export type AuthoredStatField =
   | 'damageType'
   | 'damageResistances'
   | 'damageImmunities'
-  | 'damageVulnerabilities';
+  | 'damageVulnerabilities'
+  | 'mook'
+  | 'bossMoves';
 
 export interface ParsedStatBlock {
   maxHp?: number;
@@ -56,6 +66,10 @@ export interface ParsedStatBlock {
   damageResistances?: string[];
   damageImmunities?: string[];
   damageVulnerabilities?: string[];
+  /** `Mook: yes` marks a minion with no HP track (house rule). */
+  mook?: boolean;
+  /** The Opener, Turnabout and Finale lines, when all three parse. See `parseBossMoveLine`. */
+  bossMoves?: AuthoredBossMove[];
   /** Fields whose label was present but whose value did not match the required shape. */
   unparsedLabels: string[];
   /** Readable fields with unsupported text that was discarded. */
@@ -340,9 +354,86 @@ export function parseAuthoredStatBlock(rawContent: string): ParsedStatBlock {
   if (parsed.damageDice !== undefined || parsed.damageType !== undefined) {
     parsed.unparsedLabels = parsed.unparsedLabels.filter((label) => label !== DAMAGE_LABELS[0]);
   }
+  const mook = readLabelled(content, ['Mook'], '(?:yes|no)\\b');
+  if (mook) record('mook', mook.raw.toLowerCase() === 'yes');
+  else if (hasLabel(content, ['Mook'])) parsed.unparsedLabels.push('Mook');
+
+  // Boss Moves (#728): one labelled line per slot. Each is refused whole when it breaks its
+  // shape, and its label is reported as unparsed. A half-read move would be a wrong move.
+  const bossMoves: AuthoredBossMove[] = [];
+  for (const slot of BOSS_MOVE_SLOTS) {
+    const line = readLabelled(content, [slot], '[^\\n]*');
+    if (!line) continue;
+    const move = parseBossMoveLine(slot, line.raw);
+    if (move) bossMoves.push(move);
+    else parsed.unparsedLabels.push(slot);
+  }
+  if (bossMoves.length) record('bossMoves', bossMoves);
+
   parsed.unparsedLabels = [...new Set(parsed.unparsedLabels)];
 
   return parsed;
+}
+
+const BOSS_NAME = /^[A-Za-z][A-Za-z' -]{0,39}$/;
+const BOSS_EFFECT = new RegExp(
+  `^(strike|burst|frighten)(?:\\s+(${BOSS_MOVE_ABILITIES.join('|')}))?$`,
+  'i',
+);
+const BOSS_FIELD = /^(effect|tell|telegraph|counterplay)\s*:\s*(.+)$/i;
+const BOSS_TEXT_MAX = 240;
+
+/**
+ * One Boss Move line: `Name | effect: strike | tell: … | telegraph: … | counterplay: …`.
+ *
+ * Every part is required and each appears once. `effect` is a closed list: `strike`,
+ * `burst <ability>` (save for half), or `frighten <ability>` (save or frightened one round). A
+ * telegraph of `none` is null, but a Finale must have a telegraph, because it is announced a round
+ * early. Returns undefined for any line that breaks this shape.
+ */
+export function parseBossMoveLine(slot: BossMoveSlot, raw: string): AuthoredBossMove | undefined {
+  const segments = raw
+    .replace(/\*+/g, '')
+    .split('|')
+    .map((part) => part.trim());
+  const name = segments[0] ?? '';
+  if (!BOSS_NAME.test(name)) return undefined;
+
+  const fields = new Map<string, string>();
+  for (const segment of segments.slice(1)) {
+    const match = BOSS_FIELD.exec(segment);
+    if (!match) return undefined;
+    const key = match[1]!.toLowerCase();
+    if (fields.has(key)) return undefined;
+    fields.set(key, match[2]!.trim());
+  }
+
+  const effectText = fields.get('effect');
+  const tell = fields.get('tell');
+  const telegraphText = fields.get('telegraph');
+  const counterplay = fields.get('counterplay');
+  if (!effectText || !tell || !telegraphText || !counterplay) return undefined;
+  if ([tell, telegraphText, counterplay].some((text) => text.length > BOSS_TEXT_MAX)) {
+    return undefined;
+  }
+
+  const effectMatch = BOSS_EFFECT.exec(effectText);
+  if (!effectMatch) return undefined;
+  const kind = effectMatch[1]!.toLowerCase();
+  const ability = effectMatch[2]?.toLowerCase() as (typeof BOSS_MOVE_ABILITIES)[number] | undefined;
+  let effect: BossMoveEffect;
+  if (kind === 'strike') {
+    if (ability) return undefined;
+    effect = { kind: 'strike' };
+  } else {
+    if (!ability) return undefined;
+    effect = { kind: kind === 'burst' ? 'burst' : 'frighten', ability };
+  }
+
+  const telegraph = telegraphText.toLowerCase() === 'none' ? null : telegraphText;
+  if (slot === 'Finale' && telegraph === null) return undefined;
+
+  return { slot, name, effect, tell, telegraph, counterplay };
 }
 
 /** The fields that decide whether a creature can fight at authored numbers at all. */

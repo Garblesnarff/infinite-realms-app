@@ -104,6 +104,28 @@ export const actionRoutes = new Elysia()
   })
 
   /**
+   * POST /v1/combat/:encounterId/defy
+   * Arms the solo hero's one Defy for this fight (#728). The next Boss Move roll against the hero
+   * is rerolled. Refused with 409 when no Defy is left to arm.
+   */
+  .post('/:encounterId/defy', async ({ params, set }) => {
+    try {
+      // Loaded lazily: boss-move-window pulls in the database client, and this route module is
+      // imported by tests that run without DATABASE_URL.
+      const { armDefy } = await import('../../../services/combat/boss-move-window.js');
+      const armed = await armDefy(params.encounterId);
+      if (!armed) {
+        set.status = 409;
+        return { error: 'No Defy left to arm' };
+      }
+      return { armed: true };
+    } catch (e) {
+      logger.error({ msg: 'Arm Defy error', error: e });
+      return mapActionError(set, e, 'Failed to arm Defy');
+    }
+  })
+
+  /**
    * POST /v1/combat/:encounterId/spell-attack
    * Resolve a spell attack against targets
    */

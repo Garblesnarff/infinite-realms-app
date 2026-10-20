@@ -191,6 +191,13 @@ export class HPMechanics {
       }
     }
 
+    // #728 (house rule): a mook has no HP track, so any damage that lands drops it outright.
+    // A mook that succeeded on its save stays up (#810): the half damage lands but does not drop it.
+    if (options.targetIsMook === true && damageDealt > 0 && options.saveSucceeded !== true) {
+      hpLost = status.currentHp;
+      newCurrentHp = 0;
+    }
+
     // SRD 5.1, "Instant Death": damage that drops a creature to 0 with damage remaining that
     // equals or exceeds its hit point maximum kills it outright; the same holds for a single
     // blow that would take a creature already at 0 past its maximum. The overflow is what is

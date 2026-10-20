@@ -37,6 +37,16 @@ export interface PendingCombatIntent {
   queuedOnRound: number;
 }
 
+/** A Boss Move as stored on its boss's participant row (see services/combat/boss-moves.ts). */
+export interface StoredBossMove {
+  slot: 'Opener' | 'Turnabout' | 'Finale';
+  name: string;
+  effect: { kind: 'strike' } | { kind: 'burst' | 'frighten'; ability: string };
+  tell: string;
+  telegraph: string | null;
+  counterplay: string;
+}
+
 /**
  * Combat Encounters Table
  * Tracks combat encounters within game sessions with round and turn order management
@@ -169,6 +179,17 @@ export const combatParticipants = pgTable(
      */
     monsterRef: text('monster_ref'),
 
+    /**
+     * House rule (not SRD 5.1): a mook is a minion with no HP track. Any damage it takes from a
+     * hit or a failed save drops it. Set from the authored `Mook: yes` line at seating.
+     */
+    isMook: boolean('is_mook').notNull().default(false),
+    /**
+     * The creature's three authored Boss Moves (Opener, Turnabout, Finale), resolved at seating
+     * from labelled stat-block lines. Null for every creature that authors none.
+     */
+    bossMoves: jsonb('boss_moves').$type<StoredBossMove[] | null>(),
+
     // Timestamps
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
@@ -187,6 +208,28 @@ export const combatParticipants = pgTable(
     ),
   }),
 );
+
+/**
+ * Boss Move state for one fight. One row per encounter, created on the first Boss Move window.
+ * Each move is spent once per fight (keys `${participantId}:${slot}`); the window is one per round
+ * across every boss, so `lastFiredRound` is encounter-wide.
+ */
+export const combatBossState = pgTable('combat_boss_state', {
+  encounterId: uuid('encounter_id')
+    .primaryKey()
+    .references(() => combatEncounters.id, { onDelete: 'cascade' }),
+  movesUsed: text('moves_used').array().notNull().default([]),
+  lastFiredRound: integer('last_fired_round'),
+  /** Per boss (participant id): the round its Finale was telegraphed. */
+  finaleTelegraph: jsonb('finale_telegraph').$type<Record<string, number>>().notNull().default({}),
+  /** Hero turns that have ended this fight; Opener waits for the first. */
+  heroTurnsEnded: integer('hero_turns_ended').notNull().default(0),
+  /** Solo heroes get one Defy per fight; 0 for a party. */
+  defyLeft: integer('defy_left').notNull().default(0),
+  /** Set by the Defy button, spent by the next Boss Move roll against the hero. */
+  defyArmed: boolean('defy_armed').notNull().default(false),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+});
 
 /**
  * Combat Participant Status Table
@@ -476,6 +519,8 @@ export type NewCombatEncounter = InferInsertModel<typeof combatEncounters>;
 
 export type CombatParticipant = InferSelectModel<typeof combatParticipants>;
 export type NewCombatParticipant = InferInsertModel<typeof combatParticipants>;
+
+export type CombatBossState = InferSelectModel<typeof combatBossState>;
 
 export type CombatParticipantStatus = InferSelectModel<typeof combatParticipantStatus>;
 export type NewCombatParticipantStatus = InferInsertModel<typeof combatParticipantStatus>;

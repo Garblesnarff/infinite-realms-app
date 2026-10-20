@@ -80,6 +80,7 @@ const casterProfile = {
   saveBonuses: {},
   spellIds: [
     'acid-splash',
+    'burning-hands',
     'fire-bolt',
     'ray-of-frost',
     'chill-touch',
@@ -272,6 +273,13 @@ describe('CombatAttackService.resolveSpellAttack', () => {
       finalDamage: 1,
     });
     expect(applyDamage).toHaveBeenCalledTimes(1);
+    expect(applyDamage).toHaveBeenCalledWith(
+      targetId,
+      encounterId,
+      expect.objectContaining({ damageAmount: 1, saveSucceeded: false }),
+      userId,
+      expect.any(Object),
+    );
   });
 
   it('resolves a passed saving throw against DC with zero damage', async () => {
@@ -291,6 +299,29 @@ describe('CombatAttackService.resolveSpellAttack', () => {
       targetId,
       encounterId,
       expect.objectContaining({ damageAmount: 0 }),
+      userId,
+      expect.any(Object),
+    );
+  });
+
+  it('marks saveSucceeded on applyDamage when a half-damage save succeeds (#728 item 4)', async () => {
+    // First roll is the save (0.95 → 20); every damage die after that rolls 1 (3d6 → 3).
+    random.mockReset().mockReturnValue(0).mockReturnValueOnce(0.95);
+
+    const result = await resolveSpell('Burning Hands', 1);
+
+    expect(result.results[0]).toMatchObject({
+      hit: false,
+      saveAbility: 'dexterity',
+      saveRoll: 20,
+      saveDC: 13,
+      saved: true,
+      finalDamage: 1,
+    });
+    expect(applyDamage).toHaveBeenCalledWith(
+      targetId,
+      encounterId,
+      expect.objectContaining({ damageAmount: 1, saveSucceeded: true }),
       userId,
       expect.any(Object),
     );
