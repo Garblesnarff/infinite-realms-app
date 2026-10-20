@@ -5,6 +5,22 @@ import { findPlayerCombatSpellInText } from '../data/spellData.js';
 
 import type { DMResponse, DMCombatAction } from '../services/dm/dm-response-schema.js';
 
+function requestPlayerAim(response: DMResponse): { response: DMResponse; awaitingTarget: boolean } {
+  return {
+    response: {
+      ...response,
+      text: 'Who do you aim at?',
+      combat_transition: 'none',
+      narration_segments: [],
+      roll_requests: [],
+      combat_actions: [],
+      map_actions: [],
+      options: [],
+    },
+    awaitingTarget: true,
+  };
+}
+
 /** Ground the player's cast/weapon before accepting a model-selected target or weapon (#823). */
 export function groundPlayerDeclaredAction(
   response: DMResponse,
@@ -37,7 +53,7 @@ export function groundPlayerDeclaredAction(
   if (!spell) {
     if (!modelDeclaredAttack) return null;
     const weapon = new RegExp(`\\b(?:${WEAPON_NOUN})\\b`, 'i').exec(read.source)?.[0];
-    if (!target) return null;
+    if (!target) return requestPlayerAim(response);
     const unarmed = /\b(?:punch\w*|kick\w*|unarmed(?: strike)?|fists?)\b/i.test(read.source);
     const action: DMCombatAction = {
       actor_id: actor.id,
@@ -86,19 +102,7 @@ export function groundPlayerDeclaredAction(
         }
       : null;
   if ((!cone && !target) || (cone && (!direction || (!direction.x && !direction.y)))) {
-    return {
-      response: {
-        ...response,
-        text: 'Who do you aim at?',
-        combat_transition: 'none',
-        narration_segments: [],
-        roll_requests: [],
-        combat_actions: [],
-        map_actions: [],
-        options: [],
-      },
-      awaitingTarget: true,
-    };
+    return requestPlayerAim(response);
   }
   if (!cone && !modelDeclaredAttack) return null;
   const action: DMCombatAction = cone

@@ -1,9 +1,8 @@
 import { describe, expect, it, mock } from 'bun:test';
 import { Elysia } from 'elysia';
 
-// #262: a typed defensive declaration ("I dodge", "I yield") must reach the DM as a
-// structured directive while a fight is active. The client only sends combatEntry when
-// combat is NOT active, so the gate has to be the live encounter, not combatEntry.
+// #823: the real active-combat LLM route must honor the player's aim and weapon,
+// or ask for a target, instead of accepting the provider fixture's dagger attack.
 
 let generatedPrompts: string[] = [];
 let modelReply = '';
@@ -259,4 +258,13 @@ describe('#823 player aim on the real LLM route (provider stub, no model calls)'
       target_ids: ['cultist-3'],
     });
   });
+  it.each(['I attack', 'I punch'])(
+    'asks for a target instead of queuing the model dagger: %s',
+    async (words) => {
+      const result = await turn(words);
+      expect(result.text).toBe('Who do you aim at?');
+      expect(result.combat_actions).toEqual([]);
+      expect(result.roll_requests).toEqual([]);
+    },
+  );
 });
