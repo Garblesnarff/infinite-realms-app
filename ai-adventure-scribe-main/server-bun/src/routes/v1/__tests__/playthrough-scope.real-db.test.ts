@@ -733,14 +733,12 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
       expect(state.pendingDmFacts).toBeUndefined();
       expect(state.pendingDmCorrection).toBeUndefined();
       expect(state.pendingDmFactActions).toBeUndefined();
-      expect(state.pendingDmDelivery).toEqual({
-        token: tokens[0],
-        facts: before.pendingDmFacts,
-        actions: before.pendingDmFactActions,
-        correction: before.pendingDmCorrection,
-        issuedAt: expect.any(Number),
-        expiresAt: expect.any(Number),
-      });
+      const delivery = state.pendingDmDelivery!;
+      expect(delivery.token).toBe(tokens[0]);
+      expect(delivery.facts).toEqual(before.pendingDmFacts!);
+      expect(delivery.actions).toEqual(before.pendingDmFactActions!);
+      expect(delivery.correction).toBe(before.pendingDmCorrection!);
+      expect(delivery.expiresAt).toBeGreaterThan(delivery.issuedAt);
       expect(state.dmSilentTurns).toBe(0);
     });
 
@@ -775,24 +773,20 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
         { kind: 'attack', count: 1, actors: ['spent-sentinel'], hit: true },
       ]);
       const consumed = (await mapRow()).state as TacticalMap;
+      const delivery = consumed.pendingDmDelivery!;
+      expect(delivery.token).toBe(token);
+      expect(delivery.facts).toEqual(initial.pendingDmFacts!);
+      expect(delivery.actions).toEqual(initial.pendingDmFactActions!);
+      expect(delivery.correction).toBe(initial.pendingDmCorrection!);
+      expect(delivery.expiresAt).toBeGreaterThan(delivery.issuedAt);
       expect(consumed).toEqual({
         ...initial,
         pendingDmFacts: undefined,
         pendingDmCorrection: undefined,
         pendingDmFactActions: undefined,
         dmSilentTurns: 0,
-        pendingDmDelivery: {
-          token,
-          facts: initial.pendingDmFacts,
-          actions: initial.pendingDmFactActions,
-          correction: initial.pendingDmCorrection,
-          issuedAt: expect.any(Number),
-          expiresAt: expect.any(Number),
-        },
+        pendingDmDelivery: delivery,
       });
-      expect(consumed.pendingDmDelivery!.expiresAt).toBeGreaterThan(
-        consumed.pendingDmDelivery!.issuedAt,
-      );
       // #849: a retry inside the TTL returns the same batch under the same
       // token — never an empty set after a lost response.
       const second = await call('GET', `/v1/sessions/${sessionId}/tactical-map/context/${heroId}`);
