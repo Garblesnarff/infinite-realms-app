@@ -1165,7 +1165,10 @@ describeWithDb('combat victory XP uses the XP seated on each monster (#374)', ()
 });
 
 describeWithDb('a won fight reads blow first, Victory second (#570)', () => {
-  const db = hasRealDb ? realDb() : (null as never);
+  // Lazy, like the block above: an earlier block's afterAll ends the shared
+  // client (closeRealDb), so a handle captured at load time is dead by the
+  // time this block runs.
+  const getDb = () => realDb();
   const userId = testId('victory-order-user');
 
   const created = {
@@ -1183,18 +1186,18 @@ describeWithDb('a won fight reads blow first, Victory second (#570)', () => {
    */
   const seedFight = async (killer: 'hero' | 'companion') => {
     if (!created.campaignId) {
-      [{ id: created.campaignId }] = await db
+      [{ id: created.campaignId }] = await getDb()
         .insert(campaigns)
         .values({ userId, name: testId('victory-order-camp') })
         .returning({ id: campaigns.id });
     }
     const mkCharacter = async (name: string) => {
-      const [{ id }] = await db
+      const [{ id }] = await getDb()
         .insert(characters)
         .values({ userId, campaignId: created.campaignId, name, level: 5, class: 'Fighter' })
         .returning({ id: characters.id });
       created.characterIds.push(id);
-      await db.insert(characterStats).values({
+      await getDb().insert(characterStats).values({
         characterId: id,
         strength: 20,
         armorClass: 15,
@@ -1202,7 +1205,7 @@ describeWithDb('a won fight reads blow first, Victory second (#570)', () => {
         currentHitPoints: 40,
         speed: 30,
       });
-      await db
+      await getDb()
         .insert(inventoryItems)
         .values({ characterId: id, name: 'Longsword', itemType: 'weapon', isEquipped: true });
       return id;
@@ -1210,13 +1213,13 @@ describeWithDb('a won fight reads blow first, Victory second (#570)', () => {
     const heroCharId = await mkCharacter(testId('victory-hero'));
     const companionCharId = killer === 'companion' ? await mkCharacter(testId('victory-companion')) : null;
 
-    const [{ id: sessionId }] = await db
+    const [{ id: sessionId }] = await getDb()
       .insert(gameSessions)
       .values({ campaignId: created.campaignId, characterId: heroCharId, sessionNumber: 1, status: 'active' })
       .returning({ id: gameSessions.id });
     created.sessionIds.push(sessionId);
 
-    const [{ id: encounterId }] = await db
+    const [{ id: encounterId }] = await getDb()
       .insert(combatEncounters)
       .values({ sessionId, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
       .returning({ id: combatEncounters.id });
@@ -1224,7 +1227,7 @@ describeWithDb('a won fight reads blow first, Victory second (#570)', () => {
     // Turn order: the killer holds the opening turn, the hero second (when the
     // companion kills), the golem last.
     const killerCharId = companionCharId ?? heroCharId;
-    const parts = await db
+    const parts = await getDb()
       .insert(combatParticipants)
       .values([
         {
@@ -1268,7 +1271,7 @@ describeWithDb('a won fight reads blow first, Victory second (#570)', () => {
     const byOrder = new Map(parts.map((part) => [part.turnOrder, part.id]));
     const killerId = byOrder.get(0)!;
     const golemId = byOrder.get(companionCharId ? 2 : 1)!;
-    await db.insert(combatParticipantStatus).values([
+    await getDb().insert(combatParticipantStatus).values([
       { participantId: killerId, currentHp: 40, maxHp: 40, isConscious: true },
       ...(companionCharId
         ? [{ participantId: byOrder.get(1)!, currentHp: 40, maxHp: 40, isConscious: true }]
@@ -1280,7 +1283,7 @@ describeWithDb('a won fight reads blow first, Victory second (#570)', () => {
 
   /** The session's persisted chat rows in the order the client renders them. */
   const chatRows = async (sid: string) => {
-    const rows = await db
+    const rows = await getDb()
       .select({
         message: dialogueHistory.message,
         context: dialogueHistory.context,
@@ -1318,30 +1321,30 @@ describeWithDb('a won fight reads blow first, Victory second (#570)', () => {
 
   afterAll(async () => {
     if (!hasRealDb) return;
-    const rows = await db
+    const rows = await getDb()
       .select({ id: combatParticipants.id })
       .from(combatParticipants)
       .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
       .where(inArray(combatEncounters.sessionId, created.sessionIds));
-    await db.delete(combatParticipantStatus).where(
+    await getDb().delete(combatParticipantStatus).where(
       inArray(
         combatParticipantStatus.participantId,
         rows.map((row) => row.id),
       ),
     );
-    for (const row of await db
+    for (const row of await getDb()
       .select({ id: combatEncounters.id })
       .from(combatEncounters)
       .where(inArray(combatEncounters.sessionId, created.sessionIds))) {
-      await db.delete(combatParticipants).where(eq(combatParticipants.encounterId, row.id));
+      await getDb().delete(combatParticipants).where(eq(combatParticipants.encounterId, row.id));
     }
-    await db.delete(combatEncounters).where(inArray(combatEncounters.sessionId, created.sessionIds));
-    await db.delete(gameSessions).where(inArray(gameSessions.id, created.sessionIds));
-    await db.delete(experienceEvents).where(inArray(experienceEvents.characterId, created.characterIds));
-    await db.delete(inventoryItems).where(inArray(inventoryItems.characterId, created.characterIds));
-    await db.delete(characterStats).where(inArray(characterStats.characterId, created.characterIds));
-    await db.delete(characters).where(inArray(characters.id, created.characterIds));
-    if (created.campaignId) await db.delete(campaigns).where(eq(campaigns.id, created.campaignId));
+    await getDb().delete(combatEncounters).where(inArray(combatEncounters.sessionId, created.sessionIds));
+    await getDb().delete(gameSessions).where(inArray(gameSessions.id, created.sessionIds));
+    await getDb().delete(experienceEvents).where(inArray(experienceEvents.characterId, created.characterIds));
+    await getDb().delete(inventoryItems).where(inArray(inventoryItems.characterId, created.characterIds));
+    await getDb().delete(characterStats).where(inArray(characterStats.characterId, created.characterIds));
+    await getDb().delete(characters).where(inArray(characters.id, created.characterIds));
+    if (created.campaignId) await getDb().delete(campaigns).where(eq(campaigns.id, created.campaignId));
   });
 
   test('the killing blow\'s engine row is inserted before the Victory notice (player kill)', async () => {
@@ -1393,7 +1396,7 @@ describeWithDb('a won fight reads blow first, Victory second (#570)', () => {
   test('a non-killing attack writes no engine row and posts no Victory notice', async () => {
     const fight = await seedFight('hero');
     // A full-health golem: the same swing wounds but does not end the fight.
-    await db
+    await getDb()
       .update(combatParticipantStatus)
       .set({ currentHp: 11 })
       .where(eq(combatParticipantStatus.participantId, fight.golemId));
@@ -1404,7 +1407,7 @@ describeWithDb('a won fight reads blow first, Victory second (#570)', () => {
     const rows = await chatRows(fight.sessionId);
     expect(rows.filter((row) => row.intent === 'combat_victory_xp')).toHaveLength(0);
     expect(rows.filter((row) => row.intent === 'combat_npc_result')).toHaveLength(0);
-    const [encounter] = await db
+    const [encounter] = await getDb()
       .select({ status: combatEncounters.status })
       .from(combatEncounters)
       .where(eq(combatEncounters.id, fight.encounterId));
