@@ -31,6 +31,21 @@ mock.module('../ai-usage-service.js', () => ({
 mock.module('../memory-service.js', () => ({
   MemoryService: { insert: async () => [] },
 }));
+// #846: memory-extraction-job.ts persists accepted jobs through the job store,
+// whose module graph pulls in db/client (throws without DATABASE_URL). This
+// test only exercises parseExtractionText, so the store is stubbed the same
+// way the other service modules are.
+mock.module('../memory-extraction-job-store.js', () => ({
+  persistMemoryExtractionJob: async () => {
+    throw new Error('not implemented in this test');
+  },
+  claimMemoryExtractionJob: async () => null,
+  listRunnableMemoryExtractionJobs: async () => [],
+  completeMemoryExtractionJob: async () => false,
+  markMemoryExtractionJobCharged: async () => false,
+  releaseMemoryExtractionJob: async () => false,
+  failMemoryExtractionJob: async () => false,
+}));
 
 const { parseExtractionText } = await import('../memory-extraction-job.js');
 const { rerankByQueryOverlap } = await import('../memory-recall.js');
