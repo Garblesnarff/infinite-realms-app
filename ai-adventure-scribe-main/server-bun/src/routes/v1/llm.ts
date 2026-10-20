@@ -36,7 +36,7 @@ import {
   buildEncounterSizeDirective,
   expandDerivedCombatants,
 } from '../../services/combat/encounter-sizing.js';
-import { maybeStartConcentrationFromSpellCast } from '../../services/combat/spell-cast-concentration.js';
+import { maybeStartConcentrationAfterReply } from '../../services/combat/spell-cast-concentration.js';
 import {
   applyCombatEntryGate,
   stripUntargetedInitiativeRollRequests,
@@ -1021,6 +1021,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // #2718: a feature or spell the player claims and their character lacks is refused here,
         // before the reply is persisted or returned, so it applies nothing and spends nothing.
         let allowedCasts: AllowedCasts | null = null;
+        let concentrationCastsRefused = false;
         if (dmReply) {
           result = await refuseFeaturesCharacterLacks({
             result,
@@ -1031,6 +1032,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             clientCharacterId: combatEntry?.player?.characterId ?? null,
             onCastsAllowed: (casts) => {
               allowedCasts = casts;
+            },
+            onCastsRefused: () => {
+              concentrationCastsRefused = true;
             },
           });
         }
@@ -1070,10 +1074,15 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // a CON save. Placed AFTER the provider reply succeeds (not just after
         // the quota/terminal gates): a cast the DM never answers — provider
         // error or degraded envelope above — must not start concentration.
-        // Runs on player intent once the reply is confirmed; a DB failure must
-        // not break chat.
+        // The #2718 gate above refuses without setting result.error, so its
+        // refusal reaches the hook through concentrationCastsRefused. Runs on
+        // player intent once the reply is confirmed; a DB failure must not
+        // break chat.
         try {
-          await maybeStartConcentrationFromSpellCast(prompt, sessionId);
+          await maybeStartConcentrationAfterReply(prompt, sessionId, {
+            replyError: result.error,
+            castsRefused: concentrationCastsRefused,
+          });
         } catch (concentrationError) {
           logger.warn({
             msg: 'LLM_GENERATE_CONCENTRATION_START_FAILED',

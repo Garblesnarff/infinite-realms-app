@@ -65,3 +65,35 @@ export async function maybeStartConcentrationFromSpellCast(
   await startConcentration(characterId, { name: spell.name, id: spell.id });
   return true;
 }
+
+
+/** What the llm route's post-reply concentration hook is gated on. */
+export interface ConcentrationReplyGate {
+  /** Truthy when the provider reply failed (`result.error`): a cast the DM never answered. */
+  replyError: unknown;
+  /**
+   * True when the #2718 feature gate refused the turn's casts (the character
+   * lacks the spell, or no slot remains for it). The gate's refusal replaces
+   * the reply with a refusal envelope and does NOT set `result.error`, so the
+   * route reports it separately via its `onCastsRefused` callback.
+   */
+  castsRefused: boolean;
+}
+
+/**
+ * The post-reply decision behind the concentration hook in
+ * `POST /v1/llm/generate`: start concentration only when the DM reply
+ * succeeded AND the cast was not refused. A refused cast and a reply that
+ * never arrived both leave concentration exactly as it was.
+ *
+ * Extracted from the route so the refusal path is testable without driving
+ * the HTTP route (and without `mock.module`).
+ */
+export async function maybeStartConcentrationAfterReply(
+  prompt: string | null | undefined,
+  sessionId: string | null | undefined,
+  gate: ConcentrationReplyGate,
+): Promise<boolean> {
+  if (gate.replyError || gate.castsRefused) return false;
+  return maybeStartConcentrationFromSpellCast(prompt ?? '', sessionId);
+}

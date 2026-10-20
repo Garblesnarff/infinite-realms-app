@@ -51,11 +51,13 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
 
   let getConcentration: typeof ConcentrationService.getConcentration;
   let maybeStartConcentrationFromSpellCast: typeof SpellCastConcentration.maybeStartConcentrationFromSpellCast;
+  let maybeStartConcentrationAfterReply: typeof SpellCastConcentration.maybeStartConcentrationAfterReply;
 
   beforeAll(async () => {
     if (!hasRealDb) return;
     ({ getConcentration } = await import('../concentration-service.js'));
-    ({ maybeStartConcentrationFromSpellCast } = await import('../spell-cast-concentration.js'));
+    ({ maybeStartConcentrationFromSpellCast, maybeStartConcentrationAfterReply } =
+      await import('../spell-cast-concentration.js'));
     const [{ id }] = await db
       .insert(characters)
       .values({ userId, name: testId('caster'), level: 3 })
@@ -176,35 +178,87 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
     expect((await getConcentration(characterId))?.spellName).toBe('Dancing Lights');
   });
 
-  it('a refused cast leaves concentration unchanged when none exists', async () => {
-    // The route refuses before the hook on: 401 auth (llm.ts:637), 400 missing
-    // prompt (llm.ts:671), party-defeated terminal (llm.ts:775), 402 quota
-    // (llm.ts:807), and provider error / degraded envelope (llm.ts:1059-1084).
-    // On all of those paths the hook is never invoked, so concentration must
-    // stay exactly as it was. This test pins the no-op side of that invariant:
-    // with no hook call, a character with no concentration still has none.
+  // Refused/failed casts must not change concentration. These tests run the
+  // exact post-reply decision the llm route calls (the hook is llm.ts:1082;
+  // the gate it answers to is below). No mock.module is used — the real
+  // decision function runs against the real DB.
+  //
+  // The refusals before the hook, all in server-bun/src/routes/v1/llm.ts:
+  // 401 auth (line 637), 400 missing prompt (line 672), party-defeated
+  // terminal return (line 776), 402 quota (line 808), the #2718 feature gate
+  // (called at line 1026 — its refusal at dm-feature-gate.ts:352 replaces the
+  // reply with a refusal envelope and does NOT set result.error, so the route
+  // passes the outcome through the gate's onCastsRefused callback), and the
+  // provider error early return (result.error check at line 1042, degraded
+  // envelope returned at line 1067). Nothing after the hook can refuse the
+  // turn: usage recording only records, envelope parse and narration repair
+  // only rewrite text inside try/catch, and the story slot spend only runs
+  // for casts the gate allowed (failures are logged).
+  it('a #2718-refused cast starts no concentration when none exists', async () => {
     await db.delete(characterConcentration).where(eq(characterConcentration.characterId, characterId));
-    expect(await getConcentration(characterId)).toBeNull();
-    // No call to maybeStartConcentrationFromSpellCast: the refused turn never
-    // reaches it. Concentration must remain null.
+    const started = await maybeStartConcentrationAfterReply(
+      'I cast Dancing Lights [spell_id=dancing-lights, spell_level=cantrip].',
+      sessionId,
+      { replyError: null, castsRefused: true },
+    );
+    expect(started).toBe(false);
     expect(await getConcentration(characterId)).toBeNull();
   });
 
-  it('a refused cast leaves existing concentration unchanged', async () => {
-    // Start concentration via a successful cast first.
+  it('a #2718-refused cast leaves an existing concentration row untouched', async () => {
+    // Concentrating on Dancing Lights via a successful cast first.
     await maybeStartConcentrationFromSpellCast(
       'I cast Dancing Lights [spell_id=dancing-lights, spell_level=cantrip].',
       sessionId,
     );
     const before = await getConcentration(characterId);
     expect(before?.spellName).toBe('Dancing Lights');
-    // A refused turn (provider error, quota, terminal) never invokes the hook,
-    // so the existing concentration row must survive untouched — same id,
-    // same spell, same startedAt.
+    // A refused cast (of a DIFFERENT spell, Bless) must not touch the row:
+    // same id, same spell as before.
+    const started = await maybeStartConcentrationAfterReply(
+      'I cast Bless [spell_id=bless, spell_level=level 1].',
+      sessionId,
+      { replyError: null, castsRefused: true },
+    );
+    expect(started).toBe(false);
     const after = await getConcentration(characterId);
     expect(after?.id).toBe(before?.id);
     expect(after?.spellName).toBe('Dancing Lights');
     expect(after?.spellId).toBe('dancing-lights');
+  });
+
+  it('a failed reply leaves an existing concentration row untouched', async () => {
+    await maybeStartConcentrationFromSpellCast(
+      'I cast Dancing Lights [spell_id=dancing-lights, spell_level=cantrip].',
+      sessionId,
+    );
+    const before = await getConcentration(characterId);
+    // A cast the DM never answered (provider error) must not start or change
+    // concentration.
+    const started = await maybeStartConcentrationAfterReply(
+      'I cast Bless [spell_id=bless, spell_level=level 1].',
+      sessionId,
+      { replyError: 'provider_error', castsRefused: false },
+    );
+    expect(started).toBe(false);
+    const after = await getConcentration(characterId);
+    expect(after?.id).toBe(before?.id);
+    expect(after?.spellName).toBe('Dancing Lights');
+  });
+
+  it('the post-reply hook starts concentration when the reply succeeds and nothing refused the cast', async () => {
+    // This is the route's success path through the decision function the llm
+    // route calls inside its try/catch — the hook at llm.ts:1082.
+    await db.delete(characterConcentration).where(eq(characterConcentration.characterId, characterId));
+    const started = await maybeStartConcentrationAfterReply(
+      'I cast Dancing Lights [spell_id=dancing-lights, spell_level=cantrip].',
+      sessionId,
+      { replyError: null, castsRefused: false },
+    );
+    expect(started).toBe(true);
+    const state = await getConcentration(characterId);
+    expect(state?.spellName).toBe('Dancing Lights');
+    expect(state?.spellId).toBe('dancing-lights');
   });
 
   it('a failed CON save after the spell-cast drops concentration', async () => {
