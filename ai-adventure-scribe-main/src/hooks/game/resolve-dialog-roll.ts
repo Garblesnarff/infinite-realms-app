@@ -140,13 +140,13 @@ function identifyRoll(request: RollRequest): {
     return { rollType: 'save', ability: findDeclaredAbility(request), skillName: undefined };
   }
 
-  const skillName = findDeclaredSkill(request);
+  const toolName = findDeclaredTool(request);
+  const skillName = toolName ? undefined : findDeclaredSkill(request);
   if (skillName) {
     return { rollType: 'skill', ability: SKILL_ABILITIES[skillName], skillName };
   }
   // A tool check (e.g. "Thieves' Tools check") has no skill and often no named
   // ability; pass the tool so the calculator uses its ability and proficiency.
-  const toolName = findDeclaredTool(request);
   return {
     rollType: 'check',
     ability: findDeclaredAbility(request),

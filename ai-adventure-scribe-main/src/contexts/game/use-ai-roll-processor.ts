@@ -182,8 +182,8 @@ function buildCharacterDerivedRollConfig(
   }
 
   try {
-    const skillName = findDeclaredSkill(request);
-    const toolName = skillName ? undefined : findDeclaredTool(request);
+    const toolName = findDeclaredTool(request);
+    const skillName = toolName ? undefined : findDeclaredSkill(request);
     const calculation = skillName
       ? calculateRollWithBreakdown(character, 'skill', undefined, skillName)
       : (() => {

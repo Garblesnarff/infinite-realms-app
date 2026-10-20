@@ -17,6 +17,7 @@ import {
   getToolAbility,
   isSkillProficient,
   isSaveProficient,
+  isToolProficient,
 } from './basic-modifiers';
 import { hasProficiency } from './parse-proficiency-list';
 
@@ -102,7 +103,7 @@ export function calculateRollWithBreakdown(
       }
       usedAbility = checkAbility;
       abilityMod = getAbilityModifier(character, usedAbility);
-      if (skillName && hasProficiency(character.toolProficiencies, skillName)) {
+      if (skillName && isToolProficient(character, skillName)) {
         isProficient = true;
         proficiencyBonus = getProficiencyBonus(character);
       }

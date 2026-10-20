@@ -124,6 +124,27 @@ describe('dialog roll formula (#2614)', () => {
     expect(dialogFormula(rogue, request)).toBe('1d20+4');
   });
 
+  it.each([
+    ['Gaming Set (cards) check', ['One type of gaming set'], 'Deck Of Cards', 2],
+    ['Gaming Set (cards) check', [], 'Deck Of Cards', 0],
+    ['Gaming Set (dice) check', ['One type of gaming set'], 'Deck Of Cards', 0],
+    [
+      'Sleight of Hand check using thieves’ tools',
+      ["Thieves' tools", 'One type of gaming set'],
+      'Deck Of Cards',
+      4,
+    ],
+  ])('background tool queue and dialog: %s / %j / %s -> +%i', (purpose, tools, itemName, bonus) => {
+    const criminal = {
+      ...rogueCharacter(tools),
+      inventory: [{ itemId: 'cards', itemName, quantity: 1, equipped: false }],
+    };
+    const queued = queueRoll(criminal, { type: 'skill_check', formula: '1d20+0', purpose });
+    expect(queued.rollConfig.modifier).toBe(bonus);
+    const request = dialogRequestFromQueue(queued);
+    expect(dialogFormula(criminal, request)).toBe(bonus ? `1d20+${bonus}` : '1d20');
+  });
+
   it('keeps the bare DEX modifier for a tool check without proficiency (#759)', () => {
     const rogue = rogueCharacter([]);
     const queued = queueRoll(rogue, {

@@ -46,7 +46,12 @@ export function findDeclaredAbility(request: DeclaredRollText): AbilityName | un
   return undefined;
 }
 
-const TOOL_TERMS = Object.keys(TOOL_ABILITIES).sort((a, b) => b.length - a.length);
+const TOOL_TERMS = [
+  ...Object.keys(TOOL_ABILITIES),
+  'gaming set (cards)',
+  'gaming set (dice)',
+  'gaming set',
+].sort((a, b) => b.length - a.length);
 
 /**
  * The tool a roll request names ("Thieves' Tools check"), or undefined.
@@ -55,5 +60,7 @@ const TOOL_TERMS = Object.keys(TOOL_ABILITIES).sort((a, b) => b.length - a.lengt
 export function findDeclaredTool(request: DeclaredRollText): string | undefined {
   const text = canonicalProficiencyKey(`${request.purpose || ''} ${request.formula || ''}`);
   if (!text) return undefined;
+  if (/gamingset(?:cards|playingcards)/.test(text)) return 'gaming set (cards)';
+  if (/gamingsetdice/.test(text)) return 'gaming set (dice)';
   return TOOL_TERMS.find((tool) => text.includes(canonicalProficiencyKey(tool)));
 }
