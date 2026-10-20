@@ -154,7 +154,7 @@ const runGate = async (playerInput: string) => {
       allowed = features as AllowedFeatures;
     },
   });
-  return { allowed, result, reply };
+  return { allowed: allowed as AllowedFeatures | null, result, reply };
 };
 
 describe('use-verb feature claims (#712)', () => {

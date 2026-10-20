@@ -497,11 +497,11 @@ export async function resolveLayOnHands(
 
   const missing = await missingHitPoints(targetId, participantId, encounterId);
   // A named amount ("for 20") may exceed what the target can actually receive:
-  // healing clamps at max HP (hp-mechanics.ts), so cap the draw at the target's
+  // healing clamps at max HP (hp-mechanics.ts), so cap the heal at the target's
   // missing HP — otherwise the pool pays for healing that never lands (#712).
-  const hasAmount = typeof input.amount === 'number' && input.amount > 0;
-  const requested = hasAmount ? Math.trunc(input.amount) : missing;
-  const wanted = Math.min(requested, missing);
+  const namedAmount =
+    typeof input.amount === 'number' && input.amount > 0 ? Math.trunc(input.amount) : null;
+  const wanted = Math.min(namedAmount ?? missing, missing);
   if (wanted <= 0) {
     return {
       ok: true,
@@ -512,15 +512,19 @@ export async function resolveLayOnHands(
     };
   }
 
-  // Claim the draw before healing. A named amount is claimed whole (never
-  // silently shrunk to whatever a racing read happened to see); an unnamed
-  // draw claims what the target needs, capped at the pool this call read.
-  // The claim lands only when the row still holds the draw, so concurrent
-  // spends refuse instead of overspending; a heal that throws gives the
-  // claim back.
-  const draw = hasAmount ? wanted : Math.min(wanted, pool.remaining);
-  const poolRemaining = await claimPoolDraw(pool.row.id, draw);
-  if (poolRemaining === null) {
+  // Claim before healing, so concurrent spends cannot take the same HP
+  // twice. The claimed amount never depends on a value a racing call can
+  // move: a named amount claims that amount, capped at the pool's max (the
+  // most one draw can ever need to hold), and an unnamed draw claims what
+  // the target needs, capped at the pool this call read. The claim lands
+  // only when the row still holds it, so concurrent spends refuse instead
+  // of overspending. The heal is capped at the target's missing HP and any
+  // unhealed remainder of the claim goes back to the pool; a heal that
+  // throws gives the whole claim back.
+  const draw =
+    namedAmount !== null ? Math.min(namedAmount, pool.max) : Math.min(wanted, pool.remaining);
+  const claimedRemaining = await claimPoolDraw(pool.row.id, draw);
+  if (claimedRemaining === null) {
     const remaining = await currentPoolRemaining(pool.row.id);
     if (remaining <= 0) {
       return {
@@ -545,16 +549,21 @@ export async function resolveLayOnHands(
     };
   }
 
+  const healAmount = Math.min(draw, missing);
   try {
     if (participantId && encounterId) {
-      await CombatHPService.healDamage(participantId, encounterId, draw, 'Lay on Hands', userId);
+      await CombatHPService.healDamage(participantId, encounterId, healAmount, 'Lay on Hands', userId);
     } else {
-      await CharacterVitalsService.heal(targetId, userId, draw);
+      await CharacterVitalsService.heal(targetId, userId, healAmount);
     }
   } catch (error) {
     await releasePoolDraw(pool.row.id, draw);
     throw error;
   }
+  if (healAmount < draw) {
+    await releasePoolDraw(pool.row.id, draw - healAmount);
+  }
+  const poolRemaining = claimedRemaining + (draw - healAmount);
   await ClassFeatureUsageService.logFeatureUsage(
     characterId,
     pool.featureId,
@@ -566,11 +575,11 @@ export async function resolveLayOnHands(
   const targetLabel = targetId === characterId ? 'themself' : 'their ally';
   return {
     ok: true,
-    healed: draw,
+    healed: healAmount,
     poolRemaining,
     poolMax: pool.max,
     message:
-      `${paladinName} lays on hands and restores ${draw} HP to ${targetLabel}. ` +
+      `${paladinName} lays on hands and restores ${healAmount} HP to ${targetLabel}. ` +
       `Pool: ${poolRemaining} of ${pool.max} HP remaining.`,
   };
 }
