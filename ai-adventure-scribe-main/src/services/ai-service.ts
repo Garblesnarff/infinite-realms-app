@@ -217,22 +217,24 @@ export class AIService {
       try {
         // #874: a resolution-only turn's `message` is the machine-built combat
         // resolution payload (a JSON of engine results from combat-resolution-step),
-        // not something the player typed. It is never used as player input below:
-        // not as the memory-recall query (the recall route caps `query` at 8000
-        // chars and 422'd on it) and not as the generate body's `player_input`
-        // (capped at 20000 chars; a death-save turn's payload — the save plus every
-        // creature the server drained before the player's next turn, carried more
-        // than once — passes both caps in any real fight, and the whole turn died
-        // as "I encountered an issue processing your message").
+        // not something the player typed. It is never sent as the generate body's
+        // `player_input` (below): that field is the player's raw input and the
+        // route caps it at 20000 chars, while a death-save turn's payload — the
+        // save plus every creature the server drained before the player's next
+        // turn, carried more than once — passes the cap in any real fight, and
+        // the whole turn died as "I encountered an issue processing your message".
         const resolutionOnly = params.context?.gameState?.resolutionOnly === true;
         // ⚡ Bolt: Use provided relevant memories if available, otherwise fetch them.
         // This allows for parallelization in the caller (e.g., use-ai-response.ts).
         let relevantMemories: Memory[] = params.relevantMemories || [];
-        if (!params.relevantMemories && params.context.sessionId && !resolutionOnly) {
+        if (!params.relevantMemories && params.context.sessionId) {
           try {
             relevantMemories = await MemoryManager.getRelevantMemories(
               params.context.sessionId,
-              params.message,
+              // #874: recall still runs for a resolution turn, but the recall
+              // route caps `query` at 8000 chars and 422'd on the full payload;
+              // bound the query to the cap.
+              resolutionOnly ? params.message.slice(0, 8000) : params.message,
               8, // Get top 8 relevant memories
             );
             logger.info(`📚 Retrieved ${relevantMemories.length} relevant memories`);

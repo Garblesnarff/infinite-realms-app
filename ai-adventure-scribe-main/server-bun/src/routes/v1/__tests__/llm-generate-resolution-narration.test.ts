@@ -16,6 +16,7 @@ import { Elysia } from 'elysia';
 // no-player_input body.
 
 let generatedCalls = 0;
+let rollTurnPlayerInputs: Array<string | undefined> = [];
 
 mock.module('../../../lib/auth.js', () => ({
   authenticateRequest: async () => ({
@@ -73,11 +74,14 @@ mock.module('../../../services/session/session-message-service.js', () => ({
     withRollTurn: async (
       _sessionId: string,
       _userId: string,
-      _playerInput: string | undefined,
+      playerInput: string | undefined,
       _rollId: string | undefined,
       _replyId: string | undefined,
       generate: () => Promise<unknown>,
-    ) => generate(),
+    ) => {
+      rollTurnPlayerInputs.push(playerInput);
+      return generate();
+    },
   },
 }));
 
@@ -101,6 +105,7 @@ const postGenerate = (body: Record<string, unknown>): Promise<Response> =>
 describe('llm generate resolution narration (#874)', () => {
   it('accepts the post-fix narration body: no player_input, payload in the prompt', async () => {
     generatedCalls = 0;
+    rollTurnPlayerInputs = [];
     // Four creatures standing — the payload the real producers build is
     // ~40k chars. If it ever shrinks under the cap, this test stops proving
     // the bug; fail loudly instead.
@@ -112,10 +117,15 @@ describe('llm generate resolution narration (#874)', () => {
     const body = (await res.json()) as Record<string, unknown>;
     expect(generatedCalls).toBe(1);
     expect(body.text).toBe('The DM narrates the settled turn.');
+    // With the field absent, the route's extract-from-prompt fallback hands
+    // downstream consumers (here withRollTurn) the identical string the old
+    // player_input field carried — the equivalence is asserted, not assumed.
+    expect(rollTurnPlayerInputs).toEqual([payload]);
   });
 
   it('rejects the pre-fix body: the same payload sent as player_input 422s', async () => {
     generatedCalls = 0;
+    rollTurnPlayerInputs = [];
     const payload = buildDeathSaveNarrationPayload(4);
 
     const res = await postGenerate(buildNarrationGenerateBody(payload, { includePlayerInput: true }));
@@ -123,5 +133,6 @@ describe('llm generate resolution narration (#874)', () => {
     // exact failure every death-save Roll hit in production.
     expect(res.status).toBe(422);
     expect(generatedCalls).toBe(0);
+    expect(rollTurnPlayerInputs).toEqual([]);
   });
 });

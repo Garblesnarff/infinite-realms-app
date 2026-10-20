@@ -3,10 +3,12 @@
 // resolution payload (JSON of engine results), not player text. Sending it as
 // the generate body's `player_input` 422'd every death-save narration (the
 // route caps that field at 20000 chars because it is the player's raw input),
-// and using it as the memory-recall query 422'd the recall route (8000-char
-// cap). The payload itself is built by the shared fixture from the real
-// producers; the server half of this pair posts the exact wire body through
-// the real route (server-bun llm-generate-resolution-narration.test.ts).
+// and using it unbounded as the memory-recall query 422'd the recall route
+// (8000-char cap). The payload itself is built by the shared fixture from the
+// real producers; the wire-body test (ai-service-resolution-wire-body.test.ts)
+// asserts the body the client actually POSTs equals the fixture's body, and
+// the server half of this pair posts that body through the real route
+// (server-bun llm-generate-resolution-narration.test.ts).
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { buildDeathSaveNarrationPayload } from '../../../shared/test-fixtures/death-save-narration-payload';
@@ -92,7 +94,7 @@ describe('AIService resolution-only player_input (#874)', () => {
     vi.mocked(enforceNarrationContract).mockImplementation(async (raw: string) => raw);
   });
 
-  it('omits player_input and skips the recall fallback for a resolution-only death-save narration', async () => {
+  it('omits player_input and bounds the recall query for a resolution-only death-save narration', async () => {
     // Four creatures standing: the real producers' payload is ~40k chars,
     // twice the route's player_input cap. If the fixture ever shrinks under
     // the cap, this test stops proving the bug — fail loudly instead.
@@ -118,8 +120,12 @@ describe('AIService resolution-only player_input (#874)', () => {
     expect(call).not.toHaveProperty('player_input');
     // The model still receives the payload, inside the prompt.
     expect(call.prompt).toContain(payload);
-    // The machine payload is never a memory-recall query.
-    expect(MemoryManager.getRelevantMemories).not.toHaveBeenCalled();
+    // Recall still runs, but the query is bounded to the recall route's
+    // 8000-char cap instead of 422ing on the full payload.
+    expect(MemoryManager.getRelevantMemories).toHaveBeenCalledTimes(1);
+    const query = vi.mocked(MemoryManager.getRelevantMemories).mock.calls[0][1] as string;
+    expect(query).toBe(payload.slice(0, 8000));
+    expect(query.length).toBeLessThanOrEqual(8000);
   });
 
   it('still sends player_input and recalls memories on an ordinary player turn', async () => {

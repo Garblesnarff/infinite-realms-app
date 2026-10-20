@@ -161,7 +161,10 @@ export function buildDeathSaveNarrationPayload(monsterCount = 4): string {
   };
   const intentResult = {
     previousParticipant: null,
-    currentParticipant: { id: monsters[0].id, name: monsters[0].name },
+    currentParticipant:
+      monsters.length > 0
+        ? { id: monsters[0].id, name: monsters[0].name }
+        : { id: DYING_CLERIC.id, name: DYING_CLERIC.name },
     newRound: false,
     roundNumber: 9,
     deathSaves: [
@@ -222,20 +225,35 @@ export function buildDeathSaveNarrationPayload(monsterCount = 4): string {
  * is ai-service's assembly: the payload rides inside `<player_input>` either way.
  * `includePlayerInput: true` reproduces the pre-#874 client, which also sent the
  * payload as the `player_input` field.
+ *
+ * `prompt`, `systemPrompt` and `metrics` are assembled from session state, so
+ * they are inputs, not fixture-owned values: the defaults below are the
+ * representative ones the server test posts, and the client wire test passes
+ * the values from its own captured request so it can assert the whole body
+ * equals this builder's output (AGENTS.md §4). Everything else — the field
+ * set, the constants, and whether `player_input` is present at all — is owned
+ * here and shared by both tests.
  */
 export function buildNarrationGenerateBody(
   payload: string,
-  options: { includePlayerInput: boolean },
+  options: {
+    includePlayerInput: boolean;
+    prompt?: string;
+    systemPrompt?: string;
+    metrics?: Record<string, number>;
+  },
 ): Record<string, unknown> {
   return {
-    prompt: [
-      'CAMPAIGN CONTEXT',
-      'The party descends into the Abyss.',
-      '<player_input>',
-      payload,
-      '</player_input>',
-    ].join('\n'),
-    systemPrompt: 'You are Nisaba, the AI Dungeon Master.',
+    prompt:
+      options.prompt ??
+      [
+        'CAMPAIGN CONTEXT',
+        'The party descends into the Abyss.',
+        '<player_input>',
+        payload,
+        '</player_input>',
+      ].join('\n'),
+    systemPrompt: options.systemPrompt ?? 'You are Nisaba, the AI Dungeon Master.',
     ...(options.includePlayerInput ? { player_input: payload } : {}),
     maxTokens: 8192,
     temperature: 0.9,
@@ -245,7 +263,7 @@ export function buildNarrationGenerateBody(
     // ai-service's `metrics` is measurePromptSections output: a
     // Record<string, number> of per-section token counts (the route schema
     // rejects any non-number value).
-    metrics: {
+    metrics: options.metrics ?? {
       total: 15234,
       system: 3900,
       history: 900,
