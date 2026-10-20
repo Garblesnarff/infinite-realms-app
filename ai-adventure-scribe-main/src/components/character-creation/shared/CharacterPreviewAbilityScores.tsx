@@ -37,7 +37,12 @@ export const CharacterPreviewAbilityScores: React.FC<CharacterPreviewAbilityScor
   const emptyScores = {} as AbilityScores;
   const displayScores: AbilityScores =
     race || subrace
-      ? applyRacialBonusesToAbilityScores(character.abilityScores ?? emptyScores, race, subrace)
+      ? applyRacialBonusesToAbilityScores(
+          character.abilityScores ?? emptyScores,
+          race,
+          subrace,
+          character.racialAbilityChoices,
+        )
       : (character.abilityScores ?? emptyScores);
 
   return (
