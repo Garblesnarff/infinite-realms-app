@@ -4,13 +4,15 @@
  * unknown vendors get the conservative fallback (instructions + ajv).
  * No live provider calls: fetch is stubbed.
  */
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it, spyOn } from 'bun:test';
 
+import { logger } from '../../lib/logger.js';
 import { resetCircuitBreakersForTests } from '../../utils/circuit-breaker.js';
 import { dmResponseSchema } from '../dm/dm-response-schema.js';
 import { getVendorCapabilityProfile, modelSupportsStrictSchema } from '../llm-model-config.js';
 import {
   LLMProviderService,
+  parseStringifiedNested,
   stripOptionalNulls,
   validateToolReplyText,
 } from '../llm-provider-service.js';
@@ -819,6 +821,137 @@ describe('#783 forced-tool delivery for anthropic/', () => {
     };
     const normalized = JSON.parse(validateToolReplyText(JSON.stringify(reply), dmResponseSchema));
     expect(normalized.combat_actions).toEqual(reply.combat_actions);
+  });
+
+  // #783: Haiku sends a nested object as a JSON string on the forced-tool path.
+  it('a tool reply with scene_spec sent as a JSON string of a valid object validates and Haiku is served', async () => {
+    process.env.OPENROUTER_API_KEY = 'test-key-for-stubbed-provider';
+    process.env.OPENROUTER_TEXT_MODEL = 'anthropic/claude-haiku-5.5';
+    process.env.OPENROUTER_FALLBACK_MODELS = 'google/gemini-3.1-flash-lite';
+    const sceneSpec = { environment: 'cave', seed: 4 };
+    const stringified = { ...JSON.parse(VALID_DM_REPLY), scene_spec: JSON.stringify(sceneSpec) };
+    const bodies = stubOpenRouter([{ toolArguments: JSON.stringify(stringified) }]);
+
+    const result = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      responseSchema: dmResponseSchema,
+      maxTokens: 100,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(bodies).toHaveLength(1);
+    expect(result.model).toBe('anthropic/claude-haiku-5.5');
+    expect(JSON.parse(result.text).scene_spec).toEqual(sceneSpec);
+  });
+
+  it('a tool reply with scene_spec as a string that is not JSON still fails and falls over', async () => {
+    process.env.OPENROUTER_API_KEY = 'test-key-for-stubbed-provider';
+    process.env.OPENROUTER_TEXT_MODEL = 'anthropic/claude-haiku-5.5';
+    process.env.OPENROUTER_FALLBACK_MODELS = 'google/gemini-3.1-flash-lite';
+    const notJson = { ...JSON.parse(VALID_DM_REPLY), scene_spec: 'a dim cave, cold air' };
+    expect(() => validateToolReplyText(JSON.stringify(notJson), dmResponseSchema)).toThrow(
+      /does not match schema/,
+    );
+    const bodies = stubOpenRouter([
+      { toolArguments: JSON.stringify(notJson) },
+      { toolArguments: JSON.stringify(notJson) },
+      { content: VALID_DM_REPLY },
+    ]);
+
+    const result = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      responseSchema: dmResponseSchema,
+      maxTokens: 100,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(bodies).toHaveLength(3);
+    expect(result.model).toBe('google/gemini-3.1-flash-lite');
+  });
+
+  it('a tool reply with scene_spec as a JSON string of the wrong type still fails and falls over', async () => {
+    process.env.OPENROUTER_API_KEY = 'test-key-for-stubbed-provider';
+    process.env.OPENROUTER_TEXT_MODEL = 'anthropic/claude-haiku-5.5';
+    process.env.OPENROUTER_FALLBACK_MODELS = 'google/gemini-3.1-flash-lite';
+    const wrongType = { ...JSON.parse(VALID_DM_REPLY), scene_spec: JSON.stringify([1, 2]) };
+    const bodies = stubOpenRouter([
+      { toolArguments: JSON.stringify(wrongType) },
+      { toolArguments: JSON.stringify(wrongType) },
+      { content: VALID_DM_REPLY },
+    ]);
+
+    const result = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      responseSchema: dmResponseSchema,
+      maxTokens: 100,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(bodies).toHaveLength(3);
+    expect(result.model).toBe('google/gemini-3.1-flash-lite');
+  });
+
+  it('a tool reply with narration_segments sent as a JSON string is parsed', () => {
+    const segments = [{ type: 'dm', text: 'The cave breathes cold air.' }];
+    const reply = { ...JSON.parse(VALID_DM_REPLY), narration_segments: JSON.stringify(segments) };
+    const normalized = JSON.parse(validateToolReplyText(JSON.stringify(reply), dmResponseSchema));
+    expect(normalized.narration_segments).toEqual(segments);
+  });
+
+  it('parseStringifiedNested parses only where the schema type matches and walks into the result', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        spec: {
+          type: 'object',
+          properties: { inner: { type: 'object', properties: { n: { type: 'number' } } } },
+        },
+        items: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' } } } },
+        label: { type: 'string' },
+        mixed: { anyOf: [{ type: 'object' }, { type: 'string' }] },
+      },
+    };
+    const data = {
+      // A JSON string whose own nested field is also a JSON string.
+      spec: JSON.stringify({ inner: JSON.stringify({ n: 3 }) }),
+      items: JSON.stringify([{ id: 'a' }]),
+      label: JSON.stringify({ not: 'a string field' }),
+      mixed: JSON.stringify({ kept: true }),
+    };
+    expect(parseStringifiedNested(data, schema)).toEqual({
+      spec: { inner: { n: 3 } },
+      items: [{ id: 'a' }],
+      label: JSON.stringify({ not: 'a string field' }),
+      mixed: JSON.stringify({ kept: true }),
+    });
+    // Unparseable and wrong-type strings are returned unchanged.
+    expect(parseStringifiedNested('{broken', { type: 'object' })).toBe('{broken');
+    expect(parseStringifiedNested('[1]', { type: 'object' })).toBe('[1]');
+  });
+
+  it('a failed tool-path validation logs the first error path, value type and a 200-char slice', () => {
+    const warn = spyOn(logger, 'warn');
+    try {
+      const longSentence = 'x'.repeat(500);
+      const reply = { ...JSON.parse(VALID_DM_REPLY), scene_spec: `${longSentence}` };
+      expect(() => validateToolReplyText(JSON.stringify(reply), dmResponseSchema)).toThrow(
+        /does not match schema/,
+      );
+      const call = warn.mock.calls.find(
+        ([payload]) => (payload as { msg?: string }).msg === 'LLM_TOOL_SCHEMA_INVALID',
+      );
+      expect(call).toBeDefined();
+      const payload = call?.[0] as Record<string, unknown>;
+      expect(payload.instancePath).toBe('/scene_spec');
+      expect(payload.valueType).toBe('string');
+      expect(payload.valueHead).toBe('x'.repeat(200));
+      expect(String(payload.valueHead).length).toBeLessThanOrEqual(200);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('schemaDelivery overrides keep strictJsonSchema in agreement', () => {
