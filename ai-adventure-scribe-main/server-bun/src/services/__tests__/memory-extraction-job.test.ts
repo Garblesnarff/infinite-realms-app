@@ -29,6 +29,9 @@ const jobRows = new Map<string, Record<string, any>>();
 // Fault injection for the settle-phase tests: when true, the next
 // completeMemoryExtractionJob call throws (a transient DB error).
 let completeThrowsOnce = false;
+// When true, the next completeMemoryExtractionJob mutates the row to completed
+// and then throws — a committed transition with a lost ack.
+let completeAmbiguous = false;
 const row = (id: string, overrides: Record<string, unknown> = {}) => ({
   id,
   userId: 'user-1',
@@ -76,7 +79,19 @@ mock.module('../memory-extraction-job-store.js', () => ({
       .sort((a, b) => +a.createdAt - +b.createdAt)
       .slice(0, limit)
       .map((r) => ({ ...r })),
+  getMemoryExtractionJob: async (id: string) => {
+    const r = jobRows.get(id);
+    return r ? { ...r } : null;
+  },
   completeMemoryExtractionJob: async (id: string, charged: boolean) => {
+    if (completeAmbiguous) {
+      completeAmbiguous = false;
+      const r = jobRows.get(id);
+      if (r && r.status === 'running') {
+        jobRows.set(id, { ...r, status: 'completed', charged, updatedAt: new Date() });
+      }
+      throw new Error('ack lost after commit');
+    }
     if (completeThrowsOnce) {
       completeThrowsOnce = false;
       throw new Error('connection reset during settle');
@@ -241,6 +256,7 @@ describe('runMemoryExtractionJob (#2148)', () => {
     quotaRemaining = 10;
     quotaConsumeError = null;
     completeThrowsOnce = false;
+    completeAmbiguous = false;
     jobRows.clear();
     writtenJobIds.clear();
     extractGate = null;
@@ -528,6 +544,28 @@ describe('runMemoryExtractionJob (#2148)', () => {
     expect(settled.charged).toBe(true);
     expect(insertCalls).toHaveLength(1);
     expect(quotaConsumeCalls).toHaveLength(1);
+  });
+
+  it('a completed transition with a lost ack is still charged exactly once (#846)', async () => {
+    const realSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = ((fn: () => void) => realSetTimeout(fn, 1)) as typeof setTimeout;
+    try {
+      completeAmbiguous = true;
+
+      const { jobId, done } = await startMemoryExtractionJob(job());
+      const outcome = await done;
+
+      expect(outcome.status).toBe('completed');
+      // The ack was lost but the row did commit; the executor must not charge
+      // it twice and must not leave it uncharged: the scheduled retry lands
+      // the unit exactly once.
+      const chargedRow = await waitForRow(jobId, (r) => r.charged === true, 'charge after ack loss');
+      expect(chargedRow.status).toBe('completed');
+      expect(quotaConsumeCalls).toHaveLength(1);
+      expect(insertCalls).toHaveLength(1);
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+    }
   });
 
   it('a charge that throws at completion is retried, not silently dropped (#846)', async () => {

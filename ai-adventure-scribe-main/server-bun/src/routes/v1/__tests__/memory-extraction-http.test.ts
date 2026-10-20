@@ -45,6 +45,10 @@ mock.module('../../../services/memory-extraction-job-store.js', () => ({
     jobRows.set(id, claimed);
     return { ...claimed };
   },
+  getMemoryExtractionJob: async (id: string) => {
+    const r = jobRows.get(id);
+    return r ? { ...r } : null;
+  },
   listRunnableMemoryExtractionJobs: async (limit: number) =>
     [...jobRows.values()]
       .filter(

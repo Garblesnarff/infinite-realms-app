@@ -6,6 +6,7 @@ import {
   claimMemoryExtractionJob,
   completeMemoryExtractionJob,
   failMemoryExtractionJob,
+  getMemoryExtractionJob,
   listRunnableMemoryExtractionJobs,
   markMemoryExtractionJobCharged,
   persistMemoryExtractionJob,
@@ -463,7 +464,19 @@ async function executeClaimedJob(
     await settle(async () => {
       transitioned = await completeMemoryExtractionJob(claimed.id, false);
     });
-    if (transitioned === null) return outcome; // settle failed; row released for retry
+    if (transitioned === null) {
+      // Settle failed ambiguously: the guarded UPDATE may have committed with a
+      // lost ack. Read the row: only a completed row is owed a charge (the
+      // charge never ran in this path), and only then schedule it.
+      const current = await getMemoryExtractionJob(claimed.id).catch(() => null);
+      if (current?.status === 'completed') {
+        logger.warn({ ...logBase, msg: 'memory_extraction.settle_ambiguous_completed' });
+        scheduleChargeRetry(claimed, logBase, 1);
+      }
+      // Otherwise the recovery release already put the row back to pending (or
+      // it is gone): resume reclaims it, and its executor charges once.
+      return outcome;
+    }
     if (!transitioned) {
       logger.warn({ ...logBase, msg: 'memory_extraction.complete_race_lost' });
       return outcome;

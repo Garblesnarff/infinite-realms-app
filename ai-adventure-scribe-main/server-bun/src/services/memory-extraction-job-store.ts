@@ -34,6 +34,16 @@ export async function persistMemoryExtractionJob(
   return inserted;
 }
 
+/** Read a job row by id. Used after an ambiguous settle to see what actually committed. */
+export async function getMemoryExtractionJob(id: string): Promise<MemoryExtractionJobRow | null> {
+  const [job] = await db
+    .select()
+    .from(memoryExtractionJobs)
+    .where(eq(memoryExtractionJobs.id, id))
+    .limit(1);
+  return job ?? null;
+}
+
 /**
  * Claim a job for execution: pending -> running, or stale-running -> running.
  * Bumps attempts and the heartbeat. Returns null when another process holds
