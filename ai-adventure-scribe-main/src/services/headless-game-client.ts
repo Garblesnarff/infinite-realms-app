@@ -163,9 +163,15 @@ export class HeadlessGameClient {
     // here meant the DM was guaranteed never to be told how any fight ended. The entity id is
     // only used to centre the board digest, so a fight with no board left passes a placeholder.
     if (this.combatActive) {
-      const tacticalContext = await this.loadTacticalContext(combat.currentParticipantId ?? '-');
-      if (tacticalContext)
-        (aiContext.gameState as Record<string, unknown>).tacticalContext = tacticalContext;
+      const tactical = await this.loadTacticalContext(combat.currentParticipantId ?? '-');
+      if (tactical) {
+        (aiContext.gameState as Record<string, unknown>).tacticalContext = tactical.context;
+        // #849: ai-service echoes the delivery token on the generate call so the
+        // server can confirm delivery of the one-shot facts and delete them.
+        if (tactical.deliveryToken)
+          (aiContext.gameState as Record<string, unknown>).tacticalDeliveryToken =
+            tactical.deliveryToken;
+      }
     }
     const nextTurnCount = this.turnCount + 1;
     const response = await AIService.chatWithDM({
@@ -421,14 +427,21 @@ export class HeadlessGameClient {
    * spatial contract all return null on their first line. It is also why the feedback loop
    * "never once fired in prod" — the endpoint that emits engine outcomes was never called.
    */
-  private async loadTacticalContext(currentParticipantId: string): Promise<string | null> {
+  private async loadTacticalContext(
+    currentParticipantId: string,
+  ): Promise<{ context: string; deliveryToken?: string } | null> {
     try {
       const response = await userDataApi.getTacticalMapContext(
         this.sessionId,
         currentParticipantId,
       );
       if (!response.ok) return null;
-      return ((await response.json()) as { tacticalContext?: string }).tacticalContext ?? null;
+      const payload = (await response.json()) as {
+        tacticalContext?: string;
+        deliveryToken?: string;
+      };
+      if (!payload.tacticalContext) return null;
+      return { context: payload.tacticalContext, deliveryToken: payload.deliveryToken };
     } catch {
       // Context is an enrichment, not a precondition: a failed fetch must not lose the turn.
       return null;

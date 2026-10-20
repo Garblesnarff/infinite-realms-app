@@ -401,6 +401,12 @@ export interface GenerateTextParams {
   /** #2050 C: correlates the server's envelope log line on every generate. */
   sessionId?: string;
   /**
+   * #849: the token the tactical-context GET handed out with its one-shot
+   * facts. Echoing it on the generate confirms delivery; the server deletes
+   * the batch only on this echo (or when its TTL lapses).
+   */
+  tacticalDeliveryToken?: string;
+  /**
    * #2218: the id reserved for this turn's DM row. The server persists a display-ready reply
    * under it before responding, and the client's own save of the turn replaces that row in
    * place. Only the main DM turn sends it.
@@ -676,6 +682,7 @@ class LlmApiClient {
           sessionId: params.sessionId,
           combatEntry: params.combatEntry,
           dmReply: params.dmReply,
+          tacticalDeliveryToken: params.tacticalDeliveryToken,
           // #633 PR2: opt-in to server-sent narration deltas. Off by default.
           ...(params.onStream ? { stream: true } : {}),
         }),

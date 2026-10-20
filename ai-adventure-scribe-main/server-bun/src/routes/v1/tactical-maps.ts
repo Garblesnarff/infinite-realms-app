@@ -141,9 +141,8 @@ export function createTacticalMapRoutes({
           set.status = access.error!.status;
           return { error: access.error!.message };
         }
-        const { map, correction, facts, actions, silentTurns } = await consumeTacticalMapContext(
-          params.id,
-        );
+        const { map, correction, facts, actions, silentTurns, deliveryToken } =
+          await consumeTacticalMapContext(params.id);
         if (!map && !facts.length && !correction && !actions.length) {
           set.status = 404;
           return { error: 'No active tactical map' };
@@ -157,6 +156,9 @@ export function createTacticalMapRoutes({
             actions,
           });
           return {
+            // #849: the delivery token the client echoes on its next generate to confirm
+            // the one-shot facts were received; absent only when there was nothing to deliver.
+            deliveryToken,
             tacticalContext:
               (facts.length
                 ? `<engine_resolved_outcomes>\n${facts.join('\n')}\n</engine_resolved_outcomes>`
@@ -182,6 +184,9 @@ export function createTacticalMapRoutes({
           });
         }
         return {
+          // #849: the delivery token the client echoes on its next generate to confirm
+          // the one-shot facts were received; absent only when there was nothing to deliver.
+          deliveryToken,
           tacticalContext:
             buildTacticalPrompt(map, params.entityId) +
             // Standing state, every turn, not just on the turn it changed. A fact is a one-shot

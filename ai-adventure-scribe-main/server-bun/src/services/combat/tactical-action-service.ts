@@ -200,12 +200,23 @@ export async function recordDmTacticalFact(
   await saveTacticalMapRow(row.rowId, row.state);
 }
 
+/**
+ * How long a context batch marked out for delivery stays retrievable before it is
+ * dropped as stale (#849). The context GET and the generate that confirms it are
+ * seconds apart in the live turn loop; ten minutes leaves room for a lost response,
+ * a browser retry and a player who stepped away mid-turn, without letting a fact
+ * from an earlier round leak into a later one's narration.
+ */
+export const TACTICAL_DELIVERY_TTL_MS = 10 * 60 * 1000;
+
 export async function consumeTacticalMapContext(sessionId: string): Promise<{
   map: TacticalMap | null;
   facts: string[];
   actions: DmFactAction[];
   correction: string | null;
   silentTurns: number;
+  /** #849: the token the client's next generate echoes to confirm delivery. */
+  deliveryToken: string | null;
 }> {
   const { db } = await import('../../../../db/client.js');
   return db.transaction(async (tx) => {
@@ -216,7 +227,15 @@ export async function consumeTacticalMapContext(sessionId: string): Promise<{
       .orderBy(desc(tacticalMaps.updatedAt))
       .limit(1)
       .for('update');
-    if (!row) return { map: null, facts: [], actions: [], correction: null, silentTurns: 0 };
+    if (!row)
+      return {
+        map: null,
+        facts: [],
+        actions: [],
+        correction: null,
+        silentTurns: 0,
+        deliveryToken: null,
+      };
     const [activeRow] = row.active
       ? [row]
       : await tx
@@ -227,12 +246,50 @@ export async function consumeTacticalMapContext(sessionId: string): Promise<{
           .limit(1)
           .for('update');
     const state = row.state as TacticalMap;
-    const facts = state.pendingDmFacts ?? [];
-    const actions = state.pendingDmFactActions ?? [];
-    const correction = state.pendingDmCorrection ?? null;
-    delete state.pendingDmFacts;
-    delete state.pendingDmFactActions;
-    delete state.pendingDmCorrection;
+    const now = Date.now();
+    // #849 (audit F19): this read used to delete the one-shot facts inside the
+    // transaction, so a context response lost on the wire destroyed them before
+    // the DM ever saw them. The batch now moves into `pendingDmDelivery` under a
+    // token instead: a retry inside the TTL returns this same batch and token,
+    // and the batch is deleted only by `confirmTacticalContextDelivery` — the
+    // generate call echoing the token — or when the TTL lapses. New facts the
+    // engine records while a batch is out stay in the pending slots and go out
+    // as the next batch, so nothing waits behind a delivery it never saw.
+    let delivery = state.pendingDmDelivery ?? null;
+    if (delivery && delivery.expiresAt <= now) {
+      delete state.pendingDmDelivery;
+      delivery = null;
+    }
+    let facts: string[];
+    let actions: DmFactAction[];
+    let correction: string | null;
+    let deliveryToken: string | null;
+    if (delivery) {
+      facts = delivery.facts;
+      actions = delivery.actions;
+      correction = delivery.correction;
+      deliveryToken = delivery.token;
+    } else {
+      facts = state.pendingDmFacts ?? [];
+      actions = state.pendingDmFactActions ?? [];
+      correction = state.pendingDmCorrection ?? null;
+      delete state.pendingDmFacts;
+      delete state.pendingDmFactActions;
+      delete state.pendingDmCorrection;
+      if (facts.length || actions.length || correction) {
+        deliveryToken = crypto.randomUUID();
+        state.pendingDmDelivery = {
+          token: deliveryToken,
+          facts,
+          actions,
+          correction,
+          issuedAt: now,
+          expiresAt: now + TACTICAL_DELIVERY_TTL_MS,
+        };
+      } else {
+        deliveryToken = null;
+      }
+    }
     const map = activeRow ? (activeRow.state as TacticalMap) : null;
     const silentTurns = map ? (facts.length ? 0 : (map.dmSilentTurns ?? 0) + 1) : 0;
     if (map) map.dmSilentTurns = silentTurns;
@@ -246,7 +303,42 @@ export async function consumeTacticalMapContext(sessionId: string): Promise<{
           .where(eq(tacticalMaps.id, target.id));
       }
     }
-    return { map, facts, actions, correction, silentTurns };
+    return { map, facts, actions, correction, silentTurns, deliveryToken };
+  });
+}
+
+/**
+ * #849: the generate call carrying a delivery token confirms the client received
+ * the batch, which is what finally deletes it. A token that matches nothing (stale,
+ * already confirmed, or minted by another session's read) is a no-op, so a late or
+ * duplicated confirm can never clear a batch it did not carry. The confirm runs in
+ * the same transaction shape as consume (row locked FOR UPDATE): a GET retried
+ * while a confirm is in flight cannot resurrect the batch, and a fact the engine
+ * records during the confirm lands after the lock instead of being overwritten.
+ */
+export async function confirmTacticalContextDelivery(
+  sessionId: string,
+  token: string,
+): Promise<boolean> {
+  const { db } = await import('../../../../db/client.js');
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(tacticalMaps)
+      .where(eq(tacticalMaps.sessionId, sessionId))
+      .orderBy(desc(tacticalMaps.updatedAt))
+      .limit(1)
+      .for('update');
+    if (!row) return false;
+    const state = row.state as TacticalMap;
+    const delivery = state.pendingDmDelivery;
+    if (!delivery || delivery.token !== token) return false;
+    delete state.pendingDmDelivery;
+    await tx
+      .update(tacticalMaps)
+      .set({ state, updatedAt: new Date() })
+      .where(eq(tacticalMaps.id, row.id));
+    return true;
   });
 }
 

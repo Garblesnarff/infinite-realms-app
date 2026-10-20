@@ -704,9 +704,17 @@ export const useAIResponse = (): {
                 );
             const tacticalResponse = await rejectWhenAborted(tacticalRequest, signal);
             if (tacticalResponse.ok) {
-              const payload = (await tacticalResponse.json()) as { tacticalContext?: string };
+              // #849: the delivery token travels with the one-shot facts; ai-service
+              // echoes it on the generate call so the server can confirm delivery
+              // and finally delete the batch.
+              const payload = (await tacticalResponse.json()) as {
+                tacticalContext?: string;
+                deliveryToken?: string;
+              };
               if (payload.tacticalContext)
                 aiContext.gameState.tacticalContext = payload.tacticalContext;
+              if (payload.deliveryToken && aiContext.gameState)
+                aiContext.gameState.tacticalDeliveryToken = payload.deliveryToken;
             }
           } catch (error) {
             logger.warn('Unable to load tactical context; continuing without map context', error);
