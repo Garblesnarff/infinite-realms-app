@@ -1121,19 +1121,12 @@ ${playerInput}
   test('refuses #217: The Apprentice casting Witch Bolt, which is not in their spellbook (RP-14)', async () => {
     // RP-14 (Hark, 2026-10-09): Witch Bolt was cast and a slot "expended". It is not an SRD spell,
     // so it is not in the server's catalog either, and the gate never saw a spell claim.
+    // #782 item 3: the mock must be contract-compliant (no attack roll with
+    // combat_transition 'none'). The spell gate detects "Witch Bolt" from the
+    // text; the roll is not needed for the refusal.
     const reply = castReply(
       'A crackling arc leaps from your hand toward the cultist. Your first-level slot is expended.',
-      [
-        {
-          type: 'attack',
-          formula: '1d20+5',
-          purpose: 'Witch Bolt ranged spell attack against the cultist',
-          dc: null,
-          ac: 12,
-          advantage: false,
-          disadvantage: false,
-        },
-      ],
+      [],
     );
     const turn = await dmTurn({
       ...apprentice(apprenticeSpellLists),

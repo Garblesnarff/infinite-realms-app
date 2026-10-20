@@ -220,7 +220,9 @@ describe('POST /v1/llm/generate degraded by a provider key limit (#350)', () => 
   it('carries the ai_usage row ids back so the deploy smoke can delete them (#350 FIX round 2)', async () => {
     quotaConsumeCalls = [];
     stubbedProviderResult = {
-      text: '{"text": "You see a long banquet hall."}',
+      // #782 item 3: the route enforces the server-built schema; the mock
+      // must return a complete envelope.
+      text: '{"text": "You see a long banquet hall.", "options": [], "narration_segments": [], "roll_requests": [], "combat_transition": "none", "scene_spec": null, "map_actions": [], "handout_actions": [], "combatants": [], "combat_actions": []}',
       provider: 'openrouter',
       model: 'test/model',
       usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
