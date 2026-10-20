@@ -29,9 +29,10 @@ import { resolveCatalogSpell } from '../../data/spellData.js';
  * `[spell_id=...]` tag), start concentration for the session's character.
  * Returns true when concentration was started.
  *
- * Safe to call when there is no tag, the spell is unknown, or the spell does
- * not require concentration -- all are no-ops returning false. Throws nothing;
- * callers wrap it so a DB failure never breaks the chat route.
+ * Safe to call when there is no tag, the spell is unknown, the spell does
+ * not require concentration, or the character cannot cast the tagged spell
+ * -- all are no-ops returning false. Throws nothing; callers wrap it so a
+ * DB failure never breaks the chat route.
  */
 export async function maybeStartConcentrationFromSpellCast(
   prompt: string,
@@ -46,8 +47,9 @@ export async function maybeStartConcentrationFromSpellCast(
 
   // Lazy DB imports: only load db/client when we actually need it.
   const { db } = await import('../../../../db/client');
-  const { gameSessions } = await import('../../../../db/schema/index');
+  const { characters, gameSessions } = await import('../../../../db/schema/index');
   const { getConcentration, startConcentration } = await import('./concentration-service.js');
+  const { castableSpells, spellKey } = await import('../dm/castable-spells.js');
 
   // One character per session; the session owns the concentration state.
   const [session] = await db
@@ -57,6 +59,20 @@ export async function maybeStartConcentrationFromSpellCast(
     .limit(1);
   const characterId = session?.characterId;
   if (!characterId) return false;
+
+  // The character must actually be able to cast the tagged spell. The #2718
+  // gate reads cast claims by name from the player's words, and its phrase
+  // parser cannot see a claim inside a [spell_id=...] tag, so a tag-only cast
+  // is never refused by the gate — the hook checks the spell itself against
+  // the same castable list the gate uses.
+  const [character] = await db
+    .select()
+    .from(characters)
+    .where(eq(characters.id, characterId))
+    .limit(1);
+  if (!character) return false;
+  const castable = new Set((await castableSpells(character)).map(spellKey));
+  if (!castable.has(spellKey(spell.name))) return false;
 
   // Already concentrating on this spell: keep the original startedAt.
   const current = await getConcentration(characterId);

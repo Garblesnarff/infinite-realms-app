@@ -49,6 +49,8 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
   let characterId: string;
   let sessionId: string;
   let sessionWithoutCharacterId: string;
+  const extraSessionIds: string[] = [];
+  const extraCampaignIds: string[] = [];
 
   let getConcentration: typeof ConcentrationService.getConcentration;
   let maybeStartConcentrationFromSpellCast: typeof SpellCastConcentration.maybeStartConcentrationFromSpellCast;
@@ -61,7 +63,13 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
       await import('../spell-cast-concentration.js'));
     const [{ id }] = await db
       .insert(characters)
-      .values({ userId, name: testId('caster'), level: 3 })
+      .values({
+        userId,
+        name: testId('caster'),
+        level: 3,
+        cantrips: 'Dancing Lights',
+        knownSpells: 'Bless',
+      })
       .returning({ id: characters.id });
     characterId = id;
 
@@ -81,6 +89,13 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
   afterAll(async () => {
     if (!hasRealDb) return;
     await db.delete(characterConcentration).where(eq(characterConcentration.characterId, characterId));
+    for (const id of [sessionId, sessionWithoutCharacterId, ...extraSessionIds]) {
+      await db.delete(gameSessions).where(eq(gameSessions.id, id));
+    }
+    for (const id of extraCampaignIds) {
+      await db.delete(campaigns).where(eq(campaigns.id, id));
+    }
+    await db.delete(characters).where(eq(characters.id, characterId));
     await closeRealDb();
   });
 
@@ -128,6 +143,20 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
       sessionWithoutCharacterId,
     );
     expect(started).toBe(false);
+  });
+
+  it('does not start concentration for a concentration spell the character cannot cast', async () => {
+    // Bane requires concentration, but the caster has only Dancing Lights
+    // (cantrip) and Bless (known). The #2718 gate cannot see a claim inside
+    // a [spell_id=...] tag, so the hook checks the tagged spell against the
+    // character's castable spells itself.
+    await db.delete(characterConcentration).where(eq(characterConcentration.characterId, characterId));
+    const started = await maybeStartConcentrationFromSpellCast(
+      '[spell_id=bane, spell_level=level 1].',
+      sessionId,
+    );
+    expect(started).toBe(false);
+    expect(await getConcentration(characterId)).toBeNull();
   });
 
   it('is idempotent when already concentrating on the same spell', async () => {
@@ -180,26 +209,28 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
   });
 
   // Refused/failed casts must not change concentration. These tests run the
-  // exact post-reply decision the llm route calls (the hook is llm.ts:1082;
-  // the gate it answers to is below). No mock.module is used — the real
-  // decision function runs against the real DB.
+  // exact post-reply decision the llm route calls, plus the real #2718 gate
+  // (the hook's wiring partner), against the real DB — no mock.module.
+  // What is NOT tested here: the route wiring itself. The llm.ts call with
+  // the gateRan field and the try/catch at server-bun/src/routes/v1/llm.ts
+  // 1081-1096 have no test; the wiring is visible in the diff and is the
+  // only route code this PR adds.
   //
   // The refusals before the hook, all in server-bun/src/routes/v1/llm.ts
-  // (verified at head 39b198ca; the import at line 39 is a same-line
-  // replacement, so no shift): 401 auth (line 637), 400 missing prompt
-  // (line 672), party-defeated terminal return (line 776), 402 quota
-  // (line 808), the #2718 feature gate (called at line 1026 — its refusal at
-  // dm-feature-gate.ts:352 replaces the reply with a refusal envelope and
-  // does NOT set result.error, so the route passes the outcome through the
-  // gate's onCastsRefused callback), and the provider error early return
-  // (result.error check at line 1042, degraded envelope returned at line
-  // 1067). The hook itself is llm.ts:1082, and the gate runs only inside
-  // `if (dmReply)` (line 1025), so the route also passes gateRan: a turn the
-  // gate never ran (non-DM generation) must not start concentration.
-  // Nothing after the hook can refuse the turn: usage recording only
-  // records, envelope parse and narration repair only rewrite text inside
-  // try/catch, and the story slot spend only runs for casts the gate allowed
-  // (failures are logged).
+  // (verified at head ac2afb8c; llm.ts is unchanged since): 401 auth
+  // (line 637), 400 missing prompt (line 672), party-defeated terminal
+  // return (line 776), 402 quota (line 808), the #2718 feature gate (called
+  // at line 1026 — its refusal at dm-feature-gate.ts:352 replaces the reply
+  // with a refusal envelope and does NOT set result.error, so the route
+  // passes the outcome through the gate's onCastsRefused callback), and the
+  // provider error early return (result.error check at line 1042, degraded
+  // envelope returned at line 1067). The hook itself is llm.ts:1082, and
+  // the gate runs only inside `if (dmReply)` (line 1025), so the route also
+  // passes gateRan: a turn the gate never ran (non-DM generation) must not
+  // start concentration. Nothing after the hook can refuse the turn:
+  // usage recording only records, envelope parse and narration repair only
+  // rewrite text inside try/catch, and the story slot spend only runs for
+  // casts the gate allowed (failures are logged).
   it('a #2718-refused cast starts no concentration when none exists', async () => {
     await db.delete(characterConcentration).where(eq(characterConcentration.characterId, characterId));
     const started = await maybeStartConcentrationAfterReply(
@@ -298,10 +329,12 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
       .insert(campaigns)
       .values({ userId, name: testId('campaign') })
       .returning({ id: campaigns.id });
+    extraCampaignIds.push(campaignId);
     const [{ id: gateSessionId }] = await db
       .insert(gameSessions)
       .values({ characterId, campaignId, sessionNumber: 3, status: 'active' })
       .returning({ id: gameSessions.id });
+    extraSessionIds.push(gateSessionId);
     // The gate reads cast claims by NAME from the player's words (a typed
     // claim); the [spell_id=] tag is the hook's input, fed to the decision
     // below — the route passes the same message to both.
@@ -323,6 +356,48 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
     // why the callback exists and why the hook cannot rely on result.error.
     expect(result.error).toBeFalsy();
     const started = await maybeStartConcentrationAfterReply(prompt, gateSessionId, {
+      replyError: result.error,
+      castsRefused: gateRefused,
+      gateRan: true,
+    });
+    expect(started).toBe(false);
+    expect(await getConcentration(characterId)).toBeNull();
+  });
+
+  it('a tag-only cast of a spell the character lacks never starts concentration', async () => {
+    // The hook takes the spell id from the [spell_id=...] tag, but the #2718
+    // gate reads casts by name from the player's words — its phrase parser
+    // captures junk from a tag-only message and never sees the claim, so a
+    // tag-only cast is NOT refused. This test pins that behavior end to end:
+    // the gate stays blind, and the hook's own castable check blocks it.
+    await db.delete(characterConcentration).where(eq(characterConcentration.characterId, characterId));
+    const { refuseFeaturesCharacterLacks } = await import('../../dm/dm-feature-gate.js');
+    const [{ id: tagCampaignId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('campaign') })
+      .returning({ id: campaigns.id });
+    extraCampaignIds.push(tagCampaignId);
+    const [{ id: tagSessionId }] = await db
+      .insert(gameSessions)
+      .values({ characterId, campaignId: tagCampaignId, sessionNumber: 4, status: 'active' })
+      .returning({ id: gameSessions.id });
+    extraSessionIds.push(tagSessionId);
+    const prompt = '[spell_id=bane, spell_level=level 1].';
+    let gateRefused = false;
+    const result = await refuseFeaturesCharacterLacks({
+      result: { text: JSON.stringify({ text: 'Darkness falls.', narration_segments: [] }) },
+      userId,
+      sessionId: tagSessionId,
+      playerInput: prompt,
+      inCombat: false,
+      clientCharacterId: null,
+      onCastsRefused: () => {
+        gateRefused = true;
+      },
+    });
+    // The gate does not refuse a tag-only claim: it never saw one.
+    expect(gateRefused).toBe(false);
+    const started = await maybeStartConcentrationAfterReply(prompt, tagSessionId, {
       replyError: result.error,
       castsRefused: gateRefused,
       gateRan: true,
