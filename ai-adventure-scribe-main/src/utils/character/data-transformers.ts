@@ -1,4 +1,5 @@
 import { parsePersonalityEnvelope } from './personality-envelope';
+import { parseSpellSlots } from './spell-slots';
 import { abilityModifier } from '../../../shared/ability-modifier';
 
 import type {
@@ -109,6 +110,7 @@ export interface CharacterRow {
   known_spells?: string | null;
   prepared_spells?: string | null;
   ritual_spells?: string | null;
+  spell_slots?: unknown;
   skill_proficiencies?: string | string[] | null;
   expertise_proficiencies?: string | string[] | null;
   tool_proficiencies?: string | string[] | null;
@@ -451,6 +453,7 @@ export const transformCharacterData = (
       wisdom: { score: 10, modifier: 0, savingThrow: false },
       charisma: { score: 10, modifier: 0, savingThrow: false },
     },
+    spellSlots: parseSpellSlots(characterData.spell_slots),
     equipment: equipmentData?.map((item) => item.item_name) || [],
     experience: characterData.experience_points || 0,
     alignment: characterData.alignment || '',
