@@ -10,8 +10,8 @@ cd "$APP_DIR" || exit 1
 client_status="PASS"
 server_status="PASS"
 
-echo "=== client typecheck: bun x tsc --noEmit ==="
-if bun x tsc --noEmit; then
+echo "=== client typecheck: scripts/frontend-typecheck-gate.sh ==="
+if bash scripts/frontend-typecheck-gate.sh; then
   echo "client typecheck: PASS"
 else
   client_status="FAIL"
