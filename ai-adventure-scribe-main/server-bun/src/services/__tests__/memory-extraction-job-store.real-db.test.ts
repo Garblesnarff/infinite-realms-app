@@ -17,6 +17,17 @@
  * Requires TEST_DATABASE_URL or DATABASE_URL — see fixtures/real-db.ts.
  * Without one the suite skips, per the harness contract.
  */
+import { randomUUID } from 'crypto';
+
+// The restart path charges through AIUsageService -> lib/db, which validates
+// the full env; the real-db CI job only sets the database URLs, so provide
+// harmless dummy values for the rest (additive only — never override a value
+// the environment already provides).
+process.env.PORT ??= '8888';
+process.env.CORS_ORIGIN ??= 'http://localhost:3000';
+process.env.WORKOS_API_KEY ??= 'test-workos-api-key';
+process.env.WORKOS_CLIENT_ID ??= 'test-workos-client-id';
+
 import { afterAll, beforeAll, expect, mock, test } from 'bun:test';
 import { eq, sql } from 'drizzle-orm';
 
@@ -45,7 +56,7 @@ function newRow(id: string, userId = USER) {
     id,
     userId,
     plan: 'free',
-    sessionId: testId('mej-session'),
+    sessionId: randomUUID(),
     campaignId: null,
     characterId: null,
     kind: 'memories' as const,
@@ -83,7 +94,7 @@ describeWithDb('memory extraction job store (real DB, #846)', () => {
   });
 
   test('persist -> claim is single-winner; a second claim stands down', async () => {
-    const id = testId('mej-job');
+    const id = randomUUID();
     const persisted = await persist(id);
     expect(persisted.status).toBe('pending');
     expect(persisted.attempts).toBe(0);
@@ -99,7 +110,7 @@ describeWithDb('memory extraction job store (real DB, #846)', () => {
   });
 
   test('guarded complete fires once; the charge flag flips once', async () => {
-    const id = testId('mej-job');
+    const id = randomUUID();
     await persist(id);
     await store.claimMemoryExtractionJob(id, 'pending');
 
@@ -115,7 +126,7 @@ describeWithDb('memory extraction job store (real DB, #846)', () => {
   });
 
   test('release returns a running job to pending; fail is terminal and running-only', async () => {
-    const id = testId('mej-job');
+    const id = randomUUID();
     await persist(id);
     // Fail/release require 'running': on a pending row both are no-ops.
     expect(await store.failMemoryExtractionJob(id, 'nope')).toBe(false);
@@ -134,7 +145,7 @@ describeWithDb('memory extraction job store (real DB, #846)', () => {
   });
 
   test('attempts cap: a row at the cap is unclaimable, unlisted, and swept to failed', async () => {
-    const id = testId('mej-job');
+    const id = randomUUID();
     await persist(id);
     const db = realDb();
     await db
@@ -156,9 +167,9 @@ describeWithDb('memory extraction job store (real DB, #846)', () => {
   });
 
   test('countActive counts pending + running for the accept-path reservation', async () => {
-    const pendingId = testId('mej-job');
-    const runningId = testId('mej-job');
-    const doneId = testId('mej-job');
+    const pendingId = randomUUID();
+    const runningId = randomUUID();
+    const doneId = randomUUID();
     await persist(pendingId);
     await persist(runningId);
     await persist(doneId);
@@ -172,7 +183,7 @@ describeWithDb('memory extraction job store (real DB, #846)', () => {
   });
 
   test('restart path: a job persisted by a dead process is resumed and charged once', async () => {
-    const id = testId('mej-job');
+    const id = randomUUID();
     await persist(id, RESTART_USER);
 
     // "Process 2" boots: resume claims the pending row, the (mocked) model
@@ -185,7 +196,9 @@ describeWithDb('memory extraction job store (real DB, #846)', () => {
     await jobModule.resumePendingMemoryExtractionJobs();
 
     let row = await store.getMemoryExtractionJob(id);
-    for (let i = 0; i < 50 && row?.status !== 'completed'; i += 1) {
+    // Wait for charged too: the charge lands right after the completed
+    // transition in the same execution, and reading in between is a race.
+    for (let i = 0; i < 50 && !(row?.status === 'completed' && row?.charged); i += 1) {
       await new Promise((resolve) => setTimeout(resolve, 100));
       row = await store.getMemoryExtractionJob(id);
     }
