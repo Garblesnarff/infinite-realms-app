@@ -144,17 +144,30 @@ function buildLimits(): Record<string, PlanRateConfig> {
 // Default limits used by planRateLimit if caller doesn't pass a config
 const DEFAULT_LIMITS: Record<string, PlanRateConfig> = buildLimits();
 
+// #847: the idle-bucket sweep is O(#buckets); at most one sweep per
+// interval keeps a distinct-key flood from turning the rate limiter itself
+// into O(n) work per request. A bucket is only ever deleted once its whole
+// window has elapsed, so delaying eviction by one interval changes no
+// limiting decision.
+const RATE_EVICT_INTERVAL_MS = 1_000;
+
 // Internal bucket structure for sliding window counters
 interface RateBucket {
   count: number;
   windowStart: number;
+  windowMs: number;
 }
 
 /**
- * In-memory rate limit store using sliding window algorithm
+ * In-memory rate limit store using sliding window algorithm.
+ *
+ * One invariant the callers rely on: a given key always uses the same
+ * windowMs (its limiter's configured window), so the stored per-bucket
+ * window is stable.
  */
-class MemoryStore {
+export class MemoryStore {
   private buckets = new Map<string, RateBucket>();
+  private lastEvictAt = 0;
 
   incr(key: string, windowMs: number): { count: number; resetMs: number } {
     const now = Date.now();
@@ -162,13 +175,36 @@ class MemoryStore {
 
     // Reset window if expired
     if (!b || now - b.windowStart >= windowMs) {
-      b = { count: 0, windowStart: now };
+      b = { count: 0, windowStart: now, windowMs };
       this.buckets.set(key, b);
+      this.evictIdle(now);
     }
 
     b.count += 1;
     const resetMs = b.windowStart + windowMs - now;
     return { count: b.count, resetMs: resetMs > 0 ? resetMs : 0 };
+  }
+
+  /**
+   * #847: drop every bucket whose window has fully elapsed. A bucket past
+   * its window would be reset on its next hit anyway, so eviction changes
+   * no limiting behavior — it only stops one entry per distinct key from
+   * living in the map for the whole process lifetime. Runs on the
+   * create/reset path only, never on a hot in-window increment.
+   */
+  private evictIdle(now: number): void {
+    if (now - this.lastEvictAt < RATE_EVICT_INTERVAL_MS) return;
+    this.lastEvictAt = now;
+    for (const [k, v] of this.buckets) {
+      if (now - v.windowStart >= v.windowMs) {
+        this.buckets.delete(k);
+      }
+    }
+  }
+
+  /** Live bucket count — inspection/testing hook. */
+  get size(): number {
+    return this.buckets.size;
   }
 }
 
@@ -180,15 +216,44 @@ const memoryStore = new MemoryStore();
  * public endpoints without changing rejection behavior. Same lifecycle as
  * the buckets map above (in-memory, per process).
  */
-const lastRateLimitWarnAt = new Map<string, number>();
+const lastRateLimitWarnAt = new Map<string, { at: number; throttleMs: number }>();
+let lastWarnSweepAt = 0;
 
-function shouldWarnRateLimit(bucketKey: string, throttleMs: number): boolean {
+export function shouldWarnRateLimit(bucketKey: string, throttleMs: number): boolean {
   if (throttleMs <= 0) return true;
   const now = Date.now();
   const last = lastRateLimitWarnAt.get(bucketKey);
-  if (last !== undefined && now - last < throttleMs) return false;
-  lastRateLimitWarnAt.set(bucketKey, now);
+  if (last !== undefined && now - last.at < throttleMs) return false;
+  lastRateLimitWarnAt.set(bucketKey, { at: now, throttleMs });
+  // #847: a warn entry older than its own throttle window no longer
+  // suppresses anything, so drop it — idle keys otherwise accumulate in
+  // this map for the life of the process, same as the buckets above. Each
+  // entry is evicted by the throttle it was recorded with, so callers
+  // with different throttles cannot sweep each other's live entries. The
+  // sweep itself runs at most once per RATE_EVICT_INTERVAL_MS (same
+  // bound as evictIdle above): the read path already ignores entries
+  // older than their own throttleMs, so a delayed sweep changes no warn
+  // decision, and a distinct-key flood cannot make each warn O(#entries).
+  if (now - lastWarnSweepAt >= RATE_EVICT_INTERVAL_MS) {
+    lastWarnSweepAt = now;
+    for (const [k, entry] of lastRateLimitWarnAt) {
+      if (now - entry.at >= entry.throttleMs) {
+        lastRateLimitWarnAt.delete(k);
+      }
+    }
+  }
   return true;
+}
+
+/** Live warn-timestamp count — inspection/testing hook. */
+export function rateLimitWarnMapSizeForTests(): number {
+  return lastRateLimitWarnAt.size;
+}
+
+/** Test hook: clear the warn map and its sweep state between tests. */
+export function resetRateLimitWarnForTests(): void {
+  lastRateLimitWarnAt.clear();
+  lastWarnSweepAt = 0;
 }
 
 /**
