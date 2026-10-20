@@ -1,4 +1,4 @@
-import { isUnarmedAttackVerb, isUnarmedWeaponClaim } from './weapon-catalog.js';
+import { findCatalogWeapon, isUnarmedAttackVerb, isUnarmedWeaponClaim } from './weapon-catalog.js';
 import {
   COMBAT_INTENT_VERBS,
   looksLikeCombatIntent,
@@ -46,6 +46,9 @@ export { COMBAT_INTENT_VERBS, looksLikeCombatIntent };
 const IGNORABLE_ACTOR_WORDS = new Set(['a', 'an', 'at', 'in', 'on', 'the', 'to']);
 
 const DIRECT_ATTACK_VERBS = [
+  'grab',
+  'smash',
+  'crack',
   'punch',
   'hit',
   'strike',
@@ -62,7 +65,7 @@ const DIRECT_ATTACK_VERBS = [
 ] as const;
 
 const VERB_TOKEN_PATTERN =
-  /(?:punch|hit|strike|stab|slash|shoot|attack|kick|headbutt|tackle|grapple|shove|slap|elbow|fire|swing|throw|hurl|launch|loose|blast|zap|cast)(?:es|s)?\b/gi;
+  /(?:grab|smash|crack|draw|punch|hit|strike|stab|slash|shoot|attack|kick|headbutt|tackle|grapple|shove|slap|elbow|fire|swing|throw|hurl|launch|loose|blast|zap|cast)(?:es|s)?\b/gi;
 
 const DECLARATION_BLOCK_PATTERN =
   /\b(?:don't|do not|won't|never|not going to|should\s+i|can\s+i|could\s+i|what\s+if|if\s+i)\b/i;
@@ -356,6 +359,11 @@ interface ClauseAttackMatch {
 }
 
 const matchClauseHead = (clause: string): ClauseAttackMatch | null => {
+  // Drawing a weapon alone is preparation; aiming it on a creature is a threat.
+  const drawnWeapon = /^draw\s+(?:my|the|a)\s+(.+?)\s+(?:on|at)\s+(.+)$/i.exec(clause);
+  if (drawnWeapon && (findCatalogWeapon(drawnWeapon[1]) || /^sword$/i.test(drawnWeapon[1]))) {
+    return { verb: 'draw', weaponName: drawnWeapon[1], targetText: drawnWeapon[2] };
+  }
   const spellVerbMatch = new RegExp(`^(${SPELL_VERBS})\\s+(.+?)\\s+(?:at|on)\\s+(.+)$`, 'i').exec(
     clause,
   );
@@ -428,6 +436,9 @@ const resolveClauseAttack = (
 
   const match = matchClauseHead(strippedClause);
   if (!match) return null;
+  // A creature's possession is an object target, even though its owner is in the roster.
+  if (['grab', 'smash', 'crack', 'draw'].includes(match.verb) && /['’]s\b/.test(match.targetText))
+    return null;
 
   const verb = match.verb === 'fire at' ? 'fire' : match.verb;
   const verbOffset = strippedClause.search(new RegExp(`\\b${verb.split('\\s+')[0]}\\b`, 'i'));
@@ -464,7 +475,7 @@ const resolveClauseAttack = (
   // rule the in-combat proposal applies when nothing was claimed. Only an explicit unarmed
   // verb (punch, kick, …) or an unarmed weapon word ("with my fists") is an unarmed strike
   // (#1807).
-  const unarmedVerb = isUnarmedAttackVerb(match.verb);
+  const unarmedVerb = match.verb === 'grab' || isUnarmedAttackVerb(match.verb);
   const unarmedWeaponWord = Boolean(match.weaponName && isUnarmedWeaponClaim(match.weaponName));
   return {
     ...toDeclaredAttack(match.verb, actor),
@@ -645,7 +656,8 @@ export function detectDeclaredLayOnHands(playerInput: string): DeclaredLayOnHand
       ? 'poison'
       : null;
 
-  const amountMatch = /(\d+)\s*(?:hit points|hp)\b/i.exec(clause) ?? /\bfor\s+(\d+)\b/i.exec(clause);
+  const amountMatch =
+    /(\d+)\s*(?:hit points|hp)\b/i.exec(clause) ?? /\bfor\s+(\d+)\b/i.exec(clause);
   const amount = amountMatch ? Math.max(0, Math.trunc(Number(amountMatch[1]))) : null;
 
   const targetMatch =
