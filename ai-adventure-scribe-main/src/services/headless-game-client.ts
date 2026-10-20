@@ -3,6 +3,7 @@ import { mapToAscii } from '../../server-bun/src/tactical/serialize';
 import { buildTacticalDigest } from '../../server-bun/src/tactical/tactical-context';
 
 import type { InitiativeOrderEntry } from '../../server-bun/src/services/combat/initiative-order';
+import type { AIResponse } from '@/services/ai/shared/types';
 import type { RollRequest } from '@/types/roll-request';
 
 import { buildAIContext } from '@/hooks/ai/ai-utils';
@@ -15,6 +16,10 @@ import {
   executeStructuredCombatActionWithBoundary,
   type StructuredCombatAction,
 } from '@/services/combat/combat-action-executor';
+import {
+  buildCombatEntryPlayer,
+  type CombatEntryPayload,
+} from '@/services/combat/structured-combat-payload';
 import { DiceEngine, type DiceRollResult } from '@/services/dice/DiceEngine';
 import { extractHeadlessOptions } from '@/services/headless-game-options';
 import { userDataApi } from '@/services/user-data-api';
@@ -41,6 +46,64 @@ export class ContractViolationError extends Error {
     super(message);
     this.name = 'ContractViolationError';
   }
+}
+
+/**
+ * The server refused to seat a pending combat entry (#913). The shape is the one the
+ * auto-play failure streak and the CLI transcript already read: fingerprinted
+ * `combat_entry:<status>:entry:<detail>`, three identical refusals stop the run
+ * instead of the entry being re-proposed until the turn budget is gone.
+ */
+export class CombatEntryError extends Error {
+  readonly category = 'transport';
+  readonly stage = 'entry';
+  readonly status: number;
+  readonly detail: string;
+  readonly responseBody: string;
+  readonly envelope: unknown;
+  readonly fingerprint: string;
+
+  constructor(params: { status: number; detail: string; responseBody: string; envelope: unknown }) {
+    super(`Combat entry failed (${params.status}, stage: entry): ${params.detail}`);
+    this.name = 'CombatEntryError';
+    this.status = params.status;
+    this.detail = params.detail;
+    this.responseBody = params.responseBody;
+    this.envelope = params.envelope;
+    this.fingerprint = `combat_entry:${params.status}:entry:${params.detail}`;
+  }
+
+  toTranscriptDetail(): Record<string, unknown> {
+    return {
+      kind: 'combat_entry_failure',
+      status: this.status,
+      stage: this.stage,
+      detail: this.detail,
+      responseBody: this.responseBody,
+      dmEnvelope: this.envelope,
+    };
+  }
+}
+
+/** The refusal's detail is the route's `error` line when it sent one, else the status. */
+async function combatEntryError(
+  enterResponse: Response,
+  envelope: AIResponse,
+): Promise<CombatEntryError> {
+  const responseBody = await enterResponse.text().catch(() => '');
+  let detail = `HTTP ${enterResponse.status}`;
+  try {
+    const parsed = JSON.parse(responseBody) as { error?: unknown } | null;
+    if (typeof parsed?.error === 'string' && parsed.error) detail = parsed.error;
+  } catch {
+    // A non-JSON refusal body keeps the status line as its detail.
+  }
+  return new CombatEntryError({
+    status: enterResponse.status,
+    detail,
+    responseBody,
+    envelope,
+  });
 }
 
 export type HeadlessRollOutcome =
@@ -174,7 +237,7 @@ export class HeadlessGameClient {
       }
     }
     const nextTurnCount = this.turnCount + 1;
-    const response = await AIService.chatWithDM({
+    let response = await AIService.chatWithDM({
       message: effectiveInput,
       context: aiContext,
       conversationHistory: [...this.history, ...priorRollHistory],
@@ -189,6 +252,14 @@ export class HeadlessGameClient {
     }
     if (response.roll_requests !== undefined && !Array.isArray(response.roll_requests)) {
       throw new ContractViolationError('DM response roll_requests field is not an array');
+    }
+    // #913: the browser completes a pending entry in `dm-actions-handler` — confirm,
+    // roll initiative, POST `/enter`. This client never read the field, so the pending's
+    // initiative request fell into the narrative roll queue, the roll went back as chat
+    // text, nothing seated, and the DM re-proposed the same entry every turn (the
+    // fair-test failure: 8 proposals, no encounter). Seat it the same way here.
+    if (response.combat_entry_pending && !this.combatActive) {
+      response = await this.seatPendingCombatEntry(response);
     }
     // #1907 PR1: a pending handoff is not a seated encounter. Only the explicit `/enter`
     // response can report `combat_entry.entered`; the model's raw start signal is not authority.
@@ -295,6 +366,98 @@ export class HeadlessGameClient {
       });
     }
     return events;
+  }
+
+  /**
+   * Seat a pending combat entry the way the browser does (#913). The headless player is
+   * the one who declared the attack (or picked the action that proposed the fight), so
+   * confirmation is the standing auto-play policy — the same policy that auto-rolls every
+   * DM roll request; declining is a human-only choice with no scripted equivalent. The
+   * initiative d20 is rolled here and consumed by `/enter`. A refusal throws
+   * `CombatEntryError`, so a deterministic refusal fails the turn loudly and the
+   * auto-play failure streak stops the run, instead of the entry being re-proposed in
+   * silence. The DM's telegraph text stays the turn's narration: the transcript is the
+   * audit record of what the DM actually said.
+   */
+  private async seatPendingCombatEntry(response: AIResponse): Promise<AIResponse> {
+    const pending = response.combat_entry_pending;
+    if (!pending) return response;
+    const player = buildCombatEntryPlayer(this.character);
+    if (!player) return response;
+
+    const initiativeRoll = DiceEngine.roll('1d20');
+    // The pending's type does not declare the seating hint the gate can attach; the
+    // browser forwards it when present, and so does this.
+    const seatingHint = (pending as { seatingHint?: CombatEntryPayload['seatingHint'] })
+      .seatingHint;
+    const enterPayload: CombatEntryPayload = {
+      combatants: pending.combatants,
+      sceneSpec: pending.sceneSpec,
+      player,
+      ...(pending.declaredAttack ? { declaredAttack: pending.declaredAttack } : {}),
+      ...(seatingHint ? { seatingHint } : {}),
+      ...(initiativeRoll.naturalRoll !== undefined
+        ? { playerInitiativeRoll: initiativeRoll.naturalRoll }
+        : {}),
+    };
+    const enterResponse = await userDataApi.enterCombat(this.sessionId, enterPayload);
+    if (!enterResponse.ok) throw await combatEntryError(enterResponse, response);
+
+    const responseBody = await enterResponse.text().catch(() => '');
+    type EnteredCombatPayload = {
+      encounter?: { id?: unknown };
+      first_action?: { combat_action?: StructuredCombatAction };
+      first_action_refusal?: unknown;
+      npcTurns?: { combatEnded?: unknown };
+    };
+    let entryPayload: EnteredCombatPayload | null = null;
+    try {
+      entryPayload = JSON.parse(responseBody) as EnteredCombatPayload;
+    } catch {
+      entryPayload = null;
+    }
+    // A 201 the client cannot read the encounter out of is not a seat it can play:
+    // fail the turn loudly (the failure streak ends the run) rather than inventing
+    // an encounter id and playing a fight that may not exist.
+    const encounterId =
+      typeof entryPayload?.encounter?.id === 'string' ? entryPayload.encounter.id : null;
+    if (!encounterId) {
+      throw new CombatEntryError({
+        status: enterResponse.status,
+        detail: 'Combat entry response did not include an encounter id',
+        responseBody,
+        envelope: response,
+      });
+    }
+    const firstAction = entryPayload?.first_action;
+    // The route runs the creatures that won initiative before it answers (#2658);
+    // when that drain already ended the fight, no first action may fire into it
+    // (the browser's `preflightNpcTurns` rule in `dm-actions-handler`).
+    const npcEndedCombat = entryPayload?.npcTurns?.combatEnded === true;
+    return {
+      ...response,
+      combat_entry: {
+        entered: true,
+        encounterId,
+        trigger: pending.trigger,
+        detail: pending.detail,
+        sceneSpecSynthesized: pending.sceneSpecSynthesized,
+      },
+      // Consumed by the seat — the initiative d20 above, and the attack the declaration
+      // already named. Left in the narrative queue they would be rolled as ordinary
+      // rolls and sent back as chat text, which seats nothing: the #913 loop.
+      roll_requests: (response.roll_requests || []).filter((request) => {
+        const type = (request as { type?: unknown } | null)?.type;
+        return type !== 'attack' && type !== 'initiative';
+      }),
+      // A successful seat replaces the model's own batch on every path: the derived
+      // opening action when `/enter` produced a usable one, and nothing when the
+      // derivation was refused, absent, or the opening NPC drain ended the fight.
+      // The model's batch was authored against a fight that had not seated yet.
+      combat_actions: (!npcEndedCombat && firstAction?.combat_action
+        ? [firstAction.combat_action]
+        : []) as unknown as AIResponse['combat_actions'],
+    };
   }
 
   roll(request = this.pending[0]): HeadlessRollOutcome {

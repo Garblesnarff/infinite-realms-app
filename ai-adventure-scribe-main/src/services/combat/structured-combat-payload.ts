@@ -69,6 +69,10 @@ export type CombatEntryPayload = {
     actorSlug?: string;
     monsterId?: string;
     attackSource?: 'unarmed' | 'weapon' | 'spell';
+    // #877: `detectDeclaredAttack` sets this on a weapon declaration and the `/enter`
+    // body declares it; the payload type names it so forwarding the pending's
+    // declaredAttack verbatim cannot silently drop the stated weapon.
+    weaponStated?: boolean;
     weaponName?: string;
     spellId?: string;
     spellName?: string;

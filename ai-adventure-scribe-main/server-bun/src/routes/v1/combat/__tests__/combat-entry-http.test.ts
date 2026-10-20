@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 import { Elysia } from 'elysia';
 
+import {
+  HEADLESS_ENTRY_CHARACTER_ID,
+  headlessEntryEnterBody,
+} from '../../../../../../shared/test-fixtures/combat-entry-headless';
+
 process.env.DATABASE_URL ??= 'postgres://test.invalid/unused';
 process.env.PORT ??= '8892';
 process.env.CORS_ORIGIN ??= 'http://localhost:8891';
@@ -196,6 +201,37 @@ describe('POST /v1/combat/sessions/:sessionId/enter', () => {
         weaponName: 'longbow',
       },
     });
+  });
+
+  it('seats the exact /enter body the headless client sends for a declared attack (#913)', async () => {
+    // The shared fixture (AGENTS.md §4): the client test asserts the headless client
+    // sends exactly this body for the pending entry a declared attack produced; here
+    // the same body goes through the real route schema and handler.
+    const response = await request(headlessEntryEnterBody as Record<string, unknown>);
+    const body = (await response.json()) as Record<string, unknown>;
+
+    expect(response.status).toBe(201);
+    expect(seatCalls).toHaveLength(1);
+    expect(seatCalls[0]).toMatchObject({
+      sessionId: SESSION_ID,
+      player: {
+        characterId: HEADLESS_ENTRY_CHARACTER_ID,
+        name: 'Rook',
+        initiativeModifier: 2,
+        hpCurrent: 12,
+        hpMax: 12,
+      },
+      combatants: [{ name: 'Head Chef Balthazar', count: 1 }],
+      declaredAttack: {
+        verb: 'attack',
+        actorName: 'Head Chef Balthazar',
+        attackSource: 'weapon',
+        weaponStated: true,
+        weaponName: 'longsword',
+      },
+      playerInitiativeRoll: 14,
+    });
+    expect(body.seatingTranscript).toEqual(expect.stringContaining('Initiative'));
   });
 
   it('allows the server to auto-roll when the player roll is omitted', async () => {
