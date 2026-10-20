@@ -14,7 +14,7 @@
  * A mocked `db` cannot cover this: the whole bug class the real-DB harness exists for is writes
  * that never reach Postgres. Requires TEST_DATABASE_URL or DATABASE_URL -- see fixtures/real-db.ts.
  */
-import { afterAll, beforeAll, beforeEach, expect, mock, spyOn, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, expect, mock, test } from 'bun:test';
 import { eq } from 'drizzle-orm';
 import { Elysia } from 'elysia';
 
@@ -38,6 +38,7 @@ import {
   gameSessions,
   inventoryItems,
 } from '../../../../db/schema/index';
+import { setRngSeed } from '../../lib/rng.js';
 
 // The live-route block below fakes only authentication, so the intent route, reference
 // resolution, the combat services, and the concentration write are all the production code.
@@ -112,7 +113,7 @@ describeWithDb('Hex (#754)', () => {
         name: testId('warlock'),
         level: 3,
         class: 'Warlock',
-        knownSpells: 'Hex',
+        knownSpells: 'Hex, Eldritch Blast',
       })
       .returning({ id: characters.id });
 
@@ -317,7 +318,7 @@ describeWithDb('Hex (#754)', () => {
   test('a seeded natural 20 doubles Hex dice through resolveAttack', async () => {
     await castHex();
 
-    const random = spyOn(Math, 'random').mockReturnValue(0.999);
+    setRngSeed(1);
     try {
       const result = (await combatAttackService!.resolveAttack(
         encounterId,
@@ -334,9 +335,9 @@ describeWithDb('Hex (#754)', () => {
 
       expect(result.d20).toBe(20);
       expect(result.isCritical).toBe(true);
-      expect(result.hexDamage).toBe(12);
+      expect(result.hexDamage).toBe(10);
     } finally {
-      random.mockRestore();
+      setRngSeed(undefined);
     }
   });
 
@@ -386,7 +387,7 @@ describeWithDb('Hex (#754)', () => {
   test('a seeded natural 20 doubles Hex dice through resolveSpellAttack', async () => {
     await castHex();
 
-    const random = spyOn(Math, 'random').mockReturnValue(0.999);
+    setRngSeed(1);
     try {
       const resolution = (await combatAttackService!.resolveSpellAttack(
         encounterId,
@@ -407,9 +408,9 @@ describeWithDb('Hex (#754)', () => {
 
       expect(result.d20).toBe(20);
       expect(result.isCritical).toBe(true);
-      expect(result.hexDamage).toBe(12);
+      expect(result.hexDamage).toBe(10);
     } finally {
-      random.mockRestore();
+      setRngSeed(undefined);
     }
   });
 });
