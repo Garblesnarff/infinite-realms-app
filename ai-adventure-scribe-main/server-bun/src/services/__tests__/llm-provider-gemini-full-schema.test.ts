@@ -137,7 +137,9 @@ describe('#782 item 2: full-schema validation on the Gemini (strict) path', () =
       { content: MISSING_SECTIONS_REPLY },
       { content: MISSING_SECTIONS_REPLY },
       { content: VALID_DM_REPLY },
-    ]);    const result = await LLMProviderService.generate({
+    ]);
+
+    const result = await LLMProviderService.generate({
       prompt: 'volatile user prompt',
       systemPrompt: 'stable system block',
       responseSchema: dmResponseSchema,

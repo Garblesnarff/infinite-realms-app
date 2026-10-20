@@ -94,6 +94,7 @@ process.env.NODE_ENV ??= 'test';
 const { SessionMessageService } = await importWithRealDb(
   () => import('../session/session-message-service.js'),
 );
+const { parseDmResponse } = await importWithRealDb(() => import('../dm/dm-response-schema.js'));
 const dmReplyPersistence = await importWithRealDb(() => import('../dm/dm-reply-persistence.js'));
 const { dmReplyRowExists, persistGeneratedDmReply, provisionalDmText } = dmReplyPersistence;
 const { AIUsageService } = await importWithRealDb(() => import('../ai-usage-service.js'));
@@ -4157,6 +4158,68 @@ ${playerInput}
         .where(eq(characterSpellSlots.characterId, character.id));
       expect(slots).toHaveLength(1);
       expect(slots[0]?.usedSlots).toBe(0);
+    });
+  });
+
+  describe('#782 item 7: collapsed null pads round-trip to the same stored row', () => {
+    // The narration segment hints (character, voice_category) are the one
+    // collapsed group whose sub-objects reach storage: the client persists
+    // the derived segments verbatim in the message context. The parse step
+    // rebuilds every segment through deriveNarrationSegments, which always
+    // sets both keys explicitly, so a model that omits the hints and a model
+    // that nulls them must land byte-identical rows.
+    test('omitted narration hint fields persist identically to explicit nulls', async () => {
+      const prose = 'Torchlight gutters against the stone.';
+      const base = {
+        text: prose,
+        options: [],
+        map_actions: [],
+        combat_actions: [],
+        handout_actions: [],
+      };
+      const parsedNull = parseDmResponse({
+        ...base,
+        narration_segments: [{ text: prose, character: null, voice_category: null }],
+      });
+      const parsedOmitted = parseDmResponse({
+        ...base,
+        narration_segments: [{ text: prose }],
+      });
+      expect(parsedNull.success).toBe(true);
+      expect(parsedOmitted.success).toBe(true);
+      if (!parsedNull.success || !parsedOmitted.success) return;
+
+      const segmentsNull = parsedNull.data.narration_segments;
+      const segmentsOmitted = parsedOmitted.data.narration_segments;
+      expect(segmentsOmitted).toEqual(segmentsNull);
+
+      const idNull = crypto.randomUUID();
+      const idOmitted = crypto.randomUUID();
+      await SessionMessageService.addMessages(
+        [
+          {
+            id: idNull,
+            sessionId,
+            speakerType: 'dm',
+            message: prose,
+            context: { intent: 'response', narration_segments: segmentsNull },
+          },
+          {
+            id: idOmitted,
+            sessionId,
+            speakerType: 'dm',
+            message: prose,
+            context: { intent: 'response', narration_segments: segmentsOmitted },
+          },
+        ],
+        userId,
+      );
+
+      const stored = await rowsFor([idNull, idOmitted]);
+      expect(stored).toHaveLength(2);
+      const contexts = stored.map((row) => row.context as Record<string, unknown>);
+      expect(contexts[0]).toEqual(contexts[1]);
+      expect(contexts[0]?.narration_segments).toEqual(segmentsNull);
     });
   });
 
