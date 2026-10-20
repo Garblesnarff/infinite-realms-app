@@ -81,6 +81,9 @@ mock.module('../../../lib/auth.js', () => ({
   },
 }));
 
+// Production auth startup wraps this same SQL client in Drizzle, changing its JSON serializers.
+await importWithRealDb(() => import('../../../lib/drizzle.js'));
+
 const { createRequestPipelineApp } = await importWithRealDb(
   () => import('../../../http-pipeline.js'),
 );
@@ -283,6 +286,12 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
     expect(guard.voice_id).toBeNull();
     expect(guard.voice_muted).toBe(false);
     expect(guard.character).toBe('Guard');
+    const [reservation] = await sql`
+      SELECT config_value, jsonb_typeof(config_value) AS value_type
+      FROM session_config WHERE session_id = ${session} AND config_key LIKE 'npc-voice-scene:%'
+    `;
+    expect(reservation.value_type).toBe('object');
+    expect(reservation.config_value).toEqual({ npc_ids: [] });
   });
 
   test('campaign NPC voices persist through the real route across two sessions (#729)', async () => {
