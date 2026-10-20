@@ -445,19 +445,14 @@ async function resolveDeathSaveTurn(
     // Dynamic imports: these services pull in the database client at import
     // time. Loading them lazily keeps the route importable in tests that don't
     // mock the database (same pattern as the party-defeated check).
-    const { CombatEncounterService } = await import(
-      '../../services/combat/combat-encounter-service.js'
-    );
+    const { CombatEncounterService } =
+      await import('../../services/combat/combat-encounter-service.js');
     const activeEncounter = await CombatEncounterService.getActiveEncounter(sessionId, userId);
     if (!activeEncounter) return null;
-    const { executeCombatIntent } = await import(
-      '../../services/combat/combat-intent-service.js'
-    );
+    const { executeCombatIntent } = await import('../../services/combat/combat-intent-service.js');
     const state = await CombatEncounterService.getCombatState(activeEncounter.id, userId);
     const currentRef = state.currentParticipant;
-    const current = currentRef
-      ? state.participants.find((p) => p.id === currentRef.id)
-      : undefined;
+    const current = currentRef ? state.participants.find((p) => p.id === currentRef.id) : undefined;
     const { vitalStateOf } = await import('../../services/combat/vital-state.js');
     // Not a dying turn (turn advanced after a resolved save, or the text was
     // sent when no save was owed): answer from the engine so the DM never sees
@@ -1216,7 +1211,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // player message. A refused rest is logged inside the applier; it never costs
         // the player their turn.
         if (
-          envelope?.rest &&
+          envelope &&
           dmReply &&
           dmReply.inCombat !== true &&
           castSessionId &&
