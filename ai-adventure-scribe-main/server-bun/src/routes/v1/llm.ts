@@ -32,11 +32,11 @@ import {
   type UntargetedAttackSpell,
 } from '../../services/combat/combat-intent-gate.js';
 import { loadCombatIntentActorRoster } from '../../services/combat/combat-intent-roster.js';
-import { maybeStartConcentrationFromSpellCast } from '../../services/combat/spell-cast-concentration.js';
 import {
   buildEncounterSizeDirective,
   expandDerivedCombatants,
 } from '../../services/combat/encounter-sizing.js';
+import { maybeStartConcentrationFromSpellCast } from '../../services/combat/spell-cast-concentration.js';
 import {
   applyCombatEntryGate,
   stripUntargetedInitiativeRollRequests,
@@ -817,26 +817,6 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // so requests that never reach a provider call are not logged as turns.
         logPromptSections(prompt, history, sessionId ?? combatEntry?.sessionId, Boolean(dmReply));
 
-        // #709: a concentration spell cast via the sheet's Cast button (or typed
-        // with the [spell_id=...] tag) starts concentration. The DM narrates
-        // utility spells without touching the combat engine, so without this the
-        // character_concentration row is never created and damage never prompts
-        // a CON save. Placed after the quota and terminal gates so a refused
-        // request never starts concentration. Runs on player intent; a DB
-        // failure must not break chat.
-        try {
-          await maybeStartConcentrationFromSpellCast(prompt, sessionId);
-        } catch (concentrationError) {
-          logger.warn({
-            msg: 'LLM_GENERATE_CONCENTRATION_START_FAILED',
-            sessionId: sessionId ?? null,
-            error:
-              concentrationError instanceof Error
-                ? concentrationError.message
-                : String(concentrationError),
-          });
-        }
-
         const playerInput =
           typeof requestedPlayerInput === 'string'
             ? requestedPlayerInput
@@ -1081,6 +1061,28 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           logEnvelopeShape(null, degradedEnvelope.text, sessionId ?? combatEntry?.sessionId, true);
           set.status = 200;
           return degradedEnvelope;
+        }
+
+        // #709: a concentration spell cast via the sheet's Cast button (or typed
+        // with the [spell_id=...] tag) starts concentration. The DM narrates
+        // utility spells without touching the combat engine, so without this the
+        // character_concentration row is never created and damage never prompts
+        // a CON save. Placed AFTER the provider reply succeeds (not just after
+        // the quota/terminal gates): a cast the DM never answers — provider
+        // error or degraded envelope above — must not start concentration.
+        // Runs on player intent once the reply is confirmed; a DB failure must
+        // not break chat.
+        try {
+          await maybeStartConcentrationFromSpellCast(prompt, sessionId);
+        } catch (concentrationError) {
+          logger.warn({
+            msg: 'LLM_GENERATE_CONCENTRATION_START_FAILED',
+            sessionId: sessionId ?? null,
+            error:
+              concentrationError instanceof Error
+                ? concentrationError.message
+                : String(concentrationError),
+          });
         }
 
         if (result.usage && result.provider) {

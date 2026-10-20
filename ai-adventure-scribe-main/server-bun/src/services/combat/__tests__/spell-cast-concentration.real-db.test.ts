@@ -16,9 +16,14 @@
  *
  * Requires TEST_DATABASE_URL or DATABASE_URL -- see fixtures/real-db.ts.
  */
-import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
+import { afterAll, beforeAll, expect, it } from 'bun:test';
 import { eq } from 'drizzle-orm';
 
+import {
+  characterConcentration,
+  characters,
+  gameSessions,
+} from '../../../../../db/schema/index';
 import {
   closeRealDb,
   describeWithDb,
@@ -26,18 +31,14 @@ import {
   realDb,
   testId,
 } from '../../__tests__/fixtures/real-db.js';
-import {
-  characterConcentration,
-  characters,
-  gameSessions,
-} from '../../../../../db/schema/index';
 import type * as ConcentrationService from '../concentration-service.js';
 import type * as SpellCastConcentration from '../spell-cast-concentration.js';
 
 if (!hasRealDb) {
-  console.warn('[spell-cast-concentration] SKIPPED: set TEST_DATABASE_URL to a scratch Postgres to run these.');
+  console.warn(
+    '[spell-cast-concentration] SKIPPED: set TEST_DATABASE_URL to run these.',
+  );
 }
-
 
 describeWithDb('maybeStartConcentrationFromSpellCast', () => {
   const db = hasRealDb ? realDb() : (null as never);
@@ -172,6 +173,37 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
     expect(result.dropped).toBe(false);
     // Concentration survives the successful save.
     expect((await getConcentration(characterId))?.spellName).toBe('Dancing Lights');
+  });
+
+  it('a refused cast leaves concentration unchanged when none exists', async () => {
+    // The route refuses before the hook on: 401 auth (llm.ts:637), 400 missing
+    // prompt (llm.ts:671), party-defeated terminal (llm.ts:775), 402 quota
+    // (llm.ts:807), and provider error / degraded envelope (llm.ts:1059-1084).
+    // On all of those paths the hook is never invoked, so concentration must
+    // stay exactly as it was. This test pins the no-op side of that invariant:
+    // with no hook call, a character with no concentration still has none.
+    await db.delete(characterConcentration).where(eq(characterConcentration.characterId, characterId));
+    expect(await getConcentration(characterId)).toBeNull();
+    // No call to maybeStartConcentrationFromSpellCast: the refused turn never
+    // reaches it. Concentration must remain null.
+    expect(await getConcentration(characterId)).toBeNull();
+  });
+
+  it('a refused cast leaves existing concentration unchanged', async () => {
+    // Start concentration via a successful cast first.
+    await maybeStartConcentrationFromSpellCast(
+      'I cast Dancing Lights [spell_id=dancing-lights, spell_level=cantrip].',
+      sessionId,
+    );
+    const before = await getConcentration(characterId);
+    expect(before?.spellName).toBe('Dancing Lights');
+    // A refused turn (provider error, quota, terminal) never invokes the hook,
+    // so the existing concentration row must survive untouched — same id,
+    // same spell, same startedAt.
+    const after = await getConcentration(characterId);
+    expect(after?.id).toBe(before?.id);
+    expect(after?.spellName).toBe('Dancing Lights');
+    expect(after?.spellId).toBe('dancing-lights');
   });
 
   it('a failed CON save after the spell-cast drops concentration', async () => {

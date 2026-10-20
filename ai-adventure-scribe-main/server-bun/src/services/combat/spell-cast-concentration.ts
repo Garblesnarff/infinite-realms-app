@@ -21,8 +21,8 @@
  */
 import { eq } from 'drizzle-orm';
 
-import { resolveCatalogSpell } from '../../data/spellData.js';
 import { extractSpellIdFromPrompt } from './spell-cast-tag.js';
+import { resolveCatalogSpell } from '../../data/spellData.js';
 
 /**
  * If the prompt declares a concentration spell cast (via the sheet's

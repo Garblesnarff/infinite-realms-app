@@ -9,9 +9,9 @@ import { extractSpellIdFromPrompt } from '../spell-cast-tag.js';
 
 describe('extractSpellIdFromPrompt', () => {
   it('extracts the spell id from the sheet Cast tag', () => {
-    expect(
-      extractSpellIdFromPrompt('I cast Dancing Lights [spell_id=dancing-lights, spell_level=cantrip].'),
-    ).toBe('dancing-lights');
+    const prompt =
+      'I cast Dancing Lights [spell_id=dancing-lights, spell_level=cantrip].';
+    expect(extractSpellIdFromPrompt(prompt)).toBe('dancing-lights');
   });
 
   it('extracts the spell id when the tag has no trailing comma', () => {
