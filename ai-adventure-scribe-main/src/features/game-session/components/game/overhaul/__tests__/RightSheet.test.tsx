@@ -214,3 +214,18 @@ describe('RightSheet attacks list', () => {
     expect(screen.queryByRole('button', { name: /Prepare Stored Spell/i })).not.toBeInTheDocument();
   });
 });
+
+describe('RightSheet concentration indicator (#709)', () => {
+  it('shows the Concentrating panel with the server-side spell', () => {
+    render(<RightSheet c={{ ...sheet, concentratingOn: 'Dancing Lights' }} />);
+
+    expect(screen.getByText('Concentrating')).toBeInTheDocument();
+    expect(screen.getByText('Dancing Lights')).toBeInTheDocument();
+  });
+
+  it('hides the Concentrating panel when nothing is concentrated', () => {
+    render(<RightSheet c={{ ...sheet, concentratingOn: null }} />);
+
+    expect(screen.queryByText('Concentrating')).not.toBeInTheDocument();
+  });
+});

@@ -402,6 +402,16 @@ export const RightSheet: React.FC<{
       </IRPanel>
     </TwoCol>
 
+    {/* #709: server-side concentration -- the spell a CON save would end. */}
+    {c.concentratingOn && (
+      <IRPanel>
+        <IRPanelHeader title="Concentrating" />
+        <div className="p-2.5">
+          <span className="ir-text-min font-medium text-foreground/90">{c.concentratingOn}</span>
+        </div>
+      </IRPanel>
+    )}
+
     <TwoCol>
       <IRPanel>
         <IRPanelHeader title="Equipment" />

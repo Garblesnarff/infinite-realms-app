@@ -54,6 +54,7 @@ import { SpellSlotsService } from '../spell-slots-service.js';
 import { markPlayerDamageProvocation } from './npc-provocation.js';
 import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
 
+import type { ConcentrationCheckResult } from './concentration-service.js';
 import type { WeaponAttack, CreatureStats } from '../../../../db/schema/index';
 import type {
   AttackRollInput,
@@ -210,6 +211,63 @@ export async function maybeStartConcentrationOnCast(
   const { startConcentration } = await import('./concentration-service.js');
   await startConcentration(characterId, { name: spell.name, id: spell.id });
   return true;
+}
+
+/**
+ * #709: a combat attack that lands on a player character fires the 2014
+ * concentration rule -- a concentrating target that took damage rolls a CON
+ * save (DC max(10, half damage)); a failed save ends the spell. Only a PC
+ * target concentrates (an NPC participant has no character row). Returns the
+ * engine lines for the transcript plus the check result, so the resolution
+ * surfaces what happened. Imported lazily so unit tests that mock the
+ * DB-facing leaves never load db/client at import time.
+ */
+export async function checkTargetConcentrationAfterHit(input: {
+  target: { characterId?: string | null; name?: string | null };
+  /** The damage the HP layer actually took -- the figure the save DC is judged on. */
+  damageDealt: number;
+  targetIsConscious?: boolean;
+  targetIsDead?: boolean;
+  sessionId?: string | null;
+  /** Test hook: pins the d20 for the concentration save. Production omits it. */
+  rollD20Fn?: () => number;
+}): Promise<{ lines: string[]; concentration?: ConcentrationCheckResult }> {
+  const characterId = input.target.characterId;
+  if (!characterId || !(input.damageDealt > 0)) return { lines: [] };
+  const {
+    checkConcentrationOnDamage,
+    describeConcentrationBroken,
+    describeConcentrationMaintained,
+  } = await import('./concentration-service.js');
+  const concentration = await checkConcentrationOnDamage(characterId, input.damageDealt, {
+    rollD20Fn: input.rollD20Fn,
+    incapacitated: input.targetIsDead === true || input.targetIsConscious === false,
+  });
+  if (!concentration.hadConcentration) return { lines: [] };
+  const name = input.target.name ?? 'The character';
+  const lines: string[] = [];
+  if (concentration.dropped && concentration.droppedSpell) {
+    lines.push(describeConcentrationBroken(name, concentration.droppedSpell));
+  } else if (
+    concentration.saveTriggered &&
+    concentration.spellName &&
+    concentration.total !== undefined &&
+    concentration.dc !== undefined
+  ) {
+    lines.push(
+      describeConcentrationMaintained(
+        name,
+        concentration.spellName,
+        concentration.total,
+        concentration.dc,
+      ),
+    );
+  }
+  if (lines.length && input.sessionId) {
+    const { recordDmTacticalFact } = await import('./tactical-action-service.js');
+    for (const line of lines) await recordDmTacticalFact(input.sessionId, line);
+  }
+  return { lines, concentration };
 }
 
 export class CombatAttackService {
@@ -642,6 +700,16 @@ export class CombatAttackService {
           target: targetParticipant,
           damage: appliedDamage,
         });
+        // #709: a concentrating target that took damage rolls its CON save now (2014).
+        const { lines: concentrationLines, concentration } =
+          await checkTargetConcentrationAfterHit({
+            target: targetParticipant,
+            damageDealt: appliedDamage,
+            targetIsConscious: hpResult.isConscious,
+            targetIsDead: hpResult.isDead,
+            sessionId: attackerData.participant.encounter?.sessionId,
+          });
+        transcriptLines.push(...concentrationLines);
 
         return {
           hit: true,
@@ -675,6 +743,7 @@ export class CombatAttackService {
           isNaturalOne: hitCheck.isNaturalOne,
           isNaturalTwenty: hitCheck.isNaturalTwenty,
           autoRolled,
+          ...(concentration ? { concentration } : {}),
           ...(transcriptLines.length ? { transcriptLines } : {}),
         };
       } catch (error) {
@@ -1041,8 +1110,19 @@ export class CombatAttackService {
               target: targetParticipant,
               damage: attackResult.finalDamage,
             });
+            // #709: a concentrating target that took damage rolls its CON save now (2014).
+            const { lines: concentrationLines, concentration } =
+              await checkTargetConcentrationAfterHit({
+                target: targetParticipant,
+                damageDealt: attackResult.finalDamage,
+                targetIsConscious: attackResult.targetIsConscious,
+                targetIsDead: attackResult.targetIsDead,
+                sessionId: casterData.participant.encounter?.sessionId,
+              });
+            transcriptLines.push(...concentrationLines);
             return {
               ...attackResult,
+              ...(concentration ? { concentration } : {}),
               ...(transcriptLines.length ? { transcriptLines } : {}),
             };
           } catch (error) {
@@ -1172,8 +1252,19 @@ export class CombatAttackService {
                 target: targetParticipant,
                 damage: attackResult.finalDamage,
               });
+              // #709: a concentrating target that took damage rolls its CON save now (2014).
+              const { lines: concentrationLines, concentration } =
+                await checkTargetConcentrationAfterHit({
+                  target: targetParticipant,
+                  damageDealt: attackResult.finalDamage,
+                  targetIsConscious: attackResult.targetIsConscious,
+                  targetIsDead: attackResult.targetIsDead,
+                  sessionId: casterData.participant.encounter?.sessionId,
+                });
+              transcriptLines.push(...concentrationLines);
               return {
                 ...attackResult,
+                ...(concentration ? { concentration } : {}),
                 ...(transcriptLines.length ? { transcriptLines } : {}),
               };
             } catch (error) {
@@ -1283,8 +1374,19 @@ export class CombatAttackService {
                 target: targetParticipant,
                 damage: saveResult.finalDamage,
               });
+              // #709: a concentrating target that took damage rolls its CON save now (2014).
+              const { lines: concentrationLines, concentration } =
+                await checkTargetConcentrationAfterHit({
+                  target: targetParticipant,
+                  damageDealt: saveResult.finalDamage,
+                  targetIsConscious: saveResult.targetIsConscious,
+                  targetIsDead: saveResult.targetIsDead,
+                  sessionId: casterData.participant.encounter?.sessionId,
+                });
+              transcriptLines.push(...concentrationLines);
               return {
                 ...saveResult,
+                ...(concentration ? { concentration } : {}),
                 ...(transcriptLines.length ? { transcriptLines } : {}),
               };
             } catch (error) {
