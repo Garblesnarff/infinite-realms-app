@@ -1202,16 +1202,24 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
         hit_dice?: Array<{ die_type: string; total_dice: number; used_dice: number }>;
       };
 
-    // A short rest the story grants: applied through RestService, spending no hit
-    // dice on its own (the player spends them from the sheet).
+    // A short rest the story grants: applied through RestService. #751: a rest
+    // declared in chat has no sheet hit-dice prompt, so the rest spends dice
+    // until the character is healed or out of dice (the #264 "spends no dice"
+    // expectation is what Hark reported as "short rest does nothing").
     await playerMessage('We catch our breath behind the rocks for an hour.');
     expect(await applyStoryRest({ userId, sessionId, rest: { type: 'short' } })).toBe('applied');
     const afterShort = await readSheet();
-    expect(afterShort.stats?.current_hit_points).toBe(6);
+    expect(afterShort.stats?.current_hit_points).toBeGreaterThan(6);
+    expect(afterShort.stats?.current_hit_points).toBeLessThanOrEqual(20);
     expect(afterShort.hit_dice).toHaveLength(1);
     expect(afterShort.hit_dice?.[0].die_type).toBe('d10');
     expect(afterShort.hit_dice?.[0].total_dice).toBe(3);
-    expect(afterShort.hit_dice?.[0].used_dice).toBe(0);
+    expect(afterShort.hit_dice?.[0].used_dice).toBeGreaterThan(0);
+    // The spend only stops early at full HP: short of full means every die went.
+    if ((afterShort.stats?.current_hit_points ?? 0) < 20) {
+      expect(afterShort.hit_dice?.[0].used_dice).toBe(3);
+    }
+    const spentDice = afterShort.hit_dice?.[0].used_dice ?? 0;
 
     // Retry re-sends the same player message: no second rest.
     expect(await applyStoryRest({ userId, sessionId, rest: { type: 'short' } })).toBe(
@@ -1227,7 +1235,9 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
     const afterLong = await readSheet();
     expect(afterLong.stats?.current_hit_points).toBe(20);
     expect(afterLong.stats?.max_hit_points).toBe(20);
-    expect(afterLong.hit_dice?.[0].used_dice).toBe(0);
+    // 2014: a long rest regains half the total dice (3 -> 1), so the short
+    // rest's spend comes back by exactly one die.
+    expect(afterLong.hit_dice?.[0].used_dice).toBe(spentDice - 1);
 
     await db.delete(restEvents).where(eq(restEvents.characterId, charId));
     await db.delete(characterHitDice).where(eq(characterHitDice.characterId, charId));
@@ -1445,6 +1455,98 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
     const rests = await db.select().from(restEvents).where(eq(restEvents.characterId, charId));
     expect(rests).toHaveLength(1);
     expect(rests[0].restType).toBe('long');
+
+    // Retry re-sends the same saved message: the #777 claim keeps it to one rest.
+    const res2 = await request('/v1/llm/generate', 'POST', generateBody);
+    expect(res2.status).toBe(200);
+    expect(
+      await db.select().from(restEvents).where(eq(restEvents.characterId, charId)),
+    ).toHaveLength(1);
+
+    await db.delete(restEvents).where(eq(restEvents.characterId, charId));
+    await db.delete(characterHitDice).where(eq(characterHitDice.characterId, charId));
+    await db.delete(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId));
+    await db.delete(gameSessions).where(eq(gameSessions.id, sessionId));
+    await db.delete(characterStats).where(eq(characterStats.characterId, charId));
+    await db.delete(characters).where(eq(characters.id, charId));
+    await db.delete(campaigns).where(eq(campaigns.id, campId));
+  });
+
+  it('#751: a short rest typed in chat spends hit dice and restores HP through POST /v1/llm/generate', async () => {
+    if (!hasRealDb) return;
+
+    const [{ id: campId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('751-typed-short-camp') })
+      .returning({ id: campaigns.id });
+    const [{ id: charId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId: campId,
+        name: testId('751-typed-short-hero'),
+        level: 3,
+        class: 'Fighter',
+      })
+      .returning({ id: characters.id });
+    await db.insert(characterStats).values({
+      characterId: charId,
+      maxHitPoints: 13,
+      currentHitPoints: 2,
+      temporaryHitPoints: 0,
+      constitution: 14,
+      isConscious: true,
+      vitalState: 'standing',
+    });
+    const [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId: campId, characterId: charId })
+      .returning({ id: gameSessions.id });
+    // Hark N2-003's line (#751), saved as the client saves the player turn.
+    // The character starts with no hit-dice rows, as in that report.
+    const typed = 'I take a short rest.';
+    await db.insert(dialogueHistory).values({ sessionId, speakerType: 'player', message: typed });
+
+    const generateBody = {
+      prompt: 'The fighter finds a moment of quiet. What happens?',
+      player_input: typed,
+      sessionId,
+      dmReply: { messageId: '11111111-2222-4333-8444-777777777777', inCombat: false },
+      combatEntry: {
+        sessionId,
+        player: { name: testId('751-typed-short-hero'), initiativeModifier: 2 },
+      },
+      provider: 'openrouter',
+      requestType: 'user',
+      maxTokens: 8192,
+      temperature: 0.9,
+    };
+    // The DM narrates the rest but omits `rest`, as in the playtest: the
+    // typed declaration is what applies it.
+    generatedText = JSON.stringify({ text: 'You lean on your sword and breathe.' });
+    const res = await request('/v1/llm/generate', 'POST', generateBody);
+    expect(res.status).toBe(200);
+
+    const rests = await db.select().from(restEvents).where(eq(restEvents.characterId, charId));
+    expect(rests).toHaveLength(1);
+    expect(rests[0].restType).toBe('short');
+    expect(rests[0].hitDiceSpent).toBeGreaterThan(0);
+    expect(rests[0].hpRestored).toBeGreaterThan(0);
+
+    // The sheet's data source shows the recovery and the spent dice — this is
+    // what the live sheet renders once the story_rest invalidation lands.
+    const sheet = (await (await request(`/v1/characters/${charId}`, 'GET')).json()) as {
+      stats?: { current_hit_points?: number; max_hit_points?: number };
+      hit_dice?: Array<{ die_type: string; total_dice: number; used_dice: number }>;
+    };
+    expect(sheet.stats?.current_hit_points).toBeGreaterThan(2);
+    expect(sheet.stats?.current_hit_points).toBeLessThanOrEqual(13);
+    expect(sheet.hit_dice).toHaveLength(1);
+    expect(sheet.hit_dice?.[0].used_dice).toBe(rests[0].hitDiceSpent ?? 0);
+    // The dice stop early only at full HP: short of full means all 3 went.
+    if ((sheet.stats?.current_hit_points ?? 0) < 13) {
+      expect(sheet.hit_dice?.[0].used_dice).toBe(3);
+    }
 
     // Retry re-sends the same saved message: the #777 claim keeps it to one rest.
     const res2 = await request('/v1/llm/generate', 'POST', generateBody);
