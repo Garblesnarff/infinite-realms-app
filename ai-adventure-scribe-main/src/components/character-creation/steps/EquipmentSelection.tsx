@@ -21,6 +21,8 @@ const EquipmentSelection: React.FC = () => {
   const { scrollToNavigation } = useAutoScroll();
   const characterClass = state.character?.class;
   const characterBackground = state.character?.background;
+  const backgroundEquipment =
+    backgrounds.find((b) => b.id === characterBackground?.id)?.equipment ?? [];
 
   // #2710: derive gold state from currency so it survives remount.
   // hasRolledGold is true when currency.gp > 0.
@@ -50,9 +52,7 @@ const EquipmentSelection: React.FC = () => {
 
     // Automatically add background equipment if background is selected
     if (characterBackground) {
-      const backgroundEquip =
-        backgrounds.find((b) => b.id === characterBackground.id)?.equipment || [];
-      totalEquipment = [...backgroundEquip, ...equipmentNames];
+      totalEquipment = [...backgroundEquipment, ...equipmentNames];
     }
 
     const isGold = selectedEquipment.length === 0;
@@ -64,9 +64,7 @@ const EquipmentSelection: React.FC = () => {
         selectedEquipmentOptionIndex: optionIndex,
         // #2710: switching back to the package clears any rolled gold.
         // Selecting gold without a roll uses the average (see below).
-        ...(isGold
-          ? {}
-          : { currency: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 } }),
+        ...(isGold ? {} : { currency: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 } }),
       },
     });
 
@@ -169,9 +167,7 @@ const EquipmentSelection: React.FC = () => {
         {/* Starting Gold Option */}
         <Card
           className={`p-4 cursor-pointer transition-all hover:shadow-lg border-2 relative ${
-            isGoldSelected
-              ? 'border-primary bg-accent/10'
-              : 'border-transparent'
+            isGoldSelected ? 'border-primary bg-accent/10' : 'border-transparent'
           }`}
           onClick={() => handleEquipmentSelect([], GOLD_OPTION_INDEX)}
           role="button"
@@ -211,10 +207,15 @@ const EquipmentSelection: React.FC = () => {
         />
       )}
       {characterBackground && (
-        <div className="text-sm text-muted-foreground">
-          <strong>Note:</strong> Background equipment ({characterBackground.name}) will be
-          automatically added to your inventory.
-        </div>
+        <section aria-label="Background equipment" className="text-sm text-muted-foreground">
+          <h3 className="font-semibold">{characterBackground.name} background equipment</h3>
+          <p>Included separately from your class package or starting gold.</p>
+          <ul className="list-disc list-inside">
+            {backgroundEquipment.map((name, index) => (
+              <li key={index}>{name}</li>
+            ))}
+          </ul>
+        </section>
       )}
     </div>
   );

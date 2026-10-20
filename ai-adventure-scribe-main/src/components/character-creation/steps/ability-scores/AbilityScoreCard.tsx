@@ -20,6 +20,7 @@ interface AbilityScoreCardProps {
   method: Method;
   remainingPoints: number;
   nextCost: number;
+  onAssignArrayScore: (ability: keyof AbilityScores, value: number) => void;
   onIncrease: (ability: keyof AbilityScores) => void;
   onDecrease: (ability: keyof AbilityScores) => void;
 }
@@ -38,6 +39,7 @@ const AbilityScoreCard: React.FC<AbilityScoreCardProps> = ({
   method,
   remainingPoints,
   nextCost,
+  onAssignArrayScore,
   onIncrease,
   onDecrease,
 }) => {
@@ -55,7 +57,8 @@ const AbilityScoreCard: React.FC<AbilityScoreCardProps> = ({
   };
 
   const isDecreaseDisabled = method !== 'pointBuy' || baseScore === 8;
-  const isIncreaseDisabled = method !== 'pointBuy' || baseScore === 15 || remainingPoints < nextCost;
+  const isIncreaseDisabled =
+    method !== 'pointBuy' || baseScore === 15 || remainingPoints < nextCost;
 
   return (
     <Card className="p-4 hover:shadow-md transition-shadow">
@@ -117,9 +120,7 @@ const AbilityScoreCard: React.FC<AbilityScoreCardProps> = ({
                 </div>
               </TooltipTrigger>
               <TooltipContent>
-                <p>
-                  Final {ability} score (Base + Bonuses)
-                </p>
+                <p>Final {ability} score (Base + Bonuses)</p>
               </TooltipContent>
             </Tooltip>
             <Tooltip>
@@ -140,9 +141,7 @@ const AbilityScoreCard: React.FC<AbilityScoreCardProps> = ({
                 </div>
               </TooltipTrigger>
               <TooltipContent>
-                <p>
-                  The modifier added to {ability} based checks, attacks, and saving throws
-                </p>
+                <p>The modifier added to {ability} based checks, attacks, and saving throws</p>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -168,6 +167,24 @@ const AbilityScoreCard: React.FC<AbilityScoreCardProps> = ({
             </TooltipContent>
           </Tooltip>
         </div>
+
+        {method === 'standardArray' && (
+          <label className="block text-sm">
+            Assign {ability}
+            <select
+              aria-label={`Assign standard array ${ability}`}
+              value={baseScore}
+              onChange={(event) => onAssignArrayScore(ability, Number(event.target.value))}
+              className="w-full rounded border bg-background p-2"
+            >
+              {[15, 14, 13, 12, 10, 8].map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         {method === 'pointBuy' && baseScore < 15 && (
           <div className="text-center">

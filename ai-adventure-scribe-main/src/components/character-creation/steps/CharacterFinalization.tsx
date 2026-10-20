@@ -2,6 +2,11 @@ import { Loader2, Sparkles, Image as ImageIcon, Wand2, CheckCircle, ImageOff } f
 import React, { useId } from 'react';
 
 import { useCharacterFinalization } from './character-finalization/use-character-finalization';
+import {
+  computeServerArmorClass,
+  withStartingPackageEquipped,
+} from '../../../../shared/creation-armor-class';
+import { CharacterPreviewAbilityScores } from '../shared/CharacterPreviewAbilityScores';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -13,6 +18,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { getBaseSpeed } from '@/utils/character-calculations';
+import { applyRacialBonusesToAbilityScores } from '@/utils/racialAbilityBonuses';
 
 /**
  * CharacterFinalization component for character creation
@@ -36,6 +43,30 @@ const CharacterFinalization: React.FC = () => {
     handleGenerateAvatar,
     handleGenerateImage,
   } = useCharacterFinalization();
+  const character = state.character;
+  const finalScores = character?.abilityScores
+    ? applyRacialBonusesToAbilityScores(
+        character.abilityScores,
+        character.race ?? null,
+        character.subrace ?? null,
+        character.racialAbilityChoices,
+      )
+    : null;
+  const creationArmor = withStartingPackageEquipped(
+    (character?.equipment ?? []).map((name) => ({ item_name: name, equipped: false })),
+  );
+  const armorClass = finalScores
+    ? computeServerArmorClass(
+        character?.class?.name,
+        {
+          dexterity: finalScores.dexterity.score,
+          constitution: finalScores.constitution.score,
+          wisdom: finalScores.wisdom.score,
+        },
+        creationArmor,
+        character?.fightingStyles,
+      )
+    : null;
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-center mb-6">Finalize Your Character</h2>
@@ -67,6 +98,21 @@ const CharacterFinalization: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {character && finalScores && (
+        <section
+          aria-label="Final character statistics"
+          className="bg-muted/50 p-4 rounded-lg space-y-3"
+        >
+          <CharacterPreviewAbilityScores character={character} />
+          <p>
+            Armor Class: <strong>{armorClass}</strong>
+          </p>
+          <p>
+            Speed: <strong>{getBaseSpeed(character)} ft</strong>
+          </p>
+        </section>
+      )}
 
       {/* Proficiencies Summary */}
       {state.character && (

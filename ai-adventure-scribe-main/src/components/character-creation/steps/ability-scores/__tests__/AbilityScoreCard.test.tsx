@@ -19,6 +19,7 @@ describe('AbilityScoreCard', () => {
     method: 'pointBuy' as Method,
     remainingPoints: 27,
     nextCost: 1,
+    onAssignArrayScore: vi.fn(),
     onIncrease: vi.fn(),
     onDecrease: vi.fn(),
   };

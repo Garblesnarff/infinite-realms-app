@@ -41,6 +41,7 @@ const AbilityScoresSelection: React.FC = () => {
     handleRollScores,
     handleRerollSingleScore,
     handleStandardArray,
+    handleAssignArrayScore,
     handleReset,
     getAbilityDescription,
     racialBonuses,
@@ -250,6 +251,7 @@ const AbilityScoresSelection: React.FC = () => {
                 method={method}
                 remainingPoints={remainingPoints}
                 nextCost={nextCost}
+                onAssignArrayScore={handleAssignArrayScore}
                 onIncrease={handleIncreaseScore}
                 onDecrease={handleDecreaseScore}
               />
