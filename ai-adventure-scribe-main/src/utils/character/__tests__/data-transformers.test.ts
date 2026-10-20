@@ -165,6 +165,18 @@ describe('data-transformers', () => {
       },
     ];
 
+    it.each([['defense'], '["Defense"]'])(
+      'retains stored fighting styles on the sheet: %s',
+      (fighting_styles) => {
+        const character = transformCharacterData(
+          { ...mockCharacterRow, fighting_styles },
+          mockStats,
+          mockEquipment,
+        );
+        expect(character.fightingStyles).toEqual(['defense']);
+      },
+    );
+
     it('should transform full database data into a Character object', () => {
       const equipmentWithMissingFields: CharacterEquipmentRow[] = [
         ...mockEquipment,

@@ -19,7 +19,12 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import { isAlreadyOnSheet, sheetItemNameSet } from './sheet-item-names.js';
 import { db } from '../../../../db/client';
-import { characterEquipment, characterStats, inventoryItems } from '../../../../db/schema/index';
+import {
+  characterEquipment,
+  characterStats,
+  characters,
+  inventoryItems,
+} from '../../../../db/schema/index';
 import { abilityModifier } from '../../../../shared/ability-modifier';
 import { computeArmorClass, type ArmorClassEquipmentItem } from '../../../../shared/armor-class';
 import { logger } from '../../lib/logger.js';
@@ -86,12 +91,16 @@ export async function readArmorClassEquipment(
 export async function recomputeStoredArmorClass(
   characterId: string,
 ): Promise<RecomputedArmorClass | null> {
-  const [stats, equipment] = await Promise.all([
+  const [stats, equipment, character] = await Promise.all([
     db.query.characterStats.findFirst({
       where: eq(characterStats.characterId, characterId),
       columns: { dexterity: true, armorClass: true },
     }),
     readArmorClassEquipment(characterId),
+    db.query.characters.findFirst({
+      where: eq(characters.id, characterId),
+      columns: { fightingStyles: true },
+    }),
   ]);
 
   if (!stats) return null;
@@ -103,11 +112,13 @@ export async function recomputeStoredArmorClass(
     0,
   );
   const ownsArmor =
-    equipment.some((item) => ARMOR_ITEM_TYPES.includes((item.item_type ?? '').trim().toLowerCase())) ||
-    wornByName !== computeArmorClass([], 0);
+    equipment.some((item) =>
+      ARMOR_ITEM_TYPES.includes((item.item_type ?? '').trim().toLowerCase()),
+    ) || wornByName !== computeArmorClass([], 0);
   if (!ownsArmor) return null;
 
   const armorClass = computeArmorClass(equipment, abilityModifier(stats.dexterity ?? 10), {
+    fightingStyles: character?.fightingStyles,
     warn: (msg, context) => logger.warn({ msg, characterId, ...context }),
   });
 

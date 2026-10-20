@@ -47,6 +47,7 @@ export interface SrdArmorEntry {
 export type ArmorClassWarning = (message: string, context: Record<string, unknown>) => void;
 
 export interface ArmorClassOptions {
+  fightingStyles?: unknown;
   warn?: ArmorClassWarning;
 }
 
@@ -215,7 +216,17 @@ export function describeArmorClass(
   const base = armor ? armor.base : UNARMORED_ARMOR_CLASS;
 
   return {
-    armorClass: base + dexterityBonus + shieldBonus,
+    armorClass:
+      base +
+      dexterityBonus +
+      shieldBonus +
+      (armor &&
+      Array.isArray(options.fightingStyles) &&
+      options.fightingStyles.some(
+        (style) => typeof style === 'string' && style.trim().toLowerCase() === 'defense',
+      )
+        ? 1
+        : 0),
     armor,
     dexterityBonus,
     shieldBonus,

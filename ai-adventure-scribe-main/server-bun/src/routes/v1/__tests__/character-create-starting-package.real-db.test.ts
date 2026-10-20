@@ -127,7 +127,53 @@ describeWithDb('character create starting package (#710)', () => {
     return id;
   }
 
-  it('wears Chain Mail, Shield, and Longsword from the Hill Dwarf Fighter payload and stores AC 18', async () => {
+  it('persists Defense through create and read and grants AC 17 in chain mail (#824)', async () => {
+    const id = await create({
+      ...fighterPayload,
+      name: testId('defense-fighter'),
+      fighting_styles: ['defense'],
+      stats: { ...fighterPayload.stats, dexterity: 10 },
+      equipment: [{ item_name: 'Chain Mail', item_type: 'armor', equipped: true }],
+    });
+    const response = await app.handle(new Request(`http://localhost/v1/characters/${id}`));
+    expect(response.status).toBe(200);
+    const character = await response.json();
+    expect(character.fighting_styles).toEqual(['defense']);
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    expect(stats.armorClass).toBe(17);
+    const update = async (body: unknown) => {
+      const response = await app.handle(
+        new Request(`http://localhost/v1/characters/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }),
+      );
+      expect(response.status).toBe(200);
+      const [stats] = await db
+        .select()
+        .from(characterStats)
+        .where(eq(characterStats.characterId, id));
+      return stats.armorClass;
+    };
+    expect(await update({ fighting_styles: ['archery'] })).toBe(16);
+    expect(await update({ fighting_styles: ['defense'] })).toBe(17);
+    expect(
+      await update({
+        equipment: [{ item_name: 'Chain Mail', item_type: 'armor', equipped: false }],
+      }),
+    ).toBe(10);
+    expect(
+      await update({
+        equipment: [{ item_name: 'Chain Mail', item_type: 'armor', equipped: true }],
+      }),
+    ).toBe(17);
+  });
+
+  it('wears Chain Mail, Shield, and Longsword from the Hill Dwarf Fighter payload and stores AC 19', async () => {
     const id = await create({
       ...fighterPayload,
       name: `Hill Dwarf Fighter ${testId('710')}`,
@@ -138,8 +184,8 @@ describeWithDb('character create starting package (#710)', () => {
       .from(characterStats)
       .where(eq(characterStats.characterId, id));
     expect(stats).toBeDefined();
-    // Chain Mail 16 (heavy, DEX ignored) + Shield 2. The payload sends armor_class 12.
-    expect(stats.armorClass).toBe(18);
+    // Chain Mail 16 (heavy, DEX ignored) + Shield 2 + Defense 1. The payload sends armor_class 12.
+    expect(stats.armorClass).toBe(19);
 
     const rows = (await db
       .select()
@@ -171,7 +217,7 @@ describeWithDb('character create starting package (#710)', () => {
       .select()
       .from(characterStats)
       .where(eq(characterStats.characterId, id));
-    expect(stats.armorClass).toBe(18);
+    expect(stats.armorClass).toBe(19);
 
     const rows = (await db
       .select()
