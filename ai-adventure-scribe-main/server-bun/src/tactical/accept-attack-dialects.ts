@@ -17,6 +17,7 @@
  * out of the paragraph that describes it — one swing, one roll.
  */
 import { translateLegacyAttackRolls } from './legacy-attack-translation.js';
+import { groundPlayerDeclaredAction } from './player-declared-action.js';
 import { applyProseAttackIntent, inferProseAttackIntent } from './prose-attack-intent.js';
 
 import type { LegacyAttackTranslationResult } from './legacy-attack-translation.js';
@@ -31,6 +32,7 @@ export type AcceptedResponse = {
   inference: ProseAttackInference | null;
   /** False when the model already spoke the engine's dialect and nothing was rewritten. */
   rewritten: boolean;
+  awaitingTarget?: boolean;
 };
 
 export function acceptWhateverWasEmitted(
@@ -39,6 +41,15 @@ export function acceptWhateverWasEmitted(
   combatActive: boolean,
   playerInput?: string,
 ): AcceptedResponse {
+  const grounded = combatActive ? groundPlayerDeclaredAction(parsed, prompt, playerInput) : null;
+  if (grounded)
+    return {
+      response: grounded.response,
+      translation: null,
+      inference: null,
+      rewritten: true,
+      awaitingTarget: grounded.awaitingTarget,
+    };
   const translation = translateLegacyAttackRolls(parsed, prompt, combatActive);
   const translated = translation?.response ?? parsed;
   const inference = inferProseAttackIntent(translated, prompt, combatActive, playerInput);

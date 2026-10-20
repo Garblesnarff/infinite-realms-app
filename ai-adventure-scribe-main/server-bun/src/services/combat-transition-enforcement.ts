@@ -269,6 +269,7 @@ export async function enforceCombatTransitionContract(params: {
   // sees the rewritten form. An attack can no longer fail to resolve because of its envelope.
   const acceptance = acceptWhateverWasEmitted(parsed, prompt, combatActive, params.playerInput);
   let accepted = withAcceptance(result, acceptance);
+  if (acceptance.awaitingTarget) return accepted;
   const { translation, inference } = acceptance;
   // Declared actions resolve BEFORE the end-of-combat transition is evaluated (#2524).
   // In run D1 the envelope carried `combat_transition: 'end'` on the very turn the
