@@ -6,15 +6,19 @@ export function typedRestType(text: string): 'short' | 'long' | null {
   const t = text.toLowerCase().replace(/\s+/g, ' ').trim();
   if (/\?\s*$/.test(t) || /^(can|could|should|shall|may|do|does|is|are|will|would)\b/.test(t))
     return null;
-  if (/\b(?:not|never|don'?t|do not|won'?t|refuse to|no)\b[^.!]{0,20}\brest/.test(t)) return null;
+  if (/\b(?:not|never|don'?t|won'?t|can'?t|cannot|refuse to|no)\b/.test(t)) return null;
   if (
-    /\b(?:long|full) rest\b/.test(t) ||
-    /\brest (?:for|through) the night\b/.test(t) ||
-    /\b(?:sleep|rest)\w* (?:for )?(?:eight|8) hours\b/.test(t)
+    /^(?:i|we) (?:take|begin|start|have) (?:a |the )?(?:full |long |full long )rest\b/.test(t) ||
+    /^(?:i|we) rest (?:for|through) the night\b/.test(t) ||
+    /^(?:i|we) (?:sleep|rest) (?:for )?(?:eight|8) hours\b/.test(t)
   ) {
     return 'long';
   }
-  if (/\bshort rest\b/.test(t) || /\brest for an hour\b/.test(t) || /\btake a breather\b/.test(t)) {
+  if (
+    /^(?:i|we) (?:take|begin|start|have) (?:a |the )?short rest\b/.test(t) ||
+    /^(?:i|we) rest for an hour\b/.test(t) ||
+    /^(?:i|we) take a breather\b/.test(t)
+  ) {
     return 'short';
   }
   return null;

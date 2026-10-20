@@ -22,5 +22,12 @@ describe('typedRestType (#751)', () => {
     expect(typedRestType("I don't rest, I keep walking.")).toBeNull();
     expect(typedRestType('We keep walking.')).toBeNull();
     expect(typedRestType('')).toBeNull();
+    expect(typedRestType('we took a long rest last week')).toBeNull();
+    expect(typedRestType('I need a long rest')).toBeNull();
+    expect(typedRestType("I can't sleep for 8 hours")).toBeNull();
+    expect(typedRestType('I cannot sleep for 8 hours')).toBeNull();
+    expect(typedRestType('I can take a long rest')).toBeNull();
+    expect(typedRestType('I wish I could take a short rest')).toBeNull();
+    expect(typedRestType('They take a long rest')).toBeNull();
   });
 });
