@@ -111,6 +111,59 @@ describe('CombatSummary', () => {
     expect(npcItem?.className).toContain('bg-red-50');
   });
 
+  // #876: a creature seated under a DM label ("The Pale Shape 1") whose result cards read
+  // by its bestiary heading ("The Thing Below (Avatar) 1" — the `displayName`
+  // `mapAuthoritativeCombat` flattens off the server row's attack profile) must read by
+  // that same heading in the tracker, or the player is shown two names for one creature.
+  it('names a renamed creature by its display name, as the result cards do', () => {
+    const mockEncounter = {
+      currentRound: 7,
+      currentTurnParticipantId: 'p1',
+      participants: [
+        {
+          id: 'p1',
+          name: 'Hero',
+          participantType: 'player',
+          currentHitPoints: 10,
+          maxHitPoints: 10,
+          armorClass: 15,
+          initiative: 20,
+          conditions: [],
+          actionTaken: false,
+          bonusActionTaken: false,
+          reactionTaken: false,
+        },
+        {
+          id: 'p2',
+          name: 'The Pale Shape 1',
+          displayName: 'The Thing Below (Avatar) 1',
+          participantType: 'monster',
+          currentHitPoints: 20,
+          maxHitPoints: 20,
+          armorClass: 13,
+          initiative: 10,
+          conditions: [],
+          actionTaken: false,
+          bonusActionTaken: false,
+          reactionTaken: false,
+        },
+      ],
+      actions: [],
+    };
+
+    (useCombat as any).mockReturnValue({
+      state: { isInCombat: true, activeEncounter: mockEncounter },
+      nextTurn: mockNextTurn,
+      endCombat: mockEndCombat,
+    });
+
+    render(<CombatSummary />);
+
+    expect(screen.getByText('The Thing Below (Avatar) 1')).toBeInTheDocument();
+    expect(screen.getByLabelText('The Thing Below (Avatar) 1')).toBeInTheDocument();
+    expect(screen.queryByText('The Pale Shape 1')).toBeNull();
+  });
+
   it('does not expose client-authoritative combat controls', () => {
     const mockEncounter = {
       currentRound: 1,

@@ -88,11 +88,14 @@ const ActionPanel: React.FC<ActionPanelProps> = React.memo(
       return null;
     }
 
+    // The name the result cards show: a creature seated under a DM label reads by its
+    // bestiary heading here too (#876).
+    const currentLabel = currentParticipant.displayName ?? currentParticipant.name;
     const turnLabel = showControls
-      ? `${currentParticipant.name}'s Turn`
+      ? `${currentLabel}'s Turn`
       : isPlayersTurn
         ? 'Your turn'
-        : `${currentParticipant.name}'s turn`;
+        : `${currentLabel}'s turn`;
 
     return (
       <Card>

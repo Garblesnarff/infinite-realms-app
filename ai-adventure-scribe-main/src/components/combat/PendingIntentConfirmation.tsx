@@ -16,7 +16,13 @@ function matchesParticipant(
   participant: CombatEncounter['participants'][number],
   reference: string,
 ): boolean {
-  return participant.id === reference || slugify(participant.name) === slugify(reference);
+  // A declaration may name the creature by the name on its result card (the bestiary
+  // heading) rather than the seating label; both spellings are the same participant (#876).
+  return (
+    participant.id === reference ||
+    slugify(participant.name) === slugify(reference) ||
+    (!!participant.displayName && slugify(participant.displayName) === slugify(reference))
+  );
 }
 
 function isUnavailable(participant: CombatEncounter['participants'][number] | undefined): boolean {
@@ -59,7 +65,9 @@ export const PendingIntentConfirmation: React.FC<PendingIntentConfirmationProps>
     // A target that disappeared from the authoritative roster is unavailable too. Never offer
     // Strike on a stale declaration just because the old slug no longer resolves to a row.
     const targetUnavailable = targets.some((target) => !target || isUnavailable(target));
-    const targetName = targets.find(Boolean)?.name || pending.targetIds[0] || 'the declared target';
+    const firstTarget = targets.find(Boolean);
+    const targetName =
+      firstTarget?.displayName || firstTarget?.name || pending.targetIds[0] || 'the declared target';
     return {
       pending,
       encounterId: encounter.id,

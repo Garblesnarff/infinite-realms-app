@@ -6,6 +6,7 @@ import { advanceNpcTurns, type AdvanceNpcTurnsResult } from './npc-turn-runner.j
 import { loadSessionEntityIndex } from './session-entity-index.js';
 import { db } from '../../../../db/client';
 import { campaigns, characters, combatEncounters, gameSessions } from '../../../../db/schema/index';
+import { displayNameOf } from '../../../../shared/engine-display-name';
 import { logger } from '../../lib/logger.js';
 import { resolveEntityRef } from '../../tactical/identity.js';
 
@@ -41,7 +42,15 @@ async function participantIdFor(state: CombatState, token: string): Promise<stri
   if (seated(token)) return token;
   const boardId = (await loadSessionEntityIndex(state.encounter.sessionId)).resolve(token);
   if (seated(boardId)) return boardId;
-  return resolveEntityRef(state.participants, token)?.id;
+  // State rows carry the player-facing name on the attack profile, not as a column:
+  // surface it so a token naming the creature as the cards do still resolves (#876).
+  return resolveEntityRef(
+    state.participants.map((participant) => ({
+      ...participant,
+      displayName: displayNameOf(participant),
+    })),
+    token,
+  )?.id;
 }
 
 /**

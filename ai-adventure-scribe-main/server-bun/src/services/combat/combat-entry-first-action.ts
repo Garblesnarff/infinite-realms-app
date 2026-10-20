@@ -16,6 +16,7 @@ import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { isUnarmedAttackVerb, isUnarmedWeaponClaim, UNARMED_STRIKE } from './weapon-catalog.js';
 import { groundRequestedWeapon } from './weapon-grounding.js';
+import { displayNameOf } from '../../../../shared/engine-display-name';
 import {
   isPlayerCombatCurseSpell,
   isPlayerCombatSpell,
@@ -117,6 +118,10 @@ export interface CombatEntryFirstActionState {
     participantType?: string;
     armorClass?: number | null;
     encounterId?: string;
+    /** Player-facing name when it differs from `name` (bestiary heading, #2398). */
+    displayName?: string | null;
+    /** Stored attack profile; carries the bestiary `displayName` when the row has no column value. */
+    monsterAttack?: unknown;
   }>;
 }
 
@@ -234,6 +239,30 @@ function findTarget(
     );
   });
   if (exact) return exact;
+
+  // The name the cards show for this seat (bestiary heading) answers to the same
+  // comparisons — but only when it picks out exactly one seat. The unnumbered heading
+  // names every seat of its kind, and an opening attack must not silently land on the
+  // first of them: ambiguity is a refusal, as in uniqueCatalogMatch (#876).
+  const displayMatches = participants.filter((participant) => {
+    if (player && participant.id === player.id) return false;
+    const display = displayNameOf(participant);
+    if (!display) return false;
+    const displayName = normalize(display);
+    const displayBase = displayName.replace(/\s+\d+$/, '');
+    const displaySlug = slugify(display);
+    const displayBaseSlug = displaySlug.replace(/-\d+$/, '');
+    return (
+      displaySlug === claimSlug ||
+      displayBaseSlug === claimSlug ||
+      displayName === claimName ||
+      displayBase === claimName ||
+      displayName.endsWith(` ${claimName}`) ||
+      claimName.endsWith(` ${displayName}`)
+    );
+  });
+  if (displayMatches.length === 1) return displayMatches[0];
+  if (displayMatches.length > 1) return undefined;
 
   // A prose declaration can arrive with the hostile still carrying the old synthetic seat
   // label. If there is exactly one unresolved hostile, its id remains authoritative and the

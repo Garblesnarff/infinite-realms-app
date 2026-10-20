@@ -4,6 +4,7 @@ import {
   loadLatestTacticalMapRow,
   saveTacticalMap,
 } from './tactical-map-store.js';
+import { displayNameOf } from '../../../../shared/engine-display-name';
 import { combatLogger } from '../../lib/logger.js';
 import { resetMovement } from '../../tactical/engine.js';
 import { generateMap } from '../../tactical/generator.js';
@@ -13,7 +14,16 @@ import { broadcastToRoom } from '../collaboration/room-manager.js';
 
 import type { EntitySize, SceneSpec, TacticalMap } from '../../tactical/types.js';
 
-type Participant = { id: string; name: string; participantType: string; speed: number };
+type Participant = {
+  id: string;
+  name: string;
+  participantType: string;
+  speed: number;
+  /** Player-facing name when it differs from `name` (bestiary heading, #2398). */
+  displayName?: string | null;
+  /** Stored attack profile; carries the bestiary `displayName` when the row has no column value. */
+  monsterAttack?: unknown;
+};
 
 const broadcast = (sessionId: string, payload: Record<string, unknown>): void => {
   broadcastToRoom(sessionId, null as never, { ...payload, timestamp: Date.now() });
@@ -32,6 +42,9 @@ export async function createTacticalCombatMap(
   const entities = participants.map((participant) => ({
     id: participant.id,
     name: participant.name,
+    // The board is what every later name resolution reads (session entity index, AoE,
+    // dispatch): carry the name the cards show, or a target named by it cannot resolve (#876).
+    displayName: displayNameOf(participant) ?? undefined,
     x: 0,
     y: 0,
     size: tacticalSizeForParticipant(participant, participantSizes[participant.id]),

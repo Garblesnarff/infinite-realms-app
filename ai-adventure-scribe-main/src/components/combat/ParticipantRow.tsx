@@ -67,6 +67,10 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
     const needsDeathSave =
       isPlayer && participant.currentHitPoints === 0 && !isDead && vital !== 'stable';
 
+    // The one name every part of this row uses (#876): the bestiary heading when the
+    // seat carries one, so the visible heading, the portrait alt and the HP label agree.
+    const label = participant.displayName ?? participant.name;
+
     // Look up portrait from campaign assets
     const assetKey = participant.name.toLowerCase().replace(/\s+/g, '-');
     const assetType =
@@ -150,7 +154,7 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
             {portraitUrl ? (
               <img
                 src={portraitUrl}
-                alt={participant.name}
+                alt={label}
                 className="w-full h-full object-cover"
               />
             ) : (
@@ -163,7 +167,7 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
         <div className="flex-1 ml-4">
           <div className="flex items-center gap-2">
             <h4 className={`font-semibold ${isDead ? 'line-through' : ''}`}>
-              {participant.displayName ?? participant.name}
+              {label}
             </h4>
 
             {/* The word, not only a colour or a pip: a screen reader hears the state. */}
@@ -216,8 +220,8 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
               indicatorClassName={getPlayerHPBarColor(hpPercent)}
               aria-label={
                 isPlayer
-                  ? `${participant.name} Health: ${participant.currentHitPoints}/${participant.maxHitPoints}${participant.temporaryHitPoints > 0 ? ` (+${participant.temporaryHitPoints} temp)` : ''}`
-                  : `${participant.name} Health bar`
+                  ? `${label} Health: ${participant.currentHitPoints}/${participant.maxHitPoints}${participant.temporaryHitPoints > 0 ? ` (+${participant.temporaryHitPoints} temp)` : ''}`
+                  : `${label} Health bar`
               }
             />
             {isPlayer ? (

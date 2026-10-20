@@ -287,7 +287,7 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({
                           role="button"
                           tabIndex={0}
                           aria-pressed={selectedEnemy === enemy.id}
-                          aria-label={`Select ${enemy.name}`}
+                          aria-label={`Select ${enemy.displayName ?? enemy.name}`}
                           onKeyDown={handleEnemyKeyDown(enemy.id)}
                           className={`cursor-pointer transition-all focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:outline-none focus-visible:ring-offset-2 ${
                             selectedEnemy === enemy.id

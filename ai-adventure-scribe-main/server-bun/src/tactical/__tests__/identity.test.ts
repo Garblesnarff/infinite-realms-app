@@ -305,3 +305,74 @@ describe('slug-based entity identity', () => {
     );
   });
 });
+
+/**
+ * #876: a campaign creature seated under a DM-invented label carries a second name — the
+ * bestiary heading on its result cards ("The Thing Below (Avatar) 1") — while the board
+ * seats it as "The Pale Shape 1". A reference copied from a card is a spelling of the same
+ * seat and must resolve to it; the unnumbered heading names two seats and stays ambiguous.
+ */
+describe('an entity with a bestiary display name', () => {
+  const AVATAR_ONE_UUID = 'b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e';
+  const AVATAR_TWO_UUID = 'c2d3e4f5-a6b7-4c8d-9e0f-1a2b3c4d5e6f';
+
+  const renamed = (): MapEntity[] => {
+    const entities = [
+      entity(SEEKER_UUID, 'The Seeker', 1, 1, 'pc'),
+      {
+        ...entity(AVATAR_ONE_UUID, 'The Pale Shape 1', 6, 4, 'monster'),
+        displayName: 'The Thing Below (Avatar) 1',
+      },
+      {
+        ...entity(AVATAR_TWO_UUID, 'The Pale Shape 2', 6, 6, 'monster'),
+        displayName: 'The Thing Below (Avatar) 2',
+      },
+    ];
+    assignEntitySlugs(entities);
+    return entities;
+  };
+
+  test('resolves the numbered display name from the result card to its seat', () => {
+    const entities = renamed();
+    expect(resolveEntityRef(entities, 'The Thing Below (Avatar) 1')?.id).toBe(AVATAR_ONE_UUID);
+    expect(resolveEntityRef(entities, 'the-thing-below-avatar-2')?.id).toBe(AVATAR_TWO_UUID);
+  });
+
+  test('still resolves the seating label', () => {
+    const entities = renamed();
+    expect(resolveEntityRef(entities, 'The Pale Shape 1')?.id).toBe(AVATAR_ONE_UUID);
+    expect(resolveEntityRef(entities, 'the-pale-shape-2')?.id).toBe(AVATAR_TWO_UUID);
+  });
+
+  test('the unnumbered heading names two seats and resolves to neither', () => {
+    expect(resolveEntityRef(renamed(), 'The Thing Below (Avatar)')).toBeNull();
+  });
+
+  test('an exact name outranks a card name that only reaches it by dropping the article', () => {
+    const entities = [
+      {
+        ...entity(AVATAR_ONE_UUID, 'Wraith 1', 6, 4, 'monster'),
+        displayName: 'The Shadow 1',
+      },
+      entity(AVATAR_TWO_UUID, 'Shadow 1', 6, 6, 'monster'),
+    ];
+    assignEntitySlugs(entities);
+    // "Shadow 1" is the second seat's exact label; the first seat's card name
+    // reaches it only through the article-stripped derived form.
+    expect(resolveEntityRef(entities, 'Shadow 1')?.id).toBe(AVATAR_TWO_UUID);
+    expect(resolveEntityRef(entities, 'The Shadow 1')?.id).toBe(AVATAR_ONE_UUID);
+  });
+
+  test('the mirror pairing resolves the same way', () => {
+    const entities = [
+      entity(AVATAR_ONE_UUID, 'The Shadow 1', 6, 4, 'monster'),
+      {
+        ...entity(AVATAR_TWO_UUID, 'Wraith 1', 6, 6, 'monster'),
+        displayName: 'Shadow 1',
+      },
+    ];
+    assignEntitySlugs(entities);
+    expect(resolveEntityRef(entities, 'The Shadow 1')?.id).toBe(AVATAR_ONE_UUID);
+    expect(resolveEntityRef(entities, 'Shadow 1')?.id).toBe(AVATAR_TWO_UUID);
+  });
+});

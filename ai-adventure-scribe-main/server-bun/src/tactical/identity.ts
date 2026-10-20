@@ -9,7 +9,17 @@
  */
 
 /** Anything with a stable internal id and, optionally, an LLM-facing slug and name. */
-export type EntityRef = { id: string; slug?: string; name?: string };
+export type EntityRef = {
+  id: string;
+  slug?: string;
+  name?: string;
+  /**
+   * The player-facing name when it differs from `name` (a bestiary creature seated under a
+   * DM-invented label: the result cards show the bible heading, #2398). A reference copied
+   * from a card must resolve to the same entity, so it is an alias like any other spelling.
+   */
+  displayName?: string | null;
+};
 
 const LEADING_ARTICLE = /^(?:the|a|an)-/;
 
@@ -86,14 +96,23 @@ function uniqueSlug(preferred: string, taken: Set<string>): string {
   }
 }
 
+/**
+ * The spellings an entity is actually known by: its id, its slug, its seating label and
+ * the name on its result cards ("The Thing Below (Avatar) 1" for a seat the engine calls
+ * "The Pale Shape 1", #876).
+ */
+function fullFormsFor(entity: EntityRef): string[] {
+  const forms = [normalizeEntityToken(entity.id), normalizeEntityToken(entitySlug(entity))];
+  if (entity.name) forms.push(normalizeEntityToken(entity.name));
+  if (entity.displayName) forms.push(normalizeEntityToken(entity.displayName));
+  return [...new Set(forms)];
+}
+
 /** Every spelling of an entity that is specific enough to be unambiguous on its own. */
 function aliasesFor(entity: EntityRef): string[] {
-  const aliases = [normalizeEntityToken(entity.id)];
-  const slug = normalizeEntityToken(entitySlug(entity));
-  const name = entity.name ? normalizeEntityToken(entity.name) : null;
-  for (const form of [slug, name]) {
-    if (!form) continue;
-    aliases.push(form);
+  const aliases = [...fullFormsFor(entity)];
+  // Article-stripped variants of every known spelling except the raw id, as before.
+  for (const form of aliases.slice(1)) {
     const stripped = withoutArticle(form);
     if (stripped) aliases.push(stripped);
   }
@@ -114,6 +133,12 @@ export function resolveEntityRef<T extends EntityRef>(entities: T[], token: stri
   if (exact) return exact;
   const wanted = normalizeEntityToken(token);
   if (!wanted) return null;
+  // A spelling an entity is actually known by outranks a derived one: "Shadow 1" is the
+  // second seat's exact name even when the first seat's card name ("The Shadow 1") only
+  // reaches it by dropping the article. Two full forms still refuse, as do two derived
+  // ones — derivation never breaks a tie (#876).
+  const byFullForm = entities.filter((entity) => fullFormsFor(entity).includes(wanted));
+  if (byFullForm.length) return byFullForm.length === 1 ? byFullForm[0] : null;
   const byAlias = entities.filter((entity) => aliasesFor(entity).includes(wanted));
   if (byAlias.length) return byAlias.length === 1 ? byAlias[0] : null;
   // A prefix that names exactly one entity ("void" for "void-maw").

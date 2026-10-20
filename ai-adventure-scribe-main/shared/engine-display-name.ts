@@ -47,6 +47,26 @@ export function rosterEntryForParticipant(participant: {
   };
 }
 
+/**
+ * The player-facing name for a participant row, or null when it answers to its seating
+ * label alone: a direct value first, else the heading stored on the attack profile at
+ * seating (#876). The one extraction rule — resolvers, the tactical board and the turn
+ * projections all read the heading through here.
+ */
+export function displayNameOf(participant: {
+  id: string;
+  displayName?: string | null;
+  monsterAttack?: unknown;
+}): string | null {
+  if (typeof participant.displayName === 'string' && participant.displayName.trim()) {
+    return participant.displayName;
+  }
+  const fromProfile = (
+    participant.monsterAttack as { displayName?: unknown } | null | undefined
+  )?.displayName;
+  return typeof fromProfile === 'string' && fromProfile.trim() ? fromProfile : null;
+}
+
 export function isUuid(value: string): boolean {
   return UUID_RE.test(value.trim());
 }

@@ -35,6 +35,8 @@ export interface MapEntity {
   speedFeet: number;
   movementRemaining: number;
   name?: string;
+  /** Player-facing name when it differs from `name` (bestiary heading, #2398); an alias for resolution. */
+  displayName?: string;
   isLiving?: boolean;
 }
 

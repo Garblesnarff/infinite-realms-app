@@ -76,6 +76,26 @@ describe('PendingIntentConfirmation', () => {
     } as Response);
   });
 
+  it('does not throw on a participant carrying a null displayName (#876)', () => {
+    // A target reference no name matches forces every participant through the
+    // displayName comparison; a null there must read as "no card name", not crash.
+    const encounter = makeEncounter({
+      pendingIntent: {
+        actorId: 'player-1',
+        actionType: 'attack',
+        targetIds: ['the-thing-below-avatar-1'],
+        sourceText: 'I cast Sacred Flame at The Thing Below (Avatar) 1',
+        queuedOnTurn: 0,
+        queuedOnRound: 1,
+      },
+    });
+    (encounter.participants as Array<Record<string, unknown>>)[1].displayName = null;
+    renderConfirmation(encounter);
+
+    expect(screen.queryByRole('button', { name: '[Strike]' })).toBeNull();
+    expect(screen.getByRole('button', { name: '[Do something else]' })).toBeDefined();
+  });
+
   it('promotes the stored declaration and sends its source text through normal resolution', async () => {
     const user = userEvent.setup();
     const { onRefresh, onSendFullMessage } = renderConfirmation();

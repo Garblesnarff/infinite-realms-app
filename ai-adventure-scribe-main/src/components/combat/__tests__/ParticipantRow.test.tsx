@@ -151,3 +151,31 @@ describe('ParticipantRow: the dying state (#2518)', () => {
     expect(screen.queryByTestId('participant-vital-badge')).toBeNull();
   });
 });
+
+describe('ParticipantRow: one name per creature (#876)', () => {
+  it('names a renamed creature by its card name in the heading, the portrait alt and the HP label', () => {
+    const renamed = {
+      id: 'avatar-1',
+      name: 'The Pale Shape 1',
+      displayName: 'The Thing Below (Avatar) 1',
+      participantType: 'monster',
+      initiative: 12,
+      armorClass: 13,
+      currentHitPoints: 20,
+      maxHitPoints: 27,
+      temporaryHitPoints: 0,
+      conditions: [],
+      deathSaves: { successes: 0, failures: 0 },
+      portraitUrl: 'https://example.test/avatar.png',
+    } as unknown as CombatParticipant;
+    render(
+      <TooltipProvider>
+        <ParticipantRow participant={renamed} isCurrentTurn={false} roundNumber={1} />
+      </TooltipProvider>,
+    );
+    expect(screen.getByRole('heading', { name: 'The Thing Below (Avatar) 1' })).toBeTruthy();
+    expect(screen.getByAltText('The Thing Below (Avatar) 1')).toBeTruthy();
+    expect(screen.getByLabelText('The Thing Below (Avatar) 1 Health bar')).toBeTruthy();
+    expect(screen.queryByText('The Pale Shape 1')).toBeNull();
+  });
+});

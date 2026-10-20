@@ -24,7 +24,7 @@ const DeathSaveManager: React.FC<DeathSaveManagerProps> = ({ participant, onDeat
     <Card className="border-red-500 bg-red-950/20">
       <CardHeader>
         <CardTitle className="text-red-400 flex items-center justify-between">
-          <span>Dying: {participant.name}</span>
+          <span>Dying: {participant.displayName ?? participant.name}</span>
           <Heart className="w-5 h-5 animate-pulse" />
         </CardTitle>
       </CardHeader>

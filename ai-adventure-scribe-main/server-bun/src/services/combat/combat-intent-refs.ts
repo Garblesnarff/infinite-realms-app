@@ -1,4 +1,5 @@
 import { normalizeMonsterKey } from './monster-key.js';
+import { displayNameOf } from '../../../../shared/engine-display-name';
 import { NotFoundError } from '../../lib/errors.js';
 import { resolveEntityRef } from '../../tactical/identity.js';
 
@@ -6,6 +7,10 @@ export interface CombatIntentRefParticipant {
   id: string;
   name?: string;
   participantType?: string;
+  /** Player-facing name when it differs from `name` (bestiary heading, #2398). */
+  displayName?: string | null;
+  /** Stored attack profile; carries the bestiary `displayName` when the row has no column value. */
+  monsterAttack?: unknown;
 }
 
 export interface CombatIntentRefState {
@@ -32,6 +37,25 @@ const CATALOG_REF = /^[a-z][a-z0-9_-]*:\S/i;
 /** The participant types seated from a stat block (see `participant-type.ts`). */
 const CATALOG_SEATED_TYPES = new Set(['npc', 'monster']);
 
+/** The trailing duplicate number combat adds to a repeated name ("Shadow Roach 2"). */
+const DUPLICATE_SUFFIX = /\s+\d+$/;
+
+/**
+ * Every catalog key a participant answers to. A stat-block key names the block, not the
+ * seat, so both the seating label and the bestiary heading count — each with and without
+ * the duplicate number combat added, which no catalog holds ("Shadow Roach 2" is seated
+ * from `srd:shadow-roach`).
+ */
+function catalogKeysFor(participant: CombatIntentRefParticipant): string[] {
+  const keys = new Set<string>();
+  for (const raw of [participant.name, displayNameOf(participant)]) {
+    if (!raw) continue;
+    keys.add(normalizeMonsterKey(raw));
+    keys.add(normalizeMonsterKey(raw.replace(DUPLICATE_SUFFIX, '')));
+  }
+  return [...keys];
+}
+
 function uniqueCatalogMatch<P extends CombatIntentRefParticipant>(
   participants: P[],
   token: string,
@@ -43,8 +67,7 @@ function uniqueCatalogMatch<P extends CombatIntentRefParticipant>(
   const matches = participants.filter(
     (participant) =>
       CATALOG_SEATED_TYPES.has(participant.participantType ?? '') &&
-      !!participant.name &&
-      normalizeMonsterKey(participant.name) === key,
+      catalogKeysFor(participant).includes(key),
   );
   return matches.length === 1 ? matches[0] : null;
 }
@@ -57,13 +80,21 @@ export function resolveCombatIntentRefs<T extends CombatIntentRefSubmission>(
   warn: RefLog = () => undefined,
 ): T {
   const participantIds = new Set(state.participants.map((participant) => participant.id));
+  // The roster the resolver sees carries each seat's player-facing name as an alias: the
+  // name on the result cards ("The Thing Below (Avatar) 1") must resolve to the seat the
+  // engine knows by its label ("The Pale Shape 1"), or the cast is refused for naming the
+  // creature the game itself showed the player (#876).
+  const roster = state.participants.map((participant) => ({
+    ...participant,
+    displayName: displayNameOf(participant),
+  }));
   const requireParticipant = (token: string, role: 'actor' | 'target'): string => {
     const boardId = index.resolve(token);
     if (participantIds.has(boardId)) return boardId;
 
     // A recently rebuilt encounter can briefly be ahead of its tactical-map aliases. Resolve
     // the same token against the authoritative encounter roster before refusing the action.
-    const encounterParticipant = resolveEntityRef(state.participants, token);
+    const encounterParticipant = resolveEntityRef(roster, token);
     if (encounterParticipant && participantIds.has(encounterParticipant.id)) {
       warn({
         msg: 'COMBAT_INTENT_REF_RECONCILED_TO_ENCOUNTER_ROSTER',
