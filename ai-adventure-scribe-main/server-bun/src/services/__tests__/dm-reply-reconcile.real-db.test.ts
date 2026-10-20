@@ -1904,14 +1904,18 @@ ${playerInput}
     }
   });
 
-  test('a name the catalog does not hold is no spell from a non-caster: a Fighter "casts Witch Bolt at" nothing (#217 step d2)', async () => {
+  test('a name the catalog does not hold is no spell from a non-caster: a Fighter "casts Shadow Bolt at" nothing (#217 step d2)', async () => {
+    // The unknown name here was Witch Bolt until #902 added it to the catalog
+    // (it is a real PHB spell that was missing); a Fighter naming it now gets
+    // the sheet refusal, correctly. Shadow Bolt is a name the catalog still
+    // does not hold, so this case keeps pinning the unknown-name path.
     const reply = castReply('You fling your arm out. Nothing happens, and the cultist laughs.');
     const turn = await dmTurn({
       characterClass: 'Fighter',
       race: 'Human',
       scores: 'STR 16(+3), DEX 12(+1), CON 14(+2), INT 10(+0), WIS 12(+1), CHA 10(+0)',
       dexterityModifier: 1,
-      playerInput: 'I cast Witch Bolt at the cultist.',
+      playerInput: 'I cast Shadow Bolt at the cultist.',
       reply,
     });
     expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);

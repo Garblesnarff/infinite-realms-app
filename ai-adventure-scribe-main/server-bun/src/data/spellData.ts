@@ -79,6 +79,50 @@ export function isPlayerCombatCurseSpell(spell: Spell | undefined): boolean {
   return !!spell && PLAYER_COMBAT_CURSE_SPELL_ID_SET.has(spell.id);
 }
 
+/**
+ * Spells the combat engine resolves as a pure benefit on chosen creatures (#902): they spend
+ * a slot, claim their action, and open a lasting effect on their targets — Bless's +1d4 is
+ * applied by the roll paths for as long as the caster's concentration holds. Kept separate
+ * from PLAYER_COMBAT_SPELL_IDS for the same reason as the curse list.
+ */
+export const PLAYER_COMBAT_BUFF_SPELL_IDS = ['bless'] as const;
+
+const PLAYER_COMBAT_BUFF_SPELL_ID_SET = new Set<string>(PLAYER_COMBAT_BUFF_SPELL_IDS);
+
+export function isPlayerCombatBuffSpell(spell: Spell | undefined): boolean {
+  return !!spell && PLAYER_COMBAT_BUFF_SPELL_ID_SET.has(spell.id);
+}
+
+/**
+ * A spell the combat engine can acknowledge as cast on the caster themself (#902): range
+ * Self, concentration, and nothing for the engine to resolve against another creature —
+ * no damage, attack roll, saving throw, or area (Detect Magic is the reported case). Such
+ * a cast needs no target named: the caster is the target, the slot is spent, the action
+ * claimed, and the concentration row — the one ledger the engine keeps for a lasting
+ * effect — tracks the spell's life while the DM narrates what it reveals or grants.
+ *
+ * The concentration requirement is the boundary. A non-concentration Self spell's effect
+ * is either instant or tracked by state this cast does not write (False Life's and Armor
+ * of Agathys' temporary hit points, Misty Step's movement), so acknowledging it would
+ * spend the slot and action on an effect nothing records. Those stay refused, with the
+ * honest "describe it to the DM" message. A Self-range spell WITH an effect the engine
+ * resolves (Burning Hands' cone, Arms of Hadar's burst) is not a self cast either; it
+ * keeps the area path. The exact admitted set is pinned by
+ * spell-self-cast-gate.vitest.ts, so a catalog addition forces a conscious verdict.
+ */
+export function isSelfCastSpell(spell: Spell | undefined): boolean {
+  if (!spell) return false;
+  return (
+    /^self\b/i.test(spell.range.trim()) &&
+    spell.concentration === true &&
+    !spell.damage &&
+    (!spell.damageByLevel || Object.keys(spell.damageByLevel).length === 0) &&
+    !spell.attackType &&
+    !spell.saveAbility &&
+    !spell.areaOfEffect
+  );
+}
+
 const sourceSpells = [
   ...(srdSpells as unknown as any[]),
   ...(nonSrdSupplement as unknown as any[]),
@@ -221,6 +265,17 @@ export function assessPlayerCombatSpell(
     };
   }
   if (isPlayerCombatCurseSpell(spell)) {
+    if (spell.level >= 1 && (slotLevel === undefined || slotLevel === null)) {
+      return {
+        castable: false,
+        spell,
+        reason: 'missing_spell_slot_level',
+        message: `Spell refused: ${spell.name} needs a spell slot level — say which slot to spend (level ${spell.level} or higher)`,
+      };
+    }
+    return { castable: true, spell };
+  }
+  if (isPlayerCombatBuffSpell(spell) || isSelfCastSpell(spell)) {
     if (spell.level >= 1 && (slotLevel === undefined || slotLevel === null)) {
       return {
         castable: false,

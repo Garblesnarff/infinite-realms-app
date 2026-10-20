@@ -26,14 +26,15 @@ export function checkHit(input: HitCheckInput): HitCheckResult {
     targetAC,
     advantage: _advantage,
     disadvantage: _disadvantage,
+    blessDie = 0,
   } = input;
 
   // Determine if this is a natural 1 or natural 20
   const isNaturalOne = attackRoll === 1;
   const isNaturalTwenty = attackRoll === 20;
 
-  // Calculate total attack roll
-  const totalAttackRoll = attackRoll + attackBonus;
+  // Calculate total attack roll (Bless's d4 counts toward the total, never toward the face)
+  const totalAttackRoll = attackRoll + attackBonus + blessDie;
 
   // Natural 1 always misses
   if (isNaturalOne) {

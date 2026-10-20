@@ -41,7 +41,9 @@ vi.mock('../../../../db/client', () => ({
     select: vi.fn(() => ({
       from: vi.fn(() => ({
         where: vi.fn(() => ({
-          limit: vi.fn(),
+          // #902: blessDieFor awaits a limited select for Bless's concentration rows;
+          // an unresolved vi.fn() here made the awaited value undefined, not a row list.
+          limit: vi.fn(async () => []),
           innerJoin: vi.fn(() => ({
             where: vi.fn(),
           })),

@@ -16,6 +16,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { logAttackResolution, participantSlug } from './attack-telemetry.js';
+import { appliesBlessDie } from './bless-rider.js';
 import { mookGroupAttackBonus } from './boss-moves.js';
 import { resolveAttackRules } from './combat-rules.js';
 import {
@@ -47,10 +48,16 @@ import { aggregateResistances } from './resistance-resolver.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { abilityModifier } from '../../../../shared/ability-modifier';
 import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
-import { assessPlayerCombatSpell, resolveCatalogSpell } from '../../data/spellData.js';
+import {
+  assessPlayerCombatSpell,
+  isPlayerCombatBuffSpell,
+  isSelfCastSpell,
+  resolveCatalogSpell,
+} from '../../data/spellData.js';
 import { rollD20, rollD20Pair } from '../../lib/dice.js';
 import { NotFoundError, InternalServerError, BusinessLogicError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
+import { rollDie } from '../../lib/rng.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
 import { entitySlug } from '../../tactical/identity.js';
 import { CombatHPService } from '../combat-hp-service.js';
@@ -411,6 +418,33 @@ export class CombatAttackService {
   }
 
   /**
+   * The 1d4 Bless adds to a roll this participant is about to make (#902), or 0 when no live
+   * Bless covers them. Two rows can bless one participant: their own concentration (Bless
+   * cast on themself, or stored with no single target) and another caster's Bless naming
+   * them as its target. The die is rolled fresh for every roll — 2014 adds 1d4 per roll,
+   * not per turn — and never stacks: the same spell's effects don't combine, so the first
+   * matching row decides and one die is all a roll ever gets. Concentration rows are read
+   * live, so the die stops the moment the caster's concentration drops. The concentration
+   * service is imported lazily, the way hexRiderDamage does it, so unit tests that mock
+   * the database leaves never load db/client at import time.
+   */
+  private async blessDieFor(
+    participant: { id: string; characterId?: string | null } | null | undefined,
+  ): Promise<number> {
+    if (!participant) return 0;
+    const { getConcentration, getConcentrationTargetingParticipant } = await import(
+      './concentration-service.js'
+    );
+    if (participant.characterId) {
+      const own = await getConcentration(participant.characterId);
+      if (appliesBlessDie(own, participant)) return rollDie(4);
+    }
+    const targeting = await getConcentrationTargetingParticipant(participant.id);
+    if (appliesBlessDie(targeting, participant)) return rollDie(4);
+    return 0;
+  }
+
+  /**
    * Everything an attack needs to know before anything is claimed, rolled, or written.
    *
    * Split out of `resolveAttack` so `proposeAttack` can answer "what would this attack be?"
@@ -605,6 +639,9 @@ export class CombatAttackService {
         cover: geometry?.cover ?? null,
       };
 
+      // #902: a blessed attacker adds Bless's 1d4 to the roll while concentration holds.
+      const blessDie = await this.blessDieFor(attackerData.participant);
+
       // Check if the attack hits: a natural 1 always misses, a natural 20 always hits.
       const hitCheck = checkHit({
         attackRoll,
@@ -612,6 +649,7 @@ export class CombatAttackService {
         targetAC,
         advantage: rules.advantage,
         disadvantage: rules.disadvantage,
+        blessDie,
       });
 
       // SRD 5.1: a melee attack within 5 ft of an unconscious creature is an automatic
@@ -673,6 +711,7 @@ export class CombatAttackService {
           disadvantage: rules.disadvantage,
           attackBonus: rules.attackBonus,
           ...(mookGroupBonus > 0 ? { mookGroupBonus } : {}),
+          ...(blessDie > 0 ? { blessDie } : {}),
           ...acFacts,
           totalAttackRoll: hitCheck.totalAttackRoll,
           effectiveResistance: false,
@@ -794,6 +833,7 @@ export class CombatAttackService {
           effectiveImmunity: damageCalc.effectiveImmunity,
           finalDamage: appliedDamage,
           ...(hexDamage > 0 ? { hexDamage } : {}),
+          ...(blessDie > 0 ? { blessDie } : {}),
           targetNewHp: hpResult.newCurrentHp,
           targetIsConscious: hpResult.isConscious,
           targetIsDead: hpResult.isDead,
@@ -878,6 +918,10 @@ export class CombatAttackService {
       });
     }
     const { spell } = verdict;
+    // #902: a self cast (Detect Magic and its kin) has exactly one target — the caster —
+    // whatever the declaration named. Clamped here, where the proposal and the resolution
+    // both read their targets, so neither can aim a Self-range spell at anyone else.
+    const effectiveTargetIds = isSelfCastSpell(spell) ? [casterId] : targetIds;
     const tacticalMap = await loadActiveTacticalMap(casterData.participant.encounter.sessionId);
     const spellRange = spellReachFeet(spell);
     const casterConditions = await getActiveConditionNames(casterId);
@@ -886,7 +930,7 @@ export class CombatAttackService {
       string,
       { seated: number; effective: number; cover: 0 | 1 | 2 | 3 | null }
     >();
-    for (const targetId of targetIds) {
+    for (const targetId of effectiveTargetIds) {
       const targetData = allParticipantDataMap.get(targetId);
       if (!targetData) throw new NotFoundError('Target participant', targetId);
       const targetConditions = await getActiveConditionNames(targetId);
@@ -950,6 +994,7 @@ export class CombatAttackService {
     const spellAttackBonus = spellModifier + proficiencyBonus(casterProfile.level);
     return {
       spell,
+      targetIds: effectiveTargetIds,
       casterData,
       casterProfile,
       allParticipantDataMap,
@@ -1008,9 +1053,10 @@ export class CombatAttackService {
     input: SpellAttackInput,
     userId: string,
   ): Promise<SpellAttackResult> {
-    const { casterId, expectedVersion, targetIds, slotLevel, d20, d20Rolls } = input;
+    const { casterId, expectedVersion, slotLevel, d20, d20Rolls } = input;
     const {
       spell,
+      targetIds,
       casterData,
       casterProfile,
       allParticipantDataMap,
@@ -1025,6 +1071,29 @@ export class CombatAttackService {
         reason: 'hex_single_target',
         targetCount: targetIds.length,
       });
+    }
+    // #902: Bless chooses up to three creatures, plus one per slot level above the spell's
+    // own (2014). Refuse an empty or over-large blessing before anything is spent.
+    if (isPlayerCombatBuffSpell(spell)) {
+      const slotUsed = Math.max(spell.level, slotLevel ?? spell.level);
+      const maxTargets = 3 + (slotUsed - spell.level);
+      if (targetIds.length < 1) {
+        throw new BusinessLogicError(
+          `Spell refused: ${spell.name} needs at least one creature to bless — name who receives it and cast it again`,
+          { reason: 'bless_no_target', spell: spell.name },
+        );
+      }
+      if (targetIds.length > maxTargets) {
+        throw new BusinessLogicError(
+          `Spell refused: ${spell.name} from a level ${slotUsed} slot blesses at most ${maxTargets} creatures — name fewer and cast it again`,
+          {
+            reason: 'bless_too_many_targets',
+            spell: spell.name,
+            targetCount: targetIds.length,
+            maxTargets,
+          },
+        );
+      }
     }
     const usesBonusAction = spell.castingTime.toLowerCase().includes('bonus action');
     // Same release-on-throw wrapper as resolveAttack. It matters more here: the
@@ -1144,6 +1213,50 @@ export class CombatAttackService {
           };
         }
 
+        // #902: Bless deals no damage of its own. The engine acknowledges the cast on each
+        // chosen creature; the shared path below spends the slot and claims the action, and
+        // resolveSpellAttack starts concentration when it returns. The +1d4 is applied by
+        // the roll paths (blessDieFor) for as long as that concentration holds.
+        if (isPlayerCombatBuffSpell(spell)) {
+          return {
+            hit: true,
+            targetAC: 0,
+            totalAttackRoll: 0,
+            finalDamage: 0,
+            effectiveResistance: false,
+            effectiveVulnerability: false,
+            effectiveImmunity: false,
+            isCritical: false,
+            isNaturalOne: false,
+            isNaturalTwenty: false,
+            autoHit: true,
+            spellName: spell.name,
+            blessed: true,
+          };
+        }
+
+        // #902: a self cast resolves on the caster alone — prepareSpellCast clamped the
+        // targets to the caster. No roll and no damage: the slot, the action claim, and the
+        // concentration start on return are the cast's whole mechanical effect, and the
+        // DM narrates what the spell reveals or grants.
+        if (isSelfCastSpell(spell)) {
+          return {
+            hit: true,
+            targetAC: 0,
+            totalAttackRoll: 0,
+            finalDamage: 0,
+            effectiveResistance: false,
+            effectiveVulnerability: false,
+            effectiveImmunity: false,
+            isCritical: false,
+            isNaturalOne: false,
+            isNaturalTwenty: false,
+            autoHit: true,
+            spellName: spell.name,
+            selfCast: true,
+          };
+        }
+
         if (spell.id === 'magic-missile') {
           if (!damageProfile || !damageType) {
             throw new BusinessLogicError(`Spell refused: ${spell.name} has no damage profile`, {
@@ -1241,10 +1354,13 @@ export class CombatAttackService {
             spellPair.other === undefined
               ? undefined
               : ([spellPair.kept, spellPair.other] as [number, number]);
+          // #902: a blessed caster adds Bless's 1d4 to the spell attack roll.
+          const spellBlessDie = await this.blessDieFor(casterData.participant);
           const hitCheckResult = checkHit({
             attackRoll,
             attackBonus: spellAttackBonus,
             targetAC,
+            blessDie: spellBlessDie,
           });
 
           if (!hitCheckResult.hit) {
@@ -1255,6 +1371,7 @@ export class CombatAttackService {
               advantage: attackRules?.advantage,
               disadvantage: attackRules?.disadvantage,
               attackBonus: spellAttackBonus,
+              ...(spellBlessDie > 0 ? { blessDie: spellBlessDie } : {}),
               ...acFacts,
               totalAttackRoll: hitCheckResult.totalAttackRoll,
               effectiveResistance: false,
@@ -1337,6 +1454,7 @@ export class CombatAttackService {
                 effectiveImmunity: damageCalc.effectiveImmunity,
                 finalDamage: hpResult.damageDealt ?? totalDamage,
                 ...(hexDamage > 0 ? { hexDamage } : {}),
+                ...(spellBlessDie > 0 ? { blessDie: spellBlessDie } : {}),
                 targetNewHp: hpResult.newCurrentHp,
                 targetIsConscious: hpResult.isConscious,
                 targetIsDead: hpResult.isDead,
@@ -1407,7 +1525,9 @@ export class CombatAttackService {
             explicitBonus ??
             this.abilityModifier(targetProfile.scores[ability]) +
               (proficient ? proficiencyBonus(targetProfile.level) : 0);
-          const saveRoll = rollD20() + saveBonus;
+          // #902: the saving creature adds Bless's 1d4 when a live Bless covers it.
+          const saveBlessDie = await this.blessDieFor(targetParticipant);
+          const saveRoll = rollD20() + saveBonus + saveBlessDie;
           const savedSuccessfully = saveRoll >= saveDC;
 
           if (damageProfile && damageType) {
@@ -1474,6 +1594,7 @@ export class CombatAttackService {
                 spellName: spell.name,
                 saveAbility: namedAbility,
                 saveRoll,
+                ...(saveBlessDie > 0 ? { blessDie: saveBlessDie } : {}),
                 saveDC,
                 saved: savedSuccessfully,
               };

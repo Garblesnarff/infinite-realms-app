@@ -220,6 +220,21 @@ mock.module('../../../services/combat/combat-sync-service.js', () => ({
   publishCombatState: async () => {},
 }));
 mock.module('../../../services/combat/combat-events.js', () => ({ trackCombatEvent: noop }));
+// #902: the roll paths now read concentration for Bless's 1d4 (blessDieFor), so the module
+// is stubbed with the whole surface the attack service imports — nobody here concentrates,
+// so every read answers null and no cast is recorded.
+mock.module('../../../services/combat/concentration-service.js', () => ({
+  getConcentration: async () => null,
+  getConcentrationTargetingParticipant: async () => null,
+  startConcentration: async () => {},
+  dropConcentration: async () => null,
+  checkConcentrationOnDamage: async () => ({ hadConcentration: false, saveTriggered: false }),
+  describeConcentrationBroken: (name: string, spellName: string) =>
+    `${name} loses concentration on ${spellName}.`,
+  describeConcentrationMaintained: (name: string, spellName: string) =>
+    `${name} maintains concentration on ${spellName}.`,
+  concentrationSaveDc: (damage: number) => Math.max(10, Math.floor(damage / 2)),
+}));
 
 let board: TacticalMap;
 mock.module('../../../services/combat/tactical-map-store.js', () => ({

@@ -42,6 +42,9 @@ function selectChain(): any {
   chain.innerJoin = () => chain;
   chain.leftJoin = () => chain;
   chain.where = () => chain;
+  // The Bless rider's targeting lookup (#902) ends its select in .limit(1) and
+  // awaits it; on this stub that read finds no concentration rows.
+  chain.limit = () => Promise.resolve([]);
   return chain;
 }
 
