@@ -6,7 +6,13 @@ import type { Character } from '@/types/character';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import DiceRoller from '@/components/ui/dice-roller';
-import { calculateProficiencyBonus } from '@/utils/character/basic-math';
+import {
+  calculateProficiencyBonus,
+  calculateSkillModifier,
+  calculateSaveModifier,
+  isSkillProficient,
+  isSaveProficient,
+} from '@/utils/characterModifiers';
 
 interface AbilitiesTabProps {
   character: Character;
@@ -45,51 +51,9 @@ type AbilityName = keyof NonNullable<Character['abilityScores']>;
 const AbilitiesTab: React.FC<AbilitiesTabProps> = ({ character, onUpdate: _onUpdate }) => {
   const proficiencyBonus = calculateProficiencyBonus(character.level!);
 
-  // For demo purposes, assume some proficiencies based on class
-  const getProficiencies = (): { skills: SkillName[]; saves: AbilityName[] } => {
-    const classProfs = {
-      Fighter: {
-        skills: ['Athletics', 'Intimidation'] as SkillName[],
-        saves: ['strength', 'constitution'] as AbilityName[],
-      },
-      Wizard: {
-        skills: ['Arcana', 'History'] as SkillName[],
-        saves: ['intelligence', 'wisdom'] as AbilityName[],
-      },
-      Rogue: {
-        skills: ['Stealth', 'Sleight of Hand', 'Perception', 'Investigation'] as SkillName[],
-        saves: ['dexterity', 'intelligence'] as AbilityName[],
-      },
-      Cleric: {
-        skills: ['Medicine', 'Religion'] as SkillName[],
-        saves: ['wisdom', 'charisma'] as AbilityName[],
-      },
-    };
-
-    return (
-      classProfs[character.class?.name as keyof typeof classProfs] || {
-        skills: [],
-        saves: [],
-      }
-    );
-  };
-
-  const { skills: proficientSkills, saves: proficientSaves } = getProficiencies();
-
-  const getSkillModifier = (skill: SkillName): number => {
-    const ability = SKILLS[skill] as AbilityName;
-    const abilityMod = character.abilityScores![ability].modifier;
-    const isProficient = proficientSkills.includes(skill);
-
-    return abilityMod + (isProficient ? proficiencyBonus : 0);
-  };
-
-  const getSaveModifier = (ability: AbilityName): number => {
-    const abilityMod = character.abilityScores![ability].modifier;
-    const isProficient = proficientSaves.includes(ability);
-
-    return abilityMod + (isProficient ? proficiencyBonus : 0);
-  };
+  const getSkillModifier = (skill: SkillName): number => calculateSkillModifier(character, skill);
+  const getSaveModifier = (ability: AbilityName): number =>
+    calculateSaveModifier(character, ability);
 
   const formatModifier = (modifier: number): string => {
     return modifier >= 0 ? `+${modifier}` : `${modifier}`;
@@ -138,7 +102,7 @@ const AbilitiesTab: React.FC<AbilitiesTabProps> = ({ character, onUpdate: _onUpd
         </CardHeader>
         <CardContent className="space-y-3">
           {Object.entries(character.abilityScores!).map(([ability, _data]) => {
-            const isProficient = proficientSaves.includes(ability as AbilityName);
+            const isProficient = isSaveProficient(character, ability as AbilityName);
             const modifier = getSaveModifier(ability as AbilityName);
 
             return (
@@ -172,7 +136,7 @@ const AbilitiesTab: React.FC<AbilitiesTabProps> = ({ character, onUpdate: _onUpd
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {Object.entries(SKILLS).map(([skill, ability]) => {
-              const isProficient = proficientSkills.includes(skill as SkillName);
+              const isProficient = isSkillProficient(character, skill);
               const modifier = getSkillModifier(skill as SkillName);
 
               return (
