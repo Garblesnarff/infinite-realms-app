@@ -111,7 +111,7 @@ describeWithDb('sheet Equip PUT (#711)', () => {
     );
   }
 
-  it('wears the shield at AC 14, then Chain Mail and the shield at AC 18', async () => {
+  it('wears the shield at AC 14, then Chain Mail, shield and Defense at AC 19', async () => {
     const created = await send('/v1/characters', 'POST', {
       ...fighterPayload,
       name: `Equip sheet ${testId('711')}`,
@@ -154,7 +154,7 @@ describeWithDb('sheet Equip PUT (#711)', () => {
       .select()
       .from(characterStats)
       .where(eq(characterStats.characterId, id));
-    expect(statsAfterArmor.armorClass).toBe(18);
+    expect(statsAfterArmor.armorClass).toBe(19);
 
     const rowsAfterArmor = await db
       .select()
