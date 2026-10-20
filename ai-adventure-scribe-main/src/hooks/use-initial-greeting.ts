@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 
 import type { AIResponse } from '@/services/ai-service';
 import type { Campaign } from '@/types/campaign';
@@ -40,6 +40,18 @@ interface InitialGreetingState {
 }
 
 const GREETING_MIN_LENGTH = 50;
+
+/**
+ * #865: how long opening-scene generation may run before the wait is
+ * declared stalled and the spinner swaps to a retry control. A healthy
+ * opening is one LLM call (the generate route's transport ceiling is
+ * 90 s in rest-client), but a wedged chain — a promise that never settles
+ * anywhere between the request and the state flip — previously spun
+ * forever: the overlay is keyed on `isGenerating`, which only clears when
+ * generateInitialGreeting's awaited chain settles. The deadline does NOT
+ * cancel the attempt; if it lands late, the scene still displays.
+ */
+export const GREETING_STALL_TIMEOUT_MS = 45_000;
 
 const storedMessageText = (message: Record<string, unknown> | undefined): string => {
   const text = message?.text ?? message?.message;
@@ -101,6 +113,23 @@ export const useInitialGreeting = ({
 
   const { toast } = useToast();
   const hasTriggeredRef = useRef(false);
+  const attemptRef = useRef(0);
+  const [timedOut, setTimedOut] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+
+  // #865: stall watchdog. While a generation is in flight, arm the
+  // deadline; the attempt settling (or unmounting) disarms it. The
+  // attempt counter re-arms the deadline when a retry starts while the
+  // stalled attempt never settled (isGenerating never flipped), so a
+  // wedged retry surfaces the control again instead of spinning forever.
+  useEffect(() => {
+    if (!state.isGenerating) {
+      setTimedOut(false);
+      return;
+    }
+    const timer = setTimeout(() => setTimedOut(true), GREETING_STALL_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [state.isGenerating, attempt]);
 
   useEffect(() => {
     const onlyFallbackMessage =
@@ -136,6 +165,17 @@ export const useInitialGreeting = ({
   ]);
 
   const generateInitialGreeting = async () => {
+    const myAttempt = ++attemptRef.current;
+    setAttempt(myAttempt);
+    // #865: each run carries an attempt id so a newer run (the player's
+    // retry) supersedes this one. A superseded attempt must not deliver
+    // messages, roll requests, a fallback greeting or state: the server
+    // dedupe (#2379) covers the greeting message row only — not the
+    // fallback greeting or the initial memories — so without this guard
+    // a late-settling original could post a fallback after the retry's
+    // real scene. (One exception, at the save below: the initial
+    // memories of a greeting this attempt already saved.)
+    const isSuperseded = () => attemptRef.current !== myAttempt;
     setState((prev) => ({ ...prev, isGenerating: true, error: null }));
 
     try {
@@ -156,7 +196,9 @@ export const useInitialGreeting = ({
         logger.info(
           '[Initial Greeting] Detected existing dialogue entries; skipping automated greeting.',
         );
-        setState((prev) => ({ ...prev, isGenerating: false, hasGenerated: true }));
+        if (!isSuperseded()) {
+          setState((prev) => ({ ...prev, isGenerating: false, hasGenerated: true }));
+        }
         return;
       }
 
@@ -217,6 +259,10 @@ export const useInitialGreeting = ({
       if (typeof openingText !== 'string' || openingText.trim().length < GREETING_MIN_LENGTH) {
         throw new Error('Opening message was too short to be a valid scene');
       }
+
+      // A retry may have superseded this attempt while the model was
+      // generating; the superseded scene is discarded.
+      if (isSuperseded()) return;
 
       // Only parse structured ROLL_REQUESTS_V1 blocks from the opening message.
       // Regex-based prose detection is intentionally skipped here: option descriptions
@@ -279,8 +325,15 @@ export const useInitialGreeting = ({
       // 2. Normal DM opening message
       await onGreetingGenerated(greetingMessage);
 
+      // A retry may have started while the save was in flight. The dice
+      // UI belongs to the newer attempt then — but the initial memories
+      // below belong to THIS attempt: the retry sees the greeting saved
+      // here and takes the existing-dialogue branch, which creates no
+      // memories, so skipping them would leave the session with none.
+      const supersededAfterSave = isSuperseded();
+
       // 3. Trigger dice UI if opening message contains roll requests
-      if (openingRollRequests.length > 0) {
+      if (!supersededAfterSave && openingRollRequests.length > 0) {
         logger.info(
           `[Initial Greeting] Detected ${openingRollRequests.length} roll request(s) in opening message`,
         );
@@ -302,12 +355,18 @@ export const useInitialGreeting = ({
         );
       }
 
-      setState((prev) => ({
-        ...prev,
-        isGenerating: false,
-        hasGenerated: true,
-      }));
+      if (!isSuperseded()) {
+        setState((prev) => ({
+          ...prev,
+          isGenerating: false,
+          hasGenerated: true,
+        }));
+      }
     } catch (error) {
+      // A superseded attempt delivers nothing — no fallback greeting, no
+      // error state; the newer attempt owns the session.
+      if (isSuperseded()) return;
+
       logger.error('[Initial Greeting] Error generating greeting:', {
         error,
         sessionId,
@@ -353,6 +412,24 @@ export const useInitialGreeting = ({
     }
   };
 
+  const generateRef = useRef(generateInitialGreeting);
+  useEffect(() => {
+    generateRef.current = generateInitialGreeting;
+  });
+
+  // #865: the retry control's handler. Runs the generation again; the new
+  // run supersedes any still-in-flight attempt (see the attempt guard in
+  // generateInitialGreeting), so the player can retry at the stall
+  // deadline without waiting for the original to settle. The one-shot
+  // trigger stays armed — retry IS the trigger, and disarming it would
+  // let the auto-trigger effect fire an extra unrequested generation if
+  // this attempt ends with both state flags false.
+  const retry = useCallback(() => {
+    hasTriggeredRef.current = true;
+    setTimedOut(false);
+    void generateRef.current();
+  }, []);
+
   // ⚡ Bolt: Wrap the returned object in useMemo to enforce referential stability
   // and prevent downstream component re-renders when consumed context/initial greeting states are stable.
   return useMemo(
@@ -360,7 +437,9 @@ export const useInitialGreeting = ({
       isGenerating: state.isGenerating,
       hasGenerated: state.hasGenerated,
       error: state.error,
+      timedOut,
+      retry,
     }),
-    [state.isGenerating, state.hasGenerated, state.error],
+    [state.isGenerating, state.hasGenerated, state.error, timedOut, retry],
   );
 };

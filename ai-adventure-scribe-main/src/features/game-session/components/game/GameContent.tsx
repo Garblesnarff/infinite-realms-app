@@ -313,7 +313,11 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
 
   useStaleClientCheck({ isInCombat: combatState.isInCombat, sessionId });
 
-  const { isGenerating: isGeneratingGreeting } = useInitialGreeting({
+  const {
+    isGenerating: isGeneratingGreeting,
+    timedOut: greetingTimedOut,
+    retry: retryGreeting,
+  } = useInitialGreeting({
     sessionId,
     sessionData: sessionData as unknown as Parameters<typeof useInitialGreeting>[0]['sessionData'],
     characterId: characterIdForHandler,
@@ -391,6 +395,8 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
       setShowTracker={setShowTracker}
       isCombatDetected={isCombatDetected}
       isGeneratingGreeting={isGeneratingGreeting}
+      greetingTimedOut={greetingTimedOut}
+      onRetryGreeting={retryGreeting}
       innerHandleAIResponse={
         innerHandleAIResponse as unknown as (message: unknown) => Promise<void>
       }
