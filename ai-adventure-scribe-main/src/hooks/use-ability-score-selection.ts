@@ -40,6 +40,7 @@ export interface UseAbilityScoreSelectionReturn {
   handleRollScores: () => void;
   handleRerollSingleScore: (abilityIndex: number) => void;
   handleStandardArray: () => void;
+  handleAssignArrayScore: (ability: keyof AbilityScores, value: number) => void;
   handleReset: () => void;
   getAbilityDescription: (ability: keyof AbilityScores) => string;
   racialBonuses: RacialBonus[];
@@ -124,6 +125,27 @@ export const useAbilityScoreSelection = (): UseAbilityScoreSelectionReturn => {
       description: 'Scores set to: 15, 14, 13, 12, 10, 8',
     });
   }, [state.character?.abilityScores, dispatch, toast]);
+
+  const handleAssignArrayScore = useCallback(
+    (ability: keyof AbilityScores, value: number) => {
+      const scores = state.character?.abilityScores;
+      if (!scores || ![15, 14, 13, 12, 10, 8].includes(value)) return;
+      const other = ABILITIES.find((key) => scores[key].score === value);
+      if (!other || other === ability) return;
+      const current = scores[ability].score;
+      dispatch({
+        type: 'UPDATE_CHARACTER',
+        payload: {
+          abilityScores: {
+            ...scores,
+            [ability]: { ...scores[ability], score: value, modifier: abilityModifier(value) },
+            [other]: { ...scores[other], score: current, modifier: abilityModifier(current) },
+          },
+        },
+      });
+    },
+    [dispatch, state.character?.abilityScores],
+  );
 
   /**
    * Resets all ability scores to 8
@@ -252,6 +274,7 @@ export const useAbilityScoreSelection = (): UseAbilityScoreSelectionReturn => {
       handleRollScores,
       handleRerollSingleScore,
       handleStandardArray,
+      handleAssignArrayScore,
       handleReset,
       getAbilityDescription,
       racialBonuses,
@@ -274,6 +297,7 @@ export const useAbilityScoreSelection = (): UseAbilityScoreSelectionReturn => {
       handleRollScores,
       handleRerollSingleScore,
       handleStandardArray,
+      handleAssignArrayScore,
       handleReset,
       getAbilityDescription,
       racialBonuses,
