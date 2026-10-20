@@ -11,6 +11,7 @@ import {
   listRunnableMemoryExtractionJobs,
   markMemoryExtractionJobCharged,
   persistMemoryExtractionJob,
+  persistMemoryExtractionJobWithinActiveCap,
   releaseMemoryExtractionJob,
   type MemoryExtractionJobRow,
 } from './memory-extraction-job-store.js';
@@ -576,25 +577,38 @@ async function claimAndExecuteById(
 }
 
 /**
+ * Thrown by startMemoryExtractionJob when the caller's burst cap is already
+ * reached (#883): the accept is refused, no row is persisted, and nothing
+ * executes. The route turns this into the same 402 its quota pre-check returns.
+ */
+export class MemoryExtractionBurstCapError extends Error {
+  constructor(userId: string) {
+    super(`memory extraction burst cap reached for user ${userId}`);
+    this.name = 'MemoryExtractionBurstCapError';
+  }
+}
+
+/**
  * Start a job: persist the row first, then execute it without waiting.
  * The row must exist before the 202 goes out, so a crash after the response
  * still leaves a resumable job. Throws when persistence fails — the route must
  * not 202 a job it could not store.
+ *
+ * With `opts.maxActiveJobs` (the accept path), the persist is the atomic
+ * count-and-insert in the store: under the per-user advisory lock the active
+ * count is rechecked at insert time, so concurrent accepts cannot both slip
+ * past the burst cap. A cap refusal throws MemoryExtractionBurstCapError
+ * before anything is logged as accepted or executed.
  */
-export async function startMemoryExtractionJob(input: MemoryExtractionJobInput): Promise<{
+export async function startMemoryExtractionJob(
+  input: MemoryExtractionJobInput,
+  opts?: { maxActiveJobs?: number },
+): Promise<{
   jobId: string;
   done: Promise<MemoryExtractionOutcome>;
 }> {
   const jobId = randomUUID();
-  logger.info({
-    jobId,
-    sessionId: input.sessionId,
-    kind: input.kind,
-    turn: input.turn,
-    promptLength: input.prompt.length,
-    msg: 'memory_extraction.accepted',
-  });
-  const persisted = await persistMemoryExtractionJob({
+  const row = {
     id: jobId,
     userId: input.userId,
     plan: input.plan,
@@ -606,10 +620,23 @@ export async function startMemoryExtractionJob(input: MemoryExtractionJobInput):
     payloadHash: payloadHash(input),
     maxTokens: input.maxTokens,
     turn: input.turn ?? null,
-    status: 'pending',
+    status: 'pending' as const,
     attempts: 0,
     charged: false,
     error: null,
+  };
+  const persisted =
+    opts?.maxActiveJobs === undefined
+      ? await persistMemoryExtractionJob(row)
+      : await persistMemoryExtractionJobWithinActiveCap(row, opts.maxActiveJobs);
+  if (!persisted) throw new MemoryExtractionBurstCapError(input.userId);
+  logger.info({
+    jobId,
+    sessionId: input.sessionId,
+    kind: input.kind,
+    turn: input.turn,
+    promptLength: input.prompt.length,
+    msg: 'memory_extraction.accepted',
   });
   // The claim cannot lose here: nothing else knows the id yet. If it somehow
   // does, a sweep picks up the still-pending row so it is not stranded for the
