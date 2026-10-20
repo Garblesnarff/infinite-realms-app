@@ -5,6 +5,7 @@ import { LLMProviderService } from './llm-provider-service.js';
 import {
   claimMemoryExtractionJob,
   completeMemoryExtractionJob,
+  failExhaustedMemoryExtractionJobs,
   failMemoryExtractionJob,
   getMemoryExtractionJob,
   listRunnableMemoryExtractionJobs,
@@ -292,8 +293,9 @@ export async function runMemoryExtractionJob(
   }
 }
 
-// Jobs accepted but not yet finished in this process.
+// Jobs accepted but not yet finished in this process, with their execution promises.
 const inFlightJobIds = new Set<string>();
+const inFlightExecutions = new Map<string, Promise<MemoryExtractionOutcome>>();
 
 export function inFlightMemoryExtractionJobs(): number {
   return inFlightJobIds.size;
@@ -330,16 +332,26 @@ function rowToInput(row: MemoryExtractionJobRow): MemoryExtractionJobInput {
 export const MAX_MEMORY_EXTRACTION_CHARGE_ATTEMPTS = 3;
 
 /**
- * One charge attempt: consume the unit, then flag the row. Returns true when the
- * unit was consumed. The flag write is best-effort — once the consume has landed,
- * a failed flag write must not trigger a retry (the retry would consume twice);
- * the flag is diagnostic and its own failure is logged on its own line.
+ * The three ways a charge attempt can end. 'ambiguous' is the dangerous one:
+ * checkQuotaAndConsume threw — and a throw can mean the consume COMMITTED with
+ * a lost ack (QuotaUnavailableError out of sql.begin after the insert landed).
+ * Retrying an ambiguous charge can consume twice, so it is never retried: it
+ * alerts instead. Only 'not-consumed' (a definite allowed:false — nothing was
+ * written) is safe to retry.
+ */
+type ChargeOutcome = 'consumed' | 'not-consumed' | 'ambiguous';
+
+/**
+ * One charge attempt: consume the unit, then flag the row. The flag write is
+ * best-effort — once the consume has landed, a failed flag write must not
+ * trigger a retry (the retry would consume twice); the flag is diagnostic and
+ * its own failure is logged on its own line.
  */
 async function attemptCharge(
   claimed: MemoryExtractionJobRow,
   logBase: Record<string, unknown>,
   chargeAttempt: number,
-): Promise<boolean> {
+): Promise<ChargeOutcome> {
   try {
     const quota = await AIUsageService.checkQuotaAndConsume({
       userId: claimed.userId,
@@ -349,16 +361,16 @@ async function attemptCharge(
     });
     if (!quota.allowed) {
       logger.warn({ ...logBase, msg: 'memory_extraction.charge_quota_exhausted', chargeAttempt });
-      return false;
+      return 'not-consumed';
     }
   } catch (error: unknown) {
     logger.error({
       ...logBase,
-      msg: 'memory_extraction.charge_failed',
+      msg: 'memory_extraction.charge_ambiguous',
       chargeAttempt,
       error: error instanceof Error ? error.message : String(error),
     });
-    return false;
+    return 'ambiguous';
   }
   await markMemoryExtractionJobCharged(claimed.id).catch((error: unknown) => {
     logger.error({
@@ -368,16 +380,28 @@ async function attemptCharge(
       note: 'quota was consumed; the charged flag is stale, do not re-charge',
     });
   });
-  return true;
+  return 'consumed';
+}
+
+/** Surface an uncharged completed job. Completed + charged=false after this alert is an accounting fact, not a silent leak. */
+function alertChargeFailed(
+  claimed: MemoryExtractionJobRow,
+  logBase: Record<string, unknown>,
+  reason: string,
+): void {
+  logger.error({ ...logBase, msg: 'memory_extraction.charge_failed_alert', reason });
+  alert('memory_extraction_charge_failed', {
+    sessionId: claimed.sessionId,
+    error: `job ${claimed.id} completed but its quota unit was not charged (${reason})`,
+  });
 }
 
 /**
- * Retry a charge that did not land (usage store down, or quota exhausted between
- * the accept pre-check and completion). Scheduled with backoff on an unref'd
- * timer, like execution retries. Retries only re-run when the consume itself did
- * not land, so a job is never charged twice; when the attempts run out the leak
- * is alerted — a completed row with charged=false after the alert is an
- * accounting fact, not a silent leak.
+ * Retry a charge that definitely did not land (allowed:false — quota exhausted
+ * between the accept pre-check and completion). Scheduled with backoff on an
+ * unref'd timer, like execution retries. An ambiguous attempt (a throw) stops
+ * the chain and alerts: the consume may already have landed, and a retry could
+ * charge twice. When the safe attempts run out, the leak is alerted.
  */
 function scheduleChargeRetry(
   claimed: MemoryExtractionJobRow,
@@ -385,19 +409,18 @@ function scheduleChargeRetry(
   chargeAttempt: number,
 ): void {
   if (chargeAttempt >= MAX_MEMORY_EXTRACTION_CHARGE_ATTEMPTS) {
-    logger.error({ ...logBase, msg: 'memory_extraction.charge_retries_exhausted' });
-    alert('memory_extraction_charge_failed', {
-      sessionId: claimed.sessionId,
-      error: `job ${claimed.id} completed but its quota unit was never charged`,
-    });
+    alertChargeFailed(claimed, logBase, 'charge retries exhausted');
     return;
   }
   const delay = MEMORY_EXTRACTION_RETRY_BASE_DELAY_MS * chargeAttempt;
   logger.info({ ...logBase, msg: 'memory_extraction.charge_retry_scheduled', chargeAttempt, delayMs: delay });
   const timer = setTimeout(() => {
     void (async () => {
-      const consumed = await attemptCharge(claimed, logBase, chargeAttempt + 1);
-      if (!consumed) scheduleChargeRetry(claimed, logBase, chargeAttempt + 1);
+      const outcome = await attemptCharge(claimed, logBase, chargeAttempt + 1);
+      if (outcome === 'not-consumed') scheduleChargeRetry(claimed, logBase, chargeAttempt + 1);
+      if (outcome === 'ambiguous') {
+        alertChargeFailed(claimed, logBase, 'charge outcome ambiguous after a throw; not retried');
+      }
     })().catch((retryError: unknown) => {
       logger.error({
         ...logBase,
@@ -482,10 +505,13 @@ async function executeClaimedJob(
       return outcome;
     }
     // This process owns the completed row: charge the unit now, exactly once.
-    const charged = await attemptCharge(claimed, logBase, 1);
-    if (!charged) {
-      // The row is completed; the charge is retried with backoff, then alerted.
+    const charge = await attemptCharge(claimed, logBase, 1);
+    if (charge === 'not-consumed') {
+      // Definitely nothing consumed: safe to retry with backoff, then alert.
       scheduleChargeRetry(claimed, logBase, 1);
+    } else if (charge === 'ambiguous') {
+      // The consume may have landed despite the throw: never retry, alert.
+      alertChargeFailed(claimed, logBase, 'charge outcome ambiguous after a throw; not retried');
     }
     return outcome;
   }
@@ -539,10 +565,13 @@ async function claimAndExecuteById(
     return null;
   }
   inFlightJobIds.add(claimed.id);
+  const execution = executeClaimedJob(claimed);
+  inFlightExecutions.set(claimed.id, execution);
   try {
-    return await executeClaimedJob(claimed);
+    return await execution;
   } finally {
     inFlightJobIds.delete(claimed.id);
+    inFlightExecutions.delete(claimed.id);
   }
 }
 
@@ -611,6 +640,19 @@ export async function resumePendingMemoryExtractionJobs(
   limit = 100,
 ): Promise<{ resumed: number }> {
   let resumed = 0;
+  // Rows that burned their whole attempts budget (a job that kept killing its
+  // process mid-run) are terminally failed first, so resume never loops on them.
+  try {
+    const exhausted = await failExhaustedMemoryExtractionJobs();
+    if (exhausted > 0) {
+      logger.warn({ msg: 'memory_extraction.exhausted_failed', count: exhausted });
+    }
+  } catch (error: unknown) {
+    logger.error({
+      msg: 'memory_extraction.exhausted_sweep_failed',
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
   let rows: MemoryExtractionJobRow[];
   try {
     rows = await listRunnableMemoryExtractionJobs(limit);
@@ -641,20 +683,23 @@ export async function resumePendingMemoryExtractionJobs(
 }
 
 /**
- * Shutdown hook (#846): release this process's in-flight jobs back to pending so the next
- * startup resumes them immediately instead of waiting out the stale-running window.
- * Best-effort and bounded; the index.ts shutdown races it against a timeout.
+ * Shutdown hook (#846): give this process's in-flight executions a bounded chance
+ * to finish before the process exits — and NEVER flip a still-running row back
+ * to pending. A released row is claimable by the handoff process while this
+ * process's model call is still live, and two live executors can both pass the
+ * check-then-insert dedup and write duplicate memories. Rows still running at
+ * exit stay 'running': their heartbeat goes stale and the next process reclaims
+ * them once this process is provably dead. Bounded by the caller's race in
+ * index.ts; never throws.
  */
-export async function releaseInFlightMemoryExtractionJobs(signal: string): Promise<void> {
-  const ids = [...inFlightJobIds];
-  if (ids.length === 0) return;
+export async function settleInFlightMemoryExtractionJobs(signal: string): Promise<void> {
+  const executions = [...inFlightExecutions.values()];
+  if (executions.length === 0) return;
   logger.warn({
-    msg: 'memory_extraction.shutdown_release',
-    count: ids.length,
+    msg: 'memory_extraction.shutdown_settle',
+    count: executions.length,
     signal,
-    note: 'jobs persist in memory_extraction_jobs and resume on startup',
+    note: 'awaiting in-flight executions; unfinished rows stay running and are reclaimed after the stale window',
   });
-  await Promise.allSettled(
-    ids.map((id) => releaseMemoryExtractionJob(id, `interrupted by ${signal}; resumes on startup`)),
-  );
+  await Promise.allSettled(executions);
 }

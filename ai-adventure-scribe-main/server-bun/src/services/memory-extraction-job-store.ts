@@ -1,4 +1,4 @@
-import { and, asc, eq, lt, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, lt, or, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import {
@@ -26,6 +26,14 @@ export type { MemoryExtractionJobRow, NewMemoryExtractionJobRow };
  */
 export const STALE_RUNNING_JOB_MS = 15 * 60 * 1000;
 
+/**
+ * Execution budget for one job, mirrored from MAX_MEMORY_EXTRACTION_ATTEMPTS in
+ * the job module (a literal here so the store stays import-cycle free): a row at
+ * the cap is never claimed again — a job that kills the process mid-run must not
+ * be reclaimed on every restart forever.
+ */
+export const MAX_MEMORY_EXTRACTION_JOB_ATTEMPTS = 3;
+
 /** Insert the row the 202 hands back. Throws on DB error: the route must not 202 then. */
 export async function persistMemoryExtractionJob(
   row: NewMemoryExtractionJobRow,
@@ -46,6 +54,7 @@ export async function getMemoryExtractionJob(id: string): Promise<MemoryExtracti
 
 /**
  * Claim a job for execution: pending -> running, or stale-running -> running.
+ * Rows at the attempts cap are never claimable; the exhaustion sweep fails them.
  * Bumps attempts and the heartbeat. Returns null when another process holds
  * the claim (or the row is not in the expected state).
  */
@@ -53,13 +62,19 @@ export async function claimMemoryExtractionJob(
   id: string,
   expectedStatus: 'pending' | 'running',
 ): Promise<MemoryExtractionJobRow | null> {
+  const attemptsUnderCap = lt(memoryExtractionJobs.attempts, MAX_MEMORY_EXTRACTION_JOB_ATTEMPTS);
   const where =
     expectedStatus === 'pending'
-      ? and(eq(memoryExtractionJobs.id, id), eq(memoryExtractionJobs.status, 'pending'))
+      ? and(
+          eq(memoryExtractionJobs.id, id),
+          eq(memoryExtractionJobs.status, 'pending'),
+          attemptsUnderCap,
+        )
       : and(
           eq(memoryExtractionJobs.id, id),
           eq(memoryExtractionJobs.status, 'running'),
           lt(memoryExtractionJobs.updatedAt, new Date(Date.now() - STALE_RUNNING_JOB_MS)),
+          attemptsUnderCap,
         );
   const [claimed] = await db
     .update(memoryExtractionJobs)
@@ -73,7 +88,7 @@ export async function claimMemoryExtractionJob(
   return claimed ?? null;
 }
 
-/** Jobs eligible to start now: anything pending, plus orphaned running jobs. */
+/** Jobs eligible to start now: under the attempts cap, pending or orphaned running. */
 export async function listRunnableMemoryExtractionJobs(
   limit: number,
 ): Promise<MemoryExtractionJobRow[]> {
@@ -82,16 +97,68 @@ export async function listRunnableMemoryExtractionJobs(
     .select()
     .from(memoryExtractionJobs)
     .where(
-      or(
-        eq(memoryExtractionJobs.status, 'pending'),
-        and(
-          eq(memoryExtractionJobs.status, 'running'),
-          lt(memoryExtractionJobs.updatedAt, staleBefore),
+      and(
+        lt(memoryExtractionJobs.attempts, MAX_MEMORY_EXTRACTION_JOB_ATTEMPTS),
+        or(
+          eq(memoryExtractionJobs.status, 'pending'),
+          and(
+            eq(memoryExtractionJobs.status, 'running'),
+            lt(memoryExtractionJobs.updatedAt, staleBefore),
+          ),
         ),
       ),
     )
     .orderBy(asc(memoryExtractionJobs.createdAt))
     .limit(limit);
+}
+
+/**
+ * Fail rows that burned their whole attempts budget without completing (a job
+ * that kept killing its process mid-run). Runs at startup before resume so the
+ * terminal state is recorded instead of the row sitting claimable forever.
+ * Returns how many rows were failed.
+ */
+export async function failExhaustedMemoryExtractionJobs(): Promise<number> {
+  const staleBefore = new Date(Date.now() - STALE_RUNNING_JOB_MS);
+  const failed = await db
+    .update(memoryExtractionJobs)
+    .set({
+      status: 'failed',
+      error: 'attempts exhausted without completing',
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        sql`${memoryExtractionJobs.attempts} >= ${MAX_MEMORY_EXTRACTION_JOB_ATTEMPTS}`,
+        or(
+          eq(memoryExtractionJobs.status, 'pending'),
+          and(
+            eq(memoryExtractionJobs.status, 'running'),
+            lt(memoryExtractionJobs.updatedAt, staleBefore),
+          ),
+        ),
+      ),
+    )
+    .returning({ id: memoryExtractionJobs.id });
+  return failed.length;
+}
+
+/**
+ * A user's accepted-but-unfinished jobs (pending + running). The accept path
+ * subtracts this from the remaining quota so a burst of 202s cannot promise
+ * more extractions than the quota will pay for at completion.
+ */
+export async function countActiveMemoryExtractionJobs(userId: string): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(memoryExtractionJobs)
+    .where(
+      and(
+        eq(memoryExtractionJobs.userId, userId),
+        inArray(memoryExtractionJobs.status, ['pending', 'running']),
+      ),
+    );
+  return row?.count ?? 0;
 }
 
 /** Mark a running job completed. Returns false when the row left 'running' already. */

@@ -5,8 +5,8 @@ import { logger } from './lib/logger';
 import { startIdleEncounterSweep } from './services/combat/idle-encounter-sweeper.js';
 import { startNpcTurnSweep } from './services/combat/npc-turn-drain.js';
 import {
-  releaseInFlightMemoryExtractionJobs,
   resumePendingMemoryExtractionJobs,
+  settleInFlightMemoryExtractionJobs,
 } from './services/memory-extraction-job.js';
 import { startModelHealthChecks, validateConfiguredModels } from './services/model-health.js';
 
@@ -30,17 +30,18 @@ function shutdown(signal: string): Promise<void> {
   shutdownPromise = (async () => {
     logger.info({ msg: `Received ${signal}, shutting down gracefully...` });
     // Extraction jobs run after their 202, so no open request holds them. They are persisted
-    // (#846): hand this process's in-flight jobs back to pending so the next startup resumes
-    // them immediately. Best-effort within 2 s; a timeout leaves them 'running', and the
-    // stale-running reclaim still picks them up — they are never dropped.
+    // (#846): give in-flight executions up to 3 s to finish on their own. Rows still running
+    // at exit are NOT released — a released row is claimable by the handoff process while
+    // this process's model call is still live, and two live executors can write duplicate
+    // memories. The stale-running reclaim picks the leftovers up; they are never dropped.
     await Promise.race([
-      releaseInFlightMemoryExtractionJobs(signal).catch((error: unknown) => {
+      settleInFlightMemoryExtractionJobs(signal).catch((error: unknown) => {
         logger.error({
-          msg: 'Failed to release in-flight memory extraction jobs',
+          msg: 'Failed to settle in-flight memory extraction jobs',
           error: error instanceof Error ? error.message : String(error),
         });
       }),
-      new Promise((resolve) => setTimeout(resolve, 2000)),
+      new Promise((resolve) => setTimeout(resolve, 3000)),
     ]);
 
     const server = app.server;

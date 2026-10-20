@@ -40,6 +40,8 @@ mock.module('../memory-extraction-job-store.js', () => ({
     throw new Error('not implemented in this test');
   },
   getMemoryExtractionJob: async () => null,
+  failExhaustedMemoryExtractionJobs: async () => 0,
+  countActiveMemoryExtractionJobs: async () => 0,
   claimMemoryExtractionJob: async () => null,
   listRunnableMemoryExtractionJobs: async () => [],
   completeMemoryExtractionJob: async () => false,

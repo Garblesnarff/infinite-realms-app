@@ -4,6 +4,7 @@ import { NotFoundError } from '../../lib/errors.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { AIUsageService } from '../../services/ai-usage-service.js';
+import { countActiveMemoryExtractionJobs } from '../../services/memory-extraction-job-store.js';
 import { startMemoryExtractionJob } from '../../services/memory-extraction-job.js';
 import { SessionService } from '../../services/session-service.js';
 
@@ -57,13 +58,16 @@ export const memoryExtractionRoutes = new Elysia({ prefix: '/v1/memory-extractio
       // fail-closed (#2673): getQuotaStatus has a display fallback to a stale memory counter
       // on a DB read error, so probe the store first — an unreachable usage store refuses
       // the request (throws QuotaUnavailableError), exactly as checkQuotaAndConsume did.
+      // The remaining budget also reserves one unit per accepted-but-unfinished job, so a
+      // burst of 202s cannot promise more extractions than the quota will pay for.
       await AIUsageService.assertUsageStoreAvailable();
       const quotaStatus = await AIUsageService.getQuotaStatus({
         userId: user!.userId,
         plan: user!.plan ?? 'free',
         type: 'llm_system',
       });
-      if (quotaStatus.remaining < 1) {
+      const reserved = await countActiveMemoryExtractionJobs(user!.userId);
+      if (quotaStatus.remaining - reserved < 1) {
         set.status = 402;
         return { error: 'AI quota exceeded', resetAt: quotaStatus.resetAt };
       }

@@ -82,6 +82,11 @@ mock.module('../../../services/memory-extraction-job-store.js', () => ({
     jobRows.set(id, { ...r, status: 'failed', error, updatedAt: new Date() });
     return true;
   },
+  failExhaustedMemoryExtractionJobs: async () => 0,
+  countActiveMemoryExtractionJobs: async (userId: string) =>
+    [...jobRows.values()].filter(
+      (r) => r.userId === userId && (r.status === 'pending' || r.status === 'running'),
+    ).length,
 }));
 
 const testLogger = {
@@ -302,6 +307,43 @@ describe('POST /v1/memory-extraction/jobs (#2148)', () => {
 
     expect(response.status).toBe(402);
     expect(extractCalls).toBe(0);
+  });
+
+  it('reserves quota for accepted-but-unfinished jobs at accept (#846)', async () => {
+    // remaining is 10 in this suite's quota mock; seed 10 active jobs for the
+    // user so the burst cannot promise more extractions than the quota will
+    // pay for at completion.
+    for (let i = 0; i < 10; i += 1) {
+      jobRows.set(`seeded-active-${i}`, {
+        id: `seeded-active-${i}`,
+        userId: 'user-1',
+        plan: 'free',
+        sessionId: SESSION,
+        campaignId: CAMPAIGN,
+        characterId: null,
+        kind: 'memories',
+        prompt: 'seeded',
+        payloadHash: 'b'.repeat(64),
+        maxTokens: 1000,
+        turn: null,
+        status: 'pending',
+        attempts: 0,
+        charged: false,
+        error: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        completedAt: null,
+      });
+    }
+
+    const response = await app.handle(
+      jobRequest({ session_id: SESSION, kind: 'memories', prompt: 'extract this' }),
+    );
+
+    expect(response.status).toBe(402);
+    expect(extractCalls).toBe(0);
+    expect(jobRows.size).toBe(10);
+    jobRows.clear();
   });
 
   it('requires auth', async () => {
