@@ -18,7 +18,6 @@
  */
 import { afterAll, beforeAll, expect, it } from 'bun:test';
 import { eq } from 'drizzle-orm';
-
 import {
   characterConcentration,
   characters,
