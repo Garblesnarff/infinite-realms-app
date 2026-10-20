@@ -37,12 +37,17 @@ export function groundPlayerDeclaredAction(
   if (!spell) {
     if (!modelDeclaredAttack) return null;
     const weapon = new RegExp(`\\b(?:${WEAPON_NOUN})\\b`, 'i').exec(read.source)?.[0];
-    if (!weapon || weapon.toLowerCase() === 'weapon' || !target) return null;
+    if (!target) return null;
+    const unarmed = /\b(?:punch\w*|kick\w*|unarmed(?: strike)?|fists?)\b/i.test(read.source);
     const action: DMCombatAction = {
       actor_id: actor.id,
       action_type: 'attack',
       target_ids: [target.id],
-      weapon_id: weapon.toLowerCase(),
+      weapon_id: unarmed
+        ? 'unarmed-strike'
+        : weapon?.toLowerCase() === 'weapon'
+          ? null
+          : (weapon?.toLowerCase() ?? null),
       spell_id: null,
       slot_level: null,
       movement_feet: 0,

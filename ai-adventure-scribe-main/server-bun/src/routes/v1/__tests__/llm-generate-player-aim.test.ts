@@ -243,4 +243,20 @@ describe('#823 player aim on the real LLM route (provider stub, no model calls)'
     });
     expect(result.roll_requests).toEqual([]);
   });
+  it('does not invent a named weapon when the player only declares an attack', async () => {
+    const result = await turn('I attack Cultist 3');
+    expect(result.combat_actions[0]).toMatchObject({
+      action_type: 'attack',
+      weapon_id: null,
+      target_ids: ['cultist-3'],
+    });
+  });
+  it('keeps an explicit punch unarmed instead of using the model dagger', async () => {
+    const result = await turn('I punch Cultist 3');
+    expect(result.combat_actions[0]).toMatchObject({
+      action_type: 'attack',
+      weapon_id: 'unarmed-strike',
+      target_ids: ['cultist-3'],
+    });
+  });
 });
