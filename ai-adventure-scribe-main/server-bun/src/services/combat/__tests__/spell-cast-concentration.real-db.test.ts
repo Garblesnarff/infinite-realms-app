@@ -302,13 +302,16 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
       .insert(gameSessions)
       .values({ characterId, campaignId, sessionNumber: 3, status: 'active' })
       .returning({ id: gameSessions.id });
+    // The gate reads cast claims by NAME from the player's words (a typed
+    // claim); the [spell_id=] tag is the hook's input, fed to the decision
+    // below — the route passes the same message to both.
     const prompt = 'I cast Bless [spell_id=bless, spell_level=level 1].';
     let gateRefused = false;
     const result = await refuseFeaturesCharacterLacks({
       result: { text: JSON.stringify({ text: 'A holy light answers.', narration_segments: [] }) },
       userId,
       sessionId: gateSessionId,
-      playerInput: prompt,
+      playerInput: 'I cast Bless.',
       inCombat: false,
       clientCharacterId: null,
       onCastsRefused: () => {
