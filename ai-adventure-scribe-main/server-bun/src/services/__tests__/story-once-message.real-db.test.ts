@@ -10,7 +10,8 @@
  * with no client notification, so the live sheet showed the stale value until
  * a hard reload. The appliers now publish `character_state_updated` to the
  * session room; these tests drive the real applier entry points and assert the
- * invalidation is broadcast alongside the write.
+ * invalidation is broadcast alongside the write. #751 adds the same pair for
+ * rests: a story rest publishes too, and a story short rest spends hit dice.
  *
  * Requires TEST_DATABASE_URL or DATABASE_URL — see fixtures/real-db.ts.
  */
@@ -217,6 +218,79 @@ describeWithDb('#777 two parallel story applies for one message', () => {
       expect(events[0]?.restType).toBe('long');
     } finally {
       await cleanup(characterId, sessionId, campaignId);
+    }
+  });
+
+  it('#751: a story short rest spends hit dice and restores HP', async () => {
+    // 6/20 with CON +2: one d10 die restores at most 12, so at least two dice
+    // are always spent — the spend is proven deterministically, not by odds.
+    const { userId, characterId, sessionId, campaignId } = await world('751-short', 6, 20);
+    try {
+      expect(await applyStoryRest({ userId, sessionId, rest: { type: 'short' } })).toBe('applied');
+      const [stats] = await db
+        .select({ current: characterStats.currentHitPoints })
+        .from(characterStats)
+        .where(eq(characterStats.characterId, characterId));
+      expect(stats?.current).toBeGreaterThan(6);
+      expect(stats?.current).toBeLessThanOrEqual(20);
+      const dice = await db
+        .select({ used: characterHitDice.usedDice, total: characterHitDice.totalDice })
+        .from(characterHitDice)
+        .where(eq(characterHitDice.characterId, characterId));
+      expect(dice).toHaveLength(1);
+      expect(dice[0]?.used).toBeGreaterThanOrEqual(2);
+      // The spend only stops early at full HP: short of full means every die went.
+      if ((stats?.current ?? 0) < 20) expect(dice[0]?.used).toBe(dice[0]?.total);
+      const events = await db
+        .select({ hitDiceSpent: restEvents.hitDiceSpent, hpRestored: restEvents.hpRestored })
+        .from(restEvents)
+        .where(eq(restEvents.characterId, characterId));
+      expect(events).toHaveLength(1);
+      expect(events[0]?.hitDiceSpent).toBe(dice[0]?.used);
+      expect(events[0]?.hpRestored).toBeGreaterThan(0);
+    } finally {
+      await cleanup(characterId, sessionId, campaignId);
+    }
+  });
+
+  it('#751: a story rest publishes a character_state_updated invalidation', async () => {
+    const { userId, characterId, sessionId, campaignId } = await world('751-rest', 6, 20);
+    try {
+      // The real production entry llm.ts calls for the reply's `rest`.
+      const updates = await characterUpdatesInSessionRoom(sessionId, () =>
+        applyStoryRest({ userId, sessionId, rest: { type: 'long' } }).then((outcome) => {
+          expect(outcome).toBe('applied');
+        }),
+      );
+      // The sheet's data source moved 6 -> 20 ...
+      const [stats] = await db
+        .select({ current: characterStats.currentHitPoints })
+        .from(characterStats)
+        .where(eq(characterStats.characterId, characterId));
+      expect(stats?.current).toBe(20);
+      // ... and the live client was told to refetch it, as for damage/items/XP.
+      expect(updates).toHaveLength(1);
+      expect(updates[0]?.reason).toBe('story_rest');
+    } finally {
+      await cleanup(characterId, sessionId, campaignId);
+    }
+
+    // Same publish for a short rest — the #751 headline case.
+    const shortWorld = await world('751-rest-short', 6, 20);
+    try {
+      const updates = await characterUpdatesInSessionRoom(shortWorld.sessionId, () =>
+        applyStoryRest({
+          userId: shortWorld.userId,
+          sessionId: shortWorld.sessionId,
+          rest: { type: 'short' },
+        }).then((outcome) => {
+          expect(outcome).toBe('applied');
+        }),
+      );
+      expect(updates).toHaveLength(1);
+      expect(updates[0]?.reason).toBe('story_rest');
+    } finally {
+      await cleanup(shortWorld.characterId, shortWorld.sessionId, shortWorld.campaignId);
     }
   });
 

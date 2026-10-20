@@ -5,8 +5,10 @@
  *
  * The server is the one writer: it runs RestService.takeShortRest / takeLongRest, which
  * persist HP, hit dice, spell slots, class features, conditions and the rest_events row.
- * A story short rest spends no hit dice on its own — spending is the player's choice, made
- * from the sheet's hit-dice prompt. Once per player message, as the slot spend in
+ * A story short rest spends hit dice until the character is healed or out of dice
+ * (#751): a rest declared in chat has no sheet hit-dice prompt to pick a count, and a
+ * short rest that restores no HP is narration-only — the failure this module exists to
+ * prevent. Once per player message, as the slot spend in
  * story-spell-slots.ts: Retry re-sends the same saved message, so a second rest for it is
  * not applied. The claim is inside RestService (#777): it locks the character, re-checks
  * rest_events for this character, session, and player message, and inserts the event
@@ -69,6 +71,7 @@ export async function applyStoryRest(input: {
           sessionId,
           'story rest',
           message.createdAt,
+          { spendHitDiceUntilHealed: true },
         );
       } else {
         await RestService.takeLongRest(
@@ -80,6 +83,22 @@ export async function applyStoryRest(input: {
         );
       }
       outcome = 'applied';
+      // #751 (#130's shape): the write landed server-side, but the live sheet
+      // only refreshes on character_state_updated — without this publish it
+      // keeps the pre-rest HP and conditions until a hard reload. A failed
+      // broadcast must not fail the rest: the write already landed.
+      try {
+        const { publishStoryCharacterUpdate } = await import('./story-broadcast.js');
+        publishStoryCharacterUpdate(sessionId, 'story_rest');
+      } catch (broadcastError) {
+        logger.warn({
+          msg: 'DM_STORY_REST_BROADCAST_FAILED',
+          sessionId,
+          characterId: character.id,
+          error:
+            broadcastError instanceof Error ? broadcastError.message : String(broadcastError),
+        });
+      }
     } catch (error) {
       if (error instanceof StoryRestAlreadyRecorded) {
         outcome = 'already_applied';

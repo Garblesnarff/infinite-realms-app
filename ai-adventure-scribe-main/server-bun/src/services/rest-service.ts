@@ -485,6 +485,15 @@ export class RestService {
     notes?: string,
     /** Story once-per-message key. Sheet rests omit it. */
     since?: Date,
+    options?: {
+      /**
+       * #751: a rest declared in chat has no sheet hit-dice prompt to choose a
+       * count, so the rest spends dice one at a time until the character is
+       * back to full HP or out of dice — the choice a player declaring the
+       * rest in chat is making. Sheet rests pass an explicit count instead.
+       */
+      spendHitDiceUntilHealed?: boolean;
+    },
   ): Promise<ShortRestResult> {
     // ⚡ Bolt: Consolidated character ownership verification, stats fetching, and hit dice retrieval
     // into a single database round-trip. This reduces sequential latency from 3-4 down to 1.
@@ -538,7 +547,26 @@ export class RestService {
       let hitDiceSpent = 0;
       let updatedHitDice: HitDice[] = hitDice;
 
-      if (hitDiceToSpend > 0) {
+      if (options?.spendHitDiceUntilHealed && character.stats) {
+        let currentHitPoints = character.stats.currentHitPoints;
+        const maxHitPoints = character.stats.maxHitPoints;
+        let diceAvailable = updatedHitDice.reduce(
+          (sum, hd) => sum + (hd.totalDice - hd.usedDice),
+          0,
+        );
+        while (currentHitPoints < maxHitPoints && diceAvailable > 0) {
+          const result = await this.spendHitDice(characterId, userId, 1, undefined, {
+            character,
+            hitDice: updatedHitDice,
+          });
+          if (result.hitDiceSpent === 0) break;
+          hpRestored += result.hpRestored;
+          hitDiceSpent += result.hitDiceSpent;
+          diceAvailable -= result.hitDiceSpent;
+          updatedHitDice = result.hitDiceRemaining;
+          currentHitPoints = Math.min(maxHitPoints, currentHitPoints + result.hpRestored);
+        }
+      } else if (hitDiceToSpend > 0) {
         const result = await this.spendHitDice(characterId, userId, hitDiceToSpend, undefined, {
           character,
           hitDice,
