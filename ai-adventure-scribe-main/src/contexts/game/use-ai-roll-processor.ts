@@ -9,11 +9,7 @@ import { useCharacter } from '@/contexts/CharacterContext';
 import logger from '@/lib/logger';
 import { throttle } from '@/lib/utils';
 import { calculateRollWithBreakdown } from '@/utils/characterModifiers';
-import {
-  findDeclaredAbility,
-  findDeclaredSkill,
-  findDeclaredTool,
-} from '@/utils/roll-request/declared-roll';
+import { findDeclaredAbility, preferredDeclaredCheck } from '@/utils/roll-request/declared-roll';
 
 /**
  * Shape of a roll request from AI responses, before conversion
@@ -182,8 +178,7 @@ function buildCharacterDerivedRollConfig(
   }
 
   try {
-    const toolName = findDeclaredTool(request);
-    const skillName = toolName ? undefined : findDeclaredSkill(request);
+    const { toolName, skillName } = preferredDeclaredCheck(request, character);
     const calculation = skillName
       ? calculateRollWithBreakdown(character, 'skill', undefined, skillName)
       : (() => {

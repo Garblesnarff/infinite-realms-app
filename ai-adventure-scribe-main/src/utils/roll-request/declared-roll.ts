@@ -1,7 +1,11 @@
+import type { Character } from '@/types/character';
+
 import {
   SKILL_ABILITIES,
   SKILL_ALIASES,
   TOOL_ABILITIES,
+  isSkillProficient,
+  isToolProficient,
   type AbilityName,
 } from '@/utils/character/basic-modifiers';
 import { canonicalProficiencyKey } from '@/utils/character/parse-proficiency-list';
@@ -63,4 +67,23 @@ export function findDeclaredTool(request: DeclaredRollText): string | undefined 
   if (/gamingset(?:cards|playingcards)/.test(text)) return 'gaming set (cards)';
   if (/gamingsetdice/.test(text)) return 'gaming set (dice)';
   return TOOL_TERMS.find((tool) => text.includes(canonicalProficiencyKey(tool)));
+}
+
+/** A tool mention must not discard an already-proficient skill. */
+export function preferredDeclaredCheck(
+  request: DeclaredRollText,
+  character: Character,
+): {
+  skillName: string | undefined;
+  toolName: string | undefined;
+} {
+  const skillName = findDeclaredSkill(request);
+  const toolName = findDeclaredTool(request);
+  if (
+    skillName &&
+    (isSkillProficient(character, skillName) || !toolName || !isToolProficient(character, toolName))
+  ) {
+    return { skillName, toolName: undefined };
+  }
+  return { skillName: undefined, toolName };
 }

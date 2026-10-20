@@ -150,11 +150,12 @@ export function isToolProficient(character: Character, toolName: string): boolea
   if (!key.startsWith('gamingset')) return false;
   const kind = key.includes('cards') ? 'cards' : key.includes('dice') ? 'dice' : undefined;
   if (!kind || !hasProficiency(character.toolProficiencies, 'One type of gaming set')) return false;
-  return (character.inventory ?? []).some((item) => {
-    if (item.quantity <= 0) return false;
+  const ownedKinds = new Set<string>();
+  for (const item of character.inventory ?? []) {
+    if (item.quantity <= 0) continue;
     const name = canonicalProficiencyKey(item.itemName ?? item.itemId);
-    return kind === 'cards'
-      ? ['deckofcards', 'playingcards', 'gamingsetcards'].includes(name)
-      : ['diceset', 'setofdice', 'gamingsetdice'].includes(name);
-  });
+    if (['deckofcards', 'playingcards', 'gamingsetcards'].includes(name)) ownedKinds.add('cards');
+    if (['diceset', 'setofdice', 'gamingsetdice'].includes(name)) ownedKinds.add('dice');
+  }
+  return ownedKinds.size === 1 && ownedKinds.has(kind);
 }
