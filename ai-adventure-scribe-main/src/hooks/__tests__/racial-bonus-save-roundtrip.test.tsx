@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -333,10 +333,15 @@ describe('#203 racial ability bonuses survive save', () => {
       expect(saved).not.toBeNull();
       for (const [ability, value] of Object.entries(final))
         expect(saved!.abilityScores![ability as keyof AbilityScores].score).toBe(value);
-      writeFileSync(
-        resolve(process.cwd(), `shared/test-fixtures/half-elf-${method}-create.json`),
-        JSON.stringify({ method, base, choices, final, body }, null, 2) + '\n',
+      const fixturePath = resolve(
+        process.cwd(),
+        `shared/test-fixtures/half-elf-${method}-create.json`,
       );
+      const actual = JSON.parse(JSON.stringify({ method, base, choices, final, body }));
+      if (process.env.UPDATE_FIXTURES === '1') {
+        writeFileSync(fixturePath, JSON.stringify(actual, null, 2) + '\n');
+      }
+      expect(actual).toEqual(JSON.parse(readFileSync(fixturePath, 'utf8')));
       await act(async () => {
         await result.current.saveCharacter(saved!);
       });
