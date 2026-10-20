@@ -8,7 +8,9 @@ Proposed workflow insertion after the checks job's app install; new helper and i
 diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
 --- a/.github/workflows/ci.yml
 +++ b/.github/workflows/ci.yml
-@@ -175,1 +175,11 @@
+@@ -173,6 +173,16 @@
+       - id: install
+         if: ${{ !cancelled() }}
          run: bun install --frozen-lockfile
 +      - name: Dependency advisories (app)
 +        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
@@ -20,6 +22,9 @@ diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
 +          # The checker accepts only valid audit JSON; network/registry errors fail closed.
 +          # npm lock domains need separately keyed npm-format checks, not this Bun parser.
 +          # A nonzero audit status alone is expected for explicitly accepted baseline entries.
+       - id: install-server
+         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+         run: bun install --frozen-lockfile
 diff --git a/ai-adventure-scribe-main/scripts/check-dependency-advisories.ts b/ai-adventure-scribe-main/scripts/check-dependency-advisories.ts
 new file mode 100644
 --- /dev/null
