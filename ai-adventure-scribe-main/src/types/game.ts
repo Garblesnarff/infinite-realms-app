@@ -28,6 +28,8 @@ export interface MessageContext {
   combatEnded?: boolean;
   /** Structured DM roll requests retained so a pending popup can be restored after reload. */
   rollRequests?: RollRequest[];
+  /** Choices are separate from narration so reload does not depend on inline formatting. */
+  actionOptions?: string[];
   /**
    * DM voice segments persisted with the dialogue_history row, in the vocabulary the DM
    * schema emits (`dm` / `character` / `transition`, #458). Null when the message carries

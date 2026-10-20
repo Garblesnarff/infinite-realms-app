@@ -199,6 +199,13 @@ export const useMessageQueue = (sessionId: string | null) => {
                   ? { rollRequestId: message.context.rollRequestId }
                   : {}),
                 handouts: message.context.handouts || null,
+                ...(Array.isArray(message.context.actionOptions)
+                  ? {
+                      actionOptions: message.context.actionOptions.filter(
+                        (option): option is string => typeof option === 'string',
+                      ),
+                    }
+                  : {}),
                 combat_transition: message.context.combat_transition || null,
                 scene_spec: Boolean(message.context.scene_spec),
                 combat_engine_blocks:

@@ -1314,6 +1314,9 @@ export const useAIResponse = (): {
             // GP-015 (#219): narration turn with no action choices — the UI
             // says why there are none instead of rendering nothing.
             noActionOptions: isNarrationTurn && !sheetOptions.length,
+            ...(isNarrationTurn && sheetOptions.length
+              ? { actionOptions: sheetOptions as string[] }
+              : {}),
           },
           narrationSegments,
           diceRolls,

@@ -68,6 +68,7 @@ import {
   previouslyOnMessage,
   previouslyOnWireBody,
 } from '../../../shared/test-fixtures/continuation-session-init-save';
+import { DM_OPTIONS_RELOAD } from '../../../shared/test-fixtures/dm-options-reload';
 import {
   DECLINED_ROLL_BODY,
   DECLINED_ROLL_LINE,
@@ -515,6 +516,20 @@ describe('useMessageQueue', () => {
         previouslyOnWireBody(PREVIOUSLY_ON_IDS[0]),
       ]);
     });
+  });
+
+  it('saves separate choices with exactly the body the real route accepts (#868)', async () => {
+    const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+    await act(async () => {
+      await result.current.messageMutation.mutateAsync({
+        id: DM_OPTIONS_RELOAD.id,
+        text: DM_OPTIONS_RELOAD.message,
+        sender: 'dm',
+        timestamp: DM_OPTIONS_RELOAD.timestamp,
+        context: DM_OPTIONS_RELOAD.context,
+      });
+    });
+    expect(mockSaveSessionMessages).toHaveBeenCalledWith(sessionId, DM_OPTIONS_RELOAD);
   });
 
   describe('narrative roll replies (#2280)', () => {

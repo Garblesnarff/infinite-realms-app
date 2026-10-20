@@ -271,14 +271,10 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
           // reports combat_ended. Without it the yield dead-ends at "X yielded.".
           const endLine =
             combatBoundaryFromResult(result) === 'combat_ended'
-              ? formatCombatEndLine(
-                  (result as { endedReason?: string | null } | null)?.endedReason,
-                )
+              ? formatCombatEndLine((result as { endedReason?: string | null } | null)?.endedReason)
               : null;
           await sendEngineNotice(onSendMessage, {
-            text: [...parts.map((part) => part.line), ...(endLine ? [endLine] : [])].join(
-              '\n\n',
-            ),
+            text: [...parts.map((part) => part.line), ...(endLine ? [endLine] : [])].join('\n\n'),
             cards: parts.map((part) => part.card),
           });
           // No `end_turn` after it: the exit has already taken the player out of the turn order,
@@ -531,6 +527,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
         {error && <p role="alert">{error}</p>}
         <ActionOptions
           options={renderedOptions}
+          disabled={!isLatest}
           onOptionSelect={handleSelection}
           resetSelectionAfterCompletion={showCombatMenu}
           delay={hasDynamicOverlay || showCombatMenu ? 0 : 10000}
