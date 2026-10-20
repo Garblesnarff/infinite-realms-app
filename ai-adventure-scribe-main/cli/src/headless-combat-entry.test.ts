@@ -1,5 +1,5 @@
 /**
- * #913 (Hetzner fair test, session 598023a8): the DM proposed combat entry on 8 of 10
+ * #913 (Hetzner fair test): the DM proposed combat entry on 8 of 10
  * turns and no encounter ever seated. The server's gate did its half every turn — it
  * rewrote the model's start envelope into a `combat_entry_pending` handoff and waited
  * for `POST /v1/combat/sessions/:id/enter`. The browser completes that handoff in
@@ -13,7 +13,11 @@
  * become narrative rolls, the next turn is played in-encounter, a re-proposal while
  * seated seats nothing twice, and a refused entry fails the turn with the
  * `CombatEntryError` shape the auto-play failure streak already understands
- * (`combat-entry-resilience.test.ts`) instead of looping silently.
+ * (`combat-entry-resilience.test.ts`) instead of looping silently. A seat also
+ * retires the model's own `combat_actions` on every path — replaced by the derived
+ * first action when there is one, cleared when there is not, and suppressed when
+ * the route's opening NPC drain already ended the fight — and a 201 whose body
+ * names no encounter fails the turn rather than inventing an encounter id.
  *
  * Producers: every fixture comes from `shared/test-fixtures/combat-entry-headless.ts`
  * (AGENTS.md §4); the server test posts the same `/enter` body through the real route.
@@ -174,6 +178,85 @@ describe('HeadlessGameClient combat entry (#913)', () => {
     await client.play(HEADLESS_ENTRY_PLAYER_INPUT);
 
     expect(userDataApi.enterCombat).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the model combat_actions when a seat derives no first action', async () => {
+    sessionContext();
+    stubInitiativeDie();
+    const modelAction = {
+      actor_id: 'participant-player',
+      action_type: 'attack',
+      target_ids: ['participant-balthazar'],
+      weapon_id: 'longsword',
+      spell_id: null,
+      slot_level: null,
+      movement_feet: 0,
+    };
+    vi.mocked(AIService.chatWithDM).mockResolvedValue({
+      ...headlessEntryDmResponse,
+      combat_actions: [modelAction],
+    } as never);
+    // A 201 with an encounter but neither first_action nor first_action_refusal:
+    // the seat stands, the model's pre-seat batch does not.
+    vi.mocked(userDataApi.enterCombat).mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ encounter: { id: HEADLESS_ENTRY_ENCOUNTER_ID } }), {
+          status: 201,
+        }),
+    );
+    globalThis.fetch = mapFetch();
+
+    const client = new HeadlessGameClient(HEADLESS_ENTRY_SESSION_ID);
+    await client.play(HEADLESS_ENTRY_PLAYER_INPUT);
+
+    expect(userDataApi.enterCombat).toHaveBeenCalledTimes(1);
+    expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
+  });
+
+  it('does not fire the derived first action when the opening NPC drain ended the fight', async () => {
+    sessionContext();
+    stubInitiativeDie();
+    vi.mocked(AIService.chatWithDM).mockResolvedValue(headlessEntryDmResponse as never);
+    vi.mocked(userDataApi.enterCombat).mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            ...headlessEntryEnterResponse,
+            npcTurns: { combatEnded: true, transcriptLines: [] },
+          }),
+          { status: 201 },
+        ),
+    );
+    globalThis.fetch = mapFetch();
+
+    const client = new HeadlessGameClient(HEADLESS_ENTRY_SESSION_ID);
+    await client.play(HEADLESS_ENTRY_PLAYER_INPUT);
+
+    expect(userDataApi.enterCombat).toHaveBeenCalledTimes(1);
+    expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
+  });
+
+  it('fails the turn when a 201 body names no encounter', async () => {
+    sessionContext();
+    stubInitiativeDie();
+    vi.mocked(AIService.chatWithDM).mockResolvedValue(headlessEntryDmResponse as never);
+    vi.mocked(userDataApi.enterCombat).mockImplementation(
+      async () => new Response('not a combat entry response', { status: 201 }),
+    );
+    globalThis.fetch = mapFetch();
+
+    const client = new HeadlessGameClient(HEADLESS_ENTRY_SESSION_ID);
+    const failure = await client.play(HEADLESS_ENTRY_PLAYER_INPUT).catch((error) => error);
+
+    expect(failure).toMatchObject({
+      name: 'CombatEntryError',
+      category: 'transport',
+      status: 201,
+      stage: 'entry',
+      detail: 'Combat entry response did not include an encounter id',
+      fingerprint:
+        'combat_entry:201:entry:Combat entry response did not include an encounter id',
+    });
   });
 
   it('fails the turn with a CombatEntryError when the server refuses the entry', async () => {

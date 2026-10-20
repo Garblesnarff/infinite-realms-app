@@ -256,8 +256,8 @@ export class HeadlessGameClient {
     // #913: the browser completes a pending entry in `dm-actions-handler` — confirm,
     // roll initiative, POST `/enter`. This client never read the field, so the pending's
     // initiative request fell into the narrative roll queue, the roll went back as chat
-    // text, nothing seated, and the DM re-proposed the same entry every turn (fair-test
-    // session 598023a8: 8 proposals, no encounter). Seat it the same way here.
+    // text, nothing seated, and the DM re-proposed the same entry every turn (the
+    // fair-test failure: 8 proposals, no encounter). Seat it the same way here.
     if (response.combat_entry_pending && !this.combatActive) {
       response = await this.seatPendingCombatEntry(response);
     }
@@ -403,16 +403,36 @@ export class HeadlessGameClient {
     const enterResponse = await userDataApi.enterCombat(this.sessionId, enterPayload);
     if (!enterResponse.ok) throw await combatEntryError(enterResponse, response);
 
-    const entryPayload = (await enterResponse.json().catch(() => null)) as {
+    const responseBody = await enterResponse.text().catch(() => '');
+    let entryPayload: {
       encounter?: { id?: unknown };
       first_action?: { combat_action?: StructuredCombatAction };
       first_action_refusal?: unknown;
-    } | null;
+      npcTurns?: { combatEnded?: unknown };
+    } | null = null;
+    try {
+      entryPayload = JSON.parse(responseBody) as typeof entryPayload;
+    } catch {
+      entryPayload = null;
+    }
+    // A 201 the client cannot read the encounter out of is not a seat it can play:
+    // fail the turn loudly (the failure streak ends the run) rather than inventing
+    // an encounter id and playing a fight that may not exist.
     const encounterId =
-      typeof entryPayload?.encounter?.id === 'string'
-        ? entryPayload.encounter.id
-        : this.sessionId;
+      typeof entryPayload?.encounter?.id === 'string' ? entryPayload.encounter.id : null;
+    if (!encounterId) {
+      throw new CombatEntryError({
+        status: enterResponse.status,
+        detail: 'Combat entry response did not include an encounter id',
+        responseBody,
+        envelope: response,
+      });
+    }
     const firstAction = entryPayload?.first_action;
+    // The route runs the creatures that won initiative before it answers (#2658);
+    // when that drain already ended the fight, no first action may fire into it
+    // (the browser's `preflightNpcTurns` rule in `dm-actions-handler`).
+    const npcEndedCombat = entryPayload?.npcTurns?.combatEnded === true;
     return {
       ...response,
       combat_entry: {
@@ -429,16 +449,13 @@ export class HeadlessGameClient {
         const type = (request as { type?: unknown } | null)?.type;
         return type !== 'attack' && type !== 'initiative';
       }),
-      // The model's own batch is never consulted when `/enter` derived the opening
-      // action from the declaration: the derived action replaces it, and a refused or
-      // unusable derivation clears it (the browser's rule in `dm-actions-handler`).
-      ...(firstAction || entryPayload?.first_action_refusal
-        ? {
-            combat_actions: (firstAction?.combat_action
-              ? [firstAction.combat_action]
-              : []) as unknown as AIResponse['combat_actions'],
-          }
-        : {}),
+      // A successful seat replaces the model's own batch on every path: the derived
+      // opening action when `/enter` produced a usable one, and nothing when the
+      // derivation was refused, absent, or the opening NPC drain ended the fight.
+      // The model's batch was authored against a fight that had not seated yet.
+      combat_actions: (!npcEndedCombat && firstAction?.combat_action
+        ? [firstAction.combat_action]
+        : []) as unknown as AIResponse['combat_actions'],
     };
   }
 
