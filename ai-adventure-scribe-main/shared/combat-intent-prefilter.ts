@@ -10,6 +10,10 @@
  * an attack-shaped clause and then resolves the named actor against the server roster.
  */
 export const COMBAT_INTENT_VERBS = [
+  'grab',
+  'smash',
+  'crack',
+  'draw',
   'punch',
   'hit',
   'strike',

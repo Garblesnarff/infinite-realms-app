@@ -74,6 +74,36 @@ describe('POST /v1/combat/sessions/:sessionId/declared-attack', () => {
     rosterCalls.splice(0);
   });
 
+  it.each([
+    'I grab the Professor',
+    'I draw my sword on the Professor',
+    'I smash the Professor with my mace',
+  ])('offers combat entry for a hostile creature action: %s', async (playerInput) => {
+    const response = await post({ ...declaredAttackCheckBody, playerInput });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      pending: {
+        trigger: 'player_intent',
+        combatants: [{ name: 'Professor Darkwater', count: 1 }],
+        declaredAttack: { actorName: 'Professor Darkwater' },
+      },
+    });
+  });
+
+  it.each([
+    'I smash the cauldron',
+    'I crack the basalt with my mace',
+    'I force the hatch',
+    'I grab the Professor’s book',
+    'I draw my longsword',
+    'I draw a portrait of the Professor',
+    'I do not grab the Professor',
+  ])('leaves object acts and non-hostile wording in narrative: %s', async (playerInput) => {
+    const response = await post({ ...declaredAttackCheckBody, playerInput });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ pending: null });
+  });
+
   it('returns no pending entry when a fight is already live (#2623)', async () => {
     liveEncounter = { id: 'encounter-live', status: 'active' };
     const response = await post(declaredAttackCheckBody);
