@@ -201,6 +201,36 @@ describe('quota when the DB is down (#2673 step 3b)', () => {
   it('reaches the LLM provider once while the DB is up (positive control for the 503 case)', async () => {
     db.insertAllowed = true;
 
+    // #782 item 3: the route enforces the server-built schema and retries on
+    // parse failure. The mock must return a valid DM envelope, not an image.
+    globalThis.fetch = (async () => {
+      providerCalls += 1;
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  text: 'Hello there.',
+                  options: ['Continue'],
+                  narration_segments: [],
+                  roll_requests: [],
+                  combat_transition: 'none',
+                  scene_spec: null,
+                  map_actions: [],
+                  handout_actions: [],
+                  combatants: [],
+                  combat_actions: [],
+                }),
+              },
+            },
+          ],
+          usage: { prompt_tokens: 4, completion_tokens: 8 },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    }) as unknown as typeof fetch;
+
     await (llmApp as unknown as Handler).handle(
       new Request('http://localhost/v1/llm/generate', {
         method: 'POST',

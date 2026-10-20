@@ -137,7 +137,11 @@ export function validateCombatTransitionContract(
 ): CombatTransitionContractViolation | null {
   if (combatActive) return null;
 
-  const violating = response.roll_requests.filter((request) => {
+  // #782 item 3: the route now always enforces the server-built schema, so
+  // this runs on every turn. Be defensive: a parsed envelope that is not
+  // schema-valid (e.g. a test mock) may lack roll_requests.
+  const rollRequests = Array.isArray(response.roll_requests) ? response.roll_requests : [];
+  const violating = rollRequests.filter((request) => {
     if (request.type === 'initiative' || request.type === 'attack') return true;
     if (request.type !== 'save' || /\bdeath\b/i.test(request.purpose)) return false;
     return CREATURE_SAVE_PATTERN.test(`${request.purpose}\n${response.text}`);
