@@ -775,6 +775,12 @@ export class AIService {
           metrics: promptMetrics,
           combatEntry,
           dmReply: params.dmReply,
+          // #849: confirms the one-shot facts the tactical-context GET delivered
+          // with this turn's prompt; the server deletes them only on this echo.
+          tacticalDeliveryToken:
+            typeof params.context.gameState?.tacticalDeliveryToken === 'string'
+              ? params.context.gameState.tacticalDeliveryToken
+              : undefined,
           signal: params.signal,
           // #633 PR2: opt the DM turn into server-sent narration deltas.
           ...(params.onStream ? { onStream: params.onStream } : {}),

@@ -75,6 +75,29 @@ export interface TacticalMap {
    * never reach the engine" — the run 9 failure, counted rather than inferred.
    */
   dmSilentTurns?: number;
+  /**
+   * The one-shot batch currently out for delivery (#849, audit F19). The context GET used to
+   * delete `pendingDmFacts`/`pendingDmFactActions`/`pendingDmCorrection` inside its read
+   * transaction, so a response lost on the wire — or a narration that never happened — took
+   * the facts with it. The GET now moves the batch here under a delivery token instead: a
+   * retry inside the TTL returns the same batch under the same token, and the batch is
+   * deleted only when a generate call echoes the token back (delivery confirmed) or when
+   * the TTL lapses, at which point facts from an earlier round would corrupt the narration.
+   */
+  pendingDmDelivery?: TacticalDelivery;
+}
+
+/** One batch of one-shot DM facts out for delivery (#849). See `TacticalMap.pendingDmDelivery`. */
+export interface TacticalDelivery {
+  /** The token the client's next generate call echoes to confirm delivery. */
+  token: string;
+  facts: string[];
+  actions: DmFactAction[];
+  correction: string | null;
+  /** Epoch ms the batch was first read. */
+  issuedAt: number;
+  /** Epoch ms at which an unconfirmed batch is dropped as stale. */
+  expiresAt: number;
 }
 
 /**

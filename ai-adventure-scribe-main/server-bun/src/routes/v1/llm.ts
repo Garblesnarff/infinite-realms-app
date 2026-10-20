@@ -649,6 +649,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         metrics,
         combatEntry,
         sessionId,
+        // #849 (audit F19): the token the tactical-context GET handed out with its
+        // one-shot facts. Carrying it here confirms delivery; see the hook below.
+        tacticalDeliveryToken,
         player_input: requestedPlayerInput,
         dmReply: requestedDmReply,
         stream,
@@ -667,6 +670,48 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         set.status = 400;
         return { error: 'Missing prompt' };
       }
+
+      // #849 (audit F19): a generate carrying the tactical delivery token confirms
+      // the client received the one-shot facts the context GET put in this prompt,
+      // which is what finally deletes them. The confirm fires only once the turn
+      // has actually produced a reply (see the two call sites below): firing at
+      // accept time would lose the facts to any turn that then errored. A missing
+      // token (older clients) never confirms, and a failed confirm leaves the
+      // batch to its TTL rather than failing the player's turn — best-effort and
+      // detached, like the other post-accept hooks in this route. Loaded lazily for
+      // the same reason as the recordTacticalFact hook below: this route's module
+      // graph must stay loadable without DATABASE_URL. Like the rest of this
+      // handler, the session id falls back to the combat entry's session id.
+      const tacticalDeliverySucceeded = (payload: unknown): boolean =>
+        typeof payload === 'object' &&
+        payload !== null &&
+        !('error' in payload) &&
+        (payload as { degraded?: unknown }).degraded !== true &&
+        typeof (payload as { text?: unknown }).text === 'string';
+      const confirmTacticalDelivery = (): void => {
+        const confirmSessionId = sessionId ?? combatEntry?.sessionId;
+        if (
+          typeof confirmSessionId !== 'string' ||
+          confirmSessionId.length === 0 ||
+          typeof tacticalDeliveryToken !== 'string' ||
+          tacticalDeliveryToken.length === 0
+        ) {
+          return;
+        }
+        void (async () => {
+          try {
+            const { confirmTacticalContextDelivery } =
+              await import('../../services/combat/tactical-action-service.js');
+            await confirmTacticalContextDelivery(confirmSessionId, tacticalDeliveryToken);
+          } catch (error) {
+            logger.warn({
+              msg: 'TACTICAL_DELIVERY_CONFIRM_FAILED',
+              sessionId: confirmSessionId,
+              error,
+            });
+          }
+        })();
+      };
 
       const generateTurn = async (
         canonicalMessageId?: string,
@@ -1456,6 +1501,10 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         void (async () => {
           try {
             const payload = await runTurn(onToken, onAttemptStart);
+            // #849: the streamed turn produced its reply — delivery confirmed.
+            // (AppErrors throw out of runTurn in stream mode and land in the
+            // error path below, so they never confirm.)
+            if (tacticalDeliverySucceeded(payload)) confirmTacticalDelivery();
             sendEvent({ type: 'done', payload });
           } catch (error) {
             const { AppError } = await import('../../lib/errors.js');
@@ -1486,7 +1535,11 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         })();
         return new Response(readable, { headers: SSE_HEADERS });
       }
-      return runTurn();
+      const payload = await runTurn();
+      // #849: only a turn that actually produced a reply confirms delivery — an
+      // errored or degraded turn leaves the batch to be re-served (or expire).
+      if (tacticalDeliverySucceeded(payload)) confirmTacticalDelivery();
+      return payload;
     },
     {
       body: t.Object({
@@ -1497,6 +1550,10 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // #2050 C: correlate the envelope log line to a session on every
         // generate, not only on the combat-entry path.
         sessionId: t.Optional(t.String({ maxLength: 255 })),
+        // #849 (audit F19): the delivery token from the tactical-context GET.
+        // Optional — older clients never send it, and their facts simply live
+        // out the delivery TTL instead of being confirmed.
+        tacticalDeliveryToken: t.Optional(t.String({ maxLength: 255 })),
         player_input: t.Optional(t.String({ maxLength: 20_000 })),
         // #2218: the id the client reserved for this turn's DM row. Present only on the main DM
         // turn; the server persists the reply under it when the turn is display-ready.
