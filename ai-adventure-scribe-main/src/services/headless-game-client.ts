@@ -404,14 +404,15 @@ export class HeadlessGameClient {
     if (!enterResponse.ok) throw await combatEntryError(enterResponse, response);
 
     const responseBody = await enterResponse.text().catch(() => '');
-    let entryPayload: {
+    type EnteredCombatPayload = {
       encounter?: { id?: unknown };
       first_action?: { combat_action?: StructuredCombatAction };
       first_action_refusal?: unknown;
       npcTurns?: { combatEnded?: unknown };
-    } | null = null;
+    };
+    let entryPayload: EnteredCombatPayload | null = null;
     try {
-      entryPayload = JSON.parse(responseBody) as typeof entryPayload;
+      entryPayload = JSON.parse(responseBody) as EnteredCombatPayload;
     } catch {
       entryPayload = null;
     }
