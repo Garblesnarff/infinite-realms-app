@@ -261,7 +261,12 @@ describe('tactical map combat flow', () => {
     }
   });
 
-  it('falls back to the map round when no encounter is active (#179 item 3)', async () => {
+  it('shows no initiative round when no encounter is active (#864)', async () => {
+    // The old expectation here — fall back to the map's round field — was the #864 bug:
+    // the map payload's round is never updated after creation (NT-046), so after a fight
+    // ended the header kept claiming "Initiative · round 1" with no fight active. #179
+    // item 3's point stands for an active encounter (previous test); with none, there is
+    // no initiative order to label.
     combatStateHolder.current = { activeEncounter: null };
     try {
       vi.stubGlobal(
@@ -278,7 +283,8 @@ describe('tactical map combat flow', () => {
           new CustomEvent('tactical-map-delta', { detail: { type: 'map_created', map: map() } }),
         ),
       );
-      expect(await screen.findByText(/Initiative · round 1/)).toBeInTheDocument();
+      expect(await screen.findByText('Tactical map')).toBeInTheDocument();
+      expect(screen.queryByText(/Initiative · round/)).not.toBeInTheDocument();
     } finally {
       combatStateHolder.current = {
         activeEncounter: { id: 'enc-1', currentTurnParticipantId: 'pc' },

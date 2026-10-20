@@ -28,7 +28,10 @@ import {
   markNarrativeRollCommitted,
   markPlayerRollCommitted,
 } from '@/services/combat/player-roll-bridge';
-import { previousEngineDividerKeys } from '@/utils/combat-engine-blocks';
+import {
+  messagesSupersededByCombatEnd,
+  previousEngineDividerKeys,
+} from '@/utils/combat-engine-blocks';
 import { withheldDmRollReplies } from '@/utils/dm-roll-recovery';
 
 interface MessageListContainerProps {
@@ -106,6 +109,13 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
     usePlayerRollHost();
 
     const previousEngineKeys = useMemo(() => previousEngineDividerKeys(messages), [messages]);
+
+    // Options saved with a message from before a combat end are stale once that fight is
+    // over (#864); the DM reply that ended the fight supplies the new ones.
+    const supersededByCombatEnd = useMemo(
+      () => messagesSupersededByCombatEnd(messages),
+      [messages],
+    );
 
     // Group consecutive messages from the same sender
     const groupedMessages = useMemo(() => {
@@ -257,6 +267,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
                       onSendMessage={onSendMessage}
                       combatOptionsVisible={combatOptionsVisible}
                       isLatestMessage={isLastMessage}
+                      optionsSuperseded={supersededByCombatEnd.has(message)}
                       characterName={group.messages[0].characterName}
                       previousEngineKey={previousEngineKeys.get(message)}
                     />

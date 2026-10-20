@@ -153,6 +153,25 @@ describe('provisionalDmText', () => {
       'Cold air rises from the stair. Somewhere below, water drips on stone.',
     );
   });
+
+  test('each offered choice once when the model repeated its options (#864)', () => {
+    expect(
+      provisionalDmText(
+        explorationEnvelope({
+          options: [
+            'A. **Descend carefully**, testing each step.',
+            'B. **Listen**, hold still and wait for another sound.',
+            'C. **Descend carefully**, testing each step.',
+            'D. **Listen**, hold still and wait for another sound.',
+          ],
+        }),
+      ),
+    ).toBe(
+      'Cold air rises from the stair. Somewhere below, water drips on stone.\n\n' +
+        'A. **Descend carefully**, testing each step.\n' +
+        'B. **Listen**, hold still and wait for another sound.',
+    );
+  });
 });
 
 describe('persistGeneratedDmReply', () => {

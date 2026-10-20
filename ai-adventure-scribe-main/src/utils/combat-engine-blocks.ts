@@ -99,6 +99,53 @@ export function combatMessageEndedCombat(message: {
   );
 }
 
+function combatMessageIsSummary(message: {
+  sender?: string;
+  context?: Record<string, unknown>;
+}): boolean {
+  if (message.sender !== 'system') return false;
+  const combatData = message.context?.combatData as
+    | { type?: unknown; summary?: unknown }
+    | undefined;
+  return combatData?.type === 'summary' || Boolean(combatData?.summary);
+}
+
+/**
+ * The messages whose saved options a later combat end has made stale (#864): everything before
+ * a combat-end boundary — a DM message that ended a fight, or that fight's Combat Summary —
+ * belongs to the pre-fight world, so its options must stop rendering once the fight is over.
+ * The DM message that ended the fight is the boundary, not a victim of it: its options are the
+ * post-combat ones. A summary closes only the world before its fight's terminal DM message:
+ * the deferred summary posts late (it awaits the damage-summary fetch, or the fallback
+ * timer), and DM replies the player already drew from the terminal's options can sit between
+ * the two — those are current, not stale. A summary whose fight's terminal message never
+ * landed (or lands after it) closes everything before itself.
+ */
+export function messagesSupersededByCombatEnd<
+  M extends { sender?: string; context?: Record<string, unknown> },
+>(messages: readonly M[]): Set<M> {
+  const superseded = new Set<M>();
+  // For each summary, the index it closes up to: the last terminal DM message before it,
+  // or its own index when no terminal precedes it.
+  const summaryBound = new Map<number, number>();
+  let lastTerminal = -1;
+  messages.forEach((message, index) => {
+    if (combatMessageEndedCombat(message)) lastTerminal = index;
+    if (combatMessageIsSummary(message))
+      summaryBound.set(index, lastTerminal === -1 ? index : lastTerminal);
+  });
+  let laterTerminal = false;
+  let summaryReach = -1;
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    if (laterTerminal || summaryReach > index) superseded.add(message);
+    if (combatMessageEndedCombat(message)) laterTerminal = true;
+    const bound = summaryBound.get(index);
+    if (bound !== undefined && bound > summaryReach) summaryReach = bound;
+  }
+  return superseded;
+}
+
 /**
  * What the chat divider compares: the round and the actor. A block with no actor (the NPC loop's
  * safety line) is not an actor's turn, so it never starts a divider.

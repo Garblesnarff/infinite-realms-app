@@ -53,6 +53,67 @@ describe('dmResponseSchema options contract', () => {
   test('accepts legacy local shells that omit options', () => {
     expect(parseDmResponse(response()).success).toBe(true);
   });
+
+  test('drops options the model repeated word for word (#864)', () => {
+    const parsed = parseDmResponse(
+      response({
+        options: [
+          'A. **Study the passage**, look for signs of movement.',
+          'B. **Call out**, see whether anyone answers.',
+          'C. **Press onward**, keep your hand near your weapon.',
+          'D. **Study the passage**, look for signs of movement.',
+          'E. **Call out**, see whether anyone answers.',
+          'F. **Press onward**, keep your hand near your weapon.',
+        ],
+      }),
+    );
+
+    expect(parsed).toEqual({
+      success: true,
+      data: expect.objectContaining({
+        options: [
+          'A. **Study the passage**, look for signs of movement.',
+          'B. **Call out**, see whether anyone answers.',
+          'C. **Press onward**, keep your hand near your weapon.',
+        ],
+      }),
+    });
+  });
+
+  test('dedupes options that differ only in marker, case, emphasis or punctuation (#864)', () => {
+    const parsed = parseDmResponse(
+      response({
+        options: [
+          'A. **Press the Professor further**, demand an answer.',
+          '2. press the professor further — demand an answer!',
+          '**C. Press the Professor further**, demand an answer.',
+          'B. **Retreat**, back away from the desk.',
+          'D.  **Retreat**,   back away from the desk',
+        ],
+      }),
+    );
+
+    expect(parsed).toEqual({
+      success: true,
+      data: expect.objectContaining({
+        options: [
+          'A. **Press the Professor further**, demand an answer.',
+          'B. **Retreat**, back away from the desk.',
+        ],
+      }),
+    });
+  });
+
+  test('keeps options that share a title but differ in the choice itself (#864)', () => {
+    const options = [
+      'A. **Attack**, strike the professor with your staff.',
+      'B. **Attack**, hurl the lantern at the professor.',
+    ];
+
+    const parsed = parseDmResponse(response({ options }));
+
+    expect(parsed).toEqual({ success: true, data: expect.objectContaining({ options }) });
+  });
 });
 
 describe('dmResponseSchema voice category contract', () => {

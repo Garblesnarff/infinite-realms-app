@@ -666,6 +666,38 @@ export function reviewNarrationSpeakerSplit(
   };
 }
 
+/**
+ * The comparison key for one DM option (#864): two options that differ only in
+ * their list marker, casing, markdown emphasis, whitespace or punctuation are
+ * the same choice offered twice.
+ */
+export function normalizeDmOptionText(option: string): string {
+  return option
+    .replace(/^\s*(?:\*\*)?(?:\d{1,3}|[A-Za-z])[.)](?:\*\*)?\s+/, '')
+    .toLowerCase()
+    .replace(/[*_`~]/g, '')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
+
+/**
+ * Drop options the model already offered earlier in the same list, keeping the
+ * first occurrence and the order (#864: an opening reply repeated its four
+ * options word for word as options 5–8, and every consumer renders the list
+ * verbatim).
+ */
+export function dedupeDmOptions(options: string[]): string[] {
+  const seen = new Set<string>();
+  const kept: string[] = [];
+  for (const option of options) {
+    const key = normalizeDmOptionText(option);
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    kept.push(option);
+  }
+  return kept;
+}
+
 export function parseDmResponse(
   value: unknown,
 ): { success: true; data: DMResponse } | { success: false; issues: string[] } {
@@ -676,6 +708,7 @@ export function parseDmResponse(
     return { success: false, issues: ['text must be a string'] };
   if (response.options !== undefined && !isStringArray(response.options))
     return { success: false, issues: ['options must be an array of strings'] };
+  if (Array.isArray(response.options)) response.options = dedupeDmOptions(response.options);
   if (!Array.isArray(response.map_actions) || !response.map_actions.every(isMapAction))
     return { success: false, issues: ['map_actions contains an invalid action'] };
   const handoutIssue = handoutActionsIssue(response.handout_actions);
