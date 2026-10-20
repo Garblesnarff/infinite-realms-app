@@ -8,6 +8,8 @@ import {
   getCharacterStatsForAI,
 } from '../roll-breakdown';
 
+import type { Character } from '@/types/character';
+
 describe('roll-breakdown', () => {
   describe('generateDiceFormula', () => {
     it('should generate formula with positive modifiers', () => {
@@ -306,5 +308,20 @@ describe('roll-breakdown', () => {
       const result = getCharacterStatsForAI(character);
       expect(result).toContain('Level 1 Unknown Unknown');
     });
+  });
+});
+
+describe('#759 background gaming set', () => {
+  it('uses the explicitly named ability and adds proficiency once', () => {
+    const character = {
+      level: 1,
+      abilityScores: { charisma: { score: 14, modifier: 2 } },
+      toolProficiencies: ['One type of gaming set'],
+      inventory: [{ itemId: 'deck-of-cards', quantity: 1, equipped: false }],
+    } as unknown as Character;
+    const roll = calculateRollWithBreakdown(character, 'check', 'charisma', 'Gaming Set (cards)');
+    expect(roll.totalModifier).toBe(4);
+    expect(roll.isProficient).toBe(true);
+    expect(roll.proficiencyBonus).toBe(2);
   });
 });

@@ -79,6 +79,8 @@ export const TOOL_ABILITIES: Record<string, AbilityName> = {
 export function getToolAbility(toolName: string): AbilityName | undefined {
   const key = canonicalProficiencyKey(toolName);
   if (!key) return undefined;
+  // Gaming checks default to recalling the rules; an explicitly requested ability wins.
+  if (key.startsWith('gamingset')) return 'intelligence';
   for (const [tool, ability] of Object.entries(TOOL_ABILITIES)) {
     if (canonicalProficiencyKey(tool) === key) return ability;
   }
@@ -140,4 +142,20 @@ export function isSaveProficient(character: Character, ability: AbilityName): bo
 
   // Fallback: check abilityScores savingThrow flag
   return character.abilityScores?.[ability]?.savingThrow || false;
+}
+
+export function isToolProficient(character: Character, toolName: string): boolean {
+  if (hasProficiency(character.toolProficiencies, toolName)) return true;
+  const key = canonicalProficiencyKey(toolName);
+  if (!key.startsWith('gamingset')) return false;
+  const kind = key.includes('cards') ? 'cards' : key.includes('dice') ? 'dice' : undefined;
+  if (!kind || !hasProficiency(character.toolProficiencies, 'One type of gaming set')) return false;
+  const ownedKinds = new Set<string>();
+  for (const item of character.inventory ?? []) {
+    if (item.quantity <= 0) continue;
+    const name = canonicalProficiencyKey(item.itemName ?? item.itemId);
+    if (['deckofcards', 'playingcards', 'gamingsetcards'].includes(name)) ownedKinds.add('cards');
+    if (['diceset', 'setofdice', 'gamingsetdice'].includes(name)) ownedKinds.add('dice');
+  }
+  return ownedKinds.size === 1 && ownedKinds.has(kind);
 }

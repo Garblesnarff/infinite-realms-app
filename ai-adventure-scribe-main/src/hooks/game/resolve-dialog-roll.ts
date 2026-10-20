@@ -8,11 +8,7 @@ import {
   type AbilityName,
   type RollCalculation,
 } from '@/utils/characterModifiers';
-import {
-  findDeclaredAbility,
-  findDeclaredSkill,
-  findDeclaredTool,
-} from '@/utils/roll-request/declared-roll';
+import { findDeclaredAbility, preferredDeclaredCheck } from '@/utils/roll-request/declared-roll';
 
 /** Shown instead of rolling a d20+0 when the character that owns the modifier is not loaded. */
 export const MODIFIER_UNKNOWN_LABEL = 'modifier unknown';
@@ -62,7 +58,7 @@ export function resolveDialogRollFormula(
   }
 
   try {
-    const { rollType, ability, skillName } = identifyRoll(request);
+    const { rollType, ability, skillName } = identifyRoll(request, character);
     // A save with no named ability is a flat d20 (a death save). Rolling it as
     // "modifier unknown" leaves the prompt with no roll and no cancel.
     if (rollType === 'save' && !ability) {
@@ -119,7 +115,10 @@ function explicitNonZeroModifier(formula: string): boolean {
   return Number.parseInt(match[1], 10) !== 0;
 }
 
-function identifyRoll(request: RollRequest): {
+function identifyRoll(
+  request: RollRequest,
+  character: Character,
+): {
   rollType: 'attack' | 'save' | 'check' | 'skill' | 'initiative';
   ability: AbilityName | undefined;
   skillName: string | undefined;
@@ -140,13 +139,12 @@ function identifyRoll(request: RollRequest): {
     return { rollType: 'save', ability: findDeclaredAbility(request), skillName: undefined };
   }
 
-  const skillName = findDeclaredSkill(request);
+  const { toolName, skillName } = preferredDeclaredCheck(request, character);
   if (skillName) {
     return { rollType: 'skill', ability: SKILL_ABILITIES[skillName], skillName };
   }
   // A tool check (e.g. "Thieves' Tools check") has no skill and often no named
   // ability; pass the tool so the calculator uses its ability and proficiency.
-  const toolName = findDeclaredTool(request);
   return {
     rollType: 'check',
     ability: findDeclaredAbility(request),

@@ -43,6 +43,7 @@ import {
   type CombatEntryContext,
 } from '../../services/combat-entry-pipeline.js';
 import { enforceCombatTransitionContract } from '../../services/combat-transition-enforcement.js';
+import { preserveDeclaredToolCheck } from '../../services/dm/declared-tool-check.js';
 import {
   refuseFeaturesCharacterLacks,
   type AllowedCasts,
@@ -949,9 +950,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         let layOnHandsDirective: string | null = null;
         if (dmReply && defenseSessionId && typeof playerInput === 'string') {
           try {
-            const { resolveCombatLayOnHands } = await import(
-              '../../services/dm/combat-lay-on-hands.js'
-            );
+            const { resolveCombatLayOnHands } =
+              await import('../../services/dm/combat-lay-on-hands.js');
             layOnHandsDirective = await resolveCombatLayOnHands({
               playerInput,
               sessionId: defenseSessionId,
@@ -993,14 +993,13 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             });
           }
         }
-        const llmPromptBase =
-          declaredAttack
-            ? appendDeclaredAttackDirective(prompt, declaredAttack.actorName, encounterDirective)
-            : declaredDefense
-              ? appendDeclaredDefenseDirective(prompt, declaredDefense)
-              : untargetedSpell
-                ? appendUntargetedSpellDirective(prompt, untargetedSpell.name)
-                : prompt;
+        const llmPromptBase = declaredAttack
+          ? appendDeclaredAttackDirective(prompt, declaredAttack.actorName, encounterDirective)
+          : declaredDefense
+            ? appendDeclaredDefenseDirective(prompt, declaredDefense)
+            : untargetedSpell
+              ? appendUntargetedSpellDirective(prompt, untargetedSpell.name)
+              : prompt;
         const llmPrompt = layOnHandsDirective
           ? `${llmPromptBase}\n\n${layOnHandsDirective}`
           : llmPromptBase;
@@ -1207,6 +1206,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
 
         // One parse, shared by the log line and the narration rewrite. (#2050 G)
         const envelope = parseLlmEnvelope(result.text);
+        preserveDeclaredToolCheck(envelope, playerInput ?? '');
         // #266: the engine's verdict for the turn is authoritative. If the narration
         // contradicts the latest roll outcome (a failed check narrated as a success, or an
         // engine hit narrated as a miss), only the contradicting sentences are replaced with
@@ -1270,9 +1270,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         const featuresToSpend = allowedFeatures as AllowedFeatures | null;
         if (featuresToSpend && castSessionId && combatEntry && !envelope?.combat_entry_pending) {
           try {
-            const { spendStoryFeatureUses } = await import(
-              '../../services/dm/story-feature-uses.js'
-            );
+            const { spendStoryFeatureUses } =
+              await import('../../services/dm/story-feature-uses.js');
             await spendStoryFeatureUses({
               userId,
               sessionId: castSessionId,

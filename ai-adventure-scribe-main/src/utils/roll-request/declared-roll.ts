@@ -1,7 +1,11 @@
+import type { Character } from '@/types/character';
+
 import {
   SKILL_ABILITIES,
   SKILL_ALIASES,
   TOOL_ABILITIES,
+  isSkillProficient,
+  isToolProficient,
   type AbilityName,
 } from '@/utils/character/basic-modifiers';
 import { canonicalProficiencyKey } from '@/utils/character/parse-proficiency-list';
@@ -46,7 +50,12 @@ export function findDeclaredAbility(request: DeclaredRollText): AbilityName | un
   return undefined;
 }
 
-const TOOL_TERMS = Object.keys(TOOL_ABILITIES).sort((a, b) => b.length - a.length);
+const TOOL_TERMS = [
+  ...Object.keys(TOOL_ABILITIES),
+  'gaming set (cards)',
+  'gaming set (dice)',
+  'gaming set',
+].sort((a, b) => b.length - a.length);
 
 /**
  * The tool a roll request names ("Thieves' Tools check"), or undefined.
@@ -55,5 +64,26 @@ const TOOL_TERMS = Object.keys(TOOL_ABILITIES).sort((a, b) => b.length - a.lengt
 export function findDeclaredTool(request: DeclaredRollText): string | undefined {
   const text = canonicalProficiencyKey(`${request.purpose || ''} ${request.formula || ''}`);
   if (!text) return undefined;
+  if (/gamingset(?:cards|playingcards)/.test(text)) return 'gaming set (cards)';
+  if (/gamingsetdice/.test(text)) return 'gaming set (dice)';
   return TOOL_TERMS.find((tool) => text.includes(canonicalProficiencyKey(tool)));
+}
+
+/** A tool mention must not discard an already-proficient skill. */
+export function preferredDeclaredCheck(
+  request: DeclaredRollText,
+  character: Character,
+): {
+  skillName: string | undefined;
+  toolName: string | undefined;
+} {
+  const skillName = findDeclaredSkill(request);
+  const toolName = findDeclaredTool(request);
+  if (
+    skillName &&
+    (isSkillProficient(character, skillName) || !toolName || !isToolProficient(character, toolName))
+  ) {
+    return { skillName, toolName: undefined };
+  }
+  return { skillName: undefined, toolName };
 }
