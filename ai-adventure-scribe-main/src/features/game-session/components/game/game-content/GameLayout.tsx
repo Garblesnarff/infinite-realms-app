@@ -43,6 +43,10 @@ interface GameLayoutProps {
   setShowTracker: (v: boolean) => void;
   isCombatDetected: boolean;
   isGeneratingGreeting: boolean;
+  /** #865: the greeting generation passed its stall deadline; the overlay offers a retry. */
+  greetingTimedOut?: boolean;
+  /** #865: re-request the opening scene from the stalled overlay. */
+  onRetryGreeting?: () => void;
   innerHandleAIResponse: (message: unknown) => Promise<void>;
   isDM: boolean;
   spellCastHandlerRef: SpellCastHandlerRef;
@@ -79,6 +83,8 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
     setShowTracker,
     isCombatDetected,
     isGeneratingGreeting,
+    greetingTimedOut = false,
+    onRetryGreeting,
     innerHandleAIResponse,
     isDM,
     spellCastHandlerRef,
@@ -228,6 +234,8 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
                 setShowTracker={setShowTracker}
                 isCombatDetected={isCombatDetected}
                 isGeneratingGreeting={isGeneratingGreeting}
+                greetingTimedOut={greetingTimedOut}
+                onRetryGreeting={onRetryGreeting}
                 innerHandleAIResponse={innerHandleAIResponse}
                 spellCastHandlerRef={spellCastHandlerRef}
                 lastSafetyCommand={lastSafetyCommand}

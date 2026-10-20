@@ -207,6 +207,10 @@ interface GameMainContentProps {
   setShowTracker: (v: boolean) => void;
   isCombatDetected: boolean;
   isGeneratingGreeting: boolean;
+  /** #865: the greeting generation passed its stall deadline; the overlay offers a retry. */
+  greetingTimedOut?: boolean;
+  /** #865: re-request the opening scene from the stalled overlay. */
+  onRetryGreeting?: () => void;
   innerHandleAIResponse: (message: unknown) => Promise<void>;
   spellCastHandlerRef: SpellCastHandlerRef;
   lastSafetyCommand?: {
@@ -250,6 +254,8 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     setShowTracker,
     isCombatDetected,
     isGeneratingGreeting,
+    greetingTimedOut = false,
+    onRetryGreeting,
     innerHandleAIResponse,
     spellCastHandlerRef,
     lastSafetyCommand,
@@ -521,12 +527,26 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                               introduction based on your character and campaign.
                             </p>
                           </div>
-                          <div className="flex items-center justify-center gap-1">
-                            <div className="w-2 h-2 bg-infinite-gold rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                            <div className="w-2 h-2 bg-infinite-teal rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                            <div className="w-2 h-2 bg-infinite-gold rounded-full animate-bounce"></div>
-                          </div>
-                          <div className="w-8 h-8 border-2 border-infinite-gold/20 border-t-infinite-gold rounded-full animate-spin"></div>
+                          {greetingTimedOut ? (
+                            <div className="space-y-3" role="status">
+                              <p className="text-sm text-muted-foreground leading-relaxed">
+                                This is taking longer than usual — the opening scene may have
+                                stalled.
+                              </p>
+                              {onRetryGreeting && (
+                                <Button onClick={onRetryGreeting}>Try again</Button>
+                              )}
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex items-center justify-center gap-1">
+                                <div className="w-2 h-2 bg-infinite-gold rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                                <div className="w-2 h-2 bg-infinite-teal rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                                <div className="w-2 h-2 bg-infinite-gold rounded-full animate-bounce"></div>
+                              </div>
+                              <div className="w-8 h-8 border-2 border-infinite-gold/20 border-t-infinite-gold rounded-full animate-spin"></div>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>

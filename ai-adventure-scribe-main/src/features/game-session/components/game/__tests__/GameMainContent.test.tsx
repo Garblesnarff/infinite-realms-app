@@ -280,6 +280,39 @@ describe('GameMainContent overhaul behavior contract', () => {
     expect(screen.getByTestId('message-list')).toHaveAttribute('data-suppress-empty', 'true');
   });
 
+  // #865: a greeting generation that outlives its stall deadline swaps the
+  // spinner for a retry control instead of spinning forever.
+  it('offers a retry control on the opening-scene overlay once the wait has stalled', () => {
+    const onRetryGreeting = vi.fn();
+    render(
+      <GameMainContent
+        {...baseProps}
+        isGeneratingGreeting
+        greetingTimedOut
+        onRetryGreeting={onRetryGreeting}
+      />,
+    );
+
+    expect(screen.getByText('Crafting Opening Scene')).toBeInTheDocument();
+    expect(screen.getByText(/taking longer than usual/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(onRetryGreeting).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows no retry control while the opening scene is within its deadline', () => {
+    render(<GameMainContent {...baseProps} isGeneratingGreeting />);
+
+    expect(screen.getByText('Crafting Opening Scene')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+  });
+
+  it('renders no dead retry button when no retry handler is wired', () => {
+    render(<GameMainContent {...baseProps} isGeneratingGreeting greetingTimedOut />);
+
+    expect(screen.getByText(/taking longer than usual/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+  });
+
   // #2418: the pill read the message queue, which only covers the database write of the player's
   // message. It must stay up for the whole wait for the DM, whatever the queue says.
   it('keeps the "Dungeon Master is thinking" pill up for the whole DM call, not the queue write', async () => {
