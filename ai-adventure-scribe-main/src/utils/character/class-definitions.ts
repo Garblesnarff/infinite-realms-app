@@ -60,6 +60,17 @@ export const CLASS_FEATURES_MAP: Record<string, (level: number) => ClassFeature[
         type: 'passive',
         usesPerRest: 'none',
       });
+
+      features.push({
+        name: 'thieves_cant',
+        displayName: "Thieves' Cant",
+        description:
+          "You know thieves' cant, a secret mix of dialect, jargon, and code that lets you hide messages in seemingly normal conversation.",
+        className: 'rogue',
+        level: 1,
+        type: 'passive',
+        usesPerRest: 'none',
+      });
     }
 
     if (level >= 5) {
@@ -119,6 +130,17 @@ export const CLASS_FEATURES_MAP: Record<string, (level: number) => ClassFeature[
 
     if (level >= 1) {
       features.push({
+        name: 'divine_sense',
+        displayName: 'Divine Sense',
+        description:
+          'As an action, you can open your awareness to detect strong evil and powerful good until the end of your next turn. You can use this feature a number of times equal to 1 + your Charisma modifier, regaining all uses on a long rest.',
+        className: 'paladin',
+        level: 1,
+        type: 'active',
+        usesPerRest: 'long',
+      });
+
+      features.push({
         name: 'lay_on_hands',
         displayName: 'Lay on Hands',
         description:
@@ -168,13 +190,14 @@ export const CLASS_FEATURES_MAP: Record<string, (level: number) => ClassFeature[
 
     if (level >= 1) {
       features.push({
-        name: 'ki',
-        displayName: 'Ki',
-        description: 'Your training allows you to harness the mystic energy of ki.',
+        name: 'martial_arts',
+        displayName: 'Martial Arts',
+        description:
+          'Your practice of martial arts gives you mastery of combat styles that use unarmed strikes and monk weapons. You can use Dexterity instead of Strength for the attack and damage rolls of your unarmed strikes and monk weapons, and you can roll a martial arts die in place of the normal damage.',
         className: 'monk',
-        level: 2,
+        level: 1,
         type: 'passive',
-        usesPerRest: 'short',
+        usesPerRest: 'none',
       });
 
       features.push({
@@ -186,6 +209,21 @@ export const CLASS_FEATURES_MAP: Record<string, (level: number) => ClassFeature[
         level: 1,
         type: 'passive',
         usesPerRest: 'none',
+      });
+    }
+
+    // Ki starts at 2nd level in the 2014 PHB — it must not appear on a
+    // level-1 monk (its resource pool is likewise gated in
+    // getInitialCharacterResources).
+    if (level >= 2) {
+      features.push({
+        name: 'ki',
+        displayName: 'Ki',
+        description: 'Your training allows you to harness the mystic energy of ki.',
+        className: 'monk',
+        level: 2,
+        type: 'passive',
+        usesPerRest: 'short',
       });
     }
 
@@ -248,6 +286,19 @@ export const CLASS_FEATURES_MAP: Record<string, (level: number) => ClassFeature[
 
   druid: (level: number) => {
     const features: ClassFeature[] = [];
+
+    if (level >= 1) {
+      features.push({
+        name: 'druidic',
+        displayName: 'Druidic',
+        description:
+          'You know Druidic, the secret language of druids. You can speak the language and use it to leave hidden messages.',
+        className: 'druid',
+        level: 1,
+        type: 'passive',
+        usesPerRest: 'none',
+      });
+    }
 
     if (level >= 2) {
       features.push({

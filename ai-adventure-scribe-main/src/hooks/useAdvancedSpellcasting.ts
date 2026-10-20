@@ -18,6 +18,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { spellApi } from '@/services/spellApi';
+import { getAlwaysPreparedSpells } from '@/utils/character/subclass-grants';
 import { applyRacialBonusesToAbilityScores } from '@/utils/racialAbilityBonuses';
 
 export interface UseAdvancedSpellcastingReturn {
@@ -37,6 +38,8 @@ export interface UseAdvancedSpellcastingReturn {
   usesPactMagic: boolean;
   usesMetamagic: boolean;
   maxPreparedSpells: number;
+  /** Subclass-granted spells that are always prepared (cleric domain spells); never counted against maxPreparedSpells. */
+  alwaysPreparedSpells: string[];
   availableSpells: Spell[];
   availableRitualSpells: Spell[];
   pactProgression: ReturnType<typeof getPactMagicProgression> | null;
@@ -112,6 +115,35 @@ export function useAdvancedSpellcasting(): UseAdvancedSpellcastingReturn {
     [allSpells, maxPreparableLevel],
   );
 
+  // Subclass-granted always-prepared spells (cleric domain spells, e.g. a
+  // Life Domain cleric's Bless and Cure Wounds). They ride along with the
+  // player's own picks at apply time and never consume a preparation slot.
+  // Deps are the memo's actual inputs, not the whole character object: the
+  // character's identity changes on this hook's own apply dispatch, and a
+  // fresh array identity here would re-fire the auto-apply effect (#320).
+  const classDataForGrants = character?.class;
+  const classFeaturesForGrants = character?.classFeatures;
+  const alwaysPreparedSpells = useMemo(
+    () =>
+      getAlwaysPreparedSpells({
+        class: classDataForGrants,
+        classFeatures: classFeaturesForGrants,
+        level,
+      }),
+    [classDataForGrants, classFeaturesForGrants, level],
+  );
+  const alwaysPreparedIds = useMemo(
+    () =>
+      new Set(
+        allSpells.filter((spell) => alwaysPreparedSpells.includes(spell.name)).map((s) => s.id),
+      ),
+    [allSpells, alwaysPreparedSpells],
+  );
+  const countChosenPreparations = useCallback(
+    (ids: string[]): number => ids.filter((id) => !alwaysPreparedIds.has(id)).length,
+    [alwaysPreparedIds],
+  );
+
   // Pact Magic progression
   const pactProgression = usesPactMagic ? getPactMagicProgression(level) : null;
   const maxPactSpells = pactProgression?.spellsKnown || 0;
@@ -120,8 +152,10 @@ export function useAdvancedSpellcasting(): UseAdvancedSpellcastingReturn {
   const sorceryPoints = usesMetamagic ? getSorceryPoints(level) : 0;
   const maxMetamagicOptions = usesMetamagic ? getMetamagicOptionsKnown(level) : 0;
 
-  // Check if all required selections are complete
-  const hasRequiredPreparations = !canPrepareSpells || preparedSpells.length === maxPreparedSpells;
+  // Check if all required selections are complete. Always-prepared domain
+  // spells the player also picked by hand do not count toward the cap.
+  const hasRequiredPreparations =
+    !canPrepareSpells || countChosenPreparations(preparedSpells) === maxPreparedSpells;
   const hasRequiredMetamagic = !usesMetamagic || selectedMetamagic.length === maxMetamagicOptions;
   const hasRequiredPactSpells = !usesPactMagic || pactMagicSpells.length === maxPactSpells;
   const allSelectionsComplete =
@@ -139,14 +173,20 @@ export function useAdvancedSpellcasting(): UseAdvancedSpellcastingReturn {
       // kebab-case ids (for the save path which needs UUIDs).
       // Fail loudly if a name is missing — silent fallback hides bugs.
       const namesById = new Map(availableSpells.map((s) => [s.id, s.name]));
-      updates.preparedSpells = preparedSpells.map((id) => {
+      const chosenNames = preparedSpells.map((id) => {
         const name = namesById.get(id);
         if (!name) {
           throw new Error(`#2710: no spell name for prepared spell id: ${id}`);
         }
         return name;
       });
-      updates.preparedSpellIds = [...preparedSpells];
+      // Always-prepared subclass spells (cleric domain spells) join the
+      // prepared list on top of the player's picks; a domain spell the
+      // player also picked by hand is not duplicated.
+      const grantedNames = alwaysPreparedSpells.filter((name) => !chosenNames.includes(name));
+      const grantedIds = [...alwaysPreparedIds].filter((id) => !preparedSpells.includes(id));
+      updates.preparedSpells = [...chosenNames, ...grantedNames];
+      updates.preparedSpellIds = [...preparedSpells, ...grantedIds];
     }
 
     if (usesMetamagic) {
@@ -186,6 +226,8 @@ export function useAdvancedSpellcasting(): UseAdvancedSpellcastingReturn {
     canPrepareSpells,
     preparedSpells,
     availableSpells,
+    alwaysPreparedSpells,
+    alwaysPreparedIds,
     usesMetamagic,
     selectedMetamagic,
     sorceryPoints,
@@ -265,7 +307,11 @@ export function useAdvancedSpellcasting(): UseAdvancedSpellcastingReturn {
     (spellId: string, checked: boolean): void => {
       if (checked) {
         setPreparedSpells((prev) => {
-          if (prev.length < maxPreparedSpells && !prev.includes(spellId)) {
+          if (prev.includes(spellId)) return prev;
+          // Always-prepared domain spells are free: they can be picked (or
+          // left to the automatic grant) without consuming a prepared slot.
+          if (alwaysPreparedIds.has(spellId)) return [...prev, spellId];
+          if (countChosenPreparations(prev) < maxPreparedSpells) {
             return [...prev, spellId];
           }
           return prev;
@@ -274,7 +320,7 @@ export function useAdvancedSpellcasting(): UseAdvancedSpellcastingReturn {
         setPreparedSpells((prev) => prev.filter((s) => s !== spellId));
       }
     },
-    [maxPreparedSpells],
+    [maxPreparedSpells, alwaysPreparedIds, countChosenPreparations],
   );
 
   /**
@@ -336,6 +382,7 @@ export function useAdvancedSpellcasting(): UseAdvancedSpellcastingReturn {
       usesPactMagic,
       usesMetamagic,
       maxPreparedSpells,
+      alwaysPreparedSpells,
       availableSpells,
       availableRitualSpells,
       pactProgression,
@@ -365,6 +412,7 @@ export function useAdvancedSpellcasting(): UseAdvancedSpellcastingReturn {
       usesPactMagic,
       usesMetamagic,
       maxPreparedSpells,
+      alwaysPreparedSpells,
       availableSpells,
       availableRitualSpells,
       pactProgression,

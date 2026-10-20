@@ -26,6 +26,8 @@ export interface CharacterRace {
   speed: number;
   traits: string[];
   languages: string[];
+  /** Skill proficiencies the race itself grants (e.g. a half-orc's Menacing). */
+  skillProficiencies?: string[];
   subraces?: Subrace[];
   backgroundImage?: string;
   heightRange?: [number, number];
@@ -100,6 +102,14 @@ export interface CharacterSubclass {
   name: string;
   description: string;
   features: SubclassFeature[];
+  /** Armor proficiencies the subclass grants on top of the class list (e.g. Life Domain heavy armor). */
+  armorProficiencies?: string[];
+  /**
+   * Spells the subclass always has prepared, keyed by the character level at
+   * which they are gained (cleric domain spells: the key is the cleric level
+   * whose spell slots they use). They never count against the prepared cap.
+   */
+  domainSpells?: Record<number, string[]>;
 }
 
 export interface CharacterClass {
@@ -126,6 +136,8 @@ export interface CharacterClass {
   armorProficiencies: string[];
   weaponProficiencies: string[];
   toolProficiencies?: string[];
+  /** Languages the class itself grants (e.g. Druidic for druids). */
+  languages?: string[];
 }
 
 export interface CharacterBackground {

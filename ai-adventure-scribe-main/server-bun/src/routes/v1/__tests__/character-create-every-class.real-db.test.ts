@@ -533,4 +533,81 @@ describeWithDb('character create every class (#388)', () => {
     const fetched = JSON.parse(await getRes.text()) as { gold_pieces?: number };
     expect(fetched.gold_pieces).toBe(14);
   });
+
+  // #899: the class_features body below is the ClassFeatureSelection
+  // producer's output shape (Record<featureId, {name, description, choice}>)
+  // with the real Sorcerous Origin option strings from src/data/classes/
+  // sorcerer.ts. Draconic Resilience: +1 HP and unarmoured AC 13 + DEX.
+  const sorcererOriginBody = (originChoice: string, name: string) => {
+    const body = wizardBody({ name: 'Sorcerer', hitDie: '1d6', baseHp: 10 }) as Record<
+      string,
+      unknown
+    >;
+    return {
+      ...body,
+      name,
+      class_features: {
+        'sorcerous-origin': {
+          name: 'Sorcerous Origin',
+          description:
+            'Choose a sorcerous origin, which describes the source of your innate magical power.',
+          choice: originChoice,
+        },
+        spellcasting: {
+          name: 'Spellcasting',
+          description:
+            'An event in your past, or in the life of a parent or ancestor, left an indelible mark on you, infusing you with arcane magic.',
+        },
+      },
+    };
+  };
+
+  it('applies Draconic Resilience to a Draconic Bloodline sorcerer on create (#899)', async () => {
+    // Kit is weapons only, no HP/AC sent: HP = d6 + 3 (CON) + 1 (Dwarven
+    // Toughness) + 1 (Draconic Resilience) = 11; AC = 13 + DEX (+2) = 15.
+    const res = await request(
+      '/v1/characters',
+      'POST',
+      sorcererOriginBody(
+        'Draconic Bloodline: Your innate magic comes from draconic magic that was mingled with your blood',
+        'L1 Draconic Sorcerer 899',
+      ),
+    );
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    expect(stats.maxHitPoints).toBe(11);
+    expect(stats.currentHitPoints).toBe(11);
+    expect(stats.armorClass).toBe(15);
+  });
+
+  it('gives a Wild Magic sorcerer no Draconic Resilience on create (#899)', async () => {
+    // Same body, other origin: HP = 6 + 3 + 1 = 10; AC = 10 + DEX (+2) = 12.
+    const res = await request(
+      '/v1/characters',
+      'POST',
+      sorcererOriginBody(
+        'Wild Magic: Your innate magic comes from the wild forces of chaos',
+        'L1 Wild Magic Sorcerer 899',
+      ),
+    );
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    expect(stats.maxHitPoints).toBe(10);
+    expect(stats.currentHitPoints).toBe(10);
+    expect(stats.armorClass).toBe(12);
+  });
 });

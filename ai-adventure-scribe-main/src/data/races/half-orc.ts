@@ -15,10 +15,12 @@ export const halfOrc: CharacterRace = {
   name: 'Half-Orc',
   description:
     'Half-orcs most often live among orcs. Of the other races, humans are most likely to accept half-orcs.',
-  traits: ['Darkvision', 'Relentless Endurance', 'Savage Attacks'],
+  traits: ['Darkvision', 'Menacing', 'Relentless Endurance', 'Savage Attacks'],
   abilityScoreIncrease: { strength: 2, constitution: 1 },
   speed: 30,
   languages: ['Common', 'Orc'],
+  // Menacing: a half-orc is proficient in the Intimidation skill.
+  skillProficiencies: ['Intimidation'],
   heightRange,
   weightRange,
   backgroundImage: '/images/races/base/halforc-class-card-background.png',

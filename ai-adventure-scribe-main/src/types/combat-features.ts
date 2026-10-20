@@ -51,7 +51,11 @@ export type ClassFeatureName =
   | 'uncanny_dodge'
   | 'second_wind'
   | 'lay_on_hands'
-  | 'ki';
+  | 'ki'
+  | 'divine_sense'
+  | 'martial_arts'
+  | 'thieves_cant'
+  | 'druidic';
 
 export interface ClassFeature {
   name: ClassFeatureName;

@@ -27,6 +27,7 @@ import {
 } from '../../../../db/schema/index';
 import { abilityModifier } from '../../../../shared/ability-modifier';
 import { computeArmorClass, type ArmorClassEquipmentItem } from '../../../../shared/armor-class';
+import { isDraconicBloodline } from '../../../../shared/class-feature-choices';
 import { logger } from '../../lib/logger.js';
 
 /** `inventory_items` has no shield type; the legacy table does, so both are accepted. */
@@ -99,7 +100,7 @@ export async function recomputeStoredArmorClass(
     readArmorClassEquipment(characterId),
     db.query.characters.findFirst({
       where: eq(characters.id, characterId),
-      columns: { fightingStyles: true },
+      columns: { fightingStyles: true, class: true, classFeatures: true },
     }),
   ]);
 
@@ -119,6 +120,11 @@ export async function recomputeStoredArmorClass(
 
   const armorClass = computeArmorClass(equipment, abilityModifier(stats.dexterity ?? 10), {
     fightingStyles: character?.fightingStyles,
+    // A Draconic Bloodline sorcerer who takes their armour off falls back to
+    // the Draconic Resilience base of 13, not 10.
+    draconicResilience:
+      (character?.class ?? '').trim().toLowerCase() === 'sorcerer' &&
+      isDraconicBloodline(character?.classFeatures),
     warn: (msg, context) => logger.warn({ msg, characterId, ...context }),
   });
 

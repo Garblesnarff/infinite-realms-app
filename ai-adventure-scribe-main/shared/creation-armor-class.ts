@@ -18,7 +18,9 @@ function equipmentItemName(item: Record<string, unknown>): string {
 /**
  * Armour class, server-side (#620). Unarmoured Defence (Barbarian +CON, Monk
  * +WIS) applies only when no armour is worn; a Monk also loses it while
- * using a shield. Everything else defers to the shared equipment rule.
+ * using a shield. A Draconic Bloodline sorcerer's Draconic Resilience
+ * (unarmoured base 13) is part of the shared equipment rule. Everything else
+ * defers to the shared equipment rule.
  */
 export function computeServerArmorClass(
   className: string | null | undefined,
@@ -29,11 +31,15 @@ export function computeServerArmorClass(
   },
   equipment: ArmorClassEquipmentItem[],
   fightingStyles?: unknown,
+  draconicBloodline = false,
 ): number {
+  const normalized = (className ?? '').trim().toLowerCase();
   const breakdown = describeArmorClass(equipment, abilityModifier(scores.dexterity ?? 10), {
     fightingStyles,
+    // Draconic Resilience belongs to sorcerers; the choice string alone
+    // must not raise another class's unarmoured base.
+    draconicResilience: draconicBloodline && normalized === 'sorcerer',
   });
-  const normalized = (className ?? '').trim().toLowerCase();
   const hasUnarmoredDefense =
     !breakdown.armor && (normalized === 'barbarian' || normalized === 'monk');
   if (!hasUnarmoredDefense) return breakdown.armorClass;

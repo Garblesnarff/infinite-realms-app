@@ -61,6 +61,29 @@ describe('computeLevel1MaxHitPoints (#620)', () => {
   });
 });
 
+describe('Draconic Resilience (#899)', () => {
+  it('adds +1 HP for a Draconic Bloodline sorcerer', () => {
+    // Hark D20-011: a CON 14 sorcerer showed HP 8; Draconic Resilience
+    // makes it d6 + 2 (CON) + 1 = 9.
+    expect(computeLevel1MaxHitPoints('Sorcerer', 14, null, { draconicBloodline: true })).toBe(9);
+    expect(computeLevel1MaxHitPoints('Sorcerer', 14, null)).toBe(8);
+    expect(computeLevel1MaxHitPoints('Sorcerer', 14, null, { draconicBloodline: false })).toBe(
+      8,
+    );
+  });
+
+  it('stacks with Dwarven Toughness', () => {
+    expect(
+      computeLevel1MaxHitPoints('Sorcerer', 16, 'Hill Dwarf', { draconicBloodline: true }),
+    ).toBe(11);
+  });
+
+  it('never applies to another class, even with the flag set', () => {
+    expect(computeLevel1MaxHitPoints('Wizard', 14, null, { draconicBloodline: true })).toBe(8);
+    expect(computeLevel1MaxHitPoints('Fighter', 14, null, { draconicBloodline: true })).toBe(12);
+  });
+});
+
 describe('dwarvenToughnessBonus (#620)', () => {
   it('grants +1 HP for a Hill Dwarf, case-insensitively', () => {
     expect(dwarvenToughnessBonus('Hill Dwarf')).toBe(1);
