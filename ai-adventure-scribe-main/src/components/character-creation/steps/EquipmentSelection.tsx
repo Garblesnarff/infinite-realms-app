@@ -70,11 +70,13 @@ const EquipmentSelection: React.FC = () => {
 
     // #2710: if the gold card is chosen without rolling, use the average
     // so Continue doesn't leave 0 gold.
+    // #901: gold_pieces is an integer column, so the grant must be whole —
+    // the monk average is 12.5 (5d4 x 1) and the fraction 500'd the create.
     if (isGold && !hasRolledGold && goldData) {
       dispatch({
         type: 'UPDATE_CHARACTER',
         payload: {
-          currency: { cp: 0, sp: 0, ep: 0, gp: goldData.average, pp: 0 },
+          currency: { cp: 0, sp: 0, ep: 0, gp: Math.floor(goldData.average), pp: 0 },
         },
       });
     }

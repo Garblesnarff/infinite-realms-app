@@ -84,6 +84,25 @@ describe('saveCharacterAndNavigate (#208 clear-on-complete)', () => {
     expect(onSaved).not.toHaveBeenCalled();
     expect(readWizardDraft(DRAFT_KEY)).not.toBeNull();
   });
+
+  it('leaves the draft in place when the save throws (a 500, #901)', async () => {
+    // The #901 failure shape: the create POST 500s and the save rejects.
+    // The seeded draft must survive in storage — a failed save never
+    // discards the player's character.
+    seedDraft();
+    const deps = makeDeps({
+      onSaved: () => clearWizardDraft(DRAFT_KEY),
+      saveCharacter: vi.fn(async () => {
+        throw new Error('Internal Server Error (500)');
+      }),
+    });
+    await saveCharacterAndNavigate(deps);
+
+    expect(deps.navigate).not.toHaveBeenCalled();
+    expect(readWizardDraft(DRAFT_KEY)).not.toBeNull();
+    expect(window.localStorage.getItem(DRAFT_KEY)).not.toBeNull();
+  });
+
   it('calls onSaved and navigates when the save succeeds with an id', async () => {
     const deps = makeDeps();
     await saveCharacterAndNavigate(deps);
