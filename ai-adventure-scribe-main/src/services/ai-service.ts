@@ -215,10 +215,20 @@ export class AIService {
       let voiceContext: SessionVoiceContext | null = null;
       let isFirstMessage = false;
       try {
+        // #874: a resolution-only turn's `message` is the machine-built combat
+        // resolution payload (a JSON of engine results from combat-resolution-step),
+        // not something the player typed. It is never used as player input below:
+        // not as the memory-recall query (the recall route caps `query` at 8000
+        // chars and 422'd on it) and not as the generate body's `player_input`
+        // (capped at 20000 chars; a death-save turn's payload — the save plus every
+        // creature the server drained before the player's next turn, carried more
+        // than once — passes both caps in any real fight, and the whole turn died
+        // as "I encountered an issue processing your message").
+        const resolutionOnly = params.context?.gameState?.resolutionOnly === true;
         // ⚡ Bolt: Use provided relevant memories if available, otherwise fetch them.
         // This allows for parallelization in the caller (e.g., use-ai-response.ts).
         let relevantMemories: Memory[] = params.relevantMemories || [];
-        if (!params.relevantMemories && params.context.sessionId) {
+        if (!params.relevantMemories && params.context.sessionId && !resolutionOnly) {
           try {
             relevantMemories = await MemoryManager.getRelevantMemories(
               params.context.sessionId,
@@ -357,7 +367,6 @@ export class AIService {
         });
         const playerInput =
           params.message || 'Begin the adventure. Generate the opening scene for this campaign.';
-        const resolutionOnly = params.context.gameState?.resolutionOnly === true;
         // #2341: the player named an attack, was asked, and chose not to strike.
         const combatEntryDeclined =
           typeof params.context.gameState?.combatEntryDeclined === 'string'
@@ -763,7 +772,12 @@ export class AIService {
           // #2050 C: always send the session, not only via combatEntry (which is
           // absent once combat is active -- the very turns being diagnosed).
           sessionId: params.context?.sessionId,
-          player_input: params.message,
+          // #874: `player_input` is the player's raw turn input (the route caps
+          // it at 20000 chars). A resolution-only turn has none — its payload
+          // already rides inside the prompt's <player_input> block, and the
+          // route's extract-from-prompt fallback feeds the downstream consumers
+          // the identical string.
+          ...(resolutionOnly ? {} : { player_input: params.message }),
           temperature: 0.9,
           maxTokens: 8192,
           // #782 item 3: the route builds the DM reply schema server-side; the
