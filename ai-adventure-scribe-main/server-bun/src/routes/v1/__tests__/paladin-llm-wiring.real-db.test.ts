@@ -1,5 +1,17 @@
 /**
  * #712: llm.ts wiring for Lay on Hands.
+ *
+ * The module mocks below (auth, logger, admin, rate-limit, ai-usage,
+ * llm-provider, session-message) are file-scope by necessity: the route
+ * resolves its collaborators at module load, so the stubs must be
+ * registered before the pipeline imports it. They cannot leak into other
+ * suites — the server-real-db runner (scripts/ci/run-real-db-suites.mjs)
+ * spawns one bun process per test file. The other real-db files that mount
+ * the same llm pipeline and import these collaborators for real —
+ * sheet-feature-rest.real-db.test.ts, dm-place-without-id.real-db.test.ts,
+ * playthrough-scope.real-db.test.ts, and
+ * services/__tests__/dm-reply-reconcile.real-db.test.ts — pass alongside
+ * this file in the same CI run (39390253942, server-real-db job).
  */
 import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
 import { and, eq } from 'drizzle-orm';
@@ -268,11 +280,7 @@ describeWithDb('paladin Lay on Hands llm.ts wiring (#712)', () => {
     // Self-contained: a fresh paladin and session owned by the current auth
     // user, so there is no userId swap and no shared-encounter state. A fresh
     // session has no encounter, which is what an ordinary story turn looks
-    // like — the combat Lay on Hands path cannot steal the spend. (Round 5:
-    // the first version of this test reused the block's shared fixtures and
-    // CI's server-real-db job died in the shared process with a
-    // dialogue_history lock timeout before this file's invocation ran; the
-    // self-contained rewrite removes the test as a suspect.)
+    // like — the combat Lay on Hands path cannot steal the spend.
     const owner = userId;
     const [{ id: routeCampaignId }] = await db
       .insert(campaigns)

@@ -60,7 +60,6 @@ if (!hasRealDb) {
   );
 }
 
-
 describeWithDb('paladin Lay on Hands pool (#712)', () => {
   // Fresh client per block: earlier blocks close the shared one in afterAll.
   let db: ReturnType<typeof realDb>;
@@ -438,4 +437,46 @@ describeWithDb('paladin Lay on Hands pool (#712)', () => {
     expect((await logCount()) - logsBefore).toBe(1);
   });
 
+  it('five concurrent 3-HP draws on a pool of 5 land exactly one — the pool ends at 2 (#712)', async () => {
+    // Deterministic regardless of test order: full pool, paladin missing 5 HP.
+    // A named amount is claimed whole with a conditional UPDATE before it
+    // heals, so exactly one of the five claims can land against a pool of 5;
+    // the four losers refuse instead of writing the same remainder.
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: 5 })
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, layOnHandsId),
+        ),
+      );
+    await db
+      .update(characterStats)
+      .set({ currentHitPoints: 7 })
+      .where(eq(characterStats.characterId, paladinId));
+
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        resolveLayOnHands({
+          characterId: paladinId,
+          userId: paladinUserId,
+          targetCharacterId: paladinId,
+          amount: 3,
+          sessionId,
+          context: 'concurrency-check',
+        }),
+      ),
+    );
+
+    expect(results.filter((result) => result.ok).length).toBe(1);
+    expect(await poolRemaining(layOnHandsId)).toBe(2);
+    // The one heal landed on the sheet: 7 + 3 = 10.
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, paladinId))
+      .limit(1);
+    expect(stats.currentHitPoints).toBe(10);
+  });
 });

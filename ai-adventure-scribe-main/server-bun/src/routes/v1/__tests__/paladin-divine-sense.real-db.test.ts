@@ -54,7 +54,6 @@ if (!hasRealDb) {
   );
 }
 
-
 describeWithDb('paladin Divine Sense tracking (#712)', () => {
   // Fresh client per block: earlier blocks close the shared one in afterAll.
   let db: ReturnType<typeof realDb>;
@@ -198,5 +197,4 @@ describeWithDb('paladin Divine Sense tracking (#712)', () => {
     expect(third.success).toBe(true);
     expect(third.usesRemaining).toBe(0);
   });
-
 });
