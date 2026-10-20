@@ -13,6 +13,7 @@ import { act, render, screen } from '@testing-library/react';
 import React, { createRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { DM_OPTIONS_RELOAD } from '../../../../../../../shared/test-fixtures/dm-options-reload';
 import { MessageListContainer } from '../MessageListContainer';
 
 import type { ChatMessage } from '@/types/game';
@@ -185,6 +186,31 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+it('reloads separate saved choices, with only the latest reply clickable (#868)', async () => {
+  const row = DM_OPTIONS_RELOAD;
+  const reloaded: ChatMessage = {
+    id: row.id,
+    text: row.message,
+    sender: row.speaker_type,
+    timestamp: row.timestamp,
+    context: row.context,
+  };
+  const { unmount } = render(
+    list([
+      dmReply('older', 'The door opens.', ['Wait at the door', 'Look around', 'Call out']),
+      player('p', 'Enter.'),
+      reloaded,
+    ]),
+  );
+  await settle();
+  expect(screen.getByRole('button', { name: /Ask the Professor/i })).toBeEnabled();
+  expect(screen.getByRole('button', { name: /Wait at the door/i })).toBeDisabled();
+  unmount();
+  render(list([reloaded]));
+  await settle();
+  expect(screen.getByRole('button', { name: /Ask the Professor/i })).toBeEnabled();
 });
 
 describe('past suggestion groups stay as the DM offered them when combat begins (#2641)', () => {

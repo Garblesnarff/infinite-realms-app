@@ -546,6 +546,11 @@ describe('useAIResponse: sheet-only option filter reads the owned sheet (#400)',
     expect(response.text).toContain('Longsword');
     expect(response.text).toContain('Talk');
     expect(response.text).not.toContain('Fireball');
+    expect(response.context?.actionOptions).toEqual([
+      'A. **Fire Bolt**, hurl a mote of flame.',
+      'C. **Attack with Longsword**, swing at the goblin.',
+      'D. **Talk**, try to parley.',
+    ]);
   });
 
   it('does not filter when the owned sheet is unavailable', async () => {

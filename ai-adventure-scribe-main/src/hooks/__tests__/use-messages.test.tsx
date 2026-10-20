@@ -4,6 +4,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { DM_OPTIONS_RELOAD } from '../../../shared/test-fixtures/dm-options-reload';
 import { useMessages } from '../use-messages';
 
 import { userDataApi } from '@/services/user-data-api';
@@ -53,8 +54,37 @@ describe('useMessages', () => {
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
 
+  it('hydrates saved choices after a fresh mount, without needing inline options (#868)', async () => {
+    vi.mocked(userDataApi.listSessionMessages).mockResolvedValue({
+      messages: [DM_OPTIONS_RELOAD],
+      total: 1,
+      hasMore: false,
+    });
+    const first = renderHook(() => useMessages(sessionId), { wrapper });
+    await waitFor(() =>
+      expect(first.result.current.data[0]?.context?.actionOptions).toEqual(
+        DM_OPTIONS_RELOAD.context.actionOptions,
+      ),
+    );
+    first.unmount();
+    queryClient.clear();
+    const reloaded = renderHook(() => useMessages(sessionId), { wrapper });
+    await waitFor(() =>
+      expect(reloaded.result.current.data[0]?.text).toBe(DM_OPTIONS_RELOAD.message),
+    );
+    expect(reloaded.result.current.data[0]?.context?.actionOptions).toEqual(
+      DM_OPTIONS_RELOAD.context.actionOptions,
+    );
+  });
+
   it('renders a received NPC row while viewing older history, without formatting or saving it', async () => {
-    const page = (id: string, sequence: number) => ({ id, message: id, speaker_type: 'dm', timestamp: '2026-10-07T00:00:00Z', sequence_number: sequence });
+    const page = (id: string, sequence: number) => ({
+      id,
+      message: id,
+      speaker_type: 'dm',
+      timestamp: '2026-10-07T00:00:00Z',
+      sequence_number: sequence,
+    });
     vi.mocked(userDataApi.listSessionMessages)
       .mockResolvedValueOnce({ messages: [page('latest', 51)], total: 51, hasMore: true })
       .mockResolvedValueOnce({ messages: [page('old', 1)], total: 51, hasMore: false });
@@ -62,10 +92,30 @@ describe('useMessages', () => {
     await waitFor(() => expect(result.current.data).toHaveLength(1));
     act(() => result.current.loadMore());
     await waitFor(() => expect(result.current.data).toHaveLength(2));
-    const received = { id: 'server-npc-row', sessionId, sequence: 52, text: 'Server supplied NPC account.', kind: 'npc', actionId: 'npc-action', timestamp: '2026-10-07T00:01:00Z', context: { intent: 'combat_npc_result', round: 2, engineCards: [] } };
+    const received = {
+      id: 'server-npc-row',
+      sessionId,
+      sequence: 52,
+      text: 'Server supplied NPC account.',
+      kind: 'npc',
+      actionId: 'npc-action',
+      timestamp: '2026-10-07T00:01:00Z',
+      context: { intent: 'combat_npc_result', round: 2, engineCards: [] },
+    };
     act(() => window.dispatchEvent(new CustomEvent('session-engine-rows', { detail: [received] })));
-    await waitFor(() => expect(result.current.data.map((message) => message.id)).toEqual(['old', 'latest', 'server-npc-row']));
-    expect(result.current.data[2]).toMatchObject({ text: received.text, sender: 'system', sequenceNumber: 52, context: received.context });
+    await waitFor(() =>
+      expect(result.current.data.map((message) => message.id)).toEqual([
+        'old',
+        'latest',
+        'server-npc-row',
+      ]),
+    );
+    expect(result.current.data[2]).toMatchObject({
+      text: received.text,
+      sender: 'system',
+      sequenceNumber: 52,
+      context: received.context,
+    });
     expect(userDataApi.saveSessionMessages).not.toHaveBeenCalled();
     act(() => window.dispatchEvent(new CustomEvent('session-engine-rows', { detail: [received] })));
     expect(result.current.data).toHaveLength(3);

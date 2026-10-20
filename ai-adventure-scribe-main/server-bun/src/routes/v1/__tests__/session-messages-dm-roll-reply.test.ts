@@ -1,3 +1,5 @@
+import { beforeEach, describe, expect, it, mock } from 'bun:test';
+
 /**
  * #2280: the DM reply for a narrative-roll turn, posted exactly as the client posts it, through
  * the real request pipeline and the real `POST /v1/sessions/:id/messages` schema.
@@ -7,8 +9,8 @@
  * auth, ownership and the database service are stubbed here; the body is the shared fixture the
  * client's save-queue test asserts it sends.
  */
-import { beforeEach, describe, expect, it, mock } from 'bun:test';
 
+import { DM_OPTIONS_RELOAD } from '../../../../../shared/test-fixtures/dm-options-reload';
 import {
   DECLINED_ROLL_BODY,
   DM_ROLL_REPLY_TURNS,
@@ -106,6 +108,13 @@ const post = (body: unknown): Promise<Response> =>
 describe('POST /v1/sessions/:id/messages — narrative roll replies (#2280)', () => {
   beforeEach(() => {
     saved.length = 0;
+  });
+
+  it('retains separate DM choices through the real save route (#868)', async () => {
+    const response = await post(DM_OPTIONS_RELOAD);
+    expect(response.status).toBe(200);
+    expect(saved[0]?.[0]?.context).toEqual(DM_OPTIONS_RELOAD.context);
+    expect(saved[0]?.[0]?.message).toBe(DM_OPTIONS_RELOAD.message);
   });
 
   it('retains the exact client spell-save answer identity through the real route', async () => {

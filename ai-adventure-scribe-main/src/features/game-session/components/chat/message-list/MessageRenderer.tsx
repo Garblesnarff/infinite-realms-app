@@ -82,7 +82,20 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
     optionsSuperseded = false,
   }) => {
     // Parse for this message
-    const parsedMessage = isDM ? parseMessageOptions(message.text) : null;
+    const inlineMessage = isDM ? parseMessageOptions(message.text) : null;
+    const savedChoices = message.context?.actionOptions;
+    const restoredOptions =
+      isDM && Array.isArray(savedChoices)
+        ? parseMessageOptions(
+            savedChoices
+              .filter((choice): choice is string => typeof choice === 'string')
+              .join('\n'),
+          )
+        : null;
+    const parsedMessage =
+      inlineMessage && !inlineMessage.hasOptions && restoredOptions?.hasOptions
+        ? { ...inlineMessage, options: restoredOptions.options, hasOptions: true }
+        : inlineMessage;
 
     // Truncation logic
     const baseText = parsedMessage
