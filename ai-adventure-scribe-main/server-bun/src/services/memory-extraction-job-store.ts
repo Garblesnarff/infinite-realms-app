@@ -42,6 +42,44 @@ export async function persistMemoryExtractionJob(
   return inserted;
 }
 
+/**
+ * Insert a job row only while the user is below `maxActiveJobs` active
+ * (pending + running) jobs — the accept path's burst reservation, made atomic
+ * (#883). The route used to count with countActiveMemoryExtractionJobs and
+ * persist in two separate steps, so two concurrent accepts for the same user
+ * could both pass the count before either insert landed, and the burst guard
+ * (#846 item 5) promised more extractions than the quota will pay for.
+ *
+ * The count and the insert run in one transaction holding a pg advisory lock
+ * keyed on the user id — the same shape as the quota consume's TOCTOU fix in
+ * ai-usage-service and the hit-dice race guard in rest-hit-dice-service. The
+ * lock is xact-scoped: a second accept for the user blocks until the first
+ * commits, then counts the first's row. Returns null when the cap is already
+ * reached; the caller refuses the accept. Throws on DB error, like persist.
+ */
+export async function persistMemoryExtractionJobWithinActiveCap(
+  row: NewMemoryExtractionJobRow,
+  maxActiveJobs: number,
+): Promise<MemoryExtractionJobRow | null> {
+  return db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${row.userId}::text, 0))`,
+    );
+    const [counted] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(memoryExtractionJobs)
+      .where(
+        and(
+          eq(memoryExtractionJobs.userId, row.userId),
+          inArray(memoryExtractionJobs.status, ['pending', 'running']),
+        ),
+      );
+    if ((counted?.count ?? 0) >= maxActiveJobs) return null;
+    const [inserted] = await tx.insert(memoryExtractionJobs).values(row).returning();
+    return inserted;
+  });
+}
+
 /** Read a job row by id. Used after an ambiguous settle to see what actually committed. */
 export async function getMemoryExtractionJob(id: string): Promise<MemoryExtractionJobRow | null> {
   const [job] = await db

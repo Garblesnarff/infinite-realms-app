@@ -5,7 +5,10 @@ import { requireAuth } from '../../middleware/auth.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { AIUsageService } from '../../services/ai-usage-service.js';
 import { countActiveMemoryExtractionJobs } from '../../services/memory-extraction-job-store.js';
-import { startMemoryExtractionJob } from '../../services/memory-extraction-job.js';
+import {
+  MemoryExtractionBurstCapError,
+  startMemoryExtractionJob,
+} from '../../services/memory-extraction-job.js';
 import { SessionService } from '../../services/session-service.js';
 
 /**
@@ -59,7 +62,11 @@ export const memoryExtractionRoutes = new Elysia({ prefix: '/v1/memory-extractio
       // on a DB read error, so probe the store first — an unreachable usage store refuses
       // the request (throws QuotaUnavailableError), exactly as checkQuotaAndConsume did.
       // The remaining budget also reserves one unit per accepted-but-unfinished job, so a
-      // burst of 202s cannot promise more extractions than the quota will pay for.
+      // burst of 202s cannot promise more extractions than the quota will pay for. The
+      // count here is only a fast path: the authoritative reservation is the recount
+      // inside the persist, under a per-user advisory lock (#883) — two concurrent
+      // accepts can both pass this check before either insert lands, so the locked
+      // recount at insert time is what actually holds the cap.
       await AIUsageService.assertUsageStoreAvailable();
       const quotaStatus = await AIUsageService.getQuotaStatus({
         userId: user!.userId,
@@ -73,18 +80,30 @@ export const memoryExtractionRoutes = new Elysia({ prefix: '/v1/memory-extractio
       }
 
       // Persists the job row before the 202 (#846). A persistence failure throws,
-      // so an unstored job is never acknowledged.
-      const { jobId } = await startMemoryExtractionJob({
-        userId: user!.userId,
-        plan: user!.plan ?? 'free',
-        sessionId: session.id,
-        campaignId: session.campaignId ?? undefined,
-        characterId: body.character_id,
-        kind: body.kind,
-        prompt: body.prompt,
-        maxTokens: body.max_tokens ?? (body.kind === 'summary' ? 1200 : 1000),
-        turn: body.turn,
-      });
+      // so an unstored job is never acknowledged. A burst-cap refusal under the
+      // lock throws MemoryExtractionBurstCapError instead: the same 402 as the
+      // pre-check above, with no row persisted.
+      let jobId: string;
+      try {
+        ({ jobId } = await startMemoryExtractionJob(
+          {
+            userId: user!.userId,
+            plan: user!.plan ?? 'free',
+            sessionId: session.id,
+            campaignId: session.campaignId ?? undefined,
+            characterId: body.character_id,
+            kind: body.kind,
+            prompt: body.prompt,
+            maxTokens: body.max_tokens ?? (body.kind === 'summary' ? 1200 : 1000),
+            turn: body.turn,
+          },
+          { maxActiveJobs: quotaStatus.remaining },
+        ));
+      } catch (error) {
+        if (!(error instanceof MemoryExtractionBurstCapError)) throw error;
+        set.status = 402;
+        return { error: 'AI quota exceeded', resetAt: quotaStatus.resetAt };
+      }
 
       set.status = 202;
       return { jobId, status: 'accepted' as const };

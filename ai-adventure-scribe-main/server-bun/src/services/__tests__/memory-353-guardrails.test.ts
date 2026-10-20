@@ -39,6 +39,11 @@ mock.module('../memory-extraction-job-store.js', () => ({
   persistMemoryExtractionJob: async () => {
     throw new Error('not implemented in this test');
   },
+  // #883: the job module links this export; the capped persist is not
+  // exercised here either.
+  persistMemoryExtractionJobWithinActiveCap: async () => {
+    throw new Error('not implemented in this test');
+  },
   getMemoryExtractionJob: async () => null,
   failExhaustedMemoryExtractionJobs: async () => 0,
   countActiveMemoryExtractionJobs: async () => 0,

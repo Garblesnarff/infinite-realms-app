@@ -17,9 +17,8 @@ const quotaConsumeCalls: unknown[] = [];
 // the rows with the same guarded claim semantics as the real store.
 const jobRows = new Map<string, Record<string, unknown>>();
 const STALE_MS = 15 * 60 * 1000;
-mock.module('../../../services/memory-extraction-job-store.js', () => ({
-  STALE_RUNNING_JOB_MS: STALE_MS,
-  persistMemoryExtractionJob: async (r: Record<string, any>) => {
+mock.module('../../../services/memory-extraction-job-store.js', () => {
+  const persistRow = async (r: Record<string, any>) => {
     const stored: Record<string, any> = {
       ...r,
       attempts: 0,
@@ -31,6 +30,22 @@ mock.module('../../../services/memory-extraction-job-store.js', () => ({
     };
     jobRows.set(stored.id as string, stored);
     return { ...stored };
+  };
+  return {
+  STALE_RUNNING_JOB_MS: STALE_MS,
+  persistMemoryExtractionJob: persistRow,
+  // #883: the capped persist recounts the user's active jobs at insert time
+  // and returns null once the cap is reached (the real store does it under a
+  // per-user advisory lock; this in-memory Map is single-threaded).
+  persistMemoryExtractionJobWithinActiveCap: async (
+    r: Record<string, any>,
+    maxActiveJobs: number,
+  ) => {
+    const active = [...jobRows.values()].filter(
+      (row) => row.userId === r.userId && (row.status === 'pending' || row.status === 'running'),
+    ).length;
+    if (active >= maxActiveJobs) return null;
+    return persistRow(r);
   },
   claimMemoryExtractionJob: async (id: string, expected: 'pending' | 'running') => {
     const r = jobRows.get(id);
@@ -87,7 +102,8 @@ mock.module('../../../services/memory-extraction-job-store.js', () => ({
     [...jobRows.values()].filter(
       (r) => r.userId === userId && (r.status === 'pending' || r.status === 'running'),
     ).length,
-}));
+  };
+});
 
 const testLogger = {
   debug: () => {},

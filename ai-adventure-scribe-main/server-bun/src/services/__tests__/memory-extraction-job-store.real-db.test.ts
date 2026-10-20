@@ -49,6 +49,9 @@ const OTHER_USER = testId('mej-other');
 // The restart test gets its own user so its ai_usage delta is exactly one row,
 // independent of whatever the other tests left runnable for USER.
 const RESTART_USER = testId('mej-restart');
+// The #883 cap tests get their own users so their active counts are exact.
+const BURST_USER = testId('mej-burst');
+const BURST_STORM_USER = testId('mej-burst-storm');
 const createdJobIds: string[] = [];
 
 function newRow(id: string, userId = USER) {
@@ -209,5 +212,52 @@ describeWithDb('memory extraction job store (real DB, #846)', () => {
       .from(aiUsage)
       .where(eq(aiUsage.userId, RESTART_USER));
     expect(after[0].count - before[0].count).toBe(1);
+  });
+
+  test('capped persist: sequential accepts fill to the cap, then refuse (#883)', async () => {
+    const cap = 2;
+    // Single-accept happy path: below the cap the row persists as pending,
+    // exactly as the uncapped persist leaves it.
+    const first = await store.persistMemoryExtractionJobWithinActiveCap(
+      newRow(randomUUID(), BURST_USER),
+      cap,
+    );
+    if (first) createdJobIds.push(first.id);
+    expect(first).toMatchObject({ status: 'pending', userId: BURST_USER });
+
+    const second = await store.persistMemoryExtractionJobWithinActiveCap(
+      newRow(randomUUID(), BURST_USER),
+      cap,
+    );
+    if (second) createdJobIds.push(second.id);
+    expect(second).not.toBeNull();
+
+    // At the cap the capped persist refuses with null and inserts nothing.
+    const third = await store.persistMemoryExtractionJobWithinActiveCap(
+      newRow(randomUUID(), BURST_USER),
+      cap,
+    );
+    expect(third).toBeNull();
+    expect(await store.countActiveMemoryExtractionJobs(BURST_USER)).toBe(cap);
+  });
+
+  test('capped persist: a concurrent accept storm never exceeds the cap (#883)', async () => {
+    const cap = 3;
+    const fired = 8;
+    // The pre-#883 accept path counted and inserted in two separate steps, so
+    // a storm like this could land every insert before any count moved. The
+    // advisory lock serializes count+insert per user: exactly cap accepts win.
+    const results = await Promise.all(
+      Array.from({ length: fired }, () =>
+        store.persistMemoryExtractionJobWithinActiveCap(
+          newRow(randomUUID(), BURST_STORM_USER),
+          cap,
+        ),
+      ),
+    );
+    for (const row of results) if (row) createdJobIds.push(row.id);
+    expect(results.filter((row) => row !== null)).toHaveLength(cap);
+    expect(results.filter((row) => row === null)).toHaveLength(fired - cap);
+    expect(await store.countActiveMemoryExtractionJobs(BURST_STORM_USER)).toBe(cap);
   });
 });

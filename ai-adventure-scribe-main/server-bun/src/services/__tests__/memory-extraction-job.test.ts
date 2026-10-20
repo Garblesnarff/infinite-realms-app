@@ -61,6 +61,24 @@ mock.module('../memory-extraction-job-store.js', () => ({
     jobRows.set(stored.id, stored);
     return { ...stored };
   },
+  // #883: the real store recounts under a per-user advisory lock at insert
+  // time and returns null at the cap; this Map is single-threaded, so a plain
+  // count carries the same semantics. These suites never pass a cap — the job
+  // module only needs the export to link.
+  persistMemoryExtractionJobWithinActiveCap: async (
+    r: Record<string, unknown>,
+    maxActiveJobs: number,
+  ) => {
+    const active = [...jobRows.values()].filter(
+      (existing) =>
+        existing.userId === r.userId &&
+        (existing.status === 'pending' || existing.status === 'running'),
+    ).length;
+    if (active >= maxActiveJobs) return null;
+    const stored = { ...row(r.id as string), ...r };
+    jobRows.set(stored.id, stored);
+    return { ...stored };
+  },
   claimMemoryExtractionJob: async (id: string, expected: 'pending' | 'running') => {
     const r = jobRows.get(id);
     if (!r || r.status !== expected) return null;
