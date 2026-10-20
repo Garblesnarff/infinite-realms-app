@@ -8,6 +8,7 @@ import {
   requestCombatEntryAnswer,
   requestCombatEntryConfirmation,
 } from '@/services/combat/combat-entry-confirmation-bridge';
+import { withoutSpellCastTag } from '@/services/combat/declared-player-spell';
 import { buildCombatEntryPlayer } from '@/services/combat/structured-combat-payload';
 import { userDataApi } from '@/services/user-data-api';
 import { stripOptionMenus } from '@/utils/memory/segmentation';
@@ -19,6 +20,7 @@ export type PendingCombatEntry = NonNullable<AIResponse['combat_entry_pending']>
 export function confirmCombatEntry(
   pendingEntry: PendingCombatEntry,
   player: { name: string; initiativeModifier: number },
+  playerMessage?: string,
 ): Promise<boolean> {
   // The card never names a placeholder: "Strike at Hostile Creature?" told the player nothing
   // (#2532). The server names the creature before it sends the entry; this covers a server that has
@@ -48,6 +50,16 @@ export function confirmCombatEntry(
     actorLabel: player.name,
     combatantLabels,
     ...(declaredTargets.length ? { declaredTargets, otherCombatants } : {}),
+    // #877: the player's words ride along so the card can quote them verbatim — the
+    // parsed target list alone drops the weapon they named ("with my longbow"). Only
+    // when the pending carries the player's own declared attack: a DM-triggered entry
+    // (combat_transition, a tactical action, a roll request) asks the player to
+    // confirm a strike they may never have declared, and quoting their last message
+    // there would put words written for something else on the strike card. The
+    // sheet's Cast tag is engine syntax, stripped as the chat bubble strips it (#2343).
+    ...(playerMessage?.trim() && pendingEntry.declaredAttack
+      ? { playerMessage: withoutSpellCastTag(playerMessage) }
+      : {}),
     initiativeRoll: null,
     initiativeModifier: player.initiativeModifier,
   });
@@ -164,7 +176,7 @@ export async function holdCombatEntryBeforeDm(params: {
 
   let confirmed: boolean;
   try {
-    confirmed = await confirmCombatEntry(check.pending, player);
+    confirmed = await confirmCombatEntry(check.pending, player, params.message);
   } catch (error) {
     logger.warn('[CombatEntry] held entry could not be confirmed', error);
     return { pending: check.pending, decision: 'unavailable' };

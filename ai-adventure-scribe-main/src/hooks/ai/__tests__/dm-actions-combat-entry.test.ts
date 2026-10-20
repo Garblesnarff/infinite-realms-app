@@ -347,6 +347,46 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     expect(outcome.activeEncounter).toEqual(PLAYER_TURN_ENCOUNTER);
   });
 
+  it('quotes the player\'s words on the card when the pending carries their declared weapon attack (#877)', async () => {
+    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(true);
+    vi.mocked(userDataApi.enterCombat).mockResolvedValue(
+      response({ encounter: { id: 'encounter-1' }, npcTurns: ENTRY_NPC_TURNS }) as any,
+    );
+    const refresh = vi.fn().mockResolvedValue(PLAYER_TURN_ENCOUNTER);
+    const declaredAttack = {
+      verb: 'shoot',
+      actorName: 'Vance',
+      attackSource: 'weapon' as const,
+      weaponStated: true,
+      weaponName: 'longbow',
+    };
+
+    await invoke(
+      {
+        combat_transition: 'none',
+        combat_entry_pending: { ...PENDING_ENTRY, declaredAttack },
+        combat_actions: [NPC_ACTION],
+      },
+      refresh,
+      { playerMessage: 'I shoot Vance with my longbow' },
+    );
+
+    expect(requestCombatEntryConfirmation).toHaveBeenCalledWith({
+      actorLabel: 'The Storyteller',
+      combatantLabels: ['Vance'],
+      declaredTargets: ['Vance'],
+      otherCombatants: [],
+      playerMessage: 'I shoot Vance with my longbow',
+      initiativeRoll: null,
+      initiativeModifier: 2,
+    });
+    // …and the declared weapon is what /enter receives, verbatim.
+    expect(userDataApi.enterCombat).toHaveBeenCalledWith(
+      'session-1',
+      expect.objectContaining({ declaredAttack }),
+    );
+  });
+
   it('marks entry confirmation and initiative prompts as player waits', async () => {
     const waits: boolean[] = [];
     const refresh = vi

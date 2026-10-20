@@ -11,6 +11,9 @@ import {
   declaredAttackCharacter,
   declaredAttackCheckBody,
   pickedTargetCheckBody,
+  SILK_ATTACK_PLAYER_INPUT,
+  silkAttackCheckBody,
+  silkDeclaredAttack,
   untargetedSpellCheckBody,
 } from '../../../../shared/test-fixtures/declared-attack-hold';
 import { namedHostilePending } from '../../../../shared/test-fixtures/unnamed-hostile-entry';
@@ -99,6 +102,45 @@ describe('holdCombatEntryBeforeDm', () => {
         combatantLabels: ['Valerius'],
         declaredTargets: ['Valerius'],
         initiativeModifier: 1,
+      }),
+    );
+  });
+
+  it('quotes the player\'s own words — weapon included — on the card for a weapon declaration (#877)', async () => {
+    // The pending is the declared-attack route's real output for this sentence (the
+    // server test posts the same fixture through the route): the declared target is
+    // its only combatant.
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        pending: {
+          trigger: 'player_intent',
+          detail: 'player declared an attack on Silk Woman',
+          combatants: [{ name: 'Silk Woman', count: 1 }],
+          sceneSpec: { sessionId: DECLARED_ATTACK_SESSION_ID },
+          sceneSpecSynthesized: true,
+          declaredAttack: silkDeclaredAttack,
+        },
+      }),
+    );
+
+    const result = await holdCombatEntryBeforeDm({
+      sessionId: DECLARED_ATTACK_SESSION_ID,
+      message: SILK_ATTACK_PLAYER_INPUT,
+      characterRecord: declaredAttackCharacter,
+    });
+
+    expect(result).toMatchObject({ decision: 'confirmed' });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(
+      `http://localhost:8888/v1/combat/sessions/${DECLARED_ATTACK_SESSION_ID}/declared-attack`,
+    );
+    expect(JSON.parse(init.body)).toEqual(silkAttackCheckBody);
+    // The full sentence rides to the card verbatim; a spec built from parsed pieces alone
+    // would name the target and drop "with my longbow".
+    expect(requestCombatEntryConfirmation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        declaredTargets: ['Silk Woman'],
+        playerMessage: SILK_ATTACK_PLAYER_INPUT,
       }),
     );
   });
@@ -375,5 +417,15 @@ describe('the card for a fight the DM asked for without naming anyone (#2532)', 
     expect(requestCombatEntryConfirmation).toHaveBeenCalledWith(
       expect.objectContaining({ combatantLabels: [] }),
     );
+  });
+
+  it('does not quote the player\'s message when the entry is not their declared attack (#877)', async () => {
+    // A DM-triggered entry: the player's last words may be an attempt to talk the
+    // creature down. Quoting them above "Strike at …?" would put words written for
+    // something else on the strike card.
+    await confirmCombatEntry(namedHostilePending, player, 'I try to talk it down.');
+
+    const spec = vi.mocked(requestCombatEntryConfirmation).mock.calls[0][0];
+    expect(spec).not.toHaveProperty('playerMessage');
   });
 });

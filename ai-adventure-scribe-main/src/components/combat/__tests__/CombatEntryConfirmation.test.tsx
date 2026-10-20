@@ -146,6 +146,61 @@ describe('CombatEntryConfirmation', () => {
     expect(screen.queryByText(/Also joining the fight:/)).not.toBeInTheDocument();
   });
 
+  it('quotes the player\'s own words, weapon included, for a weapon declaration (#877)', () => {
+    render(
+      <CombatEntryConfirmation
+        confirmation={{
+          spec: {
+            actorLabel: 'Rook',
+            combatantLabels: ['Silk Woman', 'Silk Man'],
+            declaredTargets: ['Silk Woman'],
+            otherCombatants: ['Silk Man'],
+            playerMessage: 'I shoot the silk woman with my longbow',
+            initiativeRoll: null,
+            initiativeModifier: 2,
+          },
+          confirm: vi.fn(),
+          decline: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText('You wrote: “I shoot the silk woman with my longbow”'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Strike at Silk Woman? Your initiative is rolled after you confirm.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Also joining the fight: Silk Man.')).toBeInTheDocument();
+  });
+
+  it('does not quote the message on the target-picker card (#877)', () => {
+    render(
+      <CombatEntryConfirmation
+        confirmation={{
+          spec: {
+            actorLabel: 'The Scholar',
+            combatantLabels: ['Valerius', 'Professor Darkwater'],
+            targetChoices: ['Valerius', 'Professor Darkwater'],
+            spellLabel: 'Fire Bolt',
+            playerMessage: 'I cast Fire Bolt at him.',
+            initiativeRoll: null,
+            initiativeModifier: 1,
+          },
+          confirm: vi.fn(),
+          decline: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(screen.queryByText(/You wrote:/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Who is Fire Bolt for? Your initiative is rolled after you choose.'),
+    ).toBeInTheDocument();
+  });
+
   it('asks who an attack spell is for when it named nobody (#2341), and reports the pick', () => {
     const confirm = vi.fn();
     const decline = vi.fn();
