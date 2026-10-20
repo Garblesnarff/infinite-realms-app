@@ -7,9 +7,14 @@
  * reason per file. An exclusion whose file no longer exists fails the job.
  *
  * Process sharing: SHARED_PROCESS is the one `bun test` process the job has
- * always used for its 26 files. Files in it depend on each other's process-wide
+ * always used for its files. Files in it depend on each other's process-wide
  * `mock.module` state, so it stays one process. Every other discovered suite
  * runs in its own process, which is the default for a new file (#1906, #1717).
+ *
+ * OWN_PROCESS_LOCK_SUITES used to sit in that shared process. They take row
+ * locks on dialogue_history or characters. A lock_timeout there exits bun for
+ * every file in the process, and the old process.exit dropped the buffered
+ * failure. Each of them now runs alone (#852).
  *
  * Guard, per file: bun prints a `<file>:` header for every file it loads and a
  * `(pass)` line under it for every passing test. A file with no passing test
@@ -19,7 +24,7 @@
  *
  * Run from ai-adventure-scribe-main: node scripts/ci/run-real-db-suites.mjs
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -56,15 +61,24 @@ export const SHARED_PROCESS = [
   'src/services/__tests__/dying-and-death.real-db.test.ts',
   'src/services/combat/__tests__/campaign-monster-resolution.pg.test.ts',
   'src/services/__tests__/companions.real-db.test.ts',
-  'src/services/__tests__/dm-reply-reconcile.real-db.test.ts',
   'src/services/__tests__/issue-1784-public-table-rls.real-db.test.ts',
   'src/services/__tests__/monster-attacks.real-db.test.ts',
   'src/services/__tests__/player-exit-intent.real-db.test.ts',
+  'src/services/__tests__/rest-long-rest-recovery.real-db.test.ts',
+];
+
+/**
+ * Row locks on dialogue_history or characters. A timeout in the shared
+ * process used to fail every file in that process (#852). Own process each.
+ * `invocationsFor` already gives any file outside SHARED_PROCESS its own
+ * `bun test`, one after another.
+ */
+export const OWN_PROCESS_LOCK_SUITES = [
+  'src/services/__tests__/dm-reply-reconcile.real-db.test.ts',
   'src/services/__tests__/session-initial-greeting.real-db.test.ts',
   'src/services/__tests__/session-init-once.real-db.test.ts',
   'src/services/__tests__/spell-slot-backfill.real-db.test.ts',
   'src/services/__tests__/spell-slot-single-source.real-db.test.ts',
-  'src/services/__tests__/rest-long-rest-recovery.real-db.test.ts',
 ];
 
 /**
@@ -95,12 +109,15 @@ export function readBunSummary(output) {
  * The files bun reported at least one passing test for. bun prints a `<file>:`
  * header per file, then that file's `(pass)`/`(skip)`/`(fail)` lines.
  */
+const FILE_HEADER = /^(?:##\[group\]|::group::)?(\S+\.test\.ts):$/;
+const FAIL_LINE = /^\(fail\)\s+(.+?)(?:\s+\[\d+(?:\.\d+)?ms\])?\s*$/;
+
 export function filesWithPassingTests(output) {
   const passing = new Set();
   let current = null;
   for (const line of output.split('\n')) {
     // GitHub Actions turns each header into a log group (bun 1.4 on the hosted runner).
-    const header = line.match(/^(?:##\[group\]|::group::)?(\S+\.test\.ts):$/);
+    const header = line.match(FILE_HEADER);
     if (header) {
       current = header[1];
     } else if (current !== null && line.startsWith('(pass)')) {
@@ -110,17 +127,62 @@ export function filesWithPassingTests(output) {
   return passing;
 }
 
-/** Problems that stop an invocation from counting as run. Empty when it ran clean. */
-export function invocationProblems(exitCode, output, files) {
-  if (exitCode !== 0) return [`bun test exited ${exitCode}`];
-  const summary = readBunSummary(output);
-  const problems = [];
-  if (summary.skip > 0) {
-    problems.push(`${summary.skip} test(s) skipped (the database env did not reach the tests)`);
+/**
+ * One line per file. A non-zero exit with no `(fail)` line blames the last
+ * file bun had started, not every file that already passed (#852).
+ */
+export function fileVerdicts(files, output, exitCode) {
+  const fails = new Map();
+  let current = null;
+  let lastHeader = null;
+  for (const line of output.split('\n')) {
+    const header = line.match(FILE_HEADER);
+    if (header) {
+      current = header[1];
+      if (files.includes(current)) lastHeader = current;
+      continue;
+    }
+    const fail = line.match(FAIL_LINE);
+    if (!fail) continue;
+    const file = current && files.includes(current) ? current : files[0];
+    const names = fails.get(file) ?? [];
+    names.push(fail[1]);
+    fails.set(file, names);
+  }
+  const lines = output.split('\n').map((line) => line.trim());
+  // Prefer bun's `error:` line. A passing test whose name mentions a lock
+  // must not become the reason (#852).
+  const errorLine =
+    lines.find((line) => line.startsWith('error:')) ??
+    lines.find((line) => line.includes('canceling statement due to lock timeout'));
+  const blamed = new Set(fails.keys());
+  if (exitCode !== 0 && blamed.size === 0) {
+    blamed.add(lastHeader ?? files[files.length - 1]);
   }
   const passing = filesWithPassingTests(output);
-  for (const file of files) {
-    if (!passing.has(file)) problems.push(`${file} has no passing test`);
+  return files.map((file) => {
+    const names = fails.get(file) ?? [];
+    if (names.length > 0) return `real-db-file fail ${file} :: ${names.join(' | ')}`;
+    if (blamed.has(file)) {
+      const why = errorLine ?? `bun test exited ${exitCode}`;
+      return `real-db-file fail ${file} :: ${why}`;
+    }
+    if (!passing.has(file)) return `real-db-file fail ${file} :: no passing test`;
+    return `real-db-file pass ${file}`;
+  });
+}
+
+/** Problems that stop an invocation from counting as run. Empty when it ran clean. */
+export function invocationProblems(exitCode, output, files) {
+  const problems = [];
+  if (exitCode !== 0) problems.push(`bun test exited ${exitCode}`);
+  for (const verdict of fileVerdicts(files, output, exitCode)) {
+    if (verdict.includes(' fail ')) problems.push(verdict);
+  }
+  if (exitCode !== 0) return problems;
+  const summary = readBunSummary(output);
+  if (summary.skip > 0) {
+    problems.push(`${summary.skip} test(s) skipped (the database env did not reach the tests)`);
   }
   if (summary.files !== files.length) {
     problems.push(`bun ran ${summary.files} file(s), expected ${files.length}`);
@@ -128,47 +190,75 @@ export function invocationProblems(exitCode, output, files) {
   return problems;
 }
 
+function emit(text) {
+  writeSync(1, text.endsWith('\n') ? text : `${text}\n`);
+}
+
+function emitError(text) {
+  writeSync(2, text.endsWith('\n') ? text : `${text}\n`);
+}
+
 function runInvocation(files) {
-  const result = spawnSync('bun', ['test', ...files], {
+  // --no-orphans kills bun's descendants on exit, so a crashed file cannot
+  // keep a row lock into the next process (#852). bun 1.4.3 accepts the flag:
+  // `bun test --no-orphans src/lib/__tests__/rng.test.ts` from server-bun
+  // printed "10 pass" and "0 fail".
+  const result = spawnSync('bun', ['test', '--no-orphans', ...files], {
     cwd: SERVER_DIR,
     env: process.env,
     encoding: 'utf8',
     maxBuffer: 256 * 1024 * 1024,
   });
   if (result.error) {
-    return { files, passing: new Set(), problems: [`could not start bun: ${result.error.message}`] };
+    const reason = `could not start bun: ${result.error.message}`;
+    const problems = [reason];
+    for (const file of files) {
+      const verdict = `real-db-file fail ${file} :: ${reason}`;
+      emit(verdict);
+      problems.push(verdict);
+    }
+    return { files, passing: new Set(), problems };
   }
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
-  process.stdout.write(output);
+  // writeSync, not stdout.write: process.exit drops a buffered stream, which
+  // is how a lock timeout used to hide the failing test (#852).
+  if (output) emit(output);
+  const exitCode = result.status ?? 1;
+  const verdicts = fileVerdicts(files, output, exitCode);
+  for (const verdict of verdicts) emit(verdict);
+  const passing = new Set(
+    files.filter((file) => verdicts.includes(`real-db-file pass ${file}`)),
+  );
   return {
     files,
-    passing: filesWithPassingTests(output),
-    problems: invocationProblems(result.status, output, files),
+    passing,
+    problems: invocationProblems(exitCode, output, files),
   };
 }
 
 function main() {
   const onDisk = collectRealDbTests();
   if (onDisk.length === 0) {
-    console.error('::error::no *.real-db.test.ts found under server-bun/src -- the glob found nothing to run.');
+    emitError(
+      '::error::no *.real-db.test.ts found under server-bun/src -- the glob found nothing to run.',
+    );
     process.exit(1);
   }
   const excluded = JSON.parse(readFileSync(BASELINE_PATH, 'utf8'));
   const obsolete = obsoleteExclusions(excluded, onDisk);
   if (obsolete.length > 0) {
     for (const file of obsolete) {
-      console.error(
+      emitError(
         `::error::real-db-known-unlisted.json excludes ${file}, which no longer exists. Delete the entry.`,
       );
     }
     process.exit(1);
   }
 
-  const missing = [...SHARED_PROCESS, ...NON_REAL_DB_SUITES].filter(
-    (file) => !existsSync(path.join(SERVER_DIR, file)),
-  );
+  const mustExist = [...SHARED_PROCESS, ...NON_REAL_DB_SUITES, ...OWN_PROCESS_LOCK_SUITES];
+  const missing = mustExist.filter((file) => !existsSync(path.join(SERVER_DIR, file)));
   if (missing.length > 0) {
-    console.error(`::error::SHARED_PROCESS names file(s) that do not exist: ${missing.join(', ')}`);
+    emitError(`::error::a named real-db suite does not exist: ${missing.join(', ')}`);
     process.exit(1);
   }
 
@@ -177,37 +267,41 @@ function main() {
   const invocations = invocationsFor(discovered);
   const planned = invocations.flat().sort().join('\n');
   if (planned !== [...expected].sort().join('\n')) {
-    console.error('::error::the bun test invocations do not cover exactly the expected suite files.');
+    emitError('::error::the bun test invocations do not cover exactly the expected suite files.');
     process.exit(1);
   }
 
-  console.log(
+  emit(
     `Real-DB suites found: ${onDisk.length}; excluded: ${onDisk.length - discovered.length}; ` +
       `to run: ${discovered.length} real-DB + ${NON_REAL_DB_SUITES.length} other, in ${invocations.length} bun test process(es).`,
   );
   for (const file of onDisk.filter((file) => file in excluded)) {
-    console.log(`  excluded: ${file} -- ${excluded[file]}`);
+    emit(`  excluded: ${file} -- ${excluded[file]}`);
   }
 
   const runs = invocations.map((files) => {
-    console.log(`\n=== bun test (${files.length} file${files.length === 1 ? '' : 's'}): ${files.join(' ')}`);
+    emit(
+      `\n=== bun test (${files.length} file${files.length === 1 ? '' : 's'}): ${files.join(' ')}`,
+    );
     return runInvocation(files);
   });
 
   for (const run of runs) {
     for (const problem of run.problems) {
-      console.error(`::error::${problem}`);
+      emitError(`::error::${problem}`);
     }
   }
-  const passed = new Set(runs.flatMap((run) => (run.problems.length === 0 ? [...run.passing] : [])));
+  const passed = new Set(runs.flatMap((run) => [...run.passing]));
   const missing_ = expected.filter((file) => !passed.has(file));
-  console.log(`\nReal-DB suite files that ran clean: ${expected.length - missing_.length} of ${expected.length}.`);
+  emit(
+    `\nReal-DB suite files that ran clean: ${expected.length - missing_.length} of ${expected.length}.`,
+  );
   if (missing_.length > 0 || runs.some((run) => run.problems.length > 0)) {
     for (const file of missing_) {
-      console.error(`::error::${file} did not run clean`);
+      emitError(`::error::${file} did not run clean`);
     }
-    console.error('::error::The job fails rather than report a partial run.');
-    process.exit(1);
+    emitError('::error::The job fails rather than report a partial run.');
+    process.exitCode = 1;
   }
 }
 

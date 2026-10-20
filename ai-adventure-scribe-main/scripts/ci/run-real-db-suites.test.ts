@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 
 import {
+  fileVerdicts,
   filesWithPassingTests,
   invocationProblems,
   invocationsFor,
   obsoleteExclusions,
+  OWN_PROCESS_LOCK_SUITES,
   readBunSummary,
   SHARED_PROCESS,
 } from './run-real-db-suites.mjs';
@@ -87,9 +89,10 @@ describe('invocationProblems', () => {
     expect(invocationProblems(0, BUN_OUTPUT_ONE_FILE, ['a.test.ts'])).toEqual([]);
   });
 
-  it('names a non-zero exit and stops there', () => {
+  it('names a non-zero exit and the file that was in progress', () => {
     expect(invocationProblems(1, BUN_OUTPUT_ONE_FILE, ['a.test.ts'])).toEqual([
       'bun test exited 1',
+      'real-db-file fail a.test.ts :: bun test exited 1',
     ]);
   });
 
@@ -107,15 +110,59 @@ describe('invocationProblems', () => {
     expect(
       invocationProblems(0, BUN_OUTPUT_THREE_FILES, ['a.test.ts', 'b.test.ts', 'empty.test.ts']),
     ).toEqual([
+      'real-db-file fail empty.test.ts :: no passing test',
       '1 test(s) skipped (the database env did not reach the tests)',
-      'empty.test.ts has no passing test',
     ]);
   });
 
   it('flags a file bun did not run at all', () => {
     expect(invocationProblems(0, BUN_OUTPUT_ONE_FILE, ['a.test.ts', 'missing.test.ts'])).toEqual([
-      'missing.test.ts has no passing test',
+      'real-db-file fail missing.test.ts :: no passing test',
       'bun ran 1 file(s), expected 2',
+    ]);
+  });
+});
+
+describe('fileVerdicts', () => {
+  it('names the failing test under that file and leaves the earlier file as a pass', () => {
+    const output = [
+      '##[group]src/a.real-db.test.ts:',
+      '(pass) one [1.00ms]',
+      '##[endgroup]',
+      '##[group]src/b.real-db.test.ts:',
+      '(fail) suite > the row lock timed out [5.00ms]',
+      'error: canceling statement due to lock timeout',
+    ].join('\n');
+    expect(fileVerdicts(['src/a.real-db.test.ts', 'src/b.real-db.test.ts'], output, 1)).toEqual([
+      'real-db-file pass src/a.real-db.test.ts',
+      'real-db-file fail src/b.real-db.test.ts :: suite > the row lock timed out',
+    ]);
+  });
+
+  it('does not use a passing test name as the lock-timeout reason', () => {
+    const output = [
+      '##[group]src/a.real-db.test.ts:',
+      '(pass) lock timeout is the product behavior [1.00ms]',
+      '##[group]src/b.real-db.test.ts:',
+      '(pass) two [1.00ms]',
+      'error: canceling statement due to lock timeout',
+    ].join('\n');
+    expect(fileVerdicts(['src/a.real-db.test.ts', 'src/b.real-db.test.ts'], output, 1)[1]).toBe(
+      'real-db-file fail src/b.real-db.test.ts :: error: canceling statement due to lock timeout',
+    );
+  });
+
+  it('blames only the last file when bun exits with passes and no (fail) line', () => {
+    const output = [
+      '##[group]src/a.real-db.test.ts:',
+      '(pass) one [1.00ms]',
+      '##[group]src/b.real-db.test.ts:',
+      '(pass) two [1.00ms]',
+      'error: canceling statement due to lock timeout',
+    ].join('\n');
+    expect(fileVerdicts(['src/a.real-db.test.ts', 'src/b.real-db.test.ts'], output, 1)).toEqual([
+      'real-db-file pass src/a.real-db.test.ts',
+      'real-db-file fail src/b.real-db.test.ts :: error: canceling statement due to lock timeout',
     ]);
   });
 });
@@ -142,6 +189,15 @@ describe('invocationsFor', () => {
   it('runs the whole shared process as one invocation when every member is discovered', () => {
     const discovered = SHARED_PROCESS.filter((file) => file.endsWith('.real-db.test.ts'));
     expect(invocationsFor(discovered)).toEqual([SHARED_PROCESS]);
+  });
+
+  it('runs each dialogue and character lock suite in its own process', () => {
+    for (const file of OWN_PROCESS_LOCK_SUITES) {
+      expect(SHARED_PROCESS).not.toContain(file);
+    }
+    const invocations = invocationsFor(OWN_PROCESS_LOCK_SUITES);
+    expect(invocations.slice(1)).toEqual(OWN_PROCESS_LOCK_SUITES.map((file) => [file]));
+    expect(invocations[0].some((file) => OWN_PROCESS_LOCK_SUITES.includes(file))).toBe(false);
   });
 });
 
