@@ -20,6 +20,7 @@ import { afterAll, beforeAll, expect, it } from 'bun:test';
 import { eq } from 'drizzle-orm';
 
 import {
+  campaigns,
   characterConcentration,
   characters,
   gameSessions,
@@ -183,23 +184,28 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
   // the gate it answers to is below). No mock.module is used — the real
   // decision function runs against the real DB.
   //
-  // The refusals before the hook, all in server-bun/src/routes/v1/llm.ts:
-  // 401 auth (line 637), 400 missing prompt (line 672), party-defeated
-  // terminal return (line 776), 402 quota (line 808), the #2718 feature gate
-  // (called at line 1026 — its refusal at dm-feature-gate.ts:352 replaces the
-  // reply with a refusal envelope and does NOT set result.error, so the route
-  // passes the outcome through the gate's onCastsRefused callback), and the
-  // provider error early return (result.error check at line 1042, degraded
-  // envelope returned at line 1067). Nothing after the hook can refuse the
-  // turn: usage recording only records, envelope parse and narration repair
-  // only rewrite text inside try/catch, and the story slot spend only runs
-  // for casts the gate allowed (failures are logged).
+  // The refusals before the hook, all in server-bun/src/routes/v1/llm.ts
+  // (verified at head 39b198ca; the import at line 39 is a same-line
+  // replacement, so no shift): 401 auth (line 637), 400 missing prompt
+  // (line 672), party-defeated terminal return (line 776), 402 quota
+  // (line 808), the #2718 feature gate (called at line 1026 — its refusal at
+  // dm-feature-gate.ts:352 replaces the reply with a refusal envelope and
+  // does NOT set result.error, so the route passes the outcome through the
+  // gate's onCastsRefused callback), and the provider error early return
+  // (result.error check at line 1042, degraded envelope returned at line
+  // 1067). The hook itself is llm.ts:1082, and the gate runs only inside
+  // `if (dmReply)` (line 1025), so the route also passes gateRan: a turn the
+  // gate never ran (non-DM generation) must not start concentration.
+  // Nothing after the hook can refuse the turn: usage recording only
+  // records, envelope parse and narration repair only rewrite text inside
+  // try/catch, and the story slot spend only runs for casts the gate allowed
+  // (failures are logged).
   it('a #2718-refused cast starts no concentration when none exists', async () => {
     await db.delete(characterConcentration).where(eq(characterConcentration.characterId, characterId));
     const started = await maybeStartConcentrationAfterReply(
       'I cast Dancing Lights [spell_id=dancing-lights, spell_level=cantrip].',
       sessionId,
-      { replyError: null, castsRefused: true },
+      { replyError: null, castsRefused: true, gateRan: true },
     );
     expect(started).toBe(false);
     expect(await getConcentration(characterId)).toBeNull();
@@ -218,7 +224,7 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
     const started = await maybeStartConcentrationAfterReply(
       'I cast Bless [spell_id=bless, spell_level=level 1].',
       sessionId,
-      { replyError: null, castsRefused: true },
+      { replyError: null, castsRefused: true, gateRan: true },
     );
     expect(started).toBe(false);
     const after = await getConcentration(characterId);
@@ -238,7 +244,7 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
     const started = await maybeStartConcentrationAfterReply(
       'I cast Bless [spell_id=bless, spell_level=level 1].',
       sessionId,
-      { replyError: 'provider_error', castsRefused: false },
+      { replyError: 'provider_error', castsRefused: false, gateRan: true },
     );
     expect(started).toBe(false);
     const after = await getConcentration(characterId);
@@ -253,12 +259,73 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
     const started = await maybeStartConcentrationAfterReply(
       'I cast Dancing Lights [spell_id=dancing-lights, spell_level=cantrip].',
       sessionId,
-      { replyError: null, castsRefused: false },
+      { replyError: null, castsRefused: false, gateRan: true },
     );
     expect(started).toBe(true);
     const state = await getConcentration(characterId);
     expect(state?.spellName).toBe('Dancing Lights');
     expect(state?.spellId).toBe('dancing-lights');
+  });
+
+  it('a turn the #2718 gate never ran leaves an existing concentration row untouched', async () => {
+    // A non-DM generation (no dmReply in the request) reaches the same route
+    // but skips the gate. Without a refusal check, no concentration starts.
+    await maybeStartConcentrationFromSpellCast(
+      'I cast Dancing Lights [spell_id=dancing-lights, spell_level=cantrip].',
+      sessionId,
+    );
+    const before = await getConcentration(characterId);
+    const started = await maybeStartConcentrationAfterReply(
+      'I cast Bless [spell_id=bless, spell_level=level 1].',
+      sessionId,
+      { replyError: null, castsRefused: false, gateRan: false },
+    );
+    expect(started).toBe(false);
+    const after = await getConcentration(characterId);
+    expect(after?.id).toBe(before?.id);
+    expect(after?.spellName).toBe('Dancing Lights');
+  });
+
+  it('the real #2718 refusal reaches the hook decision through onCastsRefused', async () => {
+    // This test runs the actual gate (no mock.module) against the real DB:
+    // the test character lacks Bless, so claiming it is refused. The test
+    // then feeds the gate's own outcome into the route's decision function —
+    // the same two calls the route wires together at llm.ts:1026 and
+    // llm.ts:1082.
+    await db.delete(characterConcentration).where(eq(characterConcentration.characterId, characterId));
+    const { refuseFeaturesCharacterLacks } = await import('../../dm/dm-feature-gate.js');
+    const [{ id: campaignId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('campaign') })
+      .returning({ id: campaigns.id });
+    const [{ id: gateSessionId }] = await db
+      .insert(gameSessions)
+      .values({ characterId, campaignId, sessionNumber: 3, status: 'active' })
+      .returning({ id: gameSessions.id });
+    const prompt = 'I cast Bless [spell_id=bless, spell_level=level 1].';
+    let gateRefused = false;
+    const result = await refuseFeaturesCharacterLacks({
+      result: { text: JSON.stringify({ text: 'A holy light answers.', narration_segments: [] }) },
+      userId,
+      sessionId: gateSessionId,
+      playerInput: prompt,
+      inCombat: false,
+      clientCharacterId: null,
+      onCastsRefused: () => {
+        gateRefused = true;
+      },
+    });
+    expect(gateRefused).toBe(true);
+    // The refusal replaces the reply but does NOT set result.error — this is
+    // why the callback exists and why the hook cannot rely on result.error.
+    expect(result.error).toBeFalsy();
+    const started = await maybeStartConcentrationAfterReply(prompt, gateSessionId, {
+      replyError: result.error,
+      castsRefused: gateRefused,
+      gateRan: true,
+    });
+    expect(started).toBe(false);
+    expect(await getConcentration(characterId)).toBeNull();
   });
 
   it('a failed CON save after the spell-cast drops concentration', async () => {

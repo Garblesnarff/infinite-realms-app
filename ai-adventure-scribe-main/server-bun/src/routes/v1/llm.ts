@@ -1082,6 +1082,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           await maybeStartConcentrationAfterReply(prompt, sessionId, {
             replyError: result.error,
             castsRefused: concentrationCastsRefused,
+            gateRan: Boolean(dmReply),
           });
         } catch (concentrationError) {
           logger.warn({

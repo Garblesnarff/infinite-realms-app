@@ -78,6 +78,12 @@ export interface ConcentrationReplyGate {
    * route reports it separately via its `onCastsRefused` callback.
    */
   castsRefused: boolean;
+  /**
+   * False when the request carried no `dmReply`, so the #2718 gate never ran
+   * this turn (non-DM generations reach the same route). An ungated turn must
+   * not start concentration: no refusal check happened.
+   */
+  gateRan: boolean;
 }
 
 /**
@@ -94,6 +100,6 @@ export async function maybeStartConcentrationAfterReply(
   sessionId: string | null | undefined,
   gate: ConcentrationReplyGate,
 ): Promise<boolean> {
-  if (gate.replyError || gate.castsRefused) return false;
+  if (!gate.gateRan || gate.replyError || gate.castsRefused) return false;
   return maybeStartConcentrationFromSpellCast(prompt ?? '', sessionId);
 }
