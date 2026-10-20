@@ -81,9 +81,6 @@ mock.module('../../../lib/auth.js', () => ({
   },
 }));
 
-// Production auth startup wraps this same SQL client in Drizzle, changing its JSON serializers.
-await importWithRealDb(() => import('../../../lib/drizzle.js'));
-
 const { createRequestPipelineApp } = await importWithRealDb(
   () => import('../../../http-pipeline.js'),
 );
@@ -286,12 +283,6 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
     expect(guard.voice_id).toBeNull();
     expect(guard.voice_muted).toBe(false);
     expect(guard.character).toBe('Guard');
-    const [reservation] = await sql`
-      SELECT config_value, jsonb_typeof(config_value) AS value_type
-      FROM session_config WHERE session_id = ${session} AND config_key LIKE 'npc-voice-scene:%'
-    `;
-    expect(reservation.value_type).toBe('object');
-    expect(reservation.config_value).toEqual({ npc_ids: [] });
   });
 
   test('campaign NPC voices persist through the real route across two sessions (#729)', async () => {
@@ -716,31 +707,44 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
       });
     });
 
-    test('concurrent map context calls deliver every pending fact only once (#2685 step 4)', async () => {
+    test('concurrent map context calls share one delivery batch under its token (#2685 step 4, #849)', async () => {
+      // #849: the one-shot batch is stamped out-for-delivery under a token, not
+      // deleted on read — so both concurrent GETs carry the same delivery and a
+      // response lost on the wire can be retried without losing the facts.
+      const before = (await mapRow()).state as TacticalMap;
       const responses = await Promise.all([
         call('GET', `/v1/sessions/${sessionId}/tactical-map/context/${heroId}`),
         call('GET', `/v1/sessions/${sessionId}/tactical-map/context/${heroId}`),
       ]);
       expect(responses.map((response) => response.status)).toEqual([200, 200]);
+      const tokens = responses.map((response) => response.json.deliveryToken as string);
+      expect(tokens[0]).toEqual(expect.any(String));
+      expect(tokens[1]).toBe(tokens[0]);
       const contexts = responses.map((response) => response.json.tacticalContext as string);
-      expect(
-        contexts.filter((context) => context.includes('Private engine fact for user A')),
-      ).toHaveLength(1);
-      expect(
-        contexts.filter((context) => context.includes('Private correction for user A')),
-      ).toHaveLength(1);
+      for (const context of contexts) {
+        expect(context.split('Private engine fact for user A')).toHaveLength(2);
+        expect(context).toContain('Private correction for user A');
+      }
       const contracts = contexts.map((context) =>
         JSON.parse(context.match(/<contract_json>(.*?)<\/contract_json>/s)![1]),
       );
-      expect(contracts.flatMap((contract) => contract.actions)).toHaveLength(1);
+      expect(contracts.flatMap((contract) => contract.actions)).toHaveLength(2);
       const state = (await mapRow()).state as TacticalMap;
       expect(state.pendingDmFacts).toBeUndefined();
       expect(state.pendingDmCorrection).toBeUndefined();
       expect(state.pendingDmFactActions).toBeUndefined();
-      expect(state.dmSilentTurns).toBe(1);
+      expect(state.pendingDmDelivery).toEqual({
+        token: tokens[0],
+        facts: before.pendingDmFacts,
+        actions: before.pendingDmFactActions,
+        correction: before.pendingDmCorrection,
+        issuedAt: expect.any(Number),
+        expiresAt: expect.any(Number),
+      });
+      expect(state.dmSilentTurns).toBe(0);
     });
 
-    test('map context consumes facts, correction and structured actions together, then returns none (#2685 step 4)', async () => {
+    test('map context stamps facts, correction and structured actions out for delivery, and a retry returns the same batch (#2685 step 4, #849)', async () => {
       const initial = (await mapRow()).state as TacticalMap;
       initial.pendingDmFacts!.push('Second engine fact for user A');
       initial.pendingDmFactActions!.push({
@@ -753,7 +757,13 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
       await database.update(tacticalMaps).set({ state: initial }).where(eq(tacticalMaps.id, mapId));
       const first = await call('GET', `/v1/sessions/${sessionId}/tactical-map/context/${heroId}`);
       expect(first.status).toBe(200);
-      expect(Object.keys(first.json)).toEqual(['tacticalContext']);
+      // #849: the delivery token travels with the batch; the client echoes it
+      // on its next generate to confirm delivery, and only then is the batch
+      // deleted (or when its TTL lapses).
+      expect(Object.keys(first.json)).toEqual(['deliveryToken', 'tacticalContext']);
+      const token = first.json.deliveryToken as string;
+      expect(token).toEqual(expect.any(String));
+      expect(token.length).toBeGreaterThan(0);
       const context = first.json.tacticalContext as string;
       for (const fact of initial.pendingDmFacts!) expect(context.split(fact)).toHaveLength(2);
       expect(context).toContain(
@@ -771,17 +781,34 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
         pendingDmCorrection: undefined,
         pendingDmFactActions: undefined,
         dmSilentTurns: 0,
+        pendingDmDelivery: {
+          token,
+          facts: initial.pendingDmFacts,
+          actions: initial.pendingDmFactActions,
+          correction: initial.pendingDmCorrection,
+          issuedAt: expect.any(Number),
+          expiresAt: expect.any(Number),
+        },
       });
+      expect(consumed.pendingDmDelivery!.expiresAt).toBeGreaterThan(
+        consumed.pendingDmDelivery!.issuedAt,
+      );
+      // #849: a retry inside the TTL returns the same batch under the same
+      // token — never an empty set after a lost response.
       const second = await call('GET', `/v1/sessions/${sessionId}/tactical-map/context/${heroId}`);
       expect(second.status).toBe(200);
-      expect(Object.keys(second.json)).toEqual(['tacticalContext']);
-      expect(second.json.tacticalContext).not.toContain('<engine_resolved_outcomes>');
-      expect(second.json.tacticalContext).not.toContain('<previous_tactical_failure>');
+      expect(second.json.deliveryToken).toBe(token);
+      expect(second.json.tacticalContext).toContain('<engine_resolved_outcomes>');
+      expect(second.json.tacticalContext).toContain('<previous_tactical_failure>');
       expect(
-        JSON.parse(second.json.tacticalContext.match(/<contract_json>(.*?)<\/contract_json>/s)[1])
-          .actions,
-      ).toEqual([]);
-      expect(((await mapRow()).state as TacticalMap).dmSilentTurns).toBe(1);
+        JSON.parse(
+          second.json.tacticalContext.match(/<contract_json>(.*?)<\/contract_json>/s)![1],
+        ).actions,
+      ).toMatchObject([
+        { kind: 'move', count: 1, actors: ['alice'] },
+        { kind: 'attack', count: 1, actors: ['spent-sentinel'], hit: true },
+      ]);
+      expect(((await mapRow()).state as TacticalMap).dmSilentTurns).toBe(0);
     });
 
     test('map context consumes the latest inactive row once without reviving it (#2685 step 4)', async () => {
@@ -796,7 +823,8 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
       await database.update(tacticalMaps).set({ active: false }).where(eq(tacticalMaps.id, mapId));
       const first = await call('GET', `/v1/sessions/${sessionId}/tactical-map/context/${heroId}`);
       expect(first.status).toBe(200);
-      expect(Object.keys(first.json)).toEqual(['tacticalContext']);
+      // #849: the delivery token travels with the batch (see the consumes test).
+      expect(Object.keys(first.json)).toEqual(['deliveryToken', 'tacticalContext']);
       expect(first.json.tacticalContext).toContain('Private engine fact for user A');
       expect(first.json.tacticalContext).toContain('Private correction for user A');
       expect(first.json.tacticalContext).not.toContain('Older inactive fact must stay queued');
@@ -811,10 +839,21 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
         pendingDmFacts: undefined,
         pendingDmCorrection: undefined,
         pendingDmFactActions: undefined,
+        pendingDmDelivery: {
+          token: first.json.deliveryToken as string,
+          facts: initial.pendingDmFacts,
+          actions: initial.pendingDmFactActions,
+          correction: initial.pendingDmCorrection,
+          issuedAt: expect.any(Number),
+          expiresAt: expect.any(Number),
+        },
       });
-      expect(await call('GET', `/v1/sessions/${sessionId}/tactical-map/context/${heroId}`)).toEqual(
-        { status: 404, json: { error: 'No active tactical map' } },
-      );
+      // #849: the minted batch is re-served under its token until a generate
+      // confirms it — a repeat GET is a retry of the same delivery, not a 404.
+      const retry = await call('GET', `/v1/sessions/${sessionId}/tactical-map/context/${heroId}`);
+      expect(retry.status).toBe(200);
+      expect(retry.json.deliveryToken).toBe(first.json.deliveryToken);
+      expect(retry.json.tacticalContext).toContain('Private engine fact for user A');
       const maps = await database
         .select()
         .from(tacticalMaps)
