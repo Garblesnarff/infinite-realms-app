@@ -216,6 +216,66 @@ describe('useInitialGreeting stall watchdog (#865)', () => {
     expect(onGreetingGenerated.mock.calls[0][0].text).toContain(OPENING_TEXT);
   });
 
+  it('an attempt superseded during its greeting save still creates the initial memories — exactly once', async () => {
+    generateOpeningMessage.mockResolvedValue(OPENING_TEXT);
+    const onMemoryCreated = vi.fn().mockResolvedValue(undefined);
+
+    // Attempt A's greeting save hangs until the test releases it.
+    let releaseSave!: () => void;
+    const savePending = new Promise<void>((resolve) => {
+      releaseSave = resolve;
+    });
+    onGreetingGenerated.mockImplementationOnce(() => savePending);
+
+    // The retry's message re-check also hangs; when released it sees the
+    // greeting A saved (the shape listSessionMessages really returns).
+    let resolveRetryList!: (value: unknown) => void;
+    const retryList = new Promise((resolve) => {
+      resolveRetryList = resolve;
+    });
+    listSessionMessages
+      .mockImplementationOnce(async () => ({ total: 0, messages: [] }))
+      .mockImplementationOnce(() => retryList);
+
+    const { result } = renderHook(() => useInitialGreeting({ ...props, onMemoryCreated }));
+    await act(async () => {});
+    expect(onGreetingGenerated).toHaveBeenCalledTimes(1);
+
+    // The retry starts while A's save is still in flight.
+    act(() => {
+      result.current.retry();
+    });
+    await act(async () => {});
+
+    // A's save lands. A is superseded, but it owns the initial memories:
+    // the retry is about to take the existing-dialogue branch, which
+    // creates none.
+    await act(async () => {
+      releaseSave();
+    });
+    await act(async () => {});
+
+    await act(async () => {
+      resolveRetryList({
+        total: 1,
+        messages: [{ speaker_type: 'dm', text: OPENING_TEXT, context: { initialGreeting: true } }],
+      });
+    });
+    await act(async () => {});
+    await act(async () => {});
+
+    // The retry generated nothing and saved nothing; the memories exist
+    // exactly once (one of each foundational type createInitialMemories
+    // always writes).
+    expect(generateOpeningMessage).toHaveBeenCalledTimes(1);
+    expect(onGreetingGenerated).toHaveBeenCalledTimes(1);
+    const memoryTypes = onMemoryCreated.mock.calls.map(([memory]) => memory.type);
+    expect(memoryTypes.filter((t) => t === 'character_moment')).toHaveLength(1);
+    expect(memoryTypes.filter((t) => t === 'world_detail')).toHaveLength(1);
+    expect(memoryTypes.filter((t) => t === 'location')).toHaveLength(1);
+    expect(result.current.hasGenerated).toBe(true);
+  });
+
   it('unmounting disarms the watchdog — no extra generations afterwards', async () => {
     generateOpeningMessage.mockImplementation(neverSettles);
 

@@ -169,11 +169,12 @@ export const useInitialGreeting = ({
     setAttempt(myAttempt);
     // #865: each run carries an attempt id so a newer run (the player's
     // retry) supersedes this one. A superseded attempt must not deliver
-    // messages, memories, roll requests or state: the server dedupe
-    // (#2379) covers the greeting message row only — not the fallback
-    // greeting or the initial memories — so without this guard a
-    // late-settling original could post a fallback after the retry's
-    // real scene and duplicate the initial memories.
+    // messages, roll requests, a fallback greeting or state: the server
+    // dedupe (#2379) covers the greeting message row only — not the
+    // fallback greeting or the initial memories — so without this guard
+    // a late-settling original could post a fallback after the retry's
+    // real scene. (One exception, at the save below: the initial
+    // memories of a greeting this attempt already saved.)
     const isSuperseded = () => attemptRef.current !== myAttempt;
     setState((prev) => ({ ...prev, isGenerating: true, error: null }));
 
@@ -324,12 +325,15 @@ export const useInitialGreeting = ({
       // 2. Normal DM opening message
       await onGreetingGenerated(greetingMessage);
 
-      // Superseded during the save: the newer attempt owns the dice UI
-      // and the initial memories.
-      if (isSuperseded()) return;
+      // A retry may have started while the save was in flight. The dice
+      // UI belongs to the newer attempt then — but the initial memories
+      // below belong to THIS attempt: the retry sees the greeting saved
+      // here and takes the existing-dialogue branch, which creates no
+      // memories, so skipping them would leave the session with none.
+      const supersededAfterSave = isSuperseded();
 
       // 3. Trigger dice UI if opening message contains roll requests
-      if (openingRollRequests.length > 0) {
+      if (!supersededAfterSave && openingRollRequests.length > 0) {
         logger.info(
           `[Initial Greeting] Detected ${openingRollRequests.length} roll request(s) in opening message`,
         );
