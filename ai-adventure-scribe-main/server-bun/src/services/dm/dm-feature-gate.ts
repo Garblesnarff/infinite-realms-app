@@ -255,9 +255,24 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
       );
     });
   }
+  // A feature named after a use verb fragments the same way ("use Lay on Hands"
+  // captures only "Lay", because "on" is a phrase stop word), so usable feature
+  // names are also matched straight against the claim texts behind a use verb.
+  const useFeatureClaims: string[] = [];
+  if (usePhrases.length && usable.length) {
+    for (const name of [...usable].sort((a, b) => b.length - a.length)) {
+      const pattern = new RegExp(
+        `\\b(?:use|uses|using|activate|activates|activating|invoke|invokes|invoking)\\s+(?:my\\s+|the\\s+|a\\s+|an\\s+)?${escapeRegExp(name)}(?![\\w'-])`,
+        'i',
+      );
+      if (texts.some((text) => pattern.test(text))) useFeatureClaims.push(name);
+    }
+  }
   const allClaimedFeatures = [
     ...new Map(
-      [...claimedFeatures, ...castFeatureClaims].map((name) => [name.toLowerCase(), name] as const),
+      [...claimedFeatures, ...castFeatureClaims, ...useFeatureClaims].map(
+        (name) => [name.toLowerCase(), name] as const,
+      ),
     ).values(),
   ];
   if (!allClaimedFeatures.length && !claimedSpells.length) return result;
