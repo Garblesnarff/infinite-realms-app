@@ -437,9 +437,15 @@ function scheduleChargeRetry(
 
 /**
  * Execute one claimed job: run the extraction, then settle the row. Never throws —
- * every store call in the settle phase is guarded, and a settle failure releases the
- * row back to pending so startup resume or the stale reclaim retries it instead of
- * stranding it in 'running'.
+ * every store call in the settle phase is guarded. How a row that goes back to
+ * pending gets retried depends on which release put it there: a deliberate release
+ * after a failed execution (attempts remaining) is scheduled for prompt re-claim
+ * by the in-process retry timer below, but a settle failure is released by the
+ * settle recovery with no execution-retry timer scheduled for the row — it waits
+ * for a later resume sweep (normally the startup one), and if the recovery release
+ * itself failed, the row stays 'running' and is picked up by that sweep's stale
+ * reclaim once it is past the 15-minute stale window (subject to the attempts
+ * cap) instead of being stranded there.
  *
  * The completed transition is guarded on status='running' and happens before the quota
  * charge, so a job that loses a race (shutdown release, a reclaiming process) is never
@@ -477,7 +483,7 @@ async function executeClaimedJob(
         msg: 'memory_extraction.settle_failed',
         error: error instanceof Error ? error.message : String(error),
       });
-      // Best-effort recovery: back to pending so the job is retried, never stranded.
+      // Best-effort recovery: release back to pending for a later resume sweep; if this fails too, the stale reclaim is the backstop.
       await releaseMemoryExtractionJob(claimed.id, 'settle failed').catch(() => {});
       return false;
     }
@@ -497,8 +503,10 @@ async function executeClaimedJob(
         logger.warn({ ...logBase, msg: 'memory_extraction.settle_ambiguous_completed' });
         scheduleChargeRetry(claimed, logBase, 1);
       }
-      // Otherwise the recovery release already put the row back to pending (or
-      // it is gone): resume reclaims it, and its executor charges once.
+      // Otherwise the row did not complete: pending (the recovery release
+      // landed) -> a later resume sweep reclaims it and its executor charges
+      // once; still 'running' (the release failed too) -> the stale reclaim;
+      // unreadable or gone -> nothing further happens here.
       return outcome;
     }
     if (!transitioned) {
@@ -520,7 +528,7 @@ async function executeClaimedJob(
   const error = outcome.error ?? 'unknown failure';
   if (claimed.attempts < MAX_MEMORY_EXTRACTION_ATTEMPTS) {
     const released = await settle(() => releaseMemoryExtractionJob(claimed.id, error));
-    if (!released) return outcome; // a retry was already scheduled by the settle recovery
+    if (!released) return outcome; // the settle recovery already attempted the release — no retry timer is scheduled on this path; a later resume sweep retries the row (via the stale reclaim if that release also failed)
     const delay = MEMORY_EXTRACTION_RETRY_BASE_DELAY_MS * claimed.attempts;
     logger.info({ ...logBase, msg: 'memory_extraction.retry_scheduled', delayMs: delay, error });
     const timer = setTimeout(() => {
