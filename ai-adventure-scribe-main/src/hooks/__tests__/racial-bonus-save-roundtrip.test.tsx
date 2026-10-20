@@ -1,3 +1,6 @@
+import { writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * #203: racial ability bonuses must survive save. Stored scores are final (base + racial,
@@ -9,6 +12,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook } from '@testing-library/react';
 import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { abilityModifier } from '../../../shared/ability-modifier';
@@ -18,7 +22,7 @@ import { useCharacterStats, useEffectiveAbilityScores } from '../use-character-s
 
 import type { AbilityScores, Character } from '@/types/character';
 
-
+import { CharacterPreviewAbilityScores } from '@/components/character-creation/shared/CharacterPreviewAbilityScores';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { dwarf } from '@/data/races/dwarf';
@@ -26,6 +30,7 @@ import { halfElf } from '@/data/races/half-elf';
 import { useToast } from '@/hooks/use-toast';
 import { characterBackgroundGenerator } from '@/services/character-background-generator';
 import { userDataApi } from '@/services/user-data-api';
+import { prepareCharacterPayload } from '@/services/user-data-payload-helpers';
 import { convertSpellIdsToDatabase } from '@/utils/spell-id-mapping';
 
 vi.mock('@/lib/logger', () => ({
@@ -259,4 +264,85 @@ describe('#203 racial ability bonuses survive save', () => {
     expect(effective.current?.strength.score).toBe(16);
     expect(effective.current?.dexterity.score).toBe(15);
   });
+  it.each([
+    {
+      method: 'pointBuy',
+      base: {
+        strength: 8,
+        dexterity: 14,
+        constitution: 13,
+        intelligence: 10,
+        wisdom: 12,
+        charisma: 15,
+      },
+      choices: ['constitution', 'wisdom'],
+      final: {
+        strength: 8,
+        dexterity: 14,
+        constitution: 14,
+        intelligence: 10,
+        wisdom: 13,
+        charisma: 17,
+      },
+    },
+    {
+      method: 'standardArray',
+      base: {
+        strength: 8,
+        dexterity: 12,
+        constitution: 13,
+        intelligence: 10,
+        wisdom: 14,
+        charisma: 15,
+      },
+      choices: ['strength', 'dexterity'],
+      final: {
+        strength: 9,
+        dexterity: 13,
+        constitution: 13,
+        intelligence: 10,
+        wisdom: 14,
+        charisma: 17,
+      },
+    },
+  ])(
+    '#897 Half-Elf $method preview, exact creation body and later save agree',
+    async ({ method, base, choices, final }) => {
+      const wizard = {
+        ...wizardCharacter(),
+        name: `Half-Elf ${method}`,
+        race: halfElf,
+        subrace: null,
+        abilityScoreMethod: method,
+        racialAbilityChoices: { halfElf: choices },
+        abilityScores: toAbilityScores(base),
+      } as Character;
+      const markup = renderToStaticMarkup(<CharacterPreviewAbilityScores character={wizard} />);
+      for (const [ability, value] of Object.entries(final)) {
+        expect(markup).toMatch(
+          new RegExp(`${ability}</span>[\\s\\S]*?font-bold text-sm">${value}</div>`),
+        );
+      }
+      const { result } = renderHook(() => useCharacterSave(), { wrapper });
+      let saved: Character | null = null;
+      await act(async () => {
+        saved = await result.current.saveCharacter(wizard);
+      });
+      const body = prepareCharacterPayload(vi.mocked(userDataApi.createCharacter).mock.calls[0][0]);
+      expect(body.stats).toEqual(final);
+      expect(saved).not.toBeNull();
+      for (const [ability, value] of Object.entries(final))
+        expect(saved!.abilityScores![ability as keyof AbilityScores].score).toBe(value);
+      writeFileSync(
+        resolve(process.cwd(), `shared/test-fixtures/half-elf-${method}-create.json`),
+        JSON.stringify({ method, base, choices, final, body }, null, 2) + '\n',
+      );
+      await act(async () => {
+        await result.current.saveCharacter(saved!);
+      });
+      expect(vi.mocked(userDataApi.updateCharacterStats).mock.calls.at(-1)?.[1]).toMatchObject(
+        final,
+      );
+    },
+  );
 });

@@ -183,9 +183,7 @@ export const useCharacterSave = (): {
 
             // #2710: send the prepared set as database UUIDs (no lossy
             // name→kebab→UUID round trip; use the ids directly).
-            const preparedDatabaseIds = convertSpellIdsToDatabase(
-              character.preparedSpellIds || [],
-            );
+            const preparedDatabaseIds = convertSpellIdsToDatabase(character.preparedSpellIds || []);
 
             if (databaseSpellIds.length > 0) {
               await characterSpellService.saveCharacterSpells(id, {
@@ -252,7 +250,12 @@ export const useCharacterSave = (): {
           });
           const newCharacterId = createdCharacter.id;
           characterData.id = newCharacterId;
-          savedCharacter = { ...character, id: newCharacterId, campaign_id: effectiveCampaignId };
+          savedCharacter = {
+            ...character,
+            id: newCharacterId,
+            campaign_id: effectiveCampaignId,
+            abilityScores: finalAbilityScores,
+          };
 
           // Save spells after creation (needs the new ID)
           await saveSpells(newCharacterId);
