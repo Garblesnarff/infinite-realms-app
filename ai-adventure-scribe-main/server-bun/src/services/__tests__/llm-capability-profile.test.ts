@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from 'bun:test';
 import { resetCircuitBreakersForTests } from '../../utils/circuit-breaker.js';
 import { dmResponseSchema } from '../dm/dm-response-schema.js';
 import { getVendorCapabilityProfile, modelSupportsStrictSchema } from '../llm-model-config.js';
-import { LLMProviderService } from '../llm-provider-service.js';
+import { LLMProviderService, validateToolReplyText } from '../llm-provider-service.js';
 import { resetModelHealthForTests } from '../model-health.js';
 
 const originalFetch = globalThis.fetch;
@@ -36,7 +36,8 @@ const VALID_DM_REPLY = JSON.stringify({
   combat_actions: [],
 });
 
-type Reply = { status?: number; content: string };
+/** `toolArguments` makes the reply a forced `dm_reply` tool call (#783). */
+type Reply = { status?: number; content?: string; toolArguments?: string };
 
 /** Stub OpenRouter: each call takes the next scripted reply (the last one repeats). */
 function stubOpenRouter(replies: Reply[]) {
@@ -44,9 +45,27 @@ function stubOpenRouter(replies: Reply[]) {
   globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
     bodies.push(JSON.parse(String(init?.body)));
     const reply = replies[Math.min(bodies.length - 1, replies.length - 1)];
+    const message =
+      reply.toolArguments !== undefined
+        ? {
+            content: null,
+            tool_calls: [
+              {
+                id: 'call_dm_reply',
+                type: 'function',
+                function: { name: 'dm_reply', arguments: reply.toolArguments },
+              },
+            ],
+          }
+        : { content: reply.content };
     return new Response(
       JSON.stringify({
-        choices: [{ message: { content: reply.content } }],
+        choices: [
+          {
+            message,
+            finish_reason: reply.toolArguments !== undefined ? 'tool_calls' : 'stop',
+          },
+        ],
         usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
       }),
       { status: reply.status ?? 200 },
@@ -64,6 +83,8 @@ type Body = {
   stream?: boolean;
   response_format?: unknown;
   provider?: unknown;
+  tools?: unknown;
+  tool_choice?: unknown;
 };
 
 const systemText = (body: Body): string => {
@@ -238,9 +259,9 @@ describe('#782 item 4 OpenRouter request bodies', () => {
     expect(result.usage?.schemaDelivery).toBe('strict-json-schema');
   });
 
-  it('anthropic/ keeps the schema-as-instructions system block byte-identical', async () => {
+  it('anthropic/ sends the DM schema as one forced tool, with no schema system text', async () => {
     useModel('anthropic/claude-haiku-5.5');
-    const bodies = stubOpenRouter([{ content: VALID_DM_REPLY }]);
+    const bodies = stubOpenRouter([{ toolArguments: VALID_DM_REPLY }]);
 
     const result = await LLMProviderService.generate({
       prompt: 'volatile user prompt',
@@ -251,14 +272,46 @@ describe('#782 item 4 OpenRouter request bodies', () => {
 
     expect(result.error).toBeUndefined();
     const body = bodies[0] as unknown as Body;
+    expect(body.tools).toEqual([
+      {
+        type: 'function',
+        function: {
+          name: 'dm_reply',
+          description: 'The DM reply for this turn.',
+          parameters: dmResponseSchema,
+        },
+      },
+    ]);
+    expect(body.tool_choice).toEqual({ type: 'function', function: { name: 'dm_reply' } });
     expect(body.response_format).toBeUndefined();
-    // #783: the instructed path sends no provider routing and no temperature.
+    // #783: no provider routing and no temperature on the forced-tool request.
     expect('provider' in body).toBe(false);
     expect('temperature' in body).toBe(false);
-    expect(systemText(body)).toBe(
-      `stable system block\n\n${SCHEMA_INSTRUCTION_LINE}\n${JSON.stringify(dmResponseSchema)}`,
-    );
-    expect(result.usage?.schemaDelivery).toBe('schema-as-instructions');
+    // The schema rides only in tools: no instruction line, no schema text in system.
+    expect(systemText(body)).toBe('stable system block');
+    expect(JSON.stringify(body.messages)).not.toContain(SCHEMA_INSTRUCTION_LINE);
+    expect(body.messages.at(-1)).toEqual({ role: 'user', content: 'volatile user prompt' });
+    expect(result.text).toBe(VALID_DM_REPLY);
+    expect(result.usage?.schemaDelivery).toBe('forced-tool-call');
+  });
+
+  it('anthropic/ tool path is never streamed, so onToken does not fire and stream is absent', async () => {
+    useModel('anthropic/claude-haiku-5.5');
+    const bodies = stubOpenRouter([{ toolArguments: VALID_DM_REPLY }]);
+    const tokens: string[] = [];
+
+    const result = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      responseSchema: dmResponseSchema,
+      maxTokens: 100,
+      onToken: (delta) => tokens.push(delta),
+    });
+
+    expect(result.error).toBeUndefined();
+    expect('stream' in (bodies[0] as unknown as Body)).toBe(false);
+    expect(tokens).toEqual([]);
+    expect(result.text).toBe(VALID_DM_REPLY);
   });
 
   it('unknown vendors take the conservative path: instructions, no response_format', async () => {
@@ -361,17 +414,17 @@ describe('#782 item 4 OpenRouter request bodies', () => {
 
     expect(result.error).toBeUndefined();
     // The strict candidate was tried twice (schema retry), then the chain
-    // fell through to the instructed candidate.
+    // fell through to the forced-tool candidate.
     expect(bodies.length).toBe(3);
     expect(result.model).toBe('anthropic/claude-haiku-5.5');
     // require_parameters rides only on the strict json_schema attempts (the
-    // two refused google/ calls). The instructed anthropic/ attempt has none (#783).
+    // two refused google/ calls). The forced-tool anthropic/ attempt has none (#783).
     expect((bodies[0] as Body).provider).toEqual({ require_parameters: true });
     expect((bodies[1] as Body).provider).toEqual({ require_parameters: true });
     expect('provider' in (bodies[2] as Body)).toBe(false);
     expect('temperature' in (bodies[2] as Body)).toBe(false);
     // The winning candidate's delivery path is logged on the usage object.
-    expect(result.usage?.schemaDelivery).toBe('schema-as-instructions');
+    expect(result.usage?.schemaDelivery).toBe('forced-tool-call');
   });
 });
 
@@ -460,5 +513,134 @@ describe('#783 temperature and require_parameters gating on OpenRouter', () => {
     const body = bodies[0] as unknown as Body;
     expect('temperature' in body).toBe(false);
     expect('provider' in body).toBe(false);
+  });
+});
+
+describe('#783 forced-tool delivery for anthropic/', () => {
+  it('a tool-call reply with an extra top-level key validates after stripping and is returned as the reply', async () => {
+    useModel('anthropic/claude-haiku-5.5');
+    const withExtra = JSON.stringify({ ...JSON.parse(VALID_DM_REPLY), visual_prompt: 'a lantern' });
+    const bodies = stubOpenRouter([{ toolArguments: withExtra }]);
+
+    const result = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      responseSchema: dmResponseSchema,
+      maxTokens: 100,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(bodies).toHaveLength(1);
+    expect(result.model).toBe('anthropic/claude-haiku-5.5');
+    expect(result.text).toBe(VALID_DM_REPLY);
+    expect(JSON.parse(result.text)).not.toHaveProperty('visual_prompt');
+  });
+
+  it('a tool-call reply missing a required key fails validation and falls over to the next candidate', async () => {
+    process.env.OPENROUTER_API_KEY = 'test-key-for-stubbed-provider';
+    process.env.OPENROUTER_TEXT_MODEL = 'anthropic/claude-haiku-5.5';
+    process.env.OPENROUTER_FALLBACK_MODELS = 'google/gemini-3.1-flash-lite';
+    const { options: _omitted, ...missingOptions } = JSON.parse(VALID_DM_REPLY);
+    const bodies = stubOpenRouter([
+      { toolArguments: JSON.stringify(missingOptions) },
+      { toolArguments: JSON.stringify(missingOptions) },
+      { content: VALID_DM_REPLY },
+    ]);
+
+    const result = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      responseSchema: dmResponseSchema,
+      maxTokens: 100,
+    });
+
+    expect(result.error).toBeUndefined();
+    // Two forced-tool attempts (schema retry), then the chain fell over to google/.
+    expect(bodies).toHaveLength(3);
+    expect((bodies[0] as Body).tools).toBeDefined();
+    expect((bodies[1] as Body).tools).toBeDefined();
+    expect(result.model).toBe('google/gemini-3.1-flash-lite');
+    expect((bodies[2] as Body).response_format).toBeDefined();
+  });
+
+  it('a plain-content reply on the tool path is the prose case: no retry, fail over at once', async () => {
+    process.env.OPENROUTER_API_KEY = 'test-key-for-stubbed-provider';
+    process.env.OPENROUTER_TEXT_MODEL = 'anthropic/claude-haiku-5.5';
+    process.env.OPENROUTER_FALLBACK_MODELS = 'google/gemini-3.1-flash-lite';
+    const bodies = stubOpenRouter([
+      { content: 'The lantern flickers over a wet cobblestone street.' },
+      { content: VALID_DM_REPLY },
+    ]);
+
+    const result = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      responseSchema: dmResponseSchema,
+      maxTokens: 100,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(bodies).toHaveLength(2);
+    expect((bodies[0] as Body).tools).toBeDefined();
+    expect(result.model).toBe('google/gemini-3.1-flash-lite');
+  });
+
+  it('the stripping validator removes an unnamed key on a nested object', () => {
+    const reply = JSON.parse(VALID_DM_REPLY);
+    const nested = {
+      ...reply,
+      combatants: [{ monster_id: 'goblin-1', name: 'Goblin', count: 1, hp: 7 }],
+    };
+    const normalized = JSON.parse(validateToolReplyText(JSON.stringify(nested), dmResponseSchema));
+    expect(normalized.combatants).toEqual([{ monster_id: 'goblin-1', name: 'Goblin', count: 1 }]);
+    expect(normalized.text).toBe(reply.text);
+  });
+
+  it('the stripping validator still rejects a missing required key', () => {
+    const { options: _omitted, ...missingOptions } = JSON.parse(VALID_DM_REPLY);
+    expect(() => validateToolReplyText(JSON.stringify(missingOptions), dmResponseSchema)).toThrow(
+      /does not match schema/,
+    );
+  });
+
+  it('keeps both combat_actions oneOf branches intact when stripping', () => {
+    const reply = {
+      ...JSON.parse(VALID_DM_REPLY),
+      combat_actions: [
+        {
+          actor_id: 'p1',
+          action_type: 'cast_spell',
+          spell_id: 'fireball',
+          origin: { x: 1, y: 2 },
+          direction: null,
+          slot_level: 3,
+        },
+      ],
+    };
+    const normalized = JSON.parse(validateToolReplyText(JSON.stringify(reply), dmResponseSchema));
+    expect(normalized.combat_actions).toEqual(reply.combat_actions);
+  });
+
+  it('schemaDelivery overrides keep strictJsonSchema in agreement', () => {
+    process.env.LLM_VENDOR_CAPABILITIES = '{"anthropic/": {"schemaDelivery": "strict"}}';
+    const strict = getVendorCapabilityProfile('anthropic/claude-haiku-5.5');
+    expect(strict.schemaDelivery).toBe('strict');
+    expect(strict.strictJsonSchema).toBe(true);
+
+    process.env.LLM_VENDOR_CAPABILITIES = '{"google/": {"schemaDelivery": "tool"}}';
+    const tool = getVendorCapabilityProfile('google/gemini-3.1-flash-lite');
+    expect(tool.schemaDelivery).toBe('tool');
+    expect(tool.strictJsonSchema).toBe(false);
+
+    process.env.LLM_VENDOR_CAPABILITIES = '{"anthropic/": {"schemaDelivery": "bogus"}}';
+    expect(getVendorCapabilityProfile('anthropic/claude-haiku-5.5').schemaDelivery).toBe('tool');
+  });
+
+  it('the default table gives anthropic/ the tool path and every other known vendor its strict/instructed path', () => {
+    expect(getVendorCapabilityProfile('anthropic/claude-haiku-5.5').schemaDelivery).toBe('tool');
+    expect(getVendorCapabilityProfile('google/gemini-3.1-flash-lite').schemaDelivery).toBe(
+      'strict',
+    );
+    expect(getVendorCapabilityProfile('xai/grok-4').schemaDelivery).toBe('instructed');
   });
 });

@@ -98,7 +98,7 @@ export interface LLMResponse {
      * enforcement. Only set when `responseSchema` was requested; absent on
      * schema-less turns.
      */
-    schemaDelivery?: 'strict-json-schema' | 'schema-as-instructions';
+    schemaDelivery?: 'strict-json-schema' | 'schema-as-instructions' | 'forced-tool-call';
     /** LLM_STRICT_BRANCH_VALIDATION=shadow: accepted replies that failed the full schema. Absent when zero. */
     schemaShadowInvalid?: number;
   };
@@ -132,6 +132,8 @@ export const isTruncatedFinishReason = (reason: string | null | undefined): bool
 
 const GEMINI_MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
 export const TEXT_PROVIDER_TIMEOUT_MS = 60_000;
+/** #783: name of the single forced tool that carries the DM schema on the tool path. */
+const DM_REPLY_TOOL_NAME = 'dm_reply';
 /** #633: instruction line sent ahead of the schema for models without strict json_schema. */
 const SCHEMA_INSTRUCTION_LINE =
   'Reply with exactly one JSON object that matches this JSON Schema. No prose, no code fences.';
@@ -241,6 +243,36 @@ const validateFullSchemaText = (text: string, responseSchema: Record<string, unk
       `Structured response does not match schema: ${schemaAjv.errorsText(validate.errors)}`,
     );
   }
+};
+
+// #783: the tool path validates after stripping keys the schema does not name.
+// Forced tool calls return extra top-level keys (e.g. `visual_prompt`) that the
+// schema never declared; removing them keeps the reply usable.
+const strippingSchemaAjv = new Ajv({ strict: false, allErrors: false, removeAdditional: 'all' });
+const compiledStrippingValidators = new WeakMap<Record<string, unknown>, ValidateFunction>();
+
+const compiledStrippingValidator = (schema: Record<string, unknown>): ValidateFunction => {
+  let validate = compiledStrippingValidators.get(schema);
+  if (!validate) {
+    validate = strippingSchemaAjv.compile(schema);
+    compiledStrippingValidators.set(schema, validate);
+  }
+  return validate;
+};
+
+/** #783: text:string check, then the schema with unnamed keys stripped. Returns the normalized reply text. */
+export const validateToolReplyText = (
+  text: string,
+  responseSchema: Record<string, unknown>,
+): string => {
+  const parsed = validateStructuredResponseText(text, responseSchema);
+  const validate = compiledStrippingValidator(responseSchema);
+  if (!validate(parsed)) {
+    throw new Error(
+      `Structured response does not match schema: ${strippingSchemaAjv.errorsText(validate.errors)}`,
+    );
+  }
+  return JSON.stringify(parsed);
 };
 
 /**
@@ -632,7 +664,13 @@ export class LLMProviderService {
       : messages;
 
     type ORChatResp = {
-      choices?: { message?: { content?: string }; finish_reason?: string | null }[];
+      choices?: {
+        message?: {
+          content?: string;
+          tool_calls?: { function?: { name?: string; arguments?: string } }[];
+        };
+        finish_reason?: string | null;
+      }[];
       usage?: {
         prompt_tokens?: number;
         completion_tokens?: number;
@@ -653,13 +691,17 @@ export class LLMProviderService {
       // modelSupportsStrictSchema conditional.
       const profile = getVendorCapabilityProfile(candidate);
       const strictSchema = !responseSchema || profile.strictJsonSchema;
+      // #783: the schema as one forced tool. The tool path sends the plain
+      // messages (no schema text) and reads the tool call's arguments.
+      const toolSchema = Boolean(responseSchema) && profile.schemaDelivery === 'tool';
+      const instructedSchema = Boolean(responseSchema) && profile.schemaDelivery === 'instructed';
       // #783: only the strict json_schema request needs provider routing
-      // constrained. The instructed-schema and schema-less paths send no
+      // constrained. The instructed-schema, tool and schema-less paths send no
       // `provider` field.
       const strictRequest = Boolean(responseSchema && strictSchema);
       const reqBody = {
         model: candidate,
-        messages: strictSchema ? messages : instructedMessages,
+        messages: instructedSchema ? instructedMessages : messages,
         max_tokens: maxTokens,
         // #783: omitted for vendors whose OpenRouter endpoints reject
         // `temperature` alongside require_parameters (anthropic/).
@@ -672,14 +714,33 @@ export class LLMProviderService {
         // silently dropped.
         ...(strictRequest ? { provider: { require_parameters: true } } : {}),
         // #633 PR2: stream tokens when the caller wants progress callbacks.
-        // Usage rides the final stream chunk automatically.
-        ...(onToken ? { stream: true } : {}),
+        // Usage rides the final stream chunk automatically. #783: the tool
+        // path is never streamed; the stream parser reads only content deltas,
+        // not tool-call argument deltas.
+        ...(onToken && !toolSchema ? { stream: true } : {}),
         ...(strictRequest
           ? {
               response_format: {
                 type: 'json_schema',
                 json_schema: { name: 'structured_response', strict: true, schema: responseSchema },
               },
+            }
+          : {}),
+        // #783: the DM schema as ONE forced tool. tool_choice names it, so the
+        // model cannot answer in prose.
+        ...(toolSchema && responseSchema
+          ? {
+              tools: [
+                {
+                  type: 'function',
+                  function: {
+                    name: DM_REPLY_TOOL_NAME,
+                    description: 'The DM reply for this turn.',
+                    parameters: responseSchema,
+                  },
+                },
+              ],
+              tool_choice: { type: 'function', function: { name: DM_REPLY_TOOL_NAME } },
             }
           : {}),
       };
@@ -704,7 +765,7 @@ export class LLMProviderService {
             let text: string;
             let usage: ORChatResp['usage'] | undefined;
             let finishReason: string | null | undefined;
-            if (onToken) {
+            if (onToken && !toolSchema) {
               // #633 PR2: accumulate the streamed completion, firing the
               // token callback per delta. Everything below (validation,
               // retry, usage accounting) is shared with the non-stream path.
@@ -724,7 +785,14 @@ export class LLMProviderService {
               finishReason = streamed.finishReason;
             } else {
               const data = (await response.json()) as ORChatResp;
-              text = data.choices?.[0]?.message?.content ?? '';
+              const message = data.choices?.[0]?.message;
+              // #783: on the tool path the reply is the forced tool call's
+              // arguments (a JSON string). Other paths read message.content.
+              const toolArguments = message?.tool_calls?.[0]?.function?.arguments;
+              text =
+                toolSchema && typeof toolArguments === 'string'
+                  ? toolArguments
+                  : (message?.content ?? '');
               usage = data.usage;
               finishReason = data.choices?.[0]?.finish_reason;
             }
@@ -735,7 +803,11 @@ export class LLMProviderService {
                 // silently ignore unsupported keywords, so validate here too.
                 // The strict branch runs in shadow mode by default (see
                 // validateStrictBranchText); the instructed branch is always hard.
-                if (strictSchema) {
+                if (toolSchema) {
+                  // #783: tool path validates after stripping unnamed keys, and
+                  // the reply carries the stripped text.
+                  text = validateToolReplyText(text, responseSchema);
+                } else if (strictSchema) {
                   schemaShadowInvalid += validateStrictBranchText(text, responseSchema, candidate);
                 } else {
                   validateFullSchemaText(text, responseSchema);
@@ -805,9 +877,11 @@ export class LLMProviderService {
                 // Only meaningful when a schema was requested.
                 ...(responseSchema
                   ? {
-                      schemaDelivery: strictSchema
-                        ? ('strict-json-schema' as const)
-                        : ('schema-as-instructions' as const),
+                      schemaDelivery: toolSchema
+                        ? ('forced-tool-call' as const)
+                        : strictSchema
+                          ? ('strict-json-schema' as const)
+                          : ('schema-as-instructions' as const),
                     }
                   : {}),
                 ...(schemaShadowInvalid > 0 ? { schemaShadowInvalid } : {}),
