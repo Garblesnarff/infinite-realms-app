@@ -270,12 +270,44 @@ const compiledStrippingValidator = (schema: Record<string, unknown>): ValidateFu
   return validate;
 };
 
-/** #783: text:string check, then the schema with unnamed keys stripped. Returns the normalized reply text. */
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * #783: Haiku on the forced-tool path sends `null` for optional fields it has
+ * nothing for. A null on a property the schema names but does not require means
+ * "absent", so drop it. Required properties keep their null and fail ajv.
+ * Walks `properties` and array `items`; anyOf/oneOf and any other shape are
+ * left alone (conservative).
+ */
+export const stripOptionalNulls = (value: unknown, schema: unknown): unknown => {
+  if (!isPlainObject(schema)) return value;
+  if (Array.isArray(value)) {
+    const items = schema.items;
+    if (!isPlainObject(items)) return value;
+    return value.map((entry) => stripOptionalNulls(entry, items));
+  }
+  const properties = schema.properties;
+  if (!isPlainObject(value) || !isPlainObject(properties)) return value;
+  const required = Array.isArray(schema.required) ? schema.required : [];
+  const out: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    const named = Object.prototype.hasOwnProperty.call(properties, key);
+    if (named && child === null && !required.includes(key)) continue;
+    out[key] = named ? stripOptionalNulls(child, properties[key]) : child;
+  }
+  return out;
+};
+
+/** #783: text:string check, then optional nulls dropped, then the schema with unnamed keys stripped. Returns the normalized reply text. */
 export const validateToolReplyText = (
   text: string,
   responseSchema: Record<string, unknown>,
 ): string => {
-  const parsed = validateStructuredResponseText(text, responseSchema);
+  const parsed = stripOptionalNulls(
+    validateStructuredResponseText(text, responseSchema),
+    responseSchema,
+  );
   const validate = compiledStrippingValidator(responseSchema);
   if (!validate(parsed)) {
     throw new Error(

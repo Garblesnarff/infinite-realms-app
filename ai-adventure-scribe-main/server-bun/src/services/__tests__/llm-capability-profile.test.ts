@@ -9,7 +9,11 @@ import { afterEach, describe, expect, it } from 'bun:test';
 import { resetCircuitBreakersForTests } from '../../utils/circuit-breaker.js';
 import { dmResponseSchema } from '../dm/dm-response-schema.js';
 import { getVendorCapabilityProfile, modelSupportsStrictSchema } from '../llm-model-config.js';
-import { LLMProviderService, validateToolReplyText } from '../llm-provider-service.js';
+import {
+  LLMProviderService,
+  stripOptionalNulls,
+  validateToolReplyText,
+} from '../llm-provider-service.js';
 import { resetModelHealthForTests } from '../model-health.js';
 
 const originalFetch = globalThis.fetch;
@@ -655,6 +659,110 @@ describe('#783 forced-tool delivery for anthropic/', () => {
     expect(bodies).toHaveLength(2);
     expect((bodies[0] as Body).tools).toBeDefined();
     expect(result.model).toBe('google/gemini-3.1-flash-lite');
+  });
+
+  it('a tool reply with null optional fields (scene_spec, character) validates, drops them, and Haiku is served', async () => {
+    useModel('anthropic/claude-haiku-5.5');
+    const withNulls = {
+      ...JSON.parse(VALID_DM_REPLY),
+      narration_segments: [
+        { type: 'character', text: 'I hold the lantern higher.', character: null },
+      ],
+      scene_spec: null,
+    };
+    const bodies = stubOpenRouter([{ toolArguments: JSON.stringify(withNulls) }]);
+
+    const result = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      responseSchema: dmResponseSchema,
+      maxTokens: 100,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(bodies).toHaveLength(1);
+    expect(result.model).toBe('anthropic/claude-haiku-5.5');
+    const reply = JSON.parse(result.text);
+    expect(reply).not.toHaveProperty('scene_spec');
+    expect(reply.narration_segments).toEqual([
+      { type: 'character', text: 'I hold the lantern higher.' },
+    ]);
+  });
+
+  it('a tool reply with a REQUIRED key set to null still fails validation and falls over', async () => {
+    process.env.OPENROUTER_API_KEY = 'test-key-for-stubbed-provider';
+    process.env.OPENROUTER_TEXT_MODEL = 'anthropic/claude-haiku-5.5';
+    process.env.OPENROUTER_FALLBACK_MODELS = 'google/gemini-3.1-flash-lite';
+    const nullRequired = { ...JSON.parse(VALID_DM_REPLY), options: null };
+    expect(() => validateToolReplyText(JSON.stringify(nullRequired), dmResponseSchema)).toThrow(
+      /does not match schema/,
+    );
+    const bodies = stubOpenRouter([
+      { toolArguments: JSON.stringify(nullRequired) },
+      { toolArguments: JSON.stringify(nullRequired) },
+      { content: VALID_DM_REPLY },
+    ]);
+
+    const result = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      responseSchema: dmResponseSchema,
+      maxTokens: 100,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(bodies).toHaveLength(3);
+    expect(result.model).toBe('google/gemini-3.1-flash-lite');
+  });
+
+  it('stripOptionalNulls walks nested array-of-objects, dropping optional nulls and keeping required ones', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        groups: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string' },
+              note: { type: 'string' },
+              members: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: { id: { type: 'string' }, role: { type: 'string' } },
+                  required: ['id'],
+                },
+              },
+            },
+            required: ['label', 'members'],
+          },
+        },
+      },
+      required: ['groups'],
+    };
+    const data = {
+      groups: [
+        {
+          label: 'A',
+          note: null,
+          members: [
+            { id: 'm1', role: null },
+            { id: null, role: 'scout' },
+          ],
+        },
+        { label: null, members: [] },
+      ],
+    };
+    expect(stripOptionalNulls(data, schema)).toEqual({
+      groups: [
+        {
+          label: 'A',
+          members: [{ id: 'm1' }, { id: null, role: 'scout' }],
+        },
+        { label: null, members: [] },
+      ],
+    });
   });
 
   it('the stripping validator removes an unnamed key on a nested object', () => {
