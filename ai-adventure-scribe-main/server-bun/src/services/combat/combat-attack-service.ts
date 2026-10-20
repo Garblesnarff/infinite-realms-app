@@ -233,7 +233,7 @@ export async function checkTargetConcentrationAfterHit(input: {
   rollD20Fn?: () => number;
 }): Promise<{ lines: string[]; concentration?: ConcentrationCheckResult }> {
   const characterId = input.target.characterId;
-  if (!characterId || !(input.damageDealt > 0)) return { lines: [] };
+  if (!characterId) return { lines: [] };
   const {
     checkConcentrationOnDamage,
     describeConcentrationBroken,
