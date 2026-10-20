@@ -9,7 +9,7 @@
  *
  * @module server/services/combat/concentration-service
  */
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, or } from 'drizzle-orm';
 
 import { db } from '../../../../db/client';
 import { characterConcentration, characterStats } from '../../../../db/schema/index';
@@ -81,6 +81,43 @@ export async function getConcentration(characterId: string): Promise<Concentrati
     })
     .from(characterConcentration)
     .where(eq(characterConcentration.characterId, characterId))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * The Bless concentration row that names this participant as its target, or null (#902).
+ * Bless's +1d4 follows the blessed creature, whose own `getConcentration` row is somebody
+ * else's spell (or nothing), so the rider looks the target up from the other side. The
+ * query filters to Bless rows: Hex also stores its cursed participant in this column, and
+ * an unfiltered first row could be the Hex row — the caller would discard it as not-Bless
+ * and the blessed creature would silently lose the die while both spells hold. A row only
+ * exists while its caster still concentrates, because every end-of-concentration path
+ * deletes it; the die never stacks (2014: the same spell's effects don't combine), so the
+ * first Bless row decides.
+ */
+export async function getConcentrationTargetingParticipant(
+  participantId: string,
+): Promise<ConcentrationState | null> {
+  const [row] = await db
+    .select({
+      id: characterConcentration.id,
+      characterId: characterConcentration.characterId,
+      spellName: characterConcentration.spellName,
+      spellId: characterConcentration.spellId,
+      targetParticipantId: characterConcentration.targetParticipantId,
+      startedAt: characterConcentration.startedAt,
+    })
+    .from(characterConcentration)
+    .where(
+      and(
+        eq(characterConcentration.targetParticipantId, participantId),
+        or(
+          eq(characterConcentration.spellId, 'bless'),
+          eq(characterConcentration.spellName, 'Bless'),
+        ),
+      ),
+    )
     .limit(1);
   return row ?? null;
 }

@@ -55,6 +55,8 @@ vi.mock('../combat-hp-service.js', () => ({
 // db/client, so it is stubbed here like the other database-facing modules.
 vi.mock('../combat/concentration-service.js', () => ({
   getConcentration: vi.fn(async () => null),
+  // #902: blessDieFor looks up Bless rows naming the roller as their target.
+  getConcentrationTargetingParticipant: vi.fn(async () => null),
   startConcentration: vi.fn(async () => {}),
 }));
 

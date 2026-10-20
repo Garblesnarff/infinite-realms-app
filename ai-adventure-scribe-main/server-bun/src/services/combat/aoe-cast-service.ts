@@ -2,7 +2,7 @@ import { CombatEncounterService } from './combat-encounter-service.js';
 import { executeCombatIntent } from './combat-intent-service.js';
 import { getParticipantAbilityProfile } from './data-access.js';
 import { loadActiveTacticalMap, saveTacticalMap } from './tactical-map-store.js';
-import { resolveCatalogSpell } from '../../data/spellData.js';
+import { isSelfCastSpell, resolveCatalogSpell } from '../../data/spellData.js';
 import { BusinessLogicError } from '../../lib/errors.js';
 import { calculateAoECast } from '../../tactical/aoe.js';
 import { dispatchMapAction } from '../../tactical/dispatch.js';
@@ -131,11 +131,26 @@ async function prepare(sessionId: string, request: AoECastRequest, userId: strin
       'there is no tactical map for this fight, so the area cannot be placed — name one target and cast it again',
       'no_tactical_map',
     );
-  if (!spell?.areaOfEffect)
+  // #902: a spell with no area that the engine acknowledges as a self cast (Detect Magic
+  // is the reported case) is cast on the caster — there is no target to name, so the
+  // "name its target" refusal must not fire. The cast is synthesized on the actor's own
+  // cell in the return below, and the engine resolves it as a self cast. A Self-range
+  // spell the engine does not resolve (False Life and its kin) refuses as what it is —
+  // never with "name its target", which is the one instruction it cannot be obeyed by.
+  // A no-area spell with a real range keeps the original refusal: it genuinely needs
+  // a target named.
+  const selfCast = !!spell && !spell.areaOfEffect && isSelfCastSpell(spell);
+  if (!spell?.areaOfEffect && !selfCast) {
+    if (spell && isSelfRange(spell))
+      throw new AoECastRefusedError(
+        `${spell.name} is cast on yourself, and the combat engine does not resolve it — describe it to the DM instead and it will be narrated; no slot was spent`,
+        'self_spell_not_resolved',
+      );
     throw new AoECastRefusedError(
       `${spell?.name ?? request.spellId} has no area of effect — name its target and cast it again`,
       'no_area_of_effect',
     );
+  }
   // The DM copies the digest slug ("the-apprentice"), the client echoes participant ids, and the
   // model sometimes writes the display name. The board answers all three; an exact-id `find`
   // answered only the second and refused the rest (#2304).
@@ -156,20 +171,33 @@ async function prepare(sessionId: string, request: AoECastRequest, userId: strin
   // A cone or line with no direction is an empty template: `isAoECell` answers false for every
   // cell, so the cast would reach the "catches no creature" refusal with a hint about distance
   // that is not the problem. Say what is missing instead.
-  const directional = spell.areaOfEffect.shape === 'cone' || spell.areaOfEffect.shape === 'line';
+  const directional = spell.areaOfEffect?.shape === 'cone' || spell.areaOfEffect?.shape === 'line';
   if (directional && (!direction || (!direction.x && !direction.y)))
     throw new AoECastRefusedError(
-      `${spell.name} is a ${spell.areaOfEffect.sizeFeet}-foot ${spell.areaOfEffect.shape} and was given no direction — say which way you aim it (at which creature) and cast it again; no slot was spent`,
+      `${spell.name} is a ${spell.areaOfEffect!.sizeFeet}-foot ${spell.areaOfEffect!.shape} and was given no direction — say which way you aim it (at which creature) and cast it again; no slot was spent`,
       'aoe_no_direction',
     );
   return {
     map,
     spell,
-    area: spell.areaOfEffect,
+    area: spell.areaOfEffect ?? null,
     actor,
     origin,
     direction,
-    cast: calculateAoECast(map, actor.id, spell.areaOfEffect, origin, direction),
+    // A self cast has no template to calculate: its whole geometry is the caster's cell and
+    // its only target is the caster (calculateAoECast would exclude the source by design).
+    cast: spell.areaOfEffect
+      ? calculateAoECast(map, actor.id, spell.areaOfEffect, origin, direction)
+      : {
+          geometry: {
+            shape: 'sphere',
+            sizeFeet: 0,
+            origin,
+            direction: null,
+            cells: [{ x: actor.x, y: actor.y }],
+          } satisfies AoECastGeometry,
+          targets: [actor],
+        },
   };
 }
 
@@ -216,9 +244,10 @@ export async function resolveAoECast(
     throw new AoECastRefusedError('there is no active fight to cast it in', 'no_active_encounter');
   const targetIds = cast.targets.map((target) => target.id);
   if (!targetIds.length) {
-    const size = `${area.sizeFeet}-foot ${area.shape}`;
+    // Only an area cast can land here — a self cast always targets its caster.
+    const size = `${area?.sizeFeet ?? 0}-foot ${area?.shape ?? 'area'}`;
     throw new AoECastRefusedError(
-      `the ${size} catches no creature from where it was aimed — move within ${area.sizeFeet} feet of a target and cast it again; no slot was spent`,
+      `the ${size} catches no creature from where it was aimed — move within ${area?.sizeFeet ?? 0} feet of a target and cast it again; no slot was spent`,
       'aoe_no_targets',
     );
   }

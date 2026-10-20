@@ -733,6 +733,12 @@ export interface HitCheckInput {
   targetAC: number;
   advantage?: boolean;
   disadvantage?: boolean;
+  /**
+   * Bless's rolled 1d4 (#902), added to the total when the attacker is blessed. The d20
+   * face alone still decides natural 1 / natural 20 — Bless never turns a natural 1 into
+   * a hit or a 19 into a crit (2014).
+   */
+  blessDie?: number;
 }
 
 /**
