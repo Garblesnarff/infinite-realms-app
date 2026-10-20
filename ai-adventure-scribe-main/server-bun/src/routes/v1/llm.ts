@@ -55,6 +55,7 @@ import {
   parseLlmEnvelope,
   rewriteNarrationSegmentsFromEnvelope,
 } from '../../services/dm/dm-response-schema.js';
+import { recordDmTurnActions } from '../../services/dm/dm-turn-action-registry.js';
 import { isRetryableUpstreamStatus } from '../../services/llm-errors.js';
 import { isProviderKeyLimitError } from '../../services/llm-key-limit.js';
 import {
@@ -1320,6 +1321,18 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             narrationGated: dmReply.narrationGated,
           });
           dmReplyPersisted = persistence.persisted;
+          // #841: record this reply's action batches under its message id, so
+          // the corrective reprompts in the handout-actions and
+          // tactical-map/dm-actions routes can only ever correct actions the
+          // DM actually produced for this session.
+          recordDmTurnActions({
+            sessionId: dmSessionId,
+            messageId: dmReply.messageId,
+            handoutActions: Array.isArray(envelope?.handout_actions)
+              ? envelope.handout_actions
+              : [],
+            mapActions: Array.isArray(envelope?.map_actions) ? envelope.map_actions : [],
+          });
           logger.info({
             msg: 'DM_REPLY_PERSISTENCE',
             sessionId: dmSessionId,
@@ -1360,7 +1373,15 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           model: result.model,
           usageIds,
           ...(dmReply ? { dmReplyPersisted } : {}),
-          ...(canonicalMessageId ? { dmReplyMessageId: canonicalMessageId } : {}),
+          // #841: the DM reply id is echoed on every recorded turn — not only on
+          // roll-guarded ones — because the handout-actions and
+          // tactical-map/dm-actions routes bind their corrective reprompts to
+          // it. On the guarded path dmReply.messageId was already reassigned
+          // to canonicalMessageId before this, so the fallback only fires for
+          // ordinary turns, where persistence used the client-supplied id.
+          ...(dmReply && dmSessionId
+            ? { dmReplyMessageId: canonicalMessageId ?? dmReply.messageId }
+            : {}),
         };
       };
       const runTurn = (onToken?: (text: string) => void, onAttemptStart?: () => void) => {

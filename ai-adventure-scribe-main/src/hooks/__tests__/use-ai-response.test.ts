@@ -1055,6 +1055,9 @@ describe('useAIResponse', () => {
     (AIService.chatWithDM as any).mockResolvedValueOnce({
       text: 'The goblin moves.',
       map_actions: [mapAction],
+      // #841: the server echoes this on every recorded DM turn; the client
+      // binds the tactical action batch's corrective call to it.
+      dmMessageId: '7b3a9c1e-2f4d-4a6b-8c9d-0e1f2a3b4c5d',
     });
 
     const { result } = renderHook(() => useAIResponse());
@@ -1063,7 +1066,12 @@ describe('useAIResponse', () => {
     // The server owns legality and the single corrective retry; the client
     // submits the whole batch once and does not re-prompt on refusal.
     expect(userDataApi.applyDmTacticalActions).toHaveBeenCalledTimes(1);
-    expect(userDataApi.applyDmTacticalActions).toHaveBeenCalledWith(mockSessionId, [mapAction]);
+    expect(userDataApi.applyDmTacticalActions).toHaveBeenCalledWith(
+      mockSessionId,
+      [mapAction],
+      undefined,
+      '7b3a9c1e-2f4d-4a6b-8c9d-0e1f2a3b4c5d',
+    );
     expect(AIService.chatWithDM).toHaveBeenCalledTimes(1);
   });
   /**

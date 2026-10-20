@@ -166,3 +166,59 @@ describe('userDataApi.reportClientFailure (#2515)', () => {
     expect((body.message as string).length).toBe(500);
   });
 });
+
+describe('userDataApi DM action batches bind their DM reply (#841)', () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.mocked(waitForAuth).mockResolvedValue(undefined);
+    vi.mocked(loadCachedSession).mockReturnValue({ access_token: 'access-token' });
+  });
+
+  it('sends dmReplyId with the handout and tactical action batches', async () => {
+    const response = { ok: true, json: vi.fn().mockResolvedValue({}) } as unknown as Response;
+    fetchMock.mockResolvedValue(response);
+
+    const handoutActions = [
+      { mode: 'authored' as const, key: 'sealed-letter', title: 'Sealed Letter', body: null, giver: 'Innkeeper' },
+    ];
+    await userDataApi.applyDmHandoutActions('session-1', handoutActions, undefined, 'reply-1');
+    await userDataApi.applyDmTacticalActions('session-1', [], undefined, 'reply-1');
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:8888/v1/sessions/session-1/handout-actions',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer access-token' },
+        body: JSON.stringify({ actions: handoutActions, dmReplyId: 'reply-1' }),
+        signal: expect.any(AbortSignal),
+      },
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:8888/v1/sessions/session-1/tactical-map/dm-actions',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer access-token' },
+        body: JSON.stringify({ actions: [], dmReplyId: 'reply-1' }),
+        signal: expect.any(AbortSignal),
+      },
+    );
+
+    // Without a reply id the body is the bare batch, as before.
+    await userDataApi.applyDmHandoutActions('session-1', handoutActions);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'http://localhost:8888/v1/sessions/session-1/handout-actions',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer access-token' },
+        body: JSON.stringify({ actions: handoutActions }),
+        signal: expect.any(AbortSignal),
+      },
+    );
+  });
+});

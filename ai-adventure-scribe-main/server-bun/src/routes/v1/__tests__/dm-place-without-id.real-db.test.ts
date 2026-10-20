@@ -67,6 +67,14 @@ const { tacticalMapRoutes } = await importWithRealDb(() => import('../tactical-m
 const { LLMProviderService } = await importWithRealDb(
   () => import('../../../services/llm-provider-service.js'),
 );
+// #841: the corrective reprompt is bound to a DM reply the session owns. In
+// production the /v1/llm/generate route records each reply's action batches
+// in this registry; the refusal test below records its turn the same way so
+// the bound corrective call can fire. Nothing about the refusal path itself
+// is stubbed.
+const { recordDmTurnActions } = await import(
+  '../../../services/dm/dm-turn-action-registry.js'
+);
 
 if (!hasRealDb) {
   console.warn(
@@ -214,6 +222,24 @@ describeWithDb(
 
     test('refuses the place, retries once against the same bad reply, and leaves the board intact', async () => {
       const before = await reloadMap();
+      // #841: this is the turn the reply corrects. The DM emitted the place
+      // action in this reply, so the corrective retry is bound to it.
+      const dmReplyId = crypto.randomUUID();
+      const posted = placeAction({
+        name: 'Bitter End Mercenary',
+        x: 5,
+        y: 5,
+        size: 'medium',
+        type: 'monster',
+        speedFeet: 30,
+        movementRemaining: 30,
+      });
+      recordDmTurnActions({
+        sessionId,
+        messageId: dmReplyId,
+        handoutActions: [],
+        mapActions: [posted],
+      });
       // The corrective retry returns another place with no id: the engine must refuse it too.
       const generate = spyOn(LLMProviderService, 'generate').mockResolvedValue(
         correctiveReply([
@@ -233,17 +259,8 @@ describeWithDb(
           'POST',
           `/v1/sessions/${sessionId}/tactical-map/dm-actions`,
           {
-            actions: [
-              placeAction({
-                name: 'Bitter End Mercenary',
-                x: 5,
-                y: 5,
-                size: 'medium',
-                type: 'monster',
-                speedFeet: 30,
-                movementRemaining: 30,
-              }),
-            ],
+            actions: [posted],
+            dmReplyId,
           },
         );
         expect(status).toBe(200);
