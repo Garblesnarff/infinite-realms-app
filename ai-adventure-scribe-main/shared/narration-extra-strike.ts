@@ -21,13 +21,26 @@ const HIT_BADGE_WORDS = new Set(['HIT', 'CRITICAL HIT', 'AUTO-HIT']);
 /**
  * The engine hits that landed on the player this turn: a card carrying the player's HP, or an
  * enemy attack card whose math names the player as the target and whose badge is a hit.
+ *
+ * An HP block names who was hit, and that name is the checkable fact: producers set the block
+ * from a caller-supplied "the target is the player" flag, so a companion's hit can arrive
+ * carrying HP too. Counting it as the player's inflates the count — at two it switches
+ * `inventedExtraStrikeClaims` off entirely, and a fake second strike on the player ships
+ * (#716, the #771 follow-up). When `playerName` is given, an HP card counts only if it names
+ * the player; callers with a roster always pass it. Without a name there is nothing to check
+ * the block against, so it counts as before — that unnamed form trusts the flag, which is
+ * the bug above, so it is legacy for roster-less tests and fixtures only: production
+ * callers must pass the name.
  */
-export function engineHitsOnPlayer(cards: EngineResultCard[]): number {
+export function engineHitsOnPlayer(
+  cards: EngineResultCard[],
+  playerName?: string,
+): number {
   let count = 0;
   for (const card of cards) {
     if (!card) continue;
     if (card.hp) {
-      count += 1;
+      if (playerName === undefined || card.hp.name === playerName) count += 1;
       continue;
     }
     if (

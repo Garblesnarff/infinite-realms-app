@@ -5,8 +5,11 @@ import {
   inventedExtraStrikeClaims,
 } from '../../../../shared/narration-extra-strike';
 import {
+  ENEMY_HITS_COMPANION,
   ENEMY_HITS_PLAYER,
   FIGHT_ROSTER,
+  MIRA,
+  PARTY_ROSTER,
   REEVES,
   SCHOLAR,
   attackAction,
@@ -36,6 +39,50 @@ describe('narration-extra-strike', () => {
       );
       const cards = parts.map((p) => p.card);
       expect(engineHitsOnPlayer(cards)).toBe(1);
+    });
+
+    /**
+     * #716 (the #771 follow-up): the HP block is set from a caller-supplied "the target is
+     * the player" flag. A producer that passes it for a companion's hit puts the companion's
+     * HP on the card; counting that card as the player's hit inflates the count, and at two
+     * the extra-strike check stands down entirely. The cards below are the real producer's
+     * output for a hit on Mira, built with the flag set — the mis-flagged case.
+     */
+    const companionHitCards = () =>
+      formatCombatEngineParts(attackAction(REEVES, MIRA), ENEMY_HITS_COMPANION, PARTY_ROSTER, {
+        targetHp: true,
+        targetMaxHp: 9,
+      }).map((p) => p.card);
+    const playerHitCards = () =>
+      formatCombatEngineParts(attackAction(REEVES, SCHOLAR), ENEMY_HITS_PLAYER, PARTY_ROSTER, {
+        targetHp: true,
+        targetMaxHp: 7,
+      }).map((p) => p.card);
+
+    it('does not count a companion HP card as a hit on the player', () => {
+      const cards = companionHitCards();
+      expect(cards[0]?.hp?.name).toBe('Mira');
+      expect(engineHitsOnPlayer(cards, SCHOLAR.name)).toBe(0);
+    });
+
+    it('a companion hit cannot hide an invented second strike on the player', () => {
+      const cards = [...companionHitCards(), ...playerHitCards()];
+      // One hit landed on the player; the companion's card must not make it two.
+      expect(engineHitsOnPlayer(cards, SCHOLAR.name)).toBe(1);
+      expect(
+        inventedExtraStrikeClaims('A second strike lands across your ribs.', 1),
+      ).toHaveLength(1);
+      // Without the name there is nothing to check the block against: the legacy count
+      // trusts the flag, reaches 2, and the same prose passes — the bug being fixed.
+      expect(engineHitsOnPlayer(cards)).toBe(2);
+      expect(inventedExtraStrikeClaims('A second strike lands across your ribs.', 2)).toEqual(
+        [],
+      );
+    });
+
+    it('two companion hits leave the count at 0 for the player', () => {
+      const cards = [...companionHitCards(), ...companionHitCards()];
+      expect(engineHitsOnPlayer(cards, SCHOLAR.name)).toBe(0);
     });
   });
 
