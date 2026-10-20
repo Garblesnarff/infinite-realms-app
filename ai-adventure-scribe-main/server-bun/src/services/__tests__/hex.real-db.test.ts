@@ -14,7 +14,7 @@
  * A mocked `db` cannot cover this: the whole bug class the real-DB harness exists for is writes
  * that never reach Postgres. Requires TEST_DATABASE_URL or DATABASE_URL -- see fixtures/real-db.ts.
  */
-import { afterAll, beforeAll, beforeEach, expect, mock, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, expect, mock, spyOn, test } from 'bun:test';
 import { eq } from 'drizzle-orm';
 import { Elysia } from 'elysia';
 
@@ -314,6 +314,32 @@ describeWithDb('Hex (#754)', () => {
     expect(result.hexDamage).toBeLessThanOrEqual(6);
   });
 
+  test('a seeded natural 20 doubles Hex dice through resolveAttack', async () => {
+    await castHex();
+
+    const random = spyOn(Math, 'random').mockReturnValue(0.999);
+    try {
+      const result = (await combatAttackService!.resolveAttack(
+        encounterId,
+        {
+          attackerId: warlockId,
+          targetId: cursedId,
+          expectedVersion: await giveTurnTo(warlockId),
+          attackType: 'melee',
+          weaponId: 'Longsword',
+          providedD20: 20,
+        },
+        userId,
+      )) as HexCarrier & { d20?: number; isCritical?: boolean };
+
+      expect(result.d20).toBe(20);
+      expect(result.isCritical).toBe(true);
+      expect(result.hexDamage).toBe(12);
+    } finally {
+      random.mockRestore();
+    }
+  });
+
   test('a hit on a different target carries no Hex rider', async () => {
     await castHex();
 
@@ -355,6 +381,36 @@ describeWithDb('Hex (#754)', () => {
       .from(characterSpellSlots)
       .where(eq(characterSpellSlots.characterId, characterId));
     expect(slots.reduce((total, row) => total + row.usedSlots, 0)).toBe(0);
+  });
+
+  test('a seeded natural 20 doubles Hex dice through resolveSpellAttack', async () => {
+    await castHex();
+
+    const random = spyOn(Math, 'random').mockReturnValue(0.999);
+    try {
+      const resolution = (await combatAttackService!.resolveSpellAttack(
+        encounterId,
+        {
+          casterId: warlockId,
+          targetIds: [cursedId],
+          spellId: 'eldritch-blast',
+          spellName: 'Eldritch Blast',
+          expectedVersion: await giveTurnTo(warlockId),
+          d20: 20,
+        },
+        userId,
+      )) as Resolution;
+      const result = resolution.results[0] as HexCarrier & {
+        d20?: number;
+        isCritical?: boolean;
+      };
+
+      expect(result.d20).toBe(20);
+      expect(result.isCritical).toBe(true);
+      expect(result.hexDamage).toBe(12);
+    } finally {
+      random.mockRestore();
+    }
   });
 });
 
