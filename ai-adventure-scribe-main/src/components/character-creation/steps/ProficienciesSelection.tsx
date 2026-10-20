@@ -56,7 +56,12 @@ const ProficienciesSelection: React.FC<ProficienciesSelectionProps> = ({ effecti
     ...(currentBackground?.skillProficiencies || []),
     // Note: Saving throws are separate, handled in savingThrowProficiencies
   ];
-  const fixedTools = currentBackground?.toolProficiencies || [];
+  const fixedTools = [
+    ...new Set([
+      ...(currentClass?.toolProficiencies || []),
+      ...(currentBackground?.toolProficiencies || []),
+    ]),
+  ];
   const fixedLanguages = currentRace?.languages || [];
   const fixedSavingThrows = currentClass?.savingThrowProficiencies || [];
 
@@ -168,7 +173,7 @@ const ProficienciesSelection: React.FC<ProficienciesSelectionProps> = ({ effecti
     if (!hasSkillChoices || selectedSkills.length === numSkillChoices) {
       updateProficiencies();
     }
-  }, [selectedSkills]);
+  }, [selectedSkills, selectedExpertise]);
 
   React.useEffect(() => {
     if (!hasLanguageChoices || selectedLanguages.length === numLanguageChoices) {
