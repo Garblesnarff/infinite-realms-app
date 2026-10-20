@@ -20,6 +20,7 @@
  * the watchdog below reports on when no DM row follows.
  */
 
+import { dedupeDmOptions } from './dm-response-schema.js';
 import { suspectsFabricatedOutcome } from '../../../../shared/narration-harm.js';
 import { logger } from '../../lib/logger.js';
 
@@ -76,8 +77,12 @@ export function dmReplySkipReason(
  */
 export function provisionalDmText(envelope: Record<string, unknown>): string {
   const text = String(envelope.text ?? '').trim();
+  // #864: same dedupe parseDmResponse applies to the returned envelope, so a
+  // provisional row that outlives its tab shows each offered choice once.
   const options = Array.isArray(envelope.options)
-    ? envelope.options.filter((option): option is string => typeof option === 'string')
+    ? dedupeDmOptions(
+        envelope.options.filter((option): option is string => typeof option === 'string'),
+      )
     : [];
   return options.length > 0 ? `${text}\n\n${options.join('\n')}` : text;
 }

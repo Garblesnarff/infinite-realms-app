@@ -144,7 +144,9 @@ function TacticalMapBoardView({
     >
       <div className="flex items-center justify-between gap-2 px-3 py-2 text-sm text-infinite-gold">
         <span className="font-display">
-          Initiative · round {combatState.activeEncounter?.currentRound ?? map.round}
+          {combatState.activeEncounter
+            ? `Initiative · round ${combatState.activeEncounter.currentRound}`
+            : 'Tactical map'}
           {activePlayer ? ' · your turn' : ''}
         </span>
         <div className="flex gap-2">

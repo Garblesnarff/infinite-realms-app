@@ -46,6 +46,11 @@ interface MessageRendererProps {
    * DM saved with it, whatever the game mode is now (#2641).
    */
   isLatestMessage?: boolean;
+  /**
+   * A later message in the transcript ended a fight after this one (#864): its saved options
+   * belong to the pre-fight world and no longer render.
+   */
+  optionsSuperseded?: boolean;
 }
 
 /**
@@ -74,6 +79,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
     previousEngineKey,
     combatOptionsVisible = false,
     isLatestMessage = true,
+    optionsSuperseded = false,
   }) => {
     // Parse for this message
     const parsedMessage = isDM ? parseMessageOptions(message.text) : null;
@@ -199,6 +205,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
             GP-015 (#219): a narration turn with no action choices still
             renders, so it can say why there are none. */}
         {isLastInGroup &&
+          !optionsSuperseded &&
           (isDM || combatOptionsVisible) &&
           (parsedMessage?.hasOptions ||
             combatOptionsVisible ||
@@ -236,7 +243,8 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
     if (
       !basicPropsMatch ||
       prev.combatOptionsVisible !== next.combatOptionsVisible ||
-      prev.isLatestMessage !== next.isLatestMessage
+      prev.isLatestMessage !== next.isLatestMessage ||
+      prev.optionsSuperseded !== next.optionsSuperseded
     ) {
       return false;
     }
