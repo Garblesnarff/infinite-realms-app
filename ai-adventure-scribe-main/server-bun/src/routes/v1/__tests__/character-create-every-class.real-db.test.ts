@@ -91,6 +91,22 @@ const fighterPayload = JSON.parse(
 ) as Record<string, unknown>;
 
 /**
+ * The pinned real wizard payload for a Wood Elf Monk who chose Starting
+ * Gold and rolled 14 gp (Outlander background, so the equipment rows carry
+ * a Staff), produced by src/hooks/__tests__/wizard-save-901-payload.test.ts
+ * through the same real producer chain as the Fighter pin.
+ */
+const monkGoldPayload = JSON.parse(
+  readFileSync(
+    resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      '../../../../../shared/test-fixtures/wood-elf-monk-starting-gold-create-payload.json',
+    ),
+    'utf8',
+  ),
+) as Record<string, unknown>;
+
+/**
  * Real starting-kit item names per class, transcribed from
  * getStartingEquipment (src/data/equipment/api.ts) — the same producer the
  * wizard's equipment step reads.
@@ -471,5 +487,50 @@ describeWithDb('character create every class (#388)', () => {
     expect(stats.armorClass).toBe(16);
     expect(stats.maxHitPoints).toBe(16);
     expect(stats.currentHitPoints).toBe(16);
+  });
+
+  it('rejects fractional gold with 422 and creates nothing (#901)', async () => {
+    // The pre-fix wizard put the monk's 12.5 gp average on the wire; the
+    // route's t.Number() let it through and the integer gold_pieces column
+    // threw at insert — a 500 and a lost character. The schema now requires
+    // an integer, so the same body is a validation error and no row exists.
+    const name = `Fraction Monk ${testId('901')}`;
+    const res = await request('/v1/characters', 'POST', {
+      ...monkGoldPayload,
+      name,
+      gold_pieces: 12.5,
+    });
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(422);
+
+    const rows = await db.select().from(characters).where(eq(characters.name, name));
+    expect(rows).toHaveLength(0);
+  });
+
+  it('lands a starting-gold monk with whole gp and its weapon (#901)', async () => {
+    // The pinned wizard body: Starting Gold (rolled 14) + the Outlander
+    // background kit. Both the gold and the weapon must persist — the QA
+    // symptom was a saved starting-gold character with 0 gp and no weapon.
+    const name = `Gold Monk ${testId('901')}`;
+    const res = await request('/v1/characters', 'POST', { ...monkGoldPayload, name });
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const [row] = await db.select().from(characters).where(eq(characters.id, id));
+    expect(row).toBeDefined();
+    expect(row.goldPieces).toBe(14);
+
+    const equipmentRows = await db
+      .select()
+      .from(characterEquipment)
+      .where(eq(characterEquipment.characterId, id));
+    expect(equipmentRows.map((r: { itemName: string }) => r.itemName)).toContain('Staff');
+
+    const getRes = await request(`/v1/characters/${id}`, 'GET');
+    expect(getRes.status).toBe(200);
+    const fetched = JSON.parse(await getRes.text()) as { gold_pieces?: number };
+    expect(fetched.gold_pieces).toBe(14);
   });
 });

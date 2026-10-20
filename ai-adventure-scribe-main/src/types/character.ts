@@ -499,11 +499,13 @@ export function transformCharacterForStorage(character: Character) {
     enhancement_selections: JSON.stringify(character.enhancementSelections || []),
     // Fighting Styles
     fighting_styles: JSON.stringify(character.fightingStyles || []),
-    copper_pieces: character.currency?.cp || 0,
-    silver_pieces: character.currency?.sp || 0,
-    electrum_pieces: character.currency?.ep || 0,
-    gold_pieces: character.currency?.gp || 0,
-    platinum_pieces: character.currency?.pp || 0,
+    // #901: the *_pieces columns are integers; never put a fraction on the
+    // wire (a resumed draft can still carry a pre-fix fractional balance).
+    copper_pieces: Math.floor(character.currency?.cp || 0),
+    silver_pieces: Math.floor(character.currency?.sp || 0),
+    electrum_pieces: Math.floor(character.currency?.ep || 0),
+    gold_pieces: Math.floor(character.currency?.gp || 0),
+    platinum_pieces: Math.floor(character.currency?.pp || 0),
     // Damage Resistances, Immunities, and Vulnerabilities
     damage_resistances: JSON.stringify(character.damageResistances || []),
     damage_immunities: JSON.stringify(character.damageImmunities || []),

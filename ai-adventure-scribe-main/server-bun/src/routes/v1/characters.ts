@@ -168,11 +168,13 @@ const characterSchema = t.Object({
   class_features: t.Optional(t.Any()),
   enhancement_selections: t.Optional(t.Any()),
   fighting_styles: t.Optional(t.Any()),
-  copper_pieces: t.Optional(t.Number()),
-  silver_pieces: t.Optional(t.Number()),
-  electrum_pieces: t.Optional(t.Number()),
-  gold_pieces: t.Optional(t.Number()),
-  platinum_pieces: t.Optional(t.Number()),
+  // #901: the *_pieces columns are integers — a fractional value must fail
+  // validation (422) here instead of throwing at the insert (500).
+  copper_pieces: t.Optional(t.Integer()),
+  silver_pieces: t.Optional(t.Integer()),
+  electrum_pieces: t.Optional(t.Integer()),
+  gold_pieces: t.Optional(t.Integer()),
+  platinum_pieces: t.Optional(t.Integer()),
   damage_resistances: t.Optional(t.Any()),
   damage_immunities: t.Optional(t.Any()),
   damage_vulnerabilities: t.Optional(t.Any()),
