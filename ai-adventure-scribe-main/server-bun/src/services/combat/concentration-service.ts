@@ -21,6 +21,11 @@ export interface ConcentrationState {
   characterId: string;
   spellName: string;
   spellId: string | null;
+  /**
+   * The combat participant the spell was cast on, when it has a single target (#754).
+   * Hex's extra 1d6 necrotic only applies to this participant; null for untargeted spells.
+   */
+  targetParticipantId: string | null;
   startedAt: Date | null;
 }
 
@@ -39,6 +44,7 @@ export function concentrationSaveDc(damageTaken: number): number {
 export async function startConcentration(
   characterId: string,
   spell: { name: string; id?: string },
+  targetId?: string | null,
 ): Promise<void> {
   await db
     .insert(characterConcentration)
@@ -46,6 +52,7 @@ export async function startConcentration(
       characterId,
       spellName: spell.name,
       spellId: spell.id ?? null,
+      targetParticipantId: targetId ?? null,
       startedAt: new Date(),
       updatedAt: new Date(),
     })
@@ -54,6 +61,7 @@ export async function startConcentration(
       set: {
         spellName: spell.name,
         spellId: spell.id ?? null,
+        targetParticipantId: targetId ?? null,
         startedAt: new Date(),
         updatedAt: new Date(),
       },
@@ -68,6 +76,7 @@ export async function getConcentration(characterId: string): Promise<Concentrati
       characterId: characterConcentration.characterId,
       spellName: characterConcentration.spellName,
       spellId: characterConcentration.spellId,
+      targetParticipantId: characterConcentration.targetParticipantId,
       startedAt: characterConcentration.startedAt,
     })
     .from(characterConcentration)

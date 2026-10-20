@@ -264,6 +264,9 @@ export const characterConcentration = pgTable(
       .unique(),
     spellName: text('spell_name').notNull(),
     spellId: text('spell_id'),
+    // The combat participant the spell was cast on (#754): Hex's extra 1d6 necrotic only
+    // applies to this target. Null for spells with no single target (Bless, Dancing Lights).
+    targetParticipantId: uuid('target_participant_id'),
     startedAt: timestamp('started_at', { withTimezone: true, mode: 'date' }).defaultNow(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow(),

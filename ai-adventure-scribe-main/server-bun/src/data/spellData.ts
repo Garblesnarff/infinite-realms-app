@@ -66,6 +66,19 @@ export function isPlayerCombatSpell(spell: Spell | undefined): boolean {
   return !!spell && PLAYER_COMBAT_SPELL_ID_SET.has(spell.id);
 }
 
+/**
+ * Spells the combat engine resolves without dealing damage of their own (#754): they spend a
+ * slot, claim their action (Hex's is a bonus action), and open a lasting effect on one target.
+ * Kept separate from PLAYER_COMBAT_SPELL_IDS so the damaging combat surface stays explicit.
+ */
+export const PLAYER_COMBAT_CURSE_SPELL_IDS = ['hex'] as const;
+
+const PLAYER_COMBAT_CURSE_SPELL_ID_SET = new Set<string>(PLAYER_COMBAT_CURSE_SPELL_IDS);
+
+export function isPlayerCombatCurseSpell(spell: Spell | undefined): boolean {
+  return !!spell && PLAYER_COMBAT_CURSE_SPELL_ID_SET.has(spell.id);
+}
+
 const sourceSpells = [
   ...(srdSpells as unknown as any[]),
   ...(nonSrdSupplement as unknown as any[]),
@@ -206,6 +219,17 @@ export function assessPlayerCombatSpell(
       reason: 'unknown_spell',
       message: `Spell refused: unknown spell "${label}" — it is not in the spell catalog; cast a spell from your sheet by its name`,
     };
+  }
+  if (isPlayerCombatCurseSpell(spell)) {
+    if (spell.level >= 1 && (slotLevel === undefined || slotLevel === null)) {
+      return {
+        castable: false,
+        spell,
+        reason: 'missing_spell_slot_level',
+        message: `Spell refused: ${spell.name} needs a spell slot level — say which slot to spend (level ${spell.level} or higher)`,
+      };
+    }
+    return { castable: true, spell };
   }
   if (!isPlayerCombatSpell(spell)) {
     return {

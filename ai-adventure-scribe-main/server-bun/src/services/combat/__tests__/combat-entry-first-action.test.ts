@@ -579,6 +579,49 @@ describe('deriveCombatEntryFirstAction', () => {
     expect(firstAction?.roll_request).toBeUndefined();
   });
 
+  it('routes "I cast Hex on X" through the first-action spell path', async () => {
+    const declaredAttack = detectDeclaredAttack('I cast Hex on Professor Emil Darkwater', [
+      { name: 'Professor Emil Darkwater' },
+    ]);
+    expect(declaredAttack).toMatchObject({
+      attackSource: 'spell',
+      spellId: 'hex',
+      actorName: 'Professor Emil Darkwater',
+    });
+
+    const firstAction = await deriveCombatEntryFirstAction(
+      {
+        sessionId: 'session-1',
+        combatState: state,
+        player: { characterId: 'character-1', name: 'Rook' },
+        declaredAttack: declaredAttack!,
+      },
+      {
+        ...deps,
+        getParticipantAbilityProfile: async () => ({
+          level: 1,
+          scores: { str: 12, dex: 14, cha: 16 },
+          savingThrowProficiencies: [],
+          saveBonuses: {},
+          spellIds: ['hex'],
+        }),
+      },
+    );
+
+    expect(firstAction).toMatchObject({
+      type: 'spell',
+      source: 'spell',
+      spellId: 'hex',
+      slotLevel: 1,
+      combat_action: {
+        action_type: 'cast_spell',
+        spell_id: 'hex',
+        target_ids: ['participant-professor'],
+      },
+    });
+    expect(firstAction?.roll_request).toBeUndefined();
+  });
+
   it('refuses an unknown or out-of-scope declared spell without fabricating a weapon attack', async () => {
     const warnings: unknown[] = [];
     const firstAction = await deriveCombatEntryFirstAction(

@@ -1,0 +1,1 @@
+ALTER TABLE "character_concentration" ADD COLUMN "target_participant_id" uuid;

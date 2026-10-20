@@ -51,6 +51,13 @@ vi.mock('../combat-hp-service.js', () => ({
   },
 }));
 
+// Hex's rider (#754) reads concentration from the database on every hit; that leaf reaches
+// db/client, so it is stubbed here like the other database-facing modules.
+vi.mock('../combat/concentration-service.js', () => ({
+  getConcentration: vi.fn(async () => null),
+  startConcentration: vi.fn(async () => {}),
+}));
+
 vi.mock('../combat-initiative-service.js', () => ({ CombatInitiativeService: { getCurrentTurn } }));
 vi.mock('../combat/tactical-map-store.js', () => ({ loadActiveTacticalMap }));
 vi.mock('../combat/npc-provocation.js', () => ({ markPlayerDamageProvocation }));

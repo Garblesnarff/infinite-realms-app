@@ -28,6 +28,8 @@ export function describeResolvedAttack(
     targetIsDead?: boolean;
     targetIsConscious?: boolean;
     autoRolled?: boolean;
+    /** Extra necrotic from Hex on a hit against its cursed target (#754). */
+    hexDamage?: number;
   },
   weaponName?: string,
 ): string {
@@ -45,6 +47,11 @@ export function describeResolvedAttack(
       : 'CRITICAL HIT'
     : 'HIT';
   const damage = Number(outcome.finalDamage ?? 0);
+  // Hex's rider is already inside finalDamage; say so, so it is not read as extra damage.
+  const hex =
+    outcome.hexDamage && outcome.hexDamage > 0
+      ? ` (including ${outcome.hexDamage} necrotic from Hex)`
+      : '';
   const hp =
     outcome.targetNewHp == null ? '' : ` ${targetLabel} is now at ${outcome.targetNewHp} HP`;
   const state = outcome.targetIsDead
@@ -53,7 +60,7 @@ export function describeResolvedAttack(
       ? ` and is UNCONSCIOUS`
       : '';
   return (
-    `${actorLabel} attacked ${targetLabel}${weapon}: ${crit}${auto} for ${damage} damage.${hp}${state}. ` +
+    `${actorLabel} attacked ${targetLabel}${weapon}: ${crit}${auto} for ${damage} damage${hex}.${hp}${state}. ` +
     'Narrate this outcome; it already happened.'
   );
 }
@@ -72,6 +79,10 @@ export type ResolvedSpellOutcome = {
   saveDC?: number;
   saved?: boolean;
   autoHit?: boolean;
+  /** True for the Hex cast itself: a no-damage curse, narrated as such (#754). */
+  hexCurse?: boolean;
+  /** Extra necrotic from Hex on a spell-attack hit against its cursed target (#754). */
+  hexDamage?: number;
   finalDamage?: number;
   damageType?: string;
   targetNewHp?: number;
@@ -129,6 +140,10 @@ export function describeResolvedSpell(
   outcome: ResolvedSpellOutcome,
   showTargetNumbers: boolean,
 ): string {
+  // #754: the Hex cast is a no-damage curse, not a spell attack. One engine line, exactly.
+  if (outcome.hexCurse) {
+    return `${actorLabel} curses ${targetLabel} with ${spellName}.`;
+  }
   if (outcome.autoHit) {
     return resolvedSpellLine(
       targetLabel,
@@ -157,13 +172,19 @@ export function describeResolvedSpell(
       showTargetNumbers && outcome.targetAC != null && Number.isFinite(outcome.targetAC)
         ? ` ${formatVersusArmorClass(outcome)}`
         : '';
-    return resolvedSpellLine(
+    // Hex's rider is already inside finalDamage (#754); name it on the damage line, not as extra.
+    const hex =
+      outcome.hexDamage && outcome.hexDamage > 0
+        ? ` (including ${outcome.hexDamage} necrotic from Hex)`
+        : '';
+    const line = resolvedSpellLine(
       targetLabel,
       outcome,
       `${actorLabel} cast ${spellName} at ${targetLabel} — spell attack ${outcome.d20} + ${
         outcome.attackBonus
       } = ${outcome.totalAttackRoll}${versus} — ${result}.`,
     );
+    return hex ? line.replace(/ damage\. /, ` damage${hex}. `) : line;
   }
   return resolvedSpellLine(
     targetLabel,
