@@ -1,5 +1,6 @@
 import Ajv, { type ValidateFunction } from 'ajv';
 
+import { stripOptionsAppendix } from './dm/narration-text.js';
 import { isRetryableUpstreamStatus, LLMUpstreamError } from './llm-errors.js';
 import { llmFetch } from './llm-fixture-fetch.js';
 import { alertProviderKeyLimit, isProviderKeyLimitError } from './llm-key-limit.js';
@@ -281,6 +282,9 @@ export const validateToolReplyText = (
     throw new Error(
       `Structured response does not match schema: ${strippingSchemaAjv.errorsText(validate.errors)}`,
     );
+  }
+  if (parsed && typeof parsed === 'object' && 'text' in parsed && typeof parsed.text === 'string') {
+    parsed.text = stripOptionsAppendix(parsed.text);
   }
   return JSON.stringify(parsed);
 };
@@ -730,7 +734,13 @@ export class LLMProviderService {
       const strictRequest = Boolean(responseSchema && strictSchema);
       const reqBody = {
         model: candidate,
-        messages: instructedSchema ? instructedMessages : messages,
+        messages: instructedSchema
+          ? instructedMessages
+          : toolSchema
+            ? buildMessages(
+                `${systemPrompt ?? ''}\nThe options belong only in the options field; never append an options block to text.`,
+              )
+            : messages,
         max_tokens: maxTokens,
         // #783: omitted for vendors whose OpenRouter endpoints reject
         // `temperature` alongside require_parameters (anthropic/).
