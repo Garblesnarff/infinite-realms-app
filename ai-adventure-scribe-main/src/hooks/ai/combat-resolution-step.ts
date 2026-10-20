@@ -131,6 +131,7 @@ export interface CombatResolutionParams {
   /** The encounter's participants, so the player's own attacks can be told apart. */
   participants?: Array<{
     id: string;
+    characterId?: string | null;
     name?: string;
     participantType?: string;
     turnOrder?: number;
@@ -140,6 +141,13 @@ export interface CombatResolutionParams {
     currentHitPoints?: number;
     maxHitPoints?: number;
   }>;
+  /**
+   * The human player's character id. Companions are seated through their characterId too
+   * and are 'player'-typed on both server and client, so the roster alone cannot say
+   * which 'player' row is the human; the dm-actions handler's own player finds
+   * disambiguate the same way.
+   */
+  playerCharacterId?: string;
   /** Actors whose refused declarations are already queued for their next legal turn. */
   queuedIntentActorIds?: string[];
   /** The entry endpoint already proposed this first action, and its die was requested upstream. */
@@ -314,6 +322,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     userPlan,
     turnCount,
     participants,
+    playerCharacterId,
     queuedIntentActorIds,
     playerAttackRoll,
     preResolvedNpcTurns,
@@ -1183,9 +1192,15 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     };
   }
 
-  const playerParticipant = participants?.find(
-    (participant) => participant.participantType === 'player',
-  );
+  // Companions are 'player'-typed too, so prefer the row whose characterId is the
+  // human's; roster shapes that predate characterId on the wire fall back to the first
+  // 'player' row rather than losing the player entirely.
+  const playerRows =
+    participants?.filter((participant) => participant.participantType === 'player') ?? [];
+  const playerParticipant =
+    (playerCharacterId
+      ? playerRows.find((participant) => participant.characterId === playerCharacterId)
+      : undefined) ?? playerRows[0];
   const combatOver = encounterAlreadyConcluded || preflightBoundary === 'combat_ended';
   if (declaredPlayerSpell && !declaredSpellReachedEngine && !combatOver) {
     // The player declared a spell and the DM's batch never cast it — no action, the wrong

@@ -28,7 +28,9 @@ const HIT_BADGE_WORDS = new Set(['HIT', 'CRITICAL HIT', 'AUTO-HIT']);
  * `inventedExtraStrikeClaims` off entirely, and a fake second strike on the player ships
  * (#716, the #771 follow-up). When `playerName` is given, an HP card counts only if it names
  * the player; callers with a roster always pass it. Without a name there is nothing to check
- * the block against, so it counts as before.
+ * the block against, so it counts as before — that unnamed form trusts the flag, which is
+ * the bug above, so it is legacy for roster-less tests and fixtures only: production
+ * callers must pass the name.
  */
 export function engineHitsOnPlayer(
   cards: EngineResultCard[],

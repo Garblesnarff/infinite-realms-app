@@ -30,10 +30,16 @@ export const FIGHT_ROSTER = [
   { id: REEVES.id, name: REEVES.name, participantType: 'monster' },
 ];
 
-/** The same fight with the player's companion Mira seated on the party's side. */
+/**
+ * The same fight with the player's companion Mira seated on the party's side. A companion
+ * is seated through her characterId, so the server types her 'player'
+ * (`resolveParticipantType`) and the client keeps her 'player' (`mapAuthoritativeCombat`)
+ * — the seat whose hits `buildNpcEngineMessage` flags `targetHp`, which is exactly how a
+ * companion's hit comes to carry an HP block.
+ */
 export const PARTY_ROSTER = [
   { id: SCHOLAR.id, name: SCHOLAR.name, participantType: 'player' },
-  { id: MIRA.id, name: MIRA.name, participantType: 'npc' },
+  { id: MIRA.id, name: MIRA.name, participantType: 'player' },
   { id: REEVES.id, name: REEVES.name, participantType: 'monster' },
 ];
 

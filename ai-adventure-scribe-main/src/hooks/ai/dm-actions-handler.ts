@@ -851,6 +851,7 @@ export async function handleDmActionsAndTransitions(
         ? 'Combat entry was confirmed. Narrate only authoritative engine results; the player declaration itself is not an outcome.'
         : result.text,
       participants: activeEncounter.participants,
+      playerCharacterId: params.characterRecord?.id as string | undefined,
       aiContext,
       conversationHistory,
       userPlan,
