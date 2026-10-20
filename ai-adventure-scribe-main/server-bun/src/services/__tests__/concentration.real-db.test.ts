@@ -309,6 +309,8 @@ describe('live route: POST /v1/characters/:id/damage forces the CON save (#621 R
 
   let app: { handle: (request: Request) => Response | Promise<Response> };
   let liveCharacterId: string;
+  let getConcentration: typeof ConcentrationService.getConcentration;
+  let startConcentration: typeof ConcentrationService.startConcentration;
 
   async function postDamageWithRoll(
     amount: number,
@@ -349,6 +351,7 @@ describe('live route: POST /v1/characters/:id/damage forces the CON save (#621 R
     const { createRequestPipelineApp } = await import('../../http-pipeline.js');
     const { charactersRoutes } = await import('../../routes/v1/characters.js');
     app = createRequestPipelineApp().use(charactersRoutes);
+    ({ getConcentration, startConcentration } = await import('../combat/concentration-service.js'));
 
     const [{ id }] = await db
       .insert(characters)
@@ -371,6 +374,40 @@ describe('live route: POST /v1/characters/:id/damage forces the CON save (#621 R
 
   afterAll(async () => {
     await closeRealDb();
+  });
+
+  it('cast then damage through the real route: the cast starts concentration and the hit forces the save (#709)', async () => {
+    // The full #709 loop. The cast goes through the DM turn's production
+    // entry point (spendStorySpellSlots -- story casts have no dedicated
+    // HTTP route; the sheet Cast button reaches the engine through the DM
+    // turn), then the damage goes through the real POST /:id/damage route.
+    const { spendStorySpellSlots } = await import('../dm/story-spell-slots.js');
+    const [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ characterId: liveCharacterId, sessionNumber: 1, status: 'active' })
+      .returning({ id: gameSessions.id });
+    const [character] = await db
+      .select()
+      .from(characters)
+      .where(eq(characters.id, liveCharacterId));
+    await spendStorySpellSlots({
+      userId: liveUserId,
+      sessionId,
+      playerInput: 'I cast Dancing Lights',
+      casts: { character, spells: ['Dancing Lights'] },
+    });
+    expect((await getConcentration(liveCharacterId))?.spellName).toBe('Dancing Lights');
+
+    // 30 damage -> DC 15. d20 pinned to 1: 1 + 2 = 3 fails.
+    const { status, json } = await postDamageWithRoll(30, 0);
+
+    expect(status).toBe(200);
+    const concentration = json.concentration as Record<string, unknown>;
+    expect(concentration.hadConcentration).toBe(true);
+    expect(concentration.saveTriggered).toBe(true);
+    expect(concentration.dc).toBe(15);
+    expect(concentration.dropped).toBe(true);
+    expect(await getConcentration(liveCharacterId)).toBeNull();
   });
 
   it('a failed CON save through the live route drops concentration', async () => {
@@ -400,6 +437,30 @@ describe('live route: POST /v1/characters/:id/damage forces the CON save (#621 R
       expect.stringContaining('maintains concentration on Bless (CON save 22 vs DC 15)'),
     );
     expect(await getConcentration(liveCharacterId)).not.toBeNull();
+  });
+
+  it('the live route response surfaces the concentration check (#709)', async () => {
+    // The client needs the check in the response to show the CON save that
+    // just happened: without it the save was invisible (Hark P1018-025).
+    await startConcentration(liveCharacterId, { name: 'Bless' });
+
+    // 30 damage -> DC 15. d20 pinned to 20: 20 + 2 = 22 succeeds.
+    const { status, json } = await postDamageWithRoll(30, 0.99999);
+
+    expect(status).toBe(200);
+    const concentration = json.concentration as Record<string, unknown>;
+    expect(concentration.hadConcentration).toBe(true);
+    expect(concentration.saveTriggered).toBe(true);
+    expect(concentration.dc).toBe(15);
+    expect(concentration.success).toBe(true);
+    expect(concentration.spellName).toBe('Bless');
+  });
+
+  it('the live route omits concentration when the character was not concentrating (#709)', async () => {
+    const { status, json } = await postDamageWithRoll(30, 0.99999);
+
+    expect(status).toBe(200);
+    expect('concentration' in json).toBe(false);
   });
 
   it('the forced save uses DC max(10, half damage): same die, different damage, different outcome', async () => {
@@ -721,6 +782,161 @@ describeWithDb('combat hook: maybeStartConcentrationOnCast (#709 Round 3)', () =
 
     expect(await maybeStartConcentrationOnCast(null, spell, characterId)).toBe(false);
     expect(await maybeStartConcentrationOnCast(undefined, spell, characterId)).toBe(false);
+    expect(await getConcentration(characterId)).toBeNull();
+  });
+});
+
+describeWithDb('combat attacks force the CON save (#709)', () => {
+  // resolveAttack's four damage sites call `checkTargetConcentrationAfterHit`
+  // after every hit on a PC. Driving a full resolveAttack here would need a
+  // live encounter, weapons and the turn-claim machinery; the four call sites
+  // pass the same narrow shape (target participant, applied damage, hp
+  // result), so the helper is exercised directly with the real DB and the
+  // real concentration service. The d20 is pinned through the helper's
+  // rollD20Fn hook -- production omits it and gets the server-owned rollD20.
+  let db: ReturnType<typeof realDb>;
+  const userId = testId('attack-conc-user');
+
+  let checkTargetConcentrationAfterHit: typeof CombatAttackServiceModule.checkTargetConcentrationAfterHit;
+  let getConcentration: typeof ConcentrationService.getConcentration;
+  let startConcentration: typeof ConcentrationService.startConcentration;
+
+  let characterId: string;
+
+  beforeAll(async () => {
+    db = realDb();
+    ({ checkTargetConcentrationAfterHit } = await import('../combat/combat-attack-service.js'));
+    ({ getConcentration, startConcentration } = await import('../combat/concentration-service.js'));
+
+    const [{ id }] = await db
+      .insert(characters)
+      .values({ userId, name: testId('attack-target'), level: 5 })
+      .returning({ id: characters.id });
+    characterId = id;
+    // CON 14 -> +2 modifier.
+    await db.insert(characterStats).values({
+      characterId: id,
+      constitution: 14,
+      maxHitPoints: 40,
+      currentHitPoints: 40,
+      temporaryHitPoints: 0,
+    });
+  });
+
+  beforeEach(async () => {
+    if (!hasRealDb) return;
+    await db
+      .delete(characterConcentration)
+      .where(eq(characterConcentration.characterId, characterId));
+  });
+
+  afterAll(async () => {
+    await closeRealDb();
+  });
+
+  const target = { characterId: '', name: 'Testy' };
+
+  it('a hit on a concentrating target triggers the save; a fail drops the spell and writes the line', async () => {
+    await startConcentration(characterId, { name: 'Dancing Lights' });
+
+    // 30 damage -> DC max(10, 15) = 15. Roll 1 + 2 = 3 fails.
+    const { lines, concentration } = await checkTargetConcentrationAfterHit({
+      target: { ...target, characterId },
+      damageDealt: 30,
+      targetIsConscious: true,
+      targetIsDead: false,
+      rollD20Fn: () => 1,
+    });
+
+    expect(concentration?.hadConcentration).toBe(true);
+    expect(concentration?.saveTriggered).toBe(true);
+    expect(concentration?.dc).toBe(15);
+    expect(concentration?.roll).toBe(1);
+    expect(concentration?.total).toBe(3);
+    expect(concentration?.success).toBe(false);
+    expect(concentration?.dropped).toBe(true);
+    expect(concentration?.droppedSpell).toBe('Dancing Lights');
+    expect(lines).toEqual(['Testy loses concentration on Dancing Lights.']);
+    expect(await getConcentration(characterId)).toBeNull();
+  });
+
+  it('a passed save keeps the spell and writes the maintained line', async () => {
+    await startConcentration(characterId, { name: 'Dancing Lights' });
+
+    // 30 damage -> DC 15. Roll 20 + 2 = 22 succeeds.
+    const { lines, concentration } = await checkTargetConcentrationAfterHit({
+      target: { ...target, characterId },
+      damageDealt: 30,
+      targetIsConscious: true,
+      targetIsDead: false,
+      rollD20Fn: () => 20,
+    });
+
+    expect(concentration?.saveTriggered).toBe(true);
+    expect(concentration?.success).toBe(true);
+    expect(concentration?.dropped).toBe(false);
+    expect(lines).toEqual(['Testy maintains concentration on Dancing Lights (CON save 22 vs DC 15).']);
+    expect((await getConcentration(characterId))?.spellName).toBe('Dancing Lights');
+  });
+
+  it('a hit on a target that is not concentrating is a no-op', async () => {
+    const { lines, concentration } = await checkTargetConcentrationAfterHit({
+      target: { ...target, characterId },
+      damageDealt: 30,
+      targetIsConscious: true,
+      targetIsDead: false,
+      rollD20Fn: () => 1,
+    });
+
+    expect(lines).toEqual([]);
+    expect(concentration).toBeUndefined();
+  });
+
+  it('an NPC target (no character row) is a no-op', async () => {
+    const { lines, concentration } = await checkTargetConcentrationAfterHit({
+      target: { characterId: null, name: 'Goblin' },
+      damageDealt: 30,
+      targetIsConscious: true,
+      targetIsDead: false,
+      rollD20Fn: () => 1,
+    });
+
+    expect(lines).toEqual([]);
+    expect(concentration).toBeUndefined();
+  });
+
+  it('zero damage dealt means no save', async () => {
+    await startConcentration(characterId, { name: 'Dancing Lights' });
+
+    const { lines, concentration } = await checkTargetConcentrationAfterHit({
+      target: { ...target, characterId },
+      damageDealt: 0,
+      targetIsConscious: true,
+      targetIsDead: false,
+      rollD20Fn: () => 1,
+    });
+
+    expect(concentration?.saveTriggered).toBe(false);
+    expect(lines).toEqual([]);
+    expect((await getConcentration(characterId))?.spellName).toBe('Dancing Lights');
+  });
+
+  it('dropping to 0 HP ends concentration outright, no save', async () => {
+    await startConcentration(characterId, { name: 'Dancing Lights' });
+
+    const { lines, concentration } = await checkTargetConcentrationAfterHit({
+      target: { ...target, characterId },
+      damageDealt: 40,
+      targetIsConscious: false,
+      targetIsDead: false,
+      rollD20Fn: () => 20,
+    });
+
+    expect(concentration?.hadConcentration).toBe(true);
+    expect(concentration?.saveTriggered).toBe(false);
+    expect(concentration?.dropped).toBe(true);
+    expect(concentration?.incapacitated).toBe(true);
+    expect(lines).toEqual(['Testy loses concentration on Dancing Lights.']);
     expect(await getConcentration(characterId)).toBeNull();
   });
 });

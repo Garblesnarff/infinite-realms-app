@@ -210,6 +210,7 @@ export function buildCharacterSheet(
     skills: [],
     attacks: [],
     conditions: [],
+    concentratingOn: null,
     equipment: [],
     inventory: [],
     spells: EMPTY_SPELLS,
@@ -371,6 +372,8 @@ export function buildCharacterSheet(
     skills,
     attacks,
     conditions,
+    // #709: server-side concentration -- the spell a CON save would end.
+    concentratingOn: character.concentration?.spellName ?? null,
     equipment,
     inventory,
     // Equipment never loaded (its request failed): say so, rather than "No weapons".

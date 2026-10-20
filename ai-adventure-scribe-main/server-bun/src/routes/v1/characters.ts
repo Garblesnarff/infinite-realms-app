@@ -102,6 +102,35 @@ export async function overlayCharacterConditions(
 }
 
 /**
+ * Overlay the character's server-side concentration onto the sheet-facing
+ * character payload. `character_concentration` is the single source of truth
+ * (#709): without this the sheet only ever saw the client-managed
+ * `activeConcentration`, so a spell cast through the DM turn never showed an
+ * indicator. Best-effort like the conditions overlay: a lookup failure must
+ * not 500 the whole character read.
+ */
+export async function overlayCharacterConcentration(
+  mapped: Record<string, unknown> | null,
+  characterId: string,
+): Promise<Record<string, unknown> | null> {
+  if (!mapped) return mapped;
+  try {
+    const { getConcentration } = await import('../../services/combat/concentration-service.js');
+    const current = await getConcentration(characterId);
+    return {
+      ...mapped,
+      concentration: current
+        ? { spellName: current.spellName, spellId: current.spellId }
+        : null,
+    };
+  } catch (error) {
+    // prettier-ignore
+    logger.warn({ err: error, characterId }, 'overlayCharacterConcentration lookup failed; serving character without concentration');
+    return mapped;
+  }
+}
+
+/**
  * Validation schema for character operations
  */
 const characterSchema = t.Object({
@@ -563,7 +592,10 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
     const withSlots = await overlayEngineSpellSlots(mapped, resolved.id, user!.userId);
     // Serve the out-of-combat conditions so the sheet's Conditions panel reads the
     // same source the story writer writes (#218 step 4).
-    return overlayCharacterConditions(withSlots, resolved.id);
+    const withConditions = await overlayCharacterConditions(withSlots, resolved.id);
+    // Serve the server-side concentration so the sheet's indicator reads the
+    // same row the damage path checks (#709).
+    return overlayCharacterConcentration(withConditions, resolved.id);
   })
 
   /**
@@ -691,14 +723,21 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
       // (participant row, sheet mirror, engine line); out of one it is the sheet path (#2518, #2622).
       // Loaded on use: the combat write path is a heavy import chain no other character route needs.
       const { applyNonAttackDamage } = await import('../../services/combat/non-attack-damage.js');
-      const { vitals, engineLines } = await applyNonAttackDamage(
+      const { vitals, engineLines, concentration } = await applyNonAttackDamage(
         params.id,
         user!.userId,
         body.amount,
         'damage_taken',
         { critical: body.critical === true, damageType: body.damageType },
       );
-      return { ...vitals, engineLines };
+      // #709: surface the concentration check so the client can show the CON
+      // save that just happened. Absent when the character was not
+      // concentrating -- the wire shape is unchanged for everyone else.
+      return {
+        ...vitals,
+        engineLines,
+        ...(concentration?.hadConcentration ? { concentration } : {}),
+      };
     },
     {
       body: t.Object({

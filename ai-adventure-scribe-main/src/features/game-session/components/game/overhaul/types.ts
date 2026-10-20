@@ -116,6 +116,8 @@ export interface CharacterSheetVM {
   skills: NamedModVM[];
   attacks: AttackVM[];
   conditions: ConditionVM[];
+  /** #709: the spell the sheet's owner is concentrating on, from the server. */
+  concentratingOn?: string | null;
   equipment: EquipmentVM[];
   inventory: InventoryItemVM[];
   /** True when the character's equipment did not load; the gear sections say so. */

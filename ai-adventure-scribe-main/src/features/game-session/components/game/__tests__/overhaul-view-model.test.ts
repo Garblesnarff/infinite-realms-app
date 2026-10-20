@@ -487,4 +487,17 @@ describe('sheet weapon attack bonuses with a name-only class (#2519)', () => {
       expect.objectContaining({ name: 'Longsword', bonus: '+1' }),
     ]);
   });
+
+  it('maps server-side concentration to the sheet indicator (#709)', () => {
+    const concentrating = {
+      id: 'char-conc',
+      name: 'The Apprentice',
+      level: 5,
+      concentration: { spellName: 'Dancing Lights', spellId: 'dancing-lights' },
+    } as unknown as Character;
+
+    expect(buildCharacterSheet(concentrating).concentratingOn).toBe('Dancing Lights');
+    expect(buildCharacterSheet({ ...concentrating, concentration: null }).concentratingOn).toBeNull();
+    expect(buildCharacterSheet({ ...concentrating, concentration: undefined }).concentratingOn).toBeNull();
+  });
 });

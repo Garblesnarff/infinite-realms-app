@@ -266,6 +266,13 @@ export interface Character {
     }>;
   };
   conditions?: Condition[];
+  /**
+   * #709: the spell the character is concentrating on, from the server's
+   * `character_concentration` row (GET /v1/characters/:id overlays it). Null
+   * when not concentrating. This is the server-side state; the legacy
+   * client-managed `activeConcentration` is separate.
+   */
+  concentration?: { spellName: string; spellId: string | null } | null;
   equipment?: string[];
   selectedEquipmentOptionIndex?: number; // Tracks which equipment option was selected (for UI feedback)
   skillProficiencies?: string[];

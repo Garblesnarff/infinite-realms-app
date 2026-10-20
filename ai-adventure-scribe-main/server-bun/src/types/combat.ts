@@ -5,6 +5,7 @@
  */
 
 import type { PendingCombatIntent } from '../../../db/schema/index';
+import type { ConcentrationCheckResult } from '../services/combat/concentration-service.js';
 import type { EntitySize } from '../tactical/types.js';
 
 /**
@@ -680,6 +681,12 @@ export interface AttackResult {
   autoRolled?: boolean;
   /** Engine-only transcript facts produced during this resolution. */
   transcriptLines?: string[];
+  /**
+   * #709: the concentration check this hit forced on a concentrating target
+   * (2014: CON save, DC max(10, half damage)). Present only when the target
+   * was concentrating when the damage landed.
+   */
+  concentration?: ConcentrationCheckResult;
   /** Spell-resolution facts used to build the authoritative DM engine line. */
   spellName?: string;
   saveAbility?: string;

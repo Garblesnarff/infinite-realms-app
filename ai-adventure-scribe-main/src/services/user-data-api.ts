@@ -633,6 +633,22 @@ export const userDataApi = {
     temporaryHitPoints: number;
     /** The engine's sentences for what the damage did (dropped to 0, a failure, instant death). */
     engineLines?: string[];
+    /**
+     * #709: the concentration check this hit forced, present only when the
+     * character was concentrating when the damage landed.
+     */
+    concentration?: {
+      hadConcentration: boolean;
+      saveTriggered: boolean;
+      dc?: number;
+      roll?: number;
+      total?: number;
+      success?: boolean;
+      dropped?: boolean;
+      droppedSpell?: string;
+      spellName?: string;
+      incapacitated?: boolean;
+    };
   }> =>
     request(`/v1/characters/${encodeURIComponent(characterId)}/damage`, {
       method: 'POST',
