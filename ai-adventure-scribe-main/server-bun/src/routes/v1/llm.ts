@@ -46,6 +46,7 @@ import { enforceCombatTransitionContract } from '../../services/combat-transitio
 import {
   refuseFeaturesCharacterLacks,
   type AllowedCasts,
+  type AllowedFeatures,
 } from '../../services/dm/dm-feature-gate.js';
 import {
   persistGeneratedDmReply,
@@ -938,6 +939,28 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             declaredDefense = null;
           }
         }
+        // #712: a typed Lay on Hands in combat resolves against the pool before the
+        // DM narrates, so the reply carries the engine's truth (the healing or the
+        // clear refusal) instead of ignoring or inventing it. Not gated on
+        // !declaredAttack: the QA case combined it with an attack in one line.
+        // Gated on dmReply: narration regens carry no dmReply, and resolving
+        // twice would spend the pool twice.
+        // Dynamic import: the resolver pulls in the database client at load time.
+        let layOnHandsDirective: string | null = null;
+        if (dmReply && defenseSessionId && typeof playerInput === 'string') {
+          try {
+            const { resolveCombatLayOnHands } = await import(
+              '../../services/dm/combat-lay-on-hands.js'
+            );
+            layOnHandsDirective = await resolveCombatLayOnHands({
+              playerInput,
+              sessionId: defenseSessionId,
+              userId,
+            });
+          } catch {
+            layOnHandsDirective = null;
+          }
+        }
         // #2514: the DM prompt receives the engine-decided creature count and
         // names BEFORE it narrates the approach. For a declared attack the
         // target is known before generation, so sizing runs here and the
@@ -970,13 +993,17 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             });
           }
         }
-        const llmPrompt = declaredAttack
-          ? appendDeclaredAttackDirective(prompt, declaredAttack.actorName, encounterDirective)
-          : declaredDefense
-            ? appendDeclaredDefenseDirective(prompt, declaredDefense)
-            : untargetedSpell
-              ? appendUntargetedSpellDirective(prompt, untargetedSpell.name)
-              : prompt;
+        const llmPromptBase =
+          declaredAttack
+            ? appendDeclaredAttackDirective(prompt, declaredAttack.actorName, encounterDirective)
+            : declaredDefense
+              ? appendDeclaredDefenseDirective(prompt, declaredDefense)
+              : untargetedSpell
+                ? appendUntargetedSpellDirective(prompt, untargetedSpell.name)
+                : prompt;
+        const llmPrompt = layOnHandsDirective
+          ? `${llmPromptBase}\n\n${layOnHandsDirective}`
+          : llmPromptBase;
 
         const generateOnce = (): Promise<LLMResponse> =>
           LLMProviderService.generate({
@@ -1067,6 +1094,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // before the reply is persisted or returned, so it applies nothing and spends nothing.
         let allowedCasts: AllowedCasts | null = null;
         let concentrationCastsRefused = false;
+        let allowedFeatures: AllowedFeatures | null = null;
         if (dmReply) {
           result = await refuseFeaturesCharacterLacks({
             result,
@@ -1080,6 +1108,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             },
             onCastsRefused: () => {
               concentrationCastsRefused = true;
+            },
+            onFeaturesAllowed: (features) => {
+              allowedFeatures = features;
             },
           });
         }
@@ -1225,6 +1256,32 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             });
           } catch (error) {
             logger.warn({ msg: 'DM_STORY_SLOT_SPEND_FAILED', sessionId: castSessionId, error });
+          }
+        }
+        // #712: a feature the gate allowed spends its uses, server-side, once per player
+        // message — a Retry replays the same saved player message, and a usage-log row
+        // for the feature at or after it means the message already spent it (the slot
+        // spend's `since` rule, on the feature usage log). Out of combat only (in combat
+        // the engine resolves Lay on Hands pre-generation), and never on a turn that
+        // opens combat. A spend that fails is logged; it never costs the player their turn.
+        // Polarity note: `combatEntry` is the client-sent entry context, present only when
+        // combat is NOT already active; `combat_entry_pending` marks the turn that opens
+        // combat. So `combatEntry && !envelope?.combat_entry_pending` is an ordinary story turn.
+        const featuresToSpend = allowedFeatures as AllowedFeatures | null;
+        if (featuresToSpend && castSessionId && combatEntry && !envelope?.combat_entry_pending) {
+          try {
+            const { spendStoryFeatureUses } = await import(
+              '../../services/dm/story-feature-uses.js'
+            );
+            await spendStoryFeatureUses({
+              userId,
+              sessionId: castSessionId,
+              playerInput: playerInput ?? '',
+              character: featuresToSpend.character,
+              features: featuresToSpend.features,
+            });
+          } catch (error) {
+            logger.warn({ msg: 'DM_STORY_FEATURE_SPEND_FAILED', sessionId: castSessionId, error });
           }
         }
         // #218 step 2: XP the story awards reaches the sheet, server-side, once per player message.

@@ -159,9 +159,17 @@ export interface FeatureGateInput {
   onCastsAllowed?: (casts: AllowedCasts) => void;
   /** Told the turn's casts were refused — the character lacks them, or no slot remains (#709). */
   onCastsRefused?: () => void;
+  /**
+   * Told the class features the player claimed in their own words and the check
+   * allowed (#712). The story spends their uses after the reply is allowed.
+   */
+  onFeaturesAllowed?: (features: AllowedFeatures) => void;
 }
 
 export type AllowedCasts = { character: CharacterRow; spells: string[] };
+
+/** A feature the player's own words claimed and the sheet allowed. */
+export type AllowedFeatures = { character: CharacterRow; features: string[] };
 
 /**
  * Fails open: the generation is already paid for, so a check that cannot run logs and lets the
@@ -247,9 +255,24 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
       );
     });
   }
+  // A feature named after a use verb fragments the same way ("use Lay on Hands"
+  // captures only "Lay", because "on" is a phrase stop word), so usable feature
+  // names are also matched straight against the claim texts behind a use verb.
+  const useFeatureClaims: string[] = [];
+  if (usePhrases.length && usable.length) {
+    for (const name of [...usable].sort((a, b) => b.length - a.length)) {
+      const pattern = new RegExp(
+        `\\b(?:use|uses|using|activate|activates|activating|invoke|invokes|invoking)\\s+(?:my\\s+|the\\s+|a\\s+|an\\s+)?${escapeRegExp(name)}(?![\\w'-])`,
+        'i',
+      );
+      if (texts.some((text) => pattern.test(text))) useFeatureClaims.push(name);
+    }
+  }
   const allClaimedFeatures = [
     ...new Map(
-      [...claimedFeatures, ...castFeatureClaims].map((name) => [name.toLowerCase(), name] as const),
+      [...claimedFeatures, ...castFeatureClaims, ...useFeatureClaims].map(
+        (name) => [name.toLowerCase(), name] as const,
+      ),
     ).values(),
   ];
   if (!allClaimedFeatures.length && !claimedSpells.length) return result;
@@ -336,6 +359,10 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
       : null;
   if (!refused.length && !noSlot.length && spells.length && !input.inCombat)
     input.onCastsAllowed?.({ character, spells });
+  // #712: the story spends allowed feature uses (Divine Sense, Lay on Hands) after
+  // the reply is allowed. In combat the engine resolves them instead.
+  if (!refused.length && !noSlot.length && allClaimedFeatures.length && !input.inCombat)
+    input.onFeaturesAllowed?.({ character, features: allClaimedFeatures });
   if (!refused.length && !noSlot.length) return result;
 
   logger.warn({
