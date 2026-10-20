@@ -218,6 +218,18 @@ const subscriptionUpdatedEvent = {
   },
 };
 
+// Same subscription.updated, but the purchased price is the enterprise one (#848).
+const subscriptionUpdatedEnterpriseEvent = {
+  ...subscriptionUpdatedEvent,
+  id: 'evt_sub_updated_enterprise_1',
+  data: {
+    object: {
+      ...subscriptionUpdatedEvent.data.object,
+      items: { data: [{ price: { id: 'price_enterprise' } }] },
+    },
+  },
+};
+
 const paymentFailedEvent = {
   id: 'evt_pay_failed_1',
   object: 'event',
@@ -665,6 +677,64 @@ describe('billing webhook API boundary', () => {
 
       expect(retrievedCharges).toEqual([]);
       expect(userUpdates()).toHaveLength(0);
+    });
+  });
+
+  // #848: checkout.session.completed must write the plan for the price actually
+  // purchased (read off the subscription via the mocked Stripe retrieve, whose
+  // price follows subscriptionPriceId), not the literal 'pro'.
+  describe('checkout.session.completed plan (#848)', () => {
+    beforeEach(() => {
+      delete process.env.STRIPE_ENTERPRISE_PRICE_ID;
+    });
+
+    it('writes pro for the pro price', async () => {
+      subscriptionPriceId = 'price_pro';
+
+      const response = await billingRoutes.handle(webhookRequest());
+
+      expect(response.status).toBe(200);
+      expect(userUpdates()).toHaveLength(1);
+      expect(userUpdates()[0]).not.toContain("plan = 'pro'");
+      expect(lastUpdateValues()).toEqual(['pro', 'cus_1', 'sub_1', 'user_1']);
+    });
+
+    it('writes enterprise when the purchased price is the enterprise price', async () => {
+      process.env.STRIPE_ENTERPRISE_PRICE_ID = 'price_enterprise';
+      subscriptionPriceId = 'price_enterprise';
+
+      const response = await billingRoutes.handle(webhookRequest());
+
+      expect(response.status).toBe(200);
+      expect(userUpdates()).toHaveLength(1);
+      expect(lastUpdateValues()).toEqual(['enterprise', 'cus_1', 'sub_1', 'user_1']);
+    });
+
+    it('reversed order: subscription.updated before checkout still ends on enterprise', async () => {
+      process.env.STRIPE_ENTERPRISE_PRICE_ID = 'price_enterprise';
+      subscriptionPriceId = 'price_enterprise';
+
+      constructEventAsync = async () => subscriptionUpdatedEnterpriseEvent;
+      const updated = await billingRoutes.handle(webhookRequest());
+      expect(updated.status).toBe(200);
+      expect(lastUpdateValues()[0]).toBe('enterprise');
+
+      constructEventAsync = async () => checkoutEvent;
+      const completed = await billingRoutes.handle(webhookRequest());
+
+      expect(completed.status).toBe(200);
+      expect(userUpdates()).toHaveLength(2);
+      expect(lastUpdateValues()).toEqual(['enterprise', 'cus_1', 'sub_1', 'user_1']);
+    });
+
+    it('warns and writes free when the purchased price is not a configured plan price', async () => {
+      subscriptionPriceId = 'price_unknown';
+
+      const response = await billingRoutes.handle(webhookRequest());
+
+      expect(response.status).toBe(200);
+      expect(lastUpdateValues()).toEqual(['free', 'cus_1', 'sub_1', 'user_1']);
+      expect(warnings.some((w) => w.msg === 'STRIPE_CHECKOUT_UNKNOWN_PRICE')).toBe(true);
     });
   });
 
