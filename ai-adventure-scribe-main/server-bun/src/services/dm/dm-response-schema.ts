@@ -431,7 +431,11 @@ const baseProperties = {
   },
   combat_actions: {
     type: 'array',
-    items: { oneOf: [targetedCombatActionSchema, aoeCombatActionSchema] },
+    // #782 item 8: anyOf, not oneOf. The two variants are disjoint — a targeted
+    // action requires target_ids/movement_feet (which the AoE schema forbids),
+    // an AoE action requires origin (which the targeted schema forbids) — so
+    // anyOf accepts exactly the same actions oneOf did.
+    items: { anyOf: [targetedCombatActionSchema, aoeCombatActionSchema] },
   },
 } as const;
 

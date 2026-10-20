@@ -1,3 +1,4 @@
+import Ajv from 'ajv';
 import { describe, expect, test } from 'bun:test';
 
 import {
@@ -266,5 +267,122 @@ describe('dmResponseSchema scene_spec contract (#782 item 6)', () => {
     expect(required).not.toContain('sessionId');
     expect(sceneProps).toHaveProperty('seed');
     expect(required).toContain('seed');
+  });
+});
+
+describe('dmResponseSchema combat_actions anyOf contract (#782 item 8)', () => {
+  // #782 item 8: the last oneOf in the wire schema (combat_actions items) is
+  // now anyOf. The two variants are disjoint — a targeted action requires
+  // target_ids/movement_feet (forbidden on the AoE schema) and an AoE action
+  // requires origin (forbidden on the targeted schema) — so oneOf and anyOf
+  // accept exactly the same payloads. This test rebuilds the old oneOf shape
+  // from the same two variants and proves the verdicts match on a corpus.
+  const combatItems = (
+    dmResponseSchema.properties as Record<string, Record<string, unknown>>
+  ).combat_actions.items as { anyOf: unknown[] };
+  const variants = combatItems.anyOf;
+
+  const oldValidator = new Ajv({ strict: false }).compile({
+    type: 'array',
+    items: { oneOf: variants },
+  });
+  const newValidator = new Ajv({ strict: false }).compile({
+    type: 'array',
+    items: { anyOf: variants },
+  });
+
+  const targetedAction = {
+    actor_id: 'enemy-goblin-1',
+    action_type: 'attack',
+    target_ids: ['pc-artha'],
+    weapon_id: 'scimitar',
+    spell_id: null,
+    slot_level: null,
+    movement_feet: 30,
+  };
+  const aoeAction = {
+    actor_id: 'enemy-wizard',
+    action_type: 'cast_spell',
+    spell_id: 'fireball',
+    origin: { x: 5, y: 3 },
+    direction: null,
+    slot_level: 3,
+  };
+  // Missing-key variants are built explicitly — on the wire a missing key is
+  // absent, not present-with-undefined, and ajv + additionalProperties treat
+  // the two differently.
+  const targetedMissingIds = {
+    actor_id: 'enemy-goblin-1',
+    action_type: 'attack',
+    weapon_id: 'scimitar',
+    spell_id: null,
+    slot_level: null,
+    movement_feet: 30,
+  };
+  const aoeMissingOrigin = {
+    actor_id: 'enemy-wizard',
+    action_type: 'cast_spell',
+    spell_id: 'fireball',
+    direction: null,
+    slot_level: 3,
+  };
+
+  // [payload, expected verdict]: mirrors what the DM model emits on the
+  // google/ branch (see llm-provider-gemini-full-schema.test.ts).
+  const corpus: Array<[string, unknown, boolean]> = [
+    ['accepts a valid targeted action', [targetedAction], true],
+    ['accepts a valid AoE action', [aoeAction], true],
+    ['accepts both kinds in one array', [targetedAction, aoeAction], true],
+    ['rejects a targeted action missing target_ids', [targetedMissingIds], false],
+    ['rejects an AoE action missing origin', [aoeMissingOrigin], false],
+    [
+      'rejects an action with both target_ids and origin (matches neither variant)',
+      [{ ...targetedAction, origin: { x: 1, y: 1 } }],
+      false,
+    ],
+    [
+      'rejects an unknown action_type',
+      [{ ...targetedAction, action_type: 'teleport' }],
+      false,
+    ],
+    [
+      'rejects an extra property',
+      [{ ...targetedAction, extra: 'nope' }],
+      false,
+    ],
+    ['rejects an AoE action with spell_id null', [{ ...aoeAction, spell_id: null }], false],
+  ];
+
+  for (const [name, payload, expected] of corpus) {
+    test(name, () => {
+      const oldVerdict = oldValidator(payload);
+      const newVerdict = newValidator(payload);
+      expect(oldVerdict).toBe(expected);
+      expect(newVerdict).toBe(oldVerdict);
+    });
+  }
+
+  test('oneOf and anyOf agree across systematic mutations of both variants', () => {
+    const mutations: unknown[] = [];
+    for (const base of [targetedAction, aoeAction]) {
+      for (const key of Object.keys(base)) {
+        const copy: Record<string, unknown> = { ...base };
+        delete copy[key];
+        mutations.push([copy]);
+      }
+      for (const actionType of ['attack', 'cast_spell', 'dash', 'teleport']) {
+        mutations.push([{ ...base, action_type: actionType }]);
+      }
+      mutations.push([{ ...base, slot_level: 'high' }]);
+      mutations.push([{ ...base, actor_id: 42 }]);
+    }
+    for (const payload of mutations) {
+      expect(newValidator(payload)).toBe(oldValidator(payload));
+    }
+  });
+
+  test('parseDmResponse accepts a full reply carrying both action kinds', () => {
+    const parsed = parseDmResponse(response({ combat_actions: [targetedAction, aoeAction] }));
+    expect(parsed.success).toBe(true);
   });
 });

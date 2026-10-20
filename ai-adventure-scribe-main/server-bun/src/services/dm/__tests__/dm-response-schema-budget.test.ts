@@ -16,6 +16,10 @@ import { createDmResponseSchema, dmResponseSchema } from '../dm-response-schema.
  *  - createDmResponseSchema(): 28 unions, 13 optionals, 1 oneOf,
  *    1 numeric/length keyword
  *
+ * #782 item 8 lowered the oneOf baselines to 0 (combat_actions now uses anyOf
+ * between two disjoint variants); the oneOf target todos below are now real
+ * assertions.
+ *
  * Counting follows the Anthropic convention from
  * dm-response-schema-anthropic.test.ts: every `anyOf` / `oneOf` node and every
  * `type: [..., 'null']` array counts as one union; every object property not
@@ -27,24 +31,27 @@ import { createDmResponseSchema, dmResponseSchema } from '../dm-response-schema.
 
 /**
  * Strict structured-output targets (docs checked 2026-10-16/17). Items 5-8 of
- * the epic tighten the ratchet from the baseline to these; until then they are
- * todos so this PR merges green.
+ * the epic tighten the ratchet from the baseline to these; each target starts
+ * as a todo and becomes a real assertion when its item lands (the oneOf target
+ * landed in #782 item 8; the remaining three are still todos).
  */
 const TARGET_MAX_UNIONS = 16;
 const TARGET_MAX_OPTIONALS = 24;
 const TARGET_MAX_ONE_OF = 0;
 const TARGET_MAX_KEYWORDS = 0;
 
-/** Baseline budget per phase, measured at bd9041bf — see header comment. */
+/** Baseline budget per phase, measured at bd9041bf — see header comment.
+ *  ONE_OF lowered to 0 by #782 item 8 (was 1). */
 const BASELINE_UNIONS = 34;
 const BASELINE_OPTIONALS = 20;
-const BASELINE_ONE_OF = 1;
+const BASELINE_ONE_OF = 0;
 const BASELINE_KEYWORDS = 7;
 
-/** Baseline budget for createDmResponseSchema(), measured at bd9041bf. */
+/** Baseline budget for createDmResponseSchema(), measured at bd9041bf.
+ *  ONE_OF lowered to 0 by #782 item 8 (was 1). */
 const BASELINE_DEFAULT_UNIONS = 28;
 const BASELINE_DEFAULT_OPTIONALS = 13;
-const BASELINE_DEFAULT_ONE_OF = 1;
+const BASELINE_DEFAULT_ONE_OF = 0;
 const BASELINE_DEFAULT_KEYWORDS = 1;
 
 /**
@@ -180,10 +187,11 @@ describe('dmResponseSchema strict budget (Refs #782 item 1)', () => {
         expect(budget.constraintPaths.length).toBeLessThanOrEqual(BASELINE_KEYWORDS);
       });
 
-      test.todo(
-        `target: ${TARGET_MAX_ONE_OF} oneOf (strict limit; baseline ${BASELINE_ONE_OF})`,
-        todoStub,
-      );
+      // #782 item 8: the last oneOf is gone; the target is now a real assertion.
+      test(`target: ${TARGET_MAX_ONE_OF} oneOf (strict limit)`, () => {
+        const budget = measureSchemaBudget(schemaForPhase(phase), `dmResponseSchema:${phase}`);
+        expect(budget.oneOfPaths).toEqual([]);
+      });
       test.todo(
         `target: ≤${TARGET_MAX_UNIONS} unions (strict limit; baseline ${BASELINE_UNIONS})`,
         todoStub,
@@ -220,10 +228,11 @@ describe('dmResponseSchema strict budget (Refs #782 item 1)', () => {
       expect(budget.constraintPaths.length).toBeLessThanOrEqual(BASELINE_DEFAULT_KEYWORDS);
     });
 
-    test.todo(
-      `target: ${TARGET_MAX_ONE_OF} oneOf (strict limit; baseline ${BASELINE_DEFAULT_ONE_OF})`,
-      todoStub,
-    );
+    // #782 item 8: the last oneOf is gone; the target is now a real assertion.
+    test(`target: ${TARGET_MAX_ONE_OF} oneOf (strict limit)`, () => {
+      const budget = measureSchemaBudget(createDmResponseSchema(), 'createDmResponseSchema()');
+      expect(budget.oneOfPaths).toEqual([]);
+    });
     test.todo(
       `target: ≤${TARGET_MAX_UNIONS} unions (strict limit; baseline ${BASELINE_DEFAULT_UNIONS})`,
       todoStub,
