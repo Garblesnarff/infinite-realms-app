@@ -36,6 +36,7 @@ import {
   buildEncounterSizeDirective,
   expandDerivedCombatants,
 } from '../../services/combat/encounter-sizing.js';
+import { maybeStartConcentrationAfterReply } from '../../services/combat/spell-cast-concentration.js';
 import {
   applyCombatEntryGate,
   stripUntargetedInitiativeRollRequests,
@@ -1015,6 +1016,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // #2718: a feature or spell the player claims and their character lacks is refused here,
         // before the reply is persisted or returned, so it applies nothing and spends nothing.
         let allowedCasts: AllowedCasts | null = null;
+        let concentrationCastsRefused = false;
         if (dmReply) {
           result = await refuseFeaturesCharacterLacks({
             result,
@@ -1025,6 +1027,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             clientCharacterId: combatEntry?.player?.characterId ?? null,
             onCastsAllowed: (casts) => {
               allowedCasts = casts;
+            },
+            onCastsRefused: () => {
+              concentrationCastsRefused = true;
             },
           });
         }
@@ -1055,6 +1060,34 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           logEnvelopeShape(null, degradedEnvelope.text, sessionId ?? combatEntry?.sessionId, true);
           set.status = 200;
           return degradedEnvelope;
+        }
+
+        // #709: a concentration spell cast via the sheet's Cast button (or typed
+        // with the [spell_id=...] tag) starts concentration. The DM narrates
+        // utility spells without touching the combat engine, so without this the
+        // character_concentration row is never created and damage never prompts
+        // a CON save. Placed AFTER the provider reply succeeds (not just after
+        // the quota/terminal gates): a cast the DM never answers — provider
+        // error or degraded envelope above — must not start concentration.
+        // The #2718 gate above refuses without setting result.error, so its
+        // refusal reaches the hook through concentrationCastsRefused. Runs on
+        // player intent once the reply is confirmed; a DB failure must not
+        // break chat.
+        try {
+          await maybeStartConcentrationAfterReply(prompt, sessionId, {
+            replyError: result.error,
+            castsRefused: concentrationCastsRefused,
+            gateRan: Boolean(dmReply),
+          });
+        } catch (concentrationError) {
+          logger.warn({
+            msg: 'LLM_GENERATE_CONCENTRATION_START_FAILED',
+            sessionId: sessionId ?? null,
+            error:
+              concentrationError instanceof Error
+                ? concentrationError.message
+                : String(concentrationError),
+          });
         }
 
         if (result.usage && result.provider) {

@@ -157,6 +157,8 @@ export interface FeatureGateInput {
   clientCharacterId?: string | null;
   /** Told the spells the player cast in their own words and the check allowed (#218 step 1). */
   onCastsAllowed?: (casts: AllowedCasts) => void;
+  /** Told the turn's casts were refused — the character lacks them, or no slot remains (#709). */
+  onCastsRefused?: () => void;
 }
 
 export type AllowedCasts = { character: CharacterRow; spells: string[] };
@@ -346,6 +348,7 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
     refusedSpells,
     noSlotSpells: noSlot.map((spell) => `${spell.name} (level ${spell.level})`),
   });
+  input.onCastsRefused?.();
   return {
     ...result,
     text: JSON.stringify(
