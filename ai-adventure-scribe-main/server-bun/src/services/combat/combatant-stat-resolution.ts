@@ -26,6 +26,7 @@ import {
 } from './srd-monster-resolution.js';
 import { logger } from '../../lib/logger.js';
 
+import type { AuthoredBossMove } from './boss-moves.js';
 import type { EntitySize } from '../../tactical/types.js';
 
 /** Where each resolution landed, for logging and for tests to assert on. */
@@ -45,6 +46,10 @@ export interface ResolvedCombatantStats extends ResolvedMonsterStats {
    * Flattening the two into one label would report an authored attack that nobody wrote.
    */
   attackProfile: MonsterAttackProfile;
+  /** `Mook: yes` on the authored block (house rule): no HP track, dropped by any damage. */
+  mook?: boolean;
+  /** The authored Opener, Turnabout and Finale lines, when present. */
+  bossMoves?: AuthoredBossMove[];
 }
 
 const TACTICAL_SIZES = new Set<EntitySize>([
@@ -155,6 +160,8 @@ export function resolveCombatantStats(
           maxHp,
           monsterName: authored.entityName,
         }),
+        mook: parsed.mook === true,
+        ...(parsed.bossMoves?.length ? { bossMoves: parsed.bossMoves } : {}),
       };
 
       if (filledFromFallback.length > 0) {

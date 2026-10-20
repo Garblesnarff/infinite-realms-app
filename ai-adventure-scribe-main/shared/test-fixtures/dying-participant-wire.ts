@@ -57,6 +57,9 @@ export const DYING_SCHOLAR_PARTICIPANT = {
   // #374: persisted at seating for exact 2014 victory-XP awards; NULL for players.
   monsterRef: null,
   xpValue: null,
+  // #728: a player is never a mook and authors no Boss Moves.
+  isMook: false,
+  bossMoves: null,
   createdAt: '2026-10-05T23:43:11.586Z',
   updatedAt: '2026-10-05T23:43:11.972Z',
   status: {

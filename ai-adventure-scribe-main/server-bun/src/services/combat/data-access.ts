@@ -931,3 +931,27 @@ export async function getParticipantInEncounter(
 
   return result.participant;
 }
+
+/**
+ * Count the mooks still standing in an encounter (#728): active mooks whose current HP is
+ * above 0. Feeds the mook group-attack bonus — a mook attacking with its pack gets +1 to hit
+ * per extra standing mook. A mook with no status row counts at its participant max HP.
+ */
+export async function countStandingMooks(encounterId: string): Promise<number> {
+  const rows = await db
+    .select({ id: combatParticipants.id })
+    .from(combatParticipants)
+    .leftJoin(
+      combatParticipantStatus,
+      eq(combatParticipantStatus.participantId, combatParticipants.id),
+    )
+    .where(
+      and(
+        eq(combatParticipants.encounterId, encounterId),
+        eq(combatParticipants.isMook, true),
+        eq(combatParticipants.isActive, true),
+        sql`COALESCE(${combatParticipantStatus.currentHp}, ${combatParticipants.maxHp}) > 0`,
+      ),
+    );
+  return rows.length;
+}

@@ -66,6 +66,27 @@ export function writeNpcEngineRow(
   );
 }
 
+/** One engine line in the combat log, keyed by `actionId` so a replayed drain writes it once. */
+export function writeEngineLineRow(
+  state: CombatState,
+  actionId: string,
+  line: string,
+  userId: string,
+): Promise<NpcEngineRow[]> {
+  const round = state.encounter.currentRound;
+  return storeEngineRow(
+    state,
+    actionId,
+    line,
+    {
+      intent: 'combat_npc_result',
+      round,
+      combatEngineBlocks: [{ sequence: 0, round, source: 'npc', lines: [line], cards: [] }],
+    },
+    userId,
+  );
+}
+
 /** The safety-cap line, one row per (round, holder): a drain that stops there again writes nothing. */
 export function writeNpcCapRow(
   state: CombatState,

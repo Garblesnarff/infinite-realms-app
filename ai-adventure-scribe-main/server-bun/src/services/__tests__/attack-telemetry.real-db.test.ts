@@ -37,6 +37,7 @@ import {
   inventoryItems,
   tacticalMaps,
 } from '../../../../db/schema/index';
+import { mookGroupAttackBonus } from '../combat/boss-moves.js';
 
 type LogPayload = Record<string, unknown>;
 
@@ -440,5 +441,176 @@ describeWithDb('attack resolution telemetry', () => {
     expect(line.targetSlug).toBe('telemetry-golem');
 
     await db.delete(tacticalMaps).where(eq(tacticalMaps.sessionId, sessionId));
+  });
+});
+
+/**
+ * The mook group attack bonus (#728 item 4): a mook attacking with its pack gets +1 to hit
+ * for each extra standing mook, to a maximum of +3. Asserted through a real `resolveAttack`,
+ * the same entry point the NPC drain uses — never against a hand-built number.
+ */
+describeWithDb('mook group attack bonus', () => {
+  // Read the shared connection at use time: the block above closes it in its afterAll.
+  let db: ReturnType<typeof realDb>;
+  const userId = testId('mook-group-user');
+  // The stat block's own to-hit number; the pack bonus is added on top by the engine.
+  const MOOK_ATTACK_BONUS = 4;
+
+  let encounterId: string;
+  let heroId: string;
+  let mookIds: string[];
+
+  beforeAll(async () => {
+    db = realDb();
+    const [campaign] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('mook-group-camp') })
+      .returning({ id: campaigns.id });
+    const [character] = await db
+      .insert(characters)
+      .values({ userId, campaignId: campaign.id, name: testId('mook-group-hero'), class: 'Fighter', level: 1 })
+      .returning({ id: characters.id });
+    await db.insert(characterStats).values({
+      characterId: character.id,
+      strength: 10,
+      armorClass: 13,
+      maxHitPoints: 60,
+      currentHitPoints: 60,
+      speed: 30,
+    });
+    const [session] = await db
+      .insert(gameSessions)
+      .values({ campaignId: campaign.id, characterId: character.id, sessionNumber: 1, status: 'active' })
+      .returning({ id: gameSessions.id });
+    const [encounter] = await db
+      .insert(combatEncounters)
+      .values({ sessionId: session.id, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
+      .returning({ id: combatEncounters.id });
+    encounterId = encounter.id;
+
+    // The mook's attack as seating stores it: the flat bonus from the stat block.
+    const mookProfile = {
+      source: 'authored',
+      attacks: [
+        {
+          name: 'Rusty Blade',
+          attackBonus: MOOK_ATTACK_BONUS,
+          damageDice: '1d6',
+          damageBonus: 2,
+          damageType: 'slashing',
+          normalRange: 5,
+          ranged: false,
+        },
+      ],
+    };
+    const rows = await db
+      .insert(combatParticipants)
+      .values([
+        {
+          encounterId,
+          characterId: character.id,
+          name: 'Pack Hero',
+          participantType: 'player',
+          turnOrder: 0,
+          initiative: 20,
+          armorClass: 13,
+          maxHp: 60,
+          speed: 30,
+        },
+        ...[1, 2, 3].map((n) => ({
+          encounterId,
+          name: `Mook ${n}`,
+          participantType: 'monster',
+          turnOrder: n,
+          initiative: 10 - n,
+          armorClass: 12,
+          maxHp: 10,
+          speed: 30,
+          isMook: true,
+          monsterAttack: mookProfile,
+        })),
+      ])
+      .returning({ id: combatParticipants.id, turnOrder: combatParticipants.turnOrder });
+    heroId = rows.find((row) => row.turnOrder === 0)!.id;
+    mookIds = rows.filter((row) => row.turnOrder !== 0).map((row) => row.id);
+    await db.insert(combatParticipantStatus).values(
+      rows.map((row) => ({
+        participantId: row.id,
+        currentHp: row.turnOrder === 0 ? 60 : 10,
+        maxHp: row.turnOrder === 0 ? 60 : 10,
+      })),
+    );
+  });
+
+  afterAll(async () => {
+    if (!hasRealDb) return;
+    await closeRealDb();
+  });
+
+  /** Hands the turn to `actorId`, refunds actions, and returns the version to claim. */
+  const giveTurnTo = async (actorId: string): Promise<number> => {
+    const [participant] = await db
+      .select({ turnOrder: combatParticipants.turnOrder })
+      .from(combatParticipants)
+      .where(eq(combatParticipants.id, actorId));
+    await db
+      .update(combatParticipants)
+      .set({ actionUsed: false, bonusActionUsed: false })
+      .where(eq(combatParticipants.encounterId, encounterId));
+    const [encounter] = await db
+      .update(combatEncounters)
+      .set({ currentTurnOrder: participant.turnOrder, updatedAt: new Date() })
+      .where(eq(combatEncounters.id, encounterId))
+      .returning({ version: combatEncounters.version });
+    return encounter.version;
+  };
+
+  test('a mook attacking with two standing pack-mates gets +2 to hit', async () => {
+    const expectedVersion = await giveTurnTo(mookIds[0]!);
+    emitted.length = 0;
+    await combatAttackService!.resolveAttack(
+      encounterId,
+      {
+        attackerId: mookIds[0]!,
+        targetId: heroId,
+        expectedVersion,
+        attackType: 'melee',
+      },
+      userId,
+    );
+    expect(emitted).toHaveLength(1);
+    const line = emitted[0]!;
+    // Three standing mooks: +1 per extra mook, so +2 on top of the stat block's +4.
+    expect(line.attackBonus).toBe(MOOK_ATTACK_BONUS + mookGroupAttackBonus(3));
+    // The total the hit check judged against carries the same bonus.
+    expect(Number(line.totalAttack) - Number(line.d20)).toBe(MOOK_ATTACK_BONUS + 2);
+  });
+
+  test('a lone mook gets no pack bonus', async () => {
+    // Two pack-mates drop to 0: the lone mook attacks alone.
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 0 })
+      .where(eq(combatParticipantStatus.participantId, mookIds[1]!));
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 0 })
+      .where(eq(combatParticipantStatus.participantId, mookIds[2]!));
+
+    const expectedVersion = await giveTurnTo(mookIds[0]!);
+    emitted.length = 0;
+    await combatAttackService!.resolveAttack(
+      encounterId,
+      {
+        attackerId: mookIds[0]!,
+        targetId: heroId,
+        expectedVersion,
+        attackType: 'melee',
+      },
+      userId,
+    );
+    expect(emitted).toHaveLength(1);
+    const line = emitted[0]!;
+    expect(line.attackBonus).toBe(MOOK_ATTACK_BONUS);
   });
 });

@@ -1,6 +1,8 @@
+import { heroTurnJustEnded } from './boss-moves.js';
 import { grappleOf } from './grapple-source.js';
 import { combatLogger } from '../../lib/logger.js';
 
+import type { BossMoveWindowResult } from './boss-move-window.js';
 import type { SubmittedCombatIntent } from './combat-intent-service.js';
 import type { WeaponRuleProfile } from './combat-rules.js';
 import type { NpcEngineRow } from './npc-engine-row.js';
@@ -75,6 +77,12 @@ export type NpcTurnRunnerDependencies = {
   recordDownedChoice?: (sessionId: string, fact: string) => Promise<void>;
   /** Whether a won parley holds this creature's action in this round (#2420). */
   isParleyHeld?: (sessionId: string, participantId: string, round: number) => Promise<boolean>;
+  /** The Boss Move window, run once after a hero's turn ends (#728). Absent: no Boss Moves. */
+  runBossMoves?: (
+    encounterId: string,
+    userId: string,
+    state: CombatState,
+  ) => Promise<BossMoveWindowResult>;
 };
 
 const defaultDependencies: NpcTurnRunnerDependencies = {
@@ -107,6 +115,10 @@ const defaultDependencies: NpcTurnRunnerDependencies = {
   isParleyHeld: async (sessionId, participantId, round) => {
     const { isParleyHeld } = await import('./parley-hold.js');
     return isParleyHeld(sessionId, participantId, round);
+  },
+  runBossMoves: async (encounterId, userId, state) => {
+    const { runBossMoveWindow } = await import('./boss-move-window.js');
+    return runBossMoveWindow({ encounterId, userId, state });
   },
 };
 
@@ -332,6 +344,8 @@ export async function advanceNpcTurns(
   const iterationCap = Math.max(1, initial.participants.length) * 2;
   const results: NpcTurnOutcome[] = [];
   const transcriptLines: string[] = [];
+  const bossMoveEngineRows: NpcEngineRow[] = [];
+  let bossWindowChecked = false;
   let combatEnded = initial.encounter.status !== 'active';
   let iterationCount = 0;
 
@@ -343,6 +357,16 @@ export async function advanceNpcTurns(
     }
     const actor = state.currentParticipant;
     if (!actor || isPlayer(actor)) break;
+
+    // #728: a Boss Move comes right after the hero's turn, before the creature's own turn. The
+    // window is checked once per drain, on the first creature the hero's end_turn hands to.
+    if (!bossWindowChecked) {
+      bossWindowChecked = true;
+      if (heroTurnJustEnded(state)) {
+        const window = await dependencies.runBossMoves?.(encounterId, userId, state);
+        bossMoveEngineRows.push(...(window?.engineRows ?? []));
+      }
+    }
 
     iterationCount += 1;
     const standing = npcIsStanding(
@@ -468,9 +492,12 @@ export async function advanceNpcTurns(
     iterationCap,
     capReached,
     transcriptLines,
-    engineRows: results.flatMap(
-      (result) =>
-        (result.engineResult as { engineRows?: NpcEngineRow[] } | undefined)?.engineRows ?? [],
-    ),
+    engineRows: [
+      ...bossMoveEngineRows,
+      ...results.flatMap(
+        (result) =>
+          (result.engineResult as { engineRows?: NpcEngineRow[] } | undefined)?.engineRows ?? [],
+      ),
+    ],
   };
 }

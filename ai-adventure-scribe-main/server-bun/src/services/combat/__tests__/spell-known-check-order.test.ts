@@ -135,6 +135,8 @@ mock.module('../data-access.js', () => ({
   // machinery pulls the HP service into the import graph. A mocked module with a
   // missing export is a hard SyntaxError for every importer.
   verifyEncounterAccess: async () => {},
+  // Same: combat-attack-service imports it for the mook pack bonus (#728).
+  countStandingMooks: async () => 0,
 }));
 
 mock.module('../tactical-map-store.js', () => ({

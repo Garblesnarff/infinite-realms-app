@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import { afterAll, beforeAll, expect, mock, spyOn, test } from 'bun:test';
 import { and, eq } from 'drizzle-orm';
 import { Elysia } from 'elysia';
@@ -18,9 +21,11 @@ import {
   combatEncounters,
   combatParticipants,
   combatParticipantStatus,
+  combatBossState,
   dialogueHistory,
 } from '../../../../db/schema/index';
 import { ENEMY_HITS_PLAYER, REEVES } from '../../../../shared/test-fixtures/engine-results';
+import { parseAuthoredStatBlock } from '../combat/authored-stat-block-parser.js';
 import { resolveMonsterAttackProfile } from '../combat/monster-attack-profile.js';
 
 const userId = testId('npc-engine-rows-user');
@@ -50,6 +55,9 @@ const { runNpcTurnsToPlayer, resumeStrandedNpcTurns } = await importWithRealDb(
 );
 const { getLegalCombatActions } = await importWithRealDb(
   () => import('../combat/combat-intent-service.js'),
+);
+const { runBossMoveWindow, armDefy } = await importWithRealDb(
+  () => import('../combat/boss-move-window.js'),
 );
 
 describeWithDb('server NPC engine rows through the real routes (#2658 step 2)', () => {
@@ -581,5 +589,241 @@ describeWithDb('the server runs NPC turns on End turn (#2658 step 3)', () => {
     expect(capRows).toHaveLength(1);
     expect(drained.engineRows?.map((row) => row.id)).toContain(capRows[0].id);
     await finish(encounterId);
+  });
+});
+
+describeWithDb('Boss Move window through the real database (#728)', () => {
+  const bossUserId = testId('boss-move-user');
+  let encounterId: string;
+  let heroId: string;
+  let campaignId: string;
+  let characterId: string;
+
+  // Read the shared connection at use time: an earlier block in this file closes it.
+  const freshState = () => CombatEncounterService.getCombatState(encounterId, bossUserId);
+  const setRound = (round: number) =>
+    realDb()
+      .update(combatEncounters)
+      .set({ currentRound: round })
+      .where(eq(combatEncounters.id, encounterId));
+  const windowNow = async () =>
+    runBossMoveWindow({ encounterId, userId: bossUserId, state: await freshState() });
+  // The Opener's damage is rolled, so the hero can leave round 1 bloodied. Each test sets the hero's
+  // HP and dodging explicitly rather than inheriting them from the test before.
+  const setHero = (currentHp: number, isDodging = false) =>
+    Promise.all([
+      realDb()
+        .update(combatParticipantStatus)
+        .set({ currentHp })
+        .where(eq(combatParticipantStatus.participantId, heroId)),
+      realDb()
+        .update(combatParticipants)
+        .set({ isDodging })
+        .where(eq(combatParticipants.id, heroId)),
+    ]);
+
+  beforeAll(async () => {
+    const [campaign] = await realDb()
+      .insert(campaigns)
+      .values({ userId: bossUserId, name: testId('boss-camp') })
+      .returning();
+    campaignId = campaign!.id;
+    const [character] = await realDb()
+      .insert(characters)
+      .values({
+        userId: bossUserId,
+        campaignId: campaign!.id,
+        name: 'The Stranger',
+        class: 'Fighter',
+        level: 1,
+      })
+      .returning();
+    characterId = character!.id;
+    await realDb().insert(characterStats).values({
+      characterId: character!.id,
+      currentHitPoints: 40,
+      maxHitPoints: 40,
+      armorClass: 13,
+    });
+    const [session] = await realDb()
+      .insert(gameSessions)
+      .values({
+        campaignId: campaign!.id,
+        characterId: character!.id,
+        sessionNumber: 1,
+        status: 'active',
+      })
+      .returning();
+    const [encounter] = await realDb()
+      .insert(combatEncounters)
+      .values({
+        sessionId: session!.id,
+        status: 'active',
+        currentRound: 1,
+        currentTurnOrder: 0,
+        version: 1,
+      })
+      .returning();
+    encounterId = encounter!.id;
+
+    // Real producers: the pilot boss's stat block is parsed by the authored parser, and its attack
+    // and Boss Moves are stored exactly as seating stores them.
+    const stat = parseAuthoredStatBlock(
+      readFileSync(
+        path.join(import.meta.dir, '../combat/__tests__/fixtures/thing-below-stat-block.md'),
+        'utf8',
+      ),
+    );
+    const [hero, boss] = await realDb()
+      .insert(combatParticipants)
+      .values([
+        {
+          encounterId,
+          characterId: character!.id,
+          name: 'The Stranger',
+          participantType: 'player',
+          turnOrder: 0,
+          initiative: 20,
+          armorClass: 13,
+          maxHp: 40,
+          speed: 30,
+        },
+        {
+          encounterId,
+          name: 'The Thing Below (Avatar)',
+          participantType: 'monster',
+          turnOrder: 1,
+          initiative: 10,
+          armorClass: stat.armorClass!,
+          maxHp: stat.maxHp!,
+          speed: 30,
+          monsterAttack: resolveMonsterAttackProfile({ authored: stat, maxHp: stat.maxHp }),
+          bossMoves: stat.bossMoves ?? null,
+        },
+      ])
+      .returning();
+    heroId = hero!.id;
+    await realDb()
+      .insert(combatParticipantStatus)
+      .values([
+        { participantId: heroId, currentHp: 40, maxHp: 40 },
+        { participantId: boss!.id, currentHp: 200, maxHp: 200 },
+      ]);
+  });
+
+  test('Opener fires right after the hero first ends a turn, and never twice in a round', async () => {
+    await setRound(1);
+    const first = await windowNow();
+    expect(first.lines).toHaveLength(1);
+    expect(first.lines[0]).toStartWith('Boss Move: Starlit Lash (Opener)');
+    expect(first.engineRows.length).toBeGreaterThan(0);
+
+    const sameRound = await windowNow();
+    expect(sameRound.lines).toEqual([]);
+  });
+
+  test('a round with no trigger leaves the hero alone', async () => {
+    await setHero(40);
+    await setRound(2);
+    const quiet = await windowNow();
+    expect(quiet.lines).toEqual([]);
+  });
+
+  test('the Finale is telegraphed in round 3, one round before it can fire', async () => {
+    await setHero(40);
+    await setRound(3);
+    const telegraph = await windowNow();
+    expect(telegraph.lines).toHaveLength(1);
+    expect(telegraph.lines[0]).toStartWith('Boss Move telegraph: Reality Break (Finale)');
+  });
+
+  test('counterplay (dodging) spends the telegraphed Finale in round 4', async () => {
+    await setRound(4);
+    await setHero(40, true);
+    const countered = await windowNow();
+    expect(countered.lines).toHaveLength(1);
+    expect(countered.lines[0]).toStartWith('Boss Move: Reality Break (Finale)');
+    expect(countered.lines[0]).toContain('countered');
+
+    const after = await windowNow();
+    expect(after.lines).toEqual([]);
+  });
+
+  test('two drains that race into the same round fire one move between them', async () => {
+    await setRound(8);
+    // Bloodied, so Turnabout is due. Two windows run at once, as a hero's end_turn drain and the
+    // sweep can. Only the one that claims the round may act.
+    await setHero(20);
+    const [a, b] = await Promise.all([windowNow(), windowNow()]);
+    expect(a.lines.length + b.lines.length).toBe(1);
+    const fired = [...a.lines, ...b.lines][0] ?? '';
+    expect(fired).toStartWith('Boss Move: Gaze of the Void (Turnabout)');
+  });
+
+  test('a solo hero has one Defy per fight: armed once, then refused', async () => {
+    expect(await armDefy(encounterId)).toBe(true);
+    expect(await armDefy(encounterId)).toBe(false);
+    const [row] = await realDb()
+      .select()
+      .from(combatBossState)
+      .where(eq(combatBossState.encounterId, encounterId));
+    expect(row?.defyLeft).toBe(1);
+    expect(row?.defyArmed).toBe(true);
+  });
+
+  test('armDefy arms the Defy on a new encounter before the first window runs', async () => {
+    // A fresh encounter: the boss-state row does not exist yet, because the window only
+    // creates it after the hero's first end_turn. The Defy button must still arm, so the
+    // Defy can cover the Opener. (One active encounter per session, so a fresh session.)
+    const [freshSession] = await realDb()
+      .insert(gameSessions)
+      .values({
+        campaignId,
+        characterId,
+        sessionNumber: 2,
+        status: 'active',
+      })
+      .returning();
+    const [fresh] = await realDb()
+      .insert(combatEncounters)
+      .values({
+        sessionId: freshSession!.id,
+        status: 'active',
+        currentRound: 1,
+        currentTurnOrder: 0,
+        version: 1,
+      })
+      .returning();
+    const [freshHero] = await realDb()
+      .insert(combatParticipants)
+      .values({
+        encounterId: fresh!.id,
+        name: 'Fresh Hero',
+        participantType: 'player',
+        turnOrder: 0,
+        initiative: 20,
+        armorClass: 13,
+        maxHp: 40,
+        speed: 30,
+      })
+      .returning();
+    await realDb()
+      .insert(combatParticipantStatus)
+      .values({ participantId: freshHero!.id, currentHp: 40, maxHp: 40 });
+
+    const before = await realDb()
+      .select()
+      .from(combatBossState)
+      .where(eq(combatBossState.encounterId, fresh!.id));
+    expect(before).toHaveLength(0);
+
+    expect(await armDefy(fresh!.id)).toBe(true);
+
+    const [row] = await realDb()
+      .select()
+      .from(combatBossState)
+      .where(eq(combatBossState.encounterId, fresh!.id));
+    expect(row?.defyLeft).toBe(1);
+    expect(row?.defyArmed).toBe(true);
   });
 });
