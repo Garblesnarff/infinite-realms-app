@@ -6,7 +6,8 @@ mock.module('../../../lib/logger.js', () => ({
   logger: { info, warn: mock(() => {}), debug: mock(() => {}), error: mock(() => {}) },
 }));
 
-const { detectDeclaredAttack, detectDeclaredDefense } = await import('../combat-intent-gate.js');
+const { detectDeclaredAttack, detectDeclaredDefense, detectDeclaredLayOnHands } =
+  await import('../combat-intent-gate.js');
 
 const actors = [
   { name: 'Professor Emil Darkwater' },
@@ -289,5 +290,45 @@ describe('detectDeclaredDefense (#262)', () => {
     expect(detectDeclaredDefense('Should I dodge or attack?')).toBeNull();
     expect(detectDeclaredDefense('The goblin dodges my attack')).toBeNull();
     expect(detectDeclaredDefense('')).toBeNull();
+  });
+});
+
+describe('detectDeclaredLayOnHands (#712)', () => {
+  it('detects the QA phrasing as a self-targeted declaration', () => {
+    expect(
+      detectDeclaredLayOnHands(
+        'I call on my Lay on Hands as a bonus action, laying my hand on myself... Then I take the Attack action with an Unarmed Strike against Pale Stalker 1',
+      ),
+    ).toEqual({ target: 'self', targetIsSelf: true, amount: null, cure: null });
+  });
+
+  it('detects a named target and a stated HP amount', () => {
+    expect(detectDeclaredLayOnHands('I use Lay on Hands on Mira for 5 hit points')).toEqual({
+      target: 'Mira',
+      targetIsSelf: false,
+      amount: 5,
+      cure: null,
+    });
+  });
+
+  it('detects cure phrasing', () => {
+    expect(detectDeclaredLayOnHands('I use my Lay on Hands to cure the poison')).toEqual({
+      target: 'self',
+      targetIsSelf: true,
+      amount: null,
+      cure: 'poison',
+    });
+    expect(
+      detectDeclaredLayOnHands('I lay on hands to cure his disease'),
+    ).toMatchObject({ cure: 'disease' });
+  });
+
+  it('does not mistake "call on my" for a target, and ignores non-declarations', () => {
+    expect(detectDeclaredLayOnHands('I call on my Lay on Hands')).toMatchObject({
+      target: 'self',
+      targetIsSelf: true,
+    });
+    expect(detectDeclaredLayOnHands('I attack the goblin')).toBeNull();
+    expect(detectDeclaredLayOnHands('')).toBeNull();
   });
 });
