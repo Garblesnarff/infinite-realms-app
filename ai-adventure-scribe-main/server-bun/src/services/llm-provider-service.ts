@@ -407,6 +407,8 @@ type OpenRouterStreamUsage = {
 
 type OpenRouterStreamResult = {
   text: string;
+  /** #783: forced-tool-call arguments for choice 0, tool 0, joined in arrival order. */
+  toolArguments: string;
   usage?: OpenRouterStreamUsage;
   /** #750 step 2: the last non-null `choices[0].finish_reason` seen on the stream. */
   finishReason?: string;
@@ -425,7 +427,7 @@ const consumeOpenRouterStream = async (
   response: Response,
   onToken: (deltaText: string) => void,
 ): Promise<OpenRouterStreamResult> => {
-  const result: OpenRouterStreamResult = { text: '' };
+  const result: OpenRouterStreamResult = { text: '', toolArguments: '' };
   if (!response.body) return { ...result, streamError: 'empty response body' };
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -433,7 +435,13 @@ const consumeOpenRouterStream = async (
   const handleData = (data: string): void => {
     if (data === '[DONE]') return;
     let chunk: {
-      choices?: Array<{ delta?: { content?: string }; finish_reason?: string | null }>;
+      choices?: Array<{
+        delta?: {
+          content?: string;
+          tool_calls?: Array<{ index?: number; function?: { arguments?: string } }>;
+        };
+        finish_reason?: string | null;
+      }>;
       usage?: OpenRouterStreamUsage;
       error?: { message?: string } | string;
     };
@@ -451,6 +459,17 @@ const consumeOpenRouterStream = async (
     if (typeof delta === 'string' && delta.length > 0) {
       result.text += delta;
       onToken(delta);
+    }
+    // #783: forced-tool replies stream their JSON as tool-call argument
+    // fragments. Only tool 0 of choice 0 is the DM reply (tool_choice names
+    // one tool), matching the non-stream path's tool_calls[0].
+    const toolCall = chunk.choices?.[0]?.delta?.tool_calls?.[0];
+    if (toolCall && (toolCall.index ?? 0) === 0) {
+      const fragment = toolCall.function?.arguments;
+      if (typeof fragment === 'string' && fragment.length > 0) {
+        result.toolArguments += fragment;
+        onToken(fragment);
+      }
     }
     const finishReason = chunk.choices?.[0]?.finish_reason;
     if (typeof finishReason === 'string' && finishReason.length > 0) {
@@ -714,10 +733,8 @@ export class LLMProviderService {
         // silently dropped.
         ...(strictRequest ? { provider: { require_parameters: true } } : {}),
         // #633 PR2: stream tokens when the caller wants progress callbacks.
-        // Usage rides the final stream chunk automatically. #783: the tool
-        // path is never streamed; the stream parser reads only content deltas,
-        // not tool-call argument deltas.
-        ...(onToken && !toolSchema ? { stream: true } : {}),
+        // Usage rides the final stream chunk automatically.
+        ...(onToken ? { stream: true } : {}),
         ...(strictRequest
           ? {
               response_format: {
@@ -765,7 +782,7 @@ export class LLMProviderService {
             let text: string;
             let usage: ORChatResp['usage'] | undefined;
             let finishReason: string | null | undefined;
-            if (onToken && !toolSchema) {
+            if (onToken) {
               // #633 PR2: accumulate the streamed completion, firing the
               // token callback per delta. Everything below (validation,
               // retry, usage accounting) is shared with the non-stream path.
@@ -780,7 +797,12 @@ export class LLMProviderService {
                 });
                 continue;
               }
-              text = streamed.text;
+              // #783: a forced-tool reply carries its JSON in the argument
+              // fragments; content stays empty on that path.
+              text =
+                toolSchema && streamed.text.length === 0 && streamed.toolArguments.length > 0
+                  ? streamed.toolArguments
+                  : streamed.text;
               usage = streamed.usage;
               finishReason = streamed.finishReason;
             } else {

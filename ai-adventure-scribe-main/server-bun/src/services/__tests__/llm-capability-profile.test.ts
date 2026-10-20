@@ -74,6 +74,18 @@ function stubOpenRouter(replies: Reply[]) {
   return bodies;
 }
 
+/** #783: fake OpenRouter SSE stream. Each chunk is one `data:` event; the stream ends with [DONE]. */
+function stubOpenRouterSse(chunks: unknown[]): Record<string, unknown>[] {
+  const bodies: Record<string, unknown>[] = [];
+  globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+    bodies.push(JSON.parse(String(init?.body)));
+    const sse =
+      chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join('') + 'data: [DONE]\n\n';
+    return new Response(sse, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+  }) as unknown as typeof fetch;
+  return bodies;
+}
+
 type Body = {
   model: string;
   messages: { role: string; content: unknown }[];
@@ -295,9 +307,32 @@ describe('#782 item 4 OpenRouter request bodies', () => {
     expect(result.usage?.schemaDelivery).toBe('forced-tool-call');
   });
 
-  it('anthropic/ tool path is never streamed, so onToken does not fire and stream is absent', async () => {
+  it('anthropic/ tool path streams argument fragments through onToken and the joined text is the reply', async () => {
     useModel('anthropic/claude-haiku-5.5');
-    const bodies = stubOpenRouter([{ toolArguments: VALID_DM_REPLY }]);
+    const half = Math.floor(VALID_DM_REPLY.length / 2);
+    const fragments = [VALID_DM_REPLY.slice(0, half), VALID_DM_REPLY.slice(half)];
+    const bodies = stubOpenRouterSse([
+      {
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: 'call_dm_reply',
+                  function: { name: 'dm_reply', arguments: fragments[0] },
+                },
+              ],
+            },
+          },
+        ],
+      },
+      {
+        choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: fragments[1] } }] } }],
+      },
+      { choices: [{ delta: {}, finish_reason: 'tool_calls' }] },
+      { choices: [], usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } },
+    ]);
     const tokens: string[] = [];
 
     const result = await LLMProviderService.generate({
@@ -309,9 +344,47 @@ describe('#782 item 4 OpenRouter request bodies', () => {
     });
 
     expect(result.error).toBeUndefined();
-    expect('stream' in (bodies[0] as unknown as Body)).toBe(false);
-    expect(tokens).toEqual([]);
+    const body = bodies[0] as unknown as Body;
+    expect(body.stream).toBe(true);
+    expect(body.tools).toBeDefined();
+    expect(body.response_format).toBeUndefined();
+    expect(tokens).toEqual(fragments);
     expect(result.text).toBe(VALID_DM_REPLY);
+    expect(result.usage?.schemaDelivery).toBe('forced-tool-call');
+  });
+
+  it('a streamed google/ strict reply is unchanged: content deltas go through onToken, response_format and provider stay', async () => {
+    useModel('google/gemini-3.1-flash-lite');
+    const half = Math.floor(VALID_DM_REPLY.length / 2);
+    const pieces = [VALID_DM_REPLY.slice(0, half), VALID_DM_REPLY.slice(half)];
+    const bodies = stubOpenRouterSse([
+      { choices: [{ delta: { content: pieces[0] } }] },
+      { choices: [{ delta: { content: pieces[1] }, finish_reason: 'stop' }] },
+      { choices: [], usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } },
+    ]);
+    const tokens: string[] = [];
+
+    const result = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      responseSchema: dmResponseSchema,
+      maxTokens: 100,
+      onToken: (delta) => tokens.push(delta),
+    });
+
+    expect(result.error).toBeUndefined();
+    const body = bodies[0] as unknown as Body;
+    expect(body.stream).toBe(true);
+    expect(body.tools).toBeUndefined();
+    expect(body.tool_choice).toBeUndefined();
+    expect(body.provider).toEqual({ require_parameters: true });
+    expect(body.response_format).toEqual({
+      type: 'json_schema',
+      json_schema: { name: 'structured_response', strict: true, schema: dmResponseSchema },
+    });
+    expect(tokens).toEqual(pieces);
+    expect(result.text).toBe(VALID_DM_REPLY);
+    expect(result.usage?.schemaDelivery).toBe('strict-json-schema');
   });
 
   it('unknown vendors take the conservative path: instructions, no response_format', async () => {
