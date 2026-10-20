@@ -300,17 +300,90 @@ export const stripOptionalNulls = (value: unknown, schema: unknown): unknown => 
   return out;
 };
 
-/** #783: text:string check, then optional nulls dropped, then the schema with unnamed keys stripped. Returns the normalized reply text. */
+/**
+ * #783: Haiku on the forced-tool path sometimes sends a nested object or array
+ * as a JSON-encoded string (`"scene_spec": "{\"environment\":...}"`). Where the
+ * schema says `object` or `array` and the value is a string that parses to that
+ * same type, replace it with the parsed value and walk into it. Anything else
+ * is left alone and still fails ajv. Walks `properties` and array `items`, as
+ * stripOptionalNulls does; anyOf/oneOf and other shapes are left alone.
+ */
+export const parseStringifiedNested = (value: unknown, schema: unknown): unknown => {
+  if (!isPlainObject(schema)) return value;
+  if (typeof value === 'string') {
+    if (schema.type !== 'object' && schema.type !== 'array') return value;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      return value;
+    }
+    const typeMatches = schema.type === 'array' ? Array.isArray(parsed) : isPlainObject(parsed);
+    return typeMatches ? parseStringifiedNested(parsed, schema) : value;
+  }
+  if (Array.isArray(value)) {
+    const items = schema.items;
+    if (!isPlainObject(items)) return value;
+    return value.map((entry) => parseStringifiedNested(entry, items));
+  }
+  const properties = schema.properties;
+  if (!isPlainObject(value) || !isPlainObject(properties)) return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    out[key] = Object.prototype.hasOwnProperty.call(properties, key)
+      ? parseStringifiedNested(child, properties[key])
+      : child;
+  }
+  return out;
+};
+
+const TOOL_SCHEMA_DIAG_CHARS = 200;
+
+const jsonTypeOf = (value: unknown): string =>
+  value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+
+/** Resolves a JSON pointer (ajv instancePath) against the validated data. */
+const valueAtPointer = (root: unknown, pointer: string): unknown => {
+  if (pointer === '') return root;
+  let node: unknown = root;
+  for (const raw of pointer.split('/').slice(1)) {
+    if (node === null || typeof node !== 'object') return undefined;
+    node = (node as Record<string, unknown>)[raw.replace(/~1/g, '/').replace(/~0/g, '~')];
+  }
+  return node;
+};
+
+/**
+ * #783 diagnostics: the tool-path failure log names the first ajv error's path,
+ * the JSON type found there, and the first 200 characters of the value. No
+ * full payload. The slice is the only reply text that reaches the log.
+ */
+const logToolSchemaFailure = (data: unknown, errors: ValidateFunction['errors']): void => {
+  const first = errors?.[0];
+  const instancePath = first?.instancePath ?? '';
+  const value = valueAtPointer(data, instancePath);
+  const rendered = typeof value === 'string' ? value : (JSON.stringify(value) ?? '');
+  logger.warn({
+    msg: 'LLM_TOOL_SCHEMA_INVALID',
+    instancePath,
+    keyword: first?.keyword ?? '',
+    valueType: jsonTypeOf(value),
+    valueHead: rendered.slice(0, TOOL_SCHEMA_DIAG_CHARS),
+  });
+};
+
+/** #783: text:string check, then stringified nested values parsed, then optional nulls dropped, then the schema with unnamed keys stripped. Returns the normalized reply text. */
 export const validateToolReplyText = (
   text: string,
   responseSchema: Record<string, unknown>,
 ): string => {
   const parsed = stripOptionalNulls(
-    validateStructuredResponseText(text, responseSchema),
+    parseStringifiedNested(validateStructuredResponseText(text, responseSchema), responseSchema),
     responseSchema,
   );
   const validate = compiledStrippingValidator(responseSchema);
   if (!validate(parsed)) {
+    logToolSchemaFailure(parsed, validate.errors);
     throw new Error(
       `Structured response does not match schema: ${strippingSchemaAjv.errorsText(validate.errors)}`,
     );
