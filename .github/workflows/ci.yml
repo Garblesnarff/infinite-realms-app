@@ -104,6 +104,8 @@ jobs:
               - 'ai-adventure-scribe-main/shared/**'
               - 'ai-adventure-scribe-main/db/**'
               - 'ai-adventure-scribe-main/supabase/**'
+              - 'ai-adventure-scribe-main/scripts/ci/run-real-db-suites.mjs'
+              - 'ai-adventure-scribe-main/scripts/ci/run-real-db-suites.test.ts'
               - 'ai-adventure-scribe-main/scripts/server-typecheck-gate.sh'
               - 'ai-adventure-scribe-main/scripts/test-migrations.sh'
               - 'ai-adventure-scribe-main/package.json'
