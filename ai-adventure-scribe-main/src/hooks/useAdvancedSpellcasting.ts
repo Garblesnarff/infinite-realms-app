@@ -1,6 +1,8 @@
 /* eslint-disable max-lines */
 import { useState, useEffect, useCallback, useMemo } from 'react';
 
+import { abilityModifier as modifierForScore } from '../../shared/ability-modifier';
+
 import type { Spell, Character } from '@/types/character';
 
 import { useCharacter } from '@/contexts/CharacterContext';
@@ -16,6 +18,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { spellApi } from '@/services/spellApi';
+import { applyRacialBonusesToAbilityScores } from '@/utils/racialAbilityBonuses';
 
 export interface UseAdvancedSpellcastingReturn {
   characterClass: Character['class'] | undefined;
@@ -58,8 +61,16 @@ export function useAdvancedSpellcasting(): UseAdvancedSpellcastingReturn {
   const characterClass = character?.class;
   const level = character?.level || 1;
   const spellcastingAbility = characterClass?.spellcasting?.ability;
+  const finalScores = character?.abilityScores
+    ? applyRacialBonusesToAbilityScores(
+        character.abilityScores,
+        character.race ?? null,
+        character.subrace ?? null,
+        character.racialAbilityChoices,
+      )
+    : undefined;
   const abilityModifier = spellcastingAbility
-    ? character?.abilityScores?.[spellcastingAbility]?.modifier || 0
+    ? modifierForScore(finalScores?.[spellcastingAbility]?.score ?? 10)
     : 0;
 
   const [preparedSpells, setPreparedSpells] = useState<string[]>([]);
