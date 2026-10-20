@@ -17,6 +17,9 @@ import {
   run19Roster,
   sheetCastCheckBody,
   sheetCastRoster,
+  silkAttackCheckBody,
+  silkDeclaredAttack,
+  silkRoster,
   untargetedSpellCheckBody,
 } from '../../../../../../shared/test-fixtures/declared-attack-hold';
 
@@ -90,6 +93,21 @@ describe('POST /v1/combat/sessions/:sessionId/declared-attack', () => {
       declaredAttack: { actorName: 'Valerius', attackSource: 'spell', spellName: 'Chill Touch' },
     });
     expect(body.pending?.sceneSpec).toMatchObject({ sessionId: DECLARED_ATTACK_SESSION_ID });
+  });
+
+  it('hands the named weapon over in the pending for the Hark Night2 silk attack (#877)', async () => {
+    roster = silkRoster;
+    const response = await post(silkAttackCheckBody);
+    const body = (await response.json()) as { pending: Record<string, any> | null };
+
+    expect(response.status).toBe(200);
+    expect(body.pending).toMatchObject({
+      trigger: 'player_intent',
+      combatants: [{ name: 'Silk Woman', count: 1 }],
+      // The weapon rides out of this route in the pending — the half of the seam this
+      // route owns. That /enter accepts it unstripped is covered in combat-entry-http.
+      declaredAttack: silkDeclaredAttack,
+    });
   });
 
   it('answers null for a question to a creature, and for a message that names no attack', async () => {

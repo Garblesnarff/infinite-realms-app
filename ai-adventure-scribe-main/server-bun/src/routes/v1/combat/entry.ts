@@ -120,6 +120,10 @@ const enterBody = t.Object({
       attackSource: t.Optional(
         t.Union([t.Literal('unarmed'), t.Literal('weapon'), t.Literal('spell')]),
       ),
+      // #877: detectDeclaredAttack always sets this on a weapon declaration and the
+      // client forwards the pending's declaredAttack verbatim; declare the field so
+      // the stated weapon is part of the wire contract, not unspecified-field tolerance.
+      weaponStated: t.Optional(t.Boolean()),
       weaponName: t.Optional(t.String({ minLength: 1, maxLength: 200 })),
       spellId: t.Optional(t.String({ minLength: 1, maxLength: 200 })),
       spellName: t.Optional(t.String({ minLength: 1, maxLength: 200 })),

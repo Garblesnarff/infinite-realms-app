@@ -270,7 +270,7 @@ export async function handleDmActionsAndTransitions(
         // the popup twice.
         const confirmed =
           params.entryConfirmed === true ||
-          (await awaitPlayerInput(confirmCombatEntry(pendingEntry, player)));
+          (await awaitPlayerInput(confirmCombatEntry(pendingEntry, player, playerMessage)));
         if (!confirmed) {
           // A decline is a real answer: do not call `/enter` and do not resolve the model's
           // attack batch. But the DM's telegraph is already on screen and the player's message

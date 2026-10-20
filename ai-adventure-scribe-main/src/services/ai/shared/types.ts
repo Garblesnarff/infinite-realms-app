@@ -118,6 +118,10 @@ export interface AIResponse {
       actorSlug?: string;
       monsterId?: string;
       attackSource?: 'unarmed' | 'weapon' | 'spell';
+      // #877: detectDeclaredAttack always sets this on a weapon declaration and the
+      // /enter body declares it; the client type names it so a typed reconstruction
+      // cannot silently drop the stated weapon again.
+      weaponStated?: boolean;
       weaponName?: string;
       spellId?: string;
       spellName?: string;

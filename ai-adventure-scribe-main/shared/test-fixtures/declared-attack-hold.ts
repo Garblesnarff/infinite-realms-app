@@ -116,3 +116,30 @@ export const sheetCastCheckBody = {
   player: declaredAttackCheckBody.player,
   recentNarration: SHEET_CAST_RECENT_NARRATION,
 };
+
+/**
+ * Hark Night2 (#877): "I shoot the silk woman with my longbow" typed before the fight started.
+ * A weapon declaration — the shape every earlier case here does not cover (they are spells or
+ * unarmed). The Eternal Feast roster the server assembles names both silk creatures.
+ */
+export const SILK_ATTACK_PLAYER_INPUT = 'I shoot the silk woman with my longbow';
+
+export const silkRoster = [
+  { name: 'Silk Woman', source: 'campaign' as const },
+  { name: 'Silk Man', source: 'campaign' as const },
+];
+
+/** `POST /v1/combat/sessions/:id/declared-attack` for the silk attack, as the client sends it. */
+export const silkAttackCheckBody = {
+  playerInput: SILK_ATTACK_PLAYER_INPUT,
+  player: declaredAttackCheckBody.player,
+};
+
+/** The declaredAttack `detectDeclaredAttack` returns for that sentence on that roster. */
+export const silkDeclaredAttack = {
+  verb: 'shoot',
+  actorName: 'Silk Woman',
+  attackSource: 'weapon' as const,
+  weaponStated: true,
+  weaponName: 'longbow',
+};

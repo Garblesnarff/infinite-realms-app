@@ -16,6 +16,13 @@ export interface CombatEntryConfirmationSpec {
    */
   targetChoices?: string[];
   spellLabel?: string;
+  /**
+   * The player's own words that declared the attack, quoted verbatim on the card (#877).
+   * The card otherwise rebuilds the action from parsed pieces — target names only — and
+   * the weapon the player named ("with my longbow") never appeared on it, so the player
+   * confirmed a strike the card described differently from the one they wrote.
+   */
+  playerMessage?: string;
 }
 
 /** The player's answer: strike (at `target`, when the card asked who) or do something else. */

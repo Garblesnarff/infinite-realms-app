@@ -169,6 +169,35 @@ describe('POST /v1/combat/sessions/:sessionId/enter', () => {
     expect(body.notice).toBe(seatRefusal.notice);
   });
 
+  it('seats the weapon declaration the declared-attack route hands out, weaponStated included (#877)', async () => {
+    const response = await request({
+      combatants: [{ name: 'Silk Woman', count: 1 }],
+      sceneSpec: { environment: 'dungeon_room' },
+      player: { characterId: CHARACTER_ID, name: 'Rook', initiativeModifier: 2 },
+      // Exactly the object detectDeclaredAttack puts on the pending for "I shoot the silk
+      // woman with my longbow" — the client forwards it verbatim, weaponStated included.
+      declaredAttack: {
+        verb: 'shoot',
+        actorName: 'Silk Woman',
+        attackSource: 'weapon',
+        weaponStated: true,
+        weaponName: 'longbow',
+      },
+    });
+
+    expect(response.status).toBe(201);
+    expect(seatCalls).toHaveLength(1);
+    expect(seatCalls[0]).toMatchObject({
+      declaredAttack: {
+        verb: 'shoot',
+        actorName: 'Silk Woman',
+        attackSource: 'weapon',
+        weaponStated: true,
+        weaponName: 'longbow',
+      },
+    });
+  });
+
   it('allows the server to auto-roll when the player roll is omitted', async () => {
     await request(validBody());
     expect(seatCalls[0]).toMatchObject({ playerInitiativeRoll: undefined });

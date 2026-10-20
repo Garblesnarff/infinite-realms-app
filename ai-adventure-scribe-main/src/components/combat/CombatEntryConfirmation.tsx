@@ -61,6 +61,13 @@ export const CombatEntryConfirmation: React.FC<CombatEntryConfirmationProps> = (
           aria-label="Combat entry confirmation"
         >
           <p className="font-semibold text-card-foreground">Combat is about to begin</p>
+          {spec.playerMessage && !targetChoices.length ? (
+            // #877: quote the player's own words — weapon included — so what they confirm
+            // is the action they wrote, not the card's reconstruction from target names.
+            <p className="mt-1 text-sm text-card-foreground">
+              You wrote: &ldquo;{spec.playerMessage}&rdquo;
+            </p>
+          ) : null}
           <p className="mt-1 text-sm text-muted-foreground">
             {targetChoices.length
               ? `Who is ${spec.spellLabel ?? 'your attack'} for? Your initiative is rolled after you choose.`
