@@ -1438,7 +1438,12 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     ).narration;
     if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError');
   } else if (orderedEngineTranscriptLines.length > 0) {
-    const engineHits = engineHitsOnPlayer(orderedEngineBlocks.flatMap((b) => b.cards ?? []));
+    // The player's facing name, computed over the same roster the card producers used, so
+    // the hit counter can tell the player's HP block from a companion's (#716).
+    const engineHits = engineHitsOnPlayer(
+      orderedEngineBlocks.flatMap((b) => b.cards ?? []),
+      playerParticipant ? labelFor(playerParticipant.id) : undefined,
+    );
     narration = await gateInventedExtraStrike({
       narration,
       engineHits,

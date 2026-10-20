@@ -19,6 +19,7 @@
 
 export const SCHOLAR = { id: 'player-1', name: 'The Scholar' };
 export const REEVES = { id: 'npc-1', name: 'Captain Sarah Reeves' };
+export const MIRA = { id: 'npc-2', name: 'Mira' };
 
 /**
  * The roster `rosterEntryForParticipant` builds for a fight between the two. The client types every
@@ -26,6 +27,13 @@ export const REEVES = { id: 'npc-1', name: 'Captain Sarah Reeves' };
  */
 export const FIGHT_ROSTER = [
   { id: SCHOLAR.id, name: SCHOLAR.name, participantType: 'player' },
+  { id: REEVES.id, name: REEVES.name, participantType: 'monster' },
+];
+
+/** The same fight with the player's companion Mira seated on the party's side. */
+export const PARTY_ROSTER = [
+  { id: SCHOLAR.id, name: SCHOLAR.name, participantType: 'player' },
+  { id: MIRA.id, name: MIRA.name, participantType: 'npc' },
   { id: REEVES.id, name: REEVES.name, participantType: 'monster' },
 ];
 
@@ -132,6 +140,8 @@ export const PLAYER_CRITS_ENEMY = exposed(
   REEVES,
 );
 export const ENEMY_HITS_PLAYER = exposed(rawHit, REEVES, SCHOLAR);
+/** The same swing at the companion: Mira at 6 of 9 HP after the same 3 damage. */
+export const ENEMY_HITS_COMPANION = exposed({ ...rawHit, targetNewHp: 6 }, REEVES, MIRA);
 export const ENEMY_MISSES_PLAYER = exposed(rawMiss, REEVES, SCHOLAR);
 export const ENEMY_CRITS_PLAYER = exposed(
   {
