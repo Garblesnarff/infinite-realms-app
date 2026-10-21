@@ -1,6 +1,6 @@
 import Ajv, { type ValidateFunction } from 'ajv';
 
-import { stripOptionsAppendix } from './dm/narration-text.js';
+import { normalizeReplyNarration, type NarrationNormalization } from './dm/narration-text.js';
 import { isRetryableUpstreamStatus, LLMUpstreamError } from './llm-errors.js';
 import { llmFetch } from './llm-fixture-fetch.js';
 import { alertProviderKeyLimit, isProviderKeyLimitError } from './llm-key-limit.js';
@@ -395,10 +395,46 @@ export const validateToolReplyText = (
       `Structured response does not match schema: ${strippingSchemaAjv.errorsText(validate.errors)}`,
     );
   }
-  if (parsed && typeof parsed === 'object' && 'text' in parsed && typeof parsed.text === 'string') {
-    parsed.text = stripOptionsAppendix(parsed.text);
+  // validateStructuredResponseText has already guaranteed a string `text`
+  // before stripOptionalNulls/parseStringifiedNested ran, so normalization
+  // can assume it; its own doc comment states the invariants it preserves.
+  if (parsed && typeof parsed === 'object') {
+    const kind = normalizeReplyNarration(parsed as Record<string, unknown>);
+    if (kind) {
+      logger.info({ msg: 'LLM_REPLY_NARRATION_NORMALIZED', path: 'forced-tool', kind });
+    }
   }
   return JSON.stringify(parsed);
+};
+
+/**
+ * #875: the strict and instructed branches keep the model's raw string, so
+ * normalize its narration at the text level (parse, normalize, re-serialize) —
+ * re-serializing only when the narration actually changed, so a clean reply
+ * keeps its exact bytes. Every caller reaches this only after
+ * validateStructuredResponseText has had its say upstream or is about to:
+ * prose never reaches here (the text:string check throws first); what shadow
+ * mode can hand over is a JSON object with a string `text` that fails the
+ * FULL schema. Text that does not parse as a reply object passes through
+ * untouched regardless.
+ */
+export const normalizeStructuredReplyText = (
+  text: string,
+): { text: string; kind: NarrationNormalization | null } => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(
+      text
+        .trim()
+        .replace(/^```(?:json)?\s*/, '')
+        .replace(/\s*```$/, ''),
+    );
+  } catch {
+    return { text, kind: null };
+  }
+  if (!isPlainObject(parsed)) return { text, kind: null };
+  const kind = normalizeReplyNarration(parsed);
+  return kind ? { text: JSON.stringify(parsed), kind } : { text, kind: null };
 };
 
 /**
@@ -964,6 +1000,24 @@ export class LLMProviderService {
                 ...(outputTokens > 0 ? { outputTokens } : {}),
               });
             }
+            if (responseSchema && !toolSchema) {
+              // #875: normalize the narration BEFORE branch validation, so
+              // what is validated (and what the strict branch's shadow
+              // counter describes) is the text that actually ships: an
+              // options appendix stripped, an envelope nested in `text`
+              // unwrapped with its fields adopted. Tool replies are
+              // normalized inside validateToolReplyText instead.
+              const normalized = normalizeStructuredReplyText(text);
+              if (normalized.kind) {
+                logger.info({
+                  msg: 'LLM_REPLY_NARRATION_NORMALIZED',
+                  path: strictSchema ? 'strict-json-schema' : 'schema-as-instructions',
+                  model: candidate,
+                  kind: normalized.kind,
+                });
+                text = normalized.text;
+              }
+            }
             if (responseSchema) {
               try {
                 // #782 item 2: full schema on every path. The strict branch
@@ -1157,6 +1211,7 @@ export class LLMProviderService {
 
     const attempts: string[] = [];
     let successPayload: any = null;
+    let successText: string | null = null;
     let successModel: string | null = null;
     let lastFailure: { status: number; details: string; retryAfter?: number } | null = null;
     // #350 N2: OR the key-limit signal across attempts (see orKeyLimitSignal).
@@ -1193,14 +1248,30 @@ export class LLMProviderService {
 
         if (response.ok) {
           const payload = await response.json();
+          // The parts join is computed once, here: validation, narration
+          // normalization and the returned text all read this same string.
+          const candidateText = ((payload as any)?.candidates?.[0]?.content?.parts || [])
+            .map((part: { text?: string }) => part?.text)
+            .filter(Boolean)
+            .join('\n');
+          let attemptText = candidateText;
           if (responseSchema) {
-            const candidateText = ((payload as any)?.candidates?.[0]?.content?.parts || [])
-              .map((part: { text?: string }) => part?.text)
-              .filter(Boolean)
-              .join('\n');
+            // #875: normalize the narration BEFORE validation, like the
+            // OpenRouter strict branch, so the validated text is the text
+            // that ships (appendix stripped, nested envelope unwrapped).
+            const normalized = normalizeStructuredReplyText(candidateText);
+            if (normalized.kind) {
+              logger.info({
+                msg: 'LLM_REPLY_NARRATION_NORMALIZED',
+                path: 'gemini',
+                model: candidate,
+                kind: normalized.kind,
+              });
+              attemptText = normalized.text;
+            }
             try {
               schemaShadowInvalid += validateStrictBranchText(
-                candidateText,
+                attemptText,
                 responseSchema,
                 candidate,
               );
@@ -1227,6 +1298,7 @@ export class LLMProviderService {
           }
           successPayload = payload;
           successModel = candidate;
+          successText = attemptText;
           break;
         }
 
@@ -1328,10 +1400,13 @@ export class LLMProviderService {
     const candidates = data?.candidates || [];
     const first = candidates[0];
     const parts: Array<{ text?: string }> = first?.content?.parts || [];
-    const text = parts
+    const joinedText = parts
       .map((p) => p?.text)
       .filter(Boolean)
       .join('\n');
+    // The winning attempt's text (already narration-normalized when a schema
+    // was requested); the join above is only the fallback.
+    const text = successText ?? joinedText;
     const metadata = data?.usageMetadata || {};
     const inputTokens = Number(metadata.promptTokenCount || 0);
     const outputTokens = Number(metadata.candidatesTokenCount || 0);

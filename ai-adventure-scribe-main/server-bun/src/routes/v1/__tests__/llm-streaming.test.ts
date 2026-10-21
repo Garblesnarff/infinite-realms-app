@@ -72,4 +72,72 @@ describe('#875 options never enter the preview', () => {
       ),
     ).toBe('The door opens.');
   });
+  it('never prints an in-text options appendix at any chunk boundary', () => {
+    const story = 'You shift your grip on the rope and look down into the dark.';
+    const raw = JSON.stringify({
+      text: story + '\noptions: ["A. Climb down", "B. Call out", "C. Wait"]',
+      options: ['A. Climb down'],
+      narration_segments: [],
+      roll_requests: [],
+      combat_transition: 'none',
+    });
+    for (let i = 0; i <= raw.length; i++) {
+      const preview = extractPartialNarration(raw.slice(0, i));
+      if (preview !== null) expect(story.startsWith(preview)).toBe(true);
+    }
+    expect(extractPartialNarration(raw)).toBe(story);
+  });
+  it('previews the inner narration when the model nested an envelope inside text', () => {
+    const story = 'You shift your grip on the rope and look down into the dark.';
+    // Inner envelope lists options before text (key order must not matter).
+    const inner = JSON.stringify({
+      options: ['A. Climb down', 'B. Call out'],
+      text: story,
+      narration_segments: [],
+      roll_requests: [],
+      combat_transition: 'none',
+    });
+    const raw = JSON.stringify({
+      text: inner,
+      options: [],
+      narration_segments: [],
+      roll_requests: [],
+      combat_transition: 'none',
+    });
+    for (let i = 0; i <= raw.length; i++) {
+      const preview = extractPartialNarration(raw.slice(0, i));
+      if (preview !== null) expect(story.startsWith(preview)).toBe(true);
+    }
+    expect(extractPartialNarration(raw)).toBe(story);
+  });
+  it('previews the inner narration through two levels of nesting', () => {
+    const story = 'You shift your grip on the rope and look down into the dark.';
+    const innermost = JSON.stringify({ text: story, options: ['A. Climb down'] });
+    const middle = JSON.stringify({ text: innermost, options: [] });
+    const raw = JSON.stringify({ text: middle, options: [] });
+    for (let i = 0; i <= raw.length; i++) {
+      const preview = extractPartialNarration(raw.slice(0, i));
+      if (preview !== null) expect(story.startsWith(preview)).toBe(true);
+    }
+    expect(extractPartialNarration(raw)).toBe(story);
+  });
+  it('previews the inner narration when the nested envelope is code-fenced', () => {
+    const story = 'You shift your grip on the rope and look down into the dark.';
+    const inner = JSON.stringify({ text: story, options: ['A. Climb down'] });
+    const raw = JSON.stringify({ text: '```json\n' + inner + '\n```', options: [] });
+    for (let i = 0; i <= raw.length; i++) {
+      const preview = extractPartialNarration(raw.slice(0, i));
+      if (preview !== null) expect(story.startsWith(preview)).toBe(true);
+    }
+    expect(extractPartialNarration(raw)).toBe(story);
+  });
+  it('previews brace-opening prose as itself once its string completes', () => {
+    const prose = '{"weight": 5} is etched into the stone above the door.';
+    const raw = JSON.stringify({ text: prose, options: [] });
+    for (let i = 0; i <= raw.length; i++) {
+      const preview = extractPartialNarration(raw.slice(0, i));
+      if (preview !== null) expect(prose.startsWith(preview)).toBe(true);
+    }
+    expect(extractPartialNarration(raw)).toBe(prose);
+  });
 });

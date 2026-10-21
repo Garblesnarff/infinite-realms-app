@@ -327,3 +327,95 @@ describe('POST /v1/llm/generate fallback chain closes the SSE stream (#783)', ()
     expect(text.includes('"type":"done"') || text.includes('"type":"error"')).toBe(true);
   }, 30_000);
 });
+
+describe('POST /v1/llm/generate #875 leaks on the strict path', () => {
+  beforeEach(() => {
+    loggedErrors.length = 0;
+    loggedWarns.length = 0;
+    resetCircuitBreakersForTests();
+    // Single-candidate chain on a strict-schema vendor (openai/): the reply
+    // rides message.content, not a forced tool call.
+    process.env.OPENROUTER_API_KEY = 'route-test-key';
+    process.env.OPENROUTER_TEXT_MODEL = 'openai/gpt-5-mini';
+    process.env.OPENROUTER_FALLBACK_MODELS = 'openai/gpt-5-mini';
+    delete process.env.LLM_FIXTURE_DIR;
+    process.env.LLM_TEXT_PROVIDER_TIMEOUT_MS = '250';
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    process.env = { ...originalEnv };
+  });
+
+  const story = 'You shift your grip on the rope and look down into the dark.';
+  const envelope = (text: string, options: string[]): string =>
+    JSON.stringify({
+      text,
+      options,
+      narration_segments: [],
+      roll_requests: [],
+      combat_transition: 'none',
+      map_actions: [],
+      handout_actions: [],
+      combatants: [],
+      combat_actions: [],
+    });
+
+  it('keeps a strict-path options appendix out of the streamed preview and the done payload', async () => {
+    const raw = envelope(story + '\noptions: ["A. Climb down", "B. Call out"]', [
+      'A. Climb down',
+    ]);
+    // Strict candidates stream content deltas; split the envelope across chunks.
+    const thirds = [raw.slice(0, 60), raw.slice(60, 130), raw.slice(130)];
+    globalThis.fetch = (async () =>
+      new Response(thirds.map((chunk) => sseChunk(chunk)).join('') + 'data: [DONE]\n\n', {
+        headers: { 'content-type': 'text/event-stream' },
+      })) as unknown as typeof fetch;
+    const response = await app.handle(
+      new Request('http://localhost/v1/llm/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'Continue', stream: true }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    const wire = await response.text();
+    const events = wire
+      .split('\n')
+      .filter((line) => line.startsWith('data: '))
+      .map((line) => JSON.parse(line.slice(6)));
+    const preview = events
+      .filter((event) => event.type === 'delta')
+      .map((event) => event.text)
+      .join('');
+    expect(preview).toBe(story);
+    const done = events.find((event) => event.type === 'done');
+    expect(done).toBeDefined();
+    expect(JSON.parse(done.payload.text).text).toBe(story);
+    expect(JSON.parse(done.payload.text).options).toEqual(['A. Climb down']);
+  });
+
+  it('unwraps an envelope nested inside text before the reply leaves the route', async () => {
+    const raw = envelope(envelope(story, ['A. Climb down', 'B. Call out']), []);
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: raw }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )) as unknown as typeof fetch;
+    const response = await app.handle(
+      new Request('http://localhost/v1/llm/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'Continue' }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as { text: string; parsed: boolean };
+    expect(payload.parsed).toBe(true);
+    expect(JSON.parse(payload.text).text).toBe(story);
+    expect(JSON.parse(payload.text).options).toEqual(['A. Climb down', 'B. Call out']);
+  });
+});

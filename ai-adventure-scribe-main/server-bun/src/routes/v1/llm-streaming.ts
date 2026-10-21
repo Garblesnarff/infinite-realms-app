@@ -73,7 +73,7 @@ const isWhitespace = (ch: string): boolean =>
  * The final authoritative text always comes from the full parse at the end
  * of the stream; this is a progress preview only.
  */
-export function extractPartialNarration(accumulated: string): string | null {
+export function extractPartialNarration(accumulated: string, nesting = 0): string | null {
   let depth = 0;
   let i = 0;
   const n = accumulated.length;
@@ -110,6 +110,29 @@ export function extractPartialNarration(accumulated: string): string | null {
           if (j >= n || accumulated[j] !== '"') return null;
           const narration = decodePartialString(accumulated, j);
           if (narration === null) return null;
+          // A value that so far is only a (partial) code fence has no story
+          // to show yet — emitting the backticks would wedge the preview,
+          // since later chunks must extend what was already emitted.
+          if (/^`{1,3}[a-z]*\s*$/i.test(narration.trim())) return null;
+          // #875: the model nested a whole reply inside `text` — the decoded
+          // value is itself envelope JSON, so preview from ITS text field
+          // instead of printing the payload. The recursive call applies this
+          // same appendix handling to the inner narration; the depth is
+          // bounded like the provider's unwrap in normalizeReplyNarration,
+          // and a code fence before the payload is tolerated, matching its
+          // inner parser (the scanner simply skips the backticks).
+          const payloadLead = narration.trimStart().replace(/^```(?:json)?\s*/, '');
+          if (nesting < 3 && payloadLead.startsWith('{')) {
+            const innerPreview = extractPartialNarration(narration, nesting + 1);
+            if (innerPreview !== null) return innerPreview;
+            // No inner narration yet. While the outer string is still
+            // streaming, the payload may yet resolve into an envelope —
+            // stay silent rather than print fragments of it. Once the
+            // string is complete, the value is brace-opening prose or a
+            // non-envelope object: preview it as-is via the fall-through
+            // below, exactly as the final text will read.
+            if (stringEnd(accumulated, j) === -1) return null;
+          }
           const clean = stripOptionsAppendix(narration);
           const lastLine = clean.slice(clean.lastIndexOf('\n') + 1).trimStart();
           const key = lastLine.replace(/^["']/, '').toLowerCase();
