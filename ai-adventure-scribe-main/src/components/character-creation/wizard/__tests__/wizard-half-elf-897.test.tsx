@@ -15,8 +15,10 @@ import { resolve } from 'node:path';
  * POST body. The route/stored/sheet legs for these bodies are pinned by
  * server-bun/src/routes/v1/__tests__/character-create-half-elf.real-db.test.ts
  * on the shared fixtures in shared/test-fixtures/half-elf-*-create.json;
- * the standard-array fixture case below produces exactly that fixture's
- * body stats from wizard state, chaining the two suites.
+ * the fixture cases below produce exactly those fixtures' body stats from
+ * wizard state, chaining the two suites (#996 completed the point-buy
+ * leg, which previously rested on a fixture captured from hand-built
+ * state rather than from the wizard producers).
  * Fixtures follow the wizard's own producers: name/class/background are
  * seeded with the same UPDATE_CHARACTER payloads those steps dispatch;
  * every score and choice is entered through the step UI. One exception:
@@ -231,8 +233,22 @@ describe('#897 Half-Elf bonuses through the real wizard', () => {
     vi.mocked(userDataApi.updateCharacterStats).mockResolvedValue({} as any);
   });
 
-  /** Reset to 8s, then click the real +/- buttons to the probe's point-buy base. */
-  async function drivePointBuyBase(): Promise<void> {
+  /**
+   * Reset to 8s, then click the real +/- buttons up to the given point-buy
+   * base. Entries run in the target's key order (STR -> CHA); every target
+   * used here stays within the 27-point budget at each prefix, so no
+   * Increase click is ever disabled mid-sequence.
+   */
+  async function drivePointBuyBase(
+    target: Record<string, number> = {
+      strength: 15, // 8 -> 15 (9 pts)
+      dexterity: 13, // 8 -> 13 (5 pts)
+      constitution: 14, // 8 -> 14 (7 pts)
+      intelligence: 8,
+      wisdom: 10, // 8 -> 10 (2 pts)
+      charisma: 12, // 8 -> 12 (4 pts) = 27 total
+    },
+  ): Promise<void> {
     await goToStep('Ability Scores');
     await screen.findByText('Assign Ability Scores');
     // Wizard starts from all-10s; a point-buy user resets to 8s first.
@@ -242,19 +258,10 @@ describe('#897 Half-Elf bonuses through the real wizard', () => {
         fireEvent.click(screen.getByRole('button', { name: `Increase ${ability}` }));
       }
     };
-    clickPlus('strength', 7); // 8 -> 15 (9 pts)
-    clickPlus('dexterity', 5); // 8 -> 13 (5 pts)
-    clickPlus('constitution', 6); // 8 -> 14 (7 pts)
-    clickPlus('wisdom', 2); // 8 -> 10 (2 pts)
-    clickPlus('charisma', 4); // 8 -> 12 (4 pts) = 27 total
-    expect(scoresOf(character())).toEqual({
-      strength: 15,
-      dexterity: 13,
-      constitution: 14,
-      intelligence: 8,
-      wisdom: 10,
-      charisma: 12,
-    });
+    for (const [ability, score] of Object.entries(target)) {
+      clickPlus(ability, score - 8);
+    }
+    expect(scoresOf(character())).toEqual(target);
   }
 
   const PB_FINAL = {
@@ -316,6 +323,39 @@ describe('#897 Half-Elf bonuses through the real wizard', () => {
     expect(shown).toEqual(PB_FINAL);
     const body = await saveBodyFor(character());
     expect(body.stats).toEqual(PB_FINAL);
+  });
+
+  it('point buy: the shared-fixture combo produces exactly the fixture body stats', async () => {
+    renderWizard();
+    seedBasics('Half-Elf pointBuy');
+
+    await chooseHalfElf(['Constitution', 'Wisdom']);
+    expect(character().race?.id).toBe('half-elf');
+    expect(character().racialAbilityChoices?.halfElf).toEqual(['constitution', 'wisdom']);
+
+    // The shared fixture's point-buy base (27 points), entered through the
+    // real +/- producers like the other point-buy cases.
+    await drivePointBuyBase({
+      strength: 8,
+      dexterity: 14,
+      constitution: 13,
+      intelligence: 10,
+      wisdom: 12,
+      charisma: 15,
+    });
+
+    await goToStep('Finalization');
+    await screen.findByText('Finalize Your Character');
+    const fixture = JSON.parse(
+      readFileSync(
+        resolve(process.cwd(), 'shared/test-fixtures/half-elf-pointBuy-create.json'),
+        'utf8',
+      ),
+    );
+    const shown = displayedScores();
+    expect(shown).toEqual(fixture.final);
+    const body = await saveBodyFor(character());
+    expect(body.stats).toEqual(fixture.body.stats);
   });
 
   async function runStandardArray(

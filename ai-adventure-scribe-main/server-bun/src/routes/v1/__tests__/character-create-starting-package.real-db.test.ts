@@ -138,7 +138,11 @@ const criminalRoguePayload971 = JSON.parse(
 // class choices Acrobatics/Insight/Perception/Stealth, Expertise in Insight
 // and Stealth (Hark D20-010's picks). Fighter: Half-Orc/Acolyte, choices
 // Athletics/Perception (the D20-005 shape). Warlock: Human/Acolyte, choices
-// Arcana/Deception (the D20-012 shape).
+// Arcana/Deception (the D20-012 shape). Sorcerer: Human/Noble, choices
+// Arcana/Deception, saves constitution + charisma (the D20-011 shape,
+// added by #995). Wizard: Human/Acolyte, choices Arcana/Investigation,
+// background Insight + Religion in the saved set (the D20-013 shape,
+// added by #995).
 const roguePayload898 = JSON.parse(
   readFileSync(
     resolve(
@@ -164,6 +168,26 @@ const warlockPayload898 = JSON.parse(
     resolve(
       dirname(fileURLToPath(import.meta.url)),
       '../../../../../shared/test-fixtures/warlock-898-create-payload.json',
+    ),
+    'utf8',
+  ),
+) as Record<string, unknown>;
+
+const sorcererPayload898 = JSON.parse(
+  readFileSync(
+    resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      '../../../../../shared/test-fixtures/sorcerer-898-create-payload.json',
+    ),
+    'utf8',
+  ),
+) as Record<string, unknown>;
+
+const wizardPayload898 = JSON.parse(
+  readFileSync(
+    resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      '../../../../../shared/test-fixtures/wizard-898-create-payload.json',
     ),
     'utf8',
   ),
@@ -792,7 +816,8 @@ describeWithDb('character create proficiencies survive to the saved sheet (#898)
   // skill and one choice, the Warlock's saves came back as another class's,
   // the Rogue's Expertise showed +0. The client pin proves the wizard body
   // carries the full sets; this block proves the create stores them verbatim
-  // and the GET serves them back — the two hops the sheet reads.
+  // and the GET serves them back — the two hops the sheet reads. #995 adds
+  // the Sorcerer (D20-011) and Wizard (D20-013) shapes #993 did not cover.
   const CASES = [
     {
       label: 'rogue',
@@ -820,6 +845,27 @@ describeWithDb('character create proficiencies survive to the saved sheet (#898)
       // Acolyte fixed (Insight, Religion) + class choices (Arcana, Deception).
       skills: ['Arcana', 'Deception', 'Insight', 'Religion'],
       saves: ['wisdom', 'charisma'],
+      expertise: [] as string[],
+      tools: [] as string[],
+    },
+    {
+      label: 'sorcerer',
+      payload: sorcererPayload898,
+      // Noble fixed (History, Persuasion) + class choices (Arcana,
+      // Deception); the D20-011 shape is the CON/CHA save pair.
+      skills: ['Arcana', 'Deception', 'History', 'Persuasion'],
+      saves: ['constitution', 'charisma'],
+      expertise: [] as string[],
+      tools: ['One type of gaming set'],
+    },
+    {
+      label: 'wizard',
+      payload: wizardPayload898,
+      // Acolyte fixed (Insight, Religion) + class choices (Arcana,
+      // Investigation); the D20-013 shape is the background Insight
+      // surviving into the saved set.
+      skills: ['Arcana', 'Insight', 'Investigation', 'Religion'],
+      saves: ['intelligence', 'wisdom'],
       expertise: [] as string[],
       tools: [] as string[],
     },
