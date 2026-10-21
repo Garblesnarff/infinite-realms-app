@@ -1212,6 +1212,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // engine hit narrated as a miss), only the contradicting sentences are replaced with
         // the engine's truth — the rest of the reply is the DM's legitimate prose and stays.
         // Fails open: a check that cannot run keeps the reply.
+        let outcomeRepaired = false;
         if (
           envelope &&
           typeof envelope.text === 'string' &&
@@ -1234,9 +1235,35 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
               envelope.text = repaired;
               envelope.narration_segments = [];
               result = { ...result, text: JSON.stringify(envelope) };
+              outcomeRepaired = true;
             }
           } catch (error) {
             logger.warn({ msg: 'DM_NARRATION_OUTCOME_HOOK_FAILED', error });
+          }
+        }
+        // #266 (NT-011/NT-020): a reply that REQUESTS a roll must not narrate that roll's
+        // outcome in the same breath — the narration posts before the dice exist, and when
+        // the roll then contradicts it, no outcome gate ever runs on that earlier text
+        // (the repair above needs a persisted outcome; the requesting turn has none yet).
+        // Runs only when the outcome repair did not already rewrite this text: one repair
+        // per turn, and a turn with a fresh outcome has its verdicts owned by that repair.
+        // Keys on the envelope's own roll_requests, needs no session or DB, fails open.
+        if (envelope && typeof envelope.text === 'string' && !outcomeRepaired) {
+          try {
+            const { repairPrematureRollClaims } =
+              await import('../../services/dm/narration-outcome.js');
+            const repairedPending = repairPrematureRollClaims(
+              envelope.text,
+              envelope.roll_requests,
+              combatEntry?.player?.name,
+            );
+            if (repairedPending) {
+              envelope.text = repairedPending;
+              envelope.narration_segments = [];
+              result = { ...result, text: JSON.stringify(envelope) };
+            }
+          } catch (error) {
+            logger.warn({ msg: 'DM_NARRATION_PREMATURE_HOOK_FAILED', error });
           }
         }
         // #218 step 1: a cast the gate allowed spends its slot, server-side, once per player

@@ -5,7 +5,7 @@ import {
   contradictsEngineOutcome,
   spliceContradictingSentences,
 } from '../../../../../shared/narration-harm.js';
-import { repairNarration } from '../narration-outcome.js';
+import { repairNarration, repairPrematureRollClaims } from '../narration-outcome.js';
 
 // #266: the repair states the engine's authoritative outcome plainly — it replaces the false
 // claim, it does not embroider it, and it never invents a consequence.
@@ -162,5 +162,72 @@ describe('spliceContradictingSentences (#266)', () => {
     expect(claims.length).toBe(1);
     const result = spliceContradictingSentences(text, claims, truth);
     expect(result).toContain('The Stealth check to climb the shaft unheard failed (7 vs DC 14).');
+  });
+});
+
+// #266 NT-011/NT-020: the reply that REQUESTS the roll narrates its outcome in the same
+// breath — the narration posts before the dice exist, so no outcome repair can ever see
+// it. The request objects below use the real envelope shape (dm-response-schema.ts
+// roll_requests: type, formula, purpose, dc, ac, advantage, disadvantage).
+describe('repairPrematureRollClaims (#266)', () => {
+  const STEALTH_REQUEST = {
+    type: 'check',
+    formula: '1d20+5',
+    purpose: 'Stealth check to climb the shaft',
+    dc: 14,
+    ac: null,
+    advantage: false,
+    disadvantage: false,
+  };
+
+  test('a success claim about the requested check is replaced with the pending truth', () => {
+    const text =
+      'You succeed in slipping past the guard post without a sound. Roll for Stealth.';
+    const repaired = repairPrematureRollClaims(text, [STEALTH_REQUEST]);
+    expect(repaired).toBe(
+      'That outcome is not decided yet — the roll still has to be made. Roll for Stealth.',
+    );
+  });
+
+  test('a failure claim about the requested check is equally premature', () => {
+    const text = 'You fail to find any purchase on the slick stone. Roll a Stealth check.';
+    const repaired = repairPrematureRollClaims(text, [STEALTH_REQUEST]);
+    expect(repaired).toBe(
+      'That outcome is not decided yet — the roll still has to be made. Roll a Stealth check.',
+    );
+  });
+
+  test('a soft verdict anchored on the requested action is repaired', () => {
+    const text = 'You manage to climb the shaft in perfect silence. Roll a Stealth check.';
+    const repaired = repairPrematureRollClaims(text, [STEALTH_REQUEST]);
+    expect(repaired).toBe(
+      'That outcome is not decided yet — the roll still has to be made. Roll a Stealth check.',
+    );
+  });
+
+  test('a soft verdict about something else is not a claim on the pending roll', () => {
+    const text =
+      'You manage to catch your breath at the ledge. Roll a Stealth check to climb the shaft.';
+    expect(repairPrematureRollClaims(text, [STEALTH_REQUEST])).toBeNull();
+  });
+
+  test('a neutral requesting reply passes through untouched', () => {
+    const text =
+      'The shaft rises into darkness above you, slick with condensation. ' +
+      'Roll a Stealth check to climb it unheard.';
+    expect(repairPrematureRollClaims(text, [STEALTH_REQUEST])).toBeNull();
+  });
+
+  test('no verdict-bearing request, no repair', () => {
+    const text = 'You succeed in climbing the shaft unheard.';
+    expect(repairPrematureRollClaims(text, [])).toBeNull();
+    expect(repairPrematureRollClaims(text, undefined)).toBeNull();
+    // Damage and initiative requests carry no pass/fail verdict to pre-narrate.
+    expect(
+      repairPrematureRollClaims(text, [
+        { type: 'damage', formula: '1d6', purpose: 'falling damage', dc: null, ac: null },
+        { type: 'initiative', formula: '1d20+3', purpose: 'initiative', dc: null, ac: null },
+      ]),
+    ).toBeNull();
   });
 });
