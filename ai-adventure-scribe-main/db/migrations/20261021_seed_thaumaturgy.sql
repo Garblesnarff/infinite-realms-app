@@ -1,4 +1,14 @@
 -- Refs #933. Data only; apply on Rob's line and record the apply (#1703).
+-- Pre-apply check: SELECT id FROM spells WHERE name = 'Thaumaturgy';
+-- A different UUID needs an explicit reference/mapping decision; never overwrite it.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM spells WHERE name = 'Thaumaturgy'
+    AND id <> '9441a1c1-bf92-4177-9494-39f815ff7f36'::uuid) THEN
+    RAISE EXCEPTION 'Thaumaturgy UUID mismatch: inspect SELECT id FROM spells WHERE name = ''Thaumaturgy'' before applying #933';
+  END IF;
+END $$;
+
 INSERT INTO spells (id, name, level, school, casting_time, range_text, duration, description, components_verbal, components_somatic, components_material, concentration, ritual) VALUES ('9441a1c1-bf92-4177-9494-39f815ff7f36','Thaumaturgy',0,'Transmutation','1 action','30 feet','1 minute','You manifest a minor wonder, a sign of supernatural power, within range. You create one of the following magical effects within range.
 
 - Your voice booms up to three times as loud as normal for 1 minute.

@@ -5,7 +5,13 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
 import { eq, sql } from 'drizzle-orm';
 
-import { characters, characterSpells, classes, spells } from '../../../../../db/schema/index';
+import {
+  characters,
+  characterSpells,
+  classes,
+  classSpells,
+  spells,
+} from '../../../../../db/schema/index';
 import {
   closeRealDb,
   describeWithDb,
@@ -188,5 +194,132 @@ describeWithDb('racial Thaumaturgy route round trip (#933)', () => {
       .from(spells)
       .where(eq(spells.id, fighterPayload.spells.spells[0]));
     expect(seeded).toHaveLength(1);
+  });
+  async function existingSpell() {
+    const id = await create({ ...fighterPayload.create, cantrips: 'Existing cantrip' });
+    const [wizard] = await db.select().from(classes).where(eq(classes.name, 'Wizard'));
+    const [spell] = await db
+      .insert(spells)
+      .values({
+        name: testId('existing-933'),
+        level: 0,
+        school: 'Illusion',
+        castingTime: '1 action',
+        rangeText: 'Self',
+        duration: '1 minute',
+        description: 'Existing saved cantrip.',
+      })
+      .returning();
+    await db.insert(classSpells).values({ classId: wizard.id, spellId: spell.id, spellLevel: 0 });
+    await db.insert(characterSpells).values({
+      characterId: id,
+      spellId: spell.id,
+      sourceClassId: wizard.id,
+      sourceFeature: 'base',
+    });
+    return { id, spell };
+  }
+  function save(id: string, spellIds: string[]) {
+    return app.handle(
+      new Request(`http://localhost/v1/characters/${id}/spells`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...fighterPayload.spells, spells: spellIds }),
+      }),
+    );
+  }
+  it('refuses a missing catalog row before replacing any saved spells', async () => {
+    const { id, spell } = await existingSpell();
+    await db.delete(spells).where(eq(spells.id, fighterPayload.spells.spells[0]));
+    try {
+      const response = await save(id, [spell.id, ...fighterPayload.spells.spells]);
+      expect(response.status).toBe(400);
+      expect(await response.text()).toContain('Thaumaturgy is temporarily unavailable');
+      const rows = await db
+        .select()
+        .from(characterSpells)
+        .where(eq(characterSpells.characterId, id));
+      expect(rows.map((row) => row.spellId)).toEqual([spell.id]);
+      const [stored] = await db.select().from(characters).where(eq(characters.id, id));
+      expect(stored.cantrips).toBe('Existing cantrip');
+    } finally {
+      await db.delete(spells).where(eq(spells.id, spell.id));
+      await db.execute(
+        sql.raw(
+          readFileSync(
+            resolve(
+              dirname(fileURLToPath(import.meta.url)),
+              '../../../../../db/migrations/20261021_seed_thaumaturgy.sql',
+            ),
+            'utf8',
+          ),
+        ),
+      );
+    }
+  });
+  it('rolls back deletion if a database insert fails after validation', async () => {
+    const { id, spell } = await existingSpell();
+    const trigger = `test_933_reject_${process.pid}`;
+    await db.execute(
+      sql.raw(
+        `CREATE FUNCTION ${trigger}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.character_id = '${id}'::uuid THEN RAISE EXCEPTION 'test insert failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER ${trigger} BEFORE INSERT ON character_spells FOR EACH ROW EXECUTE FUNCTION ${trigger}();`,
+      ),
+    );
+    try {
+      expect((await save(id, [spell.id, ...fighterPayload.spells.spells])).status).toBe(500);
+      const rows = await db
+        .select()
+        .from(characterSpells)
+        .where(eq(characterSpells.characterId, id));
+      expect(rows.map((row) => row.spellId)).toEqual([spell.id]);
+      const [stored] = await db.select().from(characters).where(eq(characters.id, id));
+      expect(stored.cantrips).toBe('Existing cantrip');
+    } finally {
+      await db.execute(
+        sql.raw(`DROP TRIGGER ${trigger} ON character_spells; DROP FUNCTION ${trigger}();`),
+      );
+      await db.delete(spells).where(eq(spells.id, spell.id));
+    }
+  });
+  it('refuses seed application when the existing name has a different UUID', async () => {
+    const original = fighterPayload.spells.spells[0];
+    await db.delete(spells).where(eq(spells.id, original));
+    const [other] = await db
+      .insert(spells)
+      .values({
+        name: 'Thaumaturgy',
+        level: 0,
+        school: 'Transmutation',
+        castingTime: '1 action',
+        rangeText: '30 feet',
+        duration: '1 minute',
+        description: 'Existing alternate UUID.',
+      })
+      .returning();
+    try {
+      const seed = readFileSync(
+        resolve(
+          dirname(fileURLToPath(import.meta.url)),
+          '../../../../../db/migrations/20261021_seed_thaumaturgy.sql',
+        ),
+        'utf8',
+      );
+      await expect(Promise.resolve(db.execute(sql.raw(seed)))).rejects.toThrow();
+      const [retained] = await db.select().from(spells).where(eq(spells.id, other.id));
+      expect(retained.name).toBe('Thaumaturgy');
+    } finally {
+      await db.delete(spells).where(eq(spells.id, other.id));
+      await db.execute(
+        sql.raw(
+          readFileSync(
+            resolve(
+              dirname(fileURLToPath(import.meta.url)),
+              '../../../../../db/migrations/20261021_seed_thaumaturgy.sql',
+            ),
+            'utf8',
+          ),
+        ),
+      );
+    }
   });
 });

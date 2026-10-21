@@ -147,6 +147,22 @@ export class CharacterSpellService {
 
     const racialSpellIds = new Set<string>();
     if (spellIds.includes(THAUMATURGY_SPELL_ID)) {
+      const [catalogSpell] = await db
+        .select({ id: spells.id })
+        .from(spells)
+        .where(
+          and(
+            eq(spells.id, THAUMATURGY_SPELL_ID),
+            eq(spells.name, 'Thaumaturgy'),
+            eq(spells.level, 0),
+          ),
+        )
+        .limit(1);
+      if (!catalogSpell)
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Thaumaturgy is temporarily unavailable. Your saved spells were not changed.',
+        });
       const character = await db.query.characters.findFirst({
         where: and(
           eq(characters.id, characterId),
@@ -204,63 +220,128 @@ export class CharacterSpellService {
       }
     }
 
-    // Clear existing spells with ownership check in WHERE clause for defense-in-depth
-    const deleted = await db
-      .delete(characterSpells)
-      .where(
-        and(
-          eq(characterSpells.characterId, characterId),
-          eq(characterSpells.sourceClassId, classData.id),
-          exists(
-            db
-              .select({ one: sql`1` })
-              .from(characters)
-              .where(
-                and(
-                  eq(characters.id, characterId),
-                  or(
-                    eq(characters.userId, userId),
-                    eq(characters.ownerId, userId),
-                    exists(
-                      db
-                        .select({ one: sql`1` })
-                        .from(characterPermissions)
-                        .where(
-                          and(
-                            eq(characterPermissions.characterId, characters.id),
-                            eq(characterPermissions.userId, userId),
-                            inArray(characterPermissions.permissionLevel, ['editor', 'owner']),
+    await db.transaction(async (tx) => {
+      // Clear existing spells with ownership check in WHERE clause for defense-in-depth
+      const deleted = await tx
+        .delete(characterSpells)
+        .where(
+          and(
+            eq(characterSpells.characterId, characterId),
+            eq(characterSpells.sourceClassId, classData.id),
+            exists(
+              tx
+                .select({ one: sql`1` })
+                .from(characters)
+                .where(
+                  and(
+                    eq(characters.id, characterId),
+                    or(
+                      eq(characters.userId, userId),
+                      eq(characters.ownerId, userId),
+                      exists(
+                        tx
+                          .select({ one: sql`1` })
+                          .from(characterPermissions)
+                          .where(
+                            and(
+                              eq(characterPermissions.characterId, characters.id),
+                              eq(characterPermissions.userId, userId),
+                              inArray(characterPermissions.permissionLevel, ['editor', 'owner']),
+                            ),
                           ),
-                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
+            ),
           ),
-        ),
-      )
-      .returning({ id: characterSpells.id });
+        )
+        .returning({ id: characterSpells.id });
 
-    let insertedCount = 0;
+      let insertedCount = 0;
 
-    // The ownership check used to ride along inside an insert-select. Its projection
-    // covered 5 of character_spells' 10 columns, so Drizzle rejected the statement
-    // before it was ever sent -- every spell write on this path had been failing
-    // since it shipped. Split into an explicit authorization query plus a plain
-    // insert. The pattern is now banned outright by the insert-select rule in
-    // eslint.config.js.
-    if (spellIds.length > 0) {
-      const editable = await db
-        .select({ one: sql`1` })
-        .from(characters)
-        .where(
-          and(
+      // The ownership check used to ride along inside an insert-select. Its projection
+      // covered 5 of character_spells' 10 columns, so Drizzle rejected the statement
+      // before it was ever sent -- every spell write on this path had been failing
+      // since it shipped. Split into an explicit authorization query plus a plain
+      // insert. The pattern is now banned outright by the insert-select rule in
+      // eslint.config.js.
+      if (spellIds.length > 0) {
+        const editable = await tx
+          .select({ one: sql`1` })
+          .from(characters)
+          .where(
+            and(
+              eq(characters.id, characterId),
+              or(
+                eq(characters.userId, userId),
+                eq(characters.ownerId, userId),
+                exists(
+                  tx
+                    .select({ one: sql`1` })
+                    .from(characterPermissions)
+                    .where(
+                      and(
+                        eq(characterPermissions.characterId, characters.id),
+                        eq(characterPermissions.userId, userId),
+                        inArray(characterPermissions.permissionLevel, ['editor', 'owner']),
+                      ),
+                    ),
+                ),
+              ),
+            ),
+          )
+          .limit(1);
+
+        if (editable.length === 0) {
+          throw new NotFoundError('Character', characterId);
+        }
+
+        // Still one query for the spell list rather than N: the insert-select was
+        // reading rows out of class_spells, not just proving ownership.
+        const grantable = await tx
+          .select({ spellId: classSpells.spellId })
+          .from(classSpells)
+          .where(
+            and(eq(classSpells.classId, classData.id), inArray(classSpells.spellId, spellIds)),
+          );
+
+        for (const spellId of racialSpellIds)
+          if (!grantable.some((row) => row.spellId === spellId)) grantable.push({ spellId });
+
+        if (grantable.length > 0) {
+          // #2710: when the caller sends an explicit prepared set, write
+          // isPrepared per spell. When omitted, keep the old behaviour
+          // (all true) so existing callers don't break.
+          const preparedSet = preparedSpellIds !== undefined ? new Set(preparedSpellIds) : null;
+          const inserted = await tx
+            .insert(characterSpells)
+            .values(
+              grantable.map((row) => ({
+                characterId,
+                spellId: row.spellId,
+                sourceClassId: classData.id,
+                isPrepared: preparedSet ? preparedSet.has(row.spellId) : true,
+                sourceFeature: racialSpellIds.has(row.spellId) ? 'racial' : 'base',
+              })),
+            )
+            .returning({ id: characterSpells.id });
+
+          insertedCount = inserted.length;
+        }
+      }
+
+      // ⚡ Bolt: Verify character existence/ownership only if no rows were affected by DELETE or INSERT.
+      // This maintains the NotFoundError contract while skipping the extra query in most cases.
+      if (deleted.length === 0 && (spellIds.length === 0 || insertedCount === 0)) {
+        const characterExists = await tx.query.characters.findFirst({
+          where: and(
             eq(characters.id, characterId),
             or(
               eq(characters.userId, userId),
               eq(characters.ownerId, userId),
               exists(
-                db
+                tx
                   .select({ one: sql`1` })
                   .from(characterPermissions)
                   .where(
@@ -273,75 +354,14 @@ export class CharacterSpellService {
               ),
             ),
           ),
-        )
-        .limit(1);
+          columns: { id: true },
+        });
 
-      if (editable.length === 0) {
-        throw new NotFoundError('Character', characterId);
+        if (!characterExists) {
+          throw new NotFoundError('Character', characterId);
+        }
       }
-
-      // Still one query for the spell list rather than N: the insert-select was
-      // reading rows out of class_spells, not just proving ownership.
-      const grantable = await db
-        .select({ spellId: classSpells.spellId })
-        .from(classSpells)
-        .where(and(eq(classSpells.classId, classData.id), inArray(classSpells.spellId, spellIds)));
-
-      for (const spellId of racialSpellIds)
-        if (!grantable.some((row) => row.spellId === spellId)) grantable.push({ spellId });
-
-      if (grantable.length > 0) {
-        // #2710: when the caller sends an explicit prepared set, write
-        // isPrepared per spell. When omitted, keep the old behaviour
-        // (all true) so existing callers don't break.
-        const preparedSet = preparedSpellIds !== undefined ? new Set(preparedSpellIds) : null;
-        const inserted = await db
-          .insert(characterSpells)
-          .values(
-            grantable.map((row) => ({
-              characterId,
-              spellId: row.spellId,
-              sourceClassId: classData.id,
-              isPrepared: preparedSet ? preparedSet.has(row.spellId) : true,
-              sourceFeature: racialSpellIds.has(row.spellId) ? 'racial' : 'base',
-            })),
-          )
-          .returning({ id: characterSpells.id });
-
-        insertedCount = inserted.length;
-      }
-    }
-
-    // ⚡ Bolt: Verify character existence/ownership only if no rows were affected by DELETE or INSERT.
-    // This maintains the NotFoundError contract while skipping the extra query in most cases.
-    if (deleted.length === 0 && (spellIds.length === 0 || insertedCount === 0)) {
-      const characterExists = await db.query.characters.findFirst({
-        where: and(
-          eq(characters.id, characterId),
-          or(
-            eq(characters.userId, userId),
-            eq(characters.ownerId, userId),
-            exists(
-              db
-                .select({ one: sql`1` })
-                .from(characterPermissions)
-                .where(
-                  and(
-                    eq(characterPermissions.characterId, characters.id),
-                    eq(characterPermissions.userId, userId),
-                    inArray(characterPermissions.permissionLevel, ['editor', 'owner']),
-                  ),
-                ),
-            ),
-          ),
-        ),
-        columns: { id: true },
-      });
-
-      if (!characterExists) {
-        throw new NotFoundError('Character', characterId);
-      }
-    }
+    });
 
     // ⚡ Bolt: Maintain data consistency by syncing with comma-separated columns on characters table.
     // Optimized to use SQL aggregation (string_agg) instead of fetching every spell row.
