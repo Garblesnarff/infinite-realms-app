@@ -588,3 +588,27 @@ describe('every area spell in the player combat scope resolves through the route
     },
   );
 });
+
+describe('#918 D2-011: a downed caster’s queued Burning Hands', () => {
+  it('refuses the cast at 0 HP: no damage, no slot spent', async () => {
+    // The Apprentice declared Burning Hands, the drained NPC turn dropped her to 0 HP, and
+    // the queued cast reached the route afterwards. A caster at 0 HP cannot act: the intent
+    // gateway's downed-actor gate refuses it, so nothing is rolled and no slot is spent.
+    hp.set(APPRENTICE_ID, 0);
+
+    const response = await castArea({
+      actorId: 'the-apprentice',
+      spellId: 'burning-hands',
+      origin: { x: 3, y: 4 },
+      slotLevel: 1,
+      actionOrigin: 'sheet_cast',
+    });
+    const payload = (await response.json()) as CastResponse;
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(payload.delta).toBeUndefined();
+    expect(hp.get(GOLDWHISK_ID)).toBe(40);
+    expect(hp.get(IMP_ID)).toBe(40);
+    expect(slots.get(1)).toBe(2);
+  });
+});
