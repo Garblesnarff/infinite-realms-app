@@ -3,6 +3,8 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import { Elysia } from 'elysia';
 
+import { formatCombatEngineParts } from '../../../../../../shared/combat-outcome-transcript.js';
+
 import type {
   DMResponse,
   DMTargetedCombatAction,
@@ -184,6 +186,8 @@ mock.module('../../../../services/combat/combat-encounter-service.js', () => ({
       participants: [
         participant('the-seeker', 'The Seeker', 'player'),
         participant('the-void-maw', 'The Void-Maw', 'npc'),
+        participant('construct-1', 'Construct 1', 'npc'),
+        participant('construct-2', 'Construct 2', 'npc'),
       ],
       turnOrder: [],
       currentParticipant:
@@ -845,5 +849,177 @@ describe('honest rejection of anything the intent union refuses', () => {
       expect(response.status).toBeLessThan(500);
       expect(response.status).toBeGreaterThanOrEqual(400);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #260 CB-020, the original report: a premade whose sheet carries BOTH a
+// Handaxe and a Light Crossbow declares a ranged attack with the crossbow at
+// ~20 ft. The 2026-10-10 engine answered "Weapon swap: light-crossbow ->
+// Handaxe (requested weapon was not equipped)" twice and quietly moved the
+// attack onto Construct 2. The earlier #260 suites never caught why: their
+// crossbow fixture is named "Light Crossbow", the display order a claim uses
+// — but a real sheet row stores the SRD's suffix-first name, "Crossbow,
+// light" (that is the name the engine line itself prints, per CB-040), and
+// the claim a producer emits is the slug `weaponIdFromPurpose` builds from
+// the roll-request purpose: "light-crossbow". Normalization equates neither
+// order, so every matcher leg missed and the crossbow read as unowned.
+// ---------------------------------------------------------------------------
+
+describe('#260 CB-020: the Gourmand declares a Light Crossbow attack', () => {
+  // The premade's sheet rows as `candidateToProfile` builds them in
+  // production: the profile name is the stored row name, "Crossbow, light",
+  // with damage and range defaulted from the SRD catalog entry of that name.
+  const CROSSBOW_PROFILE = {
+    id: 'eq-crossbow',
+    name: 'Crossbow, light',
+    damageDice: '1d8',
+    damageType: 'piercing',
+    normalRange: 80,
+    longRange: 320,
+    magicBonus: 0,
+    finesse: false,
+    ranged: true,
+    proficient: true,
+  };
+  const HANDAXE_PROFILE = {
+    id: 'eq-handaxe',
+    name: 'Handaxe',
+    damageDice: '1d6',
+    damageType: 'slashing',
+    normalRange: 20,
+    longRange: 60,
+    magicBonus: 0,
+    finesse: false,
+    ranged: true,
+    proficient: true,
+  };
+  const engineLines = (result: Record<string, unknown>): string[] =>
+    formatCombatEngineParts(
+      { action_type: 'attack', actor_id: 'the-seeker', target_ids: ['construct-1'] },
+      result,
+      [
+        { id: 'the-seeker', name: 'The Gourmand' },
+        { id: 'construct-1', name: 'Construct 1' },
+        { id: 'construct-2', name: 'Construct 2' },
+      ],
+    ).map((part) => part.line);
+
+  beforeEach(() => {
+    activeParticipantId = 'the-seeker';
+    equippedByActor['the-seeker'] = [CROSSBOW_PROFILE, HANDAXE_PROFILE];
+    carriedByActor['the-seeker'] = [CROSSBOW_PROFILE, HANDAXE_PROFILE];
+  });
+
+  it('fires the equipped crossbow at the named construct — no swap, no target switch, each line once', async () => {
+    const response = await postIntent({
+      intent: {
+        type: 'attack',
+        actorId: 'the-seeker',
+        targetId: 'construct-1',
+        weaponId: 'light-crossbow',
+        expectedVersion: ENCOUNTER_VERSION,
+      },
+      source: 'player',
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { result: Record<string, unknown> };
+    // The target is the player's declared one (CB-020 switched to Construct 2).
+    expect(body.result.targetId).toBe('construct-1');
+    expect(body.result.targetName).toBe('Construct 1');
+    // The crossbow grounds: no substitution happened at all.
+    expect(body.result.weaponResolution).toEqual({
+      requested: 'light-crossbow',
+      resolved: 'Crossbow, light',
+      substituted: false,
+    });
+    // Exactly one attack rolled, with the crossbow — and the approach was
+    // grounded on the crossbow too, so no second resolution disagrees.
+    expect(attackInputs).toHaveLength(1);
+    expect(attackInputs[0]?.weaponId).toBe('eq-crossbow');
+    expect(approachWeapons).toHaveLength(1);
+    expect(approachWeapons[0]).toMatchObject({ name: 'Crossbow, light' });
+    // The transcript prints no swap line and no line twice.
+    const lines = engineLines(body.result);
+    expect(lines.filter((line) => line.includes('Weapon swap'))).toHaveLength(0);
+    expect(new Set(lines).size).toBe(lines.length);
+  });
+
+  it('crossbow carried but not equipped — the player is told once (422) and nothing rolls', async () => {
+    equippedByActor['the-seeker'] = [HANDAXE_PROFILE];
+
+    const response = await postIntent({
+      intent: {
+        type: 'attack',
+        actorId: 'the-seeker',
+        targetId: 'construct-1',
+        weaponId: 'light-crossbow',
+        expectedVersion: ENCOUNTER_VERSION,
+      },
+      source: 'player',
+    });
+
+    expect(response.status).toBe(422);
+    const body = (await response.json()) as {
+      error: string;
+      details: { reason: string };
+    };
+    expect(body.details).toMatchObject({ reason: 'weapon_not_equipped' });
+    // The refusal is one message, printed once — never a silent Handaxe roll.
+    expect(body.error.split('Weapon not equipped').length - 1).toBe(1);
+    expect(attackInputs).toHaveLength(0);
+    expect(approachWeapons).toHaveLength(0);
+  });
+
+  it('RG-014: naming a longsword he does not own is refused with weapon_not_on_sheet — never a silent swap', async () => {
+    equippedByActor['the-seeker'] = [GREATAXE];
+    carriedByActor['the-seeker'] = [GREATAXE, HANDAXE_PROFILE];
+
+    const response = await postIntent({
+      intent: {
+        type: 'attack',
+        actorId: 'the-seeker',
+        targetId: 'construct-1',
+        weaponId: 'longsword',
+        expectedVersion: ENCOUNTER_VERSION,
+      },
+      source: 'player',
+    });
+
+    expect(response.status).toBe(422);
+    const body = (await response.json()) as {
+      error: string;
+      details: { reason: string };
+    };
+    expect(body.details).toMatchObject({ reason: 'weapon_not_on_sheet' });
+    expect(body.error.split('Weapon not on character sheet').length - 1).toBe(1);
+    expect(attackInputs).toHaveLength(0);
+  });
+
+  it('a DM naming the carried-but-unequipped crossbow substitutes out loud — one swap line, no 422', async () => {
+    equippedByActor['the-seeker'] = [HANDAXE_PROFILE];
+
+    const response = await postIntent({
+      intent: {
+        type: 'attack',
+        actorId: 'the-seeker',
+        targetId: 'construct-1',
+        weaponId: 'light-crossbow',
+      },
+      source: 'dm',
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { result: Record<string, unknown> };
+    // The substitute is the equipped Handaxe, announced via the warning and
+    // exactly one transcript line — the swap is out loud, never silent.
+    const ungrounded = warnings.find((entry) => entry.event === 'DM_WEAPON_UNGROUNDED');
+    expect(ungrounded).toMatchObject({ requested: 'light-crossbow', resolved: 'Handaxe' });
+    expect(attackInputs).toHaveLength(1);
+    expect(attackInputs[0]?.weaponId).toBe('eq-handaxe');
+    const swapLines = engineLines(body.result).filter((line) => line.includes('Weapon swap'));
+    expect(swapLines).toHaveLength(1);
+    expect(swapLines[0]).toContain('light-crossbow → Handaxe');
   });
 });
