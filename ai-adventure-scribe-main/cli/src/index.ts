@@ -138,8 +138,12 @@ async function getStarterCampaign(slug: string) {
     id: data.id,
     title: data.title,
     premise: data.premise,
-    genre: data.genre || [],
-    tone: data.tone || [],
+    genre: Array.isArray(data.genre)
+      ? data.genre.filter((value): value is string => typeof value === 'string')
+      : [],
+    tone: Array.isArray(data.tone)
+      ? data.tone.filter((value): value is string => typeof value === 'string')
+      : [],
     difficulty: data.difficulty,
     coverImageUrl: data.cover_image_url,
   };

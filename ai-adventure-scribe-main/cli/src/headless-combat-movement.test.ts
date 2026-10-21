@@ -41,7 +41,7 @@ afterEach(() => {
 });
 
 const positionOf = (event: { type: string }, entityId: string): { x: number; y: number } => {
-  const map = (event as { map: TacticalMap }).map;
+  const map = (event as { type: string; map: TacticalMap }).map;
   const entity = map.entities.find((candidate) => candidate.id === entityId)!;
   return { x: entity.x, y: entity.y };
 };

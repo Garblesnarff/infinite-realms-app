@@ -2,6 +2,12 @@
   "name": "@infinite-realms/cli",
   "private": true,
   "type": "module",
-  "bin": { "ir": "src/index.ts" },
-  "scripts": { "test": "vitest run --root .. cli/src", "start": "bun src/index.ts", "type-check": "tsc --noEmit" }
+  "bin": {
+    "ir": "src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run --root .. cli/src",
+    "start": "bun src/index.ts",
+    "type-check": "bash ../scripts/cli-typecheck-gate.sh"
+  }
 }
