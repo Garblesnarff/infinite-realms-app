@@ -55,7 +55,12 @@ vi.mock('../session-state-service', () => ({
 vi.mock('@/agents/services/lore-keeper/LoreKeeperService', () => ({
   getLoreKeeperService: vi.fn(),
 }));
-vi.mock('@/services/ai/asset-processor', () => ({ fetchCampaignAssetsForPrompt: vi.fn() }));
+vi.mock('@/services/ai/asset-processor', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  // Keep the real exports (normalizePcName is consumed by the lore renderer);
+  // only the assets fetch is stubbed.
+  return { ...actual, fetchCampaignAssetsForPrompt: vi.fn() };
+});
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     getCharacterLoadout: vi.fn(),

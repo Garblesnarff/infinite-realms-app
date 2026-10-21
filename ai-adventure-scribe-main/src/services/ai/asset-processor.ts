@@ -329,8 +329,10 @@ export function applyAssetPostProcessing<T extends { text: string }>(response: T
  * punctuation and a leading article are ignored, so "The Apprentice" matches
  * "apprentice". Mirrors the server's PC-name comparison
  * (server-bun/src/tactical/seating.ts `comparableName`, #2438).
+ * Callers must guard the empty-name case themselves: '' folds to '', and
+ * '' === '' would match any other empty name.
  */
-function normalizePcName(value: string): string {
+export function normalizePcName(value: string): string {
   return value
     .trim()
     .toLowerCase()

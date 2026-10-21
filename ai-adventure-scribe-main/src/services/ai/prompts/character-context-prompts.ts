@@ -77,8 +77,17 @@ ARMOR: ${armorText} | ${acText}
   }
 
   public static async buildCharacterSection(char: Record<string, any>): Promise<string> {
+    // #708: bind the name to the player at its first presentation in the
+    // prompt. Premade names are bare role titles ("The Apprentice"), which
+    // read as NPC descriptors; an unbound label lets the DM narrate the PC
+    // in the third person as a separate person standing nearby. The full
+    // <player_identity> anchor rides in the starter-lore head (see
+    // CampaignContextPrompts.renderLoreHead): the character block is in the
+    // prompt-section counter's system_rules remainder, whose #2533 budget
+    // (ai-service-prompt-diet.test.ts) has only a few tokens of headroom,
+    // while the lore head is campaign canon with room.
     let section = `<character_details>
-PLAYER CHARACTER: ${char.name}, a level ${char.level} ${char.race || 'Unknown Race'} ${char.class?.name || char.class || 'Unknown Class'}`;
+PLAYER CHARACTER: ${char.name} (you, the player), a level ${char.level} ${char.race || 'Unknown Race'} ${char.class?.name || char.class || 'Unknown Class'}`;
 
     if (char.background) {
       section += ` (${char.background} background)`;
