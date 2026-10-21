@@ -126,7 +126,7 @@ async function getStarterCampaign(slug: string) {
   const { supabase } = await import('@/integrations/supabase/client');
   const { data, error } = await supabase
     .from('starter_campaigns')
-    .select('id, title, premise, genre, tone, difficulty, cover_image_url')
+    .select('id, title, premise, genre, tone, difficulty, cover_image_url, estimated_sessions, overview')
     .eq('slug', slug)
     .eq('is_published', true)
     .eq('is_complete', true)
@@ -146,6 +146,8 @@ async function getStarterCampaign(slug: string) {
       : [],
     difficulty: data.difficulty,
     coverImageUrl: data.cover_image_url,
+    estimatedSessions: data.estimated_sessions,
+    overview: data.overview,
   };
 }
 
