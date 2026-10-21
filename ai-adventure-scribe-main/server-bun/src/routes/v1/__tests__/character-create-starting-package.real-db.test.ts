@@ -131,6 +131,44 @@ const criminalRoguePayload971 = JSON.parse(
   ),
 ) as Record<string, unknown>;
 
+// #898: the pinned wizard payloads for the proficiency round trip, produced
+// by the client's real producers in
+// src/hooks/__tests__/wizard-save-898-payload.test.ts (the wizard state is
+// built exactly as ProficienciesSelection leaves it). Rogue: Human/Criminal,
+// class choices Acrobatics/Insight/Perception/Stealth, Expertise in Insight
+// and Stealth (Hark D20-010's picks). Fighter: Half-Orc/Acolyte, choices
+// Athletics/Perception (the D20-005 shape). Warlock: Human/Acolyte, choices
+// Arcana/Deception (the D20-012 shape).
+const roguePayload898 = JSON.parse(
+  readFileSync(
+    resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      '../../../../../shared/test-fixtures/rogue-898-create-payload.json',
+    ),
+    'utf8',
+  ),
+) as Record<string, unknown>;
+
+const fighterPayload898 = JSON.parse(
+  readFileSync(
+    resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      '../../../../../shared/test-fixtures/fighter-898-create-payload.json',
+    ),
+    'utf8',
+  ),
+) as Record<string, unknown>;
+
+const warlockPayload898 = JSON.parse(
+  readFileSync(
+    resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      '../../../../../shared/test-fixtures/warlock-898-create-payload.json',
+    ),
+    'utf8',
+  ),
+) as Record<string, unknown>;
+
 type EquipRow = { itemName: string; equipped: boolean; quantity: number };
 function equippedByName(rows: EquipRow[]): Map<string, EquipRow> {
   return new Map(rows.map((row) => [row.itemName, row]));
@@ -699,4 +737,115 @@ describeWithDb('character create gold lands in the purse, never as an item (#971
     const names = await equipmentNames(id);
     expect(names.filter((name) => BARE_GOLD.test(name))).toEqual([]);
   });
+});
+
+describeWithDb('character create proficiencies survive to the saved sheet (#898)', () => {
+  let app: { handle: (request: Request) => Promise<Response> };
+  let db: ReturnType<typeof realDb>;
+  const createdIds: string[] = [];
+
+  beforeAll(async () => {
+    userId = testId('user-898');
+    db = realDb();
+    const pipeline = await importWithRealDb(async () => {
+      const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');
+      const { charactersRoutes } = await import('../characters.ts');
+      return { createRequestPipelineApp, charactersRoutes };
+    });
+    app = pipeline.createRequestPipelineApp().use(pipeline.charactersRoutes);
+  });
+
+  afterAll(async () => {
+    for (const id of createdIds) {
+      await db
+        .delete(characters)
+        .where(eq(characters.id, id))
+        .catch(() => {});
+    }
+    await closeRealDb();
+  });
+
+  async function create(body: unknown): Promise<string> {
+    const res = await app.handle(
+      new Request('http://localhost/v1/characters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    );
+    const text = await res.text();
+    expect(res.status, text.slice(0, 400)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+    return id;
+  }
+
+  const sortedCsv = (v: unknown): string[] =>
+    String(v ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .sort();
+
+  // The D20 sweep (builds 43a2a4d7 / e8a0e324) found these sets lost or
+  // wrong on the saved sheet: the Fighter read back with only its racial
+  // skill and one choice, the Warlock's saves came back as another class's,
+  // the Rogue's Expertise showed +0. The client pin proves the wizard body
+  // carries the full sets; this block proves the create stores them verbatim
+  // and the GET serves them back — the two hops the sheet reads.
+  const CASES = [
+    {
+      label: 'rogue',
+      payload: roguePayload898,
+      // Criminal fixed (Deception, Stealth) + class choices (Acrobatics,
+      // Insight, Perception, Stealth); Expertise in Insight and Stealth.
+      skills: ['Acrobatics', 'Deception', 'Insight', 'Perception', 'Stealth'],
+      saves: ['dexterity', 'intelligence'],
+      expertise: ['Insight', 'Stealth'],
+      tools: ["Thieves' tools", 'One type of gaming set'],
+    },
+    {
+      label: 'fighter',
+      payload: fighterPayload898,
+      // Acolyte fixed (Insight, Religion) + Half-Orc Menacing (Intimidation)
+      // + class choices (Athletics, Perception).
+      skills: ['Athletics', 'Insight', 'Intimidation', 'Perception', 'Religion'],
+      saves: ['strength', 'constitution'],
+      expertise: [] as string[],
+      tools: [] as string[],
+    },
+    {
+      label: 'warlock',
+      payload: warlockPayload898,
+      // Acolyte fixed (Insight, Religion) + class choices (Arcana, Deception).
+      skills: ['Arcana', 'Deception', 'Insight', 'Religion'],
+      saves: ['wisdom', 'charisma'],
+      expertise: [] as string[],
+      tools: [] as string[],
+    },
+  ];
+
+  for (const c of CASES) {
+    it(`${c.label}: chosen skills, class saves and expertise are stored and served back`, async () => {
+      const id = await create({ ...c.payload, name: testId(`prof-898-${c.label}`) });
+
+      const [row] = await db.select().from(characters).where(eq(characters.id, id));
+      expect(sortedCsv(row?.skillProficiencies), 'stored skills').toEqual([...c.skills].sort());
+      expect(sortedCsv(row?.savingThrowProficiencies), 'stored saves').toEqual([...c.saves].sort());
+      expect(sortedCsv(row?.expertiseProficiencies), 'stored expertise').toEqual(
+        [...c.expertise].sort(),
+      );
+      expect(sortedCsv(row?.toolProficiencies), 'stored tools').toEqual([...c.tools].sort());
+
+      const res = await app.handle(new Request(`http://localhost/v1/characters/${id}`));
+      expect(res.status).toBe(200);
+      const api = (await res.json()) as Record<string, unknown>;
+      expect(sortedCsv(api.skill_proficiencies), 'GET skills').toEqual([...c.skills].sort());
+      expect(sortedCsv(api.saving_throw_proficiencies), 'GET saves').toEqual([...c.saves].sort());
+      expect(sortedCsv(api.expertise_proficiencies), 'GET expertise').toEqual(
+        [...c.expertise].sort(),
+      );
+      expect(sortedCsv(api.tool_proficiencies), 'GET tools').toEqual([...c.tools].sort());
+    });
+  }
 });
