@@ -490,3 +490,137 @@ describe('repairPrematureRollClaims — strategist FIX round 1', () => {
     );
   });
 });
+
+// #266 round 2 (strategist items on #266, after #979): (1) the branch-marker scan
+// is scoped to the claim's clause — a marker in a later clause cannot exempt an
+// asserted contrast, and a ';' pair must carry its verdicts on different sides;
+// (2) keyword inflection covers doubled consonants (slip→slipping/slipped).
+describe('repairPrematureRollClaims — #266 round 2', () => {
+  const req = (type: string, purpose: string, dc: number | null = 14) => ({
+    type,
+    formula: '1d20+5',
+    purpose,
+    dc,
+    ac: null,
+    advantage: false,
+    disadvantage: false,
+  });
+  const STEALTH_SLIP = req('check', 'Stealth check to slip past the guard post');
+  const PENDING = 'That outcome is not decided yet — the roll still has to be made.';
+
+  test('a branch marker in a later clause does not exempt an asserted contrast', () => {
+    const text =
+      'You succeed in slipping past the guard, but you fail to notice the dog, ' +
+      'even if the hinges protest. Roll a Stealth check.';
+    expect(repairPrematureRollClaims(text, [STEALTH_SLIP])).toBe(
+      `${PENDING} Roll a Stealth check.`,
+    );
+  });
+
+  test('an asserted contrast is not a semicolon pair when both verdicts share a side', () => {
+    const text =
+      'You succeed in slipping past the guard, but you fail to notice the dog; ' +
+      'the torch gutters in the wind. Roll a Stealth check.';
+    expect(repairPrematureRollClaims(text, [STEALTH_SLIP])).toBe(
+      `${PENDING} Roll a Stealth check.`,
+    );
+  });
+
+  test('either/or stakes stay untouched: the opening marker scopes both branches', () => {
+    const text =
+      'Either you succeed and slip through, or you fail and fall. ' +
+      'Roll a Stealth check to slip past the guard post.';
+    expect(repairPrematureRollClaims(text, [STEALTH_SLIP])).toBeNull();
+  });
+
+  test('an or-joined pair in one semicolon branch stays untouched', () => {
+    // A preamble clause before the ';' puts both verdicts in the second branch;
+    // as an "or"-alternation they are still paired stakes, not an asserted
+    // contrast (self-review BLOCKER 1).
+    expect(
+      repairPrematureRollClaims(
+        'The guard turns away; you succeed and slip through, or you fail and stumble. ' +
+          'Roll a Stealth check to slip past the guard post.',
+        [STEALTH_SLIP],
+      ),
+    ).toBeNull();
+    expect(
+      repairPrematureRollClaims(
+        'Torches gutter in the wind; you fail and fall, or you succeed and slip through. ' +
+          'Roll a Stealth check to slip past the guard post.',
+        [STEALTH_SLIP],
+      ),
+    ).toBeNull();
+  });
+
+  test('a branch marker after the claim’s clause no longer frames it (otherwise)', () => {
+    // The comma variant of the ';' otherwise stakes above: "otherwise" opens a
+    // LATER clause, so under the clause scope it frames nothing about the
+    // asserted success claim (#266 round 2, by the item's letter).
+    const text =
+      'You succeed and slip through, otherwise you fail and the alarm rings. ' +
+      'Roll a Stealth check to slip past the guard post.';
+    expect(repairPrematureRollClaims(text, [STEALTH_SLIP])).toBe(
+      `${PENDING} Roll a Stealth check to slip past the guard post.`,
+    );
+  });
+
+  test('a branch marker inside the claim’s own clause still frames it', () => {
+    const text =
+      'You succeed if the hinges stay silent, or you fail if they creak. ' +
+      'Roll a Stealth check to slip past the guard post.';
+    expect(repairPrematureRollClaims(text, [STEALTH_SLIP])).toBeNull();
+  });
+
+  test('otherwise stakes stay untouched', () => {
+    const text =
+      'Slip through and you succeed; otherwise, you fail and the alarm rings. ' +
+      'Roll a Stealth check to slip past the guard post.';
+    expect(repairPrematureRollClaims(text, [STEALTH_SLIP])).toBeNull();
+  });
+
+  test('a doubled-consonant inflection names the pending action (slipping)', () => {
+    const text =
+      'You succeed in slipping through the dark unseen. ' +
+      'Roll a Stealth check to slip past the guard.';
+    expect(
+      repairPrematureRollClaims(text, [req('check', 'Stealth check to slip past the guard')]),
+    ).toBe(`${PENDING} Roll a Stealth check to slip past the guard.`);
+  });
+
+  test('a doubled-consonant inflection names the pending action (slipped, fail side)', () => {
+    const text =
+      'You fail as the knot slipped tighter instead. ' +
+      'Roll a Dexterity check to slip free of the ropes.';
+    expect(
+      repairPrematureRollClaims(text, [req('check', 'Dexterity check to slip free of the ropes')]),
+    ).toBe(`${PENDING} Roll a Dexterity check to slip free of the ropes.`);
+  });
+
+  test('a doubled-consonant inflection names the pending action (grabbing)', () => {
+    const text =
+      'You succeed in grabbing the ledge. Roll a Dexterity check to grab the rope.';
+    expect(
+      repairPrematureRollClaims(text, [req('check', 'Dexterity check to grab the rope')]),
+    ).toBe(`${PENDING} Roll a Dexterity check to grab the rope.`);
+  });
+
+  test('a doubled form in a recap of a different action is still left alone', () => {
+    const text =
+      'You succeed in slipping past the outer guard post unheard. ' +
+      "A locked gate blocks the ledge — roll a Thieves' Tools check.";
+    expect(
+      repairPrematureRollClaims(text, [req('check', "Thieves' Tools check to open the gate", 15)]),
+    ).toBeNull();
+  });
+
+  test('a keyword does not match a longer word that merely shares its doubled stem', () => {
+    // "slippery" contains slipp- but names no action; it must not anchor the claim.
+    const text =
+      'You succeed in crossing the slippery stones. ' +
+      'Roll a Stealth check to slip past the guard.';
+    expect(
+      repairPrematureRollClaims(text, [req('check', 'Stealth check to slip past the guard')]),
+    ).toBeNull();
+  });
+});

@@ -413,4 +413,47 @@ describeWithDb('latestRollOutcome reads the current turn’s roll (#266)', () =>
     const sessionId = await newSession([]);
     expect(await latestRollOutcome(sessionId)).toBeNull();
   });
+
+  test('a typed (raw-only) roll mention does not shadow the real roll below it', async () => {
+    // The client logs a typed "I rolled 17" as roll_result with payload
+    // { total, raw } and no success flag (session-logger.ts logTextRollResult):
+    // no engine verdict of its own, so the search skips it (#266 round 2).
+    const rawEntry = {
+      timestamp: new Date().toISOString(),
+      entry: { kind: 'roll_result', payload: { total: 17, raw: 'I rolled 17' } },
+    };
+    const sessionId = await newSession([rollEntry(new Date().toISOString()), rawEntry]);
+    const outcome = await latestRollOutcome(sessionId);
+    expect(outcome?.success).toBe(false);
+    expect(outcome?.total).toBe(7);
+  });
+
+  test('an outcome-less real roll stops the search instead of surfacing an older roll', async () => {
+    // A damage roll / untargeted check carries a total and no verdict, and is
+    // NOT a text-parsed mention (no raw): the search stops there.
+    const verdictless = {
+      timestamp: new Date().toISOString(),
+      entry: { kind: 'roll_result', payload: { total: 12 } },
+    };
+    const sessionId = await newSession([rollEntry(new Date().toISOString()), verdictless]);
+    expect(await latestRollOutcome(sessionId)).toBeNull();
+  });
+
+  test('the exchange start reads the DM message’s server created_at, not its client timestamp', async () => {
+    const sessionId = await newSession([
+      rollEntry(new Date(Date.now() - 30 * 1000).toISOString()),
+    ]);
+    // Client clock an hour fast: the client-supplied timestamp would exile the
+    // fresh roll as a previous turn's; the server created_at places it in this
+    // exchange (#266 follow-up; AGENTS.md §4).
+    await db().insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'dm',
+      message: 'The shadows deepen around you.',
+      timestamp: new Date(Date.now() + 60 * 60 * 1000),
+      createdAt: new Date(Date.now() - 60 * 1000),
+    });
+    const outcome = await latestRollOutcome(sessionId);
+    expect(outcome?.total).toBe(7);
+  });
 });

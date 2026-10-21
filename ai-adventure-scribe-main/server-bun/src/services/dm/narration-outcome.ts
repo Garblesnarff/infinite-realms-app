@@ -43,7 +43,9 @@ const OUTCOME_MAX_AGE_MS = 15 * 60 * 1000;
  * `SessionStateService.getLatestRollOutcome` (same combatLog `roll_result` shape the DM prompt
  * carries as `lastRollOutcome`). Null when there is none, it is malformed, its timestamp is
  * missing or too old, or it predates the latest DM message (a previous turn's roll must not
- * repair this turn's narration).
+ * repair this turn's narration). Text-parsed roll mentions (`{ total, raw }`, no success
+ * flag) are skipped over — a typed roll has no verdict of its own and must not shadow the
+ * real roll below it.
  */
 export async function latestRollOutcome(sessionId: string): Promise<RollOutcome | null> {
   // Lazy db import: the module must stay importable without DATABASE_URL so the pure
@@ -57,16 +59,18 @@ export async function latestRollOutcome(sessionId: string): Promise<RollOutcome 
   const log = (row?.state as { combatLog?: unknown } | null)?.combatLog;
   if (!Array.isArray(log)) return null;
   // The latest DM message marks the start of the current exchange; a roll older than it
-  // belongs to a previous turn.
+  // belongs to a previous turn. Read its server-side created_at: the timestamp column
+  // is client-supplied display data, and a skewed client clock must not exile this
+  // turn's roll (#266 follow-up; AGENTS.md §4).
   const [latestDm] = await db
-    .select({ timestamp: dialogueHistory.timestamp })
+    .select({ createdAt: dialogueHistory.createdAt })
     .from(dialogueHistory)
     .where(
       and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'dm')),
     )
-    .orderBy(desc(dialogueHistory.timestamp))
+    .orderBy(desc(dialogueHistory.createdAt))
     .limit(1);
-  const exchangeStart = latestDm?.timestamp?.getTime() ?? 0;
+  const exchangeStart = latestDm?.createdAt?.getTime() ?? 0;
   for (let index = log.length - 1; index >= 0; index -= 1) {
     const entry = (log[index] as { entry?: unknown } | null)?.entry;
     if (!entry || typeof entry !== 'object') continue;
@@ -74,7 +78,17 @@ export async function latestRollOutcome(sessionId: string): Promise<RollOutcome 
     if (candidate.kind !== 'roll_result' || !candidate.payload) continue;
     if (typeof candidate.payload !== 'object') return null;
     const payload = candidate.payload as Record<string, unknown>;
-    if (typeof payload.success !== 'boolean' || typeof payload.total !== 'number') return null;
+    if (typeof payload.success !== 'boolean' || typeof payload.total !== 'number') {
+      // Text-parsed roll mentions are logged as roll_result too, with no authoritative
+      // outcome of their own ({ total, raw } and no success flag): they are the one
+      // skippable shape — a typed "I rolled 17" must not shadow the real roll below
+      // it (#266 round 2; mirrors the client's getLatestRollOutcome). Any other
+      // outcome-less entry is a real roll that simply has no verdict (an untargeted
+      // check, a damage roll): stop there instead of surfacing an older roll from an
+      // earlier turn as the latest outcome.
+      if (typeof payload.raw === 'string') continue;
+      return null;
+    }
     const timestamp = (log[index] as { timestamp?: unknown })?.timestamp;
     // A missing or malformed timestamp cannot be placed in this turn: fail closed.
     if (typeof timestamp !== 'string') return null;
@@ -165,12 +179,22 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** Word-boundary keyword match with light inflection (open→opening, climb→climbed). */
+/**
+ * Word-boundary keyword match with light inflection (open→opening, climb→climbed).
+ * A monosyllabic keyword ending in a single vowel + consonant also matches its
+ * doubled-consonant inflections (slip→slipping/slipped, grab→grabbing): the
+ * consonant doubles before -ed/-ing, so the plain stem never matches them
+ * (#266 round 2).
+ */
 function sentenceNamesKeyword(sentence: string, keyword: string): boolean {
   const stem = keyword.endsWith('e') ? keyword.slice(0, -1) : keyword;
-  return new RegExp(`\\b(?:${escapeRegExp(keyword)}|${escapeRegExp(stem)})(?:s|es|ed|ing)?\\b`, 'i').test(
-    sentence,
-  );
+  const stems = [keyword, stem];
+  const monosyllabic = (keyword.match(/[aeiou]+/gi) ?? []).length === 1;
+  if (monosyllabic && /[^aeiou][aeiou][bcdfgklmnprstz]$/i.test(keyword)) {
+    stems.push(`${keyword}${keyword.slice(-1)}`);
+  }
+  const alternation = [...new Set(stems)].map(escapeRegExp).join('|');
+  return new RegExp(`\\b(?:${alternation})(?:s|es|ed|ing)?\\b`, 'i').test(sentence);
 }
 
 /**
@@ -190,6 +214,22 @@ function expandedSentenceStart(text: string, start: number): number {
     if (!ABBREVIATION.test(word)) return expanded;
     expanded = sentenceSpan(text, before.length - word.length - 1).start;
   }
+}
+
+/**
+ * One side of a ';' carrying BOTH verdicts as alternatives ("you succeed and slip
+ * through, or you fail and stumble"): the later verdict is introduced by "or",
+ * where an asserted contrast joins them with "but" instead ("…past the guard,
+ * but you fail to notice the dog"). The verdicts may come in either order.
+ */
+function branchHasAlternatingPair(branch: string): boolean {
+  const success = /succeed|successful/i.exec(branch);
+  const failure = /\bfail/i.exec(branch);
+  if (!success || !failure) return false;
+  const [first, second] =
+    success.index < failure.index ? [success, failure] : [failure, success];
+  const between = branch.slice(first.index + first[0].length, second.index);
+  return /\bor\s*(?:you\s*)?$/i.test(between);
 }
 
 /**
@@ -238,16 +278,37 @@ function isClaimOnPendingRoll(
   const tailWords = beforeClaim.trim().split(/\s+/).slice(-3).join(' ');
   if (/\b(?:would|could|might|can|may)\b/i.test(tailWords)) return false;
   if (VERDICT_CLAIM.test(claim.match) && /succeed|successful/i.test(sentence) && /\bfail/i.test(sentence)) {
-    // Paired stakes only in a BRANCH structure: a branch marker in the sentence, or
-    // a ';'-separated pair carrying a verdict on each side. A mere contrast in one
-    // clause ("You succeed in slipping past the guard, but you fail to notice the
-    // dog.") asserts both outcomes — it is a claim, not stakes (strategist FIX).
+    // Paired stakes only in a BRANCH structure: a branch marker scoping the claim,
+    // or a ';'-separated pair carrying a verdict on each side. A mere contrast in
+    // one clause ("You succeed in slipping past the guard, but you fail to notice
+    // the dog.") asserts both outcomes — it is a claim, not stakes (strategist FIX).
+    // The marker scan runs from the sentence start through the end of the claim's
+    // clause (#266 round 2): a marker in a LATER clause ("…, even if the hinges
+    // protest") frames nothing about the claim and cannot exempt an asserted
+    // contrast. Markers before the claim keep their reach — for if/whether/etc.
+    // the conditional-prefix rule above already scans all of beforeClaim, and
+    // either/otherwise opening an alternation the claim belongs to ("Either you
+    // succeed…, or you fail…") scope it from the same span.
+    const claimStart = claim.index - start;
+    const afterClaim = claimStart + claim.match.length;
+    const clauseBreak = sentence.slice(afterClaim).search(/[,;:]/);
+    const clauseEnd = clauseBreak === -1 ? sentence.length : afterClaim + clauseBreak;
     const branches = sentence.split(';');
     const semicolonPair =
       branches.length > 1 &&
-      branches.some((branch) => /succeed|successful/i.test(branch)) &&
-      branches.some((branch) => /\bfail/i.test(branch));
-    if (/\b(?:if|whether|otherwise|either)\b/i.test(sentence) || semicolonPair) {
+      (branches.some(
+        (branch, i) =>
+          /succeed|successful/i.test(branch) &&
+          branches.some((other, j) => j !== i && /\bfail/i.test(other)),
+      ) ||
+        // Both verdicts in ONE side, as alternatives: a preamble clause before
+        // the ';' ("The guard turns away; you succeed…, or you fail…") puts the
+        // pair in a single branch — it is still a pair (self-review BLOCKER 1).
+        branches.some(branchHasAlternatingPair));
+    if (
+      /\b(?:if|whether|otherwise|either)\b/i.test(sentence.slice(0, clauseEnd)) ||
+      semicolonPair
+    ) {
       return false;
     }
   }
