@@ -331,6 +331,7 @@ describeWithDb('full 30-turn session (#660 item 5)', () => {
       30 /* player messages */ +
         28 /* DM replies persisted by /v1/llm/generate (turns 3-4 are combat-handled and skipped) */ +
         1 /* combat-entry seating system row written at /enter */ +
+        1 /* story-rest engine line (#751 follow-up): the scripted DM-granted short rest posts its Hit Die rolls */ +
         2 /* goblin NPC attacks resolved during combat entry */,
     );
 

@@ -253,6 +253,70 @@ describeWithDb('#777 two parallel story applies for one message', () => {
     }
   });
 
+  it('#751 follow-up: a story short rest posts the engine line showing the Hit Die rolls', async () => {
+    // Same deterministic-spend fixture as the #751 case above: 6/20 with
+    // CON +2, so at least two d10 dice are always spent.
+    const { userId, characterId, sessionId, campaignId } = await world('751-line', 6, 20);
+    try {
+      expect(await applyStoryRest({ userId, sessionId, rest: { type: 'short' } })).toBe('applied');
+      const [event] = await db
+        .select({ hitDiceSpent: restEvents.hitDiceSpent, hpRestored: restEvents.hpRestored })
+        .from(restEvents)
+        .where(eq(restEvents.characterId, characterId));
+      const spent = event?.hitDiceSpent ?? 0;
+      const restored = event?.hpRestored ?? 0;
+      expect(spent).toBeGreaterThanOrEqual(2);
+      expect(restored).toBeGreaterThan(0);
+      // The reported restore is the sheet's real gain (the last die can
+      // overshoot max HP; the write caps there).
+      const [stats] = await db
+        .select({ current: characterStats.currentHitPoints })
+        .from(characterStats)
+        .where(eq(characterStats.characterId, characterId));
+      expect(stats?.current).toBe(6 + restored);
+
+      const systemRows = (): Promise<Array<typeof dialogueHistory.$inferSelect>> =>
+        db
+          .select()
+          .from(dialogueHistory)
+          .where(
+            and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'system')),
+          );
+      const lines = await systemRows();
+      expect(lines).toHaveLength(1);
+      const line = lines[0]?.message ?? '';
+      expect(line.startsWith('⚙️ Engine: Short rest — Hit Dice:')).toBe(true);
+      const rollParts = [...line.matchAll(/d10 rolled (\d+) \(\+(\d+) HP\)/g)];
+      expect(rollParts).toHaveLength(spent);
+      expect(rollParts.reduce((sum, part) => sum + Number(part[2]), 0)).toBe(restored);
+      expect(line).toContain(`${restored} HP restored.`);
+      expect(line).toContain(`Hit dice: ${3 - spent} of 3 remaining.`);
+
+      // A retry sees the existing line and does not duplicate it.
+      expect(await applyStoryRest({ userId, sessionId, rest: { type: 'short' } })).toBe(
+        'already_applied',
+      );
+      expect(await systemRows()).toHaveLength(1);
+
+      // With the line lost (the first attempt threw after the write), a retry
+      // re-posts the summary from the stored event — counts and HP, no rolls.
+      await db
+        .delete(dialogueHistory)
+        .where(
+          and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'system')),
+        );
+      expect(await applyStoryRest({ userId, sessionId, rest: { type: 'short' } })).toBe(
+        'already_applied',
+      );
+      const recovered = await systemRows();
+      expect(recovered).toHaveLength(1);
+      expect(recovered[0]?.message).toContain(`${spent} hit dice spent, ${restored} HP restored.`);
+      expect(recovered[0]?.message).not.toContain('rolled');
+    } finally {
+      await cleanup(characterId, sessionId, campaignId);
+    }
+  });
+
   it('#751: a story rest publishes a character_state_updated invalidation', async () => {
     const { userId, characterId, sessionId, campaignId } = await world('751-rest', 6, 20);
     try {

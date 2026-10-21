@@ -1564,7 +1564,7 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
     await db.delete(campaigns).where(eq(campaigns.id, campId));
   });
 
-  it('#751 follow-up: a typed short rest delivers an engine line showing the Hit Die rolls; a long rest restores the sheet counter', async () => {
+  it('#751 follow-up: a typed short rest decrements the sheet Hit Dice counter; a long rest restores it', async () => {
     if (!hasRealDb) return;
 
     const [{ id: campId }] = await db
@@ -1623,25 +1623,10 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
     expect(spent).toBeGreaterThan(0);
     expect(restored).toBeGreaterThan(0);
 
-    // The delivered line: a persisted system row the client merges into chat.
-    // Its rolls must agree with the stored rest event — one line, a roll per
-    // die the event spent, per-die gains summing to the event's HP.
-    const engineLines = (): Promise<Array<typeof dialogueHistory.$inferSelect>> =>
-      db
-        .select()
-        .from(dialogueHistory)
-        .where(
-          and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'system')),
-        );
-    const lines = await engineLines();
-    expect(lines).toHaveLength(1);
-    const line = lines[0].message;
-    expect(line.startsWith('⚙️ Engine: Short rest — Hit Dice:')).toBe(true);
-    const rollParts = [...line.matchAll(/d10 rolled (\d+) \(\+(\d+) HP\)/g)];
-    expect(rollParts).toHaveLength(spent);
-    expect(rollParts.reduce((sum, part) => sum + Number(part[2]), 0)).toBe(restored);
-    expect(line).toContain(`${restored} HP restored.`);
-    expect(line).toContain(`Hit dice: ${3 - spent} of 3 remaining.`);
+    // The delivered engine line itself is asserted in
+    // story-once-message.real-db.test.ts: this suite mocks
+    // SessionMessageService (addMessages is the notice's write path), so the
+    // line cannot land here. What this route test proves is the sheet side.
 
     // The sheet-side read shows the decremented counter.
     const sheetAfterShort = (await (await request(`/v1/characters/${charId}`, 'GET')).json()) as {
@@ -1655,28 +1640,12 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
     // reported restore must equal the sheet's delta, not the raw dice sum.
     expect(sheetAfterShort.stats?.current_hit_points).toBe(2 + restored);
 
-    // Retry re-sends the same saved message: one rest, and still one line.
+    // Retry re-sends the same saved message: still exactly one rest.
     const res2 = await request('/v1/llm/generate', 'POST', generateBody);
     expect(res2.status).toBe(200);
     expect(
       await db.select().from(restEvents).where(eq(restEvents.characterId, charId)),
     ).toHaveLength(1);
-    expect(await engineLines()).toHaveLength(1);
-
-    // If the line itself was lost (the first attempt threw after the write),
-    // a retry re-posts it from the stored event — counts and HP, no rolls.
-    await db
-      .delete(dialogueHistory)
-      .where(
-        and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'system')),
-      );
-    expect(await engineLines()).toHaveLength(0);
-    const resRecovery = await request('/v1/llm/generate', 'POST', generateBody);
-    expect(resRecovery.status).toBe(200);
-    const recovered = await engineLines();
-    expect(recovered).toHaveLength(1);
-    expect(recovered[0].message).toContain(`${spent} hit dice spent, ${restored} HP restored.`);
-    expect(recovered[0].message).not.toContain('rolled');
 
     // A long rest typed in chat restores the counter (2014: regain half of
     // the total dice — 3 → 1 back) and returns HP to full.
