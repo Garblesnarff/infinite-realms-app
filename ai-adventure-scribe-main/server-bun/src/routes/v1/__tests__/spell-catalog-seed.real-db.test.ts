@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
-import { eq, sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 
 import {
   characters,
@@ -144,9 +144,27 @@ describeWithDb('spell catalog seed and the Wizard spell round trip (#957)', () =
   }
 
   it('leaves the catalog unchanged when the seed is applied again', async () => {
+    // Count only the SRD classes: other suites may leave their own class rows in the shared DB.
+    const srdNames = [
+      'Barbarian',
+      'Bard',
+      'Cleric',
+      'Druid',
+      'Fighter',
+      'Monk',
+      'Paladin',
+      'Ranger',
+      'Rogue',
+      'Sorcerer',
+      'Warlock',
+      'Wizard',
+    ];
     const counts = () =>
       Promise.all([
-        db.select({ n: sql<number>`count(*)::int` }).from(classes),
+        db
+          .select({ n: sql<number>`count(*)::int` })
+          .from(classes)
+          .where(inArray(classes.name, srdNames)),
         db.select({ n: sql<number>`count(*)::int` }).from(spells),
         db.select({ n: sql<number>`count(*)::int` }).from(classSpells),
       ]);
