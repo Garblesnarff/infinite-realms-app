@@ -106,6 +106,16 @@ export interface CharacterRow {
   obscurement?: string | null;
   is_hidden?: boolean | null;
   stealth_check_bonus?: number | null;
+  /**
+   * #971/#928: the purse columns the GET serves (mapCharacterToApi emits all
+   * five). transformCharacterData folds them into Character.currency below —
+   * without them the sheet's purse read 0 for every saved character.
+   */
+  copper_pieces?: number | null;
+  silver_pieces?: number | null;
+  electrum_pieces?: number | null;
+  gold_pieces?: number | null;
+  platinum_pieces?: number | null;
   cantrips?: string | null;
   known_spells?: string | null;
   prepared_spells?: string | null;
@@ -455,6 +465,17 @@ export const transformCharacterData = (
     },
     spellSlots: parseSpellSlots(characterData.spell_slots),
     equipment: equipmentData?.map((item) => item.item_name) || [],
+    // #971/#928: the return leg of the purse round trip. The write transform
+    // (transformCharacterForStorage) maps currency -> *_pieces on save and the
+    // GET serves those columns, but this loader never folded them back, so
+    // the sheet's Inventory tab read character.currency as all zeros.
+    currency: {
+      cp: characterData.copper_pieces ?? 0,
+      sp: characterData.silver_pieces ?? 0,
+      ep: characterData.electrum_pieces ?? 0,
+      gp: characterData.gold_pieces ?? 0,
+      pp: characterData.platinum_pieces ?? 0,
+    },
     experience: characterData.experience_points || 0,
     alignment: characterData.alignment || '',
     // Proficiencies carry the proficiency bonus onto skills and saves. Dropping

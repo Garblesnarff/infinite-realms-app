@@ -106,8 +106,32 @@ const paladinPayload = JSON.parse(
   stats: { dexterity: number };
 };
 
-type EquipRow = { itemName: string; equipped: boolean; quantity: number };
+// #971: the pinned wizard payloads for the two Hark cases. The Monk body is
+// the #901 pin (Starting Gold roll of 14 + the Outlander kit, whose equipment
+// list carries the background's gold as a bare '10 gp' item). The Criminal
+// Rogue body is pinned by src/hooks/__tests__/wizard-save-971-payload.test.ts
+// (package path: gold_pieces 0, the Criminal kit's '15 gp' as an item).
+const monkGoldPayload971 = JSON.parse(
+  readFileSync(
+    resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      '../../../../../shared/test-fixtures/wood-elf-monk-starting-gold-create-payload.json',
+    ),
+    'utf8',
+  ),
+) as Record<string, unknown>;
 
+const criminalRoguePayload971 = JSON.parse(
+  readFileSync(
+    resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      '../../../../../shared/test-fixtures/criminal-rogue-create-payload.json',
+    ),
+    'utf8',
+  ),
+) as Record<string, unknown>;
+
+type EquipRow = { itemName: string; equipped: boolean; quantity: number };
 function equippedByName(rows: EquipRow[]): Map<string, EquipRow> {
   return new Map(rows.map((row) => [row.itemName, row]));
 }
@@ -160,9 +184,20 @@ describeWithDb('character create starting package (#710)', () => {
         .select()
         .from(characterEquipment)
         .where(eq(characterEquipment.characterId, id));
-      expect(rows.flatMap((row) => Array(row.quantity ?? 1).fill(row.itemName)).sort()).toEqual(
-        [...fixture.equipmentNames].sort(),
+      // #971: the wizard's list carries the background's gold as a bare coin
+      // string ('10 gp'); the create lands it in gold_pieces, so the stored
+      // and exported names are the selection minus coin strings. The client
+      // pin keeps '10 gp' in equipmentNames — that is the wizard's list,
+      // not the stored rows.
+      const storedNames = [...fixture.equipmentNames].filter(
+        (name) => !/^\s*\d+\s*gp\s*$/i.test(name),
       );
+      expect(rows.flatMap((row) => Array(row.quantity ?? 1).fill(row.itemName)).sort()).toEqual(
+        storedNames.sort(),
+      );
+      // #971: the split coin value is not dropped — it lands in the purse.
+      const [charRow] = await db.select().from(characters).where(eq(characters.id, id));
+      expect(charRow?.goldPieces).toBe(10);
       const [stats] = await db
         .select()
         .from(characterStats)
@@ -177,7 +212,7 @@ describeWithDb('character create starting package (#710)', () => {
             Array(item.quantity).fill(item.item_name),
           )
           .sort(),
-      ).toEqual([...fixture.equipmentNames].sort());
+      ).toEqual(storedNames.sort());
     });
   }
 
@@ -282,6 +317,10 @@ describeWithDb('character create starting package (#710)', () => {
     const read = await app.handle(new Request(`http://localhost/v1/characters/${id}/export`));
     expect(read.status).toBe(200);
     const saved = await read.json();
+    // #971: the Acolyte kit's '15 gp' lands in gold_pieces at create, so the
+    // exported equipment is the payload's list minus the bare coin string.
+    const [charRow] = await db.select().from(characters).where(eq(characters.id, id));
+    expect(charRow?.goldPieces).toBe(15);
     expect(
       saved.character.equipment
         .flatMap((item: { item_name: string; quantity: number }) =>
@@ -289,7 +328,10 @@ describeWithDb('character create starting package (#710)', () => {
         )
         .sort(),
     ).toEqual(
-      paladinPayload.equipment.map((item) => String(item.item_name)).sort(),
+      paladinPayload.equipment
+        .map((item) => String(item.item_name))
+        .filter((name) => !/^\s*\d+\s*gp\s*$/i.test(name))
+        .sort(),
     );
   });
 
@@ -528,5 +570,133 @@ describeWithDb('character create XP seeding + awardXP demotion guard (#829 findi
     expect(progression.currentXp).toBe(50);
     expect(progression.totalXp).toBe(50);
     expect(progression.xpToNextLevel).toBe(250);
+  });
+});
+
+describeWithDb('character create gold lands in the purse, never as an item (#971)', () => {
+  let app: { handle: (request: Request) => Promise<Response> };
+  let db: ReturnType<typeof realDb>;
+  const createdIds: string[] = [];
+
+  beforeAll(async () => {
+    userId = testId('user-971');
+    db = realDb();
+    const pipeline = await importWithRealDb(async () => {
+      const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');
+      const { charactersRoutes } = await import('../characters.ts');
+      return { createRequestPipelineApp, charactersRoutes };
+    });
+    app = pipeline.createRequestPipelineApp().use(pipeline.charactersRoutes);
+  });
+
+  afterAll(async () => {
+    for (const id of createdIds) {
+      await db
+        .delete(characters)
+        .where(eq(characters.id, id))
+        .catch(() => {});
+    }
+    await closeRealDb();
+  });
+
+  async function create(body: unknown): Promise<string> {
+    const res = await app.handle(
+      new Request('http://localhost/v1/characters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    );
+    const text = await res.text();
+    expect(res.status, text.slice(0, 400)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+    return id;
+  }
+
+  async function goldPieces(id: string): Promise<number | null | undefined> {
+    const [row] = await db.select().from(characters).where(eq(characters.id, id));
+    return row?.goldPieces;
+  }
+
+  async function equipmentNames(id: string): Promise<string[]> {
+    const rows = await db
+      .select()
+      .from(characterEquipment)
+      .where(eq(characterEquipment.characterId, id));
+    return rows.map((row) => row.itemName);
+  }
+
+  async function fetchedGoldPieces(id: string): Promise<number | undefined> {
+    const res = await app.handle(new Request(`http://localhost/v1/characters/${id}`));
+    expect(res.status).toBe(200);
+    const fetched = (await res.json()) as { gold_pieces?: number };
+    return fetched.gold_pieces;
+  }
+
+  const BARE_GOLD = /^\s*\d+\s*gp\s*$/i;
+
+  it('Starting Gold monk: the roll and the Outlander 10 gp both land in the purse (N21-001)', async () => {
+    // The pinned wizard body carries gold_pieces 14 (the roll) and the
+    // Outlander kit's '10 gp' as an equipment item. Pre-fix the create stored
+    // 14 and a '10 gp' row; the purse must hold 24 and no coin row may exist.
+    const id = await create({ ...monkGoldPayload971, name: testId('monk-gold') });
+
+    expect(await goldPieces(id)).toBe(24);
+    const names = await equipmentNames(id);
+    expect(names).toContain('Staff');
+    expect(names).toContain('Belt pouch');
+    expect(names.filter((name) => BARE_GOLD.test(name))).toEqual([]);
+    expect(await fetchedGoldPieces(id)).toBe(24);
+    // The split runs before the AC computation and a coin string was never
+    // armour: Unarmoured Defence stands (10 + DEX 4 + WIS 3).
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    expect(stats?.armorClass).toBe(17);
+  });
+
+  it('Starting Gold monk with a 100 gp roll saves 110 (100 roll + 10 background)', async () => {
+    const id = await create({
+      ...monkGoldPayload971,
+      name: testId('monk-gold-100'),
+      gold_pieces: 100,
+    });
+
+    expect(await goldPieces(id)).toBe(110);
+    const names = await equipmentNames(id);
+    expect(names.filter((name) => BARE_GOLD.test(name))).toEqual([]);
+    expect(await fetchedGoldPieces(id)).toBe(110);
+  });
+
+  it('Criminal package rogue: the background 15 gp lands in the purse, not as an item (N21-006)', async () => {
+    // The pinned wizard body carries gold_pieces 0 and the Criminal kit's
+    // '15 gp' as an equipment item. Pre-fix the create stored 0 and a
+    // '15 gp' row (Hark's '15 gp Qty:1').
+    const id = await create({ ...criminalRoguePayload971, name: testId('criminal-rogue') });
+
+    expect(await goldPieces(id)).toBe(15);
+    const names = await equipmentNames(id);
+    expect(names).toContain('A crowbar');
+    expect(names.filter((name) => BARE_GOLD.test(name))).toEqual([]);
+    expect(await fetchedGoldPieces(id)).toBe(15);
+  });
+
+  it('a coin string with quantity multiplies into the purse', async () => {
+    const id = await create({
+      ...criminalRoguePayload971,
+      name: testId('criminal-rogue-qty'),
+      equipment: [
+        ...(criminalRoguePayload971.equipment as Array<Record<string, unknown>>),
+        // Whitespace-padded on purpose: the production pattern tolerates it
+        // and the split must too.
+        { item_name: ' 5 gp ', item_type: 'equipment', quantity: 2 },
+      ],
+    });
+
+    expect(await goldPieces(id)).toBe(25);
+    const names = await equipmentNames(id);
+    expect(names.filter((name) => BARE_GOLD.test(name))).toEqual([]);
   });
 });
