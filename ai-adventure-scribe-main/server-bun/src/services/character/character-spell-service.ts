@@ -23,6 +23,7 @@ import {
   classSpells,
   spells,
 } from '../../../../db/schema/index';
+import { THAUMATURGY_SPELL_ID } from '../../../../shared/racial-spell-ids';
 import { NotFoundError } from '../../lib/errors.js';
 
 import type { Character } from '../../../../db/schema/index';
@@ -144,6 +145,34 @@ export class CharacterSpellService {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid class name' });
     }
 
+    const racialSpellIds = new Set<string>();
+    if (spellIds.includes(THAUMATURGY_SPELL_ID)) {
+      const character = await db.query.characters.findFirst({
+        where: and(
+          eq(characters.id, characterId),
+          or(
+            eq(characters.userId, userId),
+            eq(characters.ownerId, userId),
+            exists(
+              db
+                .select({ one: sql`1` })
+                .from(characterPermissions)
+                .where(
+                  and(
+                    eq(characterPermissions.characterId, characters.id),
+                    eq(characterPermissions.userId, userId),
+                    inArray(characterPermissions.permissionLevel, ['editor', 'owner']),
+                  ),
+                ),
+            ),
+          ),
+        ),
+      });
+      if (!character) throw new NotFoundError('Character', characterId);
+      if (character.race?.trim().toLowerCase() === 'tiefling')
+        racialSpellIds.add(THAUMATURGY_SPELL_ID);
+    }
+
     // Validate spells in batch if any were provided
     if (spellIds.length > 0) {
       const validClassSpells = await db
@@ -156,7 +185,9 @@ export class CharacterSpellService {
         .where(and(eq(classSpells.classId, classData.id), inArray(classSpells.spellId, spellIds)));
 
       const validSpellIds = new Set(validClassSpells.map((s: { spellId: string }) => s.spellId));
-      const invalidSpellIds = spellIds.filter((id) => !validSpellIds.has(id));
+      const invalidSpellIds = spellIds.filter(
+        (id) => !validSpellIds.has(id) && !racialSpellIds.has(id),
+      );
 
       if (invalidSpellIds.length > 0) {
         // Get names for invalid spells for better error reporting
@@ -256,12 +287,14 @@ export class CharacterSpellService {
         .from(classSpells)
         .where(and(eq(classSpells.classId, classData.id), inArray(classSpells.spellId, spellIds)));
 
+      for (const spellId of racialSpellIds)
+        if (!grantable.some((row) => row.spellId === spellId)) grantable.push({ spellId });
+
       if (grantable.length > 0) {
         // #2710: when the caller sends an explicit prepared set, write
         // isPrepared per spell. When omitted, keep the old behaviour
         // (all true) so existing callers don't break.
-        const preparedSet =
-          preparedSpellIds !== undefined ? new Set(preparedSpellIds) : null;
+        const preparedSet = preparedSpellIds !== undefined ? new Set(preparedSpellIds) : null;
         const inserted = await db
           .insert(characterSpells)
           .values(
@@ -270,7 +303,7 @@ export class CharacterSpellService {
               spellId: row.spellId,
               sourceClassId: classData.id,
               isPrepared: preparedSet ? preparedSet.has(row.spellId) : true,
-              sourceFeature: 'base',
+              sourceFeature: racialSpellIds.has(row.spellId) ? 'racial' : 'base',
             })),
           )
           .returning({ id: characterSpells.id });

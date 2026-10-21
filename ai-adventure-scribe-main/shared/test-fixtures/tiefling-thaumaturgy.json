@@ -1,0 +1,73 @@
+{
+  "create": {
+    "name": "Hill Dwarf Fighter 388",
+    "description": "",
+    "race": "Tiefling",
+    "subrace": null,
+    "class": "Wizard",
+    "level": 1,
+    "alignment": "Lawful Good",
+    "experience_points": 0,
+    "image_url": "",
+    "avatar_url": "",
+    "appearance": "",
+    "personality_traits": "",
+    "personality_notes": "{\"traits\":[],\"ideals\":[],\"bonds\":[],\"flaws\":[],\"inspiration\":false,\"lastInspiration\":null,\"inspirationHistory\":[]}",
+    "backstory_elements": "",
+    "background": null,
+    "background_image": "",
+    "theme": "",
+    "session_notes": "",
+    "campaign_id": null,
+    "skill_proficiencies": "Athletics",
+    "expertise_proficiencies": "",
+    "tool_proficiencies": "",
+    "saving_throw_proficiencies": "",
+    "languages": ["Common", "Dwarvish"],
+    "cantrips": "thaumaturgy",
+    "known_spells": "",
+    "prepared_spells": "",
+    "ritual_spells": "",
+    "pact_slots": {},
+    "active_concentration": null,
+    "class_features": {},
+    "enhancement_selections": [],
+    "fighting_styles": ["Defense"],
+    "copper_pieces": 0,
+    "silver_pieces": 0,
+    "electrum_pieces": 0,
+    "gold_pieces": 0,
+    "platinum_pieces": 0,
+    "damage_resistances": [],
+    "damage_immunities": [],
+    "damage_vulnerabilities": [],
+    "vision_types": [],
+    "obscurement": "clear",
+    "is_hidden": false,
+    "stealth_check_bonus": 0,
+    "class_levels": [
+      {
+        "classId": "fighter",
+        "className": "Fighter",
+        "level": 1,
+        "hitDie": 10,
+        "features": []
+      }
+    ],
+    "total_level": 1,
+    "stats": {
+      "strength": 15,
+      "dexterity": 14,
+      "constitution": 16,
+      "intelligence": 12,
+      "wisdom": 11,
+      "charisma": 8
+    },
+    "equipment": []
+  },
+  "spells": {
+    "spells": ["9441a1c1-bf92-4177-9494-39f815ff7f36"],
+    "className": "Wizard",
+    "prepared": []
+  }
+}

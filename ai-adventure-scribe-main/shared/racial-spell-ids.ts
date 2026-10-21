@@ -1,0 +1,1 @@
+export const THAUMATURGY_SPELL_ID = '9441a1c1-bf92-4177-9494-39f815ff7f36';

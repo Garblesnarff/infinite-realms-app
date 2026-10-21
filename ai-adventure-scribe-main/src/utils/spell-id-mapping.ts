@@ -5,6 +5,8 @@
  * This is needed because the frontend uses local spell data with kebab-case IDs,
  * but the database uses UUIDs for spell references.
  */
+import { THAUMATURGY_SPELL_ID } from '../../shared/racial-spell-ids';
+
 import { getSpellById } from '@/data/spells/api';
 import logger from '@/lib/logger';
 
@@ -27,6 +29,8 @@ export const SPELL_ID_MAPPING: Record<string, string> = {
   'minor-illusion': '58c1e174-3057-40d1-becc-ba76c5396519',
   'true-strike': '67a44468-4f04-473a-a2c6-f79a128c51ee',
   'vicious-mockery': '60a8ac4a-1141-4d9c-8c77-7a42ff102d72',
+
+  thaumaturgy: THAUMATURGY_SPELL_ID,
 
   // Cleric Cantrips
   'sacred-flame': '3ee04a5d-3ed1-4521-b1d4-f1b82101552a',
