@@ -136,17 +136,21 @@ const queueRollOutcome = (combatLog: unknown[]): void => {
   combatLogForTest = combatLog;
 };
 
-const dmEnvelope = (text: string): string =>
+const dmEnvelope = (text: string, rollRequests?: unknown[]): string =>
   JSON.stringify({
     text,
     options: ['Sneak past the guards', 'Climb back down'],
     narration_segments: [{ type: 'dm', text }],
     combat_transition: 'none',
     dice_rolls: [],
+    ...(rollRequests ? { roll_requests: rollRequests } : {}),
   });
 
-const postGenerate = async (narration: string): Promise<Record<string, unknown>> => {
-  generatedText = dmEnvelope(narration);
+const postGenerate = async (
+  narration: string,
+  rollRequests?: unknown[],
+): Promise<Record<string, unknown>> => {
+  generatedText = dmEnvelope(narration, rollRequests);
   const response = await app.handle(
     new Request('http://localhost/v1/llm/generate', {
       method: 'POST',
@@ -275,5 +279,90 @@ describe('#467 NT-013 /generate narration repair (strategist FIX)', () => {
     );
     expect(envelope.text).not.toContain('ignores your magical assault');
     expect(envelope.narration_segments).toEqual([]);
+  });
+
+  it('leaves a passed check narrated as a success untouched (control)', async () => {
+    queueRollOutcome([
+      rollEntry(nowIso(), { ...FAILED_STEALTH_PAYLOAD, success: true, total: 19 }),
+    ]);
+    const narration =
+      'You succeed in climbing the shaft unheard, and the guards below never stir.';
+    const envelope = await postGenerate(narration);
+    expect(envelope.text).toBe(narration);
+  });
+});
+
+describe('#266 NT-011/NT-020 /generate premature roll claims', () => {
+  // The requesting turn: no roll outcome is persisted yet (the combatLog is empty), so
+  // the outcome repair above has nothing to key on — this is the ordering Hark's retest
+  // documented ("The DM narration posted first... The engine fail line came after").
+  // The request uses the real envelope shape (dm-response-schema.ts roll_requests).
+  const INVESTIGATION_REQUEST = {
+    type: 'check',
+    formula: '1d20+5',
+    purpose: 'Investigation check to examine the crystal',
+    dc: 14,
+    ac: null,
+    advantage: false,
+    disadvantage: false,
+  };
+
+  it('repairs a success narrated in the reply that requests the roll', async () => {
+    queueRollOutcome([]);
+    const envelope = await postGenerate(
+      "You succeed in reading the crystal's fractures like a diagnosis. " +
+        'Roll an Investigation check to learn more.',
+      [INVESTIGATION_REQUEST],
+    );
+    expect(envelope.text).toBe(
+      'That outcome is not decided yet — the roll still has to be made. ' +
+        'Roll an Investigation check to learn more.',
+    );
+    expect(envelope.text).not.toContain('You succeed');
+    // The roll request itself is untouched: the tray still gets its roll.
+    expect(envelope.roll_requests).toEqual([INVESTIGATION_REQUEST]);
+    expect(envelope.narration_segments).toEqual([]);
+  });
+
+  it('repairs a failure narrated in the reply that requests the roll', async () => {
+    queueRollOutcome([]);
+    const envelope = await postGenerate(
+      'You fail to find any purchase on the slick stone, sliding back down. ' +
+        'Roll a Stealth check to climb the shaft.',
+      [
+        {
+          type: 'check',
+          formula: '1d20+5',
+          purpose: 'Stealth check to climb the shaft',
+          dc: 14,
+          ac: null,
+          advantage: false,
+          disadvantage: false,
+        },
+      ],
+    );
+    expect(envelope.text).toBe(
+      'That outcome is not decided yet — the roll still has to be made. ' +
+        'Roll a Stealth check to climb the shaft.',
+    );
+  });
+
+  it('leaves a neutral requesting reply untouched', async () => {
+    queueRollOutcome([]);
+    const narration =
+      'The shaft rises into darkness above you, slick with condensation. ' +
+      'Roll a Stealth check to climb it unheard.';
+    const envelope = await postGenerate(narration, [
+      {
+        type: 'check',
+        formula: '1d20+5',
+        purpose: 'Stealth check to climb the shaft',
+        dc: 14,
+        ac: null,
+        advantage: false,
+        disadvantage: false,
+      },
+    ]);
+    expect(envelope.text).toBe(narration);
   });
 });

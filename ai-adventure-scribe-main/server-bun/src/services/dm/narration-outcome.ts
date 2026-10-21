@@ -105,6 +105,68 @@ export function repairNarration(outcome: RollOutcome): string {
   return outcome.success ? `${what} succeeded${score}.` : `${what} failed${score}.`;
 }
 
+/** The envelope roll-request fields this gate reads (`dm-response-schema.ts`). */
+export interface PendingRollRequest {
+  type?: unknown;
+  purpose?: unknown;
+}
+
+/** Envelope request type → the requestType vocabulary the outcome detector anchors on. */
+const PENDING_REQUEST_TYPES: Record<string, string> = {
+  check: 'skill_check',
+  save: 'saving_throw',
+  attack: 'attack',
+};
+
+/** The engine's truth for a claim about a roll that has not happened: it is undecided. */
+const PENDING_ROLL_STATEMENT = 'That outcome is not decided yet — the roll still has to be made.';
+
+/**
+ * #266, the NT-011/NT-020 ordering: the reply that REQUESTS a roll sometimes narrates that
+ * roll's outcome in the same breath — success detail posted before the dice exist, so when
+ * the roll then fails, the success narration already stands and no gate ever corrects it
+ * (the outcome repair above needs a persisted outcome, and the client gate only runs on
+ * dice-roll turns; the requesting turn is neither). The engine fact that owns the check is
+ * the request itself: while a request is pending, a verdict claim about its action is
+ * premature in BOTH directions, so the same outcome-anchored detector runs with each
+ * synthetic verdict, and any sentence it flags under either one is replaced with the
+ * pending truth. Damage and initiative requests carry no pass/fail verdict and are
+ * skipped. Pure: returns the repaired text, or null when nothing claimed a pending
+ * outcome. Never throws.
+ */
+export function repairPrematureRollClaims(
+  text: string,
+  rollRequests: unknown,
+  characterName?: string,
+): string | null {
+  if (!text || !Array.isArray(rollRequests)) return null;
+  let repaired = text;
+  for (const request of rollRequests.slice(0, 10)) {
+    const type = (request as PendingRollRequest | null)?.type;
+    const requestType = typeof type === 'string' ? PENDING_REQUEST_TYPES[type] : undefined;
+    if (!requestType) continue;
+    const purpose = (request as PendingRollRequest | null)?.purpose;
+    const description =
+      typeof purpose === 'string' && purpose.trim() ? purpose.trim() : undefined;
+    for (const success of [false, true]) {
+      const claims = contradictsEngineOutcome(repaired, {
+        success,
+        characterName,
+        description,
+        requestType,
+      });
+      if (!claims.length) continue;
+      logger.warn({
+        msg: 'DM_NARRATION_PREMATURE_CLAIM_REPAIRED',
+        requestType,
+        claims,
+      });
+      repaired = spliceContradictingSentences(repaired, claims, PENDING_ROLL_STATEMENT);
+    }
+  }
+  return repaired === text ? null : repaired;
+}
+
 /**
  * Checks a DM reply's narration against the engine's latest roll outcome. Returns the reply
  * with only the contradicting sentences replaced by the engine's truth, else null. The rest
