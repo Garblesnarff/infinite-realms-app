@@ -39,6 +39,7 @@ import {
   computeLevel1MaxHitPoints,
   findSrdClassForHitPoints,
 } from '../../../shared/level-1-hit-points';
+import { XP_TO_REACH_LEVEL } from '../../../shared/xp-tables';
 import { InternalServerError } from '../lib/errors.js';
 import { SpellSlotMechanics } from './spell-slots/spell-slot-mechanics.js';
 
@@ -256,7 +257,12 @@ export class CharacterService {
           ownerId: userId,
           name: data.name || 'Unnamed Character',
           level: data.level || 1,
-          experiencePoints: data.experiencePoints || 0,
+          // #829 finding 4: a character created above level 1 (a premade
+          // template) that arrives without XP starts at that level's XP
+          // threshold, not at 0 — a level-3 character recorded with 0 XP was
+          // demoted by the first progression award that derived its level
+          // from the recorded total.
+          experiencePoints: data.experiencePoints || XP_TO_REACH_LEVEL[data.level || 1] || 0,
         })
         .returning();
 

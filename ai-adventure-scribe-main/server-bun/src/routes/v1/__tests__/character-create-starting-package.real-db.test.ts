@@ -19,7 +19,12 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
 import { eq } from 'drizzle-orm';
 
-import { characters, characterEquipment, characterStats } from '../../../../../db/schema/index';
+import {
+  characters,
+  characterEquipment,
+  characterStats,
+  levelProgression,
+} from '../../../../../db/schema/index';
 import fighterChoices from '../../../../../shared/test-fixtures/fighter-package-choices.json';
 import {
   closeRealDb,
@@ -29,6 +34,8 @@ import {
   realDb,
   testId,
 } from '../../../services/__tests__/fixtures/real-db.ts';
+
+import type { ProgressionService as ProgressionServiceClass } from '../../../services/progression-service.ts';
 
 // Same logger stub the other character-route real-DB suites use.
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
@@ -257,5 +264,212 @@ describeWithDb('character create starting package (#710)', () => {
     expect(byName.get('shield')?.equipped).toBe(true);
     expect(byName.get('longsword')?.equipped).toBe(true);
     expect(byName.get('Backpack')?.equipped).toBe(false);
+  });
+});
+
+describeWithDb('character create XP seeding + awardXP demotion guard (#829 finding 4)', () => {
+  let app: { handle: (request: Request) => Promise<Response> };
+  let db: ReturnType<typeof realDb>;
+  let ProgressionService: typeof ProgressionServiceClass;
+  const createdIds: string[] = [];
+
+  beforeAll(async () => {
+    userId = testId('user-829xp');
+    db = realDb();
+    const pipeline = await importWithRealDb(async () => {
+      const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');
+      const { charactersRoutes } = await import('../characters.ts');
+      const progression = await import('../../../services/progression-service.ts');
+      return {
+        createRequestPipelineApp,
+        charactersRoutes,
+        ProgressionService: progression.ProgressionService,
+      };
+    });
+    app = pipeline.createRequestPipelineApp().use(pipeline.charactersRoutes);
+    ProgressionService = pipeline.ProgressionService;
+  });
+
+  afterAll(async () => {
+    for (const id of createdIds) {
+      await db
+        .delete(characters)
+        .where(eq(characters.id, id))
+        .catch(() => {});
+    }
+    await closeRealDb();
+  });
+
+  async function createViaRoute(body: unknown): Promise<string> {
+    const res = await app.handle(
+      new Request('http://localhost/v1/characters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    );
+    const text = await res.text();
+    expect(res.status, text.slice(0, 400)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+    return id;
+  }
+
+  // The pinned wizard payload with only the level fields raised to 3: the wire
+  // shape of an above-level-1 character (a premade template) arriving at the
+  // one create writer. The wizard producer sends experience_points: 0.
+  const fighterPayloadClassLevels = (
+    fighterPayload as unknown as { class_levels?: Array<Record<string, unknown>> }
+  ).class_levels ?? [{}];
+
+  function level3TemplateBody(name: string): Record<string, unknown> {
+    return {
+      ...fighterPayload,
+      name,
+      level: 3,
+      total_level: 3,
+      class_levels: [{ ...fighterPayloadClassLevels[0], level: 3 }],
+    };
+  }
+
+  async function characterRow(id: string): Promise<typeof characters.$inferSelect> {
+    const [row] = await db.select().from(characters).where(eq(characters.id, id));
+    if (!row) throw new Error(`character ${id} missing after create`);
+    return row;
+  }
+
+  async function progressionRow(
+    id: string,
+  ): Promise<typeof levelProgression.$inferSelect> {
+    const [row] = await db
+      .select()
+      .from(levelProgression)
+      .where(eq(levelProgression.characterId, id));
+    if (!row) throw new Error(`level_progression row missing for ${id}`);
+    return row;
+  }
+
+  it('(a) a level-3 template character starts at the level-3 XP threshold (900)', async () => {
+    const id = await createViaRoute(level3TemplateBody(testId('lvl3-template')));
+    const row = await characterRow(id);
+    expect(row.level).toBe(3);
+    expect(row.experiencePoints).toBe(900);
+  });
+
+  it('(b) initializeProgression seeds the row from the character record (level 3, 900 XP)', async () => {
+    const id = await createViaRoute(level3TemplateBody(testId('lvl3-init')));
+    const progression = await ProgressionService.initializeProgression(id, userId);
+    expect(progression.currentLevel).toBe(3);
+    expect(progression.currentXp).toBe(900);
+    expect(progression.totalXp).toBe(900);
+    expect(progression.xpToNextLevel).toBe(1800);
+  });
+
+  it('(b) awarding 500 XP to the level-3 character stores 1400 XP and keeps level 3', async () => {
+    const id = await createViaRoute(level3TemplateBody(testId('lvl3-award')));
+    const result = await ProgressionService.awardXP(id, 500, 'combat', userId, 'test award');
+    expect(result).toMatchObject({
+      newXp: 1400,
+      totalXp: 1400,
+      oldLevel: 3,
+      newLevel: 3,
+      leveledUp: false,
+      levelsGained: 0,
+    });
+    const progression = await progressionRow(id);
+    expect(progression.currentLevel).toBe(3);
+    expect(progression.currentXp).toBe(1400);
+    expect(progression.totalXp).toBe(1400);
+    expect(progression.xpToNextLevel).toBe(1300);
+    expect((await characterRow(id)).level).toBe(3);
+  });
+
+  it('(c) a level-3 character with low recorded XP and no progression row is not demoted', async () => {
+    // The row the pre-fix producers left behind: create() recorded level 3
+    // with 0 XP, and the live story/combat XP writers added 100 XP to
+    // characters.experience_points only. No level_progression row exists.
+    const [{ id }] = await db
+      .insert(characters)
+      .values({ userId, name: testId('legacy-norow'), level: 3, experiencePoints: 100 })
+      .returning({ id: characters.id });
+    createdIds.push(id);
+
+    const result = await ProgressionService.awardXP(id, 50, 'quest', userId);
+    expect(result).toMatchObject({ totalXp: 150, oldLevel: 3, newLevel: 3, leveledUp: false });
+    expect((await progressionRow(id)).currentLevel).toBe(3);
+    expect((await characterRow(id)).level).toBe(3);
+  });
+
+  it('(c) a stale level-1 progression row cannot demote a level-3 character either', async () => {
+    const [{ id }] = await db
+      .insert(characters)
+      .values({ userId, name: testId('legacy-stalerow'), level: 3, experiencePoints: 100 })
+      .returning({ id: characters.id });
+    createdIds.push(id);
+    // Exactly what the old initializeProgression wrote for this character.
+    await db.insert(levelProgression).values({
+      characterId: id,
+      currentLevel: 1,
+      currentXp: 0,
+      xpToNextLevel: 300,
+      totalXp: 0,
+    });
+
+    const result = await ProgressionService.awardXP(id, 500, 'combat', userId);
+    expect(result).toMatchObject({ oldLevel: 3, newLevel: 3, leveledUp: false });
+    const progression = await progressionRow(id);
+    expect(progression.currentLevel).toBe(3);
+    expect(progression.totalXp).toBe(500);
+    expect((await characterRow(id)).level).toBe(3);
+  });
+
+  it('a genuine level-up still lands: level 1 with 0 XP + 300 XP reaches level 2', async () => {
+    const id = await createViaRoute({
+      ...fighterPayload,
+      name: testId('pin-levelup'),
+    });
+    const result = await ProgressionService.awardXP(id, 300, 'combat', userId);
+    expect(result).toMatchObject({
+      oldLevel: 1,
+      newLevel: 2,
+      leveledUp: true,
+      levelsGained: 1,
+      totalXp: 300,
+    });
+    expect((await characterRow(id)).level).toBe(2);
+    const progression = await progressionRow(id);
+    expect(progression.currentLevel).toBe(2);
+    expect(progression.xpToNextLevel).toBe(600);
+  });
+
+  it('(d) PIN: a true level-1 character initializes and awards exactly as before', async () => {
+    const id = await createViaRoute({
+      ...fighterPayload,
+      name: testId('pin-lvl1'),
+    });
+    const created = await characterRow(id);
+    expect(created.level).toBe(1);
+    expect(created.experiencePoints).toBe(0);
+
+    const initial = await ProgressionService.initializeProgression(id, userId);
+    expect(initial.currentLevel).toBe(1);
+    expect(initial.currentXp).toBe(0);
+    expect(initial.totalXp).toBe(0);
+    expect(initial.xpToNextLevel).toBe(300);
+
+    const result = await ProgressionService.awardXP(id, 50, 'combat', userId, 'killed a goblin');
+    expect(result).toMatchObject({
+      newXp: 50,
+      totalXp: 50,
+      oldLevel: 1,
+      newLevel: 1,
+      leveledUp: false,
+      levelsGained: 0,
+    });
+    const progression = await progressionRow(id);
+    expect(progression.currentLevel).toBe(1);
+    expect(progression.currentXp).toBe(50);
+    expect(progression.totalXp).toBe(50);
+    expect(progression.xpToNextLevel).toBe(250);
   });
 });

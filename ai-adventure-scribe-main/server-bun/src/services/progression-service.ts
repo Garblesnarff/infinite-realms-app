@@ -7,7 +7,7 @@
  * @module server/services/progression-service
  */
 
-import { eq, and, desc, or, exists, sql } from 'drizzle-orm';
+import { eq, and, desc, or, exists } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import { experienceEvents, levelProgression, characters } from '../../../db/schema/index';
@@ -117,9 +117,12 @@ export class ProgressionService {
 
     // Ownership check split out of the insert. As an insert-select this projected 5
     // of level_progression's 7 columns and Drizzle refused to build it, so
-    // progression was never initialized for anyone.
+    // progression was never initialized for anyone. The same read carries the
+    // character's recorded level and XP: #829 finding 4 — seeding the row at a
+    // hard-coded level 1 / 0 XP made the first awardXP derive the level from a
+    // 0 total and demote anyone created above level 1.
     const owned = await db
-      .select({ one: sql`1` })
+      .select({ level: characters.level, experiencePoints: characters.experiencePoints })
       .from(characters)
       .where(
         and(
@@ -133,14 +136,17 @@ export class ProgressionService {
       throw new NotFoundError('Character', characterId);
     }
 
+    const currentLevel = owned[0]?.level ?? 1;
+    const currentXp = owned[0]?.experiencePoints ?? 0;
+
     const [progression] = await db
       .insert(levelProgression)
       .values({
         characterId,
-        currentLevel: 1,
-        currentXp: 0,
-        xpToNextLevel: ProgressionMechanics.getXPForLevel(2) || 300,
-        totalXp: 0,
+        currentLevel,
+        currentXp,
+        xpToNextLevel: ProgressionMechanics.calculateXPToNextLevel(currentLevel, currentXp),
+        totalXp: currentXp,
       })
       .returning();
 
@@ -232,7 +238,7 @@ export class ProgressionService {
 
     // Get or create progression
     const results = await db
-      .select({ progression: levelProgression })
+      .select({ progression: levelProgression, characterLevel: characters.level })
       .from(levelProgression)
       .innerJoin(characters, eq(levelProgression.characterId, characters.id))
       .where(
@@ -249,9 +255,16 @@ export class ProgressionService {
       progression = await this.initializeProgression(characterId, userId);
     }
 
-    const oldLevel = progression.currentLevel;
+    // #829 finding 4: an award never lowers a level. The character's recorded
+    // level (characters.level, or the progression row's own level where the two
+    // disagree) is the floor — a legacy row whose recorded XP total derives a
+    // lower level keeps its level, and the progression row heals to it.
+    const oldLevel = Math.max(
+      progression.currentLevel,
+      results[0]?.characterLevel ?? progression.currentLevel,
+    );
     const newTotalXp = progression.totalXp + xp;
-    const newLevel = this.calculateLevelFromXP(newTotalXp);
+    const newLevel = Math.max(this.calculateLevelFromXP(newTotalXp), oldLevel);
     const levelsGained = newLevel - oldLevel;
 
     // ⚡ Bolt: Parallelize database updates to reduce round-trip latency.
