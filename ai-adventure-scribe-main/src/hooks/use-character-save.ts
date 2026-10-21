@@ -44,15 +44,31 @@ const LOCAL_USER_ID = '00000000-0000-0000-0000-000000000000';
 export const mapWizardEquipmentToInventory = (
   character: Character,
 ): NonNullable<Character['inventory']> => {
-  if (character.inventory && character.inventory.length > 0) {
-    return character.inventory;
-  }
-  return (character.equipment || []).map((name) => ({
-    itemId: name,
-    itemType: 'equipment',
-    quantity: 1,
-    equipped: false,
-  }));
+  const inventory: NonNullable<Character['inventory']> = character.inventory?.length
+    ? character.inventory
+    : (character.equipment || []).map((name) => ({
+        itemId: name,
+        itemType: 'equipment',
+        quantity: 1,
+        equipped: false,
+      }));
+  if (character.id) return inventory;
+  const gamingItem = character.toolProficiencies?.includes('Gaming set (cards)')
+    ? 'Deck of cards'
+    : character.toolProficiencies?.includes('Gaming set (dice)')
+      ? 'Dice set'
+      : undefined;
+  if (
+    !gamingItem ||
+    inventory.some(
+      (item) => (item.itemName ?? item.itemId).toLowerCase() === gamingItem.toLowerCase(),
+    )
+  )
+    return inventory;
+  return [
+    ...inventory,
+    { itemId: gamingItem, itemType: 'equipment', quantity: 1, equipped: false },
+  ];
 };
 
 /**
