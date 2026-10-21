@@ -43,6 +43,27 @@ describe('combat-action-executor', () => {
   });
 
   describe('executeAuthoritativeCombatIntent', () => {
+    it('still publishes engine rows to browser history (#934)', async () => {
+      const dispatch = vi.spyOn(window, 'dispatchEvent');
+      const engineRows = [{ id: 'row-934', sessionId: 'session-1', text: 'The guard moves.' }];
+      (globalThis.fetch as any).mockResolvedValue({
+        ok: true,
+        json: async () => ({ result: { engineRows } }),
+      });
+      try {
+        await executeAuthoritativeCombatIntent(
+          encounterId,
+          { type: 'dash', actorId: 'npc-1', expectedVersion: 1 },
+          'dm',
+        );
+        expect(dispatch).toHaveBeenCalledWith(
+          expect.objectContaining({ type: 'session-engine-rows', detail: engineRows }),
+        );
+      } finally {
+        dispatch.mockRestore();
+      }
+    });
+
     it('should execute combat intent directly when expectedVersion is provided', async () => {
       const intent = { type: 'dash' as const, actorId: 'actor-1', expectedVersion: 5 };
       const mockResponse = { ok: true, json: async () => ({ result: 'dash-success' }) };
