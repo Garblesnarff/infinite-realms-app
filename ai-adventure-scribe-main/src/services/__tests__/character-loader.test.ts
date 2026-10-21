@@ -236,6 +236,32 @@ describe('CharacterLoaderService', () => {
       expect(getCharacterEquipment).toHaveBeenCalledWith('char-123');
     });
 
+    it('should carry the hitDice aggregate from the character payload (#751 follow-up)', async () => {
+      // Arrange — hitDice is the shape userDataApi.getCharacter returns in
+      // production (normalizeCharacter folds the server's hit_dice rows).
+      const mockSession = { character_id: 'char-123', user_id: 'user-456' };
+      const mockCharacter = {
+        id: 'char-123',
+        user_id: 'user-456',
+        name: 'Session Hero',
+        race: 'Dwarf',
+        class: 'Fighter',
+        level: 3,
+        character_stats: [{ strength: 16 }],
+        hitDice: { total: 3, remaining: 2, type: 'd10' },
+      };
+
+      getSession.mockResolvedValue(mockSession);
+      getCharacter.mockResolvedValue(mockCharacter);
+      getCharacterEquipment.mockResolvedValue([]);
+
+      // Act
+      const result = await characterLoaderService.loadCharacterBySession('session-789', 'user-456');
+
+      // Assert
+      expect(result?.hitDice).toEqual({ total: 3, remaining: 2, type: 'd10' });
+    });
+
     it('should return undefined when session is not found', async () => {
       // Arrange
       getSession.mockResolvedValue(null);

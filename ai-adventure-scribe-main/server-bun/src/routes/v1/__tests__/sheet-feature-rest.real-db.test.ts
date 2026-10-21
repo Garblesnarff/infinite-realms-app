@@ -1564,6 +1564,148 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
     await db.delete(campaigns).where(eq(campaigns.id, campId));
   });
 
+  it('#751 follow-up: a typed short rest delivers an engine line showing the Hit Die rolls; a long rest restores the sheet counter', async () => {
+    if (!hasRealDb) return;
+
+    const [{ id: campId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('751-line-camp') })
+      .returning({ id: campaigns.id });
+    const [{ id: charId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId: campId,
+        name: testId('751-line-hero'),
+        level: 3,
+        class: 'Fighter',
+      })
+      .returning({ id: characters.id });
+    await db.insert(characterStats).values({
+      characterId: charId,
+      maxHitPoints: 13,
+      currentHitPoints: 2,
+      temporaryHitPoints: 0,
+      constitution: 14,
+      isConscious: true,
+      vitalState: 'standing',
+    });
+    const [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId: campId, characterId: charId })
+      .returning({ id: gameSessions.id });
+    // Hark N2-003's line (#751), saved as the client saves the player turn.
+    const typed = 'I take a short rest.';
+    await db.insert(dialogueHistory).values({ sessionId, speakerType: 'player', message: typed });
+
+    const generateBody = {
+      prompt: 'The fighter finds a moment of quiet. What happens?',
+      player_input: typed,
+      sessionId,
+      dmReply: { messageId: '11111111-2222-4333-8444-888888888888', inCombat: false },
+      combatEntry: {
+        sessionId,
+        player: { name: testId('751-line-hero'), initiativeModifier: 2 },
+      },
+      provider: 'openrouter',
+      requestType: 'user',
+      maxTokens: 8192,
+      temperature: 0.9,
+    };
+    generatedText = JSON.stringify({ text: 'You lean on your sword and breathe.' });
+    const res = await request('/v1/llm/generate', 'POST', generateBody);
+    expect(res.status).toBe(200);
+
+    const rests = await db.select().from(restEvents).where(eq(restEvents.characterId, charId));
+    expect(rests).toHaveLength(1);
+    const spent = rests[0].hitDiceSpent ?? 0;
+    const restored = rests[0].hpRestored ?? 0;
+    expect(spent).toBeGreaterThan(0);
+    expect(restored).toBeGreaterThan(0);
+
+    // The delivered line: a persisted system row the client merges into chat.
+    // Its rolls must agree with the stored rest event — one line, a roll per
+    // die the event spent, per-die gains summing to the event's HP.
+    const engineLines = (): Promise<Array<typeof dialogueHistory.$inferSelect>> =>
+      db
+        .select()
+        .from(dialogueHistory)
+        .where(
+          and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'system')),
+        );
+    const lines = await engineLines();
+    expect(lines).toHaveLength(1);
+    const line = lines[0].message;
+    expect(line.startsWith('⚙️ Engine: Short rest — Hit Dice:')).toBe(true);
+    const rollParts = [...line.matchAll(/d10 rolled (\d+) \(\+(\d+) HP\)/g)];
+    expect(rollParts).toHaveLength(spent);
+    expect(rollParts.reduce((sum, part) => sum + Number(part[2]), 0)).toBe(restored);
+    expect(line).toContain(`${restored} HP restored.`);
+    expect(line).toContain(`Hit dice: ${3 - spent} of 3 remaining.`);
+
+    // The sheet-side read shows the decremented counter.
+    const sheetAfterShort = (await (await request(`/v1/characters/${charId}`, 'GET')).json()) as {
+      stats?: { current_hit_points?: number };
+      hit_dice?: Array<{ total_dice: number; used_dice: number }>;
+    };
+    expect(sheetAfterShort.hit_dice).toHaveLength(1);
+    expect(sheetAfterShort.hit_dice?.[0].used_dice).toBe(spent);
+    // The HP the line and the event report is the sheet's actual gain: the
+    // last die can overshoot max HP and the write caps there, so the
+    // reported restore must equal the sheet's delta, not the raw dice sum.
+    expect(sheetAfterShort.stats?.current_hit_points).toBe(2 + restored);
+
+    // Retry re-sends the same saved message: one rest, and still one line.
+    const res2 = await request('/v1/llm/generate', 'POST', generateBody);
+    expect(res2.status).toBe(200);
+    expect(
+      await db.select().from(restEvents).where(eq(restEvents.characterId, charId)),
+    ).toHaveLength(1);
+    expect(await engineLines()).toHaveLength(1);
+
+    // If the line itself was lost (the first attempt threw after the write),
+    // a retry re-posts it from the stored event — counts and HP, no rolls.
+    await db
+      .delete(dialogueHistory)
+      .where(
+        and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'system')),
+      );
+    expect(await engineLines()).toHaveLength(0);
+    const resRecovery = await request('/v1/llm/generate', 'POST', generateBody);
+    expect(resRecovery.status).toBe(200);
+    const recovered = await engineLines();
+    expect(recovered).toHaveLength(1);
+    expect(recovered[0].message).toContain(`${spent} hit dice spent, ${restored} HP restored.`);
+    expect(recovered[0].message).not.toContain('rolled');
+
+    // A long rest typed in chat restores the counter (2014: regain half of
+    // the total dice — 3 → 1 back) and returns HP to full.
+    await db
+      .insert(dialogueHistory)
+      .values({ sessionId, speakerType: 'player', message: 'I take a long rest.' });
+    generatedText = JSON.stringify({ text: 'You sleep through the quiet hours.' });
+    const res3 = await request('/v1/llm/generate', 'POST', {
+      ...generateBody,
+      player_input: 'I take a long rest.',
+      dmReply: { messageId: '11111111-2222-4333-8444-999999999999', inCombat: false },
+    });
+    expect(res3.status).toBe(200);
+    const sheetAfterLong = (await (await request(`/v1/characters/${charId}`, 'GET')).json()) as {
+      stats?: { current_hit_points?: number };
+      hit_dice?: Array<{ total_dice: number; used_dice: number }>;
+    };
+    expect(sheetAfterLong.stats?.current_hit_points).toBe(13);
+    expect(sheetAfterLong.hit_dice?.[0].used_dice).toBe(spent - 1);
+
+    await db.delete(restEvents).where(eq(restEvents.characterId, charId));
+    await db.delete(characterHitDice).where(eq(characterHitDice.characterId, charId));
+    await db.delete(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId));
+    await db.delete(gameSessions).where(eq(gameSessions.id, sessionId));
+    await db.delete(characterStats).where(eq(characterStats.characterId, charId));
+    await db.delete(characters).where(eq(characters.id, charId));
+    await db.delete(campaigns).where(eq(campaigns.id, campId));
+  });
+
   it('#264: five concurrent first-GETs create exactly one hit-dice row set', async () => {
     if (!hasRealDb) return;
 
