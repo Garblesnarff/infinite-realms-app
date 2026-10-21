@@ -162,9 +162,10 @@ function resolveThirdCasterClass(name: ClassName, subclass: string | null | unde
 /**
  * Normalize raw classLevels JSONB into validated entries. Shared by
  * seedRowsForCharacter and isPactSlotCharacter so both agree on what counts
- * as multiclass.
+ * as multiclass. Also used by CharacterService.create's class-feature grant
+ * (#829), which must read the same per-class levels the slot seeding does.
  */
-function parseClassLevels(classLevels: unknown): Array<{ className: ClassName; level: number }> {
+export function parseClassLevels(classLevels: unknown): Array<{ className: ClassName; level: number }> {
   if (!Array.isArray(classLevels)) return [];
   return classLevels
     .map((entry) => {

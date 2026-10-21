@@ -87,7 +87,10 @@ export class ClassFeaturesService {
   }
 
   /**
-   * Get all features for a class at a specific level
+   * Get all base-class features for a class at a specific level.
+   * Subclass rows are excluded: grantFeaturesForLevel adds the character's
+   * own subclass features separately, so returning them here would grant
+   * every subclass's features to every character of the class.
    */
   static async getFeaturesByLevel(
     className: string,
@@ -96,6 +99,7 @@ export class ClassFeaturesService {
     const features = await db.query.classFeaturesLibrary.findMany({
       where: and(
         eq(classFeaturesLibrary.className, className),
+        isNull(classFeaturesLibrary.subclassName),
         eq(classFeaturesLibrary.levelAcquired, level),
       ),
     });

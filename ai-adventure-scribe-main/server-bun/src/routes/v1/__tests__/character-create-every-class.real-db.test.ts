@@ -27,9 +27,16 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 
-import { characters, characterEquipment, characterStats } from '../../../../../db/schema/index';
+import {
+  characterFeatures,
+  characters,
+  characterEquipment,
+  characterStats,
+  characterSubclasses,
+  classFeaturesLibrary,
+} from '../../../../../db/schema/index';
 import {
   closeRealDb,
   describeWithDb,
@@ -806,5 +813,469 @@ describeWithDb('character create every class (#388)', () => {
       .where(eq(characterStats.characterId, dexChanged));
     expect(repaired.maxHitPoints).toBe(28);
     expect(repaired.currentHitPoints).toBe(28);
+  });
+});
+
+/**
+ * #829 finding 2: create() granted no class features at all, so a pregen
+ * created from a level-3 starter template held none of its level 1–3
+ * features. CharacterService.create now grants levels 1..N through
+ * ClassFeaturesService after the creation transaction commits.
+ *
+ * The library rows below are the rows a fully migrated database grants
+ * from. Two seed generations exist: 20251112_06_add_class_features.sql
+ * seeded Fighter/Rogue (and their subclasses) first with database-generated
+ * ids, and the generated 20261009 seed deliberately skips any feature the
+ * library already holds under the same name (ignoring a "(1 use)"-style
+ * suffix) — so for Fighter/Rogue the 20251112_06 names and values are the
+ * live ones, while Sorcerer exists only in the 20261009 seed. The rows here
+ * follow that split (ids are the 20261009 deterministic ones; only names
+ * and levels are asserted). beforeAll inserts a row only when no row with
+ * the same class/subclass/name/level key is already present, so running
+ * against a migrated database (CI) never duplicates a library row.
+ */
+const SEED_LIBRARY_ROWS = [
+  {
+    id: 'a584b9d4-38c4-a0fd-274c-88cdc36de138',
+    className: 'Fighter',
+    subclassName: null,
+    featureName: 'Fighting Style',
+    levelAcquired: 1,
+    description:
+      'You adopt a particular style of fighting as your specialty. Choose one: Archery, Defense, Dueling, Great Weapon Fighting, Protection, or Two-Weapon Fighting.',
+    usageType: 'passive' as const,
+    usesPerRest: 'at_will' as const,
+    usesCount: null,
+  },
+  {
+    id: 'a43cba29-7da0-5840-c801-28b7ddb889de',
+    className: 'Fighter',
+    subclassName: null,
+    featureName: 'Second Wind',
+    levelAcquired: 1,
+    description:
+      'You have a limited well of stamina that you can draw on to protect yourself from harm. On your turn, you can use a bonus action to regain hit points equal to 1d10 + your fighter level.',
+    usageType: 'bonus_action' as const,
+    usesPerRest: 'short_rest' as const,
+    usesCount: 1,
+  },
+  {
+    id: '06828104-d03c-924d-0c13-50d7af60abf8',
+    className: 'Fighter',
+    subclassName: null,
+    featureName: 'Action Surge',
+    levelAcquired: 2,
+    description:
+      'You can push yourself beyond your normal limits for a moment. On your turn, you can take one additional action on top of your regular action and a possible bonus action.',
+    usageType: 'action' as const,
+    usesPerRest: 'short_rest' as const,
+    usesCount: 1,
+  },
+  {
+    id: 'e448c2ac-e518-5503-e6a6-fed713506678',
+    className: 'Fighter',
+    subclassName: null,
+    featureName: 'Martial Archetype',
+    levelAcquired: 3,
+    description:
+      'Choose a martial archetype that you strive to emulate in your combat styles and techniques: Champion, Battle Master, or Eldritch Knight.',
+    usageType: 'passive' as const,
+    usesPerRest: 'at_will' as const,
+    usesCount: null,
+  },
+  {
+    id: '1fd90528-8ece-ee04-c38e-e686a2267793',
+    className: 'Fighter',
+    subclassName: null,
+    featureName: 'Ability Score Improvement',
+    levelAcquired: 4,
+    description:
+      "You can increase one ability score of your choice by 2, or you can increase two ability scores of your choice by 1. You can't increase an ability score above 20 using this feature.",
+    usageType: 'passive' as const,
+    usesPerRest: 'at_will' as const,
+    usesCount: null,
+  },
+  {
+    id: 'b5abe4c7-3fa9-ac32-dcdc-de2459ea4b33',
+    className: 'Fighter',
+    subclassName: 'Champion',
+    featureName: 'Improved Critical',
+    levelAcquired: 3,
+    description: 'Your weapon attacks score a critical hit on a roll of 19 or 20.',
+    usageType: 'passive' as const,
+    usesPerRest: 'at_will' as const,
+    usesCount: null,
+  },
+  {
+    id: 'edd3b810-bfa2-93af-38cc-b854ef4eba3e',
+    className: 'Sorcerer',
+    subclassName: null,
+    featureName: 'Sorcerous Origin',
+    levelAcquired: 1,
+    description:
+      'Choose a sorcerous origin, which describes the source of your innate magical power, such as Draconic Bloodline.\n\nYour choice grants you features when you choose it at 1st level and again at 6th, 14th, and 18th level.',
+    usageType: 'passive' as const,
+    usesPerRest: null,
+    usesCount: null,
+  },
+  {
+    id: 'fb305946-df48-7198-2668-d5a572476e53',
+    className: 'Sorcerer',
+    subclassName: null,
+    featureName: 'Spellcasting: Sorcerer',
+    levelAcquired: 1,
+    description:
+      'An event in your past, or in the life of a parent or ancestor, left an indelible mark on you, infusing you with arcane magic. This font of magic, whatever its origin, fuels your spells.',
+    usageType: 'passive' as const,
+    usesPerRest: null,
+    usesCount: null,
+  },
+  {
+    id: '2d778c25-1e91-f0ea-ca35-1c6cf8013f0b',
+    className: 'Sorcerer',
+    subclassName: 'Draconic Bloodline',
+    featureName: 'Dragon Ancestor',
+    levelAcquired: 1,
+    description: 'Choose a dragon type and learn Draconic.',
+    usageType: 'passive' as const,
+    usesPerRest: null,
+    usesCount: null,
+  },
+  {
+    id: '8d4940a1-3035-c186-c801-05ab91c2cf49',
+    className: 'Sorcerer',
+    subclassName: 'Draconic Bloodline',
+    featureName: 'Draconic Resilience',
+    levelAcquired: 1,
+    description: 'Gain additional maximum HP and an unarmored AC of 13 + Dexterity.',
+    usageType: 'passive' as const,
+    usesPerRest: null,
+    usesCount: null,
+  },
+  {
+    id: '87f17777-b675-65cd-88ee-7b16a6ad3ffe',
+    className: 'Rogue',
+    subclassName: null,
+    featureName: 'Expertise',
+    levelAcquired: 1,
+    description:
+      "Choose two of your skill proficiencies, or one of your skill proficiencies and your proficiency with thieves' tools. Your proficiency bonus is doubled for any ability check you make that uses either of the chosen proficiencies.",
+    usageType: 'passive' as const,
+    usesPerRest: 'at_will' as const,
+    usesCount: null,
+  },
+  {
+    id: '68dbfdd2-1875-c042-0c2c-0b624f0e8596',
+    className: 'Rogue',
+    subclassName: null,
+    featureName: 'Sneak Attack',
+    levelAcquired: 1,
+    description:
+      "You know how to strike subtly and exploit a foe's distraction. Once per turn, you can deal an extra 1d6 damage to one creature you hit with an attack if you have advantage on the attack roll. The attack must use a finesse or a ranged weapon.",
+    usageType: 'passive' as const,
+    usesPerRest: 'at_will' as const,
+    usesCount: null,
+  },
+  {
+    id: '2998647e-e562-e00a-dee2-cf8ea0e72d18',
+    className: 'Rogue',
+    subclassName: null,
+    featureName: "Thieves' Cant",
+    levelAcquired: 1,
+    description:
+      "You have learned thieves' cant, a secret mix of dialect, jargon, and code that allows you to hide messages in seemingly normal conversation.",
+    usageType: 'passive' as const,
+    usesPerRest: 'at_will' as const,
+    usesCount: null,
+  },
+  {
+    id: '0bc2197b-3b2a-8e07-5750-f5d782abdbfa',
+    className: 'Rogue',
+    subclassName: null,
+    featureName: 'Cunning Action',
+    levelAcquired: 2,
+    description:
+      'Your quick thinking and agility allow you to move and act quickly. You can take a bonus action on each of your turns in combat. This action can be used only to take the Dash, Disengage, or Hide action.',
+    usageType: 'bonus_action' as const,
+    usesPerRest: 'at_will' as const,
+    usesCount: null,
+  },
+];
+
+describeWithDb('character create grants class features for levels 1..N (#829)', () => {
+  let db: any;
+  let request: (path: string, method: string, body?: unknown) => Promise<Response>;
+  let ClassFeaturesService: any;
+  const createdIds: string[] = [];
+
+  /** Granted features as sorted "Name@acquiredAtLevel" strings. */
+  const grantedFeatures = async (characterId: string): Promise<string[]> => {
+    const rows = await db
+      .select()
+      .from(characterFeatures)
+      .where(eq(characterFeatures.characterId, characterId));
+    if (rows.length === 0) return [];
+    const library = await db
+      .select()
+      .from(classFeaturesLibrary)
+      .where(
+        inArray(
+          classFeaturesLibrary.id,
+          rows.map((r: { featureId: string }) => r.featureId),
+        ),
+      );
+    const nameById = new Map(
+      library.map((f: { id: string; featureName: string }) => [f.id, f.featureName]),
+    );
+    return rows
+      .map(
+        (r: { featureId: string; acquiredAtLevel: number }) =>
+          `${nameById.get(r.featureId)}@${r.acquiredAtLevel}`,
+      )
+      .sort();
+  };
+
+  beforeAll(async () => {
+    userId = testId('user-829');
+    db = realDb();
+    // Insert only the rows the database does not already hold under the
+    // same key (the 20261009 seed's own matching rule: class, subclass,
+    // level, and name ignoring a trailing "(…)" suffix), so a migrated
+    // database keeps exactly one row per feature.
+    const libraryKey = (
+      className: string,
+      subclassName: string | null,
+      featureName: string,
+      levelAcquired: number,
+    ): string =>
+      [
+        className,
+        subclassName ?? '',
+        featureName.replace(/\s*\(.*\)\s*$/, '').toLowerCase(),
+        levelAcquired,
+      ].join('|');
+    const existingLibrary = await db
+      .select()
+      .from(classFeaturesLibrary)
+      .where(inArray(classFeaturesLibrary.className, ['Fighter', 'Rogue', 'Sorcerer']));
+    const existingKeys = new Set(
+      existingLibrary.map(
+        (r: {
+          className: string;
+          subclassName: string | null;
+          featureName: string;
+          levelAcquired: number;
+        }) => libraryKey(r.className, r.subclassName, r.featureName, r.levelAcquired),
+      ),
+    );
+    const missingRows = SEED_LIBRARY_ROWS.filter(
+      (r) => !existingKeys.has(libraryKey(r.className, r.subclassName, r.featureName, r.levelAcquired)),
+    );
+    if (missingRows.length > 0) {
+      await db.insert(classFeaturesLibrary).values(missingRows).onConflictDoNothing();
+    }
+    const pipeline = await importWithRealDb(async () => {
+      const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');
+      const { charactersRoutes } = await import('../characters.ts');
+      return { createRequestPipelineApp, charactersRoutes };
+    });
+    const app = pipeline.createRequestPipelineApp().use(pipeline.charactersRoutes);
+    request = async (path: string, method: string, body?: unknown) =>
+      app.handle(
+        new Request(`http://localhost${path}`, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: body !== undefined ? JSON.stringify(body) : undefined,
+        }),
+      );
+    ClassFeaturesService = (
+      await importWithRealDb(() => import('../../../services/class-features-service.ts'))
+    ).ClassFeaturesService;
+  });
+
+  afterAll(async () => {
+    for (const id of createdIds) {
+      await db
+        .delete(characters)
+        .where(eq(characters.id, id))
+        .catch(() => {});
+    }
+    await closeRealDb();
+  });
+
+  it('creates a level-3 Fighter with its level 1–3 features', async () => {
+    // wizardBody is the wizard's wire shape; a level-3 template pregen sends
+    // the same body with the template's level on it.
+    const body = wizardBody({ name: 'Fighter', hitDie: '1d10', baseHp: 14 }) as Record<
+      string,
+      unknown
+    >;
+    const res = await request('/v1/characters', 'POST', {
+      ...body,
+      name: 'L3 Fighter 829',
+      level: 3,
+      total_level: 3,
+      class_levels: [{ classId: 'fighter', className: 'Fighter', level: 3 }],
+    });
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    // Second Wind (L1) and Action Surge (L2) are present. Martial Archetype
+    // is the subclass choice point, not a feature, and Improved Critical
+    // belongs to Champion, which this character has not chosen.
+    expect(await grantedFeatures(id)).toEqual([
+      'Action Surge@2',
+      'Fighting Style@1',
+      'Second Wind@1',
+    ]);
+  });
+
+  it('PIN: a level-1 Fighter create grants exactly the level-1 set', async () => {
+    const res = await request('/v1/characters', 'POST', {
+      ...fighterPayload,
+      name: `Hill Dwarf Fighter ${testId('829')}`,
+    });
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    expect(await grantedFeatures(id)).toEqual(['Fighting Style@1', 'Second Wind@1']);
+  });
+
+  it('PIN: a level-1 Sorcerer create grants no subclass features', async () => {
+    const res = await request(
+      '/v1/characters',
+      'POST',
+      wizardBody({ name: 'Sorcerer', hitDie: '1d6', baseHp: 10 }),
+    );
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    // Dragon Ancestor and Draconic Resilience are Draconic Bloodline rows;
+    // no subclass row exists for this character, so the base grant must not
+    // hand them out. (A wizard body that picks Draconic Bloodline stores the
+    // choice as a class_features string; granting that origin's rows at
+    // create is a separate gap — see the note in CharacterService.create.)
+    expect(await grantedFeatures(id)).toEqual([
+      'Sorcerous Origin@1',
+      'Spellcasting: Sorcerer@1',
+    ]);
+  });
+
+  it('re-granting duplicates nothing; granting level 4 completes the 1–4 set', async () => {
+    const body = wizardBody({ name: 'Fighter', hitDie: '1d10', baseHp: 14 }) as Record<
+      string,
+      unknown
+    >;
+    const res = await request('/v1/characters', 'POST', {
+      ...body,
+      name: 'L3 Fighter 829 regrant',
+      level: 3,
+      total_level: 3,
+      class_levels: [{ classId: 'fighter', className: 'Fighter', level: 3 }],
+    });
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const before = await grantedFeatures(id);
+    expect(before).toHaveLength(3);
+
+    // The grant is the repair path as well as the create path: running it
+    // again sequentially for the same levels must not add a single row
+    // (character_features has no unique constraint; the batch grant's
+    // pending check is the guard).
+    for (let level = 1; level <= 3; level++) {
+      await ClassFeaturesService.grantFeaturesForLevel(id, 'Fighter', level, userId);
+    }
+    expect(await grantedFeatures(id)).toEqual(before);
+
+    // A level-up to 4 grants exactly the level-4 feature on top.
+    await ClassFeaturesService.grantFeaturesForLevel(id, 'Fighter', 4, userId);
+    expect(await grantedFeatures(id)).toEqual([
+      'Ability Score Improvement@4',
+      'Action Surge@2',
+      'Fighting Style@1',
+      'Second Wind@1',
+    ]);
+  });
+
+  it('grants the recorded subclass its features on re-grant', async () => {
+    const body = wizardBody({ name: 'Fighter', hitDie: '1d10', baseHp: 14 }) as Record<
+      string,
+      unknown
+    >;
+    const res = await request('/v1/characters', 'POST', {
+      ...body,
+      name: 'L3 Fighter 829 champion',
+      level: 3,
+      total_level: 3,
+      class_levels: [{ classId: 'fighter', className: 'Fighter', level: 3 }],
+    });
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    // The create granted no Champion features — no subclass row existed.
+    // Once the choice is recorded (the row SubclassService.setSubclass
+    // writes), the same grant entry point delivers the subclass's features
+    // for that level through its own subclass query. This pins the split
+    // the base-only filter in getFeaturesByLevel relies on: base features
+    // from the base query, subclass features from the subclass query.
+    await db.insert(characterSubclasses).values({
+      characterId: id,
+      className: 'Fighter',
+      subclassName: 'Champion',
+      chosenAtLevel: 3,
+    });
+    await ClassFeaturesService.grantFeaturesForLevel(id, 'Fighter', 3, userId);
+
+    expect(await grantedFeatures(id)).toEqual([
+      'Action Surge@2',
+      'Fighting Style@1',
+      'Improved Critical@3',
+      'Second Wind@1',
+    ]);
+  });
+
+  it('grants each class its own levels on a multiclass create', async () => {
+    const body = wizardBody({ name: 'Fighter', hitDie: '1d10', baseHp: 14 }) as Record<
+      string,
+      unknown
+    >;
+    const res = await request('/v1/characters', 'POST', {
+      ...body,
+      name: 'Fighter Rogue 829',
+      level: 4,
+      total_level: 4,
+      class_levels: [
+        { classId: 'fighter', className: 'Fighter', level: 2 },
+        { classId: 'rogue', className: 'Rogue', level: 2 },
+      ],
+    });
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    // Total level is 4 but neither class is: the Fighter side stops at
+    // level 2 (no Ability Score Improvement) and the Rogue side receives
+    // its own level 1–2 features.
+    expect(await grantedFeatures(id)).toEqual([
+      'Action Surge@2',
+      'Cunning Action@2',
+      'Expertise@1',
+      'Fighting Style@1',
+      'Second Wind@1',
+      'Sneak Attack@1',
+      "Thieves' Cant@1",
+    ]);
   });
 });
