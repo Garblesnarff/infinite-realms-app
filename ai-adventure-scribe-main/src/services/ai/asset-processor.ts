@@ -330,7 +330,7 @@ export function applyAssetPostProcessing<T extends { text: string }>(response: T
  * "apprentice". Mirrors the server's PC-name comparison
  * (server-bun/src/tactical/seating.ts `comparableName`, #2438).
  */
-function normalizePcName(value: string): string {
+export function normalizePcName(value: string): string {
   return value
     .trim()
     .toLowerCase()

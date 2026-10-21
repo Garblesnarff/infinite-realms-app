@@ -84,6 +84,15 @@ PLAYER CHARACTER: ${char.name}, a level ${char.level} ${char.race || 'Unknown Ra
       section += ` (${char.background} background)`;
     }
 
+    // #708: bind the name to the player at the name's first presentation in
+    // the prompt. Premade names are bare role titles ("The Apprentice"),
+    // which read as NPC descriptors; without this anchor the DM narrates the
+    // PC in the third person as a separate person standing nearby.
+    section += `
+<player_identity>
+${char.name} IS the player — the person whose messages you are answering. In scene narration ${char.name} is "you": write what they perceive and do in the second person. Never narrate ${char.name} in the third person by name as a separate person present in the scene (never "Nearby, ${char.name} ..."), and never give them actions, words, or thoughts the player did not choose.
+</player_identity>`;
+
     if (char.character_stats && char.character_stats.length > 0) {
       const stats = char.character_stats[0];
       const calcMod = (score: number = 10): string => {

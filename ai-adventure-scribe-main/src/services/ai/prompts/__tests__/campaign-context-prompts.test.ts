@@ -326,6 +326,68 @@ ${markedLine}
   });
 });
 
+describe('CampaignContextPrompts.renderStarterCampaignLore — the PC is not an NPC (#708)', () => {
+  const pcLore: StarterCampaignLore = {
+    ...smallLore,
+    playerCharacterName: 'The Apprentice',
+    entitiesByType: {
+      npcs: [
+        chunk('The Apprentice', 'A new student wobbling under the weight of a trunk.'),
+        chunk('Sous-Chef Pip', 'A nervous gnome apprentice.'),
+      ],
+      locations: [chunk('The Grand Kitchen', 'Copper pots hang above a roaring hearth.')],
+      factions: [],
+      items: [],
+      monsters: [],
+      handouts: [],
+    },
+  };
+
+  it('never renders the PC as an NPC card, other NPCs intact', () => {
+    const result = CampaignContextPrompts.renderStarterCampaignLore(pcLore);
+
+    expect(result.section).not.toContain('<npc name="The Apprentice">');
+    expect(result.section).not.toContain('wobbling under the weight of a trunk');
+    expect(result.section).toContain('<npc name="Sous-Chef Pip">');
+    expect(result.keptEntities).toBe(2);
+    expect(result.keptEntityNames).not.toContain('the apprentice');
+  });
+
+  it('keeps the PC out of the canon roster on a turn-scoped render', () => {
+    const scope: TurnCanonScope = {
+      playerInput: 'I look around the hall and listen.',
+      lastDmMessage: '',
+      sceneText: '',
+      entityTokenBudget: 500,
+    };
+
+    const result = CampaignContextPrompts.renderStarterCampaignLore(pcLore, {
+      turnScope: scope,
+    });
+
+    expect(result.section).toContain('Sous-Chef Pip');
+    expect(result.section).not.toContain('The Apprentice');
+  });
+
+  it('matches the PC through case and a leading article, like the assets marking', () => {
+    const result = CampaignContextPrompts.renderStarterCampaignLore({
+      ...pcLore,
+      playerCharacterName: 'the apprentice',
+    });
+
+    expect(result.section).not.toContain('<npc name="The Apprentice">');
+  });
+
+  it('renders a same-named chunk as an NPC when the lore carries no player name', () => {
+    const result = CampaignContextPrompts.renderStarterCampaignLore({
+      ...pcLore,
+      playerCharacterName: undefined,
+    });
+
+    expect(result.section).toContain('<npc name="The Apprentice">');
+  });
+});
+
 describe('CampaignContextPrompts.extractSceneEntityNames', () => {
   it('parses entity names from a rendered scene_state block', () => {
     const block =

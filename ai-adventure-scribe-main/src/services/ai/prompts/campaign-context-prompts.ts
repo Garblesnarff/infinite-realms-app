@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { fetchCampaignAssetsForPrompt } from '../asset-processor';
+import { fetchCampaignAssetsForPrompt, normalizePcName } from '../asset-processor';
 import { approximateTokens } from '../shared/token-budget';
 
 import type { CampaignChunk, CampaignRule } from '@/agents/services/lore-keeper/data-mapping';
@@ -21,6 +21,13 @@ export interface StarterCampaignLore {
   entitiesByType: Record<LoreSectionType, CampaignChunk[]>;
   /** Rendered `<available_visual_assets>` section ('' when the campaign has none). */
   assetsSection: string;
+  /**
+   * #708: the player's own character name, when this lore was fetched for a
+   * premade playthrough. The renderer keeps a same-named NPC chunk out of the
+   * NPC cards and the canon roster, so the PC is never presented as a
+   * separate scene person.
+   */
+  playerCharacterName?: string;
 }
 
 export interface LoreRenderOptions {
@@ -527,6 +534,7 @@ export class CampaignContextPrompts {
         rules: campaignRules || [],
         entitiesByType,
         assetsSection: campaignAssets || '',
+        playerCharacterName,
       };
     } catch (loreError) {
       logger.warn('[ContextBuilder] Failed to fetch starter campaign lore:', loreError);
@@ -560,9 +568,21 @@ export class CampaignContextPrompts {
     const excludedNames = new Set(
       (options.excludeEntityNames || []).map((name) => name.toLowerCase()),
     );
+    // #708: the player's own premade is not an NPC. If the campaign bible also
+    // authors them as an NPC chunk, that chunk never becomes a card or a
+    // roster entry — the character block presents them as the player.
+    const playerCharacterFolded = lore.playerCharacterName
+      ? normalizePcName(lore.playerCharacterName)
+      : '';
     for (const sectionType of LORE_SECTION_ORDER) {
       for (const entity of lore.entitiesByType[sectionType]) {
         if (excludedNames.has((entity.entityName || '').toLowerCase())) continue;
+        if (
+          sectionType === 'npcs' &&
+          playerCharacterFolded &&
+          normalizePcName(entity.entityName || '') === playerCharacterFolded
+        )
+          continue;
         units.push({ entity, sectionType, order: units.length });
       }
     }

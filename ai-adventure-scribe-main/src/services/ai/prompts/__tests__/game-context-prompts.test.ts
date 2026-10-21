@@ -392,3 +392,90 @@ describe('GameContextPrompts', () => {
     });
   });
 });
+
+/**
+ * #708: the DM narrated the player's own premade as a separate NPC
+ * ("Nearby, The Apprentice is still wobbling precariously with their
+ * trunk..."). The assembled context must anchor the PC as the player
+ * ("you") and must never card them as an NPC. Fixtures follow the session
+ * context producer: character rows carry name/level/race/class plus a
+ * character_stats row, as getSessionContext returns them.
+ */
+describe('the player character identity anchor (#708)', () => {
+  const apprentice = {
+    id: 'char-apprentice',
+    name: 'The Apprentice',
+    level: 1,
+    race: 'Human',
+    class: { name: 'Wizard' },
+    character_stats: [
+      {
+        strength: 8,
+        dexterity: 14,
+        constitution: 12,
+        intelligence: 16,
+        wisdom: 12,
+        charisma: 10,
+        armor_class: 12,
+      },
+    ],
+  };
+
+  it('anchors a premade character as the player in the character block', async () => {
+    const result = await GameContextPrompts.buildCharacterSection(apprentice);
+
+    expect(result).toContain('<player_identity>');
+    expect(result).toContain('The Apprentice IS the player');
+    expect(result).toContain('In scene narration The Apprentice is "you"');
+    expect(result).toContain('Never narrate The Apprentice in the third person by name');
+  });
+
+  it('anchors a created character the same way (control)', async () => {
+    const created = {
+      ...apprentice,
+      id: 'char-kael',
+      name: 'Kael Thornwood',
+      class: 'Fighter',
+    };
+
+    const result = await GameContextPrompts.buildCharacterSection(created);
+
+    expect(result).toContain('Kael Thornwood IS the player');
+    expect(result).toContain('In scene narration Kael Thornwood is "you"');
+  });
+
+  it('full assembly: anchor present, the PC is never an NPC card', async () => {
+    mockLoreKeeper.getEntities.mockResolvedValue({
+      npcs: [
+        { entityName: 'Head Chef Balthazar', content: 'The head chef.', metadata: {} },
+        {
+          entityName: 'The Apprentice',
+          content: 'A new student, wobbling precariously with their trunk.',
+          metadata: {},
+        },
+      ],
+      locations: [],
+      factions: [],
+      monsters: [],
+    } as any);
+
+    const result = await GameContextPrompts.buildGameContextSection(
+      {
+        campaignDetails: {
+          name: 'Academy of Arcane Gastronomy',
+          description: 'A school for magical cooks.',
+        },
+        characterDetails: apprentice,
+        starterCampaignId: 'academy-of-arcane-gastronomy',
+        sessionId: 'session-708',
+        campaignId: 'campaign-1',
+      } as any,
+      [],
+    );
+
+    expect(result).toContain('The Apprentice IS the player');
+    expect(result).toContain('<npc name="Head Chef Balthazar">');
+    expect(result).not.toContain('<npc name="The Apprentice">');
+    expect(result).not.toContain('wobbling precariously with their trunk');
+  });
+});
