@@ -36,6 +36,7 @@ import { isFallenCharacter } from '@/utils/character/vital-state';
 interface CharacterCardProps {
   character: Partial<Character> & Required<Pick<Character, 'id' | 'name'>>;
   onDelete?: () => void;
+  copyLabel?: string;
 }
 
 /**
@@ -43,7 +44,11 @@ interface CharacterCardProps {
  * Includes options to view, play, or delete the character
  * @param character - Character data to display
  */
-const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps): JSX.Element => {
+const CharacterCardComponent = ({
+  character,
+  onDelete,
+  copyLabel,
+}: CharacterCardProps): JSX.Element => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -89,6 +94,7 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps): JS
   // state (the sheet swaps), and it cannot be played. #209: Delete stays
   // available so the fallen entry can be removed from the roster.
   const fallen = isFallenCharacter(character);
+  const displayName = copyLabel ? `${character.name} (${copyLabel})` : character.name;
 
   // #209: at-rest caption labels so duplicate premade copies are distinguishable
   // without hovering (same artwork, same name — e.g. The Scholar x8). The stats
@@ -190,7 +196,7 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps): JS
         className="character-hero group flex items-end p-4 cursor-pointer h-full w-full bg-cover bg-center bg-no-repeat filter sepia-[0.1] relative overflow-hidden transition-all duration-700 ease-out group-hover:scale-[1.02] group-hover:brightness-110 rounded-sm"
         role="link"
         tabIndex={0}
-        aria-label={`View details for ${character.name}`}
+        aria-label={`View details for ${displayName}`}
         onClick={() => {
           // Character access is now properly restricted by RLS, so navigation should work
           navigate(`/app/character/${character.id}`);
@@ -285,6 +291,7 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps): JS
         >
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold text-white">{character.name}</div>
+            {copyLabel && <span className="text-xs font-semibold text-white">{copyLabel}</span>}
             {captionMeta.length > 0 && (
               <div className="truncate text-xs text-white/70">{captionMeta.join(' · ')}</div>
             )}
@@ -297,8 +304,8 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps): JS
             // distinguishable to assistive tech.
             aria-label={
               createdLabel
-                ? `Delete ${character.name} (created ${createdLabel})`
-                : `Delete ${character.name}`
+                ? `Delete ${displayName} (created ${createdLabel})`
+                : `Delete ${displayName}`
             }
             title="Delete character"
             onClick={(e) => {
@@ -343,7 +350,7 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps): JS
               </div>
               <AlertDialogDescription className="text-sm text-muted-foreground leading-relaxed">
                 Are you sure you want to delete{' '}
-                <span className="font-semibold text-foreground">"{character.name}"</span>?{' '}
+                <span className="font-semibold text-foreground">"{displayName}"</span>?{' '}
                 <span className="text-destructive font-medium">This action cannot be undone</span>{' '}
                 and will permanently remove the character from your account.
               </AlertDialogDescription>

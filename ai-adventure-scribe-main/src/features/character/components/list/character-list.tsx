@@ -29,6 +29,23 @@ const CharacterList: React.FC = () => {
     fetchCharacters,
   } = useCharacterListData();
 
+  const copyLabels = new Map<string, string>();
+  const sameNames = new Map<string, typeof characters>();
+  for (const character of characters) {
+    if (!character.id || !character.name) continue;
+    const group = sameNames.get(character.name) ?? [];
+    group.push(character);
+    sameNames.set(character.name, group);
+  }
+  for (const group of sameNames.values()) {
+    if (group.length < 2) continue;
+    group.sort(
+      (a, b) =>
+        (a.created_at ?? '').localeCompare(b.created_at ?? '') || a.id!.localeCompare(b.id!),
+    );
+    group.forEach((character, index) => copyLabels.set(character.id!, `Copy ${index + 1}`));
+  }
+
   /**
    * Navigates to character creation page
    */
@@ -124,6 +141,7 @@ const CharacterList: React.FC = () => {
               <MemoizedCharacterCard
                 key={character.id}
                 character={character as Partial<Character> & { id: string; name: string }}
+                copyLabel={copyLabels.get(character.id)}
                 onDelete={fetchCharacters}
               />
             );
