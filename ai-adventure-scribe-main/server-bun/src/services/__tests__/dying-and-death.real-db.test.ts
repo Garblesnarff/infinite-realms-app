@@ -1757,6 +1757,7 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
           text: row.message,
           source: (row.context as { combatEngineBlocks?: Array<{ source: string }> })
             ?.combatEngineBlocks?.[0]?.source,
+          combatEnded: (row.context as { combatEnded?: boolean } | null)?.combatEnded,
         }));
 
       // 2) Attack: propose, roll (the player's d20 is 17), commit.
@@ -1869,9 +1870,20 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
         [
           '⚙️ Engine: Vitruvian Spider rolled 15 and 15 (advantage, kept 15) + 5 = 20 vs AC 11 against The Scholar with Fangs — CRITICAL HIT (the target is unconscious). 4 piercing damage. The Scholar is now at 0 HP and is dead.',
           '⚙️ Engine: Vitruvian Spider strikes the unconscious The Scholar — automatic critical hit. Two death-save failures. ✕✕✕ The Scholar is DEAD.',
-          '⚙️ Engine: Combat ended — the party was defeated (reason: party_defeated).',
+          '⚙️ Engine: Combat ended — the party was defeated.',
         ].join('\n\n'),
       );
+      // #976: the terminal row's STORED context carries combatEnded — the deferred
+      // Combat Summary gate reads exactly this after the DB round trip (the row
+      // hydrates as sender 'system' with its context verbatim, and no DM message
+      // ever matches for a server-ended fight). The mid-fight rows before it
+      // carry no flag.
+      expect(afterSave[3].combatEnded).toBe(true);
+      expect(afterSave.slice(0, 3).map((row) => row.combatEnded)).toEqual([
+        undefined,
+        undefined,
+        undefined,
+      ]);
       expect(saved.engineRows.map((row: { id: string }) => row.id)).toEqual([afterSave[3].id]);
       expect(await statusOf(scene.heroId)).toMatchObject({
         currentHp: 0,

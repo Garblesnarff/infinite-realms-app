@@ -159,8 +159,10 @@ async function postCombatSummary(
 }
 
 /**
- * "Combat has ended." is held until THIS fight's terminal DM message is in the transcript, so the
- * killing HIT reads before the summary (#2127).
+ * "Combat has ended." is held until THIS fight's terminal message is in the transcript, so the
+ * killing HIT reads before the summary (#2127). The terminal message is the DM reply that
+ * narrates the end, or — for a fight the server ended through the combat intent endpoints,
+ * where no DM turn runs — the terminal engine row/notice that presents the end (#976).
  *
  * "This fight's" is the whole point: a session with two encounters already holds the first one's
  * terminal message, and a transcript-wide check lets the second summary jump ahead of its own

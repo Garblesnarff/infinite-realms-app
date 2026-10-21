@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 
 import type { ChatMessage } from '@/types/game';
 import type { ActionOption } from '@/utils/parseMessageOptions';
@@ -57,6 +58,8 @@ interface DynamicOptionsSectionProps {
 type EngineNotice = {
   text: string;
   cards: ReturnType<typeof formatCombatActionParts>[number]['card'][];
+  /** True when the notice carries the combat end line: it is this fight's terminal message (#976). */
+  combatEnded?: boolean;
 };
 
 async function sendEngineNotice(
@@ -65,6 +68,13 @@ async function sendEngineNotice(
 ): Promise<void> {
   if (!onSendMessage || !notice.text) return;
   const message: ChatMessage = {
+    // A stable id from creation (#976 self-review): the deferred summary's
+    // baseline keys messages by id, and a notice keyed by `timestamp|text`
+    // until hydration re-keys it to the saved uuid — a previous fight's notice
+    // could then fall outside the next fight's baseline and release its
+    // summary early. The queue preserves a supplied id end-to-end. uuidv4,
+    // not crypto.randomUUID: the latter is undefined on non-secure origins.
+    id: uuidv4(),
     text: notice.text,
     sender: 'system',
     timestamp: new Date().toISOString(),
@@ -72,6 +82,7 @@ async function sendEngineNotice(
     context: {
       intent: 'combat_pending_intent',
       ...(notice.cards.length ? { engineCards: notice.cards } : {}),
+      ...(notice.combatEnded ? { combatEnded: true } : {}),
     },
   };
   try {
@@ -276,6 +287,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
           await sendEngineNotice(onSendMessage, {
             text: [...parts.map((part) => part.line), ...(endLine ? [endLine] : [])].join('\n\n'),
             cards: parts.map((part) => part.card),
+            combatEnded: endLine != null,
           });
           // No `end_turn` after it: the exit has already taken the player out of the turn order,
           // and a turn boundary for a participant who no longer has one is a second refusal.
@@ -388,6 +400,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
                 ...(playerEndLine ? [playerEndLine] : []),
               ].join('\n\n'),
               cards: playerParts.map((part) => part.card),
+              combatEnded: playerEndLine != null,
             });
           }
           const movementOnly =
@@ -478,6 +491,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
                   ...(playerEndLine ? [playerEndLine] : []),
                 ].join('\n\n'),
                 cards: playerParts.map((part) => part.card),
+                combatEnded: playerEndLine != null,
               });
             }
             const movementOnly =

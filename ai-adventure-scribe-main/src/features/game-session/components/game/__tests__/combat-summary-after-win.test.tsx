@@ -20,6 +20,7 @@ import { act, render, waitFor } from '@testing-library/react';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { buildNpcEngineMessage } from '../../../../../../shared/npc-engine-message';
 
 import { CharacterProvider } from '@/contexts/CharacterContext';
 import { CombatProvider, useCombat } from '@/contexts/CombatContext';
@@ -53,12 +54,13 @@ const saveCalls: Array<{ sessionId: string; body: any }> = [];
 const store: Array<any> = [];
 
 let activeCombat: any = null;
-const combatPayload = () => ({
+let summaryRounds = 3;
+const combatPayload = (round = 3) => ({
   encounter: {
     id: ENCOUNTER_ID,
     sessionId: SESSION_ID,
     status: 'active',
-    currentRound: 3,
+    currentRound: round,
     currentTurnOrder: 0,
     startedAt: '2026-10-20T00:00:00.000Z',
     endedAt: null,
@@ -123,6 +125,7 @@ describe('combat summary after a win (#570)', () => {
     vi.clearAllMocks();
     saveCalls.length = 0;
     store.length = 0;
+    summaryRounds = 3;
     activeCombat = combatPayload();
     (characterLoaderService.loadCharacterWithSpells as any).mockResolvedValue({
       id: 'hero-char-1',
@@ -160,7 +163,7 @@ describe('combat summary after a win (#570)', () => {
           json: async () => ({
             summary: {
               encounterId: ENCOUNTER_ID,
-              rounds: 3,
+              rounds: summaryRounds,
               totalDamage: 13,
               participants: [
                 { participantId: HERO_ID, name: 'Hero', damageDealt: 7, damageTaken: 6, status: 'ok' },
@@ -251,4 +254,94 @@ describe('combat summary after a win (#570)', () => {
       { timeout: 30000 },
     );
   }, 60000);
+
+  it('posts the summary promptly for a 7-round win the server ended (#976)', async () => {
+    summaryRounds = 7;
+    activeCombat = combatPayload(7);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <CharacterProvider>
+          <CombatProvider sessionId={SESSION_ID}>
+            <MessageProvider sessionId={SESSION_ID}>
+              <Probe />
+            </MessageProvider>
+          </CombatProvider>
+        </CharacterProvider>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(captured.isInCombat).toBe(true), { timeout: 15000 });
+
+    // The killing blow lands through the combat intent endpoint (round 7). The
+    // server concludes the encounter, writes the actor's terminal engine row
+    // (buildNpcEngineMessage is the real producer; writeNpcEngineRow stores it
+    // with npcResult + combatEncounterId added), and the client merges the row
+    // from the intent response's engineRows via the session-engine-rows event —
+    // exactly the production delivery. No DM turn runs, so no DM message ever
+    // carries combatEnded for this fight.
+    const killResult = {
+      actorName: 'Hero',
+      targetName: 'Goblin',
+      hit: true,
+      finalDamage: 7,
+      targetNewHp: 0,
+      targetIsConscious: false,
+      combatEnded: true,
+      endedReason: 'last_hostile_defeated',
+    };
+    const built = buildNpcEngineMessage(
+      [
+        { id: HERO_ID, name: 'Hero', participantType: 'player', maxHp: 20 },
+        { id: GOBLIN_ID, name: 'Goblin', participantType: 'monster', maxHp: 7 },
+      ],
+      7,
+      { type: 'attack', actorId: HERO_ID, targetIds: [GOBLIN_ID] },
+      killResult,
+    );
+    expect(built.text).toContain('Combat ended');
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent('session-engine-rows', {
+          detail: [
+            {
+              id: 'row-kill-976',
+              sessionId: SESSION_ID,
+              sequence: 42,
+              text: built.text,
+              timestamp: new Date().toISOString(),
+              context: {
+                ...built.context,
+                npcResult: killResult,
+                combatEncounterId: ENCOUNTER_ID,
+                actionId: 'kill-976',
+              },
+            },
+          ],
+        }),
+      );
+    });
+    await waitFor(() =>
+      expect(captured.messages.some((m) => m.text.includes('Combat ended'))).toBe(true),
+    );
+
+    // The client pulls authoritative state: the fight is over.
+    activeCombat = null;
+    await act(async () => {
+      await captured.refresh?.();
+    });
+    await waitFor(() => expect(captured.isInCombat).toBe(false), { timeout: 15000 });
+
+    // The summary must release on the terminal row — well inside the 15 s
+    // fallback window the bug hid behind.
+    await waitFor(
+      () => {
+        const summarySave = saveCalls.find((c) => c.body?.context?.combatData?.summary);
+        expect(summarySave).toBeTruthy();
+        expect(summarySave?.body.context.combatData.summary.rounds).toBe(7);
+        expect(summarySave?.body.context.combatData.summary.totalDamage).toBe(13);
+      },
+      { timeout: 8000 },
+    );
+  }, 90000);
 });

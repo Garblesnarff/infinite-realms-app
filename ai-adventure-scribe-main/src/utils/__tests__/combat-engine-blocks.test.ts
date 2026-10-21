@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  combatMessageEndedCombat,
   messagesSupersededByCombatEnd,
   orderCombatEngineBlocks,
+  previousEngineDividerKeys,
   type CombatEngineBlock,
 } from '../combat-engine-blocks';
 
@@ -162,5 +164,91 @@ describe('messagesSupersededByCombatEnd (#864)', () => {
 
     expect(superseded.has(betweenFights)).toBe(true);
     expect(superseded.has(secondTerminal)).toBe(false);
+  });
+
+  it('treats the terminal engine row of a server-ended fight as the boundary (#976)', () => {
+    // A server-ended fight has no terminal DM reply: its boundary is the engine
+    // row that presented the end (sender 'system', combatEnded stamped by
+    // buildNpcEngineMessage). The world before it is stale; it and anything
+    // after it are not.
+    const preFight = dm('The professor watches you. A. **Press the Professor further**');
+    const terminalRow = {
+      sender: 'system',
+      text: '⚙️ Engine: Combat ended — the last hostile was defeated.',
+      context: { intent: 'combat_npc_result', combatEnded: true },
+    };
+    const postCombat = dm('Dust settles over the hall. A. **Search the desk**');
+    const messages = [preFight, terminalRow, postCombat, summary()];
+
+    const superseded = messagesSupersededByCombatEnd(messages);
+
+    expect(superseded.has(preFight)).toBe(true);
+    expect(superseded.has(terminalRow)).toBe(false);
+    expect(superseded.has(postCombat)).toBe(false);
+  });
+});
+
+describe('combatMessageEndedCombat (#976)', () => {
+  it('accepts a DM reply stamped combatEnded', () => {
+    expect(
+      combatMessageEndedCombat({ sender: 'dm', context: { combatEnded: true } }),
+    ).toBe(true);
+  });
+
+  it('accepts the terminal engine row of a server-ended fight (sender system)', () => {
+    expect(
+      combatMessageEndedCombat({
+        sender: 'system',
+        context: { intent: 'combat_npc_result', combatEnded: true },
+      }),
+    ).toBe(true);
+    expect(
+      combatMessageEndedCombat({
+        sender: 'system',
+        context: { intent: 'combat_pending_intent', combat_ended: true },
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects messages without the flag, whatever the sender', () => {
+    expect(combatMessageEndedCombat({ sender: 'dm', context: {} })).toBe(false);
+    expect(
+      combatMessageEndedCombat({ sender: 'system', context: { intent: 'combat_npc_result' } }),
+    ).toBe(false);
+    expect(
+      combatMessageEndedCombat({ sender: 'player', context: { combatEnded: true } }),
+    ).toBe(false);
+  });
+});
+
+describe('previousEngineDividerKeys with a server-ended terminal row (#976)', () => {
+  const block = (round: number, actor: string) => ({
+    sequence: 0,
+    round,
+    source: 'npc' as const,
+    actor,
+    lines: [`⚙️ Engine: ${actor} acts.`],
+  });
+  const withBlocks = (
+    sender: string,
+    blocks: ReturnType<typeof block>[],
+    context?: Record<string, unknown>,
+  ) => ({ sender, text: 'x', context: { ...context, combatEngineBlocks: blocks } });
+
+  it('starts the next fight afresh after a terminal engine row', () => {
+    const first = withBlocks('dm', [block(1, 'Ghorza')]);
+    const terminalRow = withBlocks('system', [block(7, 'Ghorza')], {
+      intent: 'combat_npc_result',
+      combatEnded: true,
+    });
+    const nextFight = withBlocks('dm', [block(1, 'Ghorza')]);
+
+    const previous = previousEngineDividerKeys([first, terminalRow, nextFight]);
+
+    expect(previous.get(first)).toBeUndefined();
+    expect(previous.get(terminalRow)).toBe('1|Ghorza');
+    // Without the reset, the next fight's first block would compare against
+    // '7|Ghorza' and could suppress a divider that should print.
+    expect(previous.get(nextFight)).toBeUndefined();
   });
 });

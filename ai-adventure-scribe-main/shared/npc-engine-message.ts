@@ -31,6 +31,11 @@ export function buildNpcEngineMessage(
     ? 'player' as const : 'npc' as const;
   return { text: lines.join('\n\n'), context: {
     intent: 'combat_npc_result', round, engineCards: cards,
+    // #976: a row carrying the end line IS this fight's terminal message. Stamp it so
+    // the client's deferred Combat Summary can release on the row — a server-ended
+    // fight gets no DM message with the flag, and without it the card waited out
+    // the 15 s fallback (or was never seen).
+    ...(endLine ? { combatEnded: true } : {}),
     combatEngineBlocks: [{ sequence: 0, round, source, actor, lines, cards }],
   } };
 }
