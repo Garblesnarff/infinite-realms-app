@@ -175,5 +175,7 @@ fi
 
 if [ "$failed" -eq 0 ]; then
   echo "server-typecheck: PASS"
+  # #844: this existing CI step also owns the headless CLI import graph.
+  bash "$APP_DIR/scripts/cli-typecheck-gate.sh" || failed=1
 fi
 exit "$failed"

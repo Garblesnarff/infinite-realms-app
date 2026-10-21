@@ -127,8 +127,7 @@ describe('HeadlessGameClient combat entry (#913)', () => {
         map_actions: [],
       } as never);
     vi.mocked(userDataApi.enterCombat).mockImplementation(
-      async () =>
-        new Response(JSON.stringify(headlessEntryEnterResponse), { status: 201 }),
+      async () => new Response(JSON.stringify(headlessEntryEnterResponse), { status: 201 }),
     );
     globalThis.fetch = mapFetch();
 
@@ -157,10 +156,8 @@ describe('HeadlessGameClient combat entry (#913)', () => {
     await client.play('I strike at Balthazar again.');
 
     expect(userDataApi.enterCombat).toHaveBeenCalledTimes(1);
-    const secondTurn = vi.mocked(AIService.chatWithDM).mock.calls[1][0] as {
-      context: { gameState: { isInCombat: boolean } };
-    };
-    expect(secondTurn.context.gameState.isInCombat).toBe(true);
+    const secondTurn = vi.mocked(AIService.chatWithDM).mock.calls[1][0];
+    expect(secondTurn.context.gameState?.isInCombat).toBe(true);
   });
 
   it('does not seat twice when the DM re-proposes the same entry on the next turn', async () => {
@@ -168,8 +165,7 @@ describe('HeadlessGameClient combat entry (#913)', () => {
     stubInitiativeDie();
     vi.mocked(AIService.chatWithDM).mockResolvedValue(headlessEntryDmResponse as never);
     vi.mocked(userDataApi.enterCombat).mockImplementation(
-      async () =>
-        new Response(JSON.stringify(headlessEntryEnterResponse), { status: 201 }),
+      async () => new Response(JSON.stringify(headlessEntryEnterResponse), { status: 201 }),
     );
     globalThis.fetch = mapFetch();
 
@@ -254,8 +250,7 @@ describe('HeadlessGameClient combat entry (#913)', () => {
       status: 201,
       stage: 'entry',
       detail: 'Combat entry response did not include an encounter id',
-      fingerprint:
-        'combat_entry:201:entry:Combat entry response did not include an encounter id',
+      fingerprint: 'combat_entry:201:entry:Combat entry response did not include an encounter id',
     });
   });
 

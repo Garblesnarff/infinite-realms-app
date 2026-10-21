@@ -44,7 +44,8 @@ afterEach(() => {
 const SEEKER_UUID = '3f1c9a72-8d4b-4c21-9e77-2b6f0a5d1e33';
 const ROACH_UUID = 'a71e4d05-6c92-4f18-b3aa-90e7c2418d64';
 
-const mapOf = (event: { type: string }): TacticalMap => (event as { map: TacticalMap }).map;
+const mapOf = (event: { type: string }): TacticalMap =>
+  (event as { type: string; map: TacticalMap }).map;
 const positionOf = (event: { type: string }, id: string): { x: number; y: number } => {
   const entity = mapOf(event).entities.find((candidate) => candidate.id === id)!;
   return { x: entity.x, y: entity.y };

@@ -1,0 +1,7 @@
+# CLI import-graph quarantine (#844); paths relative to ai-adventure-scribe-main.
+# Current main ace6cf23 has 29 errors. CLI-owned errors and ambient gaps are fixed here.
+# These 16 imported frontend errors are already tracked by open #664.
+# New files, count increases/decreases, global errors and unattributed tsc failure fail.
+src/hooks/ai/combat-resolution-step.ts : 1 # #664
+src/hooks/use-ai-response.ts : 14 # #664
+src/utils/character-converter.ts : 1 # #664
