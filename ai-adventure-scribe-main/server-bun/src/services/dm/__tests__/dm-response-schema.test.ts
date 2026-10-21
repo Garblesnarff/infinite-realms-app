@@ -6,6 +6,7 @@ import {
   dmResponseSchema,
   parseDmResponse,
   reviewNarrationSpeakerSplit,
+  stripOptionsRepeatedInText,
 } from '../dm-response-schema.js';
 
 const response = (overrides: Record<string, unknown> = {}) => ({
@@ -113,6 +114,175 @@ describe('dmResponseSchema options contract', () => {
     const parsed = parseDmResponse(response({ options }));
 
     expect(parsed).toEqual({ success: true, data: expect.objectContaining({ options }) });
+  });
+
+  // #864 reopened (Hark D2-004): the opening producer's envelope can carry the
+  // lettered choices inside the narration text as well as in the options field.
+  // Every consumer appends the field to the text (the greeting hook builds the
+  // saved greeting exactly that way — shared/test-fixtures/initial-greeting-save.ts),
+  // so the copy inside the text is a second showing of the same list. The text and
+  // options below follow that fixture's Gilded Lantern opening.
+  const OPENING_NARRATION =
+    'Rain hammers the shutters of the Gilded Lantern as the last of the evening crowd drifts out into the mud. Behind the bar, a hooded stranger slides a folded map toward you and says nothing.';
+  const OPENING_OPTIONS = [
+    'A. **Take the map**, and read it by the fire.',
+    'B. **Ask the stranger** who sent them.',
+  ];
+  const occurrences = (haystack: string, needle: string): number =>
+    haystack.split(needle).length - 1;
+
+  test('drops options the model also wrote into the narration text (#864 reopened)', () => {
+    const parsed = parseDmResponse(
+      response({
+        text: `${OPENING_NARRATION}\n\n${OPENING_OPTIONS.join('\n')}`,
+        options: OPENING_OPTIONS,
+      }),
+    );
+
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.text).toBe(OPENING_NARRATION);
+    expect(parsed.data.options).toEqual(OPENING_OPTIONS);
+    // The assembly every consumer renders: narration, then the options appended once.
+    const delivered = `${parsed.data.text}\n\n${(parsed.data.options ?? []).join('\n')}`;
+    for (const option of OPENING_OPTIONS) expect(occurrences(delivered, option)).toBe(1);
+  });
+
+  test('drops a text-carried list when the options field repeats it too (#864 reopened)', () => {
+    const parsed = parseDmResponse(
+      response({
+        text: `${OPENING_NARRATION}\n\n${OPENING_OPTIONS.join('\n')}`,
+        options: [...OPENING_OPTIONS, ...OPENING_OPTIONS],
+      }),
+    );
+
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.text).toBe(OPENING_NARRATION);
+    expect(parsed.data.options).toEqual(OPENING_OPTIONS);
+  });
+
+  test('keeps a lettered list in the text that is not the offered options (#864 reopened)', () => {
+    const text = `${OPENING_NARRATION}\n\nOn the bar, a chalk slate lists the house rules:\nA. **No blades** drawn after the second bell.\nB. **No credit** for travellers.`;
+    const parsed = parseDmResponse(response({ text, options: OPENING_OPTIONS }));
+
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.text).toBe(text);
+    expect(parsed.data.options).toEqual(OPENING_OPTIONS);
+  });
+
+  test('leaves the text untouched when the envelope offers no options (#864 reopened)', () => {
+    const text = `${OPENING_NARRATION}\n\n${OPENING_OPTIONS.join('\n')}`;
+    const parsed = parseDmResponse(response({ text, options: [] }));
+
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.text).toBe(text);
+  });
+
+  test('keeps a trailing lettered list that only partially overlaps the options (#864 reopened)', () => {
+    // An in-world slate whose middle rule happens to read exactly like one of
+    // the offered choices: the block as a set is not the options, so nothing
+    // may be stripped — the slate keeps all three rules, in order.
+    const options = [
+      'A. **Shield** the lantern from the rain.',
+      'B. **Ask the stranger** who sent them.',
+    ];
+    const text = `${OPENING_NARRATION}\n\nOn the bar, a chalk slate lists the house rules:\nA. **No blades** drawn after the second bell.\nB. **Shield** the lantern from the rain.\nC. **No credit** for travellers.`;
+    const parsed = parseDmResponse(response({ text, options }));
+
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.text).toBe(text);
+  });
+
+  test('keeps the same list when narration continues after it (#864 reopened)', () => {
+    // Only a trailing appendix is the producer's second showing; a list the
+    // narration resumes after is part of the scene and stays.
+    const text = `${OPENING_NARRATION}\n\n${OPENING_OPTIONS.join('\n')}\n\nThe stranger watches you decide, saying nothing.`;
+    const parsed = parseDmResponse(response({ text, options: OPENING_OPTIONS }));
+
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.text).toBe(text);
+  });
+
+  test('drops the appendix when its markers differ from the field markers (#864 reopened)', () => {
+    const parsed = parseDmResponse(
+      response({
+        text: `${OPENING_NARRATION}\n\n1. **Take the map**, and read it by the fire.\n2. **Ask the stranger** who sent them.`,
+        options: OPENING_OPTIONS,
+      }),
+    );
+
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.text).toBe(OPENING_NARRATION);
+    expect(parsed.data.options).toEqual(OPENING_OPTIONS);
+  });
+
+  test('drops the appendix when an option in it wraps onto a second line (#864 reopened)', () => {
+    const parsed = parseDmResponse(
+      response({
+        text: `${OPENING_NARRATION}\n\nA. **Take the map**, and read it\nby the fire.\nB. **Ask the stranger** who sent them.`,
+        options: OPENING_OPTIONS,
+      }),
+    );
+
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.text).toBe(OPENING_NARRATION);
+  });
+
+  test('keeps narration segment hints aligned when the appendix is dropped (#864 reopened)', () => {
+    const parsed = parseDmResponse(
+      response({
+        text: `${OPENING_NARRATION}\n\n${OPENING_OPTIONS.join('\n')}`,
+        options: OPENING_OPTIONS,
+        narration_segments: [
+          { type: 'dm', character: null, voice_category: null, text: OPENING_NARRATION },
+        ],
+      }),
+    );
+
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.text).toBe(OPENING_NARRATION);
+    const segmentText = (parsed.data.narration_segments ?? []).map((s) => s.text).join('\n');
+    expect(segmentText).toContain('Rain hammers the shutters');
+    expect(segmentText).not.toContain('Take the map');
+  });
+
+  test('never empties the text: a reply that is only the option list is kept (#864 reopened)', () => {
+    const text = OPENING_OPTIONS.join('\n');
+    const parsed = parseDmResponse(response({ text, options: OPENING_OPTIONS }));
+
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.text).toBe(text);
+    expect(parsed.data.options).toEqual(OPENING_OPTIONS);
+  });
+});
+
+describe('stripOptionsRepeatedInText (#864 reopened)', () => {
+  const NARRATION = 'Rain hammers the shutters of the Gilded Lantern.';
+  const OPTIONS = [
+    'A. **Take the map**, and read it by the fire.',
+    'B. **Ask the stranger** who sent them.',
+  ];
+
+  test('is idempotent and a no-op on clean text', () => {
+    const dirty = `${NARRATION}\n\n${OPTIONS.join('\n')}`;
+    const once = stripOptionsRepeatedInText(dirty, OPTIONS);
+    expect(once).toBe(NARRATION);
+    expect(stripOptionsRepeatedInText(once, OPTIONS)).toBe(once);
+    expect(stripOptionsRepeatedInText(NARRATION, OPTIONS)).toBe(NARRATION);
+  });
+
+  test('handles a CRLF text whose appendix uses ) markers', () => {
+    const dirty = `${NARRATION}\r\n\r\nA) **Take the map**, and read it by the fire.\r\nB) **Ask the stranger** who sent them.`;
+    expect(stripOptionsRepeatedInText(dirty, OPTIONS)).toBe(NARRATION);
   });
 });
 

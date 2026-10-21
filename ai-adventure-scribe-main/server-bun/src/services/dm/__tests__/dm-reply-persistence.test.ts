@@ -172,6 +172,23 @@ describe('provisionalDmText', () => {
         'B. **Listen**, hold still and wait for another sound.',
     );
   });
+
+  test('each offered choice once when the model also wrote them into the text (#864 reopened)', () => {
+    expect(
+      provisionalDmText(
+        explorationEnvelope({
+          text:
+            'Cold air rises from the stair. Somewhere below, water drips on stone.\n\n' +
+            'A. **Descend carefully**, testing each step.\n' +
+            'B. **Listen**, hold still and wait for another sound.',
+        }),
+      ),
+    ).toBe(
+      'Cold air rises from the stair. Somewhere below, water drips on stone.\n\n' +
+        'A. **Descend carefully**, testing each step.\n' +
+        'B. **Listen**, hold still and wait for another sound.',
+    );
+  });
 });
 
 describe('persistGeneratedDmReply', () => {

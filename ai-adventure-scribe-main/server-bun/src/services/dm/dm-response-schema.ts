@@ -666,6 +666,8 @@ export function reviewNarrationSpeakerSplit(
   };
 }
 
+const DM_OPTION_MARKER = /^\s*(?:\*\*)?(?:\d{1,3}|[A-Za-z])[.)](?:\*\*)?\s+/;
+
 /**
  * The comparison key for one DM option (#864): two options that differ only in
  * their list marker, casing, markdown emphasis, whitespace or punctuation are
@@ -673,7 +675,7 @@ export function reviewNarrationSpeakerSplit(
  */
 export function normalizeDmOptionText(option: string): string {
   return option
-    .replace(/^\s*(?:\*\*)?(?:\d{1,3}|[A-Za-z])[.)](?:\*\*)?\s+/, '')
+    .replace(DM_OPTION_MARKER, '')
     .toLowerCase()
     .replace(/[*_`~]/g, '')
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
@@ -698,6 +700,66 @@ export function dedupeDmOptions(options: string[]): string[] {
   return kept;
 }
 
+/**
+ * Drop the copy of the offered options the model also wrote into the narration
+ * `text` (#864 reopened, Hark D2-004). The opening producer's envelope can
+ * carry the lettered choices inside `text` as well as in the `options` field,
+ * and every consumer appends the field to the text (the greeting hook,
+ * use-ai-response, provisionalDmText), so the copy inside the text is a second
+ * showing of the same list — the first DM message showed each choice twice
+ * while later turns, whose text stays clean, did not.
+ *
+ * The strip is deliberately narrow, because the text is narration first: only
+ * a trailing block of lettered lines that segments — marker line plus any
+ * wrapped continuation lines — into candidates covering the offered options
+ * exactly, as a set, is removed. A lettered list anywhere else, or one that
+ * only partially overlaps the options (an in-world slate, a menu), is
+ * narration and stays, and so does a text that is nothing but the list:
+ * normalization never empties the narration it was handed.
+ */
+export function stripOptionsRepeatedInText(text: string, options: string[]): string {
+  if (options.length === 0) return text;
+  const keys = new Set(options.map(normalizeDmOptionText).filter(Boolean));
+  if (keys.size === 0) return text;
+  const lines = text.split('\n');
+  let end = lines.length;
+  while (end > 0 && (lines[end - 1] ?? '').trim() === '') end--;
+  // Candidate blocks start at a marker line; try starts from the last line
+  // backwards and take the first (shortest) suffix that validates, so a
+  // lettered passage earlier in the narration is never reached.
+  for (let start = end - 1; start >= 0; start--) {
+    if (!DM_OPTION_MARKER.test(lines[start] ?? '')) continue;
+    const covered = new Set<string>();
+    let candidate: string[] = [];
+    let valid = true;
+    const flush = (): void => {
+      if (candidate.length === 0) return;
+      const key = normalizeDmOptionText(candidate.join('\n'));
+      if (!keys.has(key)) {
+        valid = false;
+        return;
+      }
+      covered.add(key);
+      candidate = [];
+    };
+    for (let i = start; i < end && valid; i++) {
+      const line = lines[i] ?? '';
+      if (line.trim() === '') continue;
+      if (i > start && DM_OPTION_MARKER.test(line)) flush();
+      if (!valid) break;
+      candidate.push(line);
+    }
+    if (valid) flush();
+    if (!valid || covered.size !== keys.size) continue;
+    const stripped = lines
+      .slice(0, start)
+      .join('\n')
+      .trimEnd();
+    return stripped.trim().length > 0 ? stripped : text;
+  }
+  return text;
+}
+
 export function parseDmResponse(
   value: unknown,
 ): { success: true; data: DMResponse } | { success: false; issues: string[] } {
@@ -708,7 +770,14 @@ export function parseDmResponse(
     return { success: false, issues: ['text must be a string'] };
   if (response.options !== undefined && !isStringArray(response.options))
     return { success: false, issues: ['options must be an array of strings'] };
-  if (Array.isArray(response.options)) response.options = dedupeDmOptions(response.options);
+  if (Array.isArray(response.options)) {
+    const options = dedupeDmOptions(response.options);
+    response.options = options;
+    // #864 reopened: the same choices can also sit inside the narration text;
+    // consumers append the field to the text, so the text copy must go too.
+    if (typeof response.text === 'string')
+      response.text = stripOptionsRepeatedInText(response.text, options);
+  }
   if (!Array.isArray(response.map_actions) || !response.map_actions.every(isMapAction))
     return { success: false, issues: ['map_actions contains an invalid action'] };
   const handoutIssue = handoutActionsIssue(response.handout_actions);

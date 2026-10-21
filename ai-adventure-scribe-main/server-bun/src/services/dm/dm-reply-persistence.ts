@@ -20,7 +20,7 @@
  * the watchdog below reports on when no DM row follows.
  */
 
-import { dedupeDmOptions } from './dm-response-schema.js';
+import { dedupeDmOptions, stripOptionsRepeatedInText } from './dm-response-schema.js';
 import { suspectsFabricatedOutcome } from '../../../../shared/narration-harm.js';
 import { logger } from '../../lib/logger.js';
 
@@ -76,7 +76,6 @@ export function dmReplySkipReason(
  * followed by the lettered options, exactly as `use-ai-response` builds the early message.
  */
 export function provisionalDmText(envelope: Record<string, unknown>): string {
-  const text = String(envelope.text ?? '').trim();
   // #864: same dedupe parseDmResponse applies to the returned envelope, so a
   // provisional row that outlives its tab shows each offered choice once.
   const options = Array.isArray(envelope.options)
@@ -84,6 +83,9 @@ export function provisionalDmText(envelope: Record<string, unknown>): string {
         envelope.options.filter((option): option is string => typeof option === 'string'),
       )
     : [];
+  // #864 reopened: same text reconciliation as parseDmResponse — the choices
+  // can also sit inside the narration text this function appends them to.
+  const text = stripOptionsRepeatedInText(String(envelope.text ?? ''), options).trim();
   return options.length > 0 ? `${text}\n\n${options.join('\n')}` : text;
 }
 
