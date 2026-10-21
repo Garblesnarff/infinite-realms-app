@@ -1699,10 +1699,11 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
    * player's damage, the spider's attack and its damage) comes from `Math.random`, pinned to 0.7
    * (a d20 of 15). Fangs is `1d1 + 2`, so the spider's damage is 3, or 4 on a critical.
    *
-   * Server rows today: a keyed End turn (the player's row) and each creature action. The player's
-   * attack and death save write no server row; their engine lines are the client's (#2658 step
-   * 4 Friction), so the gate reads their results from the participant rows and, for the save,
-   * from the DM tactical fact the server records for it.
+   * Server rows today: a keyed End turn (the player's row), each creature action, and — since
+   * #974 — the player's keyed attack, whose stored row is what makes a reposted roll return
+   * its first result instead of resolving again. The player's death save still writes no
+   * server row; its engine line is the client's, so the gate reads the save's result from
+   * the participant rows and from the DM tactical fact the server records for it.
    */
   test('combat gate: attack → end turn → downed → death save → outcome', async () => {
     const restore: Array<() => void> = [];
@@ -1779,10 +1780,17 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
       });
       expect(committed.result).toMatchObject({ hit: true, totalAttackRoll: 21, finalDamage: 3 });
       expect(committed.result.npcTurns).toBeUndefined();
-      expect(committed.engineRows).toEqual([]);
+      // #974: the keyed attack stores its own row — the record a repost of this roll
+      // returns instead of resolving it again — and the response carries it.
+      const attackRows = await rows();
+      expect(attackRows).toHaveLength(1);
+      expect(attackRows[0].source).toBe('player');
+      expect(attackRows[0].text).toContain('The Scholar rolled 17 + 4 = 21 vs AC 15');
+      expect(committed.engineRows.map((row: { id: string }) => row.id)).toEqual([
+        attackRows[0].id,
+      ]);
       expect((await statusOf(scene.spiderId)).currentHp).toBe(37);
       expect((await statusOf(scene.heroId)).currentHp).toBe(3);
-      expect(await rows()).toEqual([]);
       expect(await encounterOf(scene.encounterId)).toMatchObject({
         currentRound: 1,
         currentTurnOrder: 0,
@@ -1795,14 +1803,17 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
       });
       const afterEnd = await rows();
       expect(afterEnd.map(({ text, source }) => [source, text])).toEqual([
+        ['player', attackRows[0].text],
         ['player', '⚙️ Engine: The Scholar ended their turn.'],
         [
           'npc',
           '⚙️ Engine: Vitruvian Spider rolled 15 + 5 = 20 vs AC 11 against The Scholar with Fangs — HIT. 3 piercing damage. The Scholar is now at 0 HP and is unconscious.',
         ],
       ]);
+      // This request's rows are the End turn and the spider's — the attack's row was
+      // the previous request's, and is not carried again.
       expect(ended.engineRows.map((row: { id: string }) => row.id)).toEqual(
-        afterEnd.map((row) => row.id),
+        afterEnd.slice(1).map((row) => row.id),
       );
       expect(ended.result.npcTurns.results.map((result: any) => result.action.actor_id)).toEqual([
         scene.spiderId,
@@ -1852,16 +1863,16 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
       // 5) Outcome: the spider's melee blow on the unconscious hero is an automatic critical,
       //    two more failures: three, dead, and the fight ends in defeat.
       const afterSave = await rows();
-      expect(afterSave.slice(0, 2)).toEqual(afterEnd);
-      expect(afterSave.map(({ source }) => source)).toEqual(['player', 'npc', 'npc']);
-      expect(afterSave[2].text).toBe(
+      expect(afterSave.slice(0, 3)).toEqual(afterEnd);
+      expect(afterSave.map(({ source }) => source)).toEqual(['player', 'player', 'npc', 'npc']);
+      expect(afterSave[3].text).toBe(
         [
           '⚙️ Engine: Vitruvian Spider rolled 15 and 15 (advantage, kept 15) + 5 = 20 vs AC 11 against The Scholar with Fangs — CRITICAL HIT (the target is unconscious). 4 piercing damage. The Scholar is now at 0 HP and is dead.',
           '⚙️ Engine: Vitruvian Spider strikes the unconscious The Scholar — automatic critical hit. Two death-save failures. ✕✕✕ The Scholar is DEAD.',
           '⚙️ Engine: Combat ended — the party was defeated (reason: party_defeated).',
         ].join('\n\n'),
       );
-      expect(saved.engineRows.map((row: { id: string }) => row.id)).toEqual([afterSave[2].id]);
+      expect(saved.engineRows.map((row: { id: string }) => row.id)).toEqual([afterSave[3].id]);
       expect(await statusOf(scene.heroId)).toMatchObject({
         currentHp: 0,
         isConscious: false,

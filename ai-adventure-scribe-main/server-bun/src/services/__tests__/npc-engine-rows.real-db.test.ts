@@ -17,12 +17,15 @@ import {
   campaigns,
   characters,
   characterStats,
+  characterSpellSlots,
   gameSessions,
   combatEncounters,
   combatParticipants,
   combatParticipantStatus,
   combatBossState,
+  combatDamageLog,
   dialogueHistory,
+  inventoryItems,
 } from '../../../../db/schema/index';
 import { ENEMY_HITS_PLAYER, REEVES } from '../../../../shared/test-fixtures/engine-results';
 import { parseAuthoredStatBlock } from '../combat/authored-stat-block-parser.js';
@@ -41,6 +44,26 @@ process.env.CORS_ORIGIN ??= 'http://localhost:8891';
 process.env.WORKOS_API_KEY ??= 'test-workos-key';
 process.env.WORKOS_CLIENT_ID ??= 'test-workos-client';
 process.env.NODE_ENV ??= 'test';
+// #974: a roll's first resolution can fail after its damage has landed — a later step of
+// the same resolution throws, the spent-action claim is released, and the retried roll
+// resolves a second time. The player-damage provocation write is the first step after
+// the damage itself inside the resolver, so the #974 test arms this counter to make it
+// throw once. The module's only export is this function. Unarmed, the stub answers []
+// for every call: that matches the real function for every other test in this file
+// (their damage is a creature's, for which the real function returns [] immediately),
+// and on the #974 test's own success path it also suppresses the real function's
+// provoked flip and "turns hostile" line, which no assertion here reads. Same stub
+// shape as the AoE route tests use.
+const provocationFailure = { remaining: 0 };
+mock.module('../combat/npc-provocation.js', () => ({
+  markPlayerDamageProvocation: async () => {
+    if (provocationFailure.remaining > 0) {
+      provocationFailure.remaining -= 1;
+      throw new Error('post-damage step failed (simulated by the #974 test)');
+    }
+    return [];
+  },
+}));
 const { intentRoutes } = await importWithRealDb(() => import('../../routes/v1/combat/intents.js'));
 const { writeNpcEngineRow } = await importWithRealDb(() => import('../combat/npc-engine-row.js'));
 const { CombatEncounterService } = await importWithRealDb(
@@ -825,5 +848,618 @@ describeWithDb('Boss Move window through the real database (#728)', () => {
       .where(eq(combatBossState.encounterId, fresh!.id));
     expect(row?.defyLeft).toBe(1);
     expect(row?.defyArmed).toBe(true);
+  });
+});
+
+/**
+ * #974: one Attack tray roll produced two damage resolutions (8 then 10 slashing), both
+ * dated round 1 and both counted in the Combat Summary. A roll is keyed by its actionId;
+ * the gateway already returns a stored result when a keyed intent is posted again, but a
+ * player's attack never stored one — and when the first resolution failed after its
+ * damage had landed, the spent-action claim was released, so the retried roll resolved
+ * again with a fresh damage roll. This fight is the player's own: one Scholar, one
+ * target, the identical roll body posted three times.
+ */
+describeWithDb('a keyed player attack roll resolves exactly once (#974)', () => {
+  const app = hasRealDb ? new Elysia({ prefix: '/v1/combat' }).use(intentRoutes) : null;
+  let campaignId: string, characterId: string, sessionId: string, encounterId: string;
+  let playerId: string, monsterId: string;
+  const duels: Array<{ campaignId: string; characterId: string; sessionId: string }> = [];
+  const postTo = async (targetEncounterId: string, body: unknown) => {
+    const response = await app!.handle(
+      new Request(`http://localhost/v1/combat/${targetEncounterId}/intent`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    );
+    return { status: response.status, body: (await response.json()) as Record<string, any> };
+  };
+  const postRaw = (body: unknown) => postTo(encounterId, body);
+  /** A fresh Scholar-vs-Balthazar duel in its own session, for a test that needs a
+   *  fight the first test has not already spent. */
+  const seedDuel = async (monsterHp: number) => {
+    const database = realDb();
+    const [{ id: duelCampaignId }] = await database
+      .insert(campaigns)
+      .values({ userId, name: testId('camp') })
+      .returning();
+    const [{ id: duelCharacterId }] = await database
+      .insert(characters)
+      .values({ userId, campaignId: duelCampaignId, name: 'The Scholar', class: 'Fighter', level: 1 })
+      .returning();
+    await database.insert(characterStats).values({
+      characterId: duelCharacterId,
+      strength: 16,
+      currentHitPoints: 500,
+      maxHitPoints: 500,
+      armorClass: 11,
+    });
+    await database.insert(inventoryItems).values({
+      characterId: duelCharacterId,
+      name: 'Longsword',
+      itemType: 'weapon',
+      isEquipped: true,
+    });
+    const [{ id: duelSessionId }] = await database
+      .insert(gameSessions)
+      .values({
+        campaignId: duelCampaignId,
+        characterId: duelCharacterId,
+        sessionNumber: 1,
+        status: 'active',
+      })
+      .returning();
+    const [{ id: duelEncounterId }] = await database
+      .insert(combatEncounters)
+      .values({
+        sessionId: duelSessionId,
+        status: 'active',
+        currentRound: 1,
+        currentTurnOrder: 0,
+        version: 1,
+      })
+      .returning();
+    const monsterAttack = resolveMonsterAttackProfile({
+      authored: {
+        attackName: 'Strike',
+        attackBonus: 20,
+        damageDice: '1d1 + 2',
+        damageType: 'slashing',
+      },
+    });
+    const participants = await database
+      .insert(combatParticipants)
+      .values([
+        {
+          encounterId: duelEncounterId,
+          characterId: duelCharacterId,
+          name: 'The Scholar',
+          participantType: 'player',
+          turnOrder: 0,
+          initiative: 20,
+          armorClass: 11,
+          maxHp: 500,
+          speed: 30,
+        },
+        {
+          encounterId: duelEncounterId,
+          name: 'Balthazar',
+          participantType: 'monster',
+          turnOrder: 1,
+          initiative: 10,
+          armorClass: 11,
+          maxHp: monsterHp,
+          speed: 30,
+          monsterAttack,
+        },
+      ])
+      .returning();
+    await database.insert(combatParticipantStatus).values(
+      participants.map((participant) => ({
+        participantId: participant.id,
+        currentHp: participant.maxHp,
+        maxHp: participant.maxHp,
+        isConscious: true,
+      })),
+    );
+    duels.push({
+      campaignId: duelCampaignId,
+      characterId: duelCharacterId,
+      sessionId: duelSessionId,
+    });
+    return {
+      sessionId: duelSessionId,
+      encounterId: duelEncounterId,
+      playerId: participants[0].id,
+      monsterId: participants[1].id,
+    };
+  };
+  const damageRowsOf = (targetEncounterId: string, targetId: string) =>
+    realDb()
+      .select()
+      .from(combatDamageLog)
+      .where(
+        and(
+          eq(combatDamageLog.encounterId, targetEncounterId),
+          eq(combatDamageLog.participantId, targetId),
+        ),
+      );
+  const keyedRowsOf = async (targetSessionId: string, rollId: string) =>
+    (
+      await realDb()
+        .select()
+        .from(dialogueHistory)
+        .where(eq(dialogueHistory.sessionId, targetSessionId))
+    ).filter((row) => (row.context as { actionId?: string } | null)?.actionId === rollId);
+  const hpOf = async (participantId: string) => {
+    const [row] = await realDb()
+      .select()
+      .from(combatParticipantStatus)
+      .where(eq(combatParticipantStatus.participantId, participantId));
+    return row.currentHp;
+  };
+  beforeAll(async () => {
+    const database = realDb();
+    [{ id: campaignId }] = await database
+      .insert(campaigns)
+      .values({ userId, name: testId('camp') })
+      .returning();
+    [{ id: characterId }] = await database
+      .insert(characters)
+      .values({ userId, campaignId, name: 'The Scholar', class: 'Fighter', level: 1 })
+      .returning();
+    await database.insert(characterStats).values({
+      characterId,
+      strength: 16,
+      currentHitPoints: 500,
+      maxHitPoints: 500,
+      armorClass: 11,
+    });
+    // The equipped weapon is an inventory row, exactly as the sheet writes it; the attack
+    // grounds to it through the SRD catalog (Longsword, 1d8 slashing).
+    await database.insert(inventoryItems).values({
+      characterId,
+      name: 'Longsword',
+      itemType: 'weapon',
+      isEquipped: true,
+    });
+    [{ id: sessionId }] = await database
+      .insert(gameSessions)
+      .values({ campaignId, characterId, sessionNumber: 1, status: 'active' })
+      .returning();
+    [{ id: encounterId }] = await database
+      .insert(combatEncounters)
+      .values({ sessionId, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
+      .returning();
+    // Real producer: resolveMonsterAttackProfile, as in the fixtures above.
+    const monsterAttack = resolveMonsterAttackProfile({
+      authored: {
+        attackName: 'Strike',
+        attackBonus: 20,
+        damageDice: '1d1 + 2',
+        damageType: 'slashing',
+      },
+    });
+    const participants = await database
+      .insert(combatParticipants)
+      .values([
+        {
+          encounterId,
+          characterId,
+          name: 'The Scholar',
+          participantType: 'player',
+          turnOrder: 0,
+          initiative: 20,
+          armorClass: 11,
+          maxHp: 500,
+          speed: 30,
+        },
+        {
+          encounterId,
+          name: 'Balthazar',
+          participantType: 'monster',
+          turnOrder: 1,
+          initiative: 10,
+          armorClass: 11,
+          maxHp: 50,
+          speed: 30,
+          monsterAttack,
+        },
+      ])
+      .returning();
+    playerId = participants[0].id;
+    monsterId = participants[1].id;
+    await database.insert(combatParticipantStatus).values(
+      participants.map((participant) => ({
+        participantId: participant.id,
+        currentHp: participant.maxHp,
+        maxHp: participant.maxHp,
+        isConscious: true,
+      })),
+    );
+  });
+  afterAll(async () => {
+    const database = realDb();
+    await database.delete(gameSessions).where(eq(gameSessions.id, sessionId));
+    await database.delete(characters).where(eq(characters.id, characterId));
+    await database.delete(campaigns).where(eq(campaigns.id, campaignId));
+    for (const duel of duels) {
+      await database.delete(gameSessions).where(eq(gameSessions.id, duel.sessionId));
+      await database.delete(characters).where(eq(characters.id, duel.characterId));
+      await database.delete(campaigns).where(eq(campaigns.id, duel.campaignId));
+    }
+  });
+
+  test('the same roll reposted after a post-damage failure, and again after success, lands one damage event', async () => {
+    const rollId = testId('tray-roll');
+    const body = {
+      source: 'dm',
+      intent: { type: 'attack', actorId: playerId, targetId: monsterId, actionId: rollId, d20: 14 },
+    };
+    // The first post's damage lands, then a later step of the same resolution fails —
+    // the failure that used to release the claim and invite the re-resolve. The armed
+    // attempt answers an error on both builds: on the broken build it strands the
+    // landed damage behind the released claim; on the fixed build the whole attempt
+    // rolls back and nothing landed, so the repost below is the first resolution.
+    provocationFailure.remaining = 1;
+    const first = await postRaw(body);
+    expect(first.status).toBe(500);
+    const resolved = await postRaw(body);
+    expect(resolved.status).toBe(200);
+
+    const database = realDb();
+    const damageRows = await damageRowsOf(encounterId, monsterId);
+    expect(damageRows).toHaveLength(1);
+    expect(await hpOf(monsterId)).toBe(50 - damageRows[0].damageAmount);
+    expect(resolved.body.result.finalDamage).toBe(damageRows[0].damageAmount);
+    // The one resolution spent the action and bumped the encounter version once.
+    const [afterResolve] = await database
+      .select()
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, encounterId));
+    expect(afterResolve.version).toBe(2);
+    const [actorAfter] = await database
+      .select()
+      .from(combatParticipants)
+      .where(eq(combatParticipants.id, playerId));
+    expect(actorAfter.actionUsed).toBe(true);
+
+    // A further duplicate of the same roll returns the first result and writes nothing.
+    const replayed = await postRaw(body);
+    expect(replayed.status).toBe(200);
+    // The first result itself, not a re-render of it: identical apart from the row
+    // payload the first response carried and the replay omits.
+    const firstResult = { ...resolved.body.result };
+    delete firstResult.engineRows;
+    delete firstResult.sessionId;
+    expect(replayed.body.result).toEqual({ ...firstResult, engineRows: [] });
+    expect(replayed.body.engineRows).toEqual([]);
+    expect(await damageRowsOf(encounterId, monsterId)).toEqual(damageRows);
+    const [afterReplay] = await database
+      .select()
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, encounterId));
+    expect(afterReplay.version).toBe(2);
+    expect(await keyedRowsOf(sessionId, rollId)).toHaveLength(1);
+    const sessionRows = await database
+      .select()
+      .from(dialogueHistory)
+      .where(eq(dialogueHistory.sessionId, sessionId));
+    expect(sessionRows).toHaveLength(1);
+  });
+
+  test('two posts of the same roll in flight at once resolve it once', async () => {
+    const duel = await seedDuel(50);
+    const rollId = testId('tray-roll-race');
+    const body = {
+      source: 'dm',
+      intent: {
+        type: 'attack',
+        actorId: duel.playerId,
+        targetId: duel.monsterId,
+        actionId: rollId,
+        d20: 14,
+      },
+    };
+    const [a, b] = await Promise.all([
+      postTo(duel.encounterId, body),
+      postTo(duel.encounterId, body),
+    ]);
+    expect(a.status).toBe(200);
+    expect(b.status).toBe(200);
+    const damageRows = await damageRowsOf(duel.encounterId, duel.monsterId);
+    expect(damageRows).toHaveLength(1);
+    expect(await hpOf(duel.monsterId)).toBe(50 - damageRows[0].damageAmount);
+    // One response is the resolution, the other the replay of it: same damage, and
+    // exactly one of them carries the stored row.
+    expect(a.body.result.finalDamage).toBe(damageRows[0].damageAmount);
+    expect(b.body.result.finalDamage).toBe(damageRows[0].damageAmount);
+    expect([a, b].filter((response) => response.body.engineRows.length === 1)).toHaveLength(1);
+    expect([a, b].filter((response) => response.body.engineRows.length === 0)).toHaveLength(1);
+    expect(await keyedRowsOf(duel.sessionId, rollId)).toHaveLength(1);
+  });
+
+  test('a keyed killing blow lands once, concludes the fight, and replays after conclusion', async () => {
+    const duel = await seedDuel(4);
+    const rollId = testId('tray-roll-kill');
+    const body = {
+      source: 'dm',
+      intent: {
+        type: 'attack',
+        actorId: duel.playerId,
+        targetId: duel.monsterId,
+        actionId: rollId,
+        d20: 14,
+      },
+    };
+    const blown = await postTo(duel.encounterId, body);
+    expect(blown.status).toBe(200);
+    const database = realDb();
+    const [encounter] = await database
+      .select()
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, duel.encounterId));
+    expect(encounter.status).toBe('completed');
+    const damageRows = await damageRowsOf(duel.encounterId, duel.monsterId);
+    expect(damageRows).toHaveLength(1);
+    expect(await hpOf(duel.monsterId)).toBe(0);
+    expect(blown.body.result.finalDamage).toBe(damageRows[0].damageAmount);
+    // The actor's row is stored before the victory notice that follows it (#570):
+    // both rows exist, and the notice's timestamp does not precede the blow's
+    // (createdAt is millisecond-resolution, so an exact order can tie).
+    const rows = await database
+      .select()
+      .from(dialogueHistory)
+      .where(eq(dialogueHistory.sessionId, duel.sessionId));
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+    const blowRow = rows.find(
+      (row) => (row.context as { actionId?: string }).actionId === rollId,
+    );
+    const victoryRow = rows.find((row) => row.message.includes('Victory'));
+    expect(blowRow).toBeDefined();
+    expect(victoryRow).toBeDefined();
+    expect(victoryRow!.createdAt?.getTime() ?? 0).toBeGreaterThanOrEqual(
+      blowRow!.createdAt?.getTime() ?? 0,
+    );
+
+    // A duplicate of the killing roll, posted after the fight ended, returns the
+    // stored blow — not the concluded-encounter marker and not a second resolution.
+    const replayed = await postTo(duel.encounterId, body);
+    expect(replayed.status).toBe(200);
+    expect(replayed.body.result.finalDamage).toBe(damageRows[0].damageAmount);
+    expect(replayed.body.result.encounterAlreadyConcluded).toBeUndefined();
+    expect(replayed.body.engineRows).toEqual([]);
+    expect(await damageRowsOf(duel.encounterId, duel.monsterId)).toEqual(damageRows);
+    expect(
+      await database
+        .select()
+        .from(dialogueHistory)
+        .where(eq(dialogueHistory.sessionId, duel.sessionId)),
+    ).toHaveLength(rows.length);
+  });
+
+  test('a keyed killing blow whose row write fails rolls back whole; the same roll then lands it once', async () => {
+    const duel = await seedDuel(4);
+    const rollId = testId('tray-roll-kill-retry');
+    const body = {
+      source: 'dm',
+      intent: {
+        type: 'attack',
+        actorId: duel.playerId,
+        targetId: duel.monsterId,
+        actionId: rollId,
+        d20: 14,
+      },
+    };
+    // Fail only the write of this roll's own engine row: the blow, the ending and the
+    // award are one transaction for a keyed action, so the whole attempt must roll
+    // back and the retry of the same roll must land it — exactly once.
+    const original = SessionMessageService.addMessages.bind(SessionMessageService);
+    let armed = true;
+    const failKeyedRow = spyOn(SessionMessageService, 'addMessages').mockImplementation(
+      (async (messages: Array<{ context?: Record<string, unknown> }>, userId: string) => {
+        if (
+          armed &&
+          messages.some((message) => message.context?.actionId === rollId)
+        ) {
+          armed = false;
+          throw new Error('engine row insert failed (simulated by the #974 test)');
+        }
+        return original(messages as never, userId);
+      }) as never,
+    );
+    const failed = await postTo(duel.encounterId, body);
+    failKeyedRow.mockRestore();
+    expect(failed.status).toBe(500);
+    const database = realDb();
+    const [duringFailure] = await database
+      .select()
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, duel.encounterId));
+    expect(duringFailure.status).toBe('active');
+    expect(await hpOf(duel.monsterId)).toBe(4);
+    expect(await damageRowsOf(duel.encounterId, duel.monsterId)).toHaveLength(0);
+    expect(await keyedRowsOf(duel.sessionId, rollId)).toHaveLength(0);
+
+    const landed = await postTo(duel.encounterId, body);
+    expect(landed.status).toBe(200);
+    const [afterRetry] = await database
+      .select()
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, duel.encounterId));
+    expect(afterRetry.status).toBe('completed');
+    expect(await damageRowsOf(duel.encounterId, duel.monsterId)).toHaveLength(1);
+    expect(await hpOf(duel.monsterId)).toBe(0);
+    expect(await keyedRowsOf(duel.sessionId, rollId)).toHaveLength(1);
+  });
+
+  test('a keyed multi-target spell resolves once: per-target damage, one slot, duplicate replays whole', async () => {
+    const database = realDb();
+    const [{ id: wizCampaignId }] = await database
+      .insert(campaigns)
+      .values({ userId, name: testId('camp') })
+      .returning();
+    const [{ id: wizCharacterId }] = await database
+      .insert(characters)
+      .values({
+        userId,
+        campaignId: wizCampaignId,
+        name: 'The Wizard',
+        class: 'Wizard',
+        level: 1,
+        knownSpells: 'Burning Hands',
+      })
+      .returning();
+    await database.insert(characterStats).values({
+      characterId: wizCharacterId,
+      intelligence: 16,
+      currentHitPoints: 30,
+      maxHitPoints: 30,
+      armorClass: 12,
+    });
+    // The slot row the sheet writes (dm-reply-reconcile's slot-wizard shape).
+    await database.insert(characterSpellSlots).values({
+      characterId: wizCharacterId,
+      spellLevel: 1,
+      totalSlots: 2,
+      usedSlots: 0,
+    });
+    const [{ id: wizSessionId }] = await database
+      .insert(gameSessions)
+      .values({
+        campaignId: wizCampaignId,
+        characterId: wizCharacterId,
+        sessionNumber: 1,
+        status: 'active',
+      })
+      .returning();
+    const [{ id: wizEncounterId }] = await database
+      .insert(combatEncounters)
+      .values({
+        sessionId: wizSessionId,
+        status: 'active',
+        currentRound: 1,
+        currentTurnOrder: 0,
+        version: 1,
+      })
+      .returning();
+    const monsterAttack = resolveMonsterAttackProfile({
+      authored: {
+        attackName: 'Strike',
+        attackBonus: 20,
+        damageDice: '1d1 + 2',
+        damageType: 'slashing',
+      },
+    });
+    const participants = await database
+      .insert(combatParticipants)
+      .values([
+        {
+          encounterId: wizEncounterId,
+          characterId: wizCharacterId,
+          name: 'The Wizard',
+          participantType: 'player',
+          turnOrder: 0,
+          initiative: 20,
+          armorClass: 12,
+          maxHp: 30,
+          speed: 30,
+        },
+        {
+          encounterId: wizEncounterId,
+          name: 'First Acolyte',
+          participantType: 'monster',
+          turnOrder: 1,
+          initiative: 10,
+          armorClass: 11,
+          maxHp: 30,
+          speed: 30,
+          monsterAttack,
+        },
+        {
+          encounterId: wizEncounterId,
+          name: 'Second Acolyte',
+          participantType: 'monster',
+          turnOrder: 2,
+          initiative: 5,
+          armorClass: 11,
+          maxHp: 30,
+          speed: 30,
+          monsterAttack,
+        },
+      ])
+      .returning();
+    await database.insert(combatParticipantStatus).values(
+      participants.map((participant) => ({
+        participantId: participant.id,
+        currentHp: participant.maxHp,
+        maxHp: participant.maxHp,
+        isConscious: true,
+      })),
+    );
+    duels.push({
+      campaignId: wizCampaignId,
+      characterId: wizCharacterId,
+      sessionId: wizSessionId,
+    });
+    const wizardId = participants[0].id;
+    const targetIds = [participants[1].id, participants[2].id];
+    const usedSlots = async () => {
+      const [row] = await realDb()
+        .select()
+        .from(characterSpellSlots)
+        .where(eq(characterSpellSlots.characterId, wizCharacterId));
+      return row.usedSlots;
+    };
+
+    const rollId = testId('tray-roll-spell');
+    const body = {
+      source: 'dm',
+      intent: {
+        type: 'spell',
+        actorId: wizardId,
+        targetIds,
+        spellName: 'Burning Hands',
+        slotLevel: 1,
+        actionId: rollId,
+      },
+    };
+    const cast = await postTo(wizEncounterId, body);
+    expect(cast.status).toBe(200);
+    // Per-target results align with targetIds by index (the resolver's result
+    // objects carry finalDamage and targetNewHp, not the target's id).
+    const results = cast.body.result.results as Array<{
+      finalDamage: number;
+      targetNewHp: number;
+    }>;
+    expect(results).toHaveLength(2);
+    const allDamage = await database
+      .select()
+      .from(combatDamageLog)
+      .where(eq(combatDamageLog.encounterId, wizEncounterId));
+    expect(allDamage).toHaveLength(2);
+    for (const [index, targetId] of targetIds.entries()) {
+      const [row] = allDamage.filter((entry) => entry.participantId === targetId);
+      expect(await hpOf(targetId)).toBe(30 - row.damageAmount);
+      expect(results[index].finalDamage).toBe(row.damageAmount);
+      expect(results[index].targetNewHp).toBe(30 - row.damageAmount);
+    }
+    expect(await usedSlots()).toBe(1);
+    expect(await keyedRowsOf(wizSessionId, rollId)).toHaveLength(1);
+
+    // The duplicate returns the first cast whole and spends nothing again.
+    const replayed = await postTo(wizEncounterId, body);
+    expect(replayed.status).toBe(200);
+    expect(replayed.body.result.results).toEqual(results);
+    expect(replayed.body.engineRows).toEqual([]);
+    expect(
+      await database
+        .select()
+        .from(combatDamageLog)
+        .where(eq(combatDamageLog.encounterId, wizEncounterId)),
+    ).toEqual(allDamage);
+    expect(await usedSlots()).toBe(1);
+    expect(await keyedRowsOf(wizSessionId, rollId)).toHaveLength(1);
   });
 });
