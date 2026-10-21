@@ -432,6 +432,44 @@ export function formatCombatActionParts(
     }
   }
 
+  // #975: the Fighter features carry their numbers in the result, so their engine
+  // lines name them (the heal and the new HP; the extra action) instead of the bare
+  // verb the map below gives the resource-free actions.
+  if (action.action_type === 'second_wind' && isFiniteNumber(value.healed)) {
+    const actor = facingName(undefined, action.actor_id, roster);
+    const hpSuffix =
+      isFiniteNumber(value.newHp) && isFiniteNumber(value.maxHp)
+        ? ` (HP ${value.newHp}/${value.maxHp})`
+        : '';
+    const line = `⚙️ Engine: ${actor} used Second Wind and regained ${value.healed} HP${hpSuffix}.`;
+    return [
+      {
+        line,
+        card: {
+          kind: 'move',
+          side: engineCardSide(action.actor_id, roster, false),
+          line,
+          title: `${actor} uses Second Wind`,
+        },
+      },
+    ];
+  }
+  if (action.action_type === 'action_surge') {
+    const actor = facingName(undefined, action.actor_id, roster);
+    const line = `⚙️ Engine: ${actor} used Action Surge — one additional action this turn.`;
+    return [
+      {
+        line,
+        card: {
+          kind: 'move',
+          side: engineCardSide(action.actor_id, roster, false),
+          line,
+          title: `${actor} uses Action Surge`,
+        },
+      },
+    ];
+  }
+
   const verb: Record<string, string> = {
     dash: 'dashed',
     dodge: 'dodged',

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { buildNpcEngineMessage } from '../../../../shared/npc-engine-message';
 import { DEATH_SAVE_FAILED } from '../../../../shared/test-fixtures/engine-results';
 import {
+  formatCombatActionParts,
   formatCombatEndLine,
   formatCombatEngineOutcome,
   formatRefusedSpellOutcome,
@@ -416,6 +417,35 @@ describe('why a hit is critical (#2640)', () => {
   });
 });
 
+describe('fighter feature engine lines (#975)', () => {
+  it('Second Wind names the healed amount and the new HP', () => {
+    const parts = formatCombatActionParts(
+      { actor_id: 'ghorza', action_type: 'second_wind', target_ids: [] },
+      {
+        applied: true,
+        action: 'second_wind',
+        roll: 7,
+        healed: 8,
+        newHp: 9,
+        maxHp: 12,
+        usesRemaining: 0,
+      },
+      [{ id: 'ghorza', name: 'Ghorza' }],
+    );
+    expect(parts).toHaveLength(1);
+    expect(parts[0].line).toContain('used Second Wind and regained 8 HP (HP 9/12)');
+  });
+
+  it('Action Surge names the additional action this turn', () => {
+    const parts = formatCombatActionParts(
+      { actor_id: 'ghorza', action_type: 'action_surge', target_ids: [] },
+      { applied: true, action: 'action_surge', usesRemaining: 0, extraActionArmed: false },
+      [{ id: 'ghorza', name: 'Ghorza' }],
+    );
+    expect(parts).toHaveLength(1);
+    expect(parts[0].line).toContain('used Action Surge — one additional action this turn');
+  });
+});
 describe('combat end line player text (#976)', () => {
   // Every member of the CombatEndReason union (server-bun/src/types/combat.ts),
   // plus death_save_failed — a legacy formatter entry no current producer emits

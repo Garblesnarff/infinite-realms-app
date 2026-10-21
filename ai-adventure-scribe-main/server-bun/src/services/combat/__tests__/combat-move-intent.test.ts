@@ -276,6 +276,11 @@ mock.module('../data-access.js', () => ({
   }),
   getActiveConditionNames: async () => [],
   listCarriedWeaponProfiles: async () => [],
+  // #975: the intent service now reaches hp-data-access (through the fighter
+  // features' heal), which imports this name from data-access; the mock must
+  // provide it or the module graph fails to load — the same entry the
+  // legal-actions suite's mock carries.
+  verifyEncounterAccess: async () => {},
   listEquippedWeaponProfiles: async () => [
     {
       id: 'quarterstaff',

@@ -1015,6 +1015,14 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       }
     }
     if (execution.boundary === 'combat_ended') return 'combat_ended';
+    // #975: neither Fighter feature ends the turn. Second Wind spends only the bonus
+    // action; Action Surge's whole point is another action THIS turn. Settling either
+    // across the boundary would advance NPC turns on a turn the player still owns.
+    if (
+      (action.action_type === 'second_wind' || action.action_type === 'action_surge') &&
+      isPlayerActor(action.actor_id, participants)
+    )
+      return null;
     // A melee declaration can spend movement without resolving an attack. The engine leaves
     // Action unused in this movement-only result, so keep the player on the same turn and let
     // the refreshed legal-action menu offer the strike again instead of advancing NPC turns.
@@ -1606,9 +1614,21 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
             String(refusedPlayerActions[0].refusalReason ?? ''),
           );
   const refusedText = `${narratedText}\n\n${notice}`.trim();
+  // #975 (strategist check): a refused fighter feature otherwise exists only
+  // inside this reply text, and the in-combat reply is not persisted — a
+  // player who reloads sees nothing, and nothing on screen says the feature
+  // was refused until engine lines for something else arrive. The handler
+  // turns these into a persisted system line of their own.
+  const refusedFighterFeatures = refusedPlayerActions
+    .filter((refusal) => refusal.action === 'second_wind' || refusal.action === 'action_surge')
+    .map((refusal) => ({
+      actionType: String(refusal.action),
+      reason: String(refusal.playerFacingReason ?? refusal.engineRefusal ?? ''),
+    }));
   return {
     ...narration,
     combatEngineBlocks: orderedEngineBlocks,
+    ...(refusedFighterFeatures.length ? { refusedFighterFeatures } : {}),
     text:
       playerTurn && !encounterAlreadyConcluded
         ? ensurePlayerTurnHandoff(refusedText, playerName)

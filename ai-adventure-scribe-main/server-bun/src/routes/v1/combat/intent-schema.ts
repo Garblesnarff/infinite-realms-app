@@ -120,12 +120,24 @@ const checkFields = {
   d20: t.Optional(t.Number({ minimum: 1, maximum: 20 })),
 };
 
+/**
+ * The Fighter's short-rest features (#975): Second Wind (a bonus action) and Action
+ * Surge (one additional action this turn). Both spend a tracked use on the sheet, so
+ * they are versioned like the other mutating intents.
+ */
+const fighterFeatureFields = {
+  type: t.Union([t.Literal('second_wind'), t.Literal('action_surge')]),
+  actorId: participantId,
+  actionId,
+};
+
 const playerCombatIntentSchema = t.Union([
   ...unversionedIntentVariants,
   t.Object({ ...attackFields, expectedVersion }),
   t.Object({ ...spellFields, expectedVersion }),
   t.Object({ ...checkFields, expectedVersion }),
   t.Object({ ...defensiveFields, expectedVersion }),
+  t.Object({ ...fighterFeatureFields, expectedVersion }),
 ]);
 
 /**
@@ -142,6 +154,7 @@ const dmCombatIntentSchema = t.Union([
   t.Object({ ...spellFields, expectedVersion: t.Optional(expectedVersion) }),
   t.Object({ ...checkFields, expectedVersion: t.Optional(expectedVersion) }),
   t.Object({ ...defensiveFields, expectedVersion: t.Optional(expectedVersion) }),
+  t.Object({ ...fighterFeatureFields, expectedVersion: t.Optional(expectedVersion) }),
 ]);
 
 /**

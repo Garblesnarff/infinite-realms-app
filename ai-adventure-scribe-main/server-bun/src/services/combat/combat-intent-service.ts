@@ -43,9 +43,17 @@ import { resolveAttackRules, type WeaponRuleProfile } from './combat-rules.js';
 import { publishCombatState } from './combat-sync-service.js';
 import {
   claimTurnActionAndResolve,
+  claimTurnBonusActionAndResolve,
   claimTurnVersion,
   setDefensiveAction,
 } from './combat-turn-resources.js';
+import {
+  fighterFeatureUses,
+  resolveActionSurge,
+  resolveSecondWind,
+  type ActionSurgeResult,
+  type SecondWindResult,
+} from './fighter-features-service.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import {
   hasLeftTheBoard,
@@ -142,7 +150,13 @@ export type CombatIntent =
    * The death saving throw a dying player owes at the start of their turn. `d20` is the die the
    * player rolled in the roll prompt; absent, the engine rolls it (the prompt's auto-roll).
    */
-  | { type: 'death_save'; actorId: string; d20?: number };
+  | { type: 'death_save'; actorId: string; d20?: number }
+  /**
+   * The Fighter's short-rest features (#975). Second Wind costs the bonus action and heals;
+   * Action Surge costs no action itself and grants one additional action this turn. Both
+   * spend the tracked use on the character's sheet.
+   */
+  | { type: 'second_wind' | 'action_surge'; actorId: string; expectedVersion: number };
 
 export type CombatActionSource = 'player' | 'dm';
 
@@ -175,6 +189,10 @@ const PLAYER_ORIGIN_GUARDED_TYPES = new Set([
   'death_save',
   'flee',
   'yield',
+  // #975: a feature spend is the player's own resource; a DM- or repair-produced
+  // declaration must not burn it without the player's input, like any other action.
+  'second_wind',
+  'action_surge',
 ]);
 
 /**
@@ -241,6 +259,8 @@ const VERSIONED_INTENT_TYPES = new Set([
   'disengage',
   'flee',
   'yield',
+  'second_wind',
+  'action_surge',
 ]);
 
 /**
@@ -475,6 +495,33 @@ async function recordDiscreteActionFact(
   const map = await loadActiveTacticalMap(sessionId);
   const pastTense = kind === 'dash' ? 'dashed' : kind === 'dodge' ? 'dodged' : 'disengaged';
   await recordDmTacticalFact(sessionId, `${label} ${pastTense}.`, {
+    kind,
+    actorSlug: engineSlugForParticipant(map, actorId, label),
+    actorIsPlayer: participant?.participantType === 'player',
+  });
+}
+
+/**
+ * The engine fact for a resolved Fighter feature (#975), sibling to the discrete-action
+ * fact above: without it the DM has nothing to narrate for a Second Wind but its own
+ * invention, and an Action Surge it was never told about reads as a second action out of
+ * nowhere.
+ */
+async function recordFeatureActionFact(
+  sessionId: string,
+  state: CombatState,
+  actorId: string,
+  kind: 'second_wind' | 'action_surge',
+  result: SecondWindResult | ActionSurgeResult,
+): Promise<void> {
+  const participant = state.participants.find((p) => p.id === actorId);
+  const label = facingName(participant?.name, actorId, rosterFrom(state.participants));
+  const map = await loadActiveTacticalMap(sessionId);
+  const fact =
+    kind === 'second_wind'
+      ? `${label} used Second Wind and regained ${(result as SecondWindResult).healed} HP.`
+      : `${label} used Action Surge and has one additional action this turn.`;
+  await recordDmTacticalFact(sessionId, fact, {
     kind,
     actorSlug: engineSlugForParticipant(map, actorId, label),
     actorIsPlayer: participant?.participantType === 'player',
@@ -1594,6 +1641,67 @@ export async function executeCombatIntent(
         expectedVersion: intent.expectedVersion,
         userId,
       });
+    } else if (intent.type === 'second_wind') {
+      // #975: Second Wind is a bonus action. The claim wraps the resolution, so a
+      // refusal inside (no feature on the sheet, no uses left, already at full
+      // health) refunds the bonus action and the turn is untouched.
+      const actorCharacterId = (actor as unknown as { characterId?: string | null }).characterId;
+      result = await claimTurnBonusActionAndResolve(
+        intent.actorId,
+        encounterId,
+        intent.expectedVersion,
+        async () => {
+          if (!actorCharacterId) {
+            throw new BusinessLogicError('Second Wind is not on this character\'s sheet', {
+              reason: 'feature_not_on_sheet',
+              featureName: 'Second Wind',
+            });
+          }
+          return resolveSecondWind({
+            characterId: actorCharacterId,
+            userId,
+            participantId: intent.actorId,
+            encounterId,
+            sessionId: encounter.sessionId,
+          });
+        },
+      );
+      await recordFeatureActionFact(
+        encounter.sessionId,
+        state,
+        intent.actorId,
+        'second_wind',
+        result as SecondWindResult,
+      );
+    } else if (intent.type === 'action_surge') {
+      // #975: Action Surge costs no action itself — it grants one — so it claims
+      // only the encounter version, like flee/yield. The resolver spends the
+      // tracked use, then refunds a spent action or arms the extra action for
+      // the claim that follows (see combat-turn-resources).
+      const actorCharacterId = (actor as unknown as { characterId?: string | null }).characterId;
+      await claimTurnVersion(intent.actorId, encounterId, intent.expectedVersion);
+      if (!actorCharacterId) {
+        throw new BusinessLogicError('Action Surge is not on this character\'s sheet', {
+          reason: 'feature_not_on_sheet',
+          featureName: 'Action Surge',
+        });
+      }
+      result = await resolveActionSurge({
+        characterId: actorCharacterId,
+        userId,
+        participantId: intent.actorId,
+        encounterId,
+        sessionId: encounter.sessionId,
+        round: encounter.currentRound,
+        actionUsed: (actor as unknown as TurnResourceView).actionUsed === true,
+      });
+      await recordFeatureActionFact(
+        encounter.sessionId,
+        state,
+        intent.actorId,
+        'action_surge',
+        result as ActionSurgeResult,
+      );
     } else if (intent.type === 'death_save') {
       // The dying player's whole turn: one save, rolled by the player (or auto-rolled by the
       // prompt's timer), then the turn ends. It runs before the board moves so the result and
@@ -1819,6 +1927,8 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
     bonusActionUsed?: boolean;
     characterId?: string | null;
     encounterId: string;
+    maxHp?: number;
+    status?: { currentHp?: number };
   };
   if (!actor) throw new NotFoundError('Current combat participant', encounterId);
   // A dying player's turn offers one thing: the death saving throw. No attack, move or spell.
@@ -1935,6 +2045,27 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
       { type: 'dodge', label: 'Dodge' },
       { type: 'disengage', label: 'Disengage' },
     );
+  }
+  // #975: the Fighter's short-rest features, offered while a use remains on the sheet.
+  // Second Wind is a bonus action, so it is gated on that resource and not on the Action;
+  // Action Surge exists for the turn whose Action is already spent, so it is gated on
+  // neither — only on the use itself. Second Wind is also gated on being hurt: the
+  // resolver refuses at full health (before spending anything), and a chip that can
+  // only produce a refusal in the fighter's most common state is a trap, not an
+  // option. HP is read the way vitalStateOf reads it (status first, maxHp fallback).
+  if (actor.participantType === 'player' && actor.characterId) {
+    const uses = await fighterFeatureUses(actor.characterId);
+    const actorCurrentHp = actor.status?.currentHp ?? actor.maxHp ?? 0;
+    if (
+      !actor.bonusActionUsed &&
+      (uses.secondWind ?? 0) > 0 &&
+      actorCurrentHp < (actor.maxHp ?? 0)
+    ) {
+      actions.push({ type: 'second_wind', label: 'Second Wind' });
+    }
+    if ((uses.actionSurge ?? 0) > 0) {
+      actions.push({ type: 'action_surge', label: 'Action Surge' });
+    }
   }
   // #2580: the way out of a fight the end guard would otherwise hold open. Offered outside the
   // Action gate on purpose — a player whose Action is already spent is exactly the player stuck

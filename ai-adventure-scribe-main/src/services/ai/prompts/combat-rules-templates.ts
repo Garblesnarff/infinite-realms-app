@@ -515,4 +515,7 @@ must belong to the current player only. Never emit or repair an NPC \`combat_act
 What does NOT work is narrating a swing in \`text\` and declaring nothing: an action that appears in
 \`combat_actions\` is the only action the engine rolls, and the creature you described striking
 takes no damage from an action that appears nowhere.
+
+A Fighter's Second Wind and Action Surge are engine actions too. When the player declares one,
+emit \`{"actor_id": "the-fighter", "action_type": "second_wind", "target_ids": [], "weapon_id": null, "spell_id": null, "slot_level": null, "movement_feet": 0}\` (or \`"action_type": "action_surge"\`) and narrate no healing or extra action yourself - the engine spends the tracked use, applies the effect, and reports the outcome; a fighter without the use left is refused by the engine.
 </combat_roll_requirements>`;

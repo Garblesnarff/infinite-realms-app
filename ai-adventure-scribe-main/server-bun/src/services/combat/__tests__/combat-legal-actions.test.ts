@@ -153,12 +153,37 @@ mock.module('../data-access.js', () => ({
   verifyEncounterAccess: async () => {},
 }));
 
+/**
+ * #975: the Fighter features' tracked uses live behind `fighterFeatureUses`
+ * (a sheet read). The legal-action computation is what this suite pins, so the
+ * read is stubbed at its module boundary — a mutable holder, defaulting to "no
+ * feature rows on the sheet", which is what every pre-#975 actor reads as. The
+ * end-to-end behaviour (real rows, spends, refusals) is pinned against a real
+ * database in encounter-lifecycle.real-db.test.ts.
+ */
+let featureUses: { secondWind: number | null; actionSurge: number | null } = {
+  secondWind: null,
+  actionSurge: null,
+};
+mock.module('../fighter-features-service.js', () => ({
+  fighterFeatureUses: async () => featureUses,
+  resolveSecondWind: async () => {
+    throw new Error('resolveSecondWind is not under test in this suite');
+  },
+  resolveActionSurge: async () => {
+    throw new Error('resolveActionSurge is not under test in this suite');
+  },
+}));
+
 const { getLegalCombatActions } = await import('../combat-intent-service.js');
 
 describe('getLegalCombatActions', () => {
   afterEach(() => {
     profile = NO_SPELLS;
     player.actionUsed = false;
+    player.bonusActionUsed = false;
+    player.status.currentHp = 20;
+    featureUses = { secondWind: null, actionSurge: null };
     monster.isActive = true;
     equippedWeapons = [
       {
@@ -426,6 +451,36 @@ describe('getLegalCombatActions', () => {
     const result = await getLegalCombatActions('encounter-1', 'user-1');
 
     expect(result.actions.some((action) => action.type === 'spell')).toBe(false);
+  });
+
+  // #975: the Fighter chips ride the same list. Second Wind is offered only
+  // while it can resolve (a use remains, the bonus action is free, the fighter
+  // is hurt — at full health the resolver refuses, so the chip is not shown);
+  // Action Surge is offered while a use remains, spent Action or not.
+  test('offers Second Wind only when hurt with the bonus action free; Action Surge while a use remains (#975)', async () => {
+    featureUses = { secondWind: 1, actionSurge: 1 };
+    player.status.currentHp = 9;
+
+    const hurt = await getLegalCombatActions('encounter-1', 'user-1');
+    expect(hurt.actions).toContainEqual({ type: 'second_wind', label: 'Second Wind' });
+    expect(hurt.actions).toContainEqual({ type: 'action_surge', label: 'Action Surge' });
+
+    player.status.currentHp = 20;
+    const full = await getLegalCombatActions('encounter-1', 'user-1');
+    expect(full.actions.some((action) => action.type === 'second_wind')).toBe(false);
+    expect(full.actions.some((action) => action.type === 'action_surge')).toBe(true);
+
+    player.status.currentHp = 9;
+    player.bonusActionUsed = true;
+    const bonusSpent = await getLegalCombatActions('encounter-1', 'user-1');
+    expect(bonusSpent.actions.some((action) => action.type === 'second_wind')).toBe(false);
+    expect(bonusSpent.actions.some((action) => action.type === 'action_surge')).toBe(true);
+
+    featureUses = { secondWind: 0, actionSurge: 0 };
+    player.bonusActionUsed = false;
+    const spent = await getLegalCombatActions('encounter-1', 'user-1');
+    expect(spent.actions.some((action) => action.type === 'second_wind')).toBe(false);
+    expect(spent.actions.some((action) => action.type === 'action_surge')).toBe(false);
   });
 });
 

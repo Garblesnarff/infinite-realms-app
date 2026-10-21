@@ -4,6 +4,10 @@ import {
   deathSaveIntentWire,
   deathSaveIntentWireAutoRolled,
 } from '../../../../../../shared/test-fixtures/death-save-intent';
+import {
+  fighterFeatureChipIntentBody,
+  fighterFeaturePlayerIntentBody,
+} from '../../../../../../shared/test-fixtures/fighter-feature-intent';
 import { playerExitIntentBody } from '../../../../../../shared/test-fixtures/player-exit-intent';
 import { combatIntentRequestValidator, describeIntentRejection } from '../intent-schema.js';
 
@@ -156,4 +160,38 @@ describe('the player exit intents (flee / yield)', () => {
       }),
     ).toBe(true);
   });
+});
+
+/**
+ * #975: the Fighter's short-rest features ride the same contract as every other
+ * intent, in the exact bodies the producers post (see the fixture header: the
+ * clicked option posts the DM dialect, versionless; the player dialect is the
+ * executor's other call shape). Each spends a tracked use on the sheet, so the
+ * player dialect versions them like dash; a schema that rejected either body
+ * would strand the declaration at "not supported yet" again.
+ */
+describe('the fighter feature intents (second_wind / action_surge)', () => {
+  it.each(['second_wind', 'action_surge'] as const)(
+    'accepts the exact %s body the clicked option posts',
+    (type) => {
+      expect(combatIntentRequestValidator.Check(fighterFeatureChipIntentBody(type))).toBe(true);
+    },
+  );
+
+  it.each(['second_wind', 'action_surge'] as const)(
+    'accepts the player-dialect %s body with its version',
+    (type) => {
+      expect(combatIntentRequestValidator.Check(fighterFeaturePlayerIntentBody(type))).toBe(true);
+    },
+  );
+
+  it.each(['second_wind', 'action_surge'] as const)(
+    'refuses a player-dialect %s without expectedVersion, like every versioned player intent',
+    (type) => {
+      const { expectedVersion: _omitted, ...intent } = fighterFeaturePlayerIntentBody(type).intent;
+      expect(
+        combatIntentRequestValidator.Check({ ...fighterFeaturePlayerIntentBody(type), intent }),
+      ).toBe(false);
+    },
+  );
 });

@@ -109,6 +109,8 @@ const KIND_LABEL: Record<ContractActionKind, string> = {
   dodge: 'dodge',
   disengage: 'disengage',
   death_save: 'death save',
+  second_wind: 'second wind',
+  action_surge: 'action surge',
 };
 
 const outcomeLabel = (action: AggregatedContractAction): string => {
@@ -151,7 +153,7 @@ export function buildNarrationContract(input: NarrationContractInput): string {
     }
   } else {
     lines.push(
-      'Resolved actions this turn: none. Narrate no attack, spell, dash, dodge, or disengage.',
+      'Resolved actions this turn: none. Narrate no attack, spell, dash, dodge, disengage, second wind, or action surge.',
     );
   }
   if (sceneAnchor) {

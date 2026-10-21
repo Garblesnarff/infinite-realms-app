@@ -341,6 +341,31 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
             cards: parts.map((part) => part.card),
           });
           await refreshCombatState();
+        } else if (action.type === 'second_wind' || action.type === 'action_surge') {
+          // #975: the Fighter features, like Dash — the engine spends the tracked
+          // use and applies the effect, the notice prints the engine line, and the
+          // turn stays open (Second Wind costs only the bonus action; Action Surge
+          // exists to take another action this turn). No `end_turn` after either.
+          const result = await executeAuthoritativeCombatIntent(
+            encounter.id,
+            { type: action.type, actorId },
+            'dm',
+            Date.now(),
+            'typed',
+          );
+          const parts = [
+            ...formatCombatActionParts(
+              { actor_id: actorId, action_type: action.type },
+              result,
+              roster,
+            ),
+            ...formatWakeParts(result),
+          ];
+          await sendEngineNotice(onSendMessage, {
+            text: parts.map((part) => part.line).join('\n\n'),
+            cards: parts.map((part) => part.card),
+          });
+          await refreshCombatState();
         } else if (action.type === 'attack' && action.targetIds?.[0]) {
           // #2563: an attack option runs the declare → dialog → commit pipeline
           // itself. It used to send "I attack with … against …" as chat text, which

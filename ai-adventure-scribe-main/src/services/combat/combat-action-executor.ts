@@ -44,7 +44,14 @@ export interface StructuredCombatAction {
      * The dying player's death saving throw (#2518). Never declared by the DM: the client builds
      * it when the turn reaches a player on the floor, and the die is the player's.
      */
-    | 'death_save';
+    | 'death_save'
+    /**
+     * #975: the Fighter's short-rest features. Second Wind is a bonus action that heals;
+     * Action Surge grants one additional action this turn. Both spend the tracked use on
+     * the character's sheet server-side.
+     */
+    | 'second_wind'
+    | 'action_surge';
   target_ids: string[];
   weapon_id: string | null;
   spell_id: string | null;
@@ -103,6 +110,8 @@ export type ClientCombatIntent =
       d20Rolls?: [number, number];
     }
   | { type: 'dash' | 'dodge' | 'disengage'; actorId: string; expectedVersion?: number }
+  /** #975: the Fighter's short-rest features; the server spends the tracked use. */
+  | { type: 'second_wind' | 'action_surge'; actorId: string; expectedVersion?: number }
   /** #2580: the player's own exits — the way out of a fight nothing else can end. */
   | { type: 'flee' | 'yield'; actorId: string; expectedVersion?: number }
   /**
@@ -140,6 +149,8 @@ const INTENT_TYPES_REQUIRING_VERSION = new Set([
   'disengage',
   'flee',
   'yield',
+  'second_wind',
+  'action_surge',
 ]);
 
 type VersionedClientIntent = Extract<ClientCombatIntent, { expectedVersion?: number }>;
@@ -401,11 +412,15 @@ export async function executeStructuredCombatActionWithBoundary(
       signal,
       playerInput,
     );
-  } else if (['dash', 'dodge', 'disengage'].includes(action.action_type)) {
+  } else if (
+    ['dash', 'dodge', 'disengage', 'second_wind', 'action_surge'].includes(action.action_type)
+  ) {
+    // #975: Second Wind / Action Surge dispatch here too — self-targeted intents whose
+    // whole effect is server-side (the tracked use, the heal, the extra action).
     result = await executeAuthoritativeCombatIntent(
       encounterId,
       {
-        type: action.action_type as 'dash' | 'dodge' | 'disengage',
+        type: action.action_type as 'dash' | 'dodge' | 'disengage' | 'second_wind' | 'action_surge',
         actorId: action.actor_id,
       },
       'dm',

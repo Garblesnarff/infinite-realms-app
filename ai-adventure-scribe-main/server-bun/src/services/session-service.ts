@@ -8,6 +8,7 @@
 
 import { eq, and, desc, sql, or, type SQL } from 'drizzle-orm';
 
+import { actionSurgePreservingState } from './combat/combat-turn-resources.js';
 import { getOwnershipCondition } from './session/session-authorization.js';
 import { SessionMessageService, type MessagePage } from './session/session-message-service.js';
 import { db } from '../../../db/client';
@@ -358,9 +359,22 @@ export class SessionService {
       >
     >,
   ): Promise<GameSession> {
+    // #975: a client `session_state` write replaces the whole blob, but the
+    // Action Surge mark inside it is engine-owned — the stored value of that
+    // key wins over the client's snapshot, so a stale snapshot can neither
+    // delete a live mark nor resurrect a spent one. The merge is folded into
+    // the UPDATE itself (actionSurgePreservingState) rather than read first:
+    // a separate read would let an arm or a consume committing between the
+    // two statements be undone by this write.
     const [updated] = await db
       .update(gameSessions)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({
+        ...updates,
+        ...(updates.sessionState !== undefined
+          ? { sessionState: actionSurgePreservingState(updates.sessionState) }
+          : {}),
+        updatedAt: new Date(),
+      })
       .where(and(eq(gameSessions.id, sessionId), getOwnershipCondition(userId)))
       .returning();
     if (!updated) throw new NotFoundError('Session', sessionId);
