@@ -7,6 +7,7 @@ import {
   computeServerArmorClass,
   withStartingPackageEquipped,
 } from '../../../../shared/creation-armor-class';
+import { computeLevel1MaxHitPoints } from '../../../../shared/level-1-hit-points';
 import { CharacterPreviewAbilityScores } from '../shared/CharacterPreviewAbilityScores';
 import { getCharacterNameError } from '../wizard/validation-rules';
 
@@ -79,6 +80,15 @@ const CharacterFinalization: React.FC = () => {
         character.racialAbilityChoices,
       )
     : null;
+  const hitPoints =
+    finalScores && character?.class?.name
+      ? computeLevel1MaxHitPoints(
+          character.class.name,
+          finalScores.constitution.score,
+          character.subrace?.name ?? null,
+          { draconicBloodline: isDraconicBloodline(character.classFeatures) },
+        )
+      : null;
   const creationArmor = withStartingPackageEquipped(
     (character?.equipment ?? []).map((name) => ({ item_name: name, equipped: false })),
   );
@@ -157,6 +167,9 @@ const CharacterFinalization: React.FC = () => {
           className="bg-muted/50 p-4 rounded-lg space-y-3"
         >
           <CharacterPreviewAbilityScores character={character} />
+          <p>
+            Hit Points: <strong>{hitPoints ?? 'Select a class'}</strong>
+          </p>
           <p>
             Armor Class: <strong>{armorClass}</strong>
           </p>

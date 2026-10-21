@@ -10,6 +10,7 @@ import type { Character } from '@/types/character';
 
 import { backgrounds } from '@/data/backgroundOptions';
 import { fighter } from '@/data/classes/fighter';
+import { rogue } from '@/data/classes/rogue';
 import { halfElf } from '@/data/races/half-elf';
 
 const context = vi.hoisted(() => ({ value: {} as any }));
@@ -29,9 +30,15 @@ vi.mock(
     }),
   }),
 );
-function Harness({ children }: { children: React.ReactNode }) {
+function Harness({
+  children,
+  rogueReview = false,
+}: {
+  children: React.ReactNode;
+  rogueReview?: boolean;
+}) {
   const [character, setCharacter] = useState({
-    class: fighter,
+    class: rogueReview ? rogue : fighter,
     race: halfElf,
     level: 1,
     background: backgrounds.find((b) => b.id === 'outlander'),
@@ -43,7 +50,7 @@ function Harness({ children }: { children: React.ReactNode }) {
       Object.entries({
         strength: 15,
         dexterity: 14,
-        constitution: 12,
+        constitution: rogueReview ? 13 : 12,
         intelligence: 13,
         wisdom: 8,
         charisma: 10,
@@ -95,6 +102,16 @@ describe('#866 creator controls and review', () => {
     expect(
       context.value.state.character.equipment.filter((name: string) => name === 'Staff'),
     ).toHaveLength(1);
+  });
+  it('#973 shows Rogue CON 14 as 10 HP in the final review', () => {
+    render(
+      <Harness rogueReview>
+        <CharacterFinalization />
+      </Harness>,
+    );
+    const review = within(screen.getByRole('region', { name: 'Final character statistics' }));
+    expect(review.getByText('constitution').closest('.justify-between')).toHaveTextContent('14');
+    expect(review.getByText(/Hit Points:/)).toHaveTextContent('10');
   });
   it('shows post-racial scores, creation AC and speed on finalization', () => {
     render(
