@@ -1,5 +1,13 @@
 /**
- * #898: pins the proficiency round trip for the three Hark D20 shapes.
+ * #898: pins the proficiency round trip for the Hark D20 shapes.
+ *
+ * #995 extends the original three-case pin (#993) to the two remaining
+ * #898 shapes: the Sorcerer (D20-011, whose CON/CHA saves showed not
+ * proficient) and the Wizard (D20-013, whose Acolyte background Insight
+ * was dropped). Same chain, same assertions — the Sorcerer's payload must
+ * carry constitution,charisma, and the Wizard's saved skill set must be
+ * the union of the class choices with the background's fixed Insight +
+ * Religion.
  *
  * The D20 sweep (builds 43a2a4d7 / e8a0e324) found chosen skills, class
  * saves and expertise lost or wrong on the saved sheet: a Fighter read back
@@ -43,7 +51,9 @@ import type { Character } from '@/types/character';
 import { backgrounds } from '@/data/backgroundOptions';
 import { fighter } from '@/data/classes/fighter';
 import { rogue } from '@/data/classes/rogue';
+import { sorcerer } from '@/data/classes/sorcerer';
 import { warlock } from '@/data/classes/warlock';
+import { wizard } from '@/data/classes/wizard';
 import { getStartingEquipment } from '@/data/equipmentOptions';
 import { halfOrc } from '@/data/races/half-orc';
 import { human } from '@/data/races/human';
@@ -188,6 +198,68 @@ const CASES: CaseSpec[] = [
       intelligence: [1, false],
       wisdom: [2, true],
       charisma: [5, true],
+    },
+  },
+  {
+    key: 'sorcerer',
+    name: 'Probe Sorcerer 898',
+    race: human,
+    subraceName: 'Standard Human',
+    charClass: sorcerer,
+    backgroundId: 'noble',
+    base: { strength: 8, dexterity: 13, constitution: 14, intelligence: 10, wisdom: 12, charisma: 15 },
+    chosenSkills: ['Arcana', 'Deception'],
+    expertise: [],
+    expectedSkills: ['Arcana', 'Deception', 'History', 'Persuasion'],
+    expectedSaves: ['constitution', 'charisma'],
+    expectedTools: ['One type of gaming set'],
+    // Human +1 all: STR9(-1) DEX14(+2) CON15(+2) INT11(0) WIS13(+1) CHA16(+3), pb +2
+    expectedSkillMods: {
+      Arcana: [2, true, false],
+      Deception: [5, true, false],
+      History: [2, true, false],
+      Persuasion: [5, true, false],
+      Insight: [1, false, false],
+      Stealth: [2, false, false],
+    },
+    expectedSaveMods: {
+      strength: [-1, false],
+      dexterity: [2, false],
+      constitution: [4, true],
+      intelligence: [0, false],
+      wisdom: [1, false],
+      charisma: [5, true],
+    },
+  },
+  {
+    key: 'wizard',
+    name: 'Probe Wizard 898',
+    race: human,
+    subraceName: 'Standard Human',
+    charClass: wizard,
+    backgroundId: 'acolyte',
+    base: { strength: 8, dexterity: 13, constitution: 12, intelligence: 15, wisdom: 14, charisma: 10 },
+    chosenSkills: ['Arcana', 'Investigation'],
+    expertise: [],
+    expectedSkills: ['Arcana', 'Insight', 'Investigation', 'Religion'],
+    expectedSaves: ['intelligence', 'wisdom'],
+    expectedTools: [],
+    // Human +1 all: STR9(-1) DEX14(+2) CON13(+1) INT16(+3) WIS15(+2) CHA11(0), pb +2
+    expectedSkillMods: {
+      Arcana: [5, true, false],
+      Insight: [4, true, false],
+      Investigation: [5, true, false],
+      Religion: [5, true, false],
+      Perception: [2, false, false],
+      Stealth: [2, false, false],
+    },
+    expectedSaveMods: {
+      strength: [-1, false],
+      dexterity: [2, false],
+      constitution: [1, false],
+      intelligence: [5, true],
+      wisdom: [4, true],
+      charisma: [0, false],
     },
   },
 ];
