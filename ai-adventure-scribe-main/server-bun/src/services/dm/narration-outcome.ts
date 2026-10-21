@@ -16,7 +16,13 @@
 import { and, desc, eq } from 'drizzle-orm';
 
 import { dialogueHistory, gameSessions } from '../../../../db/schema/index';
-import { contradictsEngineOutcome, spliceContradictingSentences } from '../../../../shared/narration-harm.js';
+import {
+  actionKeywords,
+  contradictsEngineOutcome,
+  sentenceSpan,
+  spliceContradictingSentences,
+  type OutcomeClaim,
+} from '../../../../shared/narration-harm.js';
 import { logger } from '../../lib/logger.js';
 
 export interface RollOutcome {
@@ -122,6 +128,157 @@ const PENDING_REQUEST_TYPES: Record<string, string> = {
 const PENDING_ROLL_STATEMENT = 'That outcome is not decided yet — the roll still has to be made.';
 
 /**
+ * Conditional openers: a marker BEFORE the claim frames the verdict as what MIGHT
+ * happen (stakes), not what did. Scoped to the text before the claim — a concessive
+ * clause after it ("…even if the hinges protest") does not make an asserted verdict
+ * hypothetical (self-review HIGH 1). `should` only counts sentence-initially (the
+ * inverted conditional "Should you succeed…"), handled in the filter below.
+ */
+const CONDITIONAL_PREFIX =
+  /\b(?:if|whether|unless|when|once|provided|providing|in case|as long as|even if)\b/i;
+/** Verdict stems: a match without one is a miss/dismissal claim, not a success/fail claim. */
+const VERDICT_CLAIM = /succeed|fail|successful|manage[sd]?\s+to/i;
+/**
+ * Words that name the roll's TYPE or the ability behind it, never the action itself.
+ * They must not anchor a claim: every check would match "skill", every save "saving",
+ * and a recap about a different action routinely uses them as ordinary words ("You
+ * succeed in saving the child…" before a saving throw is requested) — self-review
+ * BLOCKER 2. Keywords are therefore derived from the request's purpose alone, minus
+ * this set; when nothing distinctive remains, there is no vocabulary to anchor on
+ * and the detector's verdict stands (the bare-purpose NT-011 shape).
+ */
+const GENERIC_KEYWORDS = new Set([
+  'skill',
+  'saving',
+  'throw',
+  'throws',
+  'attack',
+  'strength',
+  'dexterity',
+  'constitution',
+  'intelligence',
+  'wisdom',
+  'charisma',
+]);
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Word-boundary keyword match with light inflection (open→opening, climb→climbed). */
+function sentenceNamesKeyword(sentence: string, keyword: string): boolean {
+  const stem = keyword.endsWith('e') ? keyword.slice(0, -1) : keyword;
+  return new RegExp(`\\b(?:${escapeRegExp(keyword)}|${escapeRegExp(stem)})(?:s|es|ed|ing)?\\b`, 'i').test(
+    sentence,
+  );
+}
+
+/**
+ * sentenceSpan splits on every '.', including abbreviation periods ("St. Cuthbert"),
+ * which would hide a sentence-initial conditional from the filter. Extend the start
+ * backwards over abbreviation fragments so the conditional check sees the whole
+ * sentence (self-review MEDIUM 3). The splicer keeps its own span; an excluded claim
+ * is never spliced, so the fragmenting splice this avoids never happens.
+ */
+const ABBREVIATION = /^(?:[a-z]|st|mr|mrs|ms|dr|sr|jr|vs|etc)$/i;
+function expandedSentenceStart(text: string, start: number): number {
+  let expanded = start;
+  for (;;) {
+    const before = text.slice(0, expanded).trimEnd();
+    if (!before.endsWith('.')) return expanded;
+    const word = /([A-Za-z]+)\.$/.exec(before)?.[1] ?? '';
+    if (!ABBREVIATION.test(word)) return expanded;
+    expanded = sentenceSpan(text, before.length - word.length - 1).start;
+  }
+}
+
+/**
+ * Whether a detector claim in a REQUESTING reply is really a verdict on the pending roll
+ * (#959 forward-fix). The detector keys on verdict language alone, which is right for a
+ * decided outcome — any "you succeed" contradicts a failed roll — but a requesting reply
+ * legitimately contains verdict language that is NOT a claim on the pending roll:
+ *
+ * - A recap of an ALREADY-DECIDED roll ("You succeed in climbing the shaft unheard. …
+ *   roll a Thieves' Tools check."): the pending request cannot own a verdict about a
+ *   different action, so EVERY claim — hard verdicts included, not just the soft ones
+ *   the detector already anchors — must name the pending action's keywords in its own
+ *   sentence. A verdict sentence tied to no pending keyword is left alone.
+ * - Stakes framing ("If you succeed, you pry the gate open; if you fail, the alarm
+ *   rings."): conditional verdict language sets up the roll, it does not pre-narrate
+ *   it. A sentence carrying a conditional marker, or a conditional modal before the
+ *   claim, is hypothetical and never a claim.
+ * - A miss/dismissal the sentence does not anchor on the player ("an arrow misses the
+ *   goblin") cannot be told apart from an NPC's attack, so it needs a player anchor —
+ *   "you"/"your" or the character's name — in the sentence.
+ */
+function isClaimOnPendingRoll(
+  text: string,
+  claim: OutcomeClaim,
+  keywords: string[],
+  characterName?: string,
+): boolean {
+  const span = sentenceSpan(text, claim.index);
+  const start = expandedSentenceStart(text, span.start);
+  const sentence = text.slice(start, span.end);
+  const beforeClaim = sentence.slice(0, claim.index - start);
+  // Hypothetical framings are stakes-setting, not claims (self-review BLOCKER 1):
+  // - a question ("Will you succeed in opening the gate…?") asserts nothing;
+  // - a conditional opener before the claim (if/when/once/provided/as long as…, or
+  //   sentence-initial "Should you succeed…") frames the verdict as what might happen;
+  // - a conditional modal governing the claim ("you could succeed…") — the modal must
+  //   sit in the last few words before the claim, so an unrelated "can"/"may" in an
+  //   earlier clause cannot shield an asserted verdict (self-review HIGH 1);
+  // - paired stakes: a sentence carrying BOTH a success and a failure verdict is
+  //   laying out both branches ("You succeed, you pry the gate open; you fail, the
+  //   alarm bell rings."), whichever branch the detector flagged.
+  if (sentence.trimEnd().endsWith('?')) return false;
+  if (CONDITIONAL_PREFIX.test(beforeClaim)) return false;
+  if (/^\s*should\b/i.test(sentence)) return false;
+  const tailWords = beforeClaim.trim().split(/\s+/).slice(-3).join(' ');
+  if (/\b(?:would|could|might|can|may)\b/i.test(tailWords)) return false;
+  if (
+    VERDICT_CLAIM.test(claim.match) &&
+    /succeed|successful/i.test(sentence) &&
+    /\bfail/i.test(sentence)
+  ) {
+    return false;
+  }
+  if (!VERDICT_CLAIM.test(claim.match)) {
+    // Miss/dismiss claims: the detector already anchors these on the player/target;
+    // what this pass adds is a player anchor in the claim's own CLAUSE — a "you" in
+    // an unrelated subordinate clause ("While you watch…, an arrow misses the
+    // goblin") must not make a third party's miss the player's (self-review
+    // MEDIUM 2). No keyword gate: a genuine miss rarely repeats the attack's
+    // vocabulary ("Your strike misses entirely") — self-review MEDIUM 1.
+    const clauseStart =
+      Math.max(
+        sentence.lastIndexOf(',', claim.index - start),
+        sentence.lastIndexOf(';', claim.index - start),
+        sentence.lastIndexOf(':', claim.index - start),
+      ) + 1;
+    const afterClaim = claim.index - start + claim.match.length;
+    const clauseBreak = sentence.slice(afterClaim).search(/[;,]/);
+    const clause = sentence.slice(
+      clauseStart,
+      clauseBreak === -1 ? undefined : afterClaim + clauseBreak,
+    );
+    const name = characterName?.trim();
+    const anchoredOnPlayer =
+      /\byou\b|\byour\b/i.test(clause) ||
+      (!!name && new RegExp(`\\b${escapeRegExp(name)}\\b`, 'i').test(clause));
+    if (!anchoredOnPlayer) return false;
+    return true;
+  }
+  if (
+    keywords.length > 0 &&
+    !keywords.some((keyword) => sentenceNamesKeyword(sentence, keyword))
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
  * #266, the NT-011/NT-020 ordering: the reply that REQUESTS a roll sometimes narrates that
  * roll's outcome in the same breath — success detail posted before the dice exist, so when
  * the roll then fails, the success narration already stands and no gate ever corrects it
@@ -130,8 +287,11 @@ const PENDING_ROLL_STATEMENT = 'That outcome is not decided yet — the roll sti
  * the request itself: while a request is pending, a verdict claim about its action is
  * premature in BOTH directions, so the same outcome-anchored detector runs with each
  * synthetic verdict, and any sentence it flags under either one is replaced with the
- * pending truth. Damage and initiative requests carry no pass/fail verdict and are
- * skipped. Pure: returns the repaired text, or null when nothing claimed a pending
+ * pending truth — subject to the scoping in isClaimOnPendingRoll, because a requesting
+ * reply also carries decided-roll recaps and conditional stakes framing that are not
+ * claims on the pending roll at all (#959 shipped this pass unscoped and spliced both;
+ * this is the forward-fix). Damage and initiative requests carry no pass/fail verdict and
+ * are skipped. Pure: returns the repaired text, or null when nothing claimed a pending
  * outcome. Never throws.
  */
 export function repairPrematureRollClaims(
@@ -143,18 +303,27 @@ export function repairPrematureRollClaims(
   let repaired = text;
   for (const request of rollRequests.slice(0, 10)) {
     const type = (request as PendingRollRequest | null)?.type;
-    const requestType = typeof type === 'string' ? PENDING_REQUEST_TYPES[type] : undefined;
+    // hasOwn: a prototype key ('toString', 'constructor') is not a request type.
+    const requestType =
+      typeof type === 'string' && Object.hasOwn(PENDING_REQUEST_TYPES, type)
+        ? PENDING_REQUEST_TYPES[type]
+        : undefined;
     if (!requestType) continue;
     const purpose = (request as PendingRollRequest | null)?.purpose;
     const description =
       typeof purpose === 'string' && purpose.trim() ? purpose.trim() : undefined;
+    // Anchor vocabulary comes from the purpose alone, minus generic type/ability
+    // words (GENERIC_KEYWORDS): the requestType's own words match everything.
+    const keywords = actionKeywords({ success: false, description }).filter(
+      (keyword) => !GENERIC_KEYWORDS.has(keyword),
+    );
     for (const success of [false, true]) {
       const claims = contradictsEngineOutcome(repaired, {
         success,
         characterName,
         description,
         requestType,
-      });
+      }).filter((claim) => isClaimOnPendingRoll(repaired, claim, keywords, characterName));
       if (!claims.length) continue;
       logger.warn({
         msg: 'DM_NARRATION_PREMATURE_CLAIM_REPAIRED',
@@ -163,6 +332,13 @@ export function repairPrematureRollClaims(
       });
       repaired = spliceContradictingSentences(repaired, claims, PENDING_ROLL_STATEMENT);
     }
+  }
+  // Several flagged sentences (both synthetic verdicts, or several requests) each
+  // splice to the same pending statement; state it once, not back to back
+  // (self-review LOW 1).
+  const doubled = `${PENDING_ROLL_STATEMENT} ${PENDING_ROLL_STATEMENT}`;
+  while (repaired.includes(doubled)) {
+    repaired = repaired.replace(doubled, PENDING_ROLL_STATEMENT);
   }
   return repaired === text ? null : repaired;
 }

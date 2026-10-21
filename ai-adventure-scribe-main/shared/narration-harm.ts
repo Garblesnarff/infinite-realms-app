@@ -423,8 +423,10 @@ const ACTION_STOPWORDS = new Set([
  * The rolled action's content words ("Stealth check to climb the shaft unheard" →
  * stealth, climb, shaft, unheard), for anchoring soft verdict language on the player's own
  * action. Empty when the outcome names no action, in which case soft claims stand as before.
+ * Exported for the server's premature-claim pass (narration-outcome.ts), which must anchor
+ * verdict sentences on the SAME vocabulary — a second copy of the stopword list would drift.
  */
-function actionKeywords(outcome: EngineOutcome): string[] {
+export function actionKeywords(outcome: EngineOutcome): string[] {
   const text = `${outcome.requestType ?? ''} ${outcome.description ?? ''}`.toLowerCase();
   const words = text
     .split(/[^a-z0-9]+/)
@@ -465,8 +467,12 @@ function hasNonPlayerPossessor(sentence: string, name: string | undefined): bool
   );
 }
 
-/** The sentence (by `.`/`!`/`?`) containing `index`, for anchoring and splicing. */
-function sentenceSpan(text: string, index: number): { start: number; end: number } {
+/**
+ * The sentence (by `.`/`!`/`?`) containing `index`, for anchoring and splicing. Exported
+ * for the server's premature-claim pass (narration-outcome.ts): a claim must be judged
+ * against the same sentence the splicer would replace, so the boundary rule lives once.
+ */
+export function sentenceSpan(text: string, index: number): { start: number; end: number } {
   let start = 0;
   for (let i = index - 1; i >= 0; i--) {
     if (text[i] === '.' || text[i] === '!' || text[i] === '?') {
