@@ -23,6 +23,7 @@ import type { StarterCharacterTemplateLike } from '../starter-character-seeding'
 import { mapTemplateRow } from '@/hooks/use-starter-character-templates';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
+import { prepareCharacterPayload } from '@/services/user-data-payload-helpers';
 
 vi.mock('@/lib/logger', () => ({
   default: {
@@ -495,5 +496,79 @@ describe('starter-character-seeding', () => {
       known_spells: seed.known_spells,
       prepared_spells: seed.prepared_spells,
     }).toEqual(herbalistSpellLists);
+  });
+});
+
+describe('starter template subclass (#829)', () => {
+  // The raw row shape the secured templates route returns (SELECT *): the
+  // level-3 Fighter template from issue #829's real-route test, carrying the
+  // subclass column migration 0028 adds.
+  const championRow = {
+    id: 'template-829-champion',
+    starter_campaign_id: 'one-shot-829',
+    template_key: 'the-champion',
+    name: 'The Champion',
+    tagline: null,
+    race: 'Human',
+    subrace: null,
+    class: 'Fighter',
+    subclass: 'Champion',
+    background: 'Soldier',
+    level: 3,
+    ability_scores: {
+      strength: 16,
+      dexterity: 14,
+      constitution: 14,
+      intelligence: 10,
+      wisdom: 12,
+      charisma: 8,
+    },
+    personality: {},
+    skills: ['Athletics', 'Perception'],
+    languages: ['Common'],
+    equipment: ['Chain Mail', 'Longsword', 'Shield'],
+    adapted_backstory: null,
+    campaign_hook: null,
+    portrait_url: null,
+    card_image_url: null,
+    portrait_prompt: null,
+    display_order: 0,
+  };
+
+  it('carries the template subclass from the row through the mapper into the create payload', () => {
+    const template = mapTemplateRow(championRow);
+    expect(template.subclass).toBe('Champion');
+
+    const seed = buildStarterCharacterSeed(template, 'campaign-829');
+    expect(seed.subclass).toBe('Champion');
+    expect(seed.level).toBe(3);
+  });
+
+  it('emits subclass null when the template carries none', () => {
+    const template = mapTemplateRow({ ...championRow, subclass: null });
+    expect(template.subclass).toBeNull();
+
+    const seed = buildStarterCharacterSeed(template, 'campaign-829');
+    expect(seed.subclass).toBeNull();
+  });
+
+  it('the subclass survives prepareCharacterPayload, the whitelist createCharacter applies before the POST', () => {
+    // The full client producer chain (AGENTS.md §4): row -> mapper -> seed
+    // -> prepareCharacterPayload -> POST /v1/characters. The payload helper
+    // copies only CHARACTER_FIELDS, so a field the seeder emits but the
+    // whitelist lacks never reaches the route — this pins 'subclass' in it.
+    const template = mapTemplateRow(championRow);
+    const seed = buildStarterCharacterSeed(template, 'campaign-829');
+    const wire = prepareCharacterPayload(seed as unknown as Record<string, unknown>);
+    expect(wire.subclass).toBe('Champion');
+
+    const nullSeed = buildStarterCharacterSeed(
+      mapTemplateRow({ ...championRow, subclass: null }),
+      'campaign-829',
+    );
+    const nullWire = prepareCharacterPayload(
+      nullSeed as unknown as Record<string, unknown>,
+    );
+    expect(nullWire.subclass).toBeNull();
   });
 });

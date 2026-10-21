@@ -200,6 +200,11 @@ build_replay_list() {
         # after the newest supabase migration (20261012_combat_participants_xp.sql), so the
         # combat tables exist before it runs.
         0026_boss_moves.sql) echo "20261013_000000	$f"; continue;;
+        # ALTERs starter_character_templates, which is created by
+        # db/migrations/20251210_backfill_starter_character_templates.sql. Its drizzle index
+        # prefix would sort it before that backfill, so it would replay against a database
+        # with no starter_character_templates table in it yet (#829).
+        0028_starter_character_templates_subclass.sql) echo "20251211_000000	$f"; continue;;
         # Deliberate no-op snapshot re-baseline; safe anywhere, pinned last.
         0004_schema_baseline.sql) echo "99999999_999999	$f"; continue;;
       esac

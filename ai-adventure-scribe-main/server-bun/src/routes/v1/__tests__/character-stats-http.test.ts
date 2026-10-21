@@ -49,6 +49,12 @@ mock.module('../../../services/character-service.js', () => ({
 mock.module('../../../services/character-vitals-service.js', () => ({
   CharacterVitalsService: {},
 }));
+mock.module('../../../services/subclass-service.js', () => ({
+  SubclassService: {
+    getSubclassChoiceLevel: () => 3,
+    setSubclass: async () => {},
+  },
+}));
 
 const { charactersRoutes } = await import('../characters.js');
 const app = new Elysia().use(charactersRoutes);

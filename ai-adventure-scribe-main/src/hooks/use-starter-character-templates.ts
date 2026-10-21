@@ -20,6 +20,7 @@ export interface StarterCharacterTemplate {
   race: string;
   subrace: string | null;
   class: string;
+  subclass: string | null;
   background: string | null;
   level: number;
   abilityScores: {
@@ -99,6 +100,7 @@ export function mapTemplateRow(row: Record<string, unknown>): StarterCharacterTe
     race: row.race as string,
     subrace: row.subrace as string | null,
     class: row.class as string,
+    subclass: (row.subclass as string | null) ?? null,
     background: row.background as string | null,
     level: (row.level as number) || 1,
     abilityScores,

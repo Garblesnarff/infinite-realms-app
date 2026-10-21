@@ -20,6 +20,7 @@ export interface StarterCharacterTemplateLike {
   race: string;
   subrace?: string | null;
   class: string;
+  subclass?: string | null;
   background?: string | null;
   level?: number;
   tagline?: string | null;
@@ -361,6 +362,7 @@ export function buildStarterCharacterSeed(
     race: template.race,
     subrace: template.subrace || null,
     class: template.class,
+    subclass: template.subclass || null,
     level,
     background: template.background || null,
     backstory_elements: template.adaptedBackstory ?? template.adapted_backstory ?? null,
