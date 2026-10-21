@@ -235,6 +235,32 @@ const inputsOnlyBody = (
   };
 };
 
+/**
+ * #829: the wizardBody wire shape for a level-3 Human Fighter template with
+ * CON 14 — the issue's real-route proving case. Same producer output as
+ * wizardBody with level, total_level and the class_levels row at the
+ * template's level, and a Human's scores (no subrace toughness).
+ */
+const level3FighterBody = (name: string) => ({
+  ...wizardBody({ name: 'Fighter', hitDie: '1d10', baseHp: 14 }),
+  name,
+  race: 'Human',
+  subrace: null,
+  level: 3,
+  total_level: 3,
+  class_levels: [{ classId: 'fighter', className: 'Fighter', level: 3 }],
+  stats: {
+    strength: 15,
+    dexterity: 14,
+    constitution: 14,
+    intelligence: 12,
+    wisdom: 10,
+    charisma: 8,
+    temporary_hit_points: 0,
+    hit_dice: '1d10',
+  },
+});
+
 describeWithDb('character create every class (#388)', () => {
   let app: any;
   let db: any;
@@ -609,5 +635,176 @@ describeWithDb('character create every class (#388)', () => {
     expect(stats.maxHitPoints).toBe(10);
     expect(stats.currentHitPoints).toBe(10);
     expect(stats.armorClass).toBe(12);
+  });
+
+  it('creates a level-3 Fighter with level-3 HP, not level-1 HP (#829)', async () => {
+    // The issue's proving case through the real route: a level-3 Fighter
+    // template with CON 14. Level 1: 10 (d10) + 2 (CON) = 12; two more
+    // levels at the fixed average: 2 × (6 + 2) = 16; max_hp = 28. Before
+    // the fix, create() always used the level-1 formula and stored 12.
+    const res = await request(
+      '/v1/characters',
+      'POST',
+      level3FighterBody(`L3 Fighter 829 ${testId('829')}`),
+    );
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const [row] = await db.select().from(characters).where(eq(characters.id, id));
+    expect(row.level).toBe(3);
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    expect(stats.maxHitPoints).toBe(28);
+    expect(stats.currentHitPoints).toBe(28);
+  });
+
+  it('adds Dwarven Toughness once per level on a level-3 create (#829)', async () => {
+    // wizardBody's Hill Dwarf (CON 16 after racials): level 1 is 14
+    // (10 + 3 + 1); each further level adds 6 + 3 + 1 = 10, so a level-3
+    // Hill Dwarf Fighter is 34 — the +1 lands once per level, not once.
+    const res = await request('/v1/characters', 'POST', {
+      ...wizardBody({ name: 'Fighter', hitDie: '1d10', baseHp: 14 }),
+      name: `L3 Hill Dwarf Fighter 829 ${testId('829')}`,
+      level: 3,
+      total_level: 3,
+      class_levels: [{ classId: 'fighter', className: 'Fighter', level: 3 }],
+    });
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    expect(stats.maxHitPoints).toBe(34);
+    expect(stats.currentHitPoints).toBe(34);
+  });
+
+  it('recomputes HP at the real level on stats update (#829)', async () => {
+    // Create the level-3 Fighter (28 HP at CON 14), then raise CON to 18
+    // through the real stats route. The recompute must re-derive at
+    // level 3: 10 + 4 + 2 × (6 + 4) = 34. Before the fix the recompute
+    // kept the stored HP for any level above 1. Full health stays full.
+    const createRes = await request(
+      '/v1/characters',
+      'POST',
+      level3FighterBody(`L3 Fighter 829u ${testId('829')}`),
+    );
+    const createText = await createRes.text();
+    expect(createRes.status, createText.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(createText) as { id: string };
+    createdIds.push(id);
+
+    const updateRes = await request(`/v1/characters/${id}/stats`, 'PUT', { constitution: 18 });
+    expect(updateRes.status, (await updateRes.text()).slice(0, 300)).toBe(200);
+
+    const [raised] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    expect(raised.maxHitPoints).toBe(34);
+    expect(raised.currentHitPoints).toBe(34);
+
+    // Damage already taken is kept, capped at the new max: stage 10 HP of
+    // damage the way the vitals engine would leave it, then lower CON to
+    // 10 — max re-derives to 10 + 0 + 2 × 6 = 22 and current stays 10.
+    await db
+      .update(characterStats)
+      .set({ currentHitPoints: 10 })
+      .where(eq(characterStats.characterId, id));
+    const lowerRes = await request(`/v1/characters/${id}/stats`, 'PUT', { constitution: 10 });
+    expect(lowerRes.status, (await lowerRes.text()).slice(0, 300)).toBe(200);
+
+    const [lowered] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    expect(lowered.maxHitPoints).toBe(22);
+    expect(lowered.currentHitPoints).toBe(10);
+  });
+
+  it('keeps rolled level-up max HP on stats update (#829)', async () => {
+    // A level-3 character whose stored max HP came from rolled level-up
+    // gains — staged here the way the vitals engine leaves it, 31 in place
+    // of the formula's 28 — must keep 31 when a stats upsert changes CON.
+    // 31 matches neither the level-1 formula (12) nor the for-level
+    // formula (28) at the pre-upsert CON, so the recompute leaves max HP
+    // alone while the rest of the upsert lands.
+    const createRes = await request(
+      '/v1/characters',
+      'POST',
+      level3FighterBody(`L3 Fighter 829r ${testId('829')}`),
+    );
+    const createText = await createRes.text();
+    expect(createRes.status, createText.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(createText) as { id: string };
+    createdIds.push(id);
+
+    await db
+      .update(characterStats)
+      .set({ maxHitPoints: 31, currentHitPoints: 31 })
+      .where(eq(characterStats.characterId, id));
+
+    const updateRes = await request(`/v1/characters/${id}/stats`, 'PUT', { constitution: 18 });
+    expect(updateRes.status, (await updateRes.text()).slice(0, 300)).toBe(200);
+
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    expect(stats.constitution).toBe(18);
+    expect(stats.maxHitPoints).toBe(31);
+    expect(stats.currentHitPoints).toBe(31);
+  });
+
+  it('repairs a pre-fix level-3 template carrying level-1 HP on stats update (#829)', async () => {
+    // A template created before the fix stored the level-1 value (12 for
+    // this Fighter) as its max — staged by writing that value over a fresh
+    // create. The stored 12 is the level-1 formula's fingerprint at the
+    // pre-upsert CON, so the recompute re-derives at the real level: both
+    // when the upsert itself changes CON (12 → 34 at CON 18) and when it
+    // changes something else (12 → 28 at the unchanged CON 14).
+    const stage = async (name: string) => {
+      const res = await request('/v1/characters', 'POST', level3FighterBody(name));
+      const text = await res.text();
+      expect(res.status, text.slice(0, 300)).toBe(201);
+      const { id } = JSON.parse(text) as { id: string };
+      createdIds.push(id);
+      await db
+        .update(characterStats)
+        .set({ maxHitPoints: 12, currentHitPoints: 12 })
+        .where(eq(characterStats.characterId, id));
+      return id;
+    };
+
+    const conChanged = await stage(`L3 Fighter 829p ${testId('829')}`);
+    const conRes = await request(`/v1/characters/${conChanged}/stats`, 'PUT', {
+      constitution: 18,
+    });
+    expect(conRes.status, (await conRes.text()).slice(0, 300)).toBe(200);
+    const [raised] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, conChanged));
+    expect(raised.maxHitPoints).toBe(34);
+    expect(raised.currentHitPoints).toBe(34);
+
+    const dexChanged = await stage(`L3 Fighter 829q ${testId('829')}`);
+    const dexRes = await request(`/v1/characters/${dexChanged}/stats`, 'PUT', {
+      dexterity: 18,
+    });
+    expect(dexRes.status, (await dexRes.text()).slice(0, 300)).toBe(200);
+    const [repaired] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, dexChanged));
+    expect(repaired.maxHitPoints).toBe(28);
+    expect(repaired.currentHitPoints).toBe(28);
   });
 });
