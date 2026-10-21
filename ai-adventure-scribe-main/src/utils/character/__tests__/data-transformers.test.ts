@@ -177,6 +177,31 @@ describe('data-transformers', () => {
       },
     );
 
+    it('folds the *_pieces columns back into currency (#971, #928)', () => {
+      // The round trip this closes: transformCharacterForStorage writes
+      // currency -> *_pieces on save and the GET serves those columns, but
+      // nothing folded them back — the sheet's purse read 0 gp for every
+      // saved character, whatever the row held.
+      const character = transformCharacterData(
+        {
+          ...mockCharacterRow,
+          copper_pieces: 3,
+          silver_pieces: 2,
+          electrum_pieces: 1,
+          gold_pieces: 24,
+          platinum_pieces: 1,
+        },
+        mockStats,
+        mockEquipment,
+      );
+      expect(character.currency).toEqual({ cp: 3, sp: 2, ep: 1, gp: 24, pp: 1 });
+    });
+
+    it('reads an empty purse when the row carries no coin columns (#971)', () => {
+      const character = transformCharacterData(mockCharacterRow, mockStats, mockEquipment);
+      expect(character.currency).toEqual({ cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 });
+    });
+
     it('should transform full database data into a Character object', () => {
       const equipmentWithMissingFields: CharacterEquipmentRow[] = [
         ...mockEquipment,

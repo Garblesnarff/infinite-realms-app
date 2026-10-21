@@ -63,6 +63,41 @@ function toArmorClassItems(equipment: Array<Record<string, unknown>>): ArmorClas
 }
 
 /**
+ * #971: background kits list their gold as a bare coin string ('15 gp' in
+ * src/data/backgroundOptions) and the wizard's equipment mapping turns every
+ * equipment string into an item row — so the background's gold was stored as
+ * an inventory item ('15 gp Qty:1') while the purse stayed 0. Gold is not an
+ * item: split bare coin amounts out of the equipment list and total them
+ * (amount × quantity) so create() lands them in gold_pieces instead.
+ */
+const BARE_GOLD_ITEM = /^\s*(\d+)\s*gp\s*$/i;
+
+function splitEquipmentGold(equipment?: Array<Record<string, unknown>>): {
+  equipment?: Array<Record<string, unknown>>;
+  gold: number;
+} {
+  if (!equipment) return { equipment, gold: 0 };
+  let gold = 0;
+  const kept: Array<Record<string, unknown>> = [];
+  for (const item of equipment) {
+    const match = BARE_GOLD_ITEM.exec(String(item.item_name ?? ''));
+    const amount = match ? Number(match[1]) : NaN;
+    // Only a whole, in-range amount is purse gold: an amount that cannot
+    // land in the integer gold_pieces column stays an (inert) item row
+    // rather than minting a fractional or overflowing balance (#901's
+    // failure class). Quantity collapses the same way — a fractional or
+    // negative count contributes its whole, non-negative part.
+    if (Number.isSafeInteger(amount) && amount <= 2_147_483_647) {
+      const quantity = Number(item.quantity ?? 1);
+      gold += amount * (Number.isFinite(quantity) ? Math.max(0, Math.trunc(quantity)) : 1);
+    } else {
+      kept.push(item);
+    }
+  }
+  return { equipment: kept, gold };
+}
+
+/**
  * Recompute the server-owned derived stats after a stats upsert (#620): the
  * armour class (equipment + Unarmoured Defence) always, and max HP for the
  * character's real level (#829) — with one guard: the stored max HP is only
@@ -290,7 +325,12 @@ export class CharacterService {
     equipment?: Array<Record<string, unknown>>,
     inventory?: Array<Record<string, unknown>>,
   ): Promise<Character> {
-    const seededEquipment = equipment?.length ? withStartingPackageEquipped(equipment) : equipment;
+    // #971: bare coin amounts in the equipment list are purse money, not
+    // items — they join gold_pieces below and never become equipment rows.
+    const { equipment: nonGoldEquipment, gold: equipmentGold } = splitEquipmentGold(equipment);
+    const seededEquipment = nonGoldEquipment?.length
+      ? withStartingPackageEquipped(nonGoldEquipment)
+      : nonGoldEquipment;
     const created = await db.transaction(async (tx) => {
       const [character] = await tx
         .insert(characters)
@@ -300,6 +340,9 @@ export class CharacterService {
           ownerId: userId,
           name: data.name || 'Unnamed Character',
           level: data.level || 1,
+          // #971: the body's declared gold (a Starting Gold roll) plus the
+          // gold the equipment list carried as coin strings (backgrounds).
+          goldPieces: (data.goldPieces ?? 0) + equipmentGold,
           // #829 finding 4: a character created above level 1 (a premade
           // template) that arrives without XP starts at that level's XP
           // threshold, not at 0 — a level-3 character recorded with 0 XP was

@@ -544,6 +544,9 @@ describeWithDb('character create every class (#388)', () => {
     // The pinned wizard body: Starting Gold (rolled 14) + the Outlander
     // background kit. Both the gold and the weapon must persist — the QA
     // symptom was a saved starting-gold character with 0 gp and no weapon.
+    // #971: the kit's gold rides in the body as a '10 gp' equipment item;
+    // the purse holds the roll plus that background gold (24), and no coin
+    // row is stored — this assertion read 14 while the split was the bug.
     const name = `Gold Monk ${testId('901')}`;
     const res = await request('/v1/characters', 'POST', { ...monkGoldPayload, name });
     const text = await res.text();
@@ -553,7 +556,7 @@ describeWithDb('character create every class (#388)', () => {
 
     const [row] = await db.select().from(characters).where(eq(characters.id, id));
     expect(row).toBeDefined();
-    expect(row.goldPieces).toBe(14);
+    expect(row.goldPieces).toBe(24);
 
     const equipmentRows = await db
       .select()
@@ -564,7 +567,7 @@ describeWithDb('character create every class (#388)', () => {
     const getRes = await request(`/v1/characters/${id}`, 'GET');
     expect(getRes.status).toBe(200);
     const fetched = JSON.parse(await getRes.text()) as { gold_pieces?: number };
-    expect(fetched.gold_pieces).toBe(14);
+    expect(fetched.gold_pieces).toBe(24);
   });
 
   // #899: the class_features body below is the ClassFeatureSelection
