@@ -6,9 +6,21 @@
  *
  *   system:  persona + campaign description + rules-of-play + response-structure
  *            + final-reminders + security-rules base text (+ voice section)
- *   user:    scene-stable lore -> input-matched lore tail -> character sheet ->
- *            current scene -> tactical context -> memories -> history ->
- *            game-state JSON -> turn flags -> scene state -> player input
+ *   user:    scene-stable lore -> character sheet -> current scene ->
+ *            input-matched lore tail -> memories -> tactical context ->
+ *            history -> game-state JSON -> turn flags -> scene state ->
+ *            player input
+ *
+ * The user-message order is part of the cache contract, not just tidiness:
+ * the provider serves the longest byte-identical prefix, so every block that
+ * is stable across same-scene turns must precede the first per-turn block.
+ * The character sheet render carries no per-turn state (HP, slots and
+ * conditions travel in the game-state JSON at the tail) and the current
+ * scene changes only with the scene, so both sit ahead of the two blocks
+ * that are re-made every turn: the input-matched lore tail and the
+ * relevance-picked memories. (The tail used to sit ahead of the sheet, and
+ * the memories ahead of the current scene, which capped the cacheable
+ * user-message prefix at the scene lore alone.)
  *
  * The system block is byte-identical across turns in the same combat state
  * (two variants: in/out of combat). Per-turn flags (resolutionOnly,
@@ -112,11 +124,13 @@ export function buildTurnFlagsLine(input: DmTurnFlagsInput): string {
 export interface DmUserPromptSections {
   /** Scene-stable lore (cached per scene), or '' when the campaign has none. */
   loreScene: string;
+  /** `<game_context>` with the character sheet only (no campaign, no lore, no memories). */
+  characterSheet: string;
+  currentScene: string;
   /** Per-turn input-matched lore extras, or '' when none. */
   loreInputTail: string;
-  /** `<game_context>` with the character sheet and memories (no campaign, no lore). */
-  userGameContext: string;
-  currentScene: string;
+  /** `<story_memories>` with this turn's relevance-picked memories, or '' when none. */
+  memories: string;
   tacticalContext: string;
   historySection: string;
   /** `<immutable_game_state>` JSON envelope. */
@@ -130,16 +144,20 @@ export interface DmUserPromptSections {
 
 /**
  * Assemble the volatile user message, stable -> volatile. The leading blocks
- * (scene-stable lore, character sheet) change rarely; the tail (flags, scene
- * state, player input) changes every turn. The fact-ledger `<scene_state>`
- * stays immediately before `<player_input>` per memory-system-design-v2 §3.3.
+ * (scene-stable lore, character sheet, current scene) are byte-identical
+ * across same-scene turns; the first per-turn block is the input-matched
+ * lore tail, and everything from there on (memories, tactical context,
+ * history, game state, flags, scene state, player input) may change every
+ * turn. The fact-ledger `<scene_state>` stays immediately before
+ * `<player_input>` per memory-system-design-v2 §3.3.
  */
 export function assembleUserPrompt(sections: DmUserPromptSections): string {
   const parts: string[] = [];
   if (sections.loreScene) parts.push(sections.loreScene);
-  if (sections.loreInputTail) parts.push(sections.loreInputTail);
-  parts.push(sections.userGameContext);
+  parts.push(sections.characterSheet);
   if (sections.currentScene) parts.push(sections.currentScene);
+  if (sections.loreInputTail) parts.push(sections.loreInputTail);
+  if (sections.memories) parts.push(sections.memories);
   if (sections.tacticalContext) parts.push(sections.tacticalContext);
   if (sections.historySection) parts.push(sections.historySection);
   parts.push(sections.gameState);

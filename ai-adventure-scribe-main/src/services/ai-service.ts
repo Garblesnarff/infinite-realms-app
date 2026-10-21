@@ -455,6 +455,12 @@ export class AIService {
         let fullPrompt: string;
         let loreSceneSection = '';
         let loreInputTail = '';
+        let userCharacterSheetSection = '';
+        let userMemoriesSection = '';
+        // The metrics-facing sheet+memories string (campaign_and_canon). The
+        // two halves are built separately on the steady-state path (#352):
+        // the sheet is stable across turns, the memories are re-picked every
+        // turn, and the assembly orders them accordingly.
         let userGameContextSection = '';
         // The opening turn's ContextBuilder output, for the campaign_and_canon
         // metric (the steady-state turn measures the split user context).
@@ -539,9 +545,12 @@ export class AIService {
         } else {
           // #352: the steady-state turn. System message (stable) + user
           // message (scene-stable lore -> volatile tail).
-          userGameContextSection = await GameContextPrompts.buildUserContextSection(
+          // #352: the sheet and the memories are built separately so the
+          // assembly can place the (stable) sheet ahead of the (per-turn)
+          // memories; the concatenation keeps the campaign_and_canon metric
+          // measuring the same content the old combined build produced.
+          userCharacterSheetSection = await GameContextPrompts.buildUserCharacterSection(
             params.context,
-            relevantMemories,
           ).then((value) => {
             logger.info('TURN_GENERATE_PREPARATION_TIMING', {
               sessionId: params.context.sessionId,
@@ -550,14 +559,17 @@ export class AIService {
             });
             return value;
           });
+          userMemoriesSection = GameContextPrompts.buildUserMemoriesSection(relevantMemories);
+          userGameContextSection = userCharacterSheetSection + userMemoriesSection;
 
           // Measure the fixed user message WITHOUT lore, so the canon budget
           // leaves room for the history floor.
           const fixedUserNoLore = assembleUserPrompt({
             loreScene: '',
-            loreInputTail: '',
-            userGameContext: userGameContextSection,
+            characterSheet: userCharacterSheetSection,
             currentScene: sceneSection,
+            loreInputTail: '',
+            memories: userMemoriesSection,
             tacticalContext,
             historySection: '',
             gameState: gameStateBlock,
@@ -645,9 +657,10 @@ export class AIService {
 
           const fixedPrompt = `${systemPrompt ?? ''}${assembleUserPrompt({
             loreScene: loreSceneSection,
-            loreInputTail,
-            userGameContext: userGameContextSection,
+            characterSheet: userCharacterSheetSection,
             currentScene: sceneSection,
+            loreInputTail,
+            memories: userMemoriesSection,
             tacticalContext,
             historySection: '',
             gameState: gameStateBlock,
@@ -667,9 +680,10 @@ export class AIService {
           ).join('\n\n');
           fullPrompt = assembleUserPrompt({
             loreScene: loreSceneSection,
-            loreInputTail,
-            userGameContext: userGameContextSection,
+            characterSheet: userCharacterSheetSection,
             currentScene: sceneSection,
+            loreInputTail,
+            memories: userMemoriesSection,
             tacticalContext,
             historySection: historyContext
               ? `<conversation_history>\n${historyContext}\n</conversation_history>`

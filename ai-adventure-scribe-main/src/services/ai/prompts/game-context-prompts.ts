@@ -25,6 +25,28 @@ export function resolveStarterCampaignId(context: GameContext): string | undefin
 }
 
 export class GameContextPrompts {
+  /**
+   * The `<story_memories>` block for a set of memories ('' when there are
+   * none), shared by every game-context builder so the render can never
+   * drift between them. The block leads with a newline: in the game-context
+   * builders it is appended directly after the character section.
+   */
+  private static renderStoryMemories(relevantMemories: Memory[]): string {
+    if (relevantMemories.length === 0) return '';
+    let block = `
+<story_memories>
+<title>IMPORTANT STORY MEMORIES</title>
+Reference these memories naturally to maintain story continuity.
+Memories are color, not authority: where a memory conflicts with <scene_state>, the <scene_state> facts are correct and the memory is stale.`;
+    relevantMemories.forEach((memory, index) => {
+      block += `
+<memory index="${index + 1}" type="${memory.type.toUpperCase()}">${memory.content}</memory>`;
+    });
+    block += `
+</story_memories>`;
+    return block;
+  }
+
   static async buildGameContextSection(
     context: GameContext,
     relevantMemories: Memory[],
@@ -93,18 +115,26 @@ DESCRIPTION: ${campaignDescription}
       section += await GameContextPrompts.buildCharacterSection(context.characterDetails);
     }
 
-    if (relevantMemories.length > 0) {
-      section += `
-<story_memories>
-<title>IMPORTANT STORY MEMORIES</title>
-Reference these memories naturally to maintain story continuity.
-Memories are color, not authority: where a memory conflicts with <scene_state>, the <scene_state> facts are correct and the memory is stale.`;
-      relevantMemories.forEach((memory, index) => {
-        section += `
-<memory index="${index + 1}" type="${memory.type.toUpperCase()}">${memory.content}</memory>`;
-      });
-      section += `
-</story_memories>`;
+    section += GameContextPrompts.renderStoryMemories(relevantMemories);
+
+    section += `</game_context>`;
+    return section;
+  }
+
+  /**
+   * #352: the character sheet alone, in its `<game_context>` wrapper, for
+   * the user message's stable region. The sheet render carries no per-turn
+   * state (HP, spell slots and conditions travel in the game-state JSON at
+   * the prompt tail), so it is byte-stable across turns and the assembly
+   * places it ahead of every per-turn block. The turn's memories are built
+   * separately (`buildUserMemoriesSection`) because they are re-picked
+   * against the current player message every turn.
+   */
+  static async buildUserCharacterSection(context: GameContext): Promise<string> {
+    let section = `<game_context>`;
+
+    if (context.characterDetails) {
+      section += await GameContextPrompts.buildCharacterSection(context.characterDetails);
     }
 
     section += `</game_context>`;
@@ -112,37 +142,12 @@ Memories are color, not authority: where a memory conflicts with <scene_state>, 
   }
 
   /**
-   * #352: the volatile half of the game context for the user message: the
-   * character sheet and the turn's memories, without the campaign details
-   * (stable — they live in the system block) and without lore (scene-stable —
-   * rendered and cached per scene by the caller).
+   * #352: this turn's relevance-picked memories as a standalone block for
+   * the user message's volatile region ('' when there are none), without the
+   * leading newline the shared render carries for its in-section callers.
    */
-  static async buildUserContextSection(
-    context: GameContext,
-    relevantMemories: Memory[],
-  ): Promise<string> {
-    let section = `<game_context>`;
-
-    if (context.characterDetails) {
-      section += await GameContextPrompts.buildCharacterSection(context.characterDetails);
-    }
-
-    if (relevantMemories.length > 0) {
-      section += `
-<story_memories>
-<title>IMPORTANT STORY MEMORIES</title>
-Reference these memories naturally to maintain story continuity.
-Memories are color, not authority: where a memory conflicts with <scene_state>, the <scene_state> facts are correct and the memory is stale.`;
-      relevantMemories.forEach((memory, index) => {
-        section += `
-<memory index="${index + 1}" type="${memory.type.toUpperCase()}">${memory.content}</memory>`;
-      });
-      section += `
-</story_memories>`;
-    }
-
-    section += `</game_context>`;
-    return section;
+  static buildUserMemoriesSection(relevantMemories: Memory[]): string {
+    return GameContextPrompts.renderStoryMemories(relevantMemories).replace(/^\n/, '');
   }
 
   /**

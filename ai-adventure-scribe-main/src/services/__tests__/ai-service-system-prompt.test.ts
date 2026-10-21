@@ -44,7 +44,8 @@ vi.mock('../ai/prompts/campaign-context-prompts', () => ({
 vi.mock('../ai/prompts/game-context-prompts', () => ({
   resolveStarterCampaignId: vi.fn(),
   GameContextPrompts: {
-    buildUserContextSection: vi.fn(async () => '<game_context/>'),
+    buildUserCharacterSection: vi.fn(async () => '<game_context/>'),
+    buildUserMemoriesSection: vi.fn(() => ''),
   },
 }));
 vi.mock('../narrative/scene-state-client', () => ({ fetchSceneState: vi.fn() }));

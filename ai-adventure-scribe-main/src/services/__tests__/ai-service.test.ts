@@ -65,7 +65,8 @@ vi.mock('../ai/prompts/game-context-prompts', () => ({
   resolveStarterCampaignId: vi.fn(),
   // #352: the steady-state turn builds the volatile user context through this.
   GameContextPrompts: {
-    buildUserContextSection: vi.fn(async () => '<game_context/>'),
+    buildUserCharacterSection: vi.fn(async () => '<game_context/>'),
+    buildUserMemoriesSection: vi.fn(() => ''),
   },
 }));
 
@@ -154,10 +155,8 @@ describe('AIService', () => {
       );
       // #352: the steady-state turn builds the volatile user context through
       // GameContextPrompts (ContextBuilder.build only serves the opening).
-      expect(GameContextPrompts.buildUserContextSection).toHaveBeenCalledWith(
-        mockContext,
-        mockMemories,
-      );
+      expect(GameContextPrompts.buildUserCharacterSection).toHaveBeenCalledWith(mockContext);
+      expect(GameContextPrompts.buildUserMemoriesSection).toHaveBeenCalledWith(mockMemories);
       expect(llmApiClient.generateText).toHaveBeenCalledWith(
         expect.objectContaining({
           prompt: expect.stringContaining('<game_context/>'),
@@ -231,12 +230,12 @@ describe('AIService', () => {
       await AIService.chatWithDM(paramsWithMemories);
 
       expect(MemoryManager.getRelevantMemories).not.toHaveBeenCalled();
-      // #352: the steady-state turn builds the volatile user context through
-      // GameContextPrompts (ContextBuilder.build only serves the opening).
-      expect(GameContextPrompts.buildUserContextSection).toHaveBeenCalledWith(
-        mockContext,
-        providedMemories,
-      );
+      // #352: the steady-state turn builds the user context through
+      // GameContextPrompts (ContextBuilder.build only serves the opening) —
+      // the sheet and the memories separately, so the assembly can order the
+      // stable sheet ahead of the per-turn memories.
+      expect(GameContextPrompts.buildUserCharacterSection).toHaveBeenCalledWith(mockContext);
+      expect(GameContextPrompts.buildUserMemoriesSection).toHaveBeenCalledWith(providedMemories);
     });
 
     it('should handle errors gracefully', async () => {
