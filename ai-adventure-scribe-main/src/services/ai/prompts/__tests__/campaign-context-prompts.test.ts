@@ -346,6 +346,9 @@ describe('CampaignContextPrompts.renderStarterCampaignLore — the PC is not an 
   it('never renders the PC as an NPC card, other NPCs intact', () => {
     const result = CampaignContextPrompts.renderStarterCampaignLore(pcLore);
 
+    expect(result.section).toContain('<player_identity>');
+    expect(result.section).toContain('The Apprentice is the player');
+    expect(result.section).toContain('In scene narration The Apprentice is "you"');
     expect(result.section).not.toContain('<npc name="The Apprentice">');
     expect(result.section).not.toContain('wobbling under the weight of a trunk');
     expect(result.section).toContain('<npc name="Sous-Chef Pip">');
@@ -366,7 +369,12 @@ describe('CampaignContextPrompts.renderStarterCampaignLore — the PC is not an 
     });
 
     expect(result.section).toContain('Sous-Chef Pip');
-    expect(result.section).not.toContain('The Apprentice');
+    // The PC's name appears only inside the identity anchor — never as a
+    // card and never as a roster entry.
+    expect(result.section).toContain('<player_identity>');
+    expect(result.section).not.toContain('<npc name="The Apprentice">');
+    expect(result.section).not.toContain('NPCs: The Apprentice');
+    expect(result.section).not.toContain('wobbling under the weight of a trunk');
   });
 
   it('matches the PC through case and a leading article, like the assets marking', () => {
@@ -385,6 +393,7 @@ describe('CampaignContextPrompts.renderStarterCampaignLore — the PC is not an 
     });
 
     expect(result.section).toContain('<npc name="The Apprentice">');
+    expect(result.section).not.toContain('<player_identity>');
   });
 });
 

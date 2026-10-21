@@ -288,6 +288,28 @@ function scoreEntity(
   return score;
 }
 
+/**
+ * #708: the identity anchor for premade playthroughs, stated as a canon fact
+ * at the head of the lore the DM treats as canonical. Premade names are bare
+ * role titles ("The Apprentice") that read as NPC descriptors; without this,
+ * the DM narrates the PC in the third person as a separate person in the
+ * scene ("Nearby, The Apprentice ..."). It lives here, not in the character
+ * block, because the prompt-section counter buckets the character block into
+ * system_rules, whose #2533 budget is frozen with only a few tokens of
+ * headroom (ai-service-prompt-diet.test.ts), while the lore head is campaign
+ * canon with room. Returns '' when the lore carries no player name, so
+ * renders without one stay byte-identical.
+ */
+function playerIdentityBlock(playerCharacterName?: string): string {
+  const playerName = playerCharacterName?.trim();
+  if (!playerName) return '';
+  return `
+<player_identity>
+${playerName} is the player — the person whose messages you are answering. In scene narration ${playerName} is "you": write what they perceive and do in the second person. Never narrate ${playerName} in the third person by name as a separate person present in the scene (never "Nearby, ${playerName} ...").
+</player_identity>
+`;
+}
+
 function renderLoreHead(lore: StarterCampaignLore): string {
   let head = `
 <starter_campaign_lore>
@@ -296,7 +318,7 @@ TITLE: ${lore.title}
 PREMISE: ${lore.premise}
 OVERVIEW: ${lore.overviewText}
 </canonical_setting>
-
+${playerIdentityBlock(lore.playerCharacterName)}
 <creative_direction>
 ${lore.creativeBrief}
 </creative_direction>`;

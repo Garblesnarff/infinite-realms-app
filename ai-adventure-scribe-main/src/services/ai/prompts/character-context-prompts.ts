@@ -77,21 +77,21 @@ ARMOR: ${armorText} | ${acText}
   }
 
   public static async buildCharacterSection(char: Record<string, any>): Promise<string> {
+    // #708: bind the name to the player at its first presentation in the
+    // prompt. Premade names are bare role titles ("The Apprentice"), which
+    // read as NPC descriptors; an unbound label lets the DM narrate the PC
+    // in the third person as a separate person standing nearby. The full
+    // <player_identity> anchor rides in the starter-lore head (see
+    // CampaignContextPrompts.renderLoreHead): the character block is in the
+    // prompt-section counter's system_rules remainder, whose #2533 budget
+    // (ai-service-prompt-diet.test.ts) has only a few tokens of headroom,
+    // while the lore head is campaign canon with room.
     let section = `<character_details>
-PLAYER CHARACTER: ${char.name}, a level ${char.level} ${char.race || 'Unknown Race'} ${char.class?.name || char.class || 'Unknown Class'}`;
+PLAYER CHARACTER: ${char.name} (you, the player), a level ${char.level} ${char.race || 'Unknown Race'} ${char.class?.name || char.class || 'Unknown Class'}`;
 
     if (char.background) {
       section += ` (${char.background} background)`;
     }
-
-    // #708: bind the name to the player at the name's first presentation in
-    // the prompt. Premade names are bare role titles ("The Apprentice"),
-    // which read as NPC descriptors; without this anchor the DM narrates the
-    // PC in the third person as a separate person standing nearby.
-    section += `
-<player_identity>
-${char.name} IS the player — the person whose messages you are answering. In scene narration ${char.name} is "you": write what they perceive and do in the second person. Never narrate ${char.name} in the third person by name as a separate person present in the scene (never "Nearby, ${char.name} ...").
-</player_identity>`;
 
     if (char.character_stats && char.character_stats.length > 0) {
       const stats = char.character_stats[0];

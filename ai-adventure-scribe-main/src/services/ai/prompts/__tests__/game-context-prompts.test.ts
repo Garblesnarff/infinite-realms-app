@@ -151,7 +151,9 @@ describe('GameContextPrompts', () => {
 
       const result = await GameContextPrompts.buildCharacterSection(char);
 
-      expect(result).toContain('PLAYER CHARACTER: Grog, a level 5 Goliath Barbarian');
+      expect(result).toContain(
+        'PLAYER CHARACTER: Grog (you, the player), a level 5 Goliath Barbarian',
+      );
       expect(result).toContain('(Outlander background)');
       expect(result).toContain(
         'STR 18(+4), DEX 14(+2), CON 16(+3), INT 8(-1), WIS 10(+0), CHA 10(+0)',
@@ -170,7 +172,9 @@ describe('GameContextPrompts', () => {
 
       const result = await GameContextPrompts.buildCharacterSection(char);
 
-      expect(result).toContain('PLAYER CHARACTER: Nameless, a level 1 Human Fighter');
+      expect(result).toContain(
+        'PLAYER CHARACTER: Nameless (you, the player), a level 1 Human Fighter',
+      );
       expect(result).not.toContain('background)');
       expect(result).not.toContain('<ability_scores>');
     });
@@ -421,13 +425,12 @@ describe('the player character identity anchor (#708)', () => {
     ],
   };
 
-  it('anchors a premade character as the player in the character block', async () => {
+  it('binds a premade character name to the player at its first presentation', async () => {
     const result = await GameContextPrompts.buildCharacterSection(apprentice);
 
-    expect(result).toContain('<player_identity>');
-    expect(result).toContain('The Apprentice IS the player');
-    expect(result).toContain('In scene narration The Apprentice is "you"');
-    expect(result).toContain('Never narrate The Apprentice in the third person by name');
+    expect(result).toContain(
+      'PLAYER CHARACTER: The Apprentice (you, the player), a level 1',
+    );
   });
 
   it('anchors a created character the same way (control)', async () => {
@@ -440,8 +443,9 @@ describe('the player character identity anchor (#708)', () => {
 
     const result = await GameContextPrompts.buildCharacterSection(created);
 
-    expect(result).toContain('Kael Thornwood IS the player');
-    expect(result).toContain('In scene narration Kael Thornwood is "you"');
+    expect(result).toContain(
+      'PLAYER CHARACTER: Kael Thornwood (you, the player), a level 1',
+    );
   });
 
   it('full assembly: anchor present, the PC is never an NPC card', async () => {
@@ -473,7 +477,11 @@ describe('the player character identity anchor (#708)', () => {
       [],
     );
 
-    expect(result).toContain('The Apprentice IS the player');
+    expect(result).toContain('The Apprentice (you, the player)');
+    expect(result).toContain('<player_identity>');
+    expect(result).toContain('The Apprentice is the player');
+    expect(result).toContain('In scene narration The Apprentice is "you"');
+    expect(result).toContain('Never narrate The Apprentice in the third person by name');
     expect(result).toContain('<npc name="Head Chef Balthazar">');
     expect(result).not.toContain('<npc name="The Apprentice">');
     expect(result).not.toContain('wobbling precariously with their trunk');
