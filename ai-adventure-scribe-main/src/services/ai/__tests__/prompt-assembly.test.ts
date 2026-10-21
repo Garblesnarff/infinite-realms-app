@@ -9,8 +9,12 @@
  * 2. Per-turn flags never appear inside that prefix.
  * 3. The scene-stable lore section is byte-identical across same-scene turns
  *    and refreshes when the scene changes.
+ * 4. Two consecutive turns in the same scene share a prompt prefix covering
+ *    the whole stable region (system + scene lore + character sheet +
+ *    current scene); the first divergence sits at the first per-turn block
+ *    (the input-matched lore tail, or the memories when there is no tail).
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   assembleUserPrompt,
@@ -23,9 +27,34 @@ import {
   SECURITY_RULES_BASE_TEXT,
 } from '../prompt-assembly';
 import { CampaignContextPrompts } from '../prompts/campaign-context-prompts';
+import { GameContextPrompts } from '../prompts/game-context-prompts';
 import { approximateTokens } from '../shared/token-budget';
 
+import type { Memory } from '../../memory-manager';
 import type { StarterCampaignLore } from '../prompts/campaign-context-prompts';
+
+// The character-section builder reads the sheet through the API; stub it to
+// a fixed loadout so the sheet render is deterministic (and identical
+// across the two measured turns, exactly as a real unchanged sheet is).
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    getCharacterLoadout: vi.fn(async () => ({
+      weapons: [
+        {
+          name: 'Longbow',
+          damageDice: '1d8',
+          damageType: 'piercing',
+          normalRange: 150,
+          longRange: 600,
+          ranged: true,
+        },
+      ],
+      armor: ['Studded leather'],
+      armorClass: 15,
+    })),
+    reportClientFailure: vi.fn(),
+  },
+}));
 
 const campaign = {
   campaignDetails: {
@@ -163,9 +192,10 @@ describe('buildTurnFlagsLine', () => {
 describe('assembleUserPrompt', () => {
   const sections = {
     loreScene: '<starter_campaign_lore>scene</starter_campaign_lore>',
-    loreInputTail: '<input_matched_lore>extra</input_matched_lore>',
-    userGameContext: '<game_context>char</game_context>',
+    characterSheet: '<game_context>char</game_context>',
     currentScene: '<current_scene>kitchen</current_scene>',
+    loreInputTail: '<input_matched_lore>extra</input_matched_lore>',
+    memories: '<story_memories>mem</story_memories>',
     tacticalContext: '',
     historySection: '<conversation_history>hi</conversation_history>',
     gameState: '<immutable_game_state>{}</immutable_game_state>',
@@ -178,9 +208,10 @@ describe('assembleUserPrompt', () => {
     const user = assembleUserPrompt(sections);
     const order = [
       '<starter_campaign_lore>',
-      '<input_matched_lore>',
       '<game_context>',
       '<current_scene>',
+      '<input_matched_lore>',
+      '<story_memories>',
       '<conversation_history>',
       '<immutable_game_state>',
       '<scene_state>',
@@ -195,8 +226,14 @@ describe('assembleUserPrompt', () => {
   });
 
   it('omits empty optional sections', () => {
-    const user = assembleUserPrompt({ ...sections, loreInputTail: '', tacticalContext: '' });
+    const user = assembleUserPrompt({
+      ...sections,
+      loreInputTail: '',
+      memories: '',
+      tacticalContext: '',
+    });
     expect(user).not.toContain('<input_matched_lore>');
+    expect(user).not.toContain('<story_memories>');
   });
 });
 
@@ -301,5 +338,205 @@ describe('scene-stable lore rendering', () => {
     expect(tight.canonCut).toBe(false);
     expect(tight.keptEntityNames).toContain('quillon varr-hesk');
     expect(tight.section).toContain('<canon_roster>');
+  });
+});
+
+describe('two consecutive turns in the same scene — shared prefix', () => {
+  // The fixtures follow the real producers, assembled exactly as
+  // ai-service's steady-state path assembles them: the system block, the
+  // scene lore and the input-matched tail are rendered by the production
+  // builders, the sheet by the real character-section builder (sheet API
+  // stubbed above to a fixed loadout), and the memories by the real
+  // memories builder. History, game state and scene state are pass-through
+  // blocks in the assembly, so they are represented by the blocks the
+  // caller hands over. The measured quantity is the prompt as the provider
+  // sees it: system message + user message, concatenated.
+  const lore = (() => {
+    const extended = fakeLore();
+    extended.entitiesByType.items.push(
+      chunk('Silver Ladle', 'A silver ladle that never tarnishes or cools.'),
+    );
+    extended.entitiesByType.npcs.push(
+      chunk('Mira the Cellarer', 'Mira keeps the cellar keys and the wine ledger.'),
+    );
+    return extended;
+  })();
+
+  const sceneOptions = {
+    tokenBudget: 5000,
+    recentTurnsText: 'The kitchen.\nquillon varr-hesk\neast kitchen',
+    activeEntityNames: ['Quillon Varr-Hesk'],
+    includeRoster: true as const,
+    sceneOnly: true as const,
+  };
+  const currentScene =
+    '<current_scene>\nThe East Kitchen, mid-morning. Copper pots steam over the hearth.\n</current_scene>';
+  const ALL_ENTITY_NAMES = [
+    'Quillon Varr-Hesk',
+    'Mira the Cellarer',
+    'East Kitchen',
+    'Brass Thimble',
+    'Silver Ladle',
+  ];
+
+  const turnContext = {
+    characterDetails: {
+      id: 'char-kael',
+      name: 'Kael Thornwhisper',
+      level: 3,
+      race: 'Wood Elf',
+      class: 'Ranger',
+      background: 'Outlander',
+      character_stats: [
+        {
+          strength: 12,
+          dexterity: 17,
+          constitution: 13,
+          intelligence: 11,
+          wisdom: 16,
+          charisma: 10,
+          armor_class: 15,
+        },
+      ],
+    },
+  } as never;
+
+  function tailFor(playerInput: string, sceneKeptNames: string[]): string {
+    const tail = CampaignContextPrompts.renderStarterCampaignLore(lore, {
+      tokenBudget: 3000,
+      recentTurnsText: sceneOptions.recentTurnsText,
+      activeEntityNames: sceneOptions.activeEntityNames,
+      turnScope: {
+        playerInput,
+        lastDmMessage: '',
+        sceneText: 'The kitchen.',
+        entityTokenBudget: 3000,
+      },
+      excludeEntityNames: sceneKeptNames,
+      entitiesOnly: true,
+    });
+    return tail.keptEntities > 0
+      ? `<input_matched_lore>\n${tail.section}\n</input_matched_lore>`
+      : '';
+  }
+
+  async function assembleTurn(
+    input: {
+      playerInput: string;
+      memories: Memory[];
+      historySection: string;
+      gameState: string;
+      sceneState: string;
+    },
+    options?: { tailExcludeNames?: string[] },
+  ): Promise<string> {
+    const system = buildSystemPrompt({
+      ...extractCampaignDetails(campaign),
+      inCombat: false,
+      voiceContext: null,
+    });
+    const sceneRender = CampaignContextPrompts.renderStarterCampaignLore(lore, sceneOptions);
+    const sheet = await GameContextPrompts.buildUserCharacterSection(turnContext);
+    const user = assembleUserPrompt({
+      loreScene: sceneRender.section,
+      characterSheet: sheet,
+      currentScene,
+      loreInputTail: tailFor(input.playerInput, options?.tailExcludeNames ?? sceneRender.keptEntityNames),
+      memories: GameContextPrompts.buildUserMemoriesSection(input.memories),
+      tacticalContext: '',
+      historySection: input.historySection,
+      gameState: input.gameState,
+      turnFlagsLine: '',
+      sceneState: input.sceneState,
+      playerInput: input.playerInput,
+    });
+    return system + user;
+  }
+
+  function commonPrefixLength(a: string, b: string): number {
+    const limit = Math.min(a.length, b.length);
+    let index = 0;
+    while (index < limit && a[index] === b[index]) index += 1;
+    return index;
+  }
+
+  async function stablePrefix(): Promise<string> {
+    const system = buildSystemPrompt({
+      ...extractCampaignDetails(campaign),
+      inCombat: false,
+      voiceContext: null,
+    });
+    const sceneRender = CampaignContextPrompts.renderStarterCampaignLore(lore, sceneOptions);
+    const sheet = await GameContextPrompts.buildUserCharacterSection(turnContext);
+    return system + [sceneRender.section, sheet, currentScene].join('\n\n') + '\n\n';
+  }
+
+  const turn1 = {
+    playerInput: 'Tell me about the brass thimble.',
+    memories: [
+      { type: 'event', content: 'Kael promised Quillon first taste of the stew.' },
+      { type: 'fact', content: 'The blue tile by the east door is cracked.' },
+    ] as unknown as Memory[],
+    historySection:
+      '<conversation_history>\nDM: The kitchen smells of nutmeg and woodsmoke.\n</conversation_history>',
+    gameState: '<immutable_game_state>{"isInCombat":false,"round":1}</immutable_game_state>',
+    sceneState: '<scene_state>\n- Quillon Varr-Hesk is in the East Kitchen.\n</scene_state>',
+  };
+  const turn2 = {
+    playerInput: 'Ask Mira the Cellarer about the silver ladle.',
+    memories: [
+      { type: 'event', content: 'Quillon laughed at the story about the thimble.' },
+      { type: 'relationship', content: 'Mira trusts Kael with the cellar keys.' },
+    ] as unknown as Memory[],
+    historySection:
+      '<conversation_history>\nDM: The kitchen smells of nutmeg and woodsmoke.\n\nPlayer: Tell me about the brass thimble.\n\nDM: Quillon turns the thimble over in his palm.\n</conversation_history>',
+    gameState: '<immutable_game_state>{"isInCombat":false,"round":2}</immutable_game_state>',
+    sceneState:
+      '<scene_state>\n- Quillon Varr-Hesk is in the East Kitchen.\n- The stew is simmering.\n</scene_state>',
+  };
+
+  it('covers the whole stable region; first divergence is the lore tail', async () => {
+    const wire1 = await assembleTurn(turn1);
+    const wire2 = await assembleTurn(turn2);
+    const stable = await stablePrefix();
+
+    // Precondition: both turns name a lore entity the scene section does
+    // not carry, so both carry a non-empty input-matched tail.
+    expect(wire1.slice(stable.length)).toMatch(/^<input_matched_lore>/);
+    expect(wire2.slice(stable.length)).toMatch(/^<input_matched_lore>/);
+
+    expect(wire1.startsWith(stable)).toBe(true);
+    expect(wire2.startsWith(stable)).toBe(true);
+    const divergence = commonPrefixLength(wire1, wire2);
+    expect(divergence).toBeGreaterThanOrEqual(stable.length);
+
+    // The shared prefix is the cacheable part of the turn: it must clear
+    // the provider minimum on its own, and cover at least half the prompt
+    // on this fixture (measured share is reported in the PR).
+    expect(approximateTokens(wire1.slice(0, divergence))).toBeGreaterThan(
+      DM_PROMPT_CACHE_MIN_STABLE_TOKENS,
+    );
+    expect(divergence / Math.min(wire1.length, wire2.length)).toBeGreaterThan(0.45);
+  });
+
+  it('with no input-matched tail, first divergence is the memories block', async () => {
+    // The tail comes back empty when the scene section already carries
+    // every entity the turn scope matches (the renderer's exclusion path —
+    // ai-service wraps the tail only when the render kept entities).
+    const wire1 = await assembleTurn(
+      { ...turn1, playerInput: 'I stir the pot and wait.' },
+      { tailExcludeNames: ALL_ENTITY_NAMES },
+    );
+    const wire2 = await assembleTurn(
+      { ...turn2, playerInput: 'I taste the broth.' },
+      { tailExcludeNames: ALL_ENTITY_NAMES },
+    );
+    const stable = await stablePrefix();
+
+    expect(wire1.startsWith(stable)).toBe(true);
+    expect(wire2.startsWith(stable)).toBe(true);
+    expect(wire1.slice(stable.length)).toMatch(/^<story_memories>/);
+    expect(wire2.slice(stable.length)).toMatch(/^<story_memories>/);
+    expect(commonPrefixLength(wire1, wire2)).toBeGreaterThanOrEqual(stable.length);
   });
 });

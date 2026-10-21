@@ -58,7 +58,8 @@ vi.mock('../ai/prompts/game-context-prompts', () => ({
   resolveStarterCampaignId: vi.fn(),
   // #352: the steady-state turn builds the volatile user context through this.
   GameContextPrompts: {
-    buildUserContextSection: vi.fn(async () => '<game_context/>'),
+    buildUserCharacterSection: vi.fn(async () => '<game_context/>'),
+    buildUserMemoriesSection: vi.fn(() => ''),
   },
 }));
 
