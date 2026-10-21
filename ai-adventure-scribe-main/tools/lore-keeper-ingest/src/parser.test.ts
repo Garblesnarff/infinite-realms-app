@@ -51,6 +51,17 @@ test('the fallback does not turn an hours range into sessions', () => {
     parseOverview('# Z\n\n**Estimated Length:** 2–4 hours\n', 'z').estimatedSessions,
     undefined,
   );
+  // Two-digit bounds: without the \b after the capture group, the trailing
+  // \d+ backtracks a digit and the hours lookahead passes mid-number,
+  // yielding "10-1" / "3-1" (#829 round 2).
+  assert.equal(
+    parseOverview('# Z\n\nEstimated Length: 10-12 hours\n', 'z').estimatedSessions,
+    undefined,
+  );
+  assert.equal(
+    parseOverview('# Z\n\nEstimated Length: 3-10 hours\n', 'z').estimatedSessions,
+    undefined,
+  );
 });
 
 test('the fallback still reads a bare session range with no unit', () => {
