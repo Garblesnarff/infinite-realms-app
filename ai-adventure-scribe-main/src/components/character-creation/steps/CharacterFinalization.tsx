@@ -1,5 +1,5 @@
 import { Loader2, Sparkles, Image as ImageIcon, Wand2, CheckCircle, ImageOff } from 'lucide-react';
-import React, { useId } from 'react';
+import React, { useId, useState } from 'react';
 
 import { useCharacterFinalization } from './character-finalization/use-character-finalization';
 import { isDraconicBloodline } from '../../../../shared/class-feature-choices';
@@ -8,8 +8,10 @@ import {
   withStartingPackageEquipped,
 } from '../../../../shared/creation-armor-class';
 import { CharacterPreviewAbilityScores } from '../shared/CharacterPreviewAbilityScores';
+import { getCharacterNameError } from '../wizard/validation-rules';
 
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -19,6 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useCharacter } from '@/contexts/CharacterContext';
 import { getBaseSpeed } from '@/utils/character-calculations';
 import { applyRacialBonusesToAbilityScores } from '@/utils/racialAbilityBonuses';
 
@@ -29,6 +32,7 @@ import { applyRacialBonusesToAbilityScores } from '@/utils/racialAbilityBonuses'
 const CharacterFinalization: React.FC = () => {
   const descriptionId = useId();
   const themeId = useId();
+  const nameId = useId();
 
   const {
     state,
@@ -44,7 +48,29 @@ const CharacterFinalization: React.FC = () => {
     handleGenerateAvatar,
     handleGenerateImage,
   } = useCharacterFinalization();
+  const { dispatch } = useCharacter();
   const character = state.character;
+
+  // #920: a build can reach this step with a missing or invalid name (the
+  // name gate only runs when leaving Basic Info; drafts, the ?step= param and
+  // browser history can all land here without passing it). Offer the name
+  // field in place, wired to the same UPDATE_CHARACTER state Basic Info uses.
+  // Latched at mount so typing the first character doesn't swap the input
+  // for plain text.
+  const [nameInputArmed] = useState(() => getCharacterNameError(character?.name || '') !== null);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const showNameInput = nameInputArmed || getCharacterNameError(character?.name || '') !== null;
+
+  const handleNameChange = (name: string): void => {
+    dispatch({ type: 'UPDATE_CHARACTER', payload: { name } });
+    if (nameError) {
+      setNameError(null);
+    }
+  };
+
+  const handleNameBlur = (): void => {
+    setNameError(getCharacterNameError(character?.name || ''));
+  };
   const finalScores = character?.abilityScores
     ? applyRacialBonusesToAbilityScores(
         character.abilityScores,
@@ -81,7 +107,31 @@ const CharacterFinalization: React.FC = () => {
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
           <div>
-            <strong>Name:</strong> {state.character?.name || 'Not set'}
+            {showNameInput ? (
+              <div className="space-y-1">
+                <Label htmlFor={nameId}>
+                  <strong>Name:</strong> <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id={nameId}
+                  placeholder="Enter your character's name..."
+                  value={state.character?.name || ''}
+                  onChange={(e) => handleNameChange(e.target.value)}
+                  onBlur={handleNameBlur}
+                  aria-invalid={!!nameError}
+                  aria-describedby={nameError ? `${nameId}-error` : undefined}
+                />
+                {nameError && (
+                  <p id={`${nameId}-error`} role="alert" className="text-red-500 text-xs">
+                    {nameError}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <>
+                <strong>Name:</strong> {state.character?.name || 'Not set'}
+              </>
+            )}
           </div>
           <div>
             <strong>Race:</strong> {state.character?.race?.name || 'Not selected'}
