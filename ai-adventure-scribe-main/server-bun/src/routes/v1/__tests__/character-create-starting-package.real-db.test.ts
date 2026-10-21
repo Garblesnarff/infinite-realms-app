@@ -88,6 +88,24 @@ const fighterPayload = JSON.parse(
   stats: { dexterity: number };
 };
 
+// #972: the Half-Orc Paladin wizard payload (Acolyte background + the Paladin
+// package: Chain Mail, Shield, Longsword), produced by the client's real
+// producers (getStartingEquipment -> mapWizardEquipmentToInventory ->
+// transformEquipmentForStorage -> prepareCharacterPayload), pinned the same
+// way the Fighter payload above is pinned.
+const paladinPayload = JSON.parse(
+  readFileSync(
+    resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      '../../../../../shared/test-fixtures/half-orc-paladin-create-payload.json',
+    ),
+    'utf8',
+  ),
+) as {
+  equipment: Array<Record<string, unknown>>;
+  stats: { dexterity: number };
+};
+
 type EquipRow = { itemName: string; equipped: boolean; quantity: number };
 
 function equippedByName(rows: EquipRow[]): Map<string, EquipRow> {
@@ -234,6 +252,45 @@ describeWithDb('character create starting package (#710)', () => {
     expect(byName.get('Handaxe')?.equipped).toBe(false);
     expect(byName.get('Handaxe')?.quantity).toBe(2);
     expect(byName.get('Crossbow, light')?.equipped).toBe(false);
+  });
+
+  it('wears Chain Mail, Shield, and Longsword from the Half-Orc Paladin payload and stores AC 18 (#972)', async () => {
+    const id = await create({
+      ...paladinPayload,
+      name: `Half-Orc Paladin ${testId('972')}`,
+    });
+
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    expect(stats).toBeDefined();
+    // Chain Mail 16 (heavy, DEX ignored) + Shield 2. No Defense style for a
+    // level-1 Paladin. Hark N21-005 saw AC 12 (10 + DEX 2) — the unarmored
+    // value — on the final step and the sheet.
+    expect(stats.armorClass).toBe(18);
+
+    const rows = (await db
+      .select()
+      .from(characterEquipment)
+      .where(eq(characterEquipment.characterId, id))) as EquipRow[];
+    const byName = equippedByName(rows);
+    expect(byName.get('Chain Mail')?.equipped).toBe(true);
+    expect(byName.get('Shield')?.equipped).toBe(true);
+    expect(byName.get('Longsword')?.equipped).toBe(true);
+
+    const read = await app.handle(new Request(`http://localhost/v1/characters/${id}/export`));
+    expect(read.status).toBe(200);
+    const saved = await read.json();
+    expect(
+      saved.character.equipment
+        .flatMap((item: { item_name: string; quantity: number }) =>
+          Array(item.quantity).fill(item.item_name),
+        )
+        .sort(),
+    ).toEqual(
+      paladinPayload.equipment.map((item) => String(item.item_name)).sort(),
+    );
   });
 
   it('wears dashed catalog ids and leaves a backpack carried', async () => {
