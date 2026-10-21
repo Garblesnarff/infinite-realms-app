@@ -386,3 +386,53 @@ describe('#266 NT-011/NT-020 /generate premature roll claims', () => {
     expect(envelope.text).toBe(narration);
   });
 });
+
+describe('#266 round 2 /generate: raw-only roll_result entries', () => {
+  // The client logs a typed roll mention ("I rolled 17") as a roll_result whose
+  // payload is { total, raw } with no success flag (session-logger.ts
+  // logTextRollResult). It carries no engine verdict, so latestRollOutcome skips
+  // it: it must not shadow the real roll below it, in either repair direction.
+  const RAW_ENTRY = (): ReturnType<typeof rollEntry> =>
+    rollEntry(nowIso(), { total: 17, raw: 'I rolled 17' });
+  const INVESTIGATION_REQUEST = {
+    type: 'check',
+    formula: '1d20+5',
+    purpose: 'Investigation check to examine the crystal',
+    dc: 14,
+    ac: null,
+    advantage: false,
+    disadvantage: false,
+  };
+
+  it('the outcome repair still sees the decided roll below a typed mention', async () => {
+    queueRollOutcome([rollEntry(nowIso(), FAILED_STEALTH_PAYLOAD), RAW_ENTRY()]);
+    const envelope = await postGenerate('You succeed in climbing the shaft unheard.');
+    expect(envelope.text).toBe('The Stealth check to climb the shaft unheard failed (7 vs DC 14).');
+  });
+
+  it('a typed mention does not disable the fresh-outcome guard for the premature pass', async () => {
+    queueRollOutcome([
+      rollEntry(nowIso(), { ...FAILED_STEALTH_PAYLOAD, success: true, total: 19 }),
+      RAW_ENTRY(),
+    ]);
+    const narration =
+      'You succeed in climbing the shaft unheard. ' +
+      "You succeed in reading the crystal's fractures like a diagnosis. " +
+      'Roll an Investigation check to learn more.';
+    const envelope = await postGenerate(narration, [INVESTIGATION_REQUEST]);
+    expect(envelope.text).toBe(narration);
+    expect(envelope.roll_requests).toEqual([INVESTIGATION_REQUEST]);
+  });
+
+  it('an outcome-less real roll still stops the search (no older roll surfaces)', async () => {
+    // A damage roll / untargeted check is logged with a total and no verdict and
+    // no raw text: it is a real roll, so the decided roll below it stays buried.
+    queueRollOutcome([
+      rollEntry(nowIso(), FAILED_STEALTH_PAYLOAD),
+      rollEntry(nowIso(), { total: 12 }),
+    ]);
+    const narration = 'You succeed in climbing the shaft unheard.';
+    const envelope = await postGenerate(narration);
+    expect(envelope.text).toBe(narration);
+  });
+});
