@@ -150,6 +150,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   activeResponse = null;
   fetchCalls = [];
+  // #919: the post-combat fetch mark lives in sessionStorage; each scenario here
+  // is its own session story, so no mark may leak from one test into the next.
+  window.sessionStorage.clear();
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -295,6 +298,182 @@ describe('the DM turn reads server combat truth', () => {
             round: 2,
             tacticalContext: 'ASCII map + ACTIVE line',
           }),
+        }),
+      }),
+    );
+  });
+
+  it('carries the fight\'s ending facts into the first post-combat turn (#919)', async () => {
+    activeResponse = { status: 'active' };
+    const { result } = renderHook(() => ({ combat: useCombat(), ai: useAIResponse() }), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.combat.state.isInCombat).toBe(true));
+
+    // The killing turn: in combat, the context is fetched for the current participant.
+    await act(async () => {
+      await result.current.ai.getAIResponse(
+        [
+          {
+            text: 'I strike the goblin down',
+            sender: 'player',
+            timestamp: new Date().toISOString(),
+          },
+        ] as any,
+        SESSION_ID,
+      );
+    });
+    expect(userDataApi.getTacticalMapContext).toHaveBeenCalledWith(SESSION_ID, 'pc-1');
+
+    // The engine ends the fight server-side. The board is gone, but the context GET
+    // now serves the ending facts the board left behind — the shape the server
+    // returns from its real producer (concludeEncounter's recorded facts, wrapped
+    // by the context route in <engine_resolved_outcomes>).
+    activeResponse = { status: 'completed' };
+    const endingFacts =
+      '<engine_resolved_outcomes>\n' +
+      'THE FIGHT IS OVER: the last hostile has fallen and the party is victorious.\n' +
+      'Goblin is DEAD. Do not narrate it as alive or merely wounded, do not let it ' +
+      'act or speak, and do not offer attacks, spells, or any other action against it.\n' +
+      '</engine_resolved_outcomes>';
+    vi.mocked(userDataApi.getTacticalMapContext).mockResolvedValue({
+      ok: true,
+      json: async () => ({ tacticalContext: endingFacts, deliveryToken: 'tok-end' }),
+    } as any);
+    vi.mocked(AIService.chatWithDM).mockClear();
+
+    await act(async () => {
+      await result.current.ai.getAIResponse(
+        [
+          {
+            text: 'I search the room',
+            sender: 'player',
+            timestamp: new Date().toISOString(),
+          },
+        ] as any,
+        SESSION_ID,
+      );
+    });
+
+    // No live participant exists to centre a digest on, so the placeholder goes —
+    // and the ending facts land in the context the DM is actually called with.
+    expect(userDataApi.getTacticalMapContext).toHaveBeenCalledWith(SESSION_ID, '-');
+    expect(AIService.chatWithDM).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({
+          gameState: expect.objectContaining({
+            isInCombat: false,
+            tacticalContext: endingFacts,
+          }),
+        }),
+      }),
+    );
+
+    // The facts are one-shot: the turn after that does not fetch again.
+    vi.mocked(userDataApi.getTacticalMapContext).mockClear();
+    vi.mocked(userDataApi.getTacticalMapContext).mockResolvedValue({ ok: false } as any);
+    await act(async () => {
+      await result.current.ai.getAIResponse(
+        [{ text: 'I move on', sender: 'player', timestamp: new Date().toISOString() }] as any,
+        SESSION_ID,
+      );
+    });
+    expect(userDataApi.getTacticalMapContext).not.toHaveBeenCalled();
+  });
+
+  it('keeps asking after an empty post-combat answer until the ending facts land (#919)', async () => {
+    activeResponse = { status: 'active' };
+    const { result } = renderHook(() => ({ combat: useCombat(), ai: useAIResponse() }), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.combat.state.isInCombat).toBe(true));
+    await act(async () => {
+      await result.current.ai.getAIResponse(
+        [{ text: 'I attack', sender: 'player', timestamp: new Date().toISOString() }] as any,
+        SESSION_ID,
+      );
+    });
+
+    // The fight is over, but the first post-combat fetch finds the board still
+    // standing with nothing pending on it: an ok answer that carries neither
+    // context nor a delivery token delivered nothing, so the mark must survive.
+    activeResponse = { status: 'completed' };
+    vi.mocked(userDataApi.getTacticalMapContext).mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+    } as any);
+    await act(async () => {
+      await result.current.ai.getAIResponse(
+        [{ text: 'I look around', sender: 'player', timestamp: new Date().toISOString() }] as any,
+        SESSION_ID,
+      );
+    });
+    expect(userDataApi.getTacticalMapContext).toHaveBeenCalledWith(SESSION_ID, '-');
+
+    // The ending facts are recorded against the board in the meantime; the next
+    // turn still fetches, and they land.
+    const endingFacts = 'Goblin is DEAD. Do not narrate it as alive.';
+    vi.mocked(userDataApi.getTacticalMapContext).mockResolvedValue({
+      ok: true,
+      json: async () => ({ tacticalContext: endingFacts, deliveryToken: 'tok-late' }),
+    } as any);
+    vi.mocked(AIService.chatWithDM).mockClear();
+    await act(async () => {
+      await result.current.ai.getAIResponse(
+        [{ text: 'I search the room', sender: 'player', timestamp: new Date().toISOString() }] as any,
+        SESSION_ID,
+      );
+    });
+    expect(
+      vi
+        .mocked(userDataApi.getTacticalMapContext)
+        .mock.calls.filter((call) => call[1] === '-'),
+    ).toHaveLength(2);
+    expect(AIService.chatWithDM).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({
+          gameState: expect.objectContaining({ tacticalContext: endingFacts }),
+        }),
+      }),
+    );
+  });
+
+  it('still fetches the ending facts when the game tree remounted after the fight (#919)', async () => {
+    activeResponse = { status: 'active' };
+    const first = renderHook(() => ({ combat: useCombat(), ai: useAIResponse() }), {
+      wrapper,
+    });
+    await waitFor(() => expect(first.result.current.combat.state.isInCombat).toBe(true));
+    await act(async () => {
+      await first.result.current.ai.getAIResponse(
+        [{ text: 'I attack', sender: 'player', timestamp: new Date().toISOString() }] as any,
+        SESSION_ID,
+      );
+    });
+    first.unmount();
+
+    // The fight ended while the tree was down; a fresh mount of the same session
+    // must still make the post-combat fetch — the mark outlives the hook.
+    activeResponse = { status: 'completed' };
+    const endingFacts = 'Goblin is DEAD. Do not narrate it as alive.';
+    vi.mocked(userDataApi.getTacticalMapContext).mockResolvedValue({
+      ok: true,
+      json: async () => ({ tacticalContext: endingFacts, deliveryToken: 'tok-remount' }),
+    } as any);
+    const second = renderHook(() => ({ combat: useCombat(), ai: useAIResponse() }), {
+      wrapper,
+    });
+    await act(async () => {
+      await second.result.current.ai.getAIResponse(
+        [{ text: 'I search the room', sender: 'player', timestamp: new Date().toISOString() }] as any,
+        SESSION_ID,
+      );
+    });
+    expect(userDataApi.getTacticalMapContext).toHaveBeenCalledWith(SESSION_ID, '-');
+    expect(AIService.chatWithDM).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({
+          gameState: expect.objectContaining({ tacticalContext: endingFacts }),
         }),
       }),
     );

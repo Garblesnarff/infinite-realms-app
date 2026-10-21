@@ -54,7 +54,7 @@ import {
 import type { CombatEndReason } from '../../types/combat.js';
 import type { EngineChatLineWriter } from '../engine-chat-line.js';
 
-const { concludeEncounter, describeCombatEnd } = await importWithRealDb(
+const { concludeEncounter, describeCombatEnd, describeDeadCombatants } = await importWithRealDb(
   () => import('../combat/combat-ending.js'),
 );
 const { awardCombatVictoryXp } = await importWithRealDb(
@@ -407,6 +407,49 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
       // #310: the victory's XP award fact, recorded once with the ending.
       expect.stringContaining('COMBAT XP'),
     ]);
+  });
+
+  test('the dead are named in the singular and the plural (#919)', () => {
+    expect(describeDeadCombatants(['Monotony Cultist'])).toContain(
+      'Monotony Cultist is DEAD',
+    );
+    const plural = describeDeadCombatants(['Goblin', 'Goblin Chief']);
+    expect(plural).toContain('Goblin, Goblin Chief are dead');
+    expect(plural).toContain('Do not narrate any of them as alive');
+  });
+
+  test('a victory names the dead creature for the DM\'s next turn (#919)', async () => {
+    // Hark D2-006: the fight-over sentence says a hostile fell but never who, and the
+    // DM — still holding its pre-kill picture of a wounded creature — narrated the
+    // corpse as "barely clinging to its feet" and offered another attack on it. Put
+    // the golem on the floor the way the engine leaves a killing blow's target, then
+    // read back what the next turn's context is handed.
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 0, isConscious: false })
+      .where(eq(combatParticipantStatus.participantId, monsterId));
+    await concludeEncounter(encounterId, sessionId, userId, 'last_hostile_defeated');
+
+    const facts = await consumeDmTacticalFacts(sessionId);
+    const deadFact = facts.find((fact) => fact.includes('Ending Golem'));
+    expect(deadFact).toContain('Ending Golem is DEAD');
+    expect(deadFact).toContain('Do not narrate it as alive');
+    expect(deadFact).toContain('do not offer attacks');
+    // The hero is standing: never named among the dead.
+    expect(facts.some((fact) => fact.includes('DEAD') && fact.includes('Ending Hero'))).toBe(
+      false,
+    );
+  });
+
+  test('a creature still standing at the ending is not named dead (#919)', async () => {
+    // Control for the case above: the fixture golem is alive at 2 of 11 — run 18's
+    // shape — and the fight is closed around it. Its name reaches the DM (the ending
+    // sentence, the refusal/exit lines on other paths) but never as a death.
+    await concludeEncounter(encounterId, sessionId, userId, 'ended_by_request');
+
+    const facts = await consumeDmTacticalFacts(sessionId);
+    expect(facts.length).toBeGreaterThan(0);
+    expect(facts.some((fact) => fact.includes('DEAD') || fact.includes('is dead'))).toBe(false);
   });
 
   test('#2517: a won fight leaves the session active', async () => {

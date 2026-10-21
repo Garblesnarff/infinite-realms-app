@@ -140,6 +140,41 @@ export interface EnhancedChatMessage extends ChatMessage {
 
 const DEFERRED_TASK_TIMEOUT_MS = 20_000;
 
+// #919: a session whose most recent combat still owes the DM its ending facts
+// (who died, why the fight stopped) is marked in sessionStorage. The facts sit on
+// the concluded board and are served by the tactical-context GET, but the
+// encounter itself is already cleared by the first post-combat turn, so the turn
+// code below keeps fetching for a marked session until a fetch actually delivers
+// them. Storage, not a hook ref: the game tree remounts per session, and a
+// remount between the last in-combat turn and the first post-combat one must not
+// lose the mark. Storage can be unavailable (privacy modes); the mark then
+// simply never persists and the post-combat fetch does not happen.
+const COMBAT_END_FACTS_PENDING_KEY = 'ir:combat-end-facts-pending:';
+
+function markCombatEndFactsPending(sessionId: string): void {
+  try {
+    window.sessionStorage.setItem(COMBAT_END_FACTS_PENDING_KEY + sessionId, '1');
+  } catch {
+    // Storage unavailable: the mark is best-effort by design.
+  }
+}
+
+function combatEndFactsPending(sessionId: string): boolean {
+  try {
+    return window.sessionStorage.getItem(COMBAT_END_FACTS_PENDING_KEY + sessionId) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function clearCombatEndFactsPending(sessionId: string): void {
+  try {
+    window.sessionStorage.removeItem(COMBAT_END_FACTS_PENDING_KEY + sessionId);
+  } catch {
+    // Storage unavailable: nothing to clear.
+  }
+}
+
 type TurnAbortSignal = AbortSignal & {
   onPlayerWaitChange?: (waiting: boolean) => void;
 };
@@ -690,19 +725,34 @@ export const useAIResponse = (): {
 
         // The tactical server computes geometry. The DM receives only its bounded
         // ASCII/digest context and never derives distances or line of sight itself.
-        if (isInCombat && sessionId && activeEncounter?.currentTurnParticipantId) {
+        //
+        // #919: the fetch also runs on the first turn AFTER a combat this session
+        // has seen. The ending facts are recorded on the concluded board and the
+        // route serves them with no board left, but `refreshCombatState` has
+        // already cleared the encounter by then, so an in-combat-only gate never
+        // delivers them — the DM narrates from its pre-kill picture and offers
+        // attacks on the dead (Hark D2-006). The entity id only centres the board
+        // digest; with no board left a placeholder goes in its place, exactly as
+        // the headless client passes on its post-combat turn.
+        if (isInCombat && sessionId) markCombatEndFactsPending(sessionId);
+        const postCombatFactsPending =
+          !isInCombat && sessionId ? combatEndFactsPending(sessionId) : false;
+        const tacticalEntityId = isInCombat
+          ? activeEncounter?.currentTurnParticipantId
+          : postCombatFactsPending
+            ? '-'
+            : undefined;
+        if (sessionId && tacticalEntityId) {
           try {
             const tacticalRequest = signal
-              ? userDataApi.getTacticalMapContext(
-                  sessionId,
-                  activeEncounter.currentTurnParticipantId,
-                  signal,
-                )
-              : userDataApi.getTacticalMapContext(
-                  sessionId,
-                  activeEncounter.currentTurnParticipantId,
-                );
+              ? userDataApi.getTacticalMapContext(sessionId, tacticalEntityId, signal)
+              : userDataApi.getTacticalMapContext(sessionId, tacticalEntityId);
             const tacticalResponse = await rejectWhenAborted(tacticalRequest, signal);
+            if (!tacticalResponse.ok && postCombatFactsPending) {
+              // The route answers 404 only when no board is left and nothing is
+              // pending on it: the ending facts are spent, so stop asking.
+              clearCombatEndFactsPending(sessionId);
+            }
             if (tacticalResponse.ok) {
               // #849: the delivery token travels with the one-shot facts; ai-service
               // echoes it on the generate call so the server can confirm delivery
@@ -715,6 +765,13 @@ export const useAIResponse = (): {
                 aiContext.gameState.tacticalContext = payload.tacticalContext;
               if (payload.deliveryToken && aiContext.gameState)
                 aiContext.gameState.tacticalDeliveryToken = payload.deliveryToken;
+              // The ending facts are one-shot, and only a response that actually
+              // carried them ends the post-combat fetching: an ok response with
+              // neither context nor a delivery token means the board is still
+              // there but nothing was pending on it yet, and the fight's ending
+              // facts can still be recorded against it (#919).
+              if (postCombatFactsPending && (payload.tacticalContext || payload.deliveryToken))
+                clearCombatEndFactsPending(sessionId);
             }
           } catch (error) {
             logger.warn('Unable to load tactical context; continuing without map context', error);

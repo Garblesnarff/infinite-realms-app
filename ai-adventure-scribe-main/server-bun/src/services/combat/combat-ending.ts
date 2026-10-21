@@ -144,21 +144,66 @@ const isResolution = (reason: CombatEndReason): boolean =>
   reason === 'player_surrendered';
 
 /**
+ * The fact that names the dead for the DM's next turn (#919).
+ *
+ * `describeCombatEnd` says a hostile fell; it never says who, and the ledger's dead
+ * facts ride a different block. The DM that gets only "the last hostile has fallen"
+ * still holds its own pre-kill picture of the fight — a creature it was narrating as
+ * wounded — and offers another swing at it (Hark D2-006: "barely clinging to its
+ * feet", "strike again at the wounded Cultist", one turn after the kill). So the
+ * ending also leaves this, in the same channel and the same shape as
+ * `describeCombatExit`'s "It is NOT dead": the names, the state, and the instruction
+ * that follows from it.
+ */
+export function describeDeadCombatants(deadNames: string[]): string {
+  const names = deadNames.join(', ');
+  return deadNames.length === 1
+    ? `${names} is DEAD. Do not narrate it as alive or merely wounded, do not let it act ` +
+        'or speak, and do not offer attacks, spells, or any other action against it.'
+    : `THE DEAD: ${names} are dead. Do not narrate any of them as alive or merely ` +
+        'wounded, do not let them act or speak, and do not offer attacks, spells, or ' +
+        'any other action against them.';
+}
+
+/**
  * Persist only facts the combat engine can prove. Ledger failures are deliberately non-fatal:
  * combat state must still close if a deployment has not applied the narrative migration yet.
+ *
+ * Returns the dead participants' names so the caller can leave them in the DM's
+ * tactical facts as well (#919); empty when nobody died or the roster could not be
+ * read — the same non-fatal terms as the ledger write itself.
  */
 async function recordCombatNarrativeFacts(
   encounterId: string,
   sessionId: string,
   userId: string,
   reason: CombatEndReason,
-): Promise<void> {
+): Promise<string[]> {
+  // The roster read stands apart from the ledger writes below: the caller leaves
+  // the dead in the DM's tactical facts from these names (#919), and a ledger
+  // failure must not take the names down with it.
+  let deadParticipants: Awaited<
+    ReturnType<typeof CombatEncounterService.getCombatState>
+  >['participants'];
   try {
     const state = await CombatEncounterService.getCombatState(encounterId, userId);
-    const deadParticipants = state.participants.filter(
+    deadParticipants = state.participants.filter(
       (participant) => vitalStateOf(participant as unknown as VitalsInput) === 'dead',
     );
-
+  } catch (error) {
+    logger.warn({
+      msg: 'NARRATIVE_FACT_WRITE_FAILED',
+      encounterId,
+      sessionId,
+      error: error instanceof Error ? error.message : error,
+    });
+    alert('narrative_fact_write_failed', {
+      sessionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
+  try {
     for (const participant of deadParticipants) {
       await NarrativeLedgerService.assertFact(
         {
@@ -216,6 +261,7 @@ async function recordCombatNarrativeFacts(
       error: error instanceof Error ? error.message : String(error),
     });
   }
+  return deadParticipants.map((participant) => participant.name).filter(Boolean);
 }
 
 /**
@@ -398,7 +444,7 @@ export async function concludeEncounter(
     }
   }
 
-  await recordCombatNarrativeFacts(encounterId, sessionId, userId, reason);
+  const deadNames = await recordCombatNarrativeFacts(encounterId, sessionId, userId, reason);
   // The encounter row is already claimed as completed, but the tactical board remains active
   // until after this write. This is the only ordering in which the reason the fight ended can
   // reach the DM at all.
@@ -410,6 +456,12 @@ export async function concludeEncounter(
         : `${describeCombatEnd(reason)} ${describeStableWake(options.wake)}`
       : describeCombatEnd(reason),
   );
+  // #919: the fight-over sentence never names the fallen, so the DM's next turn also
+  // gets the dead by name — recorded in the same window, before the teardown below,
+  // for the same reason as the sentence above.
+  if (deadNames.length) {
+    await recordDmTacticalFact(sessionId, describeDeadCombatants(deadNames));
+  }
   // #310: a won fight awards XP with a visible message. The award lands on the sheet in
   // `awardCombatVictoryXp`, which also ensures the deterministic engine chat line (the
   // player always sees it); the DM's victory narration covers the fiction. Already awarded
