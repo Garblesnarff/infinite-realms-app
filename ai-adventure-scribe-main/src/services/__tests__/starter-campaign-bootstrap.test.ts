@@ -156,8 +156,20 @@ describe('resolveOrCreateStarterCampaign campaign_length (#829 finding 7)', () =
   it('the overview length line wins over estimatedSessions in both directions', async () => {
     const { api, created } = makeApi();
     await resolveOrCreateStarterCampaign({ ...fullStarter, estimatedSessions: '1' }, api);
+    await resolveOrCreateStarterCampaign({ ...oneShotStarter, estimatedSessions: '8-10' }, api);
 
     expect(created[0].campaign_length).toBe('full');
+    expect(created[1].campaign_length).toBe('one-shot');
+  });
+
+  it('ignores the hours parenthetical in an estimatedSessions value too', async () => {
+    const { api, created } = makeApi();
+    await resolveOrCreateStarterCampaign(
+      { ...oneShotStarter, overview: null, estimatedSessions: '1 session (2–4 hours)' },
+      api,
+    );
+
+    expect(created[0].campaign_length).toBe('one-shot');
   });
 
   it('PIN: a starter with no length data bootstraps exactly as before (full)', async () => {

@@ -89,7 +89,9 @@ export function starterCampaignLength(
       return fromOverview;
     }
   }
-  const sessionCounts = (starter.estimatedSessions?.match(/\d+/g) ?? []).map(Number);
+  const sessionCounts = (
+    starter.estimatedSessions?.replace(/\([^)]*\)/g, ' ').match(/\d+/g) ?? []
+  ).map(Number);
   if (sessionCounts.length > 0 && Math.max(...sessionCounts) === 1) {
     return 'one-shot';
   }
