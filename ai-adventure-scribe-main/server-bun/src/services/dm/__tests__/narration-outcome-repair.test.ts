@@ -180,21 +180,26 @@ describe('repairPrematureRollClaims (#266)', () => {
     disadvantage: false,
   };
 
-  test('a success claim about the requested check is replaced with the pending truth', () => {
+  // #959 forward-fix: these two expectations FLIP, and the flip is a CONCESSION,
+  // stated plainly (self-review HIGH 2): both inputs are semantically premature
+  // claims about the pending action phrased in synonyms the request never uses
+  // ("slipping past the guard post" for a shaft-climb Stealth check; "purchase on
+  // the slick stone" for the climb itself). Lexically they cannot be told apart
+  // from a decided roll's recap about a different action (harness case A below),
+  // which the unscoped #959 pass corrupted — so the scoped pass leaves any verdict
+  // sentence that names none of the pending action's distinctive keywords alone,
+  // these included. The strategist's anchoring directive accepts that trade: the
+  // pass now catches verdicts in the request's own vocabulary (and, when the
+  // purpose names no distinctive action at all, falls back to the detector).
+  test('a success verdict that does not name the pending action is left alone', () => {
     const text =
       'You succeed in slipping past the guard post without a sound. Roll for Stealth.';
-    const repaired = repairPrematureRollClaims(text, [STEALTH_REQUEST]);
-    expect(repaired).toBe(
-      'That outcome is not decided yet — the roll still has to be made. Roll for Stealth.',
-    );
+    expect(repairPrematureRollClaims(text, [STEALTH_REQUEST])).toBeNull();
   });
 
-  test('a failure claim about the requested check is equally premature', () => {
+  test('a failure verdict that does not name the pending action is left alone', () => {
     const text = 'You fail to find any purchase on the slick stone. Roll a Stealth check.';
-    const repaired = repairPrematureRollClaims(text, [STEALTH_REQUEST]);
-    expect(repaired).toBe(
-      'That outcome is not decided yet — the roll still has to be made. Roll a Stealth check.',
-    );
+    expect(repairPrematureRollClaims(text, [STEALTH_REQUEST])).toBeNull();
   });
 
   test('a soft verdict anchored on the requested action is repaired', () => {
@@ -229,5 +234,259 @@ describe('repairPrematureRollClaims (#266)', () => {
         { type: 'initiative', formula: '1d20+3', purpose: 'initiative', dc: null, ac: null },
       ]),
     ).toBeNull();
+  });
+
+  test('a prototype key is not a request type', () => {
+    const text = 'You succeed in climbing the shaft unheard.';
+    for (const type of ['toString', 'constructor', 'hasOwnProperty']) {
+      expect(
+        repairPrematureRollClaims(text, [
+          { type, formula: '1d20+5', purpose: 'Stealth check to climb the shaft', dc: 14, ac: null },
+        ]),
+      ).toBeNull();
+    }
+  });
+});
+
+// #959 forward-fix: PR #959 shipped the premature pass unscoped, and its own self-review
+// (delivered after the merge) confirmed two blockers against the shipped code — a decided
+// roll's recap spliced as if it claimed the pending roll, and conditional stakes framing
+// replaced wholesale. The cases below are that review's harness inputs, verbatim.
+describe('repairPrematureRollClaims — #959 forward-fix scoping', () => {
+  const req = (type: string, purpose: string, dc: number | null = 14) => ({
+    type,
+    formula: '1d20+5',
+    purpose,
+    dc,
+    ac: null,
+    advantage: false,
+    disadvantage: false,
+  });
+  const THIEVES_TOOLS_REQUEST = {
+    type: 'check',
+    formula: '1d20+5',
+    purpose: "Thieves' Tools check to open the gate",
+    dc: 15,
+    ac: null,
+    advantage: false,
+    disadvantage: false,
+  };
+
+  test('case A: a decided roll’s recap in a requesting reply is untouched', () => {
+    const text =
+      'You succeed in climbing the shaft unheard. A locked gate blocks the ledge — ' +
+      "roll a Thieves' Tools check.";
+    expect(repairPrematureRollClaims(text, [THIEVES_TOOLS_REQUEST])).toBeNull();
+  });
+
+  test('case A mirror: a decided roll’s failure recap is equally untouched', () => {
+    const text =
+      'You fail to budge the portcullis. Roll a Thieves\' Tools check to pick the lock instead.';
+    expect(repairPrematureRollClaims(text, [THIEVES_TOOLS_REQUEST])).toBeNull();
+  });
+
+  test('case B: conditional stakes framing is untouched', () => {
+    const text =
+      'Roll a Strength check. If you succeed, you pry the gate open before the patrol ' +
+      'returns; if you fail, the alarm bell rings.';
+    expect(
+      repairPrematureRollClaims(text, [req('check', 'Strength check to pry the gate')]),
+    ).toBeNull();
+  });
+
+  test('whether-framed stakes are untouched even with the action named', () => {
+    const text =
+      'Whether you succeed or fail at opening the gate, the noise will draw the patrol. ' +
+      "Roll a Thieves' Tools check.";
+    expect(repairPrematureRollClaims(text, [THIEVES_TOOLS_REQUEST])).toBeNull();
+  });
+
+  test('case C: the intended NT-011 catch still repairs', () => {
+    const text =
+      "You succeed in reading the crystal's fractures like a diagnosis. " +
+      'Roll an Investigation check to learn more.';
+    const repaired = repairPrematureRollClaims(text, [
+      req('check', 'Investigation check to examine the crystal'),
+    ]);
+    expect(repaired).toBe(
+      'That outcome is not decided yet — the roll still has to be made. ' +
+        'Roll an Investigation check to learn more.',
+    );
+  });
+
+  test('an anchored failure claim about the pending action still repairs', () => {
+    const text = 'You fail to open the gate despite your tools. Roll a Thieves\' Tools check.';
+    const repaired = repairPrematureRollClaims(text, [THIEVES_TOOLS_REQUEST]);
+    expect(repaired).toBe(
+      'That outcome is not decided yet — the roll still has to be made. ' +
+        "Roll a Thieves' Tools check.",
+    );
+  });
+
+  test('a miss with no player anchor is not the pending attack’s verdict', () => {
+    const text = 'An arrow misses the goblin in the dark. Roll your attack.';
+    expect(
+      repairPrematureRollClaims(text, [req('attack', 'Longsword attack vs Goblin', null)]),
+    ).toBeNull();
+  });
+
+  test('the player’s own miss narrated for the pending attack still repairs', () => {
+    const text = 'Your strike misses the goblin. Roll your attack.';
+    const repaired = repairPrematureRollClaims(text, [
+      req('attack', 'Longsword attack vs Goblin', null),
+    ]);
+    expect(repaired).toBe(
+      'That outcome is not decided yet — the roll still has to be made. Roll your attack.',
+    );
+  });
+});
+
+// Self-review round (pre-push review of this fix): the pinned harness cases passed
+// but trivial rewordings of both #959 harms survived. These are that review's probe
+// inputs, pinned so the shapes — not the sample sentences — are what is fixed.
+describe('repairPrematureRollClaims — self-review rewordings', () => {
+  const req = (type: string, purpose: string, dc: number | null = 14) => ({
+    type,
+    formula: '1d20+5',
+    purpose,
+    dc,
+    ac: null,
+    advantage: false,
+    disadvantage: false,
+  });
+  const THIEVES_TOOLS = req('check', "Thieves' Tools check to open the gate", 15);
+  const PENDING = 'That outcome is not decided yet — the roll still has to be made.';
+
+  test('paired stakes without "if" are untouched', () => {
+    const text =
+      'Roll a Strength check. You succeed, you pry the gate open; you fail, the alarm bell rings.';
+    expect(
+      repairPrematureRollClaims(text, [req('check', 'Strength check to pry the gate')]),
+    ).toBeNull();
+  });
+
+  test('inverted and adverbial conditionals are untouched', () => {
+    for (const opener of [
+      'Should you succeed in opening the gate, the way inside stands clear.',
+      'When you succeed in opening the gate, the way inside stands clear.',
+      'Once you succeed in opening the gate, the way inside stands clear.',
+      'Provided you succeed in opening the gate, the way inside stands clear.',
+      'As long as you succeed in opening the gate quietly, the patrol hears nothing.',
+    ]) {
+      expect(
+        repairPrematureRollClaims(`${opener} Roll a Thieves' Tools check.`, [THIEVES_TOOLS]),
+      ).toBeNull();
+    }
+  });
+
+  test('a stakes question is untouched', () => {
+    const text =
+      "Will you succeed in opening the gate before the patrol returns? Roll a Thieves' Tools check.";
+    expect(repairPrematureRollClaims(text, [THIEVES_TOOLS])).toBeNull();
+  });
+
+  test('recaps sharing only type/ability words with the request are untouched', () => {
+    expect(
+      repairPrematureRollClaims(
+        "You succeed skillfully in climbing the shaft unheard. A locked gate blocks the ledge — roll a Thieves' Tools check.",
+        [THIEVES_TOOLS],
+      ),
+    ).toBeNull();
+    expect(
+      repairPrematureRollClaims(
+        'You succeed in saving the child from the rubble. Roll a Strength saving throw to hold up the falling beam.',
+        [req('save', 'Strength saving throw to hold up the falling beam')],
+      ),
+    ).toBeNull();
+    expect(
+      repairPrematureRollClaims(
+        'You succeed in throwing the grappling hook up to the ledge. Roll a Dexterity saving throw to dodge the falling debris.',
+        [req('save', 'Dexterity saving throw to dodge the falling debris')],
+      ),
+    ).toBeNull();
+    expect(
+      repairPrematureRollClaims(
+        'You succeed in climbing the shaft because the iron rungs hold firm. Roll a Dexterity check to use the rope to descend.',
+        [req('check', 'Dexterity check to use the rope to descend')],
+      ),
+    ).toBeNull();
+  });
+
+  test('an unrelated modal or a concessive clause does not shield an asserted claim', () => {
+    for (const text of [
+      "The lock can be heard clicking softly as you succeed in opening the gate. Roll a Thieves' Tools check.",
+      "You may not have a key, but you succeed in opening the gate anyway. Roll a Thieves' Tools check.",
+      "You succeed in opening the gate even if the old hinges protest. Roll a Thieves' Tools check.",
+    ]) {
+      expect(repairPrematureRollClaims(text, [THIEVES_TOOLS])).toBe(
+        `${PENDING} Roll a Thieves' Tools check.`,
+      );
+    }
+  });
+
+  test('a conditional hidden behind an abbreviation still reads as stakes', () => {
+    const text =
+      "If the blessing of St. Cuthbert holds, you succeed in opening the gate. Roll a Thieves' Tools check.";
+    expect(repairPrematureRollClaims(text, [THIEVES_TOOLS])).toBeNull();
+  });
+
+  test('a miss that names none of the attack vocabulary still repairs', () => {
+    const attack = req('attack', 'Longsword attack vs Goblin', null);
+    expect(
+      repairPrematureRollClaims('Your strike misses entirely, ringing off stone. Roll your attack.', [
+        attack,
+      ]),
+    ).toBe(`${PENDING} Roll your attack.`);
+    expect(
+      repairPrematureRollClaims('The creature ignores your assault, laughing in the dark. Roll your attack.', [
+        attack,
+      ]),
+    ).toBe(`${PENDING} Roll your attack.`);
+  });
+
+  test("a third party's miss observed by the player is untouched", () => {
+    const text =
+      'While you watch from the shadows, an arrow misses the goblin and skitters away. Roll your attack.';
+    expect(
+      repairPrematureRollClaims(text, [req('attack', 'Longsword attack vs Goblin', null)], 'Mira'),
+    ).toBeNull();
+  });
+
+  test('a bare purpose with no distinctive action falls back to the detector', () => {
+    const text = 'You succeed in prying the gate open with a grunt. Roll a Strength check.';
+    expect(repairPrematureRollClaims(text, [req('check', 'Strength check')])).toBe(
+      `${PENDING} Roll a Strength check.`,
+    );
+  });
+
+  test('back-to-back pending statements collapse to one', () => {
+    const text =
+      "You succeed in opening the gate. You fail to open the gate quietly. Roll a Thieves' Tools check.";
+    expect(repairPrematureRollClaims(text, [THIEVES_TOOLS])).toBe(
+      `${PENDING} Roll a Thieves' Tools check.`,
+    );
+  });
+});
+
+// Strategist FIX round 1 on PR #979: the paired-stakes exemption must require a
+// branch structure; an asserted success+failure contrast is a claim.
+describe('repairPrematureRollClaims — strategist FIX round 1', () => {
+  test('an asserted success+failure contrast in one clause still repairs', () => {
+    const text =
+      'You succeed in slipping past the guard, but you fail to notice the dog. Roll a Stealth check.';
+    const repaired = repairPrematureRollClaims(text, [
+      {
+        type: 'check',
+        formula: '1d20+5',
+        purpose: 'Stealth check to slip past the guard post',
+        dc: 14,
+        ac: null,
+        advantage: false,
+        disadvantage: false,
+      },
+    ]);
+    expect(repaired).toBe(
+      'That outcome is not decided yet — the roll still has to be made. Roll a Stealth check.',
+    );
   });
 });

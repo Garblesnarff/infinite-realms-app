@@ -324,27 +324,47 @@ describe('#266 NT-011/NT-020 /generate premature roll claims', () => {
     expect(envelope.narration_segments).toEqual([]);
   });
 
-  it('repairs a failure narrated in the reply that requests the roll', async () => {
+  // #959 forward-fix: this expectation FLIPS, as a stated CONCESSION (self-review
+  // HIGH 2): semantically this failure narration IS the pending shaft climb, phrased
+  // in synonyms the request never uses ("purchase", "slick stone" vs climb/shaft).
+  // Lexically it cannot be told apart from a decided roll's recap, which the
+  // unscoped #959 pass corrupted — so the scoped pass leaves it alone, and the
+  // strategist's anchoring directive accepts that trade explicitly.
+  it('leaves a failure verdict that does not name the pending action untouched', async () => {
     queueRollOutcome([]);
-    const envelope = await postGenerate(
+    const narration =
       'You fail to find any purchase on the slick stone, sliding back down. ' +
-        'Roll a Stealth check to climb the shaft.',
-      [
-        {
-          type: 'check',
-          formula: '1d20+5',
-          purpose: 'Stealth check to climb the shaft',
-          dc: 14,
-          ac: null,
-          advantage: false,
-          disadvantage: false,
-        },
-      ],
-    );
-    expect(envelope.text).toBe(
-      'That outcome is not decided yet — the roll still has to be made. ' +
-        'Roll a Stealth check to climb the shaft.',
-    );
+      'Roll a Stealth check to climb the shaft.';
+    const envelope = await postGenerate(narration, [
+      {
+        type: 'check',
+        formula: '1d20+5',
+        purpose: 'Stealth check to climb the shaft',
+        dc: 14,
+        ac: null,
+        advantage: false,
+        disadvantage: false,
+      },
+    ]);
+    expect(envelope.text).toBe(narration);
+  });
+
+  // #959 forward-fix: when the turn HAS a fresh roll outcome, the premature pass does
+  // not run at all — the outcome repair owns the turn's verdicts. This reply recaps
+  // the decided (successful) Stealth roll correctly AND prematurely claims the newly
+  // requested Investigation check's outcome; the combined shape is deliberately
+  // conceded rather than risking the recap.
+  it('leaves a combined recap + premature claim untouched when a fresh outcome exists', async () => {
+    queueRollOutcome([
+      rollEntry(nowIso(), { ...FAILED_STEALTH_PAYLOAD, success: true, total: 19 }),
+    ]);
+    const narration =
+      'You succeed in climbing the shaft unheard. ' +
+      "You succeed in reading the crystal's fractures like a diagnosis. " +
+      'Roll an Investigation check to learn more.';
+    const envelope = await postGenerate(narration, [INVESTIGATION_REQUEST]);
+    expect(envelope.text).toBe(narration);
+    expect(envelope.roll_requests).toEqual([INVESTIGATION_REQUEST]);
   });
 
   it('leaves a neutral requesting reply untouched', async () => {

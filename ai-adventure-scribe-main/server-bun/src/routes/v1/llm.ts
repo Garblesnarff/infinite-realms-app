@@ -1245,22 +1245,47 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // outcome in the same breath — the narration posts before the dice exist, and when
         // the roll then contradicts it, no outcome gate ever runs on that earlier text
         // (the repair above needs a persisted outcome; the requesting turn has none yet).
-        // Runs only when the outcome repair did not already rewrite this text: one repair
-        // per turn, and a turn with a fresh outcome has its verdicts owned by that repair.
-        // Keys on the envelope's own roll_requests, needs no session or DB, fails open.
-        if (envelope && typeof envelope.text === 'string' && !outcomeRepaired) {
+        // Runs only when the turn has NO fresh roll outcome: when one exists, its
+        // verdicts are the outcome repair's business (above) — and this pass stays out
+        // even when the narration agreed with the outcome and that repair did not fire.
+        // That deliberately concedes the combined shape (a correct recap of the fresh
+        // outcome plus a premature claim about a newly requested roll in one reply):
+        // the recap is correct narration, and a pass that cannot tell the two apart
+        // must not risk splicing it (#959 forward-fix — the unscoped pass did exactly
+        // that to decided-roll recaps). One repair per turn either way. Keys on the
+        // envelope's own roll_requests; the outcome read fails open (an unreadable
+        // outcome is treated as none, and the pass runs as it always has).
+        // Short-circuit (self-review MEDIUM 4): with no verdict-bearing roll request
+        // the pass below is a no-op, so don't pay its outcome read on every turn.
+        const hasVerdictRequest =
+          Array.isArray(envelope?.roll_requests) &&
+          envelope.roll_requests.some(
+            (request) =>
+              !!request &&
+              typeof request === 'object' &&
+              ['check', 'save', 'attack'].includes(
+                String((request as { type?: unknown }).type),
+              ),
+          );
+        if (envelope && typeof envelope.text === 'string' && !outcomeRepaired && hasVerdictRequest) {
           try {
-            const { repairPrematureRollClaims } =
+            const { latestRollOutcome, repairPrematureRollClaims } =
               await import('../../services/dm/narration-outcome.js');
-            const repairedPending = repairPrematureRollClaims(
-              envelope.text,
-              envelope.roll_requests,
-              combatEntry?.player?.name,
-            );
-            if (repairedPending) {
-              envelope.text = repairedPending;
-              envelope.narration_segments = [];
-              result = { ...result, text: JSON.stringify(envelope) };
+            const turnSessionId = sessionId ?? combatEntry?.sessionId;
+            const freshOutcome = turnSessionId
+              ? await latestRollOutcome(turnSessionId).catch(() => null)
+              : null;
+            if (!freshOutcome) {
+              const repairedPending = repairPrematureRollClaims(
+                envelope.text,
+                envelope.roll_requests,
+                combatEntry?.player?.name,
+              );
+              if (repairedPending) {
+                envelope.text = repairedPending;
+                envelope.narration_segments = [];
+                result = { ...result, text: JSON.stringify(envelope) };
+              }
             }
           } catch (error) {
             logger.warn({ msg: 'DM_NARRATION_PREMATURE_HOOK_FAILED', error });
