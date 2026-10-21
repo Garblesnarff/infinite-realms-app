@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { buildNpcEngineMessage } from '../../../../shared/npc-engine-message';
 import { DEATH_SAVE_FAILED } from '../../../../shared/test-fixtures/engine-results';
 import {
+  formatCombatEndLine,
   formatCombatEngineOutcome,
   formatRefusedSpellOutcome,
   prependCombatEngineTranscript,
@@ -412,5 +413,82 @@ describe('why a hit is critical (#2640)', () => {
     const line = formatCombatEngineOutcome(attack, { ...roll, d20: 20, totalAttackRoll: 23 });
     expect(line).toContain('— CRITICAL HIT.');
     expect(line).not.toContain('the target is');
+  });
+});
+
+describe('combat end line player text (#976)', () => {
+  // Every member of the CombatEndReason union (server-bun/src/types/combat.ts),
+  // plus death_save_failed — a legacy formatter entry no current producer emits
+  // (death-save endings conclude as party_defeated / player_down_stable), kept
+  // covered so the map stays total. The internal key must never reach the player
+  // line — it lives on the encounter row, in telemetry, and in the persisted
+  // row's stored result.
+  const reasons: Array<[string, string]> = [
+    ['last_hostile_defeated', '⚙️ Engine: Combat ended — the last hostile was defeated.'],
+    ['party_defeated', '⚙️ Engine: Combat ended — the party was defeated.'],
+    ['death_save_failed', '⚙️ Engine: Combat ended — a death save ended the fight.'],
+    ['player_down_stable', '⚙️ Engine: Combat ended — the party was knocked out but stable.'],
+    ['dm_ended_scene', '⚙️ Engine: Combat ended — the fight ended as the scene moved on.'],
+    ['ended_by_request', '⚙️ Engine: Combat ended — you ended the fight.'],
+    ['abandoned', '⚙️ Engine: Combat ended — the party broke off and left the fight.'],
+    ['player_surrendered', '⚙️ Engine: Combat ended — you yielded.'],
+    ['ended_idle', '⚙️ Engine: Combat ended — the fight was left idle and closed.'],
+  ];
+
+  it.each(reasons)('renders %s as player text with no internal key', (reason, line) => {
+    expect(formatCombatEndLine(reason)).toBe(line);
+    expect(formatCombatEndLine(reason)).not.toContain('(reason:');
+    expect(formatCombatEndLine(reason)).not.toContain(reason);
+  });
+
+  it('never prints an unmapped key', () => {
+    expect(formatCombatEndLine('some_future_reason')).toBe(
+      '⚙️ Engine: Combat ended — the fight is over.',
+    );
+  });
+
+  it('returns null without a reason', () => {
+    expect(formatCombatEndLine(null)).toBeNull();
+    expect(formatCombatEndLine(undefined)).toBeNull();
+    expect(formatCombatEndLine('')).toBeNull();
+  });
+
+  it('stamps combatEnded on the terminal engine row, and only there', () => {
+    const participants = [
+      { id: 'pc-1', name: 'Ghorza', participantType: 'player' },
+      { id: 'm-1', name: "Remy 'The Manager'", participantType: 'monster' },
+    ];
+    const ended = buildNpcEngineMessage(
+      participants,
+      7,
+      { type: 'attack', actorId: 'pc-1', targetIds: ['m-1'] },
+      {
+        actorName: 'Ghorza',
+        targetName: "Remy 'The Manager'",
+        hit: true,
+        finalDamage: 9,
+        targetNewHp: 0,
+        targetIsConscious: false,
+        combatEnded: true,
+        endedReason: 'last_hostile_defeated',
+      },
+    );
+    expect(ended.text).toContain('Combat ended — the last hostile was defeated.');
+    expect(ended.context.combatEnded).toBe(true);
+
+    const midFight = buildNpcEngineMessage(
+      participants,
+      7,
+      { type: 'attack', actorId: 'pc-1', targetIds: ['m-1'] },
+      {
+        actorName: 'Ghorza',
+        targetName: "Remy 'The Manager'",
+        hit: true,
+        finalDamage: 3,
+        targetNewHp: 8,
+        targetIsConscious: true,
+      },
+    );
+    expect(midFight.context.combatEnded).toBeUndefined();
   });
 });

@@ -432,6 +432,11 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
 
     await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(1));
     expect((onSendMessage.mock.calls[0][0] as { text: string }).text).toContain('Combat ended');
+    // #976: the fallthrough notice is this fight's terminal message — it carries
+    // the combatEnded stamp for the summary gate and a stable id from creation.
+    const notice = onSendMessage.mock.calls[0][0] as { id?: string; context?: any };
+    expect(notice.id).toEqual(expect.any(String));
+    expect(notice.context).toMatchObject({ combatEnded: true });
   });
 
   it('a movement-only approach spends no Action and keeps the turn open', async () => {
@@ -559,9 +564,14 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
       expect(playerRows[0].text).toContain('0 damage');
       expect(playerRows[0].persist).toBe(true);
 
-      // The NPC row carries the 2-damage attack and the party_defeated end reason, exactly once.
+      // The NPC row carries the 2-damage attack and the party_defeated end, exactly once:
+      // the end renders as player text (#976); the key itself stays in the stored result,
+      // and the row context carries the terminal flag the Combat Summary gate reads.
       expect(npcRows[0].text).toContain('2 damage');
-      expect(npcRows[0].text).toContain('party_defeated');
+      expect(npcRows[0].text).toContain('Combat ended — the party was defeated.');
+      expect(npcRows[0].text).not.toContain('party_defeated');
+      expect((npcRows[0].context as any).npcResult.endedReason).toBe('party_defeated');
+      expect((npcRows[0].context as any).combatEnded).toBe(true);
       const npcBlock = (npcRows[0].context as any).combatEngineBlocks[0];
       expect(npcBlock).toMatchObject({ source: 'npc' });
     } finally {

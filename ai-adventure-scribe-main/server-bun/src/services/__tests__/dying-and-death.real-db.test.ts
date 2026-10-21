@@ -1869,7 +1869,7 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
         [
           '⚙️ Engine: Vitruvian Spider rolled 15 and 15 (advantage, kept 15) + 5 = 20 vs AC 11 against The Scholar with Fangs — CRITICAL HIT (the target is unconscious). 4 piercing damage. The Scholar is now at 0 HP and is dead.',
           '⚙️ Engine: Vitruvian Spider strikes the unconscious The Scholar — automatic critical hit. Two death-save failures. ✕✕✕ The Scholar is DEAD.',
-          '⚙️ Engine: Combat ended — the party was defeated (reason: party_defeated).',
+          '⚙️ Engine: Combat ended — the party was defeated.',
         ].join('\n\n'),
       );
       expect(saved.engineRows.map((row: { id: string }) => row.id)).toEqual([afterSave[3].id]);

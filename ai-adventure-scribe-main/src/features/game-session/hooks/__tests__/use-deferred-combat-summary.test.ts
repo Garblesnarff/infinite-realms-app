@@ -1,6 +1,7 @@
 import { renderHook, type RenderHookResult } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { buildNpcEngineMessage } from '../../../../../shared/npc-engine-message';
 import {
   COMBAT_SUMMARY_FALLBACK_MS,
   buildCombatSummaryMessageFromServer,
@@ -127,6 +128,88 @@ describe('useDeferredCombatSummary', () => {
     expect(summaries()).toHaveLength(0);
 
     rerender({ isInCombat: false, messages: [dm('old-kill', true), dm('kill', true)] });
+    expect(summaries()).toHaveLength(1);
+  });
+
+  // #976: a fight the SERVER ends (the player's killing blow resolved by the combat
+  // intent endpoint) never gets a terminal DM message — no DM turn runs, and the next
+  // one starts with combat already inactive, so use-ai-response cannot stamp
+  // combatEnded on it. The fight's end is presented by the terminal engine row the
+  // server persists for the killing action; the summary must release on that row
+  // instead of waiting out the fallback (Hark N21-023: no card on a 7-round win).
+  it('posts the summary on the terminal engine row of a server-ended fight (#976)', () => {
+    const roster = [
+      { id: 'pc-1', name: 'Ghorza', participantType: 'player', maxHp: 28 },
+      { id: 'm-1', name: "Remy 'The Manager'", participantType: 'monster', maxHp: 11 },
+    ];
+    // The settled result the intent service hands back for the killing blow:
+    // markCombatEnded spreads combatEnded/endedReason over the attack result.
+    const killResult = {
+      actorName: 'Ghorza',
+      targetName: "Remy 'The Manager'",
+      hit: true,
+      finalDamage: 9,
+      targetNewHp: 0,
+      targetIsConscious: false,
+      combatEnded: true,
+      endedReason: 'last_hostile_defeated',
+    };
+    // The row as the client receives it: buildNpcEngineMessage is the real producer
+    // (writeNpcEngineRow stores it with npcResult + combatEncounterId added), and
+    // use-messages merges the persisted row as sender 'system' with that context.
+    const built = buildNpcEngineMessage(
+      roster,
+      7,
+      { type: 'attack', actorId: 'pc-1', targetIds: ['m-1'] },
+      killResult,
+    );
+    const terminalRow: ChatMessage = {
+      id: 'terminal-row-976',
+      text: built.text,
+      sender: 'system',
+      context: {
+        ...built.context,
+        npcResult: killResult,
+        combatEncounterId: 'enc-976',
+        actionId: 'kill-action',
+      },
+    };
+    expect(terminalRow.text).toContain('Combat ended');
+
+    const { rerender } = setup({ isInCombat: true, messages: [dm('a')] });
+
+    // The row lands during the intent call, before the combat state flips.
+    rerender({ isInCombat: true, messages: [dm('a'), terminalRow] });
+    expect(summaries()).toHaveLength(0);
+
+    rerender({ isInCombat: false, messages: [dm('a'), terminalRow] });
+    expect(summaries()).toHaveLength(1);
+
+    // The fallback must not post a second summary afterwards.
+    vi.advanceTimersByTime(COMBAT_SUMMARY_FALLBACK_MS * 2);
+    expect(summaries()).toHaveLength(1);
+  });
+
+  it("ignores an earlier fight's terminal engine row in the same session (#976)", () => {
+    // The row carries the stable id the server writer gave it (and a local notice
+    // carries the id sendEngineNotice assigns at creation), so the baseline taken
+    // at the second fight's start holds its key in both its live and hydrated
+    // forms — it must not release the second fight's summary.
+    const row = (id: string): ChatMessage => ({
+      id,
+      text: `row ${id}`,
+      sender: 'system',
+      context: { intent: 'combat_npc_result', combatEnded: true },
+    });
+    const firstFight = [dm('a'), row('row-fight-1')];
+    const { rerender } = setup({ isInCombat: false, messages: firstFight });
+
+    rerender({ isInCombat: true, messages: firstFight });
+    rerender({ isInCombat: true, messages: [...firstFight, dm('b')] });
+    rerender({ isInCombat: false, messages: [...firstFight, dm('b')] });
+    expect(summaries()).toHaveLength(0);
+
+    rerender({ isInCombat: false, messages: [...firstFight, dm('b'), row('row-fight-2')] });
     expect(summaries()).toHaveLength(1);
   });
 });

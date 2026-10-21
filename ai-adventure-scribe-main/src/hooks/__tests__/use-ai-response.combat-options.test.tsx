@@ -957,13 +957,18 @@ describe('D3: combat options use the real response hook (#2547)', () => {
     // carry a reason.
     expect(persisted).toEqual([
       expect.objectContaining({
+        // #976: the notice is this fight's terminal message — it carries the
+        // combatEnded stamp for the summary gate, and a stable id from creation
+        // so the gate's baseline key cannot change when the row hydrates.
+        id: expect.any(String),
         sender: 'system',
         persist: true,
         text:
           '⚙️ Engine: The Scholar yielded.\n\n' +
-          '⚙️ Engine: Combat ended — the party surrendered (reason: player_surrendered).',
+          '⚙️ Engine: Combat ended — you yielded.',
         context: expect.objectContaining({
           intent: 'combat_pending_intent',
+          combatEnded: true,
           engineCards: [expect.objectContaining({ kind: 'move' })],
         }),
       }),

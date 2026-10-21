@@ -549,16 +549,27 @@ export function formatWakeParts(value: unknown): EngineTranscriptPart[] {
   });
 }
 
-/** Explain the authoritative reason for a terminal combat boundary. */
+/**
+ * Explain the authoritative reason for a terminal combat boundary, in player text.
+ * Every `CombatEndReason` maps to a sentence the player can read; the internal key
+ * itself never reaches the line (it stays on the encounter row, in telemetry, and in
+ * the row's stored result). An unmapped key falls back to a plain ending rather than
+ * printing the key (#976).
+ */
 export function formatCombatEndLine(reason: string | null | undefined): string | null {
   if (!reason) return null;
   const explanation: Record<string, string> = {
     last_hostile_defeated: 'the last hostile was defeated',
     party_defeated: 'the party was defeated',
     death_save_failed: 'a death save ended the fight',
-    player_surrendered: 'the party surrendered',
+    player_down_stable: 'the party was knocked out but stable',
+    dm_ended_scene: 'the fight ended as the scene moved on',
+    ended_by_request: 'you ended the fight',
+    abandoned: 'the party broke off and left the fight',
+    player_surrendered: 'you yielded',
+    ended_idle: 'the fight was left idle and closed',
   };
-  return `⚙️ Engine: Combat ended — ${explanation[reason] ?? reason} (reason: ${reason}).`;
+  return `⚙️ Engine: Combat ended — ${explanation[reason] ?? 'the fight is over'}.`;
 }
 
 /** Put engine facts before model prose so option parsing cannot discard them as trailing text. */
