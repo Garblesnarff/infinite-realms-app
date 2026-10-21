@@ -932,6 +932,83 @@ describe('#783 forced-tool delivery for anthropic/', () => {
     expect(parseStringifiedNested('[1]', { type: 'object' })).toBe('[1]');
   });
 
+  // #783 (Refs #783): Haiku writes the literal string "null" for optional object/array fields.
+  it('a tool reply with the string "null" on optional object and array fields validates, drops them, and Haiku is served', async () => {
+    useModel('anthropic/claude-haiku-5.5');
+    const stringNulls = {
+      ...JSON.parse(VALID_DM_REPLY),
+      scene_spec: 'null',
+      xp_award: 'null',
+      damage: 'null',
+      items: 'null',
+      rest: 'null',
+    };
+    const bodies = stubOpenRouter([{ toolArguments: JSON.stringify(stringNulls) }]);
+
+    const result = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      responseSchema: dmResponseSchema,
+      maxTokens: 100,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(bodies).toHaveLength(1);
+    expect(result.model).toBe('anthropic/claude-haiku-5.5');
+    const reply = JSON.parse(result.text);
+    for (const key of ['scene_spec', 'xp_award', 'damage', 'items', 'rest']) {
+      expect(reply).not.toHaveProperty(key);
+    }
+    expect(reply.text).toBe(JSON.parse(VALID_DM_REPLY).text);
+  });
+
+  it('a tool reply with a REQUIRED key set to the string "null" still fails and falls over', async () => {
+    useModel('anthropic/claude-haiku-5.5');
+    process.env.OPENROUTER_FALLBACK_MODELS = 'google/gemini-3.1-flash-lite';
+    const stringRequired = { ...JSON.parse(VALID_DM_REPLY), options: 'null' };
+    expect(() => validateToolReplyText(JSON.stringify(stringRequired), dmResponseSchema)).toThrow(
+      /does not match schema/,
+    );
+    const bodies = stubOpenRouter([
+      { toolArguments: JSON.stringify(stringRequired) },
+      { toolArguments: JSON.stringify(stringRequired) },
+      { content: VALID_DM_REPLY },
+    ]);
+
+    const result = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      responseSchema: dmResponseSchema,
+      maxTokens: 100,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(bodies).toHaveLength(3);
+    expect(result.model).toBe('google/gemini-3.1-flash-lite');
+  });
+
+  it('parseStringifiedNested maps the string "null", "", and whitespace-padded "null" to null on object and array schemas only', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        obj: { type: 'object', properties: { a: { type: 'string' } } },
+        arr: { type: 'array', items: { type: 'string' } },
+        label: { type: 'string' },
+      },
+    };
+    expect(parseStringifiedNested({ obj: 'null', arr: '', label: 'null' }, schema)).toEqual({
+      obj: null,
+      arr: null,
+      label: 'null',
+    });
+    expect(parseStringifiedNested({ obj: ' null ', arr: '   ' }, schema)).toEqual({
+      obj: null,
+      arr: null,
+    });
+    expect(parseStringifiedNested('null', { type: 'object' })).toBeNull();
+    expect(parseStringifiedNested('', { type: 'string' })).toBe('');
+  });
+
   it('a failed tool-path validation logs the first error path, value type and a 200-char slice', () => {
     const warn = spyOn(logger, 'warn');
     try {

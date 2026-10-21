@@ -307,11 +307,18 @@ export const stripOptionalNulls = (value: unknown, schema: unknown): unknown => 
  * same type, replace it with the parsed value and walk into it. Anything else
  * is left alone and still fails ajv. Walks `properties` and array `items`, as
  * stripOptionalNulls does; anyOf/oneOf and other shapes are left alone.
+ *
+ * #783: on the same object/array schemas, the string "null" (or an empty or
+ * whitespace-only string) is Haiku's spelling of "no value". It becomes JSON null
+ * here, so stripOptionalNulls drops it when the property is optional and leaves
+ * it for ajv to reject when the property is required.
  */
 export const parseStringifiedNested = (value: unknown, schema: unknown): unknown => {
   if (!isPlainObject(schema)) return value;
   if (typeof value === 'string') {
     if (schema.type !== 'object' && schema.type !== 'array') return value;
+    const trimmed = value.trim();
+    if (trimmed === 'null' || trimmed === '') return null;
     let parsed: unknown;
     try {
       parsed = JSON.parse(value);
