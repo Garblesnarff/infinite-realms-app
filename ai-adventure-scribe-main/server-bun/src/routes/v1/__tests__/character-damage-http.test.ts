@@ -57,6 +57,12 @@ mock.module('../../../services/character-service.js', () => ({
 mock.module('../../../services/character-vitals-service.js', () => ({
   CharacterVitalsService: {},
 }));
+mock.module('../../../services/subclass-service.js', () => ({
+  SubclassService: {
+    getSubclassChoiceLevel: () => 3,
+    setSubclass: async () => {},
+  },
+}));
 mock.module('../../../services/combat/non-attack-damage.js', () => ({
   applyNonAttackDamage,
 }));

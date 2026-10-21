@@ -28,8 +28,10 @@ import { fileURLToPath } from 'node:url';
 
 import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
 import { eq, inArray } from 'drizzle-orm';
+import { Client } from 'pg';
 
 import {
+  campaigns,
   characterFeatures,
   characters,
   characterEquipment,
@@ -43,6 +45,7 @@ import {
   hasRealDb,
   importWithRealDb,
   realDb,
+  realDbUrl,
   testId,
 } from '../../../services/__tests__/fixtures/real-db.ts';
 
@@ -1277,5 +1280,320 @@ describeWithDb('character create grants class features for levels 1..N (#829)', 
       'Sneak Attack@1',
       "Thieves' Cant@1",
     ]);
+  });
+});
+
+describeWithDb('starter template subclass (#829)', () => {
+  let app: any;
+  let db: ReturnType<typeof realDb>;
+  let request: (path: string, method: string, body?: unknown) => Promise<Response>;
+  const createdIds: string[] = [];
+  const STARTER_ID = 'test-829-subclass';
+  let campaignId = '';
+
+  /**
+   * The wire body buildStarterCharacterSeed (src/services/character/
+   * starter-character-seeding.ts) emits for the level-3 Fighter template
+   * seeded below — same fields, same shapes; the client suite
+   * starter-character-seeding.test.ts pins that the real seeder carries the
+   * row's subclass into this payload. CON 14 per issue #829's real-route
+   * test. HP is not asserted here: level-3 HP is finding 1, not this seam.
+   */
+  const seederBody = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+    name: 'The Champion',
+    race: 'Human',
+    subrace: null,
+    class: 'Fighter',
+    subclass: 'Champion',
+    level: 3,
+    background: 'Soldier',
+    backstory_elements: null,
+    description: null,
+    campaign_id: campaignId,
+    skill_proficiencies: 'Athletics, Perception',
+    languages: ['Common'],
+    image_url: null,
+    avatar_url: null,
+    background_image: null,
+    cantrips: '',
+    known_spells: '',
+    prepared_spells: '',
+    total_level: 3,
+    stats: {
+      strength: 16,
+      dexterity: 14,
+      constitution: 14,
+      intelligence: 10,
+      wisdom: 12,
+      charisma: 8,
+    },
+    equipment: [
+      { item_name: 'Chain Mail', item_type: 'armor', quantity: 1, equipped: true },
+      { item_name: 'Longsword', item_type: 'weapon', quantity: 1, equipped: true },
+      { item_name: 'Shield', item_type: 'shield', quantity: 1, equipped: true },
+    ],
+    ...overrides,
+  });
+
+  beforeAll(async () => {
+    userId = testId('user-829');
+    db = realDb();
+
+    // The campaign the seeder targets: in the real flow the bootstrap
+    // creates the user's campaign from the starter campaign first.
+    const [campaign] = await db
+      .insert(campaigns)
+      .values({ userId, name: `One-shot 829 ${testId('campaign')}` })
+      .returning();
+    campaignId = campaign.id;
+
+    // The starter campaign + template rows, in the shape the seed
+    // migrations write them (the #222 block in spell-slot-backfill.real-db
+    // seeds starter_campaigns the same way). starter_character_templates
+    // has no drizzle model, so these go through a pg client.
+    const client = new Client({ connectionString: realDbUrl });
+    await client.connect();
+    try {
+      // Idempotent seed: a crashed earlier run can leave these fixed-id
+      // rows behind, and an unconditional INSERT would fail the whole file.
+      await client.query(
+        'DELETE FROM public.starter_character_templates WHERE starter_campaign_id = $1',
+        [STARTER_ID],
+      );
+      await client.query('DELETE FROM public.starter_campaigns WHERE id = $1', [STARTER_ID]);
+      await client.query(
+        `INSERT INTO public.starter_campaigns
+           (id, slug, title, genre, tone, difficulty, premise, is_complete, is_published)
+         VALUES ($1, $1, 'One-shot 829', ARRAY['fantasy']::text[], ARRAY['heroic']::text[],
+                 'medium', 'Test starter campaign for the #829 subclass proof.', false, false)`,
+        [STARTER_ID],
+      );
+      await client.query(
+        `INSERT INTO public.starter_character_templates
+           (starter_campaign_id, template_key, name, race, class, background, level,
+            ability_scores, skills, languages, equipment, subclass)
+         VALUES ($1, 'the-champion', 'The Champion', 'Human', 'Fighter', 'Soldier', 3,
+                 '{"strength":16,"dexterity":14,"constitution":14,"intelligence":10,"wisdom":12,"charisma":8}'::jsonb,
+                 '["Athletics","Perception"]'::jsonb, '["Common"]'::jsonb,
+                 '["Chain Mail","Longsword","Shield"]'::jsonb, 'Champion')`,
+        [STARTER_ID],
+      );
+    } finally {
+      await client.end();
+    }
+
+    const pipeline = await importWithRealDb(async () => {
+      const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');
+      const { charactersRoutes } = await import('../characters.ts');
+      return { createRequestPipelineApp, charactersRoutes };
+    });
+    app = pipeline.createRequestPipelineApp().use(pipeline.charactersRoutes);
+    request = async (path: string, method: string, body?: unknown) =>
+      app.handle(
+        new Request(`http://localhost${path}`, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: body !== undefined ? JSON.stringify(body) : undefined,
+        }),
+      );
+  });
+
+  afterAll(async () => {
+    for (const id of createdIds) {
+      await db
+        .delete(characterSubclasses)
+        .where(eq(characterSubclasses.characterId, id))
+        .catch(() => {});
+      await db
+        .delete(characters)
+        .where(eq(characters.id, id))
+        .catch(() => {});
+    }
+    if (campaignId) {
+      await db
+        .delete(campaigns)
+        .where(eq(campaigns.id, campaignId))
+        .catch(() => {});
+    }
+    const client = new Client({ connectionString: realDbUrl });
+    await client.connect();
+    try {
+      await client.query(
+        'DELETE FROM public.starter_character_templates WHERE starter_campaign_id = $1',
+        [STARTER_ID],
+      );
+      await client.query('DELETE FROM public.starter_campaigns WHERE id = $1', [STARTER_ID]);
+    } finally {
+      await client.end();
+    }
+    await closeRealDb();
+  });
+
+  it('the template row round-trips the subclass column migration 0028 adds', async () => {
+    const client = new Client({ connectionString: realDbUrl });
+    await client.connect();
+    try {
+      const res = await client.query(
+        `SELECT subclass FROM public.starter_character_templates
+         WHERE starter_campaign_id = $1 AND template_key = 'the-champion'`,
+        [STARTER_ID],
+      );
+      expect(res.rows).toHaveLength(1);
+      expect(res.rows[0].subclass).toBe('Champion');
+    } finally {
+      await client.end();
+    }
+  });
+
+  it('creates the level-3 Fighter template character with subclass Champion', async () => {
+    const res = await request('/v1/characters', 'POST', seederBody());
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const [row] = await db.select().from(characters).where(eq(characters.id, id));
+    expect(row.level).toBe(3);
+
+    const subclasses = await db
+      .select()
+      .from(characterSubclasses)
+      .where(eq(characterSubclasses.characterId, id));
+    expect(subclasses).toHaveLength(1);
+    expect(subclasses[0].className).toBe('Fighter');
+    expect(subclasses[0].subclassName).toBe('Champion');
+    expect(subclasses[0].chosenAtLevel).toBe(3);
+  });
+
+  it('PIN: a template below the subclass choice level creates exactly as before — no subclass row', async () => {
+    const res = await request(
+      '/v1/characters',
+      'POST',
+      seederBody({ name: 'The Champion (L2)', level: 2, total_level: 2 }),
+    );
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const [row] = await db.select().from(characters).where(eq(characters.id, id));
+    expect(row.level).toBe(2);
+    const subclasses = await db
+      .select()
+      .from(characterSubclasses)
+      .where(eq(characterSubclasses.characterId, id));
+    expect(subclasses).toHaveLength(0);
+  });
+
+  it('PIN: a level-3 template with NULL subclass creates exactly as before — no subclass row', async () => {
+    const res = await request(
+      '/v1/characters',
+      'POST',
+      seederBody({ name: 'The Champion (no subclass)', subclass: null }),
+    );
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const subclasses = await db
+      .select()
+      .from(characterSubclasses)
+      .where(eq(characterSubclasses.characterId, id));
+    expect(subclasses).toHaveLength(0);
+  });
+
+  it('PIN: an unknown subclass name does not fail the create — character lands without a subclass', async () => {
+    // Other create paths (JSON import, backup restore) can carry subclass
+    // names this build does not know; before the create body had a subclass
+    // field the schema dropped the value and the create succeeded.
+    const res = await request(
+      '/v1/characters',
+      'POST',
+      seederBody({ name: 'The Champion (homebrew)', subclass: 'Oath of the Test' }),
+    );
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const subclasses = await db
+      .select()
+      .from(characterSubclasses)
+      .where(eq(characterSubclasses.characterId, id));
+    expect(subclasses).toHaveLength(0);
+  });
+
+  it('PIN: a whitespace-only subclass is ignored — character lands without a subclass', async () => {
+    const res = await request(
+      '/v1/characters',
+      'POST',
+      seederBody({ name: 'The Champion (blank subclass)', subclass: '   ' }),
+    );
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const subclasses = await db
+      .select()
+      .from(characterSubclasses)
+      .where(eq(characterSubclasses.characterId, id));
+    expect(subclasses).toHaveLength(0);
+  });
+
+  it('PIN: a level-1 template has NULL subclass — creates without a subclass row (setSubclass never called)', async () => {
+    // Level-1 templates predate subclass choice, so their row's subclass
+    // is NULL and the seeder body carries subclass: null; the create
+    // route's guard then never calls setSubclass. The observable pin is
+    // the same as the other PINs: no character_subclasses row exists for
+    // the created character.
+    const client = new Client({ connectionString: realDbUrl });
+    await client.connect();
+    try {
+      // Idempotent seed, same pattern as the block's beforeAll seed.
+      await client.query(
+        `DELETE FROM public.starter_character_templates
+         WHERE starter_campaign_id = $1 AND template_key = 'the-squire'`,
+        [STARTER_ID],
+      );
+      await client.query(
+        `INSERT INTO public.starter_character_templates
+           (starter_campaign_id, template_key, name, race, class, background, level,
+            ability_scores, skills, languages, equipment, subclass)
+         VALUES ($1, 'the-squire', 'The Squire', 'Human', 'Fighter', 'Soldier', 1,
+                 '{"strength":16,"dexterity":14,"constitution":14,"intelligence":10,"wisdom":12,"charisma":8}'::jsonb,
+                 '["Athletics","Perception"]'::jsonb, '["Common"]'::jsonb,
+                 '["Chain Mail","Longsword","Shield"]'::jsonb, NULL)`,
+        [STARTER_ID],
+      );
+      const seeded = await client.query(
+        `SELECT subclass FROM public.starter_character_templates
+         WHERE starter_campaign_id = $1 AND template_key = 'the-squire'`,
+        [STARTER_ID],
+      );
+      expect(seeded.rows).toHaveLength(1);
+      expect(seeded.rows[0].subclass).toBeNull();
+    } finally {
+      await client.end();
+    }
+
+    const res = await request(
+      '/v1/characters',
+      'POST',
+      seederBody({ name: 'The Squire', subclass: null, level: 1, total_level: 1 }),
+    );
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const [row] = await db.select().from(characters).where(eq(characters.id, id));
+    expect(row.level).toBe(1);
+    const subclasses = await db
+      .select()
+      .from(characterSubclasses)
+      .where(eq(characterSubclasses.characterId, id));
+    expect(subclasses).toHaveLength(0);
   });
 });

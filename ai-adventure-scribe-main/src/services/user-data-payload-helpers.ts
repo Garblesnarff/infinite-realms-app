@@ -28,6 +28,7 @@ export const CHARACTER_FIELDS = [
   'race',
   'subrace',
   'class',
+  'subclass',
   'level',
   'alignment',
   'experience_points',

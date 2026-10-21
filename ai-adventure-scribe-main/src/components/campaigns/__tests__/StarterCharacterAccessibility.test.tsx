@@ -16,6 +16,7 @@ const mockTemplate: StarterCharacterTemplate = {
   race: 'Human',
   subrace: null,
   class: 'Fighter',
+  subclass: null,
   background: 'Soldier',
   level: 1,
   tagline: 'A veteran of a hundred battles.',

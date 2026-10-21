@@ -41,6 +41,7 @@ import { CampaignService } from '../../services/campaign-service.js';
 import { CharacterSpellService } from '../../services/character/character-spell-service.js';
 import { CharacterService } from '../../services/character-service.js';
 import { SpellSlotDataAccess } from '../../services/spell-slots/spell-slot-data-access.js';
+import { SubclassService } from '../../services/subclass-service.js';
 
 import type {
   Character,
@@ -139,6 +140,7 @@ const characterSchema = t.Object({
   race: t.Optional(t.Nullable(t.String())),
   subrace: t.Optional(t.Nullable(t.String())),
   class: t.Optional(t.Nullable(t.String())),
+  subclass: t.Optional(t.Nullable(t.String())),
   level: t.Optional(t.Number({ minimum: 1, maximum: 20 })),
   alignment: t.Optional(t.Nullable(t.String())),
   experience_points: t.Optional(t.Number({ minimum: 0 })),
@@ -244,7 +246,7 @@ async function createCharacterFromBody(
   userId: string,
   body: typeof characterSchema.static,
 ): Promise<Character> {
-  return CharacterService.create(
+  const character = await CharacterService.create(
     userId,
     {
       name: body.name,
@@ -316,6 +318,38 @@ async function createCharacterFromBody(
     body.equipment,
     body.inventory_items,
   );
+
+  // #829: a create body can carry the character's subclass — the starter
+  // template seeder sends the template's subclass column this way. Apply it
+  // through the same service the subclass route uses, once the character
+  // exists and its level reaches the class's subclass choice level. Below
+  // that level (or with no subclass) the character is created exactly as
+  // before. A subclass the service rejects (unknown name, unmet
+  // prerequisite) must not fail the create either: before this field
+  // existed the schema dropped the value, and other create paths (JSON
+  // import, backup restore) can carry names this build does not know.
+  const subclass = body.subclass?.trim();
+  if (subclass && character.class) {
+    const level = character.level ?? 1;
+    if (level >= SubclassService.getSubclassChoiceLevel(character.class)) {
+      try {
+        await SubclassService.setSubclass({
+          characterId: character.id,
+          className: character.class,
+          subclassName: subclass,
+          level,
+          userId,
+        });
+      } catch (error) {
+        logger.warn(
+          { err: error, characterId: character.id },
+          'create-time subclass not applied; character created without it',
+        );
+      }
+    }
+  }
+
+  return character;
 }
 
 /**
