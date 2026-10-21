@@ -14,6 +14,7 @@ vi.mock('../../../../db/client', () => ({
       },
     },
     select: vi.fn(),
+    transaction: vi.fn(),
     insert: vi.fn(() => ({
       values: vi.fn().mockReturnThis(),
       select: vi.fn().mockReturnThis(),
@@ -46,6 +47,7 @@ describe('CharacterSpellService.saveCharacterSpells', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    (db.transaction as any).mockImplementation((work: (tx: typeof db) => unknown) => work(db));
 
     // Default mock for select builder
     const createMockSelect = () => ({
