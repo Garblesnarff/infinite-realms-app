@@ -1048,7 +1048,7 @@ export async function executeCombatIntent(
     // participant not found" that #1744 observed.
     let state = await CombatEncounterService.getCombatState(encounterId, userId);
     stateForUnresolved = state;
-    if (submitted.actionId) {
+    if (submitted.actionId !== undefined) {
       const { readNpcEngineResult } = await import('./npc-engine-row.js');
       const replay = await readNpcEngineResult(
         encounterId,
@@ -1143,11 +1143,19 @@ export async function executeCombatIntent(
       resolved.type,
       source,
     );
-    // A creature's result, and a keyed End turn whoever ends it, is one persisted row: replaying
-    // its actionId returns the stored result instead of taking another turn (#2658).
+    // A creature's result, and a keyed action whoever performs it, is one persisted row:
+    // replaying its actionId returns the stored result instead of resolving again (#2658).
+    // A player's attack or spell is keyed the same way (#974): when the tray roll carries
+    // an actionId, the execution runs in the action transaction below and the settled
+    // result is stored under that id — so a duplicate post of the same roll, including a
+    // retry after a first attempt that failed midway, can never produce a second
+    // resolution.
     const writesEngineRow =
       actor.participantType !== 'player' ||
-      (resolved.type === 'end_turn' && submitted.actionId !== undefined);
+      (submitted.actionId !== undefined &&
+        (resolved.type === 'end_turn' ||
+          resolved.type === 'attack' ||
+          resolved.type === 'spell'));
     // After the turn gate, not before: an absorbed advance that then refuses must stand (#2666).
     if (!inNpcTransaction && writesEngineRow) {
       const { withNpcActionTransaction } = await import('../../../../db/client');
