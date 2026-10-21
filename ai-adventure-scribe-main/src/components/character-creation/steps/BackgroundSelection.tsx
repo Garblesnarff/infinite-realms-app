@@ -29,7 +29,15 @@ const BackgroundSelection: React.FC = () => {
     logger.info('Selecting background:', background);
     dispatch({
       type: 'UPDATE_CHARACTER',
-      payload: { background },
+      payload: {
+        background,
+        toolProficiencies: [
+          ...new Set([
+            ...(state.character?.class?.toolProficiencies ?? []),
+            ...background.toolProficiencies,
+          ]),
+        ],
+      },
     });
 
     toast({
@@ -77,6 +85,44 @@ const BackgroundSelection: React.FC = () => {
         </CardContent>
       </Card>
 
+      {state.character?.background?.toolProficiencies.some(
+        (tool) => tool === 'One type of gaming set' || tool.startsWith('Gaming set ('),
+      ) && (
+        <label className="block">
+          Background gaming set
+          <select
+            aria-label="Background gaming set"
+            value={
+              state.character.background.toolProficiencies.find((tool) =>
+                tool.startsWith('Gaming set ('),
+              ) ?? ''
+            }
+            onChange={(event) => {
+              const background = state.character!.background!;
+              const tools = background.toolProficiencies.map((tool) =>
+                tool === 'One type of gaming set' || tool.startsWith('Gaming set (')
+                  ? event.target.value
+                  : tool,
+              );
+              dispatch({
+                type: 'UPDATE_CHARACTER',
+                payload: {
+                  background: { ...background, toolProficiencies: tools },
+                  toolProficiencies: [
+                    ...new Set([...(state.character?.class?.toolProficiencies ?? []), ...tools]),
+                  ],
+                },
+              });
+            }}
+          >
+            <option value="" disabled>
+              Choose a gaming set
+            </option>
+            <option value="Gaming set (cards)">Playing cards</option>
+            <option value="Gaming set (dice)">Dice set</option>
+          </select>
+        </label>
+      )}
       {/* Background Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {backgrounds.map((background) => {
