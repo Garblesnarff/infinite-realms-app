@@ -284,7 +284,10 @@ export async function executeAuthoritativeCombatIntent(
         Object.keys(details).length > 0 ? details : undefined,
       );
     }
-    if ((payload.result as { engineRows?: unknown[] })?.engineRows?.length) {
+    if (
+      typeof window !== 'undefined' &&
+      (payload.result as { engineRows?: unknown[] })?.engineRows?.length
+    ) {
       window.dispatchEvent(
         new CustomEvent('session-engine-rows', {
           detail: (payload.result as { engineRows: unknown[] }).engineRows,

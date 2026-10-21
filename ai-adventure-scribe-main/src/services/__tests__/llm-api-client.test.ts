@@ -98,6 +98,35 @@ describe('LlmApiClient', () => {
   });
 
   describe('generateText', () => {
+    it.each([false, true])(
+      'sends a nonempty generate JSON body for combat continuation (stream=%s, #934)',
+      async (stream) => {
+        mockFetch.mockResolvedValueOnce(
+          new Response(JSON.stringify({ text: 'The guard holds position.' }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+        await llmApiClient.generateText({
+          prompt: 'Continue the encounter using the authoritative combat digest.',
+          player_input: 'I dodge.',
+          sessionId: 'session-934',
+          maxTokens: 8192,
+          ...(stream ? { onStream: vi.fn() } : {}),
+        });
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        const [url, init] = mockFetch.mock.calls[0];
+        expect(String(url)).toContain('/v1/llm/generate');
+        expect(typeof init.body).toBe('string');
+        expect(JSON.parse(init.body)).toMatchObject({
+          prompt: 'Continue the encounter using the authoritative combat digest.',
+          player_input: 'I dodge.',
+          sessionId: 'session-934',
+          maxTokens: 8192,
+        });
+      },
+    );
+
     it('reports the canonical DM reply id returned by a deduped roll turn', async () => {
       const onResponseMetadata = vi.fn();
       const dmReplyMessageId = '33333333-3333-4333-8333-333333333333';
