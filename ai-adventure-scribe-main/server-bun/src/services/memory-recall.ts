@@ -220,6 +220,150 @@ function extractQueryTokens(query: string): string[] {
   return [...tokens];
 }
 
+/**
+ * #353: candidate rescue — the membership fix the re-rank above cannot do.
+ *
+ * The merge only returns rows its two legs produced. A planted fact can clear
+ * neither: its similarity sits under the 0.7 floor (short natural questions
+ * score low against statement memories), and its importance ranks below the
+ * cap once the store crowds (the 30-turn replay measured the tile fact at
+ * importance rank 14 of 42 — extracted, embedded, and still unreachable).
+ * Re-ranking the merged set cannot recover a row that never entered it.
+ *
+ * Rescue looks at a wider importance pool and swaps in a row that shares
+ * topical words with the query, displacing a merged row that shares none.
+ * Similarity picks are never displaced (they earned their slot semantically),
+ * and neither is a row that itself overlaps the query. At most
+ * {@link MAX_RESCUE_SWAPS} swaps per recall, so a topical query cannot evict
+ * the session's continuity rows wholesale.
+ */
+export const MAX_RESCUE_SWAPS = 2;
+/** A token appearing in at most this many pool rows is a pointer on its own. */
+const RARE_TOKEN_MAX_DF = 3;
+
+const CANDIDATE_STOPWORDS = new Set([
+  ...QUERY_STOPWORDS,
+  'about',
+  'after',
+  'again',
+  'before',
+  'been',
+  'could',
+  'here',
+  'just',
+  'like',
+  'many',
+  'more',
+  'most',
+  'much',
+  'other',
+  'should',
+  'some',
+  'very',
+  'will',
+  'would',
+]);
+
+/**
+ * Topical words for candidate matching: every content word of 4+ letters,
+ * stopwords removed. Unlike extractQueryTokens (tuned for names and quoted
+ * phrases), this keeps short topical words — "cook", "east", "door", "tile" —
+ * because a question about a fact usually names its topic, not the fact.
+ */
+function extractCandidateTokens(query: string): string[] {
+  const tokens = new Set<string>();
+  for (const match of query.matchAll(/"([^"]{3,})"/g)) {
+    tokens.add(match[1].toLowerCase());
+  }
+  for (const raw of query.toLowerCase().split(/[^a-z0-9'-]+/)) {
+    const word = raw.replace(/'s$/, '').replace(/^'+|'+$/g, '');
+    if (word.length < 4) continue;
+    if (CANDIDATE_STOPWORDS.has(word)) continue;
+    tokens.add(word);
+  }
+  return [...tokens];
+}
+
+function contentWordSet(content: string): Set<string> {
+  const words = new Set<string>();
+  for (const raw of content.toLowerCase().split(/[^a-z0-9'-]+/)) {
+    const word = raw.replace(/'s$/, '').replace(/^'+|'+$/g, '');
+    if (word.length >= 4) words.add(word);
+  }
+  return words;
+}
+
+export function rescueOverlapCandidates<T extends RankableRow>(
+  merged: T[],
+  pool: T[],
+  query: string,
+  limit: number,
+  protectedIds?: ReadonlySet<string>,
+  now: number = Date.now(),
+): T[] {
+  if (limit <= 0 || merged.length === 0) return merged;
+  const tokens = extractCandidateTokens(query);
+  if (tokens.length === 0) return merged;
+  const tokenSet = new Set(tokens);
+  const inMerged = new Set(merged.map((row) => row.id));
+
+  // Document frequency across the pool: a word only a few rows use ("heron",
+  // "steward") points at its row even as the query's only overlap; a word
+  // half the store uses ("kitchen") does not.
+  const documentFrequency = new Map<string, number>();
+  const poolWords = new Map<string, Set<string>>();
+  for (const row of pool) {
+    const words = contentWordSet(row.content ?? '');
+    poolWords.set(row.id, words);
+    for (const token of tokenSet) {
+      if (words.has(token)) documentFrequency.set(token, (documentFrequency.get(token) ?? 0) + 1);
+    }
+  }
+
+  const priority = (row: T): number => importanceScore(row.importance) + recencyScore(row.createdAt, now);
+  const candidates = pool
+    .filter((row) => !inMerged.has(row.id))
+    .map((row) => {
+      const words = poolWords.get(row.id) ?? new Set<string>();
+      const overlap = tokens.filter((token) => words.has(token));
+      return { row, overlap: overlap.length, rare: overlap.some((t) => (documentFrequency.get(t) ?? 0) <= RARE_TOKEN_MAX_DF), priority: priority(row) };
+    })
+    .filter((candidate) => candidate.overlap >= 2 || (candidate.overlap >= 1 && candidate.rare))
+    .sort((a, b) => b.overlap - a.overlap || b.priority - a.priority);
+  if (candidates.length === 0) return merged;
+
+  const result = [...merged];
+  let swaps = 0;
+  for (const candidate of candidates) {
+    if (result.length < limit) {
+      result.push(candidate.row);
+      continue;
+    }
+    if (swaps >= MAX_RESCUE_SWAPS) break;
+    // Victim: the displaceable row — not a similarity pick, no query overlap
+    // of its own — with the lowest importance + recency priority.
+    let victimIndex = -1;
+    let victimPriority = Number.POSITIVE_INFINITY;
+    result.forEach((row, index) => {
+      if (protectedIds?.has(row.id)) return;
+      const words = poolWords.get(row.id) ?? contentWordSet(row.content ?? '');
+      if (tokens.some((token) => words.has(token))) return;
+      const p = priority(row);
+      // <= so a priority tie displaces the later row: merged order already
+      // encodes merge priority, so the tail is the weakest claim to the slot.
+      if (p <= victimPriority) {
+        victimPriority = p;
+        victimIndex = index;
+      }
+    });
+    if (victimIndex === -1) break;
+    result.splice(victimIndex, 1);
+    result.push(candidate.row);
+    swaps += 1;
+  }
+  return result;
+}
+
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

@@ -6,6 +6,7 @@ import {
   RECALL_BUDGET_MS,
   recallWithBudget,
   rerankByQueryOverlap,
+  rescueOverlapCandidates,
   shouldRunMatch,
   takeRecallSlot,
 } from './memory-recall.js';
@@ -16,6 +17,9 @@ import { EMBEDDING_MODEL } from '../../../shared/embedding-limits.js';
 import { alert } from '../lib/alerting.js';
 import { NotFoundError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
+
+/** Wider importance pool the #353 candidate rescue picks from (see memory-recall.ts). */
+const RESCUE_POOL_LIMIT = 40;
 
 /**
  * Generate a memory's embedding and write it onto the row that already exists.
@@ -340,6 +344,9 @@ export class MemoryService {
       return loadImportant();
     }
     const started = Date.now();
+    // Ids the similarity leg produced, captured for the candidate rescue:
+    // those rows earned their slot semantically and are never displaced.
+    let similarIds: ReadonlySet<string> = new Set();
     const result = await recallWithBudget({
       limit,
       loadImportant,
@@ -373,9 +380,11 @@ export class MemoryService {
         const vector = `[${embedded.values.join(',')}]`;
         const left = RECALL_BUDGET_MS - (Date.now() - started);
         const matched = await this.matchWithin(sessionId, userId, vector, limit, 0.7, left);
-        return matched.map((row) => matchRow(row as Record<string, unknown>)) as Awaited<
+        const rows = matched.map((row) => matchRow(row as Record<string, unknown>)) as Awaited<
           ReturnType<typeof MemoryService.list>
         >;
+        similarIds = new Set(rows.map((row) => row.id));
+        return rows;
       },
       logFallback: (error) => {
         logger.warn({
@@ -392,12 +401,52 @@ export class MemoryService {
       ms: result.elapsedMs,
       fellBack: result.fellBack,
     });
+    // #353: candidate rescue. The merge can only return rows its two legs
+    // produced; a fact under the similarity floor AND below the importance
+    // cap never enters the set, and no re-rank of the set can recover it.
+    // Swap in a wider-pool row that shares topical words with the query,
+    // displacing a merged row that shares none.
+    const rescued = await this.rescueCrowdedSet(result.rows, sessionId, userId, query, limit, similarIds);
     // #353: re-rank by entity overlap so a question naming a fact surfaces the
     // memory that contains it, even when the store is crowded.
     if (!result.fellBack) {
-      return rerankByQueryOverlap(result.rows, query);
+      return rerankByQueryOverlap(rescued, query);
     }
-    return result.rows;
+    return rescued;
+  }
+
+  /**
+   * Run the overlap rescue when the merged set filled the limit (a smaller
+   * set already holds everything the legs found). One extra indexed list
+   * read, only on a full set; the pool is wider than the merge's own list so
+   * crowded-out rows are visible to it.
+   *
+   * Best-effort by contract: recall must never throw into a turn, and the
+   * merged rows are already a good answer, so a failed pool read (transient
+   * DB error, session deleted mid-turn) degrades to the un-rescued set.
+   */
+  private static async rescueCrowdedSet<T extends { id: string; content?: string | null; importance?: number | null; createdAt?: string | number | Date | null }>(
+    rows: T[],
+    sessionId: string,
+    userId: string,
+    query: string,
+    limit: number,
+    protectedIds: ReadonlySet<string>,
+  ): Promise<T[]> {
+    if (rows.length < limit) return rows;
+    try {
+      const poolLimit = Math.max(RESCUE_POOL_LIMIT, limit * 2);
+      const pool = (await this.list(sessionId, userId, { limit: poolLimit, top: true })) as unknown as T[];
+      if (pool.length <= rows.length) return rows;
+      return rescueOverlapCandidates(rows, pool, query, limit, protectedIds);
+    } catch (error) {
+      logger.warn({
+        msg: 'MEMORY_RECALL_RESCUE_FAILED',
+        sessionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return rows;
+    }
   }
 
   /** Match, but stop the statement if the recall budget has only this long left. */
