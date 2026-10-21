@@ -90,7 +90,7 @@ PLAYER CHARACTER: ${char.name}, a level ${char.level} ${char.race || 'Unknown Ra
     // PC in the third person as a separate person standing nearby.
     section += `
 <player_identity>
-${char.name} IS the player — the person whose messages you are answering. In scene narration ${char.name} is "you": write what they perceive and do in the second person. Never narrate ${char.name} in the third person by name as a separate person present in the scene (never "Nearby, ${char.name} ..."), and never give them actions, words, or thoughts the player did not choose.
+${char.name} IS the player — the person whose messages you are answering. In scene narration ${char.name} is "you": write what they perceive and do in the second person. Never narrate ${char.name} in the third person by name as a separate person present in the scene (never "Nearby, ${char.name} ...").
 </player_identity>`;
 
     if (char.character_stats && char.character_stats.length > 0) {
