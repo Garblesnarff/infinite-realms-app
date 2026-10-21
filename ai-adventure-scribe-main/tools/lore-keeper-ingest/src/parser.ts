@@ -168,7 +168,7 @@ export function parseOverview(content: string, campaignId: string): ParsedCampai
 
   // Extract estimated sessions
   const sessionsMatch = content.match(/(\d+[-–]\d+)\s*sessions/i) ||
-                        content.match(/Estimated Length:.*?(\d+)\s*sessions?\b/i) ||
+                        content.match(/Estimated Length:.*?(?<![-–\d])(\d+)\s*sessions?\b/i) ||
                         content.match(/Estimated Length:.*?(\d+[-–]\d+)\b(?!\s*hours?\b)/i);
   const estimatedSessions = sessionsMatch ? sessionsMatch[1].replace('–', '-') : undefined;
 

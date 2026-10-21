@@ -90,6 +90,23 @@ test('full-campaign overview parses exactly as before (pin)', () => {
   });
 });
 
+test('a range followed by the singular "session" still parses as the full range', () => {
+  // The bare-count branch must not capture the tail of a range in this
+  // shape ("12" from "8-12 session") and shadow the fallback (#829 round 3).
+  assert.equal(
+    parseOverview('# W\n\nEstimated Length: 8-12 session campaign\n', 'w').estimatedSessions,
+    '8-12',
+  );
+  assert.equal(
+    parseOverview('# W\n\n**Estimated Length:** 8–12 session adventure\n', 'w').estimatedSessions,
+    '8-12',
+  );
+  assert.equal(
+    parseOverview('# W\n\n**Estimated Length:** 3-5 session adventure\n', 'w').estimatedSessions,
+    '3-5',
+  );
+});
+
 test('an en-dash session range normalizes to a hyphen range', () => {
   assert.equal(
     parseOverview('# W\n\n**Estimated Length:** 8–12 sessions\n', 'w').estimatedSessions,
