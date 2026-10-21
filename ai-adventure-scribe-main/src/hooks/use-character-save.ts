@@ -211,13 +211,16 @@ export const useCharacterSave = (): {
             }
           } catch (spellError) {
             logger.warn('❌ Spell save failed but continuing:', spellError);
-            if (!character.id) {
-              toast({
-                title: 'Partial Save Success',
-                description: 'Character created but spell assignment failed.',
-                variant: 'destructive',
-              });
-            }
+            // Show the server's reason (for example, the spell catalog is not loaded yet) on
+            // create and on sheet updates alike; a silent failure looks like saved spells.
+            const reason = spellError instanceof Error ? spellError.message : '';
+            toast({
+              title: character.id ? 'Spells not saved' : 'Partial Save Success',
+              description: character.id
+                ? reason || 'Your spell changes were not saved.'
+                : `Character created but spell assignment failed.${reason ? ` ${reason}` : ''}`,
+              variant: 'destructive',
+            });
           }
         };
 

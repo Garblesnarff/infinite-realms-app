@@ -24,6 +24,7 @@ import {
   spells,
 } from '../../../../db/schema/index';
 import { THAUMATURGY_SPELL_ID } from '../../../../shared/racial-spell-ids';
+import { findSrdClass } from '../../../../shared/srd-class-data';
 import { NotFoundError } from '../../lib/errors.js';
 
 import type { Character } from '../../../../db/schema/index';
@@ -142,7 +143,16 @@ export class CharacterSpellService {
       .limit(1);
 
     if (!classData) {
-      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid class name' });
+      // The lookup above is exact, so only the canonical SRD name (what the client sends) can
+      // mean "catalog not seeded yet". An alias such as "wizard" stays "Invalid class name".
+      const srdClass = findSrdClass(className);
+      const seedMissing = srdClass !== undefined && srdClass.name === className;
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: seedMissing
+          ? `The spell catalog for ${srdClass.name} is not loaded on this server yet. Your saved spells were not changed.`
+          : 'Invalid class name',
+      });
     }
 
     const racialSpellIds = new Set<string>();

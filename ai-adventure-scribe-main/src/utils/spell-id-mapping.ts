@@ -65,10 +65,10 @@ export const SPELL_ID_MAPPING: Record<string, string> = {
 
   // Common Wizard Level 1 Spells
   'burning-hands': '4f5a6b7c-8d9e-0f1a-2b3c-4d5e6f7a8b9c', // Wizard
-  'detect-magic': '5g6h7i8j-9k0l-1m2n-3o4p-5q6r7s8t9u0v', // Wizard, Ritual
-  identify: '6h7i8j9k-0l1m-2n3o-4p5q-6r7s8t9u0v1w', // Wizard, Ritual
-  'mage-armor': '7i8j9k0l-1m2n-3o4p-5q6r-7s8t9u0v1w2x', // Wizard
-  shield: '8j9k0l1m-2n3o-4p5q-6r7s-8t9u0v1w2x3y', // Wizard
+  'detect-magic': 'fff789f3-def2-5805-b17b-bdf5f78bbfcd', // Wizard, Ritual
+  identify: '9b944916-3d61-5d2e-81bb-4afd3a12fe83', // Wizard, Ritual
+  'mage-armor': 'f3179e7d-c1e2-5d7e-9ca9-135423a85191', // Wizard
+  shield: 'b69a1665-196d-53fb-bb22-254e9cfe47a1', // Wizard
 
   // === LEVEL 2 SPELLS ===
   'spiritual-weapon': '959165f4-4def-4069-897e-70e3fa71ff63', // Cleric

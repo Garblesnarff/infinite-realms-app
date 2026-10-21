@@ -61,7 +61,10 @@ let httpUserId = '';
 mock.module('../../lib/auth.js', () => ({
   authenticateRequest: async (request: Request) =>
     request.headers.get('authorization') === 'Bearer <redacted>'
-      ? { user: { userId: httpUserId, email: 'spell-prep@example.test', plan: 'free' }, error: null }
+      ? {
+          user: { userId: httpUserId, email: 'spell-prep@example.test', plan: 'free' },
+          error: null,
+        }
       : { user: null, error: 'Unauthorized' },
 }));
 
@@ -135,17 +138,46 @@ describeWithDb('character spell prepared flags (#211 QA-041)', () => {
       .returning({ id: classes.id });
 
     const spellDefs = [
-      { name: 'Test Fire Bolt 211', level: 0, school: 'Evocation', castingTime: '1 action', rangeText: '120 feet', duration: 'Instantaneous', description: 'Test cantrip' },
-      { name: 'Test Magic Missile 211', level: 1, school: 'Evocation', castingTime: '1 action', rangeText: '120 feet', duration: 'Instantaneous', description: 'Test spell' },
-      { name: 'Test Shield 211', level: 1, school: 'Abjuration', castingTime: '1 reaction', rangeText: 'Self', duration: '1 round', description: 'Test spell' },
-      { name: 'Test Mage Armor 211', level: 1, school: 'Abjuration', castingTime: '1 action', rangeText: 'Touch', duration: '8 hours', description: 'Test spell' },
+      {
+        name: 'Test Fire Bolt 211',
+        level: 0,
+        school: 'Evocation',
+        castingTime: '1 action',
+        rangeText: '120 feet',
+        duration: 'Instantaneous',
+        description: 'Test cantrip',
+      },
+      {
+        name: 'Test Magic Missile 211',
+        level: 1,
+        school: 'Evocation',
+        castingTime: '1 action',
+        rangeText: '120 feet',
+        duration: 'Instantaneous',
+        description: 'Test spell',
+      },
+      {
+        name: 'Test Shield 211',
+        level: 1,
+        school: 'Abjuration',
+        castingTime: '1 reaction',
+        rangeText: 'Self',
+        duration: '1 round',
+        description: 'Test spell',
+      },
+      {
+        name: 'Test Mage Armor 211',
+        level: 1,
+        school: 'Abjuration',
+        castingTime: '1 action',
+        rangeText: 'Touch',
+        duration: '8 hours',
+        description: 'Test spell',
+      },
     ];
     const spellIds: string[] = [];
     for (const def of spellDefs) {
-      const [{ id }] = await db
-        .insert(spells)
-        .values(def)
-        .returning({ id: spells.id });
+      const [{ id }] = await db.insert(spells).values(def).returning({ id: spells.id });
       spellIds.push(id);
     }
     [fireBoltId, magicMissileId, shieldId, mageArmorId] = spellIds;
@@ -332,9 +364,7 @@ describeWithDb('character spell prepared flags (#211 QA-041)', () => {
       'Test Magic Missile 211',
       'Test Shield 211',
     ]);
-    expect(
-      sheet.spells.find((s) => s.name === 'Test Mage Armor 211')?.is_prepared,
-    ).toBe(false);
+    expect(sheet.spells.find((s) => s.name === 'Test Mage Armor 211')?.is_prepared).toBe(false);
     expect(sheet.cantrips).toHaveLength(1);
   });
 });
@@ -349,6 +379,10 @@ describeWithDb('Life Domain domain spells (#899)', () => {
   let clericClassId: string;
   let characterId = '';
   const spellIdsByName = new Map<string, string>();
+  // The spell catalog seed (#957) ships Cleric and the domain spells. Reuse those rows and
+  // delete only what this suite created, so cleanup never removes the catalog.
+  const createdSpellIds: string[] = [];
+  let clericOwned = false;
 
   // The L1 Life Domain cleric from the audit (D20-003): WIS 16, so the
   // preparation cap is WIS mod (+3) + level (1) = 4 chosen spells. The
@@ -366,13 +400,31 @@ describeWithDb('Life Domain domain spells (#899)', () => {
       .returning({ id: campaigns.id });
 
     // saveCharacterSpells resolves the class by the name the client sends.
-    [{ id: clericClassId }] = await db
-      .insert(classes)
-      .values({ name: 'Cleric', hitDie: 8 })
-      .returning({ id: classes.id });
+    const [seededCleric] = await db
+      .select({ id: classes.id })
+      .from(classes)
+      .where(eq(classes.name, 'Cleric'))
+      .limit(1);
+    if (seededCleric) {
+      clericClassId = seededCleric.id;
+    } else {
+      [{ id: clericClassId }] = await db
+        .insert(classes)
+        .values({ name: 'Cleric', hitDie: 8 })
+        .returning({ id: classes.id });
+      clericOwned = true;
+    }
 
     const spellDefs = [
-      { name: 'Guidance', level: 0, school: 'Divination', castingTime: '1 action', rangeText: 'Touch', duration: 'Concentration, up to 1 minute', description: 'Test cantrip' },
+      {
+        name: 'Guidance',
+        level: 0,
+        school: 'Divination',
+        castingTime: '1 action',
+        rangeText: 'Touch',
+        duration: 'Concentration, up to 1 minute',
+        description: 'Test cantrip',
+      },
       ...[...CHOSEN, ...DOMAIN].map((name) => ({
         name,
         level: 1,
@@ -384,15 +436,22 @@ describeWithDb('Life Domain domain spells (#899)', () => {
       })),
     ];
     for (const def of spellDefs) {
-      const [{ id }] = await db
-        .insert(spells)
-        .values(def)
-        .returning({ id: spells.id });
+      const [existingSpell] = await db
+        .select({ id: spells.id })
+        .from(spells)
+        .where(eq(spells.name, def.name))
+        .limit(1);
+      let id = existingSpell?.id;
+      if (!id) {
+        [{ id }] = await db.insert(spells).values(def).returning({ id: spells.id });
+        createdSpellIds.push(id);
+        // Link only spells this suite created. A reused catalog spell is already linked by the
+        // seed, and class_spells has no unique key, so a second link would double every row.
+        await db
+          .insert(classSpells)
+          .values({ classId: clericClassId, spellId: id, spellLevel: def.level });
+      }
       spellIdsByName.set(def.name, id);
-      await db
-        .insert(classSpells)
-        .values({ classId: clericClassId, spellId: id, spellLevel: def.level })
-        .onConflictDoNothing();
     }
   });
 
@@ -402,12 +461,12 @@ describeWithDb('Life Domain domain spells (#899)', () => {
       await db.delete(characterStats).where(eq(characterStats.characterId, characterId));
       await db.delete(characters).where(eq(characters.id, characterId));
     }
-    const ids = [...spellIdsByName.values()];
+    const ids = createdSpellIds;
     if (ids.length > 0) {
       await db.delete(classSpells).where(inArray(classSpells.spellId, ids));
       await db.delete(spells).where(inArray(spells.id, ids));
     }
-    if (clericClassId) {
+    if (clericClassId && clericOwned) {
       await db.delete(classes).where(eq(classes.id, clericClassId));
     }
     if (campaignId) {
