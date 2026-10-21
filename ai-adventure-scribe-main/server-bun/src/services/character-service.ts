@@ -19,6 +19,7 @@ import {
 } from './character/character-armor-class.js';
 import { CharacterSpellService } from './character/character-spell-service.js';
 import { CharacterVitalsService } from './character-vitals-service.js';
+import { ClassFeaturesService } from './class-features-service.js';
 import { RestHitDiceService } from './rest/rest-hit-dice-service.js';
 import { db } from '../../../db/client';
 import {
@@ -40,7 +41,7 @@ import {
   findSrdClassForHitPoints,
 } from '../../../shared/level-1-hit-points';
 import { InternalServerError } from '../lib/errors.js';
-import { SpellSlotMechanics } from './spell-slots/spell-slot-mechanics.js';
+import { parseClassLevels, SpellSlotMechanics } from './spell-slots/spell-slot-mechanics.js';
 
 import type { Character, NewCharacter, NewCharacterStats } from '../../../db/schema/index';
 
@@ -247,7 +248,7 @@ export class CharacterService {
     inventory?: Array<Record<string, unknown>>,
   ): Promise<Character> {
     const seededEquipment = equipment?.length ? withStartingPackageEquipped(equipment) : equipment;
-    return db.transaction(async (tx) => {
+    const created = await db.transaction(async (tx) => {
       const [character] = await tx
         .insert(characters)
         .values({
@@ -372,6 +373,71 @@ export class CharacterService {
 
       return character;
     });
+
+    // #829: grant the class features for every level the character is
+    // created at, so a level-3 template pregen holds its level 1–3 features
+    // instead of none. ClassFeaturesService verifies ownership against the
+    // committed row on the shared pool, so the grant runs after the
+    // transaction, not inside it. Its batch grant skips features the
+    // character already holds, so a sequential re-grant adds nothing; that
+    // guard is a select-then-insert check with no unique constraint behind
+    // it, so it is not race-proof against concurrent grants for the same
+    // character.
+    //
+    // The levels come from parseClassLevels — the same parse the spell-slot
+    // seeding above uses — so a multiclass create grants each class its own
+    // levels instead of the primary class at the character's total level. A
+    // single-class create carries no classLevels and falls back to its class
+    // and level, routed through the same parser so class names normalize
+    // identically. Per-class levels cap at 20, the SRD maximum.
+    //
+    // Subclass features are not granted here: grantFeaturesForLevel adds
+    // the features of the subclass recorded in character_subclasses, and no
+    // subclass row exists at create (a subclass chosen later is granted by
+    // SubclassService.setSubclass). A subclass picked in the creation wizard
+    // is stored as a choice string in the classFeatures JSON, not in
+    // character_subclasses, so its feature rows are granted by no create
+    // path today — a pre-existing gap, separate from this change.
+    //
+    // If the grant fails, the create fails as a whole: the committed
+    // character is deleted again (its rows cascade) and the grant error
+    // propagates, so a create either yields a fully granted character or no
+    // character — never a silently feature-less one left behind for a retry
+    // to duplicate.
+    const parsedClassLevels = parseClassLevels(data.classLevels);
+    const grantPlan =
+      parsedClassLevels.length > 0
+        ? parsedClassLevels
+        : parseClassLevels([
+            { className: created.class ?? data.class, level: created.level ?? data.level ?? 1 },
+          ]);
+    if (grantPlan.length > 0) {
+      try {
+        for (const entry of grantPlan) {
+          const topLevel = Math.min(entry.level, 20);
+          for (let featureLevel = 1; featureLevel <= topLevel; featureLevel++) {
+            await ClassFeaturesService.grantFeaturesForLevel(
+              created.id,
+              entry.className,
+              featureLevel,
+              userId,
+            );
+          }
+        }
+      } catch (grantError) {
+        try {
+          await db.delete(characters).where(eq(characters.id, created.id));
+        } catch (deleteError) {
+          console.error(
+            `Failed to remove character ${created.id} after a failed class-feature grant:`,
+            deleteError,
+          );
+        }
+        throw grantError;
+      }
+    }
+
+    return created;
   }
 
   static async upsertStats(
