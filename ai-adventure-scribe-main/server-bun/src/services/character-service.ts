@@ -37,6 +37,7 @@ import {
 } from '../../../shared/creation-armor-class';
 import {
   computeLevel1MaxHitPoints,
+  computeMaxHitPointsForLevel,
   findSrdClassForHitPoints,
 } from '../../../shared/level-1-hit-points';
 import { XP_TO_REACH_LEVEL } from '../../../shared/xp-tables';
@@ -62,13 +63,24 @@ function toArmorClassItems(equipment: Array<Record<string, unknown>>): ArmorClas
 
 /**
  * Recompute the server-owned derived stats after a stats upsert (#620): the
- * armour class (equipment + Unarmoured Defence) always, and max HP for
- * level-1 characters. Higher-level characters keep their stored max HP — it
- * belongs to the vitals engine once level-ups have happened. Current HP keeps
- * the damage already taken: a full-health character stays full, otherwise the
- * stored value is capped at the new max.
+ * armour class (equipment + Unarmoured Defence) always, and max HP for the
+ * character's real level (#829) — with one guard: the stored max HP is only
+ * overwritten when it is a value the HP formula itself produced (see the
+ * fingerprint check below), never a total the vitals engine stored from
+ * rolled level-up gains. A character whose class does not resolve keeps its
+ * stored max HP. Current HP keeps the damage already taken: a full-health
+ * character stays full, otherwise the stored value is capped at the new max.
+ *
+ * `previousStats` is the stats row as it was before the upsert (read by the
+ * caller before its write), or null when no row existed: the fingerprint is
+ * judged at the pre-upsert CON, because the upsert may itself be the CON
+ * change being recomputed for, and a row the upsert just inserted holds no
+ * vitals-written max HP to protect.
  */
-async function recomputeServerDerivedStats(characterId: string): Promise<void> {
+async function recomputeServerDerivedStats(
+  characterId: string,
+  previousStats?: { constitution: number } | null,
+): Promise<void> {
   const [character] = await db
     .select({
       class: characters.class,
@@ -102,22 +114,52 @@ async function recomputeServerDerivedStats(characterId: string): Promise<void> {
   );
   const updates: Partial<NewCharacterStats> = { armorClass, updatedAt: new Date() };
 
-  // A character without a resolvable class keeps its stored HP; only a
-  // level-1 character of a known class gets the formula re-derived. (Create
+  // A character without a resolvable class keeps its stored HP. (Create
   // throws on a non-empty unresolvable class and falls back to a d8 only for
   // a missing class; the update path must not rewrite HP it cannot derive.)
-  if ((character.level ?? 1) === 1 && findSrdClassForHitPoints(character.class)) {
-    const maxHitPoints = computeLevel1MaxHitPoints(
+  //
+  // The stored max HP is the fingerprint of whoever wrote it last. It is
+  // re-derived at the character's real level only when it equals one of the
+  // formula's own outputs at the pre-upsert CON: the level-1 formula (what
+  // the pre-#829 create/recompute stored for a character of any level — a
+  // level-3 template still carrying level-1 HP is repaired here) or the
+  // for-level formula (what the fixed create/recompute stored, so CON
+  // changes keep tracking). A stored max matching neither was written by
+  // the vitals engine from rolled level-up gains — every level-up adds at
+  // least 1 HP, so a rolled total above level 1 can never collide with the
+  // level-1 value, and a non-average roll breaks the for-level match — and
+  // is kept as stored. Level 1 is unconditional: no level-up has happened
+  // yet, so the stored max is the formula's by construction (#620). The
+  // upsert never writes the HP columns, so the values read here are the
+  // pre-upsert stored ones.
+  if (findSrdClassForHitPoints(character.class)) {
+    const level = character.level ?? 1;
+    const maxHitPoints = computeMaxHitPointsForLevel(
       character.class,
       stats.constitution,
       character.subrace,
+      level,
       { draconicBloodline },
     );
-    const storedMax = stats.maxHitPoints ?? maxHitPoints;
-    const storedCurrent = stats.currentHitPoints ?? maxHitPoints;
-    updates.maxHitPoints = maxHitPoints;
-    updates.currentHitPoints =
-      storedCurrent === storedMax ? maxHitPoints : Math.min(storedCurrent, maxHitPoints);
+    const storedMax = stats.maxHitPoints;
+    const judgedCon = previousStats?.constitution ?? stats.constitution;
+    const formulaProduced =
+      previousStats === null ||
+      level === 1 ||
+      storedMax ===
+        computeLevel1MaxHitPoints(character.class, judgedCon, character.subrace, {
+          draconicBloodline,
+        }) ||
+      storedMax ===
+        computeMaxHitPointsForLevel(character.class, judgedCon, character.subrace, level, {
+          draconicBloodline,
+        });
+    if (formulaProduced) {
+      const storedCurrent = stats.currentHitPoints ?? maxHitPoints;
+      updates.maxHitPoints = maxHitPoints;
+      updates.currentHitPoints =
+        storedCurrent === storedMax ? maxHitPoints : Math.min(storedCurrent, maxHitPoints);
+    }
   }
 
   await db.update(characterStats).set(updates).where(eq(characterStats.characterId, characterId));
@@ -291,14 +333,17 @@ export class CharacterService {
       }
 
       if (stats) {
-        // #620: the server is the only place that computes level-1 HP and AC.
+        // #620: the server is the only place that computes HP and AC.
         // The client sends inputs (class, ability scores, equipment); any
-        // armor_class or hit-point values it sent are ignored.
+        // armor_class or hit-point values it sent are ignored. #829: HP is
+        // computed for the character's real level — a level-3 template gets
+        // level-3 HP, not the level-1 value.
         const draconicBloodline = isDraconicBloodline(data.classFeatures);
-        const maxHitPoints = computeLevel1MaxHitPoints(
+        const maxHitPoints = computeMaxHitPointsForLevel(
           data.class,
           stats.constitution,
           data.subrace,
+          character.level ?? 1,
           { draconicBloodline },
         );
         await tx.insert(characterStats).values({
@@ -385,6 +430,15 @@ export class CharacterService {
     userId: string,
     data: Omit<Partial<NewCharacterStats>, 'characterId'>,
   ): Promise<void> {
+    // The recompute below judges the stored max HP against the HP formula
+    // at the CON in force before this write, so read that CON first (the
+    // row may not exist yet — the CTE's insert leg covers that case).
+    const [priorStats] = await db
+      .select({ constitution: characterStats.constitution })
+      .from(characterStats)
+      .where(eq(characterStats.characterId, characterId))
+      .limit(1);
+
     // 🛡️ Sentinel: Keep authorization in the same statement as the write.
     // The CTE updates an existing row or inserts a new one only when the caller
     // owns the character. This avoids the old check-then-act gap without using
@@ -450,7 +504,7 @@ export class CharacterService {
     // #620: HP and AC are server-computed; the client sends inputs only, so no
     // client value can win. Recompute from the stored row, the character's
     // class and the stored equipment.
-    await recomputeServerDerivedStats(characterId);
+    await recomputeServerDerivedStats(characterId, priorStats ?? null);
   }
 
   /**
