@@ -100,8 +100,9 @@ case "$method $path" in
     [ -e "$STUB_DIR/deleted" ] && reply 404 '{"error":"Session not found"}'
     reply 200 '{"messages":[]}' ;;
   "POST /v1/llm/generate")
+    jq -c . "$data" > "$STUB_DIR/generate-body.json"
     [ -n "${FAIL_GENERATE_BODY:-}" ] && reply 200 "$FAIL_GENERATE_BODY"
-    reply 200 '{"parsed":true,"text":"smoke test ok","provider":"openrouter","model":"test/model","usageIds":[101,102]}' ;;
+    reply 200 '{"parsed":true,"text":"smoke test ok","provider":"openrouter","model":"'"${GENERATE_MODEL:-test/model}"'","usageIds":[101,102]}' ;;
   "DELETE /v1/llm/usage")
     if [ -n "$hdr" ] && grep -q "x-smoke-cleanup-secret: ${CLEANUP_SECRET:-__unset__}" "$hdr" 2>/dev/null; then
       cp "$hdr" "$STUB_DIR/usage-delete-hdr" 2>/dev/null || true
@@ -130,7 +131,7 @@ smoke() {
     FIXTURE_JSON="$TMP/fixture.json" EXPECT_TOKEN="$TOKEN" CLEANUP_SECRET="$CLEANUP_SECRET" \
     VERSION_COMMIT="${VERSION_COMMIT:-$SHA}" \
     SMOKE_CURL="$TMP/bin/curl" SMOKE_BUN="$TMP/bin/bun" SMOKE_FIXTURE="$TMP/fixture.ts" \
-    SMOKE_ENV_FILE="$TMP/smoke.env" SMOKE_API_BASE=https://api.test \
+    SMOKE_APP_DIR="$HERE/../../ai-adventure-scribe-main" SMOKE_ENV_FILE="$TMP/smoke.env" SMOKE_API_BASE=https://api.test \
     SMOKE_VERSION_WAIT_SECONDS=0 SMOKE_POLL_SECONDS=0 \
     DEPLOY_STATE_DIR="$d/state" DEPLOY_ALERT_FILE="$d/alerts.log" DEPLOY_ALERTS_ENV="$TMP/none.env" \
     DEPLOY_GH_BIN="$TMP/bin/gh" DEPLOY_RUN_REPO=test/repo DEPLOY_RUN_ISSUE=2093 \
@@ -190,6 +191,13 @@ D="$TMP/sweep"; mkdir -p "$D"
 echo '[{"id":"c-old","name":"ops smoke 11111111 2026-09-26T00:00:00Z"},{"id":"c-keep","name":"Real campaign"}]' > "$D/campaigns.json"
 smoke "$D" "$SHA"
 expect "sweep: leftover smoke campaign deleted, other kept" test "$(cat "$D/swept")" = "c-old"
+
+expect "pass: smoke sends the shared normal-budget DM turn" \
+  jq -e --slurpfile sent "$D/generate-body.json" '. == $sent[0] and .maxTokens == 8192' "$HERE/../../ai-adventure-scribe-main/shared/test-fixtures/deploy-smoke-generate.json"
+expect "pass: reports provider and served model" has "provider=openrouter model=test/model"
+D="$TMP/flash-lite"; GENERATE_MODEL=google/gemini-3.1-flash-lite smoke "$D" "$SHA"
+expect "fallback model: keeps a successful smoke successful" test "$RC" = 0
+expect "fallback model: warns Haiku was not exercised" has "WARNING: Flash-Lite served the smoke turn"
 
 # 2. A 422 on step 3 (the #2280 shape): hold file + one alert + one comment, all naming step 3.
 D="$TMP/dm422"; FAIL_DM_STATUS=422 smoke "$D" "$SHA"
@@ -305,7 +313,7 @@ if [ -r "$REAL_FIXTURE" ] && command -v bun > /dev/null; then
   STUB_DIR="$D" CALLS="$D/calls" CURL_LOG="$D/curl.log" GH_LOG="$D/gh.log" EXPECT_TOKEN="$TOKEN" \
     CLEANUP_SECRET="$CLEANUP_SECRET" \
     VERSION_COMMIT="$SHA" SMOKE_CURL="$TMP/bin/curl" SMOKE_FIXTURE="$REAL_FIXTURE" \
-    SMOKE_ENV_FILE="$TMP/smoke.env" SMOKE_VERSION_WAIT_SECONDS=0 \
+    SMOKE_APP_DIR="$HERE/../../ai-adventure-scribe-main" SMOKE_ENV_FILE="$TMP/smoke.env" SMOKE_VERSION_WAIT_SECONDS=0 \
     DEPLOY_STATE_DIR="$D/state" DEPLOY_ALERT_FILE="$D/alerts.log" DEPLOY_ALERTS_ENV="$TMP/none.env" \
     DEPLOY_GH_BIN="$TMP/bin/gh" bash "$SMOKE" "$SHA" > "$D/out" 2>&1 || RC=$?
   OUT=$(<"$D/out")

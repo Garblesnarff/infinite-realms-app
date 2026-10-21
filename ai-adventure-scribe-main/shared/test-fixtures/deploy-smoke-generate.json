@@ -1,0 +1,8 @@
+{
+  "prompt": "You are the Dungeon Master for a single InfiniteRealms turn. The player just said: smoke test. Reply with ONLY the JSON object for this DM turn: no prose before or after, no markdown, no code fence. Use exactly these ten keys and these values, inventing nothing: {\"text\": \"smoke test ok\", \"options\": [], \"narration_segments\": [], \"roll_requests\": [], \"combat_transition\": \"none\", \"scene_spec\": null, \"map_actions\": [], \"handout_actions\": [], \"combatants\": [], \"combat_actions\": []}",
+  "player_input": "smoke test",
+  "maxTokens": 8192,
+  "temperature": 0,
+  "provider": "openrouter",
+  "requestType": "user"
+}

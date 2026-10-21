@@ -950,6 +950,20 @@ export class LLMProviderService {
               usage = data.usage;
               finishReason = data.choices?.[0]?.finish_reason;
             }
+            const outputTokens = usage?.completion_tokens ?? 0;
+            // #750 step 2: surface a provider-truncated reply (hit the token
+            // ceiling) so a cut-off turn is visible in logs. Never logs reply
+            // or prompt text.
+            if (isTruncatedFinishReason(finishReason)) {
+              logger.warn({
+                msg: 'LLM_REPLY_TRUNCATED',
+                provider: 'openrouter',
+                model: candidate,
+                finishReason,
+                maxTokens,
+                ...(outputTokens > 0 ? { outputTokens } : {}),
+              });
+            }
             if (responseSchema) {
               try {
                 // #782 item 2: full schema on every path. The strict branch
@@ -999,20 +1013,6 @@ export class LLMProviderService {
             // later breaker-open (from unrelated failures) is not misread.
             setProviderKeyLimitActive('openrouter', false);
             const inputTokens = usage?.prompt_tokens ?? 0;
-            const outputTokens = usage?.completion_tokens ?? 0;
-            // #750 step 2: surface a provider-truncated reply (hit the token
-            // ceiling) so a cut-off turn is visible in logs. Never logs reply
-            // or prompt text.
-            if (isTruncatedFinishReason(finishReason)) {
-              logger.warn({
-                msg: 'LLM_REPLY_TRUNCATED',
-                provider: 'openrouter',
-                model: candidate,
-                finishReason,
-                maxTokens,
-                ...(outputTokens > 0 ? { outputTokens } : {}),
-              });
-            }
             // #352: prompt-cache accounting. Absent details mean no cache
             // information (older path or provider without caching).
             const cachedInputTokens = usage?.prompt_tokens_details?.cached_tokens ?? 0;

@@ -342,10 +342,9 @@ QUOTA_LEFT=$(jq -r '.remaining // empty' < "$WORK/res" 2> /dev/null || true)
 case "$QUOTA_LEFT" in ''|*[!0-9]*) fail "$S5B" 200 "quota response has no numeric remaining" ;; esac
 [ "$QUOTA_LEFT" -ge 2 ] || fail "$S5B" 200 \
   "smoke account quota nearly exhausted (remaining=$QUOTA_LEFT): the probe would 402 — top up the smoke account or wait for the daily reset"
-jq -n --arg prompt 'You are the Dungeon Master for a single InfiniteRealms turn. The player just said: smoke test. Reply with ONLY the JSON object for this DM turn: no prose before or after, no markdown, no code fence. Use exactly these ten keys and these values, inventing nothing: {"text": "smoke test ok", "options": [], "narration_segments": [], "roll_requests": [], "combat_transition": "none", "scene_spec": null, "map_actions": [], "handout_actions": [], "combatants": [], "combat_actions": []}' \
-  '{prompt: $prompt,
-    player_input: "smoke test", maxTokens: 256, temperature: 0,
-    provider: "openrouter", requestType: "user"}' > "$WORK/generate.json"
+# Same exact wire body is exercised by the route contract test (#922).
+jq . "$APP_DIR/shared/test-fixtures/deploy-smoke-generate.json" > "$WORK/generate.json" \
+  || fail "$S5B" "" "could not load the smoke turn fixture"
 api POST /v1/llm/generate "$WORK/generate.json"
 expect_status "$S5B" 200
 if ! jq -e '.parsed == true and ((.degraded // false) == false) and ((.text // "") | length > 0)' \
@@ -353,6 +352,12 @@ if ! jq -e '.parsed == true and ((.degraded // false) == false) and ((.text // "
   GEN_REASON=$(jq -r '[.reason, .error] | map(select(. != null and . != "")) | first // empty' < "$WORK/res" 2> /dev/null || true)
   fail "$S5B" "$STATUS" "no live turn (reason: ${GEN_REASON:-unknown})"
 fi
+GEN_PROVIDER=$(jq -r '.provider // "unknown"' < "$WORK/res")
+GEN_MODEL=$(jq -r '.model // "unknown"' < "$WORK/res")
+say "step 5b served turn: provider=$GEN_PROVIDER model=$GEN_MODEL"
+case "$GEN_MODEL" in
+  *flash-lite*) say "WARNING: Flash-Lite served the smoke turn; Haiku was not exercised" ;;
+esac
 # --- 5b cleanup (#350 FIX round 2): delete the ai_usage rows the probe turn
 # created, by the ids the generate response carried back, and assert they are
 # gone — otherwise every deploy accumulates usage rows for the smoke account.
