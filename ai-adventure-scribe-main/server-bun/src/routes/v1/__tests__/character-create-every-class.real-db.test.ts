@@ -625,11 +625,17 @@ describeWithDb('character create every class (#388)', () => {
  * features. CharacterService.create now grants levels 1..N through
  * ClassFeaturesService after the creation transaction commits.
  *
- * The library rows below are transcribed from the generated seed,
- * supabase/migrations/20261009_seed_srd_class_features.sql (produced by
- * scripts/generate-class-features-seed.ts from src/data/srd/progressions.json
- * and src/data/classes/subclasses.ts), with its deterministic ids, so the
- * rows this suite grants from are the rows production grants from.
+ * The library rows below are the rows a fully migrated database grants
+ * from. Two seed generations exist: 20251112_06_add_class_features.sql
+ * seeded Fighter/Rogue (and their subclasses) first with database-generated
+ * ids, and the generated 20261009 seed deliberately skips any feature the
+ * library already holds under the same name (ignoring a "(1 use)"-style
+ * suffix) — so for Fighter/Rogue the 20251112_06 names and values are the
+ * live ones, while Sorcerer exists only in the 20261009 seed. The rows here
+ * follow that split (ids are the 20261009 deterministic ones; only names
+ * and levels are asserted). beforeAll inserts a row only when no row with
+ * the same class/subclass/name/level key is already present, so running
+ * against a migrated database (CI) never duplicates a library row.
  */
 const SEED_LIBRARY_ROWS = [
   {
@@ -639,9 +645,9 @@ const SEED_LIBRARY_ROWS = [
     featureName: 'Fighting Style',
     levelAcquired: 1,
     description:
-      "You adopt a particular style of fighting as your specialty. Choose one of the following options. You can't take a Fighting Style option more than once, even if you later get to choose again.",
+      'You adopt a particular style of fighting as your specialty. Choose one: Archery, Defense, Dueling, Great Weapon Fighting, Protection, or Two-Weapon Fighting.',
     usageType: 'passive' as const,
-    usesPerRest: null,
+    usesPerRest: 'at_will' as const,
     usesCount: null,
   },
   {
@@ -651,19 +657,19 @@ const SEED_LIBRARY_ROWS = [
     featureName: 'Second Wind',
     levelAcquired: 1,
     description:
-      'You have a limited well of stamina that you can draw on to protect yourself from harm. On your turn, you can use a bonus action to regain hit points equal to 1d10 + your fighter level. Once you use this feature, you must finish a short or long rest before you can use it again.',
+      'You have a limited well of stamina that you can draw on to protect yourself from harm. On your turn, you can use a bonus action to regain hit points equal to 1d10 + your fighter level.',
     usageType: 'bonus_action' as const,
     usesPerRest: 'short_rest' as const,
-    usesCount: null,
+    usesCount: 1,
   },
   {
     id: '06828104-d03c-924d-0c13-50d7af60abf8',
     className: 'Fighter',
     subclassName: null,
-    featureName: 'Action Surge (1 use)',
+    featureName: 'Action Surge',
     levelAcquired: 2,
     description:
-      'Starting at 2nd level, you can push yourself beyond your normal limits for a moment. On your turn, you can take one additional action on top of your regular action and a possible bonus action.\n\nOnce you use this feature, you must finish a short or long rest before you can use it again. Starting at 17th level, you can use it twice before a rest, but only once on the same turn.',
+      'You can push yourself beyond your normal limits for a moment. On your turn, you can take one additional action on top of your regular action and a possible bonus action.',
     usageType: 'action' as const,
     usesPerRest: 'short_rest' as const,
     usesCount: 1,
@@ -675,9 +681,9 @@ const SEED_LIBRARY_ROWS = [
     featureName: 'Martial Archetype',
     levelAcquired: 3,
     description:
-      'At 3rd level, you choose an archetype that you strive to emulate in your combat styles and techniques, such as Champion. The archetype you choose grants you features at 3rd level and again at 7th, 10th, 15th, and 18th level.',
+      'Choose a martial archetype that you strive to emulate in your combat styles and techniques: Champion, Battle Master, or Eldritch Knight.',
     usageType: 'passive' as const,
-    usesPerRest: null,
+    usesPerRest: 'at_will' as const,
     usesCount: null,
   },
   {
@@ -687,9 +693,9 @@ const SEED_LIBRARY_ROWS = [
     featureName: 'Ability Score Improvement',
     levelAcquired: 4,
     description:
-      "When you reach 4th level, and again at 6th, 8th, 12th, 14th, 16th, and 19th level, you can increase one ability score of your choice by 2, or you can increase two ability scores of your choice by 1. As normal, you can't increase an ability score above 20 using this feature.",
+      "You can increase one ability score of your choice by 2, or you can increase two ability scores of your choice by 1. You can't increase an ability score above 20 using this feature.",
     usageType: 'passive' as const,
-    usesPerRest: null,
+    usesPerRest: 'at_will' as const,
     usesCount: null,
   },
   {
@@ -698,9 +704,9 @@ const SEED_LIBRARY_ROWS = [
     subclassName: 'Champion',
     featureName: 'Improved Critical',
     levelAcquired: 3,
-    description: 'Weapon attacks score a critical hit on a roll of 19 or 20.',
+    description: 'Your weapon attacks score a critical hit on a roll of 19 or 20.',
     usageType: 'passive' as const,
-    usesPerRest: null,
+    usesPerRest: 'at_will' as const,
     usesCount: null,
   },
   {
@@ -756,9 +762,9 @@ const SEED_LIBRARY_ROWS = [
     featureName: 'Expertise',
     levelAcquired: 1,
     description:
-      "At 1st level, choose two of your skill proficiencies, or one of your skill proficiencies and your proficiency with thieves' tools.",
+      "Choose two of your skill proficiencies, or one of your skill proficiencies and your proficiency with thieves' tools. Your proficiency bonus is doubled for any ability check you make that uses either of the chosen proficiencies.",
     usageType: 'passive' as const,
-    usesPerRest: null,
+    usesPerRest: 'at_will' as const,
     usesCount: null,
   },
   {
@@ -768,9 +774,9 @@ const SEED_LIBRARY_ROWS = [
     featureName: 'Sneak Attack',
     levelAcquired: 1,
     description:
-      "Beginning at 1st level, you know how to strike subtly and exploit a foe's distraction.",
+      "You know how to strike subtly and exploit a foe's distraction. Once per turn, you can deal an extra 1d6 damage to one creature you hit with an attack if you have advantage on the attack roll. The attack must use a finesse or a ranged weapon.",
     usageType: 'passive' as const,
-    usesPerRest: null,
+    usesPerRest: 'at_will' as const,
     usesCount: null,
   },
   {
@@ -780,9 +786,9 @@ const SEED_LIBRARY_ROWS = [
     featureName: "Thieves' Cant",
     levelAcquired: 1,
     description:
-      'During your rogue training you learned thieves\' cant, a secret mix of dialect, jargon, and code that allows you to hide messages in seemingly normal conversation.',
+      "You have learned thieves' cant, a secret mix of dialect, jargon, and code that allows you to hide messages in seemingly normal conversation.",
     usageType: 'passive' as const,
-    usesPerRest: null,
+    usesPerRest: 'at_will' as const,
     usesCount: null,
   },
   {
@@ -792,9 +798,9 @@ const SEED_LIBRARY_ROWS = [
     featureName: 'Cunning Action',
     levelAcquired: 2,
     description:
-      'Starting at 2nd level, your quick thinking and agility allow you to move and act quickly.',
+      'Your quick thinking and agility allow you to move and act quickly. You can take a bonus action on each of your turns in combat. This action can be used only to take the Dash, Disengage, or Hide action.',
     usageType: 'bonus_action' as const,
-    usesPerRest: null,
+    usesPerRest: 'at_will' as const,
     usesCount: null,
   },
 ];
@@ -835,7 +841,42 @@ describeWithDb('character create grants class features for levels 1..N (#829)', 
   beforeAll(async () => {
     userId = testId('user-829');
     db = realDb();
-    await db.insert(classFeaturesLibrary).values(SEED_LIBRARY_ROWS).onConflictDoNothing();
+    // Insert only the rows the database does not already hold under the
+    // same key (the 20261009 seed's own matching rule: class, subclass,
+    // level, and name ignoring a trailing "(…)" suffix), so a migrated
+    // database keeps exactly one row per feature.
+    const libraryKey = (
+      className: string,
+      subclassName: string | null,
+      featureName: string,
+      levelAcquired: number,
+    ): string =>
+      [
+        className,
+        subclassName ?? '',
+        featureName.replace(/\s*\(.*\)\s*$/, '').toLowerCase(),
+        levelAcquired,
+      ].join('|');
+    const existingLibrary = await db
+      .select()
+      .from(classFeaturesLibrary)
+      .where(inArray(classFeaturesLibrary.className, ['Fighter', 'Rogue', 'Sorcerer']));
+    const existingKeys = new Set(
+      existingLibrary.map(
+        (r: {
+          className: string;
+          subclassName: string | null;
+          featureName: string;
+          levelAcquired: number;
+        }) => libraryKey(r.className, r.subclassName, r.featureName, r.levelAcquired),
+      ),
+    );
+    const missingRows = SEED_LIBRARY_ROWS.filter(
+      (r) => !existingKeys.has(libraryKey(r.className, r.subclassName, r.featureName, r.levelAcquired)),
+    );
+    if (missingRows.length > 0) {
+      await db.insert(classFeaturesLibrary).values(missingRows).onConflictDoNothing();
+    }
     const pipeline = await importWithRealDb(async () => {
       const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');
       const { charactersRoutes } = await import('../characters.ts');
@@ -888,7 +929,7 @@ describeWithDb('character create grants class features for levels 1..N (#829)', 
     // is the subclass choice point, not a feature, and Improved Critical
     // belongs to Champion, which this character has not chosen.
     expect(await grantedFeatures(id)).toEqual([
-      'Action Surge (1 use)@2',
+      'Action Surge@2',
       'Fighting Style@1',
       'Second Wind@1',
     ]);
@@ -962,7 +1003,7 @@ describeWithDb('character create grants class features for levels 1..N (#829)', 
     await ClassFeaturesService.grantFeaturesForLevel(id, 'Fighter', 4, userId);
     expect(await grantedFeatures(id)).toEqual([
       'Ability Score Improvement@4',
-      'Action Surge (1 use)@2',
+      'Action Surge@2',
       'Fighting Style@1',
       'Second Wind@1',
     ]);
@@ -1000,7 +1041,7 @@ describeWithDb('character create grants class features for levels 1..N (#829)', 
     await ClassFeaturesService.grantFeaturesForLevel(id, 'Fighter', 3, userId);
 
     expect(await grantedFeatures(id)).toEqual([
-      'Action Surge (1 use)@2',
+      'Action Surge@2',
       'Fighting Style@1',
       'Improved Critical@3',
       'Second Wind@1',
@@ -1031,7 +1072,7 @@ describeWithDb('character create grants class features for levels 1..N (#829)', 
     // level 2 (no Ability Score Improvement) and the Rogue side receives
     // its own level 1–2 features.
     expect(await grantedFeatures(id)).toEqual([
-      'Action Surge (1 use)@2',
+      'Action Surge@2',
       'Cunning Action@2',
       'Expertise@1',
       'Fighting Style@1',
