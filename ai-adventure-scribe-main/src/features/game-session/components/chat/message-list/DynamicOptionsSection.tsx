@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 
 import type { ChatMessage } from '@/types/game';
 import type { ActionOption } from '@/utils/parseMessageOptions';
@@ -71,8 +72,9 @@ async function sendEngineNotice(
     // baseline keys messages by id, and a notice keyed by `timestamp|text`
     // until hydration re-keys it to the saved uuid — a previous fight's notice
     // could then fall outside the next fight's baseline and release its
-    // summary early. The queue preserves a supplied id end-to-end.
-    id: crypto.randomUUID(),
+    // summary early. The queue preserves a supplied id end-to-end. uuidv4,
+    // not crypto.randomUUID: the latter is undefined on non-secure origins.
+    id: uuidv4(),
     text: notice.text,
     sender: 'system',
     timestamp: new Date().toISOString(),
