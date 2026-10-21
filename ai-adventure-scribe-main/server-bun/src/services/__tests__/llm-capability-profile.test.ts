@@ -1054,3 +1054,318 @@ describe('#783 forced-tool delivery for anthropic/', () => {
     expect(getVendorCapabilityProfile('xai/grok-4').schemaDelivery).toBe('instructed');
   });
 });
+
+describe('#875 narration normalization on every schema path', () => {
+  const story = 'You shift your grip on the rope and look down into the dark.';
+  const appendix = '\noptions: ["A. Climb down", "B. Call out", "C. Wait"]';
+  const replyWith = (text: string, options: string[] = []): string =>
+    JSON.stringify({ ...JSON.parse(VALID_DM_REPLY), text, options });
+  // The D20-020 shape: a whole reply serialized into the text field.
+  const nestedReply = (innerOptions: string[]): string =>
+    replyWith(replyWith(story, innerOptions), []);
+
+  it('strips an options appendix inside text on the strict path', async () => {
+    useModel('openai/gpt-5-mini');
+    stubOpenRouter([{ content: replyWith(story + appendix, ['A. Climb down']) }]);
+    const result = await LLMProviderService.generate({
+      prompt: 'Continue',
+      responseSchema: dmResponseSchema,
+    });
+    expect(result.error).toBeUndefined();
+    expect(JSON.parse(result.text).text).toBe(story);
+    expect(JSON.parse(result.text).options).toEqual(['A. Climb down']);
+  });
+
+  it('strips an options appendix inside text on the instructed path', async () => {
+    useModel('xai/grok-4');
+    stubOpenRouter([{ content: replyWith(story + appendix, ['A. Climb down']) }]);
+    const result = await LLMProviderService.generate({
+      prompt: 'Continue',
+      responseSchema: dmResponseSchema,
+    });
+    expect(result.error).toBeUndefined();
+    expect(JSON.parse(result.text).text).toBe(story);
+    expect(JSON.parse(result.text).options).toEqual(['A. Climb down']);
+  });
+
+  it('strips an options appendix inside text on the Gemini path', async () => {
+    process.env.GOOGLE_GEMINI_API_KEY = 'gemini-test';
+    process.env.GEMINI_TEXT_MODEL = 'gemini-2.5-flash';
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: { parts: [{ text: replyWith(story + appendix, ['A. Climb down']) }] },
+              finishReason: 'STOP',
+            },
+          ],
+          usageMetadata: { promptTokenCount: 9, candidatesTokenCount: 40, totalTokenCount: 49 },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )) as unknown as typeof fetch;
+    const result = await LLMProviderService.generate({
+      prompt: 'Continue',
+      provider: 'gemini',
+      responseSchema: dmResponseSchema,
+    });
+    expect(result.error).toBeUndefined();
+    expect(JSON.parse(result.text).text).toBe(story);
+    expect(JSON.parse(result.text).options).toEqual(['A. Climb down']);
+  });
+
+  it('unwraps an envelope nested inside text on the tool path and adopts its options', async () => {
+    useModel('anthropic/claude-haiku-5.5');
+    stubOpenRouter([{ toolArguments: nestedReply(['A. Climb down', 'B. Call out']) }]);
+    const result = await LLMProviderService.generate({
+      prompt: 'Continue',
+      responseSchema: dmResponseSchema,
+    });
+    expect(result.error).toBeUndefined();
+    expect(JSON.parse(result.text).text).toBe(story);
+    expect(JSON.parse(result.text).options).toEqual(['A. Climb down', 'B. Call out']);
+  });
+
+  it('unwraps an envelope nested inside text on the strict path', async () => {
+    useModel('openai/gpt-5-mini');
+    stubOpenRouter([{ content: nestedReply(['A. Climb down']) }]);
+    const result = await LLMProviderService.generate({
+      prompt: 'Continue',
+      responseSchema: dmResponseSchema,
+    });
+    expect(result.error).toBeUndefined();
+    expect(JSON.parse(result.text).text).toBe(story);
+    expect(JSON.parse(result.text).options).toEqual(['A. Climb down']);
+  });
+
+  it('keeps the outer options when a nested envelope is unwrapped', async () => {
+    useModel('anthropic/claude-haiku-5.5');
+    const outer = JSON.stringify({
+      ...JSON.parse(VALID_DM_REPLY),
+      text: replyWith(story, ['A. Inner']),
+      options: ['A. Outer'],
+    });
+    stubOpenRouter([{ toolArguments: outer }]);
+    const result = await LLMProviderService.generate({
+      prompt: 'Continue',
+      responseSchema: dmResponseSchema,
+    });
+    expect(result.error).toBeUndefined();
+    expect(JSON.parse(result.text).text).toBe(story);
+    expect(JSON.parse(result.text).options).toEqual(['A. Outer']);
+  });
+
+  it('strips the appendix from the inner text after unwrapping', async () => {
+    useModel('anthropic/claude-haiku-5.5');
+    const outer = replyWith(replyWith(story + appendix, []), []);
+    stubOpenRouter([{ toolArguments: outer }]);
+    const result = await LLMProviderService.generate({
+      prompt: 'Continue',
+      responseSchema: dmResponseSchema,
+    });
+    expect(result.error).toBeUndefined();
+    expect(JSON.parse(result.text).text).toBe(story);
+  });
+
+  it('leaves a clean strict reply byte-identical', async () => {
+    useModel('openai/gpt-5-mini');
+    const clean = replyWith(story, ['A. Climb down']);
+    stubOpenRouter([{ content: clean }]);
+    const result = await LLMProviderService.generate({
+      prompt: 'Continue',
+      responseSchema: dmResponseSchema,
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.text).toBe(clean);
+  });
+
+  it('adopts the inner mechanical fields the outer shell left empty', async () => {
+    useModel('anthropic/claude-haiku-5.5');
+    const inner = {
+      ...JSON.parse(VALID_DM_REPLY),
+      text: 'The goblin lunges from the dark.',
+      options: ['A. Dodge'],
+      combat_transition: 'start',
+      roll_requests: [
+        {
+          type: 'attack',
+          formula: '1d20+4',
+          purpose: 'Goblin scimitar attack',
+          dc: null,
+          ac: 15,
+          advantage: false,
+          disadvantage: false,
+        },
+      ],
+      combat_actions: [{ actor: 'Goblin', action_type: 'attack' }],
+      combatants: [{ name: 'Goblin', hp: 7, max_hp: 7, ac: 15 }],
+    };
+    // The outer reply is a shell: VALID_DM_REPLY defaults everywhere else.
+    const outer = replyWith(JSON.stringify(inner), []);
+    stubOpenRouter([{ toolArguments: outer }]);
+    const result = await LLMProviderService.generate({
+      prompt: 'Continue',
+      responseSchema: dmResponseSchema,
+    });
+    expect(result.error).toBeUndefined();
+    const envelope = JSON.parse(result.text);
+    expect(envelope.text).toBe('The goblin lunges from the dark.');
+    expect(envelope.options).toEqual(['A. Dodge']);
+    expect(envelope.combat_transition).toBe('start');
+    expect(envelope.roll_requests).toHaveLength(1);
+    expect(envelope.combat_actions).toHaveLength(1);
+    expect(envelope.combatants).toHaveLength(1);
+  });
+
+  it('keeps the outer mechanical fields when the outer reply set them', async () => {
+    useModel('anthropic/claude-haiku-5.5');
+    const outerSave = {
+      type: 'save',
+      formula: '1d20+2',
+      purpose: 'Outer save',
+      dc: 13,
+      ac: null,
+      advantage: false,
+      disadvantage: false,
+    };
+    const inner = {
+      ...JSON.parse(VALID_DM_REPLY),
+      text: story,
+      combat_transition: 'start',
+      roll_requests: [
+        {
+          type: 'attack',
+          formula: '1d20+4',
+          purpose: 'Inner attack',
+          dc: null,
+          ac: 15,
+          advantage: false,
+          disadvantage: false,
+        },
+      ],
+    };
+    const outer = {
+      ...JSON.parse(VALID_DM_REPLY),
+      text: JSON.stringify(inner),
+      combat_transition: 'end',
+      roll_requests: [outerSave],
+    };
+    stubOpenRouter([{ toolArguments: JSON.stringify(outer) }]);
+    const result = await LLMProviderService.generate({
+      prompt: 'Continue',
+      responseSchema: dmResponseSchema,
+    });
+    expect(result.error).toBeUndefined();
+    const envelope = JSON.parse(result.text);
+    expect(envelope.text).toBe(story);
+    expect(envelope.combat_transition).toBe('end');
+    expect(envelope.roll_requests).toEqual([outerSave]);
+  });
+
+  it('never empties the narration: an inner text of "" leaves the reply untouched', async () => {
+    useModel('anthropic/claude-haiku-5.5');
+    const payload = replyWith('', ['A. X']);
+    const outer = replyWith(payload, []);
+    stubOpenRouter([{ toolArguments: outer }]);
+    const result = await LLMProviderService.generate({
+      prompt: 'Continue',
+      responseSchema: dmResponseSchema,
+    });
+    expect(result.error).toBeUndefined();
+    const envelope = JSON.parse(result.text);
+    expect(envelope.text).toBe(payload);
+    expect(envelope.options).toEqual([]);
+  });
+
+  it('never empties the narration: an appendix-only inner text leaves the reply untouched', async () => {
+    useModel('anthropic/claude-haiku-5.5');
+    const payload = replyWith('\noptions: ["A. X"]', []);
+    const outer = replyWith(payload, []);
+    stubOpenRouter([{ toolArguments: outer }]);
+    const result = await LLMProviderService.generate({
+      prompt: 'Continue',
+      responseSchema: dmResponseSchema,
+    });
+    expect(result.error).toBeUndefined();
+    expect(JSON.parse(result.text).text).toBe(payload);
+  });
+
+  it('unwraps a doubly nested envelope', async () => {
+    useModel('anthropic/claude-haiku-5.5');
+    const outer = replyWith(replyWith(replyWith(story, ['A. Deep']), []), []);
+    stubOpenRouter([{ toolArguments: outer }]);
+    const result = await LLMProviderService.generate({
+      prompt: 'Continue',
+      responseSchema: dmResponseSchema,
+    });
+    expect(result.error).toBeUndefined();
+    expect(JSON.parse(result.text).text).toBe(story);
+    expect(JSON.parse(result.text).options).toEqual(['A. Deep']);
+  });
+
+  it('unwraps a fenced envelope nested inside text', async () => {
+    useModel('anthropic/claude-haiku-5.5');
+    const outer = replyWith('```json\n' + replyWith(story, ['A. Fenced']) + '\n```', []);
+    stubOpenRouter([{ toolArguments: outer }]);
+    const result = await LLMProviderService.generate({
+      prompt: 'Continue',
+      responseSchema: dmResponseSchema,
+    });
+    expect(result.error).toBeUndefined();
+    expect(JSON.parse(result.text).text).toBe(story);
+    expect(JSON.parse(result.text).options).toEqual(['A. Fenced']);
+  });
+
+  it('does not unwrap a quoted JSON object that is not reply-shaped', async () => {
+    useModel('openai/gpt-5-mini');
+    const quoted = '{"text": "The inscription reads: open at dawn."}';
+    stubOpenRouter([{ content: replyWith(quoted, []) }]);
+    const result = await LLMProviderService.generate({
+      prompt: 'Continue',
+      responseSchema: dmResponseSchema,
+    });
+    expect(result.error).toBeUndefined();
+    expect(JSON.parse(result.text).text).toBe(quoted);
+  });
+
+  it('unwraps an envelope nested inside text on the Gemini path', async () => {
+    process.env.GOOGLE_GEMINI_API_KEY = 'test-key';
+    process.env.GEMINI_TEXT_MODEL = 'gemini-2.5-flash';
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: { parts: [{ text: nestedReply(['A. Climb down']) }] },
+              finishReason: 'STOP',
+            },
+          ],
+          usageMetadata: { promptTokenCount: 9, candidatesTokenCount: 40, totalTokenCount: 49 },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )) as unknown as typeof fetch;
+    const result = await LLMProviderService.generate({
+      prompt: 'Continue',
+      provider: 'gemini',
+      responseSchema: dmResponseSchema,
+    });
+    expect(result.error).toBeUndefined();
+    expect(JSON.parse(result.text).text).toBe(story);
+    expect(JSON.parse(result.text).options).toEqual(['A. Climb down']);
+  });
+
+  it('strips the appendix from a strict reply that fails the full schema (shadow-kept)', async () => {
+    useModel('openai/gpt-5-mini');
+    // Text-valid but missing most required keys: shadow mode keeps it, and
+    // normalization still applies to the text that ships.
+    const partial = JSON.stringify({ text: story + appendix, combat_transition: 'none' });
+    stubOpenRouter([{ content: partial }]);
+    const result = await LLMProviderService.generate({
+      prompt: 'Continue',
+      responseSchema: dmResponseSchema,
+    });
+    expect(result.error).toBeUndefined();
+    expect(JSON.parse(result.text).text).toBe(story);
+    expect(result.usage?.schemaShadowInvalid).toBe(1);
+  });
+});
