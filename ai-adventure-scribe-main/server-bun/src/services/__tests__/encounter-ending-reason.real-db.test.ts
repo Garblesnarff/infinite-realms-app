@@ -1148,10 +1148,26 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
     // tactical fact is consumed on. Two turns on, the same wording is treated as
     // a fresh award — widening the window would need the strategist's call, since
     // every added turn of lookback also eats legitimate new-deed awards.
+    //
+    // The three turns sit on an explicit clock, one minute apart (AGENTS.md
+    // §4: for time-based tests, dialogue_history.created_at is the server
+    // clock). Left to the DB default, back-to-back inserts can land inside
+    // one millisecond: created_at is stored at microsecond precision but
+    // read back as a millisecond Date, so the award's `since` and the
+    // previous-message bound both truncate — the previous message resolves
+    // a turn early, or the window's lower bound drops below the victory
+    // event, and the guard fires on a victory that is really two turns old.
+    // That flake reddened main CI (runs 39545663394, 39546836412) while
+    // passing on quiet machines. The victory below is still written by the
+    // real producer and stamped by the database at insert — inside the
+    // kill turn's interval, between the first and second pins — where the
+    // scenario puts it.
+    const turnClock = Date.now();
     await db.insert(dialogueHistory).values({
       sessionId,
       speakerType: 'player',
       message: 'I strike down the golem.',
+      createdAt: new Date(turnClock),
     });
     const victory = await awardCombatVictoryXp({ encounterId, sessionId, userId });
     expect(victory.awarded).toHaveLength(1);
@@ -1159,11 +1175,13 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
       sessionId,
       speakerType: 'player',
       message: 'I search the rubble.',
+      createdAt: new Date(turnClock + 60_000),
     });
     await db.insert(dialogueHistory).values({
       sessionId,
       speakerType: 'player',
       message: 'I move on to the next chamber.',
+      createdAt: new Date(turnClock + 120_000),
     });
     const outcome = await awardStoryXp({
       userId,
