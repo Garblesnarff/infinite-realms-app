@@ -52,7 +52,8 @@ mock.module('../../../services/ai-usage-service.js', () => ({
 mock.module('../../../services/llm-provider-service.js', () => ({
   LLMProviderService: { generate: async () => generatedResult },
 }));
-// Route contract tests stub persistence; roll serialization is exercised with real PostgreSQL.
+// Stub the session-message service module the route imports: its withRollTurn
+// runs the turn inline, so the route executes without a database.
 mock.module('../../../services/session/session-message-service.js', () => ({
   SessionMessageService: {
     withRollTurn: async (
@@ -133,11 +134,27 @@ describe('POST /v1/llm/generate — opening options (#864 reopened)', () => {
   });
 
   it('passes a clean opening envelope through untouched (control)', async () => {
-    const data = await generateOpening(envelope(NARRATION, OPTIONS));
+    const input = envelope(NARRATION, OPTIONS);
+    const data = await generateOpening(input);
 
     expect(data.parsed).toBe(true);
-    const delivered = JSON.parse(data.text ?? '{}') as { text: string; options: string[] };
-    expect(delivered.options).toEqual(OPTIONS);
-    expect(delivered.text).toBe(NARRATION);
+    // The route re-serializes the envelope, so compare the delivered fields
+    // against the input envelope rather than the raw string. narration_segments
+    // is excluded: the route derives it from the text when it is empty.
+    const delivered = JSON.parse(data.text ?? '{}') as Record<string, unknown>;
+    const expected = JSON.parse(input) as Record<string, unknown>;
+    for (const field of [
+      'text',
+      'options',
+      'roll_requests',
+      'combat_transition',
+      'scene_spec',
+      'map_actions',
+      'handout_actions',
+      'combatants',
+      'combat_actions',
+    ]) {
+      expect(delivered[field]).toEqual(expected[field]);
+    }
   });
 });
