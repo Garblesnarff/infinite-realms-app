@@ -467,3 +467,26 @@ describe('repairPrematureRollClaims — self-review rewordings', () => {
     );
   });
 });
+
+// Strategist FIX round 1 on PR #979: the paired-stakes exemption must require a
+// branch structure; an asserted success+failure contrast is a claim.
+describe('repairPrematureRollClaims — strategist FIX round 1', () => {
+  test('an asserted success+failure contrast in one clause still repairs', () => {
+    const text =
+      'You succeed in slipping past the guard, but you fail to notice the dog. Roll a Stealth check.';
+    const repaired = repairPrematureRollClaims(text, [
+      {
+        type: 'check',
+        formula: '1d20+5',
+        purpose: 'Stealth check to slip past the guard post',
+        dc: 14,
+        ac: null,
+        advantage: false,
+        disadvantage: false,
+      },
+    ]);
+    expect(repaired).toBe(
+      'That outcome is not decided yet — the roll still has to be made. Roll a Stealth check.',
+    );
+  });
+});

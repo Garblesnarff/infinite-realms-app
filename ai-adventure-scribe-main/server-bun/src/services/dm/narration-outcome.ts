@@ -228,20 +228,28 @@ function isClaimOnPendingRoll(
   // - a conditional modal governing the claim ("you could succeed…") — the modal must
   //   sit in the last few words before the claim, so an unrelated "can"/"may" in an
   //   earlier clause cannot shield an asserted verdict (self-review HIGH 1);
-  // - paired stakes: a sentence carrying BOTH a success and a failure verdict is
-  //   laying out both branches ("You succeed, you pry the gate open; you fail, the
-  //   alarm bell rings."), whichever branch the detector flagged.
+  // - paired stakes in a branch structure (';'-separated branches or a branch
+  //   marker) lay out both outcomes hypothetically ("You succeed, you pry the gate
+  //   open; you fail, the alarm bell rings."); a success+failure CONTRAST in one
+  //   clause asserts both and stays a claim (strategist FIX, round 1).
   if (sentence.trimEnd().endsWith('?')) return false;
   if (CONDITIONAL_PREFIX.test(beforeClaim)) return false;
   if (/^\s*should\b/i.test(sentence)) return false;
   const tailWords = beforeClaim.trim().split(/\s+/).slice(-3).join(' ');
   if (/\b(?:would|could|might|can|may)\b/i.test(tailWords)) return false;
-  if (
-    VERDICT_CLAIM.test(claim.match) &&
-    /succeed|successful/i.test(sentence) &&
-    /\bfail/i.test(sentence)
-  ) {
-    return false;
+  if (VERDICT_CLAIM.test(claim.match) && /succeed|successful/i.test(sentence) && /\bfail/i.test(sentence)) {
+    // Paired stakes only in a BRANCH structure: a branch marker in the sentence, or
+    // a ';'-separated pair carrying a verdict on each side. A mere contrast in one
+    // clause ("You succeed in slipping past the guard, but you fail to notice the
+    // dog.") asserts both outcomes — it is a claim, not stakes (strategist FIX).
+    const branches = sentence.split(';');
+    const semicolonPair =
+      branches.length > 1 &&
+      branches.some((branch) => /succeed|successful/i.test(branch)) &&
+      branches.some((branch) => /\bfail/i.test(branch));
+    if (/\b(?:if|whether|otherwise|either)\b/i.test(sentence) || semicolonPair) {
+      return false;
+    }
   }
   if (!VERDICT_CLAIM.test(claim.match)) {
     // Miss/dismiss claims: the detector already anchors these on the player/target;
