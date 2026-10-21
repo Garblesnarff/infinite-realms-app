@@ -876,6 +876,18 @@ export async function handleDmActionsAndTransitions(
     result = narrationResult;
     responseText = narrationResult.text;
     narrationSegments = narrationResult.narrationSegments;
+    // #975 (strategist check): a refused Second Wind / Action Surge otherwise
+    // exists only inside the reply text above, and the in-combat reply is not
+    // persisted (the server's DM-reply write skips client_in_combat turns) —
+    // so land the refusal as a persisted system line the player sees now and
+    // still sees after a reload.
+    for (const refused of (narrationResult.refusedFighterFeatures ?? []) as Array<{
+      actionType: string;
+      reason: string;
+    }>) {
+      const label = refused.actionType === 'second_wind' ? 'Second Wind' : 'Action Surge';
+      appendLocalNotice(`⚙️ Engine: ${label} was not resolved: ${refused.reason}.`);
+    }
   }
 
   // #2524: declared actions have now resolved, so the end transition is evaluated last.

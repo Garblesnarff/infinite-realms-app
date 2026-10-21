@@ -71,7 +71,13 @@ export type DMTargetedCombatAction = {
      * option sends, so the DM can declare them in `combat_actions`.
      */
     | 'yield'
-    | 'flee';
+    | 'flee'
+    /**
+     * #975: the Fighter's short-rest features, declared like any other combat
+     * action and resolved by the engine (tracked use, heal, extra action).
+     */
+    | 'second_wind'
+    | 'action_surge';
   target_ids: string[];
   weapon_id?: string | null;
   spell_id?: string | null;
@@ -297,6 +303,9 @@ const targetedCombatActionSchema = {
         // #262: typed yield/flee are declared as combat actions, like dodge.
         'yield',
         'flee',
+        // #975: the Fighter's short-rest features.
+        'second_wind',
+        'action_surge',
       ],
     },
     target_ids: { type: 'array', items: { type: 'string' } },

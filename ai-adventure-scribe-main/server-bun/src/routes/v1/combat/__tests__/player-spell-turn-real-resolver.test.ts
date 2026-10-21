@@ -324,6 +324,25 @@ mock.module('../../../../services/combat/combat-turn-resources.js', () => ({
     version: number,
     resolve: (version: number) => Promise<unknown>,
   ) => resolve(version),
+  // #975: session-service imports withPreservedActionSurgeMark and the
+  // fighter-features resolver imports readActionSurgeMark / armActionSurge
+  // from this module. No case in this suite arms a surge, so the incoming
+  // blob passes through unchanged and the mark reads as absent, exactly as
+  // the real helpers behave with no mark.
+  withPreservedActionSurgeMark: (_session: unknown, nextState: unknown) => nextState,
+  readActionSurgeMark: () => null,
+  armActionSurge: async () => {},
+  // Round 4: session-service folds the surge-mark preservation into its
+  // UPDATE through this name. No mark can be stored in this suite's world
+  // (armActionSurge above is a no-op), so the merge reduces to stripping the
+  // key from the incoming blob, which is what the real expression computes
+  // when no valid mark is stored.
+  actionSurgePreservingState: (incoming: unknown) => {
+    const next =
+      incoming && typeof incoming === 'object' ? { ...(incoming as Record<string, unknown>) } : {};
+    delete next.actionSurgeArmed;
+    return next;
+  },
 }));
 mock.module('../../../../services/combat/concentration-service.js', () => ({
   getConcentration: async () => null,

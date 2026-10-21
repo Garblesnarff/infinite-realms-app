@@ -450,6 +450,10 @@ function actionSentence(
       return `${voice.subject} move${s}.`;
     case 'death_save':
       return `${voice.subject} make${s} a death saving throw.`;
+    case 'second_wind':
+      return `${voice.subject} use${s} Second Wind.`;
+    case 'action_surge':
+      return `${voice.subject} use${s} Action Surge.`;
     default:
       return `${voice.subject} take${s} an action.`;
   }

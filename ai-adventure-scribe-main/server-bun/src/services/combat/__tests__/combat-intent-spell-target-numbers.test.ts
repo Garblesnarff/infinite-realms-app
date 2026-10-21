@@ -207,6 +207,10 @@ mock.module('../data-access.js', () => ({
   getActiveConditionNames: async () => [],
   listEquippedWeaponProfiles: async () => [],
   listCarriedWeaponProfiles: async () => [],
+  // #975: hp-data-access (reached through the fighter features' heal) imports
+  // this name from data-access; the mock must provide it or the module graph
+  // fails to load.
+  verifyEncounterAccess: async () => {},
 }));
 mock.module('../death-saves-service.js', () => ({
   describeGoingDown: () => '',

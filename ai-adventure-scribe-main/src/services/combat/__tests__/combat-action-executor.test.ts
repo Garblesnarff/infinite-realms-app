@@ -2,6 +2,10 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  FIGHTER_FEATURE_ACTOR_ID,
+  fighterFeatureChipIntentBody,
+} from '../../../../shared/test-fixtures/fighter-feature-intent';
+import {
   ACTION_MISSING_DESTINATION_REASON,
   ACTION_MISSING_TARGET_REASON,
   ACTION_NOT_SUPPORTED_REASON,
@@ -488,6 +492,99 @@ describe('combat-action-executor', () => {
         expect(result).toEqual([]);
       }
     });
+
+    // #975: a DM-declared Second Wind / Action Surge dispatches to the feature intent
+    // (previously the catch-all refused them as "not supported yet"). DM-sourced
+    // intents post without a version, like dash — the DM dialect leaves it optional
+    // and the server fills it from the encounter.
+    it.each(['second_wind', 'action_surge'] as const)(
+      'dispatches a declared %s to its intent',
+      async (type) => {
+        const action = {
+          actor_id: 'actor-1',
+          action_type: type,
+          target_ids: [],
+          weapon_id: null,
+          spell_id: null,
+          slot_level: null,
+          movement_feet: 0,
+        };
+        (globalThis.fetch as any).mockResolvedValue({
+          ok: true,
+          json: async () => ({ result: { applied: true } }),
+        });
+
+        const { outcomes } = await executeStructuredCombatActionWithBoundary(encounterId, action);
+        expect(outcomes).toEqual([]);
+        expect(globalThis.fetch).toHaveBeenCalledWith(
+          'http://localhost:8888/v1/combat/encounter-123/intent',
+          expect.objectContaining({
+            body: expect.stringContaining(`"type":"${type}"`),
+          }),
+        );
+      },
+    );
+
+    // #975: the clicked option's call shape, asserted byte for byte against the
+    // shared wire fixture the route-schema test parses (the #2286 pattern): the
+    // chip calls with source 'dm' and origin 'typed', and the executor posts the
+    // intent versionless — the server fills the version for the DM dialect.
+    it.each(['second_wind', 'action_surge'] as const)(
+      'posts exactly the shared fixture body for a clicked %s option',
+      async (type) => {
+        (globalThis.fetch as any).mockResolvedValue({
+          ok: true,
+          json: async () => ({ result: { applied: true } }),
+        });
+
+        await executeAuthoritativeCombatIntent(
+          encounterId,
+          { type, actorId: FIGHTER_FEATURE_ACTOR_ID },
+          'dm',
+          1_700_000_000_000,
+          'typed',
+        );
+
+        expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+        expect(globalThis.fetch).toHaveBeenCalledWith(
+          'http://localhost:8888/v1/combat/encounter-123/intent',
+          expect.objectContaining({
+            method: 'POST',
+            body: JSON.stringify(fighterFeatureChipIntentBody(type)),
+          }),
+        );
+      },
+    );
+
+    // #975: the player dialect REQUIRES the version on these intents (the route
+    // schema test proves the refusal), so a player-sourced feature intent built
+    // without one must fetch it first — the same fill dash gets. No option posts
+    // feature intents this way today; this pins the executor's own contract for
+    // the types it now versions.
+    it.each(['second_wind', 'action_surge'] as const)(
+      'fetches the version for a player %s built without one',
+      async (type) => {
+        const intent = { type, actorId: 'actor-1' };
+        (globalThis.fetch as any)
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ encounter: { version: 10 } }),
+          })
+          .mockResolvedValueOnce({ ok: true, json: async () => ({ result: { applied: true } }) });
+
+        await executeAuthoritativeCombatIntent(encounterId, intent, 'player');
+
+        expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+        expect(globalThis.fetch).toHaveBeenNthCalledWith(
+          2,
+          'http://localhost:8888/v1/combat/encounter-123/intent',
+          expect.objectContaining({
+            method: 'POST',
+            body: expect.stringContaining('"expectedVersion":10'),
+          }),
+        );
+      },
+    );
 
     it('should execute a server-authoritative move action with its planned destination', async () => {
       const action = {

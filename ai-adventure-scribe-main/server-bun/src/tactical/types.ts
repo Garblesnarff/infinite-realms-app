@@ -109,7 +109,16 @@ export interface TacticalDelivery {
  * when the contract says it is theirs, or uses success language for a miss.
  */
 export interface DmFactAction {
-  kind: 'attack' | 'spell' | 'move' | 'dash' | 'dodge' | 'disengage' | 'death_save';
+  kind:
+    | 'attack'
+    | 'spell'
+    | 'move'
+    | 'dash'
+    | 'dodge'
+    | 'disengage'
+    | 'death_save'
+    | 'second_wind'
+    | 'action_surge';
   /** Engine slug of the actor (the tactical digest id). */
   actorSlug: string;
   actorIsPlayer: boolean;
