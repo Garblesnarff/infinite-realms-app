@@ -26,6 +26,8 @@ import { typedRestType } from './typed-rest.js';
 import { logger } from '../../lib/logger.js';
 import { StoryRestAlreadyRecorded } from '../story-rest-already-recorded.js';
 
+import type { ShortRestResult } from '../../types/rest.js';
+
 export type StoryRestOutcome =
   | 'applied'
   | 'already_applied'
@@ -63,8 +65,9 @@ export async function applyStoryRest(input: {
       const { RestService } = await import('../rest-service.js');
       // The outside read is not the claim. RestService locks, re-checks, and
       // inserts the event before it restores anything.
+      let shortRestResult: ShortRestResult | undefined;
       if (restType === 'short') {
-        await RestService.takeShortRest(
+        shortRestResult = await RestService.takeShortRest(
           character.id,
           userId,
           0,
@@ -99,6 +102,18 @@ export async function applyStoryRest(input: {
             broadcastError instanceof Error ? broadcastError.message : String(broadcastError),
         });
       }
+      // #751 follow-up: the sheet refresh above is silent in chat — the player
+      // saw HP move but never the Hit Die roll that produced it (Hark D2-002/003).
+      // Post the engine line with the rolls, the story-XP notice's shape (#310).
+      if (restType === 'short' && shortRestResult) {
+        await ensureStoryRestNotice({
+          sessionId,
+          userId,
+          characterId: character.id,
+          since: message.createdAt,
+          result: shortRestResult,
+        });
+      }
     } catch (error) {
       if (error instanceof StoryRestAlreadyRecorded) {
         outcome = 'already_applied';
@@ -106,6 +121,17 @@ export async function applyStoryRest(input: {
         logger.warn({ msg: 'DM_STORY_REST_FAILED', sessionId, characterId: character.id, error });
         outcome = 'rest_failed';
       }
+    }
+    // A retry of a rest whose line never landed (the first attempt threw after
+    // the write, or the line post itself failed) re-posts it from the stored
+    // event — counts and HP only: the individual rolls are not stored.
+    if (outcome === 'already_applied' && restType === 'short') {
+      await ensureStoryRestNotice({
+        sessionId,
+        userId,
+        characterId: character.id,
+        since: message.createdAt,
+      });
     }
   }
   logger.info({
@@ -117,4 +143,88 @@ export async function applyStoryRest(input: {
     outcome,
   });
   return outcome;
+}
+
+function hitDiceRemainingText(rows: { totalDice: number; usedDice: number }[]): string {
+  const total = rows.reduce((sum, row) => sum + row.totalDice, 0);
+  const remaining = rows.reduce((sum, row) => sum + (row.totalDice - row.usedDice), 0);
+  return `Hit dice: ${remaining} of ${total} remaining.`;
+}
+
+/**
+ * #751 follow-up: posts the visible short-rest chat line, recoverably — the
+ * story-XP notice's shape (ensureStoryXpNotice, #310). Idempotent: skips when
+ * the line already exists. A fresh apply carries the result, so the line shows
+ * every Hit Die roll; a retry rebuilds a summary from the stored rest_events
+ * row (counts and HP, not the rolls — and only when the row records a spend,
+ * which is what proves the rest finished). Never throws: a failed line never
+ * fails the rest, and the next retry tries again.
+ */
+async function ensureStoryRestNotice(input: {
+  sessionId: string;
+  userId: string;
+  characterId: string;
+  since: Date;
+  result?: ShortRestResult;
+}): Promise<void> {
+  const { sessionId, userId, characterId, since } = input;
+  const idSeed = `story-rest:${sessionId}:${characterId}:${since.getTime()}`;
+  try {
+    const { engineChatLineExists, postEngineChatLine } = await import('../engine-chat-line.js');
+    if (await engineChatLineExists(idSeed)) return;
+    let text: string;
+    if (input.result) {
+      const { hitDieRolls, hpRestored, hitDiceRemaining } = input.result;
+      const remainingText = hitDiceRemainingText(hitDiceRemaining);
+      text =
+        hitDieRolls.length > 0
+          ? `⚙️ Engine: Short rest — Hit Dice: ${hitDieRolls
+              .map((die) => `${die.dieType} rolled ${die.roll} (+${die.hpGained} HP)`)
+              .join(', ')}. ${hpRestored} HP restored. ${remainingText}`
+          : `⚙️ Engine: Short rest — no hit dice spent. ${remainingText}`;
+    } else {
+      const { db } = await import('../../../../db/client');
+      const { and, eq, gte } = await import('drizzle-orm');
+      const { restEvents } = await import('../../../../db/schema/index');
+      const [event] = await db
+        .select({ hpRestored: restEvents.hpRestored, hitDiceSpent: restEvents.hitDiceSpent })
+        .from(restEvents)
+        .where(
+          and(
+            eq(restEvents.characterId, characterId),
+            eq(restEvents.sessionId, sessionId),
+            eq(restEvents.restType, 'short'),
+            gte(restEvents.startedAt, since),
+          ),
+        )
+        .limit(1);
+      // The claim row exists from the moment RestService claims the rest,
+      // with hpRestored / hitDiceSpent still 0 until finishRestEvent fills
+      // them — an in-progress rest, or one that threw after the claim and
+      // kept it, is indistinguishable from a finished no-spend rest by the
+      // row alone. Only a recorded spend proves the rest finished: posting
+      // for a 0-spend row could lock in a false "0 hit dice spent, 0 HP
+      // restored" under the deterministic id ahead of the real line. A
+      // finished rest that spent nothing loses only this recovery line;
+      // its fresh line (posted on the applied path) is unaffected.
+      if (!event || (event.hitDiceSpent ?? 0) === 0) return;
+      // No remaining-dice counter here: it would be read at recovery time,
+      // not at rest time, and later rests change it.
+      text = `⚙️ Engine: Short rest — ${event.hitDiceSpent} hit dice spent, ${event.hpRestored ?? 0} HP restored.`;
+    }
+    await postEngineChatLine({
+      sessionId,
+      userId,
+      idSeed,
+      text,
+      context: { intent: 'story_rest' },
+    });
+  } catch (error) {
+    logger.warn({
+      msg: 'DM_STORY_REST_NOTICE_FAILED',
+      sessionId,
+      characterId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }

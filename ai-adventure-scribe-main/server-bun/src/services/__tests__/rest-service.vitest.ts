@@ -138,6 +138,77 @@ describe('RestService Security', () => {
       expect(result.characterId).toBe(mockCharacterId);
       expect(result.restEventId).toBe('event-123');
     });
+
+    it('pairs rolls with die types across class rows, largest first, and caps the gain at max HP (#751)', async () => {
+      const fighterRow = {
+        id: 'hd-f',
+        characterId: mockCharacterId,
+        className: 'Fighter',
+        dieType: 'd10' as const,
+        totalDice: 2,
+        usedDice: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      const wizardRow = {
+        id: 'hd-w',
+        characterId: mockCharacterId,
+        className: 'Wizard',
+        dieType: 'd6' as const,
+        totalDice: 2,
+        usedDice: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      (db.query.characters.findFirst as any).mockResolvedValue({
+        id: mockCharacterId,
+        // Rows deliberately unordered: pairing follows die size, not row order.
+        hitDice: [wizardRow, fighterRow],
+        stats: { constitution: 14, currentHitPoints: 5, maxHitPoints: 20 },
+        class: 'Fighter',
+        classFeatures: null,
+        pactSlots: null,
+        spellSlots: null,
+      });
+      (db.query.characterHitDice.findMany as any).mockResolvedValue([]);
+      (db.select as any).mockReturnValue({
+        from: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockResolvedValue([{ slot: null, charId: mockCharacterId }]),
+      });
+      (db.insert as any).mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([{ id: 'event-123' }]),
+        }),
+      });
+
+      // Fixture follows RestHitDiceService.spendHitDice's SpendHitDiceResult:
+      // the mechanics segment the flat rolls largest-first — the Fighter's
+      // last d10, then both Wizard d6s.
+      const spend = vi.spyOn(RestService, 'spendHitDice').mockResolvedValue({
+        hpRestored: 21,
+        hitDiceSpent: 3,
+        rolls: [8, 3, 4],
+        hitDiceRemaining: [
+          { ...fighterRow, usedDice: 2 },
+          { ...wizardRow, usedDice: 2 },
+        ],
+      });
+
+      const result = await RestService.takeShortRest(mockCharacterId, mockUserId, 3);
+      spend.mockRestore();
+
+      // CON +2 per die. Raw gains 10 + 5 + 6 = 21, but HP caps at 20:
+      // the last die contributes 0 and the reported restore is the real 15.
+      expect(result.hitDieRolls).toEqual([
+        { dieType: 'd10', roll: 8, hpGained: 10 },
+        { dieType: 'd6', roll: 3, hpGained: 5 },
+        { dieType: 'd6', roll: 4, hpGained: 0 },
+      ]);
+      expect(result.hpRestored).toBe(15);
+      expect(result.hitDiceSpent).toBe(3);
+    });
   });
 
   describe('takeLongRest', () => {

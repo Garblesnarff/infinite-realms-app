@@ -87,6 +87,10 @@ export async function loadCharacterBySession(
         characterData.saving_throw_proficiencies,
       ),
       languages: parseOptionalProficiencyList(characterData.languages),
+      // #751 follow-up: same hitDice carry as loadCharacterWithSpells — the
+      // GET payload's aggregate, folded by normalizeCharacter from the rows
+      // RestService spends from.
+      ...(characterData.hitDice ? { hitDice: characterData.hitDice } : {}),
       personalityTraits: [],
       ideals: [],
       bonds: [],

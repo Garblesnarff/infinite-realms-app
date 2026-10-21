@@ -210,6 +210,13 @@ export async function loadCharacterWithSpells(
       preparedSpells,
       ritualSpells,
       spellSlots: parseSpellSlots(characterData.spell_slots),
+      // #751 follow-up: the GET payload already carries the sheet's hitDice
+      // aggregate (normalizeCharacter folds the server's hit_dice rows, which
+      // are the rows RestService spends from). Dropping it here starved the
+      // sheet's Hit Dice counters and the rest prompt's dice count on every
+      // load and every engine-event refresh — the displays existed but never
+      // had data in game.
+      ...(characterData.hitDice ? { hitDice: characterData.hitDice } : {}),
     };
 
     logger.info(`🎯 [CharacterLoader] Successfully loaded character with spells:`, {

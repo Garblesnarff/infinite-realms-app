@@ -114,3 +114,52 @@ describe('loadCharacterWithSpells API spell shape', () => {
     expect(getCharacterSheetHitPoints(result!)).toEqual({ current: 12, maximum: 12 });
   });
 });
+
+describe('loadCharacterWithSpells hit dice (#751 follow-up)', () => {
+  beforeEach(() => {
+    getCharacterEquipment.mockResolvedValue([]);
+    getCharacterSpells.mockResolvedValue({ cantrips: [], spells: [] });
+  });
+
+  it('carries the hitDice aggregate from the GET payload onto the loaded character', async () => {
+    // The fixture is the shape userDataApi.getCharacter returns in production:
+    // normalizeCharacter folds the server's hit_dice rows (total 3, used 1)
+    // into this aggregate via aggregateHitDice.
+    getCharacter.mockResolvedValue({
+      id: 'character-id',
+      name: 'Dice Fighter',
+      race: 'Human',
+      class: 'Fighter',
+      level: 3,
+      cantrips: '',
+      known_spells: '',
+      prepared_spells: '',
+      ritual_spells: '',
+      character_stats: [{ constitution: 14 }],
+      hitDice: { total: 3, remaining: 2, type: 'd10' },
+    });
+
+    const result = await loadCharacterWithSpells('character-id');
+
+    expect(result?.hitDice).toEqual({ total: 3, remaining: 2, type: 'd10' });
+  });
+
+  it('leaves hitDice unset when the GET payload carries none', async () => {
+    getCharacter.mockResolvedValue({
+      id: 'character-id',
+      name: 'Diceless Fighter',
+      race: 'Human',
+      class: 'Fighter',
+      level: 3,
+      cantrips: '',
+      known_spells: '',
+      prepared_spells: '',
+      ritual_spells: '',
+      character_stats: [{ constitution: 14 }],
+    });
+
+    const result = await loadCharacterWithSpells('character-id');
+
+    expect(result?.hitDice).toBeUndefined();
+  });
+});

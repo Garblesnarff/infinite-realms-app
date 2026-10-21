@@ -38,6 +38,7 @@ import { SpellSlotsService } from './spell-slots-service.js';
 import { StoryRestAlreadyRecorded } from './story-rest-already-recorded.js';
 
 import type {
+  HitDieRoll,
   HitDieType,
   HitDice,
   LongRestResult,
@@ -546,6 +547,34 @@ export class RestService {
       let hpRestored = 0;
       let hitDiceSpent = 0;
       let updatedHitDice: HitDice[] = hitDice;
+      // #751 follow-up: keep each die's roll — the spend totals alone left the
+      // roll invisible on every surface. The mechanics roll largest dice
+      // first, row by row (RestMechanics.calculateSpentHitDice), so a spend
+      // call's flat rolls segment by the per-row spend counts in that order.
+      const hitDieRolls: HitDieRoll[] = [];
+      const conModifier = character.stats
+        ? RestMechanics.calculateConModifier(character.stats.constitution)
+        : 0;
+      const collectRolls = (before: HitDice[], result: SpendHitDiceResult): void => {
+        const spentRows = before
+          .map((hd) => {
+            const after = result.hitDiceRemaining.find((row) => row.id === hd.id);
+            return { dieType: hd.dieType, count: (after?.usedDice ?? hd.usedDice) - hd.usedDice };
+          })
+          .filter((row) => row.count > 0)
+          .sort((a, b) => parseInt(b.dieType.substring(1)) - parseInt(a.dieType.substring(1)));
+        let rollIndex = 0;
+        for (const row of spentRows) {
+          for (let i = 0; i < row.count && rollIndex < result.rolls.length; i++) {
+            const roll = result.rolls[rollIndex++];
+            hitDieRolls.push({
+              dieType: row.dieType,
+              roll,
+              hpGained: Math.max(0, roll + conModifier),
+            });
+          }
+        }
+      };
 
       if (options?.spendHitDiceUntilHealed && character.stats) {
         let currentHitPoints = character.stats.currentHitPoints;
@@ -560,6 +589,7 @@ export class RestService {
             hitDice: updatedHitDice,
           });
           if (result.hitDiceSpent === 0) break;
+          collectRolls(updatedHitDice, result);
           hpRestored += result.hpRestored;
           hitDiceSpent += result.hitDiceSpent;
           diceAvailable -= result.hitDiceSpent;
@@ -571,9 +601,30 @@ export class RestService {
           character,
           hitDice,
         });
+        collectRolls(hitDice, result);
         hpRestored = result.hpRestored;
         hitDiceSpent = result.hitDiceSpent;
         updatedHitDice = result.hitDiceRemaining;
+      }
+
+      // The mechanics credit each die in full (roll + CON), but the HP write
+      // caps at max (RestHitDiceService applies least(max, current +
+      // restored)): when the last die overshoots, the sheet gains less than
+      // the dice produced. Report the gain the sheet actually gets — the
+      // rest result, the stored rest event and the story-rest line all carry
+      // these numbers.
+      if (character.stats && hitDieRolls.length > 0) {
+        let runningHitPoints = character.stats.currentHitPoints;
+        let cappedRestored = 0;
+        for (const die of hitDieRolls) {
+          die.hpGained = Math.min(
+            die.hpGained,
+            Math.max(0, character.stats.maxHitPoints - runningHitPoints),
+          );
+          runningHitPoints += die.hpGained;
+          cappedRestored += die.hpGained;
+        }
+        hpRestored = cappedRestored;
       }
 
       // Get restorable resources
@@ -630,6 +681,7 @@ export class RestService {
         restType: 'short',
         hpRestored,
         hitDiceSpent,
+        hitDieRolls,
         hitDiceRemaining: updatedHitDice,
         resourcesRestored,
         // The engine's slot table is the single source of truth (#2598): the

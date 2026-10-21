@@ -49,6 +49,8 @@ export interface ShortRestResult {
   restType: 'short';
   hpRestored: number;
   hitDiceSpent: number;
+  /** Every die this rest spent, in spend order (#751 follow-up). */
+  hitDieRolls: HitDieRoll[];
   hitDiceRemaining: HitDice[];
   resourcesRestored: RestorableResource[];
   spellSlots: Record<string, { max?: number; current?: number }> | null;
@@ -119,6 +121,18 @@ export interface SpendHitDiceResult {
   hitDiceSpent: number;
   rolls: number[];
   hitDiceRemaining: HitDice[];
+}
+
+/**
+ * One hit die spent on a rest, with the roll the player is entitled to see
+ * (#751 follow-up: a story short rest's die roll was silent — the spend
+ * happened server-side but no surface ever showed the number).
+ */
+export interface HitDieRoll {
+  dieType: HitDieType;
+  roll: number;
+  /** HP this die restored: roll + CON modifier, minimum 0 (2014 PHB pg. 186). */
+  hpGained: number;
 }
 
 /**
