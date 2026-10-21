@@ -7,7 +7,7 @@ import { StartingGoldOption } from '@/components/character-creation/steps/equipm
 import { Card } from '@/components/ui/card';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { backgrounds } from '@/data/backgroundOptions';
-import { getStartingEquipment, startingGoldByClass } from '@/data/equipmentOptions';
+import { getStartingEquipment, startingGoldByClass, weapons } from '@/data/equipmentOptions';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
 import { useToast } from '@/hooks/use-toast';
 
@@ -30,7 +30,31 @@ const EquipmentSelection: React.FC = () => {
   const hasRolledGold = rolledGold > 0;
 
   // Get starting equipment options based on character class
-  const startingEquipment = characterClass ? getStartingEquipment(characterClass.name) : [];
+  const classEquipment = characterClass ? getStartingEquipment(characterClass.name) : [];
+  const isFighter = characterClass?.id === 'fighter';
+  const martialWeapons = weapons.filter((weapon) => weapon.weaponType === 'martial');
+  const selectedMartial = (state.character?.equipment ?? []).flatMap((name) => {
+    const weapon = martialWeapons.find((entry) => entry.name === name);
+    return weapon ? [weapon] : [];
+  });
+  const firstWeapon =
+    selectedMartial[0] ?? martialWeapons.find((weapon) => weapon.id === 'longsword')!;
+  const secondWeapon =
+    selectedMartial[1] ?? martialWeapons.find((weapon) => weapon.id === 'greatsword')!;
+  const fighterMode =
+    selectedMartial.length >= 2 && !state.character?.equipment?.includes('Shield')
+      ? 'two'
+      : 'shield';
+  const fighterPackage = (mode: string, first: string, second: string): Equipment[] => [
+    ...classEquipment.filter((item) => item.id !== 'shield' && item.weaponType !== 'martial'),
+    martialWeapons.find((weapon) => weapon.id === first)!,
+    ...(mode === 'two'
+      ? [martialWeapons.find((weapon) => weapon.id === second)!]
+      : classEquipment.filter((item) => item.id === 'shield')),
+  ];
+  const startingEquipment = isFighter
+    ? fighterPackage(fighterMode, firstWeapon.id, secondWeapon.id)
+    : classEquipment;
   const goldData = characterClass ? startingGoldByClass[characterClass.id] : undefined;
 
   // #2710: the gold option is the card that carries goldData (not equipment).
@@ -46,7 +70,11 @@ const EquipmentSelection: React.FC = () => {
    * @param selectedEquipment Array of selected equipment
    * @param optionIndex Index of the selected equipment option
    */
-  const handleEquipmentSelect = (selectedEquipment: Equipment[], optionIndex: number) => {
+  const handleEquipmentSelect = (
+    selectedEquipment: Equipment[],
+    optionIndex: number,
+    navigate = true,
+  ) => {
     const equipmentNames = selectedEquipment.map((eq) => eq.name);
     let totalEquipment: string[] = [...equipmentNames];
 
@@ -87,7 +115,7 @@ const EquipmentSelection: React.FC = () => {
     });
 
     // Auto-scroll to navigation to proceed to next step
-    scrollToNavigation();
+    if (navigate) scrollToNavigation();
   };
 
   // #2710: roll starting gold using the class's dice formula
@@ -132,6 +160,70 @@ const EquipmentSelection: React.FC = () => {
   return (
     <div className="space-y-4">
       <h2 className="text-2xl font-bold text-center mb-4">Choose Your Equipment</h2>
+      {isFighter && (
+        <fieldset className="space-y-3 border rounded-lg p-4">
+          <legend>Fighter weapon choices</legend>
+          <label className="block">
+            Fighter weapon option
+            <select
+              aria-label="Fighter weapon option"
+              value={fighterMode}
+              onChange={(event) =>
+                handleEquipmentSelect(
+                  fighterPackage(event.target.value, firstWeapon.id, secondWeapon.id),
+                  0,
+                  false,
+                )
+              }
+            >
+              <option value="shield">Martial weapon and shield</option>
+              <option value="two">Two martial weapons</option>
+            </select>
+          </label>
+          <label className="block">
+            First martial weapon
+            <select
+              aria-label="First martial weapon"
+              value={firstWeapon.id}
+              onChange={(event) =>
+                handleEquipmentSelect(
+                  fighterPackage(fighterMode, event.target.value, secondWeapon.id),
+                  0,
+                  false,
+                )
+              }
+            >
+              {martialWeapons.map((weapon) => (
+                <option key={weapon.id} value={weapon.id}>
+                  {weapon.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {fighterMode === 'two' && (
+            <label className="block">
+              Second martial weapon
+              <select
+                aria-label="Second martial weapon"
+                value={secondWeapon.id}
+                onChange={(event) =>
+                  handleEquipmentSelect(
+                    fighterPackage(fighterMode, firstWeapon.id, event.target.value),
+                    0,
+                    false,
+                  )
+                }
+              >
+                {martialWeapons.map((weapon) => (
+                  <option key={weapon.id} value={weapon.id}>
+                    {weapon.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </fieldset>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Equipment Package Option */}
         <Card

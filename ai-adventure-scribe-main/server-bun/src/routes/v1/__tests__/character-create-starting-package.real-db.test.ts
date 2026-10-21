@@ -20,6 +20,7 @@ import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
 import { eq } from 'drizzle-orm';
 
 import { characters, characterEquipment, characterStats } from '../../../../../db/schema/index';
+import fighterChoices from '../../../../../shared/test-fixtures/fighter-package-choices.json';
 import {
   closeRealDb,
   describeWithDb,
@@ -125,6 +126,34 @@ describeWithDb('character create starting package (#710)', () => {
     const { id } = JSON.parse(text) as { id: string };
     createdIds.push(id);
     return id;
+  }
+
+  for (const fixture of fighterChoices) {
+    it(`#921 ${fixture.name}: stores the wizard-selected equipment and reads it back`, async () => {
+      const id = await create(fixture.body);
+      const rows = await db
+        .select()
+        .from(characterEquipment)
+        .where(eq(characterEquipment.characterId, id));
+      expect(rows.flatMap((row) => Array(row.quantity ?? 1).fill(row.itemName)).sort()).toEqual(
+        [...fixture.equipmentNames].sort(),
+      );
+      const [stats] = await db
+        .select()
+        .from(characterStats)
+        .where(eq(characterStats.characterId, id));
+      expect(stats?.armorClass).toBe(fixture.mode === 'shield' ? 18 : 16);
+      const read = await app.handle(new Request(`http://localhost/v1/characters/${id}/export`));
+      expect(read.status).toBe(200);
+      const saved = await read.json();
+      expect(
+        saved.character.equipment
+          .flatMap((item: { item_name: string; quantity: number }) =>
+            Array(item.quantity).fill(item.item_name),
+          )
+          .sort(),
+      ).toEqual([...fixture.equipmentNames].sort());
+    });
   }
 
   it('persists Defense through create and read and grants AC 17 in chain mail (#824)', async () => {
