@@ -140,3 +140,37 @@ describe('refuseUngroundedPlayerWeapon (#260 / RG-014)', () => {
     }
   });
 });
+
+describe('suffix-first sheet names (#260)', () => {
+  // A real sheet row stores the SRD's "Crossbow, light"; the producer's claim is the
+  // display-order slug "light-crossbow". The refusal must name the true reason —
+  // carried but not equipped — never "not on your character sheet".
+  const CROSSBOW_ROW = weapon({
+    id: 'inv-crossbow',
+    name: 'Crossbow, light',
+    ranged: true,
+    damageDice: '1d8',
+  });
+
+  test('a player naming their carried crossbow is refused with weapon_not_equipped', () => {
+    const grounding = groundRequestedWeapon('light-crossbow', [HANDAXE], [HANDAXE, CROSSBOW_ROW]);
+    expect(grounding.grounded).toBe(false);
+    expect(grounding.notEquipped).toBe(true);
+
+    const err = expectRefusal(() => refuseUngroundedPlayerWeapon(grounding, 'player'));
+    expect(err.details).toMatchObject({
+      reason: 'weapon_not_equipped',
+      requestedWeaponId: 'light-crossbow',
+    });
+  });
+
+  test('a player naming their equipped crossbow is not refused at all', () => {
+    const grounding = groundRequestedWeapon(
+      'light-crossbow',
+      [CROSSBOW_ROW, HANDAXE],
+      [CROSSBOW_ROW, HANDAXE],
+    );
+    expect(grounding.grounded).toBe(true);
+    expect(() => refuseUngroundedPlayerWeapon(grounding, 'player')).not.toThrow();
+  });
+});

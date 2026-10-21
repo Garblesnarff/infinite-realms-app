@@ -79,8 +79,9 @@ export const findCatalogWeapon = (value: string): CatalogWeapon | undefined => {
 };
 
 /**
- * True when `requestedWeaponId` names this equipped weapon — by row id, display name, or SRD
- * id. Structural on purpose: grounding asks this question with no database handle in reach.
+ * True when `requestedWeaponId` names this equipped weapon — by row id, display name, SRD
+ * id, or a display-order spelling that resolves to the same SRD id. Structural on purpose:
+ * grounding asks this question with no database handle in reach.
  */
 export function weaponProfileMatches(
   profile: { id: string; name: string },
@@ -90,7 +91,16 @@ export function weaponProfileMatches(
   const requested = normalizeWeaponName(requestedWeaponId);
   if (!requested) return false;
   if (normalizeWeaponName(profile.name) === requested) return true;
-  return normalizeWeaponName(findCatalogWeapon(profile.name)?.id ?? '') === requested;
+  if (normalizeWeaponName(findCatalogWeapon(profile.name)?.id ?? '') === requested) return true;
+  // The SRD spells its names suffix-first ("Crossbow, light", id `crossbow-light`) while
+  // producers name the same weapon display-first ("light-crossbow", slugified from the
+  // roll-request purpose). Normalization cannot equate the two orders, so compare the
+  // RESOLVED catalog ids: both spellings resolve to `crossbow-light` through the alias
+  // table (#260 — the alias existed, but this matcher never consulted it for the claim).
+  const requestedId = resolveWeaponName(requestedWeaponId);
+  if (!requestedId) return false;
+  const profileId = findCatalogWeapon(profile.name)?.id ?? resolveWeaponName(profile.name);
+  return profileId !== undefined && profileId === requestedId;
 }
 
 /**

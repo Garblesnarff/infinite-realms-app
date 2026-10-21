@@ -138,3 +138,40 @@ describe('notEquipped flag (#260)', () => {
     expect(result.notEquipped).toBe(false);
   });
 });
+
+describe('suffix-first sheet names (#260)', () => {
+  // Production sheet rows store the SRD's name, "Crossbow, light"; producers claim the
+  // same weapon display-first ("light-crossbow", slugified from the roll-request
+  // purpose). The matcher compares RESOLVED catalog ids, so the two orders meet — the
+  // #260 cases above used a display-order row name and could not see the miss.
+  const crossbowRow = weapon({ id: 'inv-crossbow', name: 'Crossbow, light', ranged: true });
+  const handaxe = weapon({ id: 'inv-handaxe', name: 'Handaxe' });
+
+  test('grounds a display-order claim against the suffix-first row name', () => {
+    for (const claim of ['light-crossbow', 'light crossbow', 'Light Crossbow']) {
+      const result = groundRequestedWeapon(claim, [crossbowRow, handaxe]);
+      expect(result.grounded).toBe(true);
+      expect(result.weaponId).toBe('inv-crossbow');
+      expect(result.notEquipped).toBe(false);
+    }
+  });
+
+  test('marks notEquipped for the same claim when the row is only carried', () => {
+    const result = groundRequestedWeapon('light-crossbow', [handaxe], [handaxe, crossbowRow]);
+    expect(result.notEquipped).toBe(true);
+    expect(result.grounded).toBe(false);
+  });
+
+  test('does not ground a different crossbow against the row', () => {
+    const result = groundRequestedWeapon('heavy-crossbow', [crossbowRow], [crossbowRow]);
+    expect(result.grounded).toBe(false);
+    expect(result.notEquipped).toBe(false);
+  });
+
+  test('grounds the hand crossbow the same way', () => {
+    const handRow = weapon({ id: 'inv-hand-crossbow', name: 'Crossbow, hand', ranged: true });
+    const result = groundRequestedWeapon('hand-crossbow', [handRow], [handRow]);
+    expect(result.grounded).toBe(true);
+    expect(result.weaponId).toBe('inv-hand-crossbow');
+  });
+});
