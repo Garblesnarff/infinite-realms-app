@@ -416,11 +416,24 @@ describeWithDb('wizard completion saves equipment, gold, spells (#2710)', () => 
         description: 'Test.',
       },
     ];
+    // The spell catalog seed (#957) already ships these three names. Reuse the seeded row and
+    // delete only rows this block created, so cleanup never removes the catalog.
+    const landed: string[] = [];
     for (const seed of spellSeeds) {
+      const [existing] = await db
+        .select({ id: spells.id })
+        .from(spells)
+        .where(eq(spells.name, seed.name))
+        .limit(1);
+      if (existing) {
+        landed.push(existing.id);
+        continue;
+      }
       const [{ id }] = await db.insert(spells).values(seed).returning({ id: spells.id });
       createdSpellIds.push(id);
+      landed.push(id);
     }
-    [magicMissileUuid, shieldUuid, fireBoltUuid] = createdSpellIds;
+    [magicMissileUuid, shieldUuid, fireBoltUuid] = landed;
 
     await db.insert(classSpells).values([
       { classId: wizardClassId, spellId: magicMissileUuid, spellLevel: 1 },
@@ -447,23 +460,17 @@ describeWithDb('wizard completion saves equipment, gold, spells (#2710)', () => 
 
     if (createdCharacterIds.length > 0) {
       await drop(() =>
-        db
-          .delete(characterSpells)
-          .where(inArray(characterSpells.characterId, createdCharacterIds)),
+        db.delete(characterSpells).where(inArray(characterSpells.characterId, createdCharacterIds)),
       );
       await drop(() =>
         db
           .delete(characterEquipment)
           .where(inArray(characterEquipment.characterId, createdCharacterIds)),
       );
-      await drop(() =>
-        db.delete(characters).where(inArray(characters.id, createdCharacterIds)),
-      );
+      await drop(() => db.delete(characters).where(inArray(characters.id, createdCharacterIds)));
     }
     if (createdClassIds.length > 0) {
-      await drop(() =>
-        db.delete(classSpells).where(inArray(classSpells.classId, createdClassIds)),
-      );
+      await drop(() => db.delete(classSpells).where(inArray(classSpells.classId, createdClassIds)));
     }
     if (createdSpellIds.length > 0) {
       await drop(() => db.delete(spells).where(inArray(spells.id, createdSpellIds)));
@@ -491,10 +498,7 @@ describeWithDb('wizard completion saves equipment, gold, spells (#2710)', () => 
         { item_name: 'Holy Symbol', item_type: 'equipment', quantity: 1 },
       ],
     };
-    const { status: createStatus, json: created } = await postJson(
-      '/v1/characters',
-      createBody,
-    );
+    const { status: createStatus, json: created } = await postJson('/v1/characters', createBody);
     expect(createStatus).toBe(201);
     characterId = (created as { id: string }).id;
     if (characterId) createdCharacterIds.push(characterId);
@@ -544,23 +548,17 @@ describeWithDb('wizard completion saves equipment, gold, spells (#2710)', () => 
       level: 1,
       gold_pieces: 0,
     };
-    const { status: createStatus, json: created } = await postJson(
-      '/v1/characters',
-      createBody,
-    );
+    const { status: createStatus, json: created } = await postJson('/v1/characters', createBody);
     expect(createStatus).toBe(201);
     const sorcererId = (created as { id: string }).id;
     if (sorcererId) createdCharacterIds.push(sorcererId);
     expect(sorcererId).toBeDefined();
 
     // Omit `prepared` entirely.
-    const { status: spellsStatus } = await postJson(
-      `/v1/characters/${sorcererId}/spells`,
-      {
-        spells: [magicMissileUuid, fireBoltUuid],
-        className,
-      },
-    );
+    const { status: spellsStatus } = await postJson(`/v1/characters/${sorcererId}/spells`, {
+      spells: [magicMissileUuid, fireBoltUuid],
+      className,
+    });
     expect(spellsStatus).toBe(200);
 
     const spellRows = await db
@@ -571,4 +569,4 @@ describeWithDb('wizard completion saves equipment, gold, spells (#2710)', () => 
     // All true — no regression from the prepared-set feature.
     expect(spellRows.every((r) => r.isPrepared)).toBe(true);
   });
-  });
+});
