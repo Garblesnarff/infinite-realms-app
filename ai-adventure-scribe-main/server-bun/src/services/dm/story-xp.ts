@@ -56,6 +56,49 @@ export interface StoryXpGrant {
   granted: number;
 }
 
+/** Words that make a name token useless for spotting a defeat ("The Manager" → "manager"). */
+const DEFEAT_NAME_STOPWORDS = new Set(['the', 'and', 'for', 'with']);
+
+/** Verb stems a story-award reason uses when it is awarding a kill, not a new deed. */
+const DEFEAT_VERBS = [
+  'defeat',
+  'kill',
+  'slay',
+  'slain',
+  'slew',
+  'vanquish',
+  'destroy',
+  'felled',
+  'dispatched',
+  'banished',
+];
+
+/**
+ * #615: does this story award's reason award the defeat a victory row already paid?
+ * The victory description is `Victory XP [<encounterId>]: <defeated names>` (the shape
+ * `awardCombatVictoryXp` writes). A reason that speaks of defeating/killing at all, or
+ * that names one of the defeated, is the DM echoing that kill; a reason for a different
+ * deed ("Solved the logbook") matches neither and pays. Prefix match, so inflections
+ * ("Defeating", "killed", "Remy's") count.
+ */
+export function reasonReferencesDefeat(
+  reason: string,
+  victoryDescription: string | null,
+): boolean {
+  if (!reason) return false;
+  const text = reason.toLowerCase();
+  const hasWord = (word: string) => new RegExp(`\\b${word}`).test(text);
+  if (DEFEAT_VERBS.some(hasWord)) return true;
+  const namesPart = victoryDescription?.split(']: ')[1];
+  if (!namesPart || namesPart === 'the encounter') return false;
+  return namesPart
+    .toLowerCase()
+    .split(/[^a-z0-9']+/)
+    .map((word) => word.replace(/^'+|'+$/g, ''))
+    .filter((word) => word.length >= 3 && !DEFEAT_NAME_STOPWORDS.has(word))
+    .some(hasWord);
+}
+
 /**
  * The single writer. Locks the character row, so two turns for one message cannot both read
  * "nothing awarded yet" and both add; then adds the award unless an XP event for this character
@@ -65,7 +108,9 @@ export interface StoryXpGrant {
  * at or after the message also blocks the story award — the deterministic victory XP is
  * authoritative, and the model demonstrably emits `xp_award` for the same kill despite the
  * prompt-level "Never use for combat victories" rule, so the guard lives here, not in the
- * prompt. A combat-source event from elsewhere (ProgressionService.awardXP's generic shape)
+ * prompt. The same block applies to a victory from the immediately previous turn when
+ * this award's reason is for that defeat (the next-turn echo; see the check below). A
+ * combat-source event from elsewhere (ProgressionService.awardXP's generic shape)
  * still does not swallow one.
  */
 export async function awardStoryXpOnce(input: {
@@ -76,8 +121,10 @@ export async function awardStoryXpOnce(input: {
   reason: string;
 }): Promise<StoryXpGrant> {
   const { db } = await import('../../../../db/client');
-  const { and, eq, gte, like, sql } = await import('drizzle-orm');
-  const { characters, experienceEvents } = await import('../../../../db/schema/index');
+  const { and, desc, eq, gte, like, lt, sql } = await import('drizzle-orm');
+  const { characters, dialogueHistory, experienceEvents } = await import(
+    '../../../../db/schema/index'
+  );
   const { characterId, sessionId, since, amount, reason } = input;
   // #130: captured (not returned directly) so the invalidation broadcast below
   // runs after the transaction commits.
@@ -124,6 +171,49 @@ export async function awardStoryXpOnce(input: {
       )
       .limit(1);
     if (victoryPaid) return { outcome: 'victory_already_paid', granted: 0 };
+    // #615, the next-turn echo: the check above only sees a victory at or after THIS
+    // message, but the duplicate Hark reported (N3-104) arrives one turn later. The
+    // conclusion plants a tactical fact in the next turn's context naming the award
+    // ("COMBAT XP: the game awarded … Do not set xp_award for this victory"), and the
+    // model still emits `xp_award` for the same defeat on that turn — keyed to a new
+    // player message saved after the victory event, so the check above is blind to
+    // it. A victory that landed during the immediately previous turn (at or after the
+    // previous player message, before this one) therefore also blocks — but only
+    // when this award's reason is for that defeat (`reasonReferencesDefeat`): a new
+    // deed on the same turn pays in full. One turn is the bound: the tactical fact
+    // is consumed on the next turn, which is where the echo pressure lives.
+    const [prevMessage] = await tx
+      .select({ createdAt: dialogueHistory.createdAt })
+      .from(dialogueHistory)
+      .where(
+        and(
+          eq(dialogueHistory.sessionId, sessionId),
+          eq(dialogueHistory.speakerType, 'player'),
+          lt(dialogueHistory.createdAt, since),
+        ),
+      )
+      .orderBy(desc(dialogueHistory.createdAt), desc(dialogueHistory.sequenceNumber))
+      .limit(1);
+    if (prevMessage?.createdAt) {
+      const recentVictories = await tx
+        .select({ description: experienceEvents.description })
+        .from(experienceEvents)
+        .where(
+          and(
+            eq(experienceEvents.characterId, characterId),
+            eq(experienceEvents.sessionId, sessionId),
+            eq(experienceEvents.source, 'combat'),
+            like(experienceEvents.description, 'Victory XP [%'),
+            gte(experienceEvents.timestamp, prevMessage.createdAt),
+            lt(experienceEvents.timestamp, since),
+          ),
+        )
+        .orderBy(desc(experienceEvents.timestamp))
+        .limit(5);
+      if (recentVictories.some((row) => reasonReferencesDefeat(reason, row.description))) {
+        return { outcome: 'victory_already_paid', granted: 0 };
+      }
+    }
     // #273: one quarter of the level's milestone band per session, clamped and logged.
     // Only story awards (source 'other') count toward the session total, as above.
     const [sumRow] = await tx

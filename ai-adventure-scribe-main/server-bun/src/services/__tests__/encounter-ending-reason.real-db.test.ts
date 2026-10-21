@@ -945,6 +945,233 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
       );
     expect(storyEvents).toHaveLength(1);
   });
+
+  test('the DM echoing the kill on the NEXT turn does not award it twice (#615)', async () => {
+    // The production shape the same-message guard cannot see: the victory lands on
+    // the kill turn (through the real conclusion producer), and the DM — told by the
+    // tactical fact that the game already awarded the XP — still emits xp_award for
+    // the same defeat on the following out-of-combat turn, which is keyed to a NEW
+    // player message saved after the victory event. Hark N3-104's two lines arrive
+    // in this order: Victory first, Story XP after.
+    await db.insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'player',
+      message: 'I strike down the golem.',
+    });
+    const [sheetBefore] = await db
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+
+    await concludeEncounter(encounterId, sessionId, userId, 'last_hostile_defeated', {});
+    const [sheetAfterVictory] = await db
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    // The fixture golem seats no XP: the level-3 medium threshold band pays 150.
+    expect((sheetAfterVictory.xp ?? 0) - (sheetBefore.xp ?? 0)).toBe(150);
+
+    // The next turn: a new player message, then the DM's disobedient echo.
+    await db.insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'player',
+      message: 'I search the rubble.',
+    });
+    const outcome = await awardStoryXp({
+      userId,
+      sessionId,
+      xpAward: { amount: 150, reason: 'Defeating the golem' },
+    });
+    expect(outcome).toBe('victory_already_paid');
+
+    // The sheet counts the kill exactly once, and only the Victory line was posted.
+    const [sheetAfter] = await db
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect((sheetAfter.xp ?? 0) - (sheetBefore.xp ?? 0)).toBe(150);
+    const events = await db
+      .select({ source: experienceEvents.source })
+      .from(experienceEvents)
+      .where(
+        and(
+          eq(experienceEvents.characterId, characterId),
+          eq(experienceEvents.sessionId, sessionId),
+        ),
+      );
+    expect(events.filter((event) => event.source === 'combat')).toHaveLength(1);
+    expect(events.filter((event) => event.source === 'other')).toHaveLength(0);
+    expect(await victoryNotices(sessionId)).toHaveLength(1);
+    expect(await storyNotices(sessionId)).toHaveLength(0);
+  });
+
+  test('a new deed on the turn right after a victory still pays (#615)', async () => {
+    // The false-positive control for the next-turn guard: the victory sits inside
+    // the same one-turn window as the echo test above, but this award's reason is a
+    // different deed that names no defeated creature — it must not be swallowed.
+    await db.insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'player',
+      message: 'I strike down the golem.',
+    });
+    const victory = await awardCombatVictoryXp({ encounterId, sessionId, userId });
+    expect(victory.awarded).toHaveLength(1);
+    await db.insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'player',
+      message: 'I piece together the logbook.',
+    });
+    const [sheetBefore] = await db
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    const outcome = await awardStoryXp({
+      userId,
+      sessionId,
+      xpAward: { amount: 50, reason: 'Solved the logbook' },
+    });
+    expect(outcome).toBe('awarded');
+    const [sheetAfter] = await db
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect((sheetAfter.xp ?? 0) - (sheetBefore.xp ?? 0)).toBe(50);
+    expect(await storyNotices(sessionId)).toHaveLength(1);
+  });
+
+  test('a kill that does not end the encounter suppresses no later award (#615)', async () => {
+    // A second hostile keeps the fight alive: felling the first golem is the state
+    // a real mid-encounter kill leaves (participant at 0 HP, encounter still
+    // active). Victory XP is only written by the conclusion, so no combat event
+    // exists — and a legitimate story award afterwards must land in full.
+    const [second] = await db
+      .insert(combatParticipants)
+      .values({
+        encounterId,
+        name: 'Ending Golem Two',
+        participantType: 'monster',
+        turnOrder: 2,
+        initiative: 5,
+        armorClass: 12,
+        maxHp: 11,
+        speed: 30,
+      })
+      .returning({ id: combatParticipants.id });
+    await db.insert(combatParticipantStatus).values({
+      participantId: second.id,
+      currentHp: 11,
+      maxHp: 11,
+      isConscious: true,
+    });
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 0, isConscious: false })
+      .where(eq(combatParticipantStatus.participantId, monsterId));
+    const [encounter] = await db
+      .select({ status: combatEncounters.status, awarded: combatEncounters.experienceAwarded })
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, encounterId));
+    expect(encounter.status).toBe('active');
+    expect(encounter.awarded).toBeNull();
+    const combatEvents = await db
+      .select({ id: experienceEvents.id })
+      .from(experienceEvents)
+      .where(
+        and(
+          eq(experienceEvents.characterId, characterId),
+          eq(experienceEvents.sessionId, sessionId),
+          eq(experienceEvents.source, 'combat'),
+        ),
+      );
+    expect(combatEvents).toHaveLength(0);
+
+    await db.insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'player',
+      message: 'I search the cellar while the other golem closes in.',
+    });
+    const outcome = await awardStoryXp({
+      userId,
+      sessionId,
+      xpAward: { amount: 50, reason: 'Searched the cellar thoroughly' },
+    });
+    expect(outcome).toBe('awarded');
+    const storyEvents = await db
+      .select({ id: experienceEvents.id })
+      .from(experienceEvents)
+      .where(
+        and(
+          eq(experienceEvents.characterId, characterId),
+          eq(experienceEvents.sessionId, sessionId),
+          eq(experienceEvents.source, 'other'),
+        ),
+      );
+    expect(storyEvents).toHaveLength(1);
+  });
+
+  test('a next-turn echo that only NAMES the defeated is still the same kill (#615)', async () => {
+    // Pins the name branch of the defeat check on its own: this reason carries no
+    // defeat verb at all — only the defeated creature's name from the victory row.
+    await db.insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'player',
+      message: 'I strike down the golem.',
+    });
+    const victory = await awardCombatVictoryXp({ encounterId, sessionId, userId });
+    expect(victory.awarded).toHaveLength(1);
+    await db.insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'player',
+      message: 'I search the rubble.',
+    });
+    const outcome = await awardStoryXp({
+      userId,
+      sessionId,
+      xpAward: { amount: 150, reason: "The golem's fall" },
+    });
+    expect(outcome).toBe('victory_already_paid');
+    const storyEvents = await db
+      .select({ id: experienceEvents.id })
+      .from(experienceEvents)
+      .where(
+        and(
+          eq(experienceEvents.characterId, characterId),
+          eq(experienceEvents.sessionId, sessionId),
+          eq(experienceEvents.source, 'other'),
+        ),
+      );
+    expect(storyEvents).toHaveLength(0);
+  });
+
+  test('an echo two turns later is outside the one-turn window and pays (#615)', async () => {
+    // The window's bound, pinned deliberately: the guard covers the turn the
+    // tactical fact is consumed on. Two turns on, the same wording is treated as
+    // a fresh award — widening the window would need the strategist's call, since
+    // every added turn of lookback also eats legitimate new-deed awards.
+    await db.insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'player',
+      message: 'I strike down the golem.',
+    });
+    const victory = await awardCombatVictoryXp({ encounterId, sessionId, userId });
+    expect(victory.awarded).toHaveLength(1);
+    await db.insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'player',
+      message: 'I search the rubble.',
+    });
+    await db.insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'player',
+      message: 'I move on to the next chamber.',
+    });
+    const outcome = await awardStoryXp({
+      userId,
+      sessionId,
+      xpAward: { amount: 150, reason: 'Defeating the golem' },
+    });
+    expect(outcome).toBe('awarded');
+  });
 });
 
 /**
