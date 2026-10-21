@@ -24,6 +24,7 @@ import logger from '@/lib/logger';
 import { resolveOrCreateStarterCampaign } from '@/services/starter-campaign-bootstrap';
 import { userDataApi } from '@/services/user-data-api';
 import { previewCampaignOverview } from '@/utils/campaign/preview-campaign-overview';
+import { formatStarterCampaignLength } from '@/utils/campaign/starter-campaign-length';
 import { formatStarterLevelRange } from '@/utils/campaign/starter-level-range';
 
 const CampaignDetailPage: React.FC = () => {
@@ -197,7 +198,10 @@ const CampaignDetailPage: React.FC = () => {
                     d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                   />
                 </svg>
-                <span>{campaign.estimatedSessions} sessions</span>
+                <span>
+                  {formatStarterCampaignLength(campaign.overview) ??
+                    `${campaign.estimatedSessions} sessions`}
+                </span>
               </div>
             )}
             {campaign.tone.length > 0 && (

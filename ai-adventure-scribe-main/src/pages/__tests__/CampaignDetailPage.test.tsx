@@ -98,3 +98,58 @@ describe('CampaignDetailPage "What Awaits You" (#2281)', () => {
     expect(screen.getByRole('heading', { name: 'What Awaits You' })).toBeInTheDocument();
   });
 });
+
+describe('CampaignDetailPage level and length labels (#829)', () => {
+  beforeEach(() => {
+    state.campaign = null;
+  });
+
+  // Fixture follows the real producers: parseOverview stores levelRange
+  // "3-3" (Start 3 → Finish 3) and, today, estimatedSessions "2-4" — the
+  // hours range of the one-shot line — and mapCampaignRow carries the raw
+  // overview onto the campaign object.
+  it('shows Level 3 and "One-shot (2–4 hours)" for a level-3 one-shot', () => {
+    state.campaign = campaign({
+      levelRange: '3-3',
+      estimatedSessions: '2-4',
+      overview: [
+        '# Twelve Bells',
+        '',
+        '**Player Level Range:** Start **3** → Finish **3**',
+        '',
+        '**Estimated Length:** One-shot — 1 session (2–4 hours)',
+        '',
+        '## Campaign Overview',
+        '',
+        'The bell tolls for the village.',
+      ].join('\n'),
+    });
+    renderPage();
+
+    expect(screen.getByText('Level 3')).toBeInTheDocument();
+    expect(screen.getByText('One-shot (2–4 hours)')).toBeInTheDocument();
+    expect(screen.queryByText('2-4 sessions')).not.toBeInTheDocument();
+  });
+
+  it('keeps the level-1 full campaign labels byte-identical', () => {
+    state.campaign = campaign({
+      levelRange: '1-5',
+      estimatedSessions: '8-12',
+      overview: [
+        '# The Eternal Feast',
+        '',
+        '**Player Level Range:** Start **1** → Finish **5**',
+        '',
+        '**Estimated Length:** 8-12 sessions',
+        '',
+        '## Campaign Overview',
+        '',
+        'The guests have been eating for a century.',
+      ].join('\n'),
+    });
+    renderPage();
+
+    expect(screen.getByText('Level 1-5')).toBeInTheDocument();
+    expect(screen.getByText('8-12 sessions')).toBeInTheDocument();
+  });
+});
