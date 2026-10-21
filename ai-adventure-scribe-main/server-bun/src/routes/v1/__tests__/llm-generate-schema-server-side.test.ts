@@ -1,6 +1,8 @@
 import { describe, expect, it, mock } from 'bun:test';
 import { Elysia } from 'elysia';
 
+import smokeTurn from '../../../../../shared/test-fixtures/deploy-smoke-generate.json';
+
 let generatedInputs: Record<string, unknown>[] = [];
 
 mock.module('../../../lib/auth.js', () => ({
@@ -69,9 +71,7 @@ const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
 const { llmRoutes } = await import('../llm.js');
 // What the old client sent: ai-service.ts imported this same export and put it
 // on the request body as `responseSchema`.
-const { dmResponseSchema } = await import(
-  '../../../services/dm/dm-response-schema.js'
-);
+const { dmResponseSchema } = await import('../../../services/dm/dm-response-schema.js');
 const app = createRequestPipelineApp().use(llmRoutes);
 
 const postGenerate = (body: Record<string, unknown>): Promise<Response> =>
@@ -92,6 +92,22 @@ const postGenerate = (body: Record<string, unknown>): Promise<Response> =>
   );
 
 describe('#782 item 3: DM reply schema built server-side', () => {
+  it('accepts the exact smoke turn at the normal DM budget (#922)', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/v1/llm/generate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(smokeTurn),
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(generatedInputs.at(-1)).toMatchObject({
+      prompt: smokeTurn.prompt,
+      maxTokens: 8192,
+      temperature: 0,
+    });
+  });
+
   it('ignores a client-sent responseSchema and sends the server-built schema to the provider', async () => {
     generatedInputs = [];
     const response = await postGenerate({
