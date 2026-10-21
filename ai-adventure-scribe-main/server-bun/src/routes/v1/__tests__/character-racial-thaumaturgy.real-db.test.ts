@@ -70,18 +70,21 @@ describeWithDb('racial Thaumaturgy route round trip (#933)', () => {
   let app: { handle: (request: Request) => Promise<Response> };
   let db: ReturnType<typeof realDb>;
   const createdIds: string[] = [];
+  const createdClassIds: string[] = [];
 
   beforeAll(async () => {
     userId = testId('user-710');
     db = realDb();
-    await db
+    const createdClasses = await db
       .insert(classes)
       .values([
         { name: 'Wizard', hitDie: 6 },
         { name: 'Fighter', hitDie: 10 },
         { name: 'Cleric', hitDie: 8 },
       ])
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning({ id: classes.id });
+    createdClassIds.push(...createdClasses.map((row) => row.id));
     const seed = readFileSync(
       resolve(
         dirname(fileURLToPath(import.meta.url)),
@@ -106,6 +109,7 @@ describeWithDb('racial Thaumaturgy route round trip (#933)', () => {
         .where(eq(characters.id, id))
         .catch(() => {});
     }
+    for (const id of createdClassIds) await db.delete(classes).where(eq(classes.id, id));
     await closeRealDb();
   });
 
