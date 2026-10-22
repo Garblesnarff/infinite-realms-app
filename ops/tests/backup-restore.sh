@@ -268,11 +268,16 @@ default_version = '1.0'
 relocatable = false
 EOF
   cat > "$PROBE_SQL" <<'EOF'
--- ir-backup-probe: deliberately creates NOTHING. The fixture attaches a
--- function to this extension with ALTER EXTENSION ... ADD, exactly how
--- Supabase attaches graphql_public.graphql to pg_graphql — so pg_dump
--- omits the function's definition (extension members are recreated by
--- CREATE EXTENSION) but still dumps its ACLs.
+-- ir-backup-probe: creates two extension-owned tables — one plain
+-- member, one registered as a config table — so the drill also covers
+-- extension-owned relations in the verify's table count. The fixture
+-- attaches a function to this extension with ALTER EXTENSION ... ADD,
+-- exactly how Supabase attaches graphql_public.graphql to pg_graphql —
+-- so pg_dump omits the function's definition (extension members are
+-- recreated by CREATE EXTENSION) but still dumps its ACLs.
+CREATE TABLE probe_member_table (id int PRIMARY KEY, note text);
+CREATE TABLE probe_cfg_table (id int PRIMARY KEY, setting text);
+SELECT pg_extension_config_dump('probe_cfg_table', '');
 EOF
   chmod 644 "$PROBE_CTL" "$PROBE_SQL"
   EXT_FILES="$PROBE_CTL $PROBE_SQL"
@@ -286,6 +291,8 @@ ALTER EXTENSION ir_backup_probe_ext ADD FUNCTION graphql_public.graphql(text, te
 GRANT EXECUTE ON FUNCTION graphql_public.graphql(text, text, jsonb, jsonb) TO anon, authenticated;
 CREATE TABLE campaigns (id int PRIMARY KEY, name text NOT NULL);
 INSERT INTO campaigns VALUES (1, 'Prod Shape');
+INSERT INTO probe_member_table VALUES (1, 'm1'), (2, 'm2');
+INSERT INTO probe_cfg_table VALUES (1, 'c1'), (2, 'c2');
 SQL
   pg_dump -Fc -d proddb -f "$TMP/prod.dump"
   expect "prod-shape archive carries the graphql ACL entry" \
@@ -300,9 +307,29 @@ SQL
   OUT=$(env PGDATABASE=proddb BACKUP_DIR="$TMP/backups-prod" bash "$SCRIPT" 2>&1); RC=$?
   expect "script backup+verify passes on the prod-shape database" test "$RC" -eq 0
   expect_has "$OUT" "excluded 1 extension-member" "exactly one TOC entry is excluded for the prod shape"
-  expect_has "$OUT" "(1 tables" "prod-shape verify restores its table"
+  expect_has "$OUT" "(1 tables" "prod-shape verify counts only the dumped table (extension-owned tables excluded on both sides)"
   expect "no scratch database leaks after the prod-shape run" \
     bash -c "test -z \"\$1\"" _ "$(verify_db_names)"
+
+  # Extension-owned tables, pinned: the member table is absent from the
+  # archive entirely; the config table appears only as a TABLE DATA
+  # entry. A full restore recreates both via CREATE EXTENSION (config
+  # rows land, member rows do not), so a naive restored-side count is
+  # 3 against the archive's 1 dumped definition — the skew the verify's
+  # pg_depend exclusion exists to cancel.
+  PROD_DUMP=$(ls "$TMP"/backups-prod/*.dump 2>/dev/null | head -1)
+  expect "member table has no entry at all in the archive" \
+    bash -c "! pg_restore --list '$PROD_DUMP' | grep -q 'probe_member_table'"
+  expect "config table appears in the archive only as TABLE DATA" \
+    bash -c "test \"\$(pg_restore --list '$PROD_DUMP' | grep 'probe_cfg_table')\" = \"\$(pg_restore --list '$PROD_DUMP' | grep ' TABLE DATA .*probe_cfg_table')\""
+  psql_admin -d postgres -c "CREATE DATABASE extdb" >/dev/null
+  pg_restore -w -d extdb "$PROD_DUMP" >/dev/null 2>&1
+  expect "naive restored count would be 3 (the skew is real)" \
+    bash -c "test \"\$(psql -X -q -t -A -d extdb -c \"SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relkind IN ('r','p') AND n.nspname NOT IN ('pg_catalog','information_schema')\")\" = '3'"
+  expect "config table rows are restored (2)" \
+    bash -c "test \"\$(psql -X -q -t -A -d extdb -c 'SELECT count(*) FROM probe_cfg_table')\" = '2'"
+  expect "member table is recreated empty (0 rows)" \
+    bash -c "test \"\$(psql -X -q -t -A -d extdb -c 'SELECT count(*) FROM probe_member_table')\" = '0'"
 
   # A second matching entry must be refused, never silently excluded.
   psql_admin -d proddb <<'SQL'

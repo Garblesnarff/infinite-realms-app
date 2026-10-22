@@ -406,7 +406,10 @@ installed copy still runs the option-2 verify (psql + error classifier,
   entry for `graphql_public.graphql`, the pg_graphql extension member
   pg_dump structurally cannot recreate (the #38 drill proved it is the only
   unrestorable entry). The entry stays in the `.dump`; it is skipped only
-  for the verify restore. The scratch database is dropped on every exit
+  for the verify restore. The restored table count is checked against the
+  archive's own table of contents; extension-owned relations (recreated
+  by CREATE EXTENSION, absent from the archive's definitions) are
+  excluded on both sides of that comparison. The scratch database is dropped on every exit
   path the script controls (and scratch databases orphaned by a killed
   run are swept at the start of the next verify). A second entry ever
   matching the exclusion makes the run refuse rather than widen it

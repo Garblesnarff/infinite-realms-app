@@ -146,8 +146,12 @@ trap 'exit 143' TERM
 
 # Print the archive's table of contents on stdout with the excluded
 # entries removed; print the number of excluded entries on stderr.
+# The pattern travels through ENVIRON, never awk -v: -v values undergo
+# escape processing, which on gawk turns the pattern's \( into a bare
+# paren — an unmatched-paren regex that fails the filter outright.
 filter_toc() {
-  awk -v pat="$EXCLUDED_TOC_PATTERN" '
+  env EXCLUDED_TOC_PATTERN="$EXCLUDED_TOC_PATTERN" awk '
+    BEGIN { pat = ENVIRON["EXCLUDED_TOC_PATTERN"] }
     $0 ~ pat { n++; next }
     { print }
     END { print n + 0 > "/dev/stderr" }
@@ -227,13 +231,21 @@ verify_dump() {
   # COMMENT — carries 0 there; the type field alone cannot be used,
   # because a definition's fifth field is the schema name, which could
   # itself be DATA or ATTACH. Actual: base tables and partitioned
-  # parents from pg_class, so both sides measure the same set.
+  # parents from pg_class, MINUS extension-owned relations: those are
+  # recreated by CREATE EXTENSION during the restore, and pg_dump emits
+  # no definition for them — plain member tables are absent from the
+  # archive entirely, and pg_extension_config_dump tables appear only
+  # as a TABLE DATA entry, which the expected side does not count.
+  # Excluding them on the actual side compares the same set.
   local expected actual
   expected=$(awk '$4 == "TABLE" && $2 != "0" { n++ } END { print n + 0 }' "$LIST_TMP") \
     || { err "verify: table-count parse failed on $dump"; return 1; }
   actual=$(psql -w -X -q -t -A -d "$VERIFY_DB" -c \
     "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-      WHERE c.relkind IN ('r', 'p') AND n.nspname NOT IN ('pg_catalog', 'information_schema')") \
+      WHERE c.relkind IN ('r', 'p') AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+        AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                         WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid
+                           AND d.deptype = 'e')") \
     || { err "verify: restored-table count query failed"; return 1; }
   [ "$actual" = "$expected" ] \
     || { err "verify: restored table count $actual does not match the archive's $expected"; return 1; }
