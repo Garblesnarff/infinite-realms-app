@@ -7,11 +7,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { handleDmActionsAndTransitions } from '../dm-actions-handler';
 
+import type * as CombatEntryDelivery from '@/services/combat/combat-entry-delivery';
+
 import { resolveDeclaredCombatActions } from '@/hooks/ai/combat-resolution-step';
 import { SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
 import { requestCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
+import { startCombatEntryDelivery } from '@/services/combat/combat-entry-delivery';
 import { enforceCombatActionOnAttempt } from '@/services/combat/combat-zero-action-guard';
 import {
   requestPlayerAttackRoll,
@@ -51,6 +54,13 @@ vi.mock('@/services/combat/combat-attack-proposal', () => ({
 vi.mock('@/services/combat/combat-entry-confirmation-bridge', () => ({
   requestCombatEntryConfirmation: vi.fn(),
 }));
+vi.mock('@/services/combat/combat-entry-delivery', async (importOriginal) => {
+  const actual = await importOriginal<typeof CombatEntryDelivery>();
+  return {
+    ...actual,
+    startCombatEntryDelivery: vi.fn(actual.startCombatEntryDelivery),
+  };
+});
 vi.mock('@/services/combat/combat-action-executor', () => ({
   executeStructuredCombatActionWithBoundary: vi.fn(),
   executeAuthoritativeCombatIntent: vi.fn(),
@@ -347,7 +357,7 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     expect(outcome.activeEncounter).toEqual(PLAYER_TURN_ENCOUNTER);
   });
 
-  it('quotes the player\'s words on the card when the pending carries their declared weapon attack (#877)', async () => {
+  it("quotes the player's words on the card when the pending carries their declared weapon attack (#877)", async () => {
     vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(true);
     vi.mocked(userDataApi.enterCombat).mockResolvedValue(
       response({ encounter: { id: 'encounter-1' }, npcTurns: ENTRY_NPC_TURNS }) as any,
@@ -1085,9 +1095,7 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     // dropped the player's action and let a later DM turn narrate the hostile away.
     expect(outcome.responseText).toBe('Vance catches your arm before the punch lands.');
     expect(outcome.result.text).toBe('Vance catches your arm before the punch lands.');
-    expect(outcome.localNotice).toBe(
-      'No encounter was seated; the hostile is still in the scene.',
-    );
+    expect(outcome.localNotice).toBe('No encounter was seated; the hostile is still in the scene.');
     expect(outcome.localNotices).toEqual([
       {
         text: 'No encounter was seated; the hostile is still in the scene.',
@@ -1191,6 +1199,26 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
       { text: 'Combat has begun. Declare your action.', persist: true },
     ]);
     expect(outcome.responseText).toBe('');
+  });
+
+  it('already-seated drops the pre-entry telegraph', async () => {
+    vi.mocked(startCombatEntryDelivery).mockResolvedValueOnce({
+      kind: 'already-seated',
+      encounterId: 'enc-9',
+    });
+    const outcome = await invoke({
+      text: 'The cook reels before you have swung.',
+      narrationSegments: [{ type: 'dm', text: 'The cook reels before you have swung.' }],
+      combat_transition: 'none',
+      combat_entry_pending: PENDING_ENTRY,
+      combat_actions: [PLAYER_ACTION],
+    });
+
+    expect(outcome.responseText).toBe('');
+    expect(outcome.narrationSegments).toBeUndefined();
+    expect(outcome.result.text).toBe('');
+    expect(userDataApi.enterCombat).not.toHaveBeenCalled();
+    expect(resolveDeclaredCombatActions).not.toHaveBeenCalled();
   });
 
   it('keeps a declined entry as a visible non-empty line', async () => {

@@ -307,6 +307,10 @@ export async function handleDmActionsAndTransitions(
         } else if (delivered.kind === 'already-seated') {
           // The open tab already seated this proposal while generate was still
           // in flight. Refresh the board and do not roll the opening attack twice.
+          // `responseText` was copied from the model before this branch, so
+          // clearing `result.text` alone would still print the telegraph.
+          responseText = '';
+          narrationSegments = undefined;
           result = {
             ...result,
             text: '',
