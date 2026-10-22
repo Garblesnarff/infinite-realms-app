@@ -22,10 +22,7 @@
   "expertise_proficiencies": "",
   "tool_proficiencies": "",
   "saving_throw_proficiencies": "",
-  "languages": [
-    "Common",
-    "Dwarvish"
-  ],
+  "languages": ["Common", "Dwarvish"],
   "cantrips": "",
   "known_spells": "",
   "prepared_spells": "",
@@ -34,9 +31,7 @@
   "active_concentration": null,
   "class_features": {},
   "enhancement_selections": [],
-  "fighting_styles": [
-    "Defense"
-  ],
+  "fighting_styles": ["Defense"],
   "copper_pieces": 0,
   "silver_pieces": 0,
   "electrum_pieces": 0,
@@ -151,6 +146,22 @@
     {
       "character_id": "00000000-0000-0000-0000-000000000000",
       "item_name": "Crossbow, light",
+      "item_type": "equipment",
+      "quantity": 1,
+      "equipped": false,
+      "is_magic": false,
+      "magic_bonus": 0,
+      "magic_properties": null,
+      "requires_attunement": false,
+      "is_attuned": false,
+      "attunement_requirements": null,
+      "magic_item_type": null,
+      "magic_item_rarity": "common",
+      "magic_effects": null
+    },
+    {
+      "character_id": "00000000-0000-0000-0000-000000000000",
+      "item_name": "Crossbow Bolts (20)",
       "item_type": "equipment",
       "quantity": 1,
       "equipped": false,

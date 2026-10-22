@@ -997,7 +997,7 @@ describe('#260 CB-020: the Gourmand declares a Light Crossbow attack', () => {
     expect(attackInputs).toHaveLength(0);
   });
 
-  it('a DM naming the carried-but-unequipped crossbow substitutes out loud — one swap line, no 422', async () => {
+  it('a DM naming the carried crossbow gets an equip refusal, never a substituted attack', async () => {
     equippedByActor['the-seeker'] = [HANDAXE_PROFILE];
 
     const response = await postIntent({
@@ -1010,16 +1010,67 @@ describe('#260 CB-020: the Gourmand declares a Light Crossbow attack', () => {
       source: 'dm',
     });
 
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as { result: Record<string, unknown> };
-    // The substitute is the equipped Handaxe, announced via the warning and
-    // exactly one transcript line — the swap is out loud, never silent.
-    const ungrounded = warnings.find((entry) => entry.event === 'DM_WEAPON_UNGROUNDED');
-    expect(ungrounded).toMatchObject({ requested: 'light-crossbow', resolved: 'Handaxe' });
-    expect(attackInputs).toHaveLength(1);
-    expect(attackInputs[0]?.weaponId).toBe('eq-handaxe');
-    const swapLines = engineLines(body.result).filter((line) => line.includes('Weapon swap'));
-    expect(swapLines).toHaveLength(1);
-    expect(swapLines[0]).toContain('light-crossbow → Handaxe');
+    expect(response.status).toBe(422);
+    const body = await response.json();
+    expect(body.details.reason).toBe('weapon_not_equipped');
+    expect(body.error).toContain('equip');
+    expect(attackInputs).toHaveLength(0);
+    expect(approachWeapons).toHaveLength(0);
+    expect(warnings.filter((entry) => entry.event === 'DM_WEAPON_UNGROUNDED')).toHaveLength(0);
+  });
+});
+
+describe('#260 ammunition refusal before substitution', () => {
+  it.each(['propose', 'commit'])(
+    'refuses a typed no-bolts crossbow at %s without a Handaxe attack',
+    async (phase) => {
+      activeParticipantId = 'the-seeker';
+      const crossbow = {
+        ...SEEKER_WEAPONS[0],
+        id: 'empty-crossbow',
+        name: 'Crossbow, light',
+        missingAmmunition: 'bolts',
+      };
+      equippedByActor['the-seeker'] = [SEEKER_WEAPONS[1]];
+      carriedByActor['the-seeker'] = [crossbow, SEEKER_WEAPONS[1]];
+      const response = await postIntent({
+        intent: {
+          type: 'attack',
+          actorId: 'the-seeker',
+          targetId: 'the-void-maw',
+          weaponId: 'light-crossbow',
+        },
+        source: 'dm',
+        ...(phase === 'propose' ? { phase } : {}),
+      });
+      const body = await response.json();
+      expect(response.status).toBe(422);
+      expect(body.error).toMatch(/no bolts/i);
+      expect(body.error).toMatch(/choose|what|which/i);
+      expect(attackInputs).toHaveLength(0);
+      expect(approachWeapons).toHaveLength(0);
+    },
+  );
+});
+
+describe('#260 typed ranged weapon with ammo remains an explicit choice', () => {
+  it('asks to equip a carried crossbow rather than silently substituting even when ammo is available', async () => {
+    activeParticipantId = 'the-seeker';
+    const crossbow = { ...SEEKER_WEAPONS[0], id: 'crossbow', name: 'Crossbow, light' };
+    equippedByActor['the-seeker'] = [SEEKER_WEAPONS[1]];
+    carriedByActor['the-seeker'] = [crossbow, SEEKER_WEAPONS[1]];
+    const response = await postIntent({
+      intent: {
+        type: 'attack',
+        actorId: 'the-seeker',
+        targetId: 'the-void-maw',
+        weaponId: 'light-crossbow',
+      },
+      source: 'dm',
+    });
+    expect(response.status).toBe(422);
+    expect((await response.json()).details.reason).toBe('weapon_not_equipped');
+    expect(attackInputs).toHaveLength(0);
+    expect(approachWeapons).toHaveLength(0);
   });
 });
