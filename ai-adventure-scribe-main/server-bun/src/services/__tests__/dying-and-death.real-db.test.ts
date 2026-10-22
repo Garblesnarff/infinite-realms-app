@@ -495,6 +495,9 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
     const state = await stateOf(scene.encounterId);
     const hero = state.participants.find((p) => p.id === scene.heroId)!;
     expect(Object.keys(hero).sort()).toEqual(Object.keys(DYING_SCHOLAR_PARTICIPANT).sort());
+    const map = await loadActiveTacticalMap(scene.sessionId);
+    expect(map).not.toBeNull();
+    expect(hero.position).toEqual({ ...DYING_SCHOLAR_PARTICIPANT.position, sceneId: map!.id });
     expect(Object.keys(hero.status!).sort()).toEqual(
       Object.keys(DYING_SCHOLAR_PARTICIPANT.status).sort(),
     );
@@ -1787,9 +1790,7 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
       expect(attackRows).toHaveLength(1);
       expect(attackRows[0].source).toBe('player');
       expect(attackRows[0].text).toContain('The Scholar rolled 17 + 4 = 21 vs AC 15');
-      expect(committed.engineRows.map((row: { id: string }) => row.id)).toEqual([
-        attackRows[0].id,
-      ]);
+      expect(committed.engineRows.map((row: { id: string }) => row.id)).toEqual([attackRows[0].id]);
       expect((await statusOf(scene.spiderId)).currentHp).toBe(37);
       expect((await statusOf(scene.heroId)).currentHp).toBe(3);
       expect(await encounterOf(scene.encounterId)).toMatchObject({
@@ -1857,9 +1858,7 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
       // 6) The defeat leaves a DM wrap-up fact: the next DM turn narrates the defeat from it,
       //    and the post-defeat chat route answers the terminal state instead of 500ing (#261
       //    CB-027, #2456).
-      expect(facts).toContain(
-        'THE FIGHT IS OVER: no member of the party is still able to fight',
-      );
+      expect(facts).toContain('THE FIGHT IS OVER: no member of the party is still able to fight');
 
       // 5) Outcome: the spider's melee blow on the unconscious hero is an automatic critical,
       //    two more failures: three, dead, and the fight ends in defeat.

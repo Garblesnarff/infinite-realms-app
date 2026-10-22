@@ -118,6 +118,7 @@ describe('authoritative combat hydration: the death-save state (#2518)', () => {
 
   it('the server recorded 2 failures: the client participant carries 0 saved and 2 failed', () => {
     const scholar = hydrate(DYING_SCHOLAR_PARTICIPANT);
+    expect(scholar.position).toEqual(DYING_SCHOLAR_PARTICIPANT.position);
 
     expect(scholar).toMatchObject({
       currentHitPoints: 0,
