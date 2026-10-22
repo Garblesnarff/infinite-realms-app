@@ -230,6 +230,10 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
               hasDynamicOverlay={false}
               isLatest={isLatestMessage}
               showNoOptionsNotice={message.context?.noActionOptions === true}
+              showImmediately={
+                message.context?.initialGreeting === true ||
+                message.context?.initial_greeting === true
+              }
             />
           )}
       </div>
