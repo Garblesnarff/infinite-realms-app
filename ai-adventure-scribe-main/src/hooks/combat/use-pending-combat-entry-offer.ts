@@ -13,6 +13,7 @@ import { readAuthoritativeCombat } from '@/contexts/combat/use-authoritative-com
 import { useCombat } from '@/contexts/CombatContext';
 import logger from '@/lib/logger';
 import {
+  combatEntryTurnConfirmed,
   currentCombatEntryPlayer,
   onCombatEntryPlayerSourceChange,
   startCombatEntryDelivery,
@@ -24,7 +25,12 @@ const PENDING_POLL_MS = 5_000;
 function offer(sessionId: string, pending: DeliverableCombatEntry): void {
   const player = currentCombatEntryPlayer();
   if (!player) return;
-  void startCombatEntryDelivery({ sessionId, pending, player })
+  void startCombatEntryDelivery({
+    sessionId,
+    pending,
+    player,
+    entryConfirmed: combatEntryTurnConfirmed(sessionId),
+  })
     .then((result) => {
       if (result.kind !== 'seated' && result.kind !== 'already-seated') return;
       window.dispatchEvent(

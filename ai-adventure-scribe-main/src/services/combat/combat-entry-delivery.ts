@@ -45,6 +45,23 @@ type DeliveryArgs = {
 
 let inflight: { key: string; promise: Promise<CombatEntryDeliveryResult> } | null = null;
 /**
+ * The hold already asked, and this turn will pass `entryConfirmed`. The poll
+ * must not open a second Strike card while generate is still in flight.
+ */
+const confirmedTurns = new Set<string>();
+
+export function markCombatEntryTurnConfirmed(sessionId: string): void {
+  confirmedTurns.add(sessionId);
+}
+
+export function combatEntryTurnConfirmed(sessionId: string): boolean {
+  return confirmedTurns.has(sessionId);
+}
+
+export function clearCombatEntryTurnConfirmed(sessionId: string): void {
+  confirmedTurns.delete(sessionId);
+}
+/**
  * The poll can finish confirm, initiative, and `/enter` while generate is still
  * hung. A later handler call must see that seated result and resolve the opening
  * attack. A fresh call would get 409 and skip it. Forgotten after the DM reply
