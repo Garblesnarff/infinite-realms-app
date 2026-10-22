@@ -7,6 +7,8 @@
 
 import { pgTable, uuid, text, timestamp, jsonb, index, integer, boolean } from 'drizzle-orm/pg-core';
 
+import { characters } from './game';
+
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 
 /**
@@ -119,13 +121,17 @@ export const classSpells = pgTable(
 /**
  * Character Spells Junction Table
  * Individual character spell selections and preparation status
- * Note: characterId foreign key is not enforced in Drizzle to avoid circular dependency
+ * characterId carries the characters FK with ON DELETE CASCADE (#1011,
+ * migration 0029) — the same lazy-thunk pattern the sibling schema files
+ * use; the old "not enforced to avoid circular dependency" note was stale.
  */
 export const characterSpells = pgTable(
   'character_spells',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    characterId: uuid('character_id').notNull(), // References characters.id (not enforced in Drizzle)
+    characterId: uuid('character_id')
+      .notNull()
+      .references(() => characters.id, { onDelete: 'cascade' }),
     spellId: uuid('spell_id').notNull().references(() => spells.id, { onDelete: 'cascade' }),
     sourceClassId: uuid('source_class_id').notNull().references(() => classes.id, { onDelete: 'cascade' }),
     isPrepared: boolean('is_prepared').default(true),

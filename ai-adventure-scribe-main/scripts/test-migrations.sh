@@ -205,6 +205,12 @@ build_replay_list() {
         # prefix would sort it before that backfill, so it would replay against a database
         # with no starter_character_templates table in it yet (#829).
         0028_starter_character_templates_subclass.sql) echo "20251211_000000	$f"; continue;;
+        # ALTERs character_spells, which is created by
+        # db/migrations/20251106_backfill_lost_drizzle_migrations.sql. Its drizzle index
+        # prefix would sort it before that backfill, so it would replay against a database
+        # with no character_spells table in it yet (#1011). Pinned after the newest
+        # migration overall, the way the other bare-numbered pins are placed.
+        0029_character_spells_character_fk.sql) echo "20261022_000000	$f"; continue;;
         # Deliberate no-op snapshot re-baseline; safe anywhere, pinned last.
         0004_schema_baseline.sql) echo "99999999_999999	$f"; continue;;
       esac
