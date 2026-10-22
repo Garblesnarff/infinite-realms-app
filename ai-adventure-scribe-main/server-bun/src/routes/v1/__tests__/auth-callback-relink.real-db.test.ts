@@ -13,6 +13,14 @@
  * creates NO fresh users row — the account is never sealed behind the
  * new id, and a later sign-in retries the re-link.
  *
+ * #1040 hardening, same suite: an unverified sign-in creates NO users row
+ * (a row materialised for an address the signer never verified would sit
+ * beside the real owner's row and block their re-link as "ambiguous"
+ * forever); and the takeover guard accepts only the WorkOS SDK's
+ * NotFoundException as proof the old id is gone — a bare status-404 error
+ * is liveness unknown, with the same no-move/no-row/retry behaviour as any
+ * other liveness failure.
+ *
  * Every request goes through the real auth routes mounted on
  * `createRequestPipelineApp` against real PostgreSQL; only the WorkOS client
  * is stubbed (WorkOS cannot be reached from a test). The stub returns the
@@ -69,10 +77,11 @@ let stubbedUser: Record<string, unknown> | null = null;
 /**
  * How the stub's `getUser` (the re-link takeover guard's liveness check)
  * answers for the next case: the old id is gone from the environment
- * ('not-found', the cutover shape), still a live user ('live'), or the
- * check itself fails ('error').
+ * ('not-found', the cutover shape), still a live user ('live'), the check
+ * itself fails ('error'), or it fails with a status-404 error that is NOT
+ * the SDK's NotFoundException ('bare-404', #1040).
  */
-let stubbedGetUserMode: 'not-found' | 'live' | 'error' = 'not-found';
+let stubbedGetUserMode: 'not-found' | 'live' | 'error' | 'bare-404' = 'not-found';
 
 mock.module('../../../services/workos.ts', () => ({
   workos: {
@@ -89,6 +98,12 @@ mock.module('../../../services/workos.ts', () => ({
         if (stubbedGetUserMode === 'live') return { id, emailVerified: true };
         if (stubbedGetUserMode === 'error') {
           throw Object.assign(new Error('WorkOS unavailable'), { name: 'APIError', status: 500 });
+        }
+        if (stubbedGetUserMode === 'bare-404') {
+          throw Object.assign(new Error('404 from a non-SDK layer'), {
+            name: 'APIError',
+            status: 404,
+          });
         }
         throw Object.assign(new Error('User not found'), { name: 'NotFoundException', status: 404 });
       },
@@ -125,7 +140,7 @@ async function seedCampaign(userId: string): Promise<string> {
 
 async function signIn(
   user: Record<string, unknown>,
-  getUserMode: 'not-found' | 'live' | 'error' = 'not-found',
+  getUserMode: 'not-found' | 'live' | 'error' | 'bare-404' = 'not-found',
 ): Promise<Response> {
   if (!app) throw new Error('signIn called without a database-backed app');
   stubbedUser = user;
@@ -405,7 +420,83 @@ describeWithDb('#206 WorkOS re-link in the auth callback', () => {
     expect(await userRow(oldId)).not.toBeNull();
     expect(await campaignsOf(oldId)).toHaveLength(1);
     expect(await campaignsOf(newId)).toHaveLength(0);
-    expect(await userRow(newId)).not.toBeNull();
+    // #1040: and no users row is created either — a row materialised for an
+    // email this sign-in never verified would sit beside the real owner's
+    // row and block their re-link as ambiguous (next case). The row is
+    // created by the first verified sign-in instead.
+    expect(await userRow(newId)).toBeNull();
+  });
+
+  test('#1040: an unverified sign-up with the owner email creates no row, and the owner still re-links', async () => {
+    const victimOldId = testId('user-victim-old');
+    const attackerId = testId('user-attacker');
+    const victimNewId = testId('user-victim-new');
+    seededUserIds.push(attackerId, victimNewId);
+    const email = `${testId('victim')}@example.test`;
+    await seedUser(victimOldId, email, 'pro');
+    await seedCampaign(victimOldId);
+
+    // The attack: a sign-up claims the victim's email but never verifies it
+    // (the verification goes to the victim's inbox). The sign-in itself
+    // succeeds — but it must not materialise a users row.
+    const attack = await signIn({
+      id: attackerId,
+      email,
+      emailVerified: false,
+      firstName: 'A',
+      lastName: 'T',
+    });
+    expectSuccessfulSignIn(attack);
+    expect(await userRow(attackerId)).toBeNull();
+    expect(await userRow(victimOldId)).not.toBeNull();
+    expect(await campaignsOf(victimOldId)).toHaveLength(1);
+
+    // The real owner arrives from the new WorkOS environment, verified:
+    // exactly one row carries the email, so the re-link completes. On main
+    // the attacker's row made this two matches and nothing ever moved.
+    const res = await signIn({
+      id: victimNewId,
+      email,
+      emailVerified: true,
+      firstName: 'V',
+      lastName: 'O',
+    });
+    expectSuccessfulSignIn(res);
+    expect(await userRow(victimOldId)).toBeNull();
+    expect((await userRow(victimNewId))?.plan).toBe('pro');
+    expect(await campaignsOf(victimNewId)).toHaveLength(1);
+    expect(await campaignsOf(attackerId)).toHaveLength(0);
+  });
+
+  test('#1040: a first verified sign-in creates the row an earlier unverified sign-in did not', async () => {
+    const freshId = testId('user-fresh');
+    seededUserIds.push(freshId);
+    const email = `${testId('fresh')}@example.test`;
+
+    const unverified = await signIn({
+      id: freshId,
+      email,
+      emailVerified: false,
+      firstName: 'F',
+      lastName: 'R',
+    });
+    expectSuccessfulSignIn(unverified);
+    expect(await userRow(freshId)).toBeNull();
+
+    // Same WorkOS id, now verified: the row the unverified sign-in was
+    // denied is created, under the same id anything created in the
+    // meantime would already carry.
+    const verified = await signIn({
+      id: freshId,
+      email,
+      emailVerified: true,
+      firstName: 'F',
+      lastName: 'R',
+    });
+    expectSuccessfulSignIn(verified);
+    const row = await userRow(freshId);
+    expect(row).not.toBeNull();
+    expect(row?.email).toBe(email);
   });
 
   test('the old id still resolving in WorkOS: nothing is re-linked (takeover guard)', async () => {
@@ -459,6 +550,38 @@ describeWithDb('#206 WorkOS re-link in the auth callback', () => {
     expectSuccessfulSignIn(retry);
     expect(await userRow(oldId)).toBeNull();
     expect(await userRow(newId)).not.toBeNull();
+    expect(await campaignsOf(newId)).toHaveLength(1);
+  });
+
+  test('#1040: a bare 404 that is not the WorkOS NotFoundException is liveness unknown, not proof the old id is gone', async () => {
+    const oldId = testId('user-bare404-old');
+    const newId = testId('user-bare404-new');
+    seededUserIds.push(newId);
+    const email = `${testId('b404')}@example.test`;
+    await seedUser(oldId, email, 'pro');
+    await seedCampaign(oldId);
+
+    // The stub's getUser fails with a status-404 error that is NOT the
+    // SDK's NotFoundException (an intermediary's error shape). Only the
+    // SDK exception proves the old account is gone; this proves nothing,
+    // so the behaviour is the liveness-unknown one: nothing moves, no row
+    // is created, and the next sign-in retries. On main the status check
+    // accepted any 404 and the account moved on this unproven answer.
+    const res = await signIn(
+      { id: newId, email, emailVerified: true, firstName: 'B', lastName: '4' },
+      'bare-404',
+    );
+    expectSuccessfulSignIn(res);
+    expect(await userRow(oldId)).not.toBeNull();
+    expect(await campaignsOf(oldId)).toHaveLength(1);
+    expect(await campaignsOf(newId)).toHaveLength(0);
+    expect(await userRow(newId)).toBeNull();
+
+    // The retry, with the SDK's real not-found answer, completes the re-link.
+    const retry = await signIn({ id: newId, email, emailVerified: true, firstName: 'B', lastName: '4' });
+    expectSuccessfulSignIn(retry);
+    expect(await userRow(oldId)).toBeNull();
+    expect((await userRow(newId))?.plan).toBe('pro');
     expect(await campaignsOf(newId)).toHaveLength(1);
   });
 
