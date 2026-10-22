@@ -244,35 +244,44 @@ function vitalStateAfterCombat(
 }
 
 /**
- * Read a character's vitals, optionally scoped to an owner, locking the row when the caller is
- * about to write it.
+ * The owner predicate shared by the vitals read and the vitals write.
  *
- * 🛡️ Sentinel: when `userId` is given, ownership lives in this statement's WHERE clause, not in
+ * 🛡️ Sentinel: when `userId` is given, ownership lives in the statement's WHERE clause, not in
  * a separate check, so there is no window between "may I" and "I did". A character the caller
- * does not own reads as absent, which is what the caller reports.
+ * does not own matches nothing.
  *
  * `userId` is omitted only by the combat mirror, which has no user to check against — a
  * monster's turn runs server-side with no caller at all — and whose authorization is enforced
  * by the participant statement sharing its transaction. See `mirrorFromCombat`.
+ */
+function ownedByCaller(
+  tx: VitalsTx,
+  userId: string | undefined,
+): ReturnType<typeof exists> | undefined {
+  if (!userId) return undefined;
+  return exists(
+    tx
+      .select({ one: sql`1` })
+      .from(characters)
+      .where(
+        and(
+          eq(characters.id, characterStats.characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      ),
+  );
+}
+
+/**
+ * Read a character's vitals, optionally scoped to an owner, locking the row when the caller is
+ * about to write it.
  */
 async function loadVitals(
   tx: VitalsTx,
   characterId: string,
   options: { userId?: string; forUpdate: boolean },
 ): Promise<CharacterVitals | null> {
-  const ownedByCaller = options.userId
-    ? exists(
-        tx
-          .select({ one: sql`1` })
-          .from(characters)
-          .where(
-            and(
-              eq(characters.id, characterStats.characterId),
-              or(eq(characters.userId, options.userId), eq(characters.ownerId, options.userId)),
-            ),
-          ),
-      )
-    : undefined;
+  const ownedByCallerClause = ownedByCaller(tx, options.userId);
 
   const query = tx
     .select({
@@ -287,7 +296,7 @@ async function loadVitals(
       diedAt: characterStats.diedAt,
     })
     .from(characterStats)
-    .where(and(eq(characterStats.characterId, characterId), ownedByCaller))
+    .where(and(eq(characterStats.characterId, characterId), ownedByCallerClause))
     .limit(1);
 
   const [row] = await (options.forUpdate ? query.for('update') : query);
@@ -317,6 +326,7 @@ async function writeVitals(
   characterId: string,
   maxHitPoints: number,
   next: VitalsWrite,
+  userId?: string,
 ): Promise<CharacterVitals> {
   const [updated] = await tx
     .update(characterStats)
@@ -332,7 +342,7 @@ async function writeVitals(
       ...(next.diedAt === undefined ? {} : { diedAt: next.diedAt }),
       updatedAt: new Date(),
     })
-    .where(eq(characterStats.characterId, characterId))
+    .where(and(eq(characterStats.characterId, characterId), ownedByCaller(tx, userId)))
     .returning({
       currentHitPoints: characterStats.currentHitPoints,
       temporaryHitPoints: characterStats.temporaryHitPoints,
@@ -393,6 +403,7 @@ export class CharacterVitalsService {
         characterId,
         current.maxHitPoints,
         computeVitalsAfterDamage(current, amount, options),
+        userId,
       );
     });
   }
@@ -411,6 +422,7 @@ export class CharacterVitalsService {
         characterId,
         current.maxHitPoints,
         computeVitalsAfterHeal(current, amount),
+        userId,
       );
     });
   }
@@ -428,14 +440,20 @@ export class CharacterVitalsService {
       const current = await loadVitals(tx, characterId, { userId, forUpdate: true });
       if (!current) throw notFound();
 
-      return writeVitals(tx, characterId, current.maxHitPoints, {
-        currentHitPoints: current.currentHitPoints,
-        temporaryHitPoints: Math.max(current.temporaryHitPoints, Math.max(0, Math.trunc(amount))),
-        isConscious: current.isConscious,
-        vitalState: current.vitalState,
-        deathSavesSuccesses: current.deathSavesSuccesses,
-        deathSavesFailures: current.deathSavesFailures,
-      });
+      return writeVitals(
+        tx,
+        characterId,
+        current.maxHitPoints,
+        {
+          currentHitPoints: current.currentHitPoints,
+          temporaryHitPoints: Math.max(current.temporaryHitPoints, Math.max(0, Math.trunc(amount))),
+          isConscious: current.isConscious,
+          vitalState: current.vitalState,
+          deathSavesSuccesses: current.deathSavesSuccesses,
+          deathSavesFailures: current.deathSavesFailures,
+        },
+        userId,
+      );
     });
   }
 
