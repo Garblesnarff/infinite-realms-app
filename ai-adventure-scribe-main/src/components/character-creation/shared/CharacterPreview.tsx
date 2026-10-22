@@ -4,7 +4,7 @@ import React from 'react';
 import { CharacterPreviewAbilityScores } from './CharacterPreviewAbilityScores';
 import { CharacterPreviewHeader } from './CharacterPreviewHeader';
 import { isDraconicBloodline } from '../../../../shared/class-feature-choices';
-import { computeLevel1MaxHitPoints } from '../../../../shared/level-1-hit-points';
+import { computeLevel1MaxHitPoints, hasToughFeat } from '../../../../shared/level-1-hit-points';
 import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
 
 import { Badge } from '@/components/ui/badge';
@@ -71,7 +71,10 @@ const CharacterPreview: React.FC = () => {
         character.class.name,
         finalScores.constitution?.score ?? 10,
         subrace?.name ?? null,
-        { draconicBloodline: isDraconicBloodline(character.classFeatures) },
+        {
+          draconicBloodline: isDraconicBloodline(character.classFeatures),
+          tough: hasToughFeat(character.feats, character.classFeatures),
+        },
       )
     : null;
 
@@ -126,10 +129,7 @@ const CharacterPreview: React.FC = () => {
                 </Badge>
               )}
               {character.personalityTraits?.slice(0, 2).map((trait, index) => (
-                <div
-                  key={index}
-                  className="text-xs p-2 bg-card rounded border border-border"
-                >
+                <div key={index} className="text-xs p-2 bg-card rounded border border-border">
                   {trait}
                 </div>
               ))}

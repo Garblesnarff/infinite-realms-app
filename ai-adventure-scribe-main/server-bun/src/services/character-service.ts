@@ -38,6 +38,7 @@ import {
 } from '../../../shared/creation-armor-class';
 import {
   computeLevel1MaxHitPoints,
+  hasToughFeat,
   computeMaxHitPointsForLevel,
   findSrdClassForHitPoints,
 } from '../../../shared/level-1-hit-points';
@@ -137,6 +138,7 @@ async function recomputeServerDerivedStats(
   if (!stats) return;
 
   const draconicBloodline = isDraconicBloodline(character.classFeatures);
+  const tough = hasToughFeat(undefined, character.classFeatures);
   const armorClass = computeServerArmorClass(
     character.class,
     {
@@ -175,7 +177,7 @@ async function recomputeServerDerivedStats(
       stats.constitution,
       character.subrace,
       level,
-      { draconicBloodline },
+      { draconicBloodline, tough },
     );
     const storedMax = stats.maxHitPoints;
     const judgedCon = previousStats?.constitution ?? stats.constitution;
@@ -185,10 +187,12 @@ async function recomputeServerDerivedStats(
       storedMax ===
         computeLevel1MaxHitPoints(character.class, judgedCon, character.subrace, {
           draconicBloodline,
+          tough,
         }) ||
       storedMax ===
         computeMaxHitPointsForLevel(character.class, judgedCon, character.subrace, level, {
           draconicBloodline,
+          tough,
         });
     if (formulaProduced) {
       const storedCurrent = stats.currentHitPoints ?? maxHitPoints;
@@ -383,12 +387,13 @@ export class CharacterService {
         // computed for the character's real level — a level-3 template gets
         // level-3 HP, not the level-1 value.
         const draconicBloodline = isDraconicBloodline(data.classFeatures);
+        const tough = hasToughFeat(undefined, data.classFeatures);
         const maxHitPoints = computeMaxHitPointsForLevel(
           data.class,
           stats.constitution,
           data.subrace,
           character.level ?? 1,
-          { draconicBloodline },
+          { draconicBloodline, tough },
         );
         await tx.insert(characterStats).values({
           ...stats,

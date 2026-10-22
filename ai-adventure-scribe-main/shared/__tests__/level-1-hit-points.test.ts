@@ -68,9 +68,7 @@ describe('Draconic Resilience (#899)', () => {
     // makes it d6 + 2 (CON) + 1 = 9.
     expect(computeLevel1MaxHitPoints('Sorcerer', 14, null, { draconicBloodline: true })).toBe(9);
     expect(computeLevel1MaxHitPoints('Sorcerer', 14, null)).toBe(8);
-    expect(computeLevel1MaxHitPoints('Sorcerer', 14, null, { draconicBloodline: false })).toBe(
-      8,
-    );
+    expect(computeLevel1MaxHitPoints('Sorcerer', 14, null, { draconicBloodline: false })).toBe(8);
   });
 
   it('stacks with Dwarven Toughness', () => {
@@ -133,9 +131,9 @@ describe('computeMaxHitPointsForLevel (#829)', () => {
 
   it('adds Draconic Resilience once per level for a Draconic Bloodline sorcerer', () => {
     // Level 1: 6 + 2 (CON 14) + 1 = 9; each further level: 4 + 2 + 1 = 7.
-    expect(
-      computeMaxHitPointsForLevel('Sorcerer', 14, null, 3, { draconicBloodline: true }),
-    ).toBe(23);
+    expect(computeMaxHitPointsForLevel('Sorcerer', 14, null, 3, { draconicBloodline: true })).toBe(
+      23,
+    );
     // A Wild Magic sorcerer (no flag) gains no resilience at any level:
     // level 1 is 6 + 2 = 8, each further level 4 + 2 = 6.
     expect(computeMaxHitPointsForLevel('Sorcerer', 14, null, 3)).toBe(20);
@@ -177,5 +175,15 @@ describe('dwarvenToughnessBonus (#620)', () => {
     expect(dwarvenToughnessBonus('Mountain Dwarf')).toBe(0);
     expect(dwarvenToughnessBonus(null)).toBe(0);
     expect(dwarvenToughnessBonus(undefined)).toBe(0);
+  });
+});
+
+describe('#989 Tough', () => {
+  it('adds two HP per level exactly once', () => {
+    expect(computeLevel1MaxHitPoints('Fighter', 14, 'Variant Human', { tough: true })).toBe(14);
+    expect(computeMaxHitPointsForLevel('Fighter', 14, 'Variant Human', 3, { tough: true })).toBe(
+      34,
+    );
+    expect(computeLevel1MaxHitPoints('Fighter', 14, 'Variant Human')).toBe(12);
   });
 });
