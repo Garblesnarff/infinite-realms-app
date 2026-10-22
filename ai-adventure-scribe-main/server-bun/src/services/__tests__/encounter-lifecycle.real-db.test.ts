@@ -43,6 +43,7 @@ import {
   combatParticipants,
   gameSessions,
   inventoryItems,
+  tacticalMaps,
 } from '../../../../db/schema/index';
 
 const { executeCombatIntent, getLegalCombatActions } = await importWithRealDb(
@@ -55,6 +56,12 @@ const { RestService } = await importWithRealDb(() => import('../rest-service.js'
 const { withPreservedActionSurgeMark, armActionSurge, clearActionSurgeMark, readActionSurgeMark } =
   await importWithRealDb(() => import('../combat/combat-turn-resources.js'));
 const { SessionService } = await importWithRealDb(() => import('../session-service.js'));
+const { resetTacticalMovementForTurn } = await importWithRealDb(
+  () => import('../combat/tactical-combat-lifecycle.js'),
+);
+const { loadActiveTacticalMap } = await importWithRealDb(
+  () => import('../combat/tactical-map-store.js'),
+);
 
 if (!hasRealDb) {
   console.warn(
@@ -878,5 +885,390 @@ describeWithDb('fighter features resolve as combat intents (#975)', () => {
       /Action Surge/,
     );
     expect((await heroResources()).actionUsed).toBe(false);
+  });
+});
+
+/**
+ * #259: a melee attacker closes the gap and the attack is rolled.
+ *
+ * The original report (Hark CB-019/021/022/023): a Speed 30 ft melee character
+ * told to attack a target 10–55 ft away got "could not move closer… no attack
+ * was rolled" every turn, enemies only moved, and the turn could dead-end with
+ * zero legal actions. The D5-021 reopen added the obstructed shape: two sides
+ * across an impassable rift, neither ever able to hit the other.
+ *
+ * This block is the shipped form of the verification Lane B ran ad hoc in the
+ * 2026-10-21 night sprint (8 scenarios green at ace6cf23, re-run here at the
+ * pin's base). It exists because the 2026-10-12 verification on #259 cited a
+ * describe block with this name in this file that was not present at the cited
+ * ref or on main — coverage that lives only in a comment is how the issue was
+ * closed twice and reopened twice. Everything goes through
+ * `executeCombatIntent`, the gateway the player route and the NPC turn runner
+ * both enter, against a real `tactical_maps` row per fight.
+ */
+describeWithDb('a melee attacker closes the gap and the attack is rolled (#259)', () => {
+  // Bound per test, not at definition time: the describes above close the
+  // shared client in their afterAll (see the #975 block's note).
+  let db: ReturnType<typeof realDb>;
+
+  type Pt = { x: number; y: number };
+  type Blocked = Pt & { terrain: 'pit' | 'wall'; decoration: string };
+
+  const floorCell = () => ({
+    terrain: 'floor' as const,
+    blocksMovement: false,
+    blocksSight: false,
+    cover: 0 as const,
+    elevation: 0,
+  });
+
+  interface Fight {
+    userId: string;
+    sessionId: string;
+    encounterId: string;
+    heroId: string;
+    foeId: string;
+    cleanup: () => Promise<void>;
+  }
+
+  async function seedFight(opts: {
+    width: number;
+    height: number;
+    hero: Pt;
+    foe: Pt;
+    blocked?: Blocked[];
+    foeName?: string;
+    foeSize?: 'medium' | 'large';
+  }): Promise<Fight> {
+    const userId = testId('pin259-user');
+    const [{ id: campaignId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('camp') })
+      .returning({ id: campaigns.id });
+    const [{ id: characterId }] = await db
+      .insert(characters)
+      .values({ userId, campaignId, name: testId('hero'), level: 1, class: 'Fighter' })
+      .returning({ id: characters.id });
+    await db.insert(characterStats).values({
+      characterId,
+      strength: 18,
+      dexterity: 14,
+      armorClass: 15,
+      maxHitPoints: 50,
+      currentHitPoints: 50,
+      speed: 30,
+    });
+    await db
+      .insert(inventoryItems)
+      .values({ characterId, name: 'Longsword', itemType: 'weapon', isEquipped: true });
+    const [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId, characterId, sessionNumber: 1, status: 'active' })
+      .returning({ id: gameSessions.id });
+    const [{ id: encounterId }] = await db
+      .insert(combatEncounters)
+      .values({ sessionId, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
+      .returning({ id: combatEncounters.id });
+    const inserted = await db
+      .insert(combatParticipants)
+      .values([
+        {
+          encounterId,
+          characterId,
+          name: 'Pin Fighter',
+          participantType: 'player',
+          turnOrder: 0,
+          initiative: 20,
+          armorClass: 15,
+          maxHp: 50,
+          speed: 30,
+        },
+        {
+          encounterId,
+          name: opts.foeName ?? 'Pin Goblin',
+          participantType: 'monster',
+          turnOrder: 1,
+          initiative: 10,
+          armorClass: 12,
+          maxHp: 30,
+          speed: 30,
+        },
+      ])
+      .returning({ id: combatParticipants.id, turnOrder: combatParticipants.turnOrder });
+    const heroId = inserted.find((r) => r.turnOrder === 0)!.id;
+    const foeId = inserted.find((r) => r.turnOrder === 1)!.id;
+    await db.insert(combatParticipantStatus).values([
+      { participantId: heroId, currentHp: 50, maxHp: 50, isConscious: true },
+      { participantId: foeId, currentHp: 30, maxHp: 30, isConscious: true },
+    ]);
+
+    const cells = Array.from({ length: opts.height }, (_, y) =>
+      Array.from({ length: opts.width }, (_, x) => {
+        const b = opts.blocked?.find((c) => c.x === x && c.y === y);
+        if (!b) return floorCell();
+        return {
+          terrain: b.terrain,
+          blocksMovement: true,
+          blocksSight: b.terrain === 'wall',
+          cover: b.terrain === 'wall' ? (3 as const) : (1 as const),
+          elevation: 0,
+          decoration: b.decoration,
+        };
+      }),
+    );
+    // Fixture note: production boards (generateMap) ring the edges with wall
+    // cells; these boards are floor to the edge. Every start position here is
+    // interior and the rift spans the full height, so no scenario can use an
+    // edge route production would wall off — but a future scenario copied
+    // from this helper should not assume edge routes exist in production.
+    // The map row id and state.id are kept equal, as saveTacticalMap writes them.
+    const mapId = crypto.randomUUID();
+    const map = {
+      id: mapId,
+      sessionId,
+      width: opts.width,
+      height: opts.height,
+      cells,
+      entities: [
+        {
+          id: heroId,
+          x: opts.hero.x,
+          y: opts.hero.y,
+          size: 'medium' as const,
+          type: 'pc' as const,
+          speedFeet: 30,
+          movementRemaining: 30,
+          name: 'Pin Fighter',
+        },
+        {
+          id: foeId,
+          x: opts.foe.x,
+          y: opts.foe.y,
+          size: (opts.foeSize ?? 'medium') as 'medium' | 'large',
+          type: 'monster' as const,
+          speedFeet: 30,
+          movementRemaining: 30,
+          name: opts.foeName ?? 'Pin Goblin',
+        },
+      ],
+      round: 1,
+      sceneDescription: 'pin-259',
+    };
+    await db.insert(tacticalMaps).values({ id: mapId, sessionId, state: map, active: true });
+
+    return {
+      userId,
+      sessionId,
+      encounterId,
+      heroId,
+      foeId,
+      cleanup: async () => {
+        await db.delete(tacticalMaps).where(eq(tacticalMaps.sessionId, sessionId));
+        await db.delete(combatParticipants).where(eq(combatParticipants.encounterId, encounterId));
+        await db.delete(combatEncounters).where(eq(combatEncounters.id, encounterId));
+        await db.delete(gameSessions).where(eq(gameSessions.id, sessionId));
+        await db.delete(characters).where(eq(characters.id, characterId));
+        await db.delete(campaigns).where(eq(campaigns.id, campaignId));
+      },
+    };
+  }
+
+  async function setTurn(f: Fight, order: number): Promise<void> {
+    await db
+      .update(combatParticipants)
+      .set({ actionUsed: false, bonusActionUsed: false })
+      .where(eq(combatParticipants.encounterId, f.encounterId));
+    await db
+      .update(combatEncounters)
+      .set({ currentTurnOrder: order, updatedAt: new Date() })
+      .where(eq(combatEncounters.id, f.encounterId));
+  }
+
+  async function entityAt(
+    f: Fight,
+    participantId: string,
+  ): Promise<Pt & { movementRemaining: number }> {
+    const map = await loadActiveTacticalMap(f.sessionId);
+    const e = map!.entities.find((ent) => ent.id === participantId)!;
+    return { x: e.x, y: e.y, movementRemaining: e.movementRemaining };
+  }
+
+  const distFt = (a: Pt, b: Pt) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) * 5;
+
+  function attack(f: Fight, actorId: string, targetId: string) {
+    return executeCombatIntent(
+      f.encounterId,
+      { type: 'attack', actorId, targetId },
+      f.userId,
+      'dm',
+    ) as Promise<Record<string, unknown>>;
+  }
+
+  const fights: Fight[] = [];
+  const seed = async (opts: Parameters<typeof seedFight>[0]): Promise<Fight> => {
+    const f = await seedFight(opts);
+    fights.push(f);
+    return f;
+  };
+
+  beforeAll(() => {
+    db = realDb();
+  });
+
+  afterAll(async () => {
+    if (!hasRealDb) return;
+    for (const f of fights) await f.cleanup();
+    await closeRealDb();
+  });
+
+  test('open board, 25 ft: the player attack closes the gap and rolls (CB-019/CB-021)', async () => {
+    const f = await seed({ width: 12, height: 12, hero: { x: 2, y: 6 }, foe: { x: 7, y: 6 } });
+    const r = await attack(f, f.heroId, f.foeId);
+    expect(r.resolvedAs).not.toBe('movement_only');
+    expect(typeof r.d20).toBe('number');
+    expect(r.d20 as number).toBeGreaterThanOrEqual(1);
+    expect(r.d20 as number).toBeLessThanOrEqual(20);
+    expect(typeof r.hit).toBe('boolean');
+    expect(distFt(await entityAt(f, f.heroId), await entityAt(f, f.foeId))).toBe(5);
+  });
+
+  test('open board, 25 ft: the enemy attack closes the gap and rolls (CB-022)', async () => {
+    const f = await seed({ width: 12, height: 12, hero: { x: 2, y: 6 }, foe: { x: 7, y: 6 } });
+    await setTurn(f, 1);
+    const r = await attack(f, f.foeId, f.heroId);
+    expect(r.resolvedAs).not.toBe('movement_only');
+    expect(typeof r.d20).toBe('number');
+    expect(typeof r.hit).toBe('boolean');
+    expect(distFt(await entityAt(f, f.heroId), await entityAt(f, f.foeId))).toBe(5);
+  });
+
+  test('open board, 35 ft: 30 ft of speed ends exactly at reach and the attack rolls', async () => {
+    const f = await seed({ width: 14, height: 12, hero: { x: 2, y: 6 }, foe: { x: 9, y: 6 } });
+    const r = await attack(f, f.heroId, f.foeId);
+    expect(r.resolvedAs).not.toBe('movement_only');
+    expect(typeof r.d20).toBe('number');
+    expect(typeof r.hit).toBe('boolean');
+    expect(distFt(await entityAt(f, f.heroId), await entityAt(f, f.foeId))).toBe(5);
+    // Every reaching cell from x=2 is 6 steps away, so the full 30 ft is spent.
+    expect((await entityAt(f, f.heroId)).movementRemaining).toBe(0);
+  });
+
+  test('open board, 55 ft: movement commits, the turn is not a dead end, next turn closes and rolls (CB-023)', async () => {
+    const f = await seed({ width: 18, height: 12, hero: { x: 2, y: 6 }, foe: { x: 13, y: 6 } });
+    const r1 = await attack(f, f.heroId, f.foeId);
+    expect(r1.resolvedAs).toBe('movement_only');
+    expect(r1.movedFeet).toBe(30);
+    expect(r1.distanceFeet).toBe(25);
+    // CB-023: a turn that cannot reach must still offer legal actions.
+    const legal = await getLegalCombatActions(f.encounterId, f.userId);
+    expect(legal.actions.length).toBeGreaterThan(0);
+    expect(legal.actions.map((a) => String(a.type))).toContain('end_turn');
+    // The loop guard CB-023 actually turns on: with movement exhausted and the
+    // target still out of reach, no 'attack (move closer first)' is offered.
+    expect(legal.actions.map((a) => String(a.type))).not.toContain('attack');
+    // Next turn: production movement reset, the remaining 25 ft closes, roll.
+    await resetTacticalMovementForTurn(f.sessionId, f.heroId);
+    await setTurn(f, 0);
+    const r2 = await attack(f, f.heroId, f.foeId);
+    expect(r2.resolvedAs).not.toBe('movement_only');
+    expect(typeof r2.d20).toBe('number');
+    expect(typeof r2.hit).toBe('boolean');
+  });
+
+  test('rift (D5-021): both sides advance to the rift edge; the refusal is reasoned; no dead end', async () => {
+    const rift: Blocked[] = Array.from({ length: 12 }, (_, y) => ({
+      x: 7,
+      y,
+      terrain: 'pit' as const,
+      decoration: 'rift',
+    }));
+    const f = await seed({
+      width: 14,
+      height: 12,
+      hero: { x: 4, y: 6 },
+      foe: { x: 11, y: 6 },
+      blocked: rift,
+      foeName: 'Chiropteran Hulk',
+    });
+    // Player turn 1 at 35 ft: advances to the rift edge instead of standing still.
+    const r1 = await attack(f, f.heroId, f.foeId);
+    expect(r1.resolvedAs).toBe('movement_only');
+    expect((await entityAt(f, f.heroId)).x).toBe(6);
+    // Enemy turn 1: advances to its own edge too.
+    await setTurn(f, 1);
+    await resetTacticalMovementForTurn(f.sessionId, f.foeId);
+    const r2 = await attack(f, f.foeId, f.heroId);
+    expect(r2.resolvedAs).toBe('movement_only');
+    expect((await entityAt(f, f.foeId)).x).toBe(8);
+    // Player turn 2: no closer cell exists — a reasoned refusal that names the
+    // outcome, moves 0 ft, and still leaves legal actions on the turn.
+    await setTurn(f, 0);
+    await resetTacticalMovementForTurn(f.sessionId, f.heroId);
+    const r3 = await attack(f, f.heroId, f.foeId);
+    expect(r3.resolvedAs).toBe('movement_only');
+    expect(r3.movedFeet).toBe(0);
+    expect(r3.refusalReason).toBe('no_reachable_adjacent_cell');
+    expect(String(r3.narrative)).toContain('no attack was rolled');
+    const legal = await getLegalCombatActions(f.encounterId, f.userId);
+    expect(legal.actions.length).toBeGreaterThan(0);
+    expect(legal.actions.map((a) => String(a.type))).toContain('end_turn');
+    // Nor here: at the rift edge no attack is offered against a target that
+    // cannot be reached, so the turn cannot loop on a refused attack.
+    expect(legal.actions.map((a) => String(a.type))).not.toContain('attack');
+  });
+
+  test('pillar at 30 ft (N2 shape): the path around the pillar costs 25 ft and the attack rolls', async () => {
+    const f = await seed({
+      width: 12,
+      height: 12,
+      hero: { x: 2, y: 6 },
+      foe: { x: 8, y: 6 },
+      blocked: [{ x: 5, y: 6, terrain: 'wall', decoration: 'pillar' }],
+    });
+    const r = await attack(f, f.heroId, f.foeId);
+    expect(r.resolvedAs).not.toBe('movement_only');
+    expect(typeof r.d20).toBe('number');
+    expect(typeof r.hit).toBe('boolean');
+    expect(distFt(await entityAt(f, f.heroId), await entityAt(f, f.foeId))).toBe(5);
+    // The detour's cost is the claim: the cheapest reaching cell is 25 ft of
+    // path (not the 30 ft route), so exactly 5 ft of movement remains.
+    expect((await entityAt(f, f.heroId)).movementRemaining).toBe(5);
+  });
+
+  test('rift with a Large foe (the D5-021 hulk footprint): it still advances to the rift edge', async () => {
+    const rift: Blocked[] = Array.from({ length: 12 }, (_, y) => ({
+      x: 7,
+      y,
+      terrain: 'pit' as const,
+      decoration: 'rift',
+    }));
+    const f = await seed({
+      width: 14,
+      height: 12,
+      hero: { x: 4, y: 6 },
+      foe: { x: 11, y: 6 },
+      blocked: rift,
+      foeName: 'Chiropteran Hulk',
+      foeSize: 'large',
+    });
+    const r1 = await attack(f, f.heroId, f.foeId);
+    expect(r1.resolvedAs).toBe('movement_only');
+    expect((await entityAt(f, f.heroId)).x).toBe(6);
+    await setTurn(f, 1);
+    await resetTacticalMovementForTurn(f.sessionId, f.foeId);
+    const r2 = await attack(f, f.foeId, f.heroId);
+    expect(r2.resolvedAs).toBe('movement_only');
+    // The 2x2 hulk closes to the rift edge (footprint x 8-9) instead of standing at 35 ft.
+    expect((await entityAt(f, f.foeId)).x).toBe(8);
+    expect(r2.movedFeet).toBe(15);
+  });
+
+  test('adjacent control: the attack rolls and nobody moves', async () => {
+    const f = await seed({ width: 12, height: 12, hero: { x: 6, y: 6 }, foe: { x: 7, y: 6 } });
+    const r = await attack(f, f.heroId, f.foeId);
+    expect(r.resolvedAs).not.toBe('movement_only');
+    expect(typeof r.d20).toBe('number');
+    expect(typeof r.hit).toBe('boolean');
+    expect((await entityAt(f, f.heroId)).movementRemaining).toBe(30);
   });
 });
