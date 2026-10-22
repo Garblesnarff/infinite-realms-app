@@ -192,7 +192,7 @@ The game posts the ending, awards your \`xp_award\` completion XP, marks the ses
 complete and shows the completion screen. A choice the story itself offered is never a
 dead end: taking the final one is how its ending resolves. Never set it while beats
 remain, nor for a scene, combat or session ending while the story continues. Otherwise
-\`null\`.
+omit it.
 </campaign_ending_field>
 
 `;

@@ -173,7 +173,7 @@ describe('the prompt outside combat (#2400)', () => {
     // #1020: the one-shot variant (campaign-ending field taught) is pinned too.
     expect(
       sha256(ContextBuilderPrompts.buildResponseStructureSection({ oneShotCampaign: true })),
-    ).toBe('23913255e09b3695f64953ca03ec3d4bad204a1eaf1fe8b2ea6326576656c48e');
+    ).toBe('b8c356c8ad9e10810c90d856ec73d516c988929022a323b0b552ee3ac9781884');
     expect(sha256(ContextBuilderPrompts.buildFinalRemindersSection())).toBe(
       'f73f18110ce03c6aca6e4a04932ba834ce476d71c27392f86d1b4b81221fada2',
     );
