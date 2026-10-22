@@ -12,6 +12,8 @@ export interface PlayerCombatSpell {
   saveAbility?: 'DEX';
   /** Names one creature. Burning Hands is a save spell too, but a cone: its targets come from the map. */
   singleTarget?: true;
+  /** Area spells use the map's save-and-damage path rather than a Strike target roll. */
+  areaOfEffect?: true;
 }
 
 const PLAYER_COMBAT_SPELLS: readonly PlayerCombatSpell[] = [
@@ -29,7 +31,13 @@ const PLAYER_COMBAT_SPELLS: readonly PlayerCombatSpell[] = [
   },
   { id: 'magic-missile', name: 'Magic Missile', kind: 'auto-hit' },
   // #2233: the premade Wizard's and Sorcerer's leveled damage spell; the engine rolls the saves.
-  { id: 'burning-hands', name: 'Burning Hands', kind: 'save', saveAbility: 'DEX' },
+  {
+    id: 'burning-hands',
+    name: 'Burning Hands',
+    kind: 'save',
+    saveAbility: 'DEX',
+    areaOfEffect: true,
+  },
 ];
 
 const byId = new Map(PLAYER_COMBAT_SPELLS.map((spell) => [spell.id, spell]));
