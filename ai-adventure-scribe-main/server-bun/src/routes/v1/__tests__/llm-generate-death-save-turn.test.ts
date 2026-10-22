@@ -201,6 +201,32 @@ describe('llm generate death-save turn (#261)', () => {
     expect(deathSave.failures).toBe(0);
   });
 
+  it('accepts the exact dying-tray body without a 422 (#874)', async () => {
+    // #874's P1 symptom was a 422 on the death-save flow: the follow-up
+    // narration call sent a serialized reply as player_input (> 20,000
+    // chars) and Elysia rejected the body before any handler ran. That half
+    // was fixed by #896 (player_input is omitted on resolution-only
+    // narration calls; the wire body is pinned by
+    // ai-service-resolution-wire-body.test.ts and the route side by
+    // llm-generate-resolution-narration.test.ts), and Hark's N21-017 retest
+    // confirmed the error is gone. This pins the tray's own turn through
+    // the real route: the exact wire body above is accepted (never a 422)
+    // and resolved by the engine.
+    dyingEncounter();
+    executeIntentCalls = [];
+    executeIntentImpl = undefined;
+    getActiveEncounterImpl = undefined;
+    generatedCalls = 0;
+
+    const res = await postGenerate(deathSaveTurnBody());
+    expect(res.status).not.toBe(422);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.provider).toBe('engine');
+    expect(executeIntentCalls).toHaveLength(1);
+    expect(generatedCalls).toBe(0);
+  });
+
   it('returns already-resolved from the engine when no dying turn is owed', async () => {
     // Active encounter, but the current participant is standing (e.g. a retry
     // after the save resolved and the turn advanced). The engine answers; the
