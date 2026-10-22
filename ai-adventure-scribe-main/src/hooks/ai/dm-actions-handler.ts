@@ -23,6 +23,7 @@ import {
   skillCheckModifierFor,
 } from '@/services/combat/combat-check-client';
 import { requestCombatEntryAnswer } from '@/services/combat/combat-entry-confirmation-bridge';
+import { startCombatEntryDelivery } from '@/services/combat/combat-entry-delivery';
 import {
   enforceCombatActionOnAttempt,
   looksLikeCombatActionAttempt,
@@ -110,10 +111,6 @@ function isPlayerTurn(encounter: any, player: any): boolean {
     encounter.participants,
   );
   return current?.id === player.id;
-}
-
-function responsePayload(response: Response): Promise<unknown> {
-  return response.json().catch(() => ({ status: response.status }));
 }
 
 const COMBAT_ENTRY_FAILURE_NOTICE =
@@ -273,10 +270,23 @@ export async function handleDmActionsAndTransitions(
       try {
         // A held entry (#2341) was confirmed before the DM was called; asking again would open
         // the popup twice.
-        const confirmed =
-          params.entryConfirmed === true ||
-          (await awaitPlayerInput(confirmCombatEntry(pendingEntry, player, playerMessage)));
-        if (!confirmed) {
+        const delivered = await startCombatEntryDelivery({
+          sessionId,
+          pending: pendingEntry,
+          player,
+          playerMessage,
+          entryConfirmed: params.entryConfirmed === true,
+          signal,
+          confirm: () => awaitPlayerInput(confirmCombatEntry(pendingEntry, player, playerMessage)),
+          rollInitiative: () =>
+            awaitPlayerInput(
+              requestPlayerInitiativeRoll({
+                actorLabel: player.name,
+                initiativeModifier: player.initiativeModifier,
+              }),
+            ),
+        });
+        if (delivered.kind === 'declined') {
           // A decline is a real answer: do not call `/enter` and do not resolve the model's
           // attack batch. But the DM's telegraph is already on screen and the player's message
           // deserves its answer, so the prose stays — only the combat machinery is stripped
@@ -294,135 +304,132 @@ export async function handleDmActionsAndTransitions(
             map_actions: [],
             roll_requests: [],
           };
-        } else {
-          // The confirmation is the intent gate. Only after the player chooses Strike do we
-          // request the initiative die that the explicit seating endpoint will consume.
-          const initiative = await awaitPlayerInput(
-            requestPlayerInitiativeRoll({
-              actorLabel: player.name,
-              initiativeModifier: player.initiativeModifier,
+        } else if (delivered.kind === 'already-seated') {
+          // The open tab already seated this proposal while generate was still
+          // in flight. Refresh the board and do not roll the opening attack twice.
+          result = {
+            ...result,
+            text: '',
+            combat_transition: 'none',
+            combat_entry_pending: undefined,
+            combat_entry: {
+              entered: true,
+              encounterId: delivered.encounterId,
+              trigger: pendingEntry.trigger,
+              detail: pendingEntry.detail,
+              sceneSpecSynthesized: pendingEntry.sceneSpecSynthesized,
+            },
+            roll_requests: (result.roll_requests || []).filter((request: any) => {
+              const engineOwned = request.type === 'attack' || request.type === 'initiative';
+              if (engineOwned) {
+                logger.warn('DM_ROLL_REQUEST_CLEARED', {
+                  reason: 'entry_seated',
+                  type: loggableRollType(request.type),
+                });
+              }
+              return !engineOwned;
             }),
-          );
-          const enterPayload = {
-            combatants: pendingEntry.combatants,
-            sceneSpec: pendingEntry.sceneSpec,
-            player,
-            ...(pendingEntry.declaredAttack ? { declaredAttack: pendingEntry.declaredAttack } : {}),
-            ...(pendingEntry.seatingHint ? { seatingHint: pendingEntry.seatingHint } : {}),
-            ...(initiative.d20 === null ? {} : { playerInitiativeRoll: initiative.d20 }),
           };
-          const enterResponse = signal
-            ? await userDataApi.enterCombat(sessionId, enterPayload, signal)
-            : await userDataApi.enterCombat(sessionId, enterPayload);
-          if (!enterResponse.ok) {
-            const failurePayload = await responsePayload(enterResponse);
-            logger.warn('[CombatEntry] server refused explicit entry', failurePayload);
-            if (enterResponse.status === 401) throw new SessionExpiredError();
-            throw Object.assign(new Error(COMBAT_ENTRY_FAILURE_NOTICE), {
-              name: 'CombatEntryFailedError',
-              status: enterResponse.status,
+        } else {
+          const entryPayload = delivered.entryPayload;
+          // `seatCombatEntry` already persisted this exact system row. Keep it
+          // visible locally, but do not send it through the client persistence
+          // queue a second time.
+          const seatingLine = (entryPayload as any)?.seatingTranscript;
+          const seatingCard =
+            typeof seatingLine === 'string' && params.onEngineNotice
+              ? initiativeCard((entryPayload as any)?.participants ?? [], seatingLine.trim())
+              : null;
+          if (seatingCard && params.onEngineNotice) {
+            params.onEngineNotice({
+              text: seatingLine.trim(),
+              persist: false,
+              cards: [seatingCard],
             });
           } else {
-            const entryPayload = await enterResponse.json().catch(() => null);
-            // `seatCombatEntry` already persisted this exact system row. Keep it
-            // visible locally, but do not send it through the client persistence
-            // queue a second time.
-            const seatingLine = (entryPayload as any)?.seatingTranscript;
-            const seatingCard =
-              typeof seatingLine === 'string' && params.onEngineNotice
-                ? initiativeCard((entryPayload as any)?.participants ?? [], seatingLine.trim())
-                : null;
-            if (seatingCard && params.onEngineNotice) {
-              params.onEngineNotice({
-                text: seatingLine.trim(),
-                persist: false,
-                cards: [seatingCard],
-              });
-            } else {
-              appendLocalNotice(seatingLine, false, true);
-            }
-            appendLocalNotice((entryPayload as any)?.notice);
-            const enteredEncounterId =
-              typeof (entryPayload as any)?.encounter?.id === 'string'
-                ? (entryPayload as any).encounter.id
-                : sessionId;
-            entryWasSeated = true;
-            entryFirstActionPresent = Object.prototype.hasOwnProperty.call(
-              entryPayload ?? {},
-              'first_action',
-            );
-            entryFirstActionPayload = (entryPayload as any)?.first_action;
-            preflightNpcTurns = (entryPayload as any)?.npcTurns;
-            entryFirstAction = asEntryAction(entryFirstActionPayload);
-            // #2569: compute the status here, where the payload is read, so every
-            // downstream notice path can name the reason without re-deriving it.
-            const refusalReason = (entryPayload as any)?.first_action_refusal?.reason;
-            entryFirstActionStatus = entryFirstAction
-              ? 'accepted'
-              : typeof refusalReason === 'string'
-                ? 'refused'
-                : entryFirstActionPresent
-                  ? 'malformed'
-                  : 'absent';
-            // #2569: the server-notice path logs its reason too. When the server refused
-            // the declared action, this is the specific notice, not the generic one.
-            if (typeof (entryPayload as any)?.notice === 'string') {
-              logger.warn('COMBAT_ENTRY_SERVER_NOTICE', {
-                reason: entryFirstActionStatus,
-                path: 'server_notice',
-                encounterId: enteredEncounterId,
-              });
-            }
-            if (!entryFirstAction) {
-              // One structured line saying why the entry first_action is unusable, so the
-              // generic declare-action notice below is never the only evidence (#2551).
-              // Reason only — never the payload.
-              logger.warn('COMBAT_ENTRY_FIRST_ACTION_UNUSABLE', {
-                reason:
-                  typeof refusalReason === 'string'
-                    ? refusalReason
-                    : entryFirstActionPresent
-                      ? 'malformed_first_action'
-                      : 'absent_first_action',
-                status: entryFirstActionStatus,
-                encounterId: enteredEncounterId,
-              });
-            }
-            responseText = '';
-            narrationSegments = undefined;
-            result = {
-              ...result,
-              // The model's pre-entry prose is a telegraph, not an outcome. Keep it out of the
-              // post-entry result as well as the display channel until the engine has resolved the
-              // declared action.
-              text: '',
-              combat_transition: 'none',
-              // The explicit endpoint is the only authority that seats the encounter. This
-              // marker lets the existing refresh branch below re-read the new board.
-              combat_entry: {
-                entered: true,
-                encounterId: enteredEncounterId,
-                trigger: pendingEntry.trigger,
-                detail: pendingEntry.detail,
-                sceneSpecSynthesized: pendingEntry.sceneSpecSynthesized,
-              },
-              // Combat roll requests belong to the engine resolution after seating, not to the
-              // ordinary narrative dice queue. Checks are left for the in-combat drop below.
-              roll_requests: (result.roll_requests || []).filter((request: any) => {
-                const engineOwned = request.type === 'attack' || request.type === 'initiative';
-                if (engineOwned) {
-                  logger.warn('DM_ROLL_REQUEST_CLEARED', {
-                    reason: 'entry_seated',
-                    type: loggableRollType(request.type),
-                  });
-                }
-                return !engineOwned;
-              }),
-              // The model batch is never consulted when `/enter` returned an engine-derived
-              // first action. It is restored below only when first_action is absent.
-              ...(entryFirstActionPresent ? { combat_actions: [] } : {}),
-            };
+            appendLocalNotice(seatingLine, false, true);
           }
+          appendLocalNotice((entryPayload as any)?.notice);
+          const enteredEncounterId =
+            typeof (entryPayload as any)?.encounter?.id === 'string'
+              ? (entryPayload as any).encounter.id
+              : sessionId;
+          entryWasSeated = true;
+          entryFirstActionPresent = Object.prototype.hasOwnProperty.call(
+            entryPayload ?? {},
+            'first_action',
+          );
+          entryFirstActionPayload = (entryPayload as any)?.first_action;
+          preflightNpcTurns = (entryPayload as any)?.npcTurns;
+          entryFirstAction = asEntryAction(entryFirstActionPayload);
+          // #2569: compute the status here, where the payload is read, so every
+          // downstream notice path can name the reason without re-deriving it.
+          const refusalReason = (entryPayload as any)?.first_action_refusal?.reason;
+          entryFirstActionStatus = entryFirstAction
+            ? 'accepted'
+            : typeof refusalReason === 'string'
+              ? 'refused'
+              : entryFirstActionPresent
+                ? 'malformed'
+                : 'absent';
+          // #2569: the server-notice path logs its reason too. When the server refused
+          // the declared action, this is the specific notice, not the generic one.
+          if (typeof (entryPayload as any)?.notice === 'string') {
+            logger.warn('COMBAT_ENTRY_SERVER_NOTICE', {
+              reason: entryFirstActionStatus,
+              path: 'server_notice',
+              encounterId: enteredEncounterId,
+            });
+          }
+          if (!entryFirstAction) {
+            // One structured line saying why the entry first_action is unusable, so the
+            // generic declare-action notice below is never the only evidence (#2551).
+            // Reason only — never the payload.
+            logger.warn('COMBAT_ENTRY_FIRST_ACTION_UNUSABLE', {
+              reason:
+                typeof refusalReason === 'string'
+                  ? refusalReason
+                  : entryFirstActionPresent
+                    ? 'malformed_first_action'
+                    : 'absent_first_action',
+              status: entryFirstActionStatus,
+              encounterId: enteredEncounterId,
+            });
+          }
+          responseText = '';
+          narrationSegments = undefined;
+          result = {
+            ...result,
+            // The model's pre-entry prose is a telegraph, not an outcome. Keep it out of the
+            // post-entry result as well as the display channel until the engine has resolved the
+            // declared action.
+            text: '',
+            combat_transition: 'none',
+            // The explicit endpoint is the only authority that seats the encounter. This
+            // marker lets the existing refresh branch below re-read the new board.
+            combat_entry: {
+              entered: true,
+              encounterId: enteredEncounterId,
+              trigger: pendingEntry.trigger,
+              detail: pendingEntry.detail,
+              sceneSpecSynthesized: pendingEntry.sceneSpecSynthesized,
+            },
+            // Combat roll requests belong to the engine resolution after seating, not to the
+            // ordinary narrative dice queue. Checks are left for the in-combat drop below.
+            roll_requests: (result.roll_requests || []).filter((request: any) => {
+              const engineOwned = request.type === 'attack' || request.type === 'initiative';
+              if (engineOwned) {
+                logger.warn('DM_ROLL_REQUEST_CLEARED', {
+                  reason: 'entry_seated',
+                  type: loggableRollType(request.type),
+                });
+              }
+              return !engineOwned;
+            }),
+            // The model batch is never consulted when `/enter` returned an engine-derived
+            // first action. It is restored below only when first_action is absent.
+            ...(entryFirstActionPresent ? { combat_actions: [] } : {}),
+          };
         }
       } catch (error) {
         logger.warn('[CombatEntry] explicit entry failed; no attack outcome was resolved', error);

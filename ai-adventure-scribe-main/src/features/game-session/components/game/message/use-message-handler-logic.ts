@@ -42,8 +42,10 @@ import {
   onCombatEntryConfirmationPendingChange,
   settlePendingCombatEntryConfirmation,
 } from '@/services/combat/combat-entry-confirmation-bridge';
+import { registerCombatEntryPlayerSource } from '@/services/combat/combat-entry-delivery';
 import { settlePendingPlayerRoll } from '@/services/combat/player-roll-bridge';
 import { settlePendingSpellTargetSave } from '@/services/combat/spell-target-save-bridge';
+import { buildCombatEntryPlayer } from '@/services/combat/structured-combat-payload';
 import { isTerminalDefeatError, userDataApi } from '@/services/user-data-api';
 import { sanitizeDMText } from '@/utils/chatSanitizer';
 import { identifyDmRollRequests } from '@/utils/dm-roll-recovery';
@@ -206,6 +208,14 @@ export const useMessageHandlerLogic = ({
   const { state: characterState } = useCharacter();
   const character = characterState.character;
 
+  React.useEffect(
+    () =>
+      registerCombatEntryPlayerSource(() =>
+        buildCombatEntryPlayer(character as Record<string, unknown> | null),
+      ),
+    [character],
+  );
+
   const { handleSafetyCommand, handleDiceCommand } = useMessageCommandHandler({
     sessionId,
     updateGameSessionState,
@@ -229,6 +239,11 @@ export const useMessageHandlerLogic = ({
   const [isReconnecting, setIsReconnecting] = React.useState(false);
   const [isStillThinking, setIsStillThinking] = React.useState(false);
   const [attackWaitLabel, setAttackWaitLabel] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    const onSeated = (): void => setAttackWaitLabel(null);
+    window.addEventListener('combat-entry-seated', onSeated);
+    return () => window.removeEventListener('combat-entry-seated', onSeated);
+  }, []);
   const [sendError, setSendError] = React.useState<string | null>(null);
   const retryInputRef = React.useRef<string | null>(null);
   const retryContextRef = React.useRef<MessageSendContext | undefined>(undefined);
@@ -313,7 +328,12 @@ export const useMessageHandlerLogic = ({
   React.useEffect(
     () =>
       onCombatEntryConfirmationPendingChange((isPending) => {
-        if (isPending) setComposerBlocked(false);
+        if (!isPending) return;
+        // The Strike card is the answer to "The DM is working on your action…".
+        // A generate that never returns still stored the proposal; the poll
+        // shows the card on this tab (#913).
+        setComposerBlocked(false);
+        setAttackWaitLabel(null);
       }),
     [setComposerBlocked],
   );
@@ -1237,11 +1257,16 @@ export const useMessageHandlerLogic = ({
       // #783: beacon for the reload-time chip. messageId is the player row id
       // (the DM reply id was never assigned); provisionalFetched is false
       // because the hook confirmed no newer server row exists.
-      userDataApi.reportClientFailure('client_turn_failure', sessionId, DM_PROCESSING_ERROR_MESSAGE, {
-        message: DM_PROCESSING_ERROR_MESSAGE,
-        messageId: message.id,
-        provisionalFetched: false,
-      });
+      userDataApi.reportClientFailure(
+        'client_turn_failure',
+        sessionId,
+        DM_PROCESSING_ERROR_MESSAGE,
+        {
+          message: DM_PROCESSING_ERROR_MESSAGE,
+          messageId: message.id,
+          provisionalFetched: false,
+        },
+      );
     },
     [sessionId],
   );

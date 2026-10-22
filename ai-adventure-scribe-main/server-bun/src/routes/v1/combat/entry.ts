@@ -26,6 +26,10 @@ import {
 import { loadCombatIntentActorRoster as defaultLoadCombatIntentActorRoster } from '../../../services/combat/combat-intent-roster.js';
 import { buildInitiativeOrder as defaultBuildInitiativeOrder } from '../../../services/combat/initiative-order.js';
 import { runNpcTurnsIfNpcHolds as defaultRunNpcTurns } from '../../../services/combat/npc-turn-drain.js';
+import {
+  clearPendingCombatEntry,
+  readPendingCombatEntry,
+} from '../../../services/combat/pending-combat-entry.js';
 import { sanitizeSceneSpec as defaultSanitizeSceneSpec } from '../../../services/combat/scene-spec-sanitizer.js';
 import { applyCombatEntryGate } from '../../../services/combat-entry-pipeline.js';
 
@@ -100,16 +104,21 @@ function resolveSpellTarget(
   return { choices: candidates.map(({ actor }) => actor.name) };
 }
 
+const combatantBody = t.Object({
+  name: t.String({ minLength: 1, maxLength: 200 }),
+  monsterId: t.Optional(t.Nullable(t.String({ minLength: 1, maxLength: 120 }))),
+  count: t.Optional(t.Integer({ minimum: 1, maximum: 100 })),
+});
+
 const enterBody = t.Object({
-  combatants: t.Array(
-    t.Object({
-      name: t.String({ minLength: 1, maxLength: 200 }),
-      monsterId: t.Optional(t.Nullable(t.String({ minLength: 1, maxLength: 120 }))),
-      count: t.Optional(t.Integer({ minimum: 1, maximum: 100 })),
-    }),
-    { maxItems: 100 },
-  ),
-  sceneSpec: t.Unknown(),
+  /**
+   * #913: confirm the proposal the server already stored. Combatants and the
+   * scene are filled from that store when the body omits them. A body that
+   * still sends them (the hold path, which never stored) is seated as posted.
+   */
+  fromPending: t.Optional(t.Boolean()),
+  combatants: t.Optional(t.Array(combatantBody, { maxItems: 100 })),
+  sceneSpec: t.Optional(t.Unknown()),
   player: entryPlayerBody,
   declaredAttack: t.Optional(
     t.Object({
@@ -188,92 +197,164 @@ export function createCombatEntryRoutes({
   loadSessionCampaignMonsterIndex = defaultLoadSessionCampaignMonsterIndex,
   runNpcTurns = defaultRunNpcTurns,
 }: CombatEntryRouteOptions = {}) {
-  return new Elysia().post(
-    '/sessions/:sessionId/enter',
-    async ({ request, params, body, set }) => {
-      const { user, error: authError } = await authenticateRequest(request);
-      if (authError || !user) {
-        set.status = 401;
-        return { error: authError || 'Unauthorized' };
-      }
+  return new Elysia()
+    .post(
+      '/sessions/:sessionId/enter',
+      async ({ request, params, body, set }) => {
+        const { user, error: authError } = await authenticateRequest(request);
+        if (authError || !user) {
+          set.status = 401;
+          return { error: authError || 'Unauthorized' };
+        }
 
-      if (!UUID_PATTERN.test(params.sessionId)) {
-        set.status = 422;
-        return { error: 'Invalid session id', detail: 'sessionId must be a uuid' };
-      }
+        if (!UUID_PATTERN.test(params.sessionId)) {
+          set.status = 422;
+          return { error: 'Invalid session id', detail: 'sessionId must be a uuid' };
+        }
 
-      const sanitized = sanitizeSceneSpec(body.sceneSpec, params.sessionId);
-      if (!sanitized.ok) {
-        set.status = 422;
-        return { error: 'Invalid combat entry payload', detail: sanitized.detail };
-      }
-
-      const player: CombatEntryPlayer = {
-        characterId: body.player.characterId ?? null,
-        name: body.player.name.trim(),
-        initiativeModifier: body.player.initiativeModifier,
-        ...(body.player.hpCurrent != null ? { hpCurrent: body.player.hpCurrent } : {}),
-        ...(body.player.hpMax != null ? { hpMax: body.player.hpMax } : {}),
-      };
-
-      // No participant is seated as a placeholder (#2532). The pending entry the server hands out
-      // is already named; this stops a body that is not (an older client's, a forged one). With a
-      // declared attack the declared target is the creature: a placeholder beside it is dropped,
-      // never named from prose (the gate skips naming for a declared attack as well).
-      const posted: DerivedCombatant[] = body.combatants.map((combatant) => ({
-        name: combatant.name.trim(),
-        ...(combatant.monsterId ? { monsterId: combatant.monsterId } : {}),
-        count: combatant.count ?? 1,
-      }));
-      const combatants: DerivedCombatant[] = body.declaredAttack
-        ? posted.filter((combatant) => !isUnresolvedNpcName(combatant.name))
-        : await nameUnresolvedCombatants({
-            combatants: posted,
-            prose: sanitized.sceneSpec.sceneDescription ?? '',
-            playerName: player.name,
-            loadIndex: () => loadSessionCampaignMonsterIndex(params.sessionId, user.userId),
-          });
-      if (combatants.length === 0) {
-        logger.info({ msg: 'COMBAT_ENTRY_UNNAMED_HOSTILE_REFUSED', sessionId: params.sessionId });
-        set.status = 422;
-        return {
-          error: 'Invalid combat entry payload',
-          detail: 'combatants must name at least one creature',
-        };
-      }
-
-      try {
-        const outcome = await seatCombatEntry(
-          {
-            sessionId: params.sessionId,
-            userId: user.userId,
-            player,
-            combatants,
-            sceneSpec: sanitized.sceneSpec,
-            playerInitiativeRoll: body.playerInitiativeRoll,
-            declaredAttack: body.declaredAttack,
-            seatingHint: body.seatingHint,
-          },
-          combatEntryGateDeps,
-        );
-        if (!outcome) {
+        const stored = body.fromPending
+          ? await readPendingCombatEntry(params.sessionId, user.userId)
+          : null;
+        const sceneSource = body.sceneSpec ?? stored?.pending.sceneSpec;
+        const postedCombatants = body.combatants;
+        if (!body.fromPending && (postedCombatants == null || body.sceneSpec == null)) {
+          set.status = 422;
+          return {
+            error: 'Invalid combat entry payload',
+            detail: 'combatants and sceneSpec are required',
+          };
+        }
+        if (sceneSource == null || (postedCombatants == null && !stored)) {
           set.status = 409;
           return { error: 'Combat entry is no longer available' };
         }
 
-        // Creatures that won initiative act now, before the player's first action (#2658).
-        const npcTurns = await runNpcTurns(outcome.combatState.encounter.id, user.userId);
-        set.status = 201;
-        return {
-          ...enterResponse(outcome, buildInitiativeOrder),
-          ...(npcTurns ? { npcTurns } : {}),
+        const sanitized = sanitizeSceneSpec(sceneSource, params.sessionId);
+        if (!sanitized.ok) {
+          set.status = 422;
+          return { error: 'Invalid combat entry payload', detail: sanitized.detail };
+        }
+
+        const player: CombatEntryPlayer = {
+          characterId: body.player.characterId ?? null,
+          name: body.player.name.trim(),
+          initiativeModifier: body.player.initiativeModifier,
+          ...(body.player.hpCurrent != null ? { hpCurrent: body.player.hpCurrent } : {}),
+          ...(body.player.hpMax != null ? { hpMax: body.player.hpMax } : {}),
         };
-      } catch (error) {
-        return mapEntryError(set, error);
-      }
-    },
-    { params: sessionIdParams, body: enterBody },
-  );
+
+        // No participant is seated as a placeholder (#2532). The pending entry the server hands out
+        // is already named; this stops a body that is not (an older client's, a forged one). With a
+        // declared attack the declared target is the creature: a placeholder beside it is dropped,
+        // never named from prose (the gate skips naming for a declared attack as well).
+        const declaredAttack = body.declaredAttack ?? stored?.pending.declaredAttack;
+        const seatingHint = body.seatingHint ?? stored?.pending.seatingHint;
+        const posted: DerivedCombatant[] = (
+          postedCombatants ??
+          stored?.pending.combatants.map((combatant) => ({
+            name: combatant.name,
+            monsterId: combatant.monsterId ?? null,
+            count: combatant.count,
+          })) ??
+          []
+        ).map((combatant) => ({
+          name: combatant.name.trim(),
+          ...(combatant.monsterId ? { monsterId: combatant.monsterId } : {}),
+          count: combatant.count ?? 1,
+        }));
+        const combatants: DerivedCombatant[] = declaredAttack
+          ? posted.filter((combatant) => !isUnresolvedNpcName(combatant.name))
+          : await nameUnresolvedCombatants({
+              combatants: posted,
+              prose: sanitized.sceneSpec.sceneDescription ?? '',
+              playerName: player.name,
+              loadIndex: () => loadSessionCampaignMonsterIndex(params.sessionId, user.userId),
+            });
+        if (combatants.length === 0) {
+          logger.info({ msg: 'COMBAT_ENTRY_UNNAMED_HOSTILE_REFUSED', sessionId: params.sessionId });
+          set.status = 422;
+          return {
+            error: 'Invalid combat entry payload',
+            detail: 'combatants must name at least one creature',
+          };
+        }
+
+        try {
+          const outcome = await seatCombatEntry(
+            {
+              sessionId: params.sessionId,
+              userId: user.userId,
+              player,
+              combatants,
+              sceneSpec: sanitized.sceneSpec,
+              playerInitiativeRoll: body.playerInitiativeRoll,
+              declaredAttack,
+              seatingHint,
+              ...(stored
+                ? {
+                    trigger: stored.pending.trigger,
+                    detail: stored.pending.detail,
+                    sceneSpecSynthesized: stored.pending.sceneSpecSynthesized,
+                  }
+                : {}),
+            },
+            combatEntryGateDeps,
+          );
+          if (!outcome) {
+            set.status = 409;
+            // Seat already refused: a live encounter, or a session the caller does
+            // not own. Clear the proposal only when the encounter read says the
+            // fight is live. Bound the read so a database the test process cannot
+            // reach still returns the 409.
+            const active = await Promise.race([
+              combatEntryGateDeps
+                .getActiveEncounter(params.sessionId, user.userId)
+                .catch(() => null),
+              new Promise<null>((resolve) => setTimeout(() => resolve(null), 250)),
+            ]);
+            if (active) await clearPendingCombatEntry(params.sessionId);
+            return { error: 'Combat entry is no longer available' };
+          }
+          await clearPendingCombatEntry(params.sessionId);
+
+          // Creatures that won initiative act now, before the player's first action (#2658).
+          const npcTurns = await runNpcTurns(outcome.combatState.encounter.id, user.userId);
+          set.status = 201;
+          return {
+            ...enterResponse(outcome, buildInitiativeOrder),
+            ...(npcTurns ? { npcTurns } : {}),
+          };
+        } catch (error) {
+          return mapEntryError(set, error);
+        }
+      },
+      { params: sessionIdParams, body: enterBody },
+    )
+    .delete(
+      '/sessions/:sessionId/pending',
+      async ({ request, params, set }) => {
+        const { user, error: authError } = await authenticateRequest(request);
+        if (authError || !user) {
+          set.status = 401;
+          return { error: authError || 'Unauthorized' };
+        }
+        if (!UUID_PATTERN.test(params.sessionId)) {
+          set.status = 422;
+          return { error: 'Invalid session id', detail: 'sessionId must be a uuid' };
+        }
+        const ownership = await combatEntryGateDeps.verifySessionOwnership(
+          params.sessionId,
+          user.userId,
+        );
+        if (!ownership.success) {
+          set.status = 404;
+          return { error: 'Session not found' };
+        }
+        await clearPendingCombatEntry(params.sessionId);
+        return { cleared: true };
+      },
+      { params: sessionIdParams },
+    );
 }
 
 function enterResponse(

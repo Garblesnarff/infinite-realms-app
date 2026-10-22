@@ -9,6 +9,7 @@
 import { eq, and, desc, sql, or, type SQL } from 'drizzle-orm';
 
 import { actionSurgePreservingState } from './combat/combat-turn-resources.js';
+import { enginePreservingSessionState } from './combat/pending-combat-entry.js';
 import { getOwnershipCondition } from './session/session-authorization.js';
 import { SessionMessageService, type MessagePage } from './session/session-message-service.js';
 import { db } from '../../../db/client';
@@ -362,16 +363,21 @@ export class SessionService {
     // #975: a client `session_state` write replaces the whole blob, but the
     // Action Surge mark inside it is engine-owned — the stored value of that
     // key wins over the client's snapshot, so a stale snapshot can neither
-    // delete a live mark nor resurrect a spent one. The merge is folded into
-    // the UPDATE itself (actionSurgePreservingState) rather than read first:
-    // a separate read would let an arm or a consume committing between the
+    // delete a live mark nor resurrect a spent one. #913 adds the pending
+    // combat entry to that same merge. The merge is folded into the UPDATE
+    // itself (enginePreservingSessionState) rather than read first: a
+    // separate read would let an arm or a consume committing between the
     // two statements be undone by this write.
     const [updated] = await db
       .update(gameSessions)
       .set({
         ...updates,
         ...(updates.sessionState !== undefined
-          ? { sessionState: actionSurgePreservingState(updates.sessionState) }
+          ? {
+              sessionState: enginePreservingSessionState(
+                actionSurgePreservingState(updates.sessionState),
+              ),
+            }
           : {}),
         updatedAt: new Date(),
       })

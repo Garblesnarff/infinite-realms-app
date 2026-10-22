@@ -1087,6 +1087,15 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
               await import('../../services/combat/combat-entry-gate-deps.js');
             return combatEntryGateDeps.getActiveEncounter(sessionId, ownerId);
           },
+          // Remember only on generate. The declared-attack hold confirms before
+          // this route runs; storing there would drop the generate that follows.
+          holdPending: async (pending) => {
+            const holdSessionId = combatEntry?.sessionId;
+            if (!holdSessionId) return 'keep';
+            const { holdOrDropPending } =
+              await import('../../services/combat/pending-combat-entry.js');
+            return holdOrDropPending(holdSessionId, userId, pending);
+          },
         });
         // GP-060 (#313): the DM named the creature the untargeted spell was aimed at, so
         // the cast becomes the declared attack: the engine resolves it as the opening
@@ -1532,12 +1541,45 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           }
         }
 
+        // #913: an initiative result sent as this turn seats the stored proposal
+        // and the reply no longer asks the client to enter again.
+        let responseText = result.text;
+        const entrySessionId = combatEntry?.sessionId;
+        if (entrySessionId && combatEntry?.player && playerInput) {
+          try {
+            const {
+              initiativeRollFromPlayerInput,
+              seatStoredPendingEntry,
+              withoutCombatEntryPending,
+            } = await import('../../services/combat/pending-combat-entry.js');
+            const initiativeRoll = initiativeRollFromPlayerInput(playerInput);
+            if (initiativeRoll != null) {
+              const seated = await seatStoredPendingEntry({
+                sessionId: entrySessionId,
+                userId,
+                player: combatEntry.player,
+                playerInitiativeRoll: initiativeRoll,
+              });
+              if (seated) responseText = withoutCombatEntryPending(result.text);
+            }
+          } catch (seatError) {
+            logger.warn({
+              msg: 'COMBAT_ENTRY_INITIATIVE_SEAT_FAILED',
+              sessionId: entrySessionId,
+              error: seatError instanceof Error ? seatError.message : String(seatError),
+            });
+          }
+        }
+
         return {
           // #350 FIX round 2: parsed reflects whether the model text actually
           // parsed — the deploy smoke asserts parsed=true, so a hardcoded true
           // would let a prose-only (null envelope) reply pass the check.
           parsed: envelope !== null,
-          text: rewriteNarrationSegmentsFromEnvelope(envelope, result.text),
+          text: rewriteNarrationSegmentsFromEnvelope(
+            responseText === result.text ? envelope : parseLlmEnvelope(responseText),
+            responseText,
+          ),
           provider: result.provider,
           model: result.model,
           usageIds,
