@@ -473,6 +473,82 @@ describeWithDb(
       }
     });
 
+    // #128 sets the tester voice cap too (200 units = 20,000 characters); the
+    // pro/enterprise cases above never pinned it.
+    test('sets the tester voice cap in units: 200 units = 20,000 characters/day (#128)', async () => {
+      const within = await AIUsageService.checkQuotaAndConsume({
+        userId: capUser('tester-voice-within'),
+        plan: 'tester',
+        type: 'voice',
+        units: 200,
+      });
+      const over = await AIUsageService.checkQuotaAndConsume({
+        userId: capUser('tester-voice-over'),
+        plan: 'tester',
+        type: 'voice',
+        units: 201,
+      });
+
+      expect(within.allowed).toBe(true);
+      expect(within.remaining).toBe(0);
+      expect(over.allowed).toBe(false);
+
+      const status = await AIUsageService.getQuotaStatus({
+        userId: capUser('tester-voice-status'),
+        plan: 'tester',
+        type: 'voice',
+      });
+      expect(status.limits.daily.voice).toBe(200);
+      expect(status.remainingCharacters).toBe(20_000);
+    });
+
+    // #127: the caps above are pinned within a day, but the reset itself was
+    // never pinned. Usage is SUM(units) over rows with period_start = the UTC
+    // date, so a new UTC day must restore the whole allowance without any row
+    // being deleted or rewritten.
+    test('resets the voice allowance on the UTC day boundary: yesterday\u2019s full cap does not count today (#127)', async () => {
+      const database = realDb();
+      const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+      const insertUsage = async (userId: string, periodStart: string): Promise<void> => {
+        await database.execute(sql`
+          INSERT INTO ai_usage (org_id, user_id, plan, type, units, period_start)
+          VALUES (NULL, ${userId}, 'pro', 'voice', 20, ${periodStart})
+        `);
+      };
+
+      // Yesterday this user spent the entire pro voice day (20 units), in the
+      // row shape checkQuotaAndConsume writes.
+      const resetUser = capUser('pro-voice-reset');
+      await insertUsage(resetUser, yesterday);
+
+      // Today the allowance is whole again, and resetAt is the next UTC midnight.
+      const status = await AIUsageService.getQuotaStatus({
+        userId: resetUser,
+        plan: 'pro',
+        type: 'voice',
+      });
+      expect(status.usage).toBe(0);
+      expect(status.remaining).toBe(20);
+      expect(status.remainingCharacters).toBe(2_000);
+      expect(status.resetAt.endsWith('T00:00:00.000Z')).toBe(true);
+      expect(Date.parse(status.resetAt)).toBeGreaterThan(Date.now());
+
+      const first = await consume(resetUser, 'pro', 'voice', voiceQuotaUnits(100));
+      expect(first.allowed).toBe(true);
+      expect(first.remaining).toBe(19);
+
+      // The reset is the period filter, not a deletion: yesterday's row is
+      // still there, next to the row the consume above just wrote.
+      expect(await usageRowCount(resetUser)).toBe(2);
+
+      // Contrast, same cap under TODAY's period: the allowance really is spent.
+      const spentUser = capUser('pro-voice-spent-today');
+      await insertUsage(spentUser, utcToday());
+      const refused = await consume(spentUser, 'pro', 'voice', voiceQuotaUnits(100));
+      expect(refused.allowed).toBe(false);
+      expect(refused.remaining).toBe(0);
+    });
+
     test('lets a pro user at 1,900 characters send a 100-character line, then refuses at 2,000', async () => {
       const userId = capUser('pro-chars-boundary');
       const spend = (characters: number) =>
