@@ -175,37 +175,56 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
       // #206: a WorkOS environment switch hands every returning user a new
       // id; re-link their old account (verified-email match) before the
       // upsert below would create a fresh empty one. A failed re-link must
-      // never block sign-in — it is retried on the next callback.
+      // never block sign-in, and it must not be sealed by the upsert either:
+      // if the re-link threw, skip the insert this once — a users row under
+      // the new id would make every later callback take the account as
+      // already-linked and the re-link would never retry. The row is
+      // created by the next callback instead, after the re-link retries.
+      let relinkFailed = false;
       try {
-        await relinkWorkosAccountIfNeeded({
-          id: user.id,
-          email: user.email,
-          emailVerified: user.emailVerified,
-        });
+        await relinkWorkosAccountIfNeeded(
+          {
+            id: user.id,
+            email: user.email,
+            emailVerified: user.emailVerified,
+          },
+          workos,
+        );
       } catch (error) {
-        logger.error({ msg: 'WORKOS_ACCOUNT_RELINK_FAILED', userId: user.id, error });
+        relinkFailed = true;
+        // Ids-only logging rule: the raw error can carry the email as a bound
+        // query parameter (a failed users.email lookup), so log name/code only.
+        const e = error as { name?: unknown; code?: unknown };
+        logger.error({
+          msg: 'WORKOS_ACCOUNT_RELINK_FAILED',
+          userId: user.id,
+          errorName: typeof e?.name === 'string' ? e.name : 'Error',
+          errorCode: typeof e?.code === 'string' ? e.code : undefined,
+        });
       }
 
       // ⚡ Bolt: Optimized N+1 query pattern by replacing 'find-then-upsert' with a single atomic UPSERT.
       // This reduces database round-trips from 2 down to 1 for every authentication callback.
-      await db
-        .insert(users)
-        .values({
-          id: user.id,
-          email: user.email,
-          plan: 'free',
-          firstName: user.firstName || null,
-          lastName: user.lastName || null,
-        })
-        .onConflictDoUpdate({
-          target: users.id,
-          set: {
+      if (!relinkFailed) {
+        await db
+          .insert(users)
+          .values({
+            id: user.id,
             email: user.email,
+            plan: 'free',
             firstName: user.firstName || null,
             lastName: user.lastName || null,
-            updatedAt: new Date(),
-          },
-        });
+          })
+          .onConflictDoUpdate({
+            target: users.id,
+            set: {
+              email: user.email,
+              firstName: user.firstName || null,
+              lastName: user.lastName || null,
+              updatedAt: new Date(),
+            },
+          });
+      }
 
       return redirect(createFrontendTokenExchangeRedirect(accessToken, refreshToken));
     } catch (error) {
