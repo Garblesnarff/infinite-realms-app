@@ -15,6 +15,7 @@ export interface AttackRollDescriptionSpec {
   targetLabel: string;
   /** Added to the die by the engine after it arrives; shown so the die is not a bare number. */
   attackBonus: number;
+  bless?: boolean;
   targetAc: number;
   advantage: boolean;
   disadvantage: boolean;
@@ -52,13 +53,14 @@ export function describeAttackRoll(
       ? edgeLabel('disadvantage', spec.disadvantageSources)
       : '';
   if (spec.kind === 'spell-attack') {
-    return `${spec.weaponName} spell attack vs ${spec.targetLabel}${edge}`;
+    return `${spec.weaponName} spell attack vs ${spec.targetLabel}${spec.bless ? ' (+1d4 Bless)' : ''}${edge}`;
   }
   const modifier = attackModifierForRoll(spec);
   const sign = modifier >= 0 ? '+' : '';
   const target = showTargetNumbers ? ` vs AC ${spec.targetAc}` : '';
   return (
-    `${spec.weaponName} attack vs ${spec.targetLabel} — ` + `1d20${sign}${modifier}${target}${edge}`
+    `${spec.weaponName} attack vs ${spec.targetLabel} — ` +
+    `1d20${sign}${modifier}${spec.bless ? '+1d4' : ''}${target}${edge}`
   );
 }
 

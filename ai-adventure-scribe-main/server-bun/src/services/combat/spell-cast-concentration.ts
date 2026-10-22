@@ -39,7 +39,8 @@ export async function maybeStartConcentrationFromSpellCast(
   sessionId: string | null | undefined,
 ): Promise<boolean> {
   if (!prompt || !sessionId) return false;
-  const spellId = extractSpellIdFromPrompt(prompt);
+  const spellId =
+    extractSpellIdFromPrompt(prompt) ?? (/\bcast\s+bless\b/i.test(prompt) ? 'bless' : null);
   if (!spellId) return false;
 
   const spell = resolveCatalogSpell(spellId);
@@ -81,7 +82,6 @@ export async function maybeStartConcentrationFromSpellCast(
   await startConcentration(characterId, { name: spell.name, id: spell.id });
   return true;
 }
-
 
 /** What the llm route's post-reply concentration hook is gated on. */
 export interface ConcentrationReplyGate {

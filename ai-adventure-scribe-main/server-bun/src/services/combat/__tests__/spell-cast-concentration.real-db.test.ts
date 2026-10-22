@@ -37,9 +37,7 @@ import type * as ConcentrationService from '../concentration-service.js';
 import type * as SpellCastConcentration from '../spell-cast-concentration.js';
 
 if (!hasRealDb) {
-  console.warn(
-    '[spell-cast-concentration] SKIPPED: set TEST_DATABASE_URL to run these.',
-  );
+  console.warn('[spell-cast-concentration] SKIPPED: set TEST_DATABASE_URL to run these.');
 }
 
 describeWithDb('maybeStartConcentrationFromSpellCast', () => {
@@ -88,7 +86,9 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
 
   afterAll(async () => {
     if (!hasRealDb) return;
-    await db.delete(characterConcentration).where(eq(characterConcentration.characterId, characterId));
+    await db
+      .delete(characterConcentration)
+      .where(eq(characterConcentration.characterId, characterId));
     for (const id of [sessionId, sessionWithoutCharacterId, ...extraSessionIds]) {
       await db.delete(gameSessions).where(eq(gameSessions.id, id));
     }
@@ -97,6 +97,18 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
     }
     await db.delete(characters).where(eq(characters.id, characterId));
     await closeRealDb();
+  });
+
+  it('starts Bless from ordinary typed cast text after the cast gate accepts it', async () => {
+    await maybeStartConcentrationAfterReply('I cast Bless on myself.', sessionId, {
+      gateRan: true,
+      replyError: null,
+      castsRefused: false,
+    });
+    expect((await getConcentration(characterId))?.spellName).toBe('Bless');
+    await db
+      .delete(characterConcentration)
+      .where(eq(characterConcentration.characterId, characterId));
   });
 
   it('starts concentration when the prompt casts Dancing Lights (concentration cantrip)', async () => {
@@ -111,7 +123,9 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
   });
 
   it('does not start concentration for Fire Bolt (no concentration)', async () => {
-    await db.delete(characterConcentration).where(eq(characterConcentration.characterId, characterId));
+    await db
+      .delete(characterConcentration)
+      .where(eq(characterConcentration.characterId, characterId));
     const started = await maybeStartConcentrationFromSpellCast(
       'I cast Fire Bolt [spell_id=fire-bolt, spell_level=cantrip].',
       sessionId,
@@ -121,14 +135,18 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
   });
 
   it('does not start concentration when the prompt has no spell tag', async () => {
-    await db.delete(characterConcentration).where(eq(characterConcentration.characterId, characterId));
+    await db
+      .delete(characterConcentration)
+      .where(eq(characterConcentration.characterId, characterId));
     const started = await maybeStartConcentrationFromSpellCast('I cast Dancing Lights', sessionId);
     expect(started).toBe(false);
     expect(await getConcentration(characterId)).toBeNull();
   });
 
   it('does not start concentration for an unknown spell id', async () => {
-    await db.delete(characterConcentration).where(eq(characterConcentration.characterId, characterId));
+    await db
+      .delete(characterConcentration)
+      .where(eq(characterConcentration.characterId, characterId));
     const started = await maybeStartConcentrationFromSpellCast(
       'I cast Not A Spell [spell_id=not-a-spell, spell_level=cantrip].',
       sessionId,
@@ -150,7 +168,9 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
     // (cantrip) and Bless (known). The #2718 gate cannot see a claim inside
     // a [spell_id=...] tag, so the hook checks the tagged spell against the
     // character's castable spells itself.
-    await db.delete(characterConcentration).where(eq(characterConcentration.characterId, characterId));
+    await db
+      .delete(characterConcentration)
+      .where(eq(characterConcentration.characterId, characterId));
     const started = await maybeStartConcentrationFromSpellCast(
       '[spell_id=bane, spell_level=level 1].',
       sessionId,
@@ -190,7 +210,9 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
   });
 
   it('a CON save fires on damage after the spell-cast started concentration', async () => {
-    await db.delete(characterConcentration).where(eq(characterConcentration.characterId, characterId));
+    await db
+      .delete(characterConcentration)
+      .where(eq(characterConcentration.characterId, characterId));
     // Default CON 10 (+0); DC 10 for 2 damage.
     const { checkConcentrationOnDamage } = await import('../concentration-service.js');
     await maybeStartConcentrationFromSpellCast(
@@ -232,7 +254,9 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
   // rewrite text inside try/catch, and the story slot spend only runs for
   // casts the gate allowed (failures are logged).
   it('a #2718-refused cast starts no concentration when none exists', async () => {
-    await db.delete(characterConcentration).where(eq(characterConcentration.characterId, characterId));
+    await db
+      .delete(characterConcentration)
+      .where(eq(characterConcentration.characterId, characterId));
     const started = await maybeStartConcentrationAfterReply(
       'I cast Dancing Lights [spell_id=dancing-lights, spell_level=cantrip].',
       sessionId,
@@ -286,7 +310,9 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
   it('the post-reply hook starts concentration when the reply succeeds and nothing refused the cast', async () => {
     // This is the route's success path through the decision function the llm
     // route calls inside its try/catch — the hook at llm.ts:1082.
-    await db.delete(characterConcentration).where(eq(characterConcentration.characterId, characterId));
+    await db
+      .delete(characterConcentration)
+      .where(eq(characterConcentration.characterId, characterId));
     const started = await maybeStartConcentrationAfterReply(
       'I cast Dancing Lights [spell_id=dancing-lights, spell_level=cantrip].',
       sessionId,
@@ -323,7 +349,9 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
     // then feeds the gate's own outcome into the route's decision function —
     // the same two calls the route wires together at llm.ts:1026 and
     // llm.ts:1082.
-    await db.delete(characterConcentration).where(eq(characterConcentration.characterId, characterId));
+    await db
+      .delete(characterConcentration)
+      .where(eq(characterConcentration.characterId, characterId));
     const { refuseFeaturesCharacterLacks } = await import('../../dm/dm-feature-gate.js');
     const [{ id: campaignId }] = await db
       .insert(campaigns)
@@ -370,7 +398,9 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
     // captures junk from a tag-only message and never sees the claim, so a
     // tag-only cast is NOT refused. This test pins that behavior end to end:
     // the gate stays blind, and the hook's own castable check blocks it.
-    await db.delete(characterConcentration).where(eq(characterConcentration.characterId, characterId));
+    await db
+      .delete(characterConcentration)
+      .where(eq(characterConcentration.characterId, characterId));
     const { refuseFeaturesCharacterLacks } = await import('../../dm/dm-feature-gate.js');
     const [{ id: tagCampaignId }] = await db
       .insert(campaigns)
@@ -407,7 +437,9 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
   });
 
   it('a failed CON save after the spell-cast drops concentration', async () => {
-    await db.delete(characterConcentration).where(eq(characterConcentration.characterId, characterId));
+    await db
+      .delete(characterConcentration)
+      .where(eq(characterConcentration.characterId, characterId));
     const { checkConcentrationOnDamage } = await import('../concentration-service.js');
     await maybeStartConcentrationFromSpellCast(
       'I cast Dancing Lights [spell_id=dancing-lights, spell_level=cantrip].',

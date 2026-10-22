@@ -123,6 +123,7 @@ export async function askPlayerForSpellCast(
       if (proposal.targetLabel) targetLabel = proposal.targetLabel;
       rollSpec = {
         weaponName: proposal.spellName,
+        bless: proposal.bless,
         attackBonus: proposal.attackBonus,
         targetAc: proposal.targetAc,
         advantage: proposal.advantage,

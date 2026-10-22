@@ -30,6 +30,7 @@ export interface PlayerAttackRollSpec {
   weaponName: string;
   /** Added to the die by the engine after it arrives; shown so the die is not a bare number. */
   attackBonus: number;
+  bless?: boolean;
   targetAc: number;
   advantage: boolean;
   disadvantage: boolean;
