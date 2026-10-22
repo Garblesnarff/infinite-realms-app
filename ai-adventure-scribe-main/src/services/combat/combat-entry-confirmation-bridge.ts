@@ -16,6 +16,7 @@ export interface CombatEntryConfirmationSpec {
    */
   targetChoices?: string[];
   spellLabel?: string;
+  activeCombat?: boolean;
   /**
    * The player's own words that declared the attack, quoted verbatim on the card (#877).
    * The card otherwise rebuilds the action from parsed pieces — target names only — and

@@ -22,13 +22,15 @@ import {
   runDeclaredCombatCheck,
   skillCheckModifierFor,
 } from '@/services/combat/combat-check-client';
+import { requestCombatEntryAnswer } from '@/services/combat/combat-entry-confirmation-bridge';
 import {
   enforceCombatActionOnAttempt,
   looksLikeCombatActionAttempt,
 } from '@/services/combat/combat-zero-action-guard';
-import { declaredSheetSpell } from '@/services/combat/declared-player-spell';
+import { declaredSheetSpell, isSameSpell } from '@/services/combat/declared-player-spell';
 import { initiativeCard } from '@/services/combat/engine-result-card';
 import { isPlayerActor } from '@/services/combat/player-attack-roll';
+import { resolvePlayerCombatSpell } from '@/services/combat/player-combat-spell';
 import {
   requestPlayerAttackRoll,
   requestPlayerInitiativeRoll,
@@ -681,7 +683,75 @@ export async function handleDmActionsAndTransitions(
   // declared action, so their engine line, turn boundary, and refusal are reported like any
   // other. Proposing them here, on the side, is how a refused Burning Hands became a console
   // warning and the DM narrated a spell that never happened (#2304).
-  const declaredPlayerSpell = isInCombat ? declaredSheetSpell(playerMessage) : null;
+  let declaredPlayerSpell = isInCombat ? declaredSheetSpell(playerMessage) : null;
+  const sheetSpell = resolvePlayerCombatSpell(declaredPlayerSpell?.spellId);
+  const sheetCaster = activeEncounter?.participants?.find(
+    (participant: any) =>
+      participant.participantType === 'player' &&
+      (!params.characterRecord?.id || participant.characterId === params.characterRecord.id),
+  );
+  const alreadyDeclared = result.combat_actions?.some(
+    (action: StructuredCombatAction) =>
+      isPlayerActor(action.actor_id, activeEncounter?.participants) &&
+      action.action_type === 'cast_spell' &&
+      isSameSpell(action.spell_id, declaredPlayerSpell?.spellId),
+  );
+  if (
+    playerInputOrigin === 'sheet_cast' &&
+    declaredPlayerSpell &&
+    sheetCaster &&
+    sheetSpell &&
+    (sheetSpell.kind === 'attack' || sheetSpell.singleTarget) &&
+    !alreadyDeclared
+  ) {
+    const targets = standingHostiles(activeEncounter.participants ?? []);
+    const answer = targets.length
+      ? await awaitPlayerInput(
+          requestCombatEntryAnswer({
+            actorLabel: sheetCaster.name ?? 'You',
+            combatantLabels: [],
+            targetChoices: targets.map((target: any) => target.name ?? target.id),
+            spellLabel: sheetSpell.name,
+            activeCombat: true,
+            initiativeRoll: null,
+            initiativeModifier: 0,
+          }),
+        )
+      : { confirmed: false };
+    const target =
+      answer.confirmed &&
+      targets.find((candidate: any) => (candidate.name ?? candidate.id) === answer.target);
+    const otherActions = (result.combat_actions ?? []).filter(
+      (action: StructuredCombatAction) =>
+        !isPlayerActor(action.actor_id, activeEncounter.participants),
+    );
+    if (target) {
+      result = {
+        ...result,
+        combat_actions: [
+          ...otherActions,
+          {
+            actor_id: sheetCaster.id,
+            action_type: 'cast_spell',
+            target_ids: [target.id],
+            weapon_id: null,
+            spell_id: declaredPlayerSpell.spellId,
+            slot_level: null,
+            movement_feet: 0,
+          },
+        ],
+      };
+    } else {
+      appendLocalNotice(
+        targets.length
+          ? 'Cast cancelled. No spell was cast.'
+          : 'No target is available. Choose another action.',
+      );
+      declaredPlayerSpell = null;
+      result = { ...result, text: '', combat_actions: [], combat_transition: 'none' };
+      responseText = '';
+    }
+  }
 
   // #2420: a mid-combat ability check ("shove the goblin", "grapple it", "hide behind the
   // pillar", "talk it down"). Resolved HERE, beside the sheet cast, because the check is the
