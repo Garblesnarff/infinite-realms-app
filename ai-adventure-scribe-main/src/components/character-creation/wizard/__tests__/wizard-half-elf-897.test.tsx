@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -39,6 +39,7 @@ import {
   WIZARD_DRAFT_VERSION,
   writeWizardDraft,
 } from '../wizard-draft';
+import { validateStep } from '../wizard-validators';
 import WizardContent from '../WizardContent';
 
 import type { Character } from '@/types/character';
@@ -198,9 +199,7 @@ function displayedScores(): Record<string, number> {
     'wisdom',
     'charisma',
   ]) {
-    const m = html.match(
-      new RegExp(`${ability}</span>[\\s\\S]*?font-bold text-sm">(\\d+)</div>`),
-    );
+    const m = html.match(new RegExp(`${ability}</span>[\\s\\S]*?font-bold text-sm">(\\d+)</div>`));
     if (!m) throw new Error(`displayed score for ${ability} not found`);
     out[ability] = Number(m[1]);
   }
@@ -448,5 +447,47 @@ describe('#897 Half-Elf bonuses through the real wizard', () => {
     );
     expect(shown).toEqual(fixture.final);
     expect(body.stats).toEqual(fixture.body.stats);
+  });
+  it('#899 requires two racial skills and concrete extra languages, preserving them across wizard remount', async () => {
+    renderWizard();
+    seedBasics('Half-Elf choices');
+    await chooseHalfElf(['Constitution', 'Wisdom']);
+    act(() =>
+      harness.current!.dispatch({
+        type: 'UPDATE_CHARACTER',
+        payload: {
+          background: backgrounds.find((b) => b.id === 'outlander'),
+        },
+      }),
+    );
+    await goToStep('Proficiencies & Languages');
+    expect(validateStep('Proficiencies & Languages', character()).isValid).toBe(false);
+    const skillCard = await screen.findByRole('heading', { name: /Skill Versatility/ });
+    expect(skillCard).toBeInTheDocument();
+    fireEvent.click(document.getElementById('Perception')!);
+    fireEvent.click(document.getElementById('History')!);
+    fireEvent.click(document.getElementById('racial-Arcana')!);
+    fireEvent.click(document.getElementById('racial-Medicine')!);
+    expect(validateStep('Proficiencies & Languages', character()).isValid).toBe(false);
+    fireEvent.click(document.getElementById('Draconic')!);
+    expect(validateStep('Proficiencies & Languages', character()).isValid).toBe(false);
+    fireEvent.click(document.getElementById('Dwarvish')!);
+    expect(validateStep('Proficiencies & Languages', character()).isValid).toBe(true);
+    await goToStep('Background');
+    await goToStep('Proficiencies & Languages');
+    expect(document.getElementById('racial-Arcana')).toHaveAttribute('data-state', 'checked');
+    expect(document.getElementById('Draconic')).toHaveAttribute('data-state', 'checked');
+    const body = await saveBodyFor(character());
+    expect(body.skill_proficiencies.split(',')).toEqual(
+      expect.arrayContaining(['Arcana', 'Medicine', 'Perception', 'Survival', 'Athletics']),
+    );
+    expect(body.languages).toEqual(['Common', 'Elvish', 'Draconic', 'Dwarvish']);
+    const fixturePath = resolve(
+      process.cwd(),
+      'shared/test-fixtures/half-elf-899-choices-create.json',
+    );
+    if (process.env.UPDATE_FIXTURES === '1')
+      writeFileSync(fixturePath, JSON.stringify(body, null, 2) + '\n');
+    expect(body).toEqual(JSON.parse(readFileSync(fixturePath, 'utf8')));
   });
 });

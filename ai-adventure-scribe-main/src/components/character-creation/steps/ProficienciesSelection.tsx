@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
+import { SKILLS_MAP } from '@/utils/character/basic-math';
 // import { races } from '@/data/raceOptions'; // Not needed, using state
 
 // Standard D&D 5e languages for choices
@@ -40,11 +41,32 @@ const ProficienciesSelection: React.FC<ProficienciesSelectionProps> = ({ effecti
   const { toast } = useToast();
   const character = state.character;
 
-  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [selectedRacialSkills, setSelectedRacialSkills] = useState<string[]>(
+    character?.race?.id === 'half-elf'
+      ? (character.racialSkillChoices ?? []).filter(
+          (skill) => !character.background?.skillProficiencies.includes(skill),
+        )
+      : [],
+  );
+  const [selectedSkills, setSelectedSkills] = useState<string[]>(() =>
+    (character?.skillProficiencies ?? []).filter(
+      (skill) =>
+        !character?.background?.skillProficiencies.includes(skill) &&
+        !character?.race?.skillProficiencies?.includes(skill) &&
+        !character?.racialSkillChoices?.includes(skill),
+    ),
+  );
   const [selectedExpertise, setSelectedExpertise] = useState<string[]>(
     character?.expertiseProficiencies ?? [],
   );
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(() =>
+    (character?.languages ?? []).filter(
+      (language) =>
+        !character?.race?.languages.includes(language) &&
+        !character?.class?.languages?.includes(language) &&
+        !/choice/i.test(language),
+    ),
+  );
 
   // Get current selections
   const currentClass = character?.class as CharacterClass | undefined;
@@ -69,7 +91,7 @@ const ProficienciesSelection: React.FC<ProficienciesSelectionProps> = ({ effecti
   ];
   const fixedLanguages = [
     ...new Set([
-      ...(currentRace?.languages || []),
+      ...(currentRace?.languages || []).filter((language) => !/choice/i.test(language)),
       // Class-granted languages (e.g. Druidic for druids) come with the class.
       ...(currentClass?.languages || []),
     ]),
@@ -100,7 +122,11 @@ const ProficienciesSelection: React.FC<ProficienciesSelectionProps> = ({ effecti
         : 0;
 
   // Language choices from background
-  const numLanguageChoices = currentBackground?.languages || 0;
+  const numRacialSkillChoices = currentRace?.id === 'half-elf' ? 2 : 0;
+  const numRacialLanguageChoices = (currentRace?.languages ?? []).filter((language) =>
+    /choice/i.test(language),
+  ).length;
+  const numLanguageChoices = (currentBackground?.languages || 0) + numRacialLanguageChoices;
   const hasLanguageChoices = numLanguageChoices > 0;
 
   // Handle 'Any' for bard skills - use all possible skills
@@ -128,12 +154,14 @@ const ProficienciesSelection: React.FC<ProficienciesSelectionProps> = ({ effecti
     : skillChoices;
 
   // Filter out already fixed skills from choices
-  const choosableSkills = availableSkills.filter((skill) => !fixedSkills.includes(skill));
+  const choosableSkills = availableSkills.filter(
+    (skill) => !fixedSkills.includes(skill) && !selectedRacialSkills.includes(skill),
+  );
 
   // Update proficiencies on selection complete (e.g., on next button, but for simplicity, update on change with validation)
-  const updateProficiencies = () => {
+  const updateProficiencies = (partial = false) => {
     // Validate selections
-    if (hasSkillChoices && selectedSkills.length !== numSkillChoices) {
+    if (!partial && hasSkillChoices && selectedSkills.length !== numSkillChoices) {
       toast({
         title: 'Invalid Selection',
         description: `Please select exactly ${numSkillChoices} skill${numSkillChoices > 1 ? 's' : ''}.`,
@@ -141,7 +169,7 @@ const ProficienciesSelection: React.FC<ProficienciesSelectionProps> = ({ effecti
       });
       return;
     }
-    if (hasLanguageChoices && selectedLanguages.length !== numLanguageChoices) {
+    if (!partial && hasLanguageChoices && selectedLanguages.length !== numLanguageChoices) {
       toast({
         title: 'Invalid Selection',
         description: `Please select exactly ${numLanguageChoices} language${numLanguageChoices > 1 ? 's' : ''}.`,
@@ -150,7 +178,7 @@ const ProficienciesSelection: React.FC<ProficienciesSelectionProps> = ({ effecti
       return;
     }
 
-    if (expertiseChoices > 0 && selectedExpertise.length !== expertiseChoices) {
+    if (!partial && expertiseChoices > 0 && selectedExpertise.length !== expertiseChoices) {
       toast({
         title: 'Invalid Expertise Selection',
         description: `Please select exactly ${expertiseChoices} proficient skills for Expertise.`,
@@ -159,13 +187,15 @@ const ProficienciesSelection: React.FC<ProficienciesSelectionProps> = ({ effecti
       return;
     }
 
-    const allSkills = [...new Set([...fixedSkills, ...selectedSkills])]; // Dedupe
+    if (!partial && selectedRacialSkills.length !== numRacialSkillChoices) return;
+    const allSkills = [...new Set([...fixedSkills, ...selectedSkills, ...selectedRacialSkills])]; // Dedupe
     const allLanguages = [...new Set([...fixedLanguages, ...selectedLanguages])]; // Dedupe
 
     dispatch({
       type: 'UPDATE_CHARACTER',
       payload: {
         skillProficiencies: allSkills,
+        ...(numRacialSkillChoices ? { racialSkillChoices: selectedRacialSkills } : {}),
         expertiseProficiencies: selectedExpertise,
         toolProficiencies: fixedTools,
         savingThrowProficiencies: fixedSavingThrows,
@@ -173,24 +203,16 @@ const ProficienciesSelection: React.FC<ProficienciesSelectionProps> = ({ effecti
       },
     });
 
-    toast({
-      title: 'Proficiencies Updated',
-      description: 'Your skill, tool, and language proficiencies have been set.',
-    });
+    if (!partial)
+      toast({
+        title: 'Proficiencies Updated',
+        description: 'Your skill, tool, and language proficiencies have been set.',
+      });
   };
 
-  // Auto-update on changes, but only if valid
   React.useEffect(() => {
-    if (!hasSkillChoices || selectedSkills.length === numSkillChoices) {
-      updateProficiencies();
-    }
-  }, [selectedSkills, selectedExpertise]);
-
-  React.useEffect(() => {
-    if (!hasLanguageChoices || selectedLanguages.length === numLanguageChoices) {
-      updateProficiencies();
-    }
-  }, [selectedLanguages]);
+    updateProficiencies(true);
+  }, [selectedSkills, selectedExpertise, selectedRacialSkills, selectedLanguages]);
 
   return (
     <div className="space-y-6">
@@ -279,6 +301,37 @@ const ProficienciesSelection: React.FC<ProficienciesSelectionProps> = ({ effecti
         </Card>
       )}
 
+      {numRacialSkillChoices > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Skill Versatility ({selectedRacialSkills.length}/2)</CardTitle>
+            <p>Choose two additional skill proficiencies from your Half-Elf heritage.</p>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-2">
+            {Object.keys(SKILLS_MAP)
+              .filter((skill) => !fixedSkills.includes(skill) && !selectedSkills.includes(skill))
+              .map((skill) => (
+                <div key={skill} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`racial-${skill}`}
+                    checked={selectedRacialSkills.includes(skill)}
+                    disabled={
+                      !selectedRacialSkills.includes(skill) && selectedRacialSkills.length >= 2
+                    }
+                    onCheckedChange={(checked) =>
+                      setSelectedRacialSkills((previous) =>
+                        checked
+                          ? [...previous, skill]
+                          : previous.filter((value) => value !== skill),
+                      )
+                    }
+                  />
+                  <label htmlFor={`racial-${skill}`}>{skill}</label>
+                </div>
+              ))}
+          </CardContent>
+        </Card>
+      )}
       {/* Language Choices */}
       {expertiseChoices > 0 && (
         <Card>
@@ -291,26 +344,30 @@ const ProficienciesSelection: React.FC<ProficienciesSelectionProps> = ({ effecti
             </p>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-2">
-            {[...new Set([...fixedSkills, ...selectedSkills])].map((skill) => (
-              <div key={skill} className="flex items-center space-x-2">
-                <Checkbox
-                  id={`expertise-${skill}`}
-                  checked={selectedExpertise.includes(skill)}
-                  disabled={
-                    !selectedExpertise.includes(skill) &&
-                    selectedExpertise.length >= expertiseChoices
-                  }
-                  onCheckedChange={(checked) =>
-                    setSelectedExpertise((previous) =>
-                      checked ? [...previous, skill] : previous.filter((entry) => entry !== skill),
-                    )
-                  }
-                />
-                <label htmlFor={`expertise-${skill}`} className="text-sm">
-                  {skill}
-                </label>
-              </div>
-            ))}
+            {[...new Set([...fixedSkills, ...selectedSkills, ...selectedRacialSkills])].map(
+              (skill) => (
+                <div key={skill} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`expertise-${skill}`}
+                    checked={selectedExpertise.includes(skill)}
+                    disabled={
+                      !selectedExpertise.includes(skill) &&
+                      selectedExpertise.length >= expertiseChoices
+                    }
+                    onCheckedChange={(checked) =>
+                      setSelectedExpertise((previous) =>
+                        checked
+                          ? [...previous, skill]
+                          : previous.filter((entry) => entry !== skill),
+                      )
+                    }
+                  />
+                  <label htmlFor={`expertise-${skill}`} className="text-sm">
+                    {skill}
+                  </label>
+                </div>
+              ),
+            )}
           </CardContent>
         </Card>
       )}
@@ -323,45 +380,47 @@ const ProficienciesSelection: React.FC<ProficienciesSelectionProps> = ({ effecti
               Choose Languages ({selectedLanguages.length}/{numLanguageChoices})
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              Your background grants {numLanguageChoices} additional language
+              Your race and background grant {numLanguageChoices} additional language
               {numLanguageChoices > 1 ? 's' : ''}:
             </p>
           </CardHeader>
           <CardContent className="space-y-2">
             <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-              {standardLanguages.map((lang) => (
-                <div key={lang} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={lang}
-                    checked={selectedLanguages.includes(lang)}
-                    disabled={
-                      !selectedLanguages.includes(lang) &&
-                      selectedLanguages.length >= numLanguageChoices
-                    }
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        if (selectedLanguages.length >= numLanguageChoices) {
-                          toast({
-                            title: 'Language Limit Reached',
-                            description: `You can only select ${numLanguageChoices} language${numLanguageChoices > 1 ? 's' : ''} from your background.`,
-                            variant: 'destructive',
-                          });
-                          return;
-                        }
-                        setSelectedLanguages((prev) => [...prev, lang]);
-                      } else {
-                        setSelectedLanguages((prev) => prev.filter((l) => l !== lang));
+              {standardLanguages
+                .filter((language) => !fixedLanguages.includes(language))
+                .map((lang) => (
+                  <div key={lang} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={lang}
+                      checked={selectedLanguages.includes(lang)}
+                      disabled={
+                        !selectedLanguages.includes(lang) &&
+                        selectedLanguages.length >= numLanguageChoices
                       }
-                    }}
-                  />
-                  <label
-                    htmlFor={lang}
-                    className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    {lang}
-                  </label>
-                </div>
-              ))}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          if (selectedLanguages.length >= numLanguageChoices) {
+                            toast({
+                              title: 'Language Limit Reached',
+                              description: `You can only select ${numLanguageChoices} language${numLanguageChoices > 1 ? 's' : ''} from your background.`,
+                              variant: 'destructive',
+                            });
+                            return;
+                          }
+                          setSelectedLanguages((prev) => [...prev, lang]);
+                        } else {
+                          setSelectedLanguages((prev) => prev.filter((l) => l !== lang));
+                        }
+                      }}
+                    />
+                    <label
+                      htmlFor={lang}
+                      className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      {lang}
+                    </label>
+                  </div>
+                ))}
             </div>
           </CardContent>
         </Card>
@@ -370,7 +429,7 @@ const ProficienciesSelection: React.FC<ProficienciesSelectionProps> = ({ effecti
       {/* Update Button if manual update needed */}
       {(hasSkillChoices || hasLanguageChoices) && (
         <div className="flex justify-center">
-          <Button onClick={updateProficiencies} className="mt-4">
+          <Button onClick={() => updateProficiencies()} className="mt-4">
             Update Proficiencies
           </Button>
         </div>

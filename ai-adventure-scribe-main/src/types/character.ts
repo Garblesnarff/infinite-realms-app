@@ -290,6 +290,7 @@ export interface Character {
   equipment?: string[];
   selectedEquipmentOptionIndex?: number; // Tracks which equipment option was selected (for UI feedback)
   skillProficiencies?: string[];
+  racialSkillChoices?: string[];
   expertiseProficiencies?: string[];
   toolProficiencies?: string[];
   savingThrowProficiencies?: (keyof AbilityScores)[];

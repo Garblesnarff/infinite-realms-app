@@ -129,10 +129,54 @@ function validateBackground(character: Character): ValidationResult {
 }
 
 function validateProficiencies(character: Character): ValidationResult {
-  if (!character.skillProficiencies?.length) {
+  const fixedSkills = new Set([
+    ...(character.background?.skillProficiencies ?? []),
+    ...(character.race?.skillProficiencies ?? []),
+  ]);
+  const racialChoices =
+    character.race?.id === 'half-elf' ? (character.racialSkillChoices ?? []) : [];
+  if (character.race?.id === 'half-elf' && new Set(racialChoices).size !== 2) {
+    return invalid('Please choose two Half-Elf Skill Versatility proficiencies');
+  }
+  const classChoices = (character.skillProficiencies ?? []).filter(
+    (skill) => !fixedSkills.has(skill) && !racialChoices.includes(skill),
+  );
+  if (new Set(classChoices).size < (character.class?.numSkillChoices ?? 0)) {
     return invalid('Please complete your skill proficiency selections');
   }
-  if (!character.languages?.length) {
+  const classId = character.class?.id.toLowerCase();
+  const classLevel =
+    character.classLevels?.find((entry) => entry.classId === character.class?.id)?.level ??
+    character.level ??
+    1;
+  const requiredExpertise =
+    classId === 'rogue'
+      ? classLevel >= 6
+        ? 4
+        : 2
+      : classId === 'bard'
+        ? classLevel >= 10
+          ? 4
+          : classLevel >= 3
+            ? 2
+            : 0
+        : 0;
+  if (new Set(character.expertiseProficiencies ?? []).size < requiredExpertise) {
+    return invalid('Please complete your Expertise selections');
+  }
+  const fixedLanguages = new Set([
+    ...(character.race?.languages ?? []).filter((language) => !/choice/i.test(language)),
+    ...(character.class?.languages ?? []),
+  ]);
+  const requiredChoices =
+    (character.background?.languages ?? 0) +
+    (character.race?.languages ?? []).filter((language) => /choice/i.test(language)).length;
+  const languageChoices = new Set(
+    (character.languages ?? []).filter(
+      (language) => !fixedLanguages.has(language) && !/choice/i.test(language),
+    ),
+  );
+  if (languageChoices.size < requiredChoices || !character.languages?.length) {
     return invalid('Please complete your language selections');
   }
   return VALID;

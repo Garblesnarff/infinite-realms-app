@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
 import { eq } from 'drizzle-orm';
 import React from 'react';
@@ -57,6 +60,9 @@ const { rogue } = await clientModule('data/classes/rogue');
 const { transformCharacterForStorage } = await clientModule('types/character');
 const { prepareCharacterPayload } = await clientModule('services/user-data-payload-helpers');
 const { transformCharacterData } = await clientModule('utils/character/data-transformers');
+const { FeaturesProficienciesCard } = await clientModule(
+  'features/character/components/sheet/tabs/FeaturesProficienciesCard',
+);
 const { default: AbilitiesTab } = await clientModule(
   'features/character/components/sheet/tabs/AbilitiesTab',
 );
@@ -172,4 +178,51 @@ describeWithDb('#898 creation to saved sheet proficiency', () => {
       }
     });
   }
+  it('#899 posts the pinned real wizard choices and renders them after DB reload', async () => {
+    const body = JSON.parse(
+      readFileSync(
+        resolve(
+          import.meta.dir,
+          '../../../../../shared/test-fixtures/half-elf-899-choices-create.json',
+        ),
+        'utf8',
+      ),
+    );
+    const created = await app.handle(
+      new Request('http://localhost/v1/characters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    );
+    expect(created.status).toBe(201);
+    const { id } = await created.json();
+    ids.push(id);
+    const response = await app.handle(new Request(`http://localhost/v1/characters/${id}`));
+    expect(response.status).toBe(200);
+    const row = await response.json();
+    expect(row.skill_proficiencies.split(',')).toEqual(
+      expect.arrayContaining([
+        'Arcana',
+        'Medicine',
+        'Perception',
+        'History',
+        'Athletics',
+        'Survival',
+      ]),
+    );
+    expect(row.languages).toEqual(['Common', 'Elvish', 'Draconic', 'Dwarvish']);
+    const hydrated = transformCharacterData(row, row.stats, null);
+    const skillsMarkup = renderToStaticMarkup(
+      React.createElement(AbilitiesTab, { character: hydrated, onUpdate: () => {} }),
+    );
+    expect(skillsMarkup).toContain('data-roll="Arcana" data-modifier="2"');
+    expect(skillsMarkup).toContain('data-roll="Medicine" data-modifier="2"');
+    const markup = renderToStaticMarkup(
+      React.createElement(FeaturesProficienciesCard, { character: hydrated }),
+    );
+    expect(markup).toContain('Draconic');
+    expect(markup).toContain('Dwarvish');
+    expect(markup).not.toContain('language of your choice');
+  });
 });
