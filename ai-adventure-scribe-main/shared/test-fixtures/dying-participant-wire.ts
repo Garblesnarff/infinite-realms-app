@@ -29,6 +29,7 @@ export const DYING_SCHOLAR_ENCOUNTER = {
 } as const;
 
 export const DYING_SCHOLAR_PARTICIPANT = {
+  position: { x: 1, y: 1, sceneId: '7c5ae4b2-9d9d-4b9a-9c0d-a3f91bfbc130' },
   id: '9d5872f0-8ab8-44aa-afad-2eea3f23ca49',
   encounterId: '91b38a2f-69f1-4aed-8118-b45fabb79f6a',
   characterId: '01029f3b-1ece-4c52-bb0b-1ad7add8696b',

@@ -147,6 +147,7 @@ export interface CombatResolutionParams {
     isUnconscious?: boolean;
     currentHitPoints?: number;
     maxHitPoints?: number;
+    position?: { x: number; y: number } | null;
   }>;
   /**
    * The human player's character id. Companions are seated through their characterId too
@@ -430,7 +431,46 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   let playerRefusalRepaired = false;
   // Area spells travel in the same batch as targeted actions (#2304). They used to be proposed
   // on the side, where a refusal was a console warning and a success was never narrated.
-  const targetedActions = combatActions.filter(isDeclaredCombatAction);
+  // A model can still copy the old targeted shape for Burning Hands. Treat that target as the
+  // player's aimed cell and send the area route, instead of opening the Strike/spell-roll card.
+  // The server owns the caster cell and cone geometry; the client only supplies the named target
+  // cell as the direction hint for a Self-range cone.
+  const areaActionFromTargeted = (action: unknown): unknown => {
+    if (!action || typeof action !== 'object' || !('target_ids' in action)) return action;
+    const targeted = action as StructuredCombatAction;
+    if (
+      targeted.action_type !== 'cast_spell' ||
+      typeof targeted.spell_id !== 'string' ||
+      !targeted.target_ids.length ||
+      !isPlayerActor(targeted.actor_id, participants)
+    )
+      return action;
+    const spell = resolvePlayerCombatSpell(targeted.spell_id, targeted.spell_id);
+    if (!spell?.areaOfEffect) return action;
+    const target = participants?.find(
+      (participant) =>
+        participant.id === targeted.target_ids[0] ||
+        slugify(participant.name ?? '') === slugify(targeted.target_ids[0]),
+    );
+    const position = target?.position;
+    if (
+      !position ||
+      typeof position.x !== 'number' ||
+      !Number.isFinite(position.x) ||
+      typeof position.y !== 'number' ||
+      !Number.isFinite(position.y)
+    )
+      return action;
+    return {
+      actor_id: targeted.actor_id,
+      action_type: 'cast_spell',
+      spell_id: targeted.spell_id,
+      origin: { x: position.x, y: position.y },
+      direction: null,
+      slot_level: targeted.slot_level ?? null,
+    } satisfies DMAoESpellAction;
+  };
+  const targetedActions = combatActions.map(areaActionFromTargeted).filter(isDeclaredCombatAction);
   /** The dying player's turn: the declared action is their death save (#2518). */
   const declaredDeathSave = targetedActions.some(
     (action) => (action as { action_type?: string }).action_type === 'death_save',

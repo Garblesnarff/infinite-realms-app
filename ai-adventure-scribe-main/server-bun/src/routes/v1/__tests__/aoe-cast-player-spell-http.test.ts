@@ -427,6 +427,32 @@ describe('run M7 round 4: the sheet-Cast Burning Hands at level 1', () => {
     expect(line?.match(/Burning Hands/g)).toHaveLength(2);
   });
 
+  it('resolves a single creature in the cone with a save, damage, and slot spend', async () => {
+    board.entities = board.entities.filter((entity) => entity.id !== IMP_ID);
+
+    const response = await castArea({
+      actorId: 'the-apprentice',
+      spellId: 'burning-hands',
+      origin: { x: 3, y: 4 },
+      slotLevel: 1,
+      actionOrigin: 'sheet_cast',
+    });
+    const payload = (await response.json()) as CastResponse;
+
+    expect(response.status).toBe(200);
+    expect(payload.delta?.targets.map((target) => target.entityId)).toEqual([GOLDWHISK_ID]);
+    expect(payload.result?.results).toHaveLength(1);
+    expect(payload.result?.results?.[0]).toMatchObject({
+      spellName: 'Burning Hands',
+      saveAbility: 'dexterity',
+      saved: false,
+      finalDamage: 12,
+      damageType: 'fire',
+    });
+    expect(hp.get(GOLDWHISK_ID)).toBe(28);
+    expect(slots.get(1)).toBe(1);
+  });
+
   it('accepts the participant uuid and the display name as the caster too', async () => {
     for (const actorId of [APPRENTICE_ID, 'The Apprentice']) {
       const response = await castArea({

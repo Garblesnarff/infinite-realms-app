@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { handleDmActionsAndTransitions } from '../dm-actions-handler';
 
+import { mapAuthoritativeCombat } from '@/contexts/combat/authoritative-combat-state';
 import { buildSpellCastMessage } from '@/features/game-session/components/game/overhaul/spell-view-model';
 import { AIService } from '@/services/ai-service';
 import {
@@ -48,8 +49,20 @@ vi.mock('@/services/user-data-api', () => ({
 const APPRENTICE_ID = '1bc3932f-da2d-4525-84e5-77a31a4b3bef';
 const GOLDWHISK_ID = '779792b2-aef0-4288-be43-19aba2530eba';
 const PARTICIPANTS = [
-  { id: APPRENTICE_ID, name: 'The Apprentice', participantType: 'player', turnOrder: 1 },
-  { id: GOLDWHISK_ID, name: 'Headmaster Goldwhisk', participantType: 'monster', turnOrder: 2 },
+  {
+    id: APPRENTICE_ID,
+    name: 'The Apprentice',
+    participantType: 'player',
+    turnOrder: 1,
+    position: { x: 2, y: 4 },
+  },
+  {
+    id: GOLDWHISK_ID,
+    name: 'Headmaster Goldwhisk',
+    participantType: 'monster',
+    turnOrder: 2,
+    position: { x: 3, y: 4 },
+  },
 ];
 const ENCOUNTER = {
   id: 'encounter-m7',
@@ -69,6 +82,16 @@ const DM_AOE_ACTION = {
   origin: { x: 3, y: 4 },
   direction: null,
   slot_level: 1,
+};
+/** A stale targeted declaration is what the old sheet path sent for Burning Hands. */
+const DM_TARGETED_BURNING_HANDS = {
+  actor_id: 'the-apprentice',
+  action_type: 'cast_spell',
+  target_ids: [GOLDWHISK_ID],
+  weapon_id: null,
+  spell_id: 'burning-hands',
+  slot_level: 1,
+  movement_feet: 0,
 };
 /** Round 4's first-pass prose — the acid and the blow the player never saw happen. */
 const DM_PROSE =
@@ -210,6 +233,49 @@ describe('the sheet-Cast Burning Hands at level 1 (#2304)', () => {
     expect(payload.unresolvedPlayerAction).toBeUndefined();
     // The targeted path is not also taken: one cast, not two.
     expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
+  });
+
+  it('turns a stale targeted Burning Hands declaration into an aimed area cast', async () => {
+    vi.mocked(userDataApi.resolveAoECast).mockResolvedValue(jsonResponse(200, RESOLVED));
+
+    const refreshed = mapAuthoritativeCombat({
+      encounter: {
+        id: ENCOUNTER.id,
+        sessionId: 'session-m7',
+        status: 'active',
+        currentRound: 4,
+        currentTurnOrder: 0,
+        startedAt: '2026-10-22T00:00:00Z',
+      },
+      participants: PARTICIPANTS.map((participant) => ({
+        ...participant,
+        position: { ...participant.position, sceneId: 'map-m7' },
+        initiative: 10,
+        initiativeModifier: 0,
+        armorClass: 12,
+        maxHp: 40,
+        speed: 30,
+        isActive: true,
+      })),
+    });
+    expect(refreshed.participants[1].position).toEqual({ x: 3, y: 4, sceneId: 'map-m7' });
+    const outcome = await invoke({
+      activeEncounter: refreshed,
+      refreshCombatState: vi.fn().mockResolvedValue(refreshed),
+      result: { text: DM_PROSE, combat_actions: [DM_TARGETED_BURNING_HANDS] },
+    });
+
+    expect(userDataApi.resolveAoECast).toHaveBeenCalledWith('session-m7', {
+      phase: 'propose',
+      actorId: 'the-apprentice',
+      spellId: 'burning-hands',
+      origin: { x: 3, y: 4 },
+      direction: null,
+      slotLevel: 1,
+      actionOrigin: 'sheet_cast',
+    });
+    expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
+    expect(playerEngineLines(outcome)[0]).toContain('DEX save 11 vs DC 13 — FAIL. 12 fire damage.');
   });
 
   it('ends a refusal in one engine line with the reason, tells the DM so, and returns the turn', async () => {

@@ -31,6 +31,7 @@ import { seatParticipantArmorClass } from './participant-armor-class.js';
 import { resolveParticipantType } from './participant-type.js';
 import { scaleMonsterForParty } from './party-scaling.js';
 import { GENERIC_NPC_STATS } from './srd-monster-resolution.js';
+import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { vitalStateOf, type VitalsInput } from './vital-state.js';
 import { db } from '../../../../db/client';
 import {
@@ -856,12 +857,18 @@ export class CombatEncounterService {
 
     // Extract participants from the joined result
     const { participants: participantRows, ...encounter } = encounterWithParticipants;
+    const map = await loadActiveTacticalMap(encounter.sessionId);
+    const positions = new Map(
+      map?.entities.map((entity) => [entity.id, { x: entity.x, y: entity.y, sceneId: map.id }]),
+    );
     const participants = participantRows.map(({ npc, ...participant }) => {
       const disposition = authoredDisposition(npc?.stats);
+      const position = positions.get(participant.id);
       const downedBehavior = authoredDownedBehavior(npc?.stats);
       const authored = authoredNumbers(npc?.stats);
       return {
         ...participant,
+        ...(position ? { position } : {}),
         ...(disposition ? { disposition } : {}),
         ...authored,
         ...(downedBehavior ? { downedBehavior } : {}),
