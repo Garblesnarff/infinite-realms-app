@@ -205,7 +205,15 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
 
       // ⚡ Bolt: Optimized N+1 query pattern by replacing 'find-then-upsert' with a single atomic UPSERT.
       // This reduces database round-trips from 2 down to 1 for every authentication callback.
-      if (!relinkFailed) {
+      //
+      // #1040: the insert is skipped for an unverified email too. A sign-up
+      // can claim any address, and only the inbox owner can verify it — a
+      // row created for an unverified claim would sit beside the real
+      // owner's row, and their later re-link would find two matches and
+      // move nothing, permanently. The sign-in itself still succeeds; the
+      // row is created by the first verified sign-in instead, and an
+      // existing row is left untouched until then.
+      if (!relinkFailed && user.emailVerified) {
         await db
           .insert(users)
           .values({
@@ -224,6 +232,11 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
               updatedAt: new Date(),
             },
           });
+      } else if (!user.emailVerified) {
+        logger.info({
+          msg: 'WORKOS_ACCOUNT_UPSERT_SKIPPED_UNVERIFIED_EMAIL',
+          userId: user.id,
+        });
       }
 
       return redirect(createFrontendTokenExchangeRedirect(accessToken, refreshToken));

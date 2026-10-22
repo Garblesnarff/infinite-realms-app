@@ -38,6 +38,34 @@
  * upsert, exactly like a failed move; returning quietly would let the
  * upsert create the new id's row and seal the account behind it.
  *
+ * Poison rows (#1040): a `users` row is only ever created for a verified
+ * email — the auth callback skips its insert for an unverified sign-in. A
+ * row materialised by a sign-up that claimed someone else's address (only
+ * the inbox owner can verify it) would sit beside the real owner's row
+ * forever and turn their re-link into the ambiguous case above. Rows
+ * already created that way before this rule cannot be cleaned up from
+ * the database alone: nothing in the row records whether its email was
+ * verified, so classifying one means cross-checking each duplicated
+ * email against WorkOS (each candidate id's verified state) — an ops
+ * procedure, and until it happens an already-poisoned owner stays
+ * un-re-linked. This service cannot classify them after the fact.
+ *
+ * Deleted-account inheritance (#1040 — documented behaviour, kept pending
+ * Rob's product call on that issue): when a WorkOS account is deleted, its
+ * id stops resolving, so the next sign-in that verifies the same email
+ * inherits the deleted account's rows through this exact path. From the
+ * callback that is indistinguishable from the environment cutover this
+ * service exists for — both present as "verified email + old id not
+ * found", and WorkOS reports no deletion tombstone or reason on getUser.
+ * The identity claim here is the verified email: whoever currently
+ * controls it in the live environment is treated as the account's owner,
+ * the same trust rule as email-based account recovery. The residual risk
+ * is email recycling — a work or school address reissued to a different
+ * person after the original owner deleted their account. Severing the
+ * link on deletion would need a deletion-time action on our side (a
+ * WorkOS webhook or an ops procedure); the re-link cannot detect it. So
+ * inheritance stays, deliberately, until Rob decides otherwise.
+ *
  * Concurrency: the decision is re-validated inside the transaction (the
  * new id must still be row-less and the email must still match exactly the
  * same old row), and the users-row update must affect exactly one row. A
@@ -157,11 +185,23 @@ export interface WorkosSignInIdentity {
   emailVerified: boolean;
 }
 
-/** True only when the WorkOS error positively says "no such user". */
+/**
+ * True only when the error is the WorkOS SDK's NotFoundException — the one
+ * answer that positively says "no such user". The SDK maps every HTTP 404
+ * it receives from the WorkOS API to that exception class (its instances
+ * carry `name: 'NotFoundException'`), so a bare status-404 error thrown
+ * outside the SDK's HTTP handling (a custom fetch wrapper, another
+ * client's error shape) proves nothing about the user: #1040 removed the
+ * old `status === 404` acceptance for exactly that reason. The check is by
+ * name, deliberately: this service depends only on the structural shape of
+ * the client it is handed, and an instanceof check would couple it to one
+ * SDK package copy's class identity. Anything else is liveness unknown,
+ * and the caller throws so the sign-in retries instead of moving an
+ * account on an unproven answer.
+ */
 function isWorkosNotFound(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false;
-  const e = error as { name?: unknown; status?: unknown };
-  return e.name === 'NotFoundException' || e.status === 404;
+  return (error as { name?: unknown }).name === 'NotFoundException';
 }
 
 /** The users rows carrying this email, compared case-insensitively. */
