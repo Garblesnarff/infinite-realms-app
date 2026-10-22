@@ -20,6 +20,8 @@ import { Elysia } from 'elysia';
 import {
   campaigns,
   characterFeatures,
+  characterHitDice,
+  characterSpellSlots,
   characterStats,
   characters,
   classFeaturesLibrary,
@@ -29,6 +31,7 @@ import {
   dialogueHistory,
   featureUsageLog,
   gameSessions,
+  restEvents,
 } from '../../../../../db/schema/index';
 import {
   closeRealDb,
@@ -96,6 +99,12 @@ mock.module('../../../services/llm-provider-service.js', () => ({
     }),
   },
 }));
+// #751: engine chat lines (postEngineChatLine) write through
+// SessionMessageService.addMessages. The default below is a no-op; the
+// typed-long-rest block installs a real dialogue_history writer so the
+// line the player would see is what its assertions read.
+let addMessagesImpl: (messages: unknown, userId: string) => Promise<unknown[]> = async () => [];
+
 mock.module('../../../services/session/session-message-service.js', () => ({
   SessionMessageService: {
     withRollTurn: async (
@@ -109,6 +118,7 @@ mock.module('../../../services/session/session-message-service.js', () => ({
     // The DM-reply persistence write is not what the story-rest route test
     // asserts on; keep it from touching the database.
     addMessage: async () => undefined,
+    addMessages: (messages: unknown, userId: string) => addMessagesImpl(messages, userId),
   },
 }));
 
@@ -436,5 +446,257 @@ describeWithDb('paladin Lay on Hands llm.ts wiring (#712)', () => {
     expect(await hp()).toBe(7);
     expect(await pool()).toBe(5);
     expect((await logCount()) - logsBeforeEntry).toBe(0);
+  });
+});
+
+/**
+ * #751 (live-failing): a typed long rest through the DM route. The #990 pin
+ * proved applyStoryRest applies a typed rest when called directly; the live
+ * failure is here, on the route: the rest applied but NO engine line ever
+ * reached chat, because the story-rest applier posted the line only for
+ * short rests. These tests drive POST /v1/llm/generate with the stubbed
+ * provider returning narration and NO `rest` of its own — the player's
+ * typed words are the only rest signal — and assert the engine line lands
+ * in dialogue_history and the rest's effects land on the sheet.
+ */
+describeWithDb('typed long rest through the DM route posts its engine line (#751)', () => {
+  let db: ReturnType<typeof realDb>;
+  const restUserId = testId('751-user');
+
+  const request = (path: string, method: string, body?: unknown): Promise<Response> =>
+    pipeline.handle(
+      new Request(`http://localhost${path}`, {
+        method,
+        headers: authHeaders,
+        body: body === undefined ? undefined : JSON.stringify(body),
+      }),
+    );
+
+  interface RestWorld {
+    characterId: string;
+    sessionId: string;
+  }
+
+  const seedWorld = async (
+    label: string,
+    shape: { className: string; maxHp: number; hp: number; usedSlots: number; hitDiceUsed: number },
+  ): Promise<RestWorld> => {
+    const [{ id: campaignId }] = await db
+      .insert(campaigns)
+      .values({ userId: restUserId, name: testId(`${label}-camp`) })
+      .returning({ id: campaigns.id });
+    const [{ id: characterId }] = await db
+      .insert(characters)
+      .values({
+        userId: restUserId,
+        campaignId,
+        name: testId(label),
+        class: shape.className,
+        level: 3,
+      })
+      .returning({ id: characters.id });
+    await db.insert(characterStats).values({
+      characterId,
+      maxHitPoints: shape.maxHp,
+      currentHitPoints: shape.hp,
+      temporaryHitPoints: 0,
+      isConscious: true,
+      vitalState: 'standing',
+    });
+    await db.insert(characterHitDice).values({
+      characterId,
+      className: shape.className,
+      dieType: 'd8',
+      totalDice: 3,
+      usedDice: shape.hitDiceUsed,
+    });
+    if (shape.usedSlots > 0) {
+      await db.insert(characterSpellSlots).values({
+        characterId,
+        spellLevel: 1,
+        totalSlots: 4,
+        usedSlots: shape.usedSlots,
+      });
+    }
+    const [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId, characterId, sessionNumber: 1, status: 'active' })
+      .returning({ id: gameSessions.id });
+    return { characterId, sessionId };
+  };
+
+  const engineLines = async (sessionId: string): Promise<string[]> =>
+    (
+      await db
+        .select({ message: dialogueHistory.message })
+        .from(dialogueHistory)
+        .where(
+          and(
+            eq(dialogueHistory.sessionId, sessionId),
+            eq(dialogueHistory.speakerType, 'system'),
+          ),
+        )
+    )
+      .map((row) => row.message)
+      .filter((message) => message.startsWith('⚙️ Engine: Long rest'));
+
+  const hpOf = async (characterId: string): Promise<number | null> =>
+    (
+      await db
+        .select({ hp: characterStats.currentHitPoints })
+        .from(characterStats)
+        .where(eq(characterStats.characterId, characterId))
+        .limit(1)
+    )[0]?.hp ?? null;
+
+  const usedSlotsOf = async (characterId: string): Promise<number> =>
+    (
+      await db
+        .select({ used: characterSpellSlots.usedSlots })
+        .from(characterSpellSlots)
+        .where(eq(characterSpellSlots.characterId, characterId))
+    ).reduce((sum, row) => sum + row.used, 0);
+
+  const generateTurn = async (world: RestWorld, playerInput: string, messageId: string) => {
+    generatedText = JSON.stringify({
+      text: 'You settle in for the night and let the road weariness go.',
+    });
+    return request('/v1/llm/generate', 'POST', {
+      prompt: 'The party makes camp for the night. What happens?',
+      player_input: playerInput,
+      sessionId: world.sessionId,
+      dmReply: { messageId, inCombat: false },
+      combatEntry: {
+        sessionId: world.sessionId,
+        player: { name: 'Camper', initiativeModifier: 1 },
+      },
+      provider: 'openrouter',
+      requestType: 'user',
+      maxTokens: 8192,
+      temperature: 0.9,
+    });
+  };
+
+  const typeMessage = async (world: RestWorld, text: string) => {
+    await db.insert(dialogueHistory).values({
+      sessionId: world.sessionId,
+      speakerType: 'player',
+      speakerId: world.characterId,
+      message: text,
+    });
+  };
+
+  beforeAll(async () => {
+    db = realDb();
+    userId = restUserId;
+    // Engine lines write through SessionMessageService.addMessages; give
+    // the file-scope stub a real dialogue_history writer (the same rows
+    // the real service persists: deterministic id, on-conflict-do-nothing).
+    addMessagesImpl = async (messages: unknown) => {
+      const inserted: unknown[] = [];
+      for (const entry of messages as Array<Record<string, unknown>>) {
+        const [row] = await db
+          .insert(dialogueHistory)
+          .values({
+            id: entry.id as string,
+            sessionId: entry.sessionId as string,
+            speakerType: entry.speakerType as string,
+            message: entry.message as string,
+            context: (entry.context ?? null) as never,
+          })
+          .onConflictDoNothing()
+          .returning();
+        if (row) inserted.push(row);
+      }
+      return inserted;
+    };
+  });
+
+  afterAll(async () => {
+    addMessagesImpl = async () => [];
+    await closeRealDb();
+  });
+
+  it('at full HP the typed long rest posts the (nothing to restore) engine line', async () => {
+    // Hark's retest shape: Garrick at 12/12, out of combat, typed rest.
+    const world = await seedWorld('751-full', {
+      className: 'Fighter',
+      maxHp: 12,
+      hp: 12,
+      usedSlots: 0,
+      hitDiceUsed: 0,
+    });
+    await typeMessage(world, 'we take a long rest');
+
+    const res = await generateTurn(world, 'we take a long rest', '75175175-1111-4222-8333-444444444444');
+    expect(res.status).toBe(200);
+
+    const lines = await engineLines(world.sessionId);
+    expect(lines).toEqual(['⚙️ Engine: Long rest — HP and spell slots restored (nothing to restore)']);
+    // The rest really applied: one long-rest event is on the ledger, and it
+    // is the finished row (the claim stamps hpRestored 0 too, so the proof
+    // is the finish-written resource list replacing the claim's '[]').
+    const events = await db
+      .select({ id: restEvents.id, resourcesRestored: restEvents.resourcesRestored })
+      .from(restEvents)
+      .where(
+        and(eq(restEvents.characterId, world.characterId), eq(restEvents.restType, 'long')),
+      );
+    expect(events).toHaveLength(1);
+    expect(events[0]?.resourcesRestored).not.toBe('[]');
+    expect(await hpOf(world.characterId)).toBe(12);
+  });
+
+  it('a wounded caster: the line reports the heal and the slot restore, and both land', async () => {
+    const world = await seedWorld('751-hurt', {
+      className: 'Cleric',
+      maxHp: 20,
+      hp: 5,
+      usedSlots: 2,
+      hitDiceUsed: 1,
+    });
+    await typeMessage(world, 'I take a long rest');
+
+    const res = await generateTurn(world, 'I take a long rest', '75175175-2222-4333-8444-555555555555');
+    expect(res.status).toBe(200);
+
+    // Exact line: 15 HP (5 -> 20), slots were spent and restored, and the
+    // one spent hit die is regained (floor(3/2) = 1, capped by the 1 used).
+    expect(await engineLines(world.sessionId)).toEqual([
+      '⚙️ Engine: Long rest — 15 HP restored, spell slots restored, 1 hit dice regained.',
+    ]);
+    expect(await hpOf(world.characterId)).toBe(20);
+    expect(await usedSlotsOf(world.characterId)).toBe(0);
+    const [dice] = await db
+      .select({ used: characterHitDice.usedDice })
+      .from(characterHitDice)
+      .where(eq(characterHitDice.characterId, world.characterId));
+    expect(dice?.used).toBe(0);
+  });
+
+  it('a retried turn re-posts nothing twice: one rest, one line', async () => {
+    const world = await seedWorld('751-retry', {
+      className: 'Fighter',
+      maxHp: 12,
+      hp: 4,
+      usedSlots: 0,
+      hitDiceUsed: 0,
+    });
+    await typeMessage(world, 'we take a long rest');
+
+    const first = await generateTurn(world, 'we take a long rest', '75175175-3333-4444-8555-666666666666');
+    expect(first.status).toBe(200);
+    const second = await generateTurn(world, 'we take a long rest', '75175175-3333-4444-8555-666666666666');
+    expect(second.status).toBe(200);
+
+    expect(await engineLines(world.sessionId)).toHaveLength(1);
+    const events = await db
+      .select({ id: restEvents.id })
+      .from(restEvents)
+      .where(
+        and(eq(restEvents.characterId, world.characterId), eq(restEvents.restType, 'long')),
+      );
+    expect(events).toHaveLength(1);
+    expect(await hpOf(world.characterId)).toBe(12);
   });
 });
