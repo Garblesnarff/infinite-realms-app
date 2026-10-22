@@ -185,5 +185,6 @@ describe('#989 Tough', () => {
       34,
     );
     expect(computeLevel1MaxHitPoints('Fighter', 14, 'Variant Human')).toBe(12);
+    expect(computeMaxHitPointsForLevel('Wizard', 3, 'Variant Human', 3, { tough: true })).toBe(10);
   });
 });

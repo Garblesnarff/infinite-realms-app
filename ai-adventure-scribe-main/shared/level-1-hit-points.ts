@@ -86,13 +86,14 @@ export function computeLevel1MaxHitPoints(
     classData?.name === 'Sorcerer'
       ? draconicResilienceHitPointBonus(options.draconicBloodline === true)
       : 0;
-  return Math.max(
-    1,
-    hitDie +
-      abilityModifier(constitutionScore ?? 10) +
-      dwarvenToughnessBonus(subrace) +
-      draconicBonus +
-      (options.tough ? 2 : 0),
+  return (
+    Math.max(
+      1,
+      hitDie +
+        abilityModifier(constitutionScore ?? 10) +
+        dwarvenToughnessBonus(subrace) +
+        draconicBonus,
+    ) + (options.tough ? 2 : 0)
   );
 }
 
@@ -132,15 +133,15 @@ export function computeMaxHitPointsForLevel(
     classData?.name === 'Sorcerer'
       ? draconicResilienceHitPointBonus(options.draconicBloodline === true)
       : 0;
-  const perAdditionalLevel = Math.max(
-    1,
-    Math.floor(hitDie / 2) +
-      1 +
-      abilityModifier(constitutionScore ?? 10) +
-      dwarvenToughnessBonus(subrace) +
-      draconicBonus +
-      (options.tough ? 2 : 0),
-  );
+  const perAdditionalLevel =
+    Math.max(
+      1,
+      Math.floor(hitDie / 2) +
+        1 +
+        abilityModifier(constitutionScore ?? 10) +
+        dwarvenToughnessBonus(subrace) +
+        draconicBonus,
+    ) + (options.tough ? 2 : 0);
   return level1MaxHitPoints + (normalizedLevel - 1) * perAdditionalLevel;
 }
 
