@@ -16,6 +16,7 @@ import { requestPlayerCheckRoll } from './player-roll-bridge';
 import { standingHostiles } from './sheet-cast-save-hold';
 import { abilityModifier } from '../../../shared/ability-modifier';
 import { detectCombatCheck } from '../../../shared/combat-check-intent';
+import { proficiencyBonus } from '../../../shared/proficiency-bonus';
 
 import type { ClientCombatIntent } from './combat-action-executor';
 import type { CombatCheckIntentKind } from '../../../shared/combat-check-intent';
@@ -49,9 +50,24 @@ const CHECK_ABILITIES: Record<CombatCheckIntentKind, 'str' | 'dex' | 'cha'> = {
  * number, exactly as the attack popup shows its bonus.
  */
 export function skillCheckModifierFor(
-  participant: { abilityScores?: Record<string, unknown> } | null | undefined,
+  participant:
+    | { abilityScores?: Record<string, unknown>; skillProficiencies?: string[]; level?: number }
+    | null
+    | undefined,
   kind: CombatCheckIntentKind,
 ): number {
+  if (kind === 'shove') {
+    const raw = participant?.abilityScores?.str ?? participant?.abilityScores?.strength;
+    const score = typeof raw === 'number' ? raw : (raw as { score?: number } | undefined)?.score;
+    const modifier =
+      typeof score === 'number'
+        ? abilityModifier(score)
+        : ((raw as { modifier?: number } | undefined)?.modifier ?? 0);
+    const proficient = participant?.skillProficiencies?.some(
+      (skill) => skill.trim().toLowerCase() === 'athletics',
+    );
+    return modifier + (proficient ? proficiencyBonus(participant?.level ?? 1) : 0);
+  }
   const ability = CHECK_ABILITIES[kind];
   const scoreOf = (key: string): number | undefined => {
     const raw = participant?.abilityScores?.[key];
