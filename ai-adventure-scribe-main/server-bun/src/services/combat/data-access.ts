@@ -248,22 +248,12 @@ export async function listCarriedWeaponProfiles(participant: any): Promise<Weapo
     db
       .select()
       .from(inventoryItems)
-      .where(
-        and(
-          eq(inventoryItems.characterId, participant.characterId),
-          inArray(inventoryItems.itemType, ['weapon', 'equipment', 'custom']),
-        ),
-      )
+      .where(and(eq(inventoryItems.characterId, participant.characterId)))
       .orderBy(asc(inventoryItems.createdAt), asc(inventoryItems.id)),
     db
       .select()
       .from(characterEquipment)
-      .where(
-        and(
-          eq(characterEquipment.characterId, participant.characterId),
-          inArray(characterEquipment.itemType, ['weapon', 'equipment', 'custom']),
-        ),
-      )
+      .where(and(eq(characterEquipment.characterId, participant.characterId)))
       .orderBy(asc(characterEquipment.itemName), asc(characterEquipment.id)),
     db.query.characters.findFirst({
       where: eq(characters.id, participant.characterId),
@@ -289,9 +279,23 @@ export async function listCarriedWeaponProfiles(participant: any): Promise<Weapo
       properties: parseEquipmentProperties(item.magicProperties),
     })),
   ];
-  return candidates
-    .filter(isEquippedWeaponCandidate)
-    .map((candidate) => candidateToProfile(candidate, character ?? undefined));
+  return candidates.filter(isEquippedWeaponCandidate).map((candidate) => {
+    const profile = candidateToProfile(candidate, character ?? undefined);
+    const ammunition = /crossbow/i.test(profile.name)
+      ? 'bolts'
+      : /(?:shortbow|longbow)/i.test(profile.name)
+        ? 'arrows'
+        : null;
+    if (!ammunition) return profile;
+    const ammoPattern = ammunition === 'bolts' ? /\bbolts?\b/i : /\barrows?\b/i;
+    const available = [
+      ...inventory
+        .filter((item) => !isAlreadyOnSheet(sheetNames, item.name))
+        .map((item) => ({ name: item.name, quantity: item.quantity })),
+      ...legacy.map((item) => ({ name: item.itemName, quantity: item.quantity })),
+    ].some((item) => Number(item.quantity) > 0 && ammoPattern.test(item.name));
+    return available ? profile : { ...profile, missingAmmunition: ammunition };
+  });
 }
 
 /**

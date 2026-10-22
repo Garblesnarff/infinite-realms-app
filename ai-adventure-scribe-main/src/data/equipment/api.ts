@@ -48,9 +48,17 @@ export function formatCurrency(cost: Equipment['cost']): string {
 export function getStartingEquipment(className: string): Equipment[] {
   const classId = className.toLowerCase();
   const packages: Record<string, string[]> = {
-    fighter: ['chain-mail', 'shield', 'longsword', 'handaxe', 'handaxe', 'light-crossbow'],
+    fighter: [
+      'chain-mail',
+      'shield',
+      'longsword',
+      'handaxe',
+      'handaxe',
+      'light-crossbow',
+      'bolts-20',
+    ],
     wizard: ['dagger', 'quarterstaff'],
-    rogue: ['leather-armor', 'dagger', 'dagger', 'thieves-tools', 'shortbow'],
+    rogue: ['leather-armor', 'dagger', 'dagger', 'thieves-tools', 'shortbow', 'arrows-20'],
     cleric: ['chain-shirt', 'shield', 'mace', 'light-crossbow'],
     barbarian: ['leather-armor', 'shield', 'handaxe', 'handaxe'],
     bard: ['leather-armor', 'dagger', 'rapier'],

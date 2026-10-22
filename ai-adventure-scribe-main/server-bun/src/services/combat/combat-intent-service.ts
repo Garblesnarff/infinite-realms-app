@@ -31,6 +31,7 @@ import {
 import { grantTacticalDash, resetTacticalMovementForTurn } from './tactical-combat-lifecycle.js';
 import {
   findCatalogWeapon,
+  weaponProfileMatches,
   findMagicBaseWeapon,
   isUnarmedWeaponClaim,
   UNARMED_STRIKE,
@@ -826,7 +827,11 @@ export function refuseUngroundedPlayerWeapon(
   grounding: GroundedWeapon,
   source: CombatActionSource,
 ): void {
-  if (source !== 'player' || !grounding.requested || grounding.grounded) return;
+  if (!grounding.requested || grounding.grounded) return;
+  const carriedAmmoWeapon =
+    grounding.notEquipped &&
+    /crossbow|shortbow|longbow/i.test(findCatalogWeapon(grounding.requested)?.name ?? '');
+  if (source !== 'player' && !carriedAmmoWeapon) return;
   if (grounding.notEquipped) {
     throw new BusinessLogicError(
       `Weapon not equipped: ${grounding.requested} is not equipped — equip it before attacking, or choose an equipped weapon`,
@@ -841,6 +846,24 @@ export function refuseUngroundedPlayerWeapon(
     throw new BusinessLogicError(
       `Weapon not on character sheet: ${grounding.requested} is not on your character sheet — choose an equipped weapon`,
       { reason: 'weapon_not_on_sheet', requestedWeaponId: grounding.requested },
+    );
+  }
+}
+
+function refuseMissingAmmunition(
+  requested: string | null | undefined,
+  carried: WeaponRuleProfile[],
+): void {
+  if (!requested) return;
+  const weapon = carried.find((profile) => weaponProfileMatches(profile, requested));
+  if (weapon?.missingAmmunition) {
+    throw new BusinessLogicError(
+      `Cannot use ${weapon.name}: no ${weapon.missingAmmunition} — add ammunition or choose another weapon. Which weapon do you use?`,
+      {
+        reason: 'no_ammunition',
+        ammunition: weapon.missingAmmunition,
+        requestedWeaponId: requested,
+      },
     );
   }
 }
@@ -883,6 +906,7 @@ export async function proposeCombatAttack(
   const targetLabel = await participantLabel(encounterId, resolvedAttack.targetId, userId);
   const equipped = await listEquippedWeaponProfiles(actor);
   const carried = await listCarriedWeaponProfiles(actor);
+  refuseMissingAmmunition(resolvedAttack.weaponId, carried);
   const grounding = groundRequestedWeapon(resolvedAttack.weaponId, equipped, carried);
   // #260 / RG-014: refuse a player-sourced intent that names a weapon the sheet does
   // not back (see refuseUngroundedPlayerWeapon). DM narration is never refused: a DM
@@ -1298,6 +1322,7 @@ export async function executeCombatIntent(
       // walked into melee to fire an arrow, or reach-refused for a sword she was holding.
       const equipped = await listEquippedWeaponProfiles(actor);
       const carried = await listCarriedWeaponProfiles(actor);
+      refuseMissingAmmunition(intent.weaponId, carried);
       const grounding = groundRequestedWeapon(intent.weaponId, equipped, carried);
       // #260 / RG-014: refuse a player-sourced intent that names a weapon the sheet
       // does not back (see refuseUngroundedPlayerWeapon); DM narration keeps the

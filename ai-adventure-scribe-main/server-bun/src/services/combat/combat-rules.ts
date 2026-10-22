@@ -2,6 +2,7 @@ import { abilityModifier } from '../../../../shared/ability-modifier';
 import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
 
 export type WeaponRuleProfile = {
+  missingAmmunition?: 'bolts' | 'arrows';
   id: string;
   name: string;
   damageDice: string;
