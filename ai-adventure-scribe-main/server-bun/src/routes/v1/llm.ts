@@ -14,7 +14,11 @@ import { Elysia, t } from 'elysia';
 
 import { SSE_HEADERS, extractPartialNarration } from './llm-streaming.js';
 import { deferUntilCommit } from '../../../../db/transaction-context';
-import { DEATH_SAVE_TURN_TEXT, describeDeathSave } from '../../../../shared/death-save-lines.js';
+import {
+  DEATH_SAVE_TURN_TEXT,
+  describeDeathSave,
+  describeDeathSaveRollLine,
+} from '../../../../shared/death-save-lines.js';
 import { authenticateRequest, type AuthUser } from '../../lib/auth.js';
 import { logger } from '../../lib/logger.js';
 import { isAdmin } from '../../middleware/admin.js';
@@ -439,7 +443,9 @@ function constantTimeEqual(a: string, b: string): boolean {
  *
  * The engine rolls the die here (rollOwedDeathSave rolls when no d20 is
  * given) and advances the turn, so the save is recorded even when the client's
- * dice prompt never fires. The narration line comes from describeDeathSave.
+ * dice prompt never fires. The DM's narration fact is recorded by the save
+ * resolution itself (describeDeathSave, in death-saves-service); the line
+ * returned here is the chat line for the save (describeDeathSaveRollLine).
  */
 async function resolveDeathSaveTurn(
   sessionId: string | undefined,
@@ -498,7 +504,9 @@ async function resolveDeathSaveTurn(
     });
     return {
       parsed: true,
-      text: save ? describeDeathSave(actorName, save) : `${actorName} makes a death saving throw.`,
+      text: save
+        ? (describeDeathSaveRollLine(save) ?? describeDeathSave(actorName, save))
+        : `${actorName} makes a death saving throw.`,
       provider: 'engine',
       model: 'engine',
       deathSave: save ?? null,

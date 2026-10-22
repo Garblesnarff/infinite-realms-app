@@ -191,9 +191,10 @@ describe('llm generate death-save turn (#261)', () => {
     });
     // The DM was never called: no LLM generation for an engine turn.
     expect(generatedCalls).toBe(0);
-    // The response carries the rolled save for the transcript.
+    // The response carries the rolled save for the transcript, and its text
+    // is the chat line for the save: roll, outcome, running count (#874).
     expect(body.provider).toBe('engine');
-    expect(body.text).toContain('14');
+    expect(body.text).toBe('Death saving throw: 14 — success (1/3)');
     const deathSave = body.deathSave as Record<string, unknown>;
     expect(deathSave.roll).toBe(14);
     expect(deathSave.successes).toBe(1);

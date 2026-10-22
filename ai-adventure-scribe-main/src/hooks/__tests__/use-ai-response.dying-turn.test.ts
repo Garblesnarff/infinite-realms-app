@@ -358,7 +358,7 @@ describe('useAIResponse: the dying player’s turn (#2518)', () => {
       }>;
       expect(blocks[0]).toMatchObject({ source: 'player' });
       expect(blocks[0].lines.join('\n')).toContain(
-        'The Scholar rolled 14 on their death saving throw — SUCCESS (1 success, 2 failures).',
+        'Death saving throw: 14 — success (1/3)',
       );
       expect(blocks[0].cards?.[0]).toMatchObject({ kind: 'death_save' });
       // No NPC block in the response context anymore — the spider's strike arrives as a

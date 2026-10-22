@@ -348,7 +348,7 @@ describe('death-save 45 s timer engine line (#261)', () => {
     const lines = flatLines(result);
 
     const autoIdx = lines.findIndex((line) => line.includes('Death save auto-rolled after 45 s.'));
-    const saveIdx = lines.findIndex((line) => line.includes('death saving throw'));
+    const saveIdx = lines.findIndex((line) => line.includes('Death saving throw:'));
     expect(autoIdx).toBeGreaterThanOrEqual(0);
     expect(saveIdx).toBeGreaterThanOrEqual(0);
     expect(autoIdx).toBeLessThan(saveIdx);
@@ -361,6 +361,6 @@ describe('death-save 45 s timer engine line (#261)', () => {
     const lines = flatLines(result);
 
     expect(lines.some((line) => line.includes('Death save auto-rolled after 45 s.'))).toBe(false);
-    expect(lines.some((line) => line.includes('death saving throw'))).toBe(true);
+    expect(lines.some((line) => line.includes('Death saving throw:'))).toBe(true);
   });
 });

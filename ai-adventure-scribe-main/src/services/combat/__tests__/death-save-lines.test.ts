@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   describeDamageAtZeroHp,
   describeDeathSave,
+  describeDeathSaveRollLine,
+  type DeathSaveFacts,
 } from '../../../../shared/death-save-lines';
 import {
   DEATH_SAVE_FAILED,
@@ -87,6 +89,84 @@ describe('describeDeathSave (#2457)', () => {
         isStabilized: true,
         successes: 3,
       }),
+    ]);
+  });
+});
+
+describe('describeDeathSaveRollLine (#874)', () => {
+  // Fixtures follow the real producer: HPMechanics.resolveDeathSave's return
+  // (participantId, roll, isSuccess, isCritical, successes, failures,
+  // isStabilized, isDead, wasRevived, newCurrentHp), tallies already updated.
+  const save = (overrides: Record<string, unknown>): DeathSaveFacts & Record<string, unknown> => ({
+    participantId: 'hero-1',
+    roll: 14,
+    isSuccess: true,
+    isCritical: false,
+    successes: 1,
+    failures: 0,
+    isStabilized: false,
+    isDead: false,
+    wasRevived: false,
+    newCurrentHp: 0,
+    ...overrides,
+  });
+
+  it('prints the roll, the outcome word and the success count for a success', () => {
+    expect(describeDeathSaveRollLine(save({}))).toBe('Death saving throw: 14 — success (1/3)');
+    expect(describeDeathSaveRollLine(save({ roll: 18, successes: 2, failures: 1 }))).toBe(
+      'Death saving throw: 18 — success (2/3)',
+    );
+  });
+
+  it('prints the failure count (not the success count) for a failure', () => {
+    expect(
+      describeDeathSaveRollLine(
+        save({ roll: 3, isSuccess: false, successes: 0, failures: 1 }),
+      ),
+    ).toBe('Death saving throw: 3 — failure (1/3)');
+    expect(
+      describeDeathSaveRollLine(
+        save({ roll: 6, isSuccess: false, successes: 1, failures: 2 }),
+      ),
+    ).toBe('Death saving throw: 6 — failure (2/3)');
+  });
+
+  it("counts a natural 1's two failures", () => {
+    expect(
+      describeDeathSaveRollLine(
+        save({ roll: 1, isSuccess: false, isCritical: true, successes: 0, failures: 2 }),
+      ),
+    ).toBe('Death saving throw: 1 — failure (2/3)');
+  });
+
+  it('returns null for a save with no rolled die rather than fabricating a roll', () => {
+    expect(describeDeathSaveRollLine(save({ roll: undefined }))).toBeNull();
+  });
+
+  it('returns null for the terminal states, which keep the full sentence', () => {
+    // Stabilized, dead and revived saves print describeDeathSave's sentence
+    // ("…rolled 13 on their death saving throw — the third success. … is
+    // stable."); the compact line covers the ordinary saves only.
+    expect(
+      describeDeathSaveRollLine(save({ roll: 12, successes: 3, isStabilized: true })),
+    ).toBeNull();
+    expect(
+      describeDeathSaveRollLine(
+        save({ roll: 4, isSuccess: false, successes: 0, failures: 3, isDead: true }),
+      ),
+    ).toBeNull();
+    expect(
+      describeDeathSaveRollLine(
+        save({ roll: 20, isCritical: true, successes: 0, failures: 0, wasRevived: true }),
+      ),
+    ).toBeNull();
+  });
+
+  it('carries no DM-facing instruction text', () => {
+    assertNoDmInstructions([
+      describeDeathSaveRollLine(save({})) ?? '',
+      describeDeathSaveRollLine(save({ roll: 3, isSuccess: false, successes: 0, failures: 1 })) ??
+        '',
     ]);
   });
 });
