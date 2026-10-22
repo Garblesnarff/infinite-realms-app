@@ -20,9 +20,14 @@ import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
 import { eq } from 'drizzle-orm';
 
 import {
+  campaigns,
   characters,
   characterEquipment,
   characterStats,
+  combatEncounters,
+  combatParticipantStatus,
+  combatParticipants,
+  gameSessions,
   levelProgression,
 } from '../../../../../db/schema/index';
 import fighterChoices from '../../../../../shared/test-fixtures/fighter-package-choices.json';
@@ -894,4 +899,268 @@ describeWithDb('character create proficiencies survive to the saved sheet (#898)
       expect(sortedCsv(api.tool_proficiencies), 'GET tools').toEqual([...c.tools].sort());
     });
   }
+});
+
+/**
+ * #1007 pin: a new character's package gear reaches the session.
+ *
+ * Hark N22-024: a fresh Rogue's in-session sheet showed "Attacks: No weapons",
+ * "Equipment: Nothing equipped", "Inventory: Nothing carried", and a shortbow
+ * shot resolved as an Unarmed Strike. Traced end to end on main: creation
+ * writes character_equipment; the session sheet reads those rows back through
+ * GET /v1/characters/:id/equipment (loadCharacterWithSpells ->
+ * equipmentRowsToInventory); combat reads the same rows (listCarried /
+ * listEquippedWeaponProfiles) and the legal-action list is built from the
+ * equipped profiles. The silent Unarmed swap itself was #1013's fix (an
+ * explicitly requested ranged weapon with no ammunition is refused, never
+ * substituted). What was missing was a test that walks the WHOLE chain for
+ * the Rogue package, so a break in any single hop — create, the equipment
+ * read, the seat, the weapon resolution — failed nowhere. This block walks
+ * it for both creation producers:
+ *
+ * - the wizard payload (shared/test-fixtures/criminal-rogue-create-payload.json,
+ *   the pinned output of getStartingEquipment -> mapWizardEquipmentToInventory
+ *   -> transformEquipmentForStorage -> prepareCharacterPayload), and
+ * - the premade payload (shared/test-fixtures/premade-rogue-create-payload.json,
+ *   the pinned output of buildStarterCharacterSeed -> prepareCharacterPayload
+ *   for a template listing the same package as strings).
+ *
+ * The wizard seeds only the first catalog weapon equipped (the Dagger), so
+ * its shortbow is carried but not equipped: the honest outcomes are a Dagger
+ * attack on the legal list, the shortbow among the carried profiles, and a
+ * "not equipped" refusal for a shortbow intent — never an Unarmed Strike.
+ * The premade seed equips the shortbow, so its intent resolves as a Shortbow.
+ */
+const premadeRoguePayload = JSON.parse(
+  readFileSync(
+    resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      '../../../../../shared/test-fixtures/premade-rogue-create-payload.json',
+    ),
+    'utf8',
+  ),
+) as Record<string, unknown>;
+
+type IntentOutcome = {
+  weaponResolution?: { resolved?: string; substituted?: boolean };
+};
+
+describeWithDb('package gear reaches the session (#1007)', () => {
+  let app: { handle: (request: Request) => Promise<Response> };
+  let db: ReturnType<typeof realDb>;
+  let executeCombatIntent: (
+    encounterId: string,
+    intent: unknown,
+    userId: string,
+    source: string,
+  ) => Promise<IntentOutcome>;
+  let getLegalCombatActions: (
+    encounterId: string,
+    userId: string,
+  ) => Promise<{ actions: Array<{ type: string; label?: string }> }>;
+  let listCarriedWeaponProfiles: (participant: {
+    characterId: string;
+  }) => Promise<Array<{ name: string }>>;
+  const cleanup: Array<() => Promise<unknown>> = [];
+
+  beforeAll(async () => {
+    userId = testId('user-1007');
+    db = realDb();
+    const pipeline = await importWithRealDb(async () => {
+      const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');
+      const { charactersRoutes } = await import('../characters.ts');
+      const { issue1784DataRoutes } = await import('../issue-1784-data.ts');
+      const intentService = await import('../../../services/combat/combat-intent-service.ts');
+      const dataAccess = await import('../../../services/combat/data-access.ts');
+      return { createRequestPipelineApp, charactersRoutes, issue1784DataRoutes, intentService, dataAccess };
+    });
+    app = pipeline
+      .createRequestPipelineApp()
+      .use(pipeline.charactersRoutes)
+      .use(pipeline.issue1784DataRoutes);
+    executeCombatIntent = pipeline.intentService.executeCombatIntent as typeof executeCombatIntent;
+    getLegalCombatActions = pipeline.intentService.getLegalCombatActions as unknown as typeof getLegalCombatActions;
+    listCarriedWeaponProfiles = pipeline.dataAccess.listCarriedWeaponProfiles as typeof listCarriedWeaponProfiles;
+  });
+
+  afterAll(async () => {
+    for (const fn of cleanup.reverse()) await fn().catch(() => {});
+    await closeRealDb();
+  });
+
+  async function create(body: Record<string, unknown>): Promise<string> {
+    const res = await app.handle(
+      new Request('http://localhost/v1/characters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    );
+    const text = await res.text();
+    expect(res.status, text.slice(0, 400)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    cleanup.push(async () => db.delete(characters).where(eq(characters.id, id)));
+    return id;
+  }
+
+  async function equipmentRowNames(id: string): Promise<string[]> {
+    const res = await app.handle(new Request(`http://localhost/v1/characters/${id}/equipment`));
+    expect(res.status).toBe(200);
+    const rows = (await res.json()) as Array<{ item_name: string }>;
+    return rows.map((row) => row.item_name);
+  }
+
+  /** Seat the character in a real encounter (rows copied from the producers
+   * encounter-lifecycle uses) and return the ids the intent service needs. */
+  async function seat(characterId: string): Promise<{ encounterId: string; heroId: string; foeId: string }> {
+    const [{ id: campaignId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('camp-1007') })
+      .returning({ id: campaigns.id });
+    cleanup.push(async () => db.delete(campaigns).where(eq(campaigns.id, campaignId)));
+    const [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId, characterId, sessionNumber: 1, status: 'active' })
+      .returning({ id: gameSessions.id });
+    cleanup.push(async () => db.delete(gameSessions).where(eq(gameSessions.id, sessionId)));
+    const [{ id: encounterId }] = await db
+      .insert(combatEncounters)
+      .values({ sessionId, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
+      .returning({ id: combatEncounters.id });
+    cleanup.push(async () => db.delete(combatEncounters).where(eq(combatEncounters.id, encounterId)));
+    const inserted = await db
+      .insert(combatParticipants)
+      .values([
+        {
+          encounterId,
+          characterId,
+          name: 'Session Hero',
+          participantType: 'player',
+          turnOrder: 0,
+          initiative: 20,
+          armorClass: 14,
+          maxHp: 30,
+          speed: 30,
+        },
+        {
+          encounterId,
+          name: 'Session Foe',
+          participantType: 'monster',
+          turnOrder: 1,
+          initiative: 10,
+          armorClass: 12,
+          maxHp: 30,
+          speed: 30,
+        },
+      ])
+      .returning({ id: combatParticipants.id, turnOrder: combatParticipants.turnOrder });
+    const heroId = inserted.find((row) => row.turnOrder === 0)!.id;
+    const foeId = inserted.find((row) => row.turnOrder === 1)!.id;
+    await db.insert(combatParticipantStatus).values([
+      { participantId: heroId, currentHp: 30, maxHp: 30, isConscious: true },
+      { participantId: foeId, currentHp: 30, maxHp: 30, isConscious: true },
+    ]);
+    cleanup.push(async () =>
+      db.delete(combatParticipants).where(eq(combatParticipants.encounterId, encounterId)),
+    );
+    return { encounterId, heroId, foeId };
+  }
+
+  async function resetTurn(encounterId: string): Promise<void> {
+    await db
+      .update(combatParticipants)
+      .set({ actionUsed: false, bonusActionUsed: false })
+      .where(eq(combatParticipants.encounterId, encounterId));
+    await db
+      .update(combatEncounters)
+      .set({ currentTurnOrder: 0, updatedAt: new Date() })
+      .where(eq(combatEncounters.id, encounterId));
+  }
+
+  async function attackLabels(encounterId: string): Promise<string[]> {
+    const legal = await getLegalCombatActions(encounterId, userId);
+    return legal.actions.filter((a) => a.type === 'attack').map((a) => a.label ?? '');
+  }
+
+  it('wizard rogue: package rows are served to the session and the shortbow never becomes an Unarmed Strike', async () => {
+    const id = await create({ ...criminalRoguePayload971, name: testId('wiz-rogue-1007') });
+
+    // The read the in-session sheet is built from.
+    const names = await equipmentRowNames(id);
+    expect(names).toContain('Shortbow');
+    expect(names).toContain('Dagger');
+    expect(names).toContain('Leather Armor');
+    expect(names).toContain("Thieves' Tools");
+
+    const { encounterId, heroId, foeId } = await seat(id);
+
+    // Carried, equipped or not — the session's weapon lookup sees the bow.
+    const carried = await listCarriedWeaponProfiles({ characterId: id });
+    expect(carried.map((w) => w.name)).toContain('Shortbow');
+
+    // The legal attack list offers the equipped Dagger, not only fists.
+    const labels = await attackLabels(encounterId);
+    expect(labels).toContain('Attack with Dagger');
+    expect(labels).not.toEqual(['Attack with Unarmed Strike']);
+
+    // A shortbow intent is refused as not equipped (#1013) — on the build
+    // Hark played it silently resolved as an Unarmed Strike instead.
+    await resetTurn(encounterId);
+    let refusal = '';
+    try {
+      await executeCombatIntent(
+        encounterId,
+        { type: 'attack', actorId: heroId, targetId: foeId, weaponId: 'Shortbow' },
+        userId,
+        'dm',
+      );
+    } catch (error) {
+      refusal = error instanceof Error ? error.message : String(error);
+    }
+    expect(refusal).toContain('not equipped');
+
+    // The default attack resolves with the equipped weapon, not fists.
+    await resetTurn(encounterId);
+    const outcome = await executeCombatIntent(
+      encounterId,
+      { type: 'attack', actorId: heroId, targetId: foeId },
+      userId,
+      'dm',
+    );
+    expect(outcome.weaponResolution?.resolved).toBe('Dagger');
+    expect(outcome.weaponResolution?.substituted).toBe(false);
+  });
+
+  it('premade rogue: the seeded shortbow is equipped, offered and resolves as a Shortbow', async () => {
+    const [{ id: campaignId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('premade-camp-1007') })
+      .returning({ id: campaigns.id });
+    cleanup.push(async () => db.delete(campaigns).where(eq(campaigns.id, campaignId)));
+    const id = await create({
+      ...premadeRoguePayload,
+      name: testId('premade-rogue-1007'),
+      campaign_id: campaignId,
+    });
+
+    const names = await equipmentRowNames(id);
+    expect(names).toContain('Shortbow');
+    expect(names).toContain('Dagger');
+    expect(names).toContain('Leather Armor');
+
+    const { encounterId, heroId, foeId } = await seat(id);
+
+    const labels = await attackLabels(encounterId);
+    expect(labels).toContain('Attack with Shortbow');
+
+    await resetTurn(encounterId);
+    const outcome = await executeCombatIntent(
+      encounterId,
+      { type: 'attack', actorId: heroId, targetId: foeId, weaponId: 'Shortbow' },
+      userId,
+      'dm',
+    );
+    expect(outcome.weaponResolution?.resolved).toBe('Shortbow');
+    expect(outcome.weaponResolution?.substituted).toBe(false);
+  });
 });

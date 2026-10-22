@@ -1,0 +1,67 @@
+{
+  "name": "Grimnir Probe",
+  "description": null,
+  "race": "Hill Dwarf",
+  "subrace": null,
+  "class": "Rogue",
+  "subclass": null,
+  "level": 3,
+  "image_url": null,
+  "avatar_url": null,
+  "backstory_elements": null,
+  "background": "Criminal",
+  "background_image": null,
+  "campaign_id": null,
+  "skill_proficiencies": "",
+  "languages": [],
+  "cantrips": "",
+  "known_spells": "",
+  "prepared_spells": "",
+  "total_level": 3,
+  "stats": {
+    "strength": 10,
+    "dexterity": 16,
+    "constitution": 14,
+    "intelligence": 12,
+    "wisdom": 11,
+    "charisma": 8
+  },
+  "equipment": [
+    {
+      "item_name": "Leather Armor",
+      "item_type": "armor",
+      "quantity": 1,
+      "equipped": true
+    },
+    {
+      "item_name": "Dagger",
+      "item_type": "weapon",
+      "quantity": 2,
+      "equipped": true
+    },
+    {
+      "item_name": "Thieves' Tools",
+      "item_type": "tool",
+      "quantity": 1,
+      "equipped": false
+    },
+    {
+      "item_name": "Shortbow",
+      "item_type": "weapon",
+      "quantity": 1,
+      "equipped": true
+    },
+    {
+      "item_name": "Arrows (20)",
+      "item_type": "gear",
+      "quantity": 1,
+      "equipped": false
+    },
+    {
+      "item_name": "Quiver",
+      "item_type": "gear",
+      "quantity": 1,
+      "equipped": false
+    }
+  ]
+}
