@@ -3,6 +3,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 
 import { GameLoadingOverlay, GameLayout } from './game-content';
+import { CampaignCompleteEndState } from './game-content/CompletionScreen';
 import { buildChooseHeroHref, FallenEndState, FallenStoryLog } from './game-content/DeathScreen';
 import { useGameRails } from './game-content/use-game-rails';
 import { useSessionVitalGate } from './game-content/use-session-vital-gate';
@@ -227,6 +228,40 @@ const GameContent: React.FC = () => {
               campaignId: fallen.campaignId,
             })}
             chooseHeroPending={Boolean(fallen.starterCampaignId) && starterCampaignsLoading}
+            storyContent={<FallenStoryLog />}
+          />
+        </div>
+      </GameProviders>
+    );
+  }
+
+  if (vitalGate.status === 'completed') {
+    // #1020: the restore half of the completion end state — a one-shot whose
+    // session the engine completed shows its ending on load, reload and
+    // reconnect, read from the same session load payload as the fallen state
+    // above. Session init resumed THIS session to get here (never a
+    // continuation — a one-shot has no next session), so the story log behind
+    // "Read the story so far" is the finished run's own.
+    const completion = vitalGate.completion;
+    const starterSlug = completion.starterCampaignId
+      ? (starterCampaigns.find((c) => c.id === completion.starterCampaignId)?.slug ?? null)
+      : null;
+    return (
+      <GameProviders
+        sessionId={sessionId}
+        starterCampaignId={effectiveStarterCampaignId}
+        characterId={characterIdFromParams}
+      >
+        <div className="h-[100dvh]">
+          <CampaignCompleteEndState
+            characterName={completion.characterName}
+            campaignName={completion.campaignName}
+            summary={completion.summary}
+            chooseHeroHref={buildChooseHeroHref({
+              starterSlug,
+              campaignId: completion.campaignId,
+            })}
+            chooseHeroPending={Boolean(completion.starterCampaignId) && starterCampaignsLoading}
             storyContent={<FallenStoryLog />}
           />
         </div>

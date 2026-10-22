@@ -173,6 +173,26 @@ roll-request turns).
 
 `;
 
+    // #1020: the server completes the session when the DM declares the ending —
+    // before this field, the campaign's rules (its Clock, its final beats) were
+    // prose only, so a finished one-shot just kept improvising and no ending,
+    // completion XP or completion screen ever fired.
+    const campaignEndingField = `<campaign_ending_field>
+<title>CAMPAIGN ENDING</title>
+When the campaign's story is complete — its final beat has played, or a limit its rules
+define has been reached (the story Clock fills, the final choice is taken) — set the
+\`campaign_ending\` JSON field to \`{"summary": "<one or two sentences: how the story ended>"}\`
+and narrate the ending in \`text\`. The game posts the ending, awards the completion XP
+you set in \`xp_award\`, marks the session complete and shows the completion screen. A
+choice the story itself offered is never a dead end: when the player takes the final
+one, this field is how its ending resolves. Set it only for the ending itself — never
+while story beats remain, never for a scene or combat ending, and never for the end
+of a session when the campaign's story continues in a later session. Otherwise set
+it to \`null\`.
+</campaign_ending_field>
+
+`;
+
     const principlesRules = inCombat
       ? `- Use D&D 5e mechanics when appropriate. The engine resolves attacks, spells and saves during
   combat: declare the player's attack in \`combat_actions\` and do not request rolls.`
@@ -208,7 +228,7 @@ from their sheet, or a spell they have prepared or known (see the character shee
 spell or attack the character does not have (#400).
 </options_field>
 
-${inCombat ? '' : xpAwardField}${inCombat ? '' : restField}${inCombat ? '' : storyItemsField}${inCombat ? '' : storyDamageField}<visual_prompt_rule>
+${inCombat ? '' : xpAwardField}${inCombat ? '' : restField}${inCombat ? '' : storyItemsField}${inCombat ? '' : storyDamageField}${inCombat ? '' : campaignEndingField}<visual_prompt_rule>
 **OPTIONAL** - At the very end, if the scene would benefit from an illustration:
 VISUAL PROMPT: <short art prompt focusing on key visual elements>
 </visual_prompt_rule>

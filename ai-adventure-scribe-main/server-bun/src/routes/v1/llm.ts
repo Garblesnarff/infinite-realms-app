@@ -1365,8 +1365,37 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // Polarity note: `combatEntry` is the client-sent entry context, present only when
         // combat is NOT already active; `combat_entry_pending` marks the turn that opens
         // combat. So `combatEntry && !envelope?.combat_entry_pending` is an ordinary story turn.
+        // #1020: a completed session is terminal for story effects. Every applier below
+        // (feature spends, XP, items, conditions, rest, damage, the ending) writes to the
+        // sheet or the session; on a completed session those writes are a zombie run — the
+        // adventure is over, but a stale client or a retried request could keep accruing
+        // them. The shipped client never sends here (a completed one-shot restores to its
+        // completion screen), so this is the backstop: story fields on such a turn are
+        // nulled by the appliers' own not-applied paths below and nothing lands.
+        let storyEffectsClosed = false;
+        if (castSessionId) {
+          try {
+            const { db } = await import('../../../../db/client');
+            const { eq } = await import('drizzle-orm');
+            const { gameSessions } = await import('../../../../db/schema/index');
+            const [sessionRow] = await db
+              .select({ status: gameSessions.status })
+              .from(gameSessions)
+              .where(eq(gameSessions.id, castSessionId))
+              .limit(1);
+            storyEffectsClosed = sessionRow?.status === 'completed';
+          } catch (error) {
+            logger.warn({ msg: 'DM_STORY_EFFECTS_GUARD_FAILED', sessionId: castSessionId, error });
+          }
+        }
         const featuresToSpend = allowedFeatures as AllowedFeatures | null;
-        if (featuresToSpend && castSessionId && combatEntry && !envelope?.combat_entry_pending) {
+        if (
+          featuresToSpend &&
+          castSessionId &&
+          combatEntry &&
+          !envelope?.combat_entry_pending &&
+          !storyEffectsClosed
+        ) {
           try {
             const { spendStoryFeatureUses } =
               await import('../../services/dm/story-feature-uses.js');
@@ -1394,7 +1423,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           dmReply.inCombat !== true &&
           castSessionId &&
           combatEntry &&
-          !envelope.combat_entry_pending
+          !envelope.combat_entry_pending &&
+          !storyEffectsClosed
         ) {
           try {
             const { awardStoryXp } = await import('../../services/dm/story-xp.js');
@@ -1417,7 +1447,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           dmReply.inCombat !== true &&
           castSessionId &&
           combatEntry &&
-          !envelope.combat_entry_pending
+          !envelope.combat_entry_pending &&
+          !storyEffectsClosed
         ) {
           try {
             if (envelope.items) {
@@ -1453,7 +1484,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           dmReply.inCombat !== true &&
           castSessionId &&
           combatEntry &&
-          !envelope.combat_entry_pending
+          !envelope.combat_entry_pending &&
+          !storyEffectsClosed
         ) {
           try {
             const { applyStoryRest } = await import('../../services/dm/story-rest.js');
@@ -1484,7 +1516,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           dmReply.inCombat !== true &&
           castSessionId &&
           combatEntry &&
-          !envelope.combat_entry_pending
+          !envelope.combat_entry_pending &&
+          !storyEffectsClosed
         ) {
           try {
             const { applyStoryDamage } = await import('../../services/dm/story-damage.js');
@@ -1501,6 +1534,48 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         }
         if (envelope?.damage && !storyDamageApplied) {
           envelope.damage = null;
+        }
+        // #1020: an ending the story declares reaches the session, server-side: the
+        // applier claims the ending engine row, then completes the session through
+        // SessionService.completeSession — the same write the client's manual
+        // end-session flow uses. It runs after the XP award above, so the completion
+        // XP in the same reply lands while the session is still active. Same guards
+        // as the other story appliers, and the same #768 contract as damage: an
+        // ending that did not apply is nulled, so the client never treats an
+        // unapplied declaration as the engine's ending (its completion screen and
+        // its narration-gate exemption both key on the field surviving). When the
+        // ending did apply, the envelope carries the STORED summary the applier
+        // returns — a retried declaration regenerates its text, and the screen
+        // must show the ending that was stored, not the retry's version of it.
+        let storyEndingApplied = false;
+        if (
+          envelope?.campaign_ending &&
+          dmReply &&
+          dmReply.inCombat !== true &&
+          castSessionId &&
+          combatEntry &&
+          !envelope.combat_entry_pending &&
+          !storyEffectsClosed
+        ) {
+          try {
+            const { applyStoryEnding } = await import('../../services/dm/story-ending.js');
+            const endingResult = await applyStoryEnding({
+              userId,
+              sessionId: castSessionId,
+              ending: envelope.campaign_ending,
+              rollRequested,
+            });
+            storyEndingApplied =
+              endingResult.outcome === 'applied' || endingResult.outcome === 'already_applied';
+            if (storyEndingApplied && endingResult.summary) {
+              envelope.campaign_ending = { summary: endingResult.summary };
+            }
+          } catch (error) {
+            logger.warn({ msg: 'DM_STORY_ENDING_FAILED', sessionId: castSessionId, error });
+          }
+        }
+        if (envelope?.campaign_ending && !storyEndingApplied) {
+          envelope.campaign_ending = null;
         }
         // sessionId must not come from combatEntry: that is only sent when combat
         // is NOT already active, so in-combat turns logged `sessionId: null` --

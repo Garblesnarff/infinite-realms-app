@@ -115,6 +115,9 @@ export class SessionService {
           id: campaigns.id,
           name: campaigns.name,
           description: campaigns.description,
+          // #1020: the client gates a completed session's end state on the
+          // campaign being a one-shot, read in this same load payload.
+          campaignLength: campaigns.campaignLength,
         },
         character: {
           id: characters.id,

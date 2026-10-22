@@ -553,6 +553,15 @@ describe('narrativeTurnHasNoEngineEvent', () => {
       'declared story damage',
       { result: { text: CLEAN, damage: { amount: 3, source: 'rope burn' } } },
     ],
+    [
+      'a declared campaign ending',
+      {
+        result: {
+          text: CLEAN,
+          campaign_ending: { summary: 'The Hollow closed over the Heartwood.' },
+        },
+      },
+    ],
   ])('does not hold for %s', (_label, overrides) => {
     expect(narrativeTurnHasNoEngineEvent({ ...turn, ...overrides })).toBe(false);
   });
@@ -560,6 +569,12 @@ describe('narrativeTurnHasNoEngineEvent', () => {
   it('holds when the damage field is null (nothing declared)', () => {
     expect(
       narrativeTurnHasNoEngineEvent({ ...turn, result: { text: CLEAN, damage: null } }),
+    ).toBe(true);
+  });
+
+  it('holds when the campaign ending field is null (nothing declared)', () => {
+    expect(
+      narrativeTurnHasNoEngineEvent({ ...turn, result: { text: CLEAN, campaign_ending: null } }),
     ).toBe(true);
   });
 });

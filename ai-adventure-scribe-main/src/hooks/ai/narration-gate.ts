@@ -246,6 +246,8 @@ export interface NarrativeTurn {
     combat_entry?: unknown;
     /** #610: declared story damage the server applied in /generate. */
     damage?: unknown;
+    /** #1020: the campaign ending the server applied in /generate. */
+    campaign_ending?: unknown;
   };
 }
 
@@ -257,6 +259,13 @@ export interface NarrativeTurn {
  * #610: declared story damage counts as engine-resolved — the server applied it in /generate
  * before the reply reached the client, so harm the narration describes was not fabricated
  * and the gate (and the early-render suppression) must not treat this turn as unresolved.
+ *
+ * #1020: a declared campaign ending counts the same way. The server completed the session
+ * in /generate before the reply reached the client and nulled the field when the ending
+ * did not apply, so a populated field is the engine's own ending. Without this clause the
+ * ending turn — which by definition has no engine event — was exactly what the gate ate:
+ * G22-008's listed landing choice was answered "(Nothing comes of that…)" and its options
+ * wiped, because the ending narration claimed the story's conclusion with nothing backing it.
  */
 export function narrativeTurnHasNoEngineEvent({
   isInCombat,
@@ -275,6 +284,7 @@ export function narrativeTurnHasNoEngineEvent({
     !result.combat_entry_pending &&
     !result.combat_entry &&
     !isDeclaredStoryDamage(result.damage) &&
+    !isDeclaredCampaignEnding(result.campaign_ending) &&
     !/```ROLL_REQUESTS_V1/.test(result.text ?? '')
   );
 }
@@ -282,6 +292,14 @@ export function narrativeTurnHasNoEngineEvent({
 /** The envelope's `damage` field populated: the DM declared story damage this turn. */
 function isDeclaredStoryDamage(damage: unknown): boolean {
   return damage !== null && damage !== undefined && typeof damage === 'object';
+}
+
+/** The envelope's `campaign_ending` field populated with a summary: the DM declared the
+ *  campaign's ending this turn and the server applied it (#1020). */
+function isDeclaredCampaignEnding(ending: unknown): boolean {
+  if (ending === null || ending === undefined || typeof ending !== 'object') return false;
+  const summary = (ending as { summary?: unknown }).summary;
+  return typeof summary === 'string' && summary.trim().length > 0;
 }
 
 export interface RollOutcomeGateParams<T extends GatedNarration> {

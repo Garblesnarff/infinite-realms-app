@@ -229,6 +229,15 @@ export type DMResponse = {
    * deals no damage.
    */
   damage?: { amount: number; source: string } | null;
+  /**
+   * The campaign's ending, declared the turn its story completes (#1020): the
+   * final beat has played, or a limit the campaign's rules define has been
+   * reached (a story Clock that fills, a final choice taken). The server posts
+   * the ending, marks the session complete and ends the adventure; the
+   * completion XP rides in the same reply's `xp_award`. Absent or null while
+   * story beats remain.
+   */
+  campaign_ending?: { summary: string } | null;
 };
 
 const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: 'null' }] });
@@ -551,6 +560,33 @@ const storyDamageProperty = {
     '`damage` roll when the amount should be rolled). Otherwise omit it.',
 };
 
+/**
+ * #1020: the campaign's ending, declared the turn its story completes. Optional,
+ * like the other story fields. Before this field existed nobody owned the
+ * ending in code: the campaign's rules reached the DM only as prompt prose, so
+ * a one-shot whose Clock filled just kept improvising (Hark G22-008/016) — no
+ * ending row, no completion state, no completion XP, and the ending narration
+ * itself was eaten by the client's narration gate for claiming consequences no
+ * engine event backed.
+ */
+const campaignEndingProperty = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    summary: { type: 'string' },
+  },
+  required: ['summary'],
+  description:
+    '#1020 campaign ending: when the campaign\'s story is complete — its final beat has ' +
+    'played, or a limit its rules define has been reached (a story Clock that fills, the ' +
+    'final choice taken) — set this field to `{"summary": "<one or two sentences: how the ' +
+    'story ended>"}` and narrate the ending in `text`. The game posts the ending, marks ' +
+    'the session complete and ends the adventure; put the completion XP in `xp_award` in ' +
+    'the same reply. Set it only for the ending itself: never while story beats remain, ' +
+    'never for a scene or combat ending, and never for the end of a session when the ' +
+    'campaign\'s story continues in a later session. Otherwise omit it.',
+};
+
 export const dmResponseSchema = createDmResponseSchema({
   combat_exits: combatExitsProperty,
   xp_award: xpAwardProperty,
@@ -558,6 +594,7 @@ export const dmResponseSchema = createDmResponseSchema({
   conditions: storyConditionsProperty,
   rest: storyRestProperty,
   damage: storyDamageProperty,
+  campaign_ending: campaignEndingProperty,
 });
 
 const isPoint = (value: unknown): value is Point =>

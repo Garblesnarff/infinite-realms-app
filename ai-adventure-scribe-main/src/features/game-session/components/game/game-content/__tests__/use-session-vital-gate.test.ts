@@ -13,7 +13,7 @@ import { useSessionVitalGate } from '../use-session-vital-gate';
 import { userDataApi } from '@/services/user-data-api';
 
 vi.mock('@/services/user-data-api', () => ({
-  userDataApi: { fetchSessionFallenState: vi.fn() },
+  userDataApi: { fetchSessionFallenState: vi.fn(), fetchSessionCompletionState: vi.fn() },
 }));
 vi.mock('@/lib/logger', () => ({
   default: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
@@ -28,9 +28,19 @@ const fallenState = {
   diedAt: '2026-10-02T14:51:00.000Z',
 };
 
+const completionState = {
+  characterId: 'char-1',
+  characterName: 'Tavo Brejo',
+  campaignId: 'camp-1',
+  campaignName: "The Gardener's Heir",
+  starterCampaignId: 'starter-1',
+  summary: 'The party chose the Sunken Temple landing and the story ended.',
+};
+
 describe('useSessionVitalGate (#2517)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(userDataApi.fetchSessionCompletionState).mockResolvedValue(null as any);
   });
 
   it('stays unknown while the load payload is in flight', async () => {
@@ -75,5 +85,28 @@ describe('useSessionVitalGate (#2517)', () => {
     const { result } = renderHook(() => useSessionVitalGate(null));
     expect(result.current.status).toBe('unknown');
     expect(userDataApi.fetchSessionFallenState).not.toHaveBeenCalled();
+  });
+
+  it('#1020: reports completed with the stored ending when the one-shot session completed', async () => {
+    vi.mocked(userDataApi.fetchSessionFallenState).mockResolvedValue(null as any);
+    vi.mocked(userDataApi.fetchSessionCompletionState).mockResolvedValue(completionState as any);
+
+    const { result } = renderHook(() => useSessionVitalGate('session-1'));
+
+    await waitFor(() => {
+      expect(result.current).toEqual({ status: 'completed', completion: completionState });
+    });
+  });
+
+  it('#1020: a fallen character is dead, never completed — the completion read is skipped', async () => {
+    vi.mocked(userDataApi.fetchSessionFallenState).mockResolvedValue(fallenState as any);
+    vi.mocked(userDataApi.fetchSessionCompletionState).mockResolvedValue(completionState as any);
+
+    const { result } = renderHook(() => useSessionVitalGate('session-1'));
+
+    await waitFor(() => {
+      expect(result.current).toEqual({ status: 'dead', fallen: fallenState });
+    });
+    expect(userDataApi.fetchSessionCompletionState).not.toHaveBeenCalled();
   });
 });
