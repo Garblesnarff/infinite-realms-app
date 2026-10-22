@@ -71,7 +71,7 @@ export function computeLevel1MaxHitPoints(
   className: string | null | undefined,
   constitutionScore: number | null | undefined,
   subrace: string | null | undefined,
-  options: { draconicBloodline?: boolean } = {},
+  options: { draconicBloodline?: boolean; tough?: boolean } = {},
 ): number {
   const classData = findSrdClassForHitPoints(className);
   if (!classData && (className ?? '').trim().length > 0) {
@@ -86,12 +86,14 @@ export function computeLevel1MaxHitPoints(
     classData?.name === 'Sorcerer'
       ? draconicResilienceHitPointBonus(options.draconicBloodline === true)
       : 0;
-  return Math.max(
-    1,
-    hitDie +
-      abilityModifier(constitutionScore ?? 10) +
-      dwarvenToughnessBonus(subrace) +
-      draconicBonus,
+  return (
+    Math.max(
+      1,
+      hitDie +
+        abilityModifier(constitutionScore ?? 10) +
+        dwarvenToughnessBonus(subrace) +
+        draconicBonus,
+    ) + (options.tough ? 2 : 0)
   );
 }
 
@@ -114,7 +116,7 @@ export function computeMaxHitPointsForLevel(
   constitutionScore: number | null | undefined,
   subrace: string | null | undefined,
   level: number | null | undefined,
-  options: { draconicBloodline?: boolean } = {},
+  options: { draconicBloodline?: boolean; tough?: boolean } = {},
 ): number {
   const level1MaxHitPoints = computeLevel1MaxHitPoints(
     className,
@@ -131,13 +133,24 @@ export function computeMaxHitPointsForLevel(
     classData?.name === 'Sorcerer'
       ? draconicResilienceHitPointBonus(options.draconicBloodline === true)
       : 0;
-  const perAdditionalLevel = Math.max(
-    1,
-    Math.floor(hitDie / 2) +
-      1 +
-      abilityModifier(constitutionScore ?? 10) +
-      dwarvenToughnessBonus(subrace) +
-      draconicBonus,
-  );
+  const perAdditionalLevel =
+    Math.max(
+      1,
+      Math.floor(hitDie / 2) +
+        1 +
+        abilityModifier(constitutionScore ?? 10) +
+        dwarvenToughnessBonus(subrace) +
+        draconicBonus,
+    ) + (options.tough ? 2 : 0);
   return level1MaxHitPoints + (normalizedLevel - 1) * perAdditionalLevel;
+}
+
+export function hasToughFeat(
+  feats: readonly string[] | undefined,
+  classFeatures?: unknown,
+): boolean {
+  if (feats?.some((feat) => feat.toLowerCase() === 'tough')) return true;
+  if (!classFeatures || typeof classFeatures !== 'object') return false;
+  const entry = (classFeatures as Record<string, { name?: string }>)['feat:tough'];
+  return entry?.name === 'Tough';
 }

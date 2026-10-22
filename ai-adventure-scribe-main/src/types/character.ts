@@ -1,3 +1,5 @@
+import { hasToughFeat } from '../../shared/level-1-hit-points';
+
 import type { OptionSelection } from './enhancement-options';
 import type { Condition, DamageType, VisionInfo, ObscurementLevel } from '@/types/combat';
 
@@ -505,7 +507,12 @@ export function transformCharacterForStorage(character: Character) {
     // into the legacy JSONB column is what kept the two stores disagreeing.
     pact_slots: JSON.stringify(character.pactSlots || {}),
     active_concentration: character.activeConcentration || null,
-    class_features: JSON.stringify(character.classFeatures || {}),
+    class_features: JSON.stringify({
+      ...character.classFeatures,
+      ...(hasToughFeat(character.feats, character.classFeatures)
+        ? { 'feat:tough': { name: 'Tough', description: '+2 hit points per level' } }
+        : {}),
+    }),
     // #204: wizard step-12 quirk picks; the loader reads them back into
     // enhancementSelections so the sheet's Enhancements tab shows them.
     enhancement_selections: JSON.stringify(character.enhancementSelections || []),

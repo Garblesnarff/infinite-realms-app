@@ -7,7 +7,7 @@ import SummaryCard from './ability-scores/SummaryCard';
 import ValidationAlerts from './ability-scores/ValidationAlerts';
 import { abilityModifier } from '../../../../shared/ability-modifier';
 import { isDraconicBloodline } from '../../../../shared/class-feature-choices';
-import { computeLevel1MaxHitPoints } from '../../../../shared/level-1-hit-points';
+import { computeLevel1MaxHitPoints, hasToughFeat } from '../../../../shared/level-1-hit-points';
 
 import type { AbilityScoreName } from '@/utils/racialAbilityBonuses';
 
@@ -63,13 +63,17 @@ const AbilityScoresSelection: React.FC = () => {
       className,
       getFinalScore('constitution'),
       state.character?.subrace?.name ?? null,
-      { draconicBloodline: isDraconicBloodline(state.character?.classFeatures) },
+      {
+        draconicBloodline: isDraconicBloodline(state.character?.classFeatures),
+        tough: hasToughFeat(state.character?.feats, state.character?.classFeatures),
+      },
     );
   }, [
     getFinalScore,
     state.character?.class?.name,
     state.character?.subrace?.name,
     state.character?.classFeatures,
+    state.character?.feats,
   ]);
 
   return (

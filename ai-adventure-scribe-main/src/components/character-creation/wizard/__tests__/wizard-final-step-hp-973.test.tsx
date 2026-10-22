@@ -9,11 +9,13 @@ import type { AbilityScores, Character } from '@/types/character';
 
 import { initialState, characterReducer } from '@/contexts/character/character-reducer';
 import { backgrounds } from '@/data/backgroundOptions';
+import { fighter } from '@/data/classes/fighter';
 import { rogue } from '@/data/classes/rogue';
 import { sorcerer } from '@/data/classes/sorcerer';
 import { wizard } from '@/data/classes/wizard';
 import { elf } from '@/data/races/elf';
 import { halfOrc } from '@/data/races/half-orc';
+import { human } from '@/data/races/human';
 
 /**
  * #973 (Hark N21-007): the final review step must show the HP the server
@@ -125,6 +127,21 @@ describe('wizard final step HP (#973)', () => {
     window.localStorage.clear();
     harness.toast.mockClear();
     harness.saveCharacter.mockClear();
+  });
+
+  it('#989 shows Tough Variant Human Fighter CON14 as14 HP', async () => {
+    renderAtStep(
+      seedCharacter({
+        race: human,
+        subrace: human.subraces?.find((s) => s.id === 'variant-human'),
+        class: fighter,
+        feats: ['tough'],
+        abilityScores: abilityScores([15, 14, 14, 10, 10, 8]),
+      }),
+      12,
+    );
+    expect(await screen.findByText('Finalize Your Character')).toBeTruthy();
+    expect(previewHitPoints()).toBe('14');
   });
 
   it('shows HP 10 for a level-1 Rogue whose final CON is 14 (half-orc, base CON 13)', async () => {
