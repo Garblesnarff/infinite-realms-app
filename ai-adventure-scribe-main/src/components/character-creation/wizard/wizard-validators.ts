@@ -144,6 +144,26 @@ function validateProficiencies(character: Character): ValidationResult {
   if (new Set(classChoices).size < (character.class?.numSkillChoices ?? 0)) {
     return invalid('Please complete your skill proficiency selections');
   }
+  const classId = character.class?.id.toLowerCase();
+  const classLevel =
+    character.classLevels?.find((entry) => entry.classId === character.class?.id)?.level ??
+    character.level ??
+    1;
+  const requiredExpertise =
+    classId === 'rogue'
+      ? classLevel >= 6
+        ? 4
+        : 2
+      : classId === 'bard'
+        ? classLevel >= 10
+          ? 4
+          : classLevel >= 3
+            ? 2
+            : 0
+        : 0;
+  if (new Set(character.expertiseProficiencies ?? []).size < requiredExpertise) {
+    return invalid('Please complete your Expertise selections');
+  }
   const fixedLanguages = new Set([
     ...(character.race?.languages ?? []).filter((language) => !/choice/i.test(language)),
     ...(character.class?.languages ?? []),

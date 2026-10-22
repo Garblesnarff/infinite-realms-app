@@ -6,6 +6,7 @@ import type { Character } from '@/types/character';
 
 import { backgrounds } from '@/data/backgroundOptions';
 import { fighter } from '@/data/classes/fighter';
+import { rogue } from '@/data/classes/rogue';
 import { dwarf } from '@/data/races/dwarf';
 import { human } from '@/data/races/human';
 import { ABILITIES } from '@/hooks/use-ability-score-selection';
@@ -214,5 +215,29 @@ it('#899 requires the background extra language even when racial languages and c
   expect(
     validateStep('Proficiencies & Languages', { ...character, languages: ['Common', 'Draconic'] })
       .isValid,
+  ).toBe(true);
+});
+
+it('#899 partial choices do not let a Rogue leave before choosing Expertise', () => {
+  const character = {
+    class: rogue,
+    race: human,
+    background: backgrounds.find((background) => background.id === 'criminal'),
+    skillProficiencies: [
+      'Deception',
+      'Stealth',
+      'Acrobatics',
+      'Athletics',
+      'Insight',
+      'Investigation',
+    ],
+    languages: ['Common'],
+  } as Character;
+  expect(validateStep('Proficiencies & Languages', character).isValid).toBe(false);
+  expect(
+    validateStep('Proficiencies & Languages', {
+      ...character,
+      expertiseProficiencies: ['Insight', 'Stealth'],
+    }).isValid,
   ).toBe(true);
 });
