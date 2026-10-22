@@ -129,8 +129,8 @@ mock.module('../../../../services/combat/combat-attack-service.js', () => ({
       if (proposeThrows) throw proposeThrows;
       spellProposals.push(input);
       return {
-        spellId: 'chill-touch',
-        spellName: 'Chill Touch',
+        spellId: input.spellName === 'Fire Bolt' ? 'fire-bolt' : 'chill-touch',
+        spellName: input.spellName,
         kind: 'attack',
         attackBonus: 6,
         saveDC: 14,
@@ -147,7 +147,7 @@ mock.module('../../../../services/combat/combat-attack-service.js', () => ({
           {
             actorName: 'The Scholar',
             targetName: 'The Vitruvian Spider',
-            spellName: 'Chill Touch',
+            spellName: input.spellName,
             d20,
             attackBonus: 6,
             totalAttackRoll: d20 + 6,
@@ -168,7 +168,11 @@ mock.module('../../../../services/combat/data-access.js', () => ({
   listEquippedWeaponProfiles: async () => [],
   listCarriedWeaponProfiles: async () => [],
   getEquippedWeaponProfile: async () => null,
-  getParticipantAbilityProfile: async () => ({ scores: {}, level: 1, spellIds: ['chill-touch'] }),
+  getParticipantAbilityProfile: async () => ({
+    scores: {},
+    level: 1,
+    spellIds: ['chill-touch', 'fire-bolt'],
+  }),
   getActiveConditionNames: async () => [],
   verifyEncounterAccess: async () => {},
 }));
@@ -200,6 +204,7 @@ mock.module('../../../../services/combat/combat-events.js', () => ({
 // ---- The client side: real resolution step and spell popup; only its edges are stubbed. ----
 const CLIENT = '../../../../../../src';
 mock.module(`${CLIENT}/services/auth/TokenService`, () => ({
+  TokenRefreshTransportError: class extends Error {},
   getAuthHeaders: () => ({ authorization: 'Bearer valid-token' }),
   configureHeadlessSession: () => {},
   loadCachedSession: () => null,
@@ -574,3 +579,51 @@ describe('run M7 round 2: the player acts only on player input (#2305)', () => {
   });
 });
 
+describe('#1009 sheet cast through the real intent route without DM combat_actions', () => {
+  it('uses the player declaration to propose and commit one spell with the player die', async () => {
+    const handlerModule = `${CLIENT}/hooks/ai/dm-actions-handler`;
+    const { handleDmActionsAndTransitions } = await import(handlerModule);
+    const targetModule = `${CLIENT}/services/combat/combat-entry-confirmation-bridge`;
+    const { setCombatEntryConfirmationHost } = await import(targetModule);
+    setCombatEntryConfirmationHost({
+      present: (_spec: unknown, settle: (yes: boolean, target: string) => void) => {
+        settle(true, SPIDER.name);
+        return () => {};
+      },
+    });
+    setPlayerRollHost(playerRolls(14));
+    const encounter = {
+      id: ENCOUNTER_ID,
+      phase: 'active',
+      participants: PARTICIPANTS,
+      currentRound: 1,
+      currentTurnParticipantId: SCHOLAR_ID,
+    };
+    const outcome = await handleDmActionsAndTransitions({
+      sessionId: SESSION_ID,
+      activeEncounter: encounter,
+      isInCombat: true,
+      refreshCombatState: async () => encounter,
+      aiContext: { gameState: {} },
+      conversationHistory: [],
+      playerInputOrigin: 'sheet_cast',
+      playerMessage: 'I cast Fire Bolt [spell_id=fire-bolt, spell_level=cantrip].',
+      result: {
+        text: 'You aim.',
+        combat_actions: [],
+        roll_requests: [],
+        combat_transition: 'none',
+      },
+    });
+    expect(spellProposals).toHaveLength(1);
+    expect(spellCommits).toEqual([
+      expect.objectContaining({ casterId: SCHOLAR_ID, targetIds: [SPIDER_ID], d20: 14 }),
+    ]);
+    expect(prompts).toHaveLength(1);
+    expect(intentExchanges().every((exchange) => exchange.status < 400)).toBe(true);
+    expect(intentExchanges().find((exchange) => exchange.body.origin)?.body.origin).toBe(
+      'sheet_cast',
+    );
+    expect(outcome.responseText).not.toContain('DM did not declare');
+  });
+});

@@ -60,7 +60,9 @@ export const CombatEntryConfirmation: React.FC<CombatEntryConfirmationProps> = (
           role="alert"
           aria-label="Combat entry confirmation"
         >
-          <p className="font-semibold text-card-foreground">Combat is about to begin</p>
+          <p className="font-semibold text-card-foreground">
+            {spec.activeCombat ? 'Choose a spell target' : 'Combat is about to begin'}
+          </p>
           {spec.playerMessage && !targetChoices.length ? (
             // #877: quote the player's own words — weapon included — so what they confirm
             // is the action they wrote, not the card's reconstruction from target names.
@@ -70,7 +72,7 @@ export const CombatEntryConfirmation: React.FC<CombatEntryConfirmationProps> = (
           ) : null}
           <p className="mt-1 text-sm text-muted-foreground">
             {targetChoices.length
-              ? `Who is ${spec.spellLabel ?? 'your attack'} for? Your initiative is rolled after you choose.`
+              ? `Who is ${spec.spellLabel ?? 'your attack'} for?${spec.activeCombat ? '' : ' Your initiative is rolled after you choose.'}`
               : `Strike at ${combatants}? Your initiative is rolled after you confirm.`}
           </p>
           {otherCombatants.length > 0 && (
@@ -89,7 +91,7 @@ export const CombatEntryConfirmation: React.FC<CombatEntryConfirmationProps> = (
                   data-target={choice}
                   onClick={resolve}
                 >
-                  {`[Strike ${choice}]`}
+                  {`[${spec.activeCombat ? 'Cast at' : 'Strike'} ${choice}]`}
                 </Button>
               ))
             ) : (

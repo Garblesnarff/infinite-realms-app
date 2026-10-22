@@ -146,7 +146,7 @@ describe('CombatEntryConfirmation', () => {
     expect(screen.queryByText(/Also joining the fight:/)).not.toBeInTheDocument();
   });
 
-  it('quotes the player\'s own words, weapon included, for a weapon declaration (#877)', () => {
+  it("quotes the player's own words, weapon included, for a weapon declaration (#877)", () => {
     render(
       <CombatEntryConfirmation
         confirmation={{
@@ -169,9 +169,7 @@ describe('CombatEntryConfirmation', () => {
       screen.getByText('You wrote: “I shoot the silk woman with my longbow”'),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
-        'Strike at Silk Woman? Your initiative is rolled after you confirm.',
-      ),
+      screen.getByText('Strike at Silk Woman? Your initiative is rolled after you confirm.'),
     ).toBeInTheDocument();
     expect(screen.getByText('Also joining the fight: Silk Man.')).toBeInTheDocument();
   });
@@ -263,4 +261,29 @@ describe('CombatEntryConfirmation', () => {
     expect(logged.combatantLabels).toEqual(['Captain Sarah Reeves']);
     expect(logged.targetChoices).not.toBe(logged.combatantLabels);
   });
+});
+
+it('#1009 asks for a live-combat spell target without promising a second initiative roll', () => {
+  const confirm = vi.fn();
+  render(
+    <CombatEntryConfirmation
+      confirmation={{
+        spec: {
+          actorLabel: 'The Scholar',
+          combatantLabels: [],
+          targetChoices: ['Cultist', 'Guard'],
+          spellLabel: 'Fire Bolt',
+          activeCombat: true,
+          initiativeRoll: null,
+          initiativeModifier: 0,
+        },
+        confirm,
+        decline: vi.fn(),
+      }}
+    />,
+  );
+  expect(screen.getByText('Who is Fire Bolt for?')).toBeInTheDocument();
+  expect(screen.queryByText(/initiative is rolled/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '[Cast at Guard]' }));
+  expect(confirm).toHaveBeenCalledWith('Guard');
 });

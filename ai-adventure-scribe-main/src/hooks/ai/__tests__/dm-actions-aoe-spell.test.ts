@@ -9,6 +9,7 @@ import {
   executeAuthoritativeCombatIntent,
   executeStructuredCombatActionWithBoundary,
 } from '@/services/combat/combat-action-executor';
+import { setCombatEntryConfirmationHost } from '@/services/combat/combat-entry-confirmation-bridge';
 import { repairRefusedCombatAction } from '@/services/combat/combat-repair';
 import { userDataApi } from '@/services/user-data-api';
 
@@ -387,4 +388,85 @@ describe('the sheet-Cast Burning Hands at level 1 (#2304)', () => {
     expect(outcome.responseText).not.toContain('refused');
     expect(outcome.responseText.trimEnd().endsWith('The Apprentice, what do you do?')).toBe(true);
   });
+});
+
+describe('#1009 sheet attack spell without a DM action', () => {
+  it('submits the sheet spell once against the sole hostile without asking the DM to declare it', async () => {
+    vi.clearAllMocks();
+    vi.mocked(AIService.chatWithDM).mockResolvedValue({ text: 'The engine resolved it.' } as any);
+    vi.mocked(executeStructuredCombatActionWithBoundary).mockResolvedValue({
+      outcomes: [],
+      boundary: null,
+      result: { results: [] },
+    } as any);
+    setCombatEntryConfirmationHost({
+      present: (_spec, settle) => {
+        settle(true, 'Headmaster Goldwhisk');
+        return () => {};
+      },
+    });
+    const outcome = await invoke({
+      characterRecord: undefined,
+      playerMessage: buildSpellCastMessage({ name: 'Fire Bolt', id: 'fire-bolt', level: 0 }),
+      result: { text: 'You aim.', combat_actions: [] },
+    });
+    expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(executeStructuredCombatActionWithBoundary).mock.calls[0][1]).toEqual({
+      actor_id: APPRENTICE_ID,
+      action_type: 'cast_spell',
+      target_ids: [GOLDWHISK_ID],
+      spell_id: 'fire-bolt',
+      weapon_id: null,
+      slot_level: null,
+      movement_feet: 0,
+    });
+    expect(outcome.responseText).not.toContain('DM did not declare');
+  });
+});
+
+it('#1009 honours the target picked from two hostiles', async () => {
+  vi.clearAllMocks();
+  vi.mocked(AIService.chatWithDM).mockResolvedValue({ text: 'The engine resolved it.' } as any);
+  vi.mocked(executeStructuredCombatActionWithBoundary).mockResolvedValue({
+    outcomes: [],
+    boundary: null,
+    result: { results: [] },
+  } as any);
+  const guard = { id: 'guard-2', name: 'Guard', participantType: 'monster' };
+  const encounter = { ...ENCOUNTER, participants: [...PARTICIPANTS, guard] };
+  setCombatEntryConfirmationHost({
+    present: (spec, settle) => {
+      expect(spec.targetChoices).toEqual(['Headmaster Goldwhisk', 'Guard']);
+      settle(true, 'Guard');
+      return () => {};
+    },
+  });
+  await invoke({
+    characterRecord: undefined,
+    activeEncounter: encounter,
+    playerMessage: buildSpellCastMessage({ name: 'Fire Bolt', id: 'fire-bolt', level: 0 }),
+    result: { text: 'You aim.', combat_actions: [] },
+  });
+  expect(vi.mocked(executeStructuredCombatActionWithBoundary).mock.calls[0][1].target_ids).toEqual([
+    'guard-2',
+  ]);
+});
+
+it('#1009 a declined target spends no action and submits no cast', async () => {
+  vi.clearAllMocks();
+  setCombatEntryConfirmationHost({
+    present: (_spec, settle) => {
+      settle(false);
+      return () => {};
+    },
+  });
+  const outcome = await invoke({
+    characterRecord: undefined,
+    playerMessage: buildSpellCastMessage({ name: 'Fire Bolt', id: 'fire-bolt', level: 0 }),
+    result: { text: 'The bolt strikes.', combat_actions: [] },
+  });
+  expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
+  expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
+  expect(outcome.localNotice).toContain('Cast cancelled');
+  expect(outcome.responseText).toBe('');
 });
