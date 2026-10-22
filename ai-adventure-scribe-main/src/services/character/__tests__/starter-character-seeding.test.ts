@@ -571,4 +571,60 @@ describe('starter template subclass (#829)', () => {
     );
     expect(nullWire.subclass).toBeNull();
   });
+
+  it('pins the #1007 premade-rogue fixture to this producer chain', () => {
+    // Two-sided fixture lock (AGENTS.md §4, the #2286 pattern): the server
+    // suite character-create-starting-package.real-db.test.ts POSTs
+    // shared/test-fixtures/premade-rogue-create-payload.json through the
+    // real creation route; this test asserts the client producer chain
+    // still emits exactly that body, so a change to the seed transform
+    // (equip rule, quiver expansion, item typing) fails HERE instead of
+    // silently unpinning the server test.
+    //
+    // The template is a reconstruction of Hark's Grimnir from N22-024 —
+    // Hill Dwarf Rogue, Criminal background, the issue's package (the
+    // "Quiver with 20 Arrows" phrase is the template form whose bundle
+    // expansion supplies the ammunition rows) — because the Abyss
+    // premades' prod template rows are data, not repo content. Ability
+    // scores are the probe character's, from the playtest report.
+    const template = {
+      name: 'Grimnir Probe',
+      race: 'Hill Dwarf',
+      class: 'Rogue',
+      level: 3,
+      background: 'Criminal',
+      ability_scores: {
+        strength: 10,
+        dexterity: 16,
+        constitution: 14,
+        intelligence: 12,
+        wisdom: 11,
+        charisma: 8,
+      },
+      equipment: [
+        'Leather Armor',
+        'Dagger',
+        'Dagger',
+        "Thieves' Tools",
+        'Shortbow',
+        'Quiver with 20 Arrows',
+      ],
+      skills: [] as string[],
+      languages: [] as string[],
+    };
+    const fixture = JSON.parse(
+      readFileSync(
+        resolve(
+          __dirname,
+          '../../../../shared/test-fixtures/premade-rogue-create-payload.json',
+        ),
+        'utf8',
+      ),
+    ) as Record<string, unknown>;
+    const seed = buildStarterCharacterSeed(template, 'campaign-1007-pin');
+    const wire = prepareCharacterPayload(seed as unknown as Record<string, unknown>);
+    // The fixture carries campaign_id: null because the server test binds
+    // its own campaign; everything else must match byte-for-byte in shape.
+    expect({ ...wire, campaign_id: null }).toEqual(fixture);
+  });
 });
