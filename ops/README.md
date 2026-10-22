@@ -387,3 +387,59 @@ rsync -a --delete /var/lib/infiniterealms-deploy/dist.prev/ \
 Additional host overrides: `DEPLOY_HOLD_FILE`, `DEPLOY_HOLD_STALE_SECONDS`,
 `DEPLOY_TRAIN_FILE`, `DEPLOY_TRAIN_STALE_SECONDS`, `DEPLOY_SMOKE_HOLD_FILE`,
 `DEPLOY_SMOKE_ENV`, `DEPLOY_SMOKE_SCRIPT`, `DEPLOY_STAGING_ROOT`.
+
+## Database backup: `backup-infiniterealms-db.sh` (#38)
+
+The tracked copy of the nightly backup script. Until now the script existed
+only installed on the host, so its behaviour could not be reviewed; the
+installed copy still runs the option-2 verify (psql + error classifier,
+2026-09-13). This copy is option 3:
+
+- `pg_dump -Fc` to `infiniterealms_<stamp>.dump` in `BACKUP_DIR`
+  (default `/var/backups/infiniterealms`), plus the legacy plain-SQL
+  `infiniterealms_<stamp>.sql.gz` rendered from the same archive with
+  `pg_restore` (kept for one retention cycle, per #38).
+- Verify (default on): the archive is restored into a throwaway
+  `ir_backup_verify_*` database on the same server with
+  `pg_restore --exit-on-error`; any restore error fails the run loudly.
+  The restore uses a `--use-list` with exactly one entry excluded — the ACL
+  entry for `graphql_public.graphql`, the pg_graphql extension member
+  pg_dump structurally cannot recreate (the #38 drill proved it is the only
+  unrestorable entry). The entry stays in the `.dump`; it is skipped only
+  for the verify restore. The scratch database is dropped on every exit
+  path the script controls (and scratch databases orphaned by a killed
+  run are swept at the start of the next verify). A second entry ever
+  matching the exclusion makes the run refuse rather than widen it
+  silently, and a failed verify renames the run's artifacts to
+  `*.unverified`, so nothing downstream mistakes them for a verified
+  backup while they stay on disk as evidence. Artifacts are written
+  mode 0600. The verify restores a second full copy of the database on
+  the same server — keep disk headroom of at least the database's size
+  free.
+- `--verify-only <dump>` runs just the verify against an existing archive —
+  the shape the monthly restore drill (#38) needs.
+- No retention/pruning: the host's existing prune behaviour was never
+  tracked here, so parity is confirmed at install time, not invented here.
+
+Connection is the standard libpq environment (`PGHOST`, `PGPORT`, `PGUSER`,
+`PGDATABASE`, `PGPASSWORD`); overrides: `BACKUP_DIR`, `BACKUP_KEEP_PLAIN`,
+`BACKUP_VERIFY`, `BACKUP_ADMIN_DB`. Two operator notes: the verify's sweep
+drops any database under the `ir_backup_verify_` prefix whose embedded
+stamp is more than 24 hours old — that namespace belongs to this script
+alone, so never park anything else under it; and the overwrite refusal is
+check-then-act, so two runs started in the same second can still race the
+final rename (the loser's artifacts are a valid backup of the same
+database, replaced by the winner's). Cases: `bash ops/tests/backup-restore.sh`
+(self-provisions a scratch cluster; reproduces the extension-member dump
+shape with a throwaway probe extension and pins the old psql-without-
+ON_ERROR_STOP swallow as a contrast).
+
+### Install (Hetzner, only on Rob's line)
+
+Nothing is installed by merging. On Rob's line: run
+`bash ops/tests/backup-restore.sh` on the box, install
+`ops/backup-infiniterealms-db.sh` next to the current backup script (keeping
+the old one as `.bak-<stamp>`), point the existing 02:00 cron at it with the
+same `PG*` environment the current script runs under, and confirm the first
+night's log ends in `verify: OK` + `OK …`. The separate restore script and
+the monthly drill cron are unchanged by this PR.
