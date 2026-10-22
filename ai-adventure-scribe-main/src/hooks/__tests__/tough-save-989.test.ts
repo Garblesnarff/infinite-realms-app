@@ -33,9 +33,18 @@ describe('#989 Tough save body', () => {
       feats: ['tough'],
       abilityScores,
     } as unknown as Character;
+    const storedStats = transformAbilityScoresForStorage(character.abilityScores!, '');
+    const stats = {
+      strength: storedStats.strength,
+      dexterity: storedStats.dexterity,
+      constitution: storedStats.constitution,
+      intelligence: storedStats.intelligence,
+      wisdom: storedStats.wisdom,
+      charisma: storedStats.charisma,
+    };
     const body = prepareCharacterPayload({
       ...transformCharacterForStorage(character),
-      stats: transformAbilityScoresForStorage(character.abilityScores!, ''),
+      stats,
       equipment: [],
     });
     const file = resolve(process.cwd(), 'shared/test-fixtures/tough-fighter-989-create.json');
