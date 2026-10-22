@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { runDeclaredCombatCheck } from '../combat-check-client';
+import { runDeclaredCombatCheck, skillCheckModifierFor } from '../combat-check-client';
 
 import logger from '@/lib/logger';
 import {
@@ -130,4 +130,19 @@ describe('which creature a check sentence names (#2420)', () => {
 
     await expect(run('shove the goblin', [PLAYER, GOBLIN])).rejects.toThrow('network down');
   });
+});
+
+it('#1010 shows the engine Athletics modifier for a shover, including hydrated scores and proficiency', () => {
+  expect(
+    skillCheckModifierFor(
+      { abilityScores: { strength: { modifier: 2 }, dexterity: { modifier: 0 } } },
+      'shove',
+    ),
+  ).toBe(2);
+  expect(
+    skillCheckModifierFor(
+      { abilityScores: { str: 10, dex: 18 }, skillProficiencies: ['Athletics'], level: 1 },
+      'shove',
+    ),
+  ).toBe(2);
 });
