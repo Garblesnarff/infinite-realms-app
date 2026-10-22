@@ -11,6 +11,8 @@ import {
   testId,
 } from '../../../services/__tests__/fixtures/real-db.ts';
 
+import type * as CombatData from '../../../services/combat/data-access';
+
 const stub = () => ({
   info: mock(() => {}),
   warn: mock(() => {}),
@@ -54,13 +56,16 @@ const { mapWizardEquipmentToInventory } = await clientModule('hooks/use-characte
 const { transformEquipmentForStorage } = await clientModule('utils/characterTransformations');
 const { prepareCharacterPayload } = await clientModule('services/user-data-payload-helpers');
 const { characterEquipment } = await import('../../../../../db/schema/index');
-const { listCarriedWeaponProfiles } = await import('../../../services/combat/data-access');
+let listCarriedWeaponProfiles: typeof CombatData.listCarriedWeaponProfiles;
 
 describeWithDb('#260 creation package ammunition', () => {
   let app: any;
   const ids: string[] = [];
   beforeAll(async () => {
     userId = testId('ammo-260');
+    ({ listCarriedWeaponProfiles } = await importWithRealDb(
+      () => import('../../../services/combat/data-access'),
+    ));
     const modules = await importWithRealDb(async () => ({
       ...(await import('../../../http-pipeline.ts')),
       ...(await import('../characters.ts')),
@@ -75,7 +80,7 @@ describeWithDb('#260 creation package ammunition', () => {
     ['Fighter', 'Crossbow Bolts (20)', 'crossbow', 'bolts'],
     ['Rogue', 'Arrows (20)', 'shortbow', 'arrows'],
   ] as const) {
-    it(`${className} package POST stores20 ammunition, and zero quantity makes its ranged profile unavailable`, async () => {
+    it(`${className} package POST stores 20 rounds of ammunition, and zero quantity makes its ranged profile unavailable`, async () => {
       const names = getStartingEquipment(className).map((item: { name: string }) => item.name);
       const character = { equipment: names } as any;
       const equipment = transformEquipmentForStorage(

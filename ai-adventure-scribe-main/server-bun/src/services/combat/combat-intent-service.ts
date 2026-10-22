@@ -1224,7 +1224,9 @@ export async function executeCombatIntent(
     const writesEngineRow =
       actor.participantType !== 'player' ||
       (submitted.actionId !== undefined &&
-        (resolved.type === 'end_turn' || resolved.type === 'attack' || resolved.type === 'spell'));
+        (resolved.type === 'end_turn' ||
+          resolved.type === 'attack' ||
+          resolved.type === 'spell'));
     // After the turn gate, not before: an absorbed advance that then refuses must stand (#2666).
     if (!inNpcTransaction && writesEngineRow) {
       const { withNpcActionTransaction } = await import('../../../../db/client');
@@ -1675,7 +1677,7 @@ export async function executeCombatIntent(
         intent.expectedVersion,
         async () => {
           if (!actorCharacterId) {
-            throw new BusinessLogicError("Second Wind is not on this character's sheet", {
+            throw new BusinessLogicError('Second Wind is not on this character\'s sheet', {
               reason: 'feature_not_on_sheet',
               featureName: 'Second Wind',
             });
@@ -1704,7 +1706,7 @@ export async function executeCombatIntent(
       const actorCharacterId = (actor as unknown as { characterId?: string | null }).characterId;
       await claimTurnVersion(intent.actorId, encounterId, intent.expectedVersion);
       if (!actorCharacterId) {
-        throw new BusinessLogicError("Action Surge is not on this character's sheet", {
+        throw new BusinessLogicError('Action Surge is not on this character\'s sheet', {
           reason: 'feature_not_on_sheet',
           featureName: 'Action Surge',
         });

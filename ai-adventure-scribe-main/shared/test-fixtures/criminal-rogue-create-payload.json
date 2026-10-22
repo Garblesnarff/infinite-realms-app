@@ -22,7 +22,9 @@
   "expertise_proficiencies": "",
   "tool_proficiencies": "Thieves' tools,One type of gaming set",
   "saving_throw_proficiencies": "",
-  "languages": ["Common"],
+  "languages": [
+    "Common"
+  ],
   "cantrips": "",
   "known_spells": "",
   "prepared_spells": "",
