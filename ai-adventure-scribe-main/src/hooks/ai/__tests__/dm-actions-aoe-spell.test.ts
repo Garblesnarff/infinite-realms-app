@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { handleDmActionsAndTransitions } from '../dm-actions-handler';
 
+import { mapAuthoritativeCombat } from '@/contexts/combat/authoritative-combat-state';
 import { buildSpellCastMessage } from '@/features/game-session/components/game/overhaul/spell-view-model';
 import { AIService } from '@/services/ai-service';
 import {
@@ -237,7 +238,30 @@ describe('the sheet-Cast Burning Hands at level 1 (#2304)', () => {
   it('turns a stale targeted Burning Hands declaration into an aimed area cast', async () => {
     vi.mocked(userDataApi.resolveAoECast).mockResolvedValue(jsonResponse(200, RESOLVED));
 
+    const refreshed = mapAuthoritativeCombat({
+      encounter: {
+        id: ENCOUNTER.id,
+        sessionId: 'session-m7',
+        status: 'active',
+        currentRound: 4,
+        currentTurnOrder: 0,
+        startedAt: '2026-10-22T00:00:00Z',
+      },
+      participants: PARTICIPANTS.map((participant) => ({
+        ...participant,
+        position: { ...participant.position, sceneId: 'map-m7' },
+        initiative: 10,
+        initiativeModifier: 0,
+        armorClass: 12,
+        maxHp: 40,
+        speed: 30,
+        isActive: true,
+      })),
+    });
+    expect(refreshed.participants[1].position).toEqual({ x: 3, y: 4, sceneId: 'map-m7' });
     const outcome = await invoke({
+      activeEncounter: refreshed,
+      refreshCombatState: vi.fn().mockResolvedValue(refreshed),
       result: { text: DM_PROSE, combat_actions: [DM_TARGETED_BURNING_HANDS] },
     });
 

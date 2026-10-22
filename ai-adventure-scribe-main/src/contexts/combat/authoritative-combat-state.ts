@@ -15,6 +15,7 @@ type ServerStatus = {
 export type ServerVitalState = 'standing' | 'dying' | 'stabilized' | 'dead';
 type ServerCondition = { condition?: { name?: string; description?: string } };
 type ServerParticipant = {
+  position?: { x: number; y: number; sceneId: string };
   id: string;
   characterId?: string | null;
   name: string;
@@ -61,6 +62,7 @@ export function mapAuthoritativeCombat(payload: AuthoritativeCombatPayload): Com
     createCombatParticipant(
       {
         id: participant.id,
+        position: participant.position,
         characterId: participant.characterId ?? undefined,
         participantType: participant.participantType === 'player' ? 'player' : 'monster',
         name: participant.name,

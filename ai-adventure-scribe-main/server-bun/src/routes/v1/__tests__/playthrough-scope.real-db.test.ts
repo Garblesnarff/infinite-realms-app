@@ -804,9 +804,8 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
       expect(second.json.tacticalContext).toContain('<engine_resolved_outcomes>');
       expect(second.json.tacticalContext).toContain('<previous_tactical_failure>');
       expect(
-        JSON.parse(
-          second.json.tacticalContext.match(/<contract_json>(.*?)<\/contract_json>/s)![1],
-        ).actions,
+        JSON.parse(second.json.tacticalContext.match(/<contract_json>(.*?)<\/contract_json>/s)![1])
+          .actions,
       ).toMatchObject([
         { kind: 'move', count: 1, actors: ['alice'] },
         { kind: 'attack', count: 1, actors: ['spent-sentinel'], hit: true },
@@ -897,6 +896,19 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
       expect((active.state as TacticalMap).pendingDmFacts).toEqual([
         'Older active fact stays queued',
       ]);
+    });
+
+    test('combat status carries the stored tactical cells for the area-cast client (#1022)', async () => {
+      const before = await persistedCombat();
+      const response = await call('GET', `/v1/combat/${encounterId}/status`);
+      expect(response.status).toBe(200);
+      expect(response.json.participants).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: heroId, position: { x: 3, y: 3, sceneId: mapId } }),
+          expect.objectContaining({ id: monsterId, position: { x: 9, y: 3, sceneId: mapId } }),
+        ]),
+      );
+      expect(await persistedCombat()).toEqual(before);
     });
 
     test('the board valid-moves URL returns engine destinations through the real pipeline (#199 step 3)', async () => {

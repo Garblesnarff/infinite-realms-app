@@ -347,6 +347,7 @@ export interface CreateCombatEncounterInput {
  * Note: HP and conditions are tracked separately in combatParticipantStatus
  */
 export interface CombatParticipant {
+  position?: { x: number; y: number; sceneId: string };
   id: string;
   encounterId: string;
   characterId: string | null;
