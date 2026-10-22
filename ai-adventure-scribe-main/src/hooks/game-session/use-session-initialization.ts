@@ -291,6 +291,38 @@ export const useSessionInitialization = ({
             return;
           }
 
+          // #1020: a completed one-shot resumes the completed session itself
+          // — never a continuation. A one-shot has no next session: creating
+          // one would strand the completion end state on an empty session
+          // (its "Read the story so far" would read the new session's blank
+          // log) and start a run the campaign says does not exist. The check
+          // reads the same session load payload as the fallen check above;
+          // the game screen's load gate renders the completion end state for
+          // the resumed session.
+          let completionState = null;
+          try {
+            completionState =
+              await userDataApi.fetchSessionCompletionState(lastCompletedSession.id);
+          } catch (error) {
+            logger.warn('[Session Init] Completion-state check failed, continuing normally:', error);
+          }
+          if (abortSignal.aborted || !mountedRef.current) {
+            logger.info('[Session Init] Aborted after completion-state check');
+            return;
+          }
+          if (completionState) {
+            logger.info(
+              '[Session Init] Resuming the completed one-shot session:',
+              lastCompletedSession.id,
+            );
+            if (mountedRef.current && !abortSignal.aborted) {
+              setSessionData(lastCompletedSession);
+              setSessionState('active');
+              sessionInitializedRef.current = true;
+            }
+            return;
+          }
+
           logger.info(
             '[Session Init] Creating continuation from previous:',
             lastCompletedSession.id,

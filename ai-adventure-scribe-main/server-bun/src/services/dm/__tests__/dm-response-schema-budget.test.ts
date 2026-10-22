@@ -49,9 +49,14 @@ const TARGET_MAX_ONE_OF = 0;
 const TARGET_MAX_KEYWORDS = 0;
 
 /** Baseline budget per phase: unions/optionals re-measured for #782 item 7 —
- *  see header comment. ONE_OF lowered to 0 by #782 item 8 (was 1). */
+ *  see header comment. ONE_OF lowered to 0 by #782 item 8 (was 1).
+ *  OPTIONALS raised 39 → 40 by #1020 (2026-10-22): the `campaign_ending`
+ *  story field is one new optional top-level property (its `summary` is
+ *  required inside the sub-object, and it adds no unions or keywords). The
+ *  growth is the fix's payload, recorded here rather than hidden; the ≤24
+ *  strict target still waits on item 8's per-phase schemas. */
 const BASELINE_UNIONS = 7;
-const BASELINE_OPTIONALS = 39;
+const BASELINE_OPTIONALS = 40;
 const BASELINE_ONE_OF = 0;
 const BASELINE_KEYWORDS = 7;
 

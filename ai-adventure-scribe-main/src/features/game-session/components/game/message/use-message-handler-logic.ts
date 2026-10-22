@@ -190,6 +190,12 @@ export const useMessageHandlerLogic = ({
     receivedAt: number;
     finalLines?: string[];
   } | null;
+  /** #1020: the campaign's ending landed; when set, the UI renders the completion screen. */
+  campaignCompletedState: {
+    summary: string;
+    sessionId: string;
+    receivedAt: number;
+  } | null;
 } => {
   const { messages, messagesReady, sendMessage, updateMessage, removeMessage } =
     useMessageContext();
@@ -199,6 +205,7 @@ export const useMessageHandlerLogic = ({
     combatTurnUiState = INITIAL_COMBAT_TURN_UI_STATE,
     resumeCombatTurn = async () => {},
     terminalDeathState = null,
+    campaignCompletedState = null,
     checkRestoredDefeat = async () => false,
   } = useAIResponse();
   const { processAiResponse, state: gameState } = useGame();
@@ -1300,5 +1307,6 @@ export const useMessageHandlerLogic = ({
     combatTurnUiState,
     resumeCombatTurn,
     terminalDeathState,
+    campaignCompletedState,
   };
 };

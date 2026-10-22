@@ -30,6 +30,18 @@ interface MessageHandlerProps {
       finalLines?: string[];
     } | null,
   ) => void;
+  /**
+   * #1020: reports the campaign-completion state upward so the game screen
+   * can swap to the completion end state, the same page-state pattern as the
+   * fallen end state above.
+   */
+  onCampaignCompletedStateChange?: (
+    state: {
+      summary: string;
+      sessionId: string;
+      receivedAt: number;
+    } | null,
+  ) => void;
   children: (props: {
     handleSendMessage: (message: string, context?: MessageSendContext) => Promise<void>;
     isProcessing: boolean;
@@ -64,6 +76,7 @@ export const MessageHandler: React.FC<MessageHandlerProps> = (props) => {
     combatTurnUiState,
     resumeCombatTurn,
     terminalDeathState,
+    campaignCompletedState,
   } = useMessageHandlerLogic(props);
 
   useEffect(() => {
@@ -89,6 +102,18 @@ export const MessageHandler: React.FC<MessageHandlerProps> = (props) => {
     if (terminalDeathState && isProcessing) return;
     onTerminalDeathStateChange?.(terminalDeathState);
   }, [onTerminalDeathStateChange, terminalDeathState, isProcessing]);
+
+  const onCampaignCompletedStateChange = props.onCampaignCompletedStateChange;
+  useEffect(() => {
+    // #1020: same hold as the death state above — the completion can be set
+    // while the ending turn is still finishing (the DM reply and the engine
+    // ending row persist after the reply arrives), and swapping the tree
+    // mid-send would unmount this handler before those saves settle. The end
+    // state then replaces a completed turn, and "Read the story so far"
+    // holds the ending.
+    if (campaignCompletedState && isProcessing) return;
+    onCampaignCompletedStateChange?.(campaignCompletedState);
+  }, [onCampaignCompletedStateChange, campaignCompletedState, isProcessing]);
 
   return props.children({
     handleSendMessage,

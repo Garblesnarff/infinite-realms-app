@@ -59,6 +59,8 @@ export interface DmSystemPromptInput {
   campaignDescription: string;
   /** Whether the session has campaign details at all (the old prompt gated the block on this). */
   hasCampaignDetails: boolean;
+  /** #1020: the campaign-ending field instructions are taught only for one-shot campaigns. */
+  oneShotCampaign?: boolean;
   inCombat: boolean;
   voiceContext: SessionVoiceContext | null;
 }
@@ -69,7 +71,14 @@ export interface DmSystemPromptInput {
  * (campaign) / combat state (rules variants). Nothing per-turn may enter here.
  */
 export function buildSystemPrompt(input: DmSystemPromptInput): string {
-  const { campaignName, campaignDescription, hasCampaignDetails, inCombat, voiceContext } = input;
+  const {
+    campaignName,
+    campaignDescription,
+    hasCampaignDetails,
+    oneShotCampaign = false,
+    inCombat,
+    voiceContext,
+  } = input;
   let system = ContextBuilderPrompts.buildPersonaSection();
   if (hasCampaignDetails) {
     system += `\n<campaign_details>\nCAMPAIGN: "${campaignName}"\nDESCRIPTION: ${campaignDescription}\n</campaign_details>`;
@@ -78,7 +87,7 @@ export function buildSystemPrompt(input: DmSystemPromptInput): string {
   if (voiceContext) {
     system += ContextBuilderPrompts.buildVoiceOptimizationSection();
   }
-  system += ContextBuilderPrompts.buildResponseStructureSection({ inCombat });
+  system += ContextBuilderPrompts.buildResponseStructureSection({ inCombat, oneShotCampaign });
   if (voiceContext) {
     system += `\n**REMEMBER: Always respond in the JSON format with narration_segments for voice synthesis!**`;
   }
@@ -240,6 +249,7 @@ export function extractCampaignDetails(context: GameContext): {
   campaignName: string;
   campaignDescription: string;
   hasCampaignDetails: boolean;
+  oneShotCampaign: boolean;
 } {
   const rawCampaignDetails = context.campaignDetails || {};
   const nestedCampaignDetails =
@@ -252,5 +262,8 @@ export function extractCampaignDetails(context: GameContext): {
     ),
     campaignDescription: String(nestedCampaignDetails.description || nestedCampaignDetails.premise || ''),
     hasCampaignDetails: Boolean(context.campaignDetails),
+    // #1020: campaigns.campaignLength, carried on the campaign record the game
+    // context is built from (the session-context payload selects it).
+    oneShotCampaign: nestedCampaignDetails.campaignLength === 'one-shot',
   };
 }

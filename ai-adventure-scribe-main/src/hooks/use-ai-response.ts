@@ -301,6 +301,19 @@ export const useAIResponse = (): {
     finalLines?: string[];
   } | null;
   /**
+   * #1020: the campaign's ending landed this turn — the server completed the
+   * session in /generate and kept the `campaign_ending` field on the reply.
+   * While set, the UI renders the completion end state.
+   */
+  campaignCompletedState: {
+    /** The ending's summary, as declared by the DM and stored as the session summary. */
+    summary: string;
+    /** The session this ending belongs to; the screen renders it only for that session. */
+    sessionId: string;
+    /** When this completion arrived; distinguishes repeat arrivals. */
+    receivedAt: number;
+  } | null;
+  /**
    * #2517: restore the death screen for a session that already ended in
    * defeat (page load / reconnect). Resolves true when the screen is shown.
    */
@@ -327,6 +340,17 @@ export const useAIResponse = (): {
     receivedAt: number;
     /** The engine's final lines for the fallen character, when this turn produced them. */
     finalLines?: string[];
+  } | null>(null);
+  /**
+   * #1020: the campaign's ending landed — the server completed the session in
+   * /generate (story-ending.ts) and kept the reply's `campaign_ending` field,
+   * which it nulls whenever the ending did not apply. While set, the UI
+   * renders the completion end state instead of the composer.
+   */
+  const [campaignCompletedState, setCampaignCompletedState] = useState<{
+    summary: string;
+    sessionId: string;
+    receivedAt: number;
   } | null>(null);
   const terminalDeathSessionRef = useRef<string>('');
   // The queue as of the latest render: a turn started from a stale closure must not cancel a roll
@@ -380,6 +404,9 @@ export const useAIResponse = (): {
     if (terminalDeathSessionRef.current !== sessionId) {
       terminalDeathSessionRef.current = sessionId;
       setTerminalDeathState(null);
+      // #1020: a previous session's completion screen must not follow the player
+      // into a different session either.
+      setCampaignCompletedState(null);
     }
     try {
       const fallen = await userDataApi.fetchSessionFallenState(sessionId);
@@ -1146,6 +1173,31 @@ export const useAIResponse = (): {
         result = dmActionsResult.result;
         responseText = dmActionsResult.responseText;
         narrationSegments = dmActionsResult.narrationSegments;
+
+        // #1020: the campaign's ending landed — latch it only now, from the
+        // final result. The server completed the session in /generate and kept
+        // the field only when the ending applied (nulled otherwise, #768-style),
+        // so a populated field is the engine's own ending. Latching here rather
+        // than at parse time matters: the narration gate and the DM-action
+        // processing above may have replaced the reply (a regenerated reply's
+        // field is the server's verdict for THAT reply), and a turn that threw
+        // before this point must not end the game on screen. The state carries
+        // its session id, so a late-arriving turn can never render its ending
+        // over a different session's screen.
+        const declaredEnding = (result as { campaign_ending?: unknown }).campaign_ending;
+        if (
+          sessionId &&
+          declaredEnding !== null &&
+          typeof declaredEnding === 'object' &&
+          typeof (declaredEnding as { summary?: unknown }).summary === 'string' &&
+          (declaredEnding as { summary: string }).summary.trim().length > 0
+        ) {
+          setCampaignCompletedState({
+            summary: (declaredEnding as { summary: string }).summary,
+            sessionId,
+            receivedAt: Date.now(),
+          });
+        }
         const deliveredHandouts = dmActionsResult.deliveredHandouts;
         isInCombat = dmActionsResult.isInCombat;
         activeEncounter = dmActionsResult.activeEncounter;
@@ -1431,6 +1483,7 @@ export const useAIResponse = (): {
     combatTurnUiState,
     resumeCombatTurn,
     terminalDeathState,
+    campaignCompletedState,
     checkRestoredDefeat,
   };
 };

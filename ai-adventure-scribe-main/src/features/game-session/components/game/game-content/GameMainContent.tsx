@@ -2,6 +2,7 @@ import { Dice6, Map as MapIcon, Sword, X } from 'lucide-react';
 import React, { memo } from 'react';
 
 import { BuildSessionStatus } from './BuildSessionStatus';
+import { CampaignCompleteEndState } from './CompletionScreen';
 import { buildChooseHeroHref, FallenEndState, FallenStoryLog } from './DeathScreen';
 import { GamePanelControls } from './GamePanelControls';
 import { currentQueueRoll, queueRollLabel } from './queue-roll-label';
@@ -143,6 +144,41 @@ function FallenEndStateWithCharacter({
       characterName={characterState.character?.name ?? null}
       finalLines={finalLines}
       campaignName={campaignState.campaign?.name ?? null}
+      chooseHeroHref={buildChooseHeroHref({
+        starterSlug,
+        campaignId: sessionData.campaign_id ?? campaignIdForHandler,
+      })}
+      chooseHeroPending={Boolean(sessionData.starter_campaign_id) && starterCampaignsLoading}
+      storyContent={<FallenStoryLog />}
+    />
+  );
+}
+
+/**
+ * #1020: the completion end state for the live game screen, the companion to
+ * FallenEndStateWithCharacter above — same providers-on-the-terminal-path
+ * pattern, same hero-pick route back into this campaign, same story log.
+ */
+function CampaignCompleteEndStateWithCharacter({
+  summary,
+  sessionData,
+  campaignIdForHandler,
+}: {
+  summary: string;
+  sessionData: ExtendedGameSession;
+  campaignIdForHandler: string | null;
+}) {
+  const { state: characterState } = useCharacter();
+  const { state: campaignState } = useCampaign();
+  const { campaigns: starterCampaigns, isLoading: starterCampaignsLoading } = useStarterCampaigns();
+  const starterSlug = sessionData.starter_campaign_id
+    ? (starterCampaigns.find((c) => c.id === sessionData.starter_campaign_id)?.slug ?? null)
+    : null;
+  return (
+    <CampaignCompleteEndState
+      characterName={characterState.character?.name ?? null}
+      campaignName={campaignState.campaign?.name ?? null}
+      summary={summary}
       chooseHeroHref={buildChooseHeroHref({
         starterSlug,
         campaignId: sessionData.campaign_id ?? campaignIdForHandler,
@@ -299,9 +335,30 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
       },
       [],
     );
+    // #1020: the campaign's ending landed — the completion state arrives from
+    // the message handler once the ending turn has settled — and this column
+    // is replaced by the completion end state, like the fallen one. The
+    // layout is told through the same onFallenChange signal: it only needs
+    // "an end state replaced this column", so the panels and controls leave
+    // the page for a completion exactly as they do for a fall.
+    const [completionUiState, setCompletionUiState] = React.useState<{
+      summary: string;
+      sessionId: string;
+    } | null>(null);
+    const handleCampaignCompletedStateChange = React.useCallback(
+      (state: { summary: string; sessionId: string } | null) => {
+        setCompletionUiState(
+          state ? { summary: state.summary, sessionId: state.sessionId } : null,
+        );
+      },
+      [],
+    );
     React.useEffect(() => {
-      onFallenChange?.(terminalUiState !== null);
-    }, [onFallenChange, terminalUiState]);
+      onFallenChange?.(
+        terminalUiState !== null ||
+          (completionUiState !== null && completionUiState.sessionId === sessionId),
+      );
+    }, [onFallenChange, terminalUiState, completionUiState, sessionId]);
     // Queue state, not getCurrentDiceRoll(): that getter reads a ref and lags one render.
     // The queue's current roll is the only request with a visible control (the dice popup in
     // MessageListContainer), so it alone may raise the pill, the banner, and the input lock.
@@ -329,6 +386,20 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
         >
           <FallenEndStateWithCharacter
             finalLines={terminalUiState.finalLines}
+            sessionData={sessionData}
+            campaignIdForHandler={campaignIdForHandler}
+          />
+        </div>
+      );
+    }
+
+    if (completionUiState && completionUiState.sessionId === sessionId) {
+      return (
+        <div
+          className={`flex-1 min-w-0 min-h-0 ${isLeftCollapsed ? 'order-1' : 'order-2'} layout-main flex flex-col h-full`}
+        >
+          <CampaignCompleteEndStateWithCharacter
+            summary={completionUiState.summary}
             sessionData={sessionData}
             campaignIdForHandler={campaignIdForHandler}
           />
@@ -472,6 +543,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
               onAIResponse={innerHandleAIResponse}
               spellCastHandlerRef={spellCastHandlerRef}
               onTerminalDeathStateChange={handleTerminalDeathStateChange}
+              onCampaignCompletedStateChange={handleCampaignCompletedStateChange}
             >
               {({
                 handleSendMessage,

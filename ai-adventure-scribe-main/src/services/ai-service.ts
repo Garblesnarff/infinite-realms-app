@@ -393,9 +393,8 @@ export class AIService {
         // combat state flips only on combat start/end, so the system message
         // stays byte-identical across turns within a scene.
         const inCombat = params.context.gameState?.isInCombat === true;
-        const { campaignName, campaignDescription, hasCampaignDetails } = extractCampaignDetails(
-          params.context,
-        );
+        const { campaignName, campaignDescription, hasCampaignDetails, oneShotCampaign } =
+          extractCampaignDetails(params.context);
         // The opening turn keeps the legacy single-prompt assembly (no system
         // message): it has no scene yet and must see the whole campaign to
         // stage it. Every later turn splits stable -> volatile for caching.
@@ -405,6 +404,7 @@ export class AIService {
               campaignName,
               campaignDescription,
               hasCampaignDetails,
+              oneShotCampaign,
               inCombat,
               voiceContext,
             });

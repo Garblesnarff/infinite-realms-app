@@ -97,6 +97,23 @@ export type SessionFallenState = {
   diedAt: string | null;
 };
 
+/**
+ * #1020: the completed state of a one-shot session, from the same session
+ * load payload. `game_sessions.status` is the single truth for "complete";
+ * the campaign's length gates it to one-shots — a completed multi-session
+ * campaign continues in a new session instead. Everything else here is what
+ * the completion end state needs to render and route.
+ */
+export type SessionCompletionState = {
+  characterId: string | null;
+  characterName: string | null;
+  campaignId: string | null;
+  campaignName: string | null;
+  starterCampaignId: string | null;
+  /** The stored ending: the session summary the completion was stored with. */
+  summary: string;
+};
+
 export type TacticalMapActionPayload = {
   action: 'move' | 'place' | 'remove' | 'update_cell';
   entityId?: string | null;
@@ -473,6 +490,40 @@ export const userDataApi = {
       campaignName: typeof campaignRecord.name === 'string' ? campaignRecord.name : null,
       starterCampaignId: context.starter_campaign_id ?? null,
       diedAt: stats.died_at ?? null,
+    };
+  },
+  /**
+   * #1020: whether the session is a completed one-shot, from the session
+   * load payload (`GET /v1/sessions/:id/context`) — the restore half of the
+   * completion end state, as `fetchSessionFallenState` is for the fallen
+   * one. The single truth is the server's: the session's `status`, read in
+   * the same payload the game screen already loads, so load, reload and
+   * reconnect all gate on the same state. Returns null unless the session
+   * is completed, its campaign is a one-shot (`campaignLength`), and it
+   * carries the summary its completion was stored with.
+   */
+  fetchSessionCompletionState: async (
+    sessionId: string,
+  ): Promise<SessionCompletionState | null> => {
+    const context = await request<SessionContextPayload>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/context`,
+    );
+    if (context.status !== 'completed') return null;
+    const campaignRecord = context.campaign ?? {};
+    if (campaignRecord.campaignLength !== 'one-shot') return null;
+    const summary = typeof context.summary === 'string' ? context.summary : null;
+    if (!summary?.trim()) return null;
+    const characterRecord = context.character ?? {};
+    return {
+      characterId:
+        context.character_id ??
+        (typeof characterRecord.id === 'string' ? characterRecord.id : null),
+      characterName: typeof characterRecord.name === 'string' ? characterRecord.name : null,
+      campaignId:
+        context.campaign_id ?? (typeof campaignRecord.id === 'string' ? campaignRecord.id : null),
+      campaignName: typeof campaignRecord.name === 'string' ? campaignRecord.name : null,
+      starterCampaignId: context.starter_campaign_id ?? null,
+      summary,
     };
   },
   endTacticalMap: (

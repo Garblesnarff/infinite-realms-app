@@ -158,6 +158,8 @@ describe('the prompt outside combat (#2400)', () => {
  * #400 re-pinned the response-structure hash after constraining options to sheet spells/attacks.
  * #714 re-pinned the rules-of-play hash after adding the spell-cast rule.
  * #610 re-pinned the response-structure hash after adding the out-of-combat story-damage field.
+ * #1020 leaves the default hash untouched — the campaign-ending field is gated to one-shot
+ * campaigns — and pins the one-shot variant's hash separately below.
  */
   it('keeps the byte-identical sections it had before the combat variants existed', () => {
     const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -168,6 +170,10 @@ describe('the prompt outside combat (#2400)', () => {
     expect(sha256(ContextBuilderPrompts.buildResponseStructureSection())).toBe(
       '04d8155608c5ec0baaff9f309a1887c8465c2b643bd7658a047cf4690f5659d8',
     );
+    // #1020: the one-shot variant (campaign-ending field taught) is pinned too.
+    expect(
+      sha256(ContextBuilderPrompts.buildResponseStructureSection({ oneShotCampaign: true })),
+    ).toBe('b8c356c8ad9e10810c90d856ec73d516c988929022a323b0b552ee3ac9781884');
     expect(sha256(ContextBuilderPrompts.buildFinalRemindersSection())).toBe(
       'f73f18110ce03c6aca6e4a04932ba834ce476d71c27392f86d1b4b81221fada2',
     );
