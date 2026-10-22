@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Cases for ops/http-alarm.sh (#2293), with fixture nginx "combined" log lines
 # and a stub `gh`: a quiet window, 3 x 422 on the #2280 route, a repeat inside
-# the hour, a 5xx, smoke requests, a timezone offset, the rotated file, and a
-# log it cannot parse.
+# the hour, a 5xx, smoke requests, a timezone offset, the rotated file, a log
+# it cannot parse, the 24 h 4xx-rate alarm and the MCP /health probes (#350).
 #
 #   bash ops/tests/http-alarm.sh
 #
@@ -16,6 +16,9 @@ trap 'rm -rf "$TMP"' EXIT
 
 printf '#!/usr/bin/env bash\n{ echo "ARGS: $*"; cat; echo "--- end"; } >> "$GH_LOG"\n' > "$TMP/gh"
 chmod +x "$TMP/gh"
+# Stub curl for the probes: answers the code CURL_CODES maps the URL to ("<url> <code>" lines), else 000.
+printf '#!/usr/bin/env bash\nfor a; do u=$a; done\nc=$(awk -v u="$u" '"'"'$1 == u { print $2 }'"'"' "$CURL_CODES" 2> /dev/null)\nprintf %%s "${c:-000}"\n' > "$TMP/curl"
+chmod +x "$TMP/curl"
 : > "$TMP/none.env"
 
 # 2026-09-26T03:10:00Z, the end of every window below unless a case moves it.
@@ -30,12 +33,17 @@ line() {
 S1=/v1/sessions/e735db3c-809b-465a-8bd1-2a51c32f6b04/messages
 S2=/v1/sessions/75fddc00-862c-4a8b-a8d0-4e630aae61ec/messages
 
+# line25 <HH:MM:SS> <method> <path> <status>: the same, on 25/Sep/2026 (the day before).
+line25() { line "$@" | sed 's#26/Sep/2026#25/Sep/2026#'; }
+
 # alarm <dir> [now]: run the real script on <dir>/access.log (+ .1), state in <dir>.
+# Probes are off unless the case sets PROBES; CURL_CODES feeds the stub curl.
 alarm() {
   local d=$1 now=${2:-$T0}
   mkdir -p "$d/state"
   RC=0
-  GH_LOG="$d/gh.log" HTTP_ALARM_LOGS="$d/access.log.1 $d/access.log" HTTP_ALARM_NOW="$now" \
+  HTTP_ALARM_PROBES="${PROBES:-}" HTTP_ALARM_CURL="$TMP/curl" CURL_CODES="${CURL_CODES:-/dev/null}" \
+    GH_LOG="$d/gh.log" HTTP_ALARM_LOGS="$d/access.log.1 $d/access.log" HTTP_ALARM_NOW="$now" \
     DEPLOY_STATE_DIR="$d/state" DEPLOY_ALERT_FILE="$d/alerts.log" DEPLOY_ALERTS_ENV="$TMP/none.env" \
     DEPLOY_GH_BIN="$TMP/gh" DEPLOY_RUN_REPO=test/repo DEPLOY_RUN_ISSUE=2093 \
     bash "$ALARM" > "$d/out" 2>&1 || RC=$?
@@ -148,6 +156,70 @@ D="$TMP/nolog"; mkdir -p "$D"
 alarm "$D"
 expect "no log: exit 0 and says so" test "$RC" = 0 -a -n "$(grep 'no readable log' "$D/out")"
 expect "no log: no alert" test "$(alerts "$D")" = 0
+
+# 10. 4xx rate (#350): >= 90% 4xx of >= 20 calls in 24 h fires once a day; less does not.
+C1=/v1/characters/e735db3c-809b-465a-8bd1-2a51c32f6b04/spells
+C2=/v1/characters/75fddc00-862c-4a8b-a8d0-4e630aae61ec/spells
+D="$TMP/rate"; mkdir -p "$D"
+{
+  # 18 x 400 + 2 x 200 on POST /v1/characters/:id/spells, spread over the day: 90%.
+  for h in 04 06 08 10 12 14 16 18 20; do line25 "$h:00:00" POST "$C1" 400; line25 "$h:30:00" POST "$C2" 400; done
+  line 01:00:00 POST "$C1" 200; line 02:00:00 POST "$C2" 200
+  line25 02:00:00 POST "$C1" 400 # 25h ago: outside the 24 h window
+  for i in 1 2 3; do line 01:1$i:00 OPTIONS "$C1" 400; done # preflights are not counted
+  # 19 calls, all 404: under the call floor.
+  for i in $(seq 10 28); do line 00:$i:00 GET /v1/blog/missing 404; done
+  # 20 calls, 17 x 401: 85%, under the rate.
+  for i in $(seq 10 26); do line 01:$i:00 POST /v1/auth/refresh 401; done
+  for i in 27 28 29; do line 01:$i:00 POST /v1/auth/refresh 200; done
+  # 20 smoke calls, all 400: not counted.
+  for i in $(seq 30 49); do line 02:$i:00 GET /v1/smoke-only 400 "$SMOKE_UA"; done
+} > "$D/access.log"
+alarm "$D"
+expect "rate: exit 0" test "$RC" = 0
+expect "rate: one alert line" test "$(alerts "$D")" = 1
+expect "rate: names the route, ratio and period" grep -qF "HTTP ALARM: POST /v1/characters/:id/spells 18/20×4xx in 24h" "$D/alerts.log"
+expect "rate: not 'in the last 15m' (no window alarm fired)" bash -c "! grep -qF 'in the last 15m' '$D/alerts.log'"
+expect "rate: under the call floor is quiet" bash -c "! grep -qF '/v1/blog/missing' '$D/alerts.log'"
+expect "rate: 85% is quiet" bash -c "! grep -qF '/v1/auth/refresh' '$D/alerts.log'"
+expect "rate: smoke calls are not counted" bash -c "! grep -qF '/v1/smoke-only' '$D/alerts.log'"
+expect "rate: one comment, names the route" grep -qF -- '- `POST /v1/characters/:id/spells`: 18/20×4xx in 24h' "$D/gh.log"
+expect "rate: no raw character id leaves the box" bash -c "! grep -q e735db3c '$D/alerts.log' '$D/gh.log'"
+# Half an hour later the route is still at 90%+: no second alert inside the day.
+alarm "$D" $((T0 + 1800))
+expect "rate: not again inside the day" test "$(alerts "$D")" = 1
+expect "rate: says it is holding back" has "quiet: POST /v1/characters/:id/spells"
+# The hourly window alarms' state pruning must not forget the daily one.
+line 04:05:00 POST "$S1" 500 >> "$D/access.log"
+alarm "$D" $((T0 + 3600 + 300))
+expect "rate: a 5xx alert an hour later fires alone" grep -qF "HTTP ALARM: POST /v1/sessions/:id/messages 1×5xx in the last 15m (" "$D/alerts.log"
+alarm "$D" $((T0 + 3 * 3600))
+expect "rate: still remembered after the 5xx alert pruned the state" test "$(alerts "$D")" = 2
+
+# 11. Probes (#350): an MCP /health that is not 2xx fires once an hour, named by port.
+D="$TMP/probe"; mkdir -p "$D"
+line 03:05:00 GET /health 200 > "$D/access.log"
+printf '%s\n' 'http://127.0.0.1:8889/health 503' 'http://127.0.0.1:8890/health 200' > "$TMP/codes"
+PROBES='pearls=http://127.0.0.1:8889/health cofounder=http://127.0.0.1:8890/health' CURL_CODES="$TMP/codes" alarm "$D"
+expect "probe: one alert line" test "$(alerts "$D")" = 1
+expect "probe: names the server, port and status" grep -qF "HTTP ALARM: MCP pearls :8889/health HTTP 503" "$D/alerts.log"
+expect "probe: a 2xx probe is not named" bash -c "! grep -qF 'cofounder' '$D/alerts.log'"
+expect "probe: no host or IP leaves the box" bash -c "! grep -qF '127.0.0.1' '$D/alerts.log' '$D/gh.log'"
+expect "probe: summary counts probes" has "probes 1/2 ok"
+PROBES='pearls=http://127.0.0.1:8889/health cofounder=http://127.0.0.1:8890/health' CURL_CODES="$TMP/codes" alarm "$D" $((T0 + 900))
+expect "probe: not again inside the hour" test "$(alerts "$D")" = 1
+# Nothing answering at all is "no answer"; and probes still run with no log.
+D="$TMP/probe-down"; mkdir -p "$D"
+PROBES='cofounder=http://127.0.0.1:8890/health' alarm "$D"
+expect "probe: no log still probes, exit 0" test "$RC" = 0
+expect "probe: a dead port is 'no answer'" grep -qF "MCP cofounder :8890/health no answer" "$D/alerts.log"
+# All 2xx: quiet.
+D="$TMP/probe-ok"; mkdir -p "$D"
+line 03:05:00 GET /health 200 > "$D/access.log"
+printf '%s\n' 'http://127.0.0.1:8889/health 200' 'http://127.0.0.1:8890/health 204' > "$TMP/codes-ok"
+PROBES='pearls=http://127.0.0.1:8889/health cofounder=http://127.0.0.1:8890/health' CURL_CODES="$TMP/codes-ok" alarm "$D"
+expect "probe: all 2xx, no alert" test "$(alerts "$D")" = 0
+expect "probe: all 2xx counted" has "probes 2/2 ok"
 
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
