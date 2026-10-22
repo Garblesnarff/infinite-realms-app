@@ -156,9 +156,16 @@ describe('useAIResponse: the sheet save card comes before the DM (#2392)', () =>
       refreshCombatState: vi.fn(async () => encounter),
     } as any);
   };
-  const play = (message: unknown) => {
+  const play = (message: unknown, dmMessageId?: string) => {
     const { result } = renderHook(() => useAIResponse());
-    return result.current.getAIResponse([message] as any, SESSION_ID);
+    return result.current.getAIResponse(
+      [message] as any,
+      SESSION_ID,
+      undefined,
+      undefined,
+      undefined,
+      dmMessageId,
+    );
   };
   const cardIsOpen = () => vi.waitFor(() => expect(presented).toHaveLength(1));
 
@@ -222,7 +229,7 @@ describe('useAIResponse: the sheet save card comes before the DM (#2392)', () =>
     await play({ ...sheetCast('acid-splash', 'Acid Splash'), context: { intent: 'query' } });
     await play(sheetCast('chill-touch', 'Chill Touch'));
     inFight(sarah, imp);
-    await play(sheetCast('acid-splash', 'Acid Splash'));
+    await play(sheetCast('acid-splash', 'Acid Splash'), 'dm-exploration-cast');
 
     expect(presented).toEqual([]);
     expect(AIService.chatWithDM).toHaveBeenCalledTimes(3);
@@ -311,6 +318,21 @@ describe('useAIResponse: the sheet save card comes before the DM (#2392)', () =>
       const call = vi.mocked(AIService.chatWithDM).mock.calls[0][0] as any;
       // A dmReply is only sent when the caller reserved a message id.
       if (call.dmReply) expect(call.dmReply.inCombat).toBe(true);
+    });
+
+    it('keeps an exploration sheet cast on the story slot and roll path', async () => {
+      // The cancellation signal belongs to the Cast button, not to combat.  Outside combat the
+      // server must therefore receive an ordinary narrative turn so story-spell-slots can spend a
+      // levelled slot and a cantrip's attack roll can reach the dice queue.
+      vi.mocked(useCombat).mockReturnValue({
+        state: { isInCombat: false, activeEncounter: null },
+        refreshCombatState: vi.fn(async () => null),
+      } as any);
+      beginSheetCast('Acid Splash');
+      await play(sheetCast('acid-splash', 'Acid Splash'), 'dm-exploration-cast');
+      const call = vi.mocked(AIService.chatWithDM).mock.calls[0]?.[0] as any;
+      expect(call.dmReply).toEqual(expect.objectContaining({ inCombat: false }));
+      finishSheetCast();
     });
 
     it('a DM failure that is not a cancel still fails the turn', async () => {
