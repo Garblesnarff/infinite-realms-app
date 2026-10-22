@@ -15,7 +15,7 @@
  * Requires TEST_DATABASE_URL or DATABASE_URL — see fixtures/real-db.ts.
  */
 import { expect, it, mock } from 'bun:test';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { describeWithDb, hasRealDb, importWithRealDb, realDb, testId } from './fixtures/real-db.js';
 import {
@@ -225,9 +225,13 @@ describeWithDb('#751 typed chat rests', () => {
       // A long rest resets short-rest and long-rest feature uses alike.
       expect(after.featureUses).toEqual({ channel_divinity: 1, warding_flare: 3 });
       expect(after.events).toEqual(['long']);
-      // A long rest posts no engine chat line (short rests do — the asymmetry
-      // is disclosed in the PR's Friction section).
-      expect(after.engineLines).toEqual([]);
+      // #751 fix: a long rest posts its engine line too (this assertion
+      // pinned the old asymmetry — no line for a long rest — until the
+      // DM-route fix; the line's parts are the rest's actuals: 19 HP
+      // (1 -> 20), slots were spent and restored, 1 hit die regained).
+      const freshLine =
+        '⚙️ Engine: Long rest — 19 HP restored, spell slots restored, 1 hit dice regained.';
+      expect(after.engineLines).toEqual([freshLine]);
 
       // Once per player message: a retry of the same turn applies nothing twice.
       expect(
@@ -239,7 +243,29 @@ describeWithDb('#751 typed chat rests', () => {
       expect(retried.slotsUsed).toEqual({ 1: 0, 2: 0 });
       expect(retried.featureUses).toEqual({ channel_divinity: 1, warding_flare: 3 });
       expect(retried.events).toEqual(['long']);
-      expect(retried.engineLines).toEqual([]);
+      expect(retried.engineLines).toEqual([freshLine]);
+
+      // Recovery: the rest landed but the line itself was lost (a transient
+      // write failure the notice swallows). A retry re-posts it from the
+      // finished rest_events row — the stored HP actual and the completed
+      // rest's canonical effect, never a "(nothing to restore)" claim the
+      // stored row cannot support (slots and dice deltas are not stored).
+      const db = realDb();
+      await db
+        .delete(dialogueHistory)
+        .where(
+          and(
+            eq(dialogueHistory.sessionId, world.sessionId),
+            eq(dialogueHistory.speakerType, 'system'),
+          ),
+        );
+      expect(
+        await applyStoryRest({ userId: world.userId, sessionId: world.sessionId, rest: undefined }),
+      ).toBe('already_applied');
+      const recovered = await sheetState(world);
+      expect(recovered.engineLines).toEqual([
+        '⚙️ Engine: Long rest — 19 HP restored, spell slots restored.',
+      ]);
     } finally {
       await typedRestCleanup(world);
     }

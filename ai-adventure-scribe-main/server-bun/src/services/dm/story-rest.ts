@@ -26,7 +26,7 @@ import { typedRestType } from './typed-rest.js';
 import { logger } from '../../lib/logger.js';
 import { StoryRestAlreadyRecorded } from '../story-rest-already-recorded.js';
 
-import type { ShortRestResult } from '../../types/rest.js';
+import type { LongRestResult, ShortRestResult } from '../../types/rest.js';
 
 export type StoryRestOutcome =
   | 'applied'
@@ -66,6 +66,8 @@ export async function applyStoryRest(input: {
       // The outside read is not the claim. RestService locks, re-checks, and
       // inserts the event before it restores anything.
       let shortRestResult: ShortRestResult | undefined;
+      let longRestResult: LongRestResult | undefined;
+      let spellSlotsRestored = false;
       if (restType === 'short') {
         shortRestResult = await RestService.takeShortRest(
           character.id,
@@ -77,13 +79,32 @@ export async function applyStoryRest(input: {
           { spendHitDiceUntilHealed: true },
         );
       } else {
-        await RestService.takeLongRest(
+        // The long-rest result carries no spell-slot delta (its
+        // resourcesRestored is a static capability list), so snapshot the
+        // used-slot total around the rest: the engine line's
+        // "(nothing to restore)" must be exact, not a guess. The snapshots
+        // are advisory wording only — wrapped apart so a snapshot failure
+        // degrades the line, never the rest itself.
+        let usedSlotsBefore: number | null = null;
+        try {
+          usedSlotsBefore = await usedSpellSlots(character.id);
+        } catch {
+          usedSlotsBefore = null;
+        }
+        longRestResult = await RestService.takeLongRest(
           character.id,
           userId,
           sessionId,
           'story rest',
           message.createdAt,
         );
+        if (usedSlotsBefore !== null) {
+          try {
+            spellSlotsRestored = (await usedSpellSlots(character.id)) < usedSlotsBefore;
+          } catch {
+            spellSlotsRestored = false;
+          }
+        }
       }
       outcome = 'applied';
       // #751 (#130's shape): the write landed server-side, but the live sheet
@@ -114,6 +135,19 @@ export async function applyStoryRest(input: {
           result: shortRestResult,
         });
       }
+      // #751: a long rest posts its engine line too — until now only short
+      // rests did, so a typed long rest moved the sheet with no chat line at
+      // all, and at full HP (nothing to restore) the turn looked ignored.
+      if (restType === 'long' && longRestResult) {
+        await ensureStoryLongRestNotice({
+          sessionId,
+          userId,
+          characterId: character.id,
+          since: message.createdAt,
+          result: longRestResult,
+          spellSlotsRestored,
+        });
+      }
     } catch (error) {
       if (error instanceof StoryRestAlreadyRecorded) {
         outcome = 'already_applied';
@@ -127,6 +161,14 @@ export async function applyStoryRest(input: {
     // event — counts and HP only: the individual rolls are not stored.
     if (outcome === 'already_applied' && restType === 'short') {
       await ensureStoryRestNotice({
+        sessionId,
+        userId,
+        characterId: character.id,
+        since: message.createdAt,
+      });
+    }
+    if (outcome === 'already_applied' && restType === 'long') {
+      await ensureStoryLongRestNotice({
         sessionId,
         userId,
         characterId: character.id,
@@ -222,6 +264,126 @@ async function ensureStoryRestNotice(input: {
   } catch (error) {
     logger.warn({
       msg: 'DM_STORY_REST_NOTICE_FAILED',
+      sessionId,
+      characterId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/** Total used spell slots across all levels — the before/after snapshot for the long-rest line. */
+async function usedSpellSlots(characterId: string): Promise<number> {
+  const { db } = await import('../../../../db/client');
+  const { eq } = await import('drizzle-orm');
+  const { characterSpellSlots } = await import('../../../../db/schema/index');
+  const rows = await db
+    .select({ usedSlots: characterSpellSlots.usedSlots })
+    .from(characterSpellSlots)
+    .where(eq(characterSpellSlots.characterId, characterId));
+  return rows.reduce((sum, row) => sum + (row.usedSlots ?? 0), 0);
+}
+
+function longRestLineText(input: {
+  hpRestored: number;
+  hitDiceRestored: number;
+  spellSlotsRestored: boolean;
+}): string {
+  const parts: string[] = [];
+  if (input.hpRestored > 0) parts.push(`${input.hpRestored} HP restored`);
+  if (input.spellSlotsRestored) parts.push('spell slots restored');
+  if (input.hitDiceRestored > 0) parts.push(`${input.hitDiceRestored} hit dice regained`);
+  return parts.length === 0
+    ? '⚙️ Engine: Long rest — HP and spell slots restored (nothing to restore)'
+    : `⚙️ Engine: Long rest — ${parts.join(', ')}.`;
+}
+
+/**
+ * The recovered line, from the stored event alone. The slot and hit-dice
+ * deltas are not stored, so this never claims "(nothing to restore)" — a
+ * rest that restored only slots would make that an exact falsehood. It
+ * states the completed rest's canonical effect plus the one stored actual.
+ */
+function longRestRecoveryLineText(hpRestored: number): string {
+  return hpRestored > 0
+    ? `⚙️ Engine: Long rest — ${hpRestored} HP restored, spell slots restored.`
+    : '⚙️ Engine: Long rest — HP and spell slots restored.';
+}
+
+/**
+ * #751: posts the visible long-rest chat line, recoverably — the short-rest
+ * notice's shape. Idempotent: skips when the line already exists. A fresh
+ * apply carries the result (and the spell-slot snapshot), so the line is
+ * exact — including "(nothing to restore)" for a rest at full everything,
+ * the case that used to look ignored. A retry rebuilds the line from the
+ * stored rest_events row. The finished proof is the row's
+ * `resourcesRestored`: the claim insert writes '[]' and only
+ * finishRestEvent overwrites it with the rest's resource list, while
+ * `completedAt` is stamped at claim time and proves nothing. The slot and
+ * hit-dice deltas are not stored, so a recovered line states the completed
+ * rest's canonical effect plus the stored HP actual — and never the
+ * "(nothing to restore)" string, which the stored row cannot support.
+ * Never throws: a failed line never fails the rest, and the next retry
+ * tries again.
+ */
+async function ensureStoryLongRestNotice(input: {
+  sessionId: string;
+  userId: string;
+  characterId: string;
+  since: Date;
+  result?: LongRestResult;
+  spellSlotsRestored?: boolean;
+}): Promise<void> {
+  const { sessionId, userId, characterId, since } = input;
+  const idSeed = `story-rest:${sessionId}:${characterId}:${since.getTime()}`;
+  try {
+    const { engineChatLineExists, postEngineChatLine } = await import('../engine-chat-line.js');
+    if (await engineChatLineExists(idSeed)) return;
+    let text: string;
+    if (input.result) {
+      text = longRestLineText({
+        hpRestored: input.result.hpRestored,
+        hitDiceRestored: input.result.hitDiceRestored,
+        spellSlotsRestored: input.spellSlotsRestored ?? false,
+      });
+    } else {
+      const { db } = await import('../../../../db/client');
+      const { and, asc, eq, gte, ne } = await import('drizzle-orm');
+      const { restEvents } = await import('../../../../db/schema/index');
+      const [event] = await db
+        .select({
+          hpRestored: restEvents.hpRestored,
+          resourcesRestored: restEvents.resourcesRestored,
+        })
+        .from(restEvents)
+        .where(
+          and(
+            eq(restEvents.characterId, characterId),
+            eq(restEvents.sessionId, sessionId),
+            eq(restEvents.restType, 'long'),
+            gte(restEvents.startedAt, since),
+            // The finished proof: the claim row carries '[]'; only
+            // finishRestEvent replaces it with the rest's resource list.
+            ne(restEvents.resourcesRestored, '[]'),
+          ),
+        )
+        .orderBy(asc(restEvents.startedAt))
+        .limit(1);
+      // No finished event, no line: the claim row alone cannot prove the
+      // rest landed, and a false line under the deterministic id would
+      // block the real one.
+      if (!event) return;
+      text = longRestRecoveryLineText(event.hpRestored ?? 0);
+    }
+    await postEngineChatLine({
+      sessionId,
+      userId,
+      idSeed,
+      text,
+      context: { intent: 'story_rest' },
+    });
+  } catch (error) {
+    logger.warn({
+      msg: 'DM_STORY_LONG_REST_NOTICE_FAILED',
       sessionId,
       characterId,
       error: error instanceof Error ? error.message : String(error),
