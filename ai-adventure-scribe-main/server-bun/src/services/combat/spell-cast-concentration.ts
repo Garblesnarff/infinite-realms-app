@@ -24,6 +24,8 @@ import { eq } from 'drizzle-orm';
 import { extractSpellIdFromPrompt } from './spell-cast-tag.js';
 import { resolveCatalogSpell } from '../../data/spellData.js';
 
+import type { AllowedCasts } from '../dm/dm-feature-gate.js';
+
 /**
  * If the prompt declares a concentration spell cast (via the sheet's
  * `[spell_id=...]` tag), start concentration for the session's character.
@@ -37,6 +39,7 @@ import { resolveCatalogSpell } from '../../data/spellData.js';
 export async function maybeStartConcentrationFromSpellCast(
   prompt: string,
   sessionId: string | null | undefined,
+  allowedCasts?: AllowedCasts | null,
 ): Promise<boolean> {
   if (!prompt || !sessionId) return false;
   const spellId =
@@ -66,14 +69,18 @@ export async function maybeStartConcentrationFromSpellCast(
   // parser cannot see a claim inside a [spell_id=...] tag, so a tag-only cast
   // is never refused by the gate — the hook checks the spell itself against
   // the same castable list the gate uses.
-  const [character] = await db
-    .select()
-    .from(characters)
-    .where(eq(characters.id, characterId))
-    .limit(1);
-  if (!character) return false;
-  const castable = new Set((await castableSpells(character)).map(spellKey));
-  if (!castable.has(spellKey(spell.name))) return false;
+  if (allowedCasts?.character.id === characterId) {
+    if (!allowedCasts.spells.some((name) => spellKey(name) === spellKey(spell.name))) return false;
+  } else {
+    const [character] = await db
+      .select()
+      .from(characters)
+      .where(eq(characters.id, characterId))
+      .limit(1);
+    if (!character) return false;
+    const castable = new Set((await castableSpells(character)).map(spellKey));
+    if (!castable.has(spellKey(spell.name))) return false;
+  }
 
   // Already concentrating on this spell: keep the original startedAt.
   const current = await getConcentration(characterId);
@@ -85,6 +92,7 @@ export async function maybeStartConcentrationFromSpellCast(
 
 /** What the llm route's post-reply concentration hook is gated on. */
 export interface ConcentrationReplyGate {
+  allowedCasts?: AllowedCasts | null;
   /** Truthy when the provider reply failed (`result.error`): a cast the DM never answered. */
   replyError: unknown;
   /**
@@ -117,5 +125,5 @@ export async function maybeStartConcentrationAfterReply(
   gate: ConcentrationReplyGate,
 ): Promise<boolean> {
   if (!gate.gateRan || gate.replyError || gate.castsRefused) return false;
-  return maybeStartConcentrationFromSpellCast(prompt ?? '', sessionId);
+  return maybeStartConcentrationFromSpellCast(prompt ?? '', sessionId, gate.allowedCasts);
 }
