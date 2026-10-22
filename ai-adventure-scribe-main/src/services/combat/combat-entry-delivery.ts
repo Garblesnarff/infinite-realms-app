@@ -49,31 +49,49 @@ let inflight: { key: string; promise: Promise<CombatEntryDeliveryResult> } | nul
  * must not open a second Strike card while generate is still in flight.
  */
 const confirmedTurns = new Set<string>();
+/**
+ * Bumped when a turn confirms, so a poll result from the previous fight is not
+ * handed to the next one. The same actors inside the remember window used to
+ * reuse the old decline or the old encounter (#913).
+ */
+const turnEpoch = new Map<string, number>();
 
 export function markCombatEntryTurnConfirmed(sessionId: string): void {
   confirmedTurns.add(sessionId);
+  turnEpoch.set(sessionId, (turnEpoch.get(sessionId) ?? 0) + 1);
 }
 
 export function combatEntryTurnConfirmed(sessionId: string): boolean {
   return confirmedTurns.has(sessionId);
 }
 
-export function clearCombatEntryTurnConfirmed(sessionId: string): void {
-  confirmedTurns.delete(sessionId);
-}
 /**
  * The poll can finish confirm, initiative, and `/enter` while generate is still
- * hung. A later handler call must see that seated result and resolve the opening
- * attack. A fresh call would get 409 and skip it. Forgotten after the DM reply
- * watchdog so a later fight is not handed this promise.
+ * hung. A later handler call for this same turn must see that seated result and
+ * resolve the opening attack. A fresh call would get 409 and skip it. A later
+ * turn, even against the same names, does not receive it.
  */
-const remembered = new Map<string, { at: number; promise: Promise<CombatEntryDeliveryResult> }>();
+const remembered = new Map<
+  string,
+  { at: number; epoch: number; promise: Promise<CombatEntryDeliveryResult> }
+>();
 const REMEMBERED_DELIVERY_MS = 130_000;
 
-function rememberedDelivery(key: string): Promise<CombatEntryDeliveryResult> | null {
+export function clearCombatEntryTurnConfirmed(sessionId: string): void {
+  confirmedTurns.delete(sessionId);
+  for (const key of remembered.keys()) {
+    if (key.startsWith(`${sessionId}:`)) remembered.delete(key);
+  }
+}
+
+function rememberedDelivery(
+  key: string,
+  sessionId: string,
+): Promise<CombatEntryDeliveryResult> | null {
   const row = remembered.get(key);
   if (!row) return null;
-  if (Date.now() - row.at > REMEMBERED_DELIVERY_MS) {
+  const epoch = turnEpoch.get(sessionId) ?? 0;
+  if (Date.now() - row.at > REMEMBERED_DELIVERY_MS || row.epoch !== epoch) {
     remembered.delete(key);
     return null;
   }
@@ -129,7 +147,12 @@ async function encounterIdFromActive(sessionId: string): Promise<string | null> 
   if (typeof userDataApi.getActiveCombat !== 'function') return null;
   const active = await userDataApi.getActiveCombat(sessionId);
   if (!active.ok) return null;
-  const body = (await active.json().catch(() => null)) as { combat?: { id?: unknown } } | null;
+  const body = (await active.json().catch(() => null)) as {
+    combat?: { id?: unknown; encounter?: { id?: unknown } } | null;
+  } | null;
+  // GET /active returns CombatState: the id lives on combat.encounter, not combat.
+  const nested = body?.combat?.encounter?.id;
+  if (typeof nested === 'string') return nested;
   return typeof body?.combat?.id === 'string' ? body.combat.id : null;
 }
 
@@ -192,8 +215,12 @@ export function startCombatEntryDelivery(args: DeliveryArgs): Promise<CombatEntr
   const key = `${args.sessionId}:${combatEntryActorKey(args.pending)}`;
   if (inflight?.key === key) return inflight.promise;
   if (args.confirm) {
-    const prior = rememberedDelivery(key);
-    if (prior) return prior;
+    const prior = rememberedDelivery(key, args.sessionId);
+    if (prior) {
+      // The handler for this turn takes the poll result. The next call confirms again.
+      remembered.delete(key);
+      return prior;
+    }
   }
   const promise = runDelivery(args).finally(() => {
     if (inflight?.promise === promise) inflight = null;
@@ -201,7 +228,13 @@ export function startCombatEntryDelivery(args: DeliveryArgs): Promise<CombatEntr
   inflight = { key, promise };
   // Only the poll (no handler closures) is remembered. The handler's own call
   // must stay uncached so unit tests can enter twice in one process.
-  if (!args.confirm) remembered.set(key, { at: Date.now(), promise });
+  if (!args.confirm) {
+    remembered.set(key, {
+      at: Date.now(),
+      epoch: turnEpoch.get(args.sessionId) ?? 0,
+      promise,
+    });
+  }
   return promise;
 }
 

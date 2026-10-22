@@ -82,11 +82,7 @@ export function leaveRoom(roomId: RoomId, ws: WSConnection) {
 /**
  * Broadcast a message to all clients in a room except the sender
  */
-export function broadcastToRoom(
-  roomId: RoomId,
-  sender: WSConnection,
-  message: any
-) {
+export function broadcastToRoom(roomId: RoomId, sender: WSConnection | null, message: any) {
   if (deferUntilCommit(() => broadcastToRoom(roomId, sender, message))) return;
   const clients = rooms.get(roomId);
   if (!clients) return;

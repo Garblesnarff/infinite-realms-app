@@ -21,6 +21,7 @@ const CHARACTER_ID = '99999999-8888-4777-8666-555555555555';
 const seatCalls: unknown[] = [];
 let authenticated = true;
 let encounterActive = false;
+let sessionOwned = true;
 let seatError: { code: string } | null = null;
 let seatRefusal: { reason: 'declared_weapon_not_equipped'; notice: string } | null = null;
 const authenticateRequest = async () =>
@@ -97,6 +98,13 @@ const app = new Elysia().use(
     seatCombatEntry: seatCombatEntry as never,
     sanitizeSceneSpec: sanitizeSceneSpec as never,
     buildInitiativeOrder: (() => []) as never,
+    combatEntryGateDeps: {
+      verifySessionOwnership: async (): Promise<{ success: boolean }> => ({
+        success: sessionOwned,
+      }),
+      getActiveEncounter: async (): Promise<{ id: string } | null> =>
+        encounterActive ? { id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' } : null,
+    } as never,
   }),
 );
 
@@ -119,6 +127,7 @@ describe('POST /v1/combat/sessions/:sessionId/enter', () => {
   beforeEach(() => {
     authenticated = true;
     encounterActive = false;
+    sessionOwned = true;
     seatError = null;
     seatRefusal = null;
     seatCalls.splice(0);
@@ -237,6 +246,16 @@ describe('POST /v1/combat/sessions/:sessionId/enter', () => {
   it('allows the server to auto-roll when the player roll is omitted', async () => {
     await request(validBody());
     expect(seatCalls[0]).toMatchObject({ playerInitiativeRoll: undefined });
+  });
+
+  it('returns 404 for a session the caller does not own before reading a pending entry', async () => {
+    sessionOwned = false;
+
+    const response = await request({ ...validBody(), fromPending: true });
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: 'Session not found' });
+    expect(seatCalls).toHaveLength(0);
   });
 
   it('returns 401 without authenticating or attempting to seat', async () => {

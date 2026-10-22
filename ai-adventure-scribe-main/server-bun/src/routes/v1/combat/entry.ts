@@ -212,6 +212,17 @@ export function createCombatEntryRoutes({
           return { error: 'Invalid session id', detail: 'sessionId must be a uuid' };
         }
 
+        // Before any read or clear of the stored proposal. A caller who does not
+        // own the session must not expire it or wipe it when a fight is live (#913).
+        const ownership = await combatEntryGateDeps.verifySessionOwnership(
+          params.sessionId,
+          user.userId,
+        );
+        if (!ownership.success) {
+          set.status = 404;
+          return { error: 'Session not found' };
+        }
+
         const stored = body.fromPending
           ? await readPendingCombatEntry(params.sessionId, user.userId)
           : null;

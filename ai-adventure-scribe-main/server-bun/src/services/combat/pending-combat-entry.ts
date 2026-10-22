@@ -144,7 +144,7 @@ function expired(stored: StoredCombatEntry): boolean {
 async function broadcastPending(sessionId: string, pending: CombatEntryPending): Promise<void> {
   try {
     const { broadcastToRoom } = await import('../collaboration/room-manager.js');
-    broadcastToRoom(sessionId, null as never, {
+    broadcastToRoom(sessionId, null, {
       type: 'combat_state_updated',
       reason: 'combat_entry_pending',
       sessionId,
