@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { validateStep } from '../wizard-validators';
 
+import type { Character } from '@/types/character';
+
+import { backgrounds } from '@/data/backgroundOptions';
+import { fighter } from '@/data/classes/fighter';
 import { dwarf } from '@/data/races/dwarf';
+import { human } from '@/data/races/human';
 import { ABILITIES } from '@/hooks/use-ability-score-selection';
 
 /** 2014 Player's Handbook point-buy costs. Kept as literals so a wrong table fails. */
@@ -195,4 +200,19 @@ describe('wizard validation messages (#213)', () => {
 
     expect(result).toEqual({ isValid: true, message: '' });
   });
+});
+
+it('#899 requires the background extra language even when racial languages and class skills exist', () => {
+  const character = {
+    class: fighter,
+    race: human,
+    background: backgrounds.find((background) => background.id === 'outlander'),
+    skillProficiencies: ['Athletics', 'Survival', 'History', 'Perception'],
+    languages: ['Common'],
+  } as Character;
+  expect(validateStep('Proficiencies & Languages', character).isValid).toBe(false);
+  expect(
+    validateStep('Proficiencies & Languages', { ...character, languages: ['Common', 'Draconic'] })
+      .isValid,
+  ).toBe(true);
 });
