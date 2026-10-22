@@ -428,20 +428,24 @@ export class CombatAttackService {
    * service is imported lazily, the way hexRiderDamage does it, so unit tests that mock
    * the database leaves never load db/client at import time.
    */
+  private async hasBlessFor(
+    participant: { id: string; characterId?: string | null } | null | undefined,
+  ): Promise<boolean> {
+    if (!participant) return false;
+    const { getConcentration, getConcentrationTargetingParticipant } =
+      await import('./concentration-service.js');
+    if (participant.characterId) {
+      const own = await getConcentration(participant.characterId);
+      if (appliesBlessDie(own, participant)) return true;
+    }
+    const targeting = await getConcentrationTargetingParticipant(participant.id);
+    return appliesBlessDie(targeting, participant);
+  }
+
   private async blessDieFor(
     participant: { id: string; characterId?: string | null } | null | undefined,
   ): Promise<number> {
-    if (!participant) return 0;
-    const { getConcentration, getConcentrationTargetingParticipant } = await import(
-      './concentration-service.js'
-    );
-    if (participant.characterId) {
-      const own = await getConcentration(participant.characterId);
-      if (appliesBlessDie(own, participant)) return rollDie(4);
-    }
-    const targeting = await getConcentrationTargetingParticipant(participant.id);
-    if (appliesBlessDie(targeting, participant)) return rollDie(4);
-    return 0;
+    return (await this.hasBlessFor(participant)) ? rollDie(4) : 0;
   }
 
   /**
@@ -557,12 +561,13 @@ export class CombatAttackService {
     input: AttackRollInput,
     userId: string,
   ): Promise<AttackProposal> {
-    const { weapon, rules, geometry, baseTargetAc } = await this.prepareAttack(
+    const { weapon, rules, geometry, baseTargetAc, attackerData } = await this.prepareAttack(
       encounterId,
       input,
       userId,
     );
     return {
+      ...((await this.hasBlessFor(attackerData.participant)) ? { bless: true } : {}),
       legal: rules.legal,
       refusal: rules.refusal ?? null,
       weaponName: weapon.name || 'attack',
@@ -805,14 +810,15 @@ export class CombatAttackService {
           damage: appliedDamage,
         });
         // #709: a concentrating target that took damage rolls its CON save now (2014).
-        const { lines: concentrationLines, concentration } =
-          await checkTargetConcentrationAfterHit({
+        const { lines: concentrationLines, concentration } = await checkTargetConcentrationAfterHit(
+          {
             target: targetParticipant,
             damageDealt: appliedDamage,
             targetIsConscious: hpResult.isConscious,
             targetIsDead: hpResult.isDead,
             sessionId: attackerData.participant.encounter?.sessionId,
-          });
+          },
+        );
         transcriptLines.push(...concentrationLines);
 
         const attackResult: HexAttackResult = {
@@ -875,7 +881,8 @@ export class CombatAttackService {
     input: Pick<SpellAttackInput, 'casterId' | 'targetIds' | 'spellId' | 'spellName' | 'slotLevel'>,
     userId: string,
   ) {
-    const { casterId, targetIds, spellId, spellName, slotLevel } = input;
+    const { casterId, targetIds, spellId, spellName } = input;
+    let { slotLevel } = input;
     await this.assertCurrentTurn(encounterId, casterId, userId);
 
     // ⚡ Bolt: Batch fetch both caster and all targets with their stats in a single query.
@@ -909,6 +916,16 @@ export class CombatAttackService {
         `Spell refused: ${knownSpell.name} is not on ${casterData.participant.name ?? 'the caster'}'s sheet — cast a spell you know or have prepared`,
         { reason: 'spell_not_known', spellId: knownSpell.id },
       );
+    }
+    if (knownSpell?.id === 'bless' && slotLevel == null && casterData.participant.characterId) {
+      const { slots } = await SpellSlotsService.getCharacterSpellSlots(
+        casterData.participant.characterId,
+        userId,
+      );
+      const available = slots.filter(
+        (slot) => slot.spellLevel >= knownSpell.level && slot.remainingSlots > 0,
+      );
+      if (available.length === 1) slotLevel = available[0].spellLevel;
     }
     const verdict = assessPlayerCombatSpell(spellId, spellName, slotLevel);
     if (!verdict.castable) {
@@ -994,6 +1011,7 @@ export class CombatAttackService {
     const spellAttackBonus = spellModifier + proficiencyBonus(casterProfile.level);
     return {
       spell,
+      slotLevel,
       targetIds: effectiveTargetIds,
       casterData,
       casterProfile,
@@ -1017,6 +1035,7 @@ export class CombatAttackService {
     spellId: string;
     spellName: string;
     kind: 'attack' | 'save' | 'auto-hit';
+    bless?: boolean;
     attackBonus: number;
     saveDC: number;
     targetAc: number;
@@ -1025,15 +1044,13 @@ export class CombatAttackService {
     advantageSources: string[];
     disadvantageSources: string[];
   }> {
-    const { spell, spellRules, seatedAcByTarget, spellAttackBonus } = await this.prepareSpellCast(
-      encounterId,
-      input,
-      userId,
-    );
+    const { spell, spellRules, seatedAcByTarget, spellAttackBonus, casterData } =
+      await this.prepareSpellCast(encounterId, input, userId);
     const rules = spellRules.get(input.targetIds[0]);
     return {
       spellId: spell.id,
       spellName: spell.name,
+      ...((await this.hasBlessFor(casterData.participant)) ? { bless: true } : {}),
       kind: spell.attackType ? 'attack' : spell.saveAbility ? 'save' : 'auto-hit',
       attackBonus: spellAttackBonus,
       saveDC: 8 + spellAttackBonus,
@@ -1053,7 +1070,7 @@ export class CombatAttackService {
     input: SpellAttackInput,
     userId: string,
   ): Promise<SpellAttackResult> {
-    const { casterId, expectedVersion, slotLevel, d20, d20Rolls } = input;
+    const { casterId, expectedVersion, d20, d20Rolls } = input;
     const {
       spell,
       targetIds,
@@ -1064,6 +1081,7 @@ export class CombatAttackService {
       seatedAcByTarget,
       spellModifier,
       spellAttackBonus,
+      slotLevel,
     } = await this.prepareSpellCast(encounterId, input, userId);
     // #754: Hex curses one creature; refuse a multi-target cast before anything is spent.
     if (spell.id === 'hex' && targetIds.length !== 1) {

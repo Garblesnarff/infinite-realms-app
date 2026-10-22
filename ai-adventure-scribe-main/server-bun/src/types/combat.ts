@@ -606,6 +606,7 @@ export interface AttackProposal {
   refusal: string | null;
   weaponName: string;
   attackBonus: number;
+  bless?: boolean;
   targetAc: number;
   baseAc: number;
   coverBonus: number;

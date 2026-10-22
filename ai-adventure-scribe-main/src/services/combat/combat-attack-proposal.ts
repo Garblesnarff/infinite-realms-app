@@ -16,6 +16,7 @@ export interface CombatAttackProposal {
   refusal?: string | null;
   weaponName?: string;
   attackBonus?: number;
+  bless?: boolean;
   targetAc?: number;
   advantage?: boolean;
   disadvantage?: boolean;
@@ -65,6 +66,7 @@ export interface CombatSpellProposal {
   spellName: string;
   kind: 'attack' | 'save' | 'auto-hit';
   attackBonus: number;
+  bless?: boolean;
   saveDC: number;
   targetAc: number;
   advantage: boolean;

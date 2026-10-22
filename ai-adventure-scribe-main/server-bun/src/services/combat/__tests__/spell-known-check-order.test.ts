@@ -28,6 +28,11 @@ mock.module('../../../../../db/client', () => ({
   ),
 }));
 
+mock.module('../concentration-service.js', () => ({
+  getConcentration: async () => null,
+  getConcentrationTargetingParticipant: async () => null,
+}));
+
 const CASTER_ID = 'caster-scholar-1';
 const TARGET_ID = 'target-spider-1';
 // The L1 Wizard's sheet: Fire Bolt (combat) and Light (utility). No Fireball.

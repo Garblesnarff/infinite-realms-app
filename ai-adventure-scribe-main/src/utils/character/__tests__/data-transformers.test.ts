@@ -53,6 +53,22 @@ describe('data-transformers', () => {
     });
   });
 
+  it('#709 preserves the server concentration through sheet hydration', () => {
+    const raw = {
+      id: 'blessed',
+      user_id: 'owner',
+      name: 'Cleric',
+      race: 'Human',
+      class: 'Cleric',
+      level: 1,
+      concentration: { spellName: 'Bless', spellId: 'bless' },
+    };
+    expect(transformCharacterData(raw, null, null).concentration).toEqual(raw.concentration);
+    expect(
+      transformCharacterData({ ...raw, concentration: null }, null, null).concentration,
+    ).toBeNull();
+  });
+
   describe('parseSpellListField', () => {
     it('should parse JSON array strings', () => {
       const input = '["magic-missile", "shield"]';

@@ -9,6 +9,9 @@
 import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { Elysia } from 'elysia';
 
+import { describeAttackRoll } from '../../../../../../shared/describe-attack-roll';
+import { setRngSeed } from '../../../../lib/rng.js';
+
 import type { MapEntity, TacticalMap } from '../../../../tactical/types.js';
 
 const SESSION_ID = '235c24e4-f776-43fa-8f70-4b8478317953';
@@ -129,7 +132,12 @@ mock.module('../../../../services/combat/npc-turn-runner.js', () => ({
           },
           round: 2,
           outcomes: [{ participantId: MERLIN_ID, hit: true, finalDamage: 20 }],
-          engineResult: { actorName: 'Head Chef Balthazar', targetName: 'Merlin Swift', hit: true, d20: 18 },
+          engineResult: {
+            actorName: 'Head Chef Balthazar',
+            targetName: 'Merlin Swift',
+            hit: true,
+            d20: 18,
+          },
           actorIsPlayer: false,
           transcriptLines: [],
         },
@@ -228,7 +236,7 @@ mock.module('../../../../services/combat/data-access.js', () => ({
           savingThrowProficiencies: [],
           scores: { str: 8, dex: 14, con: 12, int: 16, wis: 12, cha: 10 },
           saveBonuses: {},
-          spellIds: ['fire-bolt', 'burning-hands', 'magic-missile'],
+          spellIds: ['fire-bolt', 'burning-hands', 'magic-missile', 'bless'],
         }
       : {
           level: 1,
@@ -290,7 +298,15 @@ mock.module('../../../../services/combat-hp-service.js', () => ({
   },
 }));
 mock.module('../../../../services/spell-slots-service.js', () => ({
-  SpellSlotsService: { useSpellSlot: async () => ({ used: true }) },
+  SpellSlotsService: {
+    getCharacterSpellSlots: async () => ({
+      slots: availableSlotLevels.map((spellLevel) => ({ spellLevel, remainingSlots: 1 })),
+    }),
+    useSpellSlot: async (input: unknown) => {
+      slotSpends.push(input);
+      return { used: true };
+    },
+  },
 }));
 mock.module('../../../../services/combat/combat-turn-resources.js', () => ({
   consumeAction: async () => {},
@@ -344,10 +360,17 @@ mock.module('../../../../services/combat/combat-turn-resources.js', () => ({
     return next;
   },
 }));
+let concentration: any = null;
+let availableSlotLevels = [1];
+const slotSpends: any[] = [];
 mock.module('../../../../services/combat/concentration-service.js', () => ({
-  getConcentration: async () => null,
+  getConcentration: async (id: string) =>
+    concentration?.characterId === id ? concentration : null,
   getConcentrationTargetingParticipant: async () => null,
-  startConcentration: async () => {},
+  checkConcentrationOnDamage: async () => ({ hadConcentration: false }),
+  startConcentration: async (characterId: string, spell: any, targetParticipantId: string) => {
+    concentration = { characterId, spellId: spell.id, spellName: spell.name, targetParticipantId };
+  },
 }));
 mock.module('../../../../services/combat/npc-provocation.js', () => ({
   markPlayerDamageProvocation: async () => [],
@@ -536,6 +559,10 @@ const spellIntent = () => ({
 });
 
 beforeEach(() => {
+  setRngSeed(902);
+  concentration = null;
+  availableSlotLevels = [1];
+  slotSpends.length = 0;
   holderId = MERLIN_ID;
   drainDropsMerlin = false;
   order.length = 0;
@@ -607,7 +634,6 @@ describe('#918 D2-012: a tray-rolled Fire Bolt through the real resolver', () =>
   }, 30_000);
 });
 
-
 describe('#918 D2-011: the drain, the gate, and the cast on the real route', () => {
   it('a caster dropped to 0 HP by the pre-drain has the queued cast refused, not resolved', async () => {
     holderId = BALTHAZAR_ID; // Balthazar holds the turn; Merlin's cast was declared ahead.
@@ -666,7 +692,13 @@ describe('#918 D2-012: Fire Bolt as the combat-entry first action (full handler)
       currentTurnParticipantId: MERLIN_ID,
       currentRound: 1,
       participants: [
-        { id: MERLIN_ID, characterId: 'char-merlin', name: 'Merlin Swift', participantType: 'player', isActive: true },
+        {
+          id: MERLIN_ID,
+          characterId: 'char-merlin',
+          name: 'Merlin Swift',
+          participantType: 'player',
+          isActive: true,
+        },
         { id: BALTHAZAR_ID, name: 'Head Chef Balthazar', participantType: 'npc', isActive: true },
       ],
     };
@@ -716,4 +748,91 @@ describe('#918 D2-012: Fire Bolt as the combat-entry first action (full handler)
     expect(allText).toMatch(/cast Fire Bolt at Head Chef Balthazar/);
     expect(allText).toMatch(/spell attack 14 \+ 5 = 19 vs AC 15 — HIT/);
   }, 30_000);
+});
+
+describe('#902/#709 Bless through the real intent route and resolver', () => {
+  it('defaults the sole available slot, starts concentration, and exposes the d4 on the next tray', async () => {
+    const response = await postIntent({
+      intent: {
+        type: 'spell',
+        actorId: MERLIN_ID,
+        targetIds: [MERLIN_ID],
+        spellId: 'bless',
+        spellName: 'Bless',
+      },
+      source: 'dm',
+      origin: 'typed',
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(slotSpends[0]).toMatchObject({ spellName: 'Bless', slotLevelUsed: 1 });
+    expect(concentration).toMatchObject({
+      characterId: 'char-merlin',
+      spellName: 'Bless',
+      targetParticipantId: MERLIN_ID,
+    });
+    holderId = MERLIN_ID;
+    setPlayerRollHost(playerRolls(14));
+    await resolveTurn();
+    expect(prompts[0]).toMatchObject({ bless: true });
+    expect(describeAttackRoll({ ...prompts[0], kind: 'weapon' } as any)).toContain('+1d4');
+    holderId = MERLIN_ID;
+    const blessedAttack = await postIntent(spellIntent());
+    const blessedBody = await blessedAttack.json();
+    expect(blessedAttack.status).toBe(200);
+    expect(blessedBody.result.results[0].blessDie).toBeGreaterThanOrEqual(1);
+    expect(blessedBody.result.results[0].blessDie).toBeLessThanOrEqual(4);
+    concentration = null;
+    holderId = MERLIN_ID;
+    const unblessed = await postIntent({
+      intent: spellIntent().intent,
+      source: 'dm',
+      phase: 'propose',
+    });
+    expect((await unblessed.json()).bless).not.toBe(true);
+  });
+  it('adds Bless to a saving throw, and stops adding it after concentration ends', async () => {
+    concentration = {
+      characterId: 'char-merlin',
+      spellId: 'bless',
+      spellName: 'Bless',
+      targetParticipantId: MERLIN_ID,
+    };
+    const save = await postIntent({
+      intent: {
+        type: 'spell',
+        actorId: MERLIN_ID,
+        targetIds: [MERLIN_ID],
+        spellId: 'burning-hands',
+        spellName: 'Burning Hands',
+        slotLevel: 1,
+      },
+      source: 'dm',
+      origin: 'typed',
+    });
+    const body = await save.json();
+    expect(save.status, JSON.stringify(body)).toBe(200);
+    expect(body.result.results[0].blessDie).toBeGreaterThanOrEqual(1);
+    expect(body.result.results[0].blessDie).toBeLessThanOrEqual(4);
+    concentration = null;
+    holderId = MERLIN_ID;
+    const attack = await postIntent(spellIntent());
+    expect((await attack.json()).result.results[0].blessDie).toBeUndefined();
+  });
+  it('keeps the choice explicit when more than one slot level applies', async () => {
+    availableSlotLevels = [1, 2];
+    const response = await postIntent({
+      intent: {
+        type: 'spell',
+        actorId: MERLIN_ID,
+        targetIds: [MERLIN_ID],
+        spellId: 'bless',
+        spellName: 'Bless',
+      },
+      source: 'dm',
+      origin: 'typed',
+    });
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(slotSpends).toHaveLength(0);
+    expect(concentration).toBeNull();
+  });
 });

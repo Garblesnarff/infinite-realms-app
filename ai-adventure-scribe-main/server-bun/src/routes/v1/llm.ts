@@ -1154,7 +1154,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // player intent once the reply is confirmed; a DB failure must not
         // break chat.
         try {
-          await maybeStartConcentrationAfterReply(prompt, sessionId, {
+          await maybeStartConcentrationAfterReply(playerInput ?? prompt, sessionId, {
+            allowedCasts,
             replyError: result.error,
             castsRefused: concentrationCastsRefused,
             gateRan: Boolean(dmReply),
@@ -1263,11 +1264,14 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             (request) =>
               !!request &&
               typeof request === 'object' &&
-              ['check', 'save', 'attack'].includes(
-                String((request as { type?: unknown }).type),
-              ),
+              ['check', 'save', 'attack'].includes(String((request as { type?: unknown }).type)),
           );
-        if (envelope && typeof envelope.text === 'string' && !outcomeRepaired && hasVerdictRequest) {
+        if (
+          envelope &&
+          typeof envelope.text === 'string' &&
+          !outcomeRepaired &&
+          hasVerdictRequest
+        ) {
           try {
             const { latestRollOutcome, repairPrematureRollClaims } =
               await import('../../services/dm/narration-outcome.js');

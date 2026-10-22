@@ -110,6 +110,7 @@ export async function askPlayerForAttackDie(params: PlayerAttackDieParams): Prom
       actorLabel,
       targetLabel: proposal.targetLabel ?? targetId,
       weaponName,
+      bless: proposal.bless,
       attackBonus: proposal.attackBonus ?? 0,
       targetAc: proposal.targetAc ?? 10,
       advantage: !!proposal.advantage,

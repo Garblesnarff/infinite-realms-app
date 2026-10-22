@@ -60,6 +60,7 @@ export interface CharacterEquipmentRow {
 }
 
 export interface CharacterRow {
+  concentration?: Character['concentration'];
   id: string;
   user_id: string;
   name: string;
@@ -425,6 +426,7 @@ export const transformCharacterData = (
 
   return {
     id: characterData.id,
+    concentration: characterData.concentration ?? null,
     user_id: characterData.user_id,
     name: characterData.name,
     description: characterData.description as string | undefined,
