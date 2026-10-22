@@ -79,8 +79,14 @@ Use narrator for DM narration and unknown speakers. Do not invent free-text voic
    * `inCombat` is the variant sent while an encounter is active: the engine resolves attacks,
    * spells and saves there and the client drops every DM roll_request (#2385), so it teaches none
    * (#2400). The default is the out-of-combat prompt, unchanged.
+   * `oneShotCampaign` (#1020) adds the campaign-ending field instructions; it is gated to
+   * one-shot campaigns — the only ones the server completes — so every other campaign's
+   * prompt stays byte-identical and inside the #2533 prompt budget.
    */
-  static buildResponseStructureSection({ inCombat = false }: { inCombat?: boolean } = {}): string {
+  static buildResponseStructureSection({
+    inCombat = false,
+    oneShotCampaign = false,
+  }: { inCombat?: boolean; oneShotCampaign?: boolean } = {}): string {
     const responseOrder = `1. **Narrative** (1-3 paragraphs): Consequences, new information, NPC dialogue, environmental details
 2. **roll_requests field** (if a dice roll is needed): populate it based on the narrative you just wrote - it is a JSON array field, not text in the narrative
 3. **options JSON field**: populate it with player-facing choices in the required format
@@ -179,16 +185,14 @@ roll-request turns).
     // completion XP or completion screen ever fired.
     const campaignEndingField = `<campaign_ending_field>
 <title>CAMPAIGN ENDING</title>
-When the campaign's story is complete — its final beat has played, or a limit its rules
-define has been reached (the story Clock fills, the final choice is taken) — set the
-\`campaign_ending\` JSON field to \`{"summary": "<one or two sentences: how the story ended>"}\`
-and narrate the ending in \`text\`. The game posts the ending, awards the completion XP
-you set in \`xp_award\`, marks the session complete and shows the completion screen. A
-choice the story itself offered is never a dead end: when the player takes the final
-one, this field is how its ending resolves. Set it only for the ending itself — never
-while story beats remain, never for a scene or combat ending, and never for the end
-of a session when the campaign's story continues in a later session. Otherwise set
-it to \`null\`.
+When the campaign's story is complete — final beat played, or a limit its rules define
+reached (the story Clock fills, the final choice taken) — set \`campaign_ending\` to
+\`{"summary": "<one or two sentences: how the story ended>"}\` and narrate the ending.
+The game posts the ending, awards your \`xp_award\` completion XP, marks the session
+complete and shows the completion screen. A choice the story itself offered is never a
+dead end: taking the final one is how its ending resolves. Never set it while beats
+remain, nor for a scene, combat or session ending while the story continues. Otherwise
+\`null\`.
 </campaign_ending_field>
 
 `;
@@ -228,7 +232,7 @@ from their sheet, or a spell they have prepared or known (see the character shee
 spell or attack the character does not have (#400).
 </options_field>
 
-${inCombat ? '' : xpAwardField}${inCombat ? '' : restField}${inCombat ? '' : storyItemsField}${inCombat ? '' : storyDamageField}${inCombat ? '' : campaignEndingField}<visual_prompt_rule>
+${inCombat ? '' : xpAwardField}${inCombat ? '' : restField}${inCombat ? '' : storyItemsField}${inCombat ? '' : storyDamageField}${inCombat || !oneShotCampaign ? '' : campaignEndingField}<visual_prompt_rule>
 **OPTIONAL** - At the very end, if the scene would benefit from an illustration:
 VISUAL PROMPT: <short art prompt focusing on key visual elements>
 </visual_prompt_rule>

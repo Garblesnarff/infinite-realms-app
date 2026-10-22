@@ -1365,15 +1365,30 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // Polarity note: `combatEntry` is the client-sent entry context, present only when
         // combat is NOT already active; `combat_entry_pending` marks the turn that opens
         // combat. So `combatEntry && !envelope?.combat_entry_pending` is an ordinary story turn.
+        const featuresToSpend = allowedFeatures as AllowedFeatures | null;
         // #1020: a completed session is terminal for story effects. Every applier below
         // (feature spends, XP, items, conditions, rest, damage, the ending) writes to the
         // sheet or the session; on a completed session those writes are a zombie run — the
         // adventure is over, but a stale client or a retried request could keep accruing
         // them. The shipped client never sends here (a completed one-shot restores to its
         // completion screen), so this is the backstop: story fields on such a turn are
-        // nulled by the appliers' own not-applied paths below and nothing lands.
+        // nulled by the appliers' own not-applied paths below and nothing lands. The
+        // status read runs only when this turn could actually land a story effect — a
+        // turn with no story fields has nothing to close, and /generate must not gain an
+        // unconditional database read for it (the combat-entry route tests time out on
+        // exactly that: their replies carry no story fields, but the read stalled
+        // against their stubbed database).
+        const storyEffectPossible = Boolean(
+          featuresToSpend ||
+          envelope?.xp_award ||
+          envelope?.items ||
+          envelope?.conditions ||
+          envelope?.rest ||
+          envelope?.damage ||
+          envelope?.campaign_ending,
+        );
         let storyEffectsClosed = false;
-        if (castSessionId) {
+        if (castSessionId && storyEffectPossible) {
           try {
             const { db } = await import('../../../../db/client');
             const { eq } = await import('drizzle-orm');
@@ -1388,7 +1403,6 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             logger.warn({ msg: 'DM_STORY_EFFECTS_GUARD_FAILED', sessionId: castSessionId, error });
           }
         }
-        const featuresToSpend = allowedFeatures as AllowedFeatures | null;
         if (
           featuresToSpend &&
           castSessionId &&

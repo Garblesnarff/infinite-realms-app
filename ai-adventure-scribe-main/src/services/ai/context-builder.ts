@@ -1,4 +1,5 @@
 import { ContextBuilderPrompts } from './context-builder-prompts';
+import { extractCampaignDetails } from './prompt-assembly';
 import { CombatRulesPrompts } from './prompts/combat-rules-prompts';
 import { RulesPrompts } from './prompts/rules-prompts';
 
@@ -65,7 +66,10 @@ export class ContextBuilder {
       contextPrompt += ContextBuilderPrompts.buildVoiceOptimizationSection();
     }
 
-    contextPrompt += ContextBuilderPrompts.buildResponseStructureSection({ inCombat });
+    contextPrompt += ContextBuilderPrompts.buildResponseStructureSection({
+      inCombat,
+      oneShotCampaign: extractCampaignDetails(context).oneShotCampaign,
+    });
 
     if (voiceContext) {
       contextPrompt += `\n**REMEMBER: Always respond in the JSON format with narration_segments for voice synthesis!**`;
