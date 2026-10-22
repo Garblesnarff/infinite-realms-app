@@ -22,6 +22,7 @@ import { isEngineTaggedRoll } from '@/contexts/game/dice-queue-visibility';
 import { RollTray } from '@/features/game-session/components/game/game-content/roll-tray-slot';
 import { SpellTargetSaveCard } from '@/features/game-session/components/game/SpellTargetSaveCard';
 import { useCombatEntryConfirmationHost } from '@/hooks/combat/use-combat-entry-confirmation-host';
+import { usePendingCombatEntryOffer } from '@/hooks/combat/use-pending-combat-entry-offer';
 import { usePlayerRollHost } from '@/hooks/combat/use-player-roll-host';
 import { useSpellTargetSaveHost } from '@/hooks/combat/use-spell-target-save-host';
 import {
@@ -85,6 +86,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
     const { state: combatState, refreshCombatState } = useCombat();
     usePendingDmRollRecovery({ sessionId, messages, messagesReady });
     const entryConfirmation = useCombatEntryConfirmationHost(sessionId);
+    usePendingCombatEntryOffer(sessionId);
     const spellTargetSave = useSpellTargetSaveHost();
     // Player-visible names for the pre-cast save alert, resolved the same way
     // the tracker and the engine lines resolve them (#2343 B4).

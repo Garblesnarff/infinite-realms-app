@@ -56,9 +56,18 @@ let hostOwnerKey: string | undefined;
 let pending: {
   spec: CombatEntryConfirmationSpec;
   ownerKey: string | undefined;
+  answer: Promise<CombatEntryAnswer>;
   settle: (confirmed: boolean, target?: string) => void;
   dismiss: () => void;
 } | null = null;
+
+function confirmationKey(spec: CombatEntryConfirmationSpec): string {
+  return [
+    spec.actorLabel,
+    [...spec.combatantLabels].sort().join('|'),
+    [...(spec.declaredTargets ?? [])].sort().join('|'),
+  ].join('::');
+}
 
 type PendingChangeListener = (isPending: boolean) => void;
 const pendingChangeListeners = new Set<PendingChangeListener>();
@@ -179,12 +188,20 @@ export function requestCombatEntryAnswer(
   const activeHost = host;
   const activeOwnerKey = hostOwnerKey;
 
+  // #913: the poll and the generate handler offer the same entry. Joining the
+  // card that is already up keeps the first answer; a different roster still
+  // replaces the card.
+  if (pending && confirmationKey(pending.spec) === confirmationKey(spec)) {
+    return pending.answer;
+  }
+
   if (pending) {
     logger.warn('[CombatEntry] superseded by a new entry confirmation; declining the previous one');
     settlePendingCombatEntryConfirmation(false);
   }
 
-  return new Promise<CombatEntryAnswer>((resolve) => {
+  const published: { answer: Promise<CombatEntryAnswer> | null } = { answer: null };
+  const answer = new Promise<CombatEntryAnswer>((resolve) => {
     let settled = false;
     let dismissPopup = (): void => {};
     const settle = (confirmed: boolean, target?: string): void => {
@@ -194,7 +211,15 @@ export function requestCombatEntryAnswer(
       resolve({ confirmed, ...(target ? { target } : {}) });
     };
 
-    pending = { spec, ownerKey: activeOwnerKey, settle, dismiss: () => dismissPopup() };
+    pending = {
+      spec,
+      ownerKey: activeOwnerKey,
+      get answer() {
+        return published.answer ?? answer;
+      },
+      settle,
+      dismiss: () => dismissPopup(),
+    };
     notifyPendingChange();
     const hostDismiss = activeHost.present(spec, (confirmed, target) => {
       if (pending?.settle === settle) {
@@ -207,4 +232,6 @@ export function requestCombatEntryAnswer(
 
     if (settled) hostDismiss();
   });
+  published.answer = answer;
+  return answer;
 }

@@ -19,6 +19,7 @@ import {
 } from '../../../services/combat/combat-intent-service.js';
 import { buildInitiativeOrder } from '../../../services/combat/initiative-order.js';
 import { runNpcTurnsIfNpcHolds } from '../../../services/combat/npc-turn-drain.js';
+import { readPendingCombatEntry } from '../../../services/combat/pending-combat-entry.js';
 import { loadActiveTacticalMap } from '../../../services/combat/tactical-map-store.js';
 
 const encounterIdParams = t.Object({
@@ -301,7 +302,15 @@ export const intentRoutes = new Elysia()
       if (!encounter) {
         // A session without combat is the expected result for this read. Keep
         // optional combat polling out of the error path and its 404 noise.
-        return { combat: null, initiativeOrder: [], tacticalMap: null };
+        // #913: the open tab polls this route. A generate body that never
+        // arrived is still offered here until the player confirms or it expires.
+        const pending = await readPendingCombatEntry(params.sessionId, user.userId);
+        return {
+          combat: null,
+          initiativeOrder: [],
+          tacticalMap: null,
+          ...(pending ? { combatEntryPending: pending.pending } : {}),
+        };
       }
       const combat = await CombatEncounterService.getCombatState(encounter.id, user.userId);
       return {

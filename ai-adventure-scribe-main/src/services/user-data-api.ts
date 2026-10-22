@@ -418,6 +418,11 @@ export const userDataApi = {
       body: JSON.stringify(payload),
       ...(signal ? { signal } : {}),
     }),
+  /** #913: the player declined the stored proposal, so the poll must not offer it again. */
+  declinePendingCombatEntry: (sessionId: string): Promise<Response> =>
+    requestResponse(`/v1/combat/sessions/${encodeURIComponent(sessionId)}/pending`, {
+      method: 'DELETE',
+    }),
   setPendingCombatIntent: (
     encounterId: string,
     payload: PendingCombatIntentPayload,

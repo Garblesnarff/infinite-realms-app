@@ -19,6 +19,7 @@ import {
 } from './authoritative-combat-state';
 
 import type { ReducerAction } from './combat-reducer';
+import type { DeliverableCombatEntry } from '@/services/combat/combat-entry-delivery';
 import type { CombatEncounter } from '@/types/combat';
 import type { Dispatch } from 'react';
 
@@ -34,7 +35,7 @@ const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
  */
 export type AuthoritativeCombatRead =
   | { state: 'combat'; combat: AuthoritativeCombatPayload }
-  | { state: 'none' }
+  | { state: 'none'; pending?: DeliverableCombatEntry }
   | { state: 'unknown' };
 
 export async function readAuthoritativeCombat(
@@ -49,8 +50,14 @@ export async function readAuthoritativeCombat(
     logServerRequestId('/v1/combat', response);
     if (response.status === 404) return { state: 'none' };
     if (!response.ok) return { state: 'unknown' };
-    const payload = (await response.json()) as { combat?: AuthoritativeCombatPayload };
-    return payload.combat ? { state: 'combat', combat: payload.combat } : { state: 'none' };
+    const payload = (await response.json()) as {
+      combat?: AuthoritativeCombatPayload;
+      combatEntryPending?: DeliverableCombatEntry;
+    };
+    if (payload.combat) return { state: 'combat', combat: payload.combat };
+    return payload.combatEntryPending
+      ? { state: 'none', pending: payload.combatEntryPending }
+      : { state: 'none' };
   } catch (error) {
     if (
       typeof error === 'object' &&
@@ -140,10 +147,18 @@ export function useAuthoritativeCombatSync(
       const detail = (event as CustomEvent<{ combat?: AuthoritativeCombatPayload }>).detail;
       if (detail?.combat) apply({ state: 'combat', combat: detail.combat });
     };
+    // #913: the open tab can seat a stored proposal while generate is still
+    // hung. That path has no DM result to refresh from, so the seat event
+    // re-reads the board the way a reload does.
+    const onSeated = (): void => {
+      void readAuthoritativeCombat(sessionId).then(apply);
+    };
     window.addEventListener('combat-state-updated', listener);
+    window.addEventListener('combat-entry-seated', onSeated);
     return () => {
       cancelled = true;
       window.removeEventListener('combat-state-updated', listener);
+      window.removeEventListener('combat-entry-seated', onSeated);
     };
   }, [dispatch, getEncounter, sessionId]);
 

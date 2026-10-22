@@ -29,6 +29,7 @@ import { logger } from '../lib/logger.js';
 import type { CampaignMonsterIndex } from './combat/campaign-monster-index.js';
 import type {
   CombatEntryGateDeps,
+  CombatEntryPending,
   CombatEntryPlayer,
   CombatEntryResponse,
 } from './combat/combat-entry-gate.js';
@@ -278,6 +279,11 @@ export async function applyCombatEntryGate(params: {
    */
   encounterContext?: (sessionId: string, userId: string) => Promise<EncounterContext>;
   deps?: CombatEntryGateDeps;
+  /**
+   * #913: the generate route remembers a proposal and drops a second one for
+   * the same actors. Pipeline tests omit this, so detection stays pure.
+   */
+  holdPending?: (pending: CombatEntryPending) => Promise<'keep' | 'drop'>;
 }): Promise<LLMResponse> {
   const { combatEntry, declaredAttack, untargetedSpellRoster } = params;
   const sanitizedResult = stripUntargetedInitiativeRollRequests(params.result, declaredAttack);
@@ -476,6 +482,24 @@ export async function applyCombatEntryGate(params: {
         sessionId: combatEntry.sessionId,
         error,
       });
+    }
+  }
+
+  // Drop before the detected log. A duplicate must not look like a new proposal.
+  if (params.holdPending) {
+    const decision = await params.holdPending(pending);
+    if (decision === 'drop') {
+      logger.info({
+        msg: 'COMBAT_ENTRY_DUPLICATE_DROPPED',
+        sessionId: combatEntry.sessionId,
+        trigger: pending.trigger,
+      });
+      const rest = { ...envelope } as Record<string, unknown>;
+      delete rest.combat_entry_pending;
+      return {
+        ...sanitizedResult,
+        text: JSON.stringify({ ...rest, combat_transition: 'none' }),
+      };
     }
   }
 

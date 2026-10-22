@@ -55,6 +55,10 @@ import { AIService, isRollOutcomeStale } from '@/services/ai-service';
 import { executeAuthoritativeCombatIntent } from '@/services/combat/combat-action-executor';
 import { playerInputOriginOf } from '@/services/combat/combat-action-origin';
 import { consumeCombatEntryTypedAnswer } from '@/services/combat/combat-entry-confirmation-bridge';
+import {
+  clearCombatEntryTurnConfirmed,
+  markCombatEntryTurnConfirmed,
+} from '@/services/combat/combat-entry-delivery';
 import { participantVital } from '@/services/combat/participant-vital';
 import {
   hasPendingPlayerRoll,
@@ -868,6 +872,12 @@ export const useAIResponse = (): {
           }
         };
 
+        // The poll can see the stored proposal before this request returns. A turn
+        // that already struck must not be asked again (#913, #400).
+        if (sessionId && (heldEntry?.decision === 'confirmed' || typedEntryAnswer)) {
+          markCombatEntryTurnConfirmed(sessionId);
+        }
+
         // Call AIService
         const answered = await askDmUnlessCancelled({
           message: latestMessage.text,
@@ -1400,6 +1410,8 @@ export const useAIResponse = (): {
           combatTurnUiStateForEncounter(null, false, lastCombatCharacterIdRef.current),
         );
         throw error;
+      } finally {
+        if (sessionId) clearCombatEntryTurnConfirmed(sessionId);
       }
     },
     [

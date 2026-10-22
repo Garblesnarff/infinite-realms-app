@@ -98,6 +98,11 @@ const app = createRequestPipelineApp()
       authenticateRequest: authenticateRequest as never,
       seatCombatEntry: seatCombatEntry as never,
       buildInitiativeOrder: buildInitiativeOrder as never,
+      combatEntryGateDeps: {
+        verifySessionOwnership: async (): Promise<{ success: boolean }> => ({ success: true }),
+        getActiveEncounter: async (): Promise<{ id: string } | null> =>
+          encounterActive ? { id: ENCOUNTER_ID } : null,
+      } as never,
     }),
   )
   // Keep the route-removal regression on the same mounted surface as production.

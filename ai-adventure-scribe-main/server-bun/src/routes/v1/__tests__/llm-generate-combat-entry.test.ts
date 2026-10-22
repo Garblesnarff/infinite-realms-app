@@ -17,6 +17,7 @@ import {
   SHEET_CAST_PLAYER_INPUT,
   sheetCastRoster,
 } from '../../../../../shared/test-fixtures/declared-attack-hold';
+import { resetPendingCombatEntries } from '../../../services/combat/pending-combat-entry.js';
 
 let generatedResult: Record<string, unknown> = { text: '{}', provider: 'openrouter', model: 'm' };
 let generatedInputs: Record<string, unknown>[] = [];
@@ -164,7 +165,8 @@ const generate = async (body: Record<string, unknown>): Promise<Response> =>
   );
 
 describe('POST /v1/llm/generate — combat entry gate', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await resetPendingCombatEntries();
     generatedResult = { text: '{}', provider: 'openrouter', model: 'm' };
     generatedInputs = [];
     intentActors = defaultIntentActors;

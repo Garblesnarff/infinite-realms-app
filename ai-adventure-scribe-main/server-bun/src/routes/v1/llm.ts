@@ -1076,6 +1076,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // #1907 PR1: deterministic entry detection. It runs after contract enforcement so it
         // judges the accepted dialect, and returns a pending handoff without seating. The explicit
         // combat entry endpoint owns the encounter, initiative, map, telemetry, and publication.
+        // Set only when this gate kept a handoff. A model field the gate did not
+        // produce, or a duplicate it dropped, must not be written later.
+        let gateKeptPending = false;
         result = await applyCombatEntryGate({
           result,
           userId,
@@ -1086,6 +1089,19 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             const { combatEntryGateDeps } =
               await import('../../services/combat/combat-entry-gate-deps.js');
             return combatEntryGateDeps.getActiveEncounter(sessionId, ownerId);
+          },
+          // Decide here, before the detected log. Do not write yet: a later
+          // refusal strips the handoff, and that turn must not occupy the slot.
+          // The declared-attack hold confirms before this route runs; storing
+          // there would drop the generate that follows.
+          holdPending: async (pending) => {
+            const holdSessionId = combatEntry?.sessionId;
+            if (!holdSessionId) return 'keep';
+            const { sameActorsAlreadyPending } =
+              await import('../../services/combat/pending-combat-entry.js');
+            if (await sameActorsAlreadyPending(holdSessionId, userId, pending)) return 'drop';
+            gateKeptPending = true;
+            return 'keep';
           },
         });
         // GP-060 (#313): the DM named the creature the untargeted spell was aimed at, so
@@ -1120,6 +1136,24 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
               allowedFeatures = features;
             },
           });
+        }
+
+        // #913: remember the handoff only after gates that can throw it away.
+        // A refused feature returns no `combat_entry_pending`, so it must not
+        // block the next real opening of the same actors.
+        const deliverSessionId = combatEntry?.sessionId;
+        if (deliverSessionId && gateKeptPending && !result.error) {
+          try {
+            const { rememberDeliveredCombatEntry } =
+              await import('../../services/combat/pending-combat-entry.js');
+            await rememberDeliveredCombatEntry(deliverSessionId, userId, result.text);
+          } catch (rememberError) {
+            logger.warn({
+              msg: 'COMBAT_ENTRY_PENDING_REMEMBER_FAILED',
+              sessionId: deliverSessionId,
+              error: rememberError instanceof Error ? rememberError.message : String(rememberError),
+            });
+          }
         }
 
         if (result.error) {
@@ -1532,12 +1566,45 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           }
         }
 
+        // #913: an initiative result sent as this turn seats the stored proposal
+        // and the reply no longer asks the client to enter again.
+        let responseText = result.text;
+        const entrySessionId = combatEntry?.sessionId;
+        if (entrySessionId && combatEntry?.player && playerInput) {
+          try {
+            const {
+              initiativeRollFromPlayerInput,
+              seatStoredPendingEntry,
+              withoutCombatEntryPending,
+            } = await import('../../services/combat/pending-combat-entry.js');
+            const initiativeRoll = initiativeRollFromPlayerInput(playerInput);
+            if (initiativeRoll != null) {
+              const seated = await seatStoredPendingEntry({
+                sessionId: entrySessionId,
+                userId,
+                player: combatEntry.player,
+                playerInitiativeRoll: initiativeRoll,
+              });
+              if (seated) responseText = withoutCombatEntryPending(result.text);
+            }
+          } catch (seatError) {
+            logger.warn({
+              msg: 'COMBAT_ENTRY_INITIATIVE_SEAT_FAILED',
+              sessionId: entrySessionId,
+              error: seatError instanceof Error ? seatError.message : String(seatError),
+            });
+          }
+        }
+
         return {
           // #350 FIX round 2: parsed reflects whether the model text actually
           // parsed — the deploy smoke asserts parsed=true, so a hardcoded true
           // would let a prose-only (null envelope) reply pass the check.
           parsed: envelope !== null,
-          text: rewriteNarrationSegmentsFromEnvelope(envelope, result.text),
+          text: rewriteNarrationSegmentsFromEnvelope(
+            responseText === result.text ? envelope : parseLlmEnvelope(responseText),
+            responseText,
+          ),
           provider: result.provider,
           model: result.model,
           usageIds,
