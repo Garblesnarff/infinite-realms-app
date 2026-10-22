@@ -69,6 +69,25 @@ export function describeDeathSave(name: string, result: DeathSaveFacts): string 
 }
 
 /**
+ * The chat line for a player's own death saving throw (#874): the roll, the
+ * outcome word, and the running count of that kind, in the compact form the
+ * chat prints for the save itself — "Death saving throw: 14 — success (1/3)".
+ * {@link describeDeathSave} remains the DM's narrative fact; this is the line
+ * the transcript shows for the roll. Returns null for the terminal states
+ * (revived, stabilized, dead): those keep describeDeathSave's full sentence,
+ * which the transcript already prints for them.
+ */
+export function describeDeathSaveRollLine(result: DeathSaveFacts): string | null {
+  if (result.wasRevived || result.isDead || result.isStabilized) return null;
+  // A save with no rolled die has no line: never print a fabricated roll.
+  if (typeof result.roll !== 'number' || !Number.isFinite(result.roll)) return null;
+  const roll = result.roll;
+  return result.isSuccess
+    ? `Death saving throw: ${roll} — success (${result.successes ?? 0}/3)`
+    : `Death saving throw: ${roll} — failure (${result.failures ?? 0}/3)`;
+}
+
+/**
  * One player-visible engine sentence for damage taken at 0 HP (5e: each hit adds a
  * death-save failure, two on a critical). The DM fact and the player line are the
  * same sentence, so the DM narrates exactly what the player read.

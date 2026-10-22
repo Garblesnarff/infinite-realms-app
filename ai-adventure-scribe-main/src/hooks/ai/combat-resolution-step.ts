@@ -13,6 +13,7 @@ import {
 } from './combat-notice';
 import { enforceNarrationGate, gateInventedExtraStrike } from './narration-gate';
 import { SILENT_PLAYER_TURN_SETUP, silentPlayerTurnPayload } from './silent-player-turn';
+import { describeDeathSaveRollLine } from '../../../shared/death-save-lines';
 import {
   facingName,
   playerFacingWeaponName,
@@ -20,7 +21,10 @@ import {
 } from '../../../shared/engine-display-name';
 import { engineHitsOnPlayer } from '../../../shared/narration-extra-strike';
 
-import type { CombatEngineResult } from '../../../shared/combat-outcome-transcript';
+import type {
+  CombatEngineResult,
+  EngineDeathSave,
+} from '../../../shared/combat-outcome-transcript';
 import type { DMAoESpellAction } from '@/services/ai/dm-response-schema';
 import type { StructuredCombatAction } from '@/services/combat/combat-action-executor';
 import type { EngineResultCard } from '@/services/combat/engine-result-card';
@@ -926,10 +930,33 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       playerRound = preDrained.round ?? playerRound;
     }
     // Death saves on a single executed action get their own engine lines and cards (#2457).
-    const engineParts = [
-      ...formatCombatEngineParts(action, execution.result, roster),
-      ...formatDeathSaveParts(execution.result, roster),
-    ];
+    const actionParts = formatCombatEngineParts(action, execution.result, roster);
+    let saveParts = formatDeathSaveParts(execution.result, roster);
+    if (action.action_type === 'death_save') {
+      // #874: the player's own save prints as the compact chat line — the roll,
+      // the outcome word, the running count — not the DM's narrative sentence.
+      // (The DM still receives that sentence as its fact: dmFacingResolvedAction
+      // formats the same result separately.) Saves settled for other creatures
+      // at a turn boundary keep the named sentence; only this action's own
+      // rolled saves are re-lined, in the order formatDeathSaveParts emitted them.
+      const rolledSaves = (
+        (execution.result as { deathSaves?: EngineDeathSave[] } | null)?.deathSaves ?? []
+      ).filter(
+        (save): save is EngineDeathSave =>
+          Boolean(save) && typeof save.roll === 'number' && Number.isFinite(save.roll),
+      );
+      saveParts = saveParts.map((part, index) => {
+        const save = rolledSaves[index];
+        if (!save) return part;
+        const rollLine = describeDeathSaveRollLine(save);
+        // Terminal states (revived, stabilized, dead) keep the full sentence
+        // formatDeathSaveParts already printed for them.
+        if (!rollLine) return part;
+        const line = `⚙️ Engine: ${rollLine}`;
+        return { ...part, line, card: { ...part.card, line } };
+      });
+    }
+    const engineParts = [...actionParts, ...saveParts];
     if (isPlayerActor(action.actor_id, participants)) {
       for (const part of engineParts) {
         if (part.card.kind === 'spell') reportSheetCastResult(part.card);
