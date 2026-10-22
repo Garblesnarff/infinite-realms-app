@@ -1076,6 +1076,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // #1907 PR1: deterministic entry detection. It runs after contract enforcement so it
         // judges the accepted dialect, and returns a pending handoff without seating. The explicit
         // combat entry endpoint owns the encounter, initiative, map, telemetry, and publication.
+        // Set only when this gate kept a handoff. A model field the gate did not
+        // produce, or a duplicate it dropped, must not be written later.
+        let gateKeptPending = false;
         result = await applyCombatEntryGate({
           result,
           userId,
@@ -1087,14 +1090,18 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
               await import('../../services/combat/combat-entry-gate-deps.js');
             return combatEntryGateDeps.getActiveEncounter(sessionId, ownerId);
           },
-          // Remember only on generate. The declared-attack hold confirms before
-          // this route runs; storing there would drop the generate that follows.
+          // Decide here, before the detected log. Do not write yet: a later
+          // refusal strips the handoff, and that turn must not occupy the slot.
+          // The declared-attack hold confirms before this route runs; storing
+          // there would drop the generate that follows.
           holdPending: async (pending) => {
             const holdSessionId = combatEntry?.sessionId;
             if (!holdSessionId) return 'keep';
-            const { holdOrDropPending } =
+            const { sameActorsAlreadyPending } =
               await import('../../services/combat/pending-combat-entry.js');
-            return holdOrDropPending(holdSessionId, userId, pending);
+            if (await sameActorsAlreadyPending(holdSessionId, userId, pending)) return 'drop';
+            gateKeptPending = true;
+            return 'keep';
           },
         });
         // GP-060 (#313): the DM named the creature the untargeted spell was aimed at, so
@@ -1129,6 +1136,24 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
               allowedFeatures = features;
             },
           });
+        }
+
+        // #913: remember the handoff only after gates that can throw it away.
+        // A refused feature returns no `combat_entry_pending`, so it must not
+        // block the next real opening of the same actors.
+        const deliverSessionId = combatEntry?.sessionId;
+        if (deliverSessionId && gateKeptPending && !result.error) {
+          try {
+            const { rememberDeliveredCombatEntry } =
+              await import('../../services/combat/pending-combat-entry.js');
+            await rememberDeliveredCombatEntry(deliverSessionId, userId, result.text);
+          } catch (rememberError) {
+            logger.warn({
+              msg: 'COMBAT_ENTRY_PENDING_REMEMBER_FAILED',
+              sessionId: deliverSessionId,
+              error: rememberError instanceof Error ? rememberError.message : String(rememberError),
+            });
+          }
         }
 
         if (result.error) {

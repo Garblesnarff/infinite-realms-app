@@ -7,7 +7,9 @@
  * to deliver. This module is the memory of that handoff: one pending entry
  * per session, replaced when the actors change, dropped when the same actors
  * are proposed again, seated on confirm or on an initiative result, and
- * expired with one visible engine line.
+ * expired with one visible engine line. A later gate can throw the handoff
+ * away (a refused feature must not start a fight). Only the handoff that
+ * remains on the reply is remembered.
  *
  * The value lives in `game_sessions.session_state` under `combatEntryPending`
  * so two server processes (SO_REUSEPORT) share it. A process-local map covers
@@ -198,21 +200,73 @@ export async function clearPendingCombatEntry(sessionId: string): Promise<void> 
 }
 
 /**
- * Remember `pending`, or report that the same actors are already waiting.
+ * Whether the same named actors are already waiting. Does not write.
  * An empty actor key is never a duplicate: there is nothing to match.
+ */
+export async function sameActorsAlreadyPending(
+  sessionId: string,
+  userId: string,
+  pending: CombatEntryPending,
+): Promise<boolean> {
+  const actorKey = actorKeyOf(pending);
+  if (!actorKey) return false;
+  const existing = await readPendingCombatEntry(sessionId, userId);
+  return Boolean(existing && existing.actorKey === actorKey);
+}
+
+/**
+ * Remember `pending`, or report that the same actors are already waiting.
+ * Prefer `sameActorsAlreadyPending` in the gate and
+ * `rememberDeliveredCombatEntry` after later gates: a refusal strips the
+ * handoff, and that turn must not occupy the session's one pending slot.
  */
 export async function holdOrDropPending(
   sessionId: string,
   userId: string,
   pending: CombatEntryPending,
 ): Promise<'keep' | 'drop'> {
-  const actorKey = actorKeyOf(pending);
-  const existing = await readPendingCombatEntry(sessionId, userId);
-  if (actorKey && existing && existing.actorKey === actorKey) return 'drop';
-  const stored: StoredCombatEntry = { pending, actorKey, proposedAt: nowMs() };
+  if (await sameActorsAlreadyPending(sessionId, userId, pending)) return 'drop';
+  const stored: StoredCombatEntry = {
+    pending,
+    actorKey: actorKeyOf(pending),
+    proposedAt: nowMs(),
+  };
   await writeStored(sessionId, stored);
   await broadcastPending(sessionId, pending);
   return 'keep';
+}
+
+/**
+ * Store the handoff only when `text` still carries it. A duplicate of the
+ * actors already waiting is left as it is.
+ */
+export async function rememberDeliveredCombatEntry(
+  sessionId: string,
+  userId: string,
+  text: string,
+): Promise<void> {
+  let pending: CombatEntryPending | undefined;
+  try {
+    const parsed = JSON.parse(text) as { combat_entry_pending?: CombatEntryPending };
+    if (
+      parsed?.combat_entry_pending &&
+      typeof parsed.combat_entry_pending === 'object' &&
+      Array.isArray(parsed.combat_entry_pending.combatants)
+    ) {
+      pending = parsed.combat_entry_pending;
+    }
+  } catch {
+    return;
+  }
+  if (!pending) return;
+  if (await sameActorsAlreadyPending(sessionId, userId, pending)) return;
+  const stored: StoredCombatEntry = {
+    pending,
+    actorKey: actorKeyOf(pending),
+    proposedAt: nowMs(),
+  };
+  await writeStored(sessionId, stored);
+  await broadcastPending(sessionId, pending);
 }
 
 /**

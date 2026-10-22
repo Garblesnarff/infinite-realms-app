@@ -9,7 +9,7 @@
  * called" would pass against SQL that never matches a row. It refuses every target except the
  * dedicated local/CI Postgres because it writes fixtures.
  */
-import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 
 import {
@@ -118,15 +118,21 @@ const { issue1784DataRoutes } = await importWithRealDb(
   () => import('../../routes/v1/issue-1784-data.js'),
 );
 const { SpellSlotsService } = await importWithRealDb(() => import('../spell-slots-service.js'));
-const { LevelUpService } = await importWithRealDb(() => import('../progression/level-up-service.js'));
+const { LevelUpService } = await importWithRealDb(
+  () => import('../progression/level-up-service.js'),
+);
 const { awardStoryXp, awardStoryXpOnce } = await importWithRealDb(
   () => import('../dm/story-xp.js'),
 );
 const { applyStoryItems, applyStoryItemsOnce } = await importWithRealDb(
   () => import('../dm/story-items.js'),
 );
-const { applyStoryConditions, applyStoryConditionsOnce, getActiveCharacterConditions, SRD_2014_CONDITIONS } =
-  await importWithRealDb(() => import('../dm/story-conditions.js'));
+const {
+  applyStoryConditions,
+  applyStoryConditionsOnce,
+  getActiveCharacterConditions,
+  SRD_2014_CONDITIONS,
+} = await importWithRealDb(() => import('../dm/story-conditions.js'));
 const { applyStoryDamage } = await importWithRealDb(() => import('../dm/story-damage.js'));
 
 if (!hasRealDb) {
@@ -182,6 +188,15 @@ describeWithDb('DM reply: server provisional row + client save = one row (#2218)
       .insert(gameSessions)
       .values({ campaignId, sessionNumber: 1, status: 'active' })
       .returning({ id: gameSessions.id });
+  });
+
+  // #913 remembers a delivered combat handoff on the session. These scenarios
+  // share one session and each opening is its own first proposal.
+  beforeEach(async () => {
+    if (!sessionId) return;
+    const { clearPendingCombatEntry } =
+      await import('../../services/combat/pending-combat-entry.js');
+    await clearPendingCombatEntry(sessionId);
   });
 
   afterAll(async () => {
@@ -1599,7 +1614,12 @@ ${playerInput}
     const character = await wizardWithSlots(2, 2);
     await database
       .update(characters)
-      .set({ classLevels: [{ class: 'Wizard', level: 1 }, { class: 'Warlock', level: 2 }] })
+      .set({
+        classLevels: [
+          { class: 'Wizard', level: 1 },
+          { class: 'Warlock', level: 2 },
+        ],
+      })
       .where(eq(characters.id, character.id));
     // The warlock class row (plain name, so the pact check matches) and Hellish Rebuke
     // granted by it.
@@ -2740,13 +2760,15 @@ ${playerInput}
       description: 'Goblin',
     });
     expect(
-      (await awardStoryXpOnce({
-        characterId: turn.character.id,
-        sessionId,
-        since,
-        amount: 30,
-        reason: 'Truce with the ogre',
-      })).outcome,
+      (
+        await awardStoryXpOnce({
+          characterId: turn.character.id,
+          sessionId,
+          since,
+          amount: 30,
+          reason: 'Truce with the ogre',
+        })
+      ).outcome,
     ).toBe('awarded');
     expect(await sheetXp(turn.character.id)).toBe(30);
   });
@@ -2808,10 +2830,7 @@ ${playerInput}
         .select({ createdAt: dialogueHistory.createdAt })
         .from(dialogueHistory)
         .where(
-          and(
-            eq(dialogueHistory.sessionId, sessionId),
-            eq(dialogueHistory.speakerType, 'player'),
-          ),
+          and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'player')),
         )
         .orderBy(desc(dialogueHistory.createdAt))
         .limit(1);
@@ -2820,13 +2839,15 @@ ${playerInput}
     };
     await playerSays('I scout the pass.');
     expect(
-      (await awardStoryXpOnce({
-        characterId: turn.character.id,
-        sessionId,
-        since: await playerSince(),
-        amount: 50,
-        reason: 'Scouting the pass',
-      })).outcome,
+      (
+        await awardStoryXpOnce({
+          characterId: turn.character.id,
+          sessionId,
+          since: await playerSince(),
+          amount: 50,
+          reason: 'Scouting the pass',
+        })
+      ).outcome,
     ).toBe('awarded');
     // A new player message: not a Retry, so the cap (not the already-awarded check) decides.
     await playerSays('I parley with the patrol.');
@@ -2835,13 +2856,15 @@ ${playerInput}
     let outcome: unknown;
     let capped: Array<Record<string, unknown>>;
     try {
-      outcome = (await awardStoryXpOnce({
-        characterId: turn.character.id,
-        sessionId,
-        since: await playerSince(),
-        amount: 50,
-        reason: 'Parley with the patrol',
-      })).outcome;
+      outcome = (
+        await awardStoryXpOnce({
+          characterId: turn.character.id,
+          sessionId,
+          since: await playerSince(),
+          amount: 50,
+          reason: 'Parley with the patrol',
+        })
+      ).outcome;
       // Read the spy before mockRestore(): restoring clears the recorded calls.
       capped = info.mock.calls
         .slice(before)
@@ -2887,7 +2910,9 @@ ${playerInput}
       totalXp: 0,
       xpToNextLevel: 300,
     });
-    expect((await LevelUpService.levelUp({ characterId: character.id, hpRoll: 6 }, userId)).newLevel).toBe(2);
+    expect(
+      (await LevelUpService.levelUp({ characterId: character.id, hpRoll: 6 }, userId)).newLevel,
+    ).toBe(2);
     const result = await LevelUpService.levelUp({ characterId: character.id, hpRoll: 6 }, userId);
     expect(result.oldLevel).toBe(2);
     expect(result.newLevel).toBe(3);
@@ -2920,10 +2945,7 @@ ${playerInput}
         .select({ createdAt: dialogueHistory.createdAt })
         .from(dialogueHistory)
         .where(
-          and(
-            eq(dialogueHistory.sessionId, sessionId),
-            eq(dialogueHistory.speakerType, 'player'),
-          ),
+          and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'player')),
         )
         .orderBy(desc(dialogueHistory.createdAt))
         .limit(1);
@@ -2932,13 +2954,15 @@ ${playerInput}
     };
     await playerSays('I chart the mountain passes.');
     expect(
-      (await awardStoryXpOnce({
-        characterId: turn.character.id,
-        sessionId,
-        since: await playerSince(),
-        amount: 75,
-        reason: 'Charted the passes',
-      })).outcome,
+      (
+        await awardStoryXpOnce({
+          characterId: turn.character.id,
+          sessionId,
+          since: await playerSince(),
+          amount: 75,
+          reason: 'Charted the passes',
+        })
+      ).outcome,
     ).toBe('awarded');
     expect(await xpEvents(turn.character.id)).toHaveLength(1);
     // A new player message earning more: the cap is full, so nothing is written.
@@ -2948,13 +2972,15 @@ ${playerInput}
     let outcome: unknown;
     let capped: Array<Record<string, unknown>>;
     try {
-      outcome = (await awardStoryXpOnce({
-        characterId: turn.character.id,
-        sessionId,
-        since: await playerSince(),
-        amount: 50,
-        reason: 'Befriended the clan',
-      })).outcome;
+      outcome = (
+        await awardStoryXpOnce({
+          characterId: turn.character.id,
+          sessionId,
+          since: await playerSince(),
+          amount: 50,
+          reason: 'Befriended the clan',
+        })
+      ).outcome;
       // Read the spy before mockRestore(): restoring clears the recorded calls.
       capped = info.mock.calls
         .slice(before)
@@ -3021,13 +3047,15 @@ ${playerInput}
       .limit(1);
     if (!since) throw new Error('[dm-reply-reconcile] the player row has no created_at');
     expect(
-      (await awardStoryXpOnce({
-        characterId: turn.character.id,
-        sessionId,
-        since,
-        amount: 50,
-        reason: 'Recounted legend',
-      })).outcome,
+      (
+        await awardStoryXpOnce({
+          characterId: turn.character.id,
+          sessionId,
+          since,
+          amount: 50,
+          reason: 'Recounted legend',
+        })
+      ).outcome,
     ).toBe('capped');
     expect(await sheetXp(turn.character.id)).toBe(0);
     expect(await xpEvents(turn.character.id)).toEqual([]);
@@ -3035,10 +3063,7 @@ ${playerInput}
 
   // #218 step 3: items the story grants or takes reach the inventory, server-side,
   // once per player message (story-items.ts). The sheet reads inventory from the server.
-  const storyReply = (
-    text: string,
-    extra?: Record<string, unknown>,
-  ): Record<string, unknown> =>
+  const storyReply = (text: string, extra?: Record<string, unknown>): Record<string, unknown> =>
     envelopeOf({
       text,
       options: ['A. **Take** it.', 'B. **Leave** it.'],
@@ -3262,9 +3287,7 @@ ${playerInput}
             ),
           )
       ).map((row) => row.message);
-    expect((await systemLines()).join('\n')).toContain(
-      'story damage — rope burn deals 3 damage',
-    );
+    expect((await systemLines()).join('\n')).toContain('story damage — rope burn deals 3 damage');
     // Retry re-sends the same message: still 9 HP, still one damage line.
     await dmTurn({
       ...fighter,
@@ -3357,10 +3380,9 @@ ${playerInput}
       ...fighter,
       existingCharacter: setup.character,
       playerInput,
-      reply: storyReply(
-        'The rocks come down and a boulder slams into you.',
-        { damage: { amount: 25, source: 'rockslide' } },
-      ),
+      reply: storyReply('The rocks come down and a boulder slams into you.', {
+        damage: { amount: 25, source: 'rockslide' },
+      }),
     });
     expect(first.status).toBe(200);
     expect((await sheetAfterReload(characterId)).stats).toMatchObject({
@@ -3380,10 +3402,9 @@ ${playerInput}
       ...fighter,
       existingCharacter: setup.character,
       playerInput,
-      reply: storyReply(
-        'The rocks come down and a boulder slams into you.',
-        { damage: { amount: 25, source: 'rockslide' } },
-      ),
+      reply: storyReply('The rocks come down and a boulder slams into you.', {
+        damage: { amount: 25, source: 'rockslide' },
+      }),
     });
     expect((await sheetAfterReload(characterId)).stats).toMatchObject({
       current_hit_points: 1,
@@ -3399,10 +3420,9 @@ ${playerInput}
       ...fighter,
       existingCharacter: setup.character,
       playerInput: secondInput,
-      reply: storyReply(
-        'Another boulder crashes down on you.',
-        { damage: { amount: 999, source: 'rockslide' } },
-      ),
+      reply: storyReply('Another boulder crashes down on you.', {
+        damage: { amount: 999, source: 'rockslide' },
+      }),
     });
     expect(second.status).toBe(200);
     expect((await sheetAfterReload(characterId)).stats).toMatchObject({
@@ -3519,10 +3539,7 @@ ${playerInput}
         playerMessageAt: since,
         items: [{ name: 'Charts', quantity: 2, change: 'gain' }],
       });
-    expect((await Promise.all([move(), move()])).sort()).toEqual([
-      'already_applied',
-      'applied',
-    ]);
+    expect((await Promise.all([move(), move()])).sort()).toEqual(['already_applied', 'applied']);
     expect(await sheetInventory(turn.character.id)).toEqual([{ name: 'Charts', quantity: 2 }]);
   });
 
@@ -3546,10 +3563,7 @@ ${playerInput}
         characterId: turn.character.id,
         conditions: [{ name: 'Frightened', change: 'apply', conditionId: frightened.id }],
       });
-    expect((await Promise.all([apply(), apply()])).sort()).toEqual([
-      'already_applied',
-      'applied',
-    ]);
+    expect((await Promise.all([apply(), apply()])).sort()).toEqual(['already_applied', 'applied']);
     expect(await getActiveCharacterConditions(turn.character.id)).toHaveLength(1);
   });
 
@@ -3608,7 +3622,10 @@ ${playerInput}
     expect(rows).toHaveLength(1);
     expect(rows[0].quantity).toBe(2);
     expect(rows[0].itemType).toBe('weapon');
-    expect(JSON.parse(rows[0].properties ?? '{}').damage).toEqual({ dice: '1d8', type: 'slashing' });
+    expect(JSON.parse(rows[0].properties ?? '{}').damage).toEqual({
+      dice: '1d8',
+      type: 'slashing',
+    });
   });
 
   test('#218 FIX round 3: two gain lines for the same item in one reply both count', async () => {
@@ -3694,7 +3711,11 @@ ${playerInput}
     // the item from creation, and a story gain must bump the row, not add one.
     const playerInput = 'I take the torch from the sconce.';
     await playerSays(playerInput);
-    const first = await dmTurn({ ...fighter, playerInput, reply: storyReply('A torch.', undefined) });
+    const first = await dmTurn({
+      ...fighter,
+      playerInput,
+      reply: storyReply('A torch.', undefined),
+    });
     const characterId = first.character.id;
     // Seed the starting-kit row as the creation wizard would.
     await database.insert(characterEquipment).values({
@@ -3784,7 +3805,6 @@ ${playerInput}
     expect(await getActiveCharacterConditions(turn.character.id)).toEqual([]);
   });
 
-
   // #255: two concurrent useSpellSlot calls with one slot left: one spends, the other is
   // rejected with "No available level 1 spell slots". The spend is a single atomic UPDATE
   // (SET usedSlots = usedSlots + 1 WHERE usedSlots < totalSlots), so the loser matches no
@@ -3864,17 +3884,14 @@ ${playerInput}
       body: unknown,
     ): Promise<{ status: number; json: Record<string, unknown> }> => {
       const response = await prepApp.handle(
-        new Request(
-          `http://localhost/v1/characters/${characterId}/spells/${spellId}/preparation`,
-          {
-            method: 'PATCH',
-            headers: {
-              authorization: `Bearer ${caller === 'other' ? 'other-token' : 'owner-token'}`,
-              'content-type': 'application/json',
-            },
-            body: JSON.stringify(body),
+        new Request(`http://localhost/v1/characters/${characterId}/spells/${spellId}/preparation`, {
+          method: 'PATCH',
+          headers: {
+            authorization: `Bearer ${caller === 'other' ? 'other-token' : 'owner-token'}`,
+            'content-type': 'application/json',
           },
-        ),
+          body: JSON.stringify(body),
+        }),
       );
       return { status: response.status, json: (await response.json()) as Record<string, unknown> };
     };
@@ -3887,7 +3904,12 @@ ${playerInput}
     ): Promise<string> => {
       const [{ id }] = await database
         .insert(characters)
-        .values({ userId: owner, name: testId(`prep-route-${cls.toLowerCase()}`), class: cls, level })
+        .values({
+          userId: owner,
+          name: testId(`prep-route-${cls.toLowerCase()}`),
+          class: cls,
+          level,
+        })
         .returning({ id: characters.id });
       await database.insert(characterStats).values({
         characterId: id,
@@ -4219,5 +4241,4 @@ ${playerInput}
       expect(contexts[0]?.narration_segments).toEqual(segmentsNull);
     });
   });
-
 });
