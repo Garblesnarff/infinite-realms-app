@@ -39,7 +39,6 @@ import {
 
 const DEDICATED_HOST = '127.0.0.1';
 const DEDICATED_PORT = '55432';
-const CAPTURE = 'story_hp_write_capture';
 
 function assertDedicated(url: string): void {
   let parsed: URL;
@@ -92,9 +91,10 @@ describeWithDb('story damage writes sheet HP with the owner filter (#1024)', () 
   });
 
   async function dropCapture(): Promise<void> {
-    await sql.unsafe(`DROP TRIGGER IF EXISTS ${CAPTURE} ON character_stats`);
-    await sql.unsafe(`DROP FUNCTION IF EXISTS ${CAPTURE}()`);
-    await sql.unsafe(`DROP TABLE IF EXISTS ${CAPTURE}`);
+    await sql`DROP TRIGGER IF EXISTS story_hp_write_capture ON character_stats`;
+    await sql`DROP FUNCTION IF EXISTS story_hp_write_capture()`;
+    await sql`DROP TABLE IF EXISTS story_hp_write_capture`;
+    await sql`DROP TABLE IF EXISTS story_hp_write_target`;
   }
 
   async function installCapture(characterId: string): Promise<void> {
@@ -102,29 +102,37 @@ describeWithDb('story damage writes sheet HP with the owner filter (#1024)', () 
       throw new Error('[story-damage-sheet] character id is not a uuid');
     }
     await dropCapture();
-    await sql.unsafe(`
-      CREATE TABLE ${CAPTURE} (
+    await sql`
+      CREATE TABLE story_hp_write_target (
+        character_id uuid PRIMARY KEY
+      )
+    `;
+    await sql`
+      CREATE TABLE story_hp_write_capture (
         id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         query text NOT NULL
       )
-    `);
-    await sql.unsafe(`
-      CREATE FUNCTION ${CAPTURE}() RETURNS trigger
+    `;
+    await sql`
+      CREATE FUNCTION story_hp_write_capture() RETURNS trigger
       LANGUAGE plpgsql AS $fn$
       BEGIN
-        IF NEW.character_id = '${characterId}'::uuid THEN
-          INSERT INTO ${CAPTURE} (query) VALUES (current_query());
+        IF EXISTS (
+          SELECT 1 FROM story_hp_write_target WHERE character_id = NEW.character_id
+        ) THEN
+          INSERT INTO story_hp_write_capture (query) VALUES (current_query());
         END IF;
         RETURN NEW;
       END;
       $fn$
-    `);
-    await sql.unsafe(`
-      CREATE TRIGGER ${CAPTURE}
+    `;
+    await sql`
+      CREATE TRIGGER story_hp_write_capture
       BEFORE UPDATE ON character_stats
       FOR EACH ROW
-      EXECUTE FUNCTION ${CAPTURE}()
-    `);
+      EXECUTE FUNCTION story_hp_write_capture()
+    `;
+    await sql`INSERT INTO story_hp_write_target (character_id) VALUES (${characterId}::uuid)`;
   }
 
   test('a story blow out of combat changes the reloaded sheet and the write names the owner', async () => {
