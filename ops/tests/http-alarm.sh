@@ -2,7 +2,7 @@
 # Cases for ops/http-alarm.sh (#2293), with fixture nginx "combined" log lines
 # and a stub `gh`: a quiet window, 3 x 422 on the #2280 route, a repeat inside
 # the hour, a 5xx, smoke requests, a timezone offset, the rotated file, a log
-# it cannot parse, the 24 h 4xx-rate alarm and the MCP /health probes (#350).
+# it cannot parse and the 24 h 4xx-rate alarm (#350).
 #
 #   bash ops/tests/http-alarm.sh
 #
@@ -16,9 +16,6 @@ trap 'rm -rf "$TMP"' EXIT
 
 printf '#!/usr/bin/env bash\n{ echo "ARGS: $*"; cat; echo "--- end"; } >> "$GH_LOG"\n' > "$TMP/gh"
 chmod +x "$TMP/gh"
-# Stub curl for the probes: answers the code CURL_CODES maps the URL to ("<url> <code>" lines), else 000.
-printf '#!/usr/bin/env bash\nfor a; do u=$a; done\nc=$(awk -v u="$u" '"'"'$1 == u { print $2 }'"'"' "$CURL_CODES" 2> /dev/null)\nprintf %%s "${c:-000}"\n' > "$TMP/curl"
-chmod +x "$TMP/curl"
 : > "$TMP/none.env"
 
 # 2026-09-26T03:10:00Z, the end of every window below unless a case moves it.
@@ -37,13 +34,11 @@ S2=/v1/sessions/75fddc00-862c-4a8b-a8d0-4e630aae61ec/messages
 line25() { line "$@" | sed 's#26/Sep/2026#25/Sep/2026#'; }
 
 # alarm <dir> [now]: run the real script on <dir>/access.log (+ .1), state in <dir>.
-# Probes are off unless the case sets PROBES; CURL_CODES feeds the stub curl.
 alarm() {
   local d=$1 now=${2:-$T0}
   mkdir -p "$d/state"
   RC=0
-  HTTP_ALARM_PROBES="${PROBES:-}" HTTP_ALARM_CURL="$TMP/curl" CURL_CODES="${CURL_CODES:-/dev/null}" \
-    GH_LOG="$d/gh.log" HTTP_ALARM_LOGS="$d/access.log.1 $d/access.log" HTTP_ALARM_NOW="$now" \
+  GH_LOG="$d/gh.log" HTTP_ALARM_LOGS="$d/access.log.1 $d/access.log" HTTP_ALARM_NOW="$now" \
     DEPLOY_STATE_DIR="$d/state" DEPLOY_ALERT_FILE="$d/alerts.log" DEPLOY_ALERTS_ENV="$TMP/none.env" \
     DEPLOY_GH_BIN="$TMP/gh" DEPLOY_RUN_REPO=test/repo DEPLOY_RUN_ISSUE=2093 \
     bash "$ALARM" > "$d/out" 2>&1 || RC=$?
@@ -195,31 +190,6 @@ alarm "$D" $((T0 + 3600 + 300))
 expect "rate: a 5xx alert an hour later fires alone" grep -qF "HTTP ALARM: POST /v1/sessions/:id/messages 1×5xx in the last 15m (" "$D/alerts.log"
 alarm "$D" $((T0 + 3 * 3600))
 expect "rate: still remembered after the 5xx alert pruned the state" test "$(alerts "$D")" = 2
-
-# 11. Probes (#350): an MCP /health that is not 2xx fires once an hour, named by port.
-D="$TMP/probe"; mkdir -p "$D"
-line 03:05:00 GET /health 200 > "$D/access.log"
-printf '%s\n' 'http://127.0.0.1:8889/health 503' 'http://127.0.0.1:8890/health 200' > "$TMP/codes"
-PROBES='pearls=http://127.0.0.1:8889/health cofounder=http://127.0.0.1:8890/health' CURL_CODES="$TMP/codes" alarm "$D"
-expect "probe: one alert line" test "$(alerts "$D")" = 1
-expect "probe: names the server, port and status" grep -qF "HTTP ALARM: MCP pearls :8889/health HTTP 503" "$D/alerts.log"
-expect "probe: a 2xx probe is not named" bash -c "! grep -qF 'cofounder' '$D/alerts.log'"
-expect "probe: no host or IP leaves the box" bash -c "! grep -qF '127.0.0.1' '$D/alerts.log' '$D/gh.log'"
-expect "probe: summary counts probes" has "probes 1/2 ok"
-PROBES='pearls=http://127.0.0.1:8889/health cofounder=http://127.0.0.1:8890/health' CURL_CODES="$TMP/codes" alarm "$D" $((T0 + 900))
-expect "probe: not again inside the hour" test "$(alerts "$D")" = 1
-# Nothing answering at all is "no answer"; and probes still run with no log.
-D="$TMP/probe-down"; mkdir -p "$D"
-PROBES='cofounder=http://127.0.0.1:8890/health' alarm "$D"
-expect "probe: no log still probes, exit 0" test "$RC" = 0
-expect "probe: a dead port is 'no answer'" grep -qF "MCP cofounder :8890/health no answer" "$D/alerts.log"
-# All 2xx: quiet.
-D="$TMP/probe-ok"; mkdir -p "$D"
-line 03:05:00 GET /health 200 > "$D/access.log"
-printf '%s\n' 'http://127.0.0.1:8889/health 200' 'http://127.0.0.1:8890/health 204' > "$TMP/codes-ok"
-PROBES='pearls=http://127.0.0.1:8889/health cofounder=http://127.0.0.1:8890/health' CURL_CODES="$TMP/codes-ok" alarm "$D"
-expect "probe: all 2xx, no alert" test "$(alerts "$D")" = 0
-expect "probe: all 2xx counted" has "probes 2/2 ok"
 
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

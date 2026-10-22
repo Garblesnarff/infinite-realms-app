@@ -26,10 +26,6 @@
 # surfaces. Same alert line and comment; each such route alerts at most once a
 # day. OPTIONS preflights are not counted.
 #
-# Probes (#350): each run also GETs the MCP servers' /health (pearls :8889,
-# cofounder :8890). They were down from 10-14 to 10-22 and nothing alerted. A
-# probe that does not answer 2xx fires, at most once an hour.
-#
 #   http-alarm.sh
 #
 # Install (only on Rob's install line), e.g. /etc/cron.d/infiniterealms-http-alarm:
@@ -39,8 +35,7 @@
 # HTTP_ALARM_DEPLOY_SCRIPT, HTTP_ALARM_LOGS, HTTP_ALARM_WINDOW_SECONDS,
 # HTTP_ALARM_422_MIN, HTTP_ALARM_5XX_MIN, HTTP_ALARM_REPEAT_SECONDS,
 # HTTP_ALARM_RATE_WINDOW_SECONDS, HTTP_ALARM_RATE_MIN_CALLS,
-# HTTP_ALARM_RATE_PCT, HTTP_ALARM_RATE_REPEAT_SECONDS, HTTP_ALARM_PROBES
-# ("name=url ..."; empty turns probes off), HTTP_ALARM_CURL,
+# HTTP_ALARM_RATE_PCT, HTTP_ALARM_RATE_REPEAT_SECONDS,
 # HTTP_ALARM_NOW (epoch; tests), plus DEPLOY_STATE_DIR, DEPLOY_ALERT_FILE,
 # DEPLOY_ALERTS_ENV, DEPLOY_NOTIFY, DEPLOY_RUN_REPO, DEPLOY_RUN_ISSUE,
 # DEPLOY_GH_BIN. Cases: bash ops/tests/http-alarm.sh
@@ -69,8 +64,6 @@ RATE_WINDOW=${HTTP_ALARM_RATE_WINDOW_SECONDS:-86400}
 RATE_MIN=${HTTP_ALARM_RATE_MIN_CALLS:-20}
 RATE_PCT=${HTTP_ALARM_RATE_PCT:-90}
 RATE_REPEAT=${HTTP_ALARM_RATE_REPEAT_SECONDS:-86400}
-PROBES=${HTTP_ALARM_PROBES-pearls=http://127.0.0.1:8889/health cofounder=http://127.0.0.1:8890/health}
-CURL=${HTTP_ALARM_CURL:-curl}
 NOW=${HTTP_ALARM_NOW:-$(date +%s)}
 STATE="$STATE_DIR/http-alarm.state" # "<epoch last alerted>\t<route>" per line
 mkdir -p "$STATE_DIR"
@@ -78,15 +71,15 @@ touch "$STATE"
 
 files=()
 for f in $LOGS; do [ -r "$f" ] && files+=("$f"); done
+if [ "${#files[@]}" = 0 ]; then
+  echo "$(ts) http-alarm: no readable log in: $LOGS"
+  exit 0
+fi
 
 # One pass over the logs. Prints "R\t<route>\t<422s>\t<5xxs>" per route with
 # either, "F\t<route>\t<calls>\t<4xxs>" per route with >= rmin calls in the
 # 24 h rate window, then "T\t<in window>\t<smoke skipped>\t<parsed>\t<unparsed>".
 # Plain POSIX awk (the box's is mawk): no mktime, no {n} intervals.
-if [ "${#files[@]}" = 0 ]; then
-  echo "$(ts) http-alarm: no readable log in: $LOGS"
-  summary=$(printf 'T\t0\t0\t0\t0')
-else
 # shellcheck disable=SC2016
 summary=$(awk -v now="$NOW" -v window="$WINDOW" -v rwindow="$RATE_WINDOW" -v rmin="$RATE_MIN" '
   function days(y, m, d,   era, yoe, doy) { # days since 1970-01-01 (proleptic Gregorian)
@@ -134,7 +127,6 @@ summary=$(awk -v now="$NOW" -v window="$WINDOW" -v rwindow="$RATE_WINDOW" -v rmi
     for (r in calls) if (calls[r] >= rmin) printf "F\t%s\t%d\t%d\n", r, calls[r], c4xx[r]
     printf "T\t%d\t%d\t%d\t%d\n", seen, smoke, parsed, bad
   }' "${files[@]}")
-fi
 
 IFS=$'\t' read -r _ SEEN SMOKE PARSED BAD < <(grep '^T' <<< "$summary")
 
@@ -152,7 +144,7 @@ defuse_markers() { sed -E 's/([Rr][Uu][Nn])([[:space:]]+#?[A-Za-z]?[0-9]+[[:spac
 
 # firing/counts/keys run in parallel: what the alert names, its count, and the
 # state key it is remembered under. Window alarms come first (n_window of them),
-# then 4xx-rate and probe alarms, which carry their own period in the count.
+# then 4xx-rate alarms, which carry their own period in the count.
 firing=() counts=() keys=() quiet=()
 # consider <key> <repeat> <name> <count>: fire, or note it is holding back.
 consider() {
@@ -184,17 +176,6 @@ while IFS=$'\t' read -r kind route calls n4xx; do
   consider "4xx-rate $route" "$RATE_REPEAT" "$route" "${n4xx}/${calls}×4xx in ${rate_h}h"
 done < <(grep '^F' <<< "$summary" | sort)
 
-# Probes (#350): a /health that does not answer 2xx. Named by port, never by host.
-n_probe_ok=0 n_probe=0
-for p in $PROBES; do
-  name=${p%%=*} url=${p#*=}
-  port=$(sed -E 's#^[a-z]+://[^/:]+(:([0-9]+))?.*#\2#' <<< "$url")
-  n_probe=$(( n_probe + 1 ))
-  code=$("$CURL" -s -o /dev/null -m 5 -w '%{http_code}' "$url" 2> /dev/null) || true
-  case "$code" in 2??) n_probe_ok=$(( n_probe_ok + 1 )); continue ;; esac
-  [ -z "$code" ] || [ "$code" = 000 ] && got="no answer" || got="HTTP $code"
-  consider "probe $name" "$REPEAT" "MCP $name${port:+ :$port}/health" "$got"
-done
 
 # A log that is being written but can't be read is an alarm that has gone blind.
 if [ "$PARSED" = 0 ] && [ "$BAD" -gt 0 ]; then
@@ -205,7 +186,7 @@ if [ "$PARSED" = 0 ] && [ "$BAD" -gt 0 ]; then
 fi
 
 mins=$(( WINDOW / 60 ))
-echo "$(ts) http-alarm: last ${mins}m: $SEEN requests, ${#firing[@]} route(s) alerting, ${#quiet[@]} already alerted within the repeat period, $SMOKE smoke request(s) not counted; probes $n_probe_ok/$n_probe ok."
+echo "$(ts) http-alarm: last ${mins}m: $SEEN requests, ${#firing[@]} route(s) alerting, ${#quiet[@]} already alerted within the repeat period, $SMOKE smoke request(s) not counted."
 for q in ${quiet[@]+"${quiet[@]}"}; do echo "$(ts) http-alarm: quiet: $q"; done
 [ "${#firing[@]}" = 0 ] && exit 0
 
@@ -219,11 +200,11 @@ for i in "${!firing[@]}"; do
 done
 joined="${in_window:+$in_window in the last ${mins}m}"
 joined+="${other:+${joined:+; }$other}"
-emit "🔴 HTTP ALARM: $joined (nginx api-access.log; thresholds ${MIN_422}×422 / ${MIN_5XX}×5xx per route in ${mins}m, or ≥${RATE_PCT}% 4xx of ≥${RATE_MIN} calls in ${rate_h}h; MCP /health not 2xx)."
+emit "🔴 HTTP ALARM: $joined (nginx api-access.log; thresholds ${MIN_422}×422 / ${MIN_5XX}×5xx per route in ${mins}m, or ≥${RATE_PCT}% 4xx of ≥${RATE_MIN} calls in ${rate_h}h)."
 for k in "${keys[@]}"; do remember "$k"; done
 
 body=$( {
-  echo "🔴 **HTTP alarm** — nginx \`api-access.log\` and MCP probes, to $(date -u -d "@$NOW" +%FT%TZ 2> /dev/null || date -u -r "$NOW" +%FT%TZ):"
+  echo "🔴 **HTTP alarm** — nginx \`api-access.log\`, to $(date -u -d "@$NOW" +%FT%TZ 2> /dev/null || date -u -r "$NOW" +%FT%TZ):"
   echo
   for i in "${!firing[@]}"; do
     if [ "$i" -lt "$n_window" ]; then
@@ -233,7 +214,7 @@ body=$( {
     fi
   done
   echo
-  echo "Thresholds: ≥${MIN_422} × 422 or ≥${MIN_5XX} × 5xx per route in ${mins}m (each route at most once an hour); ≥${RATE_PCT}% 4xx of ≥${RATE_MIN} calls in ${rate_h}h (at most once a day); an MCP /health that is not 2xx (at most once an hour). ${SMOKE} smoke request(s) not counted. Nothing was changed on the box. (ops/http-alarm.sh, #2293, #350)"
+  echo "Thresholds: ≥${MIN_422} × 422 or ≥${MIN_5XX} × 5xx per route in ${mins}m (each route at most once an hour); ≥${RATE_PCT}% 4xx of ≥${RATE_MIN} calls in ${rate_h}h (at most once a day). ${SMOKE} smoke request(s) not counted. Nothing was changed on the box. (ops/http-alarm.sh, #2293, #350)"
 } | defuse_markers)
 if ! printf '%s\n' "$body" | "$GH_BIN" issue comment "$RUN_ISSUE" --repo "$RUN_REPO" --body-file - > /dev/null 2>&1; then
   echo "$(ts) http-alarm: WARNING: could not comment on #$RUN_ISSUE (the alert line was written)."
