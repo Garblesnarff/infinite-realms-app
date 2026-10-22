@@ -1,0 +1,64 @@
+{
+  "name": "Clarice Faro",
+  "description": "Draconic blood, garden fire",
+  "race": "Human",
+  "subrace": null,
+  "class": "Sorcerer",
+  "subclass": "Draconic Bloodline",
+  "level": 3,
+  "image_url": null,
+  "avatar_url": null,
+  "backstory_elements": null,
+  "background": "Sage",
+  "background_image": null,
+  "campaign_id": "10191019-0000-4000-8000-000000000000",
+  "skill_proficiencies": "Arcana, Insight",
+  "languages": [
+    "Common",
+    "Draconic"
+  ],
+  "cantrips": "acid-splash, chill-touch, dancing-lights, fire-bolt",
+  "known_spells": "alter-self, blindness-deafness, blur, burning-hands",
+  "prepared_spells": "",
+  "total_level": 3,
+  "stats": {
+    "strength": 8,
+    "dexterity": 12,
+    "constitution": 14,
+    "intelligence": 11,
+    "wisdom": 10,
+    "charisma": 17
+  },
+  "equipment": [
+    {
+      "item_name": "Dagger",
+      "item_type": "weapon",
+      "quantity": 2,
+      "equipped": true
+    },
+    {
+      "item_name": "Crossbow, light",
+      "item_type": "weapon",
+      "quantity": 1,
+      "equipped": true
+    },
+    {
+      "item_name": "Crossbow Bolts (20)",
+      "item_type": "gear",
+      "quantity": 1,
+      "equipped": false
+    },
+    {
+      "item_name": "Case, crossbow bolt",
+      "item_type": "gear",
+      "quantity": 1,
+      "equipped": false
+    },
+    {
+      "item_name": "Explorer's Pack",
+      "item_type": "gear",
+      "quantity": 1,
+      "equipped": false
+    }
+  ]
+}

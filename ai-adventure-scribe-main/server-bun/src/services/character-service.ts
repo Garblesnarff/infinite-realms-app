@@ -14,6 +14,7 @@ import { TRPCError } from '@trpc/server';
 import { and, desc, eq, exists, inArray, or, sql } from 'drizzle-orm';
 
 import {
+  hasDraconicBloodlineSubclass,
   readArmorClassEquipment,
   syncArmorClassAfterEquipmentChange,
 } from './character/character-armor-class.js';
@@ -21,11 +22,13 @@ import { CharacterSpellService } from './character/character-spell-service.js';
 import { CharacterVitalsService } from './character-vitals-service.js';
 import { ClassFeaturesService } from './class-features-service.js';
 import { RestHitDiceService } from './rest/rest-hit-dice-service.js';
+import { SpellSlotDataAccess } from './spell-slots/spell-slot-data-access.js';
 import { db } from '../../../db/client';
 import {
   characterPermissions,
   characterEquipment,
   characterSpellSlots,
+  characterSubclasses,
   inventoryItems,
   characterStats,
   characters,
@@ -44,6 +47,7 @@ import {
 } from '../../../shared/level-1-hit-points';
 import { XP_TO_REACH_LEVEL } from '../../../shared/xp-tables';
 import { InternalServerError } from '../lib/errors.js';
+import { AVAILABLE_SUBCLASSES, SUBCLASS_CHOICE_LEVELS } from '../types/class-features.js';
 import { parseClassLevels, SpellSlotMechanics } from './spell-slots/spell-slot-mechanics.js';
 
 import type { Character, NewCharacter, NewCharacterStats } from '../../../db/schema/index';
@@ -137,7 +141,13 @@ async function recomputeServerDerivedStats(
     .limit(1);
   if (!stats) return;
 
-  const draconicBloodline = isDraconicBloodline(character.classFeatures);
+  // The Draconic pick lives in the wizard's choice string OR the subclass
+  // row — a premade body carries it only in the row create recorded, and a
+  // classFeatures-only read here reverted a premade's Draconic Resilience
+  // AC on its first stats edit (#1019).
+  const draconicBloodline =
+    isDraconicBloodline(character.classFeatures) ||
+    (await hasDraconicBloodlineSubclass(characterId));
   const tough = hasToughFeat(undefined, character.classFeatures);
   const armorClass = computeServerArmorClass(
     character.class,
@@ -328,7 +338,33 @@ export class CharacterService {
     stats?: Omit<Partial<NewCharacterStats>, 'characterId'>,
     equipment?: Array<Record<string, unknown>>,
     inventory?: Array<Record<string, unknown>>,
+    subclassName?: string | null,
   ): Promise<Character> {
+    // #1019: a create body can carry the character's subclass — the starter
+    // template seeder sends the template's subclass column this way (the
+    // wizard stores its pick in the classFeatures JSON instead). Resolve it
+    // here, under SubclassService's validity rules, so the subclass takes
+    // part in the creation itself: the stats computation below can see it
+    // (a Draconic Bloodline sorcerer's HP/AC depend on it) and the feature
+    // grant after the transaction reads the row it records. A name the
+    // service would reject (unknown for the class, or the character is
+    // below the class's subclass choice level) is ignored: the character
+    // is created exactly as before, never failed by its subclass.
+    const requestedSubclass = subclassName?.trim() || null;
+    const resolvedSubclass =
+      requestedSubclass &&
+      data.class &&
+      AVAILABLE_SUBCLASSES[data.class]?.includes(requestedSubclass) &&
+      (data.level || 1) >= (SUBCLASS_CHOICE_LEVELS[data.class] ?? 3)
+        ? requestedSubclass
+        : null;
+    if (requestedSubclass && !resolvedSubclass) {
+      // The old route path logged a warning when a subclass was not
+      // applied; keep the breadcrumb so an unresolvable name is not silent.
+      console.warn(
+        `CharacterService.create: subclass "${requestedSubclass}" not applied for class "${data.class}" at level ${data.level ?? 1} (unknown name or below the choice level)`,
+      );
+    }
     // #971: bare coin amounts in the equipment list are purse money, not
     // items — they join gold_pieces below and never become equipment rows.
     const { equipment: nonGoldEquipment, gold: equipmentGold } = splitEquipmentGold(equipment);
@@ -358,6 +394,20 @@ export class CharacterService {
 
       if (!character) throw new InternalServerError('Failed to create character');
 
+      // #1019: record a body-carried subclass in the same transaction, so
+      // everything downstream of the insert (the stats computation below,
+      // the post-transaction feature grant) sees the character's subclass
+      // from the start — the same end state SubclassService.setSubclass
+      // produces for a subclass chosen after creation.
+      if (resolvedSubclass && data.class) {
+        await tx.insert(characterSubclasses).values({
+          characterId: character.id,
+          className: data.class,
+          subclassName: resolvedSubclass,
+          chosenAtLevel: character.level ?? 1,
+        });
+      }
+
       // #270: seed the engine's spell-slot table from the single slot source
       // (the 2014 5e tables) at creation, in the same transaction. Non-casters
       // and unrecognized classes correctly get no rows; single-class warlocks
@@ -386,7 +436,11 @@ export class CharacterService {
         // armor_class or hit-point values it sent are ignored. #829: HP is
         // computed for the character's real level — a level-3 template gets
         // level-3 HP, not the level-1 value.
-        const draconicBloodline = isDraconicBloodline(data.classFeatures);
+        // #1019: Draconic Bloodline reaches HP/AC from either carrier of
+        // the pick — the wizard's classFeatures choice string, or the
+        // subclass this create just recorded from the body's subclass.
+        const draconicBloodline =
+          isDraconicBloodline(data.classFeatures) || resolvedSubclass === 'Draconic Bloodline';
         const tough = hasToughFeat(undefined, data.classFeatures);
         const maxHitPoints = computeMaxHitPointsForLevel(
           data.class,
@@ -490,13 +544,15 @@ export class CharacterService {
     // and level, routed through the same parser so class names normalize
     // identically. Per-class levels cap at 20, the SRD maximum.
     //
-    // Subclass features are not granted here: grantFeaturesForLevel adds
-    // the features of the subclass recorded in character_subclasses, and no
-    // subclass row exists at create (a subclass chosen later is granted by
-    // SubclassService.setSubclass). A subclass picked in the creation wizard
-    // is stored as a choice string in the classFeatures JSON, not in
-    // character_subclasses, so its feature rows are granted by no create
-    // path today — a pre-existing gap, separate from this change.
+    // Subclass features: grantFeaturesForLevel adds the features of the
+    // subclass recorded in character_subclasses alongside each level's base
+    // features. A subclass this create carried in its body was recorded in
+    // the transaction above, so its features land here at their own levels;
+    // a subclass chosen later is granted by SubclassService.setSubclass. A
+    // subclass picked in the creation wizard is stored as a choice string
+    // in the classFeatures JSON, not in character_subclasses, so its
+    // feature rows are granted by no create path today — a pre-existing
+    // gap, separate from this change.
     //
     // If the grant fails, the create fails as a whole: the committed
     // character is deleted again (its rows cascade) and the grant error
@@ -512,6 +568,14 @@ export class CharacterService {
           ]);
     if (grantPlan.length > 0) {
       try {
+        if (resolvedSubclass) {
+          // #420 parity with SubclassService.setSubclass: a third-caster
+          // subclass (Eldritch Knight, Arcane Trickster) gains its spell
+          // slots at once instead of waiting for a level-up re-sync. The
+          // sync is an idempotent upsert+prune, so non-caster subclasses
+          // are unaffected.
+          await SpellSlotDataAccess.syncSpellSlotTotals(created.id, userId);
+        }
         for (const entry of grantPlan) {
           const topLevel = Math.min(entry.level, 20);
           for (let featureLevel = 1; featureLevel <= topLevel; featureLevel++) {
