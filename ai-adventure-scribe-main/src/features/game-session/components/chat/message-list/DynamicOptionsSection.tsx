@@ -53,6 +53,11 @@ interface DynamicOptionsSectionProps {
    * instead of rendering nothing — but only on the latest message.
    */
   showNoOptionsNotice?: boolean;
+  /**
+   * The opening renders its choices with the scene text (#1023). Later
+   * narration keeps the roleplay delay.
+   */
+  showImmediately?: boolean;
 }
 
 type EngineNotice = {
@@ -109,6 +114,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
     onSendMessage,
     isLatest = true,
     showNoOptionsNotice = false,
+    showImmediately = false,
   }) => {
     const { state: combatState, refreshCombatState } = useCombat();
     const showCombatMenu = isLatest && combatState.isInCombat;
@@ -569,7 +575,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
           disabled={!isLatest}
           onOptionSelect={handleSelection}
           resetSelectionAfterCompletion={showCombatMenu}
-          delay={hasDynamicOverlay || showCombatMenu ? 0 : 10000}
+          delay={hasDynamicOverlay || showCombatMenu || showImmediately ? 0 : 10000}
           isLoading={isRefreshingLegalActions}
         />
       </div>
