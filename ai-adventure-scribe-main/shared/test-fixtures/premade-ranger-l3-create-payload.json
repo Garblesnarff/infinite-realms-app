@@ -1,0 +1,69 @@
+{
+  "name": "Tavo Brejo",
+  "description": "Monster hunter of the garden marches",
+  "race": "Human",
+  "subrace": null,
+  "class": "Ranger",
+  "subclass": "Hunter",
+  "level": 3,
+  "image_url": null,
+  "avatar_url": null,
+  "backstory_elements": null,
+  "background": "Outlander",
+  "background_image": null,
+  "campaign_id": "10191019-0000-4000-8000-000000000000",
+  "skill_proficiencies": "Athletics, Perception, Stealth, Survival",
+  "languages": [
+    "Common"
+  ],
+  "cantrips": "",
+  "known_spells": "alarm, animal-friendship, animal-messenger",
+  "prepared_spells": "",
+  "total_level": 3,
+  "stats": {
+    "strength": 13,
+    "dexterity": 16,
+    "constitution": 14,
+    "intelligence": 10,
+    "wisdom": 15,
+    "charisma": 11
+  },
+  "equipment": [
+    {
+      "item_name": "Longbow",
+      "item_type": "weapon",
+      "quantity": 1,
+      "equipped": true
+    },
+    {
+      "item_name": "Arrows (20)",
+      "item_type": "gear",
+      "quantity": 1,
+      "equipped": false
+    },
+    {
+      "item_name": "Quiver",
+      "item_type": "gear",
+      "quantity": 1,
+      "equipped": false
+    },
+    {
+      "item_name": "Shortsword",
+      "item_type": "weapon",
+      "quantity": 1,
+      "equipped": true
+    },
+    {
+      "item_name": "Leather Armor",
+      "item_type": "armor",
+      "quantity": 1,
+      "equipped": true
+    },
+    {
+      "item_name": "Explorer's Pack",
+      "item_type": "gear",
+      "quantity": 1,
+      "equipped": false
+    }
+  ]
+}

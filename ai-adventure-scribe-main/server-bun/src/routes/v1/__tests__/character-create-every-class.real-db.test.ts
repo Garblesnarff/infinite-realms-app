@@ -35,6 +35,7 @@ import {
   characterFeatures,
   characters,
   characterEquipment,
+  characterSpellSlots,
   characterStats,
   characterSubclasses,
   classFeaturesLibrary,
@@ -1598,5 +1599,330 @@ describeWithDb('starter template subclass (#829)', () => {
       .from(characterSubclasses)
       .where(eq(characterSubclasses.characterId, id));
     expect(subclasses).toHaveLength(0);
+  });
+});
+
+/**
+ * #1019: a premade level-3 hero's sheet has no subclass and no class
+ * features (Hark G22-002/010, The Gardener's Heir). The bodies below are
+ * the pinned client payloads produced by the real premade chain —
+ * starter_character_templates row -> mapTemplateRow ->
+ * buildStarterCharacterSeed -> prepareCharacterPayload — saved by
+ * src/services/character/__tests__/starter-seed-1019-payload.test.ts to
+ * shared/test-fixtures/. Read with readFileSync so this suite never
+ * imports client modules.
+ *
+ * Tavo Brejo (Ranger/Hunter L3, CON 14): HP 28 either way; the issue is the
+ * missing subclass and features. Clarice Faro (Sorcerer/Draconic Bloodline
+ * L3, CON 14, DEX 12): without Draconic Resilience her HP is 20 and her AC
+ * 11, exactly what Hark recorded; with it, HP 23 and AC 13 + DEX = 14.
+ * Sorcery points have no server store for any character — the sheet derives
+ * them from the granted Font of Magic feature, so the feature list is the
+ * server-side assertion for them, as it is for Metamagic.
+ */
+const premadeFixture = (name: string): Record<string, unknown> =>
+  JSON.parse(
+    readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), `../../../../../shared/test-fixtures/${name}`),
+      'utf8',
+    ),
+  ) as Record<string, unknown>;
+
+describeWithDb('premade level-3 heroes carry subclass and features (#1019)', () => {
+  let db: any;
+  let request: (path: string, method: string, body?: unknown) => Promise<Response>;
+  const createdIds: string[] = [];
+  let campaignId = '';
+
+  const grantedFeatures = async (characterId: string): Promise<string[]> => {
+    const rows = await db
+      .select()
+      .from(characterFeatures)
+      .where(eq(characterFeatures.characterId, characterId));
+    if (rows.length === 0) return [];
+    const library = await db
+      .select()
+      .from(classFeaturesLibrary)
+      .where(
+        inArray(
+          classFeaturesLibrary.id,
+          rows.map((r: { featureId: string }) => r.featureId),
+        ),
+      );
+    const nameById = new Map(
+      library.map((f: { id: string; featureName: string }) => [f.id, f.featureName]),
+    );
+    return rows
+      .map(
+        (r: { featureId: string; acquiredAtLevel: number }) =>
+          `${nameById.get(r.featureId)}@${r.acquiredAtLevel}`,
+      )
+      .sort();
+  };
+
+  beforeAll(async () => {
+    userId = testId('user-1019');
+    db = realDb();
+    const [campaign] = await db
+      .insert(campaigns)
+      .values({ userId, name: `One-shot 1019 ${testId('campaign')}` })
+      .returning();
+    campaignId = campaign.id;
+    const pipeline = await importWithRealDb(async () => {
+      const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');
+      const { charactersRoutes } = await import('../characters.ts');
+      return { createRequestPipelineApp, charactersRoutes };
+    });
+    const app = pipeline.createRequestPipelineApp().use(pipeline.charactersRoutes);
+    request = async (path: string, method: string, body?: unknown) =>
+      app.handle(
+        new Request(`http://localhost${path}`, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: body !== undefined ? JSON.stringify(body) : undefined,
+        }),
+      );
+  });
+
+  afterAll(async () => {
+    for (const id of createdIds) {
+      await db
+        .delete(characters)
+        .where(eq(characters.id, id))
+        .catch(() => {});
+    }
+    if (campaignId) {
+      await db
+        .delete(campaigns)
+        .where(eq(campaigns.id, campaignId))
+        .catch(() => {});
+    }
+    await closeRealDb();
+  });
+
+  it('creates the Tavo Brejo template (Ranger/Hunter L3) with subclass and the full feature list', async () => {
+    const body = {
+      ...premadeFixture('premade-ranger-l3-create-payload.json'),
+      name: `Tavo Brejo ${testId('1019')}`,
+      campaign_id: campaignId,
+    };
+    const res = await request('/v1/characters', 'POST', body);
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const [row] = await db.select().from(characters).where(eq(characters.id, id));
+    expect(row.level).toBe(3);
+    expect(row.experiencePoints).toBe(900);
+
+    const subclasses = await db
+      .select()
+      .from(characterSubclasses)
+      .where(eq(characterSubclasses.characterId, id));
+    expect(subclasses).toHaveLength(1);
+    expect(subclasses[0].className).toBe('Ranger');
+    expect(subclasses[0].subclassName).toBe('Hunter');
+    expect(subclasses[0].chosenAtLevel).toBe(3);
+
+    // 'Ranger Archetype' is the subclass choice point, not a feature: the
+    // grant filter excludes choice-point rows (Archetype/Tradition/Domain)
+    // for every create path, the wizard's included — see the #829 block's
+    // Martial Archetype note. Everything else the issue lists is here.
+    expect(await grantedFeatures(id)).toEqual([
+      'Favored Enemy (1 type)@1',
+      'Fighting Style@2',
+      "Hunter's Prey@3",
+      'Natural Explorer (1 terrain type)@1',
+      'Primeval Awareness@3',
+      'Spellcasting: Ranger@2',
+    ]);
+
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    expect(stats.maxHitPoints).toBe(28);
+    expect(stats.currentHitPoints).toBe(28);
+
+    const slots = await db
+      .select()
+      .from(characterSpellSlots)
+      .where(eq(characterSpellSlots.characterId, id));
+    expect(slots).toEqual([
+      expect.objectContaining({ spellLevel: 1, totalSlots: 3, usedSlots: 0 }),
+    ]);
+  });
+
+  it('creates the Clarice Faro template (Sorcerer/Draconic Bloodline L3) with Draconic Resilience in HP and AC', async () => {
+    const body = {
+      ...premadeFixture('premade-sorcerer-l3-create-payload.json'),
+      name: `Clarice Faro ${testId('1019')}`,
+      campaign_id: campaignId,
+    };
+    const res = await request('/v1/characters', 'POST', body);
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const subclasses = await db
+      .select()
+      .from(characterSubclasses)
+      .where(eq(characterSubclasses.characterId, id));
+    expect(subclasses).toHaveLength(1);
+    expect(subclasses[0].className).toBe('Sorcerer');
+    expect(subclasses[0].subclassName).toBe('Draconic Bloodline');
+    expect(subclasses[0].chosenAtLevel).toBe(3);
+
+    // The feature list is the sheet's source for the subclass features, for
+    // Font of Magic (sorcery points) and for Metamagic — all missing on the
+    // sheet Hark saw.
+    expect(await grantedFeatures(id)).toEqual([
+      'Draconic Resilience@1',
+      'Dragon Ancestor@1',
+      'Flexible Casting: Converting Spell Slot@2',
+      'Flexible Casting: Creating Spell Slots@2',
+      'Font of Magic@2',
+      'Metamagic@3',
+      'Sorcerous Origin@1',
+      'Spellcasting: Sorcerer@1',
+    ]);
+
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    // 6 + 2 (CON) + 2 x (4 + 2) = 20 without Draconic Resilience (the value
+    // Hark recorded); +1 per level for the bloodline makes 23.
+    expect(stats.maxHitPoints).toBe(23);
+    expect(stats.currentHitPoints).toBe(23);
+    // Unarmoured: 10 + DEX (+1) = 11 without the bloodline (Hark's value);
+    // Draconic Resilience makes it 13 + DEX = 14.
+    expect(stats.armorClass).toBe(14);
+  });
+
+  it('PIN: a wizard-created level-3 Draconic sorcerer lands the same HP and AC as the premade', async () => {
+    // The wizard's wire shape (the #899 origin body) at level 3: the shared
+    // pipeline must produce the same stats from either payload, which is
+    // what "the premade path is the same as POST /v1/characters" means for
+    // the numbers the sheet shows.
+    const body = wizardBody({ name: 'Sorcerer', hitDie: '1d6', baseHp: 10 }) as Record<
+      string,
+      unknown
+    >;
+    const res = await request('/v1/characters', 'POST', {
+      ...body,
+      name: `L3 Draconic Sorcerer (wizard) ${testId('1019')}`,
+      race: 'Human',
+      subrace: null,
+      level: 3,
+      total_level: 3,
+      class_levels: [{ classId: 'sorcerer', className: 'Sorcerer', level: 3 }],
+      stats: { strength: 8, dexterity: 12, constitution: 14, intelligence: 11, wisdom: 10, charisma: 17 },
+      class_features: {
+        'sorcerous-origin': {
+          name: 'Sorcerous Origin',
+          description:
+            'Choose a sorcerous origin, which describes the source of your innate magical power.',
+          choice:
+            'Draconic Bloodline: Your innate magic comes from draconic magic that was mingled with your blood',
+        },
+        spellcasting: {
+          name: 'Spellcasting',
+          description:
+            'An event in your past, or in the life of a parent or ancestor, left an indelible mark on you, infusing you with arcane magic.',
+        },
+      },
+    });
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    // Clarice's scores on a Human (no subrace toughness): 6 + 2 (CON) +
+    // 2 x (4 + 2) + 3 (Draconic Resilience, +1 per level) = 23, AC 13 + 1.
+    expect(stats.maxHitPoints).toBe(23);
+    expect(stats.armorClass).toBe(14);
+  });
+
+  it("keeps Clarice's Draconic Resilience through a stats edit (#1019)", async () => {
+    const body = {
+      ...premadeFixture('premade-sorcerer-l3-create-payload.json'),
+      name: `Clarice Faro (stats edit) ${testId('1019')}`,
+      campaign_id: campaignId,
+    };
+    const res = await request('/v1/characters', 'POST', body);
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    // A stats upsert recomputes the server-owned derived stats. The
+    // premade's Draconic pick exists only in the subclass row — a recompute
+    // that reads only the wizard's classFeatures choice string hands back
+    // AC 11 (Hark's recorded value) on the first edit.
+    const put = await request(`/v1/characters/${id}/stats`, 'PUT', { dexterity: 12 });
+    const putText = await put.text();
+    expect(put.status, putText.slice(0, 300)).toBe(200);
+
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    expect(stats.armorClass).toBe(14);
+    expect(stats.maxHitPoints).toBe(23);
+  });
+
+  it('seeds third-caster spell slots for an Eldritch Knight created with its subclass (#1019)', async () => {
+    // A Fighter seeds no spell-slot rows in the create transaction; the
+    // rows below exist only because create runs the same post-create slot
+    // sync SubclassService.setSubclass performed (#420). Without the sync
+    // this character has the subclass row and its features but no slots.
+    const body = wizardBody({ name: 'Fighter', hitDie: '1d10', baseHp: 14 }) as Record<
+      string,
+      unknown
+    >;
+    const res = await request('/v1/characters', 'POST', {
+      ...body,
+      name: `L3 Eldritch Knight ${testId('1019')}`,
+      level: 3,
+      total_level: 3,
+      class_levels: [{ classId: 'fighter', className: 'Fighter', level: 3 }],
+      subclass: 'Eldritch Knight',
+    });
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const subclasses = await db
+      .select()
+      .from(characterSubclasses)
+      .where(eq(characterSubclasses.characterId, id));
+    expect(subclasses).toHaveLength(1);
+    expect(subclasses[0].className).toBe('Fighter');
+    expect(subclasses[0].subclassName).toBe('Eldritch Knight');
+    expect(subclasses[0].chosenAtLevel).toBe(3);
+
+    expect(await grantedFeatures(id)).toEqual([
+      'Action Surge@2',
+      'Fighting Style@1',
+      'Second Wind@1',
+      'Spellcasting@3',
+      'Weapon Bond@3',
+    ]);
+
+    const slots = await db
+      .select()
+      .from(characterSpellSlots)
+      .where(eq(characterSpellSlots.characterId, id));
+    expect(slots).toEqual([
+      expect.objectContaining({ spellLevel: 1, totalSlots: 2, usedSlots: 0 }),
+    ]);
   });
 });

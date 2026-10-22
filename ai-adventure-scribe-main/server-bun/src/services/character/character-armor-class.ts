@@ -22,6 +22,7 @@ import { db } from '../../../../db/client';
 import {
   characterEquipment,
   characterStats,
+  characterSubclasses,
   characters,
   inventoryItems,
 } from '../../../../db/schema/index';
@@ -32,6 +33,29 @@ import { logger } from '../../lib/logger.js';
 
 /** `inventory_items` has no shield type; the legacy table does, so both are accepted. */
 const ARMOR_ITEM_TYPES = ['armor', 'shield'];
+
+/**
+ * Whether the character holds the Draconic Bloodline subclass row — the
+ * second carrier of the Draconic pick next to the wizard's `classFeatures`
+ * choice string. A premade body carries the pick only in its `subclass`
+ * field, so for a premade the row `CharacterService.create` records is the
+ * ONLY place the bloodline exists; every derived-stat reader that consults
+ * just `classFeatures` silently loses Draconic Resilience for premades
+ * (#1019). Readers OR this check with `isDraconicBloodline(classFeatures)`.
+ */
+export async function hasDraconicBloodlineSubclass(characterId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: characterSubclasses.id })
+    .from(characterSubclasses)
+    .where(
+      and(
+        eq(characterSubclasses.characterId, characterId),
+        eq(characterSubclasses.subclassName, 'Draconic Bloodline'),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
 
 export interface RecomputedArmorClass {
   previousArmorClass: number | null;
@@ -121,10 +145,13 @@ export async function recomputeStoredArmorClass(
   const armorClass = computeArmorClass(equipment, abilityModifier(stats.dexterity ?? 10), {
     fightingStyles: character?.fightingStyles,
     // A Draconic Bloodline sorcerer who takes their armour off falls back to
-    // the Draconic Resilience base of 13, not 10.
+    // the Draconic Resilience base of 13, not 10. The pick is read from the
+    // wizard's choice string OR the subclass row — a premade carries it only
+    // in the row (#1019).
     draconicResilience:
       (character?.class ?? '').trim().toLowerCase() === 'sorcerer' &&
-      isDraconicBloodline(character?.classFeatures),
+      (isDraconicBloodline(character?.classFeatures) ||
+        (await hasDraconicBloodlineSubclass(characterId))),
     warn: (msg, context) => logger.warn({ msg, characterId, ...context }),
   });
 
