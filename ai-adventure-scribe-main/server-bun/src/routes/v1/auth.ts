@@ -27,6 +27,7 @@ import {
   verifyTestRefreshToken,
 } from '../../lib/test-auth.js';
 import { createSimpleRateLimit } from '../../middleware/rate-limit.js';
+import { relinkWorkosAccountIfNeeded } from '../../services/account-relink.js';
 import { authTokenExchangeCodes } from '../../services/auth-token-exchange.js';
 import { authenticatePassword } from '../../services/password-login.js';
 import { workos, authConfig } from '../../services/workos';
@@ -170,6 +171,20 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
         code,
         clientId: authConfig.clientId,
       });
+
+      // #206: a WorkOS environment switch hands every returning user a new
+      // id; re-link their old account (verified-email match) before the
+      // upsert below would create a fresh empty one. A failed re-link must
+      // never block sign-in — it is retried on the next callback.
+      try {
+        await relinkWorkosAccountIfNeeded({
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+        });
+      } catch (error) {
+        logger.error({ msg: 'WORKOS_ACCOUNT_RELINK_FAILED', userId: user.id, error });
+      }
 
       // ⚡ Bolt: Optimized N+1 query pattern by replacing 'find-then-upsert' with a single atomic UPSERT.
       // This reduces database round-trips from 2 down to 1 for every authentication callback.
