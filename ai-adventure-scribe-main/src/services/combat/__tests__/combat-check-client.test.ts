@@ -146,3 +146,61 @@ it('#1010 shows the engine Athletics modifier for a shover, including hydrated s
     ),
   ).toBe(2);
 });
+
+describe('#1017 uses full scores, the named skill, and the participant level', () => {
+  it('adds level-5 Athletics proficiency to grapple', () => {
+    expect(
+      skillCheckModifierFor(
+        {
+          abilityScores: { strength: { score: 18, modifier: 4 } },
+          skillProficiencies: ['Athletics'],
+          level: 5,
+        },
+        'grapple',
+      ),
+    ).toBe(7);
+  });
+
+  it('uses the better proficient Athletics or Acrobatics escape check', () => {
+    expect(
+      skillCheckModifierFor(
+        {
+          abilityScores: {
+            strength: { score: 14, modifier: 2 },
+            dexterity: { score: 18, modifier: 4 },
+          },
+          skillProficiencies: ['Acrobatics'],
+          level: 5,
+        },
+        'escape',
+      ),
+    ).toBe(7);
+  });
+
+  it('adds Stealth proficiency to a full Dexterity score for hide', () => {
+    expect(
+      skillCheckModifierFor(
+        {
+          abilityScores: { dexterity: { score: 14, modifier: 2 } },
+          skillProficiencies: ['Stealth'],
+          level: 5,
+        },
+        'hide',
+      ),
+    ).toBe(5);
+  });
+
+  it('uses the requested Charisma skill for persuasion', () => {
+    expect(
+      skillCheckModifierFor(
+        {
+          abilityScores: { charisma: { score: 14, modifier: 2 } },
+          skillProficiencies: ['Persuasion'],
+          level: 5,
+        },
+        'parley',
+        'persuade',
+      ),
+    ).toBe(5);
+  });
+});

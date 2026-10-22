@@ -805,7 +805,11 @@ export async function handleDmActionsAndTransitions(
           actorId: playerParticipant.id,
           actorLabel: playerParticipant.name ?? 'You',
           participants: checkRoster,
-          checkModifier: skillCheckModifierFor(playerParticipant, detection.intent.kind),
+          checkModifier: skillCheckModifierFor(
+            playerParticipant,
+            detection.intent.kind,
+            detection.intent.parleySkill,
+          ),
           origin: 'typed',
         });
         activeEncounter = await refreshCombatState(signal);

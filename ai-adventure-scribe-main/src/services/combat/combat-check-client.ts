@@ -14,9 +14,8 @@ import {
 } from './combat-action-executor';
 import { requestPlayerCheckRoll } from './player-roll-bridge';
 import { standingHostiles } from './sheet-cast-save-hold';
-import { abilityModifier } from '../../../shared/ability-modifier';
 import { detectCombatCheck } from '../../../shared/combat-check-intent';
-import { proficiencyBonus } from '../../../shared/proficiency-bonus';
+import { combatCheckModifierFor } from '../../../shared/combat-check-modifier';
 
 import type { ClientCombatIntent } from './combat-action-executor';
 import type { CombatCheckIntentKind } from '../../../shared/combat-check-intent';
@@ -33,15 +32,6 @@ const CHECK_LABELS: Record<CombatCheckIntentKind, string> = {
 };
 
 /** The ability score each check reads, matching `CHECK_DEFINITIONS` in combat-check-rules. */
-const CHECK_ABILITIES: Record<CombatCheckIntentKind, 'str' | 'dex' | 'cha'> = {
-  shove: 'str',
-  grapple: 'str',
-  // The engine takes the better of Athletics and Acrobatics; the popup shows the better score.
-  escape: 'str',
-  hide: 'dex',
-  parley: 'cha',
-};
-
 /**
  * The modifier the popup shows for a check: d20 plus this ability's modifier.
  *
@@ -55,29 +45,25 @@ export function skillCheckModifierFor(
     | null
     | undefined,
   kind: CombatCheckIntentKind,
+  parleySkill?: 'persuade' | 'intimidate',
 ): number {
-  if (kind === 'shove') {
-    const raw = participant?.abilityScores?.str ?? participant?.abilityScores?.strength;
-    const score = typeof raw === 'number' ? raw : (raw as { score?: number } | undefined)?.score;
-    const modifier =
-      typeof score === 'number'
-        ? abilityModifier(score)
-        : ((raw as { modifier?: number } | undefined)?.modifier ?? 0);
-    const proficient = participant?.skillProficiencies?.some(
-      (skill) => skill.trim().toLowerCase() === 'athletics',
-    );
-    return modifier + (proficient ? proficiencyBonus(participant?.level ?? 1) : 0);
-  }
-  const ability = CHECK_ABILITIES[kind];
-  const scoreOf = (key: string): number | undefined => {
-    const raw = participant?.abilityScores?.[key];
-    return typeof raw === 'number' ? raw : (raw as { score?: number } | undefined)?.score;
+  const scoreOf = (short: string, long: string): number => {
+    const raw = participant?.abilityScores?.[short] ?? participant?.abilityScores?.[long];
+    if (typeof raw === 'number') return raw;
+    const value = raw as { score?: number; modifier?: number } | undefined;
+    if (typeof value?.score === 'number') return value.score;
+    if (typeof value?.modifier === 'number') return value.modifier * 2 + 10;
+    return 10;
   };
-  const score =
-    kind === 'escape'
-      ? Math.max(scoreOf('str') ?? 0, scoreOf('dex') ?? 0) || undefined
-      : scoreOf(ability);
-  return typeof score === 'number' ? abilityModifier(score) : 0;
+  const scores = {
+    str: scoreOf('str', 'strength'),
+    dex: scoreOf('dex', 'dexterity'),
+    cha: scoreOf('cha', 'charisma'),
+  };
+  return combatCheckModifierFor(
+    { scores, level: participant?.level ?? 1, skillProficiencies: participant?.skillProficiencies },
+    kind === 'parley' ? (parleySkill ?? 'persuade') : kind,
+  );
 }
 
 /** What the caller needs to resolve a check against real numbers. */

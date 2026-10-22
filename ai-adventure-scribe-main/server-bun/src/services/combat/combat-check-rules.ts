@@ -19,7 +19,8 @@
  *  - Persuasion/Intimidation are Charisma checks (PB 205-206) against a DC the creature's
  *    disposition sets, defaulting to 15.
  */
-import { abilityModifier, proficiencyBonus } from './combat-rules.js';
+import { abilityModifier } from './combat-rules.js';
+import { combatCheckModifierFor } from '../../../../shared/combat-check-modifier.js';
 
 /** The four checks the engine now owns, plus the two Charisma flavours of the fourth. */
 export type CombatCheckKind = 'shove' | 'grapple' | 'escape' | 'hide' | 'persuade' | 'intimidate';
@@ -100,10 +101,14 @@ export function checkModifier(
   definition: CheckDefinition,
   skillProficient = false,
 ): number {
-  const modifier =
-    abilityModifier(scoreOf(profile, definition.ability)) +
-    (skillProficient ? proficiencyBonus(profile.level) : 0);
-  return modifier;
+  return combatCheckModifierFor(
+    {
+      scores: profile.scores,
+      level: profile.level,
+      skillProficiencies: skillProficient ? [definition.skill] : [],
+    },
+    definition.kind,
+  );
 }
 
 /** A d20 face. Passed in so a caller (or a test) can supply a fixed die. */
@@ -243,13 +248,17 @@ export function resolveEscapeCheck(params: {
   roll: DieRoller;
 }): ResolvedCombatCheck {
   const definition = CHECK_DEFINITIONS.escape;
-  const bonus = proficiencyBonus(params.actorProfile.level);
-  const athletics =
-    abilityModifier(scoreOf(params.actorProfile, 'str')) + (params.athleticsProficient ? bonus : 0);
-  const acrobatics =
-    abilityModifier(scoreOf(params.actorProfile, 'dex')) +
-    (params.acrobaticsProficient ? bonus : 0);
-  const actorModifier = Math.max(athletics, acrobatics);
+  const actorModifier = combatCheckModifierFor(
+    {
+      scores: params.actorProfile.scores,
+      level: params.actorProfile.level,
+      skillProficiencies: [
+        ...(params.athleticsProficient ? ['Athletics'] : []),
+        ...(params.acrobaticsProficient ? ['Acrobatics'] : []),
+      ],
+    },
+    'escape',
+  );
   const actorD20 = params.actorD20 ?? params.roll();
   const grapplerModifier = abilityModifier(scoreOf(params.grapplerProfile, 'str'));
   const grapplerD20 = params.roll();
