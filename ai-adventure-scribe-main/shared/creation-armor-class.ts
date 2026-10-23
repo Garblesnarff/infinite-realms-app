@@ -4,7 +4,7 @@ import {
   isSrdArmorOrShieldName,
   type ArmorClassEquipmentItem,
 } from './armor-class';
-import { isCatalogWeaponName } from './equipment-weapon-resolver';
+import { isCatalogWeaponName, isRangedWeaponName } from './equipment-weapon-resolver';
 
 function equipmentItemName(item: Record<string, unknown>): string {
   return typeof item.item_name === 'string' ? item.item_name : '';
@@ -64,7 +64,7 @@ export function withStartingPackageEquipped(
   let woreWeapon = equipment.some(
     (item) => item.equipped === true && isCatalogWeaponName(equipmentItemName(item)),
   );
-  return equipment.map((item) => {
+  const mapped = equipment.map((item) => {
     if (item.equipped === true) return item;
     const name = equipmentItemName(item);
     if (isSrdArmorOrShieldName(name)) return { ...item, equipped: true };
@@ -74,4 +74,22 @@ export function withStartingPackageEquipped(
     }
     return item;
   });
+  // #1059: a package's main ranged weapon (the light crossbow, the shortbow)
+  // is equipped at create when no melee weapon is equipped in the main hand —
+  // the pass above can leave it carried when the one weapon slot went to a
+  // caller-equipped ranged weapon instead. When a melee weapon IS equipped,
+  // the ranged weapon stays carried and the attack picker offers it as an
+  // 'equip and attack' choice instead.
+  const hasMeleeEquipped = mapped.some(
+    (item) =>
+      item.equipped === true &&
+      isCatalogWeaponName(equipmentItemName(item)) &&
+      !isRangedWeaponName(equipmentItemName(item)),
+  );
+  if (hasMeleeEquipped) return mapped;
+  const mainRanged = mapped.find(
+    (item) => item.equipped !== true && isRangedWeaponName(equipmentItemName(item)),
+  );
+  if (!mainRanged) return mapped;
+  return mapped.map((item) => (item === mainRanged ? { ...item, equipped: true } : item));
 }

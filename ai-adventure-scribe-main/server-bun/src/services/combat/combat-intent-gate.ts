@@ -809,3 +809,180 @@ export function detectDeclaredSecondWind(playerInput: string): boolean {
   }
   return false;
 }
+
+/**
+ * A player declaring they equip (draw) a weapon in plain text (#1059):
+ * "I draw my shortbow", "I equip the shortbow". Naming the weapon is not
+ * enough — "I attack the goblin with my shortbow" declares an attack, and
+ * the #260 refusal owns it when the weapon is not equipped — so a clause
+ * declares an equip only when it carries an equip verb governed by the
+ * player (below) AND names a candidate weapon as that verb's object in
+ * the same clause, and never from a blocked clause (negation, question,
+ * hypothetical: the same DECLARATION_BLOCK_PATTERN the other detectors
+ * consult, and question sentences are skipped whole).
+ *
+ * Candidates are the weapons the resolver can act on: the ones the
+ * character carries first, then catalog weapons they do not (a named
+ * catalog weapon the character lacks still declares — the resolver hands
+ * the DM the "not carrying it" truth instead of letting the DM narrate a
+ * draw that never happened). Matching is by word overlap on the name, so
+ * "light crossbow" and "my crossbow" both find the row named
+ * "Crossbow, light"; the name's longest word (its head noun) must appear,
+ * and the candidate matching the most words wins.
+ */
+export interface EquipCandidate {
+  name: string;
+  carried: boolean;
+}
+
+export interface DeclaredEquip {
+  /** The candidate's own spelling of the weapon name. */
+  name: string;
+  carried: boolean;
+}
+
+const EQUIP_VERB =
+  '(?:equip|equips|equipped|equipping|draw|draws|drew|drawing|wield|wields|wielding|brandish|brandishes|brandishing|unsheathe|unsheathes|unsheathing|unsling|unslings|take\\s+out|takes\\s+out|pull\\s+out|pulls\\s+out|get\\s+out|gets\\s+out|ready|readies|readying)';
+// The verb must be the PLAYER's own act, or another creature's draw would
+// equip the player's same-named weapon ("the goblin draws his dagger",
+// "I watch the goblin draw his dagger"): the verb is governed by a
+// first-person subject, a "let me", or the clause's imperative opening —
+// the shapes detectDeclaredSecondWind accepts, contractions included
+// ("I'll draw…") — or by the character themself as the verb's subject
+// (third-person self-play: "Sera draws her shortbow" — the name must sit
+// immediately before the verb, not merely occur in the clause, or "Sera
+// watches the goblin draw his dagger" would equip hers). "ready" rides
+// along in the governed set only, so the state description "my shortbow
+// is ready" declares nothing.
+const FIRST_PERSON_EQUIP_PATTERN = new RegExp(
+  `\\b(?:i|we)(?:'ll|'d|'m|\\s+will|\\s+would|\\s+am|\\s+are|\\s+going\\s+to|\\s+want\\s+to)?\\s*${EQUIP_VERB}\\b`,
+  'i',
+);
+const LET_ME_EQUIP_PATTERN = new RegExp(`\\blet\\s+me\\s+${EQUIP_VERB}\\b`, 'i');
+const IMPERATIVE_EQUIP_PATTERN = new RegExp(`^\\s*${EQUIP_VERB}\\b`, 'i');
+const ANY_EQUIP_VERB_PATTERN = new RegExp(`\\b${EQUIP_VERB}\\b`, 'i');
+
+const wordStem = (word: string): string =>
+  word.length > 3 && word.endsWith('s') ? word.slice(0, -1) : word;
+
+interface ClauseToken {
+  raw: string;
+  stem: string;
+  start: number;
+}
+
+const tokenizeClause = (clause: string): ClauseToken[] => {
+  const tokens: ClauseToken[] = [];
+  for (const match of clause.toLowerCase().matchAll(/[a-z0-9']+/g)) {
+    tokens.push({ raw: match[0], stem: wordStem(match[0]), start: match.index });
+  }
+  return tokens;
+};
+
+/**
+ * The last token index of the governed equip verb, or -1 when no equip
+ * verb in the clause is the player's own act. The verb span comes from
+ * the governance match itself, so the object gate below measures from
+ * the verb that actually governs.
+ */
+const governedVerbEndToken = (
+  clause: string,
+  tokens: readonly ClauseToken[],
+  actorWords: ReadonlySet<string>,
+): number => {
+  const endTokenOf = (match: RegExpExecArray): number => {
+    const endChar = match.index + match[0].length;
+    let last = -1;
+    for (let i = 0; i < tokens.length; i += 1) {
+      if (tokens[i].start < endChar) last = i;
+    }
+    return last;
+  };
+  const firstPerson = FIRST_PERSON_EQUIP_PATTERN.exec(clause);
+  if (firstPerson) return endTokenOf(firstPerson);
+  const letMe = LET_ME_EQUIP_PATTERN.exec(clause);
+  if (letMe) return endTokenOf(letMe);
+  const imperative = IMPERATIVE_EQUIP_PATTERN.exec(clause);
+  if (imperative) return endTokenOf(imperative);
+  const anyVerb = ANY_EQUIP_VERB_PATTERN.exec(clause);
+  if (!anyVerb) return -1;
+  const verbToken = tokens.findIndex((token) => token.start >= anyVerb.index);
+  if (verbToken < 1) return -1;
+  // The character's name governs only as the verb's immediate subject
+  // (one adverb may intervene: "Sera quickly draws…").
+  if (actorWords.has(tokens[verbToken - 1].stem)) return endTokenOf(anyVerb);
+  if (
+    verbToken >= 2 &&
+    tokens[verbToken - 1].raw.endsWith('ly') &&
+    actorWords.has(tokens[verbToken - 2].stem)
+  ) {
+    return endTokenOf(anyVerb);
+  }
+  return -1;
+};
+
+export function detectDeclaredEquip(
+  playerInput: string,
+  candidates: readonly EquipCandidate[],
+  actorNames: readonly string[] = [],
+): DeclaredEquip | null {
+  if (typeof playerInput !== 'string' || !playerInput.trim() || candidates.length === 0) {
+    return null;
+  }
+  const input = playerInput.replace(/[’‘]/g, "'");
+  const actorWords = new Set(actorNames.flatMap((name) => words(name).map(wordStem)));
+  const prepared = candidates.map((candidate) => {
+    const nameWords = words(candidate.name).map(wordStem);
+    return {
+      candidate,
+      nameWords,
+      headWord: nameWords.reduce((a, b) => (b.length > a.length ? b : a), ''),
+    };
+  });
+  const headWords = new Set(prepared.map(({ headWord }) => headWord).filter(Boolean));
+  // Sentence-wise, terminators kept, like detectDeclaredSecondWind: a
+  // question sentence declares nothing.
+  const sentences = input.match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [];
+  for (const sentence of sentences) {
+    if (sentence.trimEnd().endsWith('?')) continue;
+    for (const rawClause of splitIntoClauses(sentence)) {
+      const clause = rawClause.trim();
+      if (!clause) continue;
+      if (DECLARATION_BLOCK_PATTERN.test(clause)) continue;
+      const tokens = tokenizeClause(clause);
+      const verbEnd = governedVerbEndToken(clause, tokens, actorWords);
+      if (verbEnd < 0) continue;
+      const clauseStems = new Set(tokens.map((token) => token.stem));
+      let best: DeclaredEquip | null = null;
+      let bestScore = 0;
+      for (const { candidate, nameWords, headWord } of prepared) {
+        if (!headWord) continue;
+        // The weapon must be the verb's OBJECT, not scenery or the
+        // instrument of another act: its head word is the first one
+        // after the verb, within a few words, with no "with" (the
+        // instrument marker) and no other weapon's head in between —
+        // "I take out the goblin with my shortbow" and "I draw a map …
+        // with my shortbow beside me" declare no equip.
+        const headIdx = tokens.findIndex(
+          (token, idx) => idx > verbEnd && token.stem === headWord,
+        );
+        if (headIdx < 0) continue;
+        const gap = tokens.slice(verbEnd + 1, headIdx);
+        if (gap.length > 4) continue;
+        if (gap.some((token) => token.raw === 'with')) continue;
+        if (
+          gap.some((token) => token.stem !== headWord && headWords.has(token.stem))
+        ) {
+          continue;
+        }
+        const score = nameWords.filter((word) => clauseStems.has(word)).length;
+        if (score > bestScore) {
+          bestScore = score;
+          best = { name: candidate.name, carried: candidate.carried };
+        }
+      }
+      if (best) return best;
+    }
+  }
+  return null;
+}

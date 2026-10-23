@@ -78,6 +78,20 @@ export const findCatalogWeapon = (value: string): CatalogWeapon | undefined => {
   );
 };
 
+/** Every catalog weapon's display name, in catalog order (#1059). */
+export function catalogWeaponNames(): string[] {
+  return catalogWeapons.map((weapon) => weapon.name);
+}
+
+/**
+ * True for a genuine ranged weapon (bow, crossbow, sling) by its catalog
+ * subcategory. Thrown melee weapons (handaxe, dagger) stay melee even though
+ * their profile range exceeds 5 ft (#1059).
+ */
+export function catalogWeaponIsRanged(name: string): boolean {
+  return (findCatalogWeapon(name)?.subcategory ?? '').toLowerCase().includes('ranged');
+}
+
 /**
  * True when `requestedWeaponId` names this equipped weapon — by row id, display name, SRD
  * id, or a display-order spelling that resolves to the same SRD id. Structural on purpose:

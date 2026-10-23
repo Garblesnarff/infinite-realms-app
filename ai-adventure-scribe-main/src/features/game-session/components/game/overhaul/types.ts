@@ -62,6 +62,8 @@ export interface InventoryItemVM {
   name: string; // "Potion of Healing"
   quantity?: number; // 3
   properties?: Record<string, unknown>;
+  /** Weapons and armor can be readied from the in-session sheet (#1059). */
+  equippable?: boolean;
 }
 
 export interface SpellVM {

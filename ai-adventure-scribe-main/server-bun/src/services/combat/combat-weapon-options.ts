@@ -40,8 +40,22 @@ export function buildCombatWeaponOptions(
   targetsByWeapon: (weapon: WeaponRuleProfile) => WeaponTargetResolution[],
   options?: {
     canCloseDistance?: (targetId: string, weapon: WeaponRuleProfile) => boolean;
+    /**
+     * #1059: the weapons are carried but not equipped. The chip offers the
+     * equip and the attack as one choice — drawing is the turn's free
+     * object interaction — and the client equips (the same write the
+     * sheet's Equip control makes) before it declares the attack, so the
+     * attack intent finds the weapon equipped.
+     */
+    equipFirst?: boolean;
   },
-): Array<{ type: 'attack'; label: string; weaponId: string; targetIds: string[] }> {
+): Array<{
+  type: 'attack';
+  label: string;
+  weaponId: string;
+  targetIds: string[];
+  equipFirst?: boolean;
+}> {
   return weapons.flatMap((weapon) => {
     const resolutions = targetsByWeapon(weapon);
     const legalTargets = resolutions.filter((target) => target.legal);
@@ -60,9 +74,10 @@ export function buildCombatWeaponOptions(
     return [
       {
         type: 'attack' as const,
-        label: `Attack with ${weapon.name}${needsMovement ? ' (move closer first)' : ''}`,
+        label: `${options?.equipFirst ? 'Equip and attack' : 'Attack'} with ${weapon.name}${needsMovement ? ' (move closer first)' : ''}`,
         weaponId: weapon.id,
         targetIds,
+        ...(options?.equipFirst ? { equipFirst: true } : {}),
       },
     ];
   });

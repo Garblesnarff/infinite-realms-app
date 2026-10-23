@@ -1,9 +1,10 @@
 import { act, render, fireEvent, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 
 import { buildNpcEngineMessage } from '../../../../../../../shared/npc-engine-message';
 import { DynamicOptionsSection } from '../DynamicOptionsSection';
 
+import { equipCharacterItem } from '@/services/character-equipment-api';
 import {
   executeAuthoritativeCombatIntent,
   executeStructuredCombatActionWithBoundary,
@@ -60,6 +61,9 @@ vi.mock('@/services/combat/player-attack-roll', () => ({
 }));
 vi.mock('@/services/combat/player-spell-cast', () => ({
   askPlayerForSpellCast: vi.fn(),
+}));
+vi.mock('@/services/character-equipment-api', () => ({
+  equipCharacterItem: vi.fn(),
 }));
 vi.mock('@/services/combat/player-movement-remaining', () => ({
   actorMovementRemaining: vi.fn(),
@@ -970,6 +974,101 @@ describe('the spell-attack option runs the declare pipeline, never DM text (#258
 
     expect(await screen.findByRole('alert')).toHaveTextContent('needs a target');
     expect(askPlayerForSpellCast).not.toHaveBeenCalled();
+    expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
+    expect(onOptionSelect).not.toHaveBeenCalled();
+  });
+});
+
+describe('an equip-and-attack option equips before it declares (#1059)', () => {
+  const onOptionSelect = vi.fn().mockResolvedValue(undefined);
+  const SERA_CHARACTER_ID = 'char-sera-voss';
+  const SHORTBOW_ROW_ID = 'shortbow-row-id';
+  const originalParticipants = combat.activeEncounter.participants;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    combat.activeEncounter.participants = [
+      {
+        id: SCHOLAR_ID,
+        name: 'Sera Voss',
+        participantType: 'player',
+        characterId: SERA_CHARACTER_ID,
+      },
+      { id: SWARM_1_ID, name: 'Light-Eater Swarm 1', participantType: 'monster' },
+    ] as any;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        actorId: SCHOLAR_ID,
+        actions: [
+          {
+            type: 'attack',
+            label: 'Equip and attack with Shortbow',
+            weaponId: SHORTBOW_ROW_ID,
+            targetIds: [SWARM_1_ID],
+            equipFirst: true,
+          },
+        ],
+      }),
+    } as Response);
+    vi.mocked(equipCharacterItem).mockResolvedValue({ armorClass: null });
+    vi.mocked(askPlayerForAttackDie).mockResolvedValue({
+      d20: 15,
+      autoRolled: false,
+      movementOnly: false,
+    });
+    vi.mocked(executeStructuredCombatActionWithBoundary).mockResolvedValue({
+      outcomes: [{ participantId: SWARM_1_ID, hit: true, finalDamage: 2, newHp: 2 }],
+      boundary: null,
+      result: { hit: true },
+    } as any);
+    vi.mocked(executeAuthoritativeCombatIntent).mockResolvedValue({
+      currentParticipant: { id: SWARM_1_ID },
+    } as any);
+    vi.mocked(actorMovementRemaining).mockResolvedValue(0);
+  });
+
+  afterEach(() => {
+    combat.activeEncounter.participants = originalParticipants;
+  });
+
+  it('equips the weapon, then runs the same declare → dialog → commit pipeline', async () => {
+    render(
+      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
+    );
+    fireEvent.click(await screen.findByText('Equip and attack with Shortbow'));
+
+    await waitFor(() => expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalled());
+    // The equip call carries the actor's character id and the legal
+    // action's weapon id — the exact token the equip route resolves.
+    expect(equipCharacterItem).toHaveBeenCalledWith(SERA_CHARACTER_ID, SHORTBOW_ROW_ID);
+    // And it lands before the attack is declared.
+    expect(vi.mocked(equipCharacterItem).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(askPlayerForAttackDie).mock.invocationCallOrder[0],
+    );
+    expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledWith(
+      'encounter-d5',
+      expect.objectContaining({ target_ids: [SWARM_1_ID], weapon_id: SHORTBOW_ROW_ID }),
+      15,
+      undefined,
+      'action_bar',
+    );
+    expect(onOptionSelect).not.toHaveBeenCalled();
+  });
+
+  it('a failed equip declares nothing and spends nothing', async () => {
+    vi.mocked(equipCharacterItem).mockRejectedValue(new Error('Unable to equip Shortbow.'));
+    render(
+      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
+    );
+    fireEvent.click(await screen.findByText('Equip and attack with Shortbow'));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'The weapon could not be equipped. Nothing was spent.',
+      ),
+    );
+    expect(askPlayerForAttackDie).not.toHaveBeenCalled();
     expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
     expect(onOptionSelect).not.toHaveBeenCalled();
   });

@@ -17,6 +17,7 @@ import { verifySessionOwnership } from './combat/helpers.js';
 import { mapAppRouteError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
+import { CharacterEquipService } from '../../services/inventory/character-equip-service.js';
 import { InventoryAttunementService } from '../../services/inventory/inventory-attunement-service.js';
 import { InventoryConsumableService } from '../../services/inventory/inventory-consumable-service.js';
 import { InventoryService } from '../../services/inventory-service.js';
@@ -294,6 +295,32 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
     } catch (error) {
       logger.error({ msg: 'ATTUNE error', error });
       return mapInventoryError(set, error, 'Failed to attune to item', 'Item not found');
+    }
+  })
+
+  /**
+   * POST /v1/characters/:id/equip/:itemId
+   * Equip a carried item in-session (#1059). The token is the equipment
+   * row id or the item name — the in-session sheet's rows carry the name.
+   * No request body: the equip is the whole call.
+   */
+  .post('/:id/equip/:itemId', async ({ params, set, user }) => {
+    try {
+      const result = await CharacterEquipService.equipItem(
+        params.id,
+        (user as any).userId,
+        params.itemId,
+      );
+
+      if (!result.success) {
+        set.status = 404;
+        return { error: result.error ?? 'Item not found' };
+      }
+
+      return { success: true, item: result.item, armorClass: result.armorClass ?? null };
+    } catch (error) {
+      logger.error({ msg: 'EQUIP error', error });
+      return mapInventoryError(set, error, 'Failed to equip item', 'Item not found');
     }
   })
 

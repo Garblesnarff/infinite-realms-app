@@ -11,7 +11,10 @@ import { concludeEncounter } from './combat-ending.js';
 import { trackCombatEvent } from './combat-events.js';
 import { resolveCombatIntentRefsWithRetry } from './combat-intent-refs.js';
 import { assertActorTurn } from './combat-intent-turn.js';
-import { buildCombatWeaponOptions } from './combat-weapon-options.js';
+import {
+  buildCombatWeaponOptions,
+  type WeaponTargetResolution,
+} from './combat-weapon-options.js';
 import {
   getParticipantAbilityProfile,
   getActiveConditionNames,
@@ -30,13 +33,16 @@ import {
 } from './death-saves-service.js';
 import { grantTacticalDash, resetTacticalMovementForTurn } from './tactical-combat-lifecycle.js';
 import {
+  catalogWeaponIsRanged,
   findCatalogWeapon,
+  normalizeWeaponName,
   weaponProfileMatches,
   findMagicBaseWeapon,
   isUnarmedWeaponClaim,
   UNARMED_STRIKE,
 } from './weapon-catalog.js';
 import { groundRequestedWeapon, type GroundedWeapon } from './weapon-grounding.js';
+import { resolveWeaponName } from '../../../../shared/equipment-weapon-resolver';
 import { logger } from '../../lib/logger.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
@@ -2077,37 +2083,77 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
             return !!destination && (destination.x !== mapActor.x || destination.y !== mapActor.y);
           }
         : undefined;
-    actions.push(
-      ...buildCombatWeaponOptions(
-        weapons,
-        (weapon) =>
-          opposingTargets.map((target) => {
-            const targetEntity = map?.entities.find((entity) => entity.id === target.id);
-            const rules = resolveAttackRules({
-              strength: profile.scores.str ?? 10,
-              dexterity: profile.scores.dex ?? 10,
-              level: profile.level,
-              baseTargetAc: resolveParticipantArmorClass(target.armorClass, {
-                participantId: target.id,
-                encounterId,
-              }),
-              weapon,
-              attackerConditions,
-              targetConditions: targetConditions.get(target.id) ?? [],
-              geometry:
-                map && mapActor && targetEntity
-                  ? {
-                      distanceFeet: getDistance(mapActor, targetEntity),
-                      hasLineOfSight: checkLineOfSight(map, actor.id, target.id),
-                      cover: getCover(map, actor.id, target.id),
-                    }
-                  : undefined,
-            });
-            return { targetId: target.id, legal: rules.legal, refusal: rules.refusal };
+    const targetsForWeapon = (weapon: WeaponRuleProfile): WeaponTargetResolution[] =>
+      opposingTargets.map((target) => {
+        const targetEntity = map?.entities.find((entity) => entity.id === target.id);
+        const rules = resolveAttackRules({
+          strength: profile.scores.str ?? 10,
+          dexterity: profile.scores.dex ?? 10,
+          level: profile.level,
+          baseTargetAc: resolveParticipantArmorClass(target.armorClass, {
+            participantId: target.id,
+            encounterId,
           }),
-        { canCloseDistance },
-      ),
+          weapon,
+          attackerConditions,
+          targetConditions: targetConditions.get(target.id) ?? [],
+          geometry:
+            map && mapActor && targetEntity
+              ? {
+                  distanceFeet: getDistance(mapActor, targetEntity),
+                  hasLineOfSight: checkLineOfSight(map, actor.id, target.id),
+                  cover: getCover(map, actor.id, target.id),
+                }
+              : undefined,
+        });
+        return { targetId: target.id, legal: rules.legal, refusal: rules.refusal };
+      });
+    actions.push(
+      ...buildCombatWeaponOptions(weapons, targetsForWeapon, { canCloseDistance }),
     );
+    // #1059: a carried ranged weapon the package left unequipped (the
+    // shortbow, the light crossbow) while a melee weapon holds the main
+    // hand is offered as 'Equip and attack': the client equips it — the
+    // turn's free object interaction — before declaring the attack, so
+    // the intent finds it equipped. With no weapon equipped at all there
+    // is no main hand to preserve; the create pass equips the package's
+    // main ranged weapon for that shape, and the sheet/typed equip paths
+    // cover the rest.
+    if (equippedWeapons.length > 0) {
+      const carriedWeapons = await listCarriedWeaponProfiles(actor);
+      const equippedNames = new Set(
+        equippedWeapons.map((weapon) => normalizeWeaponName(weapon.name)),
+      );
+      // The same weapon under its display-order spelling ("Light
+      // Crossbow" carried, "Crossbow, light" equipped) is the same
+      // weapon: the catalog resolver sees through the spelling, the
+      // plain name normalizer does not.
+      const equippedCatalogIds = new Set(
+        equippedWeapons
+          .map((weapon) => resolveWeaponName(weapon.name))
+          .filter((id): id is string => Boolean(id)),
+      );
+      const seenNames = new Set<string>();
+      const equippableRanged = carriedWeapons.filter((weapon) => {
+        const key = normalizeWeaponName(weapon.name);
+        if (!key || equippedNames.has(key) || seenNames.has(key)) return false;
+        seenNames.add(key);
+        const catalogId = resolveWeaponName(weapon.name);
+        if (catalogId && equippedCatalogIds.has(catalogId)) return false;
+        // No ammunition: the intent would refuse the attack AFTER the
+        // client already equipped — a state change in front of a refusal.
+        if (weapon.missingAmmunition) return false;
+        return catalogWeaponIsRanged(weapon.name);
+      });
+      if (equippableRanged.length > 0) {
+        actions.push(
+          ...buildCombatWeaponOptions(equippableRanged, targetsForWeapon, {
+            canCloseDistance,
+            equipFirst: true,
+          }),
+        );
+      }
+    }
     actions.push(
       { type: 'dash', label: 'Dash' },
       { type: 'dodge', label: 'Dodge' },

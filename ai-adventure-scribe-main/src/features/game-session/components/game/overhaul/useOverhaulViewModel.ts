@@ -320,7 +320,16 @@ export function buildCharacterSheet(
   const inventory: InventoryItemVM[] = inv
     .filter((it) => !it.equipped)
     .slice(0, 12)
-    .map((it) => ({ id: it.itemId, name: prettify(it.itemId), quantity: it.quantity }));
+    .map((it) => ({
+      id: it.itemId,
+      name: prettify(it.itemId),
+      quantity: it.quantity,
+      // #1059: a weapon or a piece of armor can be readied from the
+      // in-session sheet; the rest of the pack stays inert text.
+      equippable:
+        isWeaponInventoryRow(it) ||
+        ARMOR_HINTS.some((a) => it.itemId?.toLowerCase().includes(a)),
+    }));
 
   // The engine mirrors combat vitals onto character_stats (write-through), so the sheet's
   // Conditions panel reads the engine state: a hero on the floor shows Unconscious (dying)

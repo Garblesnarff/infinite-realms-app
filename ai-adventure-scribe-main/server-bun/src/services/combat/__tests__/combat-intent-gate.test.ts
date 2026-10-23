@@ -9,6 +9,7 @@ mock.module('../../../lib/logger.js', () => ({
 const {
   detectDeclaredAttack,
   detectDeclaredDefense,
+  detectDeclaredEquip,
   detectDeclaredLayOnHands,
   detectDeclaredSecondWind,
 } = await import('../combat-intent-gate.js');
@@ -468,5 +469,147 @@ describe('detectDeclaredSecondWind (#975)', () => {
     expect(detectDeclaredSecondWind('I take a deep breath and steady myself')).toBe(false);
     expect(detectDeclaredSecondWind('')).toBe(false);
     expect(detectDeclaredSecondWind('   ')).toBe(false);
+  });
+});
+
+describe('detectDeclaredEquip (#1059)', () => {
+  const candidates = [
+    { name: 'Shortbow', carried: true },
+    { name: 'Dagger', carried: true },
+    { name: 'Crossbow, light', carried: true },
+    { name: 'Longbow', carried: false },
+  ];
+
+  it('detects draw and equip declarations naming a carried weapon', () => {
+    expect(detectDeclaredEquip('I draw my shortbow', candidates)).toEqual({
+      name: 'Shortbow',
+      carried: true,
+    });
+    expect(detectDeclaredEquip('I equip the shortbow', candidates)).toEqual({
+      name: 'Shortbow',
+      carried: true,
+    });
+    expect(detectDeclaredEquip('I draw my shortbow and shoot the goblin', candidates)).toEqual({
+      name: 'Shortbow',
+      carried: true,
+    });
+    expect(detectDeclaredEquip('I ready my dagger', candidates)).toEqual({
+      name: 'Dagger',
+      carried: true,
+    });
+    expect(detectDeclaredEquip('I take out my dagger', candidates)).toEqual({
+      name: 'Dagger',
+      carried: true,
+    });
+    // Combined with an attack in one line: the equip still resolves first
+    // (the Lay on Hands rule — the QA case combined declarations).
+    expect(detectDeclaredEquip('I draw my dagger and stab the captain', candidates)).toEqual({
+      name: 'Dagger',
+      carried: true,
+    });
+  });
+
+  it('matches a catalog name spelled display-first or named in part', () => {
+    // The row says 'Crossbow, light'; players say 'light crossbow' or just 'crossbow'.
+    expect(detectDeclaredEquip('I draw my light crossbow', candidates)).toEqual({
+      name: 'Crossbow, light',
+      carried: true,
+    });
+    expect(detectDeclaredEquip('I equip the crossbow', candidates)).toEqual({
+      name: 'Crossbow, light',
+      carried: true,
+    });
+  });
+
+  it('prefers the candidate whose name matches most words', () => {
+    const two = [
+      { name: 'Crossbow, light', carried: true },
+      { name: 'Crossbow, hand', carried: true },
+    ];
+    expect(detectDeclaredEquip('I draw my hand crossbow', two)).toEqual({
+      name: 'Crossbow, hand',
+      carried: true,
+    });
+  });
+
+  it('reports a named catalog weapon the character does not carry', () => {
+    expect(detectDeclaredEquip('I equip the longbow', candidates)).toEqual({
+      name: 'Longbow',
+      carried: false,
+    });
+  });
+
+  it('detects the imperative and the third-person self-declaration', () => {
+    expect(detectDeclaredEquip('Draw my shortbow', candidates)).toEqual({
+      name: 'Shortbow',
+      carried: true,
+    });
+    expect(detectDeclaredEquip('Let me draw my shortbow', candidates)).toEqual({
+      name: 'Shortbow',
+      carried: true,
+    });
+    expect(
+      detectDeclaredEquip('Sera draws her shortbow', candidates, ['Sera Voss']),
+    ).toEqual({ name: 'Shortbow', carried: true });
+  });
+
+  it('declares nothing without an equip verb, a named weapon, or from a blocked clause', () => {
+    // A bare attack naming an unequipped weapon is NOT an equip declaration:
+    // the #260 refusal owns it, and the picker offers equip-and-attack.
+    expect(detectDeclaredEquip('I attack the goblin with my shortbow', candidates)).toBeNull();
+    expect(detectDeclaredEquip('My shortbow is ready', candidates)).toBeNull();
+    expect(detectDeclaredEquip('I drew a map of the cave', candidates)).toBeNull();
+    expect(detectDeclaredEquip('I draw my sword', candidates)).toBeNull();
+    expect(detectDeclaredEquip('Can I equip the shortbow?', candidates)).toBeNull();
+    expect(detectDeclaredEquip("I don't draw my shortbow", candidates)).toBeNull();
+    expect(detectDeclaredEquip('Should I equip the shortbow?', candidates)).toBeNull();
+    expect(detectDeclaredEquip('', candidates)).toBeNull();
+  });
+
+  it('never equips the player\u2019s weapon for another creature\u2019s draw', () => {
+    // The verb must be governed by the player: narration about someone
+    // else readying a same-named weapon is not the player's declaration.
+    expect(detectDeclaredEquip('The goblin draws his dagger', candidates)).toBeNull();
+    expect(detectDeclaredEquip('I watch the goblin draw his dagger', candidates)).toBeNull();
+    expect(
+      detectDeclaredEquip('The goblin draws his dagger', candidates, ['Sera Voss']),
+    ).toBeNull();
+    // The character's name merely occurring in the clause is not
+    // subjecthood either: the name must sit immediately before the verb.
+    expect(
+      detectDeclaredEquip('Sera watches the goblin draw his dagger', candidates, [
+        'Sera Voss',
+      ]),
+    ).toBeNull();
+    expect(
+      detectDeclaredEquip('I tell Sera to watch the goblin draw his dagger', candidates, [
+        'Sera Voss',
+      ]),
+    ).toBeNull();
+  });
+
+  it('requires the weapon to be the verb\u2019s object, not its instrument or scenery', () => {
+    // "take out" the goblin is an attack declaration with the shortbow as
+    // its instrument; the map's object is the map, the shortbow scenery.
+    expect(detectDeclaredEquip('I take out the goblin with my shortbow', candidates)).toBeNull();
+    expect(
+      detectDeclaredEquip('I draw a map of the goblin camp with my shortbow beside me', candidates),
+    ).toBeNull();
+    expect(detectDeclaredEquip('I am ready with my shortbow', candidates)).toBeNull();
+  });
+
+  it('detects the contracted first-person forms', () => {
+    expect(detectDeclaredEquip("I'll draw my shortbow", candidates)).toEqual({
+      name: 'Shortbow',
+      carried: true,
+    });
+    expect(detectDeclaredEquip("We'll draw our shortbows", candidates)).toEqual({
+      name: 'Shortbow',
+      carried: true,
+    });
+    expect(detectDeclaredEquip("I'd draw my shortbow", candidates)).toEqual({
+      name: 'Shortbow',
+      carried: true,
+    });
   });
 });

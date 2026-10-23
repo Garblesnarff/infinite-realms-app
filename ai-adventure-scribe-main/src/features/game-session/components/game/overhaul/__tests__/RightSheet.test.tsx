@@ -229,3 +229,47 @@ describe('RightSheet concentration indicator (#709)', () => {
     expect(screen.queryByText('Concentrating')).not.toBeInTheDocument();
   });
 });
+
+describe('RightSheet inventory equip control (#1059)', () => {
+  const gearSheet: CharacterSheetVM = {
+    ...sheet,
+    inventory: [
+      { id: 'Shortbow', name: 'Shortbow', quantity: 1, equippable: true },
+      { id: 'Arrows (20)', name: 'Arrows (20)', quantity: 1 },
+      { id: 'Leather Armor', name: 'Leather Armor', quantity: 1, equippable: true },
+    ],
+  };
+
+  it('offers Equip on equippable rows only and routes the click to the handler', () => {
+    const onEquipItem = vi.fn().mockResolvedValue(undefined);
+    render(<RightSheet c={gearSheet} onEquipItem={onEquipItem} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Equip Shortbow' }));
+    expect(onEquipItem).toHaveBeenCalledWith(gearSheet.inventory[0]);
+    expect(screen.getByRole('button', { name: 'Equip Leather Armor' })).toBeInTheDocument();
+    // Ammunition and the rest of the pack stay inert text.
+    expect(screen.queryByRole('button', { name: 'Equip Arrows (20)' })).not.toBeInTheDocument();
+  });
+
+  it('renders no Equip control without a handler', () => {
+    render(<RightSheet c={gearSheet} />);
+
+    expect(screen.queryByRole('button', { name: /^Equip / })).not.toBeInTheDocument();
+  });
+
+  it('disables the row being equipped and shows the equip error', () => {
+    render(
+      <RightSheet
+        c={gearSheet}
+        onEquipItem={vi.fn()}
+        equippingItemId="Shortbow"
+        equipActionError="Unable to equip Shortbow."
+      />,
+    );
+
+    const button = screen.getByRole('button', { name: 'Equip Shortbow' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveTextContent('Equipping…');
+    expect(screen.getByRole('alert')).toHaveTextContent('Unable to equip Shortbow.');
+  });
+});

@@ -19,6 +19,7 @@ import { Elysia } from 'elysia';
 
 import {
   campaigns,
+  characterEquipment,
   characterFeatures,
   characterHitDice,
   characterSpellSlots,
@@ -1008,5 +1009,283 @@ describeWithDb('typed Second Wind through the DM generate route (#975)', () => {
     const ownPrompts = generatePrompts.slice(twinPromptCount);
     expect(ownPrompts.length).toBeGreaterThan(0);
     expect(ownPrompts.join('\n')).not.toContain('<second_wind>');
+  }, 30_000);
+});
+
+/**
+ * #1059: a typed equip in combat ("I draw my shortbow") resolves through the
+ * DM generate route — the engine equips the weapon on the character_equipment
+ * rows before the DM narrates, posts its engine line, and hands the provider
+ * a <weapon_equip> directive carrying the truth; the next attack with that
+ * weapon then resolves instead of refusing 'not equipped' (Hark N23-008).
+ *
+ * On main this fails: llm.ts has no equip wiring, so the shortbow row stays
+ * unequipped, no directive reaches the captured prompt, and no engine line
+ * is posted.
+ */
+describeWithDb('typed equip through the DM generate route (#1059)', () => {
+  let db: ReturnType<typeof realDb>;
+  const eqUserId = testId('1059-user');
+  let executeCombatIntent: (
+    encounterId: string,
+    intent: unknown,
+    userId: string,
+    source: string,
+  ) => Promise<{ weaponResolution?: { resolved?: string; substituted?: boolean } }>;
+
+  const request = (path: string, method: string, body?: unknown): Promise<Response> =>
+    pipeline.handle(
+      new Request(`http://localhost${path}`, {
+        method,
+        headers: authHeaders,
+        body: body === undefined ? undefined : JSON.stringify(body),
+      }),
+    );
+
+  interface EquipWorld {
+    characterId: string;
+    sessionId: string;
+    encounterId: string;
+    heroId: string;
+    foeId: string;
+  }
+
+  /** Sera Voss's shape: a rogue whose Dagger is equipped and whose Shortbow is only carried. */
+  const seedEquipWorld = async (label: string): Promise<EquipWorld> => {
+    const [{ id: campaignId }] = await db
+      .insert(campaigns)
+      .values({ userId: eqUserId, name: testId(`${label}-camp`) })
+      .returning({ id: campaigns.id });
+    const [{ id: characterId }] = await db
+      .insert(characters)
+      .values({
+        userId: eqUserId,
+        campaignId,
+        name: testId(label),
+        level: 1,
+        class: 'Rogue',
+        classLevels: [{ className: 'Rogue', level: 1 }],
+      })
+      .returning({ id: characters.id });
+    await db.insert(characterStats).values({
+      characterId,
+      strength: 12,
+      dexterity: 16,
+      armorClass: 14,
+      maxHitPoints: 10,
+      currentHitPoints: 10,
+      speed: 30,
+    });
+    await db.insert(characterEquipment).values([
+      { characterId, itemName: 'Dagger', itemType: 'equipment', quantity: 1, equipped: true },
+      { characterId, itemName: 'Shortbow', itemType: 'equipment', quantity: 1, equipped: false },
+      { characterId, itemName: 'Arrows (20)', itemType: 'equipment', quantity: 1, equipped: false },
+    ]);
+    const [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId, characterId, sessionNumber: 1, status: 'active' })
+      .returning({ id: gameSessions.id });
+    const [{ id: encounterId }] = await db
+      .insert(combatEncounters)
+      .values({ sessionId, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
+      .returning({ id: combatEncounters.id });
+    const inserted = await db
+      .insert(combatParticipants)
+      .values([
+        {
+          encounterId,
+          characterId,
+          name: 'Sera Voss',
+          participantType: 'player',
+          turnOrder: 0,
+          initiative: 20,
+          armorClass: 14,
+          maxHp: 10,
+          speed: 30,
+        },
+        {
+          encounterId,
+          name: 'Training Goblin',
+          participantType: 'monster',
+          turnOrder: 1,
+          initiative: 10,
+          armorClass: 12,
+          maxHp: 30,
+          speed: 30,
+        },
+      ])
+      .returning({ id: combatParticipants.id, turnOrder: combatParticipants.turnOrder });
+    const heroId = inserted.find((row) => row.turnOrder === 0)!.id;
+    const foeId = inserted.find((row) => row.turnOrder === 1)!.id;
+    await db.insert(combatParticipantStatus).values([
+      { participantId: heroId, currentHp: 10, maxHp: 10, isConscious: true },
+      { participantId: foeId, currentHp: 30, maxHp: 30, isConscious: true },
+    ]);
+    // The saved player message, exactly as the client saves the line before
+    // the generate call.
+    await db.insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'player',
+      speakerId: characterId,
+      message: 'I draw my shortbow',
+    });
+    return { characterId, sessionId, encounterId, heroId, foeId };
+  };
+
+  const shortbowEquipped = async (world: EquipWorld): Promise<boolean> =>
+    (
+      await db
+        .select({ equipped: characterEquipment.equipped })
+        .from(characterEquipment)
+        .where(
+          and(
+            eq(characterEquipment.characterId, world.characterId),
+            eq(characterEquipment.itemName, 'Shortbow'),
+          ),
+        )
+    )[0]?.equipped ?? false;
+
+  const equipLines = async (world: EquipWorld): Promise<string[]> =>
+    (
+      await db
+        .select({ message: dialogueHistory.message })
+        .from(dialogueHistory)
+        .where(
+          and(
+            eq(dialogueHistory.sessionId, world.sessionId),
+            eq(dialogueHistory.speakerType, 'system'),
+          ),
+        )
+    )
+      .map((row) => row.message)
+      .filter((message) => message.includes('equips the Shortbow'));
+
+  const generateEquipTurn = async (
+    world: EquipWorld,
+    playerInput: string,
+    messageId: string,
+  ): Promise<Response> => {
+    generatedText = JSON.stringify({
+      text: 'Sera slips the shortbow from her shoulder and nocks an arrow.',
+    });
+    return request('/v1/llm/generate', 'POST', {
+      prompt: 'The goblin snarls and raises its scimitar. What happens?',
+      player_input: playerInput,
+      sessionId: world.sessionId,
+      dmReply: { messageId, inCombat: true },
+      provider: 'openrouter',
+      requestType: 'user',
+      maxTokens: 8192,
+      temperature: 0.9,
+    });
+  };
+
+  beforeAll(async () => {
+    db = realDb();
+    userId = eqUserId;
+    const intentService = await import('../../../services/combat/combat-intent-service.ts');
+    executeCombatIntent = intentService.executeCombatIntent as typeof executeCombatIntent;
+    // Engine lines write through SessionMessageService.addMessages; give the
+    // file-scope stub the same real dialogue_history writer the #751 block
+    // installs (deterministic id, on-conflict-do-nothing).
+    addMessagesImpl = async (messages: unknown) => {
+      const inserted: unknown[] = [];
+      for (const entry of messages as Array<Record<string, unknown>>) {
+        const [row] = await db
+          .insert(dialogueHistory)
+          .values({
+            id: entry.id as string,
+            sessionId: entry.sessionId as string,
+            speakerType: entry.speakerType as string,
+            message: entry.message as string,
+            context: (entry.context ?? null) as never,
+          })
+          .onConflictDoNothing()
+          .returning();
+        if (row) inserted.push(row);
+      }
+      return inserted;
+    };
+  });
+
+  afterAll(async () => {
+    addMessagesImpl = async () => [];
+    await closeRealDb();
+  });
+
+  it('equips through the real route, posts the engine line, and the next attack resolves with the shortbow', async () => {
+    const world = await seedEquipWorld('1059-route');
+    expect(await shortbowEquipped(world)).toBe(false);
+
+    generatePrompts = [];
+    const res = await generateEquipTurn(world, 'I draw my shortbow', '10591059-1111-4222-8333-444444444444');
+    expect(res.status).toBe(200);
+
+    // The equip landed on the sheet rows the combat readers read.
+    expect(await shortbowEquipped(world)).toBe(true);
+
+    // The directive reached the prompt the provider was actually given.
+    expect(generatePrompts.length).toBeGreaterThan(0);
+    const promptSent = generatePrompts.join('\n');
+    expect(promptSent).toContain('<weapon_equip>');
+    expect(promptSent).toContain('Shortbow');
+
+    // Exactly one engine line tells the table the weapon is in hand.
+    expect(await equipLines(world)).toHaveLength(1);
+
+    // And the next attack with the newly equipped weapon resolves with it.
+    const outcome = await executeCombatIntent(
+      world.encounterId,
+      { type: 'attack', actorId: world.heroId, targetId: world.foeId, weaponId: 'Shortbow' },
+      eqUserId,
+      'dm',
+    );
+    expect(outcome.weaponResolution?.resolved).toBe('Shortbow');
+    expect(outcome.weaponResolution?.substituted).toBe(false);
+  }, 30_000);
+
+  it('a retried turn equips nothing twice and posts no second line', async () => {
+    const world = await seedEquipWorld('1059-retry');
+    const first = await generateEquipTurn(world, 'I draw my shortbow', '10591059-2222-4333-8444-555555555555');
+    expect(first.status).toBe(200);
+    expect(await shortbowEquipped(world)).toBe(true);
+    expect(await equipLines(world)).toHaveLength(1);
+
+    // Retry replays the same saved player message with no new save: the
+    // resolver sees the weapon already in hand and resolves nothing again.
+    generatePrompts = [];
+    const second = await generateEquipTurn(world, 'I draw my shortbow', '10591059-2222-4333-8444-555555555555');
+    expect(second.status).toBe(200);
+    expect(await equipLines(world)).toHaveLength(1);
+    expect(generatePrompts.join('\n')).toContain('already equipped');
+  }, 30_000);
+
+  it('naming a weapon the character does not carry hands the DM the refusal, and nothing changes', async () => {
+    const world = await seedEquipWorld('1059-refusal');
+    generatePrompts = [];
+    const res = await generateEquipTurn(world, 'I equip the longbow', '10591059-3333-4444-8555-666666666666');
+    expect(res.status).toBe(200);
+    expect(generatePrompts.join('\n')).toContain('not carrying');
+    expect(await shortbowEquipped(world)).toBe(false);
+    expect(await equipLines(world)).toHaveLength(0);
+  }, 30_000);
+
+  it('without the dmReply gate the route equips nothing (narration regen shape)', async () => {
+    const world = await seedEquipWorld('1059-gated');
+    generatedText = JSON.stringify({
+      text: 'Sera slips the shortbow from her shoulder and nocks an arrow.',
+    });
+    const res = await request('/v1/llm/generate', 'POST', {
+      prompt: 'The goblin snarls and raises its scimitar. What happens?',
+      player_input: 'I draw my shortbow',
+      sessionId: world.sessionId,
+      provider: 'openrouter',
+      requestType: 'user',
+      maxTokens: 8192,
+      temperature: 0.9,
+    });
+    expect(res.status).toBe(200);
+    expect(await shortbowEquipped(world)).toBe(false);
+    expect(await equipLines(world)).toHaveLength(0);
   }, 30_000);
 });
