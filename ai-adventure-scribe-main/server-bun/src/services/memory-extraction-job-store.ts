@@ -21,8 +21,17 @@ export type { MemoryExtractionJobRow, NewMemoryExtractionJobRow };
 
 /**
  * A running job whose updated_at is older than this is treated as orphaned by
- * a dead process and becomes claimable again. Model calls take at most ~60 s,
- * so this is far beyond any live execution; it only fires after a real crash.
+ * a dead process and becomes claimable again. updated_at is the row's
+ * last-transition time — nothing refreshes it during execution — so staleness
+ * is measured from the claim. An extraction call tries up to two provider
+ * candidates at up to ~60 s each (~120 s worst case at the default timeout),
+ * so this is far beyond a healthy live execution; it fires after a real crash.
+ * The non-model phases (dedup check, usage write, memory insert) share the
+ * database and carry no timeout of their own: a pathological stall past this
+ * window can race a second executor — the guarded completion still charges
+ * only once, but both executors can pass the dedup check and write duplicate
+ * memories. That residual risk is accepted; a real fix is an execution
+ * heartbeat or timeouts on those phases.
  */
 export const STALE_RUNNING_JOB_MS = 15 * 60 * 1000;
 
@@ -93,7 +102,7 @@ export async function getMemoryExtractionJob(id: string): Promise<MemoryExtracti
 /**
  * Claim a job for execution: pending -> running, or stale-running -> running.
  * Rows at the attempts cap are never claimable; the exhaustion sweep fails them.
- * Bumps attempts and the heartbeat. Returns null when another process holds
+ * Bumps attempts and updated_at. Returns null when another process holds
  * the claim (or the row is not in the expected state).
  */
 export async function claimMemoryExtractionJob(

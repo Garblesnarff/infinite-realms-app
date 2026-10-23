@@ -34,7 +34,10 @@ import type { NewMemory } from '../../../db/schema/index';
  *
  * #846: the accepted job is persisted to memory_extraction_jobs before the 202, so a restart
  * (every deploy) loses nothing. On startup the server resumes pending jobs and reclaims
- * orphaned running ones. Quota is charged when a job completes, never when it is accepted, so
+ * orphaned running ones, and the resume sweep repeats on an interval for the process's
+ * whole lifetime — a running orphan is fresh at its replacement's startup sweep and only
+ * turns stale 15 minutes later, so a one-shot sweep would strand it until a second restart.
+ * Quota is charged when a job completes, never when it is accepted, so
  * a job that never runs is never charged — and completion wins a guarded status transition
  * first, so a raced job can never charge twice.
  */
@@ -551,13 +554,23 @@ async function executeClaimedJob(
 }
 
 /**
- * Claim a persisted job and execute it. Returns null when another process holds the claim.
- * Never throws: the store calls are the only fallible part and they run first.
+ * Claim a persisted job and start executing it, without awaiting the execution.
+ * Returns { execution } when the claim landed — the execution is already
+ * registered in the in-flight maps, so the shutdown settle covers it — or null
+ * when another process holds the claim. Never throws: the claim is the only
+ * fallible part and it runs first.
+ *
+ * The execution promise is WRAPPED in an object on purpose: an async function
+ * that returns a promise adopts it, so a caller awaiting this function would
+ * settle only when the execution finishes. Wrapped, the returned promise
+ * settles as soon as the claim has COMMITTED — which is what lets the resume
+ * drain await a page's claims (never the executions) before reading the next
+ * page: a claimed row is out of the runnable set by then.
  */
-async function claimAndExecuteById(
+async function claimAndStartById(
   jobId: string,
   expectedStatus: 'pending' | 'running',
-): Promise<MemoryExtractionOutcome | null> {
+): Promise<{ execution: Promise<MemoryExtractionOutcome> } | null> {
   let claimed: MemoryExtractionJobRow | null;
   try {
     claimed = await claimMemoryExtractionJob(jobId, expectedStatus);
@@ -576,12 +589,24 @@ async function claimAndExecuteById(
   inFlightJobIds.add(claimed.id);
   const execution = executeClaimedJob(claimed);
   inFlightExecutions.set(claimed.id, execution);
-  try {
-    return await execution;
-  } finally {
+  const cleanup = (): void => {
     inFlightJobIds.delete(claimed.id);
     inFlightExecutions.delete(claimed.id);
-  }
+  };
+  void execution.then(cleanup, cleanup);
+  return { execution };
+}
+
+/**
+ * Claim a persisted job and execute it, awaiting the outcome. Returns null
+ * when another process holds the claim. Never throws.
+ */
+async function claimAndExecuteById(
+  jobId: string,
+  expectedStatus: 'pending' | 'running',
+): Promise<MemoryExtractionOutcome | null> {
+  const started = await claimAndStartById(jobId, expectedStatus);
+  return started ? await started.execution : null;
 }
 
 /**
@@ -667,9 +692,18 @@ export async function startMemoryExtractionJob(
 }
 
 /**
+ * Most rows a single resume sweep start-claims. The sweep pages through the
+ * runnable list until it runs dry; the cap bounds one sweep's work, and the
+ * periodic sweep (below) continues the drain on its next tick.
+ */
+export const MAX_MEMORY_EXTRACTION_RESUME_PER_SWEEP = 1000;
+
+/**
  * Resume jobs that survived a restart: anything still pending, plus running jobs whose
- * heartbeat went stale (their process died mid-execution). Called once at startup by the
- * non-standby process. Never throws: a failed claim logs and the sweep continues.
+ * last transition went stale (their process died mid-execution). Called at startup by
+ * the non-standby process and then on an interval for the process's whole lifetime
+ * (see startMemoryExtractionResumeSweep). Never throws: a failed claim logs and the
+ * sweep continues.
  */
 export async function resumePendingMemoryExtractionJobs(
   limit = 100,
@@ -688,28 +722,48 @@ export async function resumePendingMemoryExtractionJobs(
       error: error instanceof Error ? error.message : String(error),
     });
   }
-  let rows: MemoryExtractionJobRow[];
-  try {
-    rows = await listRunnableMemoryExtractionJobs(limit);
-  } catch (error: unknown) {
-    logger.error({
-      msg: 'memory_extraction.resume_list_failed',
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return { resumed: 0 };
-  }
-  for (const row of rows) {
-    if (inFlightJobIds.has(row.id)) continue;
-    resumed += 1;
-    void claimAndExecuteById(row.id, row.status === 'running' ? 'running' : 'pending').catch(
-      (error: unknown) => {
-        logger.error({
-          msg: 'memory_extraction.resume_failed',
-          jobId: row.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      },
+  // Page through the runnable rows until a page holds nothing new: a backlog
+  // deeper than one page must not strand its tail for the rest of the process's
+  // life. Rows this sweep already attempted are skipped — a claim that lost a
+  // race or a row released mid-sweep must not spin the loop. Failure is
+  // isolated per phase: a list error mid-drain ends the call with the count
+  // resumed so far rather than throwing, and the next sweep retries the rest.
+  const attempted = new Set<string>();
+  while (attempted.size < MAX_MEMORY_EXTRACTION_RESUME_PER_SWEEP) {
+    let rows: MemoryExtractionJobRow[];
+    try {
+      rows = await listRunnableMemoryExtractionJobs(limit);
+    } catch (error: unknown) {
+      logger.error({
+        msg: 'memory_extraction.resume_list_failed',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return { resumed };
+    }
+    const fresh = rows.filter((row) => !attempted.has(row.id));
+    if (fresh.length === 0) break;
+    // Bound this call's claims by the per-sweep cap; rows past the budget are
+    // left for the next sweep.
+    const claimable = fresh.slice(
+      0,
+      MAX_MEMORY_EXTRACTION_RESUME_PER_SWEEP - attempted.size,
     );
+    for (const row of fresh) attempted.add(row.id);
+    // Await the page's CLAIMS before listing the next page — never the
+    // executions, which stay detached and tracked by the in-flight maps. A
+    // claim flips its row out of the runnable set; if the next page were read
+    // before the claims commit, it could return this same page again, the
+    // loop would see nothing fresh, and the backlog tail would go unattempted
+    // until a later sweep.
+    const claims: Promise<{ execution: Promise<MemoryExtractionOutcome> } | null>[] = [];
+    for (const row of claimable) {
+      if (inFlightJobIds.has(row.id)) continue;
+      resumed += 1;
+      claims.push(claimAndStartById(row.id, row.status === 'running' ? 'running' : 'pending'));
+    }
+    await Promise.allSettled(claims);
+    if (claimable.length < fresh.length) break;
+    if (rows.length < limit) break;
   }
   if (resumed > 0) {
     logger.info({ msg: 'memory_extraction.resumed', count: resumed });
@@ -718,12 +772,54 @@ export async function resumePendingMemoryExtractionJobs(
 }
 
 /**
+ * How often the resume sweep repeats. A running job orphaned by a restart is
+ * fresh at the replacement process's startup sweep — not yet stale — so the
+ * one-shot startup sweep alone skips it, and without a repeat sweep it would
+ * wait for a SECOND restart, unboundedly later (the deploy handoff makes this
+ * deterministic: the standby is deleted only after the live process listens,
+ * i.e. after its startup sweep has already passed the standby's fresh rows).
+ * Five minutes keeps the worst case at the stale window plus one tick.
+ */
+export const MEMORY_EXTRACTION_RESUME_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+
+let resumeSweepInFlight = false;
+
+/**
+ * Repeat the resume sweep for the process's whole lifetime. Started once by
+ * the non-standby process (index.ts), alongside the other sweeps; the startup
+ * resume there is the boot run, so this only schedules the repeats. A slow
+ * sweep is never started twice, and the timer is unref'd so it never holds
+ * the process open.
+ */
+export function startMemoryExtractionResumeSweep(
+  intervalMs = MEMORY_EXTRACTION_RESUME_SWEEP_INTERVAL_MS,
+): ReturnType<typeof setInterval> {
+  const tick = (): void => {
+    if (resumeSweepInFlight) return;
+    resumeSweepInFlight = true;
+    void resumePendingMemoryExtractionJobs()
+      .catch((error: unknown) => {
+        logger.error({
+          msg: 'memory_extraction.resume_sweep_failed',
+          error: error instanceof Error ? error.message : String(error),
+        });
+      })
+      .finally(() => {
+        resumeSweepInFlight = false;
+      });
+  };
+  const interval = setInterval(tick, intervalMs);
+  interval.unref?.();
+  return interval;
+}
+
+/**
  * Shutdown hook (#846): give this process's in-flight executions a bounded chance
  * to finish before the process exits — and NEVER flip a still-running row back
  * to pending. A released row is claimable by the handoff process while this
  * process's model call is still live, and two live executors can both pass the
  * check-then-insert dedup and write duplicate memories. Rows still running at
- * exit stay 'running': their heartbeat goes stale and the next process reclaims
+ * exit stay 'running': their last transition goes stale and the next process reclaims
  * them once this process is provably dead. Bounded by the caller's race in
  * index.ts; never throws.
  */
