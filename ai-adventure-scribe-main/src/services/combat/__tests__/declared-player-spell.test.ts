@@ -10,7 +10,21 @@ describe('the spell a sheet-Cast message declares (#2304)', () => {
       declaredSheetSpell(
         buildSpellCastMessage({ name: 'Burning Hands', id: 'burning-hands', level: 1 }),
       ),
-    ).toEqual({ spellId: 'burning-hands', spellName: 'Burning Hands' });
+    ).toEqual({ spellId: 'burning-hands', spellName: 'Burning Hands', slotLevel: 1 });
+  });
+
+  it('reads a cantrip tag as spending no slot (#1058)', () => {
+    expect(
+      declaredSheetSpell(buildSpellCastMessage({ name: 'Fire Bolt', id: 'fire-bolt', level: 0 })),
+    ).toEqual({ spellId: 'fire-bolt', spellName: 'Fire Bolt', slotLevel: null });
+  });
+
+  it('reads a tag with no readable level as declaring no slot (#1058)', () => {
+    expect(
+      declaredSheetSpell(
+        buildSpellCastMessage({ name: 'Burning Hands', id: 'burning-hands', level: null }),
+      ),
+    ).toEqual({ spellId: 'burning-hands', spellName: 'Burning Hands', slotLevel: null });
   });
 
   it('ignores free text with no tag', () => {
