@@ -369,6 +369,107 @@ describeWithDb('character spell prepared flags (#211 QA-041)', () => {
   });
 });
 
+describeWithDb('#1011 deleting a character cascades to character_spells (migration 0029)', () => {
+  // Lazily (re)created in beforeAll: the suite above closes the shared
+  // fixture client in its afterAll, and realDb() recreates it on demand.
+  let db: ReturnType<typeof realDb>;
+  const userId = testId('fk1011-user');
+
+  let campaignId = '';
+  let characterId = '';
+  let classId = '';
+  const spellIds: string[] = [];
+
+  beforeAll(async () => {
+    db = realDb();
+    httpUserId = userId;
+    [{ id: campaignId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: 'FK 1011 Campaign' })
+      .returning({ id: campaigns.id });
+    [{ id: characterId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        ownerId: userId,
+        campaignId,
+        name: 'FK 1011 Hero',
+        class: 'Wizard',
+        level: 1,
+      })
+      .returning({ id: characters.id });
+    [{ id: classId }] = await db
+      .insert(classes)
+      .values({ name: `TestClass1011-${testId('c')}`, hitDie: 6 })
+      .returning({ id: classes.id });
+    for (const label of ['Alpha', 'Beta']) {
+      const [{ id }] = await db
+        .insert(spells)
+        .values({
+          name: `Test Spell 1011 ${label} ${testId('s')}`,
+          level: 1,
+          school: 'Evocation',
+          castingTime: '1 action',
+          rangeText: 'Self',
+          duration: 'Instantaneous',
+          description: 'FK cascade test spell',
+        })
+        .returning({ id: spells.id });
+      spellIds.push(id);
+      await db
+        .insert(characterSpells)
+        .values({ characterId, spellId: id, sourceClassId: classId });
+    }
+  });
+
+  afterAll(async () => {
+    if (characterId) {
+      await db.delete(characterSpells).where(eq(characterSpells.characterId, characterId));
+      await db.delete(characterStats).where(eq(characterStats.characterId, characterId));
+      await db.delete(characters).where(eq(characters.id, characterId));
+    }
+    if (spellIds.length > 0) {
+      await db.delete(classSpells).where(inArray(classSpells.spellId, spellIds));
+      await db.delete(spells).where(inArray(spells.id, spellIds));
+    }
+    if (classId) await db.delete(classes).where(eq(classes.id, classId));
+    if (campaignId) await db.delete(campaigns).where(eq(campaigns.id, campaignId));
+  });
+
+  it('DELETE /v1/characters/:id leaves no character_spells rows behind', async () => {
+    const app = await pipeline;
+    expect(app).toBeTruthy();
+
+    const before = await db
+      .select({ id: characterSpells.id })
+      .from(characterSpells)
+      .where(eq(characterSpells.characterId, characterId));
+    expect(before).toHaveLength(2);
+
+    const res = await app.handle(
+      new Request(`http://localhost/v1/characters/${characterId}`, {
+        method: 'DELETE',
+        headers: authHeaders,
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const gone = await db
+      .select({ id: characters.id })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect(gone).toHaveLength(0);
+
+    // On the pre-0029 schema there is no FK, so the two spell rows survive
+    // the delete and this assertion fails — the #1011 bug, pinned.
+    const after = await db
+      .select({ id: characterSpells.id })
+      .from(characterSpells)
+      .where(eq(characterSpells.characterId, characterId));
+    expect(after).toHaveLength(0);
+  });
+});
+
 describeWithDb('Life Domain domain spells (#899)', () => {
   // Lazily (re)created in beforeAll: the suite above closes the shared
   // fixture client in its afterAll, and realDb() recreates it on demand.

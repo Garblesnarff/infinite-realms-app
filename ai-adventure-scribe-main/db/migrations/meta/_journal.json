@@ -190,6 +190,13 @@
       "when": 1792490751236,
       "tag": "0028_starter_character_templates_subclass",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1792677229349,
+      "tag": "0029_character_spells_character_fk",
+      "breakpoints": true
     }
   ]
 }
