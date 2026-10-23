@@ -916,7 +916,7 @@ describeWithDb('a melee attacker closes the gap and the attack is rolled (#259)'
   let db: ReturnType<typeof realDb>;
 
   type Pt = { x: number; y: number };
-  type Blocked = Pt & { terrain: 'pit' | 'wall'; decoration: string };
+  type Blocked = Pt & { terrain: 'pit' | 'wall' | 'difficult'; decoration: string };
 
   const floorCell = () => ({
     terrain: 'floor' as const,
@@ -1237,6 +1237,78 @@ describeWithDb('a melee attacker closes the gap and the attack is rolled (#259)'
     // The detour's cost is the claim: the cheapest reaching cell is 25 ft of
     // path (not the 30 ft route), so exactly 5 ft of movement remains.
     expect((await entityAt(f, f.heroId)).movementRemaining).toBe(5);
+  });
+
+  test('feast table at 25 ft (#1057): the approach commits along the only path, next turn rolls', async () => {
+    // The Eternal Feast shape from Hark N23-018: the hero at (7,4), The Taller Guest at
+    // (7,9) — 25 ft in a straight line — with the feast table (the generator's table
+    // cells: difficult terrain that blocks movement) filling the row between them.
+    // Every cell within 30 ft is exactly as far from the guest as the hero's own cell
+    // or farther, because closing the distance means walking along the table to its
+    // end first; the route around costs 55 ft. On main the plan kept the hero's own
+    // cell and the turn came back "could not move closer … no attack was rolled"
+    // with movedFeet 0, at 25 ft with 30 ft of speed.
+    const table: Blocked[] = Array.from({ length: 12 }, (_, i) => ({
+      x: 1 + i,
+      y: 5,
+      terrain: 'difficult' as const,
+      decoration: 'table',
+    }));
+    const f = await seed({
+      width: 14,
+      height: 12,
+      hero: { x: 7, y: 4 },
+      foe: { x: 7, y: 9 },
+      blocked: table,
+      foeName: 'The Taller Guest',
+    });
+    const r1 = await attack(f, f.heroId, f.foeId);
+    expect(r1.resolvedAs).toBe('movement_only');
+    expect(r1.movedFeet).toBe(30);
+    expect(r1.distanceFeet).toBe(30);
+    expect(r1.refusalReason).toBe('movement_exhausted');
+    expect(String(r1.narrative)).toContain('no attack was rolled');
+    expect(String(r1.narrative)).not.toContain('could not move closer');
+    const after = await entityAt(f, f.heroId);
+    expect(after).not.toEqual({ x: 7, y: 4, movementRemaining: 30 });
+    expect(after.movementRemaining).toBe(0);
+    expect(distFt(after, await entityAt(f, f.foeId))).toBe(30);
+    // Next turn: the remaining 25 ft of the route closes and the attack rolls.
+    await resetTacticalMovementForTurn(f.sessionId, f.heroId);
+    await setTurn(f, 0);
+    const r2 = await attack(f, f.heroId, f.foeId);
+    expect(r2.resolvedAs).not.toBe('movement_only');
+    expect(typeof r2.d20).toBe('number');
+    expect(typeof r2.hit).toBe('boolean');
+    expect(distFt(await entityAt(f, f.heroId), await entityAt(f, f.foeId))).toBe(5);
+  });
+
+  test('feast table detour costing exactly the 30 ft speed: the attack rolls', async () => {
+    // Boundary: a shorter table — the route around it costs exactly the hero's 30 ft
+    // speed, so the reaching cell sits inside the movement budget and the attack must
+    // resolve this turn with every foot spent. (This shape already worked on main —
+    // the reaching cell is a legal destination there — and pins that the #1057
+    // path-walking fallback does not disturb the exactly-at-speed boundary.)
+    const table: Blocked[] = Array.from({ length: 5 }, (_, i) => ({
+      x: 5 + i,
+      y: 5,
+      terrain: 'difficult' as const,
+      decoration: 'table',
+    }));
+    const f = await seed({
+      width: 14,
+      height: 12,
+      hero: { x: 7, y: 4 },
+      foe: { x: 7, y: 9 },
+      blocked: table,
+      foeName: 'The Taller Guest',
+    });
+    const r = await attack(f, f.heroId, f.foeId);
+    expect(r.resolvedAs).not.toBe('movement_only');
+    expect(typeof r.d20).toBe('number');
+    expect(typeof r.hit).toBe('boolean');
+    expect(distFt(await entityAt(f, f.heroId), await entityAt(f, f.foeId))).toBe(5);
+    expect((await entityAt(f, f.heroId)).movementRemaining).toBe(0);
   });
 
   test('rift with a Large foe (the D5-021 hulk footprint): it still advances to the rift edge', async () => {

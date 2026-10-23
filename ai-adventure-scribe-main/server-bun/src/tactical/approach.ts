@@ -124,16 +124,58 @@ export function planApproach(
   )[0];
   const blockingCell = blockingCellFor(map, actor, target, reachFeet);
 
-  const path = findPath(map, actorId, best.cell.x, best.cell.y)?.path ?? [
-    { x: actor.x, y: actor.y },
-  ];
+  // #1057: the selection above is greedy in straight-line distance — it only accepts a
+  // reachable cell that is strictly closer to the target than the actor's own cell. An actor
+  // standing on her side of a long movement-blocking obstacle (the feast table of the report)
+  // is at a local minimum: every cell within her movement is exactly as far from the target
+  // as the one she stands on, or farther, because closing the distance means first walking
+  // ALONG the obstacle to its end. The greedy pick is then her own cell, the approach
+  // reports movedFeet 0, and the attack dies as "could not move closer" — at 25 ft with
+  // 30 ft of speed — even though a real path exists (fullPath above) whose first steps are
+  // lateral. When the greedy pick is standing still but a path to a reach cell exists,
+  // walk that path as far as this turn's movement reaches: the move commits along the only
+  // route there is, and the next turn starts past the detour. When no path exists at all
+  // (the rift of D5-021), standing still stays the honest answer.
+  let chosen = best;
+  let chosenPath: Point[] | null = null;
+  if (
+    !best.inReach &&
+    best.cell.x === actor.x &&
+    best.cell.y === actor.y &&
+    fullPath &&
+    fullPath.path.length > 1
+  ) {
+    const reachableByKey = new Map(
+      candidates.map((cell) => [`${cell.x},${cell.y}`, cell] as const),
+    );
+    let furthest: { x: number; y: number; costFeet: number } | null = null;
+    const prefix: Point[] = [fullPath.path[0]!];
+    for (let i = 1; i < fullPath.path.length; i += 1) {
+      const step = fullPath.path[i]!;
+      const candidate = reachableByKey.get(`${step.x},${step.y}`);
+      if (!candidate) break;
+      furthest = candidate;
+      prefix.push(step);
+    }
+    if (furthest && (furthest.x !== actor.x || furthest.y !== actor.y)) {
+      chosen = {
+        cell: furthest,
+        distance: getDistance(at(actor, furthest), target),
+        inReach: false,
+      };
+      chosenPath = prefix;
+    }
+  }
+
+  const path = chosenPath ??
+    findPath(map, actorId, chosen.cell.x, chosen.cell.y)?.path ?? [{ x: actor.x, y: actor.y }];
 
   return {
-    destination: { x: best.cell.x, y: best.cell.y },
-    costFeet: best.cell.costFeet,
+    destination: { x: chosen.cell.x, y: chosen.cell.y },
+    costFeet: chosen.cell.costFeet,
     path,
-    resultingDistanceFeet: best.distance,
-    inReach: best.inReach,
+    resultingDistanceFeet: chosen.distance,
+    inReach: chosen.inReach,
     pathCostFeet: fullPath?.costFeet ?? null,
     ...(blockingCell
       ? {
