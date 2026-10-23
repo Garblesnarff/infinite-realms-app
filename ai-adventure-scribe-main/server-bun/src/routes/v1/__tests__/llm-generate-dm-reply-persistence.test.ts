@@ -14,7 +14,6 @@ let loggedInfo: Record<string, unknown>[] = [];
 let loggedErrors: Record<string, unknown>[] = [];
 let usageCalls: Record<string, unknown>[] = [];
 let addMessageCalls: Array<{ data: Record<string, unknown>; userId: string }> = [];
-let storySlotSpendCalls: Array<Record<string, unknown>> = [];
 
 mock.module('../../../lib/auth.js', () => ({
   authenticateRequest: async () => ({
@@ -94,12 +93,6 @@ mock.module('../../../services/dm/dm-feature-gate.js', () => ({
     return input.result;
   },
 }));
-mock.module('../../../services/dm/story-spell-slots.js', () => ({
-  spendStorySpellSlots: async (input: Record<string, unknown>) => {
-    storySlotSpendCalls.push(input);
-  },
-}));
-
 const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
 const { llmRoutes } = await import('../llm.js');
 const app = createRequestPipelineApp().use(llmRoutes);
@@ -173,7 +166,6 @@ beforeEach(() => {
   loggedErrors = [];
   usageCalls = [];
   addMessageCalls = [];
-  storySlotSpendCalls = [];
 });
 
 describe('POST /v1/llm/generate — the server keeps the DM reply it generated (#2218)', () => {
@@ -223,35 +215,6 @@ describe('POST /v1/llm/generate — the server keeps the DM reply it generated (
     expect(usageCalls).toEqual([
       expect.objectContaining({ sessionId: SESSION_ID, outputTokens: 731, type: 'llm' }),
     ]);
-  });
-
-  it('spends a sheet cast slot on the ordinary real route outside combat (#1021)', async () => {
-    const response = await generate(
-      {
-        ...explorationReply,
-        text: 'The spell crackles through the room.',
-        roll_requests: [],
-      },
-      {
-        dmReply: { messageId: DM_MESSAGE_ID, inCombat: false },
-        combatEntry: {
-          sessionId: SESSION_ID,
-          player: {
-            characterId: 'character-story-cast',
-            name: 'The Wizard',
-            initiativeModifier: 1,
-          },
-        },
-        player_input: 'I cast Burning Hands [spell_id=burning-hands, spell_level=level 1].',
-      },
-    );
-
-    expect(response.status).toBe(200);
-    expect(storySlotSpendCalls).toHaveLength(1);
-    expect(storySlotSpendCalls[0]).toMatchObject({
-      sessionId: SESSION_ID,
-      casts: { spells: ['Burning Hands'] },
-    });
   });
 
   it('holds a roll turn back — the declaration may narrate past the roll (#2139) — and logs why', async () => {

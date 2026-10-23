@@ -14,6 +14,7 @@ import {
   characterConditions,
   characterEquipment,
   characterHitDice,
+  characterSpells,
   characterSpellSlots,
   characterStats,
   characters,
@@ -24,6 +25,9 @@ import {
   conditionsLibrary,
   dialogueHistory,
   gameSessions,
+  classes,
+  spells,
+  spellSlotUsageLog,
   restEvents,
 } from '../../../../../db/schema/index';
 import { equipmentSaveWireBody } from '../../../../../shared/test-fixtures/equipment-save-wire-body';
@@ -1390,6 +1394,113 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
     await db.delete(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId));
     await db.delete(gameSessions).where(eq(gameSessions.id, sessionId));
     await db.delete(characterStats).where(eq(characterStats.characterId, charId));
+    await db.delete(characters).where(eq(characters.id, charId));
+    await db.delete(campaigns).where(eq(campaigns.id, campId));
+  });
+
+  it('#1021: a sheet cast spends a real story slot through POST /v1/llm/generate', async () => {
+    if (!hasRealDb) return;
+
+    const [{ id: campId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('1021-cast-camp') })
+      .returning({ id: campaigns.id });
+    const [{ id: charId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId: campId,
+        name: testId('1021-wizard'),
+        level: 1,
+        class: 'Wizard',
+        knownSpells: 'Burning Hands',
+        preparedSpells: 'Burning Hands',
+      })
+      .returning({ id: characters.id });
+    const [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId: campId, characterId: charId, status: 'active' })
+      .returning({ id: gameSessions.id });
+    const [{ id: wizardClassId }] = await db
+      .select({ id: classes.id })
+      .from(classes)
+      .where(eq(classes.name, 'Wizard'))
+      .limit(1);
+    const [{ id: burningHandsId }] = await db
+      .select({ id: spells.id })
+      .from(spells)
+      .where(eq(spells.name, 'Burning Hands'))
+      .limit(1);
+    await db.insert(characterSpells).values({
+      characterId: charId,
+      spellId: burningHandsId,
+      sourceClassId: wizardClassId,
+      isPrepared: true,
+      spellLevelLearned: 1,
+    });
+    await db.insert(characterSpellSlots).values({
+      characterId: charId,
+      spellLevel: 1,
+      totalSlots: 1,
+      usedSlots: 0,
+    });
+    const playerInput = 'I cast Burning Hands.';
+    await db.insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'player',
+      speakerId: charId,
+      message: playerInput,
+    });
+
+    generatedText = JSON.stringify({
+      text: 'Flame rolls across the room.',
+      options: [],
+      roll_requests: [],
+      combat_transition: 'none',
+    });
+    const response = await request('/v1/llm/generate', 'POST', {
+      prompt: 'The wizard casts a spell while exploring. What happens?',
+      player_input: playerInput,
+      sessionId,
+      dmReply: { messageId: '11111111-2222-4333-8444-555555555559', inCombat: false },
+      combatEntry: {
+        sessionId,
+        player: {
+          characterId: charId,
+          name: testId('1021-wizard'),
+          initiativeModifier: 1,
+        },
+      },
+      provider: 'openrouter',
+      requestType: 'user',
+      maxTokens: 8192,
+      temperature: 0.9,
+    });
+    expect(response.status).toBe(200);
+
+    const [slot] = await db
+      .select({ usedSlots: characterSpellSlots.usedSlots })
+      .from(characterSpellSlots)
+      .where(
+        and(eq(characterSpellSlots.characterId, charId), eq(characterSpellSlots.spellLevel, 1)),
+      );
+    expect(slot?.usedSlots).toBe(1);
+    const usage = await db
+      .select({
+        spellName: spellSlotUsageLog.spellName,
+        slotLevelUsed: spellSlotUsageLog.slotLevelUsed,
+      })
+      .from(spellSlotUsageLog)
+      .where(
+        and(eq(spellSlotUsageLog.characterId, charId), eq(spellSlotUsageLog.sessionId, sessionId)),
+      );
+    expect(usage).toEqual([{ spellName: 'Burning Hands', slotLevelUsed: 1 }]);
+
+    await db.delete(spellSlotUsageLog).where(eq(spellSlotUsageLog.characterId, charId));
+    await db.delete(characterSpellSlots).where(eq(characterSpellSlots.characterId, charId));
+    await db.delete(characterSpells).where(eq(characterSpells.characterId, charId));
+    await db.delete(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId));
+    await db.delete(gameSessions).where(eq(gameSessions.id, sessionId));
     await db.delete(characters).where(eq(characters.id, charId));
     await db.delete(campaigns).where(eq(campaigns.id, campId));
   });

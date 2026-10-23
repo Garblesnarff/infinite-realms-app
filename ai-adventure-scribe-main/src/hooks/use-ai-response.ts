@@ -913,6 +913,10 @@ export const useAIResponse = (): {
                   // `inCombat` made the server skip the story spell-slot spend (and its normal
                   // narrative roll path) whenever the Cast button was used outside combat.
                   inCombat: Boolean(isInCombat),
+                  // A sheet cast may still be cancelled after the request reaches the server.
+                  // Keep that provisional prose out of the reload fallback without conflating
+                  // cancellation with combat, so story spell slots still spend normally.
+                  holdProse: Boolean(castSignal),
                   // The client's own gate predicate, so the server's harm check stands down on
                   // exactly the turns the client gate does (a dice-roll message, say).
                   narrationGated: holdSideEffects,

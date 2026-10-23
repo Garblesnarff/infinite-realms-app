@@ -320,6 +320,30 @@ describe('useAIResponse: the sheet save card comes before the DM (#2392)', () =>
       if (call.dmReply) expect(call.dmReply.inCombat).toBe(true);
     });
 
+    it('holds cancelled exploration-cast prose independently of combat state for a reload (#1021)', async () => {
+      vi.mocked(useCombat).mockReturnValue({
+        state: { isInCombat: false, activeEncounter: null },
+        refreshCombatState: vi.fn(async () => null),
+      } as any);
+      beginSheetCast('Acid Splash');
+      vi.mocked(AIService.chatWithDM).mockImplementation((async () => {
+        cancelSheetCast();
+        return { text: 'The acid hisses.', roll_requests: [] };
+      }) as any);
+      try {
+        const reply = await play(
+          sheetCast('acid-splash', 'Acid Splash'),
+          '00000000-0000-4000-8000-000000001021',
+        );
+        expect(reply).toMatchObject({ text: '', localNotice: CANCELLED });
+        expect(handleDmActionsAndTransitions).not.toHaveBeenCalled();
+        const call = vi.mocked(AIService.chatWithDM).mock.calls[0]?.[0] as any;
+        expect(call.dmReply).toMatchObject({ inCombat: false, holdProse: true });
+      } finally {
+        finishSheetCast();
+      }
+    });
+
     it('keeps an exploration sheet cast on the story slot and roll path', async () => {
       // The cancellation signal belongs to the Cast button, not to combat.  Outside combat the
       // server must therefore receive an ordinary narrative turn so story-spell-slots can spend a

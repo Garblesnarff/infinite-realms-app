@@ -227,6 +227,19 @@ describe('persistGeneratedDmReply', () => {
     expect(addMessageCalls).toHaveLength(0);
   });
 
+  test('writes nothing for a cancellable sheet cast, so reload cannot resurrect its prose', async () => {
+    const result = await persistGeneratedDmReply({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      envelope: explorationEnvelope(),
+      holdProse: true,
+    });
+
+    expect(result).toEqual({ persisted: false, reason: 'client_cancellable' });
+    expect(addMessageCalls).toHaveLength(0);
+  });
+
   test('writes nothing for a roll turn and says why', async () => {
     const result = await persistGeneratedDmReply({
       userId: 'user-1',
