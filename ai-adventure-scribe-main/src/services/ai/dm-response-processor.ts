@@ -41,7 +41,14 @@ function responseTextForDeferredWork(rawResponse: string, fallback: string): str
       .replace(/^```(?:json)?\s*/, '')
       .replace(/\s*```$/, '');
     const parsed = JSON.parse(cleaned) as Record<string, unknown>;
-    return typeof parsed.text === 'string' ? parsed.text : fallback;
+    // #1008: a reply nested inside `text` must not be resurrected here. This
+    // re-parse feeds both deferred memory/world extraction AND, on the
+    // non-deferred path, the funnel's returned text (processDMResponseSideEffects
+    // replaces result.text with processWorldAndMemories' output) — returning
+    // the outer `text` verbatim would undo the unwrap processDMResponse
+    // already applied and put the raw envelope back in chat.
+    const unwrapped = unwrapNestedReplyEnvelope(parsed);
+    return typeof unwrapped.text === 'string' ? unwrapped.text : fallback;
   } catch {
     // Plain-text responses with an XML envelope need the original source for deferred
     // persistence. Otherwise retain the already-cleaned projection for legacy plain text.
@@ -192,6 +199,174 @@ export async function processDMResponseSideEffects(
  * Extracted from AIService.ts
  * Processes raw AI response into structured format, handling voice, assets, XML tags, and world updates.
  */
+/**
+ * Top-level keys a DM reply carries besides `text` — the same list the server's
+ * `nestedReplyEnvelope` (server-bun/src/services/dm/narration-text.ts) uses. A payload
+ * nested inside `text` counts as a reply only when at least two of them are present:
+ * a quoted JSON object that merely has a `text` member is narration, not an envelope.
+ */
+const REPLY_KEYS = [
+  'options',
+  'narration_segments',
+  'roll_requests',
+  'combat_transition',
+  'combat_exits',
+  'combat_entry_pending',
+  'combatants',
+  'combat_actions',
+  'map_actions',
+  'handout_actions',
+  'damage',
+  'xp_award',
+  'scene_spec',
+] as const;
+
+const isEmptyReplyValue = (value: unknown): boolean =>
+  value === undefined ||
+  value === null ||
+  value === '' ||
+  (Array.isArray(value) && value.length === 0) ||
+  (typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.keys(value as Record<string, unknown>).length === 0);
+
+/** The parsed inner envelope when a reply's `text` is itself a serialized DM reply. */
+function nestedReplyEnvelope(text: string): Record<string, any> | null {
+  const cleaned = text
+    .trim()
+    .replace(/^```(?:json)?\s*/, '')
+    .replace(/\s*```$/, '');
+  if (!cleaned.startsWith('{')) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    // A nested envelope serialized as sloppily as the reply carrying it — a
+    // raw newline inside its text, a trailing comma — still counts (#1008).
+    parsed = tolerantParseReplyEnvelope(cleaned);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  const envelope = parsed as Record<string, unknown>;
+  if (typeof envelope.text !== 'string') return null;
+  const replyKeys = REPLY_KEYS.filter((key) => key in envelope).length;
+  return replyKeys >= 2 ? (envelope as Record<string, any>) : null;
+}
+
+/** Escape raw control characters (a literal newline, tab, …) inside JSON string literals. */
+function escapeRawControlCharsInStrings(json: string): string {
+  let out = '';
+  let inString = false;
+  let escaped = false;
+  for (const ch of json) {
+    if (escaped) {
+      out += ch;
+      escaped = false;
+      continue;
+    }
+    if (inString && ch === '\\') {
+      out += ch;
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      out += ch;
+      continue;
+    }
+    if (inString && ch < ' ') {
+      out +=
+        ch === '\n'
+          ? '\\n'
+          : ch === '\r'
+            ? '\\r'
+            : ch === '\t'
+              ? '\\t'
+              : `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`;
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+/**
+ * #1008: tolerant re-parse for a reply strict JSON.parse rejects — trailing
+ * commas, stray spacing, a raw newline inside a string. The parse fallbacks in
+ * processDMResponse otherwise hand the raw payload to the chat, so a nested
+ * envelope the strict branch would have unwrapped prints verbatim. Returns
+ * null when the text is not a JSON object even after cleanup (plain-text
+ * replies keep their existing fallback paths).
+ */
+function tolerantParseReplyEnvelope(rawResponse: string): Record<string, any> | null {
+  try {
+    const cleaned = escapeRawControlCharsInStrings(
+      rawResponse
+        .trim()
+        .replace(/^```(?:json)?\s*/, '')
+        .replace(/\s*```$/, ''),
+    )
+      .replace(/,\s*}/g, '}') // Remove trailing commas before }
+      .replace(/,\s*]/g, ']') // Remove trailing commas before ]
+      .replace(/}\s*{/g, '},{') // Fix missing commas between objects
+      .replace(/"\s*:\s*"([^"]*?)"\s*([,}])/g, '":"$1"$2'); // Fix spacing issues
+    const parsed: unknown = JSON.parse(cleaned);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, any>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * #1008: unwrap a DM reply the model nested inside its own `text` field, so the story
+ * text carries only narration on this side of the wire too. The server normalizes the
+ * same shape at the provider (`normalizeReplyNarration`, #875/#992), but every client
+ * delivery route — the combat-resolution follow-up narration included — renders what
+ * THIS funnel returns, and a nested envelope that reaches it (a regeneration, a
+ * failover candidate, a reply re-serialized between hops) was handed to the chat as
+ * raw JSON. Mirrors the server's rule: bounded unwrapping, the inner reply's fields
+ * adopted wherever the outer carries only the empty/default value (a field the outer
+ * actually set wins; `combat_transition: 'none'` counts as unset), and it fails open —
+ * a normalization that would empty a non-empty narration leaves the reply untouched.
+ */
+export function unwrapNestedReplyEnvelope(
+  envelope: Record<string, any>,
+): Record<string, any> {
+  if (typeof envelope.text !== 'string') return envelope;
+  const originalText = envelope.text;
+  let current = envelope;
+  for (let level = 0; level < 3; level += 1) {
+    const inner = nestedReplyEnvelope(current.text);
+    if (!inner) break;
+    const staged: Record<string, any> = { ...current };
+    for (const [key, value] of Object.entries(inner)) {
+      if (key === 'text' || isEmptyReplyValue(value)) continue;
+      if (key === 'combat_transition') {
+        if (staged.combat_transition === 'none' || isEmptyReplyValue(staged.combat_transition)) {
+          staged.combat_transition = value;
+        }
+        continue;
+      }
+      if (key === 'options') {
+        if (isEmptyReplyValue(staged.options) && Array.isArray(value)) {
+          staged.options = value.filter(
+            (option): option is string => typeof option === 'string',
+          );
+        }
+        continue;
+      }
+      if (isEmptyReplyValue(staged[key])) staged[key] = value;
+    }
+    staged.text = inner.text as string;
+    current = staged;
+  }
+  if (current !== envelope && current.text.trim() === '' && originalText.trim() !== '') {
+    return envelope;
+  }
+  return current;
+}
+
 export async function processDMResponse(params: ProcessDMResponseParams): Promise<AIResponse> {
   const {
     rawResponse,
@@ -223,6 +398,15 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     structuredResponse = JSON.parse(cleaned);
   } catch {
     // Backward-compatible fallback for providers that do not support schemas.
+    // A reply strict JSON rejects still parses tolerantly here, so it reaches
+    // the unwrap below instead of printing raw through the fallbacks (#1008).
+    structuredResponse = tolerantParseReplyEnvelope(rawResponse);
+  }
+  // #1008: a reply nested inside `text` is unwrapped before anything reads the
+  // envelope, so the narration, roll requests and combat fields the chat and the
+  // resolution step consume are the inner reply's — never the raw payload.
+  if (structuredResponse) {
+    structuredResponse = unwrapNestedReplyEnvelope(structuredResponse);
   }
   const responseText =
     typeof structuredResponse?.text === 'string' ? structuredResponse.text : rawResponse;
@@ -349,6 +533,19 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     }
   } else {
     result = applyAssetPostProcessing({ text: rawResponse });
+  }
+
+  // #1008: whichever fallback produced the text, a serialized reply envelope
+  // is not narration — if the final text still is one (an extraction above
+  // recovered it whole), render the inner reply's narration instead. Fails
+  // open like the unwrap: an envelope whose narration is empty leaves the
+  // text untouched.
+  const residualEnvelope = nestedReplyEnvelope(result.text);
+  if (residualEnvelope) {
+    const unwrappedText = unwrapNestedReplyEnvelope(residualEnvelope).text;
+    if (typeof unwrappedText === 'string' && unwrappedText.trim() !== '') {
+      result = { ...result, text: unwrappedText };
+    }
   }
 
   const looksLikeJsonSoup =

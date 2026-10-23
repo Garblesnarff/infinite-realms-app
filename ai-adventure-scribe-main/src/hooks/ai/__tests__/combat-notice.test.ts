@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   COMBAT_INTENT_SCHEMA_REJECTED,
   combatRefusalReason,
+  playerFacingRefusal,
   redactedCombatIntent,
   repairedTurnNotice,
   turnNotice,
@@ -20,6 +21,26 @@ describe('combat refusal notices', () => {
     ],
   ])('maps %s to the player-facing notice', (reason, expected) => {
     expect(turnNotice({ id: 'player' }, true, reason)).toBe(expected);
+  });
+
+  it('surfaces the late-declaration reason and never names the player as their own blocker (#1008)', () => {
+    // The refusal resolveActorTurn throws when the turn-absorb's advance lands
+    // on the player: details carry a distinguishing reason and NO
+    // currentParticipantId, because the holder is the player themselves.
+    const refusal = {
+      message: 'That action was declared in a turn that has already ended',
+      details: { reason: 'declared_after_turn_ended' },
+    };
+    expect(combatRefusalReason(refusal)).toBe('declared_after_turn_ended');
+    // The player-facing line is the engine's own sentence — crucially not
+    // "it is not your turn — Rogue Testee acts now".
+    expect(
+      playerFacingRefusal(refusal, {
+        actorIsPlayer: true,
+        actor: 'Rogue Testee',
+        turnHolder: null,
+      }),
+    ).toBe('That action was declared in a turn that has already ended');
   });
 
   it('names who acts next after a repair without calling it out of turn', () => {
