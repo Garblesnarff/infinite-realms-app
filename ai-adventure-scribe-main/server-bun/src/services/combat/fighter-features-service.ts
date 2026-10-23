@@ -35,7 +35,7 @@ import { rollDie } from '../../lib/rng.js';
 import { CombatHPService } from '../combat-hp-service.js';
 import { ClassFeatureUsageService } from '../progression/class-feature-usage-service.js';
 
-const FIGHTER_CLASS = 'Fighter';
+export const FIGHTER_CLASS = 'Fighter';
 export const SECOND_WIND_NAME = 'Second Wind';
 export const ACTION_SURGE_NAME = 'Action Surge';
 

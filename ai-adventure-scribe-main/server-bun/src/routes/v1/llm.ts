@@ -969,6 +969,27 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             layOnHandsDirective = null;
           }
         }
+        // #975: a typed Second Wind in combat executes the same `second_wind`
+        // intent the tray button posts, before the DM narrates, so the reply
+        // carries the engine's truth (the heal or the clear refusal) instead
+        // of ignoring or inventing it. Gated on dmReply like Lay on Hands:
+        // narration regens carry no dmReply, and resolving twice would spend
+        // the use twice.
+        // Dynamic import: the resolver pulls in the database client at load time.
+        let secondWindDirective: string | null = null;
+        if (dmReply && defenseSessionId && typeof playerInput === 'string') {
+          try {
+            const { resolveCombatSecondWind } =
+              await import('../../services/dm/combat-second-wind.js');
+            secondWindDirective = await resolveCombatSecondWind({
+              playerInput,
+              sessionId: defenseSessionId,
+              userId,
+            });
+          } catch {
+            secondWindDirective = null;
+          }
+        }
         // #2514: the DM prompt receives the engine-decided creature count and
         // names BEFORE it narrates the approach. For a declared attack the
         // target is known before generation, so sizing runs here and the
@@ -1008,9 +1029,13 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             : untargetedSpell
               ? appendUntargetedSpellDirective(prompt, untargetedSpell.name)
               : prompt;
-        const llmPrompt = layOnHandsDirective
-          ? `${llmPromptBase}\n\n${layOnHandsDirective}`
-          : llmPromptBase;
+        const engineDirectives = [layOnHandsDirective, secondWindDirective].filter(
+          (directive): directive is string => directive !== null,
+        );
+        const llmPrompt =
+          engineDirectives.length > 0
+            ? `${llmPromptBase}\n\n${engineDirectives.join('\n\n')}`
+            : llmPromptBase;
 
         const generateOnce = (): Promise<LLMResponse> =>
           LLMProviderService.generate({

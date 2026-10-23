@@ -76,6 +76,10 @@ let generatedText = JSON.stringify({
   text: 'You catch your breath and press on.',
   rest: { type: 'short' },
 });
+// #975: prompts handed to the stubbed provider, and an optional hook the
+// stub runs on each generate call (see the provider stub below).
+let generatePrompts: string[] = [];
+let beforeGenerate: (() => Promise<void>) | null = null;
 mock.module('../../../middleware/admin.js', () => ({ isAdmin: () => false }));
 mock.module('../../../middleware/rate-limit.js', () => ({
   planRateLimit: () => new Elysia({ name: 'test-plan-rate-limit' }),
@@ -92,11 +96,19 @@ mock.module('../../../services/ai-usage-service.js', () => ({
 }));
 mock.module('../../../services/llm-provider-service.js', () => ({
   LLMProviderService: {
-    generate: async () => ({
-      text: generatedText,
-      provider: 'openrouter',
-      model: 'test/model',
-    }),
+    generate: async (args: { prompt: string }) => {
+      // #975: the Second Wind wiring block asserts on the prompt the route
+      // actually hands the provider (the directive rides in it). The hook
+      // lets that block snapshot the world at generation time — the
+      // resolver healed pre-generation, the reply persists post-generation.
+      if (beforeGenerate) await beforeGenerate();
+      generatePrompts.push(args.prompt);
+      return {
+        text: generatedText,
+        provider: 'openrouter',
+        model: 'test/model',
+      };
+    },
   },
 }));
 // #751: engine chat lines (postEngineChatLine) write through
@@ -699,4 +711,302 @@ describeWithDb('typed long rest through the DM route posts its engine line (#751
     expect(events).toHaveLength(1);
     expect(await hpOf(world.characterId)).toBe(12);
   });
+});
+
+/**
+ * #975 FIX round (strategist 6347116450, Required 1): the ROUTE-level test.
+ * The resolver suite (encounter-lifecycle.real-db.test.ts) drives
+ * `resolveCombatSecondWind` directly, so nothing pinned the llm.ts wiring:
+ * the dmReply gate, the defenseSessionId the resolver is handed, or the
+ * directive reaching the provider prompt. This block drives
+ * POST /v1/llm/generate end to end — real route, real resolver, real
+ * intent, real database; only the provider is stubbed (file scope above) —
+ * with the same encounter shape the resolver suite seeds: an L1 Fighter at
+ * 1/12 HP in an active encounter, hero holding the turn.
+ *
+ * On main this fails: main's llm.ts has no Second Wind wiring, so no heal
+ * lands and no <second_wind> directive reaches the captured prompt.
+ *
+ * The generate bodies carry NO combatEntry: the real client builds one
+ * only for turns that are not yet in combat (ai-service.ts), so an
+ * in-combat turn's wire body is top-level sessionId + dmReply alone —
+ * which is also what pins the route's sessionId-sourced defenseSessionId
+ * hand-off to the resolver.
+ */
+describeWithDb('typed Second Wind through the DM generate route (#975)', () => {
+  let db: ReturnType<typeof realDb>;
+  const swUserId = testId('975-user');
+
+  const SW_MAX_HP = 12;
+
+  const request = (path: string, method: string, body?: unknown): Promise<Response> =>
+    pipeline.handle(
+      new Request(`http://localhost${path}`, {
+        method,
+        headers: authHeaders,
+        body: body === undefined ? undefined : JSON.stringify(body),
+      }),
+    );
+
+  interface FighterWorld {
+    characterId: string;
+    sessionId: string;
+    participantId: string;
+    featureId: string;
+  }
+
+  /** The migration seed shape: bonus_action, short_rest, 1 use. */
+  const ensureSecondWindRow = async (): Promise<string> => {
+    const existing = await db
+      .select({ id: classFeaturesLibrary.id })
+      .from(classFeaturesLibrary)
+      .where(
+        and(
+          eq(classFeaturesLibrary.className, 'Fighter'),
+          eq(classFeaturesLibrary.featureName, 'Second Wind'),
+        ),
+      )
+      .limit(1);
+    if (existing.length > 0) return existing[0].id;
+    const [row] = await db
+      .insert(classFeaturesLibrary)
+      .values({
+        className: 'Fighter',
+        featureName: 'Second Wind',
+        levelAcquired: 1,
+        description: 'test',
+        usageType: 'bonus_action',
+        usesPerRest: 'short_rest',
+        usesCount: 1,
+      })
+      .returning({ id: classFeaturesLibrary.id });
+    return row.id;
+  };
+
+  const seedFighterWorld = async (label: string): Promise<FighterWorld> => {
+    const featureId = await ensureSecondWindRow();
+    const [{ id: campaignId }] = await db
+      .insert(campaigns)
+      .values({ userId: swUserId, name: testId(`${label}-camp`) })
+      .returning({ id: campaigns.id });
+    const [{ id: characterId }] = await db
+      .insert(characters)
+      .values({
+        userId: swUserId,
+        campaignId,
+        name: testId(label),
+        level: 1,
+        class: 'Fighter',
+        classLevels: [{ className: 'Fighter', level: 1 }],
+      })
+      .returning({ id: characters.id });
+    await db.insert(characterStats).values({
+      characterId,
+      strength: 16,
+      armorClass: 15,
+      maxHitPoints: SW_MAX_HP,
+      currentHitPoints: SW_MAX_HP,
+      speed: 30,
+    });
+    await db.insert(characterFeatures).values({
+      characterId,
+      featureId,
+      usesRemaining: 1,
+      isActive: true,
+      acquiredAtLevel: 1,
+    });
+    const [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId, characterId, sessionNumber: 1, status: 'active' })
+      .returning({ id: gameSessions.id });
+    const [{ id: encounterId }] = await db
+      .insert(combatEncounters)
+      .values({ sessionId, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
+      .returning({ id: combatEncounters.id });
+    const inserted = await db
+      .insert(combatParticipants)
+      .values([
+        {
+          encounterId,
+          characterId,
+          name: 'Route Fighter',
+          participantType: 'player',
+          turnOrder: 0,
+          initiative: 20,
+          armorClass: 15,
+          maxHp: SW_MAX_HP,
+          speed: 30,
+        },
+        {
+          encounterId,
+          name: 'Training Golem',
+          participantType: 'monster',
+          turnOrder: 1,
+          initiative: 10,
+          armorClass: 1,
+          maxHp: 200,
+          speed: 30,
+        },
+      ])
+      .returning({ id: combatParticipants.id, turnOrder: combatParticipants.turnOrder });
+    const participantId = inserted.find((row) => row.turnOrder === 0)!.id;
+    const monsterId = inserted.find((row) => row.turnOrder === 1)!.id;
+    await db.insert(combatParticipantStatus).values([
+      { participantId, currentHp: 1, maxHp: SW_MAX_HP, isConscious: true },
+      { participantId: monsterId, currentHp: 200, maxHp: 200, isConscious: true },
+    ]);
+    // The saved player message the resolver reads the declaration back
+    // from (the retry guard keys on it), exactly as the client saves the
+    // line before the generate call.
+    await db.insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'player',
+      speakerId: characterId,
+      message: 'I use Second Wind',
+    });
+    return { characterId, sessionId, participantId, featureId };
+  };
+
+  const heroHp = async (world: FighterWorld): Promise<number> =>
+    (
+      await db
+        .select({ hp: combatParticipantStatus.currentHp })
+        .from(combatParticipantStatus)
+        .where(eq(combatParticipantStatus.participantId, world.participantId))
+    )[0].hp;
+
+  const usesRemaining = async (world: FighterWorld): Promise<number | null> =>
+    (
+      await db
+        .select({ uses: characterFeatures.usesRemaining })
+        .from(characterFeatures)
+        .where(
+          and(
+            eq(characterFeatures.characterId, world.characterId),
+            eq(characterFeatures.featureId, world.featureId),
+          ),
+        )
+    )[0]?.uses ?? null;
+
+  const generateSecondWindTurn = async (world: FighterWorld): Promise<Response> => {
+    generatedText = JSON.stringify({
+      text: 'The fighter steadies, breath returning in a rush.',
+    });
+    return request('/v1/llm/generate', 'POST', {
+      prompt: 'The golem looms over the wounded fighter. What happens?',
+      player_input: 'I use Second Wind',
+      sessionId: world.sessionId,
+      dmReply: { messageId: '97597597-1111-4222-8333-444444444444', inCombat: true },
+      provider: 'openrouter',
+      requestType: 'user',
+      maxTokens: 8192,
+      temperature: 0.9,
+    });
+  };
+
+  beforeAll(async () => {
+    db = realDb();
+    userId = swUserId;
+  });
+
+  afterAll(async () => {
+    await closeRealDb();
+  });
+
+  it('heals through the real route and the directive reaches the provider prompt', async () => {
+    const world = await seedFighterWorld('975-route');
+    expect(await heroHp(world)).toBe(1);
+    expect(await usesRemaining(world)).toBe(1);
+
+    generatePrompts = [];
+    const res = await generateSecondWindTurn(world);
+    expect(res.status).toBe(200);
+
+    // The heal landed through the route, not just the resolver: the
+    // participant is healed in range (1d10 + 1 at L1, capped at max HP;
+    // seeded at 1/12 so the whole range is reachable) and the sheet use
+    // is spent.
+    const hpAfter = await heroHp(world);
+    const healed = hpAfter - 1;
+    expect(healed).toBeGreaterThanOrEqual(2);
+    expect(healed).toBeLessThanOrEqual(11);
+    expect(hpAfter).toBeLessThanOrEqual(SW_MAX_HP);
+    expect(await usesRemaining(world)).toBe(0);
+
+    // The directive reached the prompt the provider was actually given,
+    // carrying the engine's own numbers.
+    expect(generatePrompts.length).toBeGreaterThan(0);
+    const promptSent = generatePrompts.join('\n');
+    expect(promptSent).toContain('<second_wind>');
+    expect(promptSent).toContain(`regained ${healed} HP`);
+    expect(promptSent).toContain(`(now ${hpAfter}/${SW_MAX_HP})`);
+  }, 30_000);
+
+  it('without the dmReply gate the route resolves nothing (narration regen shape)', async () => {
+    // The resolver runs pre-generation in llm.ts, gated on dmReply:
+    // narration regens carry none, and resolving there would spend the
+    // use twice. This test sends the regen shape (same words, same
+    // session state, no dmReply) for `control`, and — from inside that
+    // request's own provider call, via the beforeGenerate hook — runs a
+    // second, dmReply-carrying turn for a twin world seeded identically.
+    // The hook fires after the regen request's resolver step would have
+    // run (the resolver is pre-generation), so control's HP read inside
+    // the hook proves the ungated resolution never happened; the twin's
+    // heal in the same window proves the harness could have seen one.
+    const control = await seedFighterWorld('975-control');
+    expect(await heroHp(control)).toBe(1);
+
+    let twinStatus: number | undefined;
+    let twinHp: number | undefined;
+    let controlHpInside: number | undefined;
+    let twinPromptCount = 0;
+    beforeGenerate = async () => {
+      // One-shot: clear BEFORE the nested turn, whose own provider call
+      // would otherwise re-enter this hook and recurse without bound.
+      beforeGenerate = null;
+      const twin = await seedFighterWorld('975-gated');
+      const resTwin = await generateSecondWindTurn(twin);
+      twinStatus = resTwin.status;
+      twinHp = await heroHp(twin);
+      controlHpInside = await heroHp(control);
+      // The stub pushes a prompt only after this hook returns, so every
+      // prompt recorded so far belongs to the twin's turn; the prompts
+      // recorded from here on belong to the regen-shaped request itself.
+      twinPromptCount = generatePrompts.length;
+    };
+    generatePrompts = [];
+    generatedText = JSON.stringify({
+      text: 'The fighter steadies, breath returning in a rush.',
+    });
+    try {
+      const res = await request('/v1/llm/generate', 'POST', {
+        prompt: 'The golem looms over the wounded fighter. What happens?',
+        player_input: 'I use Second Wind',
+        sessionId: control.sessionId,
+        provider: 'openrouter',
+        requestType: 'user',
+        maxTokens: 8192,
+        temperature: 0.9,
+      });
+      expect(res.status).toBe(200);
+    } finally {
+      beforeGenerate = null;
+    }
+
+    // The twin turn healed through the gated path...
+    expect(twinStatus).toBe(200);
+    expect(twinHp).toBeGreaterThan(1);
+    // ...while the regen-shaped request resolved nothing: not before
+    // its provider call (the in-hook read), and not by the time its own
+    // reply had persisted (the final reads).
+    expect(controlHpInside).toBe(1);
+    expect(await heroHp(control)).toBe(1);
+    expect(await usesRemaining(control)).toBe(1);
+    // The prompt split matches: the twin's prompts carry the directive,
+    // none of the regen-shaped request's own prompts do.
+    expect(generatePrompts.slice(0, twinPromptCount).join('\n')).toContain('<second_wind>');
+    const ownPrompts = generatePrompts.slice(twinPromptCount);
+    expect(ownPrompts.length).toBeGreaterThan(0);
+    expect(ownPrompts.join('\n')).not.toContain('<second_wind>');
+  }, 30_000);
 });
