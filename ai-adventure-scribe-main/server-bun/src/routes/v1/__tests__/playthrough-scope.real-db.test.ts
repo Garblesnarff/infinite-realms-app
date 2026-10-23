@@ -32,6 +32,7 @@ import {
   combatParticipants,
   combatParticipantStatus,
   gameSessions,
+  npcs,
   tacticalMaps,
   sessionChronicles,
   spellSlotUsageLog,
@@ -40,6 +41,7 @@ import { IR_VOICES } from '../../../../../shared/npc-voices';
 import { initialMemoryWireBodies } from '../../../../../shared/test-fixtures/continuation-session-init-save';
 import { initialGreetingWireBody } from '../../../../../shared/test-fixtures/initial-greeting-save';
 import { npcVoiceCastSegments } from '../../../../../shared/test-fixtures/npc-voice-cast';
+import { setRngSeed } from '../../../lib/rng.js';
 import {
   closeRealDb,
   describeWithDb,
@@ -1172,6 +1174,221 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
       });
       expect(after.encounters[0].version).toBe(before.encounters[0].version + 1);
       expect(after.hp).toEqual(before.hp);
+    });
+  });
+
+  describe('area spell save outcomes on the area path (#1058)', () => {
+    // Hark's N23-012 repro, through the real route and the real rows: a sheet-cast Burning
+    // Hands (the wire body the client's converted sheet cast sends, #1029/#1058) against one
+    // creature in the cone. The creature's DEX save bonus is authored on its NPC row — the
+    // producer `getParticipantAbilityProfile` reads — at +30 (always passes) or -30 (always
+    // fails), and the dice are seeded, so the two casts roll the same damage: the failed
+    // save takes it in full, the passed save takes floor(half).
+    let sessionId: string;
+    let heroId: string;
+    let monsterId: string;
+
+    const seedAreaCombat = async (dexSaveBonus: number): Promise<void> => {
+      // The session row is inserted directly, as the #2685 block inserts user B's: this
+      // file already spends the default rate-limit bucket's whole minute on routed
+      // session creations, and two more POST /v1/sessions would 429 later tests.
+      const [session] = await database
+        .insert(gameSessions)
+        .values({ campaignId, characterId: aliceId, sessionNumber: 1, status: 'active' })
+        .returning({ id: gameSessions.id });
+      if (!session) throw new Error('area-cast session missing');
+      sessionId = session.id;
+      await database
+        .update(characters)
+        .set({ class: 'Wizard', level: 5, knownSpells: 'fireball,burning-hands' })
+        .where(eq(characters.id, aliceId));
+      await database.insert(characterStats).values({
+        characterId: aliceId,
+        armorClass: 12,
+        speed: 30,
+        maxHitPoints: 20,
+        currentHitPoints: 20,
+        intelligence: 16,
+      });
+      await database.insert(characterSpellSlots).values([
+        { characterId: aliceId, spellLevel: 1, totalSlots: 4, usedSlots: 0 },
+        { characterId: aliceId, spellLevel: 3, totalSlots: 2, usedSlots: 0 },
+      ]);
+      const [npc] = await database
+        .insert(npcs)
+        .values({
+          campaignId,
+          name: 'Glass-Hide Ape',
+          stats: { dexterity: 10, savingThrows: { dex: dexSaveBonus } },
+        })
+        .returning({ id: npcs.id });
+      if (!npc) throw new Error('area-cast npc missing');
+      const [{ id: encounterId }] = await database
+        .insert(combatEncounters)
+        .values({
+          sessionId,
+          status: 'active',
+          currentRound: 1,
+          // Alice holds the turn: a sheet cast is the player's own action, taken on
+          // their turn, as in the playtest.
+          currentTurnOrder: 1,
+          version: 1,
+        })
+        .returning({ id: combatEncounters.id });
+      const participants = await database
+        .insert(combatParticipants)
+        .values([
+          {
+            encounterId,
+            npcId: npc.id,
+            name: 'Glass-Hide Ape',
+            participantType: 'monster',
+            turnOrder: 0,
+            initiative: 20,
+            armorClass: 12,
+            maxHp: 40,
+            speed: 30,
+          },
+          {
+            encounterId,
+            characterId: aliceId,
+            name: 'Alice',
+            participantType: 'player',
+            turnOrder: 1,
+            initiative: 10,
+            armorClass: 12,
+            maxHp: 20,
+            speed: 30,
+          },
+        ])
+        .returning({ id: combatParticipants.id, turnOrder: combatParticipants.turnOrder });
+      const monster = participants.find((row) => row.turnOrder === 0);
+      const hero = participants.find((row) => row.turnOrder === 1);
+      if (!monster || !hero) throw new Error('area-cast participants missing');
+      monsterId = monster.id;
+      heroId = hero.id;
+      await database.insert(combatParticipantStatus).values([
+        { participantId: heroId, currentHp: 20, maxHp: 20, isConscious: true },
+        { participantId: monsterId, currentHp: 40, maxHp: 40, isConscious: true },
+      ]);
+      const mapId = crypto.randomUUID();
+      const state: TacticalMap = {
+        id: mapId,
+        sessionId,
+        width: 12,
+        height: 10,
+        round: 1,
+        sceneDescription: 'A training yard',
+        cells: Array.from({ length: 10 }, () =>
+          Array.from({ length: 12 }, () => ({
+            terrain: 'floor',
+            blocksMovement: false,
+            blocksSight: false,
+            cover: 0,
+            elevation: 0,
+          })),
+        ),
+        entities: [
+          {
+            id: heroId,
+            slug: 'alice',
+            x: 3,
+            y: 3,
+            size: 'medium',
+            type: 'pc',
+            speedFeet: 30,
+            movementRemaining: 30,
+          },
+          {
+            id: monsterId,
+            slug: 'glass-hide-ape',
+            x: 5,
+            y: 3,
+            size: 'medium',
+            type: 'monster',
+            speedFeet: 30,
+            movementRemaining: 30,
+          },
+        ],
+        pendingDmCorrection: '',
+        pendingDmFacts: [],
+        pendingDmFactActions: [],
+        dmSilentTurns: 0,
+      };
+      await database.insert(tacticalMaps).values({ id: mapId, sessionId, state, active: true });
+    };
+
+    /**
+     * The body `executeAoECombatAction` posts for the sheet cast aimed at the ape's cell:
+     * phase 'propose' (the route auto-confirms a Self-range player cast into the resolve),
+     * and slotLevel 1 — the slot the sheet's tag declared (`spell_level=level 1`), which
+     * the sheet-cast synthesis carries into the converted area action (#1058). A null slot
+     * is refused for a leveled spell (missing_spell_slot_level) — verified against this route.
+     */
+    const castBurningHands = async (): Promise<{ status: number; json: Json }> =>
+      call('POST', `/v1/sessions/${sessionId}/tactical-map/aoe-cast`, {
+        phase: 'propose',
+        actorId: heroId,
+        spellId: 'burning-hands',
+        origin: { x: 5, y: 3 },
+        direction: null,
+        slotLevel: 1,
+        actionOrigin: 'sheet_cast',
+      });
+
+    const monsterHp = async (): Promise<number> => {
+      const [row] = await database
+        .select()
+        .from(combatParticipantStatus)
+        .where(eq(combatParticipantStatus.participantId, monsterId));
+      if (!row) throw new Error('monster status missing');
+      return row.currentHp;
+    };
+
+    test('a target that fails its save takes the full rolled damage', async () => {
+      await seedAreaCombat(-30);
+      setRngSeed(1058);
+      try {
+        const { status, json } = await castBurningHands();
+        expect(status).toBe(200);
+        const outcome = (json.result.results as Json[])[0] as Json;
+        expect(outcome.spellName).toBe('Burning Hands');
+        expect(outcome.saved).toBe(false);
+        // Seed 1058 rolls 3d6 = 11 on this fixture (asserted exactly, so the seeded
+        // premise is visible rather than inferred). A failed save takes it in full:
+        // the full rolled damage is the final damage, and the persisted HP falls by it.
+        expect(outcome.damage).toBe(11);
+        expect(outcome.finalDamage).toBe(11);
+        expect(await monsterHp()).toBe(29);
+        const target = (json.delta.targets as Json[]).find((row) => row.entityId === monsterId);
+        expect(target).toMatchObject({ saved: false, finalDamage: outcome.finalDamage });
+      } finally {
+        setRngSeed(undefined);
+      }
+    });
+
+    test('a target that passes its save takes half the rolled damage, rounded down (#1058)', async () => {
+      await seedAreaCombat(30);
+      setRngSeed(1058);
+      try {
+        const { status, json } = await castBurningHands();
+        expect(status).toBe(200);
+        const outcome = (json.result.results as Json[])[0] as Json;
+        expect(outcome.spellName).toBe('Burning Hands');
+        expect(outcome.saved).toBe(true);
+        // The same seed on the same fixture rolls the same 3d6 = 11 the failed save
+        // above took in full — asserted on this cast's own outcome, so the test stands
+        // alone. A successful save against Burning Hands halves it, rounded down:
+        // 11 is odd, so floor (5) is distinguishable from round/ceil (6).
+        expect(outcome.damage).toBe(11);
+        expect(outcome.finalDamage).toBe(Math.floor((outcome.damage as number) / 2));
+        expect(outcome.finalDamage).toBe(5);
+        expect(await monsterHp()).toBe(35);
+        const target = (json.delta.targets as Json[]).find((row) => row.entityId === monsterId);
+        expect(target).toMatchObject({ saved: true, finalDamage: outcome.finalDamage });
+      } finally {
+        setRngSeed(undefined);
+      }
     });
   });
 

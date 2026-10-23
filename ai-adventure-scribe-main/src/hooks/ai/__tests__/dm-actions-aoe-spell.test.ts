@@ -351,28 +351,109 @@ describe('the sheet-Cast Burning Hands at level 1 (#2304)', () => {
     );
   });
 
-  it('says it was not resolved when the DM declared no action for it at all', async () => {
-    // The DM answers with prose only, and the zero-action repair gets prose only too.
-    vi.mocked(AIService.chatWithDM).mockResolvedValue({
-      text: 'still prose',
-      combat_actions: [],
-    } as any);
+  it('casts it through the area path when the DM declared no action for a sheet cast (#1058)', async () => {
+    // The DM answers with prose only. The sheet's Cast is the player's own declaration, so
+    // the handler asks which creature to aim the cone at and submits the cast itself; the
+    // batch converts it to the area route with that creature's cell as the origin. This is
+    // the refusal #1058 reported ("the DM did not declare it as a combat action") — the
+    // sheet cast no longer depends on the DM declaring the spell.
+    setCombatEntryConfirmationHost({
+      present: (_spec, settle) => {
+        settle(true, 'Headmaster Goldwhisk');
+        return () => {};
+      },
+    });
+    vi.mocked(userDataApi.resolveAoECast).mockResolvedValue(jsonResponse(200, RESOLVED));
 
-    const outcome = await invoke({ result: { text: DM_PROSE, combat_actions: [] } });
+    const outcome = await invoke({
+      characterRecord: undefined,
+      result: { text: DM_PROSE, combat_actions: [] },
+    });
 
-    expect(userDataApi.resolveAoECast).not.toHaveBeenCalled();
+    expect(userDataApi.resolveAoECast).toHaveBeenCalledTimes(1);
+    expect(userDataApi.resolveAoECast).toHaveBeenCalledWith('session-m7', {
+      phase: 'propose',
+      actorId: APPRENTICE_ID,
+      spellId: 'burning-hands',
+      origin: { x: 3, y: 4 },
+      direction: null,
+      // The slot the sheet's tag declared (spell_level=level 1): with no slot the engine
+      // refuses a leveled spell, and an area cast has no roll popup to supply one.
+      slotLevel: 1,
+      actionOrigin: 'sheet_cast',
+    });
     const lines = playerEngineLines(outcome);
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatch(
-      /^⚙️ Engine: The Apprentice's spell "Burning Hands" was refused \(the DM did not declare it as a combat action/,
-    );
-    expect(narrationCall().payload.unresolvedPlayerAction).toContain(
-      "The Apprentice's Burning Hands was NOT resolved",
-    );
-    expect(outcome.responseText.trimEnd().endsWith('The Apprentice, what do you do?')).toBe(true);
+    expect(lines).toEqual([
+      '⚙️ Engine: The Apprentice cast Burning Hands at Headmaster Goldwhisk — DEX save 11 vs DC 13 — FAIL. 12 fire damage. Headmaster Goldwhisk is now at 28 HP.',
+    ]);
+    expect(narrationCall().payload.unresolvedPlayerAction).toBeUndefined();
+    expect(outcome.responseText).not.toContain('did not declare');
+    // The targeted path is not also taken: one cast, not two.
+    expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
   });
 
-  it('names Burning Hands as not cast when the DM casts Chill Touch in its place', async () => {
+  it('spends nothing when the player declines to aim a sheet-cast area spell (#1058)', async () => {
+    setCombatEntryConfirmationHost({
+      present: (_spec, settle) => {
+        settle(false);
+        return () => {};
+      },
+    });
+
+    const outcome = await invoke({
+      characterRecord: undefined,
+      result: { text: DM_PROSE, combat_actions: [] },
+    });
+
+    expect(userDataApi.resolveAoECast).not.toHaveBeenCalled();
+    expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
+    expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
+    expect(outcome.localNotice).toContain('Cast cancelled');
+    expect(outcome.responseText).toBe('');
+  });
+
+  it('casts the sheet spell, not the DM substitute, when the DM declares a different spell (#1058)', async () => {
+    // The player pressed Cast on Burning Hands; the DM declared Chill Touch for them
+    // instead. The sheet cast is the player's own declaration — the same rule #1009 gives
+    // attack spells — so the handler submits Burning Hands itself (aimed by the player's
+    // pick) and the substitute is never cast. Before #1058 the area spell was only named
+    // in a refusal here, because the synthesis skipped area spells entirely.
+    setCombatEntryConfirmationHost({
+      present: (_spec, settle) => {
+        settle(true, 'Headmaster Goldwhisk');
+        return () => {};
+      },
+    });
+    vi.mocked(userDataApi.resolveAoECast).mockResolvedValue(jsonResponse(200, RESOLVED));
+    const chillTouch = {
+      actor_id: APPRENTICE_ID,
+      action_type: 'cast_spell',
+      target_ids: [GOLDWHISK_ID],
+      weapon_id: null,
+      spell_id: 'chill_touch',
+      slot_level: null,
+      movement_feet: 0,
+    };
+
+    const outcome = await invoke({
+      characterRecord: undefined,
+      result: { text: DM_PROSE, combat_actions: [chillTouch] },
+    });
+
+    expect(userDataApi.resolveAoECast).toHaveBeenCalledTimes(1);
+    expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
+    const lines = playerEngineLines(outcome);
+    expect(lines).toEqual([
+      '⚙️ Engine: The Apprentice cast Burning Hands at Headmaster Goldwhisk — DEX save 11 vs DC 13 — FAIL. 12 fire damage. Headmaster Goldwhisk is now at 28 HP.',
+    ]);
+    expect(narrationCall().payload.unresolvedPlayerAction).toBeUndefined();
+  });
+
+  it('names Burning Hands as not cast when the DM casts Chill Touch in its place (typed cast)', async () => {
+    // The substitute branch of the refusal, kept for the shapes the sheet-cast synthesis
+    // does not pre-empt: a typed cast (synthesis is sheet_cast-only) or a spell outside
+    // the client scope. The substitute resolves and is reported as what it was; the
+    // declared spell is named as not cast, never silently swapped (#2304).
     const chillTouch = {
       actor_id: APPRENTICE_ID,
       action_type: 'cast_spell',
@@ -399,10 +480,12 @@ describe('the sheet-Cast Burning Hands at level 1 (#2304)', () => {
       },
     });
 
-    const outcome = await invoke({ result: { text: DM_PROSE, combat_actions: [chillTouch] } });
+    const outcome = await invoke({
+      playerInputOrigin: 'typed',
+      result: { text: DM_PROSE, combat_actions: [chillTouch] },
+    });
 
     const lines = playerEngineLines(outcome);
-    // The substitute resolved and is reported as what it was; the declared spell is not silent.
     expect(lines.some((line) => line.includes('cast Chill Touch'))).toBe(true);
     const refused = lines.filter((line) => line.includes('was refused'));
     expect(refused).toEqual([

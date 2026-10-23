@@ -712,7 +712,11 @@ export async function handleDmActionsAndTransitions(
     declaredPlayerSpell &&
     sheetCaster &&
     sheetSpell &&
-    (sheetSpell.kind === 'attack' || sheetSpell.singleTarget) &&
+    // #1058: an area spell (Burning Hands) belongs here too. The picked creature's cell aims
+    // the area, and the batch converts the targeted shape into the area route — the same
+    // conversion a DM declaration gets (#1029). Without it the sheet's Cast depended on the
+    // DM declaring the spell, and an undeclared cast was refused as never declared.
+    (sheetSpell.kind === 'attack' || sheetSpell.singleTarget || sheetSpell.areaOfEffect) &&
     !alreadyDeclared
   ) {
     const targets = standingHostiles(activeEncounter.participants ?? []);
@@ -747,7 +751,10 @@ export async function handleDmActionsAndTransitions(
             target_ids: [target.id],
             weapon_id: null,
             spell_id: declaredPlayerSpell.spellId,
-            slot_level: null,
+            // The slot the sheet declared. A leveled spell synthesized with no slot is
+            // refused by the engine (missing_spell_slot_level) — for an area spell there
+            // is no roll popup to supply one, so the tag's level is the only source (#1058).
+            slot_level: declaredPlayerSpell.slotLevel,
             movement_feet: 0,
           },
         ],

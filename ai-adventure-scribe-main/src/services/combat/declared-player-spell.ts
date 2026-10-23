@@ -10,12 +10,23 @@ import { playerCombatSpellLabel, resolvePlayerCombatSpell } from './player-comba
  */
 export function declaredSheetSpell(
   message: string | null | undefined,
-): { spellId: string; spellName: string } | null {
+): { spellId: string; spellName: string; slotLevel: number | null } | null {
   if (!message) return null;
-  const tagged = /\bI cast (.+?)\s*\[spell_id=([^,\]\s]+)/i.exec(message);
+  const tagged = /\bI cast (.+?)\s*\[spell_id=([^,\]\s]+)(?:,\s*spell_level=([^\]]+))?/i.exec(
+    message,
+  );
   if (!tagged) return null;
-  const [, name, spellId] = tagged;
-  return { spellId, spellName: playerCombatSpellLabel(spellId, name.trim()) };
+  const [, name, spellId, levelText] = tagged;
+  const level = /level\s+(\d+)/i.exec(levelText ?? '');
+  return {
+    spellId,
+    spellName: playerCombatSpellLabel(spellId, name.trim()),
+    // The slot the sheet declared: the spell's own level (`spell_level=level 1`), which is
+    // the slot a DM declaration of the same cast carries. A cantrip spends no slot, and a
+    // tag with no readable level declares none — the engine's missing-slot refusal is then
+    // the honest outcome, exactly as for a DM declaration that omitted it (#1058).
+    slotLevel: level ? Number(level[1]) : null,
+  };
 }
 
 /**
