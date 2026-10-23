@@ -236,7 +236,14 @@ mock.module('../../../../services/combat/data-access.js', () => ({
           savingThrowProficiencies: [],
           scores: { str: 8, dex: 14, con: 12, int: 16, wis: 12, cha: 10 },
           saveBonuses: {},
-          spellIds: ['fire-bolt', 'burning-hands', 'magic-missile', 'bless'],
+          spellIds: [
+            'fire-bolt',
+            'burning-hands',
+            'magic-missile',
+            'bless',
+            'dancing-lights',
+            'light',
+          ],
         }
       : {
           level: 1,
@@ -308,6 +315,7 @@ mock.module('../../../../services/spell-slots-service.js', () => ({
     },
   },
 }));
+const actionClaims: string[] = [];
 mock.module('../../../../services/combat/combat-turn-resources.js', () => ({
   consumeAction: async () => {},
   claimTurnAction: async () => {},
@@ -323,11 +331,14 @@ mock.module('../../../../services/combat/combat-turn-resources.js', () => ({
   resetTurnResources: async () => {},
   setDefensiveAction: async () => {},
   claimTurnActionAndResolve: async (
-    _participantId: string,
+    participantId: string,
     _encounterId: string,
     version: number,
     resolve: (version: number) => Promise<unknown>,
-  ) => resolve(version),
+  ) => {
+    actionClaims.push(participantId);
+    return resolve(version);
+  },
   claimTurnBonusActionAndResolve: async (
     _participantId: string,
     _encounterId: string,
@@ -563,6 +574,7 @@ beforeEach(() => {
   concentration = null;
   availableSlotLevels = [1];
   slotSpends.length = 0;
+  actionClaims.length = 0;
   holderId = MERLIN_ID;
   drainDropsMerlin = false;
   order.length = 0;
@@ -834,5 +846,50 @@ describe('#902/#709 Bless through the real intent route and resolver', () => {
     expect(response.status).toBeGreaterThanOrEqual(400);
     expect(slotSpends).toHaveLength(0);
     expect(concentration).toBeNull();
+  });
+});
+
+describe('#715 a utility spell casts in combat and spends the action', () => {
+  const cast = (spellId: string, spellName: string) =>
+    postIntent({
+      intent: {
+        type: 'spell',
+        actorId: MERLIN_ID,
+        targetIds: [BALTHAZAR_ID],
+        spellId,
+        spellName,
+      },
+      source: 'dm',
+      origin: 'typed',
+    });
+
+  it('refuses Light, which the engine still does not resolve, and spends nothing', async () => {
+    const response = await cast('light', 'Light');
+    const body = await response.json();
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(JSON.stringify(body)).toContain('no attack roll or damage');
+    expect(actionClaims).toEqual([]);
+    expect(slotSpends).toHaveLength(0);
+    expect(hp.get(BALTHAZAR_ID)).toBe(34);
+  });
+
+  it('casts Dancing Lights as an action: the action is claimed, no slot, no wound', async () => {
+    const response = await cast('dancing-lights', 'Dancing Lights');
+    const body = await response.json();
+    expect(response.status, JSON.stringify(body)).toBe(200);
+    expect(actionClaims).toEqual([MERLIN_ID]);
+    expect(slotSpends).toHaveLength(0);
+    expect(body.result.results[0]).toMatchObject({
+      spellName: 'Dancing Lights',
+      utilityCast: true,
+      finalDamage: 0,
+    });
+    expect(hp.get(BALTHAZAR_ID)).toBe(34);
+    expect(damageCalls).toEqual([]);
+    expect(concentration).toMatchObject({
+      characterId: 'char-merlin',
+      spellId: 'dancing-lights',
+      spellName: 'Dancing Lights',
+    });
   });
 });

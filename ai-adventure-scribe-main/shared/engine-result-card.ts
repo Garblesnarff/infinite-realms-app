@@ -35,6 +35,7 @@ export type EngineBadgeWord =
   | 'TARGET FAILED'
   | 'TARGET SAVED'
   | 'REFUSED'
+  | 'CAST'
   | 'FAILED'
   | 'PASSED';
 export type EngineBadgeTone = 'gold' | 'red' | 'grey';
@@ -123,6 +124,7 @@ export type EngineBadgeOutcome =
   | 'miss'
   | 'target-saved'
   | 'refused'
+  | 'cast'
   | 'death-save-failed'
   | 'death-save-passed';
 
@@ -135,6 +137,7 @@ const BADGE_WORDS: Record<EngineBadgeOutcome, EngineBadgeWord> = {
   miss: 'MISS',
   'target-saved': 'TARGET SAVED',
   refused: 'REFUSED',
+  cast: 'CAST',
   'death-save-failed': 'FAILED',
   'death-save-passed': 'PASSED',
 };
@@ -146,7 +149,12 @@ const BADGE_WORDS: Record<EngineBadgeOutcome, EngineBadgeWord> = {
  */
 export function engineBadge(outcome: EngineBadgeOutcome, side: EngineCardSide): EngineBadge {
   const word = BADGE_WORDS[outcome];
-  if (outcome === 'miss' || outcome === 'target-saved' || outcome === 'refused') {
+  if (
+    outcome === 'miss' ||
+    outcome === 'target-saved' ||
+    outcome === 'refused' ||
+    outcome === 'cast'
+  ) {
     return { word, tone: 'grey', icon: 'dash' };
   }
   const helpsYou =

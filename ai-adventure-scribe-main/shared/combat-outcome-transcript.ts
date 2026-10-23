@@ -89,6 +89,8 @@ export interface CombatEngineResult {
   saveDC?: number;
   saved?: boolean;
   autoHit?: boolean;
+  /** A utility cast spends the action and wounds nothing (#715). */
+  utilityCast?: boolean;
   results?: CombatEngineResult[];
   weaponResolution?: {
     requested?: string | null;

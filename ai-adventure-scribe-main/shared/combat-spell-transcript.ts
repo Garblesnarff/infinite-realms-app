@@ -113,6 +113,12 @@ function formatSpellPart(
   const castClause =
     actor === target ? `${actor} cast ${spell}` : `${actor} cast ${spell} at ${target}`;
 
+  if (result.utilityCast === true) {
+    return card(
+      `⚙️ Engine: ${actor} casts ${spell}. The action is spent. No roll, no damage, no wound.`,
+      { badge: engineBadge('cast', side) },
+    );
+  }
   if (result.autoHit === true) {
     return card(`⚙️ Engine: ${castClause} — AUTO-HIT.${damage ? ` ${damage}` : ''}${trailer}`, {
       badge: engineBadge('auto-hit', side),
