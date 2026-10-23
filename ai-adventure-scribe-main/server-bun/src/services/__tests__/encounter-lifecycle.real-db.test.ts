@@ -1562,3 +1562,211 @@ describeWithDb('a typed Second Wind resolves through the DM-route resolver (#975
     expect(directive).toBeNull();
   });
 });
+
+/**
+ * #1008: a hit that resolves after the player's turn ended must not resolve at all.
+ *
+ * Hark N22-025: "⚙️ Engine: Rogue Testee ended their turn." and the next creature's
+ * turn posted first; the declared dagger hit landed afterwards. The late intent is
+ * DM-sourced (the client settle path submits the player's declared actions that
+ * way), and `resolveActorTurn`'s absorb — the tolerance that stitches the DM's NPC
+ * sequencing when the current participant has spent its action — fired for the
+ * player too: it advanced the order onto the player and resolved the stale
+ * declaration on their next turn. The absorb's advance still stands (the spent
+ * holder really had finished), but a player actor is now refused instead of
+ * resolved: a player's boundary is the explicit `end_turn` their client
+ * synthesizes, never an inference the engine makes on a later turn. The refusal
+ * is distinguishable from an ordinary out-of-turn refusal — it names no current
+ * holder (the holder IS the player, once the advance lands) and carries
+ * `details.reason: 'declared_after_turn_ended'`, so the client renders the
+ * late-declaration message and its keeps-turn logic can stand the turn with
+ * the player instead of announcing the player as their own blocker.
+ *
+ * The spent-current state is arranged by a direct update because it is the wedge
+ * `resolveActorTurn`'s own comment names — an action spent outside this dispatch
+ * (the legacy roll_requests translation, a batch whose second action threw before
+ * its `end_turn`); the dispatch's own auto-advance only fires for actions resolved
+ * through it, so no intent sequence leaves the board in this state on purpose.
+ */
+describeWithDb('a late player action is not absorbed after their turn ended (#1008)', () => {
+  // Bound in beforeAll, not at definition time: the describes above close the
+  // shared client in their afterAll (see the #975 block's note).
+  let db: ReturnType<typeof realDb>;
+  const userId = testId('late-user-1008');
+  const cleanup: Array<() => Promise<unknown>> = [];
+
+  beforeAll(() => {
+    db = realDb();
+  });
+
+  afterAll(async () => {
+    for (const fn of cleanup.reverse()) await fn().catch(() => {});
+    await closeRealDb();
+  });
+
+  async function seedFight(monsterCount: number): Promise<{
+    encounterId: string;
+    heroId: string;
+    monsterIds: string[];
+  }> {
+    const [{ id: campaignId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('camp-1008') })
+      .returning({ id: campaigns.id });
+    cleanup.push(async () => db.delete(campaigns).where(eq(campaigns.id, campaignId)));
+
+    const [{ id: characterId }] = await db
+      .insert(characters)
+      .values({ userId, campaignId, name: testId('hero-1008'), level: 5, class: 'Fighter' })
+      .returning({ id: characters.id });
+    cleanup.push(async () => db.delete(characters).where(eq(characters.id, characterId)));
+
+    await db.insert(characterStats).values({
+      characterId,
+      strength: 20,
+      armorClass: 15,
+      maxHitPoints: 50,
+      currentHitPoints: 50,
+      speed: 30,
+    });
+    await db
+      .insert(inventoryItems)
+      .values({ characterId, name: 'Longsword', itemType: 'weapon', isEquipped: true });
+
+    const [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId, characterId, sessionNumber: 1, status: 'active' })
+      .returning({ id: gameSessions.id });
+    cleanup.push(async () => db.delete(gameSessions).where(eq(gameSessions.id, sessionId)));
+
+    const [{ id: encounterId }] = await db
+      .insert(combatEncounters)
+      .values({ sessionId, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
+      .returning({ id: combatEncounters.id });
+    cleanup.push(async () => db.delete(combatEncounters).where(eq(combatEncounters.id, encounterId)));
+
+    const rows: Array<Record<string, unknown>> = [
+      {
+        encounterId,
+        characterId,
+        name: 'Late Rogue',
+        participantType: 'player',
+        turnOrder: 0,
+        initiative: 20,
+        armorClass: 15,
+        maxHp: 50,
+        speed: 30,
+      },
+    ];
+    for (let i = 0; i < monsterCount; i += 1) {
+      rows.push({
+        encounterId,
+        name: `Holder ${i + 1}`,
+        participantType: 'monster',
+        turnOrder: i + 1,
+        initiative: 10 - i,
+        armorClass: 12,
+        maxHp: 30,
+        speed: 30,
+      });
+    }
+    const inserted = await db
+      .insert(combatParticipants)
+      .values(rows as never)
+      .returning({ id: combatParticipants.id, turnOrder: combatParticipants.turnOrder });
+    const heroId = inserted.find((row) => row.turnOrder === 0)!.id;
+    const monsterIds = inserted
+      .filter((row) => row.turnOrder > 0)
+      .sort((a, b) => a.turnOrder - b.turnOrder)
+      .map((row) => row.id);
+    await db.insert(combatParticipantStatus).values(
+      inserted.map((row) => ({
+        participantId: row.id,
+        currentHp: row.turnOrder === 0 ? 50 : 30,
+        maxHp: row.turnOrder === 0 ? 50 : 30,
+        isConscious: true,
+      })),
+    );
+    cleanup.push(async () =>
+      db.delete(combatParticipants).where(eq(combatParticipants.encounterId, encounterId)),
+    );
+    return { encounterId, heroId, monsterIds };
+  }
+
+  test('the late attack is refused and deals no damage', async () => {
+    const { encounterId, heroId, monsterIds } = await seedFight(1);
+    const [balthazarId] = monsterIds;
+
+    // The player's turn ends; the order moves to Balthazar.
+    await executeCombatIntent(encounterId, { type: 'end_turn', actorId: heroId }, userId, 'dm');
+    // His action is spent outside this dispatch — the wedge state described above.
+    await db
+      .update(combatParticipants)
+      .set({ actionUsed: true })
+      .where(eq(combatParticipants.id, balthazarId));
+
+    let refusal = '';
+    let refusalDetails: { reason?: string; currentParticipantId?: string } | undefined;
+    try {
+      await executeCombatIntent(
+        encounterId,
+        { type: 'attack', actorId: heroId, targetId: balthazarId },
+        userId,
+        'dm',
+      );
+    } catch (error) {
+      refusal = error instanceof Error ? error.message : String(error);
+      refusalDetails = (error as { details?: typeof refusalDetails }).details;
+    }
+    expect(refusal).toContain('declared in a turn that has already ended');
+    // Distinguishable from an ordinary out-of-turn refusal: a reason of its
+    // own, and NO currentParticipantId — the holder the advance landed on is
+    // the player themselves, and naming them would make the client announce
+    // the player as the person whose turn it is instead.
+    expect(refusalDetails?.reason).toBe('declared_after_turn_ended');
+    expect(refusalDetails?.currentParticipantId).toBeUndefined();
+
+    const [status] = await db
+      .select()
+      .from(combatParticipantStatus)
+      .where(eq(combatParticipantStatus.participantId, balthazarId));
+    expect(status.currentHp).toBe(30);
+    // The refusal spent nothing of the player's next turn either.
+    const [hero] = await db
+      .select()
+      .from(combatParticipants)
+      .where(eq(combatParticipants.id, heroId));
+    expect(hero.actionUsed).toBe(false);
+    // The advance stands: the order wrapped past the spent holder onto the
+    // player and the round moved on — this is advance-and-refuse, not
+    // refuse-in-place (which would leave Balthazar current in round 1).
+    const [encounter] = await db
+      .select()
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, encounterId));
+    expect(encounter.currentTurnOrder).toBe(0);
+    expect(encounter.currentRound).toBe(2);
+  });
+
+  test("the absorb still stitches the DM's own creatures' sequencing", async () => {
+    const { encounterId, heroId, monsterIds } = await seedFight(2);
+    const [firstId, secondId] = monsterIds;
+
+    await executeCombatIntent(encounterId, { type: 'end_turn', actorId: heroId }, userId, 'dm');
+    await db
+      .update(combatParticipants)
+      .set({ actionUsed: true })
+      .where(eq(combatParticipants.id, firstId));
+
+    // The DM declares the NEXT creature's action, the shape the absorb exists
+    // for: without it the dodge would be refused as out of turn (the first
+    // creature is current); with it the order advances and the action resolves
+    // — the second creature got its turn and spent it.
+    await executeCombatIntent(encounterId, { type: 'dodge', actorId: secondId }, userId, 'dm');
+    const [second] = await db
+      .select()
+      .from(combatParticipants)
+      .where(eq(combatParticipants.id, secondId));
+    expect(second.actionUsed).toBe(true);
+  });
+});

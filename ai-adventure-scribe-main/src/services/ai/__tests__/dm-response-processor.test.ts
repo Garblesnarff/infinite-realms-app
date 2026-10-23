@@ -800,3 +800,205 @@ it('removes the model d20 bonus from every visible projection of a narrative rol
     'Investigation (1d20)',
   );
 });
+
+describe('nested reply envelopes (#1008)', () => {
+  const defaultParams = {
+    context: { campaignId: 'campaign-456', characterId: 'character-789' },
+    message: 'I stay and attack Balthazar again with my dagger.',
+    conversationHistory: [],
+    isFirstMessage: false,
+    voiceContext: null,
+  };
+
+  // The Hark N22-025 shape: the model serialized a whole DM reply into the
+  // `text` field, and the chat printed the payload verbatim. The fixtures
+  // follow the real producer shape — the full envelope the DM schema always
+  // sets — with the inner reply carrying the fields the outer left empty.
+  const innerReply = {
+    text: "Your dagger darts toward Balthazar's torso as he twists in his chair, wine slopping over the rim of his cup.",
+    options: [],
+    narration_segments: [],
+    roll_requests: [
+      {
+        type: 'attack',
+        actor: 'Rogue Testee',
+        purpose: 'Dagger attack against Balthazar',
+        formula: '1d20+4',
+        ac: 14,
+      },
+    ],
+    combat_transition: 'none',
+  };
+  const outerReply = {
+    text: JSON.stringify(innerReply),
+    options: [],
+    narration_segments: [],
+    roll_requests: [],
+    combat_transition: 'none',
+    combat_actions: [],
+    combatants: [],
+    map_actions: [],
+    handout_actions: [],
+    scene_spec: null,
+  };
+
+  it('renders only the inner narration when a reply is nested inside text', async () => {
+    const result = await processDMResponse({
+      ...defaultParams,
+      rawResponse: JSON.stringify(outerReply),
+      deferSideEffects: true,
+    } as any);
+
+    expect(result.text).toBe(innerReply.text);
+    expect(result.text.trimStart().startsWith('{')).toBe(false);
+  });
+
+  it('adopts the inner reply fields the outer left empty', async () => {
+    const result = await processDMResponse({
+      ...defaultParams,
+      rawResponse: JSON.stringify(outerReply),
+      deferSideEffects: true,
+    } as any);
+
+    expect(result.roll_requests).toEqual(innerReply.roll_requests);
+  });
+
+  it('unwraps a reply nested two levels deep', async () => {
+    const doubleNested = { ...outerReply, text: JSON.stringify(outerReply) };
+    const result = await processDMResponse({
+      ...defaultParams,
+      rawResponse: JSON.stringify(doubleNested),
+      deferSideEffects: true,
+    } as any);
+
+    expect(result.text).toBe(innerReply.text);
+  });
+
+  it('leaves a clean structured reply untouched', async () => {
+    const clean = { ...innerReply, roll_requests: [] };
+    const result = await processDMResponse({
+      ...defaultParams,
+      rawResponse: JSON.stringify(clean),
+      deferSideEffects: true,
+    } as any);
+
+    expect(result.text).toBe(innerReply.text);
+    expect(result.roll_requests).toEqual([]);
+  });
+
+  it('does not unwrap JSON quoted inside narration prose', async () => {
+    const prose = 'The terminal blinks: {"text":"ACCESS DENIED","options":0} — then the screen dies.';
+    const reply = { ...outerReply, text: prose, roll_requests: [] };
+    const result = await processDMResponse({
+      ...defaultParams,
+      rawResponse: JSON.stringify(reply),
+      deferSideEffects: true,
+    } as any);
+
+    expect(result.text).toBe(prose);
+  });
+
+  it('does not unwrap an entire text field carrying only one reply key besides text', async () => {
+    // The two-key rule, exercised where it actually decides: the whole field
+    // parses as JSON and reaches the key count. `text` plus ONE canonical
+    // reply key (options) is an inscription, not an envelope — the same rule
+    // the server's parser uses.
+    const inscription = JSON.stringify({ text: 'ACCESS DENIED', options: 0 });
+    const reply = { ...outerReply, text: inscription, roll_requests: [] };
+    const result = await processDMResponse({
+      ...defaultParams,
+      rawResponse: JSON.stringify(reply),
+      deferSideEffects: true,
+    } as any);
+
+    expect(result.text).toBe(inscription);
+  });
+
+  it('fails open when the nested reply would empty the narration', async () => {
+    // An inner reply whose text is empty must not replace a non-empty
+    // payload with nothing: the funnel keeps the original rather than
+    // rendering a blank message (the pre-fix status quo for this shape).
+    const emptyInner = { ...innerReply, text: '', roll_requests: [] };
+    const reply = { ...outerReply, text: JSON.stringify(emptyInner) };
+    const result = await processDMResponse({
+      ...defaultParams,
+      rawResponse: JSON.stringify(reply),
+      deferSideEffects: true,
+    } as any);
+
+    expect(result.text).toBe(JSON.stringify(emptyInner));
+  });
+
+  it('renders only the inner narration on the non-deferred path too', async () => {
+    // deferSideEffects unset is the funnel's default mode: processDMResponse
+    // runs processDMResponseSideEffects, whose source text comes from
+    // re-parsing the RAW response. That re-parse must not resurrect the
+    // envelope the unwrap already removed. The context carries no sessionId,
+    // so processWorldAndMemories returns its input verbatim — what it is fed
+    // is exactly what this path renders.
+    const result = await processDMResponse({
+      ...defaultParams,
+      rawResponse: JSON.stringify(outerReply),
+    } as any);
+
+    expect(result.text).toBe(innerReply.text);
+    expect(result.text.trimStart().startsWith('{')).toBe(false);
+  });
+
+  it('renders only the inner narration when a trailing comma breaks strict parsing and there is no voice context', async () => {
+    // The unwrap used to run only on the strict-parse branch. Strict
+    // JSON.parse rejects the trailing comma, and with voiceContext null the
+    // funnel took the plain-text fallback, printing the whole outer payload —
+    // envelope included — as chat text.
+    const wire = `${JSON.stringify(outerReply).slice(0, -1)},}`;
+    const result = await processDMResponse({
+      ...defaultParams,
+      rawResponse: wire,
+      deferSideEffects: true,
+    } as any);
+
+    expect(result.text).toBe(innerReply.text);
+    expect(result.text.trimStart().startsWith('{')).toBe(false);
+  });
+
+  it('renders only the inner narration when a trailing comma forces the tolerant voice parse', async () => {
+    // With a voice context, the tolerant re-parse recovered the outer
+    // envelope but nothing unwrapped it, so the inner envelope printed as
+    // raw JSON — Hark's symptom.
+    const wire = `${JSON.stringify(outerReply).slice(0, -1)},}`;
+    const result = await processDMResponse({
+      ...defaultParams,
+      rawResponse: wire,
+      voiceContext: { voiceId: 'v1' },
+      deferSideEffects: true,
+    } as any);
+
+    expect(result.text).toBe(innerReply.text);
+    expect(result.text.trimStart().startsWith('{')).toBe(false);
+    expect(result.roll_requests).toEqual(innerReply.roll_requests);
+  });
+
+  it('renders only the inner narration when the outer text holds a raw newline and a voice context is set', async () => {
+    // A literal newline inside the outer `text` string breaks JSON parsing,
+    // and the regex text extraction used to print a partial {"text":"...
+    // fragment of the inner envelope as chat text. The valid wire carries
+    // the newline as an escape sequence inside the doubly-serialized text;
+    // swapping that sequence for a literal newline reproduces the sloppy
+    // emission.
+    const innerWithNewline = {
+      ...innerReply,
+      text: "Your dagger darts toward Balthazar's torso.\nHe twists in his chair, wine slopping over the rim of his cup.",
+    };
+    const validWire = JSON.stringify({ ...outerReply, text: JSON.stringify(innerWithNewline) });
+    const wire = validWire.replace('\\\\n', '\n');
+    const result = await processDMResponse({
+      ...defaultParams,
+      rawResponse: wire,
+      voiceContext: { voiceId: 'v1' },
+      deferSideEffects: true,
+    } as any);
+
+    expect(result.text).toBe(innerWithNewline.text);
+    expect(result.text.trimStart().startsWith('{')).toBe(false);
+  });
+});

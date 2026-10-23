@@ -623,6 +623,9 @@ async function resolveActorTurn(
 }> {
   const current = initial.currentParticipant as TurnResourceView | null;
   const known = initial.participants.some((participant) => participant.id === actorId);
+  const addressed = initial.participants.find(
+    (participant) => participant.id === actorId,
+  ) as (TurnResourceView & { participantType?: string }) | undefined;
   // An explicit `end_turn` is never absorbed: it is itself a turn boundary, so advancing to
   // reach its actor and then advancing again would consume two turns for one instruction.
   // Player-sourced intents are never absorbed either — a player client acting out of turn is a
@@ -649,6 +652,46 @@ async function resolveActorTurn(
     // legitimate — the previous participant really had finished — so the board is left where
     // it now honestly stands rather than rolled back to a position that was already wrong.
     return assertActorTurn(state, actorId, index);
+  }
+  if (addressed?.participantType === 'player') {
+    // #1008: the advance reached the addressed actor, but the actor is a PLAYER, and a
+    // player's action is never absorbed. The absorb stitches the DM's own creatures'
+    // sequencing; a player's boundary is explicit — their client synthesizes the
+    // `end_turn` — so a player action that only becomes current by advancing past a
+    // spent holder is a late resolution of a turn that already ended (Hark N22-025:
+    // the declared hit landed after "ended their turn" and the next creature's turn).
+    // The advance stands, exactly as in the not-enough branch above — the previous
+    // participant really had finished, and the player's new turn really has begun —
+    // but the stale declaration is refused rather than resolved on it.
+    //
+    // The refusal is deliberately NOT assertActorTurn's shape. That shape names the
+    // current holder in details.currentParticipantId, and here the holder IS the
+    // actor: naming them would render "it is not your turn — <the player> acts now"
+    // for the player's own action, record the player as the holder who blocked
+    // them, and defeat the client's keeps-turn logic, which keys on a refusal that
+    // names no other holder. So this refusal names no holder at all and carries a
+    // distinguishing reason instead: the client's combatRefusalReason surfaces it,
+    // its player-facing line falls back to this message, and its keeps-turn path
+    // can recognise that the turn now stands with the player.
+    logger.warn({
+      msg: 'COMBAT_INTENT_OUT_OF_TURN',
+      reason: 'declared_after_turn_ended',
+      encounterId,
+      sessionId: state.encounter.sessionId,
+      actorId,
+      advancedPastParticipantId: current!.id,
+      advancedPastParticipantSlug: index.slugFor(current!.id) ?? null,
+    });
+    throw new BusinessLogicError(
+      'That action was declared in a turn that has already ended',
+      {
+        encounterId,
+        sessionId: state.encounter.sessionId,
+        actorId,
+        reason: 'declared_after_turn_ended',
+        roster: index.roster(),
+      },
+    );
   }
   logger.warn({
     msg: 'DM_IMPLICIT_TURN_ADVANCE',
