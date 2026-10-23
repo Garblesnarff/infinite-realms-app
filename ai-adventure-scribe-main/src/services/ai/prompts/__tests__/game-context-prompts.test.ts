@@ -487,3 +487,154 @@ describe('the player character identity anchor (#708)', () => {
     expect(result).not.toContain('wobbling precariously with their trunk');
   });
 });
+
+/**
+ * #217: the DM granted class features and spells the character does not have, because the
+ * prompt never carried either list — the character section named equipment from the sheet
+ * but no features and no spells, so the model ruled from its mood. Fixtures follow the
+ * session context producer: the spell lists are the sheet's comma-separated text
+ * (the character's columns merged with its spell rows server-side) and `featureNames`
+ * is the server's list for the character's class and level — or null when the server
+ * cannot vouch for one — as getSessionContext returns them.
+ */
+describe('the features and spells block is the character sheet (#217)', () => {
+  const apprentice = {
+    id: 'char-apprentice-217',
+    name: 'The Apprentice',
+    level: 2,
+    race: 'Human',
+    class: 'Wizard',
+    character_stats: [
+      {
+        strength: 8,
+        dexterity: 14,
+        constitution: 12,
+        intelligence: 16,
+        wisdom: 12,
+        charisma: 10,
+        armor_class: 12,
+      },
+    ],
+    cantrips: 'Fire Bolt, Mage Hand',
+    knownSpells: 'Burning Hands, Disguise Self, Magic Missile',
+    preparedSpells: 'Burning Hands, Magic Missile',
+    ritualSpells: 'Detect Magic',
+    featureNames: ['Spellcasting', 'Arcane Recovery'],
+  };
+
+  it('names the character\u2019s real features, cantrips, prepared, known and ritual spells', async () => {
+    const result = await GameContextPrompts.buildCharacterSection(apprentice);
+
+    expect(result).toContain('CLASS FEATURES: Spellcasting, Arcane Recovery');
+    expect(result).toContain('CANTRIPS (cast at will): Fire Bolt, Mage Hand');
+    expect(result).toContain('PREPARED SPELLS: Burning Hands, Magic Missile');
+    expect(result).toContain('KNOWN SPELLS: Burning Hands, Disguise Self, Magic Missile');
+    expect(result).toContain('RITUAL SPELLS: Detect Magic');
+  });
+
+  it('tells the DM to refuse anything the lists do not give, with the standard line', async () => {
+    const result = await GameContextPrompts.buildCharacterSection(apprentice);
+
+    expect(result).toContain(
+      "These are the character's real class features and spells, from their sheet — they have no others.",
+    );
+    expect(result).toContain('these lists do not give them, it does not work');
+    // The gate's refusal line, word for word (featureRefusalLine in dm-feature-gate),
+    // with the fixture's name interpolated.
+    expect(result).toContain(
+      "The Apprentice can't use <the feature or spell>: it isn't on their character sheet.",
+    );
+    expect(result).toContain('do not roll, resolve, or narrate any effect from it');
+  });
+
+  it('a multiclass-shaped payload (featureNames null) lists the spells but claims and refuses no feature', async () => {
+    // The server returns featureNames: null when it cannot vouch for the feature
+    // list (multiclass, classless, uncovered class) — the cases the gate does not
+    // rule on. The block must not order a refusal of features it never listed.
+    const multiclass = { ...apprentice, featureNames: null };
+
+    const result = await GameContextPrompts.buildCharacterSection(multiclass);
+
+    expect(result).toContain('PREPARED SPELLS: Burning Hands, Magic Missile');
+    expect(result).not.toContain('CLASS FEATURES');
+    expect(result).toContain(
+      "These are the character's real spells, from their sheet — they have no others.",
+    );
+    expect(result).toContain('tries to cast a spell these lists do not give them');
+    expect(result).toContain("can't use <the spell>:");
+    expect(result).not.toContain('use a feature');
+  });
+
+  it('a features-only payload claims and refuses features, and says nothing about spells', async () => {
+    const fighter = {
+      id: 'char-fighter-217',
+      name: 'Ser Brann',
+      level: 2,
+      race: 'Human',
+      class: 'Fighter',
+      featureNames: ['Fighting Style', 'Second Wind', 'Action Surge'],
+    };
+
+    const result = await GameContextPrompts.buildCharacterSection(fighter);
+
+    expect(result).toContain('CLASS FEATURES: Fighting Style, Second Wind, Action Surge');
+    expect(result).toContain(
+      "These are the character's real class features, from their sheet — they have no others.",
+    );
+    expect(result).toContain('tries to use a feature these lists do not give them');
+    expect(result).toContain("can't use <the feature>:");
+    expect(result).not.toContain('cast a spell');
+    expect(result).not.toContain('Prepared casters cast');
+  });
+
+  it('an authoritative empty feature list (featureNames []) still claims: the character has none', async () => {
+    const novice = {
+      id: 'char-novice-217',
+      name: 'Novice',
+      level: 1,
+      race: 'Human',
+      class: 'Fighter',
+      featureNames: [],
+    };
+
+    const result = await GameContextPrompts.buildCharacterSection(novice);
+
+    expect(result).toContain('CLASS FEATURES: (none)');
+    expect(result).toContain(
+      "These are the character's real class features, from their sheet — they have no others.",
+    );
+    expect(result).toContain('tries to use a feature these lists do not give them');
+  });
+
+  it('accepts the array shape other producers send for the spell lists', async () => {
+    const created = {
+      ...apprentice,
+      cantrips: ['Fire Bolt'],
+      knownSpells: ['Magic Missile'],
+      preparedSpells: ['Magic Missile'],
+      ritualSpells: [],
+    };
+
+    const result = await GameContextPrompts.buildCharacterSection(created);
+
+    expect(result).toContain('CANTRIPS (cast at will): Fire Bolt');
+    expect(result).toContain('PREPARED SPELLS: Magic Missile');
+    expect(result).not.toContain('RITUAL SPELLS:');
+  });
+
+  it('renders no features or spells block when the payload carries no lists', async () => {
+    const bare = {
+      id: 'char-bare-217',
+      name: 'Bare',
+      level: 1,
+      race: 'Human',
+      class: 'Fighter',
+    };
+
+    const result = await GameContextPrompts.buildCharacterSection(bare);
+
+    expect(result).not.toContain('CLASS FEATURES');
+    expect(result).not.toContain('CANTRIPS');
+    expect(result).not.toContain('features_and_spells');
+  });
+});
