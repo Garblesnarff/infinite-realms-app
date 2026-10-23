@@ -60,6 +60,23 @@ const MAX_TARGET_CHOICES = 8;
 const sameName = (left: string, right: string): boolean =>
   left.trim().toLocaleLowerCase() === right.trim().toLocaleLowerCase();
 
+/**
+ * Who "him" or a title that matches nobody can mean (#862). The last message wins when it
+ * names one creature. Otherwise the one creature this session has met (ledger or map; a
+ * missing source counts as met, so a fixture roster stays present). The whole campaign cast
+ * is not that creature. One actor on the roster, of any source, still is.
+ */
+function attackAntecedent(
+  actors: readonly CombatIntentActor[],
+  recentNarration: string | undefined,
+): CombatIntentActor | null {
+  const mentioned = actorsMentionedIn(recentNarration ?? '', actors);
+  if (mentioned.length === 1) return mentioned[0] ?? null;
+  const present = actors.filter((actor) => actor.source !== 'campaign');
+  if (present.length === 1) return present[0] ?? null;
+  return actors.length === 1 ? (actors[0] ?? null) : null;
+}
+
 type SpellTarget = { attack: DeclaredAttack } | { choices: string[] } | null;
 
 /**
@@ -424,7 +441,9 @@ export function createDeclaredAttackRoutes({
 
       if (!looksLikeCombatIntent(body.playerInput)) return { pending: null };
       const actors = await loadCombatIntentActorRoster(params.sessionId, user.userId);
-      let declaredAttack = detectDeclaredAttack(body.playerInput, actors);
+      let declaredAttack = detectDeclaredAttack(body.playerInput, actors, {
+        antecedent: attackAntecedent(actors, body.recentNarration),
+      });
       let targetChoice: { spellName: string; candidates: string[] } | undefined;
       if (!declaredAttack) {
         const spell = detectUntargetedAttackSpell(body.playerInput);

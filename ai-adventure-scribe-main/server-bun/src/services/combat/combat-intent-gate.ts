@@ -180,23 +180,91 @@ const matchGoverningActor = (
 
 const PRONOUN_TARGETS = new Set(['him', 'her', 'them', 'it']);
 
+const HONORIFICS = [
+  'professor',
+  'captain',
+  'doctor',
+  'lord',
+  'lady',
+  'sir',
+  'dame',
+  'mother',
+  'father',
+  'brother',
+  'sister',
+  'master',
+  'elder',
+  'sergeant',
+  'lieutenant',
+  'commander',
+  'general',
+];
+const HONORIFIC_WORDS = new Set(HONORIFICS);
+const TITLE_WORDS = new Set(['the', ...HONORIFICS]);
+
+/** A trailing place ("him off the ledge") is not part of who the verb governs. */
+const PLACE_TAIL =
+  /^(.+?)\s+(?:off|into|onto|down|over|from|toward|towards|to|against|out|away|back|through)\b/i;
+
+const targetHead = (targetText: string): string => {
+  const trimmed = stripTrailingPunctuation(targetText.trim());
+  const place = PLACE_TAIL.exec(trimmed);
+  return place?.[1]?.trim() ? place[1].trim() : trimmed;
+};
+
+/** "the Professor" when no roster name contains that title. */
+const soleUnmatchedHonorific = (
+  head: string,
+  actors: readonly CombatIntentActor[],
+): string | null => {
+  const significant = actorWords(head);
+  const word = significant[0];
+  if (significant.length !== 1 || !word || !HONORIFIC_WORDS.has(word)) return null;
+  const named = actors.some((actor) => actorWords(actor.name).includes(word));
+  return named ? null : word;
+};
+
 interface ActorResolution {
   actor: CombatIntentActor;
   pronoun?: string;
+  honorific?: string;
 }
+
+interface AttackTargetOptions {
+  previousApproachTarget?: CombatIntentActor | null;
+  antecedent?: CombatIntentActor | null;
+  /** The caller chose an antecedent, including "there isn't one". */
+  antecedentGiven?: boolean;
+}
+
+const unambiguousCreature = (
+  actors: readonly CombatIntentActor[],
+  options: AttackTargetOptions,
+): CombatIntentActor | null => {
+  if (options.antecedentGiven) return options.antecedent ?? null;
+  return actors.length === 1 ? (actors[0] ?? null) : null;
+};
 
 const matchActorOrUnambiguousPronoun = (
   targetText: string,
   actors: readonly CombatIntentActor[],
-  previousApproachTarget?: CombatIntentActor | null,
+  options: AttackTargetOptions = {},
 ): ActorResolution | null => {
-  const actor = matchGoverningActor(targetText, actors);
+  const head = targetHead(targetText);
+  const actor = matchGoverningActor(head, actors);
   if (actor) return { actor };
-  const pronoun = normalize(targetText);
-  if (previousApproachTarget && PRONOUN_TARGETS.has(pronoun)) {
-    return { actor: previousApproachTarget, pronoun };
+
+  const pronoun = normalize(head);
+  if (PRONOUN_TARGETS.has(pronoun)) {
+    if (options.previousApproachTarget) return { actor: options.previousApproachTarget, pronoun };
+    const creature = unambiguousCreature(actors, options);
+    return creature ? { actor: creature, pronoun } : null;
   }
-  return actors.length === 1 && PRONOUN_TARGETS.has(pronoun) ? { actor: actors[0], pronoun } : null;
+
+  const honorific = soleUnmatchedHonorific(head, actors);
+  if (!honorific) return null;
+  const creature = unambiguousCreature(actors, options);
+  return creature ? { actor: creature, honorific } : null;
 };
 
 const toDeclaredAttack = (verb: string, actor: CombatIntentActor): DeclaredAttack => {
@@ -425,7 +493,7 @@ const matchClauseHead = (clause: string): ClauseAttackMatch | null => {
 const resolveClauseAttack = (
   rawClause: string,
   actors: readonly CombatIntentActor[],
-  previousApproachTarget?: CombatIntentActor | null,
+  targetOptions: AttackTargetOptions = {},
 ): DeclaredAttack | null => {
   const clause = stripTrailingPunctuation(rawClause.trim());
   if (!clause || DECLARATION_BLOCK_PATTERN.test(clause.replace(/[’‘]/g, "'"))) return null;
@@ -454,11 +522,7 @@ const resolveClauseAttack = (
     return actor ? declareSpellAttackOn(spell, actor) : null;
   }
 
-  const resolution = matchActorOrUnambiguousPronoun(
-    match.targetText,
-    actors,
-    previousApproachTarget,
-  );
+  const resolution = matchActorOrUnambiguousPronoun(match.targetText, actors, targetOptions);
   if (!resolution) return null;
   const { actor } = resolution;
   if (resolution.pronoun) {
@@ -466,6 +530,14 @@ const resolveClauseAttack = (
       msg: 'COMBAT_INTENT_PRONOUN_RESOLVED',
       verb: match.verb,
       pronoun: resolution.pronoun,
+      actorName: actor.name.trim(),
+    });
+  }
+  if (resolution.honorific) {
+    logger.info({
+      msg: 'COMBAT_INTENT_HONORIFIC_RESOLVED',
+      verb: match.verb,
+      honorific: resolution.honorific,
       actorName: actor.name.trim(),
     });
   }
@@ -495,8 +567,10 @@ const resolveClauseAttack = (
 export function detectDeclaredAttack(
   playerInput: string,
   actors: readonly CombatIntentActor[],
+  options?: { antecedent?: CombatIntentActor | null },
 ): DeclaredAttack | null {
   if (typeof playerInput !== 'string' || !playerInput.trim()) return null;
+  const antecedentGiven = options != null && Object.hasOwn(options, 'antecedent');
 
   const clauses = splitIntoClauses(withoutSheetSpellTag(playerInput).trim().replace(/\s+/g, ' '));
   let declaredAttack: DeclaredAttack | null = null;
@@ -504,7 +578,11 @@ export function detectDeclaredAttack(
   for (const clause of clauses) {
     if (isCombatDeescalationSpeech(clause)) continue;
     previousApproachTarget = resolveApproachTarget(clause, actors) ?? previousApproachTarget;
-    const match = resolveClauseAttack(clause, actors, previousApproachTarget);
+    const match = resolveClauseAttack(clause, actors, {
+      previousApproachTarget,
+      antecedent: options?.antecedent ?? null,
+      antecedentGiven,
+    });
     if (match) declaredAttack = match;
   }
   return declaredAttack;
@@ -547,28 +625,6 @@ export function detectUntargetedAttackSpell(playerInput: string): UntargetedAtta
   }
   return null;
 }
-
-const HONORIFICS = [
-  'professor',
-  'captain',
-  'doctor',
-  'lord',
-  'lady',
-  'sir',
-  'dame',
-  'mother',
-  'father',
-  'brother',
-  'sister',
-  'master',
-  'elder',
-  'sergeant',
-  'lieutenant',
-  'commander',
-  'general',
-];
-const HONORIFIC_WORDS = new Set(HONORIFICS);
-const TITLE_WORDS = new Set(['the', ...HONORIFICS]);
 
 /**
  * Roster actors the narration names: by full name, by title + surname ("Captain Reeves"), or

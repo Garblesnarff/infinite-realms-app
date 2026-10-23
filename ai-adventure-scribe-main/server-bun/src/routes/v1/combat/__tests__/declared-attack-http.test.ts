@@ -90,6 +90,84 @@ describe('POST /v1/combat/sessions/:sessionId/declared-attack', () => {
     });
   });
 
+  /**
+   * #862: Hark N21-015. The creature in the scene is Dr. Marrow. "I grab the Professor"
+   * shares no name word with him, and "I shove him off the ledge" is not the bare pronoun
+   * "him". Both must still open combat entry on that one present creature. An object act
+   * on the same roster stays a check. Two present creatures, and a title that matches
+   * neither, stay unresolved.
+   */
+  describe('hostile act on the one present creature (#862)', () => {
+    const marrow = { name: 'Dr. Marrow', source: 'ledger' as const };
+    const valerius = { name: 'Valerius', source: 'ledger' as const };
+
+    const expectMarrow = async (playerInput: string): Promise<void> => {
+      const response = await post({ ...declaredAttackCheckBody, playerInput });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        pending: {
+          trigger: 'player_intent',
+          combatants: [{ name: 'Dr. Marrow', count: 1 }],
+          declaredAttack: { actorName: 'Dr. Marrow' },
+        },
+      });
+    };
+
+    it('offers combat entry for "I grab the Professor" when only Dr. Marrow is present', async () => {
+      roster = [marrow];
+      await expectMarrow('I grab the Professor');
+    });
+
+    it('offers combat entry for "I shove him off the ledge" when only Dr. Marrow is present', async () => {
+      roster = [marrow];
+      await expectMarrow('I shove him off the ledge');
+    });
+
+    it('uses the one present creature when the rest of the roster is the campaign cast', async () => {
+      roster = [marrow, { name: 'Warden Ilsa Vane', source: 'campaign' }];
+      await expectMarrow('I grab the Professor');
+    });
+
+    it('uses the one creature the last message names when two are present', async () => {
+      roster = [marrow, valerius];
+      const response = await post({
+        ...declaredAttackCheckBody,
+        playerInput: 'I shove him off the ledge',
+        recentNarration: 'Dr. Marrow leans over the chasm.',
+      });
+      expect(await response.json()).toMatchObject({
+        pending: { declaredAttack: { actorName: 'Dr. Marrow' } },
+      });
+    });
+
+    it('leaves "I smash the cauldron" as a check against that same creature', async () => {
+      roster = [marrow];
+      const response = await post({
+        ...declaredAttackCheckBody,
+        playerInput: 'I smash the cauldron',
+      });
+      expect(await response.json()).toEqual({ pending: null });
+    });
+
+    it('does not guess "the Professor" when two present creatures match neither word', async () => {
+      roster = [marrow, valerius];
+      const response = await post({
+        ...declaredAttackCheckBody,
+        playerInput: 'I grab the Professor',
+      });
+      expect(await response.json()).toEqual({ pending: null });
+    });
+
+    it('does not guess "him off the ledge" when two creatures are present and none was just named', async () => {
+      roster = [marrow, valerius];
+      const response = await post({
+        ...declaredAttackCheckBody,
+        playerInput: 'I shove him off the ledge',
+      });
+      expect(await response.json()).toEqual({ pending: null });
+    });
+  });
+
   it.each([
     'I smash the cauldron',
     'I crack the basalt with my mace',
