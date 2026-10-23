@@ -29,7 +29,7 @@ process.env.WORKOS_API_KEY ??= 'test-workos-api-key';
 process.env.WORKOS_CLIENT_ID ??= 'test-workos-client-id';
 
 import { afterAll, beforeAll, expect, mock, test } from 'bun:test';
-import { eq, sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 
 import { closeRealDb, describeWithDb, importWithRealDb, realDb, testId } from './fixtures/real-db.js';
 import { aiUsage, memoryExtractionJobs } from '../../../../db/schema/index';
@@ -52,6 +52,9 @@ const RESTART_USER = testId('mej-restart');
 // The #883 cap tests get their own users so their active counts are exact.
 const BURST_USER = testId('mej-burst');
 const BURST_STORM_USER = testId('mej-burst-storm');
+// The resume-sweep tests get their own users so their ai_usage deltas are exact.
+const SWEEP_USER = testId('mej-sweep');
+const DRAIN_USER = testId('mej-drain');
 const createdJobIds: string[] = [];
 
 function newRow(id: string, userId = USER) {
@@ -93,6 +96,8 @@ describeWithDb('memory extraction job store (real DB, #846)', () => {
     await db.delete(aiUsage).where(eq(aiUsage.userId, USER));
     await db.delete(aiUsage).where(eq(aiUsage.userId, OTHER_USER));
     await db.delete(aiUsage).where(eq(aiUsage.userId, RESTART_USER));
+    await db.delete(aiUsage).where(eq(aiUsage.userId, SWEEP_USER));
+    await db.delete(aiUsage).where(eq(aiUsage.userId, DRAIN_USER));
     await closeRealDb();
   });
 
@@ -259,5 +264,89 @@ describeWithDb('memory extraction job store (real DB, #846)', () => {
     expect(results.filter((row) => row !== null)).toHaveLength(cap);
     expect(results.filter((row) => row === null)).toHaveLength(fired - cap);
     expect(await store.countActiveMemoryExtractionJobs(BURST_STORM_USER)).toBe(cap);
+  });
+
+  test('resume sweep: a fresh running row is not runnable; once stale it completes, charged once', async () => {
+    const id = randomUUID();
+    await persist(id, SWEEP_USER);
+    const db = realDb();
+
+    // A process claimed the row (attempt 1) and died just now: running with a
+    // fresh updated_at. The stale predicate must not list it, and a resume
+    // sweep must leave it alone — a live executor could still hold it.
+    await db
+      .update(memoryExtractionJobs)
+      .set({ status: 'running', attempts: 1, updatedAt: new Date() })
+      .where(eq(memoryExtractionJobs.id, id));
+    const runnable = await store.listRunnableMemoryExtractionJobs(100);
+    expect(runnable.map((r) => r.id)).not.toContain(id);
+    await jobModule.resumePendingMemoryExtractionJobs();
+    expect(await store.getMemoryExtractionJob(id)).toMatchObject({
+      status: 'running',
+      attempts: 1,
+    });
+
+    // The stale window passes with no further restart: the row becomes
+    // runnable, and the next sweep claims it (attempt 2), completes it, and
+    // charges exactly one unit to its user.
+    await db
+      .update(memoryExtractionJobs)
+      .set({ updatedAt: new Date(Date.now() - store.STALE_RUNNING_JOB_MS - 60_000) })
+      .where(eq(memoryExtractionJobs.id, id));
+    expect((await store.listRunnableMemoryExtractionJobs(100)).map((r) => r.id)).toContain(id);
+
+    const before = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(aiUsage)
+      .where(eq(aiUsage.userId, SWEEP_USER));
+    await jobModule.resumePendingMemoryExtractionJobs();
+
+    let row = await store.getMemoryExtractionJob(id);
+    for (let i = 0; i < 50 && !(row?.status === 'completed' && row?.charged); i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      row = await store.getMemoryExtractionJob(id);
+    }
+    expect(row).toMatchObject({ status: 'completed', attempts: 2, charged: true });
+
+    const after = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(aiUsage)
+      .where(eq(aiUsage.userId, SWEEP_USER));
+    expect(after[0].count - before[0].count).toBe(1);
+  });
+
+  test('resume drain: a 105-row backlog drains in one call at page size 50 against the real store', async () => {
+    const total = 105;
+    const ids = Array.from({ length: total }, () => randomUUID());
+    await Promise.all(ids.map((id) => persist(id, DRAIN_USER)));
+
+    // One call, page size 50: the drain re-lists against real SQL until the
+    // backlog is claimed — rows past the first page are not left for a later
+    // sweep or restart.
+    const { resumed } = await jobModule.resumePendingMemoryExtractionJobs(50);
+    expect(resumed).toBe(total);
+
+    // Executions finish detached; poll until every row is completed and every
+    // charge (the consume lands after the completed transition) has landed.
+    const db = realDb();
+    let completed = 0;
+    let charges = 0;
+    for (let i = 0; i < 100 && (completed < total || charges < total); i += 1) {
+      const rows = await db
+        .select({ status: memoryExtractionJobs.status })
+        .from(memoryExtractionJobs)
+        .where(inArray(memoryExtractionJobs.id, ids));
+      completed = rows.filter((r) => r.status === 'completed').length;
+      const usage = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(aiUsage)
+        .where(eq(aiUsage.userId, DRAIN_USER));
+      charges = usage[0].count;
+      if (completed < total || charges < total) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+    expect(completed).toBe(total);
+    expect(charges).toBe(total);
   });
 });

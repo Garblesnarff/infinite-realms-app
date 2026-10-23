@@ -555,18 +555,22 @@ async function executeClaimedJob(
 
 /**
  * Claim a persisted job and start executing it, without awaiting the execution.
- * Returns the execution's outcome promise when the claim landed — the execution
- * is already registered in the in-flight maps, so the shutdown settle covers
- * it — or null when another process holds the claim. Never throws and never
- * rejects: the claim is the only fallible part and it runs first. Awaiting the
- * returned promise (as claimAndExecuteById does) settles once the claim has
- * COMMITTED, which is what lets the resume drain re-list safely: a claimed row
- * is out of the runnable set before the next page is read.
+ * Returns { execution } when the claim landed — the execution is already
+ * registered in the in-flight maps, so the shutdown settle covers it — or null
+ * when another process holds the claim. Never throws: the claim is the only
+ * fallible part and it runs first.
+ *
+ * The execution promise is WRAPPED in an object on purpose: an async function
+ * that returns a promise adopts it, so a caller awaiting this function would
+ * settle only when the execution finishes. Wrapped, the returned promise
+ * settles as soon as the claim has COMMITTED — which is what lets the resume
+ * drain await a page's claims (never the executions) before reading the next
+ * page: a claimed row is out of the runnable set by then.
  */
 async function claimAndStartById(
   jobId: string,
   expectedStatus: 'pending' | 'running',
-): Promise<Promise<MemoryExtractionOutcome> | null> {
+): Promise<{ execution: Promise<MemoryExtractionOutcome> } | null> {
   let claimed: MemoryExtractionJobRow | null;
   try {
     claimed = await claimMemoryExtractionJob(jobId, expectedStatus);
@@ -590,7 +594,7 @@ async function claimAndStartById(
     inFlightExecutions.delete(claimed.id);
   };
   void execution.then(cleanup, cleanup);
-  return execution;
+  return { execution };
 }
 
 /**
@@ -601,8 +605,8 @@ async function claimAndExecuteById(
   jobId: string,
   expectedStatus: 'pending' | 'running',
 ): Promise<MemoryExtractionOutcome | null> {
-  const execution = await claimAndStartById(jobId, expectedStatus);
-  return execution ? await execution : null;
+  const started = await claimAndStartById(jobId, expectedStatus);
+  return started ? await started.execution : null;
 }
 
 /**
@@ -751,7 +755,7 @@ export async function resumePendingMemoryExtractionJobs(
     // before the claims commit, it could return this same page again, the
     // loop would see nothing fresh, and the backlog tail would go unattempted
     // until a later sweep.
-    const claims: Promise<Promise<MemoryExtractionOutcome> | null>[] = [];
+    const claims: Promise<{ execution: Promise<MemoryExtractionOutcome> } | null>[] = [];
     for (const row of claimable) {
       if (inFlightJobIds.has(row.id)) continue;
       resumed += 1;

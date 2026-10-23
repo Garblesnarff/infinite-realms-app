@@ -541,7 +541,11 @@ describe('runMemoryExtractionJob (#2148)', () => {
     const { resumed } = await resumePendingMemoryExtractionJobs();
     expect(resumed).toBe(1);
 
-    const completed = await waitForRow(id, (r) => r.status === 'completed', 'completion');
+    const completed = await waitForRow(
+      id,
+      (r) => r.status === 'completed' && r.charged === true,
+      'completion',
+    );
     expect(completed.charged).toBe(true);
     expect(quotaConsumeCalls).toHaveLength(1);
     expect(insertCalls).toHaveLength(1);
@@ -574,7 +578,11 @@ describe('runMemoryExtractionJob (#2148)', () => {
     );
 
     await resumePendingMemoryExtractionJobs();
-    const completed = await waitForRow(id, (r) => r.status === 'completed', 'completion');
+    const completed = await waitForRow(
+      id,
+      (r) => r.status === 'completed' && r.charged === true,
+      'completion',
+    );
 
     expect(completed.attempts).toBe(2);
     expect(completed.charged).toBe(true);
@@ -599,7 +607,11 @@ describe('runMemoryExtractionJob (#2148)', () => {
     // A subsequent resume completes it normally: memories written once, charged once.
     completeThrowsOnce = false;
     await resumePendingMemoryExtractionJobs();
-    const settled = await waitForRow(jobId, (r) => r.status === 'completed', 'resume completion');
+    const settled = await waitForRow(
+      jobId,
+      (r) => r.status === 'completed' && r.charged === true,
+      'resume completion',
+    );
     expect(settled.charged).toBe(true);
     expect(insertCalls).toHaveLength(1);
     expect(quotaConsumeCalls).toHaveLength(1);
@@ -735,7 +747,11 @@ describe('runMemoryExtractionJob (#2148)', () => {
         }),
       );
 
-      const completed = await waitForRow(id, (r) => r.status === 'completed', 'sweep reclaim');
+      const completed = await waitForRow(
+        id,
+        (r) => r.status === 'completed' && r.charged === true,
+        'sweep reclaim',
+      );
       expect(completed.attempts).toBe(2);
       expect(completed.charged).toBe(true);
       expect(quotaConsumeCalls).toHaveLength(1);
@@ -760,7 +776,12 @@ describe('runMemoryExtractionJob (#2148)', () => {
     const { resumed } = await resumePendingMemoryExtractionJobs(50);
     expect(resumed).toBe(total);
 
-    await waitForRow('bulk-104', (r) => r.status === 'completed', 'drain completion');
+    // Executions finish detached; the quota consume lands after each row's
+    // completed transition, so the consume count is the terminal signal.
+    const deadline = Date.now() + 5000;
+    while (quotaConsumeCalls.length < total && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
     expect([...jobRows.values()].filter((r) => r.status === 'completed')).toHaveLength(total);
     expect(quotaConsumeCalls).toHaveLength(total);
   });
@@ -779,8 +800,53 @@ describe('runMemoryExtractionJob (#2148)', () => {
     const second = await resumePendingMemoryExtractionJobs(50);
     expect(second.resumed).toBe(25);
 
-    await waitForRow('page-err-74', (r) => r.status === 'completed', 'post-error drain');
+    const deadline = Date.now() + 5000;
+    while (quotaConsumeCalls.length < 75 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
     expect([...jobRows.values()].filter((r) => r.status === 'completed')).toHaveLength(75);
     expect(quotaConsumeCalls).toHaveLength(75);
+  });
+
+  it('the drain awaits claims, never executions: a gated execution does not block the next page (#846)', async () => {
+    // Three pending rows, page size 2. Every execution is held at the model
+    // call, so if the drain awaited executions — the claim helper's promise
+    // adopting the execution's — the resume call could not resolve while the
+    // gate is shut, and the second page would never be claimed.
+    for (const id of ['gated-1', 'gated-2', 'gated-3']) jobRows.set(id, row(id));
+    let release!: () => void;
+    extractGate = new Promise((resolve) => {
+      release = resolve;
+    });
+
+    const resumePromise = resumePendingMemoryExtractionJobs(2);
+    try {
+      const outcome = await Promise.race([
+        resumePromise.then(() => 'resolved' as const),
+        new Promise<'held'>((resolve) => setTimeout(() => resolve('held'), 2000)),
+      ]);
+      expect(outcome).toBe('resolved');
+      const { resumed } = await resumePromise;
+      expect(resumed).toBe(3);
+      // Page 1 and page 2 are both claimed while every execution is still
+      // held at the gate — nothing has extracted, inserted, or charged yet.
+      for (const id of ['gated-1', 'gated-2', 'gated-3']) {
+        expect(jobRows.get(id)).toMatchObject({ status: 'running', attempts: 1 });
+      }
+      expect(insertCalls).toHaveLength(0);
+      expect(quotaConsumeCalls).toHaveLength(0);
+    } finally {
+      release();
+      // Let the drain settle whatever it still holds before the next test.
+      await resumePromise.catch(() => undefined);
+    }
+
+    await Promise.all(
+      ['gated-1', 'gated-2', 'gated-3'].map((id) =>
+        waitForRow(id, (r) => r.status === 'completed' && r.charged === true, 'gated completion'),
+      ),
+    );
+    expect([...jobRows.values()].filter((r) => r.status === 'completed')).toHaveLength(3);
+    expect(quotaConsumeCalls).toHaveLength(3);
   });
 });
