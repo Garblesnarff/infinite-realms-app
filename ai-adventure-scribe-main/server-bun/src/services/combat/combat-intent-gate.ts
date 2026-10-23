@@ -745,3 +745,55 @@ export function detectDeclaredLayOnHands(playerInput: string): DeclaredLayOnHand
     cure,
   };
 }
+
+/**
+ * A player declaring Second Wind in plain text (#975): "I use Second Wind",
+ * or the bare "Second Wind" the combat tray's inline option sends as chat.
+ *
+ * Unlike Lay on Hands — a name with no other English reading — "second wind"
+ * is an ordinary idiom ("I catch my second wind and swing again"), so naming
+ * the feature is NOT the declaration. A clause declares it only when the
+ * player spends it: a first-person use ("I use Second Wind", "we use second
+ * wind"), an imperative ("Use Second Wind"), or the bare tray label as the
+ * whole input — and never from a blocked clause (negation, question,
+ * hypothetical: the same DECLARATION_BLOCK_PATTERN the attack and spell
+ * detectors consult). Whether the use lands (a use remains, the fighter is
+ * hurt, the bonus action is free) is the combat intent's call; this only
+ * answers "did the player declare it?".
+ */
+const SECOND_WIND_PHRASE = /\bsecond\s+wind\b/i;
+const SECOND_WIND_LABEL = /^second\s+wind[.!]?$/i;
+const SECOND_WIND_USE =
+  /\b(?:i|we)(?:'ll|\s+will|\s+want\s+to|\s+try\s+to|\s+am\s+going\s+to|\s*'m\s+going\s+to)?\s*use\s+(?:my\s+)?second\s+wind\b/i;
+const SECOND_WIND_USING =
+  /\b(?:i|we)(?:\s+am|'m)\s+using\s+(?:my\s+)?second\s+wind\b/i;
+const SECOND_WIND_LET_ME = /\blet\s+me\s+use\s+(?:my\s+)?second\s+wind\b/i;
+const SECOND_WIND_USE_IMPERATIVE = /^\s*(?:use|using)\s+(?:my\s+)?second\s+wind\b/i;
+
+export function detectDeclaredSecondWind(playerInput: string): boolean {
+  if (typeof playerInput !== 'string' || !playerInput.trim()) return false;
+  const input = playerInput.replace(/[’‘]/g, "'");
+  if (SECOND_WIND_LABEL.test(input.trim())) return true;
+  // Sentence-wise, terminators kept: a question sentence declares nothing,
+  // whatever auxiliary it uses ("Did I use Second Wind already?" is a state
+  // check, not a spend). The clause splitter drops mid-text '?', so the
+  // question test must happen here, before clauses.
+  const sentences = input.match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [];
+  for (const sentence of sentences) {
+    if (sentence.trimEnd().endsWith('?')) continue;
+    for (const rawClause of splitIntoClauses(sentence)) {
+      const clause = rawClause.trim();
+      if (!SECOND_WIND_PHRASE.test(clause)) continue;
+      if (DECLARATION_BLOCK_PATTERN.test(clause)) continue;
+      if (
+        SECOND_WIND_USE.test(clause) ||
+        SECOND_WIND_USING.test(clause) ||
+        SECOND_WIND_LET_ME.test(clause) ||
+        SECOND_WIND_USE_IMPERATIVE.test(clause)
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}

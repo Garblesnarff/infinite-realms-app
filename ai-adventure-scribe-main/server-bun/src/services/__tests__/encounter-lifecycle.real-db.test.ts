@@ -41,6 +41,7 @@ import {
   combatEncounters,
   combatParticipantStatus,
   combatParticipants,
+  dialogueHistory,
   gameSessions,
   inventoryItems,
   tacticalMaps,
@@ -56,6 +57,9 @@ const { RestService } = await importWithRealDb(() => import('../rest-service.js'
 const { withPreservedActionSurgeMark, armActionSurge, clearActionSurgeMark, readActionSurgeMark } =
   await importWithRealDb(() => import('../combat/combat-turn-resources.js'));
 const { SessionService } = await importWithRealDb(() => import('../session-service.js'));
+const { resolveCombatSecondWind } = await importWithRealDb(
+  () => import('../dm/combat-second-wind.js'),
+);
 const { resetTacticalMovementForTurn } = await importWithRealDb(
   () => import('../combat/tactical-combat-lifecycle.js'),
 );
@@ -1270,5 +1274,291 @@ describeWithDb('a melee attacker closes the gap and the attack is rolled (#259)'
     expect(typeof r.d20).toBe('number');
     expect(typeof r.hit).toBe('boolean');
     expect((await entityAt(f, f.heroId)).movementRemaining).toBe(30);
+  });
+});
+
+/**
+ * #975 (reopened): the TYPED Second Wind. The block above proves the tray's
+ * `second_wind` intent; Hark's retest typed "I use Second Wind." in chat and
+ * got narration only, because nothing on the DM route detected the words.
+ * These tests drive `resolveCombatSecondWind` — the resolver the DM route
+ * (routes/v1/llm.ts) runs pre-generation on the player's own words — against
+ * the same encounter shape: the heal lands through the participant, the
+ * sheet use is spent, and a refusal (uses spent, full health) is returned as
+ * a directive instead of silence.
+ */
+describeWithDb('a typed Second Wind resolves through the DM-route resolver (#975)', () => {
+  let db: ReturnType<typeof realDb>;
+  const userId = testId('typed-fighter-user');
+
+  const MAX_HP = 12;
+
+  let campaignId: string;
+  let characterId: string;
+  let sessionId: string;
+  let encounterId: string;
+  let heroId: string;
+  let secondWindFeatureId: string;
+
+  beforeAll(async () => {
+    db = realDb();
+    [{ id: campaignId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('camp') })
+      .returning({ id: campaigns.id });
+
+    [{ id: characterId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId,
+        name: testId('typed-fighter'),
+        level: 1,
+        class: 'Fighter',
+        classLevels: [{ className: 'Fighter', level: 1 }],
+      })
+      .returning({ id: characters.id });
+
+    await db.insert(characterStats).values({
+      characterId,
+      strength: 16,
+      armorClass: 15,
+      maxHitPoints: MAX_HP,
+      currentHitPoints: MAX_HP,
+      speed: 30,
+    });
+
+    const library = await db
+      .select()
+      .from(classFeaturesLibrary)
+      .where(eq(classFeaturesLibrary.className, 'Fighter'));
+    const secondWind = library.find((row) => row.featureName === 'Second Wind');
+    if (!secondWind) throw new Error('Fighter library rows not seeded');
+    secondWindFeatureId = secondWind.id;
+    await db.insert(characterFeatures).values({
+      characterId,
+      featureId: secondWind.id,
+      usesRemaining: secondWind.usesCount,
+      isActive: true,
+      acquiredAtLevel: 1,
+    });
+
+    [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId, characterId, sessionNumber: 1, status: 'active' })
+      .returning({ id: gameSessions.id });
+
+    [{ id: encounterId }] = await db
+      .insert(combatEncounters)
+      .values({ sessionId, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
+      .returning({ id: combatEncounters.id });
+
+    const inserted = await db
+      .insert(combatParticipants)
+      .values([
+        {
+          encounterId,
+          characterId,
+          name: 'Typed Fighter',
+          participantType: 'player',
+          turnOrder: 0,
+          initiative: 20,
+          armorClass: 15,
+          maxHp: MAX_HP,
+          speed: 30,
+        },
+        {
+          encounterId,
+          name: 'Training Golem',
+          participantType: 'monster',
+          turnOrder: 1,
+          initiative: 10,
+          armorClass: 1,
+          maxHp: 200,
+          speed: 30,
+        },
+      ])
+      .returning({ id: combatParticipants.id, turnOrder: combatParticipants.turnOrder });
+    heroId = inserted.find((row) => row.turnOrder === 0)!.id;
+    const monsterId = inserted.find((row) => row.turnOrder === 1)!.id;
+
+    await db.insert(combatParticipantStatus).values([
+      { participantId: heroId, currentHp: 1, maxHp: MAX_HP, isConscious: true },
+      { participantId: monsterId, currentHp: 200, maxHp: 200, isConscious: true },
+    ]);
+  });
+
+  afterAll(async () => {
+    if (!hasRealDb) return;
+    await db.delete(characterFeatures).where(eq(characterFeatures.characterId, characterId));
+    await db.delete(combatParticipants).where(eq(combatParticipants.encounterId, encounterId));
+    await db.delete(combatEncounters).where(eq(combatEncounters.id, encounterId));
+    await db.delete(gameSessions).where(eq(gameSessions.id, sessionId));
+    await db.delete(characters).where(eq(characters.id, characterId));
+    await db.delete(campaigns).where(eq(campaigns.id, campaignId));
+    await closeRealDb();
+  });
+
+  const heroHp = async (): Promise<number> => {
+    const [row] = await db
+      .select({ hp: combatParticipantStatus.currentHp })
+      .from(combatParticipantStatus)
+      .where(eq(combatParticipantStatus.participantId, heroId));
+    return row.hp;
+  };
+
+  const usesRemaining = async (): Promise<number | null> => {
+    const [row] = await db
+      .select({ uses: characterFeatures.usesRemaining })
+      .from(characterFeatures)
+      .where(
+        and(
+          eq(characterFeatures.characterId, characterId),
+          eq(characterFeatures.featureId, secondWindFeatureId),
+        ),
+      );
+    return row?.uses ?? null;
+  };
+
+  const setHeroHp = async (hp: number) => {
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: hp })
+      .where(eq(combatParticipantStatus.participantId, heroId));
+  };
+
+  /** A later turn: the engine refunds the bonus action at the turn boundary. */
+  const newTurn = async () => {
+    await db
+      .update(combatParticipants)
+      .set({ bonusActionUsed: false })
+      .where(eq(combatParticipants.id, heroId));
+  };
+
+  /** The saved player message the DM route reads the declaration back from. */
+  const typeMessage = async (text: string) => {
+    await db.insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'player',
+      speakerId: characterId,
+      message: text,
+    });
+  };
+
+  const bonusActionUsed = async (): Promise<boolean> => {
+    const [row] = await db
+      .select({ used: combatParticipants.bonusActionUsed })
+      .from(combatParticipants)
+      .where(eq(combatParticipants.id, heroId));
+    return row.used;
+  };
+
+  const sheetHp = async (): Promise<number> => {
+    const [row] = await db
+      .select({ hp: characterStats.currentHitPoints })
+      .from(characterStats)
+      .where(eq(characterStats.characterId, characterId));
+    return row.hp;
+  };
+
+  test('typed "I use Second Wind" heals through the participant and spends the sheet use', async () => {
+    expect(await heroHp()).toBe(1);
+    expect(await usesRemaining()).toBe(1);
+    await typeMessage('I use Second Wind');
+
+    const directive = await resolveCombatSecondWind({
+      playerInput: 'I use Second Wind',
+      sessionId,
+      userId,
+    });
+
+    const hpAfter = await heroHp();
+    const healed = hpAfter - 1;
+    // The heal RANGE, not just "some healing" (strategist FIX 6347116450):
+    // an L1 Fighter's Second Wind is 1d10 + level = 2–11, capped at max
+    // HP. The hero is seeded at 1/12 so the deficit is 11 and every value
+    // in the range is reachable — both bounds of the assert are live.
+    expect(healed).toBeGreaterThanOrEqual(2);
+    expect(healed).toBeLessThanOrEqual(11);
+    expect(hpAfter).toBeLessThanOrEqual(MAX_HP);
+    expect(directive).not.toBeNull();
+    // The directive's numbers are the engine's, not a substring that a
+    // malformed result ("regained undefined HP") could satisfy.
+    expect(directive).toContain(`regained ${healed} HP`);
+    expect(directive).toContain(`(now ${hpAfter}/${MAX_HP})`);
+    expect(await usesRemaining()).toBe(0);
+    // The real intent ran: the bonus action is claimed and the heal wrote
+    // through to the sheet's own HP.
+    expect(await bonusActionUsed()).toBe(true);
+    expect(await sheetHp()).toBe(hpAfter);
+  });
+
+  test('a retry of the same saved message resolves nothing twice', async () => {
+    // No new player message: the Retry replays the one from the test above.
+    const hpBefore = await heroHp();
+
+    const directive = await resolveCombatSecondWind({
+      playerInput: 'I use Second Wind',
+      sessionId,
+      userId,
+    });
+
+    expect(directive).toBeNull();
+    expect(await heroHp()).toBe(hpBefore);
+    expect(await usesRemaining()).toBe(0);
+  });
+
+  test('a second typed use with the use spent returns the refusal, not silence', async () => {
+    await setHeroHp(5);
+    await newTurn();
+    await typeMessage('I use Second Wind again');
+
+    const directive = await resolveCombatSecondWind({
+      playerInput: 'I use Second Wind again',
+      sessionId,
+      userId,
+    });
+
+    expect(directive).not.toBeNull();
+    expect(directive).toContain('The engine refused it');
+    expect(directive).toContain('no uses remaining');
+    expect(await heroHp()).toBe(5);
+    expect(await usesRemaining()).toBe(0);
+  });
+
+  test('at full health the typed use is refused and the use is kept', async () => {
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: 1 })
+      .where(
+        and(
+          eq(characterFeatures.characterId, characterId),
+          eq(characterFeatures.featureId, secondWindFeatureId),
+        ),
+      );
+    await setHeroHp(MAX_HP);
+    await newTurn();
+    await typeMessage('Second Wind');
+
+    const directive = await resolveCombatSecondWind({
+      playerInput: 'Second Wind',
+      sessionId,
+      userId,
+    });
+
+    expect(directive).not.toBeNull();
+    expect(directive).toContain('The engine refused it');
+    expect(directive).toContain('full health');
+    expect(await heroHp()).toBe(MAX_HP);
+    expect(await usesRemaining()).toBe(1);
+  });
+
+  test('words that never name the feature resolve nothing', async () => {
+    const directive = await resolveCombatSecondWind({
+      playerInput: 'I attack the golem',
+      sessionId,
+      userId,
+    });
+    expect(directive).toBeNull();
   });
 });

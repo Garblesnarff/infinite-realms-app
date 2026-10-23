@@ -6,8 +6,12 @@ mock.module('../../../lib/logger.js', () => ({
   logger: { info, warn: mock(() => {}), debug: mock(() => {}), error: mock(() => {}) },
 }));
 
-const { detectDeclaredAttack, detectDeclaredDefense, detectDeclaredLayOnHands } =
-  await import('../combat-intent-gate.js');
+const {
+  detectDeclaredAttack,
+  detectDeclaredDefense,
+  detectDeclaredLayOnHands,
+  detectDeclaredSecondWind,
+} = await import('../combat-intent-gate.js');
 
 const actors = [
   { name: 'Professor Emil Darkwater' },
@@ -396,5 +400,48 @@ describe('typed Hex (#754 FIX item 3)', () => {
     const declared = detectDeclaredAttack('I cast Hex on Psychic Scavenger 2', scavengers);
     expect(declared?.spellId).toBe('hex');
     expect(declared?.actorName).toBe('Psychic Scavenger 2');
+  });
+});
+
+describe('detectDeclaredSecondWind (#975)', () => {
+  it('detects the typed declaration and the bare tray label', () => {
+    expect(detectDeclaredSecondWind('I use Second Wind')).toBe(true);
+    expect(detectDeclaredSecondWind('I use Second Wind.')).toBe(true);
+    expect(detectDeclaredSecondWind('Second Wind')).toBe(true);
+    expect(detectDeclaredSecondWind('Use Second Wind')).toBe(true);
+    expect(detectDeclaredSecondWind('I use my Second Wind, then hold the line')).toBe(true);
+    expect(detectDeclaredSecondWind('We use Second Wind and press on')).toBe(true);
+    expect(detectDeclaredSecondWind("I'll use Second Wind")).toBe(true);
+    expect(detectDeclaredSecondWind('I want to use Second Wind')).toBe(true);
+    expect(detectDeclaredSecondWind("I'm using Second Wind")).toBe(true);
+    expect(detectDeclaredSecondWind('Let me use Second Wind')).toBe(true);
+  });
+
+  it('does not spend the feature on a question, whatever auxiliary it uses', () => {
+    expect(detectDeclaredSecondWind('Do I use Second Wind?')).toBe(false);
+    expect(detectDeclaredSecondWind('Did I use Second Wind already?')).toBe(false);
+    expect(detectDeclaredSecondWind('Would I use Second Wind?')).toBe(false);
+    // A question sentence does not poison a later declarative one.
+    expect(detectDeclaredSecondWind('Did I use Second Wind? I use Second Wind now')).toBe(true);
+  });
+
+  it('does not spend the feature on the idiom, a negation, a question, or a deferral', () => {
+    // The ordinary English idiom: the clause's declaration is the attack.
+    expect(detectDeclaredSecondWind('I catch my second wind and swing again')).toBe(false);
+    expect(detectDeclaredSecondWind('I caught my second wind')).toBe(false);
+    expect(detectDeclaredSecondWind("I don't use Second Wind")).toBe(false);
+    expect(detectDeclaredSecondWind('I do not use Second Wind yet')).toBe(false);
+    expect(detectDeclaredSecondWind('Can I use Second Wind?')).toBe(false);
+    expect(detectDeclaredSecondWind('Should I use Second Wind now?')).toBe(false);
+    expect(detectDeclaredSecondWind('What if I use Second Wind?')).toBe(false);
+    expect(detectDeclaredSecondWind('I save my Second Wind for later')).toBe(false);
+    expect(detectDeclaredSecondWind('I never use Second Wind this early')).toBe(false);
+  });
+
+  it('ignores inputs that never name the feature', () => {
+    expect(detectDeclaredSecondWind('I attack the goblin')).toBe(false);
+    expect(detectDeclaredSecondWind('I take a deep breath and steady myself')).toBe(false);
+    expect(detectDeclaredSecondWind('')).toBe(false);
+    expect(detectDeclaredSecondWind('   ')).toBe(false);
   });
 });

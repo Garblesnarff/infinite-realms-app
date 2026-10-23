@@ -85,13 +85,16 @@ async function ownedCharacter(characterId: string, userId: string): Promise<Char
   return character ?? null;
 }
 
-async function libraryFeatureId(featureName: string): Promise<string | null> {
+async function libraryFeatureId(
+  featureName: string,
+  className: string = PALADIN_CLASS,
+): Promise<string | null> {
   const [row] = await db
     .select({ id: classFeaturesLibrary.id })
     .from(classFeaturesLibrary)
     .where(
       and(
-        eq(classFeaturesLibrary.className, PALADIN_CLASS),
+        eq(classFeaturesLibrary.className, className),
         eq(classFeaturesLibrary.featureName, featureName),
       ),
     )
@@ -228,10 +231,19 @@ export async function featureSpentSinceMessage(input: {
   featureName: string;
   sessionId: string;
   since: Date | null;
+  /**
+   * The class whose library row carries the feature. Defaults to Paladin —
+   * every original caller asks about Paladin features. The lookup MUST be
+   * told the owning class for any other feature: with the wrong class the
+   * feature id resolves to null and this returns false unconditionally,
+   * silently disabling the caller's retry guard (#975 B1: Second Wind is a
+   * Fighter row).
+   */
+  className?: string;
 }): Promise<boolean> {
   const { characterId, featureName, sessionId, since } = input;
   if (!since) return false;
-  const featureId = await libraryFeatureId(featureName);
+  const featureId = await libraryFeatureId(featureName, input.className);
   if (!featureId) return false;
   const [row] = await db
     .select({ id: featureUsageLog.id })

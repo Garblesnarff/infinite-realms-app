@@ -1926,3 +1926,115 @@ describeWithDb('premade level-3 heroes carry subclass and features (#1019)', () 
     ]);
   });
 });
+
+/**
+ * #975 (reopened): the reopen evidence said a NEW level-1 Fighter's sheet
+ * lists no Second Wind at all. The grant itself is pinned at the table level
+ * by the blocks above; this block pins the SHEET surface — the class-features
+ * endpoint the sheet/action tray reads — for both create shapes a player
+ * actually hits: the wizard payload (class_levels present) and the starter
+ * seed shape (class/level/total_level + campaign_id, no class_levels).
+ */
+describeWithDb('a new level-1 Fighter sheet exposes Second Wind (#975)', () => {
+  let app: any;
+  let db: any;
+  let request: (path: string, method: string, body?: unknown) => Promise<Response>;
+  const createdIds: string[] = [];
+  let campaignId = '';
+
+  beforeAll(async () => {
+    userId = testId('user-975');
+    db = realDb();
+    const pipeline = await importWithRealDb(async () => {
+      const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');
+      const { charactersRoutes } = await import('../characters.ts');
+      const { classFeaturesRoutes } = await import('../class-features.ts');
+      return { createRequestPipelineApp, charactersRoutes, classFeaturesRoutes };
+    });
+    app = pipeline
+      .createRequestPipelineApp()
+      .use(pipeline.charactersRoutes)
+      .use(pipeline.classFeaturesRoutes);
+    request = async (path: string, method: string, body?: unknown) =>
+      app.handle(
+        new Request(`http://localhost${path}`, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: body !== undefined ? JSON.stringify(body) : undefined,
+        }),
+      );
+
+    [{ id: campaignId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('975-camp') })
+      .returning({ id: campaigns.id });
+  });
+
+  afterAll(async () => {
+    for (const id of createdIds) {
+      await db
+        .delete(characters)
+        .where(eq(characters.id, id))
+        .catch(() => {});
+    }
+    if (campaignId) {
+      await db
+        .delete(campaigns)
+        .where(eq(campaigns.id, campaignId))
+        .catch(() => {});
+    }
+    await closeRealDb();
+  });
+
+  const sheetFeatures = async (characterId: string) => {
+    const res = await request(`/v1/class-features/characters/${characterId}/features`, 'GET');
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(200);
+    const parsed = JSON.parse(text) as { features?: unknown } | unknown[];
+    const list = (Array.isArray(parsed) ? parsed : (parsed.features ?? [])) as Array<
+      Record<string, unknown>
+    >;
+    return list;
+  };
+
+  const expectSecondWindOnSheet = async (characterId: string) => {
+    const features = await sheetFeatures(characterId);
+    const secondWind = features.find(
+      (row) => (row.feature as { featureName?: string } | undefined)?.featureName === 'Second Wind',
+    );
+    expect(secondWind, JSON.stringify(features).slice(0, 400)).toBeDefined();
+    expect(secondWind?.usesRemaining).toBe(1);
+  };
+
+  it('wizard create: the sheet endpoint lists Second Wind with its use', async () => {
+    const res = await request('/v1/characters', 'POST', {
+      ...fighterPayload,
+      name: `Sheet Fighter ${testId('975')}`,
+    });
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+    await expectSecondWindOnSheet(id);
+  });
+
+  it('starter-seed shape (no class_levels): the sheet endpoint lists Second Wind', async () => {
+    // buildStarterCharacterSeed's wire shape: class/level/total_level and
+    // campaign_id, inputs only, and NO class_levels array.
+    const body = wizardBody({ name: 'Fighter', hitDie: '1d10', baseHp: 14 }) as Record<
+      string,
+      unknown
+    >;
+    delete body.class_levels;
+    const res = await request('/v1/characters', 'POST', {
+      ...body,
+      name: `Starter Fighter ${testId('975')}`,
+      campaign_id: campaignId,
+    });
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+    await expectSecondWindOnSheet(id);
+  });
+});
