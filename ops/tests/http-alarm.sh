@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Cases for ops/http-alarm.sh (#2293), with fixture nginx "combined" log lines
 # and a stub `gh`: a quiet window, 3 x 422 on the #2280 route, a repeat inside
-# the hour, a 5xx, smoke requests, a timezone offset, the rotated file, and a
-# log it cannot parse.
+# the hour, a 5xx, smoke requests, a timezone offset, the rotated file, a log
+# it cannot parse and the 24 h 4xx-rate alarm (#350).
 #
 #   bash ops/tests/http-alarm.sh
 #
@@ -29,6 +29,9 @@ line() {
 }
 S1=/v1/sessions/e735db3c-809b-465a-8bd1-2a51c32f6b04/messages
 S2=/v1/sessions/75fddc00-862c-4a8b-a8d0-4e630aae61ec/messages
+
+# line25 <HH:MM:SS> <method> <path> <status>: the same, on 25/Sep/2026 (the day before).
+line25() { line "$@" | sed 's#26/Sep/2026#25/Sep/2026#'; }
 
 # alarm <dir> [now]: run the real script on <dir>/access.log (+ .1), state in <dir>.
 alarm() {
@@ -148,6 +151,45 @@ D="$TMP/nolog"; mkdir -p "$D"
 alarm "$D"
 expect "no log: exit 0 and says so" test "$RC" = 0 -a -n "$(grep 'no readable log' "$D/out")"
 expect "no log: no alert" test "$(alerts "$D")" = 0
+
+# 10. 4xx rate (#350): >= 90% 4xx of >= 20 calls in 24 h fires once a day; less does not.
+C1=/v1/characters/e735db3c-809b-465a-8bd1-2a51c32f6b04/spells
+C2=/v1/characters/75fddc00-862c-4a8b-a8d0-4e630aae61ec/spells
+D="$TMP/rate"; mkdir -p "$D"
+{
+  # 18 x 400 + 2 x 200 on POST /v1/characters/:id/spells, spread over the day: 90%.
+  for h in 04 06 08 10 12 14 16 18 20; do line25 "$h:00:00" POST "$C1" 400; line25 "$h:30:00" POST "$C2" 400; done
+  line 01:00:00 POST "$C1" 200; line 02:00:00 POST "$C2" 200
+  line25 02:00:00 POST "$C1" 400 # 25h ago: outside the 24 h window
+  for i in 1 2 3; do line 01:1$i:00 OPTIONS "$C1" 400; done # preflights are not counted
+  # 19 calls, all 404: under the call floor.
+  for i in $(seq 10 28); do line 00:$i:00 GET /v1/blog/missing 404; done
+  # 20 calls, 17 x 401: 85%, under the rate.
+  for i in $(seq 10 26); do line 01:$i:00 POST /v1/auth/refresh 401; done
+  for i in 27 28 29; do line 01:$i:00 POST /v1/auth/refresh 200; done
+  # 20 smoke calls, all 400: not counted.
+  for i in $(seq 30 49); do line 02:$i:00 GET /v1/smoke-only 400 "$SMOKE_UA"; done
+} > "$D/access.log"
+alarm "$D"
+expect "rate: exit 0" test "$RC" = 0
+expect "rate: one alert line" test "$(alerts "$D")" = 1
+expect "rate: names the route, ratio and period" grep -qF "HTTP ALARM: POST /v1/characters/:id/spells 18/20×4xx in 24h" "$D/alerts.log"
+expect "rate: not 'in the last 15m' (no window alarm fired)" bash -c "! grep -qF 'in the last 15m' '$D/alerts.log'"
+expect "rate: under the call floor is quiet" bash -c "! grep -qF '/v1/blog/missing' '$D/alerts.log'"
+expect "rate: 85% is quiet" bash -c "! grep -qF '/v1/auth/refresh' '$D/alerts.log'"
+expect "rate: smoke calls are not counted" bash -c "! grep -qF '/v1/smoke-only' '$D/alerts.log'"
+expect "rate: one comment, names the route" grep -qF -- '- `POST /v1/characters/:id/spells`: 18/20×4xx in 24h' "$D/gh.log"
+expect "rate: no raw character id leaves the box" bash -c "! grep -q e735db3c '$D/alerts.log' '$D/gh.log'"
+# Half an hour later the route is still at 90%+: no second alert inside the day.
+alarm "$D" $((T0 + 1800))
+expect "rate: not again inside the day" test "$(alerts "$D")" = 1
+expect "rate: says it is holding back" has "quiet: POST /v1/characters/:id/spells"
+# The hourly window alarms' state pruning must not forget the daily one.
+line 04:05:00 POST "$S1" 500 >> "$D/access.log"
+alarm "$D" $((T0 + 3600 + 300))
+expect "rate: a 5xx alert an hour later fires alone" grep -qF "HTTP ALARM: POST /v1/sessions/:id/messages 1×5xx in the last 15m (" "$D/alerts.log"
+alarm "$D" $((T0 + 3 * 3600))
+expect "rate: still remembered after the 5xx alert pruned the state" test "$(alerts "$D")" = 2
 
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

@@ -19,6 +19,13 @@
 # If the log has lines but none parse, it alerts once an hour rather than going
 # quietly blind.
 #
+# 4xx rate (#350): a route that answers >= 90% 4xx over the last 24 h, with at
+# least 20 calls, fires too. #957's POST /v1/characters/:id/spells was 400 on
+# 49 of 49 calls for 14 days, and nothing fired because a client error is not a
+# 5xx and 400 is not 422. A data gap the server reports as a client error now
+# surfaces. Same alert line and comment; each such route alerts at most once a
+# day. OPTIONS preflights are not counted.
+#
 #   http-alarm.sh
 #
 # Install (only on Rob's install line), e.g. /etc/cron.d/infiniterealms-http-alarm:
@@ -27,6 +34,8 @@
 # the sibling auto-deploy.sh, as run-status.sh does. Overrides:
 # HTTP_ALARM_DEPLOY_SCRIPT, HTTP_ALARM_LOGS, HTTP_ALARM_WINDOW_SECONDS,
 # HTTP_ALARM_422_MIN, HTTP_ALARM_5XX_MIN, HTTP_ALARM_REPEAT_SECONDS,
+# HTTP_ALARM_RATE_WINDOW_SECONDS, HTTP_ALARM_RATE_MIN_CALLS,
+# HTTP_ALARM_RATE_PCT, HTTP_ALARM_RATE_REPEAT_SECONDS,
 # HTTP_ALARM_NOW (epoch; tests), plus DEPLOY_STATE_DIR, DEPLOY_ALERT_FILE,
 # DEPLOY_ALERTS_ENV, DEPLOY_NOTIFY, DEPLOY_RUN_REPO, DEPLOY_RUN_ISSUE,
 # DEPLOY_GH_BIN. Cases: bash ops/tests/http-alarm.sh
@@ -51,6 +60,10 @@ WINDOW=${HTTP_ALARM_WINDOW_SECONDS:-900}
 MIN_422=${HTTP_ALARM_422_MIN:-3}
 MIN_5XX=${HTTP_ALARM_5XX_MIN:-1}
 REPEAT=${HTTP_ALARM_REPEAT_SECONDS:-3600}
+RATE_WINDOW=${HTTP_ALARM_RATE_WINDOW_SECONDS:-86400}
+RATE_MIN=${HTTP_ALARM_RATE_MIN_CALLS:-20}
+RATE_PCT=${HTTP_ALARM_RATE_PCT:-90}
+RATE_REPEAT=${HTTP_ALARM_RATE_REPEAT_SECONDS:-86400}
 NOW=${HTTP_ALARM_NOW:-$(date +%s)}
 STATE="$STATE_DIR/http-alarm.state" # "<epoch last alerted>\t<route>" per line
 mkdir -p "$STATE_DIR"
@@ -64,10 +77,11 @@ if [ "${#files[@]}" = 0 ]; then
 fi
 
 # One pass over the logs. Prints "R\t<route>\t<422s>\t<5xxs>" per route with
-# either, then "T\t<in window>\t<smoke skipped>\t<parsed>\t<unparsed>".
+# either, "F\t<route>\t<calls>\t<4xxs>" per route with >= rmin calls in the
+# 24 h rate window, then "T\t<in window>\t<smoke skipped>\t<parsed>\t<unparsed>".
 # Plain POSIX awk (the box's is mawk): no mktime, no {n} intervals.
 # shellcheck disable=SC2016
-summary=$(awk -v now="$NOW" -v window="$WINDOW" '
+summary=$(awk -v now="$NOW" -v window="$WINDOW" -v rwindow="$RATE_WINDOW" -v rmin="$RATE_MIN" '
   function days(y, m, d,   era, yoe, doy) { # days since 1970-01-01 (proleptic Gregorian)
     y -= (m <= 2); era = int(y / 400); yoe = y - era * 400
     doy = int((153 * (m + (m > 2 ? -3 : 9)) + 2) / 5) + d - 1
@@ -89,29 +103,37 @@ summary=$(awk -v now="$NOW" -v window="$WINDOW" '
     if (!match(rest, /"[A-Z]+ [^ "]+( [^"]*)?" [0-9][0-9][0-9] /)) { bad++; next }
     req = substr(rest, RSTART + 1, RLENGTH - 1)
     parsed++
-    if (epoch <= now - window || epoch > now) next
-    seen++
-    if (index($0, "infiniterealms-smoke") > 0) { smoke++; next }
+    if (epoch > now || (epoch <= now - window && epoch <= now - rwindow)) next
+    smk = index($0, "infiniterealms-smoke") > 0
     n = split(req, q, " ")
     status = q[n] + 0
-    if (status != 422 && (status < 500 || status > 599)) next
     path = q[2]; sub(/\?.*/, "", path)
     gsub(/[0-9A-Fa-f]+-[0-9A-Fa-f]+-[0-9A-Fa-f]+-[0-9A-Fa-f]+-[0-9A-Fa-f]+/, ":id", path)
     gsub(/\/[0-9]+\//, "/:n/", path); sub(/\/[0-9]+$/, "/:n", path)
     route = q[1] " " path
+    if (epoch > now - rwindow && !smk && q[1] != "OPTIONS") {
+      calls[route]++
+      if (status >= 400 && status <= 499) c4xx[route]++
+    }
+    if (epoch <= now - window) next
+    seen++
+    if (smk) { smoke++; next }
+    if (status != 422 && (status < 500 || status > 599)) next
     if (status == 422) c422[route]++; else c5xx[route]++
     routes[route] = 1
   }
   END {
     for (r in routes) printf "R\t%s\t%d\t%d\n", r, c422[r], c5xx[r]
+    for (r in calls) if (calls[r] >= rmin) printf "F\t%s\t%d\t%d\n", r, calls[r], c4xx[r]
     printf "T\t%d\t%d\t%d\t%d\n", seen, smoke, parsed, bad
   }' "${files[@]}")
 
 IFS=$'\t' read -r _ SEEN SMOKE PARSED BAD < <(grep '^T' <<< "$summary")
 
 last_alert() { awk -F'\t' -v r="$1" '$2 == r { t = $1 } END { print t + 0 }' "$STATE"; }
-remember() { # <route>: record an alert now, dropping lines older than REPEAT
-  awk -F'\t' -v now="$NOW" -v rep="$REPEAT" -v r="$1" '$2 != r && now - $1 < rep' "$STATE" > "$STATE.tmp" || true
+KEEP=$(( RATE_REPEAT > REPEAT ? RATE_REPEAT : REPEAT ))
+remember() { # <key>: record an alert now, dropping lines older than the longest repeat
+  awk -F'\t' -v now="$NOW" -v rep="$KEEP" -v r="$1" '$2 != r && now - $1 < rep' "$STATE" > "$STATE.tmp" || true
   printf '%s\t%s\n' "$NOW" "$1" >> "$STATE.tmp"
   mv "$STATE.tmp" "$STATE"
 }
@@ -120,21 +142,40 @@ remember() { # <route>: record an alert now, dropping lines older than REPEAT
 # "run": still readable, but never a marker to auto-deploy.sh's run hold.
 defuse_markers() { sed -E 's/([Rr][Uu][Nn])([[:space:]]+#?[A-Za-z]?[0-9]+[[:space:]]+[A-Za-z]+)/\1-\2/g'; }
 
-firing=() counts=() quiet=()
+# firing/counts/keys run in parallel: what the alert names, its count, and the
+# state key it is remembered under. Window alarms come first (n_window of them),
+# then 4xx-rate alarms, which carry their own period in the count.
+firing=() counts=() keys=() quiet=()
+# consider <key> <repeat> <name> <count>: fire, or note it is holding back.
+consider() {
+  local since=$(( NOW - $(last_alert "$1") ))
+  if [ "$since" -lt "$2" ]; then
+    quiet+=("$3 $4 (alerted $(( since / 60 ))m ago)")
+  else
+    firing+=("$3")
+    counts+=("$4")
+    keys+=("$1")
+  fi
+}
+
 while IFS=$'\t' read -r kind route n422 n5xx; do
   [ "$kind" = R ] || continue
   what=()
   [ "$n422" -ge "$MIN_422" ] && what+=("${n422}×422")
   [ "$n5xx" -ge "$MIN_5XX" ] && what+=("${n5xx}×5xx")
   [ "${#what[@]}" = 0 ] && continue
-  since=$(( NOW - $(last_alert "$route") ))
-  if [ "$since" -lt "$REPEAT" ]; then
-    quiet+=("$route ${what[*]} (alerted $(( since / 60 ))m ago)")
-  else
-    firing+=("$route")
-    counts+=("${what[*]}")
-  fi
+  consider "$route" "$REPEAT" "$route" "${what[*]}"
 done < <(grep '^R' <<< "$summary" | sort)
+n_window=${#firing[@]}
+
+# 4xx rate (#350): >= RATE_PCT% of >= RATE_MIN calls in RATE_WINDOW.
+rate_h=$(( RATE_WINDOW / 3600 ))
+while IFS=$'\t' read -r kind route calls n4xx; do
+  [ "$kind" = F ] || continue
+  [ $(( n4xx * 100 )) -ge $(( calls * RATE_PCT )) ] || continue
+  consider "4xx-rate $route" "$RATE_REPEAT" "$route" "${n4xx}/${calls}×4xx in ${rate_h}h"
+done < <(grep '^F' <<< "$summary" | sort)
+
 
 # A log that is being written but can't be read is an alarm that has gone blind.
 if [ "$PARSED" = 0 ] && [ "$BAD" -gt 0 ]; then
@@ -145,21 +186,35 @@ if [ "$PARSED" = 0 ] && [ "$BAD" -gt 0 ]; then
 fi
 
 mins=$(( WINDOW / 60 ))
-echo "$(ts) http-alarm: last ${mins}m: $SEEN requests, ${#firing[@]} route(s) alerting, ${#quiet[@]} already alerted within $(( REPEAT / 60 ))m, $SMOKE smoke request(s) not counted."
+echo "$(ts) http-alarm: last ${mins}m: $SEEN requests, ${#firing[@]} route(s) alerting, ${#quiet[@]} already alerted within the repeat period, $SMOKE smoke request(s) not counted."
 for q in ${quiet[@]+"${quiet[@]}"}; do echo "$(ts) http-alarm: quiet: $q"; done
 [ "${#firing[@]}" = 0 ] && exit 0
 
-joined=""
-for i in "${!firing[@]}"; do joined+="${joined:+; }${firing[$i]} ${counts[$i]}"; done
-emit "🔴 HTTP ALARM: $joined in the last ${mins}m (nginx api-access.log; thresholds ${MIN_422}×422 / ${MIN_5XX}×5xx per route)."
-for r in "${firing[@]}"; do remember "$r"; done
+in_window="" other=""
+for i in "${!firing[@]}"; do
+  if [ "$i" -lt "$n_window" ]; then
+    in_window+="${in_window:+; }${firing[$i]} ${counts[$i]}"
+  else
+    other+="${other:+; }${firing[$i]} ${counts[$i]}"
+  fi
+done
+joined="${in_window:+$in_window in the last ${mins}m}"
+joined+="${other:+${joined:+; }$other}"
+emit "🔴 HTTP ALARM: $joined (nginx api-access.log; thresholds ${MIN_422}×422 / ${MIN_5XX}×5xx per route in ${mins}m, or ≥${RATE_PCT}% 4xx of ≥${RATE_MIN} calls in ${rate_h}h)."
+for k in "${keys[@]}"; do remember "$k"; done
 
 body=$( {
-  echo "🔴 **HTTP alarm** — nginx \`api-access.log\`, last ${mins}m (to $(date -u -d "@$NOW" +%FT%TZ 2> /dev/null || date -u -r "$NOW" +%FT%TZ)):"
+  echo "🔴 **HTTP alarm** — nginx \`api-access.log\`, to $(date -u -d "@$NOW" +%FT%TZ 2> /dev/null || date -u -r "$NOW" +%FT%TZ):"
   echo
-  for i in "${!firing[@]}"; do echo "- \`${firing[$i]}\`: ${counts[$i]}"; done
+  for i in "${!firing[@]}"; do
+    if [ "$i" -lt "$n_window" ]; then
+      echo "- \`${firing[$i]}\`: ${counts[$i]} (last ${mins}m)"
+    else
+      echo "- \`${firing[$i]}\`: ${counts[$i]}"
+    fi
+  done
   echo
-  echo "Thresholds: ≥${MIN_422} × 422 or ≥${MIN_5XX} × 5xx per route; each route alerts at most once an hour. ${SMOKE} smoke request(s) not counted. Nothing was changed on the box. (ops/http-alarm.sh, #2293)"
+  echo "Thresholds: ≥${MIN_422} × 422 or ≥${MIN_5XX} × 5xx per route in ${mins}m (each route at most once an hour); ≥${RATE_PCT}% 4xx of ≥${RATE_MIN} calls in ${rate_h}h (at most once a day). ${SMOKE} smoke request(s) not counted. Nothing was changed on the box. (ops/http-alarm.sh, #2293, #350)"
 } | defuse_markers)
 if ! printf '%s\n' "$body" | "$GH_BIN" issue comment "$RUN_ISSUE" --repo "$RUN_REPO" --body-file - > /dev/null 2>&1; then
   echo "$(ts) http-alarm: WARNING: could not comment on #$RUN_ISSUE (the alert line was written)."
