@@ -2,7 +2,7 @@ import React from 'react';
 
 import { CastingDock } from './CastingDock';
 
-import type { CharacterSheetVM, SpellVM } from './types';
+import type { CharacterSheetVM, InventoryItemVM, SpellVM } from './types';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -311,6 +311,10 @@ export const RightSheet: React.FC<{
   spellActionError?: string;
   onCastSpell?: (spell: SpellVM) => void | Promise<void>;
   onTogglePrepared?: (spellId: string, isPrepared: boolean) => void | Promise<void>;
+  /** An equip in flight; that row's Equip button waits for it (#1059). */
+  equippingItemId?: string;
+  equipActionError?: string;
+  onEquipItem?: (item: InventoryItemVM) => void | Promise<void>;
 }> = ({
   c,
   sessionId,
@@ -320,6 +324,9 @@ export const RightSheet: React.FC<{
   spellActionError,
   onCastSpell,
   onTogglePrepared,
+  equippingItemId,
+  equipActionError,
+  onEquipItem,
 }) => (
   <div tabIndex={-1} className="flex h-full flex-col gap-3 overflow-y-auto pr-1 outline-none">
     <CastingDock />
@@ -461,6 +468,11 @@ export const RightSheet: React.FC<{
               )}
             </div>
           )}
+          {equipActionError && (
+            <p role="alert" className="mb-1.5 ir-text-min text-destructive">
+              {equipActionError}
+            </p>
+          )}
           <div className="space-y-1.5">
             {c.inventory.length === 0 && (
               <EmptyNote>
@@ -473,6 +485,19 @@ export const RightSheet: React.FC<{
                 <span className="flex-1 truncate ir-text-min text-foreground/90">{it.name}</span>
                 {it.quantity != null && it.quantity > 1 && (
                   <span className="ir-text-min text-muted-foreground">x{it.quantity}</span>
+                )}
+                {it.equippable && onEquipItem && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-6 shrink-0 px-1.5 ir-text-min ir-hit"
+                    disabled={equippingItemId === it.id}
+                    aria-label={`Equip ${it.name}`}
+                    onClick={() => void onEquipItem(it)}
+                  >
+                    {equippingItemId === it.id ? 'Equipping…' : 'Equip'}
+                  </Button>
                 )}
               </div>
             ))}

@@ -7,6 +7,7 @@ import type { ActionOption } from '@/utils/parseMessageOptions';
 import { ActionOptions } from '@/components/game/ActionOptions';
 import { useCombat } from '@/contexts/CombatContext';
 import { getAuthHeaders } from '@/services/auth/TokenService';
+import { equipCharacterItem } from '@/services/character-equipment-api';
 import {
   combatBoundaryFromResult,
   resultCarriesPersistedPlayerRow,
@@ -39,6 +40,8 @@ type LegalAction = {
   targetIds?: string[];
   x?: number;
   y?: number;
+  /** #1059: an 'Equip and attack' choice — equip the weapon before declaring the attack. */
+  equipFirst?: boolean;
 };
 
 interface DynamicOptionsSectionProps {
@@ -373,6 +376,26 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
           });
           await refreshCombatState();
         } else if (action.type === 'attack' && action.targetIds?.[0]) {
+          // #1059: an 'Equip and attack' choice readies the weapon first —
+          // the same equip write the sheet's Equip control makes (drawing is
+          // the turn's free object interaction) — so the commit below finds
+          // it equipped instead of refusing 'not equipped'. A failed equip
+          // stops the pipeline: nothing is declared and nothing is spent.
+          if (action.equipFirst && action.weaponId) {
+            const actorParticipant = encounter.participants.find(
+              (participant) => participant.id === actorId,
+            );
+            if (!actorParticipant?.characterId) {
+              setError('The weapon could not be equipped. Nothing was spent.');
+              return;
+            }
+            try {
+              await equipCharacterItem(actorParticipant.characterId, action.weaponId);
+            } catch {
+              setError('The weapon could not be equipped. Nothing was spent.');
+              return;
+            }
+          }
           // #2563: an attack option runs the declare → dialog → commit pipeline
           // itself. It used to send "I attack with … against …" as chat text, which
           // made the DM the first to see the attack: in run D5 round 2 the DM's
@@ -401,7 +424,11 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
           // rolls for the player, so the commit below runs with no player die and the
           // engine rolls. A dismissed or refused popup still stops here.
           if (!die.movementOnly && !die.timedOut && (die.autoRolled || die.d20 == null)) {
-            setError('The attack could not be made. Nothing was spent.');
+            setError(
+              action.equipFirst
+                ? 'The attack could not be made. The weapon stays equipped.'
+                : 'The attack could not be made. Nothing was spent.',
+            );
             return;
           }
           const execution = await executeStructuredCombatActionWithBoundary(

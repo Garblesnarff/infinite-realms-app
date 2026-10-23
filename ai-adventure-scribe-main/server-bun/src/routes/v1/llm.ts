@@ -990,6 +990,27 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             secondWindDirective = null;
           }
         }
+        // #1059: a typed weapon equip in combat ("I draw my shortbow")
+        // equips it through the same write the in-session Equip control
+        // makes, before the DM narrates, so the reply carries the engine's
+        // truth (the equip, the already-in-hand fact, or the not-carrying
+        // refusal) instead of prose the attack path then refuses. Gated on
+        // dmReply like Second Wind: narration regens carry no dmReply, and
+        // resolving twice would post the engine line twice.
+        // Dynamic import: the resolver pulls in the database client at load time.
+        let equipDirective: string | null = null;
+        if (dmReply && defenseSessionId && typeof playerInput === 'string') {
+          try {
+            const { resolveCombatEquip } = await import('../../services/dm/combat-equip.js');
+            equipDirective = await resolveCombatEquip({
+              playerInput,
+              sessionId: defenseSessionId,
+              userId,
+            });
+          } catch {
+            equipDirective = null;
+          }
+        }
         // #2514: the DM prompt receives the engine-decided creature count and
         // names BEFORE it narrates the approach. For a declared attack the
         // target is known before generation, so sizing runs here and the
@@ -1029,7 +1050,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             : untargetedSpell
               ? appendUntargetedSpellDirective(prompt, untargetedSpell.name)
               : prompt;
-        const engineDirectives = [layOnHandsDirective, secondWindDirective].filter(
+        const engineDirectives = [layOnHandsDirective, secondWindDirective, equipDirective].filter(
           (directive): directive is string => directive !== null,
         );
         const llmPrompt =

@@ -5,9 +5,10 @@ import { buildSpellCastContext, buildSpellCastMessage } from './spell-view-model
 import { useOverhaulViewModel } from './useOverhaulViewModel';
 
 import type { SpellCastHandlerRef } from '../spell-cast-handler';
-import type { SpellVM } from './types';
+import type { InventoryItemVM, SpellVM } from './types';
 
 import { useCharacter } from '@/contexts/CharacterContext';
+import { equipCharacterItem } from '@/services/character-equipment-api';
 import { characterSpellService } from '@/services/characterSpellApi';
 import {
   beginSheetCast,
@@ -31,6 +32,8 @@ export const RightSheetLive: React.FC<{
   const [preparedOverrides, setPreparedOverrides] = useState<Record<string, boolean>>({});
   const [pendingSpellId, setPendingSpellId] = useState<string>();
   const [spellActionError, setSpellActionError] = useState<string>();
+  const [equippingItemId, setEquippingItemId] = useState<string>();
+  const [equipActionError, setEquipActionError] = useState<string>();
   const [castingSpellId, setCastingSpellId] = useState<string>();
   // Synchronous twin of `castingSpellId`: a second click can land before React re-renders the
   // disabled button, and the state alone would let it through.
@@ -40,6 +43,7 @@ export const RightSheetLive: React.FC<{
   useEffect(() => {
     setPreparedOverrides({});
     setSpellActionError(undefined);
+    setEquipActionError(undefined);
   }, [character?.id]);
 
   const sheet = useMemo(() => {
@@ -97,6 +101,65 @@ export const RightSheetLive: React.FC<{
     [character, dispatch],
   );
 
+  // #1059: the in-session Equip control. The route writes the same
+  // character_equipment rows the sheet's equip writes; on success the
+  // local character follows, so the row moves to the Equipment panel and
+  // the combat readers (which re-read the rows) honour it on the next
+  // attack. The response's armor class is the server's re-synced stored
+  // number (#1858), so the sheet's AC follows donning armour too.
+  const equipInFlightRef = useRef(false);
+  const handleEquipItem = useCallback(
+    async (item: InventoryItemVM): Promise<void> => {
+      if (!character?.id) {
+        setEquipActionError('Equipment is unavailable until the character is loaded.');
+        return;
+      }
+      // One equip at a time, like the cast path (#2305): a second click
+      // mid-flight would overwrite equippingItemId, and the first call's
+      // finally would clear it while the second equip still runs.
+      if (equipInFlightRef.current) return;
+      equipInFlightRef.current = true;
+
+      setEquippingItemId(item.id);
+      setEquipActionError(undefined);
+      try {
+        const { armorClass } = await equipCharacterItem(character.id, item.id);
+        // The sheet reads AC from character_stats (object or one-row
+        // array); the dispatch carries the row in the shape it arrived.
+        const statsRow = Array.isArray(character.character_stats)
+          ? character.character_stats[0]
+          : character.character_stats;
+        const nextStats =
+          typeof armorClass === 'number' && statsRow
+            ? { ...statsRow, armor_class: armorClass }
+            : undefined;
+        dispatch({
+          type: 'UPDATE_CHARACTER',
+          payload: {
+            inventory: (character.inventory ?? []).map((row) =>
+              row.itemId === item.id ? { ...row, equipped: true } : row,
+            ),
+            ...(nextStats
+              ? {
+                  character_stats: Array.isArray(character.character_stats)
+                    ? [nextStats]
+                    : nextStats,
+                }
+              : {}),
+          },
+        });
+      } catch (error) {
+        setEquipActionError(
+          error instanceof Error ? error.message : 'Unable to equip that item.',
+        );
+      } finally {
+        equipInFlightRef.current = false;
+        setEquippingItemId(undefined);
+      }
+    },
+    [character, dispatch],
+  );
+
   const handleCastSpell = useCallback(
     async (spell: SpellVM): Promise<void> => {
       // In combat as well as out of it (#2233): the cast goes through the ordinary turn, where
@@ -145,6 +208,9 @@ export const RightSheetLive: React.FC<{
       spellActionError={spellActionError}
       onCastSpell={handleCastSpell}
       onTogglePrepared={handleTogglePrepared}
+      equippingItemId={equippingItemId}
+      equipActionError={equipActionError}
+      onEquipItem={handleEquipItem}
     />
   );
 });
