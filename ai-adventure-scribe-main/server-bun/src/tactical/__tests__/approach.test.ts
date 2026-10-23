@@ -140,6 +140,63 @@ describe('planApproach', () => {
     expect(planApproach(map, 'roach', 'ghost', 5)).toBeNull();
   });
 
+  test('across a long table the plan walks the real path instead of standing still (#1057)', () => {
+    // The Eternal Feast shape from the report: Sera at (9,2), the guest at (9,7) — 25ft in
+    // a straight line — with a long table row directly in front of her. Every cell she can
+    // reach is exactly as far from the guest as the one she stands on (or farther), because
+    // the only way closer runs along the table to its end first, and the ends are beyond
+    // this turn's movement. The straight-line-greedy plan used to keep her own cell and
+    // the attack died as "could not move closer" at 25ft with 30ft of speed.
+    const walls: Array<[number, number]> = Array.from({ length: 16 }, (_, i) => [2 + i, 3] as [
+      number,
+      number,
+    ]);
+    const map = board([entity('sera', 9, 2, 'pc'), entity('guest', 9, 7, 'monster')], walls);
+    const plan = planApproach(map, 'sera', 'guest', 5)!;
+    expect(plan.inReach).toBe(false);
+    // The full route around the table costs 75ft; this turn's 30ft is committed along it.
+    expect(plan.pathCostFeet).toBe(75);
+    expect(plan.costFeet).toBe(30);
+    expect(plan.destination).not.toEqual({ x: 9, y: 2 });
+    expect(plan.path[0]).toEqual({ x: 9, y: 2 });
+    expect(plan.path.at(-1)).toEqual(plan.destination);
+    expect(plan.path).toHaveLength(7);
+    const reachable = getReachableMoves(map, 'sera');
+    expect(
+      reachable.some((c) => c.x === plan.destination.x && c.y === plan.destination.y),
+    ).toBe(true);
+  });
+
+  test('at 10ft across a wide table the plan still commits movement along the path (#1057)', () => {
+    // Tavo's shape from the same report: 10ft from the target, but the table between them
+    // is wide enough that the detour costs 45ft — no reachable cell is closer in a straight
+    // line, so the greedy plan stood still here too.
+    const walls: Array<[number, number]> = [1, 2, 3, 4, 5, 6, 7, 8, 9].map(
+      (x) => [x, 6] as [number, number],
+    );
+    const map = board([entity('tavo', 5, 5, 'pc'), entity('guest', 5, 7, 'monster')], walls);
+    const plan = planApproach(map, 'tavo', 'guest', 5)!;
+    expect(plan.inReach).toBe(false);
+    expect(plan.pathCostFeet).toBe(45);
+    expect(plan.costFeet).toBe(30);
+    expect(plan.destination).not.toEqual({ x: 5, y: 5 });
+  });
+
+  test('with no path at all the plan still stands still (the rift stays an honest refusal)', () => {
+    // A full-height wall: there is no route, at any budget, so walking the path cannot
+    // fire — standing still with pathCostFeet null is the truthful plan.
+    const walls: Array<[number, number]> = Array.from({ length: 20 }, (_, y) => [7, y] as [
+      number,
+      number,
+    ]);
+    const map = board([entity('roach', 6, 6, 'monster'), entity('seeker', 9, 6, 'pc')], walls);
+    const plan = planApproach(map, 'roach', 'seeker', 5)!;
+    expect(plan.inReach).toBe(false);
+    expect(plan.pathCostFeet).toBeNull();
+    expect(plan.costFeet).toBe(0);
+    expect(plan.destination).toEqual({ x: 6, y: 6 });
+  });
+
   test('difficult terrain is paid for out of the same movement budget', () => {
     const placements: MapEntity[] = [
       entity('roach', 5, 5, 'monster'),
