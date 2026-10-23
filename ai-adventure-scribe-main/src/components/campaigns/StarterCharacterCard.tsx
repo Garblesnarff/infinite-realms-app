@@ -5,6 +5,8 @@ import { StarterCharacterPortrait } from './StarterCharacterPortrait';
 
 import type { StarterCharacterTemplate } from '@/hooks/use-starter-character-templates';
 
+import { formatClassWithSubclass } from '@/utils/character/class-with-subclass';
+
 /**
  * Get class icon component
  */
@@ -45,7 +47,8 @@ export const StarterCharacterCard: React.FC<StarterCharacterCardProps> = ({
   isSelected,
   onSelect,
 }) => {
-  const accessibleName = `Select ${template.name}, ${template.race} ${template.class}`;
+  const classLabel = formatClassWithSubclass(template.class, template.subclass);
+  const accessibleName = `Select ${template.name}, ${template.race} ${classLabel}`;
 
   return (
     <button
@@ -72,7 +75,7 @@ export const StarterCharacterCard: React.FC<StarterCharacterCardProps> = ({
       {/* Name and Class */}
       <h3 className="text-lg font-bold text-foreground text-center">{template.name}</h3>
       <p className="text-sm text-infinite-gold mb-1">
-        {template.race} {template.class}
+        {template.race} {classLabel}
       </p>
       <p className="text-xs text-muted-foreground text-center line-clamp-2">{template.tagline}</p>
 

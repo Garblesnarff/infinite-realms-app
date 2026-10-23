@@ -40,6 +40,7 @@ export async function getCharacterClassFeatures(
 ): Promise<CharacterClassFeaturesResponse> {
   const response = await fetchWithAuth(
     `/v1/class-features/characters/${encodeURIComponent(characterId)}/features`,
+    { retryBudgetMs: 0 },
   );
 
   if (!response.ok) {
@@ -47,6 +48,27 @@ export async function getCharacterClassFeatures(
   }
 
   return (await response.json()) as CharacterClassFeaturesResponse;
+}
+
+/**
+ * The chosen subclass row (`GET .../subclass/:className`). 404 is "no row",
+ * not a failure. One attempt: this read must not hold the sheet behind retries.
+ */
+export async function getCharacterSubclass(
+  characterId: string,
+  className: string,
+): Promise<string | null> {
+  const response = await fetchWithAuth(
+    `/v1/class-features/characters/${encodeURIComponent(characterId)}/subclass/${encodeURIComponent(className)}`,
+    { retryBudgetMs: 0 },
+  );
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(`Subclass request failed with status ${response.status}`);
+  }
+  const body = (await response.json()) as { subclass?: { subclassName?: unknown } };
+  const name = body.subclass?.subclassName;
+  return typeof name === 'string' && name.trim() ? name.trim() : null;
 }
 
 export async function updateCharacterClassFeatures(

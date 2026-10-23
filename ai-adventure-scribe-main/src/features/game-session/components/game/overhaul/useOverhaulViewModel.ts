@@ -29,6 +29,7 @@ import { useCombat } from '@/contexts/CombatContext';
 import { getExperienceForLevel } from '@/data/levelProgression';
 import { isHostileParticipantType } from '@/services/combat/engine-result-card';
 import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
+import { formatClassWithSubclass } from '@/utils/character/class-with-subclass';
 import { getWeaponAttackBonus } from '@/utils/character/weapon-attack-bonus';
 import { getWeaponDamageText } from '@/utils/character/weapon-damage-text';
 import { calculateAllCharacterStats } from '@/utils/character-calculations';
@@ -190,6 +191,14 @@ export function mergePartyMembers(
  */
 export type SheetVitalState = 'standing' | 'dying' | 'stabilized' | 'dead';
 
+function sheetClassIdentity(character: Character): Pick<CharacterSheetVM, 'subtitle' | 'features'> {
+  const classLabel = formatClassWithSubclass(character.class?.name, character.subclassName);
+  return {
+    subtitle: [character.race?.name, classLabel || null].filter(Boolean).join(' · '),
+    ...(character.grantedFeatureNames ? { features: character.grantedFeatureNames } : {}),
+  };
+}
+
 export function buildCharacterSheet(
   character: Character | null,
   liveVitalState?: SheetVitalState | null,
@@ -226,7 +235,7 @@ export function buildCharacterSheet(
     return {
       ...empty,
       name: character.name ?? 'Adventurer',
-      subtitle: [character.race?.name, character.class?.name].filter(Boolean).join(' · '),
+      ...sheetClassIdentity(character),
       level: character.level ?? 1,
     };
   }
@@ -357,7 +366,7 @@ export function buildCharacterSheet(
 
   return {
     name: character.name ?? 'Adventurer',
-    subtitle: [character.race?.name, character.class?.name].filter(Boolean).join(' · '),
+    ...sheetClassIdentity(character),
     level,
     xpCurrent,
     xpMax,
@@ -455,10 +464,12 @@ export function useOverhaulViewModel(opts?: {
     const liveVitalState: SheetVitalState | undefined = !protagonistParticipant
       ? undefined
       : protagonistParticipant.isDead ||
-          (protagonistParticipant.currentHitPoints <= 0 && protagonistParticipant.deathSaves.failures >= 3)
+          (protagonistParticipant.currentHitPoints <= 0 &&
+            protagonistParticipant.deathSaves.failures >= 3)
         ? 'dead'
         : protagonistParticipant.isStable ||
-            (protagonistParticipant.currentHitPoints <= 0 && protagonistParticipant.deathSaves.successes >= 3)
+            (protagonistParticipant.currentHitPoints <= 0 &&
+              protagonistParticipant.deathSaves.successes >= 3)
           ? 'stabilized'
           : protagonistParticipant.currentHitPoints <= 0
             ? 'dying'

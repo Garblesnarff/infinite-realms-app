@@ -5,6 +5,7 @@
 import { buildAbilityScores } from './build-ability-scores';
 import { characterSpellService } from './characterSpellApi';
 import { hydrateCharacterStats } from './hydrate-character-stats';
+import { loadGrantedClassIdentity } from './load-granted-class-identity';
 
 import type { CharacterSpellData } from './characterSpellApi';
 import type { Character, CharacterClass, CharacterBackground } from '@/types/character';
@@ -157,6 +158,13 @@ export async function loadCharacterWithSpells(
       // Continue with database spell data - this is not a fatal error
     }
 
+    // #1019: subclass and granted features live in their own tables. The
+    // character GET does not carry them, so the sheet read them here.
+    const classIdentity = await loadGrantedClassIdentity(
+      characterId,
+      typeof characterData.class === 'string' ? characterData.class : null,
+    );
+
     // Construct complete character object
     const loadedCharacter: Character = {
       id: characterData.id,
@@ -165,6 +173,10 @@ export async function loadCharacterWithSpells(
       race: characterRace,
       subrace: characterSubrace,
       class: characterClass as CharacterClass | null,
+      ...(classIdentity.subclassName ? { subclassName: classIdentity.subclassName } : {}),
+      ...(classIdentity.grantedFeatureNames
+        ? { grantedFeatureNames: classIdentity.grantedFeatureNames }
+        : {}),
       level: characterData.level || 1,
       background: characterBackground as CharacterBackground | null,
       // The server stores and seats this AC value; do not recompute it from
