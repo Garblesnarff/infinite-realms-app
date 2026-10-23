@@ -51,6 +51,7 @@ import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
 import {
   assessPlayerCombatSpell,
   isPlayerCombatBuffSpell,
+  isPlayerCombatUtilitySpell,
   isSelfCastSpell,
   resolveCatalogSpell,
 } from '../../data/spellData.js';
@@ -1272,6 +1273,26 @@ export class CombatAttackService {
             autoHit: true,
             spellName: spell.name,
             selfCast: true,
+          };
+        }
+
+        // #715: a utility spell (Dancing Lights) has no attack and no damage. The shared
+        // path above already claimed the action and, when the spell has a level, the slot.
+        // Concentration starts on return when the spell requires it. Nothing is wounded.
+        if (isPlayerCombatUtilitySpell(spell)) {
+          return {
+            hit: true,
+            targetAC: 0,
+            totalAttackRoll: 0,
+            finalDamage: 0,
+            effectiveResistance: false,
+            effectiveVulnerability: false,
+            effectiveImmunity: false,
+            isCritical: false,
+            isNaturalOne: false,
+            isNaturalTwenty: false,
+            spellName: spell.name,
+            utilityCast: true,
           };
         }
 

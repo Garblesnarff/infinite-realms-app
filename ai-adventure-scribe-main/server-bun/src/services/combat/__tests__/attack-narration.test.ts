@@ -119,6 +119,20 @@ describe('spell engine narration', () => {
     );
   });
 
+  it('reports a utility cast as an action spent, with no roll and no wound (#715)', () => {
+    expect(
+      describeResolvedSpell(
+        'The Apprentice',
+        'Hostile Presence',
+        'Dancing Lights',
+        { utilityCast: true, finalDamage: 0 },
+        true,
+      ),
+    ).toBe(
+      'The Apprentice casts Dancing Lights. The action is spent. No roll, no damage, no wound. Narrate the spell; the engine does not resolve an attack.',
+    );
+  });
+
   it('reports a clear refusal for an unknown spell', () => {
     expect(describeRefusedSpell('Rook', 'Meteor Swarm', 'unknown spell')).toBe(
       'Engine: Rook\'s spell "Meteor Swarm" was refused (unknown spell). No roll, no damage, no wound.',

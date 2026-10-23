@@ -94,6 +94,21 @@ export function isPlayerCombatBuffSpell(spell: Spell | undefined): boolean {
 }
 
 /**
+ * Utility spells the combat engine can cast without an attack, save, or damage (#715).
+ * Dancing Lights is the reported case: a cantrip whose whole mechanical footprint is
+ * the action it spends and the concentration it starts. The DM narrates the lights.
+ * Kept as an explicit list, like the curse and buff lists, so Haste, Fly, and Light
+ * stay refused until the engine can record what they actually do.
+ */
+export const PLAYER_COMBAT_UTILITY_SPELL_IDS = ['dancing-lights'] as const;
+
+const PLAYER_COMBAT_UTILITY_SPELL_ID_SET = new Set<string>(PLAYER_COMBAT_UTILITY_SPELL_IDS);
+
+export function isPlayerCombatUtilitySpell(spell: Spell | undefined): boolean {
+  return !!spell && PLAYER_COMBAT_UTILITY_SPELL_ID_SET.has(spell.id);
+}
+
+/**
  * A spell the combat engine can acknowledge as cast on the caster themself (#902): range
  * Self, concentration, and nothing for the engine to resolve against another creature —
  * no damage, attack roll, saving throw, or area (Detect Magic is the reported case). Such
@@ -275,7 +290,11 @@ export function assessPlayerCombatSpell(
     }
     return { castable: true, spell };
   }
-  if (isPlayerCombatBuffSpell(spell) || isSelfCastSpell(spell)) {
+  if (
+    isPlayerCombatBuffSpell(spell) ||
+    isSelfCastSpell(spell) ||
+    isPlayerCombatUtilitySpell(spell)
+  ) {
     if (spell.level >= 1 && (slotLevel === undefined || slotLevel === null)) {
       return {
         castable: false,

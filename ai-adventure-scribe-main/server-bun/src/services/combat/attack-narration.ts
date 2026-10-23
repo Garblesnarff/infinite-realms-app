@@ -81,6 +81,8 @@ export type ResolvedSpellOutcome = {
   autoHit?: boolean;
   /** True for the Hex cast itself: a no-damage curse, narrated as such (#754). */
   hexCurse?: boolean;
+  /** A utility cast: the action is spent and nothing is rolled or wounded (#715). */
+  utilityCast?: boolean;
   /** Extra necrotic from Hex on a spell-attack hit against its cursed target (#754). */
   hexDamage?: number;
   finalDamage?: number;
@@ -143,6 +145,12 @@ export function describeResolvedSpell(
   // #754: the Hex cast is a no-damage curse, not a spell attack. One engine line, exactly.
   if (outcome.hexCurse) {
     return `${actorLabel} curses ${targetLabel} with ${spellName}.`;
+  }
+  if (outcome.utilityCast) {
+    return (
+      `${actorLabel} casts ${spellName}. The action is spent. No roll, no damage, no wound. ` +
+      'Narrate the spell; the engine does not resolve an attack.'
+    );
   }
   if (outcome.autoHit) {
     return resolvedSpellLine(
