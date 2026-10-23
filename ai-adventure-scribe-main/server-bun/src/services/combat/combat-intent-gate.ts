@@ -499,6 +499,13 @@ const matchClauseHead = (clause: string): ClauseAttackMatch | null => {
   };
 };
 
+/** A purpose of help cancels the hostile reading (#1046). */
+const HELPING_PURPOSE =
+  /\b(?:to\s+(?:stop|save|help|catch)|pull\s+(?:him|her|them|it|[a-z][\w'-]*)\s+up|onto\s+safety)\b/i;
+
+const isHelpingPurpose = (clause: string): boolean =>
+  HELPING_PURPOSE.test(clause.replace(/[’‘]/g, "'"));
+
 const resolveClauseAttack = (
   rawClause: string,
   actors: readonly CombatIntentActor[],
@@ -579,6 +586,9 @@ export function detectDeclaredAttack(
   options?: { antecedent?: CombatIntentActor | null },
 ): DeclaredAttack | null {
   if (typeof playerInput !== 'string' || !playerInput.trim()) return null;
+  // "and" splits "I grab him and pull him up" into a bare grab, so the purpose
+  // is read on the whole message. It drops grab and shove only (#1046).
+  const helpingGrab = isHelpingPurpose(playerInput);
   const antecedentGiven = options != null && Object.hasOwn(options, 'antecedent');
 
   const clauses = splitIntoClauses(withoutSheetSpellTag(playerInput).trim().replace(/\s+/g, ' '));
@@ -592,6 +602,7 @@ export function detectDeclaredAttack(
       antecedent: options?.antecedent ?? null,
       antecedentGiven,
     });
+    if (match && helpingGrab && (match.verb === 'grab' || match.verb === 'shove')) continue;
     if (match) declaredAttack = match;
   }
   return declaredAttack;
@@ -765,6 +776,7 @@ const SECOND_WIND_PHRASE = /\bsecond\s+wind\b/i;
 const SECOND_WIND_LABEL = /^second\s+wind[.!]?$/i;
 const SECOND_WIND_USE =
   /\b(?:i|we)(?:'ll|\s+will|\s+want\s+to|\s+try\s+to|\s+am\s+going\s+to|\s*'m\s+going\s+to)?\s*use\s+(?:my\s+)?second\s+wind\b/i;
+// prettier-ignore
 const SECOND_WIND_USING =
   /\b(?:i|we)(?:\s+am|'m)\s+using\s+(?:my\s+)?second\s+wind\b/i;
 const SECOND_WIND_LET_ME = /\blet\s+me\s+use\s+(?:my\s+)?second\s+wind\b/i;

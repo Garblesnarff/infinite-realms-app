@@ -166,6 +166,39 @@ describe('POST /v1/combat/sessions/:sessionId/declared-attack', () => {
       });
       expect(await response.json()).toEqual({ pending: null });
     });
+
+    it.each([
+      'I grab the Professor to stop him falling',
+      'I grab him to stop his fall',
+      'I grab him and pull him up',
+      'I shove him back onto the ledge to save him',
+    ])('leaves a helping grab as a check: %s (#1046)', async (playerInput) => {
+      roster = [marrow];
+      const response = await post({ ...declaredAttackCheckBody, playerInput });
+      expect(await response.json()).toEqual({ pending: null });
+    });
+
+    it('still opens entry for an attack whose purpose only sounds like help (#1046)', async () => {
+      roster = [{ name: 'Goblin', source: 'ledger' }];
+      const response = await post({
+        ...declaredAttackCheckBody,
+        playerInput: 'I attack the goblin to stop him from escaping',
+      });
+      expect(await response.json()).toMatchObject({
+        pending: { declaredAttack: { actorName: 'Goblin', verb: 'attack' } },
+      });
+    });
+
+    it('keeps a later stab when an earlier grab was only to help (#1046)', async () => {
+      roster = [{ name: 'Goblin', source: 'ledger' }];
+      const response = await post({
+        ...declaredAttackCheckBody,
+        playerInput: 'I grab him to stop his fall. I stab the goblin',
+      });
+      expect(await response.json()).toMatchObject({
+        pending: { declaredAttack: { actorName: 'Goblin', verb: 'stab' } },
+      });
+    });
   });
 
   it.each([
