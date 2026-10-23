@@ -259,6 +259,22 @@ describe('detectDeclaredAttack', () => {
     ).toBeNull();
   });
 
+  it('cancels a grab or shove whose purpose is help (#1046)', () => {
+    const marrow = [{ name: 'Dr. Marrow' }];
+    expect(detectDeclaredAttack('I grab the Professor to stop him falling', marrow)).toBeNull();
+    expect(detectDeclaredAttack('I grab him to stop his fall', marrow)).toBeNull();
+    expect(detectDeclaredAttack('I grab him and pull him up', marrow)).toBeNull();
+    expect(detectDeclaredAttack('I shove him back onto the ledge to save him', marrow)).toBeNull();
+    expect(detectDeclaredAttack('I grab the Professor', marrow)).toMatchObject({
+      actorName: 'Dr. Marrow',
+      verb: 'grab',
+    });
+    expect(detectDeclaredAttack('I shove him off the ledge', marrow)).toMatchObject({
+      actorName: 'Dr. Marrow',
+      verb: 'shove',
+    });
+  });
+
   it('keeps an explicit unarmed weapon word unarmed (#569)', () => {
     const attack = detectDeclaredAttack('I attack the professor with my fists', actors);
     expect(attack).toMatchObject({

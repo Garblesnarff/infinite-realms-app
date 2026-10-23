@@ -166,6 +166,17 @@ describe('POST /v1/combat/sessions/:sessionId/declared-attack', () => {
       });
       expect(await response.json()).toEqual({ pending: null });
     });
+
+    it.each([
+      'I grab the Professor to stop him falling',
+      'I grab him to stop his fall',
+      'I grab him and pull him up',
+      'I shove him back onto the ledge to save him',
+    ])('leaves a helping grab as a check: %s (#1046)', async (playerInput) => {
+      roster = [marrow];
+      const response = await post({ ...declaredAttackCheckBody, playerInput });
+      expect(await response.json()).toEqual({ pending: null });
+    });
   });
 
   it.each([
