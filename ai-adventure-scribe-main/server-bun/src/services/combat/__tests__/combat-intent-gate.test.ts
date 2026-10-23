@@ -321,6 +321,9 @@ describe('detectDeclaredDefense (#262)', () => {
   it('detects disengage, dash, yield and flee', () => {
     expect(detectDeclaredDefense('I disengage')).toBe('disengage');
     expect(detectDeclaredDefense('Dash')).toBe('dash');
+    expect(detectDeclaredDefense('I dash forward')).toBe('dash');
+    expect(detectDeclaredDefense('I dash ahead.')).toBe('dash');
+    expect(detectDeclaredDefense('I dash and attack')).toBeNull();
     expect(detectDeclaredDefense('I yield')).toBe('yield');
     expect(detectDeclaredDefense('I surrender')).toBe('yield');
     expect(detectDeclaredDefense('surrender')).toBe('yield');
