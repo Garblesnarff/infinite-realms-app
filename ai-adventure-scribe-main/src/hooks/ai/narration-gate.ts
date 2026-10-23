@@ -1,5 +1,8 @@
 import { inventedExtraStrikeClaims } from '../../../shared/narration-extra-strike';
-import { spliceContradictingSentences } from '../../../shared/narration-harm';
+import {
+  spliceContradictingSentences,
+  type OutcomeClaim,
+} from '../../../shared/narration-harm';
 
 import type { ChatMessage } from '@/services/ai-service';
 import type { PlayerInputOrigin } from '@/services/combat/combat-action-origin';
@@ -7,6 +10,7 @@ import type { PersistedRollOutcome } from '@/types/session-state';
 
 import {
   contradictsEngineOutcome,
+  fabricatedOutcomeClaimSpans,
   fabricatedOutcomeClaims,
   type EngineOutcome,
 } from '@/hooks/ai/silent-player-turn';
@@ -101,6 +105,15 @@ export interface NarrationGateParams<T extends GatedNarration> {
   branch: 'combat' | 'narrative';
   /** Outside combat the player's own spell or blow may be narrated; see `fabricatedOutcomeClaims`. */
   playerMayHaveActed?: boolean;
+  /**
+   * #1048: the turn answered one of the previous DM reply's listed options. The checks
+   * run exactly as on any other turn; only the terminal step differs — a reply that
+   * still violates after the retry is not swapped for the no-effect line, because the
+   * story is advancing on the DM's own invitation. The sentences carrying the repeated
+   * claim are dropped instead (the extra-strike gate's tail), and the rest of the
+   * reply, options included, survives.
+   */
+  pickedListedOption?: boolean;
   encounterId?: string;
   /**
    * #266: the engine's authoritative verdict for the turn (a roll it decided). When present the
@@ -120,6 +133,7 @@ export async function enforceNarrationGate<T extends GatedNarration>(
     sessionId,
     branch,
     playerMayHaveActed,
+    pickedListedOption,
     encounterId,
     regenerate,
     engineOutcome,
@@ -156,11 +170,17 @@ export async function enforceNarrationGate<T extends GatedNarration>(
   }
   logRejection(1, violations, reason);
 
+  let retry: T | undefined;
+  let repeated: string[] = [];
+  let repeatedClaims: OutcomeClaim[] = [];
   try {
-    const retry = await regenerate(violationNote);
-    const repeated: string[] = engineOutcome
-      ? contradictsEngineOutcome(retry.text, engineOutcome).map((c) => c.match)
-      : fabricatedOutcomeClaims(retry.text, options);
+    retry = await regenerate(violationNote);
+    if (engineOutcome) {
+      repeatedClaims = contradictsEngineOutcome(retry.text, engineOutcome);
+      repeated = repeatedClaims.map((c) => c.match);
+    } else {
+      repeated = fabricatedOutcomeClaims(retry.text, options);
+    }
     if (!repeated.length) {
       releaseHeldSideEffects(retry);
       return { narration: retry, outcome: 'regenerated' };
@@ -168,6 +188,43 @@ export async function enforceNarrationGate<T extends GatedNarration>(
     logRejection(2, repeated, reason);
   } catch {
     logRejection(2, violations, 'regeneration_failed');
+  }
+
+  if (pickedListedOption) {
+    // #1048: the turn answered the DM's own listed option, so the narration is not
+    // swapped for the no-effect line — only the sentences carrying the repeated claim
+    // are dropped, and the reply's options stay. The spans carry the flagged
+    // occurrences' own indices (`fabricatedOutcomeClaimSpans` /
+    // `contradictsEngineOutcome`): a phrase repeated in two sentences, or used first
+    // in a negated / figurative sense, must drop the sentence the detector flagged,
+    // not the first place the phrase happens to appear. A regeneration that failed
+    // leaves the first reply as the splice source on the harm arm; on the
+    // engine-outcome arm its contradictions were never re-read, so nothing is
+    // spliceable and the replacement below stands. A splice that would leave no
+    // narration at all also falls through — an empty reply is worse than the line.
+    const source = retry ?? narration;
+    const spans = engineOutcome
+      ? repeatedClaims
+      : fabricatedOutcomeClaimSpans(source.text ?? '', options);
+    const splicedText = spans.length
+      ? spliceContradictingSentences(source.text ?? '', spans, '')
+      : '';
+    if (splicedText) {
+      // The kept narration is an edit of a reply the gate rejected, so — exactly as
+      // on the replaced arm — its parked side effects do not run and its segment map
+      // does not survive: the held closure extracts memory and world state from the
+      // reply's raw text (ai-service), which still carries the dropped claims
+      // verbatim, and the segments are a parallel copy of the same unedited text.
+      // A rejected reply leaves nothing in memory (#2373); the player still reads
+      // the narration, minus the claiming sentences.
+      const stripped: T = {
+        ...source,
+        text: splicedText,
+        narrationSegments: undefined,
+        heldSideEffects: undefined,
+      };
+      return { narration: stripped, outcome: 'regenerated' };
+    }
   }
   // Neither reply is kept: nothing they parked runs, and nothing they carried survives.
   return {
@@ -245,6 +302,9 @@ export interface NarrativeTurn {
    * #1041: the player's message picked one of the options the previous DM reply listed
    * (see `playerPickedListedOption`). The story itself offered the move, so the turn is
    * the story advancing on the DM's own invitation, not a free-text non-action.
+   * #1048: the pick is recorded for `enforceNarrationGate`, where it spares the reply
+   * the no-effect replacement; it no longer exempts the turn from the gate's checks,
+   * so the predicate below ignores it.
    */
   playerPickedListedOption?: boolean;
   result: {
@@ -278,27 +338,24 @@ export interface NarrativeTurn {
  * G22-008's listed landing choice was answered "(Nothing comes of that…)" and its options
  * wiped, because the ending narration claimed the story's conclusion with nothing backing it.
  *
- * #1041: a turn answering a listed option is likewise not the gate's to eat. The DM's own
- * previous reply offered the move and the player picked it; the narration that follows is
- * the story advancing on the DM's invitation. G22-008's landing choice carried a filled
- * campaign_ending and #1020 covered it, but an ordinary listed option mid-story carries
- * no engine field at all, so the gate replaced its answer with the no-effect line and
- * wiped the reply's options — a dead end. The click sends only the option's text (no id,
- * no send context), so the hook determines the pick from the offered options themselves
- * (`playerPickedListedOption`) and this predicate trusts that determination.
+ * #1041/#1048: a turn answering a listed option is NOT a clause here. #1041 made it
+ * one, meaning to stop the gate replacing the answer with the no-effect line and
+ * wiping its options (G22-008's dead end) — but the predicate feeds every check the
+ * gate has, so the exemption also stood the harm and outcome checks down: on a click
+ * turn a DM line narrating a wound no engine dealt passed unchecked. The pick now
+ * spares only the replacement, inside `enforceNarrationGate`; this predicate holds
+ * on a picked turn exactly as on a typed one, so the checks run.
  */
 export function narrativeTurnHasNoEngineEvent({
   isInCombat,
   isDiceRollMessage,
   playerInputOrigin,
-  playerPickedListedOption,
   result,
 }: NarrativeTurn): boolean {
   return (
     !isInCombat &&
     !isDiceRollMessage &&
     playerInputOrigin !== null &&
-    !playerPickedListedOption &&
     !result.combat_actions?.length &&
     !result.combatants?.length &&
     !result.roll_requests?.length &&

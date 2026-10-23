@@ -74,6 +74,7 @@ import { MemoryManager } from '@/services/memory-manager';
 import { SessionStateService } from '@/services/session-state-service';
 import { userDataApi } from '@/services/user-data-api';
 import { voiceConsistencyService } from '@/services/voice-consistency-service';
+import { messagesSupersededByCombatEnd } from '@/utils/combat-engine-blocks';
 import { stripEngineGeneratedLinesFromSegments } from '@/utils/engine-lines';
 import { ensureActionOptions } from '@/utils/ensure-action-options';
 import { isNarrativeRollRequest, loggableRollType } from '@/utils/roll-request/engine-channel';
@@ -854,13 +855,20 @@ export const useAIResponse = (): {
         }
         // #1041: a click on a listed option sends only the option's text, so whether this
         // turn answers one is determined against the previous DM reply's offered options.
+        // #1050 B2: a combat end withdraws the pre-fight reply's options (#864), so a DM
+        // reply the fight superseded is not an option source — its menu is no longer live,
+        // and the renderer already refuses to show it.
+        const supersededByCombatEnd = messagesSupersededByCombatEnd(messages);
         const previousDmMessage = [...messages]
           .reverse()
-          .find((message) => message?.sender === 'dm');
-        const pickedListedOption = playerPickedListedOption(
-          latestMessage.text,
-          previousDmMessage,
-        );
+          .find(
+            (message) => message?.sender === 'dm' && !supersededByCombatEnd.has(message),
+          );
+        // #1050 B1: a declined entry un-answers the pick — the player chose "Do something
+        // else" after the click — so no part of the pick is left on the turn and the reply
+        // is gated as the plain narrative turn the decline path makes it (#2341).
+        const pickedListedOption =
+          playerPickedListedOption(latestMessage.text, previousDmMessage) && !entryDeclined;
         // A declined entry's reply is checked as a plain narrative turn: its combat fields are
         // blanked below, whatever the model asked for. A turn that began in combat is never
         // narrative: its resolution can end the fight and clear `isInCombat`, and the DM is then
@@ -1086,6 +1094,9 @@ export const useAIResponse = (): {
               sessionId,
               branch: 'narrative',
               playerMayHaveActed: true,
+              // #1048: on a picked turn the gate's checks run, but the no-effect
+              // replacement is skipped — the story advances on the DM's own offer.
+              pickedListedOption,
               regenerate: (violation) =>
                 AIService.chatWithDM({
                   message: latestMessage.text,
