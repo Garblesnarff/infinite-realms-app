@@ -528,6 +528,123 @@ describe('enforceNarrationGate', () => {
       expect(runGate).not.toHaveBeenCalled();
     });
   });
+
+  describe('a picked listed-option turn (#1048)', () => {
+    const gatePicked = (
+      narration: Record<string, unknown>,
+      regenerate = vi.fn(),
+    ): ReturnType<typeof enforceNarrationGate> =>
+      enforceNarrationGate({
+        narration: narration as {
+          text: string;
+          narrationSegments?: unknown;
+          heldSideEffects?: () => Promise<void>;
+        },
+        sessionId: 'session-1',
+        branch: 'narrative',
+        playerMayHaveActed: true,
+        pickedListedOption: true,
+        regenerate,
+      });
+
+    it('still rejects a harm claim and takes a clean retry', async () => {
+      const retry = { text: CLEAN };
+      const regenerate = vi.fn().mockResolvedValue(retry);
+
+      const outcome = await gatePicked({ text: HARM }, regenerate);
+
+      expect(regenerate).toHaveBeenCalledTimes(1);
+      expect(outcome).toEqual({ narration: retry, outcome: 'regenerated' });
+      expect(logger.warn).toHaveBeenCalledTimes(1);
+      expect(logger.warn).toHaveBeenCalledWith(
+        'DM_NARRATION_REJECTED',
+        expect.objectContaining({ attempt: 1, reason: 'harm_claim_without_engine_event' }),
+      );
+    });
+
+    it('on a repeat violation drops only the claiming sentences, never the whole narration', async () => {
+      const held = vi.fn().mockResolvedValue(undefined);
+      const retry = {
+        text: 'The blow leaves you wounded. The ferry rocks gently against the mud.',
+        narrationSegments: [{ text: 'The blow leaves you wounded.' }],
+        options: ['A. **Enter the nave**, wade into the flooded dark.'],
+        heldSideEffects: held,
+      };
+      const regenerate = vi.fn().mockResolvedValue(retry);
+
+      const outcome = await gatePicked({ text: HARM }, regenerate);
+
+      expect(outcome.outcome).toBe('regenerated');
+      expect(outcome.narration.text).toBe('The ferry rocks gently against the mud.');
+      expect(outcome.narration.text).not.toContain(NEUTRAL_NO_EFFECT_LINE);
+      expect(outcome.narration).toMatchObject({ options: retry.options });
+      // The kept text is an edit of a rejected reply: its segment map (a parallel
+      // copy of the unedited narration) and its parked side effects (which extract
+      // memory and world state from the raw reply) do not survive the edit.
+      expect(outcome.narration.narrationSegments).toBeUndefined();
+      expect(outcome.narration.heldSideEffects).toBeUndefined();
+      expect(held).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledTimes(2);
+    });
+
+    it('drops every occurrence of a repeated claim, not just the first', async () => {
+      const retry = {
+        text: 'The blow leaves you wounded. You rest a moment on the gunwale. The blow leaves you wounded.',
+      };
+      const regenerate = vi.fn().mockResolvedValue(retry);
+
+      const outcome = await gatePicked({ text: HARM }, regenerate);
+
+      expect(outcome.outcome).toBe('regenerated');
+      expect(outcome.narration.text).toBe('You rest a moment on the gunwale.');
+    });
+
+    it('drops the flagged occurrence when the phrase first appears in a figurative sense', async () => {
+      // The detector skips the figurative first use ("the cold wounds you"); the
+      // splice must drop the guard's sentence, the one it actually flagged.
+      const retry = {
+        text: 'The cold wounds you to the bone. Then the guard wounds you with his blade.',
+      };
+      const regenerate = vi.fn().mockResolvedValue(retry);
+
+      const outcome = await gatePicked({ text: HARM }, regenerate);
+
+      expect(outcome.outcome).toBe('regenerated');
+      expect(outcome.narration.text).toBe('The cold wounds you to the bone.');
+    });
+
+    it('splices the first reply when regeneration itself fails', async () => {
+      const held = vi.fn().mockResolvedValue(undefined);
+      const regenerate = vi.fn().mockRejectedValue(new Error('model unavailable'));
+
+      const outcome = await gatePicked(
+        {
+          text: 'The blow leaves you wounded. The ferry rocks gently against the mud.',
+          heldSideEffects: held,
+        },
+        regenerate,
+      );
+
+      expect(outcome.outcome).toBe('regenerated');
+      expect(outcome.narration.text).toBe('The ferry rocks gently against the mud.');
+      expect(held).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(
+        'DM_NARRATION_REJECTED',
+        expect.objectContaining({ attempt: 2, reason: 'regeneration_failed' }),
+      );
+    });
+
+    it('falls back to the no-effect line when every sentence of the retry claims harm', async () => {
+      const regenerate = vi.fn().mockResolvedValue({ text: 'The blow leaves you wounded.' });
+
+      const outcome = await gatePicked({ text: HARM }, regenerate);
+
+      // Splicing would leave an empty narration; the replacement stands instead.
+      expect(outcome.outcome).toBe('replaced');
+      expect(outcome.narration.text).toBe(NEUTRAL_NO_EFFECT_LINE);
+      expect(outcome.narration.options).toBeUndefined();
+    });
+  });
 });
 
 describe('narrativeTurnHasNoEngineEvent', () => {
@@ -567,9 +684,15 @@ describe('narrativeTurnHasNoEngineEvent', () => {
         },
       },
     ],
-    ['a picked listed option', { playerPickedListedOption: true }],
   ])('does not hold for %s', (_label, overrides) => {
     expect(narrativeTurnHasNoEngineEvent({ ...turn, ...overrides })).toBe(false);
+  });
+
+  it('holds for a picked listed option: the gate’s checks run on the turn (#1048)', () => {
+    // #1041 exempted the whole turn here, which also stood the harm and outcome checks
+    // down. The pick now only spares the reply the no-effect replacement, which is
+    // `enforceNarrationGate`’s decision, not the predicate’s.
+    expect(narrativeTurnHasNoEngineEvent({ ...turn, playerPickedListedOption: true })).toBe(true);
   });
 
   it('holds when the damage field is null (nothing declared)', () => {
@@ -646,7 +769,7 @@ describe('playerPickedListedOption (#1041)', () => {
     expect(playerPickedListedOption('Sunken Temple', { text: 'No options here.' })).toBe(false);
   });
 
-  it('keeps the gate off a turn answering a clicked option, and on a free-text turn (G22-008)', () => {
+  it('recognizes the pick on a clicked option, and the gate still runs on that turn (G22-008, #1048)', () => {
     const turn = {
       isInCombat: false,
       isDiceRollMessage: false,
@@ -654,21 +777,21 @@ describe('playerPickedListedOption (#1041)', () => {
       result: { text: CLEAN, combat_transition: 'none' },
     };
     const click = createPlayerMessageFromOption(offered[0]);
+    const clickPick = playerPickedListedOption(click, { text: DM_OFFERING_OPTIONS });
+    const freeTextPick = playerPickedListedOption('I swim out to the shrine bell.', {
+      text: DM_OFFERING_OPTIONS,
+    });
+    expect(clickPick).toBe(true);
+    expect(freeTextPick).toBe(false);
+    // Recognition is unchanged from #1041; what changed is the consequence. The pick is
+    // recorded on the turn for `enforceNarrationGate` (it spares the no-effect
+    // replacement), but the predicate itself holds either way, so the harm and outcome
+    // checks run on the click turn too.
     expect(
-      narrativeTurnHasNoEngineEvent({
-        ...turn,
-        playerPickedListedOption: playerPickedListedOption(click, {
-          text: DM_OFFERING_OPTIONS,
-        }),
-      }),
-    ).toBe(false);
+      narrativeTurnHasNoEngineEvent({ ...turn, playerPickedListedOption: clickPick }),
+    ).toBe(true);
     expect(
-      narrativeTurnHasNoEngineEvent({
-        ...turn,
-        playerPickedListedOption: playerPickedListedOption('I swim out to the shrine bell.', {
-          text: DM_OFFERING_OPTIONS,
-        }),
-      }),
+      narrativeTurnHasNoEngineEvent({ ...turn, playerPickedListedOption: freeTextPick }),
     ).toBe(true);
   });
 });

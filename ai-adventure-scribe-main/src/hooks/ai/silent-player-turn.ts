@@ -49,6 +49,7 @@ export function silentPlayerTurnPayload(
 
 export {
   contradictsEngineOutcome,
+  fabricatedOutcomeClaimSpans,
   fabricatedOutcomeClaims,
   suspectsFabricatedOutcome,
 } from '../../../shared/narration-harm';

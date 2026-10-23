@@ -169,11 +169,29 @@ function isNegated(text: string, index: number, matched: string): boolean {
  */
 export function fabricatedOutcomeClaims(
   text: string | null | undefined,
-  { playerMayHaveActed = false }: { playerMayHaveActed?: boolean } = {},
+  options: { playerMayHaveActed?: boolean } = {},
 ): string[] {
+  const phrases = new Set<string>();
+  for (const claim of fabricatedOutcomeClaimSpans(text, options)) {
+    phrases.add(claim.match);
+  }
+  return [...phrases].slice(0, 5);
+}
+
+/**
+ * The same claims as `fabricatedOutcomeClaims`, one entry per surviving occurrence,
+ * carrying the occurrence's position in the text. The splicer works on indices, and
+ * only the flagged occurrence's index resolves the cases the phrase list cannot tell
+ * apart: a phrase repeated in two sentences, or a negated / figurative first use of a
+ * phrase a later sentence uses in earnest.
+ */
+export function fabricatedOutcomeClaimSpans(
+  text: string | null | undefined,
+  { playerMayHaveActed = false }: { playerMayHaveActed?: boolean } = {},
+): OutcomeClaim[] {
   const source = text ?? '';
   const patterns = playerMayHaveActed ? HARM_PATTERNS : [...HARM_PATTERNS, PLAYER_ACT_PATTERN];
-  const claims = new Set<string>();
+  const claims: OutcomeClaim[] = [];
   for (const pattern of patterns) {
     for (const match of source.matchAll(pattern)) {
       const index = match.index ?? 0;
@@ -182,10 +200,10 @@ export function fabricatedOutcomeClaims(
       if (isNegated(source, index, matched)) continue;
       if (isHypotheticalDeath(source, index, matched)) continue;
       if (FIGURATIVE_SUBJECT.test(source.slice(Math.max(0, index - 40), index))) continue;
-      claims.add(matched.trim().toLowerCase().slice(0, 80));
+      claims.push({ match: matched.trim().toLowerCase().slice(0, 80), index });
     }
   }
-  return [...claims].slice(0, 5);
+  return claims;
 }
 
 export function suspectsFabricatedOutcome(
