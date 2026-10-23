@@ -113,6 +113,7 @@ const { ClassFeaturesService } = await importWithRealDb(
 const { LLMProviderService } = await importWithRealDb(() => import('../llm-provider-service.js'));
 const { createRequestPipelineApp } = await importWithRealDb(() => import('../../http-pipeline.js'));
 const { llmRoutes } = await importWithRealDb(() => import('../../routes/v1/llm.js'));
+const { sessionsRoutes } = await importWithRealDb(() => import('../../routes/v1/sessions.js'));
 const { charactersRoutes } = await importWithRealDb(() => import('../../routes/v1/characters.js'));
 const { issue1784DataRoutes } = await importWithRealDb(
   () => import('../../routes/v1/issue-1784-data.js'),
@@ -461,9 +462,11 @@ describeWithDb('DM reply: server provisional row + client save = one row (#2218)
   // ---------------------------------------------------------------------------------------------
 
   /**
-   * The prompt as the client assembles it (ai-service.ts, character section from
-   * character-context-prompts.ts:77): the character is one line, class and level, then scores,
-   * equipment and passives. No feature list, no spell list, no rule to refuse either.
+   * The prompt as the client assembled it when step a recorded the gap (ai-service.ts,
+   * character section from character-context-prompts.ts): the character is one line, class
+   * and level, then scores, equipment and passives. The client has since gained the feature
+   * and spell lists (#217 prompt half); the gate never reads the prompt, so this fixture —
+   * which drives the gate — stands as it was recorded.
    */
   const promptFor = (
     line: string,
@@ -1939,6 +1942,254 @@ ${playerInput}
       reply,
     });
     expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+  });
+
+  // -------------------------------------------------------------------------------------------
+  // #217 (prompt half): the gate above refuses what the sheet lacks, but the DM prompt never
+  // carried the sheet's features or spells, so the model granted both from its mood and the
+  // gate had to spend the player's turn refusing. The session context payload — what the
+  // client builds the prompt from — now carries them: the spell lists verbatim from the
+  // character row, and the feature names the gate's allowlist is built from.
+  // -------------------------------------------------------------------------------------------
+  describe('#217: the session context carries the character\u2019s real features and spells', () => {
+    const contextSessionIds: string[] = [];
+    let contextAddress = 100;
+
+    const contextFor = async (opts: {
+      characterClass: string;
+      level: number;
+      cantrips?: string;
+      knownSpells?: string;
+      preparedSpells?: string;
+      ritualSpells?: string;
+      classLevels?: Array<{ class: string; level: number }>;
+      seed?: (characterId: string) => Promise<void>;
+    }): Promise<Record<string, unknown>> => {
+      const [character] = await database
+        .insert(characters)
+        .values({
+          userId,
+          campaignId,
+          name: testId(`ctx-${opts.characterClass.toLowerCase()}`),
+          class: opts.characterClass,
+          race: 'Human',
+          level: opts.level,
+          cantrips: opts.cantrips ?? null,
+          knownSpells: opts.knownSpells ?? null,
+          preparedSpells: opts.preparedSpells ?? null,
+          ritualSpells: opts.ritualSpells ?? null,
+          classLevels: opts.classLevels ?? null,
+        })
+        .returning();
+      if (!character) throw new Error('[dm-reply-reconcile] the context character was not seeded');
+      if (opts.seed) await opts.seed(character.id);
+      const [session] = await database
+        .insert(gameSessions)
+        .values({ campaignId, characterId: character.id, sessionNumber: 217, status: 'active' })
+        .returning({ id: gameSessions.id });
+      if (!session) throw new Error('[dm-reply-reconcile] the context session was not seeded');
+      contextSessionIds.push(session.id);
+      const auth = spyOn(authModule, 'authenticateRequest').mockResolvedValue({
+        user: { userId, email: 'gp@example.test', plan: 'free' },
+        error: null,
+      } as never);
+      const trustProxyHeaders = process.env.TRUST_PROXY_HEADERS;
+      process.env.TRUST_PROXY_HEADERS = 'true';
+      try {
+        const response = await createRequestPipelineApp()
+          .use(sessionsRoutes)
+          .handle(
+            new Request(`http://localhost/v1/sessions/${session.id}/context`, {
+              headers: {
+                authorization: 'Bearer context-token',
+                'x-forwarded-for': `198.51.100.${(contextAddress = (contextAddress % 254) + 1)}`,
+              },
+            }),
+          );
+        expect(response.status).toBe(200);
+        const body = (await response.json()) as { character: Record<string, unknown> };
+        return body.character;
+      } finally {
+        if (trustProxyHeaders === undefined) delete process.env.TRUST_PROXY_HEADERS;
+        else process.env.TRUST_PROXY_HEADERS = trustProxyHeaders;
+        auth.mockRestore();
+      }
+    };
+
+    afterAll(async () => {
+      if (contextSessionIds.length) {
+        await database
+          .delete(gameSessions)
+          .where(inArray(gameSessions.id, contextSessionIds));
+      }
+    });
+
+    test('a level-2 Fighter\u2019s payload lists the features of his level — Second Wind and Action Surge, not Extra Attack', async () => {
+      const character = await contextFor({ characterClass: 'Fighter', level: 2 });
+
+      const featureNames = character.featureNames as string[];
+      expect(featureNames).toContain('Second Wind');
+      expect(featureNames.some((name) => name.startsWith('Action Surge'))).toBe(true);
+      expect(featureNames).not.toContain('Extra Attack');
+    });
+
+    test('a level-1 Fighter\u2019s payload does not list Action Surge: the list is by level, like the gate\u2019s', async () => {
+      const character = await contextFor({ characterClass: 'Fighter', level: 1 });
+
+      const featureNames = character.featureNames as string[];
+      expect(featureNames).toContain('Second Wind');
+      expect(featureNames.some((name) => name.startsWith('Action Surge'))).toBe(false);
+    });
+
+    test('a Wizard\u2019s payload carries the sheet\u2019s spell lists verbatim, and her features', async () => {
+      const character = await contextFor({
+        characterClass: 'Wizard',
+        level: 2,
+        cantrips: 'Fire Bolt, Mage Hand',
+        knownSpells: 'Burning Hands, Disguise Self, Magic Missile',
+        preparedSpells: 'Burning Hands, Magic Missile',
+        ritualSpells: 'Detect Magic',
+      });
+
+      expect(character.cantrips).toBe('Fire Bolt, Mage Hand');
+      expect(character.knownSpells).toBe('Burning Hands, Disguise Self, Magic Missile');
+      expect(character.preparedSpells).toBe('Burning Hands, Magic Missile');
+      expect(character.ritualSpells).toBe('Detect Magic');
+      expect(character.featureNames as string[]).toContain('Arcane Recovery');
+    });
+
+    test('a multiclass character gets featureNames null: the gate does not rule on them, so the prompt makes no claim', async () => {
+      const character = await contextFor({
+        characterClass: 'Fighter',
+        level: 2,
+        cantrips: 'Fire Bolt',
+        preparedSpells: 'Magic Missile',
+        classLevels: [
+          { class: 'Fighter', level: 1 },
+          { class: 'Wizard', level: 1 },
+        ],
+      });
+
+      // Null, not an empty list: their spells still ride along, but no feature
+      // list exists that the prompt could truthfully call complete.
+      expect(character.featureNames).toBeNull();
+      expect(character.preparedSpells).toBe('Magic Missile');
+    });
+
+    test('a class the feature library does not cover gets featureNames null, not an empty list', async () => {
+      const character = await contextFor({ characterClass: 'Artificer', level: 3 });
+
+      expect(character.featureNames).toBeNull();
+    });
+
+    test('spells held only as character_spells rows ride in the payload: the columns are not the only source', async () => {
+      // The preparation toggle writes only the junction table, and the gate's
+      // castableSpells merges it — a spell the sheet holds solely as a row must
+      // reach the prompt, or the prompt orders the refusal of a legal cast.
+      await database.insert(classes).values({ name: 'Wizard', hitDie: 6 }).onConflictDoNothing();
+      const [wizardClass] = await database
+        .select({ id: classes.id })
+        .from(classes)
+        .where(eq(classes.name, 'Wizard'))
+        .limit(1);
+      if (!wizardClass) throw new Error('[dm-reply-reconcile] no wizard class row');
+      const seedSpell = async (name: string, level: number): Promise<string> => {
+        const [row] = await database
+          .insert(spells)
+          .values({
+            name,
+            level,
+            school: 'evocation',
+            castingTime: '1 action',
+            rangeText: '60 feet',
+            duration: 'Instantaneous',
+            description: `${name} (#217 context fixture).`,
+          })
+          .onConflictDoNothing()
+          .returning({ id: spells.id });
+        const id =
+          row?.id ??
+          (
+            await database
+              .select({ id: spells.id })
+              .from(spells)
+              .where(eq(spells.name, name))
+              .limit(1)
+          )[0]?.id;
+        if (!id) throw new Error(`[dm-reply-reconcile] no spell row for ${name}`);
+        return id;
+      };
+      const boltId = await seedSpell('Junction Bolt', 1);
+      const sparkId = await seedSpell('Junction Spark', 0);
+      const wardId = await seedSpell('Junction Ward', 1);
+
+      const character = await contextFor({
+        characterClass: 'Wizard',
+        level: 2,
+        seed: async (characterId) => {
+          await database.insert(characterSpells).values([
+            { characterId, spellId: boltId, sourceClassId: wizardClass.id, isPrepared: true },
+            { characterId, spellId: sparkId, sourceClassId: wizardClass.id, isPrepared: true },
+            { characterId, spellId: wardId, sourceClassId: wizardClass.id, isPrepared: false },
+          ]);
+        },
+      });
+
+      expect(character.cantrips).toContain('Junction Spark');
+      expect(character.preparedSpells).toContain('Junction Bolt');
+      // An unprepared row is known but not prepared, exactly as the gate reads it.
+      expect(character.preparedSpells).not.toContain('Junction Ward');
+      expect(character.knownSpells).toContain('Junction Ward');
+      expect(character.knownSpells).toContain('Junction Bolt');
+    });
+
+    test('the enrichment fails open: a feature-library error still loads the session, with no feature claim', async () => {
+      let librarySpy: ReturnType<typeof spyOn> | undefined;
+      try {
+        const character = await contextFor({
+          characterClass: 'Fighter',
+          level: 2,
+          preparedSpells: 'Magic Missile',
+          seed: async () => {
+            librarySpy = spyOn(ClassFeaturesService, 'getFeaturesLibrary').mockRejectedValue(
+              new Error('library unavailable (#217 fail-open fixture)'),
+            );
+          },
+        });
+
+        expect(character.featureNames).toBeNull();
+        expect(character.preparedSpells).toBe('Magic Missile');
+      } finally {
+        librarySpy?.mockRestore();
+      }
+    });
+
+    test('a granted feature rides in the payload even above the character’s level — and only for its own character', async () => {
+      const [extraAttack] = await database
+        .select({ id: classFeaturesLibrary.id })
+        .from(classFeaturesLibrary)
+        .where(eq(classFeaturesLibrary.featureName, 'Extra Attack'))
+        .limit(1);
+      if (!extraAttack) throw new Error('[dm-reply-reconcile] no Extra Attack library row');
+
+      const granted = await contextFor({
+        characterClass: 'Fighter',
+        level: 1,
+        seed: async (characterId) => {
+          await database.insert(characterFeatures).values({
+            characterId,
+            featureId: extraAttack.id,
+            acquiredAtLevel: 1,
+          });
+        },
+      });
+      expect(granted.featureNames as string[]).toContain('Extra Attack');
+      expect(granted.featureNames as string[]).toContain('Second Wind');
+
+      // The same suite user's other character, with no grant, does not inherit it.
+      const ungranted = await contextFor({ characterClass: 'Fighter', level: 1 });
+      expect(ungranted.featureNames as string[]).not.toContain('Extra Attack');
+    });
   });
 
   test('#252: a level-2 Cleric saying "cast Turn Undead" is not refused — the feature takes the feature path', async () => {

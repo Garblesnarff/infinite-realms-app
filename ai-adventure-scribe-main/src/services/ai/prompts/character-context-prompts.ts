@@ -76,6 +76,95 @@ ARMOR: ${armorText} | ${acText}
 </equipment>`;
   }
 
+  /**
+   * Renders the character's real class features and spells from the sheet (#217).
+   *
+   * The equipment block above is built from the sheet, but until now nothing in the prompt
+   * named a feature or a spell, so the DM ruled from its mood: a level-1 Fighter's Action
+   * Surge went through in one session and a Rogue's Mage Hand was refused in another. The
+   * lists come from the session context payload: the spell lists are the union the
+   * gate reads (the sheet's columns merged with its `character_spells` rows,
+   * comma-separated text, or an array from the other producers), and `featureNames` is
+   * the server's list for the character's class and level — the same membership the
+   * server-side gate enforces after the turn. `featureNames` is null when the server
+   * cannot vouch for the list (multiclass, classless, a class the feature library does
+   * not cover): then no feature claim is made at all. An empty payload renders
+   * nothing: a list we do not have must never read as a list of nothing.
+   */
+  public static buildFeaturesAndSpellsSection(char: Record<string, any>): string {
+    const nameList = (value: unknown): string[] => {
+      const raw =
+        typeof value === 'string'
+          ? value.split(',')
+          : Array.isArray(value)
+            ? value.filter((entry): entry is string => typeof entry === 'string')
+            : [];
+      // Case-insensitive dedupe keeping the first casing, matching the
+      // case-insensitive membership of the gate's lists (dm-feature-gate).
+      const seen = new Set<string>();
+      return raw
+        .map((name) => name.trim())
+        .filter((name) => {
+          if (!name || seen.has(name.toLowerCase())) return false;
+          seen.add(name.toLowerCase());
+          return true;
+        });
+    };
+
+    // The feature claim is made only when the server vouches for the list:
+    // `featureNames` is null (or absent, on an older payload) for a multiclass,
+    // classless, or library-uncovered character — the cases the gate does not
+    // rule on — so for them the prompt prints no feature list and refuses no
+    // feature, however many spells it lists (#217, self-review R1/R2).
+    const featuresKnown = Array.isArray(char.featureNames);
+    const features = featuresKnown ? nameList(char.featureNames) : [];
+    const lines: string[] = [];
+    const cantrips = nameList(char.cantrips);
+    if (cantrips.length > 0) lines.push(`CANTRIPS (cast at will): ${cantrips.join(', ')}`);
+    const prepared = nameList(char.preparedSpells);
+    if (prepared.length > 0) lines.push(`PREPARED SPELLS: ${prepared.join(', ')}`);
+    const known = nameList(char.knownSpells);
+    if (known.length > 0) lines.push(`KNOWN SPELLS: ${known.join(', ')}`);
+    const ritual = nameList(char.ritualSpells);
+    if (ritual.length > 0) lines.push(`RITUAL SPELLS: ${ritual.join(', ')}`);
+    const spellsKnown = lines.length > 0;
+    if (!featuresKnown && !spellsKnown) return '';
+    if (featuresKnown) {
+      lines.unshift(
+        features.length > 0 ? `CLASS FEATURES: ${features.join(', ')}` : 'CLASS FEATURES: (none)',
+      );
+    }
+
+    const claimText =
+      featuresKnown && spellsKnown
+        ? "the character's real class features and spells"
+        : featuresKnown
+          ? "the character's real class features"
+          : "the character's real spells";
+    const actionText =
+      featuresKnown && spellsKnown
+        ? 'use a feature or cast a spell'
+        : featuresKnown
+          ? 'use a feature'
+          : 'cast a spell';
+    const placeholder =
+      featuresKnown && spellsKnown
+        ? '<the feature or spell>'
+        : featuresKnown
+          ? '<the feature>'
+          : '<the spell>';
+    const spellGuidance = spellsKnown
+      ? ' Prepared casters cast their prepared spells and cantrips; a wizard also casts rituals from their spellbook.'
+      : '';
+
+    return `
+<features_and_spells>
+${lines.join('\n')}
+**These are ${claimText}, from their sheet — they have no others.**
+**If the player tries to ${actionText} these lists do not give them, it does not work: refuse it in one plain line ("${char.name} can't use ${placeholder}: it isn't on their character sheet.") and do not roll, resolve, or narrate any effect from it.${spellGuidance}**
+</features_and_spells>`;
+  }
+
   public static async buildCharacterSection(char: Record<string, any>): Promise<string> {
     // #708: bind the name to the player at its first presentation in the
     // prompt. Premade names are bare role titles ("The Apprentice"), which
@@ -110,6 +199,8 @@ STR ${stats.strength}(${calcMod(stats.strength)}), DEX ${stats.dexterity}(${calc
     }
 
     section += await CharacterContextPrompts.buildEquipmentSection(char);
+
+    section += CharacterContextPrompts.buildFeaturesAndSpellsSection(char);
 
     try {
       const characterForPassive = convertCharacterDetailsToCharacter(char as any);

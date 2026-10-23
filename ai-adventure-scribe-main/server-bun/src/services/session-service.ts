@@ -8,6 +8,7 @@
 
 import { eq, and, desc, sql, or, type SQL } from 'drizzle-orm';
 
+import { ClassFeaturesService } from './class-features-service.js';
 import { actionSurgePreservingState } from './combat/combat-turn-resources.js';
 import { enginePreservingSessionState } from './combat/pending-combat-entry.js';
 import { getOwnershipCondition } from './session/session-authorization.js';
@@ -17,13 +18,17 @@ import {
   gameSessions,
   campaigns,
   characters,
+  characterSpells,
   characterStats,
   sessionChronicles,
+  spells,
   type GameSession,
   type DialogueHistory,
 } from '../../../db/schema/index';
 import { mapSessionListApiRow } from '../../../shared/session-list-contract.js';
+import { resolveCatalogSpell } from '../data/spellData.js';
 import { NotFoundError } from '../lib/errors.js';
+import { logger } from '../lib/logger.js';
 
 type ActiveSession = Omit<
   GameSession,
@@ -99,12 +104,104 @@ function mapSessionContextCore(session: GameSession) {
 }
 
 /**
+ * The class features the DM prompt may credit this character with (#217): the same
+ * membership the DM feature gate enforces after the turn — `class_features_library` for
+ * the character's class, cumulative to their level, plus any features granted to the
+ * character. Returns null when no authoritative list exists: the gate does not rule on
+ * a multiclass character (only one class is read), on a classless character, or on a
+ * class the library does not cover, and a false refusal is worse than a missed one —
+ * so the prompt must make no claim either. Null, not an empty list: an empty list
+ * asserts "this character has no features", a stronger and different statement.
+ */
+async function sessionCharacterFeatureNames(
+  character: { id: string; class: string | null; level: number; classLevels: unknown },
+  userId: string,
+): Promise<string[] | null> {
+  if (!character.class) return null;
+  if (Array.isArray(character.classLevels) && character.classLevels.length > 1) return null;
+  const library = await ClassFeaturesService.getFeaturesLibrary();
+  const className = character.class.toLowerCase();
+  if (!library.some((feature) => feature.className.toLowerCase() === className)) return null;
+  const names = new Set<string>();
+  for (const feature of library) {
+    if (
+      feature.className.toLowerCase() === className &&
+      feature.levelAcquired <= character.level
+    ) {
+      names.add(feature.featureName);
+    }
+  }
+  const grantedIds = new Set(
+    (await ClassFeaturesService.getCharacterFeatures(character.id, userId)).map(
+      (row) => row.featureId,
+    ),
+  );
+  for (const feature of library) {
+    if (grantedIds.has(feature.id)) names.add(feature.featureName);
+  }
+  return [...names];
+}
+
+/**
+ * The character's spell lists for the DM prompt (#217): the same union the feature
+ * gate's `castableSpells` reads — the character row's text columns plus the
+ * `character_spells` rows, because the preparation toggle writes only the junction
+ * table, so the columns alone go stale the day a caster re-prepares. Column entries
+ * are resolved through the spell catalog, so a slug a producer stored
+ * ('arms-of-hadar') prints as the spell's name, the way the gate reads it. Returned
+ * as the comma-separated strings the payload has always carried, deduped.
+ */
+async function sessionCharacterSpellLists(character: {
+  id: string;
+  cantrips: string | null;
+  knownSpells: string | null;
+  preparedSpells: string | null;
+  ritualSpells: string | null;
+}): Promise<{ cantrips: string; knownSpells: string; preparedSpells: string; ritualSpells: string }> {
+  const listed = (value: string | null): string[] =>
+    (value ?? '')
+      .split(',')
+      .map((ref) => ref.trim())
+      .filter(Boolean)
+      .map((ref) => resolveCatalogSpell(ref, ref)?.name ?? ref);
+  const rows = await db
+    .select({
+      name: spells.name,
+      level: spells.level,
+      ritual: spells.ritual,
+      isPrepared: characterSpells.isPrepared,
+      isAlwaysPrepared: characterSpells.isAlwaysPrepared,
+    })
+    .from(characterSpells)
+    .innerJoin(spells, eq(characterSpells.spellId, spells.id))
+    .where(eq(characterSpells.characterId, character.id));
+  const merge = (names: string[]): string => [...new Set(names)].join(', ');
+  return {
+    cantrips: merge([
+      ...listed(character.cantrips),
+      ...rows.filter((row) => row.level === 0).map((row) => row.name),
+    ]),
+    preparedSpells: merge([
+      ...listed(character.preparedSpells),
+      ...rows
+        .filter((row) => row.isPrepared !== false || row.isAlwaysPrepared)
+        .map((row) => row.name),
+    ]),
+    knownSpells: merge([...listed(character.knownSpells), ...rows.map((row) => row.name)]),
+    ritualSpells: merge([
+      ...listed(character.ritualSpells),
+      ...rows.filter((row) => row.ritual).map((row) => row.name),
+    ]),
+  };
+}
+
+/**
  * Session Service
  * Provides type-safe database operations for game sessions and messages
  */
 export class SessionService {
   /**
-   * Get the joined gameplay context in one database round trip.
+   * Get the joined gameplay context.
    * The nested response intentionally matches the legacy Supabase embed shape.
    */
   static async getSessionContext(sessionId: string, userId: string) {
@@ -126,6 +223,15 @@ export class SessionService {
           race: characters.race,
           class: characters.class,
           background: characters.background,
+          // #217: the DM prompt is built from this payload, and until now it carried no
+          // features and no spells, so the DM granted both from its mood. These columns
+          // are the raw sheet values; the payload's lists are computed below (the spell
+          // columns merged with the character's spell rows, the features resolved).
+          cantrips: characters.cantrips,
+          knownSpells: characters.knownSpells,
+          preparedSpells: characters.preparedSpells,
+          ritualSpells: characters.ritualSpells,
+          classLevels: characters.classLevels,
         },
         stats: {
           strength: characterStats.strength,
@@ -151,12 +257,44 @@ export class SessionService {
 
     if (!row) throw new NotFoundError('Session', sessionId);
 
+    // #217: the prompt enrichment rides along on this load, and it is cosmetics —
+    // it must never fail the load itself. Like the gate it mirrors, it fails open:
+    // a character whose lists cannot be built loads with no feature claim
+    // (featureNames null) and the sheet's raw spell columns.
+    let featureNames: string[] | null = null;
+    let spellLists: {
+      cantrips: string | null;
+      knownSpells: string | null;
+      preparedSpells: string | null;
+      ritualSpells: string | null;
+    } = {
+      cantrips: row.character.cantrips,
+      knownSpells: row.character.knownSpells,
+      preparedSpells: row.character.preparedSpells,
+      ritualSpells: row.character.ritualSpells,
+    };
+    try {
+      featureNames = await sessionCharacterFeatureNames(row.character, userId);
+      spellLists = await sessionCharacterSpellLists(row.character);
+    } catch (error) {
+      logger.warn({
+        msg: 'SESSION_CONTEXT_ENRICHMENT_SKIPPED',
+        sessionId,
+        err: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // classLevels was selected only for the multiclass check above; it is not part
+    // of the payload the client has ever received, so it stays server-side.
+    const { classLevels: _classLevels, ...characterRow } = row.character;
     return {
       ...mapSessionContextCore(row.session),
       campaign: row.campaign,
       character: {
-        ...row.character,
+        ...characterRow,
+        ...spellLists,
         character_stats: row.stats?.strength == null ? [] : [row.stats],
+        featureNames,
       },
     };
   }
