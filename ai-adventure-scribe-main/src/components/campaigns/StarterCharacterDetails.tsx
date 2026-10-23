@@ -7,12 +7,8 @@ import { abilityModifier } from '../../../shared/ability-modifier';
 import type { StarterCharacterTemplate } from '@/hooks/use-starter-character-templates';
 
 import { Badge } from '@/components/ui/badge';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { formatClassWithSubclass } from '@/utils/character/class-with-subclass';
 
 /**
  * Get ability modifier from score
@@ -49,7 +45,8 @@ export const StarterCharacterDetails: React.FC<StarterCharacterDetailsProps> = (
             <h2 className="text-2xl font-bold text-foreground">{template.name}</h2>
             <p className="text-infinite-gold">
               {template.race}
-              {template.subrace && ` (${template.subrace})`} {template.class}
+              {template.subrace && ` (${template.subrace})`}{' '}
+              {formatClassWithSubclass(template.class, template.subclass)}
             </p>
             {template.background && (
               <p className="text-sm text-muted-foreground">{template.background}</p>

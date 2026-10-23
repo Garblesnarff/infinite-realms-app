@@ -102,6 +102,8 @@ export interface SpellsVM {
 export interface CharacterSheetVM {
   name: string; // "Aldric Vale"
   subtitle: string; // "Human · Fighter (Champion)"
+  /** Granted class-feature names (#1019). Absent when that read did not run. */
+  features?: string[];
   level: number;
   xpCurrent: number;
   xpMax: number;

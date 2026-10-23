@@ -327,6 +327,18 @@ export const RightSheet: React.FC<{
     {sessionId ? <CompanionPartyStrip sessionId={sessionId} /> : null}
     <CoreStats c={c} />
     <AbilityScores c={c} />
+    {c.features && c.features.length > 0 && (
+      <IRPanel>
+        <IRPanelHeader title="Features" />
+        <div className="space-y-1.5 p-2.5">
+          {c.features.map((name, index) => (
+            <p key={`${name}-${index}`} className="ir-text-min text-foreground/90">
+              {name}
+            </p>
+          ))}
+        </div>
+      </IRPanel>
+    )}
 
     {(c.spellcasting ||
       c.spells.cantrips.length > 0 ||

@@ -239,6 +239,10 @@ export interface Character {
   race?: CharacterRace | null;
   subrace?: Subrace | null;
   class?: CharacterClass | null;
+  /** Chosen subclass from `character_subclasses` (#1019). */
+  subclassName?: string;
+  /** Feature names from `character_features`, in acquired-level order (#1019). */
+  grantedFeatureNames?: string[];
   level?: number;
   background?: CharacterBackground | null;
   abilityScores?: AbilityScores;
