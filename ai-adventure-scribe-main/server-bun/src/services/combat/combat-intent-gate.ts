@@ -92,7 +92,12 @@ export type DefensiveDeclaration = 'dodge' | 'disengage' | 'dash' | 'yield' | 'f
 const DEFENSIVE_DECLARATION_PATTERNS: Array<{ type: DefensiveDeclaration; pattern: RegExp }> = [
   { type: 'dodge', pattern: /^(?:i\s+)?dodge[sd]?\s*[.!]?$/i },
   { type: 'disengage', pattern: /^(?:i\s+)?disengage[sd]?\s*[.!]?$/i },
-  { type: 'dash', pattern: /^(?:i\s+)?dash(?:e[sd])?\s*[.!]?$/i },
+  // #613: "I dash forward" is the typed dash. A following direction is still the
+  // declaration. "I dash and attack" is not, and stays with the attack parser.
+  {
+    type: 'dash',
+    pattern: /^(?:i\s+)?dash(?:e[sd])?(?:\s+(?:forward|ahead|onward|back|away))?\s*[.!]?$/i,
+  },
   // #262: "I surrender" is the natural typed phrasing of a yield; without it the
   // declaration falls through to the DM as free text and the end guard and the
   // DM prompt disagree about what ends the fight.

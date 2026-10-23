@@ -158,6 +158,28 @@ describe('#262 declared-defense directive on /v1/llm/generate', () => {
     expect(generatedPrompts[0]).toContain("combat_action of type 'yield'");
   });
 
+  it("directs 'I dash forward' at a combat_action of type 'dash' (#613)", async () => {
+    mockActiveEncounter = { id: 'encounter-defense-1' };
+    generatedPrompts = [];
+
+    const response = await postGenerate(dmTurnBody('I dash forward'));
+
+    expect(response.status).toBe(200);
+    expect(generatedPrompts).toHaveLength(1);
+    expect(generatedPrompts[0]).toContain('<declared_defense type="dash">');
+    expect(generatedPrompts[0]).toContain("combat_action of type 'dash'");
+  });
+
+  it("does not treat 'I dash and attack' as a dash (#613)", async () => {
+    mockActiveEncounter = { id: 'encounter-defense-1' };
+    generatedPrompts = [];
+
+    const response = await postGenerate(dmTurnBody('I dash and attack'));
+
+    expect(response.status).toBe(200);
+    expect(generatedPrompts[0]).not.toContain('<declared_defense');
+  });
+
   it("directs flee at a combat_action of type 'flee'", async () => {
     mockActiveEncounter = { id: 'encounter-defense-1' };
     generatedPrompts = [];

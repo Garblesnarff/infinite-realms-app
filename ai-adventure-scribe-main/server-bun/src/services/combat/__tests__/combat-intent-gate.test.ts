@@ -278,6 +278,9 @@ describe('detectDeclaredDefense (#262)', () => {
   it('detects disengage, dash, yield and flee', () => {
     expect(detectDeclaredDefense('I disengage')).toBe('disengage');
     expect(detectDeclaredDefense('Dash')).toBe('dash');
+    expect(detectDeclaredDefense('I dash forward')).toBe('dash');
+    expect(detectDeclaredDefense('I dash ahead.')).toBe('dash');
+    expect(detectDeclaredDefense('I dash and attack')).toBeNull();
     expect(detectDeclaredDefense('I yield')).toBe('yield');
     expect(detectDeclaredDefense('I surrender')).toBe('yield');
     expect(detectDeclaredDefense('surrender')).toBe('yield');
@@ -318,9 +321,9 @@ describe('detectDeclaredLayOnHands (#712)', () => {
       amount: null,
       cure: 'poison',
     });
-    expect(
-      detectDeclaredLayOnHands('I lay on hands to cure his disease'),
-    ).toMatchObject({ cure: 'disease' });
+    expect(detectDeclaredLayOnHands('I lay on hands to cure his disease')).toMatchObject({
+      cure: 'disease',
+    });
   });
 
   it('does not mistake "call on my" for a target, and ignores non-declarations', () => {
