@@ -225,6 +225,18 @@ describe('detectDeclaredAttack', () => {
     });
     expect(detectDeclaredAttack('I smash the cauldron', marrow)).toBeNull();
     expect(
+      detectDeclaredAttack('I punch Valerius the Upside Down', [
+        { name: 'Valerius' },
+        { name: 'Valerius the Upside Down' },
+      ]),
+    ).toMatchObject({ actorName: 'Valerius the Upside Down', verb: 'punch' });
+    expect(
+      detectDeclaredAttack('I attack General Out', [
+        { name: 'General Voss' },
+        { name: 'General Out' },
+      ]),
+    ).toMatchObject({ actorName: 'General Out', verb: 'attack' });
+    expect(
       detectDeclaredAttack('I grab the Professor', [{ name: 'Dr. Marrow' }, { name: 'Valerius' }]),
     ).toBeNull();
     expect(

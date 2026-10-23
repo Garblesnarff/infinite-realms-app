@@ -250,8 +250,12 @@ const matchActorOrUnambiguousPronoun = (
   actors: readonly CombatIntentActor[],
   options: AttackTargetOptions = {},
 ): ActorResolution | null => {
+  // A place word can be part of the name ("Valerius the Upside Down", "General Out").
+  // Match the words the player wrote before cutting a trailing place off.
+  const named = matchGoverningActor(targetText, actors);
+  if (named) return { actor: named };
   const head = targetHead(targetText);
-  const actor = matchGoverningActor(head, actors);
+  const actor = head === targetText.trim() ? null : matchGoverningActor(head, actors);
   if (actor) return { actor };
 
   const pronoun = normalize(head);
