@@ -212,6 +212,49 @@ describe('detectDeclaredAttack', () => {
     expect(attack).not.toHaveProperty('weaponName');
   });
 
+  it('weighs a hostile title or a placed pronoun against the one creature present (#862)', () => {
+    const marrow = [{ name: 'Dr. Marrow' }];
+    expect(detectDeclaredAttack('I grab the Professor', marrow)).toMatchObject({
+      verb: 'grab',
+      actorName: 'Dr. Marrow',
+      attackSource: 'unarmed',
+    });
+    expect(detectDeclaredAttack('I shove him off the ledge', marrow)).toMatchObject({
+      verb: 'shove',
+      actorName: 'Dr. Marrow',
+    });
+    expect(detectDeclaredAttack('I smash the cauldron', marrow)).toBeNull();
+    expect(
+      detectDeclaredAttack('I punch Valerius the Upside Down', [
+        { name: 'Valerius' },
+        { name: 'Valerius the Upside Down' },
+      ]),
+    ).toMatchObject({ actorName: 'Valerius the Upside Down', verb: 'punch' });
+    expect(
+      detectDeclaredAttack('I attack General Out', [
+        { name: 'General Voss' },
+        { name: 'General Out' },
+      ]),
+    ).toMatchObject({ actorName: 'General Out', verb: 'attack' });
+    expect(
+      detectDeclaredAttack('I grab the Professor', [{ name: 'Dr. Marrow' }, { name: 'Valerius' }]),
+    ).toBeNull();
+    expect(
+      detectDeclaredAttack(
+        'I shove him off the ledge',
+        [{ name: 'Dr. Marrow' }, { name: 'Valerius' }],
+        {
+          antecedent: { name: 'Dr. Marrow' },
+        },
+      ),
+    ).toMatchObject({ actorName: 'Dr. Marrow', verb: 'shove' });
+    expect(
+      detectDeclaredAttack('I grab the Professor', [{ name: 'Dr. Marrow' }, { name: 'Valerius' }], {
+        antecedent: null,
+      }),
+    ).toBeNull();
+  });
+
   it('keeps an explicit unarmed weapon word unarmed (#569)', () => {
     const attack = detectDeclaredAttack('I attack the professor with my fists', actors);
     expect(attack).toMatchObject({
@@ -318,9 +361,9 @@ describe('detectDeclaredLayOnHands (#712)', () => {
       amount: null,
       cure: 'poison',
     });
-    expect(
-      detectDeclaredLayOnHands('I lay on hands to cure his disease'),
-    ).toMatchObject({ cure: 'disease' });
+    expect(detectDeclaredLayOnHands('I lay on hands to cure his disease')).toMatchObject({
+      cure: 'disease',
+    });
   });
 
   it('does not mistake "call on my" for a target, and ignores non-declarations', () => {
