@@ -238,6 +238,22 @@ export type DMResponse = {
    * story beats remain.
    */
   campaign_ending?: { summary: string } | null;
+  /**
+   * Story clock changes the story makes this turn (#1042): the campaign's
+   * clock ticks (a node finished, a rest taken, a prowler escaped) or is set
+   * (a rule that jumps the clock). The server applies them to the session's
+   * stored tracker once per player message and enforces the clock's limit;
+   * absent or null when no clock moves.
+   */
+  tracker_changes?: Array<{ name: string; delta?: number; set?: number }> | null;
+  /**
+   * The story reached its final beat this turn (#1042): the campaign's
+   * final location or last beat has played, whether or not a story clock
+   * filled. The server arms the ending-required state from it; the ending
+   * itself is still declared through `campaign_ending`, on this turn or
+   * the next. Absent or null while story beats remain.
+   */
+  final_beat_reached?: boolean | null;
 };
 
 const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: 'null' }] });
@@ -587,6 +603,59 @@ const campaignEndingProperty = {
     'campaign\'s story continues in a later session. Otherwise omit it.',
 };
 
+/**
+ * #1042: story clock changes. Optional, like the other story fields. Before
+ * this field the campaign's Clock lived only in the DM's prose: the server
+ * stored no clock state, so a filled Clock changed nothing in the engine
+ * (the #1020 ending needed the DM to notice and declare it). The server now
+ * stores each clock per session and enforces its limit — the climax, or the
+ * ending, depending on the campaign's rules.
+ */
+const trackerChangesProperty = {
+  type: 'array',
+  items: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      name: { type: 'string' },
+      delta: { type: 'integer' },
+      set: { type: 'integer' },
+    },
+    required: ['name'],
+  },
+  description:
+    '#1042 story clocks: when the story advances one of the campaign\'s clocks this turn ' +
+    '(the tick events the campaign\'s rules and the <story_clock> state name: a node ' +
+    'finished, a rest taken, a creature escaped, time lingered), set this field to an ' +
+    'array of `{"name": "<clock name>", "delta": <segments>}` — or `{"name": "<clock ' +
+    'name>", "set": <segments>}` when a rule sets the clock to a value. The game stores ' +
+    'the clock and enforces its limit; the values in <story_clock> are the stored truth, ' +
+    'so render the tracker line from them, never from your own count. If this reply asks ' +
+    'for a roll, the changes land on the roll\'s result turn — send them again there. ' +
+    'Otherwise omit it.',
+};
+
+/**
+ * #1042 final beat: the turn the story reaches the campaign's final beat.
+ * Before this field the ending machinery armed only from clock state, so
+ * a run whose climax resolved in prose with the Clock at 1/6 (Hark
+ * N23-003) had no trigger: the DM narrated past the final beat and never
+ * declared the ending. The flag is the DM's one-bit judgment that the
+ * final beat has played; the server turns it into the ending-required
+ * state, and the safety net behind that state ends the adventure even if
+ * `campaign_ending` is never declared.
+ */
+const finalBeatReachedProperty = {
+  type: 'boolean',
+  description:
+    '#1042 final beat: when this turn plays the campaign\'s final beat — the story ' +
+    'reaches the final location or last beat its rules describe — set this to true, ' +
+    'even when no story clock has filled. The game then requires the ending on the ' +
+    'next turn and ends the adventure if it is still not declared. Set it only for ' +
+    'the final beat itself, never while story beats remain. If this reply asks for ' +
+    'a roll, send it again on the result turn. Otherwise omit it.',
+};
+
 export const dmResponseSchema = createDmResponseSchema({
   combat_exits: combatExitsProperty,
   xp_award: xpAwardProperty,
@@ -595,6 +664,8 @@ export const dmResponseSchema = createDmResponseSchema({
   rest: storyRestProperty,
   damage: storyDamageProperty,
   campaign_ending: campaignEndingProperty,
+  tracker_changes: trackerChangesProperty,
+  final_beat_reached: finalBeatReachedProperty,
 });
 
 const isPoint = (value: unknown): value is Point =>

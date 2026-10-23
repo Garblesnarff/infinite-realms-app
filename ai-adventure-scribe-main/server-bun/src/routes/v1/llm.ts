@@ -1043,6 +1043,42 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             });
           }
         }
+        // #1042: the session's story clocks, from server state: the tracker
+        // lines the DM renders, the climax directive on the first climax
+        // turn, and the ending-required line once the climax safety net has
+        // tripped. Loaded like the resolvers above (dynamic import, fails
+        // open); the phase it reports also tells the story step below to run
+        // on turns that carry no tracker_changes, so climax turns count.
+        let trackerDirective: string | null = null;
+        let trackerPhaseClimax = false;
+        let trackerEndingAtLimit = false;
+        // The safety net's armed state at this turn's start: the prompt
+        // below already required the ending, so a reply that still
+        // declares none is enforced after the story steps (see the
+        // enforcement block after the tracker step).
+        let trackerEndingRequired = false;
+        let trackerEndingClock: string | null = null;
+        let trackerEndingFinalBeat = false;
+        let trackerOneShot = false;
+        if (dmReply && defenseSessionId) {
+          try {
+            const { loadStoryTrackerDirective } =
+              await import('../../services/dm/story-tracker.js');
+            const loaded = await loadStoryTrackerDirective({
+              sessionId: defenseSessionId,
+              userId,
+            });
+            trackerDirective = loaded.text;
+            trackerPhaseClimax = loaded.phase?.phase === 'climax';
+            trackerEndingAtLimit = loaded.endingAtLimit;
+            trackerEndingRequired = loaded.phase?.endingRequired === true;
+            trackerEndingClock = loaded.phase?.clock ?? null;
+            trackerEndingFinalBeat = loaded.phase?.finalBeat === true;
+            trackerOneShot = loaded.campaignLength === 'one-shot';
+          } catch {
+            trackerDirective = null;
+          }
+        }
         const llmPromptBase = declaredAttack
           ? appendDeclaredAttackDirective(prompt, declaredAttack.actorName, encounterDirective)
           : declaredDefense
@@ -1050,7 +1086,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             : untargetedSpell
               ? appendUntargetedSpellDirective(prompt, untargetedSpell.name)
               : prompt;
-        const engineDirectives = [layOnHandsDirective, secondWindDirective, equipDirective].filter(
+        const engineDirectives = [layOnHandsDirective, secondWindDirective, equipDirective, trackerDirective].filter(
           (directive): directive is string => directive !== null,
         );
         const llmPrompt =
@@ -1431,7 +1467,16 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           envelope?.conditions ||
           envelope?.rest ||
           envelope?.damage ||
-          envelope?.campaign_ending,
+          envelope?.campaign_ending ||
+          envelope?.tracker_changes ||
+          // #1042: a climax-counting or ending-re-asserting turn is a story
+          // turn for this guard too, so a completed session closes it the
+          // same way (the tracker applier re-checks under its lock as well).
+          // A final-beat flag is a story effect the same way: on a completed
+          // session it must not arm a fresh ending-required state.
+          envelope?.final_beat_reached === true ||
+          trackerPhaseClimax ||
+          trackerEndingAtLimit,
         );
         let storyEffectsClosed = false;
         if (castSessionId && storyEffectPossible) {
@@ -1636,6 +1681,155 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         }
         if (envelope?.campaign_ending && !storyEndingApplied) {
           envelope.campaign_ending = null;
+        }
+        // #1042: the reply's clock movement reaches the session's stored
+        // trackers, server-side, and the limit enforces itself there — the
+        // climax phase at `at_limit: climax`, the ending forced through the
+        // same applier as a declared one at `at_limit: ending`. It runs after
+        // the ending above, so a declaration in this same reply wins over a
+        // forced ending. Changes land only on ordinary story turns (the
+        // sibling guards below); the step itself also runs on climax turns
+        // and on turns where an ending clock already sits at its limit,
+        // with changes deferred — a climax spent in combat still counts
+        // toward the safety net, and an owed ending is re-asserted until
+        // it lands. Same #768 contract as the other story appliers:
+        // changes that did not land (including a partially landed set) are
+        // nulled on the envelope, so an unapplied claim never reads as
+        // engine-applied.
+        let storyTrackersApplied = false;
+        if (
+          envelope &&
+          (envelope.tracker_changes ||
+            trackerPhaseClimax ||
+            trackerEndingAtLimit ||
+            envelope.final_beat_reached === true) &&
+          dmReply &&
+          castSessionId
+        ) {
+          const changesDeferred = !(
+            dmReply.inCombat !== true &&
+            combatEntry &&
+            !envelope.combat_entry_pending &&
+            !storyEffectsClosed
+          );
+          try {
+            const { applyStoryTrackers } = await import('../../services/dm/story-tracker.js');
+            const trackerResult = await applyStoryTrackers({
+              userId,
+              sessionId: castSessionId,
+              changes: envelope.tracker_changes,
+              rollRequested,
+              changesDeferred,
+              finalBeatReached: envelope.final_beat_reached === true,
+            });
+            const submittedChanges = Array.isArray(envelope.tracker_changes)
+              ? envelope.tracker_changes.length
+              : 0;
+            storyTrackersApplied =
+              trackerResult.outcome === 'already_applied' ||
+              (trackerResult.outcome === 'applied' &&
+                trackerResult.appliedChanges >= submittedChanges);
+          } catch (error) {
+            logger.warn({ msg: 'DM_STORY_TRACKER_FAILED', sessionId: castSessionId, error });
+          }
+        }
+        if (envelope?.tracker_changes && !storyTrackersApplied) {
+          envelope.tracker_changes = null;
+        }
+        // #1042 FIX (strategist, PR #1053): the safety net is a real
+        // request, not only a prompt line. This turn's directive already
+        // required the ending (the climax count tripped, or the final
+        // beat was flagged last turn) and the reply still declared none —
+        // the ending applier above had its chance, and the tracker step
+        // may have owed one too. One more generate call with the ending
+        // required, built the way the combat-transition enforcement
+        // builds its corrective call; if that reply also declares none,
+        // an engine-written ending is forced. When either lands, the
+        // envelope carries the stored summary, exactly as a first-reply
+        // declaration leaves it. The status re-read is armed-turns only:
+        // the tracker step above can complete the session itself (an
+        // `at_limit: 'ending'` force), and an ending that already landed
+        // must not buy a second generate.
+        // Two gates keep the net inside its purpose. One-shots only: the
+        // ending applier completes one-shots alone, so on any other
+        // campaign both rungs would refuse (`not_one_shot`) while the
+        // armed state never clears — a corrective generate burned on
+        // every turn for the rest of the session. And story turns only,
+        // under the ending applier's own guards: mid-combat or on a
+        // combat opening the net defers — the armed state persists, so
+        // the first story turn after the fight enforces it.
+        if (
+          envelope &&
+          trackerEndingRequired &&
+          trackerOneShot &&
+          !storyEndingApplied &&
+          !envelope.campaign_ending &&
+          dmReply &&
+          dmReply.inCombat !== true &&
+          combatEntry &&
+          !envelope.combat_entry_pending &&
+          castSessionId &&
+          !storyEffectsClosed
+        ) {
+          try {
+            const { db } = await import('../../../../db/client');
+            const { eq } = await import('drizzle-orm');
+            const { gameSessions } = await import('../../../../db/schema/index');
+            const [currentSession] = await db
+              .select({ status: gameSessions.status })
+              .from(gameSessions)
+              .where(eq(gameSessions.id, castSessionId))
+              .limit(1);
+            if (currentSession?.status !== 'completed') {
+              const { enforceRequiredEnding } =
+                await import('../../services/dm/story-tracker.js');
+              const enforced = await enforceRequiredEnding({
+                userId,
+                sessionId: castSessionId,
+                clock: trackerEndingClock ?? 'story',
+                finalBeat: trackerEndingFinalBeat,
+                regenerate: async (correctivePrompt: string) => {
+                  const retry = await LLMProviderService.generate({
+                    prompt: correctivePrompt,
+                    systemPrompt: typeof systemPrompt === 'string' ? systemPrompt : undefined,
+                    model: safeModel,
+                    maxTokens: safeMaxTokens,
+                    temperature,
+                    history: [
+                      ...(history ?? []),
+                      { role: 'user' as const, content: llmPrompt },
+                      { role: 'assistant' as const, content: result.text },
+                    ],
+                    provider,
+                    responseSchema,
+                  });
+                  if (retry.usage && retry.provider) {
+                    const retryUsageId = await AIUsageService.recordProviderUsage({
+                      userId,
+                      plan,
+                      type: quotaType,
+                      provider: retry.provider,
+                      model: retry.model,
+                      inputTokens: retry.usage.inputTokens,
+                      outputTokens: retry.usage.outputTokens,
+                      sessionId: castSessionId,
+                    });
+                    if (typeof retryUsageId === 'number') usageIds.push(retryUsageId);
+                  }
+                  return retry;
+                },
+              });
+              if (enforced.outcome !== 'not_applied' && enforced.summary) {
+                envelope.campaign_ending = { summary: enforced.summary };
+              }
+            }
+          } catch (error) {
+            logger.warn({
+              msg: 'DM_STORY_TRACKER_ENDING_ENFORCEMENT_FAILED',
+              sessionId: castSessionId,
+              error,
+            });
+          }
         }
         // sessionId must not come from combatEntry: that is only sent when combat
         // is NOT already active, so in-combat turns logged `sessionId: null` --

@@ -88,6 +88,7 @@ const {
   dialogueHistory,
   experienceEvents,
   gameSessions,
+  sessionTrackers,
   starterCampaigns,
 } = await importWithRealDb(() => import('../../../../db/schema/index.js'));
 
@@ -388,7 +389,11 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
               temperature: 0.9,
               maxTokens: 8192,
               requestType: 'user',
-              dmReply: { messageId: crypto.randomUUID(), inCombat: false, narrationGated: false },
+              dmReply: {
+                messageId: crypto.randomUUID(),
+                inCombat: false,
+                narrationGated: false,
+              },
               combatEntry: {
                 sessionId: opts.sessionId,
                 player: {
@@ -621,4 +626,1118 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
     expect(session?.summary).toBe('Ended by hand at the Root Stair.');
     expect(await endingRows(sessionId)).toHaveLength(0);
   });
+});
+
+/**
+ * #1042: the engine-side tracker. The DM's prose Clock becomes stored
+ * state: replies carry `tracker_changes`, the server applies them to
+ * `session_trackers`, and the limit enforces itself — the climax phase
+ * (with its directive in the next prompt) at `at_limit: climax`, the
+ * forced ending at `at_limit: ending`, and the ending-required safety
+ * net after 6 undeclared climax turns. The rules fixtures are the audit's
+ * live shape: causality rows whose condition is exactly "the <Name> Clock
+ * reaches <N>", with `limit`/`at_limit` in metadata as the revised spec
+ * has Campaign Claude write them.
+ */
+describeWithDb('#1042 story trackers: the engine stores the clock and enforces its limit', () => {
+  // Re-acquired in beforeAll: the #1020 describe above closes the shared
+  // fixture pool in its afterAll, so a pool captured at definition time
+  // here would already be ended.
+  let database = null as unknown as ReturnType<typeof realDb>;
+  const starterIds = { breath: '', score: '', plain: '', heldrest: '' };
+  const userId = `story-tracker-user-${process.pid}`;
+  const createdSessionIds: string[] = [];
+  let clientAddress = 100;
+
+  const clockRules = (
+    name: string,
+    atLimit: 'climax' | 'ending',
+  ): Array<{
+    ruleType: 'causality';
+    condition: string;
+    effect: string;
+    priority: number;
+    metadata: Record<string, unknown>;
+  }> =>
+    [2, 4, 6].map((n) => ({
+      ruleType: 'causality' as const,
+      condition: `the ${name} Clock reaches ${n}`,
+      effect:
+        n === 6
+          ? `The ${name} Clock is full: the one-shot's final movement begins.`
+          : `The ${name} Clock stands at ${n} of 6 segments.`,
+      priority: 8,
+      metadata: n === 6 ? { limit: 6, at_limit: atLimit } : {},
+    }));
+
+  /** The audit's the-held-rest, verbatim in shape: clean reaches rows
+   *  only to 5, the 6 living in a tick row's effect ("jumps to 6") and a
+   *  compound ending row — metadata empty on every row, exactly as the
+   *  live rows stand. The fail-closed parser defines no clock from
+   *  these; round 1's parser read the limit as 5. */
+  const heldRestRules = (): Array<{
+    ruleType: 'causality';
+    condition: string;
+    effect: string;
+    priority: number;
+    metadata: Record<string, unknown>;
+  }> => [
+    ...[2, 3, 4, 5].map((n) => ({
+      ruleType: 'causality' as const,
+      condition: `the Score Clock reaches ${n}`,
+      effect: `The Score Clock stands at ${n} of 6 segments.`,
+      priority: 8,
+      metadata: {},
+    })),
+    {
+      ruleType: 'causality' as const,
+      condition: 'the hero pulls the Tuner’s wedge',
+      effect: 'The Score Clock jumps to 6.',
+      priority: 8,
+      metadata: {},
+    },
+    {
+      ruleType: 'causality' as const,
+      condition:
+        'the Score Clock reaches 5 for the third time or reaches 6 and the hero never offers a phrase',
+      effect: 'Ending D: the Tuner takes the stage alone.',
+      priority: 8,
+      metadata: {},
+    },
+  ];
+
+  /** The audit's actual live shape for the 12 parseable campaigns: the
+   *  same clean causality rows with metadata EMPTY on every row — the
+   *  limit is the highest reaches-N and `at_limit` defaults to climax. */
+  const plainClockRules = (
+    name: string,
+  ): Array<{
+    ruleType: 'causality';
+    condition: string;
+    effect: string;
+    priority: number;
+    metadata: Record<string, unknown>;
+  }> =>
+    [2, 4, 6].map((n) => ({
+      ruleType: 'causality' as const,
+      condition: `the ${name} Clock reaches ${n}`,
+      effect: `The ${name} Clock stands at ${n} of 6 segments.`,
+      priority: 8,
+      metadata: {},
+    }));
+
+  beforeAll(async () => {
+    if (!hasRealDb) return;
+    database = realDb();
+    for (const [key, starter, name, atLimit] of [
+      ['breath', 'the-breath-clock', 'Breath', 'climax'],
+      ['score', 'the-score-clock', 'Score', 'ending'],
+      ['plain', 'the-plain-clock', 'Plain', 'climax'],
+    ] as const) {
+      const starterId = testId(starter);
+      starterIds[key] = starterId;
+      await database.insert(starterCampaigns).values({
+        id: starterId,
+        slug: testId(starter),
+        title: `The ${name} Clock`,
+        genre: ['fae', 'mystery'],
+        tone: ['verdant'],
+        difficulty: 'medium',
+        levelRange: '3',
+        estimatedSessions: 'One-shot — 1 session',
+        premise: `A one-shot paced by the ${name} Clock.`,
+        isPublished: true,
+        isComplete: true,
+      });
+      await database.insert(campaignRules).values(
+        (key === 'plain' ? plainClockRules(name) : clockRules(name, atLimit)).map((rule) => ({
+          campaignId: starterId,
+          ...rule,
+        })),
+      );
+    }
+    starterIds.heldrest = testId('the-held-rest');
+    await database.insert(starterCampaigns).values({
+      id: starterIds.heldrest,
+      slug: testId('the-held-rest'),
+      title: 'The Held Rest',
+      genre: ['fae', 'mystery'],
+      tone: ['verdant'],
+      difficulty: 'medium',
+      levelRange: '3',
+      estimatedSessions: 'One-shot — 1 session',
+      premise: 'A one-shot paced by the Score Clock.',
+      isPublished: true,
+      isComplete: true,
+    });
+    await database.insert(campaignRules).values(
+      heldRestRules().map((rule) => ({ campaignId: starterIds.heldrest, ...rule })),
+    );
+  });
+
+  afterAll(async () => {
+    try {
+      if (!hasRealDb) return;
+      for (const id of createdSessionIds) {
+        await database
+          .delete(sessionTrackers)
+          .where(eq(sessionTrackers.sessionId, id))
+          .catch(() => {});
+        await database
+          .delete(dialogueHistory)
+          .where(eq(dialogueHistory.sessionId, id))
+          .catch(() => {});
+        await database.delete(gameSessions).where(eq(gameSessions.id, id)).catch(() => {});
+      }
+      await database.delete(characters).where(eq(characters.userId, userId)).catch(() => {});
+      await database.delete(campaigns).where(eq(campaigns.userId, userId)).catch(() => {});
+      for (const starterId of [
+        starterIds.breath,
+        starterIds.score,
+        starterIds.plain,
+        starterIds.heldrest,
+      ]) {
+        await database
+          .delete(campaignRules)
+          .where(eq(campaignRules.campaignId, starterId))
+          .catch(() => {});
+        await database
+          .delete(starterCampaigns)
+          .where(eq(starterCampaigns.id, starterId))
+          .catch(() => {});
+      }
+      const { sql } = await import('../../lib/db.js');
+      await sql`DELETE FROM ai_usage WHERE user_id = ${userId}`.catch(() => {});
+    } finally {
+      await closeRealDb();
+    }
+  });
+
+  async function seedWorld(
+    label: string,
+    starter: 'breath' | 'score' | 'plain' | 'heldrest',
+    campaignLength: 'one-shot' | 'campaign' = 'one-shot',
+  ): Promise<{ characterId: string; sessionId: string }> {
+    const [{ id: campaignId }] = await database
+      .insert(campaigns)
+      .values({ userId, name: testId(`tracker-${label}`), campaignLength })
+      .returning({ id: campaigns.id });
+    const [{ id: characterId }] = await database
+      .insert(characters)
+      .values({ userId, campaignId, name: 'Tavo Brejo', class: 'Ranger', level: 3, experiencePoints: 1050 })
+      .returning({ id: characters.id });
+    await database.insert(characterStats).values({
+      characterId,
+      armorClass: 14,
+      maxHitPoints: 24,
+      currentHitPoints: 24,
+      strength: 12,
+      dexterity: 16,
+      constitution: 14,
+      intelligence: 10,
+      wisdom: 15,
+      charisma: 8,
+    });
+    const [{ id: sessionId }] = await database
+      .insert(gameSessions)
+      .values({
+        campaignId,
+        characterId,
+        sessionNumber: 1,
+        status: 'active',
+        turnCount: 0,
+        starterCampaignId: starterIds[starter],
+      })
+      .returning({ id: gameSessions.id });
+    createdSessionIds.push(sessionId);
+    return { characterId, sessionId };
+  }
+
+  /** One DM turn through the real route; every prompt the model saw is captured. */
+  async function dmTurn(opts: {
+    sessionId: string;
+    characterId: string;
+    playerInput: string;
+    reply: Record<string, unknown>;
+    capturedPrompts: string[];
+    /** False replays the turn against the same saved player message (a Retry). */
+    insertMessage?: boolean;
+    /**
+     * Per-call replies for a turn the server generates more than once
+     * (the safety net's corrective call): call N gets replies[N], and
+     * the last entry repeats. `reply` serves every unscripted call.
+     */
+    replies?: Array<Record<string, unknown>>;
+    /** The turn is an in-combat turn (the client's dmReply flag). */
+    inCombat?: boolean;
+  }): Promise<{ status: number; body: Record<string, unknown> }> {
+    if (opts.insertMessage !== false) {
+      await SessionMessageService.addMessages(
+        [
+          {
+            id: crypto.randomUUID(),
+            sessionId: opts.sessionId,
+            speakerType: 'player',
+            message: opts.playerInput,
+          },
+        ],
+        userId,
+      );
+    }
+    const auth = spyOn(authModule, 'authenticateRequest').mockResolvedValue({
+      user: { userId, email: 'story-tracker@example.test', plan: 'tester' },
+      error: null,
+    } as never);
+    let generateCalls = 0;
+    const model = spyOn(LLMProviderService, 'generate').mockImplementation((async (args: {
+      prompt: string;
+    }) => {
+      opts.capturedPrompts.push(args.prompt);
+      const scripted = opts.replies;
+      const reply =
+        scripted && scripted.length > 0
+          ? scripted[Math.min(generateCalls, scripted.length - 1)]
+          : opts.reply;
+      generateCalls += 1;
+      return {
+        text: JSON.stringify(reply),
+        provider: 'openrouter',
+        model: 't/m',
+        usage: { inputTokens: 4200, outputTokens: 310 },
+      };
+    }) as never);
+    const watchdog = spyOn(
+      dmReplyPersistence,
+      'scheduleDmReplyWatchdog',
+    ).mockResolvedValue(undefined as never);
+    const trustProxyHeaders = process.env.TRUST_PROXY_HEADERS;
+    process.env.TRUST_PROXY_HEADERS = 'true';
+    try {
+      const response = await createRequestPipelineApp()
+        .use(llmRoutes)
+        .handle(
+          new Request('http://localhost/v1/llm/generate', {
+            method: 'POST',
+            headers: {
+              authorization: `Bearer ${userId}`,
+              'content-type': 'application/json',
+              'x-forwarded-for': `198.51.100.${(clientAddress = (clientAddress % 254) + 1)}`,
+            },
+            body: JSON.stringify({
+              prompt: `<campaign>The Clock</campaign>\n<player_input>\n${opts.playerInput}\n</player_input>`,
+              sessionId: opts.sessionId,
+              player_input: opts.playerInput,
+              temperature: 0.9,
+              maxTokens: 8192,
+              requestType: 'user',
+              dmReply: {
+                messageId: crypto.randomUUID(),
+                inCombat: opts.inCombat ?? false,
+                narrationGated: false,
+              },
+              combatEntry: {
+                sessionId: opts.sessionId,
+                player: {
+                  characterId: opts.characterId,
+                  name: 'Tavo Brejo',
+                  initiativeModifier: 3,
+                },
+              },
+            }),
+          }),
+        );
+      return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+    } finally {
+      if (trustProxyHeaders === undefined) delete process.env.TRUST_PROXY_HEADERS;
+      else process.env.TRUST_PROXY_HEADERS = trustProxyHeaders;
+      auth.mockRestore();
+      model.mockRestore();
+      watchdog.mockRestore();
+    }
+  }
+
+  const baseReply = {
+    text: 'The grove breathes around you, and time moves in the hollow.',
+    options: [],
+    narration_segments: [],
+    roll_requests: [],
+    combat_transition: 'none',
+    combatants: [],
+    combat_actions: [],
+    map_actions: [],
+    handout_actions: [],
+    scene_spec: null,
+  };
+  const trackerReply = (changes: Array<Record<string, unknown>>) => ({
+    ...baseReply,
+    tracker_changes: changes,
+  });
+
+  const trackerRow = async (
+    sessionId: string,
+    name: string,
+  ): Promise<{ value: number; limit: number } | undefined> =>
+    (
+      await database
+        .select()
+        .from(sessionTrackers)
+        .where(and(eq(sessionTrackers.sessionId, sessionId), eq(sessionTrackers.name, name)))
+        .limit(1)
+    )[0];
+
+  const sessionRow = async (
+    sessionId: string,
+  ): Promise<Record<string, unknown> | undefined> =>
+    (await database.select().from(gameSessions).where(eq(gameSessions.id, sessionId)).limit(1))[0] as
+      | Record<string, unknown>
+      | undefined;
+
+  const trackerPhase = async (
+    sessionId: string,
+  ): Promise<
+    { tracker?: { phase?: string; climaxTurns?: number; endingRequired?: boolean } } | undefined
+  > =>
+    (await sessionRow(sessionId))?.sessionState as
+      | { tracker?: { phase?: string; climaxTurns?: number; endingRequired?: boolean } }
+      | undefined;
+
+  test('clock 5 + delta 1 at at_limit=climax: phase flips, the next prompt announces the climax, nothing ends', async () => {
+    const { characterId, sessionId } = await seedWorld('climax', 'breath');
+    const prompts: string[] = [];
+
+    // Below the limit (the original spec's negative): the value is stored
+    // from server state, and nothing fires.
+    const first = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We finish the landing and move on.',
+      reply: trackerReply([{ name: 'Breath', set: 5 }]),
+      capturedPrompts: prompts,
+    });
+    expect(first.status).toBe(200);
+    expect((await trackerRow(sessionId, 'Breath'))?.value).toBe(5);
+    expect((await trackerRow(sessionId, 'Breath'))?.limit).toBe(6);
+    expect((await sessionRow(sessionId))?.status).toBe('active');
+    expect((await trackerPhase(sessionId))?.tracker?.phase).toBeUndefined();
+
+    // The tick that fills the clock: phase becomes climax, session lives.
+    const second = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We linger until the light changes.',
+      reply: trackerReply([{ name: 'Breath', delta: 1 }]),
+      capturedPrompts: prompts,
+    });
+    expect(second.status).toBe(200);
+    expect((await trackerRow(sessionId, 'Breath'))?.value).toBe(6);
+    expect((await trackerPhase(sessionId))?.tracker?.phase).toBe('climax');
+    expect((await sessionRow(sessionId))?.status).toBe('active');
+    expect((await sessionRow(sessionId))?.endTime).toBeNull();
+
+    // The next turn's prompt carries the climax directive and the stored
+    // tracker line — rendered from server state, not the DM's prose.
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'What happens now?',
+      reply: { ...baseReply },
+      capturedPrompts: prompts,
+    });
+    const nextPrompt = prompts[prompts.length - 1];
+    expect(nextPrompt).toContain('the climax is now');
+    expect(nextPrompt).toContain('Breath Clock: 6/6');
+  }, 30_000);
+
+  test('clock reaching its limit at at_limit=ending completes the session through the ending path', async () => {
+    const { characterId, sessionId } = await seedWorld('ending', 'score');
+    const prompts: string[] = [];
+
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'The wedge comes free in my hands.',
+      reply: trackerReply([{ name: 'Score', set: 5 }]),
+      capturedPrompts: prompts,
+    });
+    expect((await sessionRow(sessionId))?.status).toBe('active');
+
+    const second = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'I pull the last wedge.',
+      reply: trackerReply([{ name: 'Score', delta: 1 }]),
+      capturedPrompts: prompts,
+    });
+    expect(second.status).toBe(200);
+    expect((await trackerRow(sessionId, 'Score'))?.value).toBe(6);
+    const session = await sessionRow(sessionId);
+    expect(session?.status).toBe('completed');
+    expect(session?.endTime).not.toBeNull();
+    // The forced ending went through applyStoryEnding: its engine row is
+    // the one stored ending for the session.
+    const rows = (
+      await database
+        .select()
+        .from(dialogueHistory)
+        .where(eq(dialogueHistory.sessionId, sessionId))
+    ).filter(
+      (row) =>
+        row.speakerType === 'system' &&
+        (row.context as { intent?: string } | null)?.intent === 'campaign_ending',
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.message).toContain('Score Clock reached 6');
+  }, 30_000);
+
+  test('six climax turns with no declared ending: the next prompt requires the ending', async () => {
+    const { characterId, sessionId } = await seedWorld('safety-net', 'breath');
+    const prompts: string[] = [];
+
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We finish the last landing.',
+      reply: trackerReply([{ name: 'Breath', set: 6 }]),
+      capturedPrompts: prompts,
+    });
+    expect((await trackerPhase(sessionId))?.tracker?.phase).toBe('climax');
+
+    // Six player turns in the climax, the DM narrating on without ever
+    // declaring the ending.
+    for (let turn = 1; turn <= 6; turn += 1) {
+      const { status } = await dmTurn({
+        sessionId,
+        characterId,
+        playerInput: `We press on through the climax (turn ${turn}).`,
+        reply: { ...baseReply },
+        capturedPrompts: prompts,
+      });
+      expect(status).toBe(200);
+    }
+    const phase = (await trackerPhase(sessionId))?.tracker;
+    expect(phase?.climaxTurns).toBe(6);
+    expect(phase?.endingRequired).toBe(true);
+    expect((await sessionRow(sessionId))?.status).toBe('active');
+
+    // The one more request the spec promises: its prompt requires the ending.
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'And then?',
+      reply: { ...baseReply },
+      capturedPrompts: prompts,
+    });
+    expect(prompts[prompts.length - 1]).toContain('the ending is required');
+  }, 60_000);
+
+  test('a retried turn (same saved player message) never applies its changes twice', async () => {
+    const { characterId, sessionId } = await seedWorld('replay', 'breath');
+    const prompts: string[] = [];
+    const reply = trackerReply([{ name: 'Breath', delta: 5 }]);
+
+    const first = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We cross the hollow quickly.',
+      reply,
+      capturedPrompts: prompts,
+    });
+    expect(first.status).toBe(200);
+    expect((await trackerRow(sessionId, 'Breath'))?.value).toBe(5);
+
+    // Retry replays the request against the same saved player message:
+    // the once-per-message marker turns the second application away, and
+    // the envelope keeps the changes (they did land — on the first try).
+    const replay = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We cross the hollow quickly.',
+      reply,
+      capturedPrompts: prompts,
+      insertMessage: false,
+    });
+    expect(replay.status).toBe(200);
+    expect((await trackerRow(sessionId, 'Breath'))?.value).toBe(5);
+    const replayEnvelope = JSON.parse(String(replay.body.text)) as Record<string, unknown>;
+    expect(Array.isArray(replayEnvelope.tracker_changes)).toBe(true);
+  }, 30_000);
+
+  test('changes on a roll-request turn wait for the result turn', async () => {
+    const { characterId, sessionId } = await seedWorld('roll-deferral', 'breath');
+    const prompts: string[] = [];
+
+    const rollTurn = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'I hold on to the rope as the hollow pulls at us.',
+      reply: {
+        ...baseReply,
+        roll_requests: [
+          {
+            type: 'save',
+            formula: '1d20+2',
+            purpose: 'Wisdom save to hold the rope against the hollow',
+            dc: 14,
+            ac: null,
+            advantage: false,
+            disadvantage: false,
+          },
+        ],
+        tracker_changes: [{ name: 'Breath', delta: 5 }],
+      },
+      capturedPrompts: prompts,
+    });
+    expect(rollTurn.status).toBe(200);
+    // Nothing landed on the roll turn, and the envelope says so.
+    expect(await trackerRow(sessionId, 'Breath')).toBeUndefined();
+    const rollEnvelope = JSON.parse(String(rollTurn.body.text)) as Record<string, unknown>;
+    expect(rollEnvelope.tracker_changes ?? null).toBeNull();
+
+    // The result turn re-sends the movement (the schema's instruction),
+    // and now it lands.
+    const resultTurn = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'I hold fast.',
+      reply: trackerReply([{ name: 'Breath', delta: 5 }]),
+      capturedPrompts: prompts,
+    });
+    expect(resultTurn.status).toBe(200);
+    expect((await trackerRow(sessionId, 'Breath'))?.value).toBe(5);
+  }, 30_000);
+
+  test('a session whose campaign belongs to another owner resolves no clocks', async () => {
+    // The tracker state is scoped through the session's campaign owner:
+    // this session's character is the caller's, but its campaign is not,
+    // so no definitions resolve and no change can land.
+    const otherUserId = `story-tracker-other-${process.pid}`;
+    const [{ id: otherCampaignId }] = await database
+      .insert(campaigns)
+      .values({ userId: otherUserId, name: testId('tracker-foreign'), campaignLength: 'one-shot' })
+      .returning({ id: campaigns.id });
+    try {
+      const [{ id: characterId }] = await database
+        .insert(characters)
+        .values({
+          userId,
+          campaignId: otherCampaignId,
+          name: 'Tavo Brejo',
+          class: 'Ranger',
+          level: 3,
+          experiencePoints: 1050,
+        })
+        .returning({ id: characters.id });
+      await database.insert(characterStats).values({
+        characterId,
+        armorClass: 14,
+        maxHitPoints: 24,
+        currentHitPoints: 24,
+        strength: 12,
+        dexterity: 16,
+        constitution: 14,
+        intelligence: 10,
+        wisdom: 15,
+        charisma: 8,
+      });
+      const [{ id: sessionId }] = await database
+        .insert(gameSessions)
+        .values({
+          campaignId: otherCampaignId,
+          characterId,
+          sessionNumber: 1,
+          status: 'active',
+          turnCount: 0,
+          starterCampaignId: starterIds.breath,
+        })
+        .returning({ id: gameSessions.id });
+      createdSessionIds.push(sessionId);
+
+      await dmTurn({
+        sessionId,
+        characterId,
+        playerInput: 'We cross the hollow quickly.',
+        reply: trackerReply([{ name: 'Breath', delta: 5 }]),
+        capturedPrompts: [],
+      });
+      expect(await trackerRow(sessionId, 'Breath')).toBeUndefined();
+      expect((await sessionRow(sessionId))?.status).toBe('active');
+    } finally {
+      await database.delete(campaigns).where(eq(campaigns.id, otherCampaignId)).catch(() => {});
+    }
+  }, 30_000);
+
+  test('client session_state writes cannot erase or forge the tracker state', async () => {
+    const { characterId, sessionId } = await seedWorld('preservation', 'breath');
+    const prompts: string[] = [];
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We linger until the light changes.',
+      reply: trackerReply([{ name: 'Breath', set: 6 }]),
+      capturedPrompts: prompts,
+    });
+    const before = (await trackerPhase(sessionId))?.tracker;
+    expect(before?.phase).toBe('climax');
+
+    const { SessionService } = await importWithRealDb(() => import('../session-service.js'));
+    // A routine whole-blob client write (its snapshot predates the
+    // climax) must not delete the phase, the count, or the marker.
+    const wiped = await SessionService.updateSession(sessionId, userId, {
+      sessionState: { clientKey: 'snapshot' },
+    });
+    expect((wiped.sessionState as { tracker?: unknown })?.tracker).toEqual(before);
+    // And a forged tracker key in the client's blob never replaces the
+    // engine's stored value.
+    const forged = await SessionService.updateSession(sessionId, userId, {
+      sessionState: {
+        tracker: {
+          phase: 'climax',
+          clock: 'Forged',
+          climaxTurns: 0,
+          endingRequired: false,
+          lastMessageId: 'forged-message-id',
+        },
+      },
+    });
+    expect((forged.sessionState as { tracker?: unknown })?.tracker).toEqual(before);
+    expect((await trackerPhase(sessionId))?.tracker).toEqual(before);
+  }, 30_000);
+
+  test('model values are clamped to the clock’s range', async () => {
+    const { characterId, sessionId } = await seedWorld('clamp', 'breath');
+    const prompts: string[] = [];
+
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'The hollow gives back its held breath.',
+      reply: trackerReply([{ name: 'Breath', set: -50 }]),
+      capturedPrompts: prompts,
+    });
+    expect((await trackerRow(sessionId, 'Breath'))?.value).toBe(0);
+    expect((await trackerPhase(sessionId))?.tracker?.phase).toBeUndefined();
+
+    // An overshooting delta lands on the limit exactly — and the limit
+    // still fires.
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'Everything happens at once.',
+      reply: trackerReply([{ name: 'Breath', delta: 9999 }]),
+      capturedPrompts: prompts,
+    });
+    expect((await trackerRow(sessionId, 'Breath'))?.value).toBe(6);
+    expect((await trackerPhase(sessionId))?.tracker?.phase).toBe('climax');
+  }, 30_000);
+
+  test('an ending clock already at its limit re-asserts the ending on the next turn', async () => {
+    const { characterId, sessionId } = await seedWorld('owed-ending', 'score');
+    const prompts: string[] = [];
+    // The state a lost forced ending leaves behind: the clock stored at
+    // its limit, the session still active, no ending written.
+    await database.insert(sessionTrackers).values({
+      sessionId,
+      name: 'Score',
+      value: 6,
+      limit: 6,
+    });
+
+    // A plain turn — no tracker changes at all — re-fires the ending,
+    // because the fire is level-triggered, not edge-triggered.
+    const turn = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'What happens now?',
+      reply: { ...baseReply },
+      capturedPrompts: prompts,
+    });
+    expect(turn.status).toBe(200);
+    const session = await sessionRow(sessionId);
+    expect(session?.status).toBe('completed');
+    expect(session?.endTime).not.toBeNull();
+  }, 30_000);
+
+  test('the audit’s live shape (metadata empty on every row): limit from prose, climax by default', async () => {
+    const { characterId, sessionId } = await seedWorld('plain', 'plain');
+    const prompts: string[] = [];
+
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We finish the landing and move on.',
+      reply: trackerReply([{ name: 'Plain', set: 5 }]),
+      capturedPrompts: prompts,
+    });
+    expect((await trackerRow(sessionId, 'Plain'))?.value).toBe(5);
+    expect((await trackerRow(sessionId, 'Plain'))?.limit).toBe(6);
+
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We linger until the light changes.',
+      reply: trackerReply([{ name: 'Plain', delta: 1 }]),
+      capturedPrompts: prompts,
+    });
+    expect((await trackerRow(sessionId, 'Plain'))?.value).toBe(6);
+    // No metadata anywhere: at_limit defaults to climax — the phase
+    // flips and the story does NOT end. This is the behaviour production
+    // sees first, until the bibles carry at_limit.
+    expect((await trackerPhase(sessionId))?.tracker?.phase).toBe('climax');
+    expect((await sessionRow(sessionId))?.status).toBe('active');
+
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'What happens now?',
+      reply: { ...baseReply },
+      capturedPrompts: prompts,
+    });
+    expect(prompts[prompts.length - 1]).toContain('Plain Clock: 6/6');
+    expect(prompts[prompts.length - 1]).toContain('the climax is now');
+  }, 30_000);
+
+  test('a declared ending in the same reply as a limit-crossing change wins', async () => {
+    const { characterId, sessionId } = await seedWorld('declaration-wins', 'breath');
+    const prompts: string[] = [];
+
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We finish the landing and move on.',
+      reply: trackerReply([{ name: 'Breath', set: 5 }]),
+      capturedPrompts: prompts,
+    });
+
+    const turn = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'It ends here, one way or another.',
+      reply: {
+        ...baseReply,
+        campaign_ending: { summary: 'The grove exhales, and the story closes.' },
+        tracker_changes: [{ name: 'Breath', delta: 1 }],
+      },
+      capturedPrompts: prompts,
+    });
+    expect(turn.status).toBe(200);
+    const session = await sessionRow(sessionId);
+    expect(session?.status).toBe('completed');
+    // The completion is the DECLARATION's (its summary is the stored
+    // ending), and the tracker change in the same reply never landed —
+    // the tracker step found the session already completed.
+    const rows = (
+      await database
+        .select()
+        .from(dialogueHistory)
+        .where(eq(dialogueHistory.sessionId, sessionId))
+    ).filter(
+      (row) =>
+        row.speakerType === 'system' &&
+        (row.context as { intent?: string } | null)?.intent === 'campaign_ending',
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.message).toContain('The grove exhales');
+    expect((await trackerRow(sessionId, 'Breath'))?.value).toBe(5);
+  }, 30_000);
+
+  test('the safety net’s required-ending turn can actually complete the session', async () => {
+    const { characterId, sessionId } = await seedWorld('safety-net-completes', 'breath');
+    const prompts: string[] = [];
+
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We finish the last landing.',
+      reply: trackerReply([{ name: 'Breath', set: 6 }]),
+      capturedPrompts: prompts,
+    });
+    for (let turn = 1; turn <= 6; turn += 1) {
+      await dmTurn({
+        sessionId,
+        characterId,
+        playerInput: `We press on through the climax (turn ${turn}).`,
+        reply: { ...baseReply },
+        capturedPrompts: prompts,
+      });
+    }
+    expect((await trackerPhase(sessionId))?.tracker?.endingRequired).toBe(true);
+
+    // The one more request, answered with the declaration the prompt
+    // required: the session completes through the ordinary ending path.
+    const turn = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'And then it ends.',
+      reply: {
+        ...baseReply,
+        campaign_ending: { summary: 'At last, the hollow lets them go.' },
+      },
+      capturedPrompts: prompts,
+    });
+    expect(turn.status).toBe(200);
+    expect(prompts[prompts.length - 1]).toContain('the ending is required');
+    expect((await sessionRow(sessionId))?.status).toBe('completed');
+  }, 60_000);
+
+  test('an uncertain prose limit defines no clock: held-rest changes land nothing', async () => {
+    const { characterId, sessionId } = await seedWorld('uncertain-limit', 'heldrest');
+    const prompts: string[] = [];
+
+    const turn = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We play the held rest through.',
+      reply: trackerReply([{ name: 'Score', set: 5 }]),
+      capturedPrompts: prompts,
+    });
+    expect(turn.status).toBe(200);
+    // The audit's held-rest rows tie 6 to the Score Clock in a tick row
+    // and a compound row, so the prose limit (highest clean reaches: 5)
+    // is uncertain and NO clock is defined — the change names an unknown
+    // clock, nothing is stored, no climax starts one segment early, and
+    // the envelope nulls the unapplied claim. Round 1's parser defined
+    // Score at 5 and stored this very change under a climax phase.
+    expect(await trackerRow(sessionId, 'Score')).toBeUndefined();
+    expect((await trackerPhase(sessionId))?.tracker?.phase).toBeUndefined();
+    expect((await sessionRow(sessionId))?.status).toBe('active');
+    const envelope = JSON.parse(String(turn.body.text)) as Record<string, unknown>;
+    expect(envelope.tracker_changes ?? null).toBeNull();
+  }, 30_000);
+
+  /** The session's stored ending rows (the applier's engine lines). */
+  const endingRowsFor = async (sessionId: string) =>
+    (
+      await database
+        .select()
+        .from(dialogueHistory)
+        .where(eq(dialogueHistory.sessionId, sessionId))
+    ).filter(
+      (row) =>
+        row.speakerType === 'system' &&
+        (row.context as { intent?: string } | null)?.intent === 'campaign_ending',
+    );
+
+  /** Drives a breath-clock session into a tripped safety net (climax + 6 turns). */
+  const driveToTrippedNet = async (
+    label: string,
+  ): Promise<{ characterId: string; sessionId: string; prompts: string[] }> => {
+    const world = await seedWorld(label, 'breath');
+    const prompts: string[] = [];
+    await dmTurn({
+      sessionId: world.sessionId,
+      characterId: world.characterId,
+      playerInput: 'We finish the last landing.',
+      reply: trackerReply([{ name: 'Breath', set: 6 }]),
+      capturedPrompts: prompts,
+    });
+    for (let turn = 1; turn <= 6; turn += 1) {
+      const { status } = await dmTurn({
+        sessionId: world.sessionId,
+        characterId: world.characterId,
+        playerInput: `We press on through the climax (turn ${turn}).`,
+        reply: { ...baseReply },
+        capturedPrompts: prompts,
+      });
+      expect(status).toBe(200);
+    }
+    expect((await trackerPhase(world.sessionId))?.tracker?.endingRequired).toBe(true);
+    expect((await sessionRow(world.sessionId))?.status).toBe('active');
+    return { ...world, prompts };
+  };
+
+  test('safety net: a DM that never declares still completes — one corrective call, then the engine ending', async () => {
+    const { characterId, sessionId, prompts } = await driveToTrippedNet('safety-net-enforced');
+    const promptsBefore = prompts.length;
+
+    const turn = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'And then?',
+      reply: { ...baseReply },
+      capturedPrompts: prompts,
+    });
+    expect(turn.status).toBe(200);
+    // Exactly two generate calls for the turn: the turn itself and the
+    // one corrective call with the ending required. The stub declares
+    // nothing on either, so the engine-written ending lands.
+    const turnPrompts = prompts.slice(promptsBefore);
+    expect(turnPrompts).toHaveLength(2);
+    expect(turnPrompts[0]).toContain('the ending is required');
+    expect(turnPrompts[1]).toContain('<corrective_instruction>');
+    expect(turnPrompts[1]).toContain('campaign_ending');
+    const session = await sessionRow(sessionId);
+    expect(session?.status).toBe('completed');
+    expect(session?.endTime).not.toBeNull();
+    const rows = await endingRowsFor(sessionId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.message).toContain(
+      'Breath Clock reached its limit and the climax ran its course',
+    );
+    // The envelope carries the stored (engine-written) summary, as a
+    // declared ending would leave it.
+    const envelope = JSON.parse(String(turn.body.text)) as {
+      campaign_ending?: { summary?: string } | null;
+    };
+    expect(envelope.campaign_ending?.summary).toContain('Breath Clock reached its limit');
+  }, 60_000);
+
+  test('safety net: a corrective reply that declares completes with the DM’s own summary', async () => {
+    const { characterId, sessionId, prompts } = await driveToTrippedNet('safety-net-corrective');
+    const promptsBefore = prompts.length;
+
+    const turn = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'And then?',
+      reply: { ...baseReply },
+      replies: [
+        { ...baseReply },
+        {
+          ...baseReply,
+          campaign_ending: { summary: 'The hollow sighs, and lets them go.' },
+        },
+      ],
+      capturedPrompts: prompts,
+    });
+    expect(turn.status).toBe(200);
+    expect(prompts.slice(promptsBefore)).toHaveLength(2);
+    expect((await sessionRow(sessionId))?.status).toBe('completed');
+    const rows = await endingRowsFor(sessionId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.message).toContain('The hollow sighs, and lets them go.');
+    const envelope = JSON.parse(String(turn.body.text)) as {
+      campaign_ending?: { summary?: string } | null;
+    };
+    expect(envelope.campaign_ending?.summary).toBe('The hollow sighs, and lets them go.');
+  }, 60_000);
+
+  test('final beat at Clock 1/6: the flag arms the ending, and the next turn’s net completes the session', async () => {
+    const { characterId, sessionId } = await seedWorld('final-beat', 'breath');
+    const prompts: string[] = [];
+
+    // Hark N23-003's shape: the climax resolves in prose, the Clock sits
+    // at 1/6, and the DM declares no ending — but it flags the final
+    // beat. The flag alone arms the ending-required state; nothing ends
+    // on this turn.
+    const first = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We step into the sundial chamber at last.',
+      reply: {
+        ...baseReply,
+        tracker_changes: [{ name: 'Breath', set: 1 }],
+        final_beat_reached: true,
+      },
+      capturedPrompts: prompts,
+    });
+    expect(first.status).toBe(200);
+    expect((await trackerRow(sessionId, 'Breath'))?.value).toBe(1);
+    expect((await sessionRow(sessionId))?.status).toBe('active');
+    const armed = (await trackerPhase(sessionId))?.tracker as
+      | { endingRequired?: boolean; finalBeat?: boolean }
+      | undefined;
+    expect(armed?.endingRequired).toBe(true);
+    expect(armed?.finalBeat).toBe(true);
+
+    // The next turn runs the same net as the climax limit: its prompt
+    // requires the ending, the DM still declares none, so the corrective
+    // call fires and the engine-written final-beat ending completes the
+    // session. A clock-only net would never have armed here.
+    const promptsBefore = prompts.length;
+    const second = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'What happens now?',
+      reply: { ...baseReply },
+      capturedPrompts: prompts,
+    });
+    expect(second.status).toBe(200);
+    const turnPrompts = prompts.slice(promptsBefore);
+    expect(turnPrompts[0]).toContain('final beat');
+    expect(turnPrompts[0]).toContain('the ending is required');
+    expect((await sessionRow(sessionId))?.status).toBe('completed');
+    const rows = await endingRowsFor(sessionId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.message).toContain('The story reached its final beat');
+    const envelope = JSON.parse(String(second.body.text)) as {
+      campaign_ending?: { summary?: string } | null;
+    };
+    expect(envelope.campaign_ending?.summary).toContain('final beat');
+  }, 60_000);
+
+  test('safety net: a non-one-shot climax arms the state but never buys a corrective call', async () => {
+    // The climax machinery is campaign-agnostic (round 1), so a long
+    // campaign's climax trips endingRequired too — but the ending
+    // applier completes one-shots only. Without the one-shot gate the
+    // route would pay for a corrective generate on every later turn
+    // forever, both rungs refusing `not_one_shot` while the armed state
+    // never clears.
+    const { characterId, sessionId } = await seedWorld('net-non-one-shot', 'breath', 'campaign');
+    const prompts: string[] = [];
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We finish the last landing.',
+      reply: trackerReply([{ name: 'Breath', set: 6 }]),
+      capturedPrompts: prompts,
+    });
+    for (let turn = 1; turn <= 6; turn += 1) {
+      await dmTurn({
+        sessionId,
+        characterId,
+        playerInput: `We press on through the climax (turn ${turn}).`,
+        reply: { ...baseReply },
+        capturedPrompts: prompts,
+      });
+    }
+    expect((await trackerPhase(sessionId))?.tracker?.endingRequired).toBe(true);
+
+    const promptsBefore = prompts.length;
+    const turn = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'And then?',
+      reply: { ...baseReply },
+      capturedPrompts: prompts,
+    });
+    expect(turn.status).toBe(200);
+    // Exactly one generate call: the turn itself. No corrective call,
+    // no forced ending — the session runs on, still armed.
+    expect(prompts.slice(promptsBefore)).toHaveLength(1);
+    expect((await sessionRow(sessionId))?.status).toBe('active');
+    expect(await endingRowsFor(sessionId)).toHaveLength(0);
+  }, 60_000);
+
+  test('safety net: an in-combat turn defers enforcement; the next story turn enforces it', async () => {
+    const { characterId, sessionId, prompts } = await driveToTrippedNet('safety-net-combat');
+    const promptsBefore = prompts.length;
+
+    // The required turn lands mid-fight: the net must not force an
+    // ending under the combat — and deferral costs nothing, because
+    // the armed state persists.
+    const combatTurn = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'I swing at the hollow’s heart.',
+      reply: { ...baseReply },
+      capturedPrompts: prompts,
+      inCombat: true,
+    });
+    expect(combatTurn.status).toBe(200);
+    expect(prompts.slice(promptsBefore)).toHaveLength(1);
+    expect((await sessionRow(sessionId))?.status).toBe('active');
+    expect(await endingRowsFor(sessionId)).toHaveLength(0);
+
+    // The first story turn after the fight: the same net fires.
+    const storyTurn = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'It is over. What happens now?',
+      reply: { ...baseReply },
+      capturedPrompts: prompts,
+    });
+    expect(storyTurn.status).toBe(200);
+    expect((await sessionRow(sessionId))?.status).toBe('completed');
+    expect(await endingRowsFor(sessionId)).toHaveLength(1);
+  }, 60_000);
 });

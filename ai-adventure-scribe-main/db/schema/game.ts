@@ -341,6 +341,36 @@ export const sessionCompanions = pgTable(
 );
 
 /**
+ * Session Trackers Table (#1042)
+ * Per-session story clocks: the engine-side copy of a campaign clock the DM
+ * advances through `tracker_changes` on its replies. The clock's definition
+ * (name, limit, at-limit behaviour) comes from the campaign's rules; this row
+ * is the session's live value, so the tracker line and the limit enforcement
+ * read server state instead of DM prose. Scoped through the session — a
+ * session belongs to a campaign, and the campaign to its owner.
+ */
+export const sessionTrackers = pgTable(
+  'session_trackers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => gameSessions.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    value: integer('value').default(0).notNull(),
+    limit: integer('limit').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => ({
+    sessionIdx: index('idx_session_trackers_session_id').on(table.sessionId),
+    sessionNameUnique: unique('session_trackers_session_id_name_unique').on(
+      table.sessionId,
+      table.name,
+    ),
+  }),
+);
+
+/**
  * Dialogue History Table
  * Chat messages during game sessions
  */
@@ -449,6 +479,8 @@ export type CharacterCondition = InferSelectModel<typeof characterConditions>;
 export type NewCharacterCondition = InferInsertModel<typeof characterConditions>;
 export type GameSession = InferSelectModel<typeof gameSessions>;
 export type NewGameSession = InferInsertModel<typeof gameSessions>;
+export type SessionTracker = InferSelectModel<typeof sessionTrackers>;
+export type NewSessionTracker = InferInsertModel<typeof sessionTrackers>;
 export type SessionCompanion = InferSelectModel<typeof sessionCompanions>;
 export type NewSessionCompanion = InferInsertModel<typeof sessionCompanions>;
 export type DialogueHistory = InferSelectModel<typeof dialogueHistory>;
