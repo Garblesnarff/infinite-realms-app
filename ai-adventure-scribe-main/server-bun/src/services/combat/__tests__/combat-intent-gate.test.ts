@@ -273,6 +273,15 @@ describe('detectDeclaredAttack', () => {
       actorName: 'Dr. Marrow',
       verb: 'shove',
     });
+    expect(
+      detectDeclaredAttack('I attack the goblin to stop him from escaping', [{ name: 'Goblin' }]),
+    ).toMatchObject({ actorName: 'Goblin', verb: 'attack' });
+    expect(
+      detectDeclaredAttack('I stab the cultist to save the child', [{ name: 'Cultist' }]),
+    ).toMatchObject({ actorName: 'Cultist', verb: 'stab' });
+    expect(
+      detectDeclaredAttack('I grab him to stop his fall. I stab the goblin', [{ name: 'Goblin' }]),
+    ).toMatchObject({ actorName: 'Goblin', verb: 'stab' });
   });
 
   it('keeps an explicit unarmed weapon word unarmed (#569)', () => {
