@@ -7,6 +7,7 @@ import { startNpcTurnSweep } from './services/combat/npc-turn-drain.js';
 import {
   resumePendingMemoryExtractionJobs,
   settleInFlightMemoryExtractionJobs,
+  startMemoryExtractionResumeSweep,
 } from './services/memory-extraction-job.js';
 import { startModelHealthChecks, validateConfiguredModels } from './services/model-health.js';
 
@@ -119,6 +120,11 @@ app.listen({ port: PORT, reusePort: true }, () => {
       error: error instanceof Error ? error.message : String(error),
     });
   });
+  // The startup sweep cannot reclaim a job that was running when its process
+  // died: the row is fresh at that moment and only turns stale 15 min later,
+  // by which time nothing would sweep again until a second restart. The
+  // periodic sweep is what picks those orphans up (#846).
+  startMemoryExtractionResumeSweep();
   // The server's existing scheduled path, same as the model health checks above: hourly in
   // this process rather than a crontab entry, so it needs no host change (#2556).
   startIdleEncounterSweep();

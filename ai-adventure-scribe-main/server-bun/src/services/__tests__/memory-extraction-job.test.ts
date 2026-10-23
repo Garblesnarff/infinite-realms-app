@@ -32,6 +32,13 @@ let completeThrowsOnce = false;
 // When true, the next completeMemoryExtractionJob mutates the row to completed
 // and then throws — a committed transition with a lost ack.
 let completeAmbiguous = false;
+// Fault/latency injection for the resume-drain tests (#846): a claim that
+// takes this long to land (the real store's UPDATE is async; the in-memory
+// mock otherwise applies it synchronously and hides the visibility race),
+// and a 1-based listRunnable call number that throws instead of returning.
+let claimDelayMs = 0;
+let listRunnableCalls = 0;
+let listRunnableFailOnCall = 0;
 const row = (id: string, overrides: Record<string, unknown> = {}) => ({
   id,
   userId: 'user-1',
@@ -80,6 +87,9 @@ mock.module('../memory-extraction-job-store.js', () => ({
     return { ...stored };
   },
   claimMemoryExtractionJob: async (id: string, expected: 'pending' | 'running') => {
+    // Optional latency: a real claim is an async UPDATE, so a page re-listed
+    // before the claims land can observe the pre-claim state.
+    if (claimDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, claimDelayMs));
     const r = jobRows.get(id);
     if (!r || r.status !== expected) return null;
     if (r.attempts >= 3) return null; // attempts cap: never claimable again
@@ -103,8 +113,12 @@ mock.module('../memory-extraction-job-store.js', () => ({
     }
     return failed;
   },
-  listRunnableMemoryExtractionJobs: async (limit: number) =>
-    [...jobRows.values()]
+  listRunnableMemoryExtractionJobs: async (limit: number) => {
+    listRunnableCalls += 1;
+    if (listRunnableFailOnCall > 0 && listRunnableCalls === listRunnableFailOnCall) {
+      throw new Error('runnable list unavailable');
+    }
+    return [...jobRows.values()]
       .filter(
         (r) =>
           r.attempts < 3 &&
@@ -113,7 +127,8 @@ mock.module('../memory-extraction-job-store.js', () => ({
       )
       .sort((a, b) => +a.createdAt - +b.createdAt)
       .slice(0, limit)
-      .map((r) => ({ ...r })),
+      .map((r) => ({ ...r }));
+  },
   getMemoryExtractionJob: async (id: string) => {
     const r = jobRows.get(id);
     return r ? { ...r } : null;
@@ -243,6 +258,7 @@ const {
   inFlightMemoryExtractionJobs,
   settleInFlightMemoryExtractionJobs,
   resumePendingMemoryExtractionJobs,
+  startMemoryExtractionResumeSweep,
 } = await import('../memory-extraction-job.js');
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -292,6 +308,9 @@ describe('runMemoryExtractionJob (#2148)', () => {
     quotaConsumeError = null;
     completeThrowsOnce = false;
     completeAmbiguous = false;
+    claimDelayMs = 0;
+    listRunnableCalls = 0;
+    listRunnableFailOnCall = 0;
     jobRows.clear();
     writtenJobIds.clear();
     extractGate = null;
@@ -687,5 +706,81 @@ describe('runMemoryExtractionJob (#2148)', () => {
     expect(failed.charged).toBe(false);
     expect(quotaConsumeCalls).toHaveLength(0);
     expect(insertCalls).toHaveLength(0);
+  });
+
+  it('a running orphan fresh at the startup sweep is reclaimed by a later sweep tick, with no second restart (#846)', async () => {
+    // "Process 1" claimed the job and died mid-execution seconds ago: the row
+    // is 'running' with a fresh last transition, so the startup sweep — and
+    // every tick while the row stays fresh — must leave it alone; a live
+    // executor could still hold it.
+    const id = 'fresh-orphan-1';
+    jobRows.set(id, row(id, { status: 'running', attempts: 1, updatedAt: new Date() }));
+
+    const sweep = startMemoryExtractionResumeSweep(10);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      expect(jobRows.get(id)).toMatchObject({ status: 'running', attempts: 1 });
+      expect(insertCalls).toHaveLength(0);
+      expect(quotaConsumeCalls).toHaveLength(0);
+
+      // The stale window passes with no further restart. The next tick of the
+      // periodic sweep — not a new process — reclaims the row, and it
+      // completes and charges exactly once, like the startup-resume cases.
+      jobRows.set(
+        id,
+        row(id, {
+          status: 'running',
+          attempts: 1,
+          updatedAt: new Date(Date.now() - STALE_MS - 1000),
+        }),
+      );
+
+      const completed = await waitForRow(id, (r) => r.status === 'completed', 'sweep reclaim');
+      expect(completed.attempts).toBe(2);
+      expect(completed.charged).toBe(true);
+      expect(quotaConsumeCalls).toHaveLength(1);
+      expect(insertCalls).toHaveLength(1);
+    } finally {
+      clearInterval(sweep);
+    }
+  });
+
+  it('one resume sweep drains a backlog deeper than one page (#846)', async () => {
+    const total = 105;
+    for (let i = 0; i < total; i++) {
+      jobRows.set(`bulk-${i}`, row(`bulk-${i}`));
+    }
+    // Claims land asynchronously, like the real store's UPDATEs: a drain that
+    // re-lists before its claims commit re-reads the same first page, sees
+    // nothing fresh, and stops with the tail unattempted.
+    claimDelayMs = 5;
+
+    // One page holds 50 rows; without paging, rows past the first page would
+    // strand until a later sweep or restart.
+    const { resumed } = await resumePendingMemoryExtractionJobs(50);
+    expect(resumed).toBe(total);
+
+    await waitForRow('bulk-104', (r) => r.status === 'completed', 'drain completion');
+    expect([...jobRows.values()].filter((r) => r.status === 'completed')).toHaveLength(total);
+    expect(quotaConsumeCalls).toHaveLength(total);
+  });
+
+  it('a list failure mid-drain returns what the sweep already resumed instead of throwing (#846)', async () => {
+    for (let i = 0; i < 75; i++) {
+      jobRows.set(`page-err-${i}`, row(`page-err-${i}`));
+    }
+
+    // The second page's list call fails: the sweep keeps the 50 rows it
+    // already claimed and reports them; a later sweep drains the rest.
+    listRunnableFailOnCall = 2;
+    const first = await resumePendingMemoryExtractionJobs(50);
+    expect(first.resumed).toBe(50);
+
+    const second = await resumePendingMemoryExtractionJobs(50);
+    expect(second.resumed).toBe(25);
+
+    await waitForRow('page-err-74', (r) => r.status === 'completed', 'post-error drain');
+    expect([...jobRows.values()].filter((r) => r.status === 'completed')).toHaveLength(75);
+    expect(quotaConsumeCalls).toHaveLength(75);
   });
 });
