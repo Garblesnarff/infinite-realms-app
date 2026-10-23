@@ -6,6 +6,7 @@ import {
   gateRollOutcomeContradiction,
   narrationViolationNote,
   narrativeTurnHasNoEngineEvent,
+  playerPickedListedOption,
   releaseHeldSideEffects,
   type RollOutcomeGateParams,
 } from '../narration-gate';
@@ -17,6 +18,10 @@ import logger from '@/lib/logger';
 import { isRollOutcomeStale } from '@/services/ai-service';
 import { SessionStateService } from '@/services/session-state-service';
 import { createDefaultSessionState, type PersistedRollOutcome } from '@/types/session-state';
+import {
+  createPlayerMessageFromOption,
+  parseMessageOptions,
+} from '@/utils/parseMessageOptions';
 
 vi.mock('@/lib/logger', () => ({
   default: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
@@ -562,6 +567,7 @@ describe('narrativeTurnHasNoEngineEvent', () => {
         },
       },
     ],
+    ['a picked listed option', { playerPickedListedOption: true }],
   ])('does not hold for %s', (_label, overrides) => {
     expect(narrativeTurnHasNoEngineEvent({ ...turn, ...overrides })).toBe(false);
   });
@@ -575,6 +581,94 @@ describe('narrativeTurnHasNoEngineEvent', () => {
   it('holds when the campaign ending field is null (nothing declared)', () => {
     expect(
       narrativeTurnHasNoEngineEvent({ ...turn, result: { text: CLEAN, campaign_ending: null } }),
+    ).toBe(true);
+  });
+});
+
+describe('playerPickedListedOption (#1041)', () => {
+  // The Gardener's Heir landing beat from G22-008, in the shape the DM's reply carries and
+  // `parseMessageOptions` (the renderer's producer) reads. The click product comes from
+  // `createPlayerMessageFromOption` — the exact function DynamicOptionsSection sends.
+  const DM_OFFERING_OPTIONS = [
+    'The ferry grounds itself on the mudflat below the drowned shrine, and the water goes still.',
+    '',
+    'A. **Sunken Temple**, descend into the flooded nave.',
+    'B. **Call to Ombu**, shout your greeting across the water.',
+  ].join('\n');
+  const offered = parseMessageOptions(DM_OFFERING_OPTIONS).options;
+
+  it('parses the fixture the way the renderer does', () => {
+    expect(offered.map((option) => option.text)).toEqual([
+      'Sunken Temple, descend into the flooded nave.',
+      'Call to Ombu, shout your greeting across the water.',
+    ]);
+  });
+
+  it('recognizes a click on either listed option by the text the click sends', () => {
+    for (const option of offered) {
+      expect(
+        playerPickedListedOption(createPlayerMessageFromOption(option), {
+          text: DM_OFFERING_OPTIONS,
+        }),
+      ).toBe(true);
+    }
+  });
+
+  it('recognizes an offered option typed verbatim', () => {
+    expect(playerPickedListedOption(offered[0].text, { text: DM_OFFERING_OPTIONS })).toBe(true);
+  });
+
+  it('does not recognize a free-text message that merely shares words with an option', () => {
+    expect(
+      playerPickedListedOption('I shout a greeting to whoever lives in the temple.', {
+        text: DM_OFFERING_OPTIONS,
+      }),
+    ).toBe(false);
+  });
+
+  it('resolves the offered options from saved actionOptions when the text carries none', () => {
+    const dm = {
+      text: 'The water goes still around the ferry.',
+      context: {
+        actionOptions: [
+          'A. **Sunken Temple**, descend into the flooded nave.',
+          'B. **Call to Ombu**, shout your greeting across the water.',
+        ],
+      },
+    };
+    expect(playerPickedListedOption(createPlayerMessageFromOption(offered[1]), dm)).toBe(true);
+    expect(playerPickedListedOption('I wait for the tide.', dm)).toBe(false);
+  });
+
+  it('needs both a player message and a previous DM reply', () => {
+    expect(playerPickedListedOption('', { text: DM_OFFERING_OPTIONS })).toBe(false);
+    expect(playerPickedListedOption('Sunken Temple', null)).toBe(false);
+    expect(playerPickedListedOption('Sunken Temple', { text: 'No options here.' })).toBe(false);
+  });
+
+  it('keeps the gate off a turn answering a clicked option, and on a free-text turn (G22-008)', () => {
+    const turn = {
+      isInCombat: false,
+      isDiceRollMessage: false,
+      playerInputOrigin: 'typed' as const,
+      result: { text: CLEAN, combat_transition: 'none' },
+    };
+    const click = createPlayerMessageFromOption(offered[0]);
+    expect(
+      narrativeTurnHasNoEngineEvent({
+        ...turn,
+        playerPickedListedOption: playerPickedListedOption(click, {
+          text: DM_OFFERING_OPTIONS,
+        }),
+      }),
+    ).toBe(false);
+    expect(
+      narrativeTurnHasNoEngineEvent({
+        ...turn,
+        playerPickedListedOption: playerPickedListedOption('I swim out to the shrine bell.', {
+          text: DM_OFFERING_OPTIONS,
+        }),
+      }),
     ).toBe(true);
   });
 });

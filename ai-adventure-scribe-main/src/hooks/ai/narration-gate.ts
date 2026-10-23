@@ -12,6 +12,11 @@ import {
 } from '@/hooks/ai/silent-player-turn';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
+import {
+  createPlayerMessageFromOption,
+  parseMessageOptions,
+  type ActionOption,
+} from '@/utils/parseMessageOptions';
 
 /**
  * The one check every DM reply passes when the turn produced no engine event (#2373).
@@ -236,6 +241,12 @@ export interface NarrativeTurn {
   isDiceRollMessage: boolean;
   /** `null` when no player message started the turn (the opening scene, a resumed turn). */
   playerInputOrigin: PlayerInputOrigin | null;
+  /**
+   * #1041: the player's message picked one of the options the previous DM reply listed
+   * (see `playerPickedListedOption`). The story itself offered the move, so the turn is
+   * the story advancing on the DM's own invitation, not a free-text non-action.
+   */
+  playerPickedListedOption?: boolean;
   result: {
     text?: string;
     roll_requests?: unknown[];
@@ -266,17 +277,28 @@ export interface NarrativeTurn {
  * ending turn — which by definition has no engine event — was exactly what the gate ate:
  * G22-008's listed landing choice was answered "(Nothing comes of that…)" and its options
  * wiped, because the ending narration claimed the story's conclusion with nothing backing it.
+ *
+ * #1041: a turn answering a listed option is likewise not the gate's to eat. The DM's own
+ * previous reply offered the move and the player picked it; the narration that follows is
+ * the story advancing on the DM's invitation. G22-008's landing choice carried a filled
+ * campaign_ending and #1020 covered it, but an ordinary listed option mid-story carries
+ * no engine field at all, so the gate replaced its answer with the no-effect line and
+ * wiped the reply's options — a dead end. The click sends only the option's text (no id,
+ * no send context), so the hook determines the pick from the offered options themselves
+ * (`playerPickedListedOption`) and this predicate trusts that determination.
  */
 export function narrativeTurnHasNoEngineEvent({
   isInCombat,
   isDiceRollMessage,
   playerInputOrigin,
+  playerPickedListedOption,
   result,
 }: NarrativeTurn): boolean {
   return (
     !isInCombat &&
     !isDiceRollMessage &&
     playerInputOrigin !== null &&
+    !playerPickedListedOption &&
     !result.combat_actions?.length &&
     !result.combatants?.length &&
     !result.roll_requests?.length &&
@@ -300,6 +322,58 @@ function isDeclaredCampaignEnding(ending: unknown): boolean {
   if (ending === null || ending === undefined || typeof ending !== 'object') return false;
   const summary = (ending as { summary?: unknown }).summary;
   return typeof summary === 'string' && summary.trim().length > 0;
+}
+
+/** The previous DM reply, as much of it as the listed-option pick determination reads. */
+export interface ListedOptionSource {
+  text?: string | null;
+  context?: { actionOptions?: unknown } | null;
+}
+
+/**
+ * #1041: whether the player's message picked one of the options the DM's previous reply
+ * listed. A click sends `createPlayerMessageFromOption(option)` and nothing else — no
+ * option id, no send context (DynamicOptionsSection → MessageList.handleOptionSelect) —
+ * so the pick is recognized by its text: the click's own product, or the option's text
+ * typed verbatim. The offered options resolve the way MessageRenderer resolves them:
+ * parsed from the reply's text, or from its saved `actionOptions` when the text carries
+ * none. Comparison ignores case, whitespace runs and a trailing full stop — the shapes a
+ * retype differs by, never the words chosen.
+ */
+export function playerPickedListedOption(
+  playerText: string | null | undefined,
+  previousDm: ListedOptionSource | null | undefined,
+): boolean {
+  if (!playerText || !previousDm) return false;
+  const picked = normalizePickedOptionText(playerText);
+  if (!picked) return false;
+  return offeredOptionsOf(previousDm).some(
+    (option) =>
+      normalizePickedOptionText(createPlayerMessageFromOption(option)) === picked ||
+      normalizePickedOptionText(option.text) === picked,
+  );
+}
+
+/** The options a DM reply offered, resolved as `MessageRenderer` resolves them. */
+function offeredOptionsOf(dm: ListedOptionSource): ActionOption[] {
+  const inline = parseMessageOptions(dm.text ?? '');
+  if (inline.hasOptions) return inline.options;
+  const saved = dm.context?.actionOptions;
+  if (Array.isArray(saved)) {
+    const restored = parseMessageOptions(
+      saved.filter((choice): choice is string => typeof choice === 'string').join('\n'),
+    );
+    if (restored.hasOptions) return restored.options;
+  }
+  return [];
+}
+
+function normalizePickedOptionText(text: string): string {
+  return text
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/[.!]+$/, '')
+    .toLowerCase();
 }
 
 export interface RollOutcomeGateParams<T extends GatedNarration> {
