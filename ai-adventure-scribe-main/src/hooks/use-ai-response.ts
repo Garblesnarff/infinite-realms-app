@@ -39,6 +39,7 @@ import {
   enforceNarrationGate,
   gateRollOutcomeContradiction,
   narrativeTurnHasNoEngineEvent,
+  playerPickedListedOption,
   releaseHeldSideEffects,
   type NarrativeTurn,
 } from '@/hooks/ai/narration-gate';
@@ -851,6 +852,15 @@ export const useAIResponse = (): {
         if (heldEntry?.decision === 'declined') {
           aiContext.gameState.combatEntryDeclined = heldEntry.label;
         }
+        // #1041: a click on a listed option sends only the option's text, so whether this
+        // turn answers one is determined against the previous DM reply's offered options.
+        const previousDmMessage = [...messages]
+          .reverse()
+          .find((message) => message?.sender === 'dm');
+        const pickedListedOption = playerPickedListedOption(
+          latestMessage.text,
+          previousDmMessage,
+        );
         // A declined entry's reply is checked as a plain narrative turn: its combat fields are
         // blanked below, whatever the model asked for. A turn that began in combat is never
         // narrative: its resolution can end the fight and clear `isInCombat`, and the DM is then
@@ -859,6 +869,7 @@ export const useAIResponse = (): {
           isInCombat: isInCombat || combatWasActiveAtRequestStart,
           isDiceRollMessage: !!isDiceRollMessage,
           playerInputOrigin,
+          playerPickedListedOption: pickedListedOption,
           result: entryDeclined ? { text: reply.text } : reply,
         });
         // Only a turn that could end up gated parks its memory and world writes; the rest write
