@@ -2018,9 +2018,7 @@ ${playerInput}
 
     afterAll(async () => {
       if (contextSessionIds.length) {
-        await database
-          .delete(gameSessions)
-          .where(inArray(gameSessions.id, contextSessionIds));
+        await database.delete(gameSessions).where(inArray(gameSessions.id, contextSessionIds));
       }
     });
 
@@ -3361,6 +3359,28 @@ ${playerInput}
     // Retry re-sends the same saved player message: the grant must not land twice.
     await dmTurn({ ...fighter, existingCharacter: first.character, playerInput, reply });
     expect(await sheetInventory(first.character.id)).toEqual([{ name: 'Stopper', quantity: 1 }]);
+  });
+
+  test('#1070: reconciling the same DM reply twice grants an item once', async () => {
+    const playerInput = 'I take the silver tasting spoon.';
+    await playerSays(playerInput);
+    const reply = storyReply('You take the spoon.', {
+      items: [{ name: 'Silver Tasting Spoon', quantity: 1, change: 'gain' }],
+    });
+    const first = await dmTurn({ ...fighter, playerInput, reply });
+    expect(await sheetInventory(first.character.id)).toEqual([
+      { name: 'Silver Tasting Spoon', quantity: 1 },
+    ]);
+    const second = await applyStoryItems({
+      userId,
+      sessionId,
+      dialogueId: first.dmMessageId,
+      items: reply.items,
+    });
+    expect(second).toBe('already_applied');
+    expect(await sheetInventory(first.character.id)).toEqual([
+      { name: 'Silver Tasting Spoon', quantity: 1 },
+    ]);
   });
 
   test('#218 step 3: losing items removes them, and a retry does not remove twice', async () => {

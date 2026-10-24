@@ -6,7 +6,8 @@
  * not land again.
  *
  * Idempotency lives in `story_item_events`, one marker row per applied movement keyed on
- * the player message's timestamp (the server clock), in the style of `experience_events`.
+ * the persisted DM reply row and item name, in the style of `experience_events`. Legacy
+ * callers still carry the player-message timestamp as a compatibility fallback.
  * The inventory rows themselves cannot serve as the marker: a loss deletes its rows, so a
  * retry would find nothing and remove again. The character row is locked first, so two
  * turns for one message cannot both read "nothing applied yet" and both write.
@@ -50,16 +51,17 @@ function validItems(items: unknown): items is StoryItemChange[] {
 export async function applyStoryItemsOnce(input: {
   characterId: string;
   sessionId: string;
-  /** The player message's created_at (the server clock): the idempotency key. */
+  /** The persisted DM reply row; legacy direct callers may omit it. */
+  dialogueId?: string;
+  /** The player message's created_at (the server clock), retained for legacy markers. */
   playerMessageAt: Date;
   items: StoryItemChange[];
 }): Promise<'applied' | 'already_applied'> {
   const { db } = await import('../../../../db/client');
   const { and, eq, sql } = await import('drizzle-orm');
-  const { characters, inventoryItems, storyItemEvents, characterEquipment } = await import(
-    '../../../../db/schema/index'
-  );
-  const { characterId, sessionId, playerMessageAt, items } = input;
+  const { characters, inventoryItems, storyItemEvents, characterEquipment } =
+    await import('../../../../db/schema/index');
+  const { characterId, sessionId, dialogueId, playerMessageAt, items } = input;
   const outcome = await db.transaction(async (tx) => {
     // Lock the character row: two turns for one message cannot both read
     // "nothing applied yet" and both move the items.
@@ -95,7 +97,9 @@ export async function applyStoryItemsOnce(input: {
           and(
             eq(storyItemEvents.characterId, characterId),
             eq(storyItemEvents.sessionId, sessionId),
-            eq(storyItemEvents.playerMessageAt, playerMessageAt),
+            dialogueId
+              ? eq(storyItemEvents.dialogueId, dialogueId)
+              : eq(storyItemEvents.playerMessageAt, playerMessageAt),
             eq(sql`lower(${storyItemEvents.itemName})`, canonicalName.toLowerCase()),
             eq(storyItemEvents.change, item.change),
           ),
@@ -233,6 +237,7 @@ export async function applyStoryItemsOnce(input: {
       await tx.insert(storyItemEvents).values({
         characterId,
         sessionId,
+        ...(dialogueId ? { dialogueId } : {}),
         playerMessageAt,
         itemName: canonicalName,
         change: item.change,
@@ -254,8 +259,7 @@ export async function applyStoryItemsOnce(input: {
         msg: 'DM_STORY_ITEMS_BROADCAST_FAILED',
         sessionId,
         characterId,
-        error:
-          broadcastError instanceof Error ? broadcastError.message : String(broadcastError),
+        error: broadcastError instanceof Error ? broadcastError.message : String(broadcastError),
       });
     }
   }
@@ -267,6 +271,8 @@ export async function applyStoryItems(input: {
   userId: string;
   sessionId: string;
   items: unknown;
+  /** The persisted DM reply row, used as the per-reply idempotency key. */
+  dialogueId?: string;
   /** The reply asks for a roll: the outcome is not known yet, so nothing changes hands yet. */
   rollRequested?: boolean;
 }): Promise<StoryItemsOutcome> {
@@ -286,6 +292,7 @@ export async function applyStoryItems(input: {
     outcome = await applyStoryItemsOnce({
       characterId: character.id,
       sessionId,
+      dialogueId: input.dialogueId ?? message.id,
       playerMessageAt: message.createdAt,
       items: input.items,
     });

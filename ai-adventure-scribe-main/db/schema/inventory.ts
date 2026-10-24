@@ -68,6 +68,7 @@ export const storyItemEvents = pgTable(
     sessionId: uuid('session_id')
       .notNull()
       .references(() => gameSessions.id, { onDelete: 'cascade' }),
+    dialogueId: uuid('dialogue_id'),
     playerMessageAt: timestamp('player_message_at', { withTimezone: true, mode: 'date' }).notNull(),
     itemName: text('item_name').notNull(),
     change: text('change').notNull(), // 'gain' | 'lose'

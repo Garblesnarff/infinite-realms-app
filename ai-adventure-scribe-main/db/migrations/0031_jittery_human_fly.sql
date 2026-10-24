@@ -1,0 +1,1 @@
+ALTER TABLE "story_item_events" ADD COLUMN "dialogue_id" uuid;
