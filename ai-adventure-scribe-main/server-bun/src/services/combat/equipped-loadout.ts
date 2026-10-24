@@ -108,6 +108,7 @@ export async function getEquippedLoadout(
     ]);
 
   const sheetNames = sheetItemNameSet(legacyArmor.map((row) => row.name));
+  const carriedSheetNames = sheetItemNameSet(legacyRows.map((row) => row.name));
   return {
     weapons,
     armor: [
@@ -124,12 +125,14 @@ export async function getEquippedLoadout(
         quantity: row.quantity ?? 1,
         equipped: row.equipped === true,
       })),
-      ...inventoryRows.map((row) => ({
-        name: row.name,
-        itemType: row.itemType,
-        quantity: row.quantity,
-        equipped: row.equipped,
-      })),
+      ...inventoryRows
+        .filter((row) => !isAlreadyOnSheet(carriedSheetNames, row.name))
+        .map((row) => ({
+          name: row.name,
+          itemType: row.itemType,
+          quantity: row.quantity,
+          equipped: row.equipped,
+        })),
     ],
   };
 }

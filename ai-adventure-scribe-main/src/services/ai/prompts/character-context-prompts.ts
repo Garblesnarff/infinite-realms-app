@@ -64,11 +64,13 @@ let the engine resolve them.
     const carriedText =
       carriedItems.length > 0
         ? carriedItems
+            .slice(0, 20)
             .map(
               (item) =>
-                `${item.name} x${item.quantity} (${item.itemType}, ${item.equipped ? 'equipped' : 'carried'})`,
+                `${item.name.slice(0, 80)} x${item.quantity} (${item.itemType.slice(0, 24)}, ${item.equipped ? 'equipped' : 'carried'})`,
             )
-            .join(' | ')
+            .join(' | ') +
+          (carriedItems.length > 20 ? ` | …and ${carriedItems.length - 20} more` : '')
         : 'None recorded';
     const carriedGuidance =
       carriedItems.length > 0

@@ -133,6 +133,30 @@ describe('GameContextPrompts', () => {
   });
 
   describe('buildCharacterSection', () => {
+    it('bounds a large carried inventory by count and field length (#1069)', async () => {
+      getCharacterLoadout.mockResolvedValueOnce({
+        weapons: [],
+        armor: [],
+        armorClass: 12,
+        carriedItems: Array.from({ length: 100 }, (_, i) => ({
+          name: `${i}-` + 'x'.repeat(1000),
+          itemType: 'y'.repeat(1000),
+          quantity: 1,
+          equipped: false,
+        })),
+      });
+      const result = await GameContextPrompts.buildCharacterSection({
+        id: 'char-large',
+        name: 'Rogue',
+        class: 'Rogue',
+        level: 1,
+      });
+      const line = result.split('\n').find((line) => line.includes('CARRIED ITEMS:'))!;
+      expect(line).toContain('…and 80 more');
+      expect(line.length).toBeLessThan(3000);
+      expect(line).not.toContain('20-');
+    });
+
     it('should build a character section with basic details', async () => {
       const char = {
         id: 'char-grog',
@@ -441,7 +465,10 @@ describe('the player character identity anchor (#708)', () => {
   it('binds a premade character name to the player at its first presentation', async () => {
     const result = await GameContextPrompts.buildCharacterSection(apprentice);
 
-    expect(result).toContain('PLAYER CHARACTER: The Apprentice (you, the player), a level 1');
+    // prettier-ignore
+    expect(result).toContain(
+      'PLAYER CHARACTER: The Apprentice (you, the player), a level 1',
+    );
   });
 
   it('anchors a created character the same way (control)', async () => {
@@ -454,7 +481,10 @@ describe('the player character identity anchor (#708)', () => {
 
     const result = await GameContextPrompts.buildCharacterSection(created);
 
-    expect(result).toContain('PLAYER CHARACTER: Kael Thornwood (you, the player), a level 1');
+    // prettier-ignore
+    expect(result).toContain(
+      'PLAYER CHARACTER: Kael Thornwood (you, the player), a level 1',
+    );
   });
 
   it('full assembly: anchor present, the PC is never an NPC card', async () => {
