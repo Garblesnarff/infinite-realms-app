@@ -1440,6 +1440,37 @@ export const useAIResponse = (): {
         // message below carries it without a non-null assertion.
         const storyTrackers = (result as AIResponse).story_trackers;
 
+        // #1085: the turn's story effects reached the sheet server-side, but
+        // the panel only refreshes on the session socket's
+        // `character_state_updated` broadcast — and the socket has no
+        // reconnect, so a dead socket leaves the panel stale for the rest of
+        // the session while DM turns still work over HTTP. Dispatch the same
+        // window event the socket forwards, so the existing refresh hook
+        // refetches the character into CharacterContext through the path the
+        // panel already reads. Read from the final result like the latch
+        // above: the handler may have replaced the reply. Only damage is
+        // nulled server-side when not applied; the other fields may stay
+        // populated on turns the appliers skipped (combat, roll-requested,
+        // closed session) — a skipped turn refetches unchanged state, which
+        // is the safe direction for a freshness bug. Slot and feature spends
+        // have no envelope field (gate-driven); those refresh via the
+        // server's broadcast.
+        const storyEffectPresent = (value: unknown): boolean =>
+          value !== null && value !== undefined && (!Array.isArray(value) || value.length > 0);
+        const storyEffectsChangedCharacter =
+          storyEffectPresent((result as AIResponse).xp_award) ||
+          storyEffectPresent((result as AIResponse).damage) ||
+          storyEffectPresent((result as AIResponse).items) ||
+          storyEffectPresent((result as AIResponse).conditions) ||
+          storyEffectPresent((result as AIResponse).rest);
+        if (typeof window !== 'undefined' && sessionId && storyEffectsChangedCharacter) {
+          window.dispatchEvent(
+            new CustomEvent('character-state-updated', {
+              detail: { type: 'character_state_updated', reason: 'story_effects' },
+            }),
+          );
+        }
+
         // Format the response as an EnhancedChatMessage
         return {
           text: finalResponseText,

@@ -205,6 +205,23 @@ export async function applyStoryConditions(input: {
     count: Array.isArray(input.conditions) ? input.conditions.length : 0,
     outcome,
   });
+  // #1085: conditions are sheet state like damage/items/XP — the live sheet
+  // only refreshes on `character_state_updated`, and no publish followed a
+  // story condition change, so the Conditions panel went stale. A failed
+  // broadcast must not fail the apply: the write already landed.
+  if (outcome === 'applied') {
+    try {
+      const { publishStoryCharacterUpdate } = await import('./story-broadcast.js');
+      publishStoryCharacterUpdate(sessionId, 'story_conditions');
+    } catch (broadcastError) {
+      logger.warn({
+        msg: 'DM_STORY_CONDITIONS_BROADCAST_FAILED',
+        sessionId,
+        characterId: character?.id ?? null,
+        error: broadcastError instanceof Error ? broadcastError.message : String(broadcastError),
+      });
+    }
+  }
   return outcome;
 }
 
