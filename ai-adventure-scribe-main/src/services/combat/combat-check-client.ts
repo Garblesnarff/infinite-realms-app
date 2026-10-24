@@ -39,6 +39,105 @@ const CHECK_LABELS: Record<CombatCheckIntentKind, string> = {
  * stale number in this popup can never change an outcome. It exists so the die is not a bare
  * number, exactly as the attack popup shows its bonus.
  */
+const ABILITY_NAMES = [
+  'strength',
+  'dexterity',
+  'constitution',
+  'intelligence',
+  'wisdom',
+  'charisma',
+] as const;
+
+function hasAbilityScores(
+  scores: Record<string, unknown> | undefined,
+): scores is Record<string, unknown> {
+  return !!scores && Object.keys(scores).length > 0;
+}
+
+function scoresFromStatRow(
+  row: Record<string, unknown> | undefined,
+): Record<string, number> | undefined {
+  if (!row) return undefined;
+  const scores: Record<string, number> = {};
+  for (const name of ABILITY_NAMES) {
+    const value = row[name];
+    if (typeof value === 'number' && Number.isFinite(value)) scores[name] = value;
+  }
+  return Object.keys(scores).length > 0 ? scores : undefined;
+}
+
+/** The blank character context has scores of 10 and no id. It is not a sheet. */
+function isIdentifiedSheet(
+  source: Record<string, unknown> | null | undefined,
+): source is Record<string, unknown> {
+  return typeof source?.id === 'string' && source.id.length > 0;
+}
+
+function skillsFrom(source: Record<string, unknown> | null | undefined): string[] | undefined {
+  if (!isIdentifiedSheet(source)) return undefined;
+  if (Array.isArray(source?.skillProficiencies)) return source.skillProficiencies.map(String);
+  const raw = source.skill_proficiencies;
+  if (Array.isArray(raw)) return raw.map(String);
+  if (typeof raw === 'string' && raw.trim()) {
+    return raw
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+  return undefined;
+}
+
+function levelFrom(source: Record<string, unknown> | null | undefined): number | undefined {
+  if (!isIdentifiedSheet(source)) return undefined;
+  return typeof source?.level === 'number' ? source.level : undefined;
+}
+
+function scoresFrom(
+  source: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | undefined {
+  if (!isIdentifiedSheet(source)) return undefined;
+  const named = source.abilityScores;
+  if (hasAbilityScores(named as Record<string, unknown> | undefined)) {
+    return named as Record<string, unknown>;
+  }
+  const rows = source.character_stats;
+  const row = Array.isArray(rows) ? (rows[0] as Record<string, unknown> | undefined) : undefined;
+  return scoresFromStatRow(row);
+}
+
+/**
+ * The profile a combat check prompt is allowed to display (#1017).
+ *
+ * The encounter participant does not carry ability scores, so a prompt built from
+ * it alone is 1d20+0 while the engine rolls the sheet. The loaded sheet wins,
+ * then the session character (`character_stats`, level, skill list), then whatever
+ * the participant itself has.
+ */
+export function combatCheckProfile(
+  participant:
+    | {
+        abilityScores?: Record<string, unknown>;
+        skillProficiencies?: string[];
+        level?: number;
+      }
+    | null
+    | undefined,
+  ...sources: Array<Record<string, unknown> | null | undefined>
+): {
+  abilityScores?: Record<string, unknown>;
+  skillProficiencies?: string[];
+  level?: number;
+} {
+  const abilityScores =
+    sources.map(scoresFrom).find(hasAbilityScores) ??
+    (hasAbilityScores(participant?.abilityScores) ? participant?.abilityScores : undefined);
+  const skillProficiencies =
+    sources.map(skillsFrom).find((skills) => skills !== undefined) ??
+    participant?.skillProficiencies;
+  const level = sources.map(levelFrom).find((level) => level !== undefined) ?? participant?.level;
+  return { abilityScores, skillProficiencies, level };
+}
+
 export function skillCheckModifierFor(
   participant:
     | { abilityScores?: Record<string, unknown>; skillProficiencies?: string[]; level?: number }

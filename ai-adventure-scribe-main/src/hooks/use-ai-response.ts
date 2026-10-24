@@ -861,9 +861,7 @@ export const useAIResponse = (): {
         const supersededByCombatEnd = messagesSupersededByCombatEnd(messages);
         const previousDmMessage = [...messages]
           .reverse()
-          .find(
-            (message) => message?.sender === 'dm' && !supersededByCombatEnd.has(message),
-          );
+          .find((message) => message?.sender === 'dm' && !supersededByCombatEnd.has(message));
         // #1050 B1: a declined entry un-answers the pick — the player chose "Do something
         // else" after the click — so no part of the pick is left on the turn and the reply
         // is gated as the plain narrative turn the decline path makes it (#2341).
@@ -1171,6 +1169,8 @@ export const useAIResponse = (): {
           sessionId,
           result,
           characterRecord,
+          // #1017: the loaded sheet, because the encounter participant has no scores.
+          checkSheet: characterState.character as Record<string, unknown> | null,
           activeEncounter,
           isInCombat,
           refreshCombatState,
