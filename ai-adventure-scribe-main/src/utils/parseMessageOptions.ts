@@ -203,6 +203,33 @@ export function parseMessageOptions(rawContent: string): ParsedMessage {
     }
   }
 
+  // Dedupe the parsed list (#864): the DM often writes the same options into
+  // the narration text AND the options field, and the client appends the field
+  // to the text, so one choice arrives twice (S-006: 1-3 shown again as 4-6).
+  // Normalized like the server's normalizeDmOptionText (lowercase, strip
+  // markdown emphasis, collapse non-letters/non-numbers to spaces — Unicode
+  // letters survive, so "Speak to Zoë" and "Speak to Zo" stay distinct; the
+  // list marker needs no stripping here, the parser already removed it).
+  // Keeps the first occurrence; near-identical but distinct wordings
+  // ("Attack the goblin" vs "Attack the goblin chief") normalize differently
+  // and are kept. Two buttons with identical normalized text send identical
+  // text when clicked, so they cannot be two distinct choices from the
+  // player's perspective — a genuinely distinct choice needs distinct wording.
+  const seenOptionTexts = new Set<string>();
+  const dedupedOptions = options.filter((option) => {
+    const key = option.text
+      .toLowerCase()
+      .replace(/[*_`~]/g, '')
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .trim();
+    if (!key) return true;
+    if (seenOptionTexts.has(key)) return false;
+    seenOptionTexts.add(key);
+    return true;
+  });
+  options.length = 0;
+  options.push(...dedupedOptions);
+
   // Extract content before options (narrative only)
   let narrativeContent = messageContent;
   if (options.length > 0 && lastIndex > 0) {

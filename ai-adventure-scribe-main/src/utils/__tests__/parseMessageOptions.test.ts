@@ -308,3 +308,105 @@ describe('parseMessageOptions', () => {
     });
   });
 });
+
+describe('parseMessageOptions duplicate options (#864)', () => {
+  // Fixture follows the real producer: use-ai-response.ts appends the reply's
+  // options field to the narration text, so when the model also wrote the
+  // lettered list into the narration, the rendered text carries both copies
+  // (Hark S-006: 1-3 shown again as 4-6).
+  const OPT_A = 'A. **Take the map**, and read it by the fire.';
+  const OPT_B = 'B. **Ask about the heir**, pressing gently.';
+  const OPT_C = 'C. **Leave quietly**, into the garden.';
+  const NARRATION = 'The gardener watches you, saying nothing.';
+
+  it('renders each offered choice once when the list appears twice (S-006)', () => {
+    const result = parseMessageOptions(
+      [NARRATION, '', OPT_A, OPT_B, OPT_C, '', OPT_A, OPT_B, OPT_C].join('\n'),
+    );
+    expect(result.hasOptions).toBe(true);
+    expect(result.options).toHaveLength(3);
+    expect(result.options.map((o) => o.text)).toEqual([
+      'Take the map, and read it by the fire.',
+      'Ask about the heir, pressing gently.',
+      'Leave quietly, into the garden.',
+    ]);
+    // Dedupe removes the second copy, not the narration before the first.
+    expect(result.content).toBe(NARRATION);
+  });
+
+  it('drops a duplicated field list even with clean narration', () => {
+    const result = parseMessageOptions(
+      [NARRATION, '', OPT_A, OPT_B, OPT_C, OPT_A, OPT_B, OPT_C].join('\n'),
+    );
+    expect(result.options).toHaveLength(3);
+  });
+
+  it('keeps genuinely distinct options, including near-identical wording', () => {
+    const result = parseMessageOptions(
+      [
+        NARRATION,
+        '',
+        'A. **Attack the goblin**, with your sword.',
+        'B. **Attack the goblin chief**, with your sword.',
+        'C. **Leave quietly**, into the garden.',
+      ].join('\n'),
+    );
+    expect(result.options).toHaveLength(3);
+  });
+
+  it('treats case, markdown and punctuation variants of one choice as the same', () => {
+    const result = parseMessageOptions(
+      [
+        NARRATION,
+        '',
+        'A. **Take the map**, and read it by the fire.',
+        'B. **take the map**, and read it by the fire.',
+      ].join('\n'),
+    );
+    expect(result.options).toHaveLength(1);
+    // First occurrence is kept: the A option, not the B variant.
+    expect(result.options[0].id).toBe('option-A');
+  });
+
+  it('keeps options that differ only in a non-ASCII letter', () => {
+    const result = parseMessageOptions(
+      [
+        NARRATION,
+        '',
+        'A. **Speak to Zoë**, by the fire.',
+        'B. **Speak to Zo**, by the fire.',
+      ].join('\n'),
+    );
+    expect(result.options).toHaveLength(2);
+    expect(result.options.map((o) => o.text)).toEqual([
+      'Speak to Zoë, by the fire.',
+      'Speak to Zo, by the fire.',
+    ]);
+  });
+
+  it('still dedupes a non-ASCII choice against its own case variant', () => {
+    const result = parseMessageOptions(
+      [
+        NARRATION,
+        '',
+        'A. **Speak to Zoë**, by the fire.',
+        'B. **speak to zoë**, by the fire!',
+      ].join('\n'),
+    );
+    expect(result.options).toHaveLength(1);
+    expect(result.options[0].id).toBe('option-A');
+  });
+
+  it('drops duplicated numbered options too', () => {
+    const result = parseMessageOptions(
+      [
+        NARRATION,
+        '',
+        '1. **Take the map**, and read it by the fire.',
+        '2. **Leave quietly**, into the garden.',
+        '1. **Take the map**, and read it by the fire.',
+      ].join('\n'),
+    );
+    expect(result.options).toHaveLength(2);
+  });
+});
