@@ -71,7 +71,7 @@ let the engine resolve them.
             )
             .join(' | ') +
           (carriedItems.length > 20 ? ` | …and ${carriedItems.length - 20} more` : '')
-        : 'None recorded';
+        : '';
     const carriedGuidance =
       carriedItems.length > 0
         ? `
@@ -89,8 +89,7 @@ let the engine resolve them.
 <equipment>
 EQUIPPED WEAPONS: ${weapons.length > 0 ? weapons.join(' | ') : 'None — unarmed strike (1d1 bludgeoning, reach 5 ft)'}
 ARMOR: ${armorText} | ${acText}
- CARRIED ITEMS: ${carriedText}
-${carriedGuidance}
+**These are the character's real, equipped items. Never name a weapon that is not on this list.**${carriedItems.length > 0 ? `\n CARRIED ITEMS: ${carriedText}${carriedGuidance}` : ''}
 **USE EXACT WEAPON DICE from this list for damage roll requests.**
 </equipment>`;
   }

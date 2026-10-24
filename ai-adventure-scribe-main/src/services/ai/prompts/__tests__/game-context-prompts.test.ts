@@ -133,6 +133,26 @@ describe('GameContextPrompts', () => {
   });
 
   describe('buildCharacterSection', () => {
+    it('keeps the equipment guard and omits an empty carried-items line (#1069)', async () => {
+      getCharacterLoadout.mockResolvedValueOnce({
+        weapons: [],
+        armor: [],
+        armorClass: 12,
+        carriedItems: [],
+      });
+      const result = await GameContextPrompts.buildCharacterSection({
+        id: 'char-empty',
+        name: 'Rogue',
+        class: 'Rogue',
+        level: 1,
+      });
+      expect(result).toContain(
+        "**These are the character's real, equipped items. Never name a weapon that is not on this list.**",
+      );
+      expect(result).not.toContain('CARRIED ITEMS:');
+      expect(result).not.toContain('None recorded');
+    });
+
     it('bounds a large carried inventory by count and field length (#1069)', async () => {
       getCharacterLoadout.mockResolvedValueOnce({
         weapons: [],
