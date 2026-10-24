@@ -21,15 +21,21 @@ import { and, eq } from 'drizzle-orm';
 import { describeWithDb, hasRealDb, importWithRealDb, realDb, testId } from './fixtures/real-db.js';
 import {
   campaigns,
+  characterConditions,
   characterEquipment,
   characterHitDice,
+  characterSpellSlots,
   characterStats,
   characters,
+  classFeaturesLibrary,
+  conditionsLibrary,
   dialogueHistory,
   experienceEvents,
+  featureUsageLog,
   gameSessions,
   inventoryItems,
   restEvents,
+  spellSlotUsageLog,
   storyItemEvents,
 } from '../../../../db/schema/index';
 
@@ -65,6 +71,15 @@ const { applyStoryDamage } = await importWithRealDb(() => import('../dm/story-da
 const { applyStoryRest } = await importWithRealDb(() => import('../dm/story-rest.js'));
 const { applyStoryItems } = await importWithRealDb(() => import('../dm/story-items.js'));
 const { awardStoryXp } = await importWithRealDb(() => import('../dm/story-xp.js'));
+const { applyStoryConditions } = await importWithRealDb(
+  () => import('../dm/story-conditions.js'),
+);
+const { spendStorySpellSlots } = await importWithRealDb(
+  () => import('../dm/story-spell-slots.js'),
+);
+const { spendStoryFeatureUses } = await importWithRealDb(
+  () => import('../dm/story-feature-uses.js'),
+);
 
 if (!hasRealDb) {
   console.warn(
@@ -79,6 +94,7 @@ describeWithDb('#777 two parallel story applies for one message', () => {
     label: string,
     currentHitPoints: number,
     maxHitPoints: number,
+    className = 'Fighter',
   ): Promise<{ userId: string; characterId: string; sessionId: string; campaignId: string }> {
     const userId = testId(`${label}-user`);
     const [{ id: campaignId }] = await db
@@ -92,7 +108,7 @@ describeWithDb('#777 two parallel story applies for one message', () => {
         campaignId,
         name: testId(`${label}-hero`),
         level: 3,
-        class: 'Fighter',
+        class: className,
       })
       .returning({ id: characters.id });
     await db.insert(characterStats).values({
@@ -439,6 +455,135 @@ describeWithDb('#777 two parallel story applies for one message', () => {
       expect(updates[0]?.reason).toBe('story_xp');
     } finally {
       await db.delete(experienceEvents).where(eq(experienceEvents.characterId, characterId));
+      await cleanup(characterId, sessionId, campaignId);
+    }
+  });
+
+  it('#1085: story conditions publish a character_state_updated invalidation', async () => {
+    // The conditions library is a shared reference table: seed the row this
+    // case needs, ignoring the unique-name conflict when another suite (or a
+    // previous run) already put it there.
+    await db
+      .insert(conditionsLibrary)
+      .values([{ name: 'poisoned', description: 'test', mechanicalEffects: 'test' }])
+      .onConflictDoNothing();
+    const { userId, characterId, sessionId, campaignId } = await world('1085-cnd', 12, 12);
+    try {
+      // The real production entry llm.ts calls for the reply's `conditions`.
+      const updates = await characterUpdatesInSessionRoom(sessionId, () =>
+        applyStoryConditions({
+          userId,
+          sessionId,
+          conditions: [{ name: 'poisoned', change: 'apply' }],
+        }).then((outcome) => {
+          expect(outcome).toBe('applied');
+        }),
+      );
+      const [row] = await db
+        .select({ active: characterConditions.isActive })
+        .from(characterConditions)
+        .where(eq(characterConditions.characterId, characterId));
+      expect(row?.active).toBe(true);
+      expect(updates).toHaveLength(1);
+      expect(updates[0]?.reason).toBe('story_conditions');
+    } finally {
+      await db
+        .delete(characterConditions)
+        .where(eq(characterConditions.characterId, characterId));
+      await cleanup(characterId, sessionId, campaignId);
+    }
+  });
+
+  it('#1085: a story spell-slot spend publishes a character_state_updated invalidation', async () => {
+    const { userId, characterId, sessionId, campaignId } = await world('1085-slot', 12, 12);
+    try {
+      // A pre-existing slot row: the spend's row-ensure lookup against the
+      // class table is bypassed, so the case pins the spend + publish, not
+      // class seeding. Burning Hands resolves from the static spell catalog.
+      await db.insert(characterSpellSlots).values({
+        characterId,
+        spellLevel: 1,
+        totalSlots: 2,
+        usedSlots: 0,
+      });
+      const [character] = await db
+        .select()
+        .from(characters)
+        .where(eq(characters.id, characterId));
+      // The real production entry llm.ts calls for the gate-allowed casts.
+      const updates = await characterUpdatesInSessionRoom(sessionId, () =>
+        spendStorySpellSlots({
+          userId,
+          sessionId,
+          playerInput: 'I cast Burning Hands at the goblins.',
+          casts: { character: character!, spells: ['Burning Hands'] },
+        }),
+      );
+      const [slot] = await db
+        .select({ used: characterSpellSlots.usedSlots })
+        .from(characterSpellSlots)
+        .where(eq(characterSpellSlots.characterId, characterId));
+      expect(slot?.used).toBe(1);
+      expect(updates).toHaveLength(1);
+      expect(updates[0]?.reason).toBe('story_slots');
+    } finally {
+      await db
+        .delete(spellSlotUsageLog)
+        .where(eq(spellSlotUsageLog.characterId, characterId));
+      await db
+        .delete(characterSpellSlots)
+        .where(eq(characterSpellSlots.characterId, characterId));
+      await cleanup(characterId, sessionId, campaignId);
+    }
+  });
+
+  it('#1085: a story feature spend publishes a character_state_updated invalidation', async () => {
+    // The class-features library is a shared reference table: seed the
+    // Divine Sense row the pool-ensure needs, ignoring the conflict when
+    // another suite (or a previous run) already put it there.
+    await db
+      .insert(classFeaturesLibrary)
+      .values([
+        {
+          className: 'Paladin',
+          featureName: 'Divine Sense',
+          levelAcquired: 1,
+          description: 'test',
+        },
+      ])
+      .onConflictDoNothing();
+    const { userId, characterId, sessionId, campaignId } = await world(
+      '1085-feat',
+      12,
+      12,
+      'Paladin',
+    );
+    try {
+      const [character] = await db
+        .select()
+        .from(characters)
+        .where(eq(characters.id, characterId));
+      // The real production entry llm.ts calls for the gate-allowed features.
+      // Divine Sense's pool is ensured from the paladin's level, so no class
+      // seeding is needed beyond the Paladin world character.
+      const updates = await characterUpdatesInSessionRoom(sessionId, () =>
+        spendStoryFeatureUses({
+          userId,
+          sessionId,
+          playerInput: 'I call on my Divine Sense.',
+          character: character!,
+          features: ['Divine Sense'],
+        }),
+      );
+      const [usage] = await db
+        .select({ id: featureUsageLog.id })
+        .from(featureUsageLog)
+        .where(eq(featureUsageLog.characterId, characterId));
+      expect(usage?.id).toBeDefined();
+      expect(updates).toHaveLength(1);
+      expect(updates[0]?.reason).toBe('story_features');
+    } finally {
+      await db.delete(featureUsageLog).where(eq(featureUsageLog.characterId, characterId));
       await cleanup(characterId, sessionId, campaignId);
     }
   });

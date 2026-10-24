@@ -138,6 +138,23 @@ export interface AIResponse {
    * Present only on turns the server's tracker step ran; absent otherwise.
    */
   story_trackers?: Array<{ name: string; value: number; limit: number }>;
+  /**
+   * #1085, server-applied: the story effects this turn's reply declared.
+   * Only damage is nulled server-side when not applied; the other fields may
+   * stay populated on turns the appliers skipped (combat, roll-requested,
+   * closed session). The client treats a populated field as "refresh the
+   * sheet" — a skipped turn refetches unchanged state. Slot and feature
+   * spends have no envelope field (gate-driven, not reply-declared).
+   */
+  xp_award?: { amount: number; reason: string } | null;
+  damage?: { amount: number; source: string } | null;
+  items?: Array<{ name: string; quantity: number; change: 'gain' | 'lose' }> | null;
+  conditions?: Array<{
+    name: string;
+    change: 'apply' | 'remove';
+    duration_minutes?: number | null;
+  }> | null;
+  rest?: { type: 'short' | 'long' } | null;
   combatants?: unknown[];
   combatDetection?: {
     isCombat: boolean;

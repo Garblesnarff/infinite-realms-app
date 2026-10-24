@@ -138,6 +138,7 @@ export async function spendStorySpellSlots(input: {
     else if (ritualExempt) outcomes.set(spellName, 'ritual');
     else toSpend.push({ spellName, spellLevel });
   }
+  let anySlotSpent = false;
   if (toSpend.length) {
     const spent = await SpellSlotsService.spendStoryCastSlots({
       characterId: casts.character.id,
@@ -146,7 +147,26 @@ export async function spendStorySpellSlots(input: {
       since: message?.createdAt ?? null,
       spells: toSpend,
     });
+    anySlotSpent = spent.includes('spent');
     toSpend.forEach(({ spellName }, index) => outcomes.set(spellName, spent[index] ?? 'unknown'));
+  }
+  // #1085: a spent slot is sheet state like damage/items/XP — the live sheet
+  // only refreshes on `character_state_updated`, and no publish followed a
+  // story slot spend, so the slots panel went stale. Only an actual spend
+  // publishes (already_spent / no_slot moved nothing). A failed broadcast
+  // must not fail the spend: the write already landed.
+  if (anySlotSpent) {
+    try {
+      const { publishStoryCharacterUpdate } = await import('./story-broadcast.js');
+      publishStoryCharacterUpdate(sessionId, 'story_slots');
+    } catch (broadcastError) {
+      logger.warn({
+        msg: 'DM_STORY_SLOT_SPEND_BROADCAST_FAILED',
+        sessionId,
+        characterId: casts.character.id,
+        error: broadcastError instanceof Error ? broadcastError.message : String(broadcastError),
+      });
+    }
   }
   for (const [spellName, outcome] of outcomes) {
     logger.info({

@@ -79,6 +79,7 @@ export async function spendStoryFeatureUses(input: {
   const message = await playerMessage(sessionId);
   const since = message?.createdAt ?? null;
 
+  let anyFeatureSpent = false;
   for (const name of features) {
     const key = name.toLowerCase();
     try {
@@ -106,12 +107,13 @@ export async function spendStoryFeatureUses(input: {
         continue;
       }
       if (key === DIVINE_SENSE) {
-        await spendDivineSense({
+        const spent = await spendDivineSense({
           characterId: character.id,
           userId,
           sessionId,
           context: 'story-turn',
         });
+        if (spent.success) anyFeatureSpent = true;
       } else if (key === LAY_ON_HANDS) {
         const declared = detectDeclaredLayOnHands(playerInput);
         let targetCharacterId: string | undefined;
@@ -128,7 +130,7 @@ export async function spendStoryFeatureUses(input: {
           }
           targetCharacterId = named;
         }
-        await resolveLayOnHands({
+        const laid = await resolveLayOnHands({
           characterId: character.id,
           userId,
           amount: declared?.amount ?? undefined,
@@ -137,9 +139,27 @@ export async function spendStoryFeatureUses(input: {
           sessionId,
           context: 'story-turn',
         });
+        if (laid.ok) anyFeatureSpent = true;
       }
     } catch (error) {
       logger.warn({ msg: 'DM_STORY_FEATURE_SPEND_FAILED', sessionId, feature: name, error });
+    }
+  }
+  // #1085: a spent feature use is sheet state like damage/items/XP — the live
+  // sheet only refreshes on `character_state_updated`, and no publish followed
+  // a story feature spend, so the features panel went stale (and Lay on Hands
+  // moves HP too). Only an actual spend publishes. A failed broadcast must
+  // not fail the spend: the write already landed.
+  if (anyFeatureSpent) {
+    try {
+      const { publishStoryCharacterUpdate } = await import('./story-broadcast.js');
+      publishStoryCharacterUpdate(sessionId, 'story_features');
+    } catch (broadcastError) {
+      logger.warn({
+        msg: 'DM_STORY_FEATURE_SPEND_BROADCAST_FAILED',
+        sessionId,
+        error: broadcastError instanceof Error ? broadcastError.message : String(broadcastError),
+      });
     }
   }
 }
