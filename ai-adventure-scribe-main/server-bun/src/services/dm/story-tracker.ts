@@ -102,12 +102,43 @@ export interface TrackerPhaseState {
    * required from the next turn regardless of the clock's value.
    */
   finalBeat?: boolean;
+  /**
+   * The climax was entered by the one-shot pacing budget (#1083), not by
+   * a clock reaching its limit: the phase's clock label names the first
+   * defined clock (or 'Final beat'), but the limit was never reached, so
+   * the directive and the engine-written ending say the budget forced it.
+   */
+  budgetForced?: boolean;
   /** The last player message this step processed (once-per-message guard). */
   lastMessageId: string | null;
 }
 
 /** Player turns a climax may run before the ending is required. */
 export const CLIMAX_TURN_LIMIT = 6;
+
+/**
+ * #1083: the one-shot pacing budget, in player turns. A one-shot is meant
+ * to take one session; Hark's S-003/S-004 run drifted to 159 DM turns with
+ * the clock at 3/6 and no final beat flagged, so no #1053 net ever armed.
+ * The budget is the issue's example number, fixed: `estimated_sessions`
+ * is session-granularity free text ("8-10", "One-shot — 1 session") and
+ * cannot yield a turn budget without inventing a turns-per-session
+ * constant, so the number itself is the strategist's to calibrate.
+ */
+export const ONE_SHOT_TURN_BUDGET = 60;
+
+/** Fraction of the budget at which the pacing directive fires (#1083). */
+export const PACING_DIRECTIVE_FRACTION = 0.75;
+
+/** The turn budget for a campaign length, or null when unbounded. */
+export function pacingBudgetFor(campaignLength: string | null): number | null {
+  return campaignLength === 'one-shot' ? ONE_SHOT_TURN_BUDGET : null;
+}
+
+/** First turn the pacing directive fires, from the budget. */
+export function pacingDirectiveTurn(budget: number): number {
+  return Math.ceil(budget * PACING_DIRECTIVE_FRACTION);
+}
 
 /**
  * A change is one clock, named, moving by a whole number of segments (or
@@ -352,6 +383,13 @@ export function parseClockDefinitions(
 export function trackerDirectiveText(input: {
   trackers: Array<{ name: string; value: number; limit: number }>;
   phase: TrackerPhaseState | null;
+  /**
+   * #1083 pacing state, from the directive load's player-message count.
+   * Renders only while no climax phase exists: once the budget forces the
+   * climax, the climax lines below supersede it. The server decides WHEN
+   * (turn count vs budget); the model still narrates the move.
+   */
+  pacing?: { turns: number; budget: number; clockName: string | null } | null;
 }): string | null {
   const lines: string[] = [];
   for (const tracker of input.trackers) {
@@ -365,16 +403,33 @@ export function trackerDirectiveText(input: {
           'the ending is required: you MUST set campaign_ending in this reply and ' +
           'narrate the ending.',
       );
+    } else if (phase.endingRequired && phase.budgetForced) {
+      lines.push(
+        `The one-shot's turn budget is reached and the climax has run ${CLIMAX_TURN_LIMIT} turns ` +
+          'without the ending being declared — the ending is required: you MUST set ' +
+          'campaign_ending in this reply and narrate the ending.',
+      );
     } else if (phase.endingRequired) {
       lines.push(
         `The ${phase.clock} Clock reached its limit and the climax has run ${CLIMAX_TURN_LIMIT} turns ` +
           'without the ending being declared — the ending is required: you MUST set ' +
           'campaign_ending in this reply and narrate the ending.',
       );
+    } else if (phase.climaxTurns === 0 && phase.budgetForced) {
+      lines.push(
+        'The one-shot’s turn budget is reached — the climax is now. Drive the story ' +
+          'to its final beats and declare campaign_ending when the story completes.',
+      );
     } else if (phase.climaxTurns === 0) {
       lines.push(
         `The ${phase.clock} Clock has reached its limit — the climax is now. Drive the story ` +
           'to its final beats and declare campaign_ending when the story completes.',
+      );
+    } else if (phase.budgetForced) {
+      lines.push(
+        `The story is in its budget-forced climax (turn ${phase.climaxTurns} of ` +
+          `${CLIMAX_TURN_LIMIT} before the ending is required). Declare campaign_ending ` +
+          'when the story completes.',
       );
     } else {
       lines.push(
@@ -383,6 +438,14 @@ export function trackerDirectiveText(input: {
           'Declare campaign_ending when the story completes.',
       );
     }
+  }
+  const pacing = input.pacing;
+  if (!phase && pacing && pacing.turns >= pacingDirectiveTurn(pacing.budget)) {
+    const clockRef = pacing.clockName ? `the ${pacing.clockName} Clock` : 'the story clock';
+    lines.push(
+      `The story is at turn ${pacing.turns} of ${pacing.budget} in this one-shot — move ` +
+        `toward the climax: advance ${clockRef} and bring in the final beat.`,
+    );
   }
   if (lines.length === 0) return null;
   return (
@@ -429,13 +492,23 @@ interface TrackerState {
   trackers: Array<{ name: string; value: number; limit: number }>;
   phase: TrackerPhaseState | null;
   campaignLength: string | null;
+  /**
+   * #1083: player messages in the session (the pacing budget's turn unit),
+   * counted only when the caller asks — the directive load needs it, the
+   * envelope read does not, and non-one-shots never pay for the COUNT.
+   */
+  playerTurns: number;
 }
 
 /** The session's clock definitions, stored trackers and phase — owner-scoped. */
-async function loadTrackerState(sessionId: string, userId: string): Promise<TrackerState | null> {
+async function loadTrackerState(
+  sessionId: string,
+  userId: string,
+  options?: { countTurns?: boolean },
+): Promise<TrackerState | null> {
   const { db } = await import('../../../../db/client');
   const { and, eq } = await import('drizzle-orm');
-  const { campaigns, campaignRules, gameSessions, sessionTrackers } =
+  const { campaigns, campaignRules, dialogueHistory, gameSessions, sessionTrackers } =
     await import('../../../../db/schema/index');
   const [session] = await db
     .select({
@@ -471,11 +544,30 @@ async function loadTrackerState(sessionId: string, userId: string): Promise<Trac
     .from(sessionTrackers)
     .where(eq(sessionTrackers.sessionId, sessionId));
   const stored = (session.sessionState as { tracker?: TrackerPhaseState } | null)?.tracker;
+  // #1083: the pacing budget counts player messages, not requests — the
+  // same unit the climax count uses, and retry-stable (a Retry replays
+  // the saved player message, it inserts no new one). gameSessions'
+  // turnCount is NOT the unit: it counts inserted messages of every
+  // speaker type.
+  let playerTurns = 0;
+  if (options?.countTurns && session.campaignLength === 'one-shot') {
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(dialogueHistory)
+      .where(
+        and(
+          eq(dialogueHistory.sessionId, sessionId),
+          eq(dialogueHistory.speakerType, 'player'),
+        ),
+      );
+    playerTurns = count;
+  }
   return {
     definitions,
     trackers,
     phase: stored?.phase === 'climax' ? stored : null,
     campaignLength: session.campaignLength,
+    playerTurns,
   };
 }
 
@@ -498,10 +590,20 @@ export async function loadStoryTrackerDirective(input: {
   campaignLength: string | null;
   /** The merged tracker list the directive renders, or null when unread. */
   trackers: Array<{ name: string; value: number; limit: number }> | null;
+  /** #1083 pacing state (one-shots only), or null when unbounded/unread. */
+  pacing: { turns: number; budget: number } | null;
 }> {
   try {
-    const state = await loadTrackerState(input.sessionId, input.userId);
-    if (!state) return { text: null, phase: null, endingAtLimit: false, campaignLength: null, trackers: null };
+    const state = await loadTrackerState(input.sessionId, input.userId, { countTurns: true });
+    if (!state)
+      return {
+        text: null,
+        phase: null,
+        endingAtLimit: false,
+        campaignLength: null,
+        trackers: null,
+        pacing: null,
+      };
     const trackers = mergeStoredTrackers(state.definitions, state.trackers);
     const storedByKey = new Map(
       state.trackers.map((tracker) => [normalizeClockName(tracker.name), tracker]),
@@ -515,16 +617,32 @@ export async function loadStoryTrackerDirective(input: {
       const stored = storedByKey.get(normalizeClockName(definition.name));
       return stored !== undefined && stored.value >= definition.limit;
     });
+    const budget = pacingBudgetFor(state.campaignLength);
+    const pacing = budget !== null ? { turns: state.playerTurns, budget } : null;
     return {
-      text: trackerDirectiveText({ trackers, phase: state.phase }),
+      text: trackerDirectiveText({
+        trackers,
+        phase: state.phase,
+        pacing: pacing
+          ? { ...pacing, clockName: state.definitions[0]?.name ?? null }
+          : null,
+      }),
       phase: state.phase,
       endingAtLimit,
       campaignLength: state.campaignLength,
       trackers,
+      pacing,
     };
   } catch (error) {
     logger.warn({ msg: 'DM_STORY_TRACKER_DIRECTIVE_FAILED', sessionId: input.sessionId, error });
-    return { text: null, phase: null, endingAtLimit: false, campaignLength: null, trackers: null };
+    return {
+      text: null,
+      phase: null,
+      endingAtLimit: false,
+      campaignLength: null,
+      trackers: null,
+      pacing: null,
+    };
   }
 }
 
@@ -726,7 +844,25 @@ export async function applyStoryTrackers(input: {
         }
       }
     }
-    if (!phase && changes.length === 0 && !armFinalBeat) {
+    // #1083: the one-shot pacing budget. Counted in this transaction,
+    // after the FOR UPDATE lock on the session row serializes competing
+    // turns: the crossing turn is the budget-th
+    // player message's turn, and a Retry replays the same message, so
+    // the count cannot double-fire. This check runs even with no changes
+    // and no final beat — a DM that never moves a clock sends no changes,
+    // which is exactly the drift the budget exists to catch.
+    let pacingTrip = false;
+    if (state.campaignLength === 'one-shot' && !phase) {
+      const [{ count: playerTurns }] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(dialogueHistory)
+        .where(
+          and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'player')),
+        );
+      const budget = pacingBudgetFor(state.campaignLength);
+      pacingTrip = budget !== null && playerTurns >= budget;
+    }
+    if (!phase && changes.length === 0 && !armFinalBeat && !pacingTrip) {
       return finish('no_changes', 0, owedEnding);
     }
 
@@ -811,6 +947,24 @@ export async function applyStoryTrackers(input: {
     }
     // The stored tracker key carries the phase once the climax begins, and
     // the once-per-message marker alone before that.
+    if (pacingTrip && !phaseToStore) {
+      // The budget forces the climax the #1053 way: the phase enters
+      // with count 0, the following turns count to the 6-turn net, and
+      // the ending is required there — the DM's clock never had to move.
+      // A clock crossing on this same turn already set the phase above
+      // and wins: the clock did reach its limit, so its wording stands.
+      // The label names the first defined clock for the directive line;
+      // budgetForced keeps the wording honest about what forced it.
+      // This MUST sit before the store below: the phase is written there.
+      phaseToStore = {
+        phase: 'climax',
+        clock: state.definitions[0]?.name ?? 'Final beat',
+        climaxTurns: 0,
+        endingRequired: false,
+        budgetForced: true,
+        lastMessageId: message.id,
+      };
+    }
     if (phaseToStore || changes.length > 0) {
       const trackerJson = phaseToStore ?? { lastMessageId: message.id };
       await tx
@@ -821,9 +975,9 @@ export async function applyStoryTrackers(input: {
         })
         .where(eq(gameSessions.id, sessionId));
     }
-
     if (appliedChanges > 0) return finish('applied', appliedChanges, forceClock, forceIsNew);
-    if (armFinalBeat) return finish('applied', appliedChanges, forceClock, forceIsNew);
+    if (armFinalBeat || pacingTrip)
+      return finish('applied', appliedChanges, forceClock, forceIsNew);
     if (unknownClock) return finish('unknown_clock');
     return finish('no_changes', 0, forceClock, forceIsNew);
   });
@@ -879,13 +1033,18 @@ export async function applyStoryTrackers(input: {
 export function buildEndingRequiredCorrectivePrompt(input: {
   clock: string;
   finalBeat?: boolean;
+  /** #1083: the climax was forced by the turn budget, not a clock limit. */
+  budgetForced?: boolean;
 }): string {
   const reason =
     input.finalBeat === true
       ? 'The story has reached its final beat (the campaign’s final location or beat ' +
         'has played) and your previous reply did not declare the ending'
-      : `The ${input.clock} Clock reached its limit, the climax has run its course, and ` +
-        'your previous reply did not declare the ending';
+      : input.budgetForced === true
+        ? 'The one-shot’s turn budget is reached, the climax has run its course, and ' +
+          'your previous reply did not declare the ending'
+        : `The ${input.clock} Clock reached its limit, the climax has run its course, and ` +
+          'your previous reply did not declare the ending';
   return (
     '<corrective_instruction>\n' +
     `${reason} — the ending is required: this reply MUST set campaign_ending to ` +
@@ -900,10 +1059,14 @@ export function buildEndingRequiredCorrectivePrompt(input: {
 export function engineWrittenEndingSummary(input: {
   clock: string;
   finalBeat?: boolean;
+  /** #1083: the climax was forced by the turn budget, not a clock limit. */
+  budgetForced?: boolean;
 }): string {
   return input.finalBeat === true
     ? 'The story reached its final beat — the adventure ends.'
-    : `The ${input.clock} Clock reached its limit and the climax ran its course — the adventure ends.`;
+    : input.budgetForced === true
+      ? 'The one-shot’s turn budget is reached and the climax ran its course — the adventure ends.'
+      : `The ${input.clock} Clock reached its limit and the climax ran its course — the adventure ends.`;
 }
 
 export type EndingEnforcementOutcome = 'declared' | 'engine_forced' | 'not_applied';
@@ -931,6 +1094,8 @@ export async function enforceRequiredEnding(input: {
   clock: string;
   /** The final-beat trigger armed the net, not the climax turn count. */
   finalBeat?: boolean;
+  /** #1083: the pacing budget forced the climax, not a clock limit. */
+  budgetForced?: boolean;
   /** One more generate with the ending required; the route owns the call shape. */
   regenerate: (correctivePrompt: string) => Promise<{ text: string; error?: string }>;
 }): Promise<{ outcome: EndingEnforcementOutcome; summary?: string }> {
@@ -944,6 +1109,7 @@ export async function enforceRequiredEnding(input: {
       sessionId,
       clock: input.clock,
       finalBeat: input.finalBeat === true,
+      budgetForced: input.budgetForced === true,
       outcome,
     });
     return summary !== undefined ? { outcome, summary } : { outcome };

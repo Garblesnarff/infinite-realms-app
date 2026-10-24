@@ -8,10 +8,13 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  ONE_SHOT_TURN_BUDGET,
   buildEndingRequiredCorrectivePrompt,
   engineWrittenEndingSummary,
   mergeStoredTrackers,
   normalizeClockName,
+  pacingBudgetFor,
+  pacingDirectiveTurn,
   parseClockDefinitions,
   trackerDirectiveText,
   validTrackerChanges,
@@ -424,5 +427,125 @@ describe('the safety net as a real request (strategist FIX, PR #1053)', () => {
       'final beat',
     );
     expect(engineWrittenEndingSummary({ clock: 'Breath' }).length).toBeLessThan(600);
+  });
+});
+
+describe('one-shot pacing budget (#1083)', () => {
+  test('the budget is 60 player turns for one-shots, unbounded otherwise', () => {
+    expect(ONE_SHOT_TURN_BUDGET).toBe(60);
+    expect(pacingBudgetFor('one-shot')).toBe(60);
+    expect(pacingBudgetFor('campaign')).toBeNull();
+    expect(pacingBudgetFor(null)).toBeNull();
+    expect(pacingDirectiveTurn(60)).toBe(45);
+  });
+
+  test('below 75% of the budget the pacing line does not render', () => {
+    const text = trackerDirectiveText({
+      trackers: [{ name: 'Breath', value: 3, limit: 6 }],
+      phase: null,
+      pacing: { turns: 44, budget: 60, clockName: 'Breath' },
+    });
+    expect(text).not.toContain('move toward the climax');
+  });
+
+  test('at 75% the pacing line names the turn, the budget and the clock to advance', () => {
+    const text = trackerDirectiveText({
+      trackers: [{ name: 'Breath', value: 3, limit: 6 }],
+      phase: null,
+      pacing: { turns: 45, budget: 60, clockName: 'Breath' },
+    });
+    expect(text).toContain('turn 45 of 60');
+    expect(text).toContain('move toward the climax');
+    expect(text).toContain('the Breath Clock');
+    expect(text).toContain('bring in the final beat');
+  });
+
+  test('with no defined clock the pacing line still renders, clock-generic', () => {
+    const text = trackerDirectiveText({
+      trackers: [],
+      phase: null,
+      pacing: { turns: 50, budget: 60, clockName: null },
+    });
+    expect(text).toContain('turn 50 of 60');
+    expect(text).toContain('the story clock');
+  });
+
+  test('once the climax phase exists the pacing line is superseded, not stacked', () => {
+    const text = trackerDirectiveText({
+      trackers: [{ name: 'Breath', value: 3, limit: 6 }],
+      phase: {
+        phase: 'climax',
+        clock: 'Breath',
+        climaxTurns: 2,
+        endingRequired: false,
+        lastMessageId: 'm1',
+      },
+      pacing: { turns: 62, budget: 60, clockName: 'Breath' },
+    });
+    expect(text).not.toContain('move toward the climax');
+    expect(text).toContain('in its climax');
+  });
+
+  test('a budget-forced climax says the budget forced it, never a filled clock', () => {
+    const first = trackerDirectiveText({
+      trackers: [{ name: 'Breath', value: 3, limit: 6 }],
+      phase: {
+        phase: 'climax',
+        clock: 'Breath',
+        climaxTurns: 0,
+        endingRequired: false,
+        budgetForced: true,
+        lastMessageId: 'm60',
+      },
+    });
+    expect(first).toContain('turn budget is reached');
+    expect(first).toContain('the climax is now');
+    expect(first).not.toContain('reached its limit');
+    const tripped = trackerDirectiveText({
+      trackers: [{ name: 'Breath', value: 3, limit: 6 }],
+      phase: {
+        phase: 'climax',
+        clock: 'Breath',
+        climaxTurns: 6,
+        endingRequired: true,
+        budgetForced: true,
+        lastMessageId: 'm66',
+      },
+    });
+    expect(tripped).toContain('turn budget is reached');
+    expect(tripped).toContain('the ending is required');
+    expect(tripped).not.toContain('reached its limit');
+  });
+
+  test('the budget corrective prompt and engine ending name the budget, not a clock', () => {
+    const prompt = buildEndingRequiredCorrectivePrompt({ clock: 'Breath', budgetForced: true });
+    expect(prompt).toContain('turn budget is reached');
+    expect(prompt).toContain('the ending is required');
+    expect(prompt).not.toContain('Clock reached its limit');
+    const summary = engineWrittenEndingSummary({ clock: 'Breath', budgetForced: true });
+    expect(summary).toContain('turn budget is reached');
+    expect(summary).toContain('the adventure ends');
+    expect(summary).not.toContain('Clock reached its limit');
+    // The final beat stays more specific than the budget when both armed it.
+    expect(
+      buildEndingRequiredCorrectivePrompt({ clock: 'Breath', finalBeat: true, budgetForced: true }),
+    ).toContain('final beat');
+    expect(
+      trackerDirectiveText({
+        trackers: [{ name: 'Breath', value: 3, limit: 6 }],
+        phase: {
+          phase: 'climax',
+          clock: 'Breath',
+          climaxTurns: 6,
+          endingRequired: true,
+          finalBeat: true,
+          budgetForced: true,
+          lastMessageId: 'm66',
+        },
+      }),
+    ).toContain('final beat');
+    expect(
+      engineWrittenEndingSummary({ clock: 'Breath', finalBeat: true, budgetForced: true }),
+    ).toContain('final beat');
   });
 });

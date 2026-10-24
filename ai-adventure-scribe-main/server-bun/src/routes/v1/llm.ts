@@ -1064,6 +1064,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         let trackerEndingRequired = false;
         let trackerEndingClock: string | null = null;
         let trackerEndingFinalBeat = false;
+        let trackerEndingBudgetForced = false;
         let trackerOneShot = false;
         if (dmReply && defenseSessionId) {
           try {
@@ -1079,6 +1080,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             trackerEndingRequired = loaded.phase?.endingRequired === true;
             trackerEndingClock = loaded.phase?.clock ?? null;
             trackerEndingFinalBeat = loaded.phase?.finalBeat === true;
+            trackerEndingBudgetForced = loaded.phase?.budgetForced === true;
             trackerOneShot = loaded.campaignLength === 'one-shot';
             directiveTrackers = loaded.trackers;
           } catch {
@@ -1705,12 +1707,21 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // engine-applied.
         let storyTrackersApplied = false;
         let trackerStepRan = false;
+        // #1083: a one-shot turn runs the step even with no tracker flags.
+        // The S-004 shape — a DM that never moves a clock and never flags
+        // the final beat — satisfies none of the flags above, which is why
+        // the #1053 net never armed there. The step itself stays
+        // once-per-message guarded and writes nothing when under budget
+        // with no phase, no changes and no flag (transaction + row lock +
+        // COUNT only), and it runs on combat turns too — a climax spent
+        // fighting is still a climax, per the deferred-turn rule below.
         if (
           envelope &&
           (envelope.tracker_changes ||
             trackerPhaseClimax ||
             trackerEndingAtLimit ||
-            envelope.final_beat_reached === true) &&
+            envelope.final_beat_reached === true ||
+            trackerOneShot) &&
           dmReply &&
           castSessionId
         ) {
@@ -1851,6 +1862,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
                 sessionId: castSessionId,
                 clock: trackerEndingClock ?? 'story',
                 finalBeat: trackerEndingFinalBeat,
+                budgetForced: trackerEndingBudgetForced,
                 regenerate: async (correctivePrompt: string) => {
                   const retry = await LLMProviderService.generate({
                     prompt: correctivePrompt,
