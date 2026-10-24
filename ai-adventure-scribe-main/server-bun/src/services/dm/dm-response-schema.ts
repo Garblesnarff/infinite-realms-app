@@ -980,7 +980,26 @@ export function rewriteNarrationSegmentsFromEnvelope(
   // segment derivation. The reply is already saved, so keep the original text.
   try {
     const parsed = parseDmResponse(envelope);
-    return parsed.success ? JSON.stringify(parsed.data) : originalText;
+    if (parsed.success) return JSON.stringify(parsed.data);
+    // #864 fail-closed: parseDmResponse dedupes the options field and strips
+    // the in-text copy BEFORE the map/handout/combat validation that failed
+    // here, so the envelope it was handed already carries the deduped
+    // options. Returning originalText would ship the raw duplicated list
+    // (S-006: 1-3 shown again as 4-6 whenever an unrelated side field is
+    // invalid). Return the mutated envelope instead — but only when the
+    // options field itself is well-formed (a string array); a malformed
+    // options field was never deduped, so that case stays fail-open.
+    // Note: on this path narration_segments still describes the original
+    // text while text may be stripped (segments are re-derived only on the
+    // success path); the throw path below intentionally still returns
+    // originalText unchanged.
+    if (
+      Array.isArray(envelope.options) &&
+      envelope.options.every((option) => typeof option === 'string')
+    ) {
+      return JSON.stringify(envelope);
+    }
+    return originalText;
   } catch {
     return originalText;
   }

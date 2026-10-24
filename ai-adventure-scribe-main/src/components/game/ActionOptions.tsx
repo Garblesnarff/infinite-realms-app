@@ -231,7 +231,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
                   const displayNumber = index + 1;
 
                   return (
-                    <Tooltip key={option.id} delayDuration={300}>
+                    <Tooltip key={`option-${index}`} delayDuration={300}>
                       <TooltipTrigger asChild>
                         <span
                           className={cn('w-full block', isDisabled ? 'cursor-not-allowed' : '')}
