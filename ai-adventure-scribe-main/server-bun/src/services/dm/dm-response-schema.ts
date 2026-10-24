@@ -247,6 +247,15 @@ export type DMResponse = {
    */
   tracker_changes?: Array<{ name: string; delta?: number; set?: number }> | null;
   /**
+   * #1062, SERVER-ATTACHED, never model-set: the session's stored story
+   * trackers after this turn's tracker step (`{name, value, limit}` per
+   * clock), attached by the /generate route for the client to render the
+   * tracker line from. Deliberately absent from `dmResponseSchema` below
+   * (schema budget, #782): the DM never sets it, and `parseDmResponse`
+   * passes it through untouched.
+   */
+  story_trackers?: Array<{ name: string; value: number; limit: number }> | null;
+  /**
    * The story reached its final beat this turn (#1042): the campaign's
    * final location or last beat has played, whether or not a story clock
    * filled. The server arms the ending-required state from it; the ending
@@ -630,7 +639,8 @@ const trackerChangesProperty = {
     'array of `{"name": "<clock name>", "delta": <segments>}` — or `{"name": "<clock ' +
     'name>", "set": <segments>}` when a rule sets the clock to a value. The game stores ' +
     'the clock and enforces its limit; the values in <story_clock> are the stored truth, ' +
-    'so render the tracker line from them, never from your own count. If this reply asks ' +
+    'never your own count. The game UI shows the tracker line from them (#1062), so do ' +
+    'NOT render a tracker line in your prose. If this reply asks ' +
     'for a roll, the changes land on the roll\'s result turn — send them again there. ' +
     'Otherwise omit it.',
 };

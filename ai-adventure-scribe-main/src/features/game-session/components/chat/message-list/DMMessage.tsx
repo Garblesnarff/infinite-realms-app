@@ -94,6 +94,25 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
       combatEngineBlocks,
     } = processed;
 
+    // #1062: the server-attached tracker line, rendered from envelope
+    // state — never from the DM's prose, which is where the bracket-line
+    // leak came from. Shape-checked at render: a malformed context entry
+    // drops out rather than printing a half line.
+    const storyTrackers = useMemo(() => {
+      const raw = message.context?.storyTrackers;
+      if (!Array.isArray(raw)) return [];
+      return raw.filter(
+        (entry): entry is { name: string; value: number; limit: number } =>
+          !!entry &&
+          typeof entry === 'object' &&
+          typeof (entry as { name?: unknown }).name === 'string' &&
+          (entry as { name: string }).name.trim().length > 0 &&
+          Number.isFinite((entry as { value?: unknown }).value) &&
+          Number.isFinite((entry as { limit?: unknown }).limit) &&
+          (entry as { limit: number }).limit > 0,
+      );
+    }, [message.context]);
+
     // Set scene background based on referenced assets (priority: location > scene > monster > npc)
     useEffect(() => {
       // Only set background once per message and only for the last message in a group
@@ -220,6 +239,16 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
             <EngineOutcomeChip key={line} line={line} showLabel={index === 0} />
           ))}
           {content ? <div className={narrativeClass}>{content}</div> : null}
+
+          {storyTrackers.length > 0 && (
+            <div
+              data-testid="story-tracker-line"
+              className="mt-3 text-sm text-white/70"
+              aria-label="Story clock"
+            >
+              {storyTrackers.map((tracker) => `${tracker.name} Clock: ${tracker.value}/${tracker.limit}`).join(' · ')}
+            </div>
+          )}
 
           {exceedsClampThreshold && (
             <div className="mt-4 flex justify-end">

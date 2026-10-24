@@ -1436,6 +1436,10 @@ export const useAIResponse = (): {
           }
         }
 
+        // #1062: the server-attached tracker line, read once here so the
+        // message below carries it without a non-null assertion.
+        const storyTrackers = (result as AIResponse).story_trackers;
+
         // Format the response as an EnhancedChatMessage
         return {
           text: finalResponseText,
@@ -1452,6 +1456,15 @@ export const useAIResponse = (): {
             handouts: deliveredHandouts,
             combatEngineBlocks: replyEngineBlocks,
             combatEnded: combatWasActiveAtRequestStart && !isInCombat,
+            // #1062: the server-attached tracker line, latched from the
+            // final result like the ending above — the handler may have
+            // replaced the reply, so an early parse-time read would be
+            // the wrong turn's line. Absent on turns the server attached
+            // nothing (non-DM or session-less turns, or a failed read);
+            // the render keeps the line only on the message that carried it.
+            ...(Array.isArray(storyTrackers) && storyTrackers.length > 0
+              ? { storyTrackers }
+              : {}),
             // GP-015 (#219): narration turn with no action choices — the UI
             // says why there are none instead of rendering nothing.
             noActionOptions: isNarrationTurn && !sheetOptions.length,

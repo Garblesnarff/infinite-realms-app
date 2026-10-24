@@ -1052,6 +1052,11 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         let trackerDirective: string | null = null;
         let trackerPhaseClimax = false;
         let trackerEndingAtLimit = false;
+        // #1062 round 2: the merged tracker list the directive above
+        // renders, captured for the envelope on turns the tracker step
+        // does not run — no second read. Null when the directive did not
+        // load (no dmReply, no session, or a failed read).
+        let directiveTrackers: Array<{ name: string; value: number; limit: number }> | null = null;
         // The safety net's armed state at this turn's start: the prompt
         // below already required the ending, so a reply that still
         // declares none is enforced after the story steps (see the
@@ -1075,8 +1080,10 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             trackerEndingClock = loaded.phase?.clock ?? null;
             trackerEndingFinalBeat = loaded.phase?.finalBeat === true;
             trackerOneShot = loaded.campaignLength === 'one-shot';
+            directiveTrackers = loaded.trackers;
           } catch {
             trackerDirective = null;
+            directiveTrackers = null;
           }
         }
         const llmPromptBase = declaredAttack
@@ -1697,6 +1704,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // nulled on the envelope, so an unapplied claim never reads as
         // engine-applied.
         let storyTrackersApplied = false;
+        let trackerStepRan = false;
         if (
           envelope &&
           (envelope.tracker_changes ||
@@ -1722,6 +1730,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
               changesDeferred,
               finalBeatReached: envelope.final_beat_reached === true,
             });
+            trackerStepRan = true;
             const submittedChanges = Array.isArray(envelope.tracker_changes)
               ? envelope.tracker_changes.length
               : 0;
@@ -1735,6 +1744,60 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         }
         if (envelope?.tracker_changes && !storyTrackersApplied) {
           envelope.tracker_changes = null;
+        }
+        // #1062: the tracker line the player sees is rendered by the client
+        // from server state, not from the DM's prose — the bracket-line leak
+        // dies with the prose line. A model-supplied value is stripped
+        // first, on every turn: the field is server truth, never the DM's
+        // own count, and without the strip it would survive on non-step
+        // turns (the step block below is skipped) and on step turns with a
+        // failed or empty read (the assignment is guarded). On step turns
+        // the field carries POST-apply stored state (the directive-load
+        // values lag one turn on exactly the turns that move the clock),
+        // read after the tracker step and before the response-text rewrite
+        // and persistence. On NON-step turns (round 2) it carries the
+        // directive-load values captured above: no applier ran on those
+        // turns, so the directive values ARE the post-apply values, and no
+        // second read is spent (the #1042 rule). A step turn with a failed
+        // or empty post-apply read still attaches nothing — directive
+        // values would be stale there, since the applier may have moved
+        // the clock. Absent (not empty) when neither source yields a
+        // non-empty list. It is NOT a model-facing schema property: the
+        // server attaches it after the story appliers, like the stored
+        // ending summary above, and `parseDmResponse` passes unknown
+        // fields through, so it survives the response-text rewrite below.
+        // The directive load runs on every DM turn with a
+        // known session (dmReply + defenseSessionId); it does NOT run on
+        // non-DM /generate calls (narration regens, non-DM generations) or
+        // session-less turns, and on those the field stays absent — which
+        // matches the old UX, since no directive meant no prose line
+        // there either.
+        if (envelope) {
+          delete envelope.story_trackers;
+        }
+        if (envelope && trackerStepRan && castSessionId) {
+          try {
+            const { loadStoredStoryTrackers } =
+              await import('../../services/dm/story-tracker.js');
+            const storedTrackers = await loadStoredStoryTrackers({
+              sessionId: castSessionId,
+              userId,
+            });
+            if (storedTrackers && storedTrackers.length > 0) {
+              envelope.story_trackers = storedTrackers;
+            }
+          } catch (error) {
+            logger.warn({ msg: 'DM_STORY_TRACKER_ENVELOPE_FAILED', sessionId: castSessionId, error });
+          }
+        } else if (envelope && !trackerStepRan && castSessionId && directiveTrackers && directiveTrackers.length > 0) {
+          // #1062 round 2: the clock line stays on quiet turns. The
+          // directive session (defenseSessionId) and the attach session
+          // (castSessionId) agree whenever the attach can fire, and the
+          // guard's truthiness requirement on castSessionId is what
+          // closes the empty-string edge (where the two derivations
+          // differ: `??` keeps "" while the length-checked fallback
+          // moves on) — so these values belong to this turn's session.
+          envelope.story_trackers = directiveTrackers;
         }
         // #1042 FIX (strategist, PR #1053): the safety net is a real
         // request, not only a prompt line. This turn's directive already
@@ -1931,7 +1994,22 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           // would let a prose-only (null envelope) reply pass the check.
           parsed: envelope !== null,
           text: rewriteNarrationSegmentsFromEnvelope(
-            responseText === result.text ? envelope : parseLlmEnvelope(responseText),
+            responseText === result.text
+              ? envelope
+              : (() => {
+                  // #1062 self-review: the seating path re-parses the
+                  // pre-applier snapshot string, which bypasses the live
+                  // envelope — so carry the server-attached field (or its
+                  // absence) across, or a model-supplied value in the
+                  // snapshot would survive the strip above, and a genuine
+                  // server value would be dropped for the seating turn.
+                  const seated = parseLlmEnvelope(responseText);
+                  if (seated) {
+                    if (envelope?.story_trackers) seated.story_trackers = envelope.story_trackers;
+                    else delete seated.story_trackers;
+                  }
+                  return seated;
+                })(),
             responseText,
           ),
           provider: result.provider,

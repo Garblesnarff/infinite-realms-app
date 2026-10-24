@@ -319,6 +319,30 @@ function tolerantParseReplyEnvelope(rawResponse: string): Record<string, any> | 
 }
 
 /**
+ * #1062: the server-attached tracker line, shape-checked at the parse
+ * boundary. The server is the only writer, but a malformed entry must
+ * never reach the UI as a half-rendered line: entries with a missing
+ * name, non-numeric value/limit, or a non-positive limit are dropped,
+ * and an empty remainder carries nothing.
+ */
+export function validStoryTrackers(
+  value: unknown,
+): Array<{ name: string; value: number; limit: number }> | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const trackers = value.filter(
+    (entry): entry is { name: string; value: number; limit: number } =>
+      !!entry &&
+      typeof entry === 'object' &&
+      typeof (entry as { name?: unknown }).name === 'string' &&
+      ((entry as { name: string }).name.trim().length > 0) &&
+      Number.isFinite((entry as { value?: unknown }).value) &&
+      Number.isFinite((entry as { limit?: unknown }).limit) &&
+      ((entry as { limit: number }).limit > 0),
+  );
+  return trackers.length > 0 ? trackers : undefined;
+}
+
+/**
  * #1008: unwrap a DM reply the model nested inside its own `text` field, so the story
  * text carries only narration on this side of the wire too. The server normalizes the
  * same shape at the provider (`normalizeReplyNarration`, #875/#992), but every client
@@ -342,6 +366,11 @@ export function unwrapNestedReplyEnvelope(
     const staged: Record<string, any> = { ...current };
     for (const [key, value] of Object.entries(inner)) {
       if (key === 'text' || isEmptyReplyValue(value)) continue;
+      // #1062 self-review: story_trackers is server-attached only — the
+      // DM never sets it — so it must never be adopted from a nested
+      // inner envelope, which is model-authored. (When the outer carries
+      // it, the outer value already wins via the fallthrough below.)
+      if (key === 'story_trackers') continue;
       if (key === 'combat_transition') {
         if (staged.combat_transition === 'none' || isEmptyReplyValue(staged.combat_transition)) {
           staged.combat_transition = value;
@@ -627,6 +656,10 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     combat_exits: Array.isArray(structuredResponse?.combat_exits)
       ? structuredResponse.combat_exits
       : undefined,
+    // #1062: the server-attached tracker line rides the same envelope the
+    // model reply came in; the unwrap above already let a server field win
+    // over a nested inner copy, so this is the server's stored state.
+    story_trackers: validStoryTrackers(structuredResponse?.story_trackers),
     combatants: structuredResponse?.combatants || [],
     combatDetection: {
       isCombat:

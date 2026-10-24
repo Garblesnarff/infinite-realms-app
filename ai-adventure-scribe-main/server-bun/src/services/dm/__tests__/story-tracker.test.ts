@@ -10,6 +10,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   buildEndingRequiredCorrectivePrompt,
   engineWrittenEndingSummary,
+  mergeStoredTrackers,
   normalizeClockName,
   parseClockDefinitions,
   trackerDirectiveText,
@@ -353,6 +354,50 @@ describe('trackerDirectiveText', () => {
     expect(text).toContain('final beat');
     expect(text).toContain('the ending is required');
     expect(text).toContain('Breath Clock: 1/6');
+  });
+});
+
+describe('mergeStoredTrackers (#1062: the line the envelope carries)', () => {
+  test('a stored value wins; a defined-but-untouched clock shows its start value', () => {
+    expect(
+      mergeStoredTrackers(
+        [
+          { name: 'Breath', limit: 6, atLimit: 'climax' },
+          { name: 'Dawn', limit: 4, atLimit: 'climax' },
+        ],
+        [{ name: 'Breath', value: 5, limit: 6 }],
+      ),
+    ).toEqual([
+      { name: 'Breath', value: 5, limit: 6 },
+      { name: 'Dawn', value: 0, limit: 4 },
+    ]);
+  });
+
+  test('a stored row whose rule was edited away still renders', () => {
+    expect(
+      mergeStoredTrackers(
+        [{ name: 'Breath', limit: 6, atLimit: 'climax' }],
+        [
+          { name: 'Breath', value: 3, limit: 6 },
+          { name: 'Ember', value: 2, limit: 5 },
+        ],
+      ),
+    ).toEqual([
+      { name: 'Breath', value: 3, limit: 6 },
+      { name: 'Ember', value: 2, limit: 5 },
+    ]);
+  });
+});
+
+describe('trackerDirectiveText (#1062: the UI owns the line now)', () => {
+  test('the directive tells the DM not to render a tracker line in prose', () => {
+    const text = trackerDirectiveText({
+      trackers: [{ name: 'Breath', value: 4, limit: 6 }],
+      phase: null,
+    });
+    expect(text).toContain('Breath Clock: 4/6');
+    expect(text).toContain('game UI');
+    expect(text).toContain('do NOT render a tracker line');
   });
 });
 
