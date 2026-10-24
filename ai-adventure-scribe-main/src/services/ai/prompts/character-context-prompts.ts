@@ -60,6 +60,24 @@ let the engine resolve them.
     });
 
     const armorText = loadout.armor.length > 0 ? loadout.armor.join(', ') : 'No armour equipped';
+    const carriedItems = loadout.carriedItems ?? [];
+    const carriedText =
+      carriedItems.length > 0
+        ? carriedItems
+            .slice(0, 20)
+            .map(
+              (item) =>
+                `${item.name.slice(0, 80)} x${item.quantity} (${item.itemType.slice(0, 24)}, ${item.equipped ? 'equipped' : 'carried'})`,
+            )
+            .join(' | ') +
+          (carriedItems.length > 20 ? ` | …and ${carriedItems.length - 20} more` : '')
+        : '';
+    const carriedGuidance =
+      carriedItems.length > 0
+        ? `
+**These are the character's real items; never name a weapon outside this list.**
+**Do not say a carried item is absent; use the typed draw/equip engine path first.**`
+        : '';
     const acText =
       typeof armorClass === 'number'
         ? `AC ${armorClass}`
@@ -71,7 +89,7 @@ let the engine resolve them.
 <equipment>
 EQUIPPED WEAPONS: ${weapons.length > 0 ? weapons.join(' | ') : 'None — unarmed strike (1d1 bludgeoning, reach 5 ft)'}
 ARMOR: ${armorText} | ${acText}
-**These are the character's real, equipped items. Never name a weapon that is not on this list.**
+**These are the character's real, equipped items. Never name a weapon that is not on this list.**${carriedItems.length > 0 ? `\n CARRIED ITEMS: ${carriedText}${carriedGuidance}` : ''}
 **USE EXACT WEAPON DICE from this list for damage roll requests.**
 </equipment>`;
   }

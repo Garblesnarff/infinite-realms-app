@@ -47,6 +47,12 @@ export type EquippedLoadout = {
   weapons: EquippedWeaponProfile[];
   armor: string[];
   armorClass: number | null;
+  carriedItems?: Array<{
+    name: string;
+    itemType: string;
+    quantity: number;
+    equipped: boolean;
+  }>;
 };
 
 export type SessionMessagePayload = {

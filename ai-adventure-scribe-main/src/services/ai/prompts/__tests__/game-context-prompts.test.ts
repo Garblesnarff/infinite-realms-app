@@ -71,6 +71,11 @@ const getCharacterLoadout = vi.fn(async () => ({
   ],
   armor: ['Leather Armor'],
   armorClass: 13,
+  carriedItems: [
+    { name: 'Longbow', itemType: 'weapon', quantity: 1, equipped: true },
+    { name: 'Shortbow', itemType: 'weapon', quantity: 1, equipped: false },
+    { name: 'Rope', itemType: 'equipment', quantity: 1, equipped: false },
+  ],
 }));
 
 vi.mock('@/services/user-data-api', () => ({
@@ -128,6 +133,50 @@ describe('GameContextPrompts', () => {
   });
 
   describe('buildCharacterSection', () => {
+    it('keeps the equipment guard and omits an empty carried-items line (#1069)', async () => {
+      getCharacterLoadout.mockResolvedValueOnce({
+        weapons: [],
+        armor: [],
+        armorClass: 12,
+        carriedItems: [],
+      });
+      const result = await GameContextPrompts.buildCharacterSection({
+        id: 'char-empty',
+        name: 'Rogue',
+        class: 'Rogue',
+        level: 1,
+      });
+      expect(result).toContain(
+        "**These are the character's real, equipped items. Never name a weapon that is not on this list.**",
+      );
+      expect(result).not.toContain('CARRIED ITEMS:');
+      expect(result).not.toContain('None recorded');
+    });
+
+    it('bounds a large carried inventory by count and field length (#1069)', async () => {
+      getCharacterLoadout.mockResolvedValueOnce({
+        weapons: [],
+        armor: [],
+        armorClass: 12,
+        carriedItems: Array.from({ length: 100 }, (_, i) => ({
+          name: `${i}-` + 'x'.repeat(1000),
+          itemType: 'y'.repeat(1000),
+          quantity: 1,
+          equipped: false,
+        })),
+      });
+      const result = await GameContextPrompts.buildCharacterSection({
+        id: 'char-large',
+        name: 'Rogue',
+        class: 'Rogue',
+        level: 1,
+      });
+      const line = result.split('\n').find((line) => line.includes('CARRIED ITEMS:'))!;
+      expect(line).toContain('…and 80 more');
+      expect(line.length).toBeLessThan(3000);
+      expect(line).not.toContain('20-');
+    });
+
     it('should build a character section with basic details', async () => {
       const char = {
         id: 'char-grog',
@@ -249,6 +298,14 @@ describe('GameContextPrompts', () => {
       // The exact two strings `getClassEquipment('Ranger')` used to emit.
       expect(result).not.toContain('Longsword');
       expect(result).not.toContain('Studded leather');
+    });
+
+    it('lists carried unequipped weapons and key items for typed draw resolution', async () => {
+      const result = await GameContextPrompts.buildCharacterSection(ranger);
+
+      expect(result).toContain('Shortbow x1 (weapon, carried)');
+      expect(result).toContain('Rope x1 (equipment, carried)');
+      expect(result).toContain('Do not say a carried item is absent');
     });
 
     it('states the gear is unknown rather than inventing one when the sheet cannot be read', async () => {
@@ -428,6 +485,7 @@ describe('the player character identity anchor (#708)', () => {
   it('binds a premade character name to the player at its first presentation', async () => {
     const result = await GameContextPrompts.buildCharacterSection(apprentice);
 
+    // prettier-ignore
     expect(result).toContain(
       'PLAYER CHARACTER: The Apprentice (you, the player), a level 1',
     );
@@ -443,6 +501,7 @@ describe('the player character identity anchor (#708)', () => {
 
     const result = await GameContextPrompts.buildCharacterSection(created);
 
+    // prettier-ignore
     expect(result).toContain(
       'PLAYER CHARACTER: Kael Thornwood (you, the player), a level 1',
     );
