@@ -70,6 +70,12 @@ let the engine resolve them.
             )
             .join(' | ')
         : 'None recorded';
+    const carriedGuidance =
+      carriedItems.length > 0
+        ? `
+**These are the character's real items; never name a weapon outside this list.**
+**Do not say a carried item is absent; use the typed draw/equip engine path first.**`
+        : '';
     const acText =
       typeof armorClass === 'number'
         ? `AC ${armorClass}`
@@ -82,8 +88,7 @@ let the engine resolve them.
 EQUIPPED WEAPONS: ${weapons.length > 0 ? weapons.join(' | ') : 'None — unarmed strike (1d1 bludgeoning, reach 5 ft)'}
 ARMOR: ${armorText} | ${acText}
  CARRIED ITEMS: ${carriedText}
-**These are the character's real, equipped items. Never name a weapon that is not on this list.**
-**The carried-items list includes unequipped weapons and key items owned by this character. Do not say a carried item is absent; resolve a typed draw/equip through the engine path before replying.**
+${carriedGuidance}
 **USE EXACT WEAPON DICE from this list for damage roll requests.**
 </equipment>`;
   }
