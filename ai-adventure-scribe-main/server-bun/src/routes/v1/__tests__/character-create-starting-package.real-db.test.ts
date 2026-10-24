@@ -17,7 +17,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import {
   campaigns,
@@ -1201,6 +1201,13 @@ describeWithDb('package gear reaches the session (#1007)', () => {
     );
     expect(outcome.weaponResolution?.resolved).toBe('Shortbow');
     expect(outcome.weaponResolution?.substituted).toBe(false);
+    const remainingArrows = await db
+      .select({ id: characterEquipment.id, quantity: characterEquipment.quantity })
+      .from(characterEquipment)
+      .where(
+        and(eq(characterEquipment.characterId, id), eq(characterEquipment.itemName, 'Arrows (20)')),
+      );
+    expect(remainingArrows).toEqual([]);
   });
 
   it('premade rogue without arrows: the equipped shortbow is refused for ammunition, never swapped to Unarmed (#1013)', async () => {

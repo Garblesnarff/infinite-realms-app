@@ -917,6 +917,82 @@ function refuseMissingAmmunition(
   }
 }
 
+/** Spend one round after the engine has accepted a player's ranged attack. */
+async function spendRangedAmmunition(
+  characterId: string | null | undefined,
+  userId: string,
+  weaponName: string,
+  sessionId: string,
+): Promise<void> {
+  if (!characterId) return;
+  const ammoType = /crossbow/i.test(weaponName)
+    ? 'bolts'
+    : /(?:shortbow|longbow)/i.test(weaponName)
+      ? 'arrows'
+      : null;
+  if (!ammoType) return;
+  const { db } = await import('../../../../db/client');
+  const { and, eq, ilike, or } = await import('drizzle-orm');
+  const { characters, characterEquipment, inventoryItems } = await import('../../../../db/schema');
+  const [owner] = await db
+    .select({ id: characters.id })
+    .from(characters)
+    .where(
+      and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+      ),
+    )
+    .limit(1);
+  if (!owner) return;
+  const pattern = `%${ammoType === 'bolts' ? 'bolt' : 'arrow'}%`;
+  const sheetItem = (
+    await db
+      .select({ id: characterEquipment.id, quantity: characterEquipment.quantity })
+      .from(characterEquipment)
+      .where(
+        and(
+          eq(characterEquipment.characterId, characterId),
+          ilike(characterEquipment.itemName, pattern),
+        ),
+      )
+      .orderBy(characterEquipment.createdAt)
+      .limit(1)
+  )[0];
+  if (sheetItem && (sheetItem.quantity ?? 0) > 0) {
+    if (sheetItem.quantity === 1) {
+      await db.delete(characterEquipment).where(eq(characterEquipment.id, sheetItem.id));
+    } else {
+      await db
+        .update(characterEquipment)
+        .set({ quantity: (sheetItem.quantity ?? 1) - 1, updatedAt: new Date() })
+        .where(eq(characterEquipment.id, sheetItem.id));
+    }
+  } else {
+    const item = (
+      await db
+        .select({ id: inventoryItems.id, quantity: inventoryItems.quantity })
+        .from(inventoryItems)
+        .where(
+          and(eq(inventoryItems.characterId, characterId), ilike(inventoryItems.name, pattern)),
+        )
+        .orderBy(inventoryItems.createdAt)
+        .limit(1)
+    )[0];
+    if (item && item.quantity > 0) {
+      if (item.quantity === 1) {
+        await db.delete(inventoryItems).where(eq(inventoryItems.id, item.id));
+      } else {
+        await db
+          .update(inventoryItems)
+          .set({ quantity: item.quantity - 1, updatedAt: new Date() })
+          .where(eq(inventoryItems.id, item.id));
+      }
+    }
+  }
+  logger.info({ msg: 'COMBAT_AMMUNITION_SPENT', sessionId, characterId, ammoType });
+}
+
 export async function proposeCombatAttack(
   encounterId: string,
   submitted: SubmittedCombatIntent,
@@ -1440,6 +1516,14 @@ export async function executeCombatIntent(
           ),
           { ...visibility, normalizeAutoRolled: true },
         );
+        if (actorIsPlayer) {
+          await spendRangedAmmunition(
+            (actor as { characterId?: string }).characterId,
+            userId,
+            weapon.name,
+            encounter.sessionId,
+          );
+        }
         // Every resolution is reported, not just the ones that failed to reach. A hit the DM is
         // never told about is a hit it cannot narrate, and a DM with nothing to narrate repeats
         // the paragraph it wrote last turn.
