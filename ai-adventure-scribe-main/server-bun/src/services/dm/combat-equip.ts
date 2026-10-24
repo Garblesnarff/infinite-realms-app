@@ -1,6 +1,6 @@
 /**
- * #1059: a weapon equip declared in a combat turn, resolved before the DM
- * narrates.
+ * #1059/#1069: a weapon equip declared in a story or combat turn, resolved
+ * before the DM narrates.
  *
  * The typed words had no engine path at all: "I draw my shortbow" was pure
  * prose, the DM accepted it, and the next attack still refused 'Shortbow
@@ -30,7 +30,7 @@ import { logger } from '../../lib/logger.js';
 import { detectDeclaredEquip } from '../combat/combat-intent-gate.js';
 
 /**
- * Detect a typed equip declaration in an active combat encounter and
+ * Detect a typed equip declaration in a story or active combat turn and
  * resolve it. Returns the DM directive carrying the engine's outcome, or
  * null when the input declares nothing or the resolution cannot run at
  * all (fail open: the DM narrates without engine truth and nothing is
@@ -44,9 +44,6 @@ export async function resolveCombatEquip(input: {
   const { playerInput, sessionId, userId } = input;
 
   try {
-    const { CombatEncounterService } = await import('../combat/combat-encounter-service.js');
-    const encounter = await CombatEncounterService.getActiveEncounter(sessionId, userId);
-    if (!encounter) return null;
     const character = await ownedSessionCharacter(sessionId, userId);
     if (!character) return null;
 
