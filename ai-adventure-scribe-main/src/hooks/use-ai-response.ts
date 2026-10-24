@@ -1459,9 +1459,9 @@ export const useAIResponse = (): {
             // #1062: the server-attached tracker line, latched from the
             // final result like the ending above — the handler may have
             // replaced the reply, so an early parse-time read would be
-            // the wrong turn's line. Absent on turns the server's tracker
-            // step did not run; the render keeps the line only on the
-            // message that carried it.
+            // the wrong turn's line. Absent on turns the server attached
+            // nothing (non-DM or session-less turns, or a failed read);
+            // the render keeps the line only on the message that carried it.
             ...(Array.isArray(storyTrackers) && storyTrackers.length > 0
               ? { storyTrackers }
               : {}),

@@ -482,7 +482,10 @@ async function loadTrackerState(sessionId: string, userId: string): Promise<Trac
 /**
  * The pre-generation read: the <story_clock> directive for this turn, or
  * null. Fails open like the other directive resolvers in /generate — a
- * tracker read must never cost the player their turn.
+ * tracker read must never cost the player their turn. `trackers` is the
+ * merged list the directive text renders (definitions at 0 where untouched,
+ * plus orphan stored rows); the route reuses it for the #1062 envelope on
+ * turns the tracker step does not run, so no second read is needed.
  */
 export async function loadStoryTrackerDirective(input: {
   sessionId: string;
@@ -493,10 +496,12 @@ export async function loadStoryTrackerDirective(input: {
   endingAtLimit: boolean;
   /** The session campaign's length; the route's ending enforcement is one-shot-only. */
   campaignLength: string | null;
+  /** The merged tracker list the directive renders, or null when unread. */
+  trackers: Array<{ name: string; value: number; limit: number }> | null;
 }> {
   try {
     const state = await loadTrackerState(input.sessionId, input.userId);
-    if (!state) return { text: null, phase: null, endingAtLimit: false, campaignLength: null };
+    if (!state) return { text: null, phase: null, endingAtLimit: false, campaignLength: null, trackers: null };
     const trackers = mergeStoredTrackers(state.definitions, state.trackers);
     const storedByKey = new Map(
       state.trackers.map((tracker) => [normalizeClockName(tracker.name), tracker]),
@@ -515,10 +520,11 @@ export async function loadStoryTrackerDirective(input: {
       phase: state.phase,
       endingAtLimit,
       campaignLength: state.campaignLength,
+      trackers,
     };
   } catch (error) {
     logger.warn({ msg: 'DM_STORY_TRACKER_DIRECTIVE_FAILED', sessionId: input.sessionId, error });
-    return { text: null, phase: null, endingAtLimit: false, campaignLength: null };
+    return { text: null, phase: null, endingAtLimit: false, campaignLength: null, trackers: null };
   }
 }
 
