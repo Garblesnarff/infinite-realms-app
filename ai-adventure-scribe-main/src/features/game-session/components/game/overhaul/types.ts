@@ -7,6 +7,8 @@
  * stay pure and previewable with mock data.
  */
 
+import type { CharacterResources } from '@/types/combat';
+
 export interface AbilityScoreVM {
   label: string; // STR, DEX, ...
   score: number; // 16
@@ -106,6 +108,8 @@ export interface CharacterSheetVM {
   subtitle: string; // "Human · Fighter (Champion)"
   /** Granted class-feature names (#1019). Absent when that read did not run. */
   features?: string[];
+  /** Class resource pools shown in the in-session sheet (#1061). */
+  resources?: CharacterResources;
   level: number;
   xpCurrent: number;
   xpMax: number;

@@ -33,6 +33,7 @@ import { formatClassWithSubclass } from '@/utils/character/class-with-subclass';
 import { getWeaponAttackBonus } from '@/utils/character/weapon-attack-bonus';
 import { getWeaponDamageText } from '@/utils/character/weapon-damage-text';
 import { calculateAllCharacterStats } from '@/utils/character-calculations';
+import { getCharacterResources } from '@/utils/classFeatures';
 import {
   getSessionCompanions,
   type SessionCompanion,
@@ -240,6 +241,9 @@ export function buildCharacterSheet(
     };
   }
   const level = character.level ?? 1;
+  const resources = character.class?.name
+    ? getCharacterResources(character.class.name, level)
+    : undefined;
   const xpCurrent = character.experience ?? getExperienceForLevel(level);
   const xpMax = getExperienceForLevel(Math.min(20, level + 1)) || xpCurrent;
   const { current: hpCurrent, maximum: hpMax } = getCharacterSheetHitPoints(character);
@@ -376,6 +380,7 @@ export function buildCharacterSheet(
   return {
     name: character.name ?? 'Adventurer',
     ...sheetClassIdentity(character),
+    resources,
     level,
     xpCurrent,
     xpMax,

@@ -14,6 +14,7 @@ import {
   IRThumb,
 } from '@/components/ui/ir-primitives';
 import { useCampaign } from '@/contexts/CampaignContext';
+import { ResourceSection } from '@/features/character/components/sheet/sections/class-feature-tracker/ResourceSection';
 import { MISSING_ARMOR_CLASS_LABEL } from '@/utils/character/character-sheet-armor-class';
 import { formatCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 import { CompanionPartyStrip } from '@/webmcp/CompanionPartyStrip';
@@ -346,6 +347,8 @@ export const RightSheet: React.FC<{
         </div>
       </IRPanel>
     )}
+
+    {c.resources && <ResourceSection characterResources={c.resources} />}
 
     {(c.spellcasting ||
       c.spells.cantrips.length > 0 ||
