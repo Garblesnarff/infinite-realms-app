@@ -1,4 +1,5 @@
 import { abilityModifier } from '../../../../shared/ability-modifier';
+import { archeryAttackBonus, duelingDamageBonus } from '../../../../shared/fighting-style';
 import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
 
 export type WeaponRuleProfile = {
@@ -32,6 +33,19 @@ export type WeaponRuleProfile = {
    * `3d8 + 6` states its own +6, which is not the monster's (nonexistent) Strength modifier.
    */
   fixedDamageBonus?: number;
+  /**
+   * The catalog subcategory is a ranged weapon (bow, crossbow, dart, sling).
+   * Distinct from `ranged`, which means the attack's reach is over 5 feet and
+   * is also true of some thrown melee weapons. Archery reads this flag.
+   * Monsters leave it unset.
+   */
+  rangedWeapon?: boolean;
+  /** A melee weapon from the catalog. Unarmed strikes and monster attacks leave it unset. */
+  meleeWeapon?: boolean;
+  /** The weapon has the two-handed property. */
+  twoHanded?: boolean;
+  /** Another weapon is wielded besides this one. A shield is not a weapon. */
+  otherWeaponWielded?: boolean;
 };
 
 export type AttackGeometry = {
@@ -56,6 +70,8 @@ export type AttackRuleInput = {
   targetDodging?: boolean;
   attackerConditions?: string[];
   targetConditions?: string[];
+  /** The attacker's stored fighting styles. Absent for a monster, whose bonus is already fixed. */
+  fightingStyles?: unknown;
 };
 
 export type AttackRuleResolution = {
@@ -138,19 +154,49 @@ export function resolveAttackRules(input: AttackRuleInput): AttackRuleResolution
   const advantage = hasAdvantage && !hasDisadvantage;
   const disadvantage = hasDisadvantage && !hasAdvantage;
   const coverBonus = geometry?.cover === 1 ? 2 : geometry?.cover === 2 ? 5 : 0;
+  const { attackBonus, damageBonus } = styleBonuses(input, modifier, proficiency);
 
   return {
     legal: true,
     ability,
     abilityModifier: modifier,
     proficiencyBonus: proficiency,
-    attackBonus: weapon.fixedAttackBonus ?? modifier + proficiency + weapon.magicBonus,
-    damageBonus: weapon.fixedDamageBonus ?? modifier + weapon.magicBonus,
+    attackBonus,
+    damageBonus,
     targetAc: input.baseTargetAc + coverBonus,
     advantage,
     disadvantage,
     advantageSources,
     disadvantageSources,
+  };
+}
+
+/**
+ * Archery and Dueling on the computed path. A monster's fixed bonus is already
+ * the whole number, so a style must not be added on top of it.
+ */
+function styleBonuses(
+  input: AttackRuleInput,
+  modifier: number,
+  proficiency: number,
+): { attackBonus: number; damageBonus: number } {
+  const weapon = input.weapon;
+  return {
+    attackBonus:
+      weapon.fixedAttackBonus ??
+      modifier +
+        proficiency +
+        weapon.magicBonus +
+        archeryAttackBonus(input.fightingStyles, weapon.rangedWeapon === true),
+    damageBonus:
+      weapon.fixedDamageBonus ??
+      modifier +
+        weapon.magicBonus +
+        duelingDamageBonus(input.fightingStyles, {
+          meleeWeapon: weapon.meleeWeapon === true,
+          twoHanded: weapon.twoHanded === true,
+          otherWeaponWielded: weapon.otherWeaponWielded === true,
+        }),
   };
 }
 
@@ -161,14 +207,15 @@ function illegal(
   proficiency: number,
   input: AttackRuleInput,
 ): AttackRuleResolution {
+  const { attackBonus, damageBonus } = styleBonuses(input, modifier, proficiency);
   return {
     legal: false,
     refusal,
     ability,
     abilityModifier: modifier,
     proficiencyBonus: proficiency,
-    attackBonus: input.weapon.fixedAttackBonus ?? modifier + proficiency + input.weapon.magicBonus,
-    damageBonus: input.weapon.fixedDamageBonus ?? modifier + input.weapon.magicBonus,
+    attackBonus,
+    damageBonus,
     targetAc: input.baseTargetAc,
     advantage: false,
     disadvantage: false,

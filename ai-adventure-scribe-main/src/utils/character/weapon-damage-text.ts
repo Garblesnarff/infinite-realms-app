@@ -8,6 +8,7 @@
  */
 
 import { abilityModifier } from '../../../shared/ability-modifier';
+import { duelingDamageBonus } from '../../../shared/fighting-style';
 
 import type { Character } from '@/types/character';
 
@@ -28,7 +29,24 @@ export function getWeaponDamageText(
   const dexScore = character.abilityScores?.dexterity?.score ?? 10;
   const ranged = (weapon.range?.normal ?? 5) > 5;
   const useDex = ranged || (weapon.weaponProperties?.finesse && dexScore > strScore);
-  const bonus = abilityMod(useDex ? dexScore : strScore) + magicBonus;
+  const meleeWeapon = !(weapon.subcategory ?? '').toLowerCase().includes('ranged');
+  // Count equipped weapon rows, not distinct catalog ids. Two Longswords share one id
+  // and still occupy both hands. A stowed weapon is not wielded.
+  const equippedWeaponCount = (character.inventory ?? []).filter((row) => {
+    if (!row.equipped) return false;
+    const other =
+      resolveEquipmentById(row.itemId) ?? resolveEquipmentByName(row.itemName ?? row.itemId);
+    return other?.category === 'weapon';
+  }).length;
+  const otherWeaponWielded = equippedWeaponCount >= 2;
+  const bonus =
+    abilityMod(useDex ? dexScore : strScore) +
+    magicBonus +
+    duelingDamageBonus(character.fightingStyles, {
+      meleeWeapon,
+      twoHanded: weapon.weaponProperties?.twoHanded === true,
+      otherWeaponWielded,
+    });
   const modifier = bonus === 0 ? '' : bonus > 0 ? `+${bonus}` : `${bonus}`;
 
   return `${weapon.damage.dice}${modifier} ${weapon.damage.type}`;

@@ -159,3 +159,72 @@ describe('combat integrity rules', () => {
     expect(result.disadvantageSources).toEqual(['long range']);
   });
 });
+
+describe('fighting styles (#824)', () => {
+  const fighter = { strength: 16, dexterity: 14, level: 1, baseTargetAc: 10 };
+
+  test('Archery adds +2 to a ranged weapon and not to a thrown melee weapon', () => {
+    const crossbow = {
+      ...longsword,
+      name: 'Crossbow, light',
+      ranged: true,
+      rangedWeapon: true,
+      normalRange: 80,
+      longRange: 320,
+    };
+    // DEX +2, proficiency +2, Archery +2. The sheet showed +4 before this.
+    expect(
+      resolveAttackRules({ ...fighter, weapon: crossbow, fightingStyles: ['Archery'] }).attackBonus,
+    ).toBe(6);
+    const javelin = {
+      ...longsword,
+      name: 'Javelin',
+      ranged: true,
+      rangedWeapon: false,
+      normalRange: 30,
+    };
+    // Thrown melee still uses the ranged-attack ability when `ranged` is set, but Archery does not apply.
+    expect(
+      resolveAttackRules({ ...fighter, weapon: javelin, fightingStyles: ['archery'] }).attackBonus,
+    ).toBe(4);
+  });
+
+  test('Dueling adds +2 damage in one hand, not with a second weapon or a two-handed weapon', () => {
+    const oneHand = { ...longsword, meleeWeapon: true };
+    expect(
+      resolveAttackRules({ ...fighter, weapon: oneHand, fightingStyles: ['dueling'] }).damageBonus,
+    ).toBe(5);
+    expect(
+      resolveAttackRules({
+        ...fighter,
+        weapon: { ...oneHand, otherWeaponWielded: true },
+        fightingStyles: ['Dueling'],
+      }).damageBonus,
+    ).toBe(3);
+    expect(
+      resolveAttackRules({
+        ...fighter,
+        weapon: { ...oneHand, twoHanded: true, name: 'Greataxe' },
+        fightingStyles: ['dueling'],
+      }).damageBonus,
+    ).toBe(3);
+  });
+
+  test('a monster fixed bonus stays verbatim when styles are also present', () => {
+    const golem = {
+      ...longsword,
+      ranged: true,
+      rangedWeapon: true,
+      meleeWeapon: true,
+      fixedAttackBonus: 10,
+      fixedDamageBonus: 6,
+    };
+    expect(
+      resolveAttackRules({
+        ...fighter,
+        weapon: golem,
+        fightingStyles: ['archery', 'dueling'],
+      }),
+    ).toMatchObject({ attackBonus: 10, damageBonus: 6 });
+  });
+});

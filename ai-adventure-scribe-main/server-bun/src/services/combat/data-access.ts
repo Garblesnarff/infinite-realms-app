@@ -15,6 +15,7 @@ import { and, asc, desc, eq, exists, inArray, or, isNotNull, sql } from 'drizzle
 
 import { isEquippedWeaponCandidate } from './combat-weapon-options.js';
 import {
+  catalogWeaponIsRanged,
   findCatalogWeapon,
   findMagicAlternateBaseWeaponIds,
   findMagicBaseWeapon,
@@ -122,6 +123,7 @@ function candidateToProfile(
   const damage = (candidate.properties.damage ?? {}) as Record<string, unknown>;
   const range = (candidate.properties.range ?? {}) as Record<string, unknown>;
   const normalRange = Number(range.normal ?? catalog?.range?.normal ?? 5);
+  const rangedWeapon = catalogWeaponIsRanged(candidate.name);
   return {
     id: candidate.id,
     name: candidate.name,
@@ -133,6 +135,9 @@ function candidateToProfile(
     finesse: Boolean(candidate.properties.finesse ?? catalog?.weaponProperties?.finesse),
     ranged: normalRange > 5,
     proficient: proficientIds.length > 0 ? characterCanUseWeapon(owner, proficientIds) : false,
+    rangedWeapon,
+    meleeWeapon: Boolean(catalog) && !rangedWeapon,
+    twoHanded: Boolean(catalog?.weaponProperties?.twoHanded),
   };
 }
 
@@ -194,9 +199,11 @@ export async function listEquippedWeaponProfiles(participant: any): Promise<Weap
         properties: parseEquipmentProperties(item.magicProperties),
       })),
     ];
-    return candidates
-      .filter(isEquippedWeaponCandidate)
-      .map((candidate) => candidateToProfile(candidate, character ?? undefined));
+    return noteOtherWeapons(
+      candidates
+        .filter(isEquippedWeaponCandidate)
+        .map((candidate) => candidateToProfile(candidate, character ?? undefined)),
+    );
   }
 
   // Scene-grounded attacks are resolved once at seating and stored on the participant. They
@@ -279,23 +286,31 @@ export async function listCarriedWeaponProfiles(participant: any): Promise<Weapo
       properties: parseEquipmentProperties(item.magicProperties),
     })),
   ];
-  return candidates.filter(isEquippedWeaponCandidate).map((candidate) => {
-    const profile = candidateToProfile(candidate, character ?? undefined);
-    const ammunition = /crossbow/i.test(profile.name)
-      ? 'bolts'
-      : /(?:shortbow|longbow)/i.test(profile.name)
-        ? 'arrows'
-        : null;
-    if (!ammunition) return profile;
-    const ammoPattern = ammunition === 'bolts' ? /\bbolts?\b/i : /\barrows?\b/i;
-    const available = [
-      ...inventory
-        .filter((item) => !isAlreadyOnSheet(sheetNames, item.name))
-        .map((item) => ({ name: item.name, quantity: item.quantity })),
-      ...legacy.map((item) => ({ name: item.itemName, quantity: item.quantity })),
-    ].some((item) => Number(item.quantity) > 0 && ammoPattern.test(item.name));
-    return available ? profile : { ...profile, missingAmmunition: ammunition };
-  });
+  return noteOtherWeapons(
+    candidates.filter(isEquippedWeaponCandidate).map((candidate) => {
+      const profile = candidateToProfile(candidate, character ?? undefined);
+      const ammunition = /crossbow/i.test(profile.name)
+        ? 'bolts'
+        : /(?:shortbow|longbow)/i.test(profile.name)
+          ? 'arrows'
+          : null;
+      if (!ammunition) return profile;
+      const ammoPattern = ammunition === 'bolts' ? /\bbolts?\b/i : /\barrows?\b/i;
+      const available = [
+        ...inventory
+          .filter((item) => !isAlreadyOnSheet(sheetNames, item.name))
+          .map((item) => ({ name: item.name, quantity: item.quantity })),
+        ...legacy.map((item) => ({ name: item.itemName, quantity: item.quantity })),
+      ].some((item) => Number(item.quantity) > 0 && ammoPattern.test(item.name));
+      return available ? profile : { ...profile, missingAmmunition: ammunition };
+    }),
+  );
+}
+
+/** Dueling turns off when any other equipped weapon is in hand. A shield never reaches this list. */
+function noteOtherWeapons(profiles: WeaponRuleProfile[]): WeaponRuleProfile[] {
+  if (profiles.length < 2) return profiles;
+  return profiles.map((profile) => ({ ...profile, otherWeaponWielded: true }));
 }
 
 /**
@@ -398,6 +413,8 @@ export interface AbilityProfile {
    * value as "no proficiencies", which is the truth for every creature anyway.
    */
   skillProficiencies?: string[];
+  /** `characters.fighting_styles`. Absent for an NPC or a monster. */
+  fightingStyles?: unknown;
 }
 
 export async function getActiveConditionNames(participantId: string): Promise<string[]> {
@@ -471,6 +488,7 @@ export async function getParticipantAbilityProfile(participant: any): Promise<Ab
       className: result.character.class,
       savingThrowProficiencies: proficiencies,
       skillProficiencies: parseCsvColumn(result.character.skillProficiencies),
+      fightingStyles: result.character.fightingStyles,
       scores: {
         str: result.stats?.strength ?? 10,
         dex: result.stats?.dexterity ?? 10,

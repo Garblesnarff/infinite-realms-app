@@ -47,6 +47,10 @@ import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { aggregateResistances } from './resistance-resolver.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { abilityModifier } from '../../../../shared/ability-modifier';
+import {
+  greatWeaponFightingApplies,
+  rerollGreatWeaponFace,
+} from '../../../../shared/fighting-style';
 import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
 import {
   assessPlayerCombatSpell,
@@ -516,6 +520,7 @@ export class CombatAttackService {
       targetDodging: targetParticipant.isDodging,
       attackerConditions,
       targetConditions,
+      fightingStyles: attackerProfile.fightingStyles,
     });
     // #728 (house rule): a mook attacking with its pack gets +1 to hit for each extra standing
     // mook, to a maximum of +3. Applied here, inside prepareAttack, so the proposal popup and
@@ -540,6 +545,7 @@ export class CombatAttackService {
       tacticalMap,
       rules,
       mookGroupBonus,
+      fightingStyles: attackerProfile.fightingStyles,
     };
   }
 
@@ -607,6 +613,7 @@ export class CombatAttackService {
       tacticalMap,
       rules,
       mookGroupBonus,
+      fightingStyles,
     } = await this.prepareAttack(encounterId, input, userId);
 
     if (!rules.legal) {
@@ -746,6 +753,12 @@ export class CombatAttackService {
       // Aggregate resistances using the extracted module
       const defenses = aggregateResistances(targetParticipant, targetStats);
 
+      const rerollGreatWeapon =
+        weapon.fixedDamageBonus === undefined &&
+        greatWeaponFightingApplies(fightingStyles, {
+          meleeWeapon: weapon.meleeWeapon === true,
+          twoHanded: weapon.twoHanded === true,
+        });
       const damageCalc = calculateDamage({
         damageDice: weapon.damageDice,
         damageBonus: rules.damageBonus,
@@ -754,6 +767,13 @@ export class CombatAttackService {
         resistances: defenses.resistances,
         vulnerabilities: defenses.vulnerabilities,
         immunities: defenses.immunities,
+        // Each of the weapon's own damage dice. A 1 or 2 is rerolled once and the new face stands.
+        ...(rerollGreatWeapon
+          ? {
+              adjustDamageDie: (face: number, sides: number) =>
+                rerollGreatWeaponFace(face, () => rollDie(sides)),
+            }
+          : {}),
       });
 
       // #754: Hex adds 1d6 necrotic to a hit on its cursed target, resisted separately.

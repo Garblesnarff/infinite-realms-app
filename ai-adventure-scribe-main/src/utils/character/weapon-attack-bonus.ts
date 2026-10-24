@@ -17,6 +17,7 @@
  */
 
 import { abilityModifier } from '../../../shared/ability-modifier';
+import { archeryAttackBonus } from '../../../shared/fighting-style';
 import { isWeaponProficientWithAny } from '../../../shared/weapon-proficiency';
 
 import type { WeaponProficiencySubject } from '../../../shared/weapon-proficiency';
@@ -86,12 +87,16 @@ export function getWeaponAttackBonus(
   const ability =
     ranged || (weapon.weaponProperties?.finesse && dexScore > strScore) ? 'dexterity' : 'strength';
   const proficient = isProficient(character, weapon);
+  // Archery is a ranged weapon, not every attack whose range exceeds 5 feet.
+  // A javelin is thrown melee and stays on the ability bonus alone.
+  const rangedWeapon = (weapon.subcategory ?? '').toLowerCase().includes('ranged');
 
   return {
     bonus:
       (ability === 'dexterity' ? dexMod : strMod) +
       (proficient ? proficiencyBonus : 0) +
-      magicBonus,
+      magicBonus +
+      archeryAttackBonus(character.fightingStyles, rangedWeapon),
     proficient,
     ability,
   };

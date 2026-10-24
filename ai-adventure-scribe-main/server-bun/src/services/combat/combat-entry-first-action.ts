@@ -519,6 +519,7 @@ export async function deriveCombatEntryFirstAction(
     level: profile.level,
     baseTargetAc: seatedAc,
     weapon: grounded.weapon,
+    fightingStyles: profile.fightingStyles,
     geometry: geometryFor(rulesMap, playerParticipant.id, targetParticipant.id),
     attackerConditions: await deps.getActiveConditionNames(playerParticipant.id),
     targetConditions: await deps.getActiveConditionNames(targetParticipant.id),
