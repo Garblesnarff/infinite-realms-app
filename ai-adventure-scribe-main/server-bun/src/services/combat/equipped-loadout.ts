@@ -25,6 +25,13 @@ export type EquippedLoadout = {
   armor: string[];
   /** The sheet's armour class, or null when the character has no stats row yet. */
   armorClass: number | null;
+  /** All owner-checked carried rows, including unequipped weapons and useful items. */
+  carriedItems: Array<{
+    name: string;
+    itemType: string;
+    quantity: number;
+    equipped: boolean;
+  }>;
 };
 
 /**
@@ -49,35 +56,56 @@ export async function getEquippedLoadout(
 ): Promise<EquippedLoadout> {
   await verifyCharacterOwnership(characterId, userId);
 
-  const [weapons, inventoryArmor, legacyArmor, stats] = await Promise.all([
-    listEquippedWeaponProfiles({ characterId }),
-    db
-      .select({ name: inventoryItems.name })
-      .from(inventoryItems)
-      .where(
-        and(
-          eq(inventoryItems.characterId, characterId),
-          eq(inventoryItems.isEquipped, true),
-          inArray(inventoryItems.itemType, ARMOR_TYPES),
-        ),
-      )
-      .orderBy(asc(inventoryItems.createdAt), asc(inventoryItems.id)),
-    db
-      .select({ name: characterEquipment.itemName })
-      .from(characterEquipment)
-      .where(
-        and(
-          eq(characterEquipment.characterId, characterId),
-          eq(characterEquipment.equipped, true),
-          inArray(characterEquipment.itemType, ARMOR_TYPES),
-        ),
-      )
-      .orderBy(asc(characterEquipment.itemName), asc(characterEquipment.id)),
-    db.query.characterStats.findFirst({
-      where: eq(characterStats.characterId, characterId),
-      columns: { armorClass: true },
-    }),
-  ]);
+  const [weapons, inventoryArmor, legacyArmor, inventoryRows, legacyRows, stats] =
+    await Promise.all([
+      listEquippedWeaponProfiles({ characterId }),
+      db
+        .select({ name: inventoryItems.name })
+        .from(inventoryItems)
+        .where(
+          and(
+            eq(inventoryItems.characterId, characterId),
+            eq(inventoryItems.isEquipped, true),
+            inArray(inventoryItems.itemType, ARMOR_TYPES),
+          ),
+        )
+        .orderBy(asc(inventoryItems.createdAt), asc(inventoryItems.id)),
+      db
+        .select({ name: characterEquipment.itemName })
+        .from(characterEquipment)
+        .where(
+          and(
+            eq(characterEquipment.characterId, characterId),
+            eq(characterEquipment.equipped, true),
+            inArray(characterEquipment.itemType, ARMOR_TYPES),
+          ),
+        )
+        .orderBy(asc(characterEquipment.itemName), asc(characterEquipment.id)),
+      db
+        .select({
+          name: inventoryItems.name,
+          itemType: inventoryItems.itemType,
+          quantity: inventoryItems.quantity,
+          equipped: inventoryItems.isEquipped,
+        })
+        .from(inventoryItems)
+        .where(eq(inventoryItems.characterId, characterId))
+        .orderBy(asc(inventoryItems.createdAt), asc(inventoryItems.id)),
+      db
+        .select({
+          name: characterEquipment.itemName,
+          itemType: characterEquipment.itemType,
+          quantity: characterEquipment.quantity,
+          equipped: characterEquipment.equipped,
+        })
+        .from(characterEquipment)
+        .where(eq(characterEquipment.characterId, characterId))
+        .orderBy(asc(characterEquipment.itemName), asc(characterEquipment.id)),
+      db.query.characterStats.findFirst({
+        where: eq(characterStats.characterId, characterId),
+        columns: { armorClass: true },
+      }),
+    ]);
 
   const sheetNames = sheetItemNameSet(legacyArmor.map((row) => row.name));
   return {
@@ -89,5 +117,19 @@ export async function getEquippedLoadout(
         .map((row) => row.name),
     ],
     armorClass: stats?.armorClass ?? null,
+    carriedItems: [
+      ...legacyRows.map((row) => ({
+        name: row.name,
+        itemType: row.itemType ?? 'equipment',
+        quantity: row.quantity ?? 1,
+        equipped: row.equipped === true,
+      })),
+      ...inventoryRows.map((row) => ({
+        name: row.name,
+        itemType: row.itemType,
+        quantity: row.quantity,
+        equipped: row.equipped,
+      })),
+    ],
   };
 }

@@ -71,6 +71,11 @@ const getCharacterLoadout = vi.fn(async () => ({
   ],
   armor: ['Leather Armor'],
   armorClass: 13,
+  carriedItems: [
+    { name: 'Longbow', itemType: 'weapon', quantity: 1, equipped: true },
+    { name: 'Shortbow', itemType: 'weapon', quantity: 1, equipped: false },
+    { name: 'Rope', itemType: 'equipment', quantity: 1, equipped: false },
+  ],
 }));
 
 vi.mock('@/services/user-data-api', () => ({
@@ -251,6 +256,14 @@ describe('GameContextPrompts', () => {
       expect(result).not.toContain('Studded leather');
     });
 
+    it('lists carried unequipped weapons and key items for typed draw resolution', async () => {
+      const result = await GameContextPrompts.buildCharacterSection(ranger);
+
+      expect(result).toContain('Shortbow x1 (weapon, carried)');
+      expect(result).toContain('Rope x1 (equipment, carried)');
+      expect(result).toContain('Do not say a carried item is absent');
+    });
+
     it('states the gear is unknown rather than inventing one when the sheet cannot be read', async () => {
       getCharacterLoadout.mockRejectedValueOnce(new Error('network down'));
 
@@ -428,9 +441,7 @@ describe('the player character identity anchor (#708)', () => {
   it('binds a premade character name to the player at its first presentation', async () => {
     const result = await GameContextPrompts.buildCharacterSection(apprentice);
 
-    expect(result).toContain(
-      'PLAYER CHARACTER: The Apprentice (you, the player), a level 1',
-    );
+    expect(result).toContain('PLAYER CHARACTER: The Apprentice (you, the player), a level 1');
   });
 
   it('anchors a created character the same way (control)', async () => {
@@ -443,9 +454,7 @@ describe('the player character identity anchor (#708)', () => {
 
     const result = await GameContextPrompts.buildCharacterSection(created);
 
-    expect(result).toContain(
-      'PLAYER CHARACTER: Kael Thornwood (you, the player), a level 1',
-    );
+    expect(result).toContain('PLAYER CHARACTER: Kael Thornwood (you, the player), a level 1');
   });
 
   it('full assembly: anchor present, the PC is never an NPC card', async () => {

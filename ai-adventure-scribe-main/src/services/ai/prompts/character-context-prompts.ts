@@ -60,6 +60,16 @@ let the engine resolve them.
     });
 
     const armorText = loadout.armor.length > 0 ? loadout.armor.join(', ') : 'No armour equipped';
+    const carriedItems = loadout.carriedItems ?? [];
+    const carriedText =
+      carriedItems.length > 0
+        ? carriedItems
+            .map(
+              (item) =>
+                `${item.name} x${item.quantity} (${item.itemType}, ${item.equipped ? 'equipped' : 'carried'})`,
+            )
+            .join(' | ')
+        : 'None recorded';
     const acText =
       typeof armorClass === 'number'
         ? `AC ${armorClass}`
@@ -71,7 +81,9 @@ let the engine resolve them.
 <equipment>
 EQUIPPED WEAPONS: ${weapons.length > 0 ? weapons.join(' | ') : 'None — unarmed strike (1d1 bludgeoning, reach 5 ft)'}
 ARMOR: ${armorText} | ${acText}
+ CARRIED ITEMS: ${carriedText}
 **These are the character's real, equipped items. Never name a weapon that is not on this list.**
+**The carried-items list includes unequipped weapons and key items owned by this character. Do not say a carried item is absent; resolve a typed draw/equip through the engine path before replying.**
 **USE EXACT WEAPON DICE from this list for damage roll requests.**
 </equipment>`;
   }
