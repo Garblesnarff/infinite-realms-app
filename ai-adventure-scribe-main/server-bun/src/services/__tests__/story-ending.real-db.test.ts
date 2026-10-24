@@ -816,7 +816,7 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
   async function seedWorld(
     label: string,
     starter: 'breath' | 'score' | 'plain' | 'heldrest',
-    campaignLength: 'one-shot' | 'campaign' = 'one-shot',
+    campaignLength: 'one-shot' | 'campaign' | 'full' = 'one-shot',
   ): Promise<{ characterId: string; sessionId: string }> {
     const [{ id: campaignId }] = await database
       .insert(campaigns)
@@ -1342,6 +1342,116 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
     expect((await trackerRow(sessionId, 'Breath'))?.value).toBe(5);
   }, 30_000);
 
+  test('a final-beat flag on a roll-request turn is cleared and waits for the result turn', async () => {
+    const { characterId, sessionId } = await seedWorld('roll-flag', 'breath');
+    const prompts: string[] = [];
+
+    const rollTurn = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'I hold on to the rope as the hollow pulls at us.',
+      reply: {
+        ...baseReply,
+        roll_requests: [
+          {
+            type: 'save',
+            formula: '1d20+2',
+            purpose: 'Wisdom save to hold the rope against the hollow',
+            dc: 14,
+            ac: null,
+            advantage: false,
+            disadvantage: false,
+          },
+        ],
+        final_beat_reached: true,
+      },
+      capturedPrompts: prompts,
+    });
+    expect(rollTurn.status).toBe(200);
+    // The flag did not land on the roll turn, and the envelope says so:
+    // cleared the way campaign_ending is cleared, not carried as applied.
+    expect((await trackerPhase(sessionId))?.tracker?.endingRequired).toBeUndefined();
+    const rollEnvelope = JSON.parse(String(rollTurn.body.text)) as Record<string, unknown>;
+    expect(rollEnvelope.final_beat_reached ?? null).toBeNull();
+
+    // The result turn re-sends the flag (the schema's instruction), and
+    // now it arms — deferred, not lost.
+    const resultTurn = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'I hold fast.',
+      reply: { ...baseReply, final_beat_reached: true },
+      capturedPrompts: prompts,
+    });
+    expect(resultTurn.status).toBe(200);
+    const armed = (await trackerPhase(sessionId))?.tracker as
+      | { endingRequired?: boolean; finalBeat?: boolean }
+      | undefined;
+    expect(armed?.endingRequired).toBe(true);
+    expect(armed?.finalBeat).toBe(true);
+  }, 30_000);
+
+  test('the final-beat audit log fires once on a real arm turn and nothing new on a Retry replay (#1068 FIX round 2)', async () => {
+    // The production logger is pino to process.stdout (sonic-boom
+    // flushes async), so capture stdout around the turns and poll the
+    // buffer for the marker instead of asserting synchronously.
+    const { characterId, sessionId } = await seedWorld('audit-log', 'breath');
+    const prompts: string[] = [];
+    const chunks: string[] = [];
+    const origWrite = process.stdout.write.bind(process.stdout);
+    const capture = (chunk: unknown, encoding?: unknown, cb?: unknown) => {
+      chunks.push(String(chunk));
+      const callback = typeof encoding === 'function' ? encoding : cb;
+      if (typeof callback === 'function') (callback as () => void)();
+      return true;
+    };
+    const countFlagged = () =>
+      chunks.join('').split('DM_STORY_TRACKER_FINAL_BEAT_FLAGGED').length - 1;
+    const waitForFlagged = async (n: number, ms: number) => {
+      const start = Date.now();
+      while (Date.now() - start < ms) {
+        if (countFlagged() >= n) return true;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      return countFlagged() >= n;
+    };
+    try {
+      (process.stdout as unknown as { write: unknown }).write = capture;
+      const armTurn = await dmTurn({
+        sessionId,
+        characterId,
+        playerInput: 'We reach the final landing.',
+        reply: { ...baseReply, final_beat_reached: true },
+        capturedPrompts: prompts,
+      });
+      expect(armTurn.status).toBe(200);
+      expect(await waitForFlagged(1, 5000)).toBe(true);
+      expect(countFlagged()).toBe(1);
+
+      // Retry replay of the same saved player message: the step returns
+      // already_applied and must not log a second arm.
+      const replay = await dmTurn({
+        sessionId,
+        characterId,
+        playerInput: 'We reach the final landing.',
+        reply: { ...baseReply, final_beat_reached: true },
+        capturedPrompts: prompts,
+        insertMessage: false,
+      });
+      expect(replay.status).toBe(200);
+      await new Promise((r) => setTimeout(r, 1000));
+      expect(countFlagged()).toBe(1);
+    } finally {
+      (process.stdout as unknown as { write: unknown }).write = origWrite;
+    }
+    // The arm really landed (phase, not just the log line).
+    const armed = (await trackerPhase(sessionId))?.tracker as
+      | { endingRequired?: boolean; finalBeat?: boolean }
+      | undefined;
+    expect(armed?.endingRequired).toBe(true);
+    expect(armed?.finalBeat).toBe(true);
+  }, 60_000);
+
   test('a session whose campaign belongs to another owner resolves no clocks', async () => {
     // The tracker state is scoped through the session's campaign owner:
     // this session's character is the caller's, but its campaign is not,
@@ -1842,6 +1952,60 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
     expect(prompts.slice(promptsBefore)).toHaveLength(1);
     expect((await sessionRow(sessionId))?.status).toBe('active');
     expect(await endingRowsFor(sessionId)).toHaveLength(0);
+  }, 60_000);
+
+  test('a non-one-shot climax directive never requires the ending (#1068)', async () => {
+    // Same drive as the corrective-call test above, but the assertion is
+    // the directive text: a long campaign's climax trips endingRequired
+    // too, yet the ending applier completes one-shots only — so the
+    // prompt must not tell the DM the ending is required, nor softly
+    // instruct it to declare campaign_ending (self-review R2). 'full'
+    // is a real wizard-written length, not the synthetic 'campaign'.
+    const { characterId, sessionId } = await seedWorld('directive-non-one-shot', 'breath', 'full');
+    const prompts: string[] = [];
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We finish the last landing.',
+      reply: trackerReply([{ name: 'Breath', set: 6 }]),
+      capturedPrompts: prompts,
+    });
+    for (let turn = 1; turn <= 6; turn += 1) {
+      await dmTurn({
+        sessionId,
+        characterId,
+        playerInput: `We press on through the climax (turn ${turn}).`,
+        reply: { ...baseReply },
+        capturedPrompts: prompts,
+      });
+    }
+    expect((await trackerPhase(sessionId))?.tracker?.endingRequired).toBe(true);
+
+    const promptsBefore = prompts.length;
+    const turn = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'And then?',
+      reply: { ...baseReply },
+      capturedPrompts: prompts,
+    });
+    expect(turn.status).toBe(200);
+    const turnPrompts = prompts.slice(promptsBefore);
+    expect(turnPrompts).toHaveLength(1);
+    expect(turnPrompts[0]).toContain('in its climax');
+    expect(turnPrompts[0]).not.toContain('the ending is required');
+    expect(turnPrompts[0]).not.toContain('MUST set campaign_ending');
+    expect(turnPrompts[0]).not.toContain('before the ending is required');
+    // Scoped to the directive block: the full prompt names the field
+    // elsewhere (schema text), but the directive itself must not
+    // instruct the DM to declare an ending the engine will refuse.
+    const clockBlock = turnPrompts[0].slice(
+      turnPrompts[0].indexOf('<story_clock>'),
+      turnPrompts[0].indexOf('</story_clock>'),
+    );
+    expect(clockBlock).toContain('in its climax');
+    expect(clockBlock).not.toContain('campaign_ending');
+    expect((await sessionRow(sessionId))?.status).toBe('active');
   }, 60_000);
 
   test('safety net: an in-combat turn defers enforcement; the next story turn enforces it', async () => {

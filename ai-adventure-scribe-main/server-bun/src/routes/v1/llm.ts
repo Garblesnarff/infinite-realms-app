@@ -1756,6 +1756,15 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         if (envelope?.tracker_changes && !storyTrackersApplied) {
           envelope.tracker_changes = null;
         }
+        // #1068: a final-beat flag that did not land is cleared the way
+        // campaign_ending is cleared above, so an unapplied claim never
+        // reads as engine-applied. The case that matters is a
+        // roll-request turn: the tracker step defers (roll_pending) and
+        // the flag belongs to the result turn — the schema tells the DM
+        // to send it again there.
+        if (envelope?.final_beat_reached === true && !storyTrackersApplied) {
+          envelope.final_beat_reached = null;
+        }
         // #1062: the tracker line the player sees is rendered by the client
         // from server state, not from the DM's prose — the bracket-line leak
         // dies with the prose line. A model-supplied value is stripped
