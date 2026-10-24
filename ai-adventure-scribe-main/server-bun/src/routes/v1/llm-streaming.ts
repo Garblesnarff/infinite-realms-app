@@ -1,4 +1,4 @@
-import { stripOptionsAppendix } from '../../services/dm/narration-text.js';
+import { normalizePartialNarration } from '../../services/dm/narration-text.js';
 
 /**
  * SSE streaming support for POST /v1/llm/generate (#633 PR2).
@@ -117,7 +117,7 @@ export function extractPartialNarration(accumulated: string, nesting = 0): strin
           // #875: the model nested a whole reply inside `text` — the decoded
           // value is itself envelope JSON, so preview from ITS text field
           // instead of printing the payload. The recursive call applies this
-          // same appendix handling to the inner narration; the depth is
+          // same preview normalization to the inner narration; the depth is
           // bounded like the provider's unwrap in normalizeReplyNarration,
           // and a code fence before the payload is tolerated, matching its
           // inner parser (the scanner simply skips the backticks).
@@ -133,7 +133,11 @@ export function extractPartialNarration(accumulated: string, nesting = 0): strin
             // below, exactly as the final text will read.
             if (stringEnd(accumulated, j) === -1) return null;
           }
-          const clean = stripOptionsAppendix(narration);
+          // #1067 follow-up: the preview gets the same artifact strips as
+          // the final text, plus holdback for shapes still arriving — so a
+          // bracket line (or lettered list, or meta sentence) is never
+          // shown mid-stream only to vanish from the final text.
+          const clean = normalizePartialNarration(narration);
           const lastLine = clean.slice(clean.lastIndexOf('\n') + 1).trimStart();
           const key = lastLine.replace(/^["']/, '').toLowerCase();
           if (

@@ -116,6 +116,124 @@ describe('normalizeReplyNarration #1067 stacked artifacts', () => {
   });
 });
 
+describe('normalizeReplyNarration #1067 new shapes (follow-up)', () => {
+  test('shape (d): an inline lettered list mid-article is removed, prose survives', () => {
+    const { text, kind } = normalizedText(
+      'The hollow yawns before you, dark and cold. ' +
+        'A. Race for the hollow. B. Hide among the roots. C. Call out to the others. ' +
+        'The wind answers nothing.',
+    );
+    expect(kind).toBe('stripped');
+    expect(text).toBe(
+      'The hollow yawns before you, dark and cold. The wind answers nothing.',
+    );
+  });
+
+  test('shape (d): an options:-labelled list mid-text still leaks (the #1081 pin owns that shape)', () => {
+    const input =
+      'You weigh your options: A. Race for the hollow. B. Hide among the roots. Then you decide.';
+    const { text, kind } = normalizedText(input);
+    expect(kind).toBeNull();
+    expect(text).toBe(input);
+  });
+
+  test('shape (d): an inline list behind a tracker line still comes off (loop)', () => {
+    const { text, kind } = normalizedText(
+      'The hollow yawns. A. Race for the hollow. B. Hide among the roots. ' +
+        '[HP 18/?] [Clock 0/6]',
+    );
+    expect(kind).toBe('stripped');
+    expect(text).toBe('The hollow yawns.');
+  });
+
+  test('shape (d): Plan A. is not a list start (no sentence boundary)', () => {
+    const input = 'You settle on Plan A. Race for the hollow at dawn. B. Hide if it fails.';
+    const { text, kind } = normalizedText(input);
+    expect(kind).toBeNull();
+    expect(text).toBe(input);
+  });
+
+  test('shape (d): a lone A. item is untouched (needs A and B)', () => {
+    const input = 'The hollow yawns. A. Race for the hollow. The wind answers nothing.';
+    const { text, kind } = normalizedText(input);
+    expect(kind).toBeNull();
+    expect(text).toBe(input);
+  });
+
+  test('shape (d): a non-sequential run is untouched (leaked, not deleted)', () => {
+    const input = 'The hollow yawns. A. Race for the hollow. C. Call out to the others.';
+    const { text, kind } = normalizedText(input);
+    expect(kind).toBeNull();
+    expect(text).toBe(input);
+  });
+
+  test('shape (d): an abbreviation breaks the run (multi-sentence item leaks)', () => {
+    const input = 'The hollow yawns. A. Meet Dr. No. B. Hide among the roots.';
+    const { text, kind } = normalizedText(input);
+    expect(kind).toBeNull();
+    expect(text).toBe(input);
+  });
+
+  test('shape (d): text that is only the list is kept (fail open, never empty)', () => {
+    const input = 'A. Race for the hollow. B. Hide among the roots.';
+    const { text, kind } = normalizedText(input);
+    expect(kind).toBeNull();
+    expect(text).toBe(input);
+  });
+
+  test('shape (e): the meta sentence is removed mid-text, at start, and at end', () => {
+    const mid = normalizedText(
+      'The prince studies you, waiting for an answer. ' +
+        'Options are not shown here; choose your next move. The room holds its breath.',
+    );
+    expect(mid.kind).toBe('stripped');
+    expect(mid.text).toBe(
+      'The prince studies you, waiting for an answer. The room holds its breath.',
+    );
+    const start = normalizedText(
+      'Options are not shown here; choose your next move. The prince studies you.',
+    );
+    expect(start.kind).toBe('stripped');
+    expect(start.text).toBe('The prince studies you.');
+    const end = normalizedText('The prince studies you. Options are not shown here.');
+    expect(end.kind).toBe('stripped');
+    expect(end.text).toBe('The prince studies you.');
+    const theVariant = normalizedText(
+      'The prince studies you. The options are not shown here. The room holds its breath.',
+    );
+    expect(theVariant.kind).toBe('stripped');
+    expect(theVariant.text).toBe('The prince studies you. The room holds its breath.');
+    const arent = normalizedText(
+      "The prince studies you. Options aren't shown here. The room holds its breath.",
+    );
+    expect(arent.kind).toBe('stripped');
+    expect(arent.text).toBe('The prince studies you. The room holds its breath.');
+  });
+
+  test('shape (e): a mid-sentence mention of the phrase is untouched', () => {
+    const input = 'He said the options are not shown here, so choose blindly.';
+    const { text, kind } = normalizedText(input);
+    expect(kind).toBeNull();
+    expect(text).toBe(input);
+  });
+
+  test('shape (d): a bare next-item letter rides along with a complete run (self-review Required 2)', () => {
+    const { text, kind } = normalizedText(
+      'The hollow yawns. A. Race for the hollow. B. Hide among the roots. C',
+    );
+    expect(kind).toBe('stripped');
+    expect(text).toBe('The hollow yawns.');
+  });
+
+  test('shape (d): a bare letter that is not the expected next item does not ride along', () => {
+    const { text, kind } = normalizedText(
+      'The hollow yawns. A. Race for the hollow. B. Hide among the roots. D',
+    );
+    expect(kind).toBe('stripped');
+    expect(text).toBe('The hollow yawns. D');
+  });
+});
+
 describe('normalizeReplyNarration #1067 regression pins', () => {
   test('prose that merely mentions options is untouched', () => {
     const input = 'You weigh your options carefully before answering the prince.';
