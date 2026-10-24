@@ -54,9 +54,17 @@ const TARGET_MAX_KEYWORDS = 0;
  *  story field is one new optional top-level property (its `summary` is
  *  required inside the sub-object, and it adds no unions or keywords). The
  *  growth is the fix's payload, recorded here rather than hidden; the ≤24
- *  strict target still waits on item 8's per-phase schemas. */
+ *  strict target still waits on item 8's per-phase schemas.
+ *  OPTIONALS raised 40 → 43 by #1042 (2026-10-23): the `tracker_changes`
+ *  story field is one new optional top-level property plus two optional
+ *  properties (`delta`, `set`) inside its item object (`name` is required
+ *  there); it adds no unions or keywords. Recorded the same way.
+ *  OPTIONALS raised 43 → 44 by #1042 round 2 (2026-10-23): the
+ *  `final_beat_reached` story field is one new optional top-level boolean
+ *  property (the final-beat trigger, Hark N23-003); it adds no unions or
+ *  keywords. Recorded the same way. */
 const BASELINE_UNIONS = 7;
-const BASELINE_OPTIONALS = 40;
+const BASELINE_OPTIONALS = 44;
 const BASELINE_ONE_OF = 0;
 const BASELINE_KEYWORDS = 7;
 
