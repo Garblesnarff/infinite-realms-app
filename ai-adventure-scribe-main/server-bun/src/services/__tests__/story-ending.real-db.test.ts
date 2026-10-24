@@ -1210,6 +1210,39 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
     expect(rows[0]?.message).toContain('Score Clock reached 6');
   }, 30_000);
 
+  test('#1084: a tracker-forced ending reaches the client on the reply envelope, so the completion screen fires on the engine-ended turn', async () => {
+    const { characterId, sessionId } = await seedWorld('envelope-ending', 'score');
+    const prompts: string[] = [];
+
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'The wedge comes free in my hands.',
+      reply: trackerReply([{ name: 'Score', set: 5 }]),
+      capturedPrompts: prompts,
+    });
+    expect((await sessionRow(sessionId))?.status).toBe('active');
+
+    const forced = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'I pull the last wedge.',
+      reply: trackerReply([{ name: 'Score', delta: 1 }]),
+      capturedPrompts: prompts,
+    });
+    expect(forced.status).toBe(200);
+    expect((await sessionRow(sessionId))?.status).toBe('completed');
+    // S-001: the session completed and the "Adventure complete" engine
+    // line posted, but the client never showed the completion screen —
+    // the envelope carried no campaign_ending, and the live latch keys
+    // on exactly that field. The forced ending's stored summary rides
+    // the envelope like a declared or safety-net ending does.
+    const envelope = JSON.parse(String(forced.body.text)) as Record<string, unknown>;
+    expect(envelope.campaign_ending).toEqual({
+      summary: 'The Score Clock reached 6 of 6 — the adventure ends.',
+    });
+  }, 30_000);
+
   test('six climax turns with no declared ending: the next prompt requires the ending', async () => {
     const { characterId, sessionId } = await seedWorld('safety-net', 'breath');
     const prompts: string[] = [];
