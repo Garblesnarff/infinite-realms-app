@@ -50,9 +50,17 @@ export async function applyStoryRest(input: {
   const dmRestType = rest.type === 'short' || rest.type === 'long' ? rest.type : null;
   const character = await ownedSessionCharacter(sessionId, userId);
   const message = character ? await playerMessage(sessionId) : null;
-  const typedType = dmRestType ? null : typedRestType(message?.message ?? '');
-  const restType = dmRestType ?? typedType;
-  const restSource = dmRestType ? 'dm' : typedType ? 'typed' : null;
+  // #751 (D23-002): the player's explicit typed declaration wins over the DM
+  // reply's `rest` field. The DM field exists for a rest the story grants
+  // that the player did not declare; when the player DID declare one, the
+  // DM's field is the model's reading of the same fiction, and it can read
+  // it wrong — a post-combat breather narration filled `short` while the
+  // player typed a long rest, and the old DM-wins rule silently applied the
+  // short rest and left the spent slot unrestored. When both agree, or only
+  // one is present, this changes nothing.
+  const typedType = typedRestType(message?.message ?? '');
+  const restType = typedType ?? dmRestType;
+  const restSource = typedType ? 'typed' : dmRestType ? 'dm' : null;
   let outcome: StoryRestOutcome;
   if (!character) outcome = 'no_character';
   // The rest belongs to the roll's result, which arrives as its own player message.
