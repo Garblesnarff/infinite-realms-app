@@ -6,6 +6,8 @@ import { buildSpellCastContext, buildSpellCastMessage } from '../spell-view-mode
 
 import type { CharacterSheetVM } from '../types';
 
+import { getCharacterResources } from '@/utils/classFeatures';
+
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({ state: { campaign: null } }),
 }));
@@ -212,6 +214,24 @@ describe('RightSheet attacks list', () => {
     } satisfies CharacterSheetVM;
     render(<RightSheet c={nonCaster} />);
     expect(screen.queryByRole('button', { name: /Prepare Stored Spell/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('RightSheet class resources (#1061)', () => {
+  it('renders class resource pools in the in-session sheet', () => {
+    render(
+      <RightSheet
+        c={{
+          ...sheet,
+          subtitle: 'Human · Sorcerer',
+          resources: getCharacterResources('sorcerer', 2),
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Character Resources')).toBeInTheDocument();
+    expect(screen.getByText('Sorcery Points')).toBeInTheDocument();
+    expect(screen.getAllByText('2 / 2').length).toBeGreaterThan(0);
   });
 });
 
