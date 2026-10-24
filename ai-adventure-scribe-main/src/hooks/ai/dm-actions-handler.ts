@@ -19,6 +19,7 @@ import logger from '@/lib/logger';
 import { filterValidHandoutActions } from '@/services/ai/valid-handout-actions';
 import { type PlayerInputOrigin } from '@/services/combat/combat-action-origin';
 import {
+  combatCheckProfile,
   runDeclaredCombatCheck,
   skillCheckModifierFor,
 } from '@/services/combat/combat-check-client';
@@ -49,6 +50,11 @@ export interface HandleDmActionsParams {
   result: any;
   /** Retained for callers; combat entry no longer builds a participant here (#1779). */
   characterRecord?: Record<string, unknown>;
+  /**
+   * The loaded character sheet (#1017). The encounter participant has no ability
+   * scores, so the combat check prompt reads this sheet, then `characterRecord`.
+   */
+  checkSheet?: Record<string, unknown> | null;
   activeEncounter: any;
   isInCombat: boolean;
   refreshCombatState: (signal?: AbortSignal) => Promise<any>;
@@ -813,7 +819,7 @@ export async function handleDmActionsAndTransitions(
           actorLabel: playerParticipant.name ?? 'You',
           participants: checkRoster,
           checkModifier: skillCheckModifierFor(
-            playerParticipant,
+            combatCheckProfile(playerParticipant, params.checkSheet, params.characterRecord),
             detection.intent.kind,
             detection.intent.parleySkill,
           ),

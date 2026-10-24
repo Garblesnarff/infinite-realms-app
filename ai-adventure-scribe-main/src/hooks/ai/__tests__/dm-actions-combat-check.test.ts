@@ -120,7 +120,11 @@ const PROD_RESULT = {
   handout_actions: [],
 };
 
-const invoke = (playerMessage: string, overrides: Record<string, unknown> = {}) =>
+const invoke = (
+  playerMessage: string,
+  overrides: Record<string, unknown> = {},
+  params: Record<string, unknown> = {},
+) =>
   handleDmActionsAndTransitions({
     sessionId: 'session-1',
     characterRecord: { id: 'char-1' },
@@ -131,6 +135,7 @@ const invoke = (playerMessage: string, overrides: Record<string, unknown> = {}) 
     conversationHistory: [],
     playerMessage,
     playerInputOrigin: 'typed',
+    ...params,
     result: { ...PROD_RESULT, text: FIRST_PASS, ...overrides },
   } as any);
 
@@ -314,5 +319,125 @@ describe('a mid-combat check the engine resolved is the whole turn (#2420)', () 
     expect(enforceCombatActionOnAttempt).toHaveBeenCalled();
     expect(narrationPayload()).toHaveProperty('silentPlayerTurnNote');
     expect(narrationPayload()).not.toHaveProperty('authoritativeCheckResult');
+  });
+});
+
+/**
+ * #1017: the combat roll prompt reads the encounter participant, which carries no
+ * ability scores. The sheet the turn already loaded has them. These cases use that
+ * live shape: a bare roster row plus the session character (`character_stats`) or
+ * the loaded sheet (`abilityScores`, skills, level).
+ */
+const BARE_PLAYER = {
+  id: 'p1',
+  name: 'The Apprentice',
+  participantType: 'player',
+  characterId: 'char-1',
+  turnOrder: 1,
+};
+const BARE_ENCOUNTER = { ...ENCOUNTER, participants: [BARE_PLAYER, GOBLIN] };
+
+const promptModifier = () => {
+  const spec = vi.mocked(requestPlayerCheckRoll).mock.calls.at(-1)?.[0] as
+    | { checkLabel?: string; checkModifier?: number }
+    | undefined;
+  return { label: spec?.checkLabel, modifier: spec?.checkModifier };
+};
+
+describe('#1017 the combat check prompt uses the sheet, not +0', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requestPlayerCheckRoll).mockResolvedValue({ d20: 14 });
+    vi.mocked(AIService.chatWithDM).mockResolvedValue({ text: 'The goblin staggers.' } as never);
+    vi.mocked(executeAuthoritativeCombatIntent).mockImplementation((async (
+      _id: string,
+      intent: any,
+    ) =>
+      intent.type === 'check' ? SHOVE_RESULT : { currentParticipant: { id: GOBLIN.id } }) as never);
+  });
+
+  it('shove shows the sheet Strength modifier (-1), not +0', async () => {
+    await invoke(
+      'shove the goblin',
+      {},
+      {
+        activeEncounter: BARE_ENCOUNTER,
+        characterRecord: {
+          id: 'char-1',
+          level: 1,
+          character_stats: [{ strength: 8, dexterity: 12, charisma: 8 }],
+        },
+      },
+    );
+    expect(promptModifier()).toEqual({ label: 'Shove', modifier: -1 });
+  });
+
+  it('grapple shows the same Athletics modifier as shove', async () => {
+    await invoke(
+      'grapple the goblin',
+      {},
+      {
+        activeEncounter: BARE_ENCOUNTER,
+        characterRecord: {
+          id: 'char-1',
+          level: 1,
+          character_stats: [{ strength: 8, dexterity: 12, charisma: 8 }],
+        },
+      },
+    );
+    expect(promptModifier()).toEqual({ label: 'Grapple', modifier: -1 });
+  });
+
+  it('hide shows the sheet Dexterity modifier (+1)', async () => {
+    await invoke(
+      'hide behind the pillar',
+      {},
+      {
+        activeEncounter: BARE_ENCOUNTER,
+        characterRecord: {
+          id: 'char-1',
+          level: 1,
+          character_stats: [{ strength: 8, dexterity: 12, charisma: 8 }],
+        },
+      },
+    );
+    expect(promptModifier()).toEqual({ label: 'Hide', modifier: 1 });
+  });
+
+  it('escape uses the better proficient skill and the sheet level', async () => {
+    await invoke(
+      'break free',
+      {},
+      {
+        activeEncounter: BARE_ENCOUNTER,
+        checkSheet: {
+          id: 'char-1',
+          level: 5,
+          abilityScores: {
+            strength: { score: 8, modifier: -1 },
+            dexterity: { score: 18, modifier: 4 },
+          },
+          skillProficiencies: ['Acrobatics'],
+        },
+      },
+    );
+    expect(promptModifier()).toEqual({ label: 'Escape', modifier: 7 });
+  });
+
+  it('persuade shows Charisma plus Persuasion proficiency at the real level', async () => {
+    await invoke(
+      'talk it down',
+      {},
+      {
+        activeEncounter: BARE_ENCOUNTER,
+        checkSheet: {
+          id: 'char-1',
+          level: 5,
+          abilityScores: { charisma: { score: 14, modifier: 2 } },
+          skillProficiencies: ['Persuasion'],
+        },
+      },
+    );
+    expect(promptModifier()).toEqual({ label: 'Persuasion', modifier: 5 });
   });
 });
