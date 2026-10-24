@@ -203,8 +203,60 @@ const GENERIC_CLOCK_WORDS = new Set([
 
 const NAMED_CLOCK_MENTION = /([A-Za-z][\w'-]*)\s+clock\b/i;
 const NAMED_COUNTER_MENTION = /([A-Za-z][\w'-]*)\s+counter\b/i;
-/** A clock value stated in prose: "reaches 6", "jumps to 6", "set to 5", "Clock 6". */
-const CLOCK_VALUE_REF = /(?:reaches|jumps to|sets? to)\s+(\d+)|\bclock\s+(\d+)/gi;
+/**
+ * Number words the veto scan recognizes (#1068): a limit written as a
+ * word ("becomes full at six") states a value just as surely as a digit,
+ * so it must trip the fail-closed rule the same way. One through twenty
+ * covers the audit's clocks; larger forms stay unparsed (no veto from
+ * this scan, as with any other unparseable row text). A hyphenated form
+ * parses as its first component ("twenty-one" reads 20). A veto fired
+ * on that reading is sound (the true value is larger still), but the
+ * reading can MISS a veto when the first component equals the clean
+ * limit exactly (clean limit 20 vs "twenty-one": parsed 20 is not above
+ * 20, so no veto, though the true 21 is). Compounds stay unparsed by
+ * design; this comment no longer claims otherwise.
+ */
+const NUMBER_WORDS: Record<string, number> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  thirteen: 13,
+  fourteen: 14,
+  fifteen: 15,
+  sixteen: 16,
+  seventeen: 17,
+  eighteen: 18,
+  nineteen: 19,
+  twenty: 20,
+};
+// Longest-first, so a teen word never matches its unit prefix ("fourteen"
+// must not read as "four"); the trailing \b is the second guard — after a
+// unit match the teen's next letter is a word character, so the boundary
+// fails and the engine backtracks to the full word. Digits first is fine:
+// digits and letters are disjoint.
+const NUMBER_WORD_PATTERN = Object.keys(NUMBER_WORDS)
+  .sort((a, b) => b.length - a.length)
+  .join('|');
+/** A clock value stated in prose: "reaches 6", "jumps to 6", "set to 5", "Clock 6" — or any of those with the value as a word, plus "becomes full at six". */
+const CLOCK_VALUE_REF = new RegExp(
+  `(?:reaches|jumps to|sets? to|becomes full at)\\s+(\\d+|${NUMBER_WORD_PATTERN})\\b|\\bclock\\s+(\\d+|${NUMBER_WORD_PATTERN})\\b`,
+  'gi',
+);
+
+/** A veto-scan value token as a number: digits parse directly, words look up. */
+function parseClockValueToken(token: string): number | null {
+  if (/^\d+$/.test(token)) return Number.parseInt(token, 10);
+  return NUMBER_WORDS[token.toLowerCase()] ?? null;
+}
 
 /**
  * Does rules text (a non-clean condition, or any row's effect) tie a
@@ -255,8 +307,9 @@ export function referencesHigherClockValue(
     }
     if (clauseSubject !== null) subject = clauseSubject;
     for (const match of clause.matchAll(CLOCK_VALUE_REF)) {
-      const value = Number.parseInt(match[1] ?? match[2], 10);
+      const value = parseClockValueToken(match[1] ?? match[2]);
       if (
+        value !== null &&
         value > candidate &&
         (subject === null || subject === 'generic' || subject === clockKey)
       ) {
@@ -384,6 +437,19 @@ export function trackerDirectiveText(input: {
   trackers: Array<{ name: string; value: number; limit: number }>;
   phase: TrackerPhaseState | null;
   /**
+   * The session campaign's length. The ending directive is one-shot-only
+   * (#1068): the ending applier completes one-shots alone, so on any
+   * other campaign every campaign_ending instruction — the MUST lines,
+   * the countdown, and the soft "declare when the story completes"
+   * sentence — is a claim the engine itself refuses (it nulls the
+   * field, but the DM's ending narration is not dropped). Absent (or
+   * anything but 'one-shot') the climax renders with no ending
+   * instruction at all — the fail-safe default, never a claim that
+   * does not hold. A flag-triggered (finalBeat) shape likewise never
+   * claims a filled clock: the trigger was the DM's flag, not the limit.
+   */
+  campaignLength?: string | null;
+  /**
    * #1083 pacing state, from the directive load's player-message count.
    * Renders only while no climax phase exists: once the budget forces the
    * climax, the climax lines below supersede it. The server decides WHEN
@@ -396,46 +462,72 @@ export function trackerDirectiveText(input: {
     lines.push(`- ${tracker.name} Clock: ${tracker.value}/${tracker.limit}`);
   }
   const phase = input.phase;
+  const oneShot = input.campaignLength === 'one-shot';
   if (phase?.phase === 'climax') {
-    if (phase.endingRequired && phase.finalBeat) {
+    // Fail safe on the declared length, never on a stored phase flag:
+    // the campaignLength doc says absent or non-'one-shot' lengths fail
+    // safe, and a stored budget phase can outlive a campaign_length edit,
+    // so budgetForced alone must not buy the final-beat MUST line (#1068
+    // verdict round 6). #1083's budget-forced directive tests declare
+    // their campaignLength: 'one-shot' explicitly instead. Round 7
+    // extends the same gate to the budget lines below: under a
+    // non-one-shot length a stored budget phase renders the non-required
+    // wording, never a MUST/declare line (verdict round 7).
+    if (phase.endingRequired && phase.finalBeat && oneShot) {
       lines.push(
         'The story has reached its final beat and the ending was not declared — ' +
           'the ending is required: you MUST set campaign_ending in this reply and ' +
           'narrate the ending.',
       );
-    } else if (phase.endingRequired && phase.budgetForced) {
+    } else if (phase.endingRequired && phase.budgetForced && oneShot) {
       lines.push(
         `The one-shot's turn budget is reached and the climax has run ${CLIMAX_TURN_LIMIT} turns ` +
           'without the ending being declared — the ending is required: you MUST set ' +
           'campaign_ending in this reply and narrate the ending.',
       );
-    } else if (phase.endingRequired) {
+    } else if (phase.endingRequired && oneShot) {
       lines.push(
         `The ${phase.clock} Clock reached its limit and the climax has run ${CLIMAX_TURN_LIMIT} turns ` +
           'without the ending being declared — the ending is required: you MUST set ' +
           'campaign_ending in this reply and narrate the ending.',
       );
-    } else if (phase.climaxTurns === 0 && phase.budgetForced) {
+    } else if (phase.climaxTurns === 0 && phase.budgetForced && oneShot) {
       lines.push(
         'The one-shot’s turn budget is reached — the climax is now. Drive the story ' +
           'to its final beats and declare campaign_ending when the story completes.',
       );
     } else if (phase.climaxTurns === 0) {
-      lines.push(
-        `The ${phase.clock} Clock has reached its limit — the climax is now. Drive the story ` +
-          'to its final beats and declare campaign_ending when the story completes.',
-      );
-    } else if (phase.budgetForced) {
+      if (oneShot) {
+        lines.push(
+          `The ${phase.clock} Clock has reached its limit — the climax is now. Drive the story ` +
+            'to its final beats and declare campaign_ending when the story completes.',
+        );
+      } else if (phase.finalBeat) {
+        lines.push('The story has reached its final beat. Drive the story to its final beats.');
+      } else {
+        lines.push(
+          `The ${phase.clock} Clock has reached its limit — the climax is now. Drive the story ` +
+            'to its final beats.',
+        );
+      }
+    } else if (phase.budgetForced && oneShot) {
       lines.push(
         `The story is in its budget-forced climax (turn ${phase.climaxTurns} of ` +
           `${CLIMAX_TURN_LIMIT} before the ending is required). Declare campaign_ending ` +
           'when the story completes.',
       );
-    } else {
+    } else if (oneShot) {
       lines.push(
         `The story is in its climax (the ${phase.clock} Clock reached its limit, turn ` +
           `${phase.climaxTurns} of ${CLIMAX_TURN_LIMIT} before the ending is required). ` +
           'Declare campaign_ending when the story completes.',
+      );
+    } else if (phase.finalBeat) {
+      lines.push('The story is in its climax. Drive the story to its final beats.');
+    } else {
+      lines.push(
+        `The story is in its climax (the ${phase.clock} Clock reached its limit). ` +
+          'Drive the story to its final beats.',
       );
     }
   }
@@ -492,6 +584,16 @@ interface TrackerState {
   trackers: Array<{ name: string; value: number; limit: number }>;
   phase: TrackerPhaseState | null;
   campaignLength: string | null;
+  starterCampaignId: string | null;
+  /**
+   * The session's last client-written scene description (free text).
+   * It is NOT the flagged turn's scene: nothing in the /generate path
+   * updates this column during a DM turn, so it lags at least a turn
+   * and is commonly null. It rides along as the only server-side
+   * "where is the party" field, labelled honestly — a real per-turn
+   * location would need a server-written scene first (see Friction).
+   */
+  currentSceneDescription: string | null;
   /**
    * #1083: player messages in the session (the pacing budget's turn unit),
    * counted only when the caller asks — the directive load needs it, the
@@ -515,6 +617,7 @@ async function loadTrackerState(
       starterCampaignId: gameSessions.starterCampaignId,
       sessionState: gameSessions.sessionState,
       campaignLength: campaigns.campaignLength,
+      currentSceneDescription: gameSessions.currentSceneDescription,
     })
     .from(gameSessions)
     .innerJoin(campaigns, eq(campaigns.id, gameSessions.campaignId))
@@ -567,6 +670,8 @@ async function loadTrackerState(
     trackers,
     phase: stored?.phase === 'climax' ? stored : null,
     campaignLength: session.campaignLength,
+    starterCampaignId: session.starterCampaignId,
+    currentSceneDescription: session.currentSceneDescription,
     playerTurns,
   };
 }
@@ -623,6 +728,7 @@ export async function loadStoryTrackerDirective(input: {
       text: trackerDirectiveText({
         trackers,
         phase: state.phase,
+        campaignLength: state.campaignLength,
         pacing: pacing
           ? { ...pacing, clockName: state.definitions[0]?.name ?? null }
           : null,
@@ -793,6 +899,10 @@ export async function applyStoryTrackers(input: {
     });
   }
 
+  // Set inside the transaction when this call arms the final-beat state;
+  // read after commit for the #1068 audit log below. A rollback throws
+  // out of the transaction, so the log never fires for an uncommitted arm.
+  let armedFinalBeatThisCall = false;
   const { result, forceEndingClock, forceIsNew } = await db.transaction(async (tx) => {
     const finish = (
       outcome: StoryTrackerOutcome,
@@ -931,6 +1041,7 @@ export async function applyStoryTrackers(input: {
       // safety net trips — with no clock at its limit, the phase is the
       // trigger's own (the first defined clock names it, when the
       // campaign has one; Hark's run had the Clock at 1/6).
+      armedFinalBeatThisCall = true;
       if (!phaseToStore) {
         phaseToStore = {
           phase: 'climax',
@@ -981,6 +1092,67 @@ export async function applyStoryTrackers(input: {
     if (unknownClock) return finish('unknown_clock');
     return finish('no_changes', 0, forceClock, forceIsNew);
   });
+
+  if (armedFinalBeatThisCall && result.outcome === 'applied') {
+    // #1068: the flag is the DM's own report, and no machine-readable
+    // final-location marker exists in campaign_rules to check it against
+    // (condition/effect are free text; metadata carries only
+    // limit/at_limit), so an automated mismatch comparison cannot be
+    // built on current data — inventing a fuzzy text match would log
+    // noise and could misjudge a legitimate flag. What the server can
+    // do is make every armed flag auditable: the post-turn clock
+    // snapshot (definitions merged like the directive, so a defined-
+    // but-untouched clock reads 0 instead of vanishing), the player
+    // message this turn answers, and the starter campaign — the join
+    // keys that let a reviewer find the flagged turn. The scene is the
+    // last client-written one, not the flagged turn's (see the
+    // TrackerState comment); it rides along labelled as such.
+    // Fail-open like the other audit logs here: a failed read must
+    // never cost the turn the flag armed on.
+    // Covered by final-beat-audit-log.test.ts (fires once on an arm,
+    // never on a rollback or an already_applied Retry) and by the
+    // stdout-capture test in story-ending.real-db.test.ts (fires once
+    // on a real arm turn, nothing new on a Retry replay).
+    try {
+      const rows = await db
+        .select({
+          name: sessionTrackers.name,
+          value: sessionTrackers.value,
+          limit: sessionTrackers.limit,
+        })
+        .from(sessionTrackers)
+        .where(eq(sessionTrackers.sessionId, sessionId));
+      const storedByKey = new Map(rows.map((row) => [normalizeClockName(row.name), row]));
+      const clocks = state.definitions.map(
+        (definition) =>
+          storedByKey.get(normalizeClockName(definition.name)) ?? {
+            name: definition.name,
+            value: 0,
+            limit: definition.limit,
+          },
+      );
+      for (const row of rows) {
+        if (
+          !state.definitions.some(
+            (d) => normalizeClockName(d.name) === normalizeClockName(row.name),
+          )
+        ) {
+          clocks.push(row);
+        }
+      }
+      logger.info({
+        msg: 'DM_STORY_TRACKER_FINAL_BEAT_FLAGGED',
+        sessionId,
+        playerMessageId: message.id,
+        starterCampaignId: state.starterCampaignId,
+        campaignLength: state.campaignLength,
+        clocks,
+        lastClientScene: state.currentSceneDescription,
+      });
+    } catch (error) {
+      logger.warn({ msg: 'DM_STORY_TRACKER_FINAL_BEAT_AUDIT_FAILED', sessionId, error });
+    }
+  }
 
   if (forceEndingClock) {
     const clock: ClockDefinition = forceEndingClock;

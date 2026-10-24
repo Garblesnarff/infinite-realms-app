@@ -300,6 +300,175 @@ describe('parseClockDefinitions fail-closed (strategist FIX, PR #1053)', () => {
   });
 });
 
+describe('parseClockDefinitions word-form limits (#1068)', () => {
+  // The strategist's shape: a limit written as a word ("becomes full at
+  // six") states a higher value just as surely as a digit, so it must
+  // trip the fail-closed rule the same way.
+  test('a word-form higher value in an effect vetoes the prose limit', () => {
+    const rows = [
+      ...[2, 3, 4, 5].map((n) => ({
+        condition: `the Score Clock reaches ${n}`,
+        effect: `The Score Clock stands at ${n} of 6 segments.`,
+        metadata: {},
+      })),
+      {
+        condition: 'the hero pulls the Tuner’s wedge',
+        effect: 'The Score Clock becomes full at six.',
+        metadata: {},
+      },
+    ];
+    expect(parseClockDefinitions(rows)).toEqual([]);
+    expect(parseClockDefinitions([...rows].reverse())).toEqual([]);
+  });
+
+  test('word-form values in the other veto-scan verb shapes veto too', () => {
+    const shapes = [
+      'The Score Clock jumps to six.',
+      'The Score Clock reaches six and the hero never offers a phrase.',
+      'The Score Clock is set to six.',
+      'The Score Clock stands at five, the tally at Clock six.',
+    ];
+    for (const effect of shapes) {
+      const rows = [
+        ...[2, 3, 4, 5].map((n) => ({
+          condition: `the Score Clock reaches ${n}`,
+          effect: `The Score Clock stands at ${n} of 6 segments.`,
+          metadata: {},
+        })),
+        { condition: 'the hero pulls the Tuner’s wedge', effect, metadata: {} },
+      ];
+      expect(parseClockDefinitions(rows)).toEqual([]);
+    }
+  });
+
+  test('every teen word vetoes against a clean limit below it (self-review R1)', () => {
+    // Regression: the first alternation order let a teen match its unit
+    // prefix ("fourteen" read as 4, "sixteen" as 6), so fourteen-vs-5
+    // and sixteen-vs-6 vetoed nothing. Clean rows to 6 catch both.
+    const teens = [
+      'eleven',
+      'twelve',
+      'thirteen',
+      'fourteen',
+      'fifteen',
+      'sixteen',
+      'seventeen',
+      'eighteen',
+      'nineteen',
+    ];
+    for (const word of teens) {
+      const rows = [
+        ...[2, 3, 4, 5, 6].map((n) => ({
+          condition: `the Score Clock reaches ${n}`,
+          effect: `The Score Clock stands at ${n} of 6 segments.`,
+          metadata: {},
+        })),
+        {
+          condition: 'the hero pulls the Tuner’s wedge',
+          effect: `The Score Clock becomes full at ${word}.`,
+          metadata: {},
+        },
+      ];
+      expect(parseClockDefinitions(rows)).toEqual([]);
+    }
+  });
+
+  test('a word-form value in a non-clean condition vetoes too', () => {
+    // Non-clean rows scan condition + effect, so a word value hiding
+    // in the condition trips the rule just like one in the effect.
+    const rows = [
+      ...[2, 3, 4, 5].map((n) => ({
+        condition: `the Score Clock reaches ${n}`,
+        effect: `The Score Clock stands at ${n} of 6 segments.`,
+        metadata: {},
+      })),
+      {
+        condition: 'the Score Clock reaches six when the wedge is pulled',
+        effect: 'The hero never offers a phrase.',
+        metadata: {},
+      },
+    ];
+    expect(parseClockDefinitions(rows)).toEqual([]);
+  });
+
+  test('an uppercase word-form value vetoes too', () => {
+    const rows = [
+      ...[2, 3, 4, 5].map((n) => ({
+        condition: `the Score Clock reaches ${n}`,
+        effect: `The Score Clock stands at ${n} of 6 segments.`,
+        metadata: {},
+      })),
+      {
+        condition: 'the hero pulls the Tuner’s wedge',
+        effect: 'The Score Clock becomes full at Six.',
+        metadata: {},
+      },
+    ];
+    expect(parseClockDefinitions(rows)).toEqual([]);
+  });
+
+  test('a word-form value at or below the clean limit vetoes nothing', () => {
+    const rows = [
+      ...[2, 4, 6].map((n) => ({
+        condition: `the Dawn Clock reaches ${n}`,
+        effect: `The Dawn Clock stands at ${n} of 6 segments.`,
+        metadata: {},
+      })),
+      {
+        condition: 'the hero rests',
+        effect: 'The Dawn Clock becomes full at six.',
+        metadata: {},
+      },
+    ];
+    expect(parseClockDefinitions(rows)).toEqual([{ name: 'Dawn', limit: 6, atLimit: 'climax' }]);
+    const atFive = [
+      ...[2, 3, 4, 5].map((n) => ({
+        condition: `the Score Clock reaches ${n}`,
+        effect: `The Score Clock stands at ${n} of 6 segments.`,
+        metadata: {},
+      })),
+      {
+        condition: 'the hero rests',
+        effect: 'The Score Clock becomes full at five.',
+        metadata: {},
+      },
+    ];
+    expect(parseClockDefinitions(atFive)).toEqual([{ name: 'Score', limit: 5, atLimit: 'climax' }]);
+  });
+
+  test('a word-form higher value tied to a different clock vetoes nothing', () => {
+    const rows = [
+      ...[2, 3, 4, 5].map((n) => ({
+        condition: `the Dawn Clock reaches ${n}`,
+        effect: `The Dawn Clock stands at ${n} of 6 segments.`,
+        metadata: {},
+      })),
+      {
+        condition: 'the hero is caught at the shrine',
+        effect: 'The Setback counter reaches six and the Dawn Clock is set to five.',
+        metadata: {},
+      },
+    ];
+    expect(parseClockDefinitions(rows)).toEqual([{ name: 'Dawn', limit: 5, atLimit: 'climax' }]);
+  });
+
+  test('a metadata limit rescues a word-form veto, like a digit veto', () => {
+    const rows = [
+      ...[2, 3, 4, 5].map((n) => ({
+        condition: `the Score Clock reaches ${n}`,
+        effect: `The Score Clock stands at ${n} of 6 segments.`,
+        metadata: n === 5 ? { limit: 6 } : {},
+      })),
+      {
+        condition: 'the hero pulls the Tuner’s wedge',
+        effect: 'The Score Clock becomes full at six.',
+        metadata: {},
+      },
+    ];
+    expect(parseClockDefinitions(rows)).toEqual([{ name: 'Score', limit: 6, atLimit: 'climax' }]);
+  });
+});
+
 describe('trackerDirectiveText', () => {
   test('stored state renders as the tracker line', () => {
     const text = trackerDirectiveText({
@@ -330,6 +499,7 @@ describe('trackerDirectiveText', () => {
   test('a tripped safety net requires the ending', () => {
     const text = trackerDirectiveText({
       trackers: [{ name: 'Breath', value: 6, limit: 6 }],
+      campaignLength: 'one-shot',
       phase: {
         phase: 'climax',
         clock: 'Breath',
@@ -345,6 +515,7 @@ describe('trackerDirectiveText', () => {
   test('a final-beat-armed phase requires the ending without naming a filled clock', () => {
     const text = trackerDirectiveText({
       trackers: [{ name: 'Breath', value: 1, limit: 6 }],
+      campaignLength: 'one-shot',
       phase: {
         phase: 'climax',
         clock: 'Breath',
@@ -357,6 +528,125 @@ describe('trackerDirectiveText', () => {
     expect(text).toContain('final beat');
     expect(text).toContain('the ending is required');
     expect(text).toContain('Breath Clock: 1/6');
+  });
+
+  test('a one-shot climax in progress counts down to the required ending', () => {
+    const text = trackerDirectiveText({
+      trackers: [{ name: 'Breath', value: 6, limit: 6 }],
+      campaignLength: 'one-shot',
+      phase: {
+        phase: 'climax',
+        clock: 'Breath',
+        climaxTurns: 3,
+        endingRequired: false,
+        lastMessageId: 'm4',
+      },
+    });
+    expect(text).toContain('before the ending is required');
+  });
+
+  test('a non-one-shot climax never requires the ending (#1068)', () => {
+    // The ending applier completes one-shots alone, so on any other
+    // campaign the requirement line is a lie the engine itself refuses —
+    // and the soft "declare when the story completes" sentence is the
+    // same instruction without the MUST, so it goes too (self-review).
+    const text = trackerDirectiveText({
+      trackers: [{ name: 'Breath', value: 6, limit: 6 }],
+      campaignLength: 'full',
+      phase: {
+        phase: 'climax',
+        clock: 'Breath',
+        climaxTurns: 6,
+        endingRequired: true,
+        lastMessageId: 'm7',
+      },
+    });
+    expect(text).not.toContain('the ending is required');
+    expect(text).not.toContain('MUST set campaign_ending');
+    expect(text).not.toContain('before the ending is required');
+    expect(text).not.toContain('campaign_ending');
+    expect(text).toContain('in its climax');
+    expect(text).toContain('Breath Clock: 6/6');
+  });
+
+  test('a non-one-shot final-beat phase never requires the ending (#1068)', () => {
+    const text = trackerDirectiveText({
+      trackers: [{ name: 'Breath', value: 1, limit: 6 }],
+      campaignLength: 'full',
+      phase: {
+        phase: 'climax',
+        clock: 'Breath',
+        climaxTurns: 0,
+        endingRequired: true,
+        finalBeat: true,
+        lastMessageId: 'm2',
+      },
+    });
+    expect(text).not.toContain('the ending is required');
+    expect(text).not.toContain('MUST set campaign_ending');
+    expect(text).not.toContain('campaign_ending');
+    // The trigger was the flag, not a filled clock: the line must not
+    // claim the clock reached its limit (self-review).
+    expect(text).not.toContain('has reached its limit');
+    expect(text).toContain('final beat');
+    expect(text).toContain('Breath Clock: 1/6');
+  });
+
+  test('a budget-forced final-beat phase on a full campaign gets no final-beat MUST line (#1068 round 6)', () => {
+    // Verdict round 7, Required 1-2: every budgetForced rendering in
+    // the directive gates on oneShot, so a stored budget phase under a
+    // non-one-shot length renders the non-required wording and no branch
+    // emits campaign_ending (the shape falls through to the final-beat
+    // tail line, which carries no ending instruction).
+    const text = trackerDirectiveText({
+      trackers: [{ name: 'Breath', value: 3, limit: 6 }],
+      campaignLength: 'full',
+      phase: {
+        phase: 'climax',
+        clock: 'Breath',
+        climaxTurns: 6,
+        endingRequired: true,
+        finalBeat: true,
+        budgetForced: true,
+        lastMessageId: 'm66',
+      },
+    });
+    expect(text).not.toContain('campaign_ending');
+    expect(text).not.toContain('the ending is required');
+  });
+
+  test('a non-one-shot first climax turn carries no ending instruction (#1068)', () => {
+    const text = trackerDirectiveText({
+      trackers: [{ name: 'Breath', value: 6, limit: 6 }],
+      campaignLength: 'full',
+      phase: {
+        phase: 'climax',
+        clock: 'Breath',
+        climaxTurns: 0,
+        endingRequired: false,
+        lastMessageId: 'm1',
+      },
+    });
+    expect(text).toContain('the climax is now');
+    expect(text).not.toContain('campaign_ending');
+  });
+
+  test('a non-one-shot climax in progress with a final beat names no filled clock (#1068)', () => {
+    const text = trackerDirectiveText({
+      trackers: [{ name: 'Breath', value: 1, limit: 6 }],
+      campaignLength: 'full',
+      phase: {
+        phase: 'climax',
+        clock: 'Breath',
+        climaxTurns: 2,
+        endingRequired: true,
+        finalBeat: true,
+        lastMessageId: 'm3',
+      },
+    });
+    expect(text).toContain('in its climax');
+    expect(text).not.toContain('reached its limit');
+    expect(text).not.toContain('campaign_ending');
   });
 });
 
@@ -489,6 +779,7 @@ describe('one-shot pacing budget (#1083)', () => {
   test('a budget-forced climax says the budget forced it, never a filled clock', () => {
     const first = trackerDirectiveText({
       trackers: [{ name: 'Breath', value: 3, limit: 6 }],
+      campaignLength: 'one-shot',
       phase: {
         phase: 'climax',
         clock: 'Breath',
@@ -503,6 +794,7 @@ describe('one-shot pacing budget (#1083)', () => {
     expect(first).not.toContain('reached its limit');
     const tripped = trackerDirectiveText({
       trackers: [{ name: 'Breath', value: 3, limit: 6 }],
+      campaignLength: 'one-shot',
       phase: {
         phase: 'climax',
         clock: 'Breath',
@@ -533,6 +825,7 @@ describe('one-shot pacing budget (#1083)', () => {
     expect(
       trackerDirectiveText({
         trackers: [{ name: 'Breath', value: 3, limit: 6 }],
+        campaignLength: 'one-shot',
         phase: {
           phase: 'climax',
           clock: 'Breath',
