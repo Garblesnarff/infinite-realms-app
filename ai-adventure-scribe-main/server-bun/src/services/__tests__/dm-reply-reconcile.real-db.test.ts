@@ -38,6 +38,7 @@ import {
   featureUsageLog,
   gameSessions,
   inventoryItems,
+  storyItemEvents,
   levelProgression,
   spellSlotUsageLog,
   spells,
@@ -528,6 +529,7 @@ ${playerInput}
     inCombat?: boolean;
     playerInput: string;
     reply: Record<string, unknown>;
+    dmMessageId?: string;
   }): Promise<{
     status: number;
     body: Record<string, unknown>;
@@ -558,7 +560,7 @@ ${playerInput}
       .update(gameSessions)
       .set({ characterId: opts.linkSession === false ? null : character.id })
       .where(eq(gameSessions.id, sessionId));
-    const dmMessageId = crypto.randomUUID();
+    const dmMessageId = opts.dmMessageId ?? crypto.randomUUID();
     const auth = spyOn(authModule, 'authenticateRequest').mockResolvedValue({
       user: { userId, email: 'gp@example.test', plan: 'free' },
       error: null,
@@ -2018,9 +2020,7 @@ ${playerInput}
 
     afterAll(async () => {
       if (contextSessionIds.length) {
-        await database
-          .delete(gameSessions)
-          .where(inArray(gameSessions.id, contextSessionIds));
+        await database.delete(gameSessions).where(inArray(gameSessions.id, contextSessionIds));
       }
     });
 
@@ -3361,6 +3361,73 @@ ${playerInput}
     // Retry re-sends the same saved player message: the grant must not land twice.
     await dmTurn({ ...fighter, existingCharacter: first.character, playerInput, reply });
     expect(await sheetInventory(first.character.id)).toEqual([{ name: 'Stopper', quantity: 1 }]);
+  });
+
+  test('#1070: reconciling the same DM reply twice grants an item once', async () => {
+    const playerInput = 'I take the silver tasting spoon.';
+    await playerSays(playerInput);
+    const reply = storyReply('You take the spoon.', {
+      items: [{ name: 'Silver Tasting Spoon', quantity: 1, change: 'gain' }],
+    });
+    const first = await dmTurn({ ...fighter, playerInput, reply });
+    expect(await sheetInventory(first.character.id)).toEqual([
+      { name: 'Silver Tasting Spoon', quantity: 1 },
+    ]);
+    const second = await applyStoryItems({
+      userId,
+      sessionId,
+      dialogueId: first.dmMessageId,
+      items: reply.items,
+    });
+    expect(second).toBe('already_applied');
+    expect(await sheetInventory(first.character.id)).toEqual([
+      { name: 'Silver Tasting Spoon', quantity: 1 },
+    ]);
+  });
+
+  test('#1070: a late same-reply reconcile after another player row does not grant twice', async () => {
+    const playerInput = 'I take the silver tasting spoon.';
+    await playerSays(playerInput);
+    const reply = storyReply('You take the spoon.', {
+      items: [{ name: 'Silver Tasting Spoon', quantity: 1, change: 'gain' }],
+    });
+    const first = await dmTurn({ ...fighter, playerInput, reply });
+    expect(first.status).toBe(200);
+    await playerSays('I inspect the next display.');
+    const retry = await dmTurn({
+      ...fighter,
+      existingCharacter: first.character,
+      playerInput,
+      reply,
+      dmMessageId: first.dmMessageId,
+    });
+    expect(retry.status).toBe(200);
+    expect(await sheetInventory(first.character.id)).toEqual([
+      { name: 'Silver Tasting Spoon', quantity: 1 },
+    ]);
+  });
+
+  test('#1070: a pre-deploy null-dialogue marker still guards a retried route grant', async () => {
+    const playerInput = 'I take the silver scale.';
+    await playerSays(playerInput);
+    const reply = storyReply('You take the scale.', {
+      items: [{ name: 'Silver Scale', quantity: 1, change: 'gain' }],
+    });
+    const first = await dmTurn({ ...fighter, playerInput, reply });
+    await database
+      .update(storyItemEvents)
+      .set({ dialogueId: null })
+      .where(eq(storyItemEvents.characterId, first.character.id));
+    const retry = await dmTurn({
+      ...fighter,
+      existingCharacter: first.character,
+      playerInput,
+      reply,
+    });
+    expect(retry.status).toBe(200);
+    expect(await sheetInventory(first.character.id)).toEqual([
+      { name: 'Silver Scale', quantity: 1 },
+    ]);
   });
 
   test('#218 step 3: losing items removes them, and a retry does not remove twice', async () => {

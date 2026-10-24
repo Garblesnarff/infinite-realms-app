@@ -1568,6 +1568,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
               await applyStoryItems({
                 userId,
                 sessionId: castSessionId,
+                dialogueId: dmReply.messageId,
                 items: envelope.items,
                 rollRequested,
               });
