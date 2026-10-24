@@ -299,6 +299,66 @@ describeWithDb('#751 typed chat rests', () => {
     }
   });
 
+  it('a typed long rest wins over a DM reply that declares a short rest (D23-002)', async () => {
+    // Live failure, Hark D23-002 (build 85d20316): after a won fight, the typed
+    // 'we take a long rest' produced 'Short rest — no hit dice spent' and the
+    // spent slot stayed spent. The DM reply had declared a short rest (a
+    // post-combat breather narration), and the old precedence let the DM's
+    // field silently override the player's explicit words. The slot-restore
+    // assert is the discriminating one: a short rest never restores slots.
+    const world = await typedRestWorld('751-typed-long-vs-dm-short', 'we take a long rest', 3);
+    try {
+      expect(
+        await applyStoryRest({
+          userId: world.userId,
+          sessionId: world.sessionId,
+          rest: { type: 'short' },
+        }),
+      ).toBe('applied');
+      const after = await sheetState(world);
+      expect(after.hp).toBe(20);
+      expect(after.hitDiceUsed).toBe(2);
+      expect(after.slotsUsed).toEqual({ 1: 0, 2: 0 });
+      expect(after.featureUses).toEqual({ channel_divinity: 1, warding_flare: 3 });
+      expect(after.events).toEqual(['long']);
+      expect(after.engineLines).toEqual([
+        '⚙️ Engine: Long rest — 19 HP restored, spell slots restored, 1 hit dice regained.',
+      ]);
+    } finally {
+      await typedRestCleanup(world);
+    }
+  });
+
+  it('a typed short rest wins over a DM reply that declares a long rest', async () => {
+    // The symmetric half of the precedence rule: the player's explicit words
+    // decide, in both directions. A DM reply that upgrades the player's
+    // short rest to a long one must not restore slots the player did not
+    // ask to restore.
+    const world = await typedRestWorld('751-typed-short-vs-dm-long', 'I take a short rest.', 0);
+    setRngSeed(42);
+    try {
+      expect(
+        await applyStoryRest({
+          userId: world.userId,
+          sessionId: world.sessionId,
+          rest: { type: 'long' },
+        }),
+      ).toBe('applied');
+      const after = await sheetState(world);
+      expect(after.hp).toBe(20);
+      expect(after.hitDiceUsed).toBe(3);
+      expect(after.featureUses).toEqual({ channel_divinity: 1, warding_flare: 1 });
+      expect(after.slotsUsed).toEqual({ 1: 3, 2: 2 });
+      expect(after.events).toEqual(['short']);
+      expect(after.engineLines).toEqual([
+        '⚙️ Engine: Short rest — Hit Dice: d8 rolled 5 (+7 HP), d8 rolled 4 (+6 HP), d8 rolled 7 (+6 HP). 19 HP restored. Hit dice: 0 of 3 remaining.',
+      ]);
+    } finally {
+      setRngSeed(undefined);
+      await typedRestCleanup(world);
+    }
+  });
+
   it('leaves state untouched when the player message declares no rest', async () => {
     const world = await typedRestWorld('751-typed-none', 'I stay where I am.', 3);
     try {
