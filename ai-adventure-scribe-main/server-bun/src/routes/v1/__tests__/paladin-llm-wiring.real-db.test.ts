@@ -1164,6 +1164,7 @@ describeWithDb('typed equip through the DM generate route (#1059)', () => {
     world: EquipWorld,
     playerInput: string,
     messageId: string,
+    inCombat = true,
   ): Promise<Response> => {
     generatedText = JSON.stringify({
       text: 'Sera slips the shortbow from her shoulder and nocks an arrow.',
@@ -1172,7 +1173,7 @@ describeWithDb('typed equip through the DM generate route (#1059)', () => {
       prompt: 'The goblin snarls and raises its scimitar. What happens?',
       player_input: playerInput,
       sessionId: world.sessionId,
-      dmReply: { messageId, inCombat: true },
+      dmReply: { messageId, inCombat },
       provider: 'openrouter',
       requestType: 'user',
       maxTokens: 8192,
@@ -1287,5 +1288,26 @@ describeWithDb('typed equip through the DM generate route (#1059)', () => {
     expect(res.status).toBe(200);
     expect(await shortbowEquipped(world)).toBe(false);
     expect(await equipLines(world)).toHaveLength(0);
+  }, 30_000);
+
+  it('equips a typed draw on an ordinary story turn with no encounter', async () => {
+    const world = await seedEquipWorld('1059-story');
+    await db
+      .update(combatEncounters)
+      .set({ status: 'completed', endedAt: new Date(), endedReason: 'completed' })
+      .where(eq(combatEncounters.id, world.encounterId));
+
+    generatePrompts = [];
+    const res = await generateEquipTurn(
+      world,
+      'I draw my shortbow',
+      '10591059-4444-4555-8666-777777777777',
+      false,
+    );
+    expect(res.status).toBe(200);
+    expect(await shortbowEquipped(world)).toBe(true);
+    expect(generatePrompts.join('\n')).toContain('<weapon_equip>');
+    expect(generatePrompts.join('\n')).toContain('Shortbow');
+    expect(await equipLines(world)).toHaveLength(1);
   }, 30_000);
 });
