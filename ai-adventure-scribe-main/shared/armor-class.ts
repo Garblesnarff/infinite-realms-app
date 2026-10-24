@@ -15,6 +15,8 @@
  * `tests/armor-class.test.ts`, which fails if either side gains, loses or renumbers an entry.
  */
 
+import { defenseArmorClassBonus } from './fighting-style';
+
 /**
  * An equipment row as the two tables actually store it.
  *
@@ -235,13 +237,7 @@ export function describeArmorClass(
       base +
       dexterityBonus +
       shieldBonus +
-      (armor &&
-      Array.isArray(options.fightingStyles) &&
-      options.fightingStyles.some(
-        (style) => typeof style === 'string' && style.trim().toLowerCase() === 'defense',
-      )
-        ? 1
-        : 0),
+      defenseArmorClassBonus(options.fightingStyles, armor !== null),
     armor,
     dexterityBonus,
     shieldBonus,

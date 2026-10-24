@@ -21,7 +21,7 @@ export type CatalogWeapon = {
   subcategory?: string;
   damage?: { dice?: string; type?: string };
   range?: { normal?: number; long?: number };
-  weaponProperties?: { finesse?: boolean };
+  weaponProperties?: { finesse?: boolean; twoHanded?: boolean; versatile?: boolean };
 };
 
 const catalogWeapons = weaponCatalog as CatalogWeapon[];

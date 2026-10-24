@@ -767,6 +767,11 @@ export interface DamageCalculationInput {
   vulnerabilities?: DamageType[];
   immunities?: DamageType[];
   damageRoll?: number;
+  /**
+   * Called once per weapon damage die, including the extra dice on a critical.
+   * Great Weapon Fighting uses it to reroll a 1 or a 2. Absent, the face stands.
+   */
+  adjustDamageDie?: (face: number, sides: number) => number;
 }
 
 /**

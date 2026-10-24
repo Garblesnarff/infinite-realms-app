@@ -814,4 +814,44 @@ describe('deriveCombatEntryFirstAction', () => {
     expect(firstAction?.reach).toBeUndefined();
     expect(firstAction?.roll_request).toBeDefined();
   });
+
+  it('adds Archery to the opening attack prompt for a ranged weapon (#824)', async () => {
+    const firstAction = await deriveCombatEntryFirstAction(
+      {
+        sessionId: 'session-1',
+        combatState: state,
+        player: { characterId: 'character-1', name: 'Rook' },
+        declaredAttack: { ...declaredDaggerAttack, weaponName: 'Longbow' },
+      },
+      {
+        ...deps,
+        getParticipantAbilityProfile: async () => ({
+          level: 1,
+          scores: { str: 16, dex: 14 },
+          savingThrowProficiencies: [],
+          saveBonuses: {},
+          spellIds: [],
+          fightingStyles: ['Archery'],
+        }),
+        listEquippedWeaponProfiles: async () => [
+          {
+            id: 'inventory-bow',
+            name: 'Longbow',
+            damageDice: '1d8',
+            damageType: 'piercing',
+            normalRange: 150,
+            magicBonus: 0,
+            finesse: false,
+            ranged: true,
+            rangedWeapon: true,
+            meleeWeapon: false,
+            proficient: true,
+          },
+        ],
+      },
+    );
+
+    // DEX 14 (+2) + proficiency (+2) + Archery (+2).
+    expect(firstAction?.roll_request?.modifier).toBe(6);
+  });
 });

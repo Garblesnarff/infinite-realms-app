@@ -36,6 +36,7 @@ export function calculateDamage(input: DamageCalculationInput): DamageCalculatio
     vulnerabilities = [],
     immunities = [],
     damageRoll,
+    adjustDamageDie,
   } = input;
 
   // Check for immunity first
@@ -63,7 +64,7 @@ export function calculateDamage(input: DamageCalculationInput): DamageCalculatio
     }
   } else {
     // Parse dice notation and roll
-    baseDamage = rollDamageDice(damageDice, isCritical) + damageBonus;
+    baseDamage = rollDamageDice(damageDice, isCritical, adjustDamageDie) + damageBonus;
   }
 
   const damageBeforeResistances = baseDamage;
@@ -123,7 +124,11 @@ export function resolveCriticalHit(
  * Helper: Roll damage dice
  * Parses dice notation like "1d8", "2d6", etc.
  */
-export function rollDamageDice(damageDice: string, isCritical: boolean): number {
+export function rollDamageDice(
+  damageDice: string,
+  isCritical: boolean,
+  adjustDie?: (face: number, sides: number) => number,
+): number {
   const match = /^(\d+)d(\d+)$/i.exec(damageDice.trim());
   if (!match || !match[1] || !match[2]) {
     throw new ValidationError(`Invalid dice notation: ${damageDice}`, { damageDice });
@@ -137,7 +142,8 @@ export function rollDamageDice(damageDice: string, isCritical: boolean): number 
 
   let total = 0;
   for (let i = 0; i < diceToRoll; i++) {
-    total += rollDie(sides);
+    const face = rollDie(sides);
+    total += adjustDie ? adjustDie(face, sides) : face;
   }
 
   return total;

@@ -21,11 +21,7 @@ function ability(score: number): { score: number; modifier: number; savingThrow:
   return { score, modifier: Math.floor((score - 10) / 2), savingThrow: false };
 }
 
-function makeCharacter(
-  characterClass: CharacterClass,
-  strength: number,
-  level: number,
-): Character {
+function makeCharacter(characterClass: CharacterClass, strength: number, level: number): Character {
   return {
     id: 'char-1',
     user_id: 'user-1',
@@ -105,5 +101,30 @@ describe('getWeaponAttackBonus with magic weapons (#155)', () => {
 
     expect(result).not.toBeNull();
     expect(result?.proficient).toBe(false);
+  });
+});
+
+function withDexterity(character: Character, dexterity: number): Character {
+  const scores = character.abilityScores;
+  if (!scores) throw new Error('fixture missing ability scores');
+  return { ...character, abilityScores: { ...scores, dexterity: ability(dexterity) } };
+}
+
+describe('fighting styles on the sheet attack bonus (#824)', () => {
+  it('adds Archery +2 to a light crossbow (DEX 14, proficient: +4 becomes +6)', () => {
+    const character = withDexterity(makeCharacter(fighter, 10, 1), 14);
+    character.fightingStyles = ['Archery'];
+    // Hark N23-019: Bram's light crossbow showed +4. DEX +2 and proficiency +2
+    // are already in that number; Archery is the missing +2.
+    expect(getWeaponAttackBonus(character, 'crossbow-light', 2)?.bonus).toBe(6);
+  });
+
+  it('adds Archery to a dart, a ranged weapon, and not to a thrown javelin', () => {
+    const character = withDexterity(makeCharacter(fighter, 16, 1), 14);
+    character.fightingStyles = ['archery'];
+    // Dart is a ranged weapon (finesse, DEX 14): +2 + 2 proficiency + 2 Archery.
+    expect(getWeaponAttackBonus(character, 'dart', 2)?.bonus).toBe(6);
+    // Javelin is a melee weapon with the thrown property. STR 16: +3 + 2, no Archery.
+    expect(getWeaponAttackBonus(character, 'javelin', 2)?.bonus).toBe(5);
   });
 });
