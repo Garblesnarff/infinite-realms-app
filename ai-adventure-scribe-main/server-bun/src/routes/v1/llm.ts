@@ -1697,6 +1697,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // nulled on the envelope, so an unapplied claim never reads as
         // engine-applied.
         let storyTrackersApplied = false;
+        let trackerStepRan = false;
         if (
           envelope &&
           (envelope.tracker_changes ||
@@ -1722,6 +1723,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
               changesDeferred,
               finalBeatReached: envelope.final_beat_reached === true,
             });
+            trackerStepRan = true;
             const submittedChanges = Array.isArray(envelope.tracker_changes)
               ? envelope.tracker_changes.length
               : 0;
@@ -1735,6 +1737,41 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         }
         if (envelope?.tracker_changes && !storyTrackersApplied) {
           envelope.tracker_changes = null;
+        }
+        // #1062: the tracker line the player sees is rendered by the client
+        // from server state, not from the DM's prose — the bracket-line leak
+        // dies with the prose line. The field is attached here, after the
+        // tracker step, so it carries POST-apply stored state (the
+        // directive-load values lag one turn on exactly the turns that move
+        // the clock). It is NOT a model-facing schema property: the server
+        // attaches it after the story appliers, like the stored ending
+        // summary above, and `parseDmResponse` passes unknown fields
+        // through, so it survives the response-text rewrite below. Only on
+        // turns the tracker step ran — /generate gains no unconditional
+        // tracker read. A model-supplied value is stripped first, on every
+        // turn: the field is server truth, never the DM's own count, and
+        // without the strip it would survive on non-step turns (the block
+        // below is skipped) and on step turns with a failed or empty read
+        // (the assignment is guarded). Absent (not empty) when the read
+        // fails or nothing is stored, so a message on such a turn shows no
+        // line; earlier messages keep the line they carried.
+        if (envelope) {
+          delete envelope.story_trackers;
+        }
+        if (envelope && trackerStepRan && castSessionId) {
+          try {
+            const { loadStoredStoryTrackers } =
+              await import('../../services/dm/story-tracker.js');
+            const storedTrackers = await loadStoredStoryTrackers({
+              sessionId: castSessionId,
+              userId,
+            });
+            if (storedTrackers && storedTrackers.length > 0) {
+              envelope.story_trackers = storedTrackers;
+            }
+          } catch (error) {
+            logger.warn({ msg: 'DM_STORY_TRACKER_ENVELOPE_FAILED', sessionId: castSessionId, error });
+          }
         }
         // #1042 FIX (strategist, PR #1053): the safety net is a real
         // request, not only a prompt line. This turn's directive already
@@ -1931,7 +1968,22 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           // would let a prose-only (null envelope) reply pass the check.
           parsed: envelope !== null,
           text: rewriteNarrationSegmentsFromEnvelope(
-            responseText === result.text ? envelope : parseLlmEnvelope(responseText),
+            responseText === result.text
+              ? envelope
+              : (() => {
+                  // #1062 self-review: the seating path re-parses the
+                  // pre-applier snapshot string, which bypasses the live
+                  // envelope — so carry the server-attached field (or its
+                  // absence) across, or a model-supplied value in the
+                  // snapshot would survive the strip above, and a genuine
+                  // server value would be dropped for the seating turn.
+                  const seated = parseLlmEnvelope(responseText);
+                  if (seated) {
+                    if (envelope?.story_trackers) seated.story_trackers = envelope.story_trackers;
+                    else delete seated.story_trackers;
+                  }
+                  return seated;
+                })(),
             responseText,
           ),
           provider: result.provider,

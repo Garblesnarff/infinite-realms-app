@@ -1048,6 +1048,96 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
     expect(nextPrompt).toContain('Breath Clock: 6/6');
   }, 30_000);
 
+  test('#1062: the reply envelope carries the tracker line from post-apply server state', async () => {
+    const { characterId, sessionId } = await seedWorld('envelope', 'breath');
+    const prompts: string[] = [];
+    const envelopeOf = (body: Record<string, unknown>): Record<string, unknown> =>
+      JSON.parse(body.text as string) as Record<string, unknown>;
+
+    // Clock-moving turn: the envelope carries the POST-apply values, and
+    // the stored row agrees — not the directive-load values, which lag
+    // one turn on exactly the turns that move the clock.
+    const moved = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We finish the landing and move on.',
+      reply: trackerReply([{ name: 'Breath', set: 5 }]),
+      capturedPrompts: prompts,
+    });
+    expect(moved.status).toBe(200);
+    expect(envelopeOf(moved.body).story_trackers).toEqual([{ name: 'Breath', value: 5, limit: 6 }]);
+    expect((await trackerRow(sessionId, 'Breath'))?.value).toBe(5);
+
+    // The tick that fills the clock, then a no-change turn: the step runs
+    // (climax phase) with no changes, and the envelope still carries the
+    // stored values.
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We linger until the light changes.',
+      reply: trackerReply([{ name: 'Breath', delta: 1 }]),
+      capturedPrompts: prompts,
+    });
+    expect((await trackerRow(sessionId, 'Breath'))?.value).toBe(6);
+    expect((await trackerPhase(sessionId))?.tracker?.phase).toBe('climax');
+    const held = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'What happens now?',
+      reply: { ...baseReply },
+      capturedPrompts: prompts,
+    });
+    expect(held.status).toBe(200);
+    expect(envelopeOf(held.body).story_trackers).toEqual([{ name: 'Breath', value: 6, limit: 6 }]);
+  }, 30_000);
+
+  test('#1062: a turn the tracker step does not run carries no tracker field', async () => {
+    const { characterId, sessionId } = await seedWorld('envelope-quiet', 'breath');
+    const prompts: string[] = [];
+    const quiet = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We walk on down the road.',
+      reply: { ...baseReply },
+      capturedPrompts: prompts,
+    });
+    expect(quiet.status).toBe(200);
+    const envelope = JSON.parse(quiet.body.text as string) as Record<string, unknown>;
+    expect('story_trackers' in envelope).toBe(false);
+  }, 30_000);
+
+  test('#1062 self-review: a model-supplied story_trackers value never renders as server truth', async () => {
+    const { characterId, sessionId } = await seedWorld('envelope-forged', 'breath');
+    const prompts: string[] = [];
+    const forged = [{ name: 'Breath', value: 99, limit: 6 }];
+
+    // Quiet turn (the tracker step does not run): the forged value is
+    // stripped, so the envelope carries no field at all.
+    const quiet = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We walk on down the road.',
+      reply: { ...baseReply, story_trackers: forged },
+      capturedPrompts: prompts,
+    });
+    expect(quiet.status).toBe(200);
+    expect('story_trackers' in (JSON.parse(quiet.body.text as string) as Record<string, unknown>)).toBe(false);
+
+    // Clock-moving turn: the stored post-apply value wins, not the forgery.
+    const moved = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We finish the landing and move on.',
+      reply: { ...trackerReply([{ name: 'Breath', set: 5 }]), story_trackers: forged },
+      capturedPrompts: prompts,
+    });
+    expect(moved.status).toBe(200);
+    expect((JSON.parse(moved.body.text as string) as Record<string, unknown>).story_trackers).toEqual([
+      { name: 'Breath', value: 5, limit: 6 },
+    ]);
+    expect((await trackerRow(sessionId, 'Breath'))?.value).toBe(5);
+  }, 30_000);
+
   test('clock reaching its limit at at_limit=ending completes the session through the ending path', async () => {
     const { characterId, sessionId } = await seedWorld('ending', 'score');
     const prompts: string[] = [];

@@ -132,6 +132,12 @@ export interface AIResponse {
   combat_actions?: DMCombatAction[];
   /** #2563: DM-declared non-lethal combat exits, forwarded to the tactical-map end route. */
   combat_exits?: Array<{ participant_id: string; exit: 'fled' | 'surrendered' | 'withdrew' }>;
+  /**
+   * #1062, server-attached: the session's stored story trackers after this
+   * turn's tracker step, for the client to render the tracker line from.
+   * Present only on turns the server's tracker step ran; absent otherwise.
+   */
+  story_trackers?: Array<{ name: string; value: number; limit: number }>;
   combatants?: unknown[];
   combatDetection?: {
     isCombat: boolean;

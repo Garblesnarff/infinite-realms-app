@@ -801,6 +801,121 @@ it('removes the model d20 bonus from every visible projection of a narrative rol
   );
 });
 
+describe('Server-attached story trackers (#1062)', () => {
+  // Self-contained params: defaultParams lives inside the processDMResponse
+  // describe above, so this top-level block builds its own (mirroring the
+  // INVESTIGATION test's shape).
+  const trackerParams = (rawResponse: string) => ({
+    rawResponse,
+    context: { campaignId: 'campaign-456', characterId: 'character-789' },
+    message: 'We finish the landing and move on.',
+    conversationHistory: [],
+    isFirstMessage: false,
+    voiceContext: null,
+    deferSideEffects: true,
+  });
+  const wireWithTrackers = (storyTrackers: unknown) =>
+    JSON.stringify({
+      text: 'The grove breathes around you, and time moves in the hollow.',
+      options: [],
+      narration_segments: [],
+      roll_requests: [],
+      combat_transition: 'none',
+      combatants: [],
+      combat_actions: [],
+      map_actions: [],
+      handout_actions: [],
+      scene_spec: null,
+      story_trackers: storyTrackers,
+    });
+
+  it('carries the server-attached tracker line onto the result', async () => {
+    const result = await processDMResponse(
+      trackerParams(wireWithTrackers([{ name: 'Breath', value: 5, limit: 6 }])),
+    );
+
+    expect(result.story_trackers).toEqual([{ name: 'Breath', value: 5, limit: 6 }]);
+  });
+
+  it('drops malformed entries and carries nothing when none survive', async () => {
+    const result = await processDMResponse(
+      trackerParams(
+        wireWithTrackers([
+          { name: 'Breath', value: 5, limit: 6 },
+          { name: '', value: 3, limit: 6 },
+          { name: 'Dawn', value: 'three', limit: 4 },
+          { name: 'Ember', value: 2, limit: 0 },
+          'not-an-entry',
+        ]),
+      ),
+    );
+
+    expect(result.story_trackers).toEqual([{ name: 'Breath', value: 5, limit: 6 }]);
+
+    const empty = await processDMResponse(
+      trackerParams(wireWithTrackers([{ name: '', value: 1, limit: 6 }])),
+    );
+    expect(empty.story_trackers).toBeUndefined();
+  });
+
+  it('carries nothing when the field is absent', async () => {
+    const wire = JSON.parse(wireWithTrackers([])) as Record<string, unknown>;
+    delete wire.story_trackers;
+    const result = await processDMResponse(trackerParams(JSON.stringify(wire)));
+    expect(result.story_trackers).toBeUndefined();
+  });
+
+  it('never adopts story_trackers from a nested inner envelope', async () => {
+    // Self-review Required 2: the inner envelope lives inside the model's
+    // text field, so it is model-authored — a server-only field must not
+    // be adopted from it, even though the outer carries nothing.
+    const inner = {
+      text: 'The grove breathes around you, and time moves in the hollow.',
+      options: ['Press on'],
+      narration_segments: [],
+      story_trackers: [{ name: 'Breath', value: 99, limit: 6 }],
+    };
+    const outer = {
+      text: JSON.stringify(inner),
+      options: [],
+      narration_segments: [],
+      roll_requests: [],
+      combat_transition: 'none',
+      combatants: [],
+      combat_actions: [],
+      map_actions: [],
+      handout_actions: [],
+      scene_spec: null,
+    };
+    const result = await processDMResponse(trackerParams(JSON.stringify(outer)));
+    expect(result.story_trackers).toBeUndefined();
+  });
+
+  it('lets an outer story_trackers value win over a nested inner copy', async () => {
+    const inner = {
+      text: 'The grove breathes around you, and time moves in the hollow.',
+      options: ['Press on'],
+      narration_segments: [],
+      story_trackers: [{ name: 'Breath', value: 99, limit: 6 }],
+    };
+    const outer = {
+      text: JSON.stringify(inner),
+      options: [],
+      narration_segments: [],
+      roll_requests: [],
+      combat_transition: 'none',
+      combatants: [],
+      combat_actions: [],
+      map_actions: [],
+      handout_actions: [],
+      scene_spec: null,
+      story_trackers: [{ name: 'Breath', value: 5, limit: 6 }],
+    };
+    const result = await processDMResponse(trackerParams(JSON.stringify(outer)));
+    expect(result.story_trackers).toEqual([{ name: 'Breath', value: 5, limit: 6 }]);
+  });
+});
+
 describe('nested reply envelopes (#1008)', () => {
   const defaultParams = {
     context: { campaignId: 'campaign-456', characterId: 'character-789' },

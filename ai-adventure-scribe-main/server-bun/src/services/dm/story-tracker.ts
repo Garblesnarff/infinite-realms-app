@@ -387,11 +387,41 @@ export function trackerDirectiveText(input: {
   if (lines.length === 0) return null;
   return (
     '<story_clock>\n' +
-    'Engine story clock state (server truth — render the tracker line from these values, ' +
-    'never from your own count). When the story ticks a clock, report it in tracker_changes.\n' +
+    'Engine story clock state (server truth — never from your own count). The game UI ' +
+    'shows the tracker line from these values (#1062), so do NOT render a tracker line ' +
+    'in your prose. When the story ticks a clock, report it in tracker_changes.\n' +
     lines.join('\n') +
     '\n</story_clock>'
   );
+}
+
+/**
+ * The stored trackers as the player sees them: every defined clock renders
+ * from turn one (a defined-but-untouched clock shows its start value, so a
+ * second clock never vanishes from the line once the first one moves), and
+ * a stored row whose rule was edited away still renders — it is engine
+ * state the DM already played against. Shared by the directive load and
+ * the #1062 envelope read so the two can never disagree about the line.
+ */
+export function mergeStoredTrackers(
+  definitions: ClockDefinition[],
+  stored: Array<{ name: string; value: number; limit: number }>,
+): Array<{ name: string; value: number; limit: number }> {
+  const storedByKey = new Map(
+    stored.map((tracker) => [normalizeClockName(tracker.name), tracker]),
+  );
+  const trackers = definitions.map((definition) => {
+    const row = storedByKey.get(normalizeClockName(definition.name));
+    return row ?? { name: definition.name, value: 0, limit: definition.limit };
+  });
+  for (const tracker of stored) {
+    if (
+      !definitions.some((d) => normalizeClockName(d.name) === normalizeClockName(tracker.name))
+    ) {
+      trackers.push(tracker);
+    }
+  }
+  return trackers;
 }
 
 interface TrackerState {
@@ -467,23 +497,10 @@ export async function loadStoryTrackerDirective(input: {
   try {
     const state = await loadTrackerState(input.sessionId, input.userId);
     if (!state) return { text: null, phase: null, endingAtLimit: false, campaignLength: null };
-    // Every defined clock renders from turn one: a clock with a stored row
-    // shows its stored value, a defined-but-untouched clock shows its
-    // start value (so a second clock never vanishes from the line once the
-    // first one moves), and a stored row whose rule was edited away still
-    // renders — it is engine state the DM already played against.
+    const trackers = mergeStoredTrackers(state.definitions, state.trackers);
     const storedByKey = new Map(
       state.trackers.map((tracker) => [normalizeClockName(tracker.name), tracker]),
     );
-    const trackers = state.definitions.map((definition) => {
-      const stored = storedByKey.get(normalizeClockName(definition.name));
-      return stored ?? { name: definition.name, value: 0, limit: definition.limit };
-    });
-    for (const tracker of state.trackers) {
-      if (!state.definitions.some((d) => normalizeClockName(d.name) === normalizeClockName(tracker.name))) {
-        trackers.push(tracker);
-      }
-    }
     // An `at_limit: 'ending'` clock already at its limit means a forced
     // ending was owed and not delivered (the fire is level-triggered in
     // the applier): the route runs the tracker step on this turn too, so
@@ -502,6 +519,30 @@ export async function loadStoryTrackerDirective(input: {
   } catch (error) {
     logger.warn({ msg: 'DM_STORY_TRACKER_DIRECTIVE_FAILED', sessionId: input.sessionId, error });
     return { text: null, phase: null, endingAtLimit: false, campaignLength: null };
+  }
+}
+
+/**
+ * #1062: the stored trackers for the reply envelope, read AFTER the
+ * tracker step applied this turn — the post-apply values, never the
+ * directive-load values (those lag one turn on exactly the turns that
+ * move the clock). The route calls this only on turns the tracker step
+ * ran, so /generate gains no unconditional tracker read. Null when the
+ * session is unknown or the read fails: the envelope then carries no
+ * field and the client keeps its last line (or none) — a failed read
+ * never costs the player their turn or invents state.
+ */
+export async function loadStoredStoryTrackers(input: {
+  sessionId: string;
+  userId: string;
+}): Promise<Array<{ name: string; value: number; limit: number }> | null> {
+  try {
+    const state = await loadTrackerState(input.sessionId, input.userId);
+    if (!state) return null;
+    return mergeStoredTrackers(state.definitions, state.trackers);
+  } catch (error) {
+    logger.warn({ msg: 'DM_STORY_TRACKER_ENVELOPE_FAILED', sessionId: input.sessionId, error });
+    return null;
   }
 }
 
