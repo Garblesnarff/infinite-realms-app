@@ -995,10 +995,25 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
   const trackerPhase = async (
     sessionId: string,
   ): Promise<
-    { tracker?: { phase?: string; climaxTurns?: number; endingRequired?: boolean } } | undefined
+    | {
+        tracker?: {
+          phase?: string;
+          climaxTurns?: number;
+          endingRequired?: boolean;
+          budgetForced?: boolean;
+        };
+      }
+    | undefined
   > =>
     (await sessionRow(sessionId))?.sessionState as
-      | { tracker?: { phase?: string; climaxTurns?: number; endingRequired?: boolean } }
+      | {
+          tracker?: {
+            phase?: string;
+            climaxTurns?: number;
+            endingRequired?: boolean;
+            budgetForced?: boolean;
+          };
+        }
       | undefined;
 
   test('clock 5 + delta 1 at at_limit=climax: phase flips, the next prompt announces the climax, nothing ends', async () => {
@@ -1861,4 +1876,74 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
     expect((await sessionRow(sessionId))?.status).toBe('completed');
     expect(await endingRowsFor(sessionId)).toHaveLength(1);
   }, 60_000);
+
+  test('#1083: a DM that never advances the clock still completes at budget + 6', async () => {
+    // The S-004 shape: a stubbed DM that sends no tracker_changes, no
+    // final beat and no ending, on a one-shot with a defined clock. The
+    // budget (60 player turns) must force what the clock never did.
+    const { characterId, sessionId } = await seedWorld('pacing-budget', 'breath');
+    const prompts: string[] = [];
+    const turn = async (n: number) => {
+      const res = await dmTurn({
+        sessionId,
+        characterId,
+        playerInput: `The hollow waits; turn ${n}.`,
+        reply: { ...baseReply },
+        capturedPrompts: prompts,
+      });
+      expect(res.status).toBe(200);
+    };
+    for (let n = 1; n <= 44; n++) await turn(n);
+    // Turn 44's prompt carries no pacing line: the directive starts at 75%.
+    expect(prompts[43]).not.toContain('move toward the climax');
+    expect((await sessionRow(sessionId))?.status).toBe('active');
+    expect((await trackerPhase(sessionId))?.tracker?.phase).toBeUndefined();
+    await turn(45);
+    // Turn 45's prompt carries the pacing directive, server-decided.
+    expect(prompts[44]).toContain('move toward the climax');
+    expect(prompts[44]).toContain('turn 45 of 60');
+    expect(prompts[44]).toContain('the Breath Clock');
+    for (let n = 46; n <= 60; n++) await turn(n);
+    // Turn 60 forces the climax phase — the clock never moved (0/6).
+    const phaseAt60 = (await trackerPhase(sessionId))?.tracker;
+    expect(phaseAt60?.phase).toBe('climax');
+    expect(phaseAt60?.climaxTurns).toBe(0);
+    expect(phaseAt60?.budgetForced).toBe(true);
+    expect((await sessionRow(sessionId))?.status).toBe('active');
+    for (let n = 61; n <= 66; n++) await turn(n);
+    // Six climax turns arm the requirement — the #1053 net, unchanged.
+    expect((await trackerPhase(sessionId))?.tracker?.endingRequired).toBe(true);
+    expect((await sessionRow(sessionId))?.status).toBe('active');
+    // Turn 67: the prompt requires the ending; the stubbed reply declares
+    // none, so the corrective call runs and the engine writes the ending.
+    await turn(67);
+    expect(prompts[66]).toContain('the ending is required');
+    expect((await sessionRow(sessionId))?.status).toBe('completed');
+    const endings = await endingRowsFor(sessionId);
+    expect(endings).toHaveLength(1);
+    expect(endings[0]?.message).toContain('turn budget is reached');
+  }, 180_000);
+
+  test('#1083: a multi-session campaign runs past 60 turns untouched', async () => {
+    // The same clock, the same drifting DM — but the budget is
+    // one-shot-only, so a campaign must never see a pacing line, a
+    // forced climax, or an ending.
+    const { characterId, sessionId } = await seedWorld('pacing-control', 'breath', 'campaign');
+    const prompts: string[] = [];
+    for (let n = 1; n <= 61; n++) {
+      const res = await dmTurn({
+        sessionId,
+        characterId,
+        playerInput: `The hollow waits; turn ${n}.`,
+        reply: { ...baseReply },
+        capturedPrompts: prompts,
+      });
+      expect(res.status).toBe(200);
+    }
+    expect(prompts.some((prompt) => prompt.includes('move toward the climax'))).toBe(false);
+    expect(prompts.some((prompt) => prompt.includes('turn budget is reached'))).toBe(false);
+    expect((await trackerPhase(sessionId))?.tracker?.phase).toBeUndefined();
+    expect((await sessionRow(sessionId))?.status).toBe('active');
+    expect(await endingRowsFor(sessionId)).toHaveLength(0);
+  }, 180_000);
 });
