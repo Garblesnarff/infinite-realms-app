@@ -1705,6 +1705,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // engine-applied.
         let storyTrackersApplied = false;
         let trackerStepRan = false;
+        let trackerForcedEndingSummary: string | undefined;
         if (
           envelope &&
           (envelope.tracker_changes ||
@@ -1738,12 +1739,26 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
               trackerResult.outcome === 'already_applied' ||
               (trackerResult.outcome === 'applied' &&
                 trackerResult.appliedChanges >= submittedChanges);
+            trackerForcedEndingSummary = trackerResult.forcedEndingSummary;
           } catch (error) {
             logger.warn({ msg: 'DM_STORY_TRACKER_FAILED', sessionId: castSessionId, error });
           }
         }
         if (envelope?.tracker_changes && !storyTrackersApplied) {
           envelope.tracker_changes = null;
+        }
+        // #1084: a tracker-forced ending completes the session through
+        // the same applier as a declared one, but the force runs inside
+        // the tracker step — mirror its stored summary onto the envelope
+        // exactly as the declared and safety-net paths do, so the
+        // client's completion latch fires on the engine-ended turn
+        // (Hark S-001: session completed, "Adventure complete" line in
+        // the feed, no completion screen). A declaration in this reply
+        // wins: the field is only filled when the envelope does not
+        // already carry one. Setting it also correctly suppresses the
+        // safety net below, which gates on the field being absent.
+        if (envelope && !envelope.campaign_ending && trackerForcedEndingSummary) {
+          envelope.campaign_ending = { summary: trackerForcedEndingSummary };
         }
         // #1062: the tracker line the player sees is rendered by the client
         // from server state, not from the DM's prose — the bracket-line leak
@@ -2007,6 +2022,11 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
                   if (seated) {
                     if (envelope?.story_trackers) seated.story_trackers = envelope.story_trackers;
                     else delete seated.story_trackers;
+                    // #1084: same carry for the server-attached ending —
+                    // a tracker-forced ending on a seating turn would
+                    // otherwise be dropped by the pre-applier snapshot.
+                    if (envelope?.campaign_ending) seated.campaign_ending = envelope.campaign_ending;
+                    else delete seated.campaign_ending;
                   }
                   return seated;
                 })(),
