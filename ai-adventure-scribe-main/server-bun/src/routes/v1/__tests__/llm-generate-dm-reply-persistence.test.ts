@@ -75,7 +75,24 @@ mock.module('../../../services/session/session-message-service.js', () => ({
     },
   },
 }));
-
+mock.module('../../../services/dm/dm-feature-gate.js', () => ({
+  refuseFeaturesCharacterLacks: async (input: {
+    result: Record<string, unknown>;
+    playerInput?: string;
+    onCastsAllowed?: (casts: {
+      character: { id: string; class: string };
+      spells: string[];
+    }) => void;
+  }) => {
+    if (input.playerInput?.includes('I cast')) {
+      input.onCastsAllowed?.({
+        character: { id: 'character-story-cast', class: 'Wizard' },
+        spells: ['Burning Hands'],
+      });
+    }
+    return input.result;
+  },
+}));
 const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
 const { llmRoutes } = await import('../llm.js');
 const app = createRequestPipelineApp().use(llmRoutes);

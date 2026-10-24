@@ -1851,6 +1851,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             envelope,
             clientInCombat: dmReply.inCombat === true,
             narrationGated: dmReply.narrationGated,
+            holdProse: dmReply.holdProse === true,
           });
           dmReplyPersisted = persistence.persisted;
           // #841: record this reply's action batches under its message id, so
@@ -2086,6 +2087,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             rollRequestId: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
             inCombat: t.Optional(t.Boolean()),
             narrationGated: t.Optional(t.Boolean()),
+            holdProse: t.Optional(t.Boolean()),
           }),
         ),
         model: t.Optional(t.String()),

@@ -954,9 +954,15 @@ export const useAIResponse = (): {
                   ...(isDiceRollMessage && latestMessage.context?.rollRequestId
                     ? { rollRequestId: latestMessage.context.rollRequestId }
                     : {}),
-                  // A cast that can still be cancelled keeps its prose off the server too: a
-                  // provisional row would narrate a cast the player gave up after a reload.
-                  inCombat: Boolean(isInCombat || castSignal),
+                  // A sheet cast may be cancelled while the request is in flight, but the
+                  // cancellation signal is not combat state.  Reporting every sheet cast as
+                  // `inCombat` made the server skip the story spell-slot spend (and its normal
+                  // narrative roll path) whenever the Cast button was used outside combat.
+                  inCombat: Boolean(isInCombat),
+                  // A sheet cast may still be cancelled after the request reaches the server.
+                  // Keep that provisional prose out of the reload fallback without conflating
+                  // cancellation with combat, so story spell slots still spend normally.
+                  ...(castSignal ? { holdProse: true } : {}),
                   // The client's own gate predicate, so the server's harm check stands down on
                   // exactly the turns the client gate does (a dice-roll message, say).
                   narrationGated: holdSideEffects,
