@@ -1,6 +1,77 @@
-/** Keep a model-authored options appendix out of story text, including partial previews. */
+/** Keep a model-authored options appendix out of story text, including partial previews. Trims only when the appendix actually matched, so a clean reply keeps its exact bytes (and `normalizeReplyNarration` does not report it as stripped). */
 export function stripOptionsAppendix(text: string): string {
-  return text.replace(/\s*\n\s*["']?options["']?\s*:\s*\[[\s\S]*$/i, '').trimEnd();
+  const stripped = text.replace(/\s*\n\s*["']?options["']?\s*:\s*\[[\s\S]*$/i, '');
+  return stripped === text ? text : stripped.trimEnd();
+}
+
+/**
+ * #1067: tool-call markup the model wrote into `text` (Hark D23-006, the
+ * forced-tool path) — a `<parameter name="options">` block, or a dangling
+ * opening tag whose tail is the tool argument itself. The tag is never
+ * prose, so it always goes; a dangling tag's tail goes only when the tail
+ * is purely the argument (a JSON array/object, or a run of quoted strings),
+ * and prose after a dangling tag survives.
+ */
+const TOOL_PARAMETER_BLOCK = /<parameter\s+name\s*=\s*["']options["']\s*>[\s\S]*?<\/parameter\s*>/gi;
+const TOOL_PARAMETER_OPEN = /<parameter\s+name\s*=\s*["']options["']\s*>/i;
+const TOOL_PARAMETER_CLOSE = /<\/parameter\s*>/gi;
+const TOOL_ARGUMENT_TAIL =
+  /^\s*(\[[\s\S]*\]|\{[\s\S]*\}|"[^"]*"(?:\s*,\s*"[^"]*")*)\s*$/;
+
+export function stripToolParameterBlocks(text: string): string {
+  let out = text.replace(TOOL_PARAMETER_BLOCK, '').replace(TOOL_PARAMETER_CLOSE, '');
+  const open = TOOL_PARAMETER_OPEN.exec(out);
+  if (open) {
+    const tail = out.slice(open.index + open[0].length);
+    out = TOOL_ARGUMENT_TAIL.test(tail)
+      ? out.slice(0, open.index)
+      : out.slice(0, open.index) + tail;
+  }
+  return out;
+}
+
+/**
+ * #1067: a lettered options list the model wrote into prose at the end of
+ * the narration (`options: A. … B. …`). Trailing only, and it must show at
+ * least two lettered items — a lone `options:` mention mid-prose is not
+ * this shape and is left alone. Each item is one sentence: the list must
+ * run to the end of the text with nothing but further lettered items after
+ * it, so a list followed by resumed narration is left alone (leaked, not
+ * deleted — deleting story to remove an artifact would be worse than the
+ * leak). Item separators may be a period or a newline, so a list broken
+ * across lines still strips.
+ */
+const PROSE_OPTIONS_LIST =
+  /\s*["']?options["']?\s*:\s*A\.\s*[^.\n]+(?:[.\n]\s*[B-Z]\.\s*[^.\n]+)+\.?\s*$/i;
+
+export function stripProseOptionsList(text: string): string {
+  const stripped = text.replace(PROSE_OPTIONS_LIST, '');
+  return stripped === text ? text : stripped.trimEnd();
+}
+
+/**
+ * #1067: the bracket tracker line the prompt asks the DM to render
+ * (`[HP 18/?] [Clock 0/6] …`), stripped only as a trailing run of at least
+ * two short label-like groups with a tracker anchor (HP/Clock/Scene, or a
+ * `Key: value` group). A single bracket aside, a sentence-like group, and
+ * an asset tag (`[ASSET:…]`, whose colon has no space after it) all fail
+ * the shape and survive. #1062 removes this line for good via server-state
+ * rendering; this strip is the safety net until then.
+ */
+const TRAILING_BRACKET_RUN = /((?:\[[^[\]\n]{1,48}\]\s*){2,})\s*$/;
+const TRACKER_GROUP =
+  /^[A-Za-z0-9][A-Za-z0-9'’\- ]{0,30}(?:: [^[\].]{1,40}| \d+(?:\/\?|\/\d+)?| \d+)?$/;
+const TRACKER_ANCHOR = /^(HP|Clock|Scene)\b|: /;
+
+export function stripTrackerLine(text: string): string {
+  const match = TRAILING_BRACKET_RUN.exec(text);
+  if (!match) return text;
+  const groups = match[1].match(/\[[^[\]\n]{1,48}\]/g);
+  if (!groups || groups.length < 2) return text;
+  const inners = groups.map((group) => group.slice(1, -1));
+  if (!inners.every((inner) => TRACKER_GROUP.test(inner))) return text;
+  if (!inners.some((inner) => TRACKER_ANCHOR.test(inner))) return text;
+  return text.slice(0, match.index).trimEnd();
 }
 
 /**
@@ -80,6 +151,12 @@ export type NarrationNormalization = 'unwrapped' | 'stripped' | 'unwrapped+strip
  *   the outer offered none), and adopted options are string-filtered.
  * - Strip a model-authored options appendix from the resulting narration
  *   (the structured `options` field is untouched).
+ * - #1067: strip the three raw-artifact shapes Hark D23-006 caught in
+ *   story text — tool-call `<parameter name="options">` blocks anywhere
+ *   in the narration, a trailing prose `options: A. … B. …` list, and a
+ *   trailing bracket tracker line. The trailing strips loop until stable,
+ *   so an artifact stacked behind another (appendix behind tracker line)
+ *   still comes off; each strip only shortens, so the loop is bounded.
  *
  * Fails open like the neighboring narration rewrites: if the result would
  * empty a narration that arrived non-empty, the reply is left exactly as it
@@ -126,7 +203,14 @@ export function normalizeReplyNarration(
     inner = nestedReplyEnvelope(text);
   }
 
-  const strippedText = stripOptionsAppendix(text);
+  let strippedText = stripToolParameterBlocks(text);
+  for (let i = 0; i < 4; i += 1) {
+    const previous = strippedText;
+    strippedText = stripProseOptionsList(strippedText);
+    strippedText = stripTrackerLine(strippedText);
+    strippedText = stripOptionsAppendix(strippedText);
+    if (strippedText === previous) break;
+  }
   const stripped = strippedText !== text;
   text = strippedText;
 
