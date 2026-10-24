@@ -114,9 +114,7 @@
         "blog_authors_slug_unique": {
           "name": "blog_authors_slug_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
+          "columns": ["slug"]
         }
       },
       "policies": {},
@@ -193,9 +191,7 @@
         "blog_categories_slug_unique": {
           "name": "blog_categories_slug_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
+          "columns": ["slug"]
         }
       },
       "policies": {},
@@ -263,12 +259,8 @@
           "name": "blog_post_categories_post_id_blog_posts_id_fk",
           "tableFrom": "blog_post_categories",
           "tableTo": "blog_posts",
-          "columnsFrom": [
-            "post_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["post_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -276,12 +268,8 @@
           "name": "blog_post_categories_category_id_blog_categories_id_fk",
           "tableFrom": "blog_post_categories",
           "tableTo": "blog_categories",
-          "columnsFrom": [
-            "category_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["category_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -353,12 +341,8 @@
           "name": "blog_post_tags_post_id_blog_posts_id_fk",
           "tableFrom": "blog_post_tags",
           "tableTo": "blog_posts",
-          "columnsFrom": [
-            "post_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["post_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -366,12 +350,8 @@
           "name": "blog_post_tags_tag_id_blog_tags_id_fk",
           "tableFrom": "blog_post_tags",
           "tableTo": "blog_tags",
-          "columnsFrom": [
-            "tag_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tag_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -553,12 +533,8 @@
           "name": "blog_posts_author_id_blog_authors_id_fk",
           "tableFrom": "blog_posts",
           "tableTo": "blog_authors",
-          "columnsFrom": [
-            "author_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["author_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -568,9 +544,7 @@
         "blog_posts_slug_unique": {
           "name": "blog_posts_slug_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
+          "columns": ["slug"]
         }
       },
       "policies": {},
@@ -635,9 +609,7 @@
         "blog_tags_slug_unique": {
           "name": "blog_tags_slug_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
+          "columns": ["slug"]
         }
       },
       "policies": {},
@@ -863,12 +835,8 @@
           "name": "character_permissions_character_id_characters_id_fk",
           "tableFrom": "character_permissions",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -878,10 +846,7 @@
         "unique_character_user_permission": {
           "name": "unique_character_user_permission",
           "nullsNotDistinct": false,
-          "columns": [
-            "character_id",
-            "user_id"
-          ]
+          "columns": ["character_id", "user_id"]
         }
       },
       "policies": {},
@@ -975,12 +940,8 @@
           "name": "character_features_character_id_characters_id_fk",
           "tableFrom": "character_features",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -988,12 +949,8 @@
           "name": "character_features_feature_id_class_features_library_id_fk",
           "tableFrom": "character_features",
           "tableTo": "class_features_library",
-          "columnsFrom": [
-            "feature_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["feature_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1069,12 +1026,8 @@
           "name": "character_subclasses_character_id_characters_id_fk",
           "tableFrom": "character_subclasses",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1305,12 +1258,8 @@
           "name": "feature_usage_log_character_id_characters_id_fk",
           "tableFrom": "feature_usage_log",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1318,12 +1267,8 @@
           "name": "feature_usage_log_feature_id_class_features_library_id_fk",
           "tableFrom": "feature_usage_log",
           "tableTo": "class_features_library",
-          "columnsFrom": [
-            "feature_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["feature_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1331,12 +1276,8 @@
           "name": "feature_usage_log_session_id_game_sessions_id_fk",
           "tableFrom": "feature_usage_log",
           "tableTo": "game_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1412,12 +1353,8 @@
           "name": "combat_boss_state_encounter_id_combat_encounters_id_fk",
           "tableFrom": "combat_boss_state",
           "tableTo": "combat_encounters",
-          "columnsFrom": [
-            "encounter_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["encounter_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1547,12 +1484,8 @@
           "name": "combat_damage_log_encounter_id_combat_encounters_id_fk",
           "tableFrom": "combat_damage_log",
           "tableTo": "combat_encounters",
-          "columnsFrom": [
-            "encounter_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["encounter_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1560,12 +1493,8 @@
           "name": "combat_damage_log_participant_id_combat_participants_id_fk",
           "tableFrom": "combat_damage_log",
           "tableTo": "combat_participants",
-          "columnsFrom": [
-            "participant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["participant_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1573,12 +1502,8 @@
           "name": "combat_damage_log_source_participant_id_combat_participants_id_fk",
           "tableFrom": "combat_damage_log",
           "tableTo": "combat_participants",
-          "columnsFrom": [
-            "source_participant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["source_participant_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1745,12 +1670,8 @@
           "name": "combat_encounters_session_id_game_sessions_id_fk",
           "tableFrom": "combat_encounters",
           "tableTo": "game_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1905,12 +1826,8 @@
           "name": "combat_participant_conditions_participant_id_combat_participants_id_fk",
           "tableFrom": "combat_participant_conditions",
           "tableTo": "combat_participants",
-          "columnsFrom": [
-            "participant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["participant_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1918,12 +1835,8 @@
           "name": "combat_participant_conditions_condition_id_conditions_library_id_fk",
           "tableFrom": "combat_participant_conditions",
           "tableTo": "conditions_library",
-          "columnsFrom": [
-            "condition_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["condition_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2028,12 +1941,8 @@
           "name": "combat_participant_status_participant_id_combat_participants_id_fk",
           "tableFrom": "combat_participant_status",
           "tableTo": "combat_participants",
-          "columnsFrom": [
-            "participant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["participant_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2043,9 +1952,7 @@
         "unique_participant_status": {
           "name": "unique_participant_status",
           "nullsNotDistinct": false,
-          "columns": [
-            "participant_id"
-          ]
+          "columns": ["participant_id"]
         }
       },
       "policies": {},
@@ -2356,12 +2263,8 @@
           "name": "combat_participants_encounter_id_combat_encounters_id_fk",
           "tableFrom": "combat_participants",
           "tableTo": "combat_encounters",
-          "columnsFrom": [
-            "encounter_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["encounter_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2369,12 +2272,8 @@
           "name": "combat_participants_character_id_characters_id_fk",
           "tableFrom": "combat_participants",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -2382,12 +2281,8 @@
           "name": "combat_participants_npc_id_npcs_id_fk",
           "tableFrom": "combat_participants",
           "tableTo": "npcs",
-          "columnsFrom": [
-            "npc_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["npc_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -2464,9 +2359,7 @@
         "conditions_library_name_unique": {
           "name": "conditions_library_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "name"
-          ]
+          "columns": ["name"]
         }
       },
       "policies": {},
@@ -2583,12 +2476,8 @@
           "name": "creature_stats_character_id_characters_id_fk",
           "tableFrom": "creature_stats",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2596,12 +2485,8 @@
           "name": "creature_stats_npc_id_npcs_id_fk",
           "tableFrom": "creature_stats",
           "tableTo": "npcs",
-          "columnsFrom": [
-            "npc_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["npc_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2703,12 +2588,8 @@
           "name": "weapon_attacks_character_id_characters_id_fk",
           "tableFrom": "weapon_attacks",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2875,12 +2756,8 @@
           "name": "measurement_templates_scene_id_scenes_id_fk",
           "tableFrom": "measurement_templates",
           "tableTo": "scenes",
-          "columnsFrom": [
-            "scene_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["scene_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3044,12 +2921,8 @@
           "name": "scene_drawings_scene_id_scenes_id_fk",
           "tableFrom": "scene_drawings",
           "tableTo": "scenes",
-          "columnsFrom": [
-            "scene_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["scene_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3221,12 +3094,8 @@
           "name": "fog_of_war_scene_id_scenes_id_fk",
           "tableFrom": "fog_of_war",
           "tableTo": "scenes",
-          "columnsFrom": [
-            "scene_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["scene_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3236,10 +3105,7 @@
         "unique_fog_of_war_scene_user": {
           "name": "unique_fog_of_war_scene_user",
           "nullsNotDistinct": false,
-          "columns": [
-            "scene_id",
-            "user_id"
-          ]
+          "columns": ["scene_id", "user_id"]
         }
       },
       "policies": {},
@@ -3382,12 +3248,8 @@
           "name": "vision_blocking_shapes_scene_id_scenes_id_fk",
           "tableFrom": "vision_blocking_shapes",
           "tableTo": "scenes",
-          "columnsFrom": [
-            "scene_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["scene_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3678,12 +3540,8 @@
           "name": "character_concentration_character_id_characters_id_fk",
           "tableFrom": "character_concentration",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3693,9 +3551,7 @@
         "character_concentration_character_id_unique": {
           "name": "character_concentration_character_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "character_id"
-          ]
+          "columns": ["character_id"]
         }
       },
       "policies": {},
@@ -3808,12 +3664,8 @@
           "name": "character_conditions_character_id_characters_id_fk",
           "tableFrom": "character_conditions",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3821,12 +3673,8 @@
           "name": "character_conditions_condition_id_conditions_library_id_fk",
           "tableFrom": "character_conditions",
           "tableTo": "conditions_library",
-          "columnsFrom": [
-            "condition_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["condition_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4009,12 +3857,8 @@
           "name": "character_stats_character_id_characters_id_fk",
           "tableFrom": "character_stats",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4607,12 +4451,8 @@
           "name": "dialogue_history_session_id_game_sessions_id_fk",
           "tableFrom": "dialogue_history",
           "tableTo": "game_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4804,12 +4644,8 @@
           "name": "game_sessions_campaign_id_campaigns_id_fk",
           "tableFrom": "game_sessions",
           "tableTo": "campaigns",
-          "columnsFrom": [
-            "campaign_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["campaign_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4817,12 +4653,8 @@
           "name": "game_sessions_character_id_characters_id_fk",
           "tableFrom": "game_sessions",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -4972,12 +4804,8 @@
           "name": "session_chronicles_session_id_game_sessions_id_fk",
           "tableFrom": "session_chronicles",
           "tableTo": "game_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4987,9 +4815,7 @@
         "session_chronicles_share_token_unique": {
           "name": "session_chronicles_share_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "share_token"
-          ]
+          "columns": ["share_token"]
         }
       },
       "policies": {},
@@ -5047,12 +4873,8 @@
           "name": "session_companions_session_id_game_sessions_id_fk",
           "tableFrom": "session_companions",
           "tableTo": "game_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5060,12 +4882,8 @@
           "name": "session_companions_character_id_characters_id_fk",
           "tableFrom": "session_companions",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5075,10 +4893,7 @@
         "session_companions_session_character_unique": {
           "name": "session_companions_session_character_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "session_id",
-            "character_id"
-          ]
+          "columns": ["session_id", "character_id"]
         }
       },
       "policies": {},
@@ -5151,12 +4966,8 @@
           "name": "session_trackers_session_id_game_sessions_id_fk",
           "tableFrom": "session_trackers",
           "tableTo": "game_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5166,10 +4977,7 @@
         "session_trackers_session_id_name_unique": {
           "name": "session_trackers_session_id_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "session_id",
-            "name"
-          ]
+          "columns": ["session_id", "name"]
         }
       },
       "policies": {},
@@ -5424,9 +5232,7 @@
         "waitlist_email_unique": {
           "name": "waitlist_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},
@@ -5718,12 +5524,8 @@
           "name": "character_spells_character_id_characters_id_fk",
           "tableFrom": "character_spells",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5731,12 +5533,8 @@
           "name": "character_spells_spell_id_spells_id_fk",
           "tableFrom": "character_spells",
           "tableTo": "spells",
-          "columnsFrom": [
-            "spell_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["spell_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5744,12 +5542,8 @@
           "name": "character_spells_source_class_id_classes_id_fk",
           "tableFrom": "character_spells",
           "tableTo": "classes",
-          "columnsFrom": [
-            "source_class_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["source_class_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5841,12 +5635,8 @@
           "name": "class_spells_class_id_classes_id_fk",
           "tableFrom": "class_spells",
           "tableTo": "classes",
-          "columnsFrom": [
-            "class_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["class_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5854,12 +5644,8 @@
           "name": "class_spells_spell_id_spells_id_fk",
           "tableFrom": "class_spells",
           "tableTo": "spells",
-          "columnsFrom": [
-            "spell_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["spell_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5978,9 +5764,7 @@
         "classes_name_unique": {
           "name": "classes_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "name"
-          ]
+          "columns": ["name"]
         }
       },
       "policies": {},
@@ -6080,9 +5864,7 @@
         "races_name_unique": {
           "name": "races_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "name"
-          ]
+          "columns": ["name"]
         }
       },
       "policies": {},
@@ -6322,9 +6104,7 @@
         "spells_name_unique": {
           "name": "spells_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "name"
-          ]
+          "columns": ["name"]
         }
       },
       "policies": {},
@@ -6466,12 +6246,8 @@
           "name": "locations_campaign_id_campaigns_id_fk",
           "tableFrom": "locations",
           "tableTo": "campaigns",
-          "columnsFrom": [
-            "campaign_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["campaign_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -6669,12 +6445,8 @@
           "name": "memories_campaign_id_campaigns_id_fk",
           "tableFrom": "memories",
           "tableTo": "campaigns",
-          "columnsFrom": [
-            "campaign_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["campaign_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6682,12 +6454,8 @@
           "name": "memories_session_id_game_sessions_id_fk",
           "tableFrom": "memories",
           "tableTo": "game_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -6833,12 +6601,8 @@
           "name": "npcs_campaign_id_campaigns_id_fk",
           "tableFrom": "npcs",
           "tableTo": "campaigns",
-          "columnsFrom": [
-            "campaign_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["campaign_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -6979,12 +6743,8 @@
           "name": "quests_campaign_id_campaigns_id_fk",
           "tableFrom": "quests",
           "tableTo": "campaigns",
-          "columnsFrom": [
-            "campaign_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["campaign_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6992,12 +6752,8 @@
           "name": "quests_location_id_locations_id_fk",
           "tableFrom": "quests",
           "tableTo": "locations",
-          "columnsFrom": [
-            "location_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["location_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -7102,12 +6858,8 @@
           "name": "character_hit_dice_character_id_characters_id_fk",
           "tableFrom": "character_hit_dice",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -7273,12 +7025,8 @@
           "name": "rest_events_character_id_characters_id_fk",
           "tableFrom": "rest_events",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -7286,12 +7034,8 @@
           "name": "rest_events_session_id_game_sessions_id_fk",
           "tableFrom": "rest_events",
           "tableTo": "game_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -7448,12 +7192,8 @@
           "name": "character_equipment_character_id_characters_id_fk",
           "tableFrom": "character_equipment",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -7581,12 +7321,8 @@
           "name": "consumable_usage_log_character_id_characters_id_fk",
           "tableFrom": "consumable_usage_log",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -7594,12 +7330,8 @@
           "name": "consumable_usage_log_item_id_inventory_items_id_fk",
           "tableFrom": "consumable_usage_log",
           "tableTo": "inventory_items",
-          "columnsFrom": [
-            "item_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["item_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -7607,12 +7339,8 @@
           "name": "consumable_usage_log_session_id_game_sessions_id_fk",
           "tableFrom": "consumable_usage_log",
           "tableTo": "game_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -7757,12 +7485,8 @@
           "name": "inventory_items_character_id_characters_id_fk",
           "tableFrom": "inventory_items",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -7856,12 +7580,8 @@
           "name": "story_item_events_character_id_characters_id_fk",
           "tableFrom": "story_item_events",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -7869,12 +7589,8 @@
           "name": "story_item_events_session_id_game_sessions_id_fk",
           "tableFrom": "story_item_events",
           "tableTo": "game_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -8001,12 +7717,8 @@
           "name": "experience_events_character_id_characters_id_fk",
           "tableFrom": "experience_events",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -8014,12 +7726,8 @@
           "name": "experience_events_session_id_game_sessions_id_fk",
           "tableFrom": "experience_events",
           "tableTo": "game_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -8118,12 +7826,8 @@
           "name": "level_progression_character_id_characters_id_fk",
           "tableFrom": "level_progression",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -8251,12 +7955,8 @@
           "name": "scene_layers_scene_id_scenes_id_fk",
           "tableFrom": "scene_layers",
           "tableTo": "scenes",
-          "columnsFrom": [
-            "scene_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["scene_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -8375,12 +8075,8 @@
           "name": "scene_settings_scene_id_scenes_id_fk",
           "tableFrom": "scene_settings",
           "tableTo": "scenes",
-          "columnsFrom": [
-            "scene_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["scene_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -8390,9 +8086,7 @@
         "scene_settings_scene_id_unique": {
           "name": "scene_settings_scene_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "scene_id"
-          ]
+          "columns": ["scene_id"]
         }
       },
       "policies": {},
@@ -8568,12 +8262,8 @@
           "name": "scenes_campaign_id_campaigns_id_fk",
           "tableFrom": "scenes",
           "tableTo": "campaigns",
-          "columnsFrom": [
-            "campaign_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["campaign_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -8638,12 +8328,8 @@
           "name": "character_tokens_character_id_characters_id_fk",
           "tableFrom": "character_tokens",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -8651,12 +8337,8 @@
           "name": "character_tokens_token_id_tokens_id_fk",
           "tableFrom": "character_tokens",
           "tableTo": "tokens",
-          "columnsFrom": [
-            "token_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["token_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -8664,10 +8346,7 @@
       "compositePrimaryKeys": {
         "character_tokens_character_id_token_id_pk": {
           "name": "character_tokens_character_id_token_id_pk",
-          "columns": [
-            "character_id",
-            "token_id"
-          ]
+          "columns": ["character_id", "token_id"]
         }
       },
       "uniqueConstraints": {},
@@ -8925,12 +8604,8 @@
           "name": "token_configurations_character_id_characters_id_fk",
           "tableFrom": "token_configurations",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -9283,12 +8958,8 @@
           "name": "tokens_scene_id_scenes_id_fk",
           "tableFrom": "tokens",
           "tableTo": "scenes",
-          "columnsFrom": [
-            "scene_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["scene_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -9457,12 +9128,8 @@
           "name": "campaign_chunks_campaign_id_starter_campaigns_id_fk",
           "tableFrom": "campaign_chunks",
           "tableTo": "starter_campaigns",
-          "columnsFrom": [
-            "campaign_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["campaign_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -9580,12 +9247,8 @@
           "name": "campaign_parties_campaign_id_starter_campaigns_id_fk",
           "tableFrom": "campaign_parties",
           "tableTo": "starter_campaigns",
-          "columnsFrom": [
-            "campaign_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["campaign_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -9704,12 +9367,8 @@
           "name": "campaign_rules_campaign_id_starter_campaigns_id_fk",
           "tableFrom": "campaign_rules",
           "tableTo": "starter_campaigns",
-          "columnsFrom": [
-            "campaign_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["campaign_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -9856,12 +9515,8 @@
           "name": "party_characters_party_id_campaign_parties_id_fk",
           "tableFrom": "party_characters",
           "tableTo": "campaign_parties",
-          "columnsFrom": [
-            "party_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["party_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -10124,9 +9779,7 @@
         "starter_campaigns_slug_unique": {
           "name": "starter_campaigns_slug_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
+          "columns": ["slug"]
         }
       },
       "policies": {},
@@ -10228,12 +9881,8 @@
           "name": "character_spell_slots_character_id_characters_id_fk",
           "tableFrom": "character_spell_slots",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -10243,10 +9892,7 @@
         "unique_character_spell_level": {
           "name": "unique_character_spell_level",
           "nullsNotDistinct": false,
-          "columns": [
-            "character_id",
-            "spell_level"
-          ]
+          "columns": ["character_id", "spell_level"]
         }
       },
       "policies": {},
@@ -10384,12 +10030,8 @@
           "name": "spell_slot_usage_log_character_id_characters_id_fk",
           "tableFrom": "spell_slot_usage_log",
           "tableTo": "characters",
-          "columnsFrom": [
-            "character_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["character_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -10397,12 +10039,8 @@
           "name": "spell_slot_usage_log_session_id_game_sessions_id_fk",
           "tableFrom": "spell_slot_usage_log",
           "tableTo": "game_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -10505,12 +10143,8 @@
           "name": "tactical_maps_session_id_game_sessions_id_fk",
           "tableFrom": "tactical_maps",
           "tableTo": "game_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -10643,12 +10277,8 @@
           "name": "campaign_journal_entries_campaign_id_campaigns_id_fk",
           "tableFrom": "campaign_journal_entries",
           "tableTo": "campaigns",
-          "columnsFrom": [
-            "campaign_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["campaign_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -10656,12 +10286,8 @@
           "name": "campaign_journal_entries_session_id_game_sessions_id_fk",
           "tableFrom": "campaign_journal_entries",
           "tableTo": "game_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -10848,12 +10474,8 @@
           "name": "narrative_facts_session_id_game_sessions_id_fk",
           "tableFrom": "narrative_facts",
           "tableTo": "game_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -10861,12 +10483,8 @@
           "name": "narrative_facts_campaign_id_campaigns_id_fk",
           "tableFrom": "narrative_facts",
           "tableTo": "campaigns",
-          "columnsFrom": [
-            "campaign_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["campaign_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -11039,45 +10657,22 @@
     "public.permission_level": {
       "name": "permission_level",
       "schema": "public",
-      "values": [
-        "viewer",
-        "editor",
-        "owner"
-      ]
+      "values": ["viewer", "editor", "owner"]
     },
     "public.drawing_type": {
       "name": "drawing_type",
       "schema": "public",
-      "values": [
-        "freehand",
-        "line",
-        "circle",
-        "rectangle",
-        "polygon",
-        "text"
-      ]
+      "values": ["freehand", "line", "circle", "rectangle", "polygon", "text"]
     },
     "public.template_type": {
       "name": "template_type",
       "schema": "public",
-      "values": [
-        "cone",
-        "cube",
-        "sphere",
-        "cylinder",
-        "line",
-        "ray"
-      ]
+      "values": ["cone", "cube", "sphere", "cylinder", "line", "ray"]
     },
     "public.sharing_mode": {
       "name": "sharing_mode",
       "schema": "public",
-      "values": [
-        "private",
-        "view_only",
-        "can_edit",
-        "co_owner"
-      ]
+      "values": ["private", "view_only", "can_edit", "co_owner"]
     },
     "public.chunk_type": {
       "name": "chunk_type",
@@ -11103,48 +10698,22 @@
     "public.campaign_difficulty": {
       "name": "campaign_difficulty",
       "schema": "public",
-      "values": [
-        "easy",
-        "low-medium",
-        "medium",
-        "medium-hard",
-        "hard",
-        "deadly"
-      ]
+      "values": ["easy", "low-medium", "medium", "medium-hard", "hard", "deadly"]
     },
     "public.playstyle": {
       "name": "playstyle",
       "schema": "public",
-      "values": [
-        "roleplay-heavy",
-        "combat-focused",
-        "balanced",
-        "exploration",
-        "puzzle-solving"
-      ]
+      "values": ["roleplay-heavy", "combat-focused", "balanced", "exploration", "puzzle-solving"]
     },
     "public.rule_type": {
       "name": "rule_type",
       "schema": "public",
-      "values": [
-        "causality",
-        "mechanic",
-        "world_law"
-      ]
+      "values": ["causality", "mechanic", "world_law"]
     },
     "public.fact_subject_type": {
       "name": "fact_subject_type",
       "schema": "public",
-      "values": [
-        "npc",
-        "location",
-        "item",
-        "quest",
-        "faction",
-        "party",
-        "world",
-        "thread"
-      ]
+      "values": ["npc", "location", "item", "quest", "faction", "party", "world", "thread"]
     }
   },
   "schemas": {},

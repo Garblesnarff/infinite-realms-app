@@ -58,7 +58,7 @@ export async function applyStoryItemsOnce(input: {
   items: StoryItemChange[];
 }): Promise<'applied' | 'already_applied'> {
   const { db } = await import('../../../../db/client');
-  const { and, eq, sql } = await import('drizzle-orm');
+  const { and, eq, or, sql } = await import('drizzle-orm');
   const { characters, inventoryItems, storyItemEvents, characterEquipment } =
     await import('../../../../db/schema/index');
   const { characterId, sessionId, dialogueId, playerMessageAt, items } = input;
@@ -97,8 +97,13 @@ export async function applyStoryItemsOnce(input: {
           and(
             eq(storyItemEvents.characterId, characterId),
             eq(storyItemEvents.sessionId, sessionId),
+            // The reply key covers late reconciliation; the turn key also preserves Retry
+            // and pre-deploy markers whose dialogue_id is NULL.
             dialogueId
-              ? eq(storyItemEvents.dialogueId, dialogueId)
+              ? or(
+                  eq(storyItemEvents.dialogueId, dialogueId),
+                  eq(storyItemEvents.playerMessageAt, playerMessageAt),
+                )
               : eq(storyItemEvents.playerMessageAt, playerMessageAt),
             eq(sql`lower(${storyItemEvents.itemName})`, canonicalName.toLowerCase()),
             eq(storyItemEvents.change, item.change),
