@@ -223,6 +223,16 @@ const GameContent: React.FC = () => {
           <FallenEndState
             characterName={fallen.characterName}
             campaignName={fallen.campaignName}
+            portraitUrl={
+              characterState.character?.image_url ?? characterState.character?.avatar_url
+            }
+            identity={[
+              characterState.character?.race?.name,
+              characterState.character?.class?.name,
+              characterState.character?.level ? `Level ${characterState.character.level}` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
             chooseHeroHref={buildChooseHeroHref({
               starterSlug,
               campaignId: fallen.campaignId,
@@ -256,6 +266,17 @@ const GameContent: React.FC = () => {
           <CampaignCompleteEndState
             characterName={completion.characterName}
             campaignName={completion.campaignName}
+            portraitUrl={
+              characterState.character?.image_url ?? characterState.character?.avatar_url
+            }
+            identity={[
+              characterState.character?.race?.name,
+              characterState.character?.class?.name,
+              characterState.character?.level ? `Level ${characterState.character.level}` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+            experience={characterState.character?.experience ?? null}
             summary={completion.summary}
             chooseHeroHref={buildChooseHeroHref({
               starterSlug,
