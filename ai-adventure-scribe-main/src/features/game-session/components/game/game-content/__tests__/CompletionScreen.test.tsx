@@ -41,9 +41,7 @@ describe('CampaignCompleteEndState (#1020)', () => {
 
     expect(screen.getByTestId('completion-screen')).toBeInTheDocument();
     expect(screen.getByText('Adventure complete')).toBeInTheDocument();
-    expect(
-      screen.getByText(/Tavo Brejo has finished The Gardener's Heir/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Tavo Brejo has finished The Gardener's Heir/)).toBeInTheDocument();
   });
 
   it('falls back to generic names when character and campaign are missing', () => {
@@ -72,7 +70,7 @@ describe('CampaignCompleteEndState (#1020)', () => {
     });
 
     expect(screen.getByTestId('completion-screen-new-character')).toHaveTextContent(
-      'Choose a new hero',
+      'Begin again with a new hero',
     );
     expect(screen.getByTestId('completion-screen-explore')).toHaveTextContent(
       'Explore other campaigns',

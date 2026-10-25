@@ -54,10 +54,10 @@ describe('FallenEndState (#2456, #2517)', () => {
       storyContent: <p>The log</p>,
     });
 
-    expect(screen.getByTestId('death-screen-new-character')).toHaveTextContent(
-      'Choose a new hero',
-    );
-    expect(screen.getByText("Begin Abyssal Descent again with a new hero. The Scholar’s story is kept.")).toBeInTheDocument();
+    expect(screen.getByTestId('death-screen-new-character')).toHaveTextContent('Choose a new hero');
+    expect(
+      screen.getByText('Begin Abyssal Descent again with a new hero. The Scholar’s story is kept.'),
+    ).toBeInTheDocument();
     expect(screen.getByTestId('death-screen-explore')).toHaveTextContent('Explore other campaigns');
     expect(screen.getByTestId('death-screen-read-story')).toHaveTextContent(
       'Read the story so far',
@@ -88,10 +88,12 @@ describe('FallenEndState (#2456, #2517)', () => {
     expect(lines).not.toHaveTextContent('Engine:');
   });
 
-  it('#2517: omits the final-lines block when no lines were carried', () => {
+  it('#136: shows a stable final line when no engine lines were carried', () => {
     renderEndState({ characterName: 'The Scholar' });
 
-    expect(screen.queryByTestId('death-screen-final-lines')).not.toBeInTheDocument();
+    expect(screen.getByTestId('death-screen-final-lines')).toHaveTextContent(
+      'The Scholar is dead.',
+    );
   });
 
   it('does not render the resume-loop text', () => {
@@ -128,9 +130,9 @@ describe('FallenEndState (#2456, #2517)', () => {
 
 describe('buildChooseHeroHref (#2517)', () => {
   it('routes a starter campaign through its hero pick', () => {
-    expect(
-      buildChooseHeroHref({ starterSlug: 'abyssal-descent', campaignId: 'camp-1' }),
-    ).toBe('/explore/abyssal-descent/choose-character?campaignId=camp-1');
+    expect(buildChooseHeroHref({ starterSlug: 'abyssal-descent', campaignId: 'camp-1' })).toBe(
+      '/explore/abyssal-descent/choose-character?campaignId=camp-1',
+    );
   });
 
   it('routes a custom campaign through creation carrying the campaign', () => {
