@@ -313,7 +313,7 @@ describeWithDb('combat intent roster and player-intent seating', () => {
     // A live ledger NPC is still a target.
     expect(names).toContain('ledger warden');
 
-    // Session 480412e0's clicked option, verbatim (Hetzner's read on #1086).
+    // The QA-reported clicked option from #1086 (g), verbatim.
     const option =
       'Catch the Falling Hunter, lunge across the slick root and grab the sliding glass arm before it goes over the edge.';
     const declaredAttack = detectDeclaredAttack(option, roster);
