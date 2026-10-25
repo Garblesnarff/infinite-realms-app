@@ -8,11 +8,18 @@ import { afterEach, describe, expect, it, spyOn } from 'bun:test';
 
 import { logger } from '../../lib/logger.js';
 import { resetCircuitBreakersForTests } from '../../utils/circuit-breaker.js';
+// Main's live schema (see dm-response-phase.test.ts for provenance): the
+// provider request must serialize byte-for-byte to this on every path
+// (strategist HOLD at 342151ce, per-path test).
+import mainDmResponseSchema from '../dm/__tests__/fixtures/main-dm-response-schema.json' with {
+  type: 'json',
+};
 import { dmResponseSchema } from '../dm/dm-response-schema.js';
 import { getVendorCapabilityProfile, modelSupportsStrictSchema } from '../llm-model-config.js';
 import {
   LLMProviderService,
   parseStringifiedNested,
+  setStrictBranchValidationModeForTests,
   stripOptionalNulls,
   validateToolReplyText,
 } from '../llm-provider-service.js';
@@ -40,6 +47,14 @@ const VALID_DM_REPLY = JSON.stringify({
   combatants: [],
   combat_actions: [],
 });
+
+/** One valid targeted combat action, for wrong-phase tests under the FIX-round-2 semantics (a non-empty dropped section still flags). */
+const NON_EMPTY_COMBAT_ACTION = {
+  actor_id: 'hero',
+  action_type: 'attack',
+  target_ids: ['goblin'],
+  movement_feet: 0,
+};
 
 /** `toolArguments` makes the reply a forced `dm_reply` tool call (#783). */
 type Reply = { status?: number; content?: string; toolArguments?: string };
@@ -1367,5 +1382,273 @@ describe('#875 narration normalization on every schema path', () => {
     expect(result.error).toBeUndefined();
     expect(JSON.parse(result.text).text).toBe(story);
     expect(result.usage?.schemaShadowInvalid).toBe(1);
+  });
+});
+
+describe('#782 HOLD item 1: true shadow compares every branch against the phase', () => {
+  it('tool path: a full-valid tool reply on a narrative turn logs a phase-only mismatch, and keeps it', async () => {
+    useModel('anthropic/claude-haiku-5.5');
+    // FIX round 2: the wrong-phase fixture must carry a NON-EMPTY dropped
+    // section — empty dropped arrays are padding, not a mismatch, so
+    // VALID_DM_REPLY on its own no longer mismatches (see the next test).
+    const reply = JSON.stringify({
+      ...JSON.parse(VALID_DM_REPLY),
+      combat_actions: [NON_EMPTY_COMBAT_ACTION],
+    });
+    const bodies = stubOpenRouter([{ toolArguments: reply }]);
+    const warn = spyOn(logger, 'warn').mockImplementation((() => {}) as typeof logger.warn);
+    try {
+      const result = await LLMProviderService.generate({
+        prompt: 'volatile user prompt',
+        systemPrompt: 'stable system block',
+        responseSchema: dmResponseSchema,
+        responseSchemaPhase: 'narrative',
+        maxTokens: 100,
+      });
+
+      // The request schema is today's full schema; the tool arguments are
+      // valid under it (stripping keeps every named key). The phase
+      // comparison sees the arguments with full-named keys intact — the
+      // non-empty dropped section is still there — so it logs the
+      // mismatch instead of swallowing it.
+      expect(bodies).toHaveLength(1);
+      expect(result.error).toBeUndefined();
+      expect(result.text).toBe(reply);
+      expect(result.usage?.schemaDelivery).toBe('forced-tool-call');
+      // The forced-tool parameters serialize byte-for-byte to main's schema:
+      // the request is today's schema, not the phase schema, on this path too.
+      const tools = (bodies[0] as unknown as Body).tools as {
+        function: { parameters: unknown };
+      }[];
+      expect(JSON.stringify(tools[0].function.parameters)).toBe(
+        JSON.stringify(mainDmResponseSchema),
+      );
+      expect(result.usage?.schemaShadowInvalid).toBe(1);
+      const calls = warn.mock.calls.map(
+        (call) => call[0] as { msg?: string; phase?: string; additionalProperty?: string },
+      );
+      const shadow = calls.find((entry) => entry?.msg === 'LLM_SCHEMA_SHADOW_INVALID');
+      expect(shadow?.phase).toBe('narrative');
+      // The log names the offending key: the non-empty dropped section.
+      expect(shadow?.additionalProperty).toBe('combat_actions');
+      // No tool failure: the reply is valid under today's full schema.
+      expect(calls.find((entry) => entry?.msg === 'LLM_TOOL_SCHEMA_INVALID')).toBeUndefined();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('tool path: a narrative turn padded with empty dropped sections is not a phase mismatch', async () => {
+    // #782 FIX at a430d910: every full-valid reply carries combat_actions
+    // and map_actions (both full-required), so counting empty dropped
+    // sections would fire the counter on nearly every narrative turn and
+    // the zero-invalid flip gate could never be met. Empty dropped
+    // sections are removed before validation; only a non-empty one flags.
+    useModel('anthropic/claude-haiku-5.5');
+    const bodies = stubOpenRouter([{ toolArguments: VALID_DM_REPLY }]);
+    const warn = spyOn(logger, 'warn').mockImplementation((() => {}) as typeof logger.warn);
+    try {
+      const result = await LLMProviderService.generate({
+        prompt: 'volatile user prompt',
+        systemPrompt: 'stable system block',
+        responseSchema: dmResponseSchema,
+        responseSchemaPhase: 'narrative',
+        maxTokens: 100,
+      });
+
+      expect(bodies).toHaveLength(1);
+      expect(result.error).toBeUndefined();
+      expect(result.text).toBe(VALID_DM_REPLY);
+      expect(result.usage?.schemaDelivery).toBe('forced-tool-call');
+      expect(result.usage?.schemaShadowInvalid).toBeUndefined();
+      const calls = warn.mock.calls.map((call) => call[0] as { msg?: string });
+      expect(calls.find((entry) => entry?.msg === 'LLM_SCHEMA_SHADOW_INVALID')).toBeUndefined();
+      expect(calls.find((entry) => entry?.msg === 'LLM_TOOL_SCHEMA_INVALID')).toBeUndefined();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('tool path: a combat turn padded with an empty dropped section is not a phase mismatch', async () => {
+    // Combat drops only map_actions; VALID_DM_REPLY carries it empty, so
+    // the comparison removes it and the reply is combat-clean. combat_actions
+    // (empty) is combat-kept, not dropped, so nothing else changes.
+    useModel('anthropic/claude-haiku-5.5');
+    const bodies = stubOpenRouter([{ toolArguments: VALID_DM_REPLY }]);
+    const warn = spyOn(logger, 'warn').mockImplementation((() => {}) as typeof logger.warn);
+    try {
+      const result = await LLMProviderService.generate({
+        prompt: 'volatile user prompt',
+        systemPrompt: 'stable system block',
+        responseSchema: dmResponseSchema,
+        responseSchemaPhase: 'combat',
+        maxTokens: 100,
+      });
+
+      expect(bodies).toHaveLength(1);
+      expect(result.error).toBeUndefined();
+      expect(result.text).toBe(VALID_DM_REPLY);
+      expect(result.usage?.schemaDelivery).toBe('forced-tool-call');
+      expect(result.usage?.schemaShadowInvalid).toBeUndefined();
+      const calls = warn.mock.calls.map((call) => call[0] as { msg?: string });
+      expect(calls.find((entry) => entry?.msg === 'LLM_SCHEMA_SHADOW_INVALID')).toBeUndefined();
+      expect(calls.find((entry) => entry?.msg === 'LLM_TOOL_SCHEMA_INVALID')).toBeUndefined();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('tool path: a phase-clean tactical tool reply with one unnamed root key is kept, with no phase mismatch', async () => {
+    // #782 FIX at 87c8e32f: the phase comparison ignores keys the full
+    // schema does not declare. A tactical-clean reply carrying one
+    // #783-tolerated extra key (visual_prompt) is phase-clean once that
+    // key is ignored, so it must not log or count as a phase mismatch.
+    // (A narrative version of this test cannot exist: a narrative-clean
+    // reply omits the fight arrays, which the full schema requires, so
+    // the tool path would reject it before any comparison runs. Tactical
+    // is the phase where full-valid and phase-clean coexist.)
+    useModel('anthropic/claude-haiku-5.5');
+    const withExtra = JSON.stringify({ ...JSON.parse(VALID_DM_REPLY), visual_prompt: 'a lantern' });
+    const bodies = stubOpenRouter([{ toolArguments: withExtra }]);
+    const warn = spyOn(logger, 'warn').mockImplementation((() => {}) as typeof logger.warn);
+    try {
+      const result = await LLMProviderService.generate({
+        prompt: 'volatile user prompt',
+        systemPrompt: 'stable system block',
+        responseSchema: dmResponseSchema,
+        responseSchemaPhase: 'tactical',
+        maxTokens: 100,
+      });
+
+      expect(bodies).toHaveLength(1);
+      expect(result.error).toBeUndefined();
+      // The extra key is stripped from the shipped text, as on #783.
+      expect(result.text).toBe(VALID_DM_REPLY);
+      expect(result.usage?.schemaDelivery).toBe('forced-tool-call');
+      expect(result.usage?.schemaShadowInvalid).toBeUndefined();
+      const calls = warn.mock.calls.map((call) => call[0] as { msg?: string });
+      expect(calls.find((entry) => entry?.msg === 'LLM_SCHEMA_SHADOW_INVALID')).toBeUndefined();
+      expect(calls.find((entry) => entry?.msg === 'LLM_TOOL_SCHEMA_INVALID')).toBeUndefined();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('tool path: a genuine tactical phase defect is still counted when an unnamed key is also present', async () => {
+    // The ignore in the test above must not blind the comparison: a
+    // full-named wrong-phase section survives the strip and still counts,
+    // and the log names it (not the ignored extra key).
+    useModel('anthropic/claude-haiku-5.5');
+    const reply = JSON.stringify({
+      ...JSON.parse(VALID_DM_REPLY),
+      scene_spec: { environment: 'corridor', seed: 7 },
+      visual_prompt: 'a lantern',
+    });
+    const bodies = stubOpenRouter([{ toolArguments: reply }]);
+    const warn = spyOn(logger, 'warn').mockImplementation((() => {}) as typeof logger.warn);
+    try {
+      const result = await LLMProviderService.generate({
+        prompt: 'volatile user prompt',
+        systemPrompt: 'stable system block',
+        responseSchema: dmResponseSchema,
+        responseSchemaPhase: 'tactical',
+        maxTokens: 100,
+      });
+
+      expect(bodies).toHaveLength(1);
+      expect(result.error).toBeUndefined();
+      // scene_spec ships (it is full-named); only the unnamed key is stripped.
+      expect(result.text).toBe(
+        JSON.stringify({
+          ...JSON.parse(VALID_DM_REPLY),
+          scene_spec: { environment: 'corridor', seed: 7 },
+        }),
+      );
+      expect(result.usage?.schemaShadowInvalid).toBe(1);
+      const shadow = warn.mock.calls
+        .map((call) => call[0] as { msg?: string; phase?: string; additionalProperty?: string })
+        .find((entry) => entry?.msg === 'LLM_SCHEMA_SHADOW_INVALID');
+      expect(shadow?.phase).toBe('tactical');
+      expect(shadow?.additionalProperty).toBe('scene_spec');
+      const calls = warn.mock.calls.map((call) => call[0] as { msg?: string });
+      expect(calls.find((entry) => entry?.msg === 'LLM_TOOL_SCHEMA_INVALID')).toBeUndefined();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('strict path: a full-valid strict reply on a narrative turn logs a phase-only mismatch, and keeps it', async () => {
+    useModel('openai/gpt-5-mini');
+    // FIX round 2: the wrong-phase fixture carries a non-empty dropped
+    // section (empty dropped arrays are padding, not a mismatch).
+    const reply = JSON.stringify({
+      ...JSON.parse(VALID_DM_REPLY),
+      combat_actions: [NON_EMPTY_COMBAT_ACTION],
+    });
+    const bodies = stubOpenRouter([{ content: reply }]);
+    const warn = spyOn(logger, 'warn').mockImplementation((() => {}) as typeof logger.warn);
+    try {
+      const result = await LLMProviderService.generate({
+        prompt: 'Continue',
+        responseSchema: dmResponseSchema,
+        responseSchemaPhase: 'narrative',
+      });
+
+      expect(bodies).toHaveLength(1);
+      expect(result.error).toBeUndefined();
+      expect(result.text).toBe(reply);
+      // The strict response_format schema serializes byte-for-byte to main's
+      // schema on this path too.
+      const schema = (
+        (bodies[0] as unknown as Body).response_format as {
+          json_schema: { schema: unknown };
+        }
+      ).json_schema.schema;
+      expect(JSON.stringify(schema)).toBe(JSON.stringify(mainDmResponseSchema));
+      expect(result.usage?.schemaShadowInvalid).toBe(1);
+      const shadow = warn.mock.calls
+        .map((call) => call[0] as { msg?: string; phase?: string; additionalProperty?: string })
+        .find((entry) => entry?.msg === 'LLM_SCHEMA_SHADOW_INVALID');
+      expect(shadow?.phase).toBe('narrative');
+      expect(shadow?.additionalProperty).toBe('combat_actions');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('strict path under LLM_STRICT_BRANCH_VALIDATION=enforce still compares, never hard-fails, a full-valid reply', async () => {
+    // The request schema is today's full schema, so enforce mode has nothing
+    // new to enforce: a full-valid reply is kept and the phase comparison
+    // still logs and counts. (Shadow must hold "with every env value".)
+    useModel('openai/gpt-5-mini');
+    // FIX round 2: the wrong-phase fixture carries a non-empty dropped
+    // section (empty dropped arrays are padding, not a mismatch).
+    const reply = JSON.stringify({
+      ...JSON.parse(VALID_DM_REPLY),
+      combat_actions: [NON_EMPTY_COMBAT_ACTION],
+    });
+    const bodies = stubOpenRouter([{ content: reply }]);
+    const warn = spyOn(logger, 'warn').mockImplementation((() => {}) as typeof logger.warn);
+    setStrictBranchValidationModeForTests('enforce');
+    try {
+      const result = await LLMProviderService.generate({
+        prompt: 'Continue',
+        responseSchema: dmResponseSchema,
+        responseSchemaPhase: 'narrative',
+      });
+
+      expect(bodies).toHaveLength(1);
+      expect(result.error).toBeUndefined();
+      expect(result.text).toBe(reply);
+      expect(result.usage?.schemaShadowInvalid).toBe(1);
+      const shadow = warn.mock.calls
+        .map((call) => call[0] as { msg?: string; phase?: string; additionalProperty?: string })
+        .find((entry) => entry?.msg === 'LLM_SCHEMA_SHADOW_INVALID');
+      expect(shadow?.phase).toBe('narrative');
+      expect(shadow?.additionalProperty).toBe('combat_actions');
+    } finally {
+      warn.mockRestore();
+      setStrictBranchValidationModeForTests('shadow');
+    }
   });
 });

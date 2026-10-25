@@ -2,6 +2,13 @@ import { describe, expect, it, mock } from 'bun:test';
 import { Elysia } from 'elysia';
 
 import smokeTurn from '../../../../../shared/test-fixtures/deploy-smoke-generate.json';
+// Main's live schema, captured from the main tree's own module output (see
+// server-bun/src/services/dm/__tests__/dm-response-phase.test.ts): the
+// provider-bound schema must serialize byte-for-byte to this, not just to
+// this branch's live object (strategist HOLD at 342151ce, per-path test).
+import mainDmResponseSchema from '../../../services/dm/__tests__/fixtures/main-dm-response-schema.json' with {
+  type: 'json',
+};
 
 let generatedInputs: Record<string, unknown>[] = [];
 
@@ -71,6 +78,12 @@ const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
 const { llmRoutes } = await import('../llm.js');
 // What the old client sent: ai-service.ts imported this same export and put it
 // on the request body as `responseSchema`.
+// #782 item 8, strategist HOLD (true shadow): the live request keeps today's
+// schema, unchanged, on every path — the picked phase only selects the
+// comparison schema (asserted by the picker unit tests + the
+// LLM_GENERATE_PHASE log), never the request schema. The assertions below
+// pin today's live schema. The anti-injection property is unchanged:
+// whatever the client sends is ignored.
 const { dmResponseSchema } = await import('../../../services/dm/dm-response-schema.js');
 const app = createRequestPipelineApp().use(llmRoutes);
 
@@ -121,9 +134,14 @@ describe('#782 item 3: DM reply schema built server-side', () => {
     expect(response.status).toBe(200);
     expect(generatedInputs).toHaveLength(1);
     // The provider must receive the canonical server-built schema, not the
-    // client-sent value — byte-identical to what the old client was sending.
+    // client-sent value — byte-identical to today's live schema, whatever
+    // phase the picker selected for comparison — and byte-identical to
+    // main's schema, not just this branch's live object.
     expect(JSON.stringify(generatedInputs[0]?.responseSchema)).toBe(
       JSON.stringify(dmResponseSchema),
+    );
+    expect(JSON.stringify(generatedInputs[0]?.responseSchema)).toBe(
+      JSON.stringify(mainDmResponseSchema),
     );
   });
 
@@ -135,6 +153,9 @@ describe('#782 item 3: DM reply schema built server-side', () => {
     expect(generatedInputs).toHaveLength(1);
     expect(JSON.stringify(generatedInputs[0]?.responseSchema)).toBe(
       JSON.stringify(dmResponseSchema),
+    );
+    expect(JSON.stringify(generatedInputs[0]?.responseSchema)).toBe(
+      JSON.stringify(mainDmResponseSchema),
     );
   });
 
@@ -153,5 +174,6 @@ describe('#782 item 3: DM reply schema built server-side', () => {
     // strings here mean a byte-identical schema on the wire before and after.
     expect(withClientValue).toBe(withoutClientValue);
     expect(withClientValue).toBe(JSON.stringify(dmResponseSchema));
+    expect(withClientValue).toBe(JSON.stringify(mainDmResponseSchema));
   });
 });

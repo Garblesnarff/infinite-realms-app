@@ -9,8 +9,12 @@
  * roster and returns the pending entry; the engine resolves the cast on confirm.
  *
  * The DM turn goes through the real `POST /v1/llm/generate` route. Only the model,
- * the auth, the usage service and the roster/index reads are stubbed — no live
- * provider calls.
+ * the auth, the usage service, the roster/index reads, and the phase picker's
+ * encounter/map reads are stubbed — no live provider calls. The turns start
+ * with no live encounter (the spell creates a pending entry), so the picker
+ * reads stub to "no encounter"; the real reads would open the shared pg pool
+ * against an unreachable DATABASE_URL and poison later requests in the file
+ * (PR 1110 run 40160860100 timeout).
  */
 import { describe, expect, it, mock } from 'bun:test';
 import { Elysia } from 'elysia';
@@ -84,6 +88,23 @@ mock.module('../../../services/combat/combat-entry-campaign-index.js', () => ({
     },
   }),
 }));
+mock.module('../../../services/combat/combat-encounter-service.js', () => ({
+  CombatEncounterService: { getActiveEncounter: async () => undefined },
+}));
+// The mock replaces the whole module, so it must carry every name the
+// loaded graph imports; the reads these scenarios never make throw loudly
+// instead of silently faking a write.
+const unstubbedStoreRead = (name: string) => async () => {
+  throw new Error(`tactical-map-store.${name} is not stubbed for GP-060 scenarios`);
+};
+mock.module('../../../services/combat/tactical-map-store.js', () => ({
+  loadActiveTacticalMap: async () => null,
+  loadLatestTacticalMapRow: unstubbedStoreRead('loadLatestTacticalMapRow'),
+  saveTacticalMapRow: unstubbedStoreRead('saveTacticalMapRow'),
+  saveTacticalMap: unstubbedStoreRead('saveTacticalMap'),
+  deactivateTacticalMap: unstubbedStoreRead('deactivateTacticalMap'),
+}));
+
 mock.module('../../../services/session/session-message-service.js', () => ({
   SessionMessageService: {
     withRollTurn: async (
