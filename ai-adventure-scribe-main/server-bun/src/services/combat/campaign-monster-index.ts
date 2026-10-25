@@ -176,27 +176,49 @@ export function findBibleNameInProse(
   return best?.name ?? null;
 }
 
+/** Combat's duplicate numbering ("Glass Prowler 2"), not part of the creature's name. */
+const DUPLICATE_SUFFIX = /\s+\d+$/;
+
 /**
  * Matches a combatant against the campaign's authored creatures.
  *
- * Both the DM's `monster_id` and the combatant's display name are tried, each normalized by
- * the shared rule, so "Gluten Golem", "gluten_golem", "gluten-golem" and "GLUTEN GOLEM" all
- * reach the same chunk. Beyond that, the only inexact match is a titled name against the one
- * bible entry it abbreviates (`findTitledPartialMatch`). There is deliberately no other fuzzy
- * matching against authored names, because a bible's creatures are the author's canon and
- * guessing between two of them would hand one creature's numbers to another.
+ * The combatant's NAME wins over the DM's `monster_id` suggestion (#1102): a bible
+ * creature the DM names outright keeps its own numbers even when the DM's id names a
+ * different creature (a 'Glass Prowler' named with `srd:glass-hide-ape` used to seat the
+ * bible's Glass-Hide Ape block, because the id was tried first). The order is: exact name,
+ * duplicate-number-stripped name, titled-partial on the stripped name, and only then the
+ * monster_id — a titled name is still a name match, so "Captain Reeves" plus an id naming
+ * another creature seats the Captain, and the duplicate strip applies to titled seats too
+ * ("Captain Reeves 2"). Each candidate is normalized by the shared rule, so "Gluten Golem",
+ * "gluten_golem", "gluten-golem" and "GLUTEN GOLEM" all reach the same chunk. A trailing
+ * duplicate number is combat's numbering, not part of the name, so "Glass Prowler 2" reaches
+ * "Glass Prowler" (mirroring `bestiaryDisplayName`'s suffix rule). Beyond that, the only
+ * inexact match is a titled name against the one bible entry it abbreviates
+ * (`findTitledPartialMatch`). There is deliberately no other fuzzy matching against authored
+ * names, because a bible's creatures are the author's canon and guessing between two of them
+ * would hand one creature's numbers to another. An id-identified seat still resolves: when
+ * the name matches nothing, the id is tried, so a DM-invented label ("Corrupted Shard")
+ * seated by its bible key still finds its block.
  */
 export function findAuthoredMonster(
   index: CampaignMonsterIndex,
   monsterId?: string | null,
   name?: string | null,
 ): AuthoredMonster | null {
-  for (const candidate of [monsterId, name]) {
-    if (!candidate) continue;
-    const hit = index.byKey.get(normalizeMonsterKey(candidate));
-    if (hit) return hit;
+  if (name) {
+    const exact = index.byKey.get(normalizeMonsterKey(name));
+    if (exact) return exact;
+    const strippedName = name.replace(DUPLICATE_SUFFIX, '');
+    const stripped = index.byKey.get(normalizeMonsterKey(strippedName));
+    if (stripped) return stripped;
+    const titled = findTitledPartialMatch(index, strippedName);
+    if (titled) return titled;
   }
-  return name ? findTitledPartialMatch(index, name) : null;
+  if (monsterId) {
+    const byId = index.byKey.get(normalizeMonsterKey(monsterId));
+    if (byId) return byId;
+  }
+  return null;
 }
 
 export interface MissingXpBlock {
