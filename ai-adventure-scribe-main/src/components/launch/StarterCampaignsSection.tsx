@@ -22,10 +22,7 @@ export const StarterCampaignsSection: React.FC = () => {
   }
 
   return (
-    <section
-      id="starter-campaigns"
-      className="relative py-24 bg-gradient-to-b from-purple-900/30 to-gray-900"
-    >
+    <section id="starter-campaigns" className="relative py-24 bg-infinite-dark">
       <div className="max-w-7xl mx-auto px-6">
         {/* Section Header */}
         <div className="text-center mb-16">
@@ -42,7 +39,7 @@ export const StarterCampaignsSection: React.FC = () => {
         {isLoading && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {[1, 2].map((n) => (
-              <div key={n} className="h-[450px] rounded-2xl bg-gray-800/50 animate-pulse" />
+              <div key={n} className="h-[450px] rounded-2xl bg-[#0c1220] animate-pulse" />
             ))}
           </div>
         )}
@@ -69,7 +66,7 @@ export const StarterCampaignsSection: React.FC = () => {
             More adventures coming soon! Each campaign is hand-crafted with unique storylines,
             memorable NPCs, and rich world-building.
           </p>
-          <p className="text-purple-400 font-semibold">
+          <p className="text-infinite-gold font-semibold">
             Create your own campaigns or explore our curated collection
           </p>
         </div>

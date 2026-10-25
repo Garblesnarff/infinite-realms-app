@@ -46,7 +46,7 @@ export const FeaturesSection: React.FC = () => {
         };
       case 'beta':
         return {
-          badge: 'bg-amber-500/20 text-amber-300 border-amber-500/30 backdrop-blur-md',
+          badge: 'bg-infinite-gold/20 text-infinite-gold border-infinite-gold/30 backdrop-blur-md',
         };
       case 'planned':
         return {
@@ -84,7 +84,7 @@ export const FeaturesSection: React.FC = () => {
   };
 
   return (
-    <section className="relative py-24 bg-gradient-to-b from-gray-900 to-purple-900/30">
+    <section className="relative py-24 bg-infinite-dark">
       <div className="max-w-7xl mx-auto px-6">
         {/* Section Header */}
         <div className="text-center mb-16">
@@ -129,7 +129,7 @@ export const FeaturesSection: React.FC = () => {
                   className="absolute bottom-0 left-0 right-0 p-8"
                   style={{ zIndex: Z_INDEX.DROPDOWN }}
                 >
-                  <h3 className="text-2xl font-bold text-white mb-3 group-hover:text-amber-400 transition-colors">
+                  <h3 className="text-2xl font-bold text-white mb-3 group-hover:text-infinite-gold transition-colors">
                     {feature.title}
                   </h3>
                   <p className="text-gray-200 leading-relaxed">{feature.description}</p>

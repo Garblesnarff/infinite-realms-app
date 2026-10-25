@@ -140,11 +140,11 @@ export const WaitlistForm: React.FC<WaitlistFormProps> = ({
   };
 
   const inputClasses = {
-    hero: 'h-16 text-lg px-6 border border-purple-500/50 focus:ring-2 focus:ring-purple-400 focus:border-transparent bg-white/10 text-white placeholder-gray-400',
+    hero: 'h-16 text-lg px-6 border border-white/20 focus:ring-2 focus:ring-infinite-gold focus:border-transparent bg-[#0c1220] text-white placeholder:text-[#9fb0e0]',
     section:
-      'h-14 text-lg px-4 border border-purple-500/50 focus:ring-2 focus:ring-purple-400 focus:border-transparent bg-white/10 text-white placeholder-gray-400',
+      'h-14 text-lg px-4 border border-white/20 focus:ring-2 focus:ring-infinite-gold focus:border-transparent bg-[#0c1220] text-white placeholder:text-[#9fb0e0]',
     modal:
-      'h-14 text-lg px-4 border border-purple-500/50 focus:ring-2 focus:ring-purple-400 focus:border-transparent bg-white/10 text-white placeholder-gray-400',
+      'h-14 text-lg px-4 border border-white/20 focus:ring-2 focus:ring-infinite-gold focus:border-transparent bg-[#0c1220] text-white placeholder:text-[#9fb0e0]',
   };
 
   return (
@@ -152,7 +152,7 @@ export const WaitlistForm: React.FC<WaitlistFormProps> = ({
       <form onSubmit={handleSubmit} className="space-y-4" aria-label="Get updates by email">
         {/* Name field (optional) */}
         <div>
-          <Label htmlFor="waitlist-name" className="sr-only">
+          <Label htmlFor="waitlist-name" className="block text-sm font-medium text-gray-300 mb-2">
             Name (Optional)
           </Label>
           <Input
@@ -168,7 +168,7 @@ export const WaitlistForm: React.FC<WaitlistFormProps> = ({
 
         {/* Email field (required) */}
         <div>
-          <Label htmlFor="waitlist-email" className="sr-only">
+          <Label htmlFor="waitlist-email" className="block text-sm font-medium text-gray-300 mb-2">
             Email Address *
           </Label>
           <Input
@@ -227,8 +227,8 @@ export const WaitlistForm: React.FC<WaitlistFormProps> = ({
           disabled={status === 'loading' || status === 'success'}
           className={`
             w-full h-14 text-xl font-bold transition-all duration-300
-            bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500
-            text-white shadow-[0_0_30px_rgba(251,191,36,0.3)] hover:shadow-[0_0_40px_rgba(251,191,36,0.5)]
+            bg-gradient-to-b from-[#f6e3b8] via-[#d5b070] to-[#c69d57] text-[#1a1206] border border-[#f3deb0]
+            shadow-[0_0_30px_rgba(213,176,112,0.3)] hover:shadow-[0_0_40px_rgba(213,176,112,0.5)] hover:brightness-110
             hover:scale-[1.02]
           `}
         >

@@ -5,7 +5,7 @@ import { Z_INDEX } from '@/constants/z-index';
 
 export const FounderStorySection: React.FC = () => {
   return (
-    <section className="py-24 bg-gray-900 relative overflow-hidden">
+    <section className="py-24 bg-infinite-dark relative overflow-hidden">
       {/* Background Texture Image */}
       <div className="absolute inset-0">
         <img
@@ -14,17 +14,17 @@ export const FounderStorySection: React.FC = () => {
           className="w-full h-full object-cover opacity-30"
         />
         {/* Much lighter overlay so dragon scale texture shows through */}
-        <div className="absolute inset-0 bg-gray-900/50"></div>
+        <div className="absolute inset-0 bg-infinite-dark/50"></div>
       </div>
 
       <div className="container mx-auto px-4 relative" style={{ zIndex: Z_INDEX.DROPDOWN }}>
-        <div className="max-w-4xl mx-auto bg-gradient-to-br from-gray-800/60 to-gray-900/60 rounded-2xl p-8 md:p-12 border border-purple-500/20 shadow-2xl backdrop-blur-sm">
+        <div className="max-w-4xl mx-auto bg-[#0c1220] rounded-2xl p-8 md:p-12 border border-infinite-gold/20 shadow-2xl backdrop-blur-sm">
           {/* Decorative Elements */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+          <div className="absolute top-0 right-0 w-64 h-64 bg-infinite-gold/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
 
           <div className="relative" style={{ zIndex: Z_INDEX.DROPDOWN }}>
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-8 flex items-center gap-3">
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-purple-200">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-infinite-gold to-infinite-teal">
                 Built to Escape the Grind
               </span>
             </h2>
@@ -54,13 +54,13 @@ export const FounderStorySection: React.FC = () => {
               {/* Signature Section with Script Font */}
               <div className="pt-8 border-t border-gray-700/50 mt-8">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xl text-white shadow-lg">
+                  <div className="w-12 h-12 bg-infinite-gold rounded-full flex items-center justify-center font-bold text-xl text-[#1a1206] shadow-lg">
                     R
                   </div>
                   <div>
                     {/* Handwritten Signature - Using Dancing Script font */}
-                    <p className="text-amber-400 text-4xl font-dancing mb-1">Rob</p>
-                    <p className="text-purple-400 text-sm">Creator, Infinite Realms</p>
+                    <p className="text-infinite-gold text-4xl font-dancing mb-1">Rob</p>
+                    <p className="text-infinite-teal text-sm">Creator, Infinite Realms</p>
                   </div>
                 </div>
                 {/* X/Twitter Link */}
@@ -68,7 +68,7 @@ export const FounderStorySection: React.FC = () => {
                   href="https://x.com/printedpathways"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-gray-300 hover:text-purple-400 transition-colors"
+                  className="inline-flex items-center gap-2 text-gray-300 hover:text-infinite-gold transition-colors"
                 >
                   <Twitter className="w-5 h-5" />
                   <span className="text-sm">@printedpathways</span>

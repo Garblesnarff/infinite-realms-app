@@ -45,7 +45,7 @@ export const HeroSection: React.FC = () => {
           className="w-full h-full object-cover"
         />
         {/* The "Readability" Gradient - Essential for text pop */}
-        <div className="absolute inset-0 bg-gradient-to-b from-gray-900/90 via-purple-900/80 to-gray-900"></div>
+        <div className="absolute inset-0 bg-gradient-to-b from-infinite-dark/90 via-[#0c1220]/80 to-infinite-dark"></div>
       </div>
 
       {/* Content */}
@@ -64,7 +64,7 @@ export const HeroSection: React.FC = () => {
         {/* Main Headline */}
         <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 tracking-tight leading-tight drop-shadow-lg">
           THE{' '}
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-amber-500">
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#f3deb0] to-[#d5b070]">
             5E CAMPAIGN
           </span>{' '}
           <br />
@@ -83,7 +83,7 @@ export const HeroSection: React.FC = () => {
             to="/explore"
             onClick={handlePlayFree}
             data-track-cta="play_free"
-            className="group relative px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-600 rounded-lg text-white font-bold text-lg shadow-[0_0_20px_rgba(245,158,11,0.3)] hover:shadow-[0_0_30px_rgba(245,158,11,0.5)] transition-all transform hover:-translate-y-1"
+            className="group relative px-8 py-4 bg-gradient-to-b from-[#f6e3b8] via-[#d5b070] to-[#c69d57] text-[#1a1206] border border-[#f3deb0] rounded-lg font-bold text-lg shadow-[0_0_20px_rgba(213,176,112,0.3)] hover:shadow-[0_0_30px_rgba(213,176,112,0.5)] hover:brightness-110 transition-all transform hover:-translate-y-1"
           >
             <span className="flex items-center gap-2">
               Play free

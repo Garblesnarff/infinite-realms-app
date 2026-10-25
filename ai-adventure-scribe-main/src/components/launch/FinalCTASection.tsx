@@ -59,7 +59,7 @@ export const FinalCTASection: React.FC = () => {
           className="w-full h-full object-cover scale-110"
         />
         {/* Heavy dimming overlay */}
-        <div className="absolute inset-0 bg-gray-900/90"></div>
+        <div className="absolute inset-0 bg-infinite-dark/90"></div>
       </div>
 
       <div className="max-w-5xl mx-auto px-6 relative" style={{ zIndex: Z_INDEX.DROPDOWN }}>
@@ -79,7 +79,7 @@ export const FinalCTASection: React.FC = () => {
             to="/explore"
             onClick={handlePlayFree}
             data-track-cta="play_free_footer"
-            className="inline-flex items-center gap-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white px-16 py-6 rounded-xl shadow-[0_0_40px_rgba(251,191,36,0.4)] hover:shadow-[0_0_60px_rgba(251,191,36,0.6)] transition-all duration-300 text-2xl font-bold hover:scale-105"
+            className="inline-flex items-center gap-4 bg-gradient-to-b from-[#f6e3b8] via-[#d5b070] to-[#c69d57] text-[#1a1206] border border-[#f3deb0] px-16 py-6 rounded-xl shadow-[0_0_40px_rgba(213,176,112,0.4)] hover:shadow-[0_0_60px_rgba(213,176,112,0.6)] hover:brightness-110 transition-all duration-300 text-2xl font-bold hover:scale-105"
           >
             <span>{finalCTA.cta}</span>
             <ArrowRight className="w-8 h-8" />
@@ -97,14 +97,14 @@ export const FinalCTASection: React.FC = () => {
         </div>
 
         {/* What Happens Next - Simplified */}
-        <div className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 border border-[rgba(213,176,112,0.35)] rounded-2xl p-10 backdrop-blur-md">
+        <div className="bg-[#0c1220] border border-[rgba(213,176,112,0.35)] rounded-2xl p-10 backdrop-blur-md">
           <h3 className="text-3xl font-bold text-white mb-10 text-center">
             What happens after you sign up?
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
             <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6 text-white font-bold text-2xl shadow-lg shadow-purple-500/30">
+              <div className="w-16 h-16 bg-gradient-to-br from-[#d5b070] to-[#b9954f] rounded-full flex items-center justify-center mx-auto mb-6 text-[#1a1206] font-bold text-2xl shadow-lg shadow-[#d5b070]/30">
                 1
               </div>
               <h4 className="text-xl font-semibold text-white mb-3">Confirm your email</h4>
@@ -114,7 +114,7 @@ export const FinalCTASection: React.FC = () => {
             </div>
 
             <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-br from-amber-500 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-6 text-white font-bold text-2xl shadow-lg shadow-amber-500/30">
+              <div className="w-16 h-16 bg-gradient-to-br from-[#d5b070] to-[#b9954f] rounded-full flex items-center justify-center mx-auto mb-6 text-[#1a1206] font-bold text-2xl shadow-lg shadow-[#d5b070]/30">
                 2
               </div>
               <h4 className="text-xl font-semibold text-white mb-3">News, not a queue</h4>
@@ -124,7 +124,7 @@ export const FinalCTASection: React.FC = () => {
             </div>
 
             <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6 text-white font-bold text-2xl shadow-lg shadow-purple-500/30">
+              <div className="w-16 h-16 bg-gradient-to-br from-[#d5b070] to-[#b9954f] rounded-full flex items-center justify-center mx-auto mb-6 text-[#1a1206] font-bold text-2xl shadow-lg shadow-[#d5b070]/30">
                 3
               </div>
               <h4 className="text-xl font-semibold text-white mb-3">Leave any time</h4>
