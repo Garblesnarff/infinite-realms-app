@@ -907,7 +907,7 @@ export function dmResponseSchemaForPhase(phase: DmResponsePhase): Record<string,
  * the strict parser runs. Optional story fields stay absent (the story
  * appliers skip absent fields exactly as they skip null ones).
  */
-const PHASE_OMITTED_SECTIONS: Record<DmResponsePhase, string[]> = {
+export const PHASE_OMITTED_SECTIONS: Record<DmResponsePhase, string[]> = {
   // Narrative drops BOTH array sections (combat_actions and map_actions):
   // the strict parser hard-requires both, so filling only one would still
   // miss the rewrite success path on every schema-conformant narrative turn

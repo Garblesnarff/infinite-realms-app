@@ -45,6 +45,14 @@ const VALID_DM_REPLY = JSON.stringify({
   combat_actions: [],
 });
 
+/** One valid targeted combat action, for wrong-phase tests under the FIX-round-2 semantics (a non-empty dropped section still flags). */
+const NON_EMPTY_COMBAT_ACTION = {
+  actor_id: 'hero',
+  action_type: 'attack',
+  target_ids: ['goblin'],
+  movement_feet: 0,
+};
+
 type Reply = { status?: number; content: string };
 
 /** Stub OpenRouter: each call takes the next scripted reply (the last one repeats). */
@@ -431,11 +439,17 @@ describe('#782 item 8: instructed branch shadows phase-only mismatches', () => {
 });
 
 describe('#782 HOLD item 1: findPhaseShadowMismatch (true shadow)', () => {
-  it('flags a dropped section on a narrative turn; ignores full/unknown phases and non-objects', () => {
-    const fullReply = JSON.parse(VALID_DM_REPLY) as Record<string, unknown>;
+  it('flags a non-empty dropped section on a narrative turn; ignores full/unknown phases and non-objects', () => {
+    // FIX round 2: empty dropped sections are padding, not a mismatch, so
+    // the flagged fixture must carry a non-empty dropped section.
+    const fullReply = {
+      ...JSON.parse(VALID_DM_REPLY),
+      combat_actions: [NON_EMPTY_COMBAT_ACTION],
+    } as Record<string, unknown>;
     const mismatch = findPhaseShadowMismatch(fullReply, 'narrative');
     expect(mismatch).not.toBeNull();
     expect(mismatch?.keyword).toBe('additionalProperties');
+    expect(mismatch?.additionalProperty).toBe('combat_actions');
     expect(findPhaseShadowMismatch(fullReply, 'full')).toBeNull();
     expect(findPhaseShadowMismatch(fullReply, undefined)).toBeNull();
     expect(findPhaseShadowMismatch(fullReply, 'bogus')).toBeNull();
@@ -457,7 +471,13 @@ describe('#782 HOLD item 1: findPhaseShadowMismatch (true shadow)', () => {
 describe('#782 HOLD item 1: instructed branch compares against the phase on a full request', () => {
   it('logs a phase-only mismatch for a full-valid reply on a narrative turn, and keeps it', async () => {
     useAnthropicThenGemini();
-    const bodies = stubOpenRouter([{ content: VALID_DM_REPLY }]);
+    // FIX round 2: the wrong-phase fixture carries a non-empty dropped
+    // section (empty dropped arrays are padding, not a mismatch).
+    const reply = JSON.stringify({
+      ...JSON.parse(VALID_DM_REPLY),
+      combat_actions: [NON_EMPTY_COMBAT_ACTION],
+    });
+    const bodies = stubOpenRouter([{ content: reply }]);
     const warn = spyOn(logger, 'warn').mockImplementation((() => {}) as typeof logger.warn);
     try {
       const result = await LLMProviderService.generate({
@@ -474,16 +494,17 @@ describe('#782 HOLD item 1: instructed branch compares against the phase on a fu
       // not retried, not failed over.
       expect(bodies).toHaveLength(1);
       expect(result.model).toBe('anthropic/claude-haiku-5.5');
-      expect(result.text).toBe(VALID_DM_REPLY);
+      expect(result.text).toBe(reply);
       // The instructed system text carries main's schema bytes exactly.
       expect(systemText(bodies[0] as unknown as Body)).toContain(
         JSON.stringify(mainDmResponseSchema),
       );
       expect(result.usage?.schemaShadowInvalid).toBe(1);
       const shadow = warn.mock.calls
-        .map((call) => call[0] as { msg?: string; phase?: string })
+        .map((call) => call[0] as { msg?: string; phase?: string; additionalProperty?: string })
         .find((entry) => entry?.msg === 'LLM_SCHEMA_SHADOW_INVALID');
       expect(shadow?.phase).toBe('narrative');
+      expect(shadow?.additionalProperty).toBe('combat_actions');
     } finally {
       warn.mockRestore();
     }

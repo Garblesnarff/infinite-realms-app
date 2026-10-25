@@ -1,6 +1,10 @@
 import Ajv, { type ValidateFunction } from 'ajv';
 
-import { dmResponseSchema, dmResponseSchemaForPhase } from './dm/dm-response-schema.js';
+import {
+  dmResponseSchema,
+  dmResponseSchemaForPhase,
+  PHASE_OMITTED_SECTIONS,
+} from './dm/dm-response-schema.js';
 import { normalizeReplyNarration, type NarrationNormalization } from './dm/narration-text.js';
 import { isRetryableUpstreamStatus, LLMUpstreamError } from './llm-errors.js';
 import { llmFetch } from './llm-fixture-fetch.js';
@@ -293,6 +297,10 @@ const validatesAgainstLiveSchema = (text: string): boolean => {
  * #783-tolerated extras do not false-positive. When the first error is an
  * additionalProperties failure, the offending key name rides along so the
  * shadow log can tell a genuine wrong-phase section from anything else.
+ * A dropped section carried as an empty array is padding, not content,
+ * and is removed before validation, so the counter does not fire on
+ * nearly every narrative/combat turn; a non-empty dropped section still
+ * flags by name.
  * Only the first error is returned: for a root-level defect that is the
  * additionalProperties error naming the key, while a nested anyOf defect
  * may surface a different first keyword (the count is still correct).
@@ -310,8 +318,22 @@ export const findPhaseShadowMismatch = (
   if (phase !== 'narrative' && phase !== 'combat' && phase !== 'tactical') return null;
   if (!isPlainObject(parsed)) return null;
   try {
+    // #782 FIX at a430d910: empty dropped sections are not mismatches.
+    // Every full-valid reply carries combat_actions and map_actions (both
+    // full-required), while narrative/combat phase schemas drop them with
+    // additionalProperties:false — so without this, the counter fires on
+    // nearly every narrative/combat turn and the zero-invalid flip gate
+    // can never be met for those phases. Remove a dropped section when
+    // it is an empty array (padding, not content); a non-empty one stays
+    // and still flags by name. The copy is never shipped.
+    const comparison = { ...parsed };
+    for (const section of PHASE_OMITTED_SECTIONS[phase] ?? []) {
+      if (Array.isArray(comparison[section]) && comparison[section].length === 0) {
+        delete comparison[section];
+      }
+    }
     const validate = compiledSchemaValidator(dmResponseSchemaForPhase(phase));
-    if (validate(parsed)) return null;
+    if (validate(comparison)) return null;
     const first = validate.errors?.[0];
     const additionalProperty =
       first?.keyword === 'additionalProperties'
