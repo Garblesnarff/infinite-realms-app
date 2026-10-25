@@ -389,6 +389,9 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
       playerMessage: 'I shoot Vance with my longbow',
       initiativeRoll: null,
       initiativeModifier: 2,
+      // #86: the declared weapon action rides to the card so its title
+      // names the verb ("Attack the …?") instead of a generic "Strike".
+      attackSource: 'weapon',
     });
     // …and the declared weapon is what /enter receives, verbatim.
     expect(userDataApi.enterCombat).toHaveBeenCalledWith(

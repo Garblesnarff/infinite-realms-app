@@ -18,6 +18,15 @@ export interface CombatEntryConfirmationSpec {
   spellLabel?: string;
   activeCombat?: boolean;
   /**
+   * What the player declared, for the entry card's verb-by-action title
+   * (#86): 'spell' renders "Cast {spellName} at the …?", weapon/unarmed
+   * renders "Attack the …?", anything else renders "Fight the …?".
+   * Forwarded from the server's declaredAttack; absent on specs built
+   * before this field existed, which fall back to "Fight the …?".
+   */
+  attackSource?: 'unarmed' | 'weapon' | 'spell';
+  spellName?: string;
+  /**
    * The player's own words that declared the attack, quoted verbatim on the card (#877).
    * The card otherwise rebuilds the action from parsed pieces — target names only — and
    * the weapon the player named ("with my longbow") never appeared on it, so the player

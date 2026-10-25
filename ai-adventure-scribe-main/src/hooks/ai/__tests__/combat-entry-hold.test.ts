@@ -106,7 +106,20 @@ describe('holdCombatEntryBeforeDm', () => {
     );
   });
 
-  it('quotes the player\'s own words — weapon included — on the card for a weapon declaration (#877)', async () => {
+  it('forwards the declared action to the card so its title names the verb (#86)', async () => {
+    // The pending fixture declares a Chill Touch cast; the card titles it
+    // "Cast Chill Touch at the …?" only if the action rides along.
+    await hold();
+
+    expect(requestCombatEntryConfirmation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attackSource: 'spell',
+        spellName: 'Chill Touch',
+      }),
+    );
+  });
+
+  it("quotes the player's own words — weapon included — on the card for a weapon declaration (#877)", async () => {
     // The pending is the declared-attack route's real output for this sentence (the
     // server test posts the same fixture through the route): the declared target is
     // its only combatant.
@@ -419,7 +432,7 @@ describe('the card for a fight the DM asked for without naming anyone (#2532)', 
     );
   });
 
-  it('does not quote the player\'s message when the entry is not their declared attack (#877)', async () => {
+  it("does not quote the player's message when the entry is not their declared attack (#877)", async () => {
     // A DM-triggered entry: the player's last words may be an attempt to talk the
     // creature down. Quoting them above "Strike at …?" would put words written for
     // something else on the strike card.

@@ -50,6 +50,16 @@ export function confirmCombatEntry(
     actorLabel: player.name,
     combatantLabels,
     ...(declaredTargets.length ? { declaredTargets, otherCombatants } : {}),
+    // #86: the declared action rides along so the card's title names the
+    // verb ("Cast Chill Touch at the …?" vs "Attack the …?") instead of
+    // always saying "Strike". Only the server's declaredAttack carries
+    // this; DM-triggered entries without one fall back to "Fight the …?".
+    ...(pendingEntry.declaredAttack?.attackSource
+      ? { attackSource: pendingEntry.declaredAttack.attackSource }
+      : {}),
+    ...(pendingEntry.declaredAttack?.spellName
+      ? { spellName: pendingEntry.declaredAttack.spellName }
+      : {}),
     // #877: the player's words ride along so the card can quote them verbatim — the
     // parsed target list alone drops the weapon they named ("with my longbow"). Only
     // when the pending carries the player's own declared attack: a DM-triggered entry
