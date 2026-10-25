@@ -60,7 +60,7 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
   }) => {
     const { showTargetNumbers } = useShowTargetNumbers();
     // The live encounter roster names slugs and says which side an actor is on (#87).
-    const participants = useOptionalCombat()?.state?.participants;
+    const participants = useOptionalCombat()?.state?.activeEncounter?.participants;
     const roster = useMemo<EngineRosterRow[]>(
       () =>
         (participants ?? []).map((participant) => ({

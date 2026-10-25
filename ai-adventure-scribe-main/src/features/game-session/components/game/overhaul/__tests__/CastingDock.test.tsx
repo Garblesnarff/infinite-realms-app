@@ -202,9 +202,7 @@ describe('CastingDock (#2418)', () => {
     });
 
     expect(screen.getByText('TARGET FAILED')).toBeInTheDocument();
-    expect(status()).toBe(
-      'DEX save 6 vs DC 14 · 2 acid damage. Captain Sarah Reeves is now at 9 HP.',
-    );
+    expect(status()).toBe('DEX save 6 vs DC 14 · 2 acid damage. Captain Sarah Reeves is bloodied.');
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(screen.queryByTestId('casting-dock')).not.toBeInTheDocument();
   });
@@ -251,7 +249,7 @@ describe('CastingDock (#2418)', () => {
       finishSheetCast();
     });
 
-    expect(status()).toBe('DEX save 6 · 2 acid damage. Captain Sarah Reeves is now at 9 HP.');
+    expect(status()).toBe('DEX save 6 · 2 acid damage. Captain Sarah Reeves is bloodied.');
   });
 
   it('clears at once when the cast ends with no engine card (a cast outside combat)', () => {

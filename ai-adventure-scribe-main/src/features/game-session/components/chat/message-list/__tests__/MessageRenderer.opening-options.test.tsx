@@ -19,7 +19,10 @@ import type { ChatMessage } from '@/types/game';
 
 const combat = vi.hoisted(() => ({ isInCombat: false, activeEncounter: null as null }));
 
-vi.mock('@/contexts/CombatContext', () => ({ useCombat: () => ({ state: combat }) }));
+vi.mock('@/contexts/CombatContext', () => ({
+  useCombat: () => ({ state: combat }),
+  useOptionalCombat: () => ({ state: combat }),
+}));
 vi.mock('@/contexts/CampaignAssetsContext', () => ({
   useCampaignAssetsContext: () => ({ getAsset: vi.fn() }),
 }));
