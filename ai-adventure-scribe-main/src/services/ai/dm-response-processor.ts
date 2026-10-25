@@ -660,6 +660,17 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     // model reply came in; the unwrap above already let a server field win
     // over a nested inner copy, so this is the server's stored state.
     story_trackers: validStoryTrackers(structuredResponse?.story_trackers),
+    // #1085: the server-applied story effects ride the same envelope, and
+    // the client gate in use-ai-response reads them to refresh the sheet.
+    // They were dropped here before #1094's gate ever saw them (its hook
+    // test mocks chatWithDM, so it never saw the drop) — carry them
+    // verbatim, so a server null (damage not applied) stays null and an
+    // absent field stays absent; the gate treats both as "no refresh".
+    xp_award: structuredResponse?.xp_award,
+    damage: structuredResponse?.damage,
+    items: structuredResponse?.items,
+    conditions: structuredResponse?.conditions,
+    rest: structuredResponse?.rest,
     combatants: structuredResponse?.combatants || [],
     combatDetection: {
       isCombat:
