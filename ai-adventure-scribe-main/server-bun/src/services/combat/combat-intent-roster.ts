@@ -22,6 +22,24 @@ const stringField = (record: Record<string, unknown>, ...keys: string[]): string
   return undefined;
 };
 
+/** #1086 (g): ledger subjects whose current status fact says dead (combat-ending.ts writes it). */
+function deadSubjectKeys(facts: unknown[]): Set<string> {
+  const dead = new Set<string>();
+  for (const fact of facts) {
+    if (!fact || typeof fact !== 'object') continue;
+    const row = fact as { subjectName?: unknown; predicate?: unknown; value?: unknown };
+    if (typeof row.predicate !== 'string' || row.predicate !== 'status') continue;
+    const value =
+      row.value && typeof row.value === 'object' ? (row.value as Record<string, unknown>) : {};
+    if (typeof value.state === 'string' && value.state.toLocaleLowerCase() === 'dead') {
+      const subjectName = typeof row.subjectName === 'string' ? row.subjectName : '';
+      const key = normalizeName(subjectName);
+      if (key) dead.add(key);
+    }
+  }
+  return dead;
+}
+
 function addActor(actors: Map<string, CombatIntentActor>, actor: CombatIntentActor): void {
   const name = actor.name.trim();
   if (!name) return;
@@ -101,12 +119,17 @@ export async function loadCombatIntentActorRoster(
       }),
     ]);
 
+    const deadSet = deadSubjectKeys(facts);
+    const mapKeys = new Set<string>();
+
     for (const actor of actorsFromFacts(facts)) addActor(actors, actor);
 
     for (const entity of tacticalMap?.entities ?? []) {
       if (entity.type === 'pc') continue;
       const name = entity.name?.trim() || entity.slug?.trim() || entity.id.trim();
       if (!name) continue;
+      const key = normalizeName(name);
+      if (key) mapKeys.add(key);
       addActor(actors, {
         name,
         source: 'map',
@@ -171,6 +194,12 @@ export async function loadCombatIntentActorRoster(
           ? { monsterId: stringField(metadata, 'monster_id', 'monsterId') }
           : {}),
       });
+    }
+
+    // #1086 (g): a creature the ledger records as dead is not a target, whichever source
+    // named it, unless it stands on the active board (present now).
+    for (const key of deadSet) {
+      if (!mapKeys.has(key)) actors.delete(key);
     }
   } catch (error) {
     // The gate fails closed when the roster cannot be loaded. The turn itself still reaches the
