@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { useMessageDiceRolls, ROLL_RESULT_FLASH_MS } from '../use-message-dice-rolls';
 
+import { gameReducer, initialGameState } from '@/contexts/game/game-reducer';
 import { useGame } from '@/contexts/GameContext';
 
 vi.mock('@/contexts/GameContext', () => ({ useGame: vi.fn() }));
@@ -121,6 +122,55 @@ describe('roll result flash (#84)', () => {
     rerender();
 
     expect(result.current.completedRoll).toBeNull();
+  });
+
+  it('flashes from the shape the real reducer actually leaves behind (FIX round 1)', () => {
+    // Required by the #1118 FIX verdict: the tests above hand-build the
+    // completed entry, so they would still pass if the real reducer removed
+    // the roll, changed its status, or dropped its result — and the flash
+    // would never show. This test drives the real reducer from pending
+    // through completeDiceRoll, asserts the flash's exact precondition on
+    // the reducer's own output, then feeds that output to the hook.
+    const pending = gameReducer(initialGameState, {
+      type: 'ADD_DICE_ROLL_REQUEST',
+      payload: {
+        ...baseRoll,
+        status: 'pending' as const,
+        requestType: 'attack' as const,
+        timestamp: new Date(),
+      },
+    });
+    expect(pending.diceRollQueue.currentRollId).toBe('roll-1');
+    expect(pending.diceRollQueue.pendingRolls).toHaveLength(1);
+
+    const settled = gameReducer(pending, {
+      type: 'COMPLETE_DICE_ROLL',
+      payload: {
+        id: 'roll-1',
+        result: {
+          dieType: 20,
+          count: 1,
+          modifier: 5,
+          results: [13],
+          keptResults: [13],
+          total: 18,
+          naturalRoll: 13,
+        },
+      },
+    });
+    const left = settled.diceRollQueue.pendingRolls;
+    expect(left).toHaveLength(1);
+    expect(left[0].status).toBe('completed');
+    expect(left[0].result).toEqual(expect.objectContaining({ total: 18, naturalRoll: 13 }));
+    expect(settled.diceRollQueue.currentRollId).toBeUndefined();
+
+    mockQueue(pending.diceRollQueue.currentRollId, pending.diceRollQueue.pendingRolls);
+    const { result, rerender } = renderHook(() => useMessageDiceRolls({ onSendMessage: vi.fn() }));
+    expect(result.current.completedRoll).toBeNull();
+
+    mockQueue(settled.diceRollQueue.currentRollId, settled.diceRollQueue.pendingRolls);
+    rerender();
+    expect(result.current.completedRoll).toEqual({ die: 13, modifier: 5, total: 18 });
   });
 
   it('clears a showing flash when a new roll arrives mid-flash', () => {
