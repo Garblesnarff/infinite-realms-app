@@ -113,6 +113,28 @@ describe('userDataApi request errors (#2280)', () => {
 
     expect(failure).toMatchObject({ status: 502, message: 'Request failed (502)' });
   });
+
+  it.each([401, 403, 404])(
+    'preserves the numeric status from getSession for %s responses',
+    async (status) => {
+      fetchMock.mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Session rejected' }), {
+          status,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+
+      const failure = await userDataApi.getSession('session-1').catch((error: unknown) => error);
+
+      expect(failure).toMatchObject({
+        status,
+      });
+      expect((failure as { name?: unknown }).name).toBe(
+        status === 401 ? 'SessionExpiredError' : 'UserDataApiRequestError',
+      );
+      expect(typeof (failure as { status?: unknown }).status).toBe('number');
+    },
+  );
 });
 
 describe('userDataApi.reportClientFailure (#2515)', () => {
@@ -182,7 +204,13 @@ describe('userDataApi DM action batches bind their DM reply (#841)', () => {
     fetchMock.mockResolvedValue(response);
 
     const handoutActions = [
-      { mode: 'authored' as const, key: 'sealed-letter', title: 'Sealed Letter', body: null, giver: 'Innkeeper' },
+      {
+        mode: 'authored' as const,
+        key: 'sealed-letter',
+        title: 'Sealed Letter',
+        body: null,
+        giver: 'Innkeeper',
+      },
     ];
     await userDataApi.applyDmHandoutActions('session-1', handoutActions, undefined, 'reply-1');
     await userDataApi.applyDmTacticalActions('session-1', [], undefined, 'reply-1');

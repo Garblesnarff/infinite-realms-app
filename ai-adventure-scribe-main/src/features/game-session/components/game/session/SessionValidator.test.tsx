@@ -3,8 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useSessionValidator } from './SessionValidator';
 
+import type * as UserDataApiModule from '@/services/user-data-api';
+
+import { SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
-import { userDataApi } from '@/services/user-data-api';
+import { UserDataApiRequestError, userDataApi } from '@/services/user-data-api';
 
 const toast = vi.fn();
 
@@ -20,11 +23,15 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-vi.mock('@/services/user-data-api', () => ({
-  userDataApi: {
-    getSession: vi.fn(),
-  },
-}));
+vi.mock('@/services/user-data-api', async (importOriginal) => {
+  const actual = await importOriginal<UserDataApiModule>();
+  return {
+    ...actual,
+    userDataApi: {
+      getSession: vi.fn(),
+    },
+  };
+});
 
 describe('useSessionValidator', () => {
   beforeEach(() => {
@@ -51,9 +58,7 @@ describe('useSessionValidator', () => {
   });
 
   it('does not mislabel an authentication failure as an invalid game session', async () => {
-    vi.mocked(userDataApi.getSession).mockRejectedValueOnce(
-      Object.assign(new Error('Session expired — sign in again'), { status: 401 }),
-    );
+    vi.mocked(userDataApi.getSession).mockRejectedValueOnce(new SessionExpiredError());
 
     const { result } = renderHook(() =>
       useSessionValidator({
@@ -72,7 +77,7 @@ describe('useSessionValidator', () => {
 
   it('keeps the invalid-session message for a missing session', async () => {
     vi.mocked(userDataApi.getSession).mockRejectedValueOnce(
-      Object.assign(new Error('Not found'), { status: 404 }),
+      new UserDataApiRequestError('Not found', 404, {}),
     );
 
     const { result } = renderHook(() =>

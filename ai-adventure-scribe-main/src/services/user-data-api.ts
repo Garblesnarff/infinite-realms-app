@@ -257,7 +257,7 @@ async function requestResponse(path: string, init: RequestInit = {}): Promise<Re
   return res;
 }
 
-class UserDataApiRequestError extends Error {
+export class UserDataApiRequestError extends Error {
   constructor(
     message: string,
     public readonly status: number,
