@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
 import { getAccessToken } from '@/services/auth/TokenService';
+import { fetchSessionTrackers } from '@/services/session-trackers';
 import { userDataApi } from '@/services/user-data-api';
 import { ensureActionOptions } from '@/utils/ensure-action-options';
 import { createInitialMemories } from '@/utils/game-session/initial-greeting-memories';
@@ -288,6 +289,32 @@ export const useInitialGreeting = ({
             ? `${displayText.trim()}\n\n${structuredOptions.join('\n')}`
             : await ensureActionOptions(displayText);
 
+      // #1095: the greeting never passes the use-ai-response latch, so
+      // the #1062 envelope line cannot reach it — at a session start the
+      // clock showed nothing at all. Same rule as the latch: the
+      // opening response's story_trackers stay primary, else fall back
+      // to GET the session's trackers, so the session's first turn
+      // shows the clock too. A failed GET leaves the greeting as today.
+      // The GET is capped at 5s: the greeting has no turn signal, so a
+      // hung GET must not stall the session's first message — it
+      // degrades to no line, like a failed GET.
+      let openingTrackers: Array<{ name: string; value: number; limit: number }> = [];
+      if (
+        typeof openingResponse !== 'string' &&
+        Array.isArray(openingResponse.story_trackers) &&
+        openingResponse.story_trackers.length > 0
+      ) {
+        openingTrackers = openingResponse.story_trackers;
+      } else if (sessionId) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        try {
+          openingTrackers = (await fetchSessionTrackers(sessionId, controller.signal)) ?? [];
+        } finally {
+          clearTimeout(timeout);
+        }
+      }
+
       // Create chat message from AI response (string only; narration is handled elsewhere)
       const greetingMessage: ChatMessage = {
         // Align with ChatMessage shape from '@/types/game'
@@ -302,6 +329,7 @@ export const useInitialGreeting = ({
         context: {
           initialGreeting: true,
           noActionOptions: openingRollRequests.length === 0 && structuredOptions.length === 0,
+          ...(openingTrackers.length > 0 ? { storyTrackers: openingTrackers } : {}),
         },
       };
 

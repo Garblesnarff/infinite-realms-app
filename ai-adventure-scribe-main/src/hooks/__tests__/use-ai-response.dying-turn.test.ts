@@ -279,6 +279,12 @@ describe('useAIResponse: the dying player’s turn (#2518)', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (_url: string, init?: RequestInit) => {
+        // #1095: this stub stands in for the engine-intent transport only.
+        // Non-intent traffic (e.g. the session-trackers GET) is not an
+        // intent and must neither be recorded nor answered as one.
+        if (!String(_url).includes('/intent')) {
+          return new Response(JSON.stringify({}), { status: 200 });
+        }
         const body = JSON.parse(String(init?.body ?? '{}'));
         intentBodies.push(body);
         order.push(`intent: ${body.intent?.type}`);
@@ -472,6 +478,11 @@ describe('useAIResponse: the dying player’s turn (#2518)', () => {
     );
     expect(stabilising.isStabilized).toBe(true);
     vi.mocked(fetch as any).mockImplementation(async (_url: string, init?: RequestInit) => {
+      // #1095: non-intent traffic (e.g. the session-trackers GET) is not
+      // an intent and must neither be recorded nor answered as one.
+      if (!String(_url).includes('/intent')) {
+        return new Response(JSON.stringify({}), { status: 200 });
+      }
       intentBodies.push(JSON.parse(String(init?.body ?? '{}')));
       return new Response(
         JSON.stringify({
@@ -585,6 +596,11 @@ describe('useAIResponse: the dying player’s turn (#2518)', () => {
     );
     expect(fatal.isDead).toBe(true);
     vi.mocked(fetch as any).mockImplementation(async (_url: string, init?: RequestInit) => {
+      // #1095: non-intent traffic (e.g. the session-trackers GET) is not
+      // an intent and must neither be recorded nor answered as one.
+      if (!String(_url).includes('/intent')) {
+        return new Response(JSON.stringify({}), { status: 200 });
+      }
       intentBodies.push(JSON.parse(String(init?.body ?? '{}')));
       return new Response(
         JSON.stringify({ result: endingResult(fatal, { endedReason: 'party_defeated' }) }),

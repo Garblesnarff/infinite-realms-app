@@ -219,6 +219,12 @@ describe('useAIResponse: the typed end-of-turn (#784)', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (_url: string, init?: RequestInit) => {
+        // #1095: this stub stands in for the engine-intent transport only.
+        // Non-intent traffic (e.g. the session-trackers GET) is not an
+        // intent and must neither be recorded nor answered as one.
+        if (!String(_url).includes('/intent')) {
+          return new Response(JSON.stringify({}), { status: 200 });
+        }
         const body = JSON.parse(String(init?.body ?? '{}'));
         sent.push(body);
         if (body.intent?.type === 'end_turn') {

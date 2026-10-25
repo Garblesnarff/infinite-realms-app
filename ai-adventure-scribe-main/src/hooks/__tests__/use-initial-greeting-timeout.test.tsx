@@ -40,6 +40,14 @@ vi.mock('@/lib/logger', () => ({
   default: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
+// #1095: the greeting now GETs the session's trackers when the opening
+// response carries none. Under fake timers a real fetch never settles
+// (undici's socket timers are faked too), so the network is stubbed
+// here exactly as the sibling greeting test file stubs it; the
+// default answers no trackers, which leaves every assertion below
+// about the watchdog itself untouched.
+global.fetch = vi.fn() as unknown as typeof fetch;
+
 const OPENING_TEXT =
   'The real opening scene unfolds beneath a copper sky as the first watch bell echoes across the valley.';
 const LATE_TEXT =
@@ -63,6 +71,7 @@ describe('useInitialGreeting stall watchdog (#865)', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    (global.fetch as any).mockResolvedValue({ ok: false });
     onGreetingGenerated.mockResolvedValue(undefined);
     listSessionMessages.mockResolvedValue({ total: 0, messages: [] });
     getCharacter.mockResolvedValue({ id: 'character-id', name: 'Hero', class: 'Cleric', level: 1 });

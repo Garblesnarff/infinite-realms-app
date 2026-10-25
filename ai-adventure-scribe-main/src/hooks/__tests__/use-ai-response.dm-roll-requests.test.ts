@@ -204,6 +204,12 @@ describe('useAIResponse: DM roll requests and the player’s turn (#2530)', () =
     vi.stubGlobal(
       'fetch',
       vi.fn(async (_url: string, init?: RequestInit) => {
+        // #1095: this stub stands in for the engine-intent transport only.
+        // Non-intent traffic (e.g. the session-trackers GET) is not an
+        // intent and must neither be recorded nor answered as one.
+        if (!String(_url).includes('/intent')) {
+          return new Response(JSON.stringify({}), { status: 200 });
+        }
         const body = JSON.parse(String(init?.body ?? '{}'));
         if (body.phase === 'propose' && body.intent?.type === 'spell') {
           // `proposeCombatSpell`'s whole return for a Fire Bolt cast by The Veteran at the Goblin.
