@@ -17,6 +17,8 @@ vi.mock('@/hooks/use-combat-actions', () => ({ useCombatActions: vi.fn() }));
 const mocks = vi.hoisted(() => ({ encounter: null as unknown, messages: [] as unknown[] }));
 vi.mock('@/contexts/CombatContext', () => ({
   useCombat: () => ({ state: { activeEncounter: mocks.encounter, isInCombat: true } }),
+  // #1095: the sheet branches on the optional combat context.
+  useOptionalCombat: () => ({ state: { activeEncounter: mocks.encounter, isInCombat: true } }),
 }));
 vi.mock('@/contexts/CampaignAssetsContext', () => ({
   useCampaignAssetsContext: () => ({ getAssetImageUrl: () => null }),
@@ -80,7 +82,12 @@ function renderSheet(isDM: boolean, showTracker = true): void {
   } as never);
   render(
     <TooltipProvider>
-      <GameCombatSheet showTracker={showTracker} setShowTracker={vi.fn()} isDM={isDM} />
+      <GameCombatSheet
+        showTracker={showTracker}
+        setShowTracker={vi.fn()}
+        isDM={isDM}
+        sessionId="session-2257"
+      />
     </TooltipProvider>,
   );
 }

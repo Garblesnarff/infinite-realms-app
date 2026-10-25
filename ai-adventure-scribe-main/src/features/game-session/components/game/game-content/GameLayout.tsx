@@ -286,6 +286,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
                   setShowTracker={setShowTracker}
                   isDM={isDM}
                   spellCastHandlerRef={spellCastHandlerRef}
+                  sessionId={sessionId}
                 />
               )}
             </div>

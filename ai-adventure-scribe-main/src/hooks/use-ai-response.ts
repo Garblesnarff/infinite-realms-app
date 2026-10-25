@@ -72,6 +72,7 @@ import { sheetCastSignal } from '@/services/combat/sheet-cast-progress';
 import { holdSaveCardBeforeDm } from '@/services/combat/sheet-cast-save-hold';
 import { MemoryManager } from '@/services/memory-manager';
 import { SessionStateService } from '@/services/session-state-service';
+import { fetchSessionTrackers } from '@/services/session-trackers';
 import { userDataApi } from '@/services/user-data-api';
 import { voiceConsistencyService } from '@/services/voice-consistency-service';
 import { messagesSupersededByCombatEnd } from '@/utils/combat-engine-blocks';
@@ -1438,7 +1439,26 @@ export const useAIResponse = (): {
 
         // #1062: the server-attached tracker line, read once here so the
         // message below carries it without a non-null assertion.
-        const storyTrackers = (result as AIResponse).story_trackers;
+        // #1095: the envelope carries trackers only on turns the tracker
+        // step ran; on the turns it skipped, the line vanished and the
+        // player read the values from DM prose instead. Fall back to GET
+        // the session's trackers so every turn's message carries the
+        // clock. The envelope stays primary: a present field is never
+        // refetched. A failed GET leaves the message as today (no line,
+        // no invented state). The turn's abort signal bounds the GET
+        // like every other await in this pipeline — a hung GET must
+        // not outlive the turn that asked for it.
+        let storyTrackers = (result as AIResponse).story_trackers;
+        if (
+          (!Array.isArray(storyTrackers) || storyTrackers.length === 0) &&
+          sessionId
+        ) {
+          const fetched = await rejectWhenAborted(
+            fetchSessionTrackers(sessionId, signal),
+            signal,
+          );
+          if (fetched && fetched.length > 0) storyTrackers = fetched;
+        }
 
         // #1085: the turn's story effects reached the sheet server-side, but
         // the panel only refreshes on the session socket's

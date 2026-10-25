@@ -147,6 +147,23 @@ mock.module('../../../services/chronicle-generator.js', () => ({
   persistChronicleFailure: async () => {},
 }));
 
+// #1095: the trackers GET reuses loadStoredStoryTrackers; the boundary
+// test pins the route wiring (path, ownership guard, response shape,
+// and the exact read arguments) and holds the read result mutable per test.
+const trackerRead: { value: Array<{ name: string; value: number; limit: number }> | null } = {
+  value: [
+    { name: 'Wall', value: 2, limit: 6 },
+    { name: 'Doom', value: 1, limit: 4 },
+  ],
+};
+const trackerArgs: Array<unknown> = [];
+mock.module('../../../services/dm/story-tracker.js', () => ({
+  loadStoredStoryTrackers: async (args: unknown) => {
+    trackerArgs.push(args);
+    return trackerRead.value;
+  },
+}));
+
 const { sessionsRoutes } = await import('../sessions.js');
 
 const app = new Elysia().use(sessionsRoutes);
@@ -266,5 +283,52 @@ describe('v1 sessions routes API boundaries', () => {
     const json: any = await response.json();
     expect(json.status).toBe('completed');
     expect(json.summary).toBe('Finished');
+  });
+
+  it('returns the session trackers for an authorized request (#1095)', async () => {
+    trackerRead.value = [
+      { name: 'Wall', value: 2, limit: 6 },
+      { name: 'Doom', value: 1, limit: 4 },
+    ];
+    trackerArgs.length = 0;
+    const response = await app.handle(
+      new Request('http://localhost/v1/sessions/valid-session-id/trackers', {
+        headers: {
+          'authorization': 'Bearer valid-user-token',
+        },
+      })
+    );
+    expect(response.status).toBe(200);
+    const json: any = await response.json();
+    expect(json.trackers).toEqual([
+      { name: 'Wall', value: 2, limit: 6 },
+      { name: 'Doom', value: 1, limit: 4 },
+    ]);
+    expect(trackerArgs).toEqual([{ sessionId: 'valid-session-id', userId: 'user-1' }]);
+  });
+
+  it('returns an empty tracker list when the read yields nothing (#1095)', async () => {
+    trackerRead.value = null;
+    const response = await app.handle(
+      new Request('http://localhost/v1/sessions/valid-session-id/trackers', {
+        headers: {
+          'authorization': 'Bearer valid-user-token',
+        },
+      })
+    );
+    expect(response.status).toBe(200);
+    const json: any = await response.json();
+    expect(json.trackers).toEqual([]);
+  });
+
+  it('denies unauthorized session access on fetch session trackers (#1095)', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/v1/sessions/invalid-session-id/trackers', {
+        headers: {
+          'authorization': 'Bearer valid-user-token',
+        },
+      })
+    );
+    expect(response.status).toBe(404);
   });
 });
