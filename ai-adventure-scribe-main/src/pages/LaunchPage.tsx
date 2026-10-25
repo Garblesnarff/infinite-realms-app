@@ -88,7 +88,7 @@ const LaunchPage: React.FC = () => {
         <link rel="canonical" href="https://infiniterealms.app/" />
       </Helmet>
 
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 via-purple-900 to-gray-900 overflow-x-hidden">
+      <div className="ir-app min-h-screen bg-infinite-dark overflow-x-hidden">
         <LaunchHeader />
 
         <main id="main-content">
@@ -96,55 +96,55 @@ const LaunchPage: React.FC = () => {
           <HeroSection />
 
           {/* Gradient Transition */}
-          <div className="h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent"></div>
+          <div className="h-px bg-gradient-to-r from-transparent via-infinite-gold/20 to-transparent"></div>
 
           {/* Vision Section - Sell the Dream */}
           <VisionSection />
 
           {/* Gradient Transition */}
-          <div className="h-px bg-gradient-to-r from-transparent via-amber-500/20 to-transparent"></div>
+          <div className="h-px bg-gradient-to-r from-transparent via-infinite-gold/20 to-transparent"></div>
 
           {/* Founder Story Section - Personal Connection & Trust Building */}
           <FounderStorySection />
 
           {/* Gradient Transition */}
-          <div className="h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent"></div>
+          <div className="h-px bg-gradient-to-r from-transparent via-infinite-gold/20 to-transparent"></div>
 
           {/* Features Section - What We're Building */}
           <FeaturesSection />
 
           {/* Gradient Transition */}
-          <div className="h-px bg-gradient-to-r from-transparent via-amber-500/20 to-transparent"></div>
+          <div className="h-px bg-gradient-to-r from-transparent via-infinite-gold/20 to-transparent"></div>
 
           {/* Pricing Section - Free vs Legend */}
           <PricingSection />
 
           {/* Gradient Transition */}
-          <div className="h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent"></div>
+          <div className="h-px bg-gradient-to-r from-transparent via-infinite-gold/20 to-transparent"></div>
 
           {/* Starter Campaigns Section - Ready-to-Play Adventures */}
           <StarterCampaignsSection />
 
           {/* Gradient Transition */}
-          <div className="h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent"></div>
+          <div className="h-px bg-gradient-to-r from-transparent via-infinite-gold/20 to-transparent"></div>
 
           {/* Roadmap Section - Clear Beta Phases */}
           <RoadmapSection />
 
           {/* Gradient Transition */}
-          <div className="h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent"></div>
+          <div className="h-px bg-gradient-to-r from-transparent via-infinite-gold/20 to-transparent"></div>
 
           {/* Early Access Section - Founding Adventurer Perks */}
           <EarlyAccessSection />
 
           {/* Gradient Transition */}
-          <div className="h-px bg-gradient-to-r from-transparent via-amber-500/20 to-transparent"></div>
+          <div className="h-px bg-gradient-to-r from-transparent via-infinite-gold/20 to-transparent"></div>
 
           {/* FAQ Section - Launch-Focused Questions */}
           <FAQSection />
 
           {/* Gradient Transition */}
-          <div className="h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent"></div>
+          <div className="h-px bg-gradient-to-r from-transparent via-infinite-gold/20 to-transparent"></div>
 
           {/* Final CTA Section - Email List */}
           <FinalCTASection />

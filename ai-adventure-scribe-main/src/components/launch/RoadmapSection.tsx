@@ -22,9 +22,9 @@ export const RoadmapSection: React.FC = () => {
       case 'current':
         return {
           badge: 'bg-[#121b30] text-[#d5b070] border-[#d5b070]',
-          icon: 'text-amber-400',
+          icon: 'text-infinite-gold',
           bg: 'bg-[#121b30] border-[#d5b070]/30',
-          glow: 'shadow-[0_0_20px_rgba(251,191,36,0.2)]',
+          glow: 'shadow-[0_0_20px_rgba(213,176,112,0.2)]',
         };
       case 'upcoming':
         return {
@@ -51,7 +51,7 @@ export const RoadmapSection: React.FC = () => {
   };
 
   return (
-    <section className="relative py-24 bg-gradient-to-b from-gray-900 to-purple-900/30">
+    <section className="relative py-24 bg-infinite-dark">
       <div className="max-w-7xl mx-auto px-6">
         {/* Section Header */}
         <div className="text-center mb-16">
@@ -86,7 +86,7 @@ export const RoadmapSection: React.FC = () => {
                         <div
                           className={`w-16 h-16 flex-shrink-0 rounded-full flex items-center justify-center ${
                             phase.status === 'current'
-                              ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-gray-900'
+                              ? 'bg-gradient-to-br from-[#d5b070] to-[#b9954f] text-[#1a1206]'
                               : 'bg-gray-600 text-white'
                           }`}
                         >
@@ -151,9 +151,9 @@ export const RoadmapSection: React.FC = () => {
           </div>
 
           {/* Timeline Note */}
-          <div className="mt-16 p-6 bg-gray-800/30 border border-gray-700/50 rounded-xl">
+          <div className="mt-16 p-6 bg-[#0c1220] border border-white/10 rounded-xl">
             <div className="flex items-start gap-4">
-              <Clock className="w-6 h-6 text-amber-400 flex-shrink-0 mt-1" />
+              <Clock className="w-6 h-6 text-infinite-gold flex-shrink-0 mt-1" />
               <div>
                 <h3 className="text-lg font-semibold text-white mb-2">Timeline Updates</h3>
                 <p className="text-gray-400 leading-relaxed">

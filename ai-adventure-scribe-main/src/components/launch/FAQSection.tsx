@@ -26,15 +26,15 @@ const FAQItem: React.FC<FAQItemProps> = ({ item, isOpen, onToggle }) => {
     <div className="border-b border-gray-700/50 last:border-b-0">
       <button
         onClick={onToggle}
-        className="w-full py-6 text-left flex items-center justify-between hover:bg-gray-800/30 transition-colors duration-200"
+        className="w-full py-6 text-left flex items-center justify-between hover:bg-white/5 transition-colors duration-200"
         aria-expanded={isOpen}
       >
         <h3 className="text-lg font-semibold text-white pr-4">{item.question}</h3>
         <div className="flex-shrink-0">
           {isOpen ? (
-            <ChevronUp className="w-5 h-5 text-purple-400" />
+            <ChevronUp className="w-5 h-5 text-infinite-gold" />
           ) : (
-            <ChevronDown className="w-5 h-5 text-purple-400" />
+            <ChevronDown className="w-5 h-5 text-infinite-gold" />
           )}
         </div>
       </button>
@@ -77,7 +77,7 @@ export const FAQSection: React.FC = () => {
   };
 
   return (
-    <section className="relative py-24 bg-gray-900">
+    <section className="relative py-24 bg-infinite-dark">
       <div className="max-w-4xl mx-auto px-6">
         {/* Section Header */}
         <div className="text-center mb-16">
@@ -88,7 +88,7 @@ export const FAQSection: React.FC = () => {
         </div>
 
         {/* FAQ List */}
-        <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl overflow-hidden">
+        <div className="bg-[#0c1220] border border-white/10 rounded-xl overflow-hidden">
           {faq.items.map((item, index) => (
             <FAQItem
               key={index}
@@ -100,9 +100,9 @@ export const FAQSection: React.FC = () => {
         </div>
 
         {/* Still Have Questions */}
-        <div className="mt-16 text-center p-8 bg-gradient-to-r from-purple-900/20 to-amber-900/20 border border-purple-500/20 rounded-xl">
+        <div className="mt-16 text-center p-8 bg-[#0c1220] border border-infinite-gold/20 rounded-xl">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <HelpCircle className="w-8 h-8 text-purple-400" />
+            <HelpCircle className="w-8 h-8 text-infinite-gold" />
             <h3 className="text-2xl font-bold text-white">Still Have Questions?</h3>
           </div>
           <p className="text-gray-300 mb-6 max-w-2xl mx-auto">
@@ -111,14 +111,14 @@ export const FAQSection: React.FC = () => {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a
               href="/contact"
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 text-white font-semibold rounded-lg transition-all duration-300"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-b from-[#f6e3b8] via-[#d5b070] to-[#c69d57] text-[#1a1206] border border-[#f3deb0] font-semibold rounded-lg hover:brightness-110 transition-all duration-300"
             >
               Contact Us
             </a>
             <SendFeedbackButton
               variant="outline"
               size="lg"
-              className="gap-2 px-6 py-3 border border-gray-600 hover:border-purple-400 bg-transparent text-gray-300 hover:text-purple-300 hover:bg-transparent font-semibold rounded-lg transition-all duration-300"
+              className="gap-2 px-6 py-3 border border-gray-600 hover:border-infinite-gold bg-transparent text-gray-300 hover:text-infinite-gold hover:bg-transparent font-semibold rounded-lg transition-all duration-300"
             />
           </div>
         </div>

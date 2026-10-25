@@ -15,7 +15,7 @@ export const PricingSection: React.FC = () => {
   const { pricing } = launchPageContent;
 
   return (
-    <section id="pricing" className="relative py-24 bg-gray-900">
+    <section id="pricing" className="relative py-24 bg-infinite-dark">
       <div className="max-w-5xl mx-auto px-6">
         <div className="text-center mb-16">
           <h2 className="text-4xl sm:text-5xl font-bold text-white mb-4">{pricing.headline}</h2>
@@ -26,8 +26,8 @@ export const PricingSection: React.FC = () => {
           {pricing.plans.map((plan) => (
             <div
               key={plan.name}
-              className={`rounded-2xl p-8 border bg-gradient-to-br from-gray-800/50 to-gray-900/50 ${
-                plan.highlighted ? 'border-amber-500/60' : 'border-gray-700/50'
+              className={`rounded-2xl p-8 border bg-[#0c1220] ${
+                plan.highlighted ? 'border-infinite-gold/60' : 'border-white/10'
               }`}
             >
               <h3 className="text-2xl font-bold text-white mb-2">{plan.name}</h3>
@@ -41,7 +41,7 @@ export const PricingSection: React.FC = () => {
               <ul className="space-y-3 mb-8">
                 {plan.features.map((feature) => (
                   <li key={feature} className="flex items-start gap-3 text-gray-200">
-                    <Check className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
+                    <Check className="w-5 h-5 text-infinite-gold mt-0.5 flex-shrink-0" />
                     <span>{feature}</span>
                   </li>
                 ))}
@@ -49,7 +49,7 @@ export const PricingSection: React.FC = () => {
               <Link
                 to="/explore"
                 data-track-cta={`pricing_${plan.name.toLowerCase()}`}
-                className="block text-center px-6 py-3 rounded-lg font-bold bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:from-amber-400 hover:to-orange-500 transition-colors"
+                className="block text-center px-6 py-3 rounded-lg font-bold bg-gradient-to-b from-[#f6e3b8] via-[#d5b070] to-[#c69d57] text-[#1a1206] border border-[#f3deb0] hover:brightness-110 transition-all"
               >
                 {plan.highlighted ? 'Start free, upgrade later' : 'Play free'}
               </Link>

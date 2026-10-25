@@ -16,7 +16,7 @@ export const EarlyAccessSection: React.FC = () => {
   const { helpShape: earlyAccess } = launchPageContent;
 
   return (
-    <section className="relative py-24 bg-gradient-to-b from-purple-900/30 to-gray-900">
+    <section className="relative py-24 bg-infinite-dark">
       <div className="max-w-7xl mx-auto px-6">
         {/* Section Header */}
         <div className="text-center mb-16">
@@ -41,10 +41,10 @@ export const EarlyAccessSection: React.FC = () => {
 
             return (
               <div key={index} className="relative group">
-                <div className="absolute inset-0 bg-gradient-to-br from-amber-600/20 to-purple-600/20 rounded-2xl blur opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                <div className="relative bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-700/50 rounded-2xl p-6 backdrop-blur-sm hover:border-amber-500/40 transition-all duration-300 text-center">
-                  <div className="w-14 h-14 bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
-                    <IconComponent className="w-7 h-7 text-gray-900" />
+                <div className="absolute inset-0 bg-gradient-to-br from-infinite-gold/20 to-infinite-teal/20 rounded-2xl blur opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="relative bg-[#0c1220] border border-white/10 rounded-2xl p-6 backdrop-blur-sm hover:border-infinite-gold/40 transition-all duration-300 text-center">
+                  <div className="w-14 h-14 bg-gradient-to-br from-[#d5b070] to-[#b9954f] rounded-xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                    <IconComponent className="w-7 h-7 text-[#1a1206]" />
                   </div>
                   <h3 className="text-xl font-bold text-white mb-3">{perk.title}</h3>
                   <p className="text-gray-400 text-sm leading-relaxed">{perk.description}</p>
@@ -59,7 +59,7 @@ export const EarlyAccessSection: React.FC = () => {
           <Link
             to="/explore"
             data-track-cta="play_free_early_access"
-            className="inline-flex items-center px-8 py-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-gray-900 font-bold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+            className="inline-flex items-center px-8 py-4 bg-gradient-to-b from-[#f6e3b8] via-[#d5b070] to-[#c69d57] text-[#1a1206] border border-[#f3deb0] font-bold rounded-xl shadow-lg hover:shadow-xl hover:brightness-110 transition-all duration-300"
           >
             {earlyAccess.cta}
           </Link>
@@ -67,9 +67,10 @@ export const EarlyAccessSection: React.FC = () => {
 
         {/* Disclaimer */}
         <div className="max-w-4xl mx-auto">
-          <div className="p-6 bg-gray-800/20 border border-gray-700/30 rounded-xl">
+          <div className="p-6 bg-[#0c1220] border border-white/10 rounded-xl">
             <p className="text-sm text-gray-400 text-center leading-relaxed">
-              <span className="text-amber-400 font-semibold">Note:</span> {earlyAccess.disclaimer}
+              <span className="text-infinite-gold font-semibold">Note:</span>{' '}
+              {earlyAccess.disclaimer}
             </p>
           </div>
         </div>
