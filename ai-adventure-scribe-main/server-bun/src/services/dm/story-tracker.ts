@@ -815,6 +815,16 @@ export interface StoryTrackerResult {
   outcome: StoryTrackerOutcome;
   /** Changes that landed on a stored tracker this call. */
   appliedChanges: number;
+  /**
+   * #1084: the stored summary of an ending this call forced through
+   * `applyStoryEnding` (an `at_limit: 'ending'` clock at its limit).
+   * Present only when the force applied (now or earlier). The route
+   * mirrors it onto the reply envelope exactly as it does a declared
+   * or safety-net ending — without it the session completes but the
+   * client's completion latch never fires, because the latch keys on
+   * the envelope's `campaign_ending` field (Hark S-001).
+   */
+  forcedEndingSummary?: string;
 }
 
 /**
@@ -1179,15 +1189,25 @@ export async function applyStoryTrackers(input: {
       // scope and completion write), with an engine summary — the DM's
       // own declaration, when it comes, finds the stored ending and
       // reports it back.
+      // #1084: the forced summary is returned, not dropped — the route
+      // mirrors it onto the reply envelope exactly as it does a declared
+      // or safety-net ending, so the client's completion latch fires on
+      // the engine-ended turn instead of only on reload.
       try {
         const { applyStoryEnding } = await import('./story-ending.js');
-        await applyStoryEnding({
+        const forced = await applyStoryEnding({
           userId,
           sessionId,
           ending: {
             summary: `The ${clock.name} Clock reached ${clock.limit} of ${clock.limit} — the adventure ends.`,
           },
         });
+        if (
+          (forced.outcome === 'applied' || forced.outcome === 'already_applied') &&
+          forced.summary
+        ) {
+          return { ...result, forcedEndingSummary: forced.summary };
+        }
       } catch (error) {
         logger.warn({ msg: 'DM_STORY_TRACKER_FORCE_ENDING_FAILED', sessionId, error });
       }
