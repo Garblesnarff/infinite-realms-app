@@ -8,11 +8,18 @@ import { afterEach, describe, expect, it, spyOn } from 'bun:test';
 
 import { logger } from '../../lib/logger.js';
 import { resetCircuitBreakersForTests } from '../../utils/circuit-breaker.js';
+// Main's live schema (see dm-response-phase.test.ts for provenance): the
+// provider request must serialize byte-for-byte to this on every path
+// (strategist HOLD at 342151ce, per-path test).
+import mainDmResponseSchema from '../dm/__tests__/fixtures/main-dm-response-schema.json' with {
+  type: 'json',
+};
 import { dmResponseSchema } from '../dm/dm-response-schema.js';
 import { getVendorCapabilityProfile, modelSupportsStrictSchema } from '../llm-model-config.js';
 import {
   LLMProviderService,
   parseStringifiedNested,
+  setStrictBranchValidationModeForTests,
   stripOptionalNulls,
   validateToolReplyText,
 } from '../llm-provider-service.js';
@@ -1367,5 +1374,109 @@ describe('#875 narration normalization on every schema path', () => {
     expect(result.error).toBeUndefined();
     expect(JSON.parse(result.text).text).toBe(story);
     expect(result.usage?.schemaShadowInvalid).toBe(1);
+  });
+});
+
+describe('#782 HOLD item 1: true shadow compares every branch against the phase', () => {
+  it('tool path: a full-valid tool reply on a narrative turn logs a phase-only mismatch, and keeps it', async () => {
+    useModel('anthropic/claude-haiku-5.5');
+    const bodies = stubOpenRouter([{ toolArguments: VALID_DM_REPLY }]);
+    const warn = spyOn(logger, 'warn').mockImplementation((() => {}) as typeof logger.warn);
+    try {
+      const result = await LLMProviderService.generate({
+        prompt: 'volatile user prompt',
+        systemPrompt: 'stable system block',
+        responseSchema: dmResponseSchema,
+        responseSchemaPhase: 'narrative',
+        maxTokens: 100,
+      });
+
+      // The request schema is today's full schema; the tool arguments are
+      // valid under it (stripping keeps every named key). The phase
+      // comparison sees the pre-strip arguments — the dropped fight arrays
+      // are still there — so it logs the mismatch instead of swallowing it.
+      expect(bodies).toHaveLength(1);
+      expect(result.error).toBeUndefined();
+      expect(result.text).toBe(VALID_DM_REPLY);
+      expect(result.usage?.schemaDelivery).toBe('forced-tool-call');
+      // The forced-tool parameters serialize byte-for-byte to main's schema:
+      // the request is today's schema, not the phase schema, on this path too.
+      const tools = (bodies[0] as unknown as Body).tools as {
+        function: { parameters: unknown };
+      }[];
+      expect(JSON.stringify(tools[0].function.parameters)).toBe(
+        JSON.stringify(mainDmResponseSchema),
+      );
+      expect(result.usage?.schemaShadowInvalid).toBe(1);
+      const calls = warn.mock.calls.map((call) => call[0] as { msg?: string; phase?: string });
+      expect(calls.find((entry) => entry?.msg === 'LLM_SCHEMA_SHADOW_INVALID')?.phase).toBe(
+        'narrative',
+      );
+      // No tool failure: the reply is valid under today's full schema.
+      expect(calls.find((entry) => entry?.msg === 'LLM_TOOL_SCHEMA_INVALID')).toBeUndefined();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('strict path: a full-valid strict reply on a narrative turn logs a phase-only mismatch, and keeps it', async () => {
+    useModel('openai/gpt-5-mini');
+    const bodies = stubOpenRouter([{ content: VALID_DM_REPLY }]);
+    const warn = spyOn(logger, 'warn').mockImplementation((() => {}) as typeof logger.warn);
+    try {
+      const result = await LLMProviderService.generate({
+        prompt: 'Continue',
+        responseSchema: dmResponseSchema,
+        responseSchemaPhase: 'narrative',
+      });
+
+      expect(bodies).toHaveLength(1);
+      expect(result.error).toBeUndefined();
+      expect(result.text).toBe(VALID_DM_REPLY);
+      // The strict response_format schema serializes byte-for-byte to main's
+      // schema on this path too.
+      const schema = (
+        (bodies[0] as unknown as Body).response_format as {
+          json_schema: { schema: unknown };
+        }
+      ).json_schema.schema;
+      expect(JSON.stringify(schema)).toBe(JSON.stringify(mainDmResponseSchema));
+      expect(result.usage?.schemaShadowInvalid).toBe(1);
+      const shadow = warn.mock.calls
+        .map((call) => call[0] as { msg?: string; phase?: string })
+        .find((entry) => entry?.msg === 'LLM_SCHEMA_SHADOW_INVALID');
+      expect(shadow?.phase).toBe('narrative');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('strict path under LLM_STRICT_BRANCH_VALIDATION=enforce still compares, never hard-fails, a full-valid reply', async () => {
+    // The request schema is today's full schema, so enforce mode has nothing
+    // new to enforce: a full-valid reply is kept and the phase comparison
+    // still logs and counts. (Shadow must hold "with every env value".)
+    useModel('openai/gpt-5-mini');
+    const bodies = stubOpenRouter([{ content: VALID_DM_REPLY }]);
+    const warn = spyOn(logger, 'warn').mockImplementation((() => {}) as typeof logger.warn);
+    setStrictBranchValidationModeForTests('enforce');
+    try {
+      const result = await LLMProviderService.generate({
+        prompt: 'Continue',
+        responseSchema: dmResponseSchema,
+        responseSchemaPhase: 'narrative',
+      });
+
+      expect(bodies).toHaveLength(1);
+      expect(result.error).toBeUndefined();
+      expect(result.text).toBe(VALID_DM_REPLY);
+      expect(result.usage?.schemaShadowInvalid).toBe(1);
+      const shadow = warn.mock.calls
+        .map((call) => call[0] as { msg?: string; phase?: string })
+        .find((entry) => entry?.msg === 'LLM_SCHEMA_SHADOW_INVALID');
+      expect(shadow?.phase).toBe('narrative');
+    } finally {
+      warn.mockRestore();
+      setStrictBranchValidationModeForTests('shadow');
+    }
   });
 });

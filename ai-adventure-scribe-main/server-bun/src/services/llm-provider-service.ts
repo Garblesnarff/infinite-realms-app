@@ -1,6 +1,6 @@
 import Ajv, { type ValidateFunction } from 'ajv';
 
-import { dmResponseSchema } from './dm/dm-response-schema.js';
+import { dmResponseSchema, dmResponseSchemaForPhase } from './dm/dm-response-schema.js';
 import { normalizeReplyNarration, type NarrationNormalization } from './dm/narration-text.js';
 import { isRetryableUpstreamStatus, LLMUpstreamError } from './llm-errors.js';
 import { llmFetch } from './llm-fixture-fetch.js';
@@ -276,6 +276,77 @@ const validatesAgainstLiveSchema = (text: string): boolean => {
     return compiledSchemaValidator(dmResponseSchema)(parsed);
   } catch {
     return false;
+  }
+};
+
+/**
+ * #782 item 8, strategist HOLD (true shadow): the phase-only mismatch of an
+ * already-parsed reply against the turn's phase schema. Pure: no logging, no
+ * counting, never throws — an unknown phase or a non-object value reads as
+ * "no mismatch". Callers log + count only when the reply already validated
+ * against today's full schema, so a phase mismatch is never double-counted
+ * with a full-schema failure. The phase validator is the standard (non-
+ * stripping) ajv: on the tool path the caller passes the normalized
+ * pre-strip arguments, so a section the tool path would silently strip is
+ * still visible here — that visibility is the point of the HOLD.
+ */
+export const findPhaseShadowMismatch = (
+  parsed: unknown,
+  phase: string | undefined,
+): { instancePath: string; keyword: string; message: string } | null => {
+  if (!phase || phase === 'full') return null;
+  if (phase !== 'narrative' && phase !== 'combat' && phase !== 'tactical') return null;
+  if (!isPlainObject(parsed)) return null;
+  try {
+    const validate = compiledSchemaValidator(dmResponseSchemaForPhase(phase));
+    if (validate(parsed)) return null;
+    const first = validate.errors?.[0];
+    return {
+      instancePath: first?.instancePath ?? '',
+      keyword: first?.keyword ?? '',
+      message: first?.message ?? '',
+    };
+  } catch {
+    return null;
+  }
+};
+
+/** Log one phase-only mismatch in the strict branch's shadow shape. */
+const logPhaseShadowMismatch = (
+  mismatch: { instancePath: string; keyword: string; message: string },
+  phase: string,
+  model: string,
+): void => {
+  logger.warn({
+    msg: 'LLM_SCHEMA_SHADOW_INVALID',
+    model,
+    phase,
+    instancePath: mismatch.instancePath,
+    keyword: mismatch.keyword,
+    message: mismatch.message,
+  });
+};
+
+/**
+ * Count the phase-only mismatch of reply text that already validated
+ * against the request (full) schema. Returns 0 or 1. Never throws and never
+ * breaks the turn for a shadow measurement.
+ */
+const countPhaseMismatchForText = (
+  text: string,
+  responseSchema: Record<string, unknown>,
+  phase: string | undefined,
+  model: string,
+): number => {
+  if (!phase || phase === 'full') return 0;
+  try {
+    const parsed = validateStructuredResponseText(text, responseSchema);
+    const mismatch = findPhaseShadowMismatch(parsed, phase);
+    if (!mismatch) return 0;
+    logPhaseShadowMismatch(mismatch, phase, model);
+    return 1;
+  } catch {
+    return 0;
   }
 };
 
@@ -1068,16 +1139,56 @@ export class LLMProviderService {
                 // reply, and stays hard only for genuinely malformed replies
                 // (see the else branch below).
                 if (toolSchema) {
+                  // #782 HOLD item 1: compare the normalized pre-strip tool
+                  // arguments against the phase schema BEFORE removeAdditional
+                  // strips them — the tool path previously swallowed phase
+                  // mismatches silently. The mismatch is only logged when the
+                  // reply validates against the full schema below (a reply
+                  // invalid under today's schema is already the tool failure,
+                  // not a phase-only mismatch).
+                  let toolPhaseMismatch: {
+                    instancePath: string;
+                    keyword: string;
+                    message: string;
+                  } | null = null;
+                  try {
+                    const preStrip = stripOptionalNulls(
+                      parseStringifiedNested(
+                        validateStructuredResponseText(text, responseSchema),
+                        responseSchema,
+                      ),
+                      responseSchema,
+                    );
+                    toolPhaseMismatch = findPhaseShadowMismatch(preStrip, responseSchemaPhase);
+                  } catch {
+                    toolPhaseMismatch = null;
+                  }
                   // #783: tool path validates after stripping unnamed keys, and
                   // the reply carries the stripped text.
                   text = validateToolReplyText(text, responseSchema, responseSchemaPhase);
+                  if (toolPhaseMismatch && responseSchemaPhase) {
+                    logPhaseShadowMismatch(toolPhaseMismatch, responseSchemaPhase, candidate);
+                    schemaShadowInvalid += 1;
+                  }
                 } else if (strictSchema) {
-                  schemaShadowInvalid += validateStrictBranchText(
+                  const strictInvalid = validateStrictBranchText(
                     text,
                     responseSchema,
                     candidate,
                     responseSchemaPhase,
                   );
+                  schemaShadowInvalid += strictInvalid;
+                  // True shadow: only compare against the phase when the
+                  // reply is valid under today's schema; a full-invalid
+                  // reply is already logged + counted above.
+                  if (strictInvalid === 0) {
+                    schemaShadowInvalid += countPhaseMismatchForText(
+                      text,
+                      responseSchema,
+                      responseSchemaPhase,
+                      candidate,
+                    );
+                  }
                 } else {
                   // #782 item 8, shadow-only on the instructed branch too. A
                   // phase-schema mismatch must not hard-fail a reply that was
@@ -1094,6 +1205,17 @@ export class LLMProviderService {
                   // exactly.
                   try {
                     validateFullSchemaText(text, responseSchema);
+                    // #782 HOLD item 1 (true shadow): valid under today's
+                    // schema — compare against the phase and log a
+                    // phase-only mismatch. The catch below already logs the
+                    // phase-as-request configuration (keep path), so this
+                    // runs only on the success path: no double log.
+                    schemaShadowInvalid += countPhaseMismatchForText(
+                      text,
+                      responseSchema,
+                      responseSchemaPhase,
+                      candidate,
+                    );
                   } catch (phaseError) {
                     const details =
                       phaseError instanceof Error ? phaseError.message : String(phaseError);
@@ -1361,12 +1483,23 @@ export class LLMProviderService {
               attemptText = normalized.text;
             }
             try {
-              schemaShadowInvalid += validateStrictBranchText(
+              const strictInvalid = validateStrictBranchText(
                 attemptText,
                 responseSchema,
                 candidate,
                 responseSchemaPhase,
               );
+              schemaShadowInvalid += strictInvalid;
+              // #782 HOLD item 1 (true shadow): only compare against the
+              // phase when the reply is valid under today's schema.
+              if (strictInvalid === 0) {
+                schemaShadowInvalid += countPhaseMismatchForText(
+                  attemptText,
+                  responseSchema,
+                  responseSchemaPhase,
+                  candidate,
+                );
+              }
             } catch (validationError) {
               lastFailure = {
                 status: 502,

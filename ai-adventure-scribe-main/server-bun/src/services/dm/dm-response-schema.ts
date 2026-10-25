@@ -311,9 +311,7 @@ const mapActionSchema = {
       description: "Required when action is 'forced_move'.",
     },
     origin: pointSchema,
-    // #782 item 5 tail (keyword move): the bound lives in the description, not
-    // a numeric keyword — the server rejects a negative distance in isMapAction.
-    distance: { type: 'number', description: 'Distance in feet; must be 0 or greater.' },
+    distance: { type: 'number', minimum: 0 },
     destination: pointSchema,
   },
   required: ['action'],
@@ -392,9 +390,7 @@ const mapActionForcedMoveVariantSchema = {
       description: "Required when action is 'forced_move'.",
     },
     origin: pointSchema,
-    // #782 item 5 tail (keyword move): bound in the description; isMapAction
-    // rejects a negative distance.
-    distance: { type: 'number', description: 'Distance in feet; must be 0 or greater.' },
+    distance: { type: 'number', minimum: 0 },
     destination: pointSchema,
   },
   required: ['action', 'target', 'mode'],
@@ -699,9 +695,7 @@ const storyItemsProperty = {
     additionalProperties: false,
     properties: {
       name: { type: 'string' },
-      // #782 item 5 tail (keyword move): bound in prose, not a keyword —
-      // the story writer validates an integer quantity of 1..99.
-      quantity: { type: 'integer', description: 'Whole number, 1 or greater.' },
+      quantity: { type: 'integer', minimum: 1 },
       change: { type: 'string', enum: ['gain', 'lose'] },
     },
     required: ['name', 'quantity', 'change'],
@@ -726,9 +720,7 @@ const storyConditionsProperty = {
     properties: {
       name: { type: 'string' },
       change: { type: 'string', enum: ['apply', 'remove'] },
-      // #782 item 5 tail (keyword move): bound in prose, not a keyword —
-      // the story writer validates an integer duration of 1..1440 minutes.
-      duration_minutes: { type: 'integer', description: 'Minutes, 1 or greater.' },
+      duration_minutes: { type: 'integer', minimum: 1 },
     },
     required: ['name', 'change'],
   },
@@ -750,13 +742,8 @@ const storyDamageProperty = {
   type: 'object',
   additionalProperties: false,
   properties: {
-    // #782 item 5 tail (keyword move): bounds in prose, not keywords — the
-    // story writer caps the amount (1..999, then tighter by current HP) and
-    // validDamage enforces the source at 1..120 characters (story-damage.ts),
-    // so the keyword move loses no server enforcement on this bound
-    // (self-review round 1, N1: the earlier "no cap" claim was wrong).
-    amount: { type: 'integer', description: 'Whole number of hit points, 1 to 999.' },
-    source: { type: 'string', description: 'Short source, 1 to 120 characters.' },
+    amount: { type: 'integer', minimum: 1, maximum: 999 },
+    source: { type: 'string', minLength: 1, maxLength: 120 },
   },
   required: ['amount', 'source'],
   // #610: the model narrated injury ("the rope burns", "dragged to the edge") with no

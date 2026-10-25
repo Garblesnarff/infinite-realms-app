@@ -149,6 +149,55 @@ describe('declared actions resolve before the end transition (#2524)', () => {
     expect(generate).not.toHaveBeenCalled();
   });
 
+  test('a narrative-shaped reply (no map_actions) is filled before acceptance (HOLD item 4)', async () => {
+    // The narrative phase schema drops map_actions; the acceptance pipeline
+    // must judge the filled shape, not the phase-narrowed one. The end
+    // deferral rewrites the text, so the filled array is observable here:
+    // without the fill the deferred text carries no map_actions key.
+    const envelope = JSON.stringify({
+      text: 'You ready your longsword.',
+      narration_segments: [],
+      roll_requests: [],
+      combat_transition: 'end',
+      scene_spec: null,
+      handout_actions: [],
+      combatants: [],
+      combat_actions: [declaredAttack],
+    });
+    const result = await enforceCombatTransitionContract({
+      result: { text: envelope, provider: 'openrouter' },
+      prompt: promptFor('enc-d1-fill'),
+      maxTokens: 4000,
+      temperature: 0.9,
+      provider: 'openrouter',
+      responseSchema: { properties: { combat_transition: {}, roll_requests: {} } },
+      responseSchemaPhase: 'narrative',
+    });
+    const parsed = JSON.parse(result.text) as DMResponse;
+    expect(parsed.combat_transition).toBe('none');
+    expect(parsed.combat_actions).toHaveLength(1);
+    expect(parsed.map_actions).toEqual([]);
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  test('without a phase the same reply is not filled (fill is phase-gated)', async () => {
+    const envelope = JSON.stringify({
+      text: 'You ready your longsword.',
+      narration_segments: [],
+      roll_requests: [],
+      combat_transition: 'end',
+      scene_spec: null,
+      handout_actions: [],
+      combatants: [],
+      combat_actions: [declaredAttack],
+    });
+    const result = await enforce(envelope, 'enc-d1-no-fill');
+    const parsed = JSON.parse(result.text) as DMResponse;
+    expect(parsed.combat_transition).toBe('none');
+    expect(parsed.map_actions).toBeUndefined();
+    expect(generate).not.toHaveBeenCalled();
+  });
+
   test('kill narration at 5/11 spends the one corrective reprompt and returns the rewrite', async () => {
     generate.mockImplementation(async () => ({
       text: dmResponse({

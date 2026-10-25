@@ -14,16 +14,23 @@ import {
   parseDmResponse,
   rewriteNarrationSegmentsFromEnvelope,
 } from '../dm-response-schema.js';
+// Strategist HOLD on PR 1110, item 5: rollback must restore today's exact
+// schema. The fixture is main's dmResponseSchema bytes, captured from the
+// main tree's own module (schema unchanged by main through f04db2b2).
+import mainDmResponseSchema from './fixtures/main-dm-response-schema.json' with {
+  type: 'json',
+};
 
 /**
- * #782 item 8 + item-5 tail (Refs #782): per-phase DM reply schemas in
- * shadow. The phase schemas are the real producer output
- * (dmResponseSchemaForPhase); the walker budgets live in
- * dm-response-schema-budget.test.ts. Fixtures follow the real producers:
- * the move shape below is copied literally from
+ * #782 item 8 (Refs #782): per-phase DM reply schemas in shadow. The phase
+ * schemas are the real producer output (dmResponseSchemaForPhase); the
+ * walker budgets live in dm-response-schema-budget.test.ts. Fixtures follow
+ * the real producers: the move shape below is copied literally from
  * cli/fixtures/combat-movement.json; the empty-turn envelopes carry every
  * section their phase schema requires, the way the live schema requires
- * them today.
+ * them today. The item-5 tail (keyword move) was split to its own PR by
+ * the strategist HOLD on PR 1110 — this file pins the split (keywords at
+ * their pre-move counts, rollback byte-identical to main's schema).
  */
 
 const ajv = new Ajv({ strict: false, allErrors: true });
@@ -193,50 +200,104 @@ describe('phase schemas (Refs #782 item 8)', () => {
   });
 });
 
-describe('keyword move (Refs #782 item 5 tail)', () => {
-  const KEYWORDS = [
-    'minimum',
-    'maximum',
-    'exclusiveMinimum',
-    'exclusiveMaximum',
-    'multipleOf',
-    'minLength',
-    'maxLength',
-    'minItems',
-    'maxItems',
-    'minProperties',
-    'maxProperties',
-    'uniqueItems',
-  ];
-  const findKeywords = (node: unknown, seen = new Set<object>()): string[] => {
-    if (node === null || typeof node !== 'object' || seen.has(node)) return [];
-    seen.add(node);
-    const found: string[] = [];
-    if (Array.isArray(node)) {
-      for (const item of node) found.push(...findKeywords(item, seen));
-      return found;
-    }
-    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
-      if (KEYWORDS.includes(key)) found.push(key);
-      found.push(...findKeywords(value, seen));
-    }
+/** Numeric/length keywords, shared with the phase-budget tests below. */
+const KEYWORDS = [
+  'minimum',
+  'maximum',
+  'exclusiveMinimum',
+  'exclusiveMaximum',
+  'multipleOf',
+  'minLength',
+  'maxLength',
+  'minItems',
+  'maxItems',
+  'minProperties',
+  'maxProperties',
+  'uniqueItems',
+];
+const findKeywords = (node: unknown, seen = new Set<object>()): string[] => {
+  if (node === null || typeof node !== 'object' || seen.has(node)) return [];
+  seen.add(node);
+  const found: string[] = [];
+  if (Array.isArray(node)) {
+    for (const item of node) found.push(...findKeywords(item, seen));
     return found;
-  };
+  }
+  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+    if (KEYWORDS.includes(key)) found.push(key);
+    found.push(...findKeywords(value, seen));
+  }
+  return found;
+};
 
-  test('no numeric/length keyword survives in any phase schema or the live schema', () => {
-    for (const phase of ['narrative', 'combat', 'tactical', 'full'] as const) {
-      expect(findKeywords(dmResponseSchemaForPhase(phase))).toEqual([]);
-    }
-    expect(findKeywords(dmResponseSchema)).toEqual([]);
-    expect(findKeywords(createDmResponseSchema())).toEqual([]);
+describe('keyword split (strategist HOLD on PR 1110: item-5 tail moves to its own PR)', () => {
+  test('keywords stay at exactly their pre-move counts per schema', () => {
+    // Narrative keeps the story bounds (quantity, duration, amount min/max,
+    // source min/maxLength); combat drops map and story sections (none);
+    // tactical keeps only the forced_move distance minimum; the default
+    // builder keeps the base map distance minimum; live keeps all seven.
+    expect(findKeywords(dmResponseSchemaForPhase('narrative')).sort()).toEqual([
+      'maxLength',
+      'maximum',
+      'minLength',
+      'minimum',
+      'minimum',
+      'minimum',
+    ]);
+    expect(findKeywords(dmResponseSchemaForPhase('combat'))).toEqual([]);
+    expect(findKeywords(dmResponseSchemaForPhase('tactical'))).toEqual(['minimum']);
+    expect(findKeywords(dmResponseSchemaForPhase('full')).sort()).toEqual([
+      'maxLength',
+      'maximum',
+      'minLength',
+      'minimum',
+      'minimum',
+      'minimum',
+      'minimum',
+    ]);
+    expect(findKeywords(dmResponseSchema).sort()).toEqual([
+      'maxLength',
+      'maximum',
+      'minLength',
+      'minimum',
+      'minimum',
+      'minimum',
+      'minimum',
+    ]);
+    expect(findKeywords(createDmResponseSchema())).toEqual(['minimum']);
   });
 
-  test('each moved bound is still stated in its field description', () => {
-    const flat = JSON.stringify(dmResponseSchema);
-    expect(flat).toContain('must be 0 or greater');
-    expect(flat).toContain('1 or greater');
-    expect(flat).toContain('1 to 999');
-    expect(flat).toContain('1 to 120 characters');
+  test('each bound sits on its field as a schema keyword', () => {
+    const live = dmResponseSchema as {
+      properties: {
+        map_actions: { items: { properties: { distance: Record<string, unknown> } } };
+        items: { items: { properties: { quantity: Record<string, unknown> } } };
+        conditions: { items: { properties: { duration_minutes: Record<string, unknown> } } };
+        damage: { properties: { amount: Record<string, unknown>; source: Record<string, unknown> } };
+      };
+    };
+    expect(live.properties.map_actions.items.properties.distance).toEqual({
+      type: 'number',
+      minimum: 0,
+    });
+    expect(live.properties.items.items.properties.quantity).toEqual({
+      type: 'integer',
+      minimum: 1,
+    });
+    expect(live.properties.conditions.items.properties.duration_minutes).toEqual({
+      type: 'integer',
+      minimum: 1,
+    });
+    expect(live.properties.damage.properties.amount).toEqual({
+      type: 'integer',
+      minimum: 1,
+      maximum: 999,
+    });
+    expect(live.properties.damage.properties.source).toEqual({
+      type: 'string',
+      minLength: 1,
+      maxLength: 120,
+    });
   });
 });
 
@@ -480,17 +541,39 @@ describe('phase picker (Refs #782 item 8)', () => {
       setPhasePickerEnabledForTests(true);
     }
   });
+
+  test('LLM_DM_PHASE_PICKER=off yields main\'s exact schema bytes (HOLD item 5)', async () => {
+    // Rollback must restore today's schema, not just today's shape: the
+    // pinned schema serializes byte-identically to main's live schema
+    // (fixture captured from the main tree's own module output).
+    setPhasePickerEnabledForTests(false);
+    try {
+      const pinned = await pickDmResponsePhase('s1', 'u1', {
+        getActiveEncounter: async () => ({ id: 'e1' }),
+        loadActiveTacticalMap: async () => ({ id: 'm1' }),
+      });
+      expect(JSON.stringify(pinned.schema)).toBe(JSON.stringify(mainDmResponseSchema));
+    } finally {
+      setPhasePickerEnabledForTests(true);
+    }
+  });
 });
 
 describe('phase schema budgets (Refs #782 item 8)', () => {
-  test('every phase fits the strict caps; full does not claim to', () => {
+  test('every phase fits the strict unions/optionals caps; keywords pinned per phase (split)', () => {
+    // Unions/optionals/oneOf fit the strict caps (asserted exactly by the
+    // budget test); keywords do NOT claim strict-fit — the HOLD split the
+    // item-5 tail out, so each phase keeps today's keywords at its pinned
+    // count (narrative 6, combat 0, tactical 1).
+    const expectedKeywords: Record<'narrative' | 'combat' | 'tactical', number> = {
+      narrative: 6,
+      combat: 0,
+      tactical: 1,
+    };
     for (const phase of ['narrative', 'combat', 'tactical'] as const) {
-      const schema = dmResponseSchemaForPhase(phase);
-      const flat = JSON.stringify(schema);
-      expect(flat).not.toContain('"minimum"');
-      expect(flat).not.toContain('"maximum"');
-      expect(flat).not.toContain('"minLength"');
-      expect(flat).not.toContain('"maxLength"');
+      expect(findKeywords(dmResponseSchemaForPhase(phase))).toHaveLength(
+        expectedKeywords[phase],
+      );
     }
     // The budget test asserts the exact counts; here the shape guarantee:
     // phase schemas are strict subsets of the live schema's properties.

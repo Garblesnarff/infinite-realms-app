@@ -670,16 +670,20 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       // #782 item 3: the DM reply schema is built server-side from the canonical
       // module. The client no longer sends `responseSchema`; a client-sent value
       // is ignored during the transition (the body type still accepts it).
-      // #782 item 8: the phase schema is picked from session state before the
-      // provider call (live encounter + active map -> tactical, live encounter
-      // without a map -> combat, otherwise narrative). Fail-safe: any picker
-      // failure falls back to the full live schema (the picker logs it) — a
-      // picker failure never fails or silently narrows the turn. Shadow-only:
-      // the phase schema rides the request, mismatches log with the phase,
-      // replies are kept; enforcement flips come later, per phase, on a clean
-      // shadow day (#801). Loaded lazily like the other DB-backed services
-      // in this handler, so the route stays importable without DATABASE_URL.
-      let responseSchema: Record<string, unknown> = dmResponseSchema;
+      // #782 item 8, strategist HOLD (true shadow): the live request keeps
+      // today's schema, unchanged, on every path. The phase is picked from
+      // session state before the provider call (live encounter + active map
+      // -> tactical, live encounter without a map -> combat, otherwise
+      // narrative) ONLY to select the comparison schema: the provider
+      // compares each accepted reply against it and logs a phase-only
+      // mismatch, including on the tool path (pre-strip). Fail-safe: any
+      // picker failure falls back to full with no comparison (the picker
+      // logs it) — a picker failure never fails or silently narrows the
+      // turn. Enforcement flips come later, per phase, on a clean shadow
+      // day (#801), in their own PR. Loaded lazily like the other DB-backed
+      // services in this handler, so the route stays importable without
+      // DATABASE_URL.
+      const responseSchema: Record<string, unknown> = dmResponseSchema;
       let responseSchemaPhase: DmResponsePhase = 'full';
       try {
         const { pickDmResponsePhase } = await import(
@@ -689,7 +693,6 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           sessionId ?? combatEntry?.sessionId ?? null,
           user.userId,
         );
-        responseSchema = picked.schema;
         responseSchemaPhase = picked.phase;
         logger.info({
           msg: 'LLM_GENERATE_PHASE',
