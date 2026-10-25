@@ -5,7 +5,6 @@ import { useShowTargetNumbers } from '../../../hooks/use-show-target-numbers';
 
 import type { SpellCastHandlerRef } from '../spell-cast-handler';
 
-
 import CombatInterface from '@/components/combat/CombatInterface';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useOptionalCombat } from '@/contexts/CombatContext';
