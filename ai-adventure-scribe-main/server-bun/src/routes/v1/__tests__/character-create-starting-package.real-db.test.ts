@@ -1170,6 +1170,28 @@ describeWithDb('package gear reaches the session (#1007)', () => {
     expect(outcome.weaponResolution?.substituted).toBe(false);
   });
 
+  it('#1124 wizard fighter with a Longbow pick: the bow fires on turn 1 of the first fight', async () => {
+    // The exact wizard body for Greatsword + Longbow (#921 fixture, produced by
+    // EquipmentSelection -> mapWizardEquipmentToInventory -> transformEquipmentForStorage).
+    const fixture = fighterChoices.find((entry) => entry.name === 'two-martial')!;
+    const id = await create({ ...fixture.body, name: testId('wiz-archer-1124') });
+
+    const rows = await equipmentRows(id);
+    expect(rows.find((row) => row.item_name === 'Longbow')).toBeDefined();
+    expect(rows.find((row) => row.item_name === 'Arrows (20)')?.quantity).toBe(1);
+
+    const { encounterId, heroId, foeId } = await seat(id);
+    await resetTurn(encounterId);
+    const outcome = await executeCombatIntent(
+      encounterId,
+      { type: 'attack', actorId: heroId, targetId: foeId, weaponId: 'Longbow' },
+      userId,
+      'dm',
+    );
+    expect(outcome.weaponResolution?.resolved).toBe('Longbow');
+    expect(outcome.weaponResolution?.substituted).toBe(false);
+  });
+
   it('premade rogue: the seeded shortbow is equipped, offered and resolves as a Shortbow', async () => {
     const [{ id: campaignId }] = await db
       .insert(campaigns)

@@ -79,6 +79,10 @@ describeWithDb('#260 creation package ammunition', () => {
   for (const [className, bundle, weapon, kind] of [
     ['Fighter', 'Crossbow Bolts (20)', 'crossbow', 'bolts'],
     ['Rogue', 'Arrows (20)', 'shortbow', 'arrows'],
+    ['Ranger', 'Arrows (20)', 'longbow', 'arrows'],
+    ['Cleric', 'Crossbow Bolts (20)', 'crossbow', 'bolts'],
+    ['Sorcerer', 'Crossbow Bolts (20)', 'crossbow', 'bolts'],
+    ['Warlock', 'Crossbow Bolts (20)', 'crossbow', 'bolts'],
   ] as const) {
     it(`${className} package POST stores 20 rounds of ammunition, and zero quantity makes its ranged profile unavailable`, async () => {
       const names = getStartingEquipment(className).map((item: { name: string }) => item.name);
