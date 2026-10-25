@@ -287,13 +287,25 @@ const validatesAgainstLiveSchema = (text: string): boolean => {
  * against today's full schema, so a phase mismatch is never double-counted
  * with a full-schema failure. The phase validator is the standard (non-
  * stripping) ajv: on the tool path the caller passes the normalized
- * pre-strip arguments, so a section the tool path would silently strip is
- * still visible here — that visibility is the point of the HOLD.
+ * arguments with keys the full schema does not declare removed (see the
+ * tool branch), so a section the tool path would silently strip is still
+ * visible here — that visibility is the point of the HOLD — while
+ * #783-tolerated extras do not false-positive. When the first error is an
+ * additionalProperties failure, the offending key name rides along so the
+ * shadow log can tell a genuine wrong-phase section from anything else.
+ * Only the first error is returned: for a root-level defect that is the
+ * additionalProperties error naming the key, while a nested anyOf defect
+ * may surface a different first keyword (the count is still correct).
  */
 export const findPhaseShadowMismatch = (
   parsed: unknown,
   phase: string | undefined,
-): { instancePath: string; keyword: string; message: string } | null => {
+): {
+  instancePath: string;
+  keyword: string;
+  message: string;
+  additionalProperty?: string;
+} | null => {
   if (!phase || phase === 'full') return null;
   if (phase !== 'narrative' && phase !== 'combat' && phase !== 'tactical') return null;
   if (!isPlainObject(parsed)) return null;
@@ -301,10 +313,15 @@ export const findPhaseShadowMismatch = (
     const validate = compiledSchemaValidator(dmResponseSchemaForPhase(phase));
     if (validate(parsed)) return null;
     const first = validate.errors?.[0];
+    const additionalProperty =
+      first?.keyword === 'additionalProperties'
+        ? (first?.params as { additionalProperty?: unknown } | undefined)?.additionalProperty
+        : undefined;
     return {
       instancePath: first?.instancePath ?? '',
       keyword: first?.keyword ?? '',
       message: first?.message ?? '',
+      ...(typeof additionalProperty === 'string' ? { additionalProperty } : {}),
     };
   } catch {
     return null;
@@ -313,7 +330,7 @@ export const findPhaseShadowMismatch = (
 
 /** Log one phase-only mismatch in the strict branch's shadow shape. */
 const logPhaseShadowMismatch = (
-  mismatch: { instancePath: string; keyword: string; message: string },
+  mismatch: { instancePath: string; keyword: string; message: string; additionalProperty?: string },
   phase: string,
   model: string,
 ): void => {
@@ -324,6 +341,7 @@ const logPhaseShadowMismatch = (
     instancePath: mismatch.instancePath,
     keyword: mismatch.keyword,
     message: mismatch.message,
+    ...(mismatch.additionalProperty ? { additionalProperty: mismatch.additionalProperty } : {}),
   });
 };
 
@@ -1139,17 +1157,25 @@ export class LLMProviderService {
                 // reply, and stays hard only for genuinely malformed replies
                 // (see the else branch below).
                 if (toolSchema) {
-                  // #782 HOLD item 1: compare the normalized pre-strip tool
-                  // arguments against the phase schema BEFORE removeAdditional
-                  // strips them — the tool path previously swallowed phase
-                  // mismatches silently. The mismatch is only logged when the
-                  // reply validates against the full schema below (a reply
-                  // invalid under today's schema is already the tool failure,
-                  // not a phase-only mismatch).
+                  // #782 HOLD item 1 + FIX at 87c8e32f: compare the
+                  // normalized tool arguments against the phase schema
+                  // with keys the full schema does not declare removed —
+                  // the tool path previously swallowed phase mismatches
+                  // silently, and comparing raw pre-strip arguments
+                  // counted #783-tolerated extras as phase mismatches.
+                  // The full schema's own stripping validator over a clone
+                  // removes exactly the undeclared keys, at every nesting
+                  // level, while full-named wrong-phase sections survive,
+                  // so genuine phase defects stay visible. The mismatch is
+                  // only logged when the reply validates against the full
+                  // schema below (a reply invalid under today's schema is
+                  // already the tool failure, not a phase-only mismatch);
+                  // the clone is never shipped.
                   let toolPhaseMismatch: {
                     instancePath: string;
                     keyword: string;
                     message: string;
+                    additionalProperty?: string;
                   } | null = null;
                   try {
                     const preStrip = stripOptionalNulls(
@@ -1159,7 +1185,12 @@ export class LLMProviderService {
                       ),
                       responseSchema,
                     );
-                    toolPhaseMismatch = findPhaseShadowMismatch(preStrip, responseSchemaPhase);
+                    const comparisonInput = JSON.parse(JSON.stringify(preStrip)) as unknown;
+                    compiledStrippingValidator(responseSchema)(comparisonInput);
+                    toolPhaseMismatch = findPhaseShadowMismatch(
+                      comparisonInput,
+                      responseSchemaPhase,
+                    );
                   } catch {
                     toolPhaseMismatch = null;
                   }

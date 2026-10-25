@@ -1393,8 +1393,9 @@ describe('#782 HOLD item 1: true shadow compares every branch against the phase'
 
       // The request schema is today's full schema; the tool arguments are
       // valid under it (stripping keeps every named key). The phase
-      // comparison sees the pre-strip arguments — the dropped fight arrays
-      // are still there — so it logs the mismatch instead of swallowing it.
+      // comparison sees the arguments with full-named keys intact — the
+      // dropped fight arrays are still there — so it logs the mismatch
+      // instead of swallowing it.
       expect(bodies).toHaveLength(1);
       expect(result.error).toBeUndefined();
       expect(result.text).toBe(VALID_DM_REPLY);
@@ -1408,11 +1409,95 @@ describe('#782 HOLD item 1: true shadow compares every branch against the phase'
         JSON.stringify(mainDmResponseSchema),
       );
       expect(result.usage?.schemaShadowInvalid).toBe(1);
-      const calls = warn.mock.calls.map((call) => call[0] as { msg?: string; phase?: string });
-      expect(calls.find((entry) => entry?.msg === 'LLM_SCHEMA_SHADOW_INVALID')?.phase).toBe(
-        'narrative',
+      const calls = warn.mock.calls.map(
+        (call) => call[0] as { msg?: string; phase?: string; additionalProperty?: string },
+      );
+      const shadow = calls.find((entry) => entry?.msg === 'LLM_SCHEMA_SHADOW_INVALID');
+      expect(shadow?.phase).toBe('narrative');
+      // The log names the offending key: a section the narrative phase drops.
+      expect(['map_actions', 'combat_actions'].includes(shadow?.additionalProperty ?? '')).toBe(
+        true,
       );
       // No tool failure: the reply is valid under today's full schema.
+      expect(calls.find((entry) => entry?.msg === 'LLM_TOOL_SCHEMA_INVALID')).toBeUndefined();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('tool path: a phase-clean tactical tool reply with one unnamed root key is kept, with no phase mismatch', async () => {
+    // #782 FIX at 87c8e32f: the phase comparison ignores keys the full
+    // schema does not declare. A tactical-clean reply carrying one
+    // #783-tolerated extra key (visual_prompt) is phase-clean once that
+    // key is ignored, so it must not log or count as a phase mismatch.
+    // (A narrative version of this test cannot exist: a narrative-clean
+    // reply omits the fight arrays, which the full schema requires, so
+    // the tool path would reject it before any comparison runs. Tactical
+    // is the phase where full-valid and phase-clean coexist.)
+    useModel('anthropic/claude-haiku-5.5');
+    const withExtra = JSON.stringify({ ...JSON.parse(VALID_DM_REPLY), visual_prompt: 'a lantern' });
+    const bodies = stubOpenRouter([{ toolArguments: withExtra }]);
+    const warn = spyOn(logger, 'warn').mockImplementation((() => {}) as typeof logger.warn);
+    try {
+      const result = await LLMProviderService.generate({
+        prompt: 'volatile user prompt',
+        systemPrompt: 'stable system block',
+        responseSchema: dmResponseSchema,
+        responseSchemaPhase: 'tactical',
+        maxTokens: 100,
+      });
+
+      expect(bodies).toHaveLength(1);
+      expect(result.error).toBeUndefined();
+      // The extra key is stripped from the shipped text, as on #783.
+      expect(result.text).toBe(VALID_DM_REPLY);
+      expect(result.usage?.schemaDelivery).toBe('forced-tool-call');
+      expect(result.usage?.schemaShadowInvalid).toBeUndefined();
+      const calls = warn.mock.calls.map((call) => call[0] as { msg?: string });
+      expect(calls.find((entry) => entry?.msg === 'LLM_SCHEMA_SHADOW_INVALID')).toBeUndefined();
+      expect(calls.find((entry) => entry?.msg === 'LLM_TOOL_SCHEMA_INVALID')).toBeUndefined();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('tool path: a genuine tactical phase defect is still counted when an unnamed key is also present', async () => {
+    // The ignore in the test above must not blind the comparison: a
+    // full-named wrong-phase section survives the strip and still counts,
+    // and the log names it (not the ignored extra key).
+    useModel('anthropic/claude-haiku-5.5');
+    const reply = JSON.stringify({
+      ...JSON.parse(VALID_DM_REPLY),
+      scene_spec: { environment: 'corridor', seed: 7 },
+      visual_prompt: 'a lantern',
+    });
+    const bodies = stubOpenRouter([{ toolArguments: reply }]);
+    const warn = spyOn(logger, 'warn').mockImplementation((() => {}) as typeof logger.warn);
+    try {
+      const result = await LLMProviderService.generate({
+        prompt: 'volatile user prompt',
+        systemPrompt: 'stable system block',
+        responseSchema: dmResponseSchema,
+        responseSchemaPhase: 'tactical',
+        maxTokens: 100,
+      });
+
+      expect(bodies).toHaveLength(1);
+      expect(result.error).toBeUndefined();
+      // scene_spec ships (it is full-named); only the unnamed key is stripped.
+      expect(result.text).toBe(
+        JSON.stringify({
+          ...JSON.parse(VALID_DM_REPLY),
+          scene_spec: { environment: 'corridor', seed: 7 },
+        }),
+      );
+      expect(result.usage?.schemaShadowInvalid).toBe(1);
+      const shadow = warn.mock.calls
+        .map((call) => call[0] as { msg?: string; phase?: string; additionalProperty?: string })
+        .find((entry) => entry?.msg === 'LLM_SCHEMA_SHADOW_INVALID');
+      expect(shadow?.phase).toBe('tactical');
+      expect(shadow?.additionalProperty).toBe('scene_spec');
+      const calls = warn.mock.calls.map((call) => call[0] as { msg?: string });
       expect(calls.find((entry) => entry?.msg === 'LLM_TOOL_SCHEMA_INVALID')).toBeUndefined();
     } finally {
       warn.mockRestore();
