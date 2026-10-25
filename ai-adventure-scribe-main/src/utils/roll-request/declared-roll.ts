@@ -36,10 +36,27 @@ function containsTerm(text: string, term: string): boolean {
   return new RegExp(`(?:^|[^a-z])${escapedTerm}(?:$|[^a-z])`, 'i').test(text);
 }
 
+/** The index where a whole-word term starts, or -1 when it is not present. */
+function termIndex(text: string, term: string): number {
+  const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+  const match = new RegExp(`(?:^|[^a-z])(${escapedTerm})(?=$|[^a-z])`, 'i').exec(text);
+  if (!match) return -1;
+  return match.index + match[0].length - match[1].length;
+}
+
 export function findDeclaredSkill(request: DeclaredRollText): string | undefined {
   const text = `${request.purpose || ''} ${request.formula || ''}`;
-  const term = SKILL_TERMS.find((candidate) => containsTerm(text, candidate));
-  return term ? SKILL_ALIASES[term] || term : undefined;
+  let bestTerm: string | undefined;
+  let bestIndex = Infinity;
+  for (const candidate of SKILL_TERMS) {
+    const index = termIndex(text, candidate);
+    if (index === -1) continue;
+    if (index < bestIndex) {
+      bestTerm = candidate;
+      bestIndex = index;
+    }
+  }
+  return bestTerm ? SKILL_ALIASES[bestTerm] || bestTerm : undefined;
 }
 
 export function findDeclaredAbility(request: DeclaredRollText): AbilityName | undefined {
