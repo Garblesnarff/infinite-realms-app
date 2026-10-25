@@ -61,11 +61,11 @@ const TermsPage: React.FC = () => (
 
     <LegalSection title="Game rules and third-party material">
       <p>
-        Infinite Realms is not affiliated with Wizards of the Coast. D&D content uses SRD/OGL
-        licensed material where applicable. Other names belong to their owners.
+        Infinite Realms is not affiliated with or endorsed by Wizards of the Coast. D&D content uses
+        SRD/OGL licensed material where applicable. Other names belong to their owners.
       </p>
       <p>
-        This work includes material taken from the System Reference Document 5.1 (&quot;SRD
+        This work includes material adapted from the System Reference Document 5.1 (&quot;SRD
         5.1&quot;) by Wizards of the Coast LLC and available at
         https://dnd.wizards.com/resources/systems-reference-document. The SRD 5.1 is licensed under
         the Creative Commons Attribution 4.0 International License available at

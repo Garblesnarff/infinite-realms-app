@@ -62,6 +62,25 @@ describe('legal routes (#2258)', () => {
     }
   });
 
+  it('terms page carries the SRD 5.1 CC-BY-4.0 attribution (#985)', async (): Promise<void> => {
+    renderAt('/terms');
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Terms of Service' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/not affiliated with or endorsed by Wizards of the Coast/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/includes material adapted from/)).toBeInTheDocument();
+    expect(screen.getByText(/System Reference Document 5\.1/)).toBeInTheDocument();
+    expect(screen.getByText(/Wizards of the Coast LLC/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Creative Commons Attribution 4\.0 International License/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/creativecommons\.org\/licenses\/by\/4\.0\/legalcode/),
+    ).toBeInTheDocument();
+  });
+
   it('footer shows the 2026 Infinite Realms copyright', () => {
     render(
       <MemoryRouter>
