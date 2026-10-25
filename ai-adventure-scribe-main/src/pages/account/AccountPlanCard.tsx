@@ -94,13 +94,6 @@ export const AccountPlanCard: React.FC<AccountPlanCardProps> = ({
                 <p className="text-sm text-muted-foreground">Get help when you need it</p>
               </div>
             </div>
-            <div className="flex items-start gap-3 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
-              <Shield className="h-5 w-5 text-emerald-400 mt-0.5" />
-              <div>
-                <h4 className="font-medium text-emerald-400">Early Access</h4>
-                <p className="text-sm text-muted-foreground">Be first to try new features</p>
-              </div>
-            </div>
           </div>
 
           {/* Upgrade Button */}

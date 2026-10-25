@@ -149,7 +149,7 @@ export const WaitlistForm: React.FC<WaitlistFormProps> = ({
 
   return (
     <div className={`${sizeClasses[variant]} ${className}`}>
-      <form onSubmit={handleSubmit} className="space-y-4" aria-label="Join beta waitlist">
+      <form onSubmit={handleSubmit} className="space-y-4" aria-label="Get updates by email">
         {/* Name field (optional) */}
         <div>
           <Label htmlFor="waitlist-name" className="sr-only">
@@ -202,9 +202,9 @@ export const WaitlistForm: React.FC<WaitlistFormProps> = ({
             className={errors.consent ? 'border-red-500' : ''}
           />
           <Label htmlFor="waitlist-consent" className="text-sm text-gray-300 leading-relaxed">
-            I agree to receive updates about the AI Dungeon Master beta launch and occasional
-            product news. I can unsubscribe at any time.{' '}
-            <a href="/privacy" className="text-purple-400 hover:text-purple-300 underline">
+            I agree to receive emails about Infinite Realms updates and new features. I can
+            unsubscribe at any time.{' '}
+            <a href="/privacy" className="text-[#d5b070] hover:text-[#f3deb0] underline">
               View Privacy Policy
             </a>
           </Label>
@@ -235,7 +235,7 @@ export const WaitlistForm: React.FC<WaitlistFormProps> = ({
           {status === 'loading' && (
             <>
               <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-              Joining Waitlist...
+              Saving...
             </>
           )}
           {status === 'success' && (
@@ -253,7 +253,7 @@ export const WaitlistForm: React.FC<WaitlistFormProps> = ({
           {status === 'idle' && (
             <>
               <Mail className="w-5 h-5 mr-2" />
-              Join Beta Waitlist
+              Get updates by email
             </>
           )}
         </Button>
@@ -262,8 +262,7 @@ export const WaitlistForm: React.FC<WaitlistFormProps> = ({
         {status === 'success' && (
           <div className="p-4 bg-green-900/20 border border-green-500/20 rounded-lg">
             <p className="text-green-400 text-sm text-center">
-              🎉 Welcome to the waitlist! Check your email for a confirmation link. We'll notify you
-              as soon as beta access is available.
+              You are on the list. Check your email for a confirmation link.
             </p>
           </div>
         )}

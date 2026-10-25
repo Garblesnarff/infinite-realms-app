@@ -21,30 +21,30 @@ export const RoadmapSection: React.FC = () => {
     switch (status) {
       case 'current':
         return {
-          badge: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+          badge: 'bg-[#121b30] text-[#d5b070] border-[#d5b070]',
           icon: 'text-amber-400',
-          bg: 'from-amber-900/40 to-gray-900/40 border-amber-500/20',
+          bg: 'bg-[#121b30] border-[#d5b070]/30',
           glow: 'shadow-[0_0_20px_rgba(251,191,36,0.2)]',
         };
       case 'upcoming':
         return {
-          badge: 'bg-gray-500/20 text-gray-300 border-gray-500/30',
+          badge: 'bg-[#0c1220] text-[#98a3c2] border-[rgba(213,176,112,0.35)]',
           icon: 'text-gray-400',
-          bg: 'from-gray-900/40 to-gray-800/40 border-gray-500/20',
+          bg: 'bg-[#0c1220] border-[rgba(213,176,112,0.35)]',
           glow: '',
         };
       case 'completed':
         return {
           badge: 'bg-green-500/20 text-green-300 border-green-500/30',
           icon: 'text-green-400',
-          bg: 'from-green-900/40 to-gray-900/40 border-green-500/20',
+          bg: 'bg-[#0c1220] border-green-500/20',
           glow: '',
         };
       default:
         return {
           badge: 'bg-gray-500/20 text-gray-300 border-gray-500/30',
           icon: 'text-gray-400',
-          bg: 'from-gray-900/40 to-gray-800/40 border-gray-500/20',
+          bg: 'bg-[#0c1220] border-gray-500/20',
           glow: '',
         };
     }
@@ -71,25 +71,30 @@ export const RoadmapSection: React.FC = () => {
                 <div key={index} className="relative">
                   {/* Timeline Line */}
                   {index < roadmap.phases.length - 1 && (
-                    <div className="absolute left-8 top-16 w-0.5 h-16 bg-gradient-to-b from-purple-400 to-transparent hidden lg:block"></div>
+                    <div className="absolute left-8 top-16 w-0.5 h-16 bg-gradient-to-b from-[#d5b070] to-transparent hidden lg:block"></div>
                   )}
 
                   {/* Phase Card */}
                   <div
-                    className={`relative bg-gradient-to-br ${styling.bg} rounded-2xl p-8 backdrop-blur-sm border transition-all duration-300 ${styling.glow}`}
+                    className={`relative ${styling.bg} rounded-2xl p-8 backdrop-blur-sm border transition-all duration-300 ${styling.glow}`}
                   >
                     <div className="flex flex-col lg:flex-row lg:items-start gap-6">
                       {/* Phase Header */}
                       <div className="flex items-start gap-4">
-                        {/* Phase Number - Aligned to top */}
+                        {/* Phase Marker - Aligned to top (a status icon: phases are
+                            "Now"/"Next", not numbers, so there is no number to show) */}
                         <div
-                          className={`w-16 h-16 flex-shrink-0 rounded-full flex items-center justify-center text-2xl font-bold ${
+                          className={`w-16 h-16 flex-shrink-0 rounded-full flex items-center justify-center ${
                             phase.status === 'current'
                               ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-gray-900'
                               : 'bg-gray-600 text-white'
                           }`}
                         >
-                          {phase.phase.replace('Phase ', '')}
+                          {phase.status === 'current' || phase.status === 'completed' ? (
+                            <CheckCircle className="w-8 h-8" />
+                          ) : (
+                            <Clock className="w-8 h-8" />
+                          )}
                         </div>
 
                         {/* Phase Info */}
@@ -100,10 +105,10 @@ export const RoadmapSection: React.FC = () => {
                               {phase.status === 'current' && (
                                 <>
                                   <Clock className="w-3 h-3 mr-1" />
-                                  Current
+                                  Live now
                                 </>
                               )}
-                              {phase.status === 'upcoming' && 'Upcoming'}
+                              {phase.status === 'upcoming' && 'Planned'}
                               {phase.status === 'completed' && (
                                 <>
                                   <CheckCircle className="w-3 h-3 mr-1" />
@@ -122,7 +127,7 @@ export const RoadmapSection: React.FC = () => {
 
                       {/* Features List - Fixed width, vertical layout */}
                       <div className="lg:min-w-[280px] lg:w-1/3">
-                        <h4 className="text-lg font-semibold text-white mb-4">Key Features</h4>
+                        <h4 className="text-lg font-semibold text-white mb-4">What it includes</h4>
                         <div className="flex flex-col gap-3">
                           {phase.features.map((feature, featureIndex) => (
                             <div key={featureIndex} className="flex items-start gap-3">
@@ -145,24 +150,6 @@ export const RoadmapSection: React.FC = () => {
             })}
           </div>
 
-          {/* Progress Indicator */}
-          <div className="mt-16">
-            <div className="max-w-2xl mx-auto">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-sm text-gray-400">Progress to Launch</span>
-                <span className="text-sm text-amber-400 font-semibold">Phase 1 of 3</span>
-              </div>
-              <div className="w-full bg-gray-800/50 rounded-full h-3">
-                <div className="bg-gradient-to-r from-amber-400 to-purple-400 h-3 rounded-full w-1/3 transition-all duration-500"></div>
-              </div>
-              <div className="flex justify-between mt-2 text-xs text-gray-500">
-                <span>Closed Beta</span>
-                <span>Open Beta</span>
-                <span>Public Launch</span>
-              </div>
-            </div>
-          </div>
-
           {/* Timeline Note */}
           <div className="mt-16 p-6 bg-gray-800/30 border border-gray-700/50 rounded-xl">
             <div className="flex items-start gap-4">
@@ -170,9 +157,7 @@ export const RoadmapSection: React.FC = () => {
               <div>
                 <h3 className="text-lg font-semibold text-white mb-2">Timeline Updates</h3>
                 <p className="text-gray-400 leading-relaxed">
-                  Our roadmap is flexible and will evolve based on beta feedback and technical
-                  requirements. Major updates will be communicated to our beta community first, with
-                  public updates shared regularly on our development blog.
+                  This list can change. We give no dates until we can keep them.
                 </p>
               </div>
             </div>
@@ -180,9 +165,9 @@ export const RoadmapSection: React.FC = () => {
 
           {/* Call to Action */}
           <div className="mt-16 text-center">
-            <p className="text-gray-400 text-lg mb-4">Want to influence our roadmap?</p>
-            <p className="text-purple-400 font-semibold">
-              Join the beta and help us prioritize features
+            <p className="text-gray-400 text-lg mb-4">Want a say in what comes next?</p>
+            <p className="text-[#d5b070] font-semibold">
+              Play, then tell us what to build next. Use Contact Us or Discord.
             </p>
           </div>
         </div>

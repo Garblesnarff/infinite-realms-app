@@ -128,7 +128,7 @@ const AuthPage: React.FC = () => {
                     to="/"
                     className="font-semibold text-amber-300 underline decoration-amber-300/40 underline-offset-4 transition-colors hover:text-amber-200"
                   >
-                    Explore the beta
+                    Explore adventures
                   </Link>
                 </p>
               </div>

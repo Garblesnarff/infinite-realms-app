@@ -89,7 +89,7 @@ export const FinalCTASection: React.FC = () => {
             <div className="mb-8 text-center">
               <h3 className="text-3xl font-bold text-white mb-3">Get news and updates</h3>
               <p className="text-gray-300 text-lg">
-                Join the waitlist for launch news. You do not need it to play.
+                Get an email when a new feature ships. You do not need it to play.
               </p>
             </div>
             <WaitlistForm variant="section" />
@@ -97,9 +97,9 @@ export const FinalCTASection: React.FC = () => {
         </div>
 
         {/* What Happens Next - Simplified */}
-        <div className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 border border-purple-500/30 rounded-2xl p-10 backdrop-blur-md">
+        <div className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 border border-[rgba(213,176,112,0.35)] rounded-2xl p-10 backdrop-blur-md">
           <h3 className="text-3xl font-bold text-white mb-10 text-center">
-            What Happens After You Join the Waitlist?
+            What happens after you sign up?
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
@@ -107,9 +107,9 @@ export const FinalCTASection: React.FC = () => {
               <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6 text-white font-bold text-2xl shadow-lg shadow-purple-500/30">
                 1
               </div>
-              <h4 className="text-xl font-semibold text-white mb-3">Email Confirmation</h4>
+              <h4 className="text-xl font-semibold text-white mb-3">Confirm your email</h4>
               <p className="text-gray-300 text-base leading-relaxed">
-                You'll receive a confirmation email with your waitlist number and next steps.
+                We send you a link. Click it to confirm.
               </p>
             </div>
 
@@ -117,9 +117,9 @@ export const FinalCTASection: React.FC = () => {
               <div className="w-16 h-16 bg-gradient-to-br from-amber-500 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-6 text-white font-bold text-2xl shadow-lg shadow-amber-500/30">
                 2
               </div>
-              <h4 className="text-xl font-semibold text-white mb-3">Beta Invitations</h4>
+              <h4 className="text-xl font-semibold text-white mb-3">News, not a queue</h4>
               <p className="text-gray-300 text-base leading-relaxed">
-                We'll send beta invitations on a first-come, first-served basis as spots open up.
+                We write when something new ships. There is no queue. You can play now.
               </p>
             </div>
 
@@ -127,9 +127,9 @@ export const FinalCTASection: React.FC = () => {
               <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6 text-white font-bold text-2xl shadow-lg shadow-purple-500/30">
                 3
               </div>
-              <h4 className="text-xl font-semibold text-white mb-3">Early Access</h4>
+              <h4 className="text-xl font-semibold text-white mb-3">Leave any time</h4>
               <p className="text-gray-300 text-base leading-relaxed">
-                Get early access to new features and direct influence on product development.
+                You can unsubscribe at any time.
               </p>
             </div>
           </div>

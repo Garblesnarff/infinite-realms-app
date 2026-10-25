@@ -38,11 +38,11 @@ export const FeaturesSection: React.FC = () => {
     switch (status) {
       case 'live':
         return {
-          badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30 backdrop-blur-md',
+          badge: 'bg-[#121b30] text-[#d5b070] border-[#d5b070] backdrop-blur-md',
         };
       case 'in_development':
         return {
-          badge: 'bg-purple-500/20 text-purple-300 border-purple-500/30 backdrop-blur-md',
+          badge: 'bg-[#121b30] text-[#98a3c2] border-[rgba(213,176,112,0.35)] backdrop-blur-md',
         };
       case 'beta':
         return {
@@ -141,11 +141,9 @@ export const FeaturesSection: React.FC = () => {
 
         {/* Bottom CTA */}
         <div className="mt-16 text-center">
-          <p className="text-gray-400 text-lg mb-4">
-            Want to influence which features we prioritize?
-          </p>
-          <p className="text-purple-400 font-semibold">
-            Join the beta and help shape the future of AI Dungeon Master
+          <p className="text-gray-400 text-lg mb-4">Want a say in what comes next?</p>
+          <p className="text-[#d5b070] font-semibold">
+            Play, then tell us what to build next. Use Contact Us or Discord.
           </p>
         </div>
       </div>

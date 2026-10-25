@@ -72,7 +72,7 @@ describe('LaunchPage', () => {
 
   it('points the refund FAQ answer at /terms', () => {
     const { container } = renderPage();
-    const link = container.querySelector('a[href="/terms"][class*="purple-400"]');
+    const link = container.querySelector('a[href="/terms"][class*="d5b070"]');
     expect(link?.textContent).toBe('Terms of Service');
   });
 
@@ -85,10 +85,38 @@ describe('LaunchPage', () => {
     expect(faqLinks).toHaveLength(1);
   });
 
-  it('puts the waitlist form after the Play CTA in the early-access section', () => {
+  it('puts the email-list form after the Play CTA in the final CTA', () => {
     const { container } = renderPage();
-    const play = container.querySelector('[data-track-cta="play_free_early_access"]') as Node;
-    const form = screen.getAllByRole('form', { name: /join beta waitlist/i })[0] as Node;
+    const play = container.querySelector('[data-track-cta="play_free_footer"]') as Node;
+    const form = screen.getAllByRole('form', { name: /get updates by email/i })[0] as Node;
     expect(play.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('has exactly one signup form on the page', () => {
+    renderPage();
+    expect(screen.getAllByRole('form')).toHaveLength(1);
+  });
+
+  it('carries none of the retired beta story strings', () => {
+    const { container } = renderPage();
+    const text = container.textContent ?? '';
+    for (const retired of [
+      /closed beta/i,
+      /founder's alpha/i,
+      /waitlist number/i,
+      /first-come/i,
+      /unlike other ais/i,
+      /perfect memory/i,
+      /professional voice/i,
+      /early access/i,
+      /founding/i,
+    ]) {
+      expect(text).not.toMatch(retired);
+    }
+  });
+
+  it('states the Legend price from the pricing label, not a typed price', () => {
+    const { container } = renderPage();
+    expect(container.textContent).toContain(`Legend costs ${ACCOUNT_UPGRADE_PRICE.label}`);
   });
 });
