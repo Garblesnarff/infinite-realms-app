@@ -347,10 +347,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Check immediately
     checkAndRefresh();
 
+    const handleFocus = (): void => {
+      void checkAndRefresh();
+    };
+    const handleVisibilityChange = (): void => {
+      if (document.visibilityState === 'visible') void checkAndRefresh();
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     // Then check every 30 seconds
     const interval = setInterval(checkAndRefresh, 30 * 1000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [endSession, hasRefreshToken, sessionEnded]);
 
   // Persist session to localStorage

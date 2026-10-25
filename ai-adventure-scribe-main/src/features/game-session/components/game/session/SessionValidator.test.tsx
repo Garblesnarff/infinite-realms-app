@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useSessionValidator } from './SessionValidator';
 
@@ -27,6 +27,10 @@ vi.mock('@/services/user-data-api', () => ({
 }));
 
 describe('useSessionValidator', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('logs the validation error object with the failure message', async () => {
     const error = new Error('session lookup failed');
     vi.mocked(userDataApi.getSession).mockRejectedValueOnce(error);
@@ -44,5 +48,49 @@ describe('useSessionValidator', () => {
     });
 
     expect(logger.error).toHaveBeenCalledWith('Session validation failed:', { error });
+  });
+
+  it('does not mislabel an authentication failure as an invalid game session', async () => {
+    vi.mocked(userDataApi.getSession).mockRejectedValueOnce(
+      Object.assign(new Error('Session expired — sign in again'), { status: 401 }),
+    );
+
+    const { result } = renderHook(() =>
+      useSessionValidator({
+        sessionId: 'session-1',
+        campaignId: 'campaign-1',
+        characterId: 'character-1',
+      }),
+    );
+
+    await act(async () => {
+      await result.current();
+    });
+
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('keeps the invalid-session message for a missing session', async () => {
+    vi.mocked(userDataApi.getSession).mockRejectedValueOnce(
+      Object.assign(new Error('Not found'), { status: 404 }),
+    );
+
+    const { result } = renderHook(() =>
+      useSessionValidator({
+        sessionId: 'session-1',
+        campaignId: 'campaign-1',
+        characterId: 'character-1',
+      }),
+    );
+
+    await act(async () => {
+      await result.current();
+    });
+
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: 'Invalid game session. Please try starting a new game.',
+      }),
+    );
   });
 });
