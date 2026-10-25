@@ -79,7 +79,12 @@ export function usePlayerRollHost(): string | null {
                   },
                   ...(spec.kind === 'spell-attack' || spec.targetAc <= 0 || !showTargetNumbers
                     ? {}
-                    : { ac: spec.targetAc }),
+                    : {
+                        ac: spec.targetAc,
+                        ...(typeof spec.coverBonus === 'number'
+                          ? { coverBonus: spec.coverBonus }
+                          : {}),
+                      }),
                   combatAttackRoll: true,
                 };
         const rollId = requestDiceRoll(
