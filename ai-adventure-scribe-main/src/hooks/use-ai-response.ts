@@ -896,8 +896,10 @@ export const useAIResponse = (): {
               : AIService.chatWithDM;
 
         // A cast from the sheet can be cancelled while the DM reads the scene (#2418). Aborting
-        // the request is safe: the slot is spent only when the engine is handed the cast, after
-        // this reply, and an in-combat turn's prose and side effects are not saved until then.
+        // the request is safe: for a story cast the server skips the slot spend when the
+        // request signal is aborted (#1021 FIX round 1), so a cancelled cast spends nothing;
+        // an in-combat turn's prose and side effects are not saved until the engine is handed
+        // the cast, after this reply.
         const castSignal = playerInputOrigin === 'sheet_cast' ? sheetCastSignal() : null;
         const requestSignal = combineAbortSignals(signal, castSignal ?? undefined);
         // Cancelled while queued behind another turn, or during the context fetch above.
@@ -952,9 +954,15 @@ export const useAIResponse = (): {
                   ...(isDiceRollMessage && latestMessage.context?.rollRequestId
                     ? { rollRequestId: latestMessage.context.rollRequestId }
                     : {}),
-                  // A cast that can still be cancelled keeps its prose off the server too: a
-                  // provisional row would narrate a cast the player gave up after a reload.
-                  inCombat: Boolean(isInCombat || castSignal),
+                  // A sheet cast may be cancelled while the request is in flight, but the
+                  // cancellation signal is not combat state. Reporting every sheet cast as
+                  // `inCombat` made the server skip the story spell-slot spend (and the other
+                  // story appliers) whenever the Cast button was used outside combat (#1021).
+                  inCombat: Boolean(isInCombat),
+                  // A sheet cast may still be cancelled after the request reaches the server.
+                  // Keep that provisional prose out of the reload fallback without conflating
+                  // cancellation with combat, so story spell slots still spend normally.
+                  ...(castSignal ? { holdProse: true } : {}),
                   // The client's own gate predicate, so the server's harm check stands down on
                   // exactly the turns the client gate does (a dice-roll message, say).
                   narrationGated: holdSideEffects,

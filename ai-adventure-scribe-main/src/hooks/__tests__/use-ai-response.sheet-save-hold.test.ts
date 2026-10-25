@@ -15,6 +15,7 @@ import type { SpellTargetSaveSpec } from '@/services/combat/spell-target-save-br
 import { mapAuthoritativeCombat } from '@/contexts/combat/authoritative-combat-state';
 import { useCombat } from '@/contexts/CombatContext';
 import { handleDmActionsAndTransitions } from '@/hooks/ai/dm-actions-handler';
+import { processRollRequests } from '@/hooks/ai/roll-processor';
 import { AIService } from '@/services/ai-service';
 import {
   beginSheetCast,
@@ -156,9 +157,16 @@ describe('useAIResponse: the sheet save card comes before the DM (#2392)', () =>
       refreshCombatState: vi.fn(async () => encounter),
     } as any);
   };
-  const play = (message: unknown) => {
+  const play = (message: unknown, dmMessageId?: string) => {
     const { result } = renderHook(() => useAIResponse());
-    return result.current.getAIResponse([message] as any, SESSION_ID);
+    return result.current.getAIResponse(
+      [message] as any,
+      SESSION_ID,
+      undefined,
+      undefined,
+      undefined,
+      dmMessageId,
+    );
   };
   const cardIsOpen = () => vi.waitFor(() => expect(presented).toHaveLength(1));
 
@@ -305,12 +313,12 @@ describe('useAIResponse: the sheet save card comes before the DM (#2392)', () =>
     it('asks the server not to keep prose for a cast that can still be cancelled', async () => {
       inFight(sarah, imp);
       beginSheetCast('Acid Splash');
-      await play(sheetCast('acid-splash', 'Acid Splash'));
+      await play(sheetCast('acid-splash', 'Acid Splash'), '11111111-2222-4333-8444-555555555501');
       finishSheetCast();
 
       const call = vi.mocked(AIService.chatWithDM).mock.calls[0][0] as any;
-      // A dmReply is only sent when the caller reserved a message id.
-      if (call.dmReply) expect(call.dmReply.inCombat).toBe(true);
+      // In combat the hold rides alongside combat state, not instead of it.
+      expect(call.dmReply).toMatchObject({ inCombat: true, holdProse: true });
     });
 
     it('a DM failure that is not a cancel still fails the turn', async () => {
@@ -329,6 +337,77 @@ describe('useAIResponse: the sheet save card comes before the DM (#2392)', () =>
       await play({ ...sheetCast('acid-splash', 'Acid Splash'), context: { intent: 'query' } });
 
       expect((vi.mocked(AIService.chatWithDM).mock.calls[0][0] as any).signal).toBeUndefined();
+    });
+  });
+
+  describe('Sheet casts outside combat (#1021)', () => {
+    const CANCELLED = 'Cast cancelled. No spell slot was used.';
+
+    // The inFight tests above leave the useCombat mock reporting combat (clearAllMocks does
+    // not undo mockReturnValue), so pin the out-of-combat state here instead of trusting default.
+    beforeEach(() => {
+      vi.mocked(useCombat).mockReturnValue({
+        state: { isInCombat: false, activeEncounter: null },
+        refreshCombatState: vi.fn(async () => null),
+      } as any);
+    });
+
+    it('holds cancelled exploration-cast prose independently of combat state for a reload', async () => {
+      // No encounter: the block's inner beforeEach pins useCombat out of combat.
+      beginSheetCast('Acid Splash');
+      vi.mocked(AIService.chatWithDM).mockImplementation((async () => {
+        cancelSheetCast();
+        return { text: 'The acid hisses.', roll_requests: [] };
+      }) as any);
+      try {
+        const reply = await play(
+          sheetCast('acid-splash', 'Acid Splash'),
+          '00000000-0000-4000-8000-000000001021',
+        );
+        expect(reply).toMatchObject({ text: '', localNotice: CANCELLED });
+        expect(handleDmActionsAndTransitions).not.toHaveBeenCalled();
+        const call = vi.mocked(AIService.chatWithDM).mock.calls[0]?.[0] as any;
+        expect(call.dmReply).toMatchObject({ inCombat: false, holdProse: true });
+      } finally {
+        finishSheetCast();
+      }
+    });
+
+    it('keeps an exploration sheet cast on the story slot and roll path', async () => {
+      // The cancellation signal belongs to the Cast button, not to combat. Outside combat the
+      // server must therefore receive an ordinary narrative turn so story-spell-slots can spend a
+      // levelled slot and a cantrip's attack roll can reach the dice queue.
+      beginSheetCast('Acid Splash');
+      await play(sheetCast('acid-splash', 'Acid Splash'), '11111111-2222-4333-8444-555555555502');
+      const call = vi.mocked(AIService.chatWithDM).mock.calls[0]?.[0] as any;
+      expect(call.dmReply).toMatchObject({ inCombat: false, holdProse: true });
+      finishSheetCast();
+    });
+
+    it('an attack cantrip with a target rolls: its attack request reaches the dice queue (G22-013)', async () => {
+      beginSheetCast('Fire Bolt');
+      vi.mocked(AIService.chatWithDM).mockImplementation((async () => ({
+        text: 'The bolt streaks toward the goblin.',
+        roll_requests: [{ type: 'attack', formula: '1d20+5', purpose: 'Fire Bolt attack' }],
+      })) as any);
+      vi.mocked(handleDmActionsAndTransitions).mockImplementation((async (params: any) => ({
+        result: params.result,
+        responseText: params.result.text,
+        narrationSegments: undefined,
+        isInCombat: false,
+        activeEncounter: null,
+      })) as any);
+      await play(sheetCast('fire-bolt', 'Fire Bolt'), '11111111-2222-4333-8444-555555555503');
+      const call = vi.mocked(AIService.chatWithDM).mock.calls[0]?.[0] as any;
+      expect(call.dmReply).toMatchObject({ inCombat: false, holdProse: true });
+      expect(vi.mocked(processRollRequests)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          existingRequests: [
+            expect.objectContaining({ type: 'attack', formula: '1d20+5' }),
+          ],
+        }),
+      );
+      finishSheetCast();
     });
   });
 });
