@@ -458,3 +458,65 @@ test('a short last tier-1 NPC keeps its chunk type and name once the table is cu
   assert.equal(quill.chunkType, 'npc_tier1');
   assert.equal(quill.content, '1. **Quill** (Kenku Critic) - Mimics.');
 });
+
+const GARDENER_CLIMAX_SECTION = `### **The Climax: Five Breaths**
+Ombu takes five breaths, and the last comes at the end of round 5. The knot has room for two creatures. Only a marked hand can hold it or drive the Spike. At the end of round 5, check who holds the heart-knot and what they do. If no fight is running, count one round for each exchange with the player. The adventure always ends at the end of round 5.
+*   The hero holds it, Favor 3 or more, Glass 2 or less: the bond passes to the hero. If the hero knows the Call (F3 or F6), they can sing it backward and send the glass home. Ending A.
+*   The hero holds it, but Favor is 2 or less or Glass is 3 or more: the jungle refuses them. The bond passes to the nearest other marked candidate who holds the knot (Breaks-Branches if present), or to nobody (Ending C).
+*   Breaks-Branches holds it (the hero gives it to him, or he gets there first): Ending A with him as the Gardener, and the hero is free.
+*   Someone cuts the Glass Vein with the Root-Knife (F5): Ending B. Someone plants Firstleaf's seed in the knot: Ending C. Someone drives the Grafting Spike into the knot (F8): Ending D, the bottled version. The Prophet or the Shard-Bearer holds it: Ending D. Nobody holds it: the bond passes to nobody, and the jungle and the glass fall still: Ending C.
+*   **The end.** Narrate the ending in one reply, then a short epilogue (what the dawn looks like, what each surviving NPC does). The hero reaches level 4. Then stop: there is no scene after the ending, and the DM offers no more options.
+*   Breaking the Perfect Shard drops the Prophet, and Benedito wakes weak and weeping, a man again. The Song-Shard rung at the Prophet silences him: he is Incapacitated until the end of his next turn with no save. Hollowglass saves as normal.
+*   Hollowglass: the Persuasion option after Shatter Crown (DC 13) stops it for one round. Allies who come: Breaks-Branches in round 1 if F7, Firstleaf shooting at the Prophet if asked, and Brandt at the grove edge from round 2 if she still has the Spike.
+*   **Endings in brief.** A: the bond passes, and the glass either goes home (if the Call is sung backward) or stops spreading but stays. The jungle takes one root from the new Gardener (a thing they love). B: the glass shrieks and dies, and so does everything east of the river, including the Archive, and someone sleeps in the cut root for a year and a day. C: the jungle and the glass fall still, permanently, and Firstleaf weeps and thanks the hero. D: the green side of the Heartwood turns clear, or Brandt's Spike takes the bond and the jungle dies grey over a month. Benedito lives in any ending where the Perfect Shard broke.
+
+`;
+
+test('a mechanic chunk keeps every ending bullet and the end rule when a sentence ends in a number (#1101)', () => {
+  const bible = `## Mechanics\n\n${GARDENER_CLIMAX_SECTION}`;
+  const chunks = chunkCampaignFiles('the-gardeners-heir', { campaignBible: bible }).chunks;
+  const climax = chunks.find((chunk) => chunk.entityName === 'The Climax: Five Breaths');
+  assert.ok(climax, 'The Climax: Five Breaths chunk exists');
+  assert.equal(
+    chunks.filter((chunk) => chunk.chunkType === 'mechanic').length,
+    1,
+    'the Climax section yields exactly one mechanic chunk',
+  );
+  // Every ending bullet, the nobody-holds-it rule, and the end rule survive the chunk.
+  for (const marker of [
+    'Ending A',
+    'Ending B',
+    'Ending C',
+    'Ending D',
+    'Nobody holds it',
+    'The end.',
+    'Breaking the Perfect Shard',
+    'Hollowglass',
+    'Endings in brief',
+    'Benedito lives in any ending where the Perfect Shard broke.',
+  ]) {
+    assert.ok(climax.content.includes(marker), `climax chunk keeps ${marker}`);
+  }
+});
+
+test('mechanic splits still fire at line-start ### and numbered headers, and the last mechanic keeps its body (#1101)', () => {
+  const headed = chunkCampaignFiles('test-campaign', {
+    campaignBible: '## Mechanics\n\n### **Alpha**\nAlpha body.\n\n### **Beta**\nBeta body.',
+  }).chunks.filter((chunk) => chunk.chunkType === 'mechanic');
+  assert.deepEqual(
+    headed.map((chunk) => chunk.entityName),
+    ['Alpha', 'Beta'],
+  );
+  assert.ok(headed[0].content.includes('Alpha body.'));
+  assert.ok(headed[1].content.includes('Beta body.'));
+
+  // Numbered headers split too, and the last mechanic keeps its body with no trailing newline.
+  const numbered = chunkCampaignFiles('test-campaign', {
+    campaignBible: '## Mechanics\n\n1. **Alpha**\nAlpha body.\n\n2. **Beta**\nBeta body.',
+  }).chunks.filter((chunk) => chunk.chunkType === 'mechanic');
+  assert.deepEqual(
+    numbered.map((chunk) => chunk.entityName),
+    ['Alpha', 'Beta'],
+  );
+  assert.ok(numbered[1].content.includes('Beta body.'));
+});
