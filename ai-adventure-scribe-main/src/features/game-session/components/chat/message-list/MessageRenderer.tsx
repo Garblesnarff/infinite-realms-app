@@ -3,6 +3,8 @@ import React from 'react';
 import { CompanionMessage } from './CompanionMessage';
 import { DMMessage } from './DMMessage';
 import { DynamicOptionsSection } from './DynamicOptionsSection';
+import { isEngineLine, engineLineModelFromCheck } from './engine-line-model';
+import { EngineLine } from './EngineLine';
 import { PlayerMessage } from './PlayerMessage';
 import { SystemMessage } from './SystemMessage';
 
@@ -132,7 +134,15 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
         className={`w-full ${isFirstInGroup ? '' : 'mt-1'}`}
       >
         {/* Special message types */}
-        {message.context?.diceRoll ? (
+        {message.context?.engineLine ? (
+          <div className="w-full">
+            <EngineLine line={engineLineModelFromCheck(message.context.engineLine as any).raw} />
+          </div>
+        ) : isEngineLine(message.text ?? '') ? (
+          <div className="w-full">
+            <EngineLine line={(message.text ?? '').trim()} />
+          </div>
+        ) : message.context?.diceRoll ? (
           <div className="w-full">
             <DiceRollMessage data={message.context.diceRoll} playerName={isPlayer ? 'You' : 'DM'} />
           </div>

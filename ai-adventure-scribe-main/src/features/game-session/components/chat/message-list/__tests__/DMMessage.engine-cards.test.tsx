@@ -241,7 +241,8 @@ describe('engine result cards in the chat (#2417)', () => {
     ]);
 
     expect(screen.queryAllByTestId('engine-result-card')).toHaveLength(0);
-    expect(screen.getByText(/rolled 14 \+ 0 = 14 vs AC 11/)).toBeTruthy();
+    expect(screen.getByText(/14 \+ 0 = 14/)).toBeTruthy();
+    expect(screen.getByText(/vs AC 11/)).toBeTruthy();
   });
 
   it('renders the live roll result beside a persisted DM reply and keeps the Engine line visible', () => {

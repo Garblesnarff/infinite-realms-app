@@ -34,10 +34,8 @@ const renderMessage = (
     />,
   );
 
-const engineLabels = (container: HTMLElement): string[] =>
-  Array.from(container.querySelectorAll('span'))
-    .map((node) => node.textContent?.trim().toLowerCase())
-    .filter((text): text is string => text === 'engine');
+const engineLabels = (container: HTMLElement): Element[] =>
+  Array.from(container.querySelectorAll('[data-testid="engine-line"]'));
 
 describe('DMMessage debug text (#2256)', () => {
   afterEach(() => {
@@ -86,7 +84,7 @@ describe('DMMessage debug text (#2256)', () => {
         `${HIT_LINE}\n${PLAIN_LINE}\n${PLAIN_LINE.replace('prone', 'dazed')}\n\nOk.`,
       );
 
-      expect(engineLabels(container)).toHaveLength(1);
+      expect(engineLabels(container)).toHaveLength(3);
       expect(container.textContent).not.toMatch(/engine\s*engine/i);
     });
 
@@ -101,14 +99,14 @@ describe('DMMessage debug text (#2256)', () => {
       const one = renderMessage('Steel rings.', {
         combatEngineBlocks: [block(0, [HIT_LINE, PLAIN_LINE])],
       });
-      expect(engineLabels(one.container)).toHaveLength(1);
+      expect(engineLabels(one.container)).toHaveLength(2);
       expect(one.container.textContent).not.toMatch(/engine\s*engine/i);
       one.unmount();
 
       const two = renderMessage('Steel rings.', {
         combatEngineBlocks: [block(0, [HIT_LINE, PLAIN_LINE]), block(1, [PLAIN_LINE, PLAIN_LINE])],
       });
-      expect(engineLabels(two.container)).toHaveLength(2);
+      expect(engineLabels(two.container)).toHaveLength(4);
       expect(two.container.textContent).not.toMatch(/engine\s*engine/i);
       expect(two.container.querySelectorAll('[data-testid="combat-engine-block"]')).toHaveLength(2);
     });
@@ -120,7 +118,7 @@ describe('DMMessage debug text (#2256)', () => {
         ],
       });
 
-      expect(container.textContent).toContain('The Veteran rolled 14 + 5 = 19');
+      expect(container.textContent).toContain('14 + 5 = 19');
       expect(container.textContent?.match(/The Goblin is prone\./g)).toHaveLength(2);
     });
   });
