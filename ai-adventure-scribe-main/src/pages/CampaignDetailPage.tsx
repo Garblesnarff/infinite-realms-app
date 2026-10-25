@@ -42,6 +42,15 @@ import { formatStarterLevelRange } from '@/utils/campaign/starter-level-range';
 /** Session key for the hero a signed-out visitor picked before signing in. */
 const PENDING_HERO_KEY = 'ir-pending-starter-hero';
 
+/**
+ * A pending hero older than this is dead: the sign-in round trip it was
+ * stored for takes minutes, not a tab session. Without a TTL, a return that
+ * never lands leaves the entry for the rest of the tab, and a later visit
+ * to the same campaign while signed in would silently start a campaign and
+ * a character with no click.
+ */
+const PENDING_HERO_TTL_MS = 10 * 60 * 1000;
+
 /** A request error carrying an HTTP status (user-data-api errors do). */
 function isUnauthorizedError(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { status?: unknown }).status === 401;
@@ -220,7 +229,7 @@ const CampaignDetailPage: React.FC = () => {
         try {
           sessionStorage.setItem(
             PENDING_HERO_KEY,
-            JSON.stringify({ slug, templateId: template.id }),
+            JSON.stringify({ slug, templateId: template.id, at: Date.now() }),
           );
         } catch {
           // Storage unavailable: sign-in still proceeds, auto-start just
@@ -253,7 +262,7 @@ const CampaignDetailPage: React.FC = () => {
           try {
             sessionStorage.setItem(
               PENDING_HERO_KEY,
-              JSON.stringify({ slug, templateId: template.id }),
+              JSON.stringify({ slug, templateId: template.id, at: Date.now() }),
             );
           } catch {
             // Ignore: the sign-in banner still offers a manual retry.
@@ -279,7 +288,7 @@ const CampaignDetailPage: React.FC = () => {
   // is only dropped once the templates load cleanly and the hero is not
   // among them, i.e. genuinely gone rather than transiently missing.
   React.useEffect(() => {
-    if (!user || !campaign || templatesLoading || templatesError) return;
+    if (!user || !campaign || templatesLoading) return;
     let pending: unknown = null;
     try {
       pending = JSON.parse(sessionStorage.getItem(PENDING_HERO_KEY) ?? 'null');
@@ -287,11 +296,24 @@ const CampaignDetailPage: React.FC = () => {
       pending = null;
     }
     if (!pending || typeof pending !== 'object') return;
-    const { slug: pendingSlug, templateId } = pending as {
+    const {
+      slug: pendingSlug,
+      templateId,
+      at,
+    } = pending as {
       slug?: unknown;
       templateId?: unknown;
+      at?: unknown;
     };
     if (pendingSlug !== slug) return;
+    // Stale first, before the templates-error early return: a dead entry is
+    // removed even when the heroes fetch is failing. An entry without a
+    // timestamp is treated as stale (this build always writes one).
+    if (typeof at !== 'number' || Date.now() - at > PENDING_HERO_TTL_MS) {
+      sessionStorage.removeItem(PENDING_HERO_KEY);
+      return;
+    }
+    if (templatesError) return;
     const template = templates.find((candidate) => candidate.id === templateId);
     sessionStorage.removeItem(PENDING_HERO_KEY);
     if (template) void playAsRef.current(template);
@@ -496,9 +518,7 @@ const CampaignDetailPage: React.FC = () => {
               className="rounded-[13px] border border-infinite-gold/50 bg-infinite-gold/[.07] p-4"
             >
               <p className="font-semibold text-foreground">Your sign-in has expired.</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Sign in again to pick a hero. You come back to this page.
-              </p>
+              <p className="text-sm text-muted-foreground mt-1">Sign in again to pick a hero.</p>
               <Button variant="ir-gold" onClick={handleSignIn} className="mt-3 min-h-11">
                 Sign in
               </Button>

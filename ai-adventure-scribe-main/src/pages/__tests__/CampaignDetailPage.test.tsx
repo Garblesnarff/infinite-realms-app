@@ -384,7 +384,7 @@ describe('CampaignDetailPage heroes (#89)', () => {
     state.templates = [template()];
     window.sessionStorage.setItem(
       'ir-pending-starter-hero',
-      JSON.stringify({ slug: 'the-eternal-feast', templateId: 't1' }),
+      JSON.stringify({ slug: 'the-eternal-feast', templateId: 't1', at: Date.now() }),
     );
     renderPage();
 
@@ -398,7 +398,7 @@ describe('CampaignDetailPage heroes (#89)', () => {
     state.templatesError = new Error('boom');
     window.sessionStorage.setItem(
       'ir-pending-starter-hero',
-      JSON.stringify({ slug: 'the-eternal-feast', templateId: 't1' }),
+      JSON.stringify({ slug: 'the-eternal-feast', templateId: 't1', at: Date.now() }),
     );
     renderPage();
 
@@ -413,11 +413,45 @@ describe('CampaignDetailPage heroes (#89)', () => {
     state.templates = [];
     window.sessionStorage.setItem(
       'ir-pending-starter-hero',
-      JSON.stringify({ slug: 'the-eternal-feast', templateId: 't1' }),
+      JSON.stringify({ slug: 'the-eternal-feast', templateId: 't1', at: Date.now() }),
     );
     renderPage();
 
     expect(screen.getByText('Heroes for this campaign are not ready yet.')).toBeInTheDocument();
+    expect(state.seed).not.toHaveBeenCalled();
+    expect(window.sessionStorage.getItem('ir-pending-starter-hero')).toBeNull();
+  });
+
+  it('does not start from a stale pending hero, and removes it', () => {
+    state.campaign = campaign({});
+    state.user = { id: 'u1' };
+    state.templates = [template()];
+    window.sessionStorage.setItem(
+      'ir-pending-starter-hero',
+      JSON.stringify({
+        slug: 'the-eternal-feast',
+        templateId: 't1',
+        at: Date.now() - 11 * 60 * 1000,
+      }),
+    );
+    renderPage();
+
+    expect(screen.getByText('Play as Bram')).toBeInTheDocument();
+    expect(state.seed).not.toHaveBeenCalled();
+    expect(window.sessionStorage.getItem('ir-pending-starter-hero')).toBeNull();
+  });
+
+  it('treats a pending hero without a timestamp as stale', () => {
+    state.campaign = campaign({});
+    state.user = { id: 'u1' };
+    state.templates = [template()];
+    window.sessionStorage.setItem(
+      'ir-pending-starter-hero',
+      JSON.stringify({ slug: 'the-eternal-feast', templateId: 't1' }),
+    );
+    renderPage();
+
+    expect(screen.getByText('Play as Bram')).toBeInTheDocument();
     expect(state.seed).not.toHaveBeenCalled();
     expect(window.sessionStorage.getItem('ir-pending-starter-hero')).toBeNull();
   });
@@ -506,9 +540,10 @@ describe('CampaignDetailPage heroes (#89)', () => {
     renderPage();
 
     expect(screen.getByText('Your sign-in has expired.')).toBeInTheDocument();
-    expect(
-      screen.getByText('Sign in again to pick a hero. You come back to this page.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Sign in again to pick a hero.')).toBeInTheDocument();
+    // The return promise was removed with the banner sentence (see the
+    // follow-up linked from #89): it must not reappear.
+    expect(screen.queryByText('You come back to this page.')).not.toBeInTheDocument();
     expect(screen.queryByText('Something Went Wrong')).not.toBeInTheDocument();
   });
 
