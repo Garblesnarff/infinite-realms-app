@@ -189,7 +189,7 @@ describe('the sheet-Cast Acid Splash in a fight (#2374, #2375)', () => {
       }),
     ]);
     expect(engineLines(result)).toEqual([
-      '⚙️ Engine: The Apprentice cast Acid Splash at Corrupted Shard — DEX save 12 vs DC 13 — FAIL. 2 acid damage. Corrupted Shard is now at 5 HP.',
+      '⚙️ Engine: The Apprentice cast Acid Splash at Corrupted Shard — DEX save 12 vs DC 13 — FAIL. 2 acid damage.',
     ]);
     expect(engineLines(result).join('\n')).not.toContain('refused');
     // One keyed End turn; the creature turn the server ran inside it hands the player back the turn.

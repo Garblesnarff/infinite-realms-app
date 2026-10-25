@@ -43,17 +43,24 @@ export function displaySaveAbility(ability: string): string {
   return names[ability.toLowerCase()] ?? ability.toUpperCase();
 }
 
-function spellTargetTrailer(target: string, result: CombatEngineResult): string {
-  if (result.targetNewHp == null) {
-    const state = targetState(result);
-    return state ? ` ${target} is ${state}.` : '';
+function spellTargetTrailer(
+  target: string,
+  result: CombatEngineResult,
+  options: EngineOutcomeOptions,
+): string {
+  if (options.targetHp === true && isFiniteNumber(result.targetNewHp)) {
+    const state = result.targetIsDead
+      ? ' and is DEAD'
+      : result.targetIsConscious === false
+        ? ' and is UNCONSCIOUS'
+        : '';
+    return ` ${target} is now at ${result.targetNewHp} HP${state}.`;
   }
-  const state = result.targetIsDead
-    ? ' and is DEAD'
-    : result.targetIsConscious === false
-      ? ' and is UNCONSCIOUS'
-      : '';
-  return ` ${target} is now at ${result.targetNewHp} HP${state}.`;
+  // Anyone but the player: no HP number (#87). The tier reads like the attack line's
+  // (`targetState`: dead, unconscious, or the engine's condition word); 0 HP without one is "down".
+  const state = targetState(result);
+  if (state) return ` ${target} is ${state}.`;
+  return isFiniteNumber(result.targetNewHp) && result.targetNewHp <= 0 ? ` ${target} is down.` : '';
 }
 
 function terminalStatus(result: CombatEngineResult): string | undefined {
@@ -80,7 +87,7 @@ function formatSpellPart(
     : result.hit === false
       ? 'No damage.'
       : '';
-  const trailer = spellTargetTrailer(target, result);
+  const trailer = spellTargetTrailer(target, result, options);
   const hp = playerHpOf(result, target, options);
   const card = (
     line: string,

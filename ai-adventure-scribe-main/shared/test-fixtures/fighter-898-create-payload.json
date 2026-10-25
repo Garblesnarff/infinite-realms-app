@@ -22,10 +22,7 @@
   "expertise_proficiencies": "",
   "tool_proficiencies": "",
   "saving_throw_proficiencies": "strength,constitution",
-  "languages": [
-    "Common",
-    "Orc"
-  ],
+  "languages": ["Common", "Orc"],
   "cantrips": "",
   "known_spells": "",
   "prepared_spells": "",

@@ -10,7 +10,6 @@ export { ChatInput } from './chat/ChatInput';
 export { ChatImage } from './chat/ChatImage';
 export { TypingIndicator } from './chat/TypingIndicator';
 export { ActionOptions } from '@/components/game/ActionOptions';
-export { DiceRollMessage } from '@/components/game/DiceRollMessage';
 export { DiceRollRequest } from '@/components/game/DiceRollRequest';
 
 // Message list components

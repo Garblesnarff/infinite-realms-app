@@ -3,6 +3,8 @@ import React from 'react';
 import { CompanionMessage } from './CompanionMessage';
 import { DMMessage } from './DMMessage';
 import { DynamicOptionsSection } from './DynamicOptionsSection';
+import { engineLineFromDiceRoll, isEngineLine, parseEngineLine } from './engine-line-model';
+import { EngineLine } from './EngineLine';
 import { PlayerMessage } from './PlayerMessage';
 import { SystemMessage } from './SystemMessage';
 
@@ -14,7 +16,6 @@ import {
   type CombatMessageData,
 } from '@/components/combat/CombatMessage';
 import { InitiativeMessage } from '@/components/combat/messages/InitiativeMessage';
-import { DiceRollMessage } from '@/components/game/DiceRollMessage';
 import { withoutSpellCastTag } from '@/services/combat/declared-player-spell';
 import { parseMessageOptions } from '@/utils/parseMessageOptions';
 
@@ -120,6 +121,12 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
       });
     };
 
+    // A notice that is one bare engine line (no cards, no combat block) is an engine row (#87).
+    const isStandaloneEngineLine =
+      isEngineLine(message.text) &&
+      !(Array.isArray(message.context?.engineCards) && message.context.engineCards.length > 0) &&
+      !message.context?.combatEngineBlocks;
+
     // Image presence (persisted or ephemeral) for DM messages
     const hasMessageImages = isDM && Array.isArray(message.images) && message.images.length > 0;
     const firstMessageImgUrl = hasMessageImages ? message.images?.[0]?.url : undefined;
@@ -133,9 +140,10 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
       >
         {/* Special message types */}
         {message.context?.diceRoll ? (
-          <div className="w-full">
-            <DiceRollMessage data={message.context.diceRoll} playerName={isPlayer ? 'You' : 'DM'} />
-          </div>
+          // A settled roll renders from its persisted fields, so a reload shows the same row (#87).
+          <EngineLine model={engineLineFromDiceRoll(message.context.diceRoll)} />
+        ) : isStandaloneEngineLine ? (
+          <EngineLine model={parseEngineLine(message.text)} />
         ) : message.context?.combatData ? (
           <div className="w-full">
             {message.context.combatData.type === 'initiative' ? (

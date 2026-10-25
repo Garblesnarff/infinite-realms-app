@@ -34,10 +34,11 @@ const renderMessage = (
     />,
   );
 
+// The label is "Rules engine" on the EngineLine row (#87); it still prints once per block.
 const engineLabels = (container: HTMLElement): string[] =>
   Array.from(container.querySelectorAll('span'))
     .map((node) => node.textContent?.trim().toLowerCase())
-    .filter((text): text is string => text === 'engine');
+    .filter((text): text is string => text === 'rules engine');
 
 describe('DMMessage debug text (#2256)', () => {
   afterEach(() => {

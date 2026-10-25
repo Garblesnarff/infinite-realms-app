@@ -232,10 +232,10 @@ describe('dmFacingResolvedAction: everything else is left as the engine sent it'
     const facing = dmFacingResolvedAction(entry, ROSTER);
 
     expect(facing.engineFact).toContain(
-      'cast Magic Missile at Captain Sarah Reeves — AUTO-HIT. 4 force damage. Captain Sarah Reeves is now at 5 HP.',
+      'cast Magic Missile at Captain Sarah Reeves — AUTO-HIT. 4 force damage.',
     );
     expect(facing.engineFact).toContain(
-      'cast Magic Missile at Kitchen Imp — AUTO-HIT. 7 force damage. Kitchen Imp is now at 1 HP.',
+      'cast Magic Missile at Kitchen Imp — AUTO-HIT. 7 force damage.',
     );
   });
 

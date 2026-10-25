@@ -146,7 +146,7 @@ describe('engine result cards in the chat (#2417)', () => {
 
     expect(
       screen.getByText(
-        'The Scholar cast Acid Splash at Captain Sarah Reeves — DEX save 6 vs DC 14 — FAIL. 2 acid damage. Captain Sarah Reeves is now at 9 HP.',
+        'The Scholar cast Acid Splash at Captain Sarah Reeves — DEX save 6 vs DC 14 — FAIL. 2 acid damage. Captain Sarah Reeves is bloodied.',
       ),
     ).toBeTruthy();
     expect(
@@ -326,6 +326,7 @@ describe('engine result cards in the chat (#2417)', () => {
         'Captain Sarah Reeves rolled 14 + 0 = 14 vs AC 11 against The Scholar with Longsword — HIT. 3 slashing damage. The Scholar is now at 4 HP and is wounded.',
       ),
     ).toBeTruthy();
-    expect(screen.getByText(/Kept: \[15\]/)).toBeTruthy();
+    // The roll is an EngineLine row now (#87): the kept die, the modifier and the total.
+    expect(screen.getByText('15 + 1 = 16')).toBeTruthy();
   });
 });

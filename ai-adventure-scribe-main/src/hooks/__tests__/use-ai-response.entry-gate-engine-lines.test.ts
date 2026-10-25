@@ -248,7 +248,7 @@ const chillTouchResult = {
   ],
 };
 const CHILL_TOUCH_LINE =
-  '⚙️ Engine: The Scholar cast Chill Touch at Professor Emil Darkwater — spell attack 7 + 6 = 13 vs AC 12 — HIT. 4 necrotic damage. Professor Emil Darkwater is now at 3 HP.';
+  '⚙️ Engine: The Scholar cast Chill Touch at Professor Emil Darkwater — spell attack 7 + 6 = 13 vs AC 12 — HIT. 4 necrotic damage.';
 
 /** The DM's narration pass from run 15: an attack request and a "Critical damage roll" 1d6. */
 const DM_TEXT = [

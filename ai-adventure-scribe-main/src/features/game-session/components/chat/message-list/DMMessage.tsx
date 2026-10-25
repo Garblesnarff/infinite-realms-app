@@ -7,14 +7,15 @@ import { MessageAssetDisplay } from './MessageAssetDisplay';
 import { MessageVoicePlayer } from './MessageVoicePlayer';
 import { CombatRoundDivider } from './CombatRoundDivider';
 import { HandoutCard } from '../../handouts/HandoutCard';
-import { EngineOutcomeChip } from '../../game/EngineOutcomeChip';
+import { EngineLine } from './EngineLine';
+import { parseEngineLine, type EngineRosterRow } from './engine-line-model';
 import { EngineResultCardView } from '../../game/EngineResultCardView';
 import { useShowTargetNumbers } from '../../../hooks/use-show-target-numbers';
-
 import type { ChatMessage } from '@/types/game';
 
 import { Button } from '@/components/ui/button';
 import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
+import { useOptionalCombat } from '@/contexts/CombatContext';
 import { useSceneBackground, type AssetType } from '@/contexts/SceneBackgroundContext';
 import { cn } from '@/lib/utils';
 import { isEngineResultCard } from '@/services/combat/engine-result-card';
@@ -58,6 +59,19 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
     previousEngineKey,
   }) => {
     const { showTargetNumbers } = useShowTargetNumbers();
+    // The live encounter roster names slugs and says which side an actor is on (#87).
+    const participants = useOptionalCombat()?.state?.activeEncounter?.participants;
+    const roster = useMemo<EngineRosterRow[]>(
+      () =>
+        (participants ?? []).map((participant) => ({
+          id: participant.id,
+          name: participant.name,
+          displayName: participant.displayName,
+          participantType: participant.participantType,
+          maxHitPoints: participant.maxHitPoints,
+        })),
+      [participants],
+    );
     // Get campaign assets for displaying entity images
     const { getAsset } = useCampaignAssetsContext();
     const { setSceneBackground } = useSceneBackground();
@@ -184,6 +198,52 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
 
     return (
       <div className="w-full">
+        {combatEngineBlocks.map((block, blockIndex) => {
+          const cards = Array.isArray(block.cards) ? block.cards.filter(isEngineResultCard) : [];
+          // A line a card stands for is not printed twice; any other line keeps its row.
+          const chipLines = block.lines.filter(
+            (line) =>
+              !cards.some((card) => line.includes(card.line) || card.covers?.includes(line)),
+          );
+          const key = engineBlockDividerKey(block);
+          const previousKey = combatEngineBlocks
+            .slice(0, blockIndex)
+            .reduce<
+              string | undefined
+            >((last, earlier) => engineBlockDividerKey(earlier) ?? last, previousEngineKey);
+          return (
+            <section
+              key={`combat-engine-${block.sequence}`}
+              aria-label={`Combat engine round ${block.round}`}
+              data-testid="combat-engine-block"
+            >
+              {block.actor && key !== previousKey && (
+                <CombatRoundDivider round={block.round} actor={block.actor} />
+              )}
+              {cards.map((card, index) => (
+                <EngineResultCardView
+                  key={`${block.sequence}-card-${index}-${card.line}`}
+                  card={card}
+                  showTargetNumbers={showTargetNumbers}
+                />
+              ))}
+              {chipLines.map((line, index) => (
+                <EngineLine
+                  key={`${block.sequence}-${index}-${line}`}
+                  model={parseEngineLine(line, { side: block.source, roster })}
+                  showLabel={cards.length === 0 && index === 0}
+                />
+              ))}
+            </section>
+          );
+        })}
+        {engineLines.map((line, index) => (
+          <EngineLine
+            key={line}
+            model={parseEngineLine(line, { roster })}
+            showLabel={index === 0}
+          />
+        ))}
         <article
           aria-label="Dungeon Master message"
           className={cn(
@@ -196,48 +256,6 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
               ◆ Previously on your adventure...
             </div>
           )}
-          {combatEngineBlocks.map((block, blockIndex) => {
-            const cards = Array.isArray(block.cards) ? block.cards.filter(isEngineResultCard) : [];
-            // A line a card stands for is not printed twice; any other line keeps its chip.
-            const chipLines = block.lines.filter(
-              (line) =>
-                !cards.some((card) => line.includes(card.line) || card.covers?.includes(line)),
-            );
-            const key = engineBlockDividerKey(block);
-            const previousKey = combatEngineBlocks
-              .slice(0, blockIndex)
-              .reduce<
-                string | undefined
-              >((last, earlier) => engineBlockDividerKey(earlier) ?? last, previousEngineKey);
-            return (
-              <section
-                key={`combat-engine-${block.sequence}`}
-                aria-label={`Combat engine round ${block.round}`}
-                data-testid="combat-engine-block"
-              >
-                {block.actor && key !== previousKey && (
-                  <CombatRoundDivider round={block.round} actor={block.actor} />
-                )}
-                {cards.map((card, index) => (
-                  <EngineResultCardView
-                    key={`${block.sequence}-card-${index}-${card.line}`}
-                    card={card}
-                    showTargetNumbers={showTargetNumbers}
-                  />
-                ))}
-                {chipLines.map((line, index) => (
-                  <EngineOutcomeChip
-                    key={`${block.sequence}-${index}-${line}`}
-                    line={line}
-                    showLabel={cards.length === 0 && index === 0}
-                  />
-                ))}
-              </section>
-            );
-          })}
-          {engineLines.map((line, index) => (
-            <EngineOutcomeChip key={line} line={line} showLabel={index === 0} />
-          ))}
           {content ? <div className={narrativeClass}>{content}</div> : null}
 
           {storyTrackers.length > 0 && (
@@ -246,7 +264,9 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
               className="mt-3 text-sm text-white/70"
               aria-label="Story clock"
             >
-              {storyTrackers.map((tracker) => `${tracker.name} Clock: ${tracker.value}/${tracker.limit}`).join(' · ')}
+              {storyTrackers
+                .map((tracker) => `${tracker.name} Clock: ${tracker.value}/${tracker.limit}`)
+                .join(' · ')}
             </div>
           )}
 

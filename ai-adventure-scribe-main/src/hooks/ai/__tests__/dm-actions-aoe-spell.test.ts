@@ -211,7 +211,7 @@ describe('the sheet-Cast Burning Hands at level 1 (#2304)', () => {
     });
     const lines = playerEngineLines(outcome);
     expect(lines).toEqual([
-      '⚙️ Engine: The Apprentice cast Burning Hands at Headmaster Goldwhisk — DEX save 11 vs DC 13 — FAIL. 12 fire damage. Headmaster Goldwhisk is now at 28 HP.',
+      '⚙️ Engine: The Apprentice cast Burning Hands at Headmaster Goldwhisk — DEX save 11 vs DC 13 — FAIL. 12 fire damage.',
     ]);
     expect(outcome.responseText.startsWith(lines[0])).toBe(true);
     // The turn ends like any other resolved action, and the monsters take theirs: the server runs
@@ -384,7 +384,7 @@ describe('the sheet-Cast Burning Hands at level 1 (#2304)', () => {
     });
     const lines = playerEngineLines(outcome);
     expect(lines).toEqual([
-      '⚙️ Engine: The Apprentice cast Burning Hands at Headmaster Goldwhisk — DEX save 11 vs DC 13 — FAIL. 12 fire damage. Headmaster Goldwhisk is now at 28 HP.',
+      '⚙️ Engine: The Apprentice cast Burning Hands at Headmaster Goldwhisk — DEX save 11 vs DC 13 — FAIL. 12 fire damage.',
     ]);
     expect(narrationCall().payload.unresolvedPlayerAction).toBeUndefined();
     expect(outcome.responseText).not.toContain('did not declare');
@@ -444,7 +444,7 @@ describe('the sheet-Cast Burning Hands at level 1 (#2304)', () => {
     expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
     const lines = playerEngineLines(outcome);
     expect(lines).toEqual([
-      '⚙️ Engine: The Apprentice cast Burning Hands at Headmaster Goldwhisk — DEX save 11 vs DC 13 — FAIL. 12 fire damage. Headmaster Goldwhisk is now at 28 HP.',
+      '⚙️ Engine: The Apprentice cast Burning Hands at Headmaster Goldwhisk — DEX save 11 vs DC 13 — FAIL. 12 fire damage.',
     ]);
     expect(narrationCall().payload.unresolvedPlayerAction).toBeUndefined();
   });

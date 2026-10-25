@@ -22,9 +22,7 @@
   "expertise_proficiencies": "Insight,Stealth",
   "tool_proficiencies": "Thieves' tools,One type of gaming set",
   "saving_throw_proficiencies": "dexterity,intelligence",
-  "languages": [
-    "Common"
-  ],
+  "languages": ["Common"],
   "cantrips": "",
   "known_spells": "",
   "prepared_spells": "",
