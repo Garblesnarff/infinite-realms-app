@@ -1,13 +1,13 @@
 /**
  * Launch Page - Beta Launch Landing Page
  *
- * PURPOSE: Send visitors to play free at /explore; the waitlist form sits below the Play CTA
+ * PURPOSE: Send visitors to play free at /explore; the email-list form sits below the Play CTA
  * Structure: Hero → Vision → Features → Pricing → Campaigns → Roadmap → Early Access → FAQ → Final CTA → Footer
  *
  * Key Principles:
  * - Future-oriented messaging (beta, planned features, roadmap)
  * - Transparent progress metrics instead of vanity numbers
- * - Clear beta positioning with waitlist mentality
+ * - Clear beta positioning with the email list below Play free, not as the main path
  * - Legal compliance and accessibility
  */
 
@@ -41,7 +41,7 @@ const LaunchPage: React.FC = () => {
     // Track page view
     if (window.gtag) {
       window.gtag('event', 'page_view', {
-        page_title: 'Infinite Realms - Beta Launch',
+        page_title: 'Infinite Realms – Launch page',
         page_location: window.location.href,
       });
     }
@@ -51,25 +51,25 @@ const LaunchPage: React.FC = () => {
     <>
       {/* SEO and Meta Tags */}
       <Helmet>
-        <title>Infinite Realms - Beta Launch | Step into Boundless Worlds of Adventure</title>
+        <title>Infinite Realms – Play a 5E campaign with an AI Game Master, free</title>
         <meta
           name="description"
-          content="Be among the first to experience Infinite Realms, where every choice shapes destiny and legends are forged in the fires of imagination. Join our closed beta and shape the future of tabletop RPGs."
+          content="Play solo 5E adventures with an AI Game Master that remembers your story. Free to start. Open beta."
         />
         <meta
           name="keywords"
-          content="Infinite Realms, AI Dungeon Master, D&D AI, tabletop RPG, beta launch, fantasy gaming"
+          content="Infinite Realms, AI Dungeon Master, D&D AI, tabletop RPG, fantasy gaming"
         />
         <meta name="robots" content="index, follow" />
 
         {/* OpenGraph Tags */}
         <meta
           property="og:title"
-          content="Infinite Realms - Beta Launch | Step into Boundless Worlds of Adventure"
+          content="Infinite Realms – Play a 5E campaign with an AI Game Master, free"
         />
         <meta
           property="og:description"
-          content="Be among the first to experience Infinite Realms, where every choice shapes destiny and legends are forged in the fires of imagination."
+          content="Play solo 5E adventures with an AI Game Master that remembers your story. Free to start. Open beta."
         />
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://infiniterealms.app/" />
@@ -77,10 +77,10 @@ const LaunchPage: React.FC = () => {
 
         {/* Twitter Card Tags */}
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="Infinite Realms - Beta Launch" />
+        <meta name="twitter:title" content="Infinite Realms – Play 5E with an AI Game Master" />
         <meta
           name="twitter:description"
-          content="Join the closed beta for Infinite Realms. Step into boundless worlds where every choice shapes destiny."
+          content="Play solo 5E adventures with an AI Game Master that remembers your story. Free to start. Open beta."
         />
         <meta name="twitter:image" content="https://infiniterealms.app/twitter-launch-card.jpg" />
 
@@ -146,7 +146,7 @@ const LaunchPage: React.FC = () => {
           {/* Gradient Transition */}
           <div className="h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent"></div>
 
-          {/* Final CTA Section - Waitlist Urgency */}
+          {/* Final CTA Section - Email List */}
           <FinalCTASection />
         </main>
 

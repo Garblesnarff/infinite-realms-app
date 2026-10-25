@@ -153,7 +153,7 @@ describe('SEO meta tags (#355)', () => {
     try {
       renderPage(<LaunchPage />);
       const final = await expectFullTagSet(
-        'Infinite Realms - Beta Launch | Step into Boundless Worlds of Adventure',
+        'Infinite Realms – Play a 5E campaign with an AI Game Master, free',
         'https://infiniterealms.app/',
       );
       // LaunchPage customizes the preview image; it must survive as one tag.

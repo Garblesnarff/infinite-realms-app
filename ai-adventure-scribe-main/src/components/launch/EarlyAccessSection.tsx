@@ -1,20 +1,19 @@
 /**
- * Early Access Section - Founding Adventurer Perks
+ * Early Access Section - Help Shape Perks
  *
- * PURPOSE: Founding-adventurer perks, with the Play free CTA above the waitlist form
- * Features: Founding member perks, clear beta limitations, urgency messaging
+ * PURPOSE: Open-beta help-shape perks, with the Play free CTA (the email form
+ * lives only in the final CTA now, so the page has exactly one signup form)
+ * Features: Feedback perks, clear beta limitations
  */
 
 import { Crown, Star, Zap, MessageCircle } from 'lucide-react';
 import React from 'react';
 import { Link } from 'react-router-dom';
 
-import { WaitlistForm } from './WaitlistForm';
-
 import { launchPageContent } from '@/data/launchPageContent';
 
 export const EarlyAccessSection: React.FC = () => {
-  const { earlyAccess } = launchPageContent;
+  const { helpShape: earlyAccess } = launchPageContent;
 
   return (
     <section className="relative py-24 bg-gradient-to-b from-purple-900/30 to-gray-900">
@@ -29,7 +28,7 @@ export const EarlyAccessSection: React.FC = () => {
         </div>
 
         {/* Perks Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
           {earlyAccess.perks.map((perk, index) => {
             const IconComponent =
               perk.icon === 'Crown'
@@ -55,8 +54,8 @@ export const EarlyAccessSection: React.FC = () => {
           })}
         </div>
 
-        {/* Play CTA - above the waitlist form */}
-        <div className="text-center mb-10">
+        {/* Play CTA */}
+        <div className="text-center mb-16">
           <Link
             to="/explore"
             data-track-cta="play_free_early_access"
@@ -64,21 +63,6 @@ export const EarlyAccessSection: React.FC = () => {
           >
             {earlyAccess.cta}
           </Link>
-        </div>
-
-        {/* Waitlist CTA */}
-        <div className="max-w-2xl mx-auto mb-16">
-          <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-700/50 rounded-2xl p-8 backdrop-blur-sm">
-            <div className="text-center mb-8">
-              <h3 className="text-2xl font-bold text-white mb-2">
-                Ready to Become a Founding Adventurer?
-              </h3>
-              <p className="text-gray-400">
-                Join our exclusive beta waitlist and secure your perks
-              </p>
-            </div>
-            <WaitlistForm variant="section" />
-          </div>
         </div>
 
         {/* Disclaimer */}

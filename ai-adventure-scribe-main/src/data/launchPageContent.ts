@@ -7,18 +7,6 @@
 
 import { ACCOUNT_UPGRADE_PRICE } from '@/hooks/use-account-billing';
 
-export interface TeamMember {
-  name: string;
-  role: string;
-  bio: string;
-  image?: string;
-  links?: {
-    github?: string;
-    linkedin?: string;
-    twitter?: string;
-  };
-}
-
 export interface RoadmapPhase {
   phase: string;
   title: string;
@@ -57,21 +45,8 @@ export interface FAQItem {
 }
 
 export const launchPageContent = {
-  // Hero Section
-  hero: {
-    badge: 'Closed Beta: Coming Soon – Be Among the First',
-    headline: 'No DM? No Schedule? Your Living D&D World Awaits',
-    subtitle:
-      'Play solo or async with an AI Dungeon Master that remembers every choice, evolves NPCs, and crafts cinematic stories tailored to you.',
-    description:
-      'Tired of campaigns fizzling out? Infinite Realms creates persistent worlds where your actions ripple forever—no prep, no waiting, just epic adventures on your time.',
-    primaryCTA: 'Claim Your Beta Spot – Be First',
-    secondaryCTA: 'Dive into the Vision',
-  },
-
   // Vision Section
   vision: {
-    headline: 'A Persistent World That Remembers You – And Evolves With Every Choice',
     content: `Frustrated by campaigns that die from scheduling hell or forgetful AIs? Infinite Realms is your always-on Dungeon Master: persistent NPCs with memories, cinematic narratives that adapt to your style, and emotional depth that makes every session feel alive.
 
 We're building more than just a tool. We're creating a new way to experience tabletop RPGs—a cinematic adventure that adapts to your playstyle, remembers your story, and pushes the boundaries of what's possible in interactive storytelling.
@@ -83,7 +58,7 @@ This isn't about replacing human Dungeon Masters. It's about giving every advent
 
   // Features Section
   features: {
-    headline: "What We're Building",
+    headline: 'What works today',
     subtitle: 'What is live today, and what is still on the way',
     features: [
       {
@@ -169,136 +144,73 @@ This isn't about replacing human Dungeon Masters. It's about giving every advent
     note: 'Daily limits reset at 00:00 UTC.',
   },
 
-  // How It Works Section
-  howItWorks: {
-    headline: 'Your Journey to Epic Adventures',
-    subtitle: 'Three simple steps to join the beta',
-    steps: [
-      {
-        step: '1',
-        title: 'Join the Waitlist',
-        description:
-          "Sign up with your email to get on our exclusive beta access list. We'll notify you as soon as spots open up.",
-      },
-      {
-        step: '2',
-        title: 'Get Early Access',
-        description:
-          "Once approved, you'll receive an invitation to create your account and start building your campaign world.",
-      },
-      {
-        step: '3',
-        title: 'Shape the Future',
-        description:
-          'Playtest new features, provide feedback, and help us build the ultimate AI Dungeon Master together.',
-      },
-    ],
-  },
-
-  // Team Section
-  team: {
-    headline: 'Forged by Adventurers, for Adventurers',
-    subtitle: 'Meet the team building the future of tabletop RPGs',
-    members: [
-      {
-        name: 'Rob McBroom',
-        role: 'Founder & Lead Developer',
-        bio: 'A lifelong D&D enthusiast and full-stack developer with a passion for creating immersive gaming experiences. Spent countless nights both playing and running campaigns, always dreaming of the perfect digital DM.',
-        links: {
-          github: 'https://github.com/Garblesnarff',
-          linkedin: 'https://linkedin.com/in/robmcbroom',
-        },
-      },
-    ] as TeamMember[],
-  },
-
   // Launch Roadmap
   roadmap: {
-    headline: 'The Road to Launch',
-    subtitle: 'Our journey from beta to full release',
+    headline: 'What is live, and what is next',
+    subtitle: 'No dates. We list what works today and what we plan to build.',
     phases: [
       {
-        phase: 'Phase 1',
-        title: 'Closed Beta',
+        phase: 'Now',
+        title: 'Open beta',
         description:
-          'Working with a select group of beta testers to refine core features and gather feedback on the AI Dungeon Master experience.',
-        timeline: 'Phase 1',
+          'Anyone can sign up and play. The core game works today. We fix bugs and add features based on what players tell us.',
+        timeline: 'Live now',
         status: 'current' as const,
         features: [
-          'Core AI storytelling engine',
-          'Basic character and campaign creation',
-          'Text-based adventure sessions',
-          'Community feedback integration',
+          'Memory for your story and your NPCs',
+          'AI character portraits and campaign cover art',
+          'Voice narration (standard voices free, premium voices with Legend)',
+          'D&D 5E rules, dice and a combat tracker',
         ],
       },
       {
-        phase: 'Phase 2',
-        title: 'Open Beta',
-        description:
-          'Expanding access to all waitlist members with enhanced features and improved stability based on closed beta feedback.',
-        timeline: 'Phase 2',
+        phase: 'Next',
+        title: 'Next up',
+        description: 'What we plan to build next. The order can change.',
+        timeline: 'Planned',
         status: 'upcoming' as const,
         features: [
-          'Visual character and scene generation',
-          'Voice narration system',
-          'Advanced NPC memory and relationships',
-          'Campaign export functionality',
-        ],
-      },
-      {
-        phase: 'Phase 3',
-        title: 'Public Launch',
-        description:
-          'Full release with all features, mobile apps, and ecosystem integrations for the complete AI Dungeon Master experience.',
-        timeline: 'Phase 3',
-        status: 'upcoming' as const,
-        features: [
-          'Mobile and tablet applications',
-          'Third-party integrations (Roll20, Discord)',
-          'Advanced customization options',
-          'Community marketplace',
+          'Storybook export: your campaign as a book',
+          'More ready-to-play campaigns',
+          'Fixes and polish from player feedback',
         ],
       },
     ] as RoadmapPhase[],
   },
 
-  // Early Access Offer
-  earlyAccess: {
-    headline: 'Be a Founding Adventurer – Shape the Living World',
-    subtitle: 'Get exclusive perks for helping build the AI DM that ends scheduling hell.',
-    description: 'Play now, then join the waitlist to hear about new features first.',
+  // Help Shape Offer
+  helpShape: {
+    headline: 'Help shape Infinite Realms',
+    subtitle:
+      'Infinite Realms is in open beta. Play it, tell us what to fix, and hear about new features first.',
+    description: 'Play now. Join the email list if you want news.',
     perks: [
       {
-        title: 'Personalized NPC in Launch',
+        title: 'Tell us what to fix',
         description:
-          'Tie to rebuilt campaigns - get a custom NPC that remembers your beta adventures',
+          'Send feedback with Contact Us or Discord. The person who builds the game reads it.',
         icon: 'Crown',
       },
       {
-        title: 'Early Voice Pack Access',
-        description: 'Via ElevenLabs integration - be first to experience cinematic narration',
+        title: 'Hear it first',
+        description: 'Join the email list. We write when a new feature ships.',
         icon: 'Star',
       },
       {
-        title: 'Early Feature Access',
-        description: "Get access to new features before they're released to the general public",
+        title: 'The real game, today',
+        description:
+          'The Free plan has the same story memory, 5E rules and combat tracker as Legend. Legend adds higher daily limits and premium voices.',
         icon: 'Zap',
       },
-      {
-        title: 'Direct Influence',
-        description:
-          'Your feedback goes directly to the development team and helps shape the product',
-        icon: 'MessageCircle',
-      },
     ] as EarlyAccessPerk[],
-    disclaimer: 'Beta focuses on core persistence – bugs mean you influence fixes directly.',
+    disclaimer: 'This is a beta. Some things will break or change. Tell us, and we fix them.',
     cta: 'Play free',
   },
 
   // FAQ Section
   faq: {
     headline: 'Frequently Asked Questions',
-    subtitle: 'Everything you need to know about our beta launch',
+    subtitle: 'Short answers about playing Infinite Realms',
     items: [
       {
         question: 'How does it solve scheduling issues?',
@@ -308,16 +220,25 @@ This isn't about replacing human Dungeon Masters. It's about giving every advent
       {
         question: 'Will NPCs really remember?',
         answer:
-          "Yes, unlike other AIs. Example: Steal from a merchant? He'll spread rumors, affecting future encounters.",
+          'Yes. The game saves what happened and what each NPC knows. Example: steal from a merchant, and he may spread rumors that change later scenes.',
       },
       {
         question: 'Do I need D&D experience?',
         answer:
-          'No. AI handles rules; you focus on choices. Great for lapsed players craving immersion without prep.',
+          'No. The game engine handles dice and rules. You choose what your character does. It suits lapsed players who want a story without prep.',
       },
       {
-        question: "What's the beta like?",
-        answer: 'Core persistent storytelling. Test and shape features like emotional NPCs.',
+        question: 'Is it finished?',
+        answer:
+          'No. Infinite Realms is in open beta. You can play full campaigns today. Story memory, voice narration, AI art and the combat tracker all work. Some things still break or change. Tell us when you find one.',
+      },
+      {
+        question: 'How much does it cost?',
+        answer: `You can play free. The Free plan has daily limits on messages and images. Legend costs ${ACCOUNT_UPGRADE_PRICE.label} and raises those limits. See the pricing section.`,
+      },
+      {
+        question: 'Do I need an account?',
+        answer: 'You can browse adventures without one. To play, you sign in with a free account.',
       },
       {
         question: 'What are the system requirements?',
@@ -341,9 +262,7 @@ This isn't about replacing human Dungeon Masters. It's about giving every advent
   // Final CTA
   finalCTA: {
     headline: 'Your Adventure Awaits',
-    subtitle: "Don't Miss Out",
-    description:
-      'Pick an adventure and start playing free in minutes, or join the waitlist for news and updates.',
+    description: 'Pick an adventure and start playing free. Or get news by email.',
     cta: 'Play free',
   },
 
@@ -354,7 +273,6 @@ This isn't about replacing human Dungeon Masters. It's about giving every advent
     links: {
       privacy: '/privacy',
       terms: '/terms',
-      contact: '/contact',
     },
     legal: {
       ipDisclaimer:

@@ -54,9 +54,11 @@ export const HeroSection: React.FC = () => {
         style={{ zIndex: Z_INDEX.DROPDOWN }}
       >
         {/* Beta Pill */}
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-purple-500/10 border border-purple-500/30 backdrop-blur-md mb-8 animate-fade-in-up">
-          <Sparkles className="w-4 h-4 text-purple-400" />
-          <span className="text-sm font-medium text-purple-200">Free to play. No waitlist.</span>
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#121b30] border border-[#d5b070]/30 backdrop-blur-md mb-8 animate-fade-in-up">
+          <Sparkles className="w-4 h-4 text-[#d5b070]" />
+          <span className="text-sm font-medium text-[#d5b070]">
+            Open beta · Free to play · No waitlist
+          </span>
         </div>
 
         {/* Main Headline */}
@@ -71,11 +73,8 @@ export const HeroSection: React.FC = () => {
 
         {/* Subheadline - The Emotional Hook */}
         <p className="text-xl md:text-2xl text-gray-200 mb-10 max-w-3xl mx-auto leading-relaxed font-light">
-          The tabletop adventures you've been wanting, now possible. An AI Game Master with{' '}
-          <span className="text-white font-semibold">perfect memory</span>,
-          <span className="text-white font-semibold"> professional voice acting</span>, and
-          <span className="text-white font-semibold"> infinite patience</span>. No scheduling. No
-          cancellations. Just play.
+          Play 5E adventures solo, on your own time. An AI Game Master that remembers your story,
+          reads it aloud and runs the dice and rules. No scheduling. No cancellations. Just play.
         </p>
 
         {/* CTAs */}
@@ -102,8 +101,8 @@ export const HeroSection: React.FC = () => {
 
         {/* Social Proof / Trust Indicator */}
         <p className="mt-8 text-sm text-gray-400">
-          Start playing free.{' '}
-          <a href="#pricing" className="underline hover:text-gray-200">
+          Free account. No credit card needed.{' '}
+          <a href="#pricing" className="underline text-[#d5b070] hover:text-[#f3deb0]">
             See pricing
           </a>
         </p>

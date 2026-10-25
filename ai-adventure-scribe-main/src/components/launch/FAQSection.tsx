@@ -48,7 +48,7 @@ const FAQItem: React.FC<FAQItemProps> = ({ item, isOpen, onToggle }) => {
           {item.link && (
             <>
               {' '}
-              <a href={item.link.href} className="text-purple-400 hover:text-purple-300 underline">
+              <a href={item.link.href} className="text-[#d5b070] hover:text-[#f3deb0] underline">
                 {item.link.label}
               </a>
               .
@@ -106,8 +106,7 @@ export const FAQSection: React.FC = () => {
             <h3 className="text-2xl font-bold text-white">Still Have Questions?</h3>
           </div>
           <p className="text-gray-300 mb-6 max-w-2xl mx-auto">
-            We're here to help! Reach out to our team for more specific questions about the beta or
-            development process.
+            Ask us anything about Infinite Realms.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a
