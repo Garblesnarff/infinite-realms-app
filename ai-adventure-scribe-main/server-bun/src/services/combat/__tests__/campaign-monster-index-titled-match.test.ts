@@ -76,6 +76,34 @@ describe('findAuthoredMonster: titled partial names', () => {
   });
 });
 
+describe('findAuthoredMonster: titled names beat a conflicting monsterId (#1102)', () => {
+  const mixed = buildCampaignMonsterIndex('titled-vs-id', [
+    npc('Captain Sarah Reeves', 45),
+    bestiary('Glass-Hide Ape', 30),
+  ]);
+
+  test('a titled name wins over an id naming another bible creature', () => {
+    expect(findAuthoredMonster(mixed, 'glass-hide-ape', 'Captain Reeves')?.entityName).toBe(
+      'Captain Sarah Reeves',
+    );
+    expect(findAuthoredMonster(mixed, 'srd:glass-hide-ape', 'Captain Reeves')?.entityName).toBe(
+      'Captain Sarah Reeves',
+    );
+  });
+
+  test('a duplicate-numbered titled seat still reaches its entry', () => {
+    expect(findAuthoredMonster(mixed, null, 'Captain Reeves 2')?.entityName).toBe(
+      'Captain Sarah Reeves',
+    );
+  });
+
+  test('an id-identified seat still resolves when the titled name matches nothing', () => {
+    expect(findAuthoredMonster(mixed, 'glass-hide-ape', 'Something Else')?.entityName).toBe(
+      'Glass-Hide Ape',
+    );
+  });
+});
+
 describe('findAuthoredMonster: what the titled match counts (#2427 follow-up)', () => {
   test('a three-token seat reaches the one entry it abbreviates', () => {
     const wide = buildCampaignMonsterIndex('wide', [

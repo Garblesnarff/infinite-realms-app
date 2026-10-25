@@ -129,7 +129,14 @@ export function resolveCombatantStats(
 
       const stats: ResolvedCombatantStats = {
         source: 'campaign',
-        monsterId: monsterId?.trim() || authored.entityName,
+        // The template identity is the campaign entity, unless the DM's id already names
+        // that same entity (#1102): a 'Glass Prowler' seated over the DM's `srd:glass-hide-ape`
+        // suggestion must not keep reporting the SRD id as its template, or the stored
+        // monsterRef attributes campaign stats to a template that did not supply them.
+        monsterId:
+          monsterId && normalizeMonsterKey(monsterId) === normalizeMonsterKey(authored.entityName)
+            ? monsterId.trim()
+            : authored.entityName,
         monsterName: authored.entityName,
         maxHp,
         armorClass: fill(
