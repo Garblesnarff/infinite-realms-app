@@ -146,7 +146,7 @@ describe('engine result cards in the chat (#2417)', () => {
 
     expect(
       screen.getByText(
-        'The Scholar cast Acid Splash at Captain Sarah Reeves — DEX save 6 vs DC 14 — FAIL. 2 acid damage. Captain Sarah Reeves is now at 9 HP.',
+        'The Scholar cast Acid Splash at Captain Sarah Reeves — DEX save 6 vs DC 14 — FAIL. 2 acid damage. Captain Sarah Reeves is bloodied.',
       ),
     ).toBeTruthy();
     expect(
@@ -241,8 +241,7 @@ describe('engine result cards in the chat (#2417)', () => {
     ]);
 
     expect(screen.queryAllByTestId('engine-result-card')).toHaveLength(0);
-    expect(screen.getByText(/14 \+ 0 = 14/)).toBeTruthy();
-    expect(screen.getByText(/vs AC 11/)).toBeTruthy();
+    expect(screen.getByText(/rolled 14 \+ 0 = 14 vs AC 11/)).toBeTruthy();
   });
 
   it('renders the live roll result beside a persisted DM reply and keeps the Engine line visible', () => {

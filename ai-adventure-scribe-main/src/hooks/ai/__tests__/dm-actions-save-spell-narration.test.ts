@@ -200,7 +200,7 @@ describe('the sheet-Cast Acid Splash narration pass (#2391)', () => {
     const outcome = await invoke();
 
     const engineLine =
-      '⚙️ Engine: The Scholar cast Acid Splash at Captain Sarah Reeves — DEX save 6 vs DC 14 — FAIL. 2 acid damage. Captain Sarah Reeves is now at 9 HP.';
+      '⚙️ Engine: The Scholar cast Acid Splash at Captain Sarah Reeves — DEX save 6 vs DC 14 — FAIL. 2 acid damage. Captain Sarah Reeves is wounded.';
     expect(outcome.responseText.startsWith(engineLine)).toBe(true);
 
     const payload = narrationPayload();

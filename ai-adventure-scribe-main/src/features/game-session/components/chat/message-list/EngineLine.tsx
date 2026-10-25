@@ -1,94 +1,113 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 
-import { parseEngineLine, humanizeRawEngineLine, isEngineLine } from './engine-line-model';
+import type { EngineLineModel, EngineLineOutcome } from './engine-line-model';
 
-import type { EngineLineOutcome } from './engine-line-model';
+import { cn } from '@/lib/utils';
 
-interface EngineLineProps {
-  line: string;
-  nameFor?: (slug: string) => string | undefined;
-}
-
-const pillClassFor = (outcome: EngineLineOutcome): string => {
-  switch (outcome) {
-    case 'hit':
-      return 'bg-infinite-gold text-[#1a1206]';
-    case 'critical':
-      return 'bg-infinite-gold-light text-[#1a1206] shadow-glow-gold';
-    case 'failed-save':
-      return 'bg-infinite-gold text-[#1a1206]';
-    case 'miss':
-    case 'enemy-miss':
-      return 'border border-[color:var(--ir-control-border)]';
-    case 'enemy-hit':
-      return 'border border-[color:var(--ir-hp-bad)]/60 text-ir-hp-bad';
-    case 'pass':
-      return 'border border-[color:var(--ir-hp-good)]/60 text-ir-hp-good';
-    case 'fail':
-    case 'refused':
-      return 'border border-[color:var(--ir-hp-bad)]/60 text-ir-hp-bad';
-    case 'saved':
-      return 'border border-white/20 text-muted-foreground';
-    case 'pending':
-      return 'border border-dashed border-infinite-gold text-infinite-gold';
-    case 'move':
-    case 'info':
-    default:
-      return 'border border-white/20 text-muted-foreground';
-  }
+/** One pill style per outcome, written from the player's side (#87). */
+const PILL_CLASS: Record<EngineLineOutcome, string> = {
+  hit: 'bg-infinite-gold text-[#1a1206]',
+  critical: 'bg-infinite-gold-light text-[#1a1206] shadow-glow-gold',
+  miss: 'border border-[color:var(--ir-control-border)]',
+  'enemy-miss': 'border border-[color:var(--ir-control-border)]',
+  'enemy-hit': 'border border-[color:var(--ir-hp-bad)]/60 text-ir-hp-bad',
+  pass: 'border border-[color:var(--ir-hp-good)]/60 text-ir-hp-good',
+  fail: 'border border-[color:var(--ir-hp-bad)]/60 text-ir-hp-bad',
+  refused: 'border border-[color:var(--ir-hp-bad)]/60 text-ir-hp-bad',
+  saved: 'border border-[color:var(--ir-control-border)] text-muted-foreground',
+  'failed-save': 'bg-infinite-gold text-[#1a1206]',
+  move: 'border border-[color:var(--ir-control-border)] text-muted-foreground',
+  info: 'border border-[color:var(--ir-control-border)] text-muted-foreground',
 };
 
-export const EngineLine: React.FC<EngineLineProps> = ({ line, nameFor }) => {
-  const [expanded, setExpanded] = useState(false);
-  const model = parseEngineLine(line, { nameFor });
-  const rawText = humanizeRawEngineLine(line, { nameFor });
+const KICKER_CLASS =
+  'block text-[11px] font-semibold uppercase tracking-[.1em] text-muted-foreground';
 
-  const badgeClass =
-    model.actorSide === 'player'
-      ? 'bg-infinite-gold text-[#1a1206]'
-      : 'bg-infinite-teal text-[#06181b]';
+interface EngineLineProps {
+  model: EngineLineModel;
+  /**
+   * Prints "Rules engine" before the kicker. False for every row after the first in one engine
+   * block, so the label prints once per block (#2256).
+   */
+  showLabel?: boolean;
+}
+
+/**
+ * A rules-engine result row (#87): full width, no bubble. The row is a disclosure button; the
+ * engine sentence sits in the region it controls, `hidden` until expanded.
+ */
+export const EngineLine: React.FC<EngineLineProps> = ({ model, showLabel = true }) => {
+  const [expanded, setExpanded] = useState(false);
+  const regionId = useId();
+  // A line without math already shows its whole sentence; there is nothing more to expand.
+  const hasMore = model.math !== null && model.sentence !== model.detail;
 
   return (
-    <div className="w-full">
+    <div className="w-full" data-testid="engine-line" data-outcome={model.outcome}>
       <button
         type="button"
         aria-expanded={expanded}
-        data-testid="engine-line"
-        data-outcome={model.outcome}
-        onClick={() => setExpanded((v) => !v)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            setExpanded((v) => !v);
-          }
-        }}
-        className="grid w-full grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2 border-y border-infinite-gold/30 bg-[color:var(--ir-engine)] text-left text-[13px] leading-[1.45] tabular-nums max-[700px]:grid-cols-[28px_minmax(0,1fr)]"
+        aria-controls={hasMore ? regionId : undefined}
+        onClick={() => setExpanded((open) => !open)}
+        className={cn(
+          'grid w-full grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2 text-left',
+          'border-y border-infinite-gold/30 bg-[color:var(--ir-engine)] text-[13px] leading-[1.45] tabular-nums',
+        )}
       >
         <span
-          className={`inline-flex h-7 w-7 items-center justify-center ${badgeClass} [clip-path:polygon(50%_0,100%_25%,100%_75%,50%_100%,0_75%,0_25%)]`}
+          aria-hidden="true"
+          data-testid="engine-line-badge"
+          className={cn(
+            'inline-flex h-7 w-7 items-center justify-center text-xs font-bold',
+            '[clip-path:polygon(50%_0,100%_25%,100%_75%,50%_100%,0_75%,0_25%)]',
+            model.side === 'npc'
+              ? 'bg-infinite-teal text-[#06181b]'
+              : 'bg-infinite-gold text-[#1a1206]',
+          )}
         >
           {model.badge}
         </span>
         <span className="min-w-0">
-          <span className="block text-[11px] font-semibold uppercase tracking-[.1em] text-muted-foreground">
-            {model.kicker}
-          </span>
+          {model.kicker ? (
+            <span className={KICKER_CLASS}>
+              {showLabel && <span data-engine-label>Rules engine</span>}
+              {showLabel ? ' · ' : null}
+              {model.kicker}
+            </span>
+          ) : showLabel ? (
+            <span data-engine-label className={KICKER_CLASS}>
+              Rules engine
+            </span>
+          ) : null}
           <span className="block">
             {model.math ? <b>{model.math}</b> : null}
-            {model.detail ? <span className="text-muted-foreground"> {model.detail}</span> : null}
+            {model.math && model.detail ? ' ' : null}
+            {model.detail ? (
+              <span className={model.math ? 'text-muted-foreground' : undefined}>
+                {model.detail}
+              </span>
+            ) : null}
           </span>
         </span>
         <span
-          className={`text-xs font-bold uppercase tracking-[.08em] px-2 py-1 rounded-md ${pillClassFor(
-            model.outcome,
-          )}`}
+          data-testid="engine-line-pill"
+          className={cn(
+            'text-xs font-bold uppercase tracking-[.08em] px-2 py-1 rounded-md',
+            PILL_CLASS[model.outcome],
+          )}
         >
           {model.pill}
         </span>
       </button>
-      {expanded ? <p className="px-3 py-2 text-xs text-muted-foreground">{rawText}</p> : null}
+      {hasMore && (
+        <p
+          id={regionId}
+          hidden={!expanded}
+          className="px-3 py-2 text-xs leading-relaxed text-muted-foreground"
+        >
+          {model.sentence}
+        </p>
+      )}
     </div>
   );
 };
-
-export { isEngineLine };

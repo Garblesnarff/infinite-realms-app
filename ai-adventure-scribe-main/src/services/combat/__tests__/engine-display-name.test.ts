@@ -110,7 +110,7 @@ describe('engine lines name combatants from the roster (#2306)', () => {
         roster,
       ),
     ).toBe(
-      '⚙️ Engine: The Scholar cast Magic Missile at The Vitruvian Spider — AUTO-HIT. 8 force damage. The Vitruvian Spider is now at 0 HP and is DEAD.',
+      '⚙️ Engine: The Scholar cast Magic Missile at The Vitruvian Spider — AUTO-HIT. 8 force damage. The Vitruvian Spider is dead.',
     );
 
     expect(

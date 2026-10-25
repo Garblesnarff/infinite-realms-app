@@ -203,7 +203,7 @@ describe('spell engine lines', () => {
     });
 
     expect(line).toBe(
-      '⚙️ Engine: Rook cast Magic Missile at Professor Umeboshi — AUTO-HIT. 8 force damage. Professor Umeboshi is now at 0 HP and is DEAD.',
+      '⚙️ Engine: Rook cast Magic Missile at Professor Umeboshi — AUTO-HIT. 8 force damage. Professor Umeboshi is dead.',
     );
   });
 
@@ -266,9 +266,9 @@ describe('spell engine lines', () => {
 
     expect(line).toBe(
       '⚙️ Engine: Rook cast Burning Hands at Goblin Archer — DEX save 6 vs DC 13 — FAIL. ' +
-        '7 fire damage. Goblin Archer is now at 4 HP.\n\n' +
+        '7 fire damage. Goblin Archer is bloodied.\n\n' +
         '⚙️ Engine: Rook cast Burning Hands at Goblin Boss — DEX save 17 vs DC 13 — PASS. ' +
-        '3 fire damage. Goblin Boss is now at 12 HP.',
+        '3 fire damage. Goblin Boss is wounded.',
     );
   });
 
@@ -298,9 +298,7 @@ describe('spell engine lines', () => {
       areaRoster,
     );
 
-    expect(line).toBe(
-      '⚙️ Engine: Rook cast a healing spell at Goblin Archer — HEALS. Goblin Archer is now at 9 HP.',
-    );
+    expect(line).toBe('⚙️ Engine: Rook cast a healing spell at Goblin Archer — HEALS.');
   });
 
   it('renders a refused spell with no roll, damage, or wound', () => {
@@ -365,11 +363,15 @@ describe('spell engine lines', () => {
     });
 
     it('returns an NPC turn as its engine line followed by the server lines', () => {
-      const row = buildNpcEngineMessage([
-        { id: npcSwing.actor_id, name: 'Captain Sarah Reeves', participantType: 'monster' },
-        { id: npcSwing.target_ids[0], name: 'The Scholar', participantType: 'player' },
-      ], 1, { type: 'attack', actorId: npcSwing.actor_id, targetId: npcSwing.target_ids[0] },
-      { ...hit, deathSaves: [{ ...DEATH_SAVE_FAILED, participantId: npcSwing.target_ids[0] }] });
+      const row = buildNpcEngineMessage(
+        [
+          { id: npcSwing.actor_id, name: 'Captain Sarah Reeves', participantType: 'monster' },
+          { id: npcSwing.target_ids[0], name: 'The Scholar', participantType: 'player' },
+        ],
+        1,
+        { type: 'attack', actorId: npcSwing.actor_id, targetId: npcSwing.target_ids[0] },
+        { ...hit, deathSaves: [{ ...DEATH_SAVE_FAILED, participantId: npcSwing.target_ids[0] }] },
+      );
       expect(row.context.combatEngineBlocks[0].lines).toEqual([
         expect.stringContaining('now at 1 HP'),
         '⚙️ Engine: The Scholar rolled 6 on their death saving throw — FAILURE (0 successes, 2 failures).',

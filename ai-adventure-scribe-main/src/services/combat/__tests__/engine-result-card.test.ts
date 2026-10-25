@@ -144,7 +144,8 @@ const BADGE_TABLE: Array<[string, () => EngineResultCard, EngineBadge]> = [
 
 function deathSaveCard(save: typeof DEATH_SAVE_FAILED): EngineResultCard {
   const card = formatDeathSaveParts({ deathSaves: [save] }, FIGHT_ROSTER)
-    .map((part) => part.card).find((candidate) => candidate.kind === 'death_save');
+    .map((part) => part.card)
+    .find((candidate) => candidate.kind === 'death_save');
   if (!card) throw new Error('no death save card');
   return card;
 }
@@ -216,7 +217,7 @@ describe('engine result card data (#2417)', () => {
     expect(onEnemy.hp).toBeUndefined();
     expect(onEnemy.status).toBe('Captain Sarah Reeves is bloodied.');
     expect(only(castsAtEnemy(PLAYER_SPELL_ATTACK_HITS)).status).toBe(
-      'Captain Sarah Reeves is now at 9 HP.',
+      'Captain Sarah Reeves is bloodied.',
     );
   });
 

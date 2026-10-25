@@ -23,15 +23,6 @@ export interface MessageContext {
   intent?: string | null;
   combat_transition?: 'none' | 'start' | 'end' | null;
   combatEngineBlocks?: CombatEngineBlock[];
-  engineLine?: {
-    kind: 'check';
-    label: string;
-    die: number;
-    modifier: number;
-    total: number;
-    dc: number;
-    outcome: string;
-  };
   /** Cards that stand for a system row's text, e.g. the seating card (#2417). */
   engineCards?: EngineResultCard[];
   combatEnded?: boolean;

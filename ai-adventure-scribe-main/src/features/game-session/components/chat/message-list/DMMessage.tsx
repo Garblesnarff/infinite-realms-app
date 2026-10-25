@@ -8,23 +8,14 @@ import { MessageVoicePlayer } from './MessageVoicePlayer';
 import { CombatRoundDivider } from './CombatRoundDivider';
 import { HandoutCard } from '../../handouts/HandoutCard';
 import { EngineLine } from './EngineLine';
+import { parseEngineLine, type EngineRosterRow } from './engine-line-model';
 import { EngineResultCardView } from '../../game/EngineResultCardView';
 import { useShowTargetNumbers } from '../../../hooks/use-show-target-numbers';
-import * as CombatContextModule from '@/contexts/CombatContext';
-
-let useOptionalCombat: () => any;
-try {
-  useOptionalCombat = (CombatContextModule as { useOptionalCombat?: () => any })
-    .useOptionalCombat as () => any;
-} catch {
-  useOptionalCombat = () => undefined;
-}
-if (typeof useOptionalCombat !== 'function') useOptionalCombat = () => undefined;
-
 import type { ChatMessage } from '@/types/game';
 
 import { Button } from '@/components/ui/button';
 import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
+import { useOptionalCombat } from '@/contexts/CombatContext';
 import { useSceneBackground, type AssetType } from '@/contexts/SceneBackgroundContext';
 import { cn } from '@/lib/utils';
 import { isEngineResultCard } from '@/services/combat/engine-result-card';
@@ -68,21 +59,18 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
     previousEngineKey,
   }) => {
     const { showTargetNumbers } = useShowTargetNumbers();
-    const combat = useOptionalCombat();
-    const nameFor = React.useCallback(
-      (slug: string) => {
-        for (const p of combat?.state?.participants ?? []) {
-          const name = p.displayName ?? p.name;
-          if (p.id === slug) return name;
-          const slugified = (p.name ?? '')
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-|-$/g, '');
-          if (slugified === slug) return name;
-        }
-        return undefined;
-      },
-      [combat],
+    // The live encounter roster names slugs and says which side an actor is on (#87).
+    const participants = useOptionalCombat()?.state?.participants;
+    const roster = useMemo<EngineRosterRow[]>(
+      () =>
+        (participants ?? []).map((participant) => ({
+          id: participant.id,
+          name: participant.name,
+          displayName: participant.displayName,
+          participantType: participant.participantType,
+          maxHitPoints: participant.maxHitPoints,
+        })),
+      [participants],
     );
     // Get campaign assets for displaying entity images
     const { getAsset } = useCampaignAssetsContext();
@@ -212,6 +200,7 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
       <div className="w-full">
         {combatEngineBlocks.map((block, blockIndex) => {
           const cards = Array.isArray(block.cards) ? block.cards.filter(isEngineResultCard) : [];
+          // A line a card stands for is not printed twice; any other line keeps its row.
           const chipLines = block.lines.filter(
             (line) =>
               !cards.some((card) => line.includes(card.line) || card.covers?.includes(line)),
@@ -241,15 +230,19 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
               {chipLines.map((line, index) => (
                 <EngineLine
                   key={`${block.sequence}-${index}-${line}`}
-                  line={line}
-                  nameFor={nameFor}
+                  model={parseEngineLine(line, { side: block.source, roster })}
+                  showLabel={cards.length === 0 && index === 0}
                 />
               ))}
             </section>
           );
         })}
-        {engineLines.map((line) => (
-          <EngineLine key={line} line={line} nameFor={nameFor} />
+        {engineLines.map((line, index) => (
+          <EngineLine
+            key={line}
+            model={parseEngineLine(line, { roster })}
+            showLabel={index === 0}
+          />
         ))}
         <article
           aria-label="Dungeon Master message"
