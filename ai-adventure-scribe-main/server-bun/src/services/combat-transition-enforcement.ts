@@ -23,8 +23,11 @@ import {
   stripKillSentences,
   type SceneEndParticipant,
 } from './combat/combat-end-guard.js';
-
-import type { DMResponse } from './dm/dm-response-schema.js';
+import {
+  fillPhaseOmissions,
+  type DMResponse,
+  type DmResponsePhase,
+} from './dm/dm-response-schema.js';
 
 const isDmResponseSchema = (schema: unknown): boolean => {
   if (!schema || typeof schema !== 'object') return false;
@@ -53,6 +56,23 @@ const parseDmResponse = (text: string): DMResponse | null => {
   } catch {
     return null;
   }
+};
+
+/**
+ * #782 item 8, strategist HOLD item 4: the acceptance pipeline reads
+ * combat_actions/map_actions off the parsed envelope, so a phase-narrowed
+ * reply must present the filled shape before anything judges it — a valid
+ * narrative reply (no map_actions key) must not fail a downstream parse
+ * that hard-requires the arrays. Fill only when the section is undefined,
+ * never overwriting a carried array (fillPhaseOmissions guarantees this).
+ * Phase 'full' or absent: no-op, today's behavior exactly.
+ */
+const fillForPhase = (parsed: DMResponse, phase: string | undefined): DMResponse => {
+  if (phase !== 'narrative' && phase !== 'combat' && phase !== 'tactical') return parsed;
+  return fillPhaseOmissions(
+    parsed as Record<string, unknown>,
+    phase as DmResponsePhase,
+  ) as DMResponse;
 };
 
 const combineUsage = (first: LLMResponse, second: LLMResponse): LLMResponse['usage'] => {
@@ -237,6 +257,11 @@ export async function enforceCombatTransitionContract(params: {
   history?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
   provider: 'openrouter' | 'gemini';
   responseSchema?: Record<string, unknown>;
+  /** #782 item 8: the phase the route picked for this turn. It selects the
+   * shadow-comparison schema, attributes the corrective generate's shadow
+   * logs, and — HOLD item 4 — fills the parsed reply before the acceptance
+   * pipeline judges it (fillForPhase below). */
+  responseSchemaPhase?: string;
   /** What the player typed this turn; the prose attack floor only reads an attack the player declared. */
   playerInput?: string;
   /**
@@ -248,8 +273,11 @@ export async function enforceCombatTransitionContract(params: {
 }): Promise<LLMResponse> {
   const { result, prompt, responseSchema } = params;
   if (result.error || !isDmResponseSchema(responseSchema)) return result;
-  const parsed = parseDmResponse(result.text);
-  if (!parsed) return result;
+  const rawParsed = parseDmResponse(result.text);
+  if (!rawParsed) return result;
+  // HOLD item 4: parse AFTER the phase fill, so the acceptance pipeline
+  // below judges the filled shape, not the phase-narrowed one.
+  const parsed = fillForPhase(rawParsed, params.responseSchemaPhase);
 
   // A deferred end leaves the fight open on the engine while the DM's text said it
   // ended; the refusal fact is how the DM learns that on its next read (#2563), the
@@ -368,6 +396,7 @@ export async function enforceCombatTransitionContract(params: {
     ],
     provider: params.provider,
     responseSchema,
+    responseSchemaPhase: params.responseSchemaPhase,
   });
   if (retry.error) {
     logger.error({
@@ -386,10 +415,14 @@ export async function enforceCombatTransitionContract(params: {
       : { ...accepted, text: JSON.stringify(sanitized) };
   }
 
-  const retryParsed = parseDmResponse(retry.text);
-  // The retry gets the same acceptance the first response did. A model that answers a hint by
-  // writing the old dialect again is translated again, silently; one that answers in prose is
-  // read out of its prose again.
+  const rawRetryParsed = parseDmResponse(retry.text);
+  // The retry gets the same acceptance the first response did — and the
+  // same phase fill first (HOLD item 4). A model that answers a hint by
+  // writing the old dialect again is translated again, silently; one that
+  // answers in prose is read out of its prose again.
+  const retryParsed = rawRetryParsed
+    ? fillForPhase(rawRetryParsed, params.responseSchemaPhase)
+    : null;
   const retryAcceptance = retryParsed
     ? acceptWhateverWasEmitted(retryParsed, prompt, combatActive, params.playerInput)
     : null;

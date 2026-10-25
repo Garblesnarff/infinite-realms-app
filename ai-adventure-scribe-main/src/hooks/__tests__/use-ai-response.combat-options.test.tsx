@@ -269,6 +269,17 @@ describe('D3: combat options use the real response hook (#2547)', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string, init?: RequestInit) => {
+        // #1095: this stub stands in for the combat transport only
+        // (intent, legal-actions, status). Non-combat traffic (e.g. the
+        // session-trackers GET) is not a combat request and must neither
+        // be recorded nor answered as one.
+        if (
+          !url.includes('/intent') &&
+          !url.endsWith('/legal-actions') &&
+          !url.endsWith('/status')
+        ) {
+          return new Response(JSON.stringify({}), { status: 200 });
+        }
         const body = JSON.parse(String(init?.body ?? '{}'));
         const reply = (payload: unknown, status = 200) =>
           new Response(JSON.stringify(payload), { status });

@@ -227,6 +227,35 @@ describe('persistGeneratedDmReply', () => {
     expect(addMessageCalls).toHaveLength(0);
   });
 
+  test('writes nothing for a cancellable sheet cast, so reload cannot resurrect its prose (#1021)', async () => {
+    const result = await persistGeneratedDmReply({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      envelope: explorationEnvelope(),
+      holdProse: true,
+    });
+
+    expect(result).toEqual({ persisted: false, reason: 'client_cancellable' });
+    expect(addMessageCalls).toHaveLength(0);
+  });
+
+  test('the fallback never resurrects a cancelled sheet cast, even one carrying a roll request (#1021)', async () => {
+    const result = await persistFallbackDmReply({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      reason: 'client_cancellable',
+      envelope: explorationEnvelope({
+        text: 'The bolt streaks toward the goblin.',
+        roll_requests: [{ type: 'attack', formula: '1d20+5' }],
+      }),
+    });
+
+    expect(result).toEqual({ persisted: false, skipped: 'client_cancellable' });
+    expect(addMessageCalls).toHaveLength(0);
+  });
+
   test('writes nothing for a roll turn and says why', async () => {
     const result = await persistGeneratedDmReply({
       userId: 'user-1',

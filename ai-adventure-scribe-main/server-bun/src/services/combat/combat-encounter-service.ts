@@ -546,6 +546,27 @@ export class CombatEncounterService {
             ...(profile.unsupported?.length ? { unsupportedActions: profile.unsupported } : {}),
           });
         }
+        if (!input.characterId && !input.npcId) {
+          // #1102: one line per monster seat naming WHERE its template came from. The
+          // Glass Prowler incident was undiagnosable because neither the stored reply nor
+          // the log said whether `srd:glass-hide-ape` came from the DM's reply or the
+          // server's name-to-monster lookup: `templateSource` is `campaign` when the
+          // campaign block won, `dm` when the DM supplied the id, and `lookup` when the
+          // server resolved by name. Fires for generic seats too, so a seat with no
+          // template at all still leaves a line saying so.
+          logger.info({
+            msg: 'COMBAT_PARTICIPANT_SEATED',
+            sessionId,
+            encounterId: encounter.id,
+            combatantName: participantName,
+            templateId: monster?.monsterId ?? input.monsterId ?? null,
+            templateSource:
+              monster?.source === 'campaign' ? 'campaign' : input.monsterId ? 'dm' : 'lookup',
+            statSource: monster?.source ?? 'generic',
+            resolvedAs: monster?.monsterName ?? null,
+            dmMonsterId: input.monsterId ?? null,
+          });
+        }
         if (scaled && scaled.factor < 1) {
           // Logged separately from the profile line and only when it changes something. A
           // scaler that rewrites a stat block in silence is the same class of problem as the

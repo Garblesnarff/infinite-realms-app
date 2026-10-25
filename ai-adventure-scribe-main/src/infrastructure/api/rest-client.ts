@@ -276,6 +276,43 @@ function buildRequestInit(options: RequestInit, accessToken?: string): RequestIn
   };
 }
 
+const TOKEN_REFRESH_MARGIN_MS = 60 * 1000;
+
+function getAccessTokenExpiry(token: string): number | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const paddedPayload = payload.padEnd(payload.length + ((4 - (payload.length % 4)) % 4), '=');
+    const expiry = Number((JSON.parse(atob(paddedPayload)) as { exp?: unknown }).exp);
+    return Number.isFinite(expiry) && expiry > 0 ? expiry * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+function isAccessTokenExpiringSoon(token: string): boolean {
+  const expiry = getAccessTokenExpiry(token);
+  return expiry !== null && Date.now() >= expiry - TOKEN_REFRESH_MARGIN_MS;
+}
+
+async function refreshExpiringSession(): Promise<string | undefined> {
+  const session = loadCachedSession();
+  if (!session?.refresh_token || !isAccessTokenExpiringSoon(session.access_token)) return undefined;
+
+  let tokens: Awaited<ReturnType<typeof refreshAccessTokenOnce>>;
+  try {
+    tokens = await refreshAccessTokenOnce(session.refresh_token, session.access_token);
+  } catch (error) {
+    if (error instanceof TokenRefreshTransportError) throw error;
+    throw new SessionExpiredError();
+  }
+  if (!tokens) throw new SessionExpiredError();
+
+  persistSession({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken });
+  return tokens.accessToken;
+}
+
 /**
  * Fetch an API route and recover one expired access token before surfacing the
  * session-expired state. Callers retain ownership of non-2xx response parsing.
@@ -305,7 +342,10 @@ export async function fetchWithAuth(
     );
 
   try {
-    const response = await request();
+    // A backgrounded tab can miss the periodic AuthContext timer. Refresh
+    // before the request when its access token is inside the one-minute window.
+    const refreshedAccessToken = await refreshExpiringSession();
+    const response = await request(refreshedAccessToken);
     if (response.status !== 401 || !isV1Route(path)) return response;
 
     const session = loadCachedSession();
@@ -415,6 +455,7 @@ export interface GenerateTextParams {
     messageId: string;
     inCombat?: boolean;
     narrationGated?: boolean;
+    holdProse?: boolean;
     rollRequestId?: string;
   };
   combatEntry?: {

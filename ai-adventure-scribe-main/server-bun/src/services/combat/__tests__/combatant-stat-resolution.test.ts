@@ -113,6 +113,67 @@ describe('campaign-authored stats', () => {
   });
 });
 
+describe('campaign name beats the DM monster_id (#1102)', () => {
+  const GARDEN = indexOf('the-gardeners-heir', {
+    'Glass Prowler':
+      '**Glass Prowler**\n\n**HP:** 22 **AC:** 13 **Speed:** 30ft\n**Attack (Bite):** +4 to hit, 1d8+2 piercing',
+    'Glass-Hide Ape':
+      '**Glass-Hide Ape**\n\n**HP:** 30 **AC:** 12 **Speed:** 30ft\n**Attack (Strike):** +3 to hit, 1d4+3 bludgeoning',
+  });
+
+  test('a name-matched campaign block wins over a DM id naming another campaign creature', () => {
+    const stats = resolveCombatantStats(GARDEN, 'srd:glass-hide-ape', 'Glass Prowler');
+    expect(stats).toMatchObject({
+      source: 'campaign',
+      monsterId: 'Glass Prowler',
+      monsterName: 'Glass Prowler',
+      maxHp: 22,
+      armorClass: 13,
+    });
+    expect(stats?.attackProfile).toMatchObject({
+      source: 'authored',
+      attacks: [
+        {
+          name: 'Bite',
+          attackBonus: 4,
+          damageDice: '1d8',
+          damageBonus: 2,
+          damageType: 'piercing',
+        },
+      ],
+    });
+  });
+
+  test('a duplicate-numbered seat still reaches its campaign block', () => {
+    expect(resolveCombatantStats(GARDEN, null, 'Glass Prowler 2')).toMatchObject({
+      source: 'campaign',
+      maxHp: 22,
+    });
+  });
+
+  test('an id-identified seat still resolves when the name matches nothing', () => {
+    const stats = resolveCombatantStats(GARDEN, 'glass-hide-ape', 'Something Else');
+    expect(stats).toMatchObject({
+      source: 'campaign',
+      monsterId: 'glass-hide-ape',
+      monsterName: 'Glass-Hide Ape',
+      maxHp: 30,
+    });
+  });
+
+  test('an agreeing DM id is preserved verbatim, srd: prefix and separators included', () => {
+    expect(resolveCombatantStats(GARDEN, 'srd:glass-hide-ape', 'Glass-Hide Ape')).toMatchObject({
+      source: 'campaign',
+      monsterId: 'srd:glass-hide-ape',
+      monsterName: 'Glass-Hide Ape',
+      maxHp: 30,
+    });
+    expect(resolveCombatantStats(GARDEN, 'glass_hide_ape', 'Glass-Hide Ape')).toMatchObject({
+      monsterId: 'glass_hide_ape',
+    });
+  });
+});
+
 describe('partial and unreadable authored blocks', () => {
   test('an authored HP survives a missing AC, and the filled field is logged', () => {
     const stats = resolveCombatantStats(ETERNAL_FEAST, null, 'Half Stat Fiend');

@@ -12,6 +12,7 @@ import { DEFAULT_TYPE_CONFIG, ROLL_TYPE_CONFIG } from './dice-roll-type-config';
 import { DiceRollActionButtons } from './DiceRollActionButtons';
 import { DiceRollManualEntrySection } from './DiceRollManualEntrySection';
 import { DiceRollModifierControls } from './DiceRollModifierControls';
+import { targetAcLabel } from '../../../shared/describe-attack-roll';
 
 import type { RollRequest } from '@/types/roll-request';
 
@@ -152,7 +153,9 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
               </span>
               {showTargetNumbers && (request.dc || request.ac) && (
                 <Badge variant="outline" className="text-xs text-muted-foreground">
-                  {request.dc ? `DC ${request.dc}` : `AC ${request.ac}`}
+                  {request.dc
+                    ? `DC ${request.dc}`
+                    : targetAcLabel(request.ac ?? 0, request.coverBonus)}
                 </Badge>
               )}
             </div>

@@ -600,8 +600,12 @@ function extractMechanics(campaignId: string, content: string): CampaignChunk[] 
     extractSection(content, 'Mechanic') || extractSection(content, 'Unique Mechanic');
   if (!mechanicsSection) return chunks;
 
-  // Look for numbered or ### mechanics
-  const mechanicPattern = /(?:###|\d+\.)\s*\*\*?(.+?)\*\*?\s*\n([\s\S]*?)(?=###|\d+\.\s*\*|##|$)/g;
+  // Look for numbered or ### mechanics. The terminator lookahead is anchored
+  // to line starts (#1101): unanchored, a sentence ending in a number followed
+  // by a bullet line matches `\d+\.\s*\*` across the break ("round 5.\n*") and
+  // ends the chunk mid-body, dropping the rest of the mechanic. Line-start
+  // numbered mechanics still split, as the quest/item patterns already assume.
+  const mechanicPattern = /(?:###|\d+\.)\s*\*\*?(.+?)\*\*?\s*\n([\s\S]*?)(?=\n###|\n\d+\.\s*\*|\n##|$)/g;
   const matches = mechanicsSection.matchAll(mechanicPattern);
 
   for (const match of matches) {

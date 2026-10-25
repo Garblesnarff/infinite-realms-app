@@ -41,11 +41,20 @@ export const useSessionValidator = ({
         throw new Error('Session mismatch');
     } catch (error) {
       logger.error('Session validation failed:', { error });
-      toast({
-        title: 'Session Error',
-        description: 'Invalid game session. Please try starting a new game.',
-        variant: 'destructive',
-      });
+      const status = (error as { status?: unknown } | null)?.status;
+      if (status === 404 || status === 403) {
+        toast({
+          title: 'Session Error',
+          description: 'Invalid game session. Please try starting a new game.',
+          variant: 'destructive',
+        });
+      } else if (status !== 401) {
+        toast({
+          title: 'Session Error',
+          description: 'Unable to verify this game session. Please try again.',
+          variant: 'destructive',
+        });
+      }
       return false;
     }
 

@@ -17,7 +17,7 @@
  * Requires TEST_DATABASE_URL or DATABASE_URL — see fixtures/real-db.ts. Refuses every target
  * except the dedicated CI Postgres at 127.0.0.1:55432 because it deletes stale fixtures first.
  */
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test';
 import { eq, like } from 'drizzle-orm';
 
 import {
@@ -75,6 +75,31 @@ if (!hasRealDb) {
     '[combat-seat-player-name] SKIPPED: set TEST_DATABASE_URL to the dedicated Postgres at 127.0.0.1:55432 to run these.',
   );
 }
+
+// The seating log line (#1102) is observed the way monster-attacks observes its profile
+// lines: the logger module is stubbed before the service loads, and payloads are collected
+// by message. Every export is stubbed: a missing child logger is a hard import error in
+// some unrelated file. No other test in this file asserts logs, so swallowing them here
+// changes no existing expectation.
+type SeatedLogPayload = Record<string, unknown>;
+const seatedLogs: SeatedLogPayload[] = [];
+const recordSeatedLog = (payload: SeatedLogPayload): void => {
+  if (payload.msg === 'COMBAT_PARTICIPANT_SEATED') seatedLogs.push(payload);
+};
+const logStub = () => ({
+  info: mock(recordSeatedLog),
+  warn: mock(() => {}),
+  error: mock(() => {}),
+  debug: mock(() => {}),
+  child: () => logStub(),
+});
+mock.module('../../lib/logger.js', () => ({
+  logger: logStub(),
+  combatLogger: logStub(),
+  spellLogger: logStub(),
+  progressionLogger: logStub(),
+  errorLogSerializers: {},
+}));
 
 const { CombatEncounterService } = await importWithRealDb(
   () => import('../combat/combat-encounter-service.js'),
@@ -343,6 +368,113 @@ describeWithDb('a seated enemy never takes the player character name (#2438)', (
         'Bitter End Mercenary',
         'Bitter End Mercenary 1',
       ]);
+    });
+  });
+
+  describe('a name-matched campaign block wins over the DM monster_id (#1102)', () => {
+    beforeAll(async () => {
+      // The incident shape: the bible holds BOTH creatures, and the DM names the Prowler
+      // while suggesting the Ape's id. Chunk shapes follow the lore-keeper's monster rows.
+      await db.insert(campaignChunks).values([
+        {
+          campaignId: starterCampaignId,
+          chunkType: 'monster' as const,
+          entityName: 'Glass Prowler',
+          content: [
+            '**Glass Prowler**',
+            '',
+            '**HP:** 22 **AC:** 13 **Speed:** 30ft',
+            '**Attack (Bite):** +4 to hit, 1d8+2 piercing',
+          ].join('\n'),
+        },
+        {
+          campaignId: starterCampaignId,
+          chunkType: 'monster' as const,
+          entityName: 'Glass-Hide Ape',
+          content: [
+            '**Glass-Hide Ape**',
+            '',
+            '**HP:** 30 **AC:** 12 **Speed:** 30ft',
+            '**Attack (Strike):** +3 to hit, 1d4+3 bludgeoning',
+          ].join('\n'),
+        },
+      ]);
+      clearCampaignMonsterCache();
+    });
+
+    test('a DM reply naming Glass Prowler seats Bite 1d8+2 at 22 HP, not the suggested Ape', async () => {
+      const id = await newSession(9, true);
+      const participants = buildEntryParticipants(
+        player(),
+        [{ name: 'Glass Prowler', monsterId: 'srd:glass-hide-ape', count: 1 }],
+        {
+          sceneDescription: 'A glass prowler pads out of the dark.',
+          source: 'combat_transition',
+        },
+      );
+      const state = await startAndRecord(id, participants as never);
+
+      expect(state.participants.find((participant) => !participant.characterId)?.name).toBe(
+        'Glass Prowler',
+      );
+      // partyScaling.rawMaxHp is the scaling-proof HP: the seated row's maxHp is party-scaled.
+      const [row] = await db
+        .select({ profile: combatParticipants.monsterAttack })
+        .from(combatParticipants)
+        .where(eq(combatParticipants.encounterId, state.encounter.id))
+        .then((rows) => rows.filter((candidate) => candidate.profile));
+      // Party scaling rewrites the stored attack (1d8+2 -> 1d8 at party size 1), so the
+      // issue's numbers are pinned where scaling preserves them: partyScaling's raw values.
+      // On main this seats the Ape instead: rawMaxHp 30, rawAttacks ['1d4+3 (avg 5.5)'].
+      expect(row?.profile).toMatchObject({
+        source: 'authored',
+        attacks: [{ name: 'Bite', damageDice: '1d8' }],
+        partyScaling: { rawMaxHp: 22, rawAttacks: ['1d8+2 (avg 6.5)'] },
+      });
+      // Task 1 of the issue: the seating line names the template AND its source. The
+      // player seat in this same encounter emits no line, so exactly one line belongs
+      // to this session — the monster seat's.
+      const seats = seatedLogs.filter((payload) => payload.sessionId === id);
+      expect(seats).toHaveLength(1);
+      expect(seats[0]).toMatchObject({
+        msg: 'COMBAT_PARTICIPANT_SEATED',
+        encounterId: state.encounter.id,
+        combatantName: 'Glass Prowler',
+        templateId: 'Glass Prowler',
+        templateSource: 'campaign',
+        statSource: 'campaign',
+        resolvedAs: 'Glass Prowler',
+        dmMonsterId: 'srd:glass-hide-ape',
+      });
+    });
+
+    test('a generic seat still leaves a line, and the player seat leaves none', async () => {
+      const id = await newSession(10, true);
+      const participants = buildEntryParticipants(
+        player(),
+        [{ name: 'Mossback Brute', count: 1 }],
+        {
+          sceneDescription: 'A mossback brute lumbers forward.',
+          source: 'combat_transition',
+        },
+      );
+      const state = await startAndRecord(id, participants as never);
+
+      // No bible entry, no SRD entry, no DM id: the seat fights at generic stats, and
+      // the line says so (templateSource 'lookup' is the route attempted, statSource
+      // 'generic' is what supplied the stats). The player seat emits nothing.
+      const seats = seatedLogs.filter((payload) => payload.sessionId === id);
+      expect(seats).toHaveLength(1);
+      expect(seats[0]).toMatchObject({
+        msg: 'COMBAT_PARTICIPANT_SEATED',
+        encounterId: state.encounter.id,
+        combatantName: 'Mossback Brute',
+        templateId: null,
+        templateSource: 'lookup',
+        statSource: 'generic',
+        resolvedAs: null,
+        dmMonsterId: null,
+      });
     });
   });
 });

@@ -72,6 +72,7 @@ import { sheetCastSignal } from '@/services/combat/sheet-cast-progress';
 import { holdSaveCardBeforeDm } from '@/services/combat/sheet-cast-save-hold';
 import { MemoryManager } from '@/services/memory-manager';
 import { SessionStateService } from '@/services/session-state-service';
+import { fetchSessionTrackers } from '@/services/session-trackers';
 import { userDataApi } from '@/services/user-data-api';
 import { voiceConsistencyService } from '@/services/voice-consistency-service';
 import { messagesSupersededByCombatEnd } from '@/utils/combat-engine-blocks';
@@ -896,8 +897,10 @@ export const useAIResponse = (): {
               : AIService.chatWithDM;
 
         // A cast from the sheet can be cancelled while the DM reads the scene (#2418). Aborting
-        // the request is safe: the slot is spent only when the engine is handed the cast, after
-        // this reply, and an in-combat turn's prose and side effects are not saved until then.
+        // the request is safe: for a story cast the server skips the slot spend when the
+        // request signal is aborted (#1021 FIX round 1), so a cancelled cast spends nothing;
+        // an in-combat turn's prose and side effects are not saved until the engine is handed
+        // the cast, after this reply.
         const castSignal = playerInputOrigin === 'sheet_cast' ? sheetCastSignal() : null;
         const requestSignal = combineAbortSignals(signal, castSignal ?? undefined);
         // Cancelled while queued behind another turn, or during the context fetch above.
@@ -952,9 +955,15 @@ export const useAIResponse = (): {
                   ...(isDiceRollMessage && latestMessage.context?.rollRequestId
                     ? { rollRequestId: latestMessage.context.rollRequestId }
                     : {}),
-                  // A cast that can still be cancelled keeps its prose off the server too: a
-                  // provisional row would narrate a cast the player gave up after a reload.
-                  inCombat: Boolean(isInCombat || castSignal),
+                  // A sheet cast may be cancelled while the request is in flight, but the
+                  // cancellation signal is not combat state. Reporting every sheet cast as
+                  // `inCombat` made the server skip the story spell-slot spend (and the other
+                  // story appliers) whenever the Cast button was used outside combat (#1021).
+                  inCombat: Boolean(isInCombat),
+                  // A sheet cast may still be cancelled after the request reaches the server.
+                  // Keep that provisional prose out of the reload fallback without conflating
+                  // cancellation with combat, so story spell slots still spend normally.
+                  ...(castSignal ? { holdProse: true } : {}),
                   // The client's own gate predicate, so the server's harm check stands down on
                   // exactly the turns the client gate does (a dice-roll message, say).
                   narrationGated: holdSideEffects,
@@ -1438,7 +1447,26 @@ export const useAIResponse = (): {
 
         // #1062: the server-attached tracker line, read once here so the
         // message below carries it without a non-null assertion.
-        const storyTrackers = (result as AIResponse).story_trackers;
+        // #1095: the envelope carries trackers only on turns the tracker
+        // step ran; on the turns it skipped, the line vanished and the
+        // player read the values from DM prose instead. Fall back to GET
+        // the session's trackers so every turn's message carries the
+        // clock. The envelope stays primary: a present field is never
+        // refetched. A failed GET leaves the message as today (no line,
+        // no invented state). The turn's abort signal bounds the GET
+        // like every other await in this pipeline — a hung GET must
+        // not outlive the turn that asked for it.
+        let storyTrackers = (result as AIResponse).story_trackers;
+        if (
+          (!Array.isArray(storyTrackers) || storyTrackers.length === 0) &&
+          sessionId
+        ) {
+          const fetched = await rejectWhenAborted(
+            fetchSessionTrackers(sessionId, signal),
+            signal,
+          );
+          if (fetched && fetched.length > 0) storyTrackers = fetched;
+        }
 
         // #1085: the turn's story effects reached the sheet server-side, but
         // the panel only refreshes on the session socket's

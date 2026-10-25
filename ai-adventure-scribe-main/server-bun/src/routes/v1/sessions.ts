@@ -20,6 +20,7 @@ import { logger } from '../../lib/logger.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
+import { loadStoredStoryTrackers } from '../../services/dm/story-tracker.js';
 import { SessionService } from '../../services/session-service.js';
 import { db } from '../../../../db/client';
 import { sessionChronicles } from '../../../../db/schema/index';
@@ -210,6 +211,28 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
         set.status = 500;
         return { error: 'Failed to fetch session context' };
       }
+    },
+    { params: sessionIdParams },
+  )
+
+  /**
+   * GET /v1/sessions/:id/trackers
+   * #1095: the session's campaign trackers from latest server state —
+   * the GET fallback for turns the DM reply envelope did not carry
+   * story_trackers (the tracker step runs only on some turns), for the
+   * greeting, and for the tracker sheet. Reuses the #1062 envelope
+   * read, so the fallback and the envelope can never disagree. The
+   * ownership guard above 404s unknown or foreign sessions; a failed
+   * read yields an empty list, never invented state.
+   */
+  .get(
+    '/:id/trackers',
+    async ({ params, user }) => {
+      const trackers = await loadStoredStoryTrackers({
+        sessionId: params.id,
+        userId: (user as { userId: string }).userId,
+      });
+      return { trackers: trackers ?? [] };
     },
     { params: sessionIdParams },
   )

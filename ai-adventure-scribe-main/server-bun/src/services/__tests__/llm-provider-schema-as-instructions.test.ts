@@ -3,12 +3,24 @@
  * For those candidates the schema is sent as system-prompt instructions instead.
  * No live provider calls: fetch is stubbed.
  */
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it, spyOn } from 'bun:test';
 
+import { logger } from '../../lib/logger.js';
 import { resetCircuitBreakersForTests } from '../../utils/circuit-breaker.js';
-import { dmResponseSchema, parseDmResponse, parseLlmEnvelope } from '../dm/dm-response-schema.js';
+// Main's live schema (see dm-response-phase.test.ts for provenance): the
+// instructed system text must carry exactly these bytes on this path too
+// (strategist HOLD at 342151ce, per-path test).
+import mainDmResponseSchema from '../dm/__tests__/fixtures/main-dm-response-schema.json' with {
+  type: 'json',
+};
+import {
+  dmResponseSchema,
+  dmResponseSchemaForPhase,
+  parseDmResponse,
+  parseLlmEnvelope,
+} from '../dm/dm-response-schema.js';
 import { modelSupportsStrictSchema } from '../llm-model-config.js';
-import { LLMProviderService } from '../llm-provider-service.js';
+import { findPhaseShadowMismatch, LLMProviderService } from '../llm-provider-service.js';
 import { resetModelHealthForTests } from '../model-health.js';
 
 const originalFetch = globalThis.fetch;
@@ -32,6 +44,14 @@ const VALID_DM_REPLY = JSON.stringify({
   combatants: [],
   combat_actions: [],
 });
+
+/** One valid targeted combat action, for wrong-phase tests under the FIX-round-2 semantics (a non-empty dropped section still flags). */
+const NON_EMPTY_COMBAT_ACTION = {
+  actor_id: 'hero',
+  action_type: 'attack',
+  target_ids: ['goblin'],
+  movement_feet: 0,
+};
 
 type Reply = { status?: number; content: string };
 
@@ -361,6 +381,159 @@ describe('#633 full-schema validation on the instructed branch', () => {
     expect(result.model).toBe('google/gemini-3.1-flash-lite');
     expect(result.text).toBe(VALID_DM_REPLY);
     expect(deltas.length).toBeGreaterThan(0);
+  });
+});
+
+describe('#782 item 8: instructed branch shadows phase-only mismatches', () => {
+  it('keeps a full-shape reply on a narrative turn and logs the phase shadow invalid', async () => {
+    useAnthropicThenGemini();
+    const bodies = stubOpenRouter([{ content: VALID_DM_REPLY }]);
+    const warn = spyOn(logger, 'warn').mockImplementation((() => {}) as typeof logger.warn);
+    try {
+      const result = await LLMProviderService.generate({
+        prompt: 'volatile user prompt',
+        systemPrompt: 'stable system block',
+        responseSchema: dmResponseSchemaForPhase('narrative'),
+        responseSchemaPhase: 'narrative',
+        maxTokens: 100,
+      });
+
+      // Kept, not retried or failed over: the reply is valid under the full
+      // schema, so its only defect is phase-narrowing (the dropped fight
+      // arrays it still pads, as the old full schema required).
+      expect(bodies).toHaveLength(1);
+      expect(result.model).toBe('anthropic/claude-haiku-5.5');
+      expect(result.text).toBe(VALID_DM_REPLY);
+      const shadow = warn.mock.calls
+        .map((call) => call[0] as { msg?: string; phase?: string })
+        .find((entry) => entry?.msg === 'LLM_SCHEMA_SHADOW_INVALID');
+      expect(shadow?.phase).toBe('narrative');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('still retries then fails over a reply malformed under the full schema too', async () => {
+    useAnthropicThenGemini();
+    const bodies = stubOpenRouter([
+      { content: BAD_DM_REPLY },
+      { content: BAD_DM_REPLY },
+      { content: VALID_DM_REPLY },
+    ]);
+
+    const result = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      responseSchema: dmResponseSchemaForPhase('narrative'),
+      responseSchemaPhase: 'narrative',
+      maxTokens: 100,
+    });
+
+    expect(bodies.map((b) => (b as unknown as Body).model)).toEqual([
+      'anthropic/claude-haiku-5.5',
+      'anthropic/claude-haiku-5.5',
+      'google/gemini-3.1-flash-lite',
+    ]);
+    expect(result.model).toBe('google/gemini-3.1-flash-lite');
+  });
+});
+
+describe('#782 HOLD item 1: findPhaseShadowMismatch (true shadow)', () => {
+  it('flags a non-empty dropped section on a narrative turn; ignores full/unknown phases and non-objects', () => {
+    // FIX round 2: empty dropped sections are padding, not a mismatch, so
+    // the flagged fixture must carry a non-empty dropped section.
+    const fullReply = {
+      ...JSON.parse(VALID_DM_REPLY),
+      combat_actions: [NON_EMPTY_COMBAT_ACTION],
+    } as Record<string, unknown>;
+    const mismatch = findPhaseShadowMismatch(fullReply, 'narrative');
+    expect(mismatch).not.toBeNull();
+    expect(mismatch?.keyword).toBe('additionalProperties');
+    expect(mismatch?.additionalProperty).toBe('combat_actions');
+    expect(findPhaseShadowMismatch(fullReply, 'full')).toBeNull();
+    expect(findPhaseShadowMismatch(fullReply, undefined)).toBeNull();
+    expect(findPhaseShadowMismatch(fullReply, 'bogus')).toBeNull();
+    expect(findPhaseShadowMismatch('not an object', 'narrative')).toBeNull();
+    // A narrative-clean reply (only narrative properties) has no mismatch.
+    const narrativeClean = {
+      text: 'The lantern flickers.',
+      options: [],
+      narration_segments: [],
+      roll_requests: [],
+      combat_transition: 'none',
+      combatants: [],
+      handout_actions: [],
+    };
+    expect(findPhaseShadowMismatch(narrativeClean, 'narrative')).toBeNull();
+  });
+});
+
+describe('#782 HOLD item 1: instructed branch compares against the phase on a full request', () => {
+  it('logs a phase-only mismatch for a full-valid reply on a narrative turn, and keeps it', async () => {
+    useAnthropicThenGemini();
+    // FIX round 2: the wrong-phase fixture carries a non-empty dropped
+    // section (empty dropped arrays are padding, not a mismatch).
+    const reply = JSON.stringify({
+      ...JSON.parse(VALID_DM_REPLY),
+      combat_actions: [NON_EMPTY_COMBAT_ACTION],
+    });
+    const bodies = stubOpenRouter([{ content: reply }]);
+    const warn = spyOn(logger, 'warn').mockImplementation((() => {}) as typeof logger.warn);
+    try {
+      const result = await LLMProviderService.generate({
+        prompt: 'volatile user prompt',
+        systemPrompt: 'stable system block',
+        responseSchema: dmResponseSchema,
+        responseSchemaPhase: 'narrative',
+        maxTokens: 100,
+      });
+
+      // The request schema is today's full schema (true shadow); the reply
+      // is valid under it, so its only defect is phase-narrowing (the
+      // dropped fight arrays it still carries). Kept, counted, logged —
+      // not retried, not failed over.
+      expect(bodies).toHaveLength(1);
+      expect(result.model).toBe('anthropic/claude-haiku-5.5');
+      expect(result.text).toBe(reply);
+      // The instructed system text carries main's schema bytes exactly.
+      expect(systemText(bodies[0] as unknown as Body)).toContain(
+        JSON.stringify(mainDmResponseSchema),
+      );
+      expect(result.usage?.schemaShadowInvalid).toBe(1);
+      const shadow = warn.mock.calls
+        .map((call) => call[0] as { msg?: string; phase?: string; additionalProperty?: string })
+        .find((entry) => entry?.msg === 'LLM_SCHEMA_SHADOW_INVALID');
+      expect(shadow?.phase).toBe('narrative');
+      expect(shadow?.additionalProperty).toBe('combat_actions');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('logs nothing when the phase is full (no comparison to run)', async () => {
+    useAnthropicThenGemini();
+    const bodies = stubOpenRouter([{ content: VALID_DM_REPLY }]);
+    const warn = spyOn(logger, 'warn').mockImplementation((() => {}) as typeof logger.warn);
+    try {
+      const result = await LLMProviderService.generate({
+        prompt: 'volatile user prompt',
+        systemPrompt: 'stable system block',
+        responseSchema: dmResponseSchema,
+        responseSchemaPhase: 'full',
+        maxTokens: 100,
+      });
+
+      expect(bodies).toHaveLength(1);
+      expect(result.text).toBe(VALID_DM_REPLY);
+      expect(result.usage?.schemaShadowInvalid).toBeUndefined();
+      expect(
+        warn.mock.calls
+          .map((call) => call[0] as { msg?: string })
+          .find((entry) => entry?.msg === 'LLM_SCHEMA_SHADOW_INVALID'),
+      ).toBeUndefined();
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 

@@ -25,6 +25,8 @@ export interface AttackRollDescriptionSpec {
   disadvantageSources?: string[];
   /** Spell attacks reuse this popup but must not claim a weapon AC line. */
   kind?: 'weapon' | 'spell-attack';
+  /** #1086 (e): the part of `targetAc` that is cover (+2 half, +5 three-quarters). */
+  coverBonus?: number;
 }
 
 /**
@@ -34,6 +36,14 @@ export interface AttackRollDescriptionSpec {
 function edgeLabel(kind: 'advantage' | 'disadvantage', sources: string[] | undefined): string {
   const reason = sources?.filter((source) => source.length > 0).join('; ');
   return reason ? ` (${kind}: ${reason})` : ` (${kind})`;
+}
+
+/** 'AC 14', or 'AC 12 +2 half cover' when the engine's AC includes cover (#1086 (e)). */
+export function targetAcLabel(targetAc: number, coverBonus?: number): string {
+  if (typeof coverBonus !== 'number' || coverBonus <= 0) {
+    return `AC ${targetAc}`;
+  }
+  return `AC ${targetAc - coverBonus} +${coverBonus} ${coverBonus >= 5 ? 'three-quarters' : 'half'} cover`;
 }
 
 /**
@@ -57,7 +67,7 @@ export function describeAttackRoll(
   }
   const modifier = attackModifierForRoll(spec);
   const sign = modifier >= 0 ? '+' : '';
-  const target = showTargetNumbers ? ` vs AC ${spec.targetAc}` : '';
+  const target = showTargetNumbers ? ` vs ${targetAcLabel(spec.targetAc, spec.coverBonus)}` : '';
   return (
     `${spec.weaponName} attack vs ${spec.targetLabel} — ` +
     `1d20${sign}${modifier}${spec.bless ? '+1d4' : ''}${target}${edge}`

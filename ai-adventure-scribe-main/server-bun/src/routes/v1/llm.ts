@@ -61,6 +61,7 @@ import {
   dmResponseSchema,
   parseLlmEnvelope,
   rewriteNarrationSegmentsFromEnvelope,
+  type DmResponsePhase,
 } from '../../services/dm/dm-response-schema.js';
 import { recordDmTurnActions } from '../../services/dm/dm-turn-action-registry.js';
 import { isRetryableUpstreamStatus } from '../../services/llm-errors.js';
@@ -669,7 +670,43 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       // #782 item 3: the DM reply schema is built server-side from the canonical
       // module. The client no longer sends `responseSchema`; a client-sent value
       // is ignored during the transition (the body type still accepts it).
-      const responseSchema = dmResponseSchema;
+      // #782 item 8, strategist HOLD (true shadow): the live request keeps
+      // today's schema, unchanged, on every path. The phase is picked from
+      // session state before the provider call (live encounter + active map
+      // -> tactical, live encounter without a map -> combat, otherwise
+      // narrative) ONLY to select the comparison schema: the provider
+      // compares each accepted reply against it and logs a phase-only
+      // mismatch, including on the tool path (pre-strip). Fail-safe: any
+      // picker failure falls back to full with no comparison (the picker
+      // logs it) — a picker failure never fails or silently narrows the
+      // turn. Enforcement flips come later, per phase, on a clean shadow
+      // day (#801), in their own PR. Loaded lazily like the other DB-backed
+      // services in this handler, so the route stays importable without
+      // DATABASE_URL.
+      const responseSchema: Record<string, unknown> = dmResponseSchema;
+      let responseSchemaPhase: DmResponsePhase = 'full';
+      try {
+        const { pickDmResponsePhase } = await import(
+          '../../services/dm/dm-response-phase-picker.js'
+        );
+        const picked = await pickDmResponsePhase(
+          sessionId ?? combatEntry?.sessionId ?? null,
+          user.userId,
+        );
+        responseSchemaPhase = picked.phase;
+        logger.info({
+          msg: 'LLM_GENERATE_PHASE',
+          sessionId: sessionId ?? combatEntry?.sessionId ?? null,
+          phase: picked.phase,
+          fallback: picked.fallback,
+        });
+      } catch (error) {
+        logger.warn({
+          msg: 'LLM_GENERATE_PHASE_PICKER_FAILED',
+          sessionId: sessionId ?? combatEntry?.sessionId ?? null,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
       let dmReply = requestedDmReply;
       const safeModel = allowlistedModel(model);
       const safeMaxTokens = clampMaxTokens(maxTokens, 1000, MAX_GENERATE_TOKENS);
@@ -1114,6 +1151,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             history,
             provider,
             responseSchema,
+            responseSchemaPhase,
             // #633 PR2: stream provider tokens when the client opted in; the
             // full text still accumulates, so retry and everything downstream
             // behave exactly as non-streaming.
@@ -1150,6 +1188,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           history,
           provider,
           responseSchema,
+          responseSchemaPhase,
           playerInput,
           // #2563: a scene end deferred at generation time writes the refusal fact the
           // end route writes on a 409, so the DM's next read knows the fight is not over.
@@ -1434,7 +1473,19 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // nothing was cast. A spend that fails is logged; it never costs the player their turn.
         const castsToSpend = allowedCasts as AllowedCasts | null;
         const castSessionId = sessionId ?? combatEntry?.sessionId;
-        if (castsToSpend && castSessionId && combatEntry && !envelope?.combat_entry_pending) {
+        // #1021 FIX round 1: a sheet cast the player cancelled while the DM was
+        // generating must not spend. The client aborts the fetch on cancel, but
+        // nothing stopped the server's handler: generation, gating and this spend
+        // all ran to completion against a dead connection, so the slot was
+        // decremented on a cast the player was told used no slot. The request
+        // signal is aborted by the time the spend runs, so skip it then.
+        if (
+          castsToSpend &&
+          castSessionId &&
+          combatEntry &&
+          !envelope?.combat_entry_pending &&
+          !request.signal.aborted
+        ) {
           try {
             const { spendStorySpellSlots } = await import('../../services/dm/story-spell-slots.js');
             await spendStorySpellSlots({
@@ -1901,6 +1952,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
                     ],
                     provider,
                     responseSchema,
+                    responseSchemaPhase,
                   });
                   if (retry.usage && retry.provider) {
                     const retryUsageId = await AIUsageService.recordProviderUsage({
@@ -1950,6 +2002,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             envelope,
             clientInCombat: dmReply.inCombat === true,
             narrationGated: dmReply.narrationGated,
+            holdProse: dmReply.holdProse === true,
           });
           dmReplyPersisted = persistence.persisted;
           // #841: record this reply's action batches under its message id, so
@@ -2052,6 +2105,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
                   return seated;
                 })(),
             responseText,
+            responseSchemaPhase,
           ),
           provider: result.provider,
           model: result.model,
@@ -2205,6 +2259,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             rollRequestId: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
             inCombat: t.Optional(t.Boolean()),
             narrationGated: t.Optional(t.Boolean()),
+            holdProse: t.Optional(t.Boolean()),
           }),
         ),
         model: t.Optional(t.String()),

@@ -6,7 +6,8 @@
  * The DM turn goes through the real `POST /v1/llm/generate` route and the real entry gate; the
  * pending entry it returns goes to the real `POST /v1/combat/sessions/:id/enter` route and the
  * real `seatCombatEntry`, whose `startCombat` dependency records the participants it is given.
- * Only the model, the auth and the campaign-index read are stubbed. The turn follows the full
+ * Only the model, the auth, the campaign-index read, and the phase picker's encounter/map
+ * reads are stubbed. The turn follows the full
  * envelope `dmEnvelope` builds in `llm-generate-combat-entry.test.ts`, with `combat_transition:
  * 'start'` and `combatants: []`.
  */
@@ -90,6 +91,28 @@ mock.module('../../../services/combat/combat-entry-campaign-index.js', () => ({
     difficultyRaw: null,
     index: campaignIndex,
   }),
+}));
+
+// #782 item 8: the generate route picks a phase schema from the live encounter
+// and tactical map. These scenarios have no live encounter (the gate defers
+// rather than joining), so the picker reads stub to "no encounter"; the real
+// reads would open the shared pg pool against DATABASE_URL=test.invalid and
+// poison later requests in the file (PR 1110 run 40160860100 timeouts).
+mock.module('../../../services/combat/combat-encounter-service.js', () => ({
+  CombatEncounterService: { getActiveEncounter: async () => undefined },
+}));
+// The mock replaces the whole module, so it must carry every name the
+// loaded graph imports; the reads these scenarios never make throw loudly
+// instead of silently faking a write.
+const unstubbedStoreRead = (name: string) => async () => {
+  throw new Error(`tactical-map-store.${name} is not stubbed for #2532 scenarios`);
+};
+mock.module('../../../services/combat/tactical-map-store.js', () => ({
+  loadActiveTacticalMap: async () => null,
+  loadLatestTacticalMapRow: unstubbedStoreRead('loadLatestTacticalMapRow'),
+  saveTacticalMapRow: unstubbedStoreRead('saveTacticalMapRow'),
+  saveTacticalMap: unstubbedStoreRead('saveTacticalMap'),
+  deactivateTacticalMap: unstubbedStoreRead('deactivateTacticalMap'),
 }));
 
 // Route contract tests stub persistence; roll serialization is exercised with real PostgreSQL.
