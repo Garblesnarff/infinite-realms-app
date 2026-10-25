@@ -4,6 +4,18 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
+/**
+ * The button names the die it rolls (#84: "Roll d20", not "Roll Dice").
+ * A damage prompt rolls its own die, so the label follows the formula.
+ * An unparseable formula falls back to a neutral "Roll", never a die lie.
+ */
+function rollButtonLabel(formula: string): string {
+  const match = /^(\d*)d(\d+)/.exec(formula);
+  if (!match) return 'Roll';
+  const count = match[1] === '' ? 1 : Number(match[1]);
+  return count === 1 ? `Roll d${match[2]}` : `Roll ${count}d${match[2]}`;
+}
+
 interface DiceRollActionButtonsProps {
   formula: string;
   purpose: string;
@@ -28,7 +40,7 @@ export const DiceRollActionButtons: React.FC<DiceRollActionButtonsProps> = React
               aria-label={`Roll ${formula} for ${purpose}`}
             >
               <Dice6 className="w-4 h-4 mr-2" aria-hidden="true" />
-              {isRolling ? 'Rolling...' : 'Roll Dice'}
+              {isRolling ? 'Rolling...' : rollButtonLabel(formula)}
             </Button>
           </TooltipTrigger>
           <TooltipContent>

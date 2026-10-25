@@ -1,4 +1,4 @@
-import { useMemo, useRef, useCallback, useState } from 'react';
+import { useMemo, useRef, useCallback, useState, useEffect } from 'react';
 
 import type { MessageSendContext, DiceRollContext } from '../MessageList';
 import type { RolledResultDetails } from '@/hooks/game/use-dice-roll-request';
@@ -29,6 +29,16 @@ import { handleAsyncError } from '@/utils/error-handler';
 import { isEngineChannelRollType } from '@/utils/roll-request/engine-channel';
 
 export const ROLL_SUBMISSION_TIMEOUT_MS = 90_000;
+
+/** The tray's result flash (#84): the settled die, its modifier, its total. */
+export interface CompletedRollFlash {
+  die: number;
+  modifier: number;
+  total: number;
+}
+
+/** How long the result flash stays in the tray after the roll settles (#84). */
+export const ROLL_RESULT_FLASH_MS = 1500;
 
 async function boundedRollSave(save: Promise<void>): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -88,6 +98,8 @@ export function useMessageDiceRolls({
   lastRollRef: MutableRefObject<LastRollMeta | null>;
   pendingRollId: string | null;
   rollError: string | null;
+  /** The just-settled roll's flash, while it stays in the tray (≤ 1.5 s). */
+  completedRoll: CompletedRollFlash | null;
 } {
   const { state, getCurrentDiceRoll, completeDiceRoll, cancelDiceRoll, clearBatch } = useGame();
 
@@ -155,6 +167,53 @@ export function useMessageDiceRolls({
 
     return { current: currentPosition, total: totalRolls };
   }, [currentRoll, state.diceRollQueue.pendingRolls]);
+
+  /**
+   * The result flash (#84): when the current roll settles and nothing replaces
+   * it, the tray shows the settled die for 1.5 s instead of vanishing at once.
+   * A cancelled roll has no result and flashes nothing; a batch advancing to
+   * its next roll shows that roll, not the flash.
+   */
+  const [completedRoll, setCompletedRoll] = useState<CompletedRollFlash | null>(null);
+  const prevCurrentRollIdRef = useRef<string | null>(null);
+  const completedRollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const prevId = prevCurrentRollIdRef.current;
+    prevCurrentRollIdRef.current = currentRoll?.id ?? null;
+    if (completedRollTimerRef.current) {
+      clearTimeout(completedRollTimerRef.current);
+      completedRollTimerRef.current = null;
+    }
+    if (currentRoll) {
+      setCompletedRoll(null);
+      return;
+    }
+    if (!prevId) {
+      setCompletedRoll(null);
+      return;
+    }
+    const done = state.diceRollQueue.pendingRolls.find(
+      (roll) => roll.id === prevId && roll.status === 'completed' && roll.result,
+    );
+    if (!done?.result) {
+      setCompletedRoll(null);
+      return;
+    }
+    const modifier = done.rollConfig.modifier;
+    const total = done.result.total;
+    setCompletedRoll({
+      die: done.result.naturalRoll ?? total - modifier,
+      modifier,
+      total,
+    });
+    completedRollTimerRef.current = setTimeout(() => setCompletedRoll(null), ROLL_RESULT_FLASH_MS);
+  }, [currentRoll, state.diceRollQueue.pendingRolls]);
+  useEffect(
+    () => () => {
+      if (completedRollTimerRef.current) clearTimeout(completedRollTimerRef.current);
+    },
+    [],
+  );
 
   /**
    * Memoized roll request object for DiceRollRequest stable props
@@ -471,5 +530,6 @@ export function useMessageDiceRolls({
     lastRollRef,
     pendingRollId,
     rollError,
+    completedRoll,
   };
 }

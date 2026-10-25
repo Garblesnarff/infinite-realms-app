@@ -16,6 +16,7 @@ import type { ChatMessage } from '@/types/game';
 import { CombatEntryConfirmation } from '@/components/combat/CombatEntryConfirmation';
 import { PendingIntentConfirmation } from '@/components/combat/PendingIntentConfirmation';
 import { DiceRollRequest } from '@/components/game/DiceRollRequest';
+import { DiceRollResultFlash } from '@/components/game/DiceRollResultFlash';
 import { Button } from '@/components/ui/button';
 import { useCombat } from '@/contexts/CombatContext';
 import { isEngineTaggedRoll } from '@/contexts/game/dice-queue-visibility';
@@ -104,6 +105,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
       lastRollRef: _lastRollRef,
       pendingRollId,
       rollError,
+      completedRoll,
     } = useMessageDiceRolls({ onSendMessage, onSendFullMessage });
 
     // Combat asks the player for their own attack die through this popup. Registered here
@@ -308,6 +310,17 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
               onCancel={handleCancelRoll}
               onRetry={handleRetryRoll}
               isRetrying={isRetrying || retryInFlight}
+            />
+          </RollTray>
+        )}
+
+        {/* The settled die flashes in the tray for 1.5 s after the prompt closes (#84). */}
+        {!currentRoll && completedRoll && (
+          <RollTray>
+            <DiceRollResultFlash
+              die={completedRoll.die}
+              modifier={completedRoll.modifier}
+              total={completedRoll.total}
             />
           </RollTray>
         )}

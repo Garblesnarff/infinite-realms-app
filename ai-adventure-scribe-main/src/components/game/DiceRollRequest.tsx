@@ -27,6 +27,12 @@ import { cn } from '@/lib/utils';
 
 export type { RollRequest } from '@/types/roll-request';
 
+/** Ticket #84 eyebrow copy by roll type; every other roll is the player's own. */
+const ROLL_TRAY_EYEBROW: Record<string, string> = {
+  initiative: 'Initiative',
+  death_save: 'Death saving throw',
+};
+
 interface DiceRollRequestProps {
   request: RollRequest;
   /**
@@ -135,18 +141,15 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
           <div className="flex items-center gap-2 text-infinite-gold">
             {config.icon}
             <span className="ir-text-min font-semibold uppercase tracking-[.12em]">
-              {config.label} Requested
+              {ROLL_TRAY_EYEBROW[request.type] ?? 'Your roll'}
             </span>
-            <Badge variant="warning" className="ml-auto">
-              Roll required
-            </Badge>
           </div>
 
           {/* Roll details: purpose, formula, breakdown, advantage */}
           <div data-testid="roll-details" className="space-y-2">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <p className="min-w-0 flex-1 text-sm font-semibold leading-snug text-foreground">
-                {request.purpose}
+                {request.type === 'initiative' ? 'Roll initiative' : request.purpose}
               </p>
               <span className="font-mono text-lg font-bold tabular-nums text-foreground">
                 {rollCalculation.formula}
