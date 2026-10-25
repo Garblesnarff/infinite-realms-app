@@ -21,6 +21,7 @@ import type {
   SpellsVM,
 } from './types';
 import type { Character } from '@/types/character';
+import type { CombatEncounter } from '@/types/combat-encounter';
 import type { ChatMessage } from '@/types/game';
 
 import { useCampaign } from '@/contexts/CampaignContext';
@@ -331,8 +332,7 @@ export function buildCharacterSheet(
       // #1059: a weapon or a piece of armor can be readied from the
       // in-session sheet; the rest of the pack stays inert text.
       equippable:
-        isWeaponInventoryRow(it) ||
-        ARMOR_HINTS.some((a) => it.itemId?.toLowerCase().includes(a)),
+        isWeaponInventoryRow(it) || ARMOR_HINTS.some((a) => it.itemId?.toLowerCase().includes(a)),
     }));
 
   // The engine mirrors combat vitals onto character_stats (write-through), so the sheet's
@@ -404,6 +404,25 @@ export function buildCharacterSheet(
     spells,
     spellcasting,
   };
+}
+
+export function buildEncounterCombatants(
+  encounter: CombatEncounter | null,
+  turn: ReturnType<typeof summarizeCombatTurn>,
+): CombatantVM[] {
+  return (encounter?.participants ?? [])
+    .filter((p) => p.isActive !== false)
+    .slice()
+    .sort((a, b) => (b.initiative ?? 0) - (a.initiative ?? 0))
+    .map((p) => ({
+      id: p.id,
+      initiative: p.initiative ?? 0,
+      // #876: the tracker shows the same facing name as the feed and turn bar.
+      name: p.displayName ?? p.name,
+      isEnemy: isHostileParticipantType(p.participantType),
+      isActive: encounter?.currentTurnParticipantId === p.id,
+      state: turn?.actors.find((actor) => actor.id === p.id)?.state,
+    }));
 }
 
 /**
@@ -491,18 +510,7 @@ export function useOverhaulViewModel(opts?: {
     const sheet = buildCharacterSheet(character, liveVitalState);
 
     const turn = summarizeCombatTurn(encounter);
-    const combatants: CombatantVM[] = (encounter?.participants ?? [])
-      .filter((p) => p.isActive !== false)
-      .slice()
-      .sort((a, b) => (b.initiative ?? 0) - (a.initiative ?? 0))
-      .map((p) => ({
-        id: p.id,
-        initiative: p.initiative ?? 0,
-        name: p.name,
-        isEnemy: isHostileParticipantType(p.participantType),
-        isActive: encounter?.currentTurnParticipantId === p.id,
-        state: turn?.actors.find((actor) => actor.id === p.id)?.state,
-      }));
+    const combatants: CombatantVM[] = buildEncounterCombatants(encounter, turn);
 
     const protagonist = character
       ? {
