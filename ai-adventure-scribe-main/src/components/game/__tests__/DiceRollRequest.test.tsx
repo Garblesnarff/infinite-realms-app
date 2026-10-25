@@ -90,9 +90,10 @@ describe('DiceRollRequest', () => {
   it('renders correctly with default request', () => {
     render(<DiceRollRequest request={defaultRequest} onResult={mockOnManualResult} />);
 
-    expect(screen.getByText(/Ability Check Requested/i)).toBeInTheDocument();
+    expect(screen.getByText('Your roll')).toBeInTheDocument();
     expect(screen.getByText(/Test purpose/i)).toBeInTheDocument();
     expect(screen.getByText('1d20+2')).toBeInTheDocument();
+    expect(screen.getByText('Roll d20')).toBeInTheDocument();
   });
 
   it('shows the engine’s disadvantage reason in the tray (#603)', () => {
@@ -286,7 +287,7 @@ describe('DiceRollRequest', () => {
     );
 
     expect(screen.getByTestId('dice-roll-request')).toHaveFocus();
-    expect(screen.getByText('Roll required')).toBeInTheDocument();
+    expect(screen.queryByText('Roll required')).not.toBeInTheDocument();
     expect(logger.info).toHaveBeenCalledWith('ROLL_PROMPT_SHOWN', {
       requestId: 'roll-42',
       check: 'Test purpose',
@@ -386,22 +387,23 @@ describe('DiceRollRequest', () => {
 
   it('renders different request types correctly', () => {
     const typeMap = {
-      attack: /Attack Roll Requested/i,
-      save: /Saving Throw Requested/i,
-      initiative: /Initiative Requested/i,
-      damage_taken: /Incoming Damage Requested/i,
-      skill_check: /Skill Check Requested/i,
-      damage: /Damage Roll Requested/i,
+      attack: 'Your roll',
+      save: 'Your roll',
+      initiative: 'Initiative',
+      damage_taken: 'Your roll',
+      skill_check: 'Your roll',
+      damage: 'Your roll',
+      death_save: 'Death saving throw',
     };
 
-    Object.entries(typeMap).forEach(([type, regex]) => {
+    Object.entries(typeMap).forEach(([type, eyebrow]) => {
       const { unmount } = render(
         <DiceRollRequest
           request={{ ...defaultRequest, type: type as any }}
           onResult={mockOnManualResult}
         />,
       );
-      expect(screen.getByText(regex)).toBeInTheDocument();
+      expect(screen.getByText(eyebrow)).toBeInTheDocument();
       unmount();
     });
   });
@@ -513,7 +515,7 @@ describe('DiceRollRequest', () => {
     );
   });
 
-  it('1d20+int — resolved numeric formula enables Roll Dice button', () => {
+  it('1d20+int — resolved numeric formula enables Roll d20 button', () => {
     (calculateRollWithBreakdown as any).mockReturnValue({
       formula: '1d20-1',
       breakdown: ['1d20', 'INT -1'],
@@ -529,7 +531,7 @@ describe('DiceRollRequest', () => {
     expect(screen.getByText('1d20-1')).toBeInTheDocument();
   });
 
-  it('1d20+wis — resolved numeric formula enables Roll Dice button', () => {
+  it('1d20+wis — resolved numeric formula enables Roll d20 button', () => {
     (calculateRollWithBreakdown as any).mockReturnValue({
       formula: '1d20+2',
       breakdown: ['1d20', 'WIS +2'],
@@ -543,5 +545,54 @@ describe('DiceRollRequest', () => {
     const rollButton = screen.getByRole('button', { name: /roll 1d20\+2 for Perception check/i });
     expect(rollButton).not.toBeDisabled();
     expect(screen.getByText('1d20+2')).toBeInTheDocument();
+  });
+
+  it('uses the ticket eyebrow and title copy per roll type (#84)', () => {
+    const initiative = { type: 'initiative' as const, formula: '1d20+2', purpose: 'Initiative' };
+    const { unmount } = render(
+      <DiceRollRequest request={initiative} onResult={mockOnManualResult} />,
+    );
+    expect(screen.getByText('Initiative')).toBeInTheDocument();
+    expect(screen.getByText('Roll initiative')).toBeInTheDocument();
+    unmount();
+
+    // RollRequest's union lacks 'death_save' (production passes it through a
+    // cast in use-message-dice-rolls); the component still renders it via
+    // ROLL_TYPE_CONFIG, which is what this test pins.
+    const deathSave = {
+      type: 'death_save' as any,
+      formula: '1d20',
+      purpose: 'Death save',
+    };
+    const { unmount: unmount2 } = render(
+      <DiceRollRequest request={deathSave} onResult={mockOnManualResult} />,
+    );
+    expect(screen.getByText('Death saving throw')).toBeInTheDocument();
+    expect(screen.getByText('Death save')).toBeInTheDocument();
+    unmount2();
+
+    const attack = {
+      type: 'attack' as const,
+      formula: '1d20+5',
+      purpose: 'Longsword attack vs Sentient Glaze',
+    };
+    render(<DiceRollRequest request={attack} onResult={mockOnManualResult} />);
+    expect(screen.getByText('Your roll')).toBeInTheDocument();
+    expect(screen.getByText('Longsword attack vs Sentient Glaze')).toBeInTheDocument();
+  });
+
+  it('names the damage die on a damage prompt instead of claiming d20 (#84)', () => {
+    (calculateRollWithBreakdown as any).mockReturnValue({
+      formula: '2d6+3',
+      breakdown: ['2d6', '+3'],
+      totalModifier: 3,
+      isProficient: false,
+    });
+
+    const request = { type: 'damage' as const, formula: '2d6+3', purpose: 'Weapon damage' };
+    render(<DiceRollRequest request={request} onResult={mockOnManualResult} />);
+
+    expect(screen.getByText('Roll 2d6')).toBeInTheDocument();
+    expect(screen.queryByText('Roll d20')).not.toBeInTheDocument();
   });
 });
