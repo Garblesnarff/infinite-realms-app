@@ -237,6 +237,9 @@ export async function enforceCombatTransitionContract(params: {
   history?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
   provider: 'openrouter' | 'gemini';
   responseSchema?: Record<string, unknown>;
+  /** #782 item 8: the phase the route picked for this turn's schema, carried
+   * only so the corrective generate's shadow logs attribute to the phase. */
+  responseSchemaPhase?: string;
   /** What the player typed this turn; the prose attack floor only reads an attack the player declared. */
   playerInput?: string;
   /**
@@ -368,6 +371,7 @@ export async function enforceCombatTransitionContract(params: {
     ],
     provider: params.provider,
     responseSchema,
+    responseSchemaPhase: params.responseSchemaPhase,
   });
   if (retry.error) {
     logger.error({

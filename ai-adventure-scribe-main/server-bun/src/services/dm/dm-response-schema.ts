@@ -311,10 +311,106 @@ const mapActionSchema = {
       description: "Required when action is 'forced_move'.",
     },
     origin: pointSchema,
-    distance: { type: 'number', minimum: 0 },
+    // #782 item 5 tail (keyword move): the bound lives in the description, not
+    // a numeric keyword — the server rejects a negative distance in isMapAction.
+    distance: { type: 'number', description: 'Distance in feet; must be 0 or greater.' },
     destination: pointSchema,
   },
   required: ['action'],
+} as const;
+
+/**
+ * #782 item 8, tactical kind-split: one variant per map action kind, each
+ * carrying only its kind's fields, required where the engine needs them to
+ * apply the action (tactical/dispatch.ts) — not merely where the lenient
+ * isMapAction parser checks them. The `changes` patch bag stays as-is inside
+ * update_cell (and place, which shares the same object, so the budget
+ * walker's identity dedup counts the bag once); a patch is inherently sparse.
+ * Deliberate narrowings vs the single schema, all for fields dispatch
+ * ignores on that kind (shadow week adjudicates): move with a Cell bag in
+ * `changes`; remove with x/y/changes; update_cell with entityId; place with
+ * entityId/x/y. forced_move keeps origin/distance/destination optional
+ * because the mode decides which are needed (teleport needs destination,
+ * shove/pull need origin + distance — engine.ts forceMoveEntity), so no
+ * single required-set is honest there.
+ */
+const mapActionMoveVariantSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    action: { type: 'string', enum: ['move'] },
+    entityId: { type: 'string' },
+    x: { type: 'number' },
+    y: { type: 'number' },
+    // Real replies send changes:null on moves (cli/fixtures/combat-movement.json).
+    changes: { type: 'null' },
+  },
+  required: ['action', 'entityId', 'x', 'y'],
+} as const;
+
+const mapActionPlaceVariantSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    action: { type: 'string', enum: ['place'] },
+    changes: changesSchema,
+  },
+  required: ['action', 'changes'],
+} as const;
+
+const mapActionRemoveVariantSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    action: { type: 'string', enum: ['remove'] },
+    entityId: { type: 'string' },
+  },
+  required: ['action', 'entityId'],
+} as const;
+
+const mapActionUpdateCellVariantSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    action: { type: 'string', enum: ['update_cell'] },
+    x: { type: 'number' },
+    y: { type: 'number' },
+    changes: changesSchema,
+  },
+  required: ['action', 'x', 'y', 'changes'],
+} as const;
+
+const mapActionForcedMoveVariantSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    action: { type: 'string', enum: ['forced_move'] },
+    target: { type: 'string', description: "Required when action is 'forced_move'." },
+    mode: {
+      type: 'string',
+      enum: ['shove', 'pull', 'teleport'],
+      description: "Required when action is 'forced_move'.",
+    },
+    origin: pointSchema,
+    // #782 item 5 tail (keyword move): bound in the description; isMapAction
+    // rejects a negative distance.
+    distance: { type: 'number', description: 'Distance in feet; must be 0 or greater.' },
+    destination: pointSchema,
+  },
+  required: ['action', 'target', 'mode'],
+} as const;
+
+const tacticalMapActionsSchema = {
+  type: 'array',
+  items: {
+    anyOf: [
+      mapActionMoveVariantSchema,
+      mapActionPlaceVariantSchema,
+      mapActionRemoveVariantSchema,
+      mapActionUpdateCellVariantSchema,
+      mapActionForcedMoveVariantSchema,
+    ],
+  },
 } as const;
 
 const targetedCombatActionSchema = {
@@ -467,21 +563,103 @@ const baseProperties = {
   },
 } as const;
 
+/**
+ * #782 item 8: per-phase DM reply schemas. `full` is today's single live
+ * schema (every base property + every extension). The three phases are
+ * strict subsets, chosen by the route from session state it already trusts:
+ * narrative keeps the entry fields (a fight can only start on a narrative
+ * turn) and the story extensions; combat keeps the fight fields and drops
+ * the map surface and the story extensions; tactical is the combat set plus
+ * the kind-split map actions. combat_exits is the one extension narrative
+ * drops: an end is declared on a turn whose encounter is still active, and
+ * such a turn picks combat or tactical, never narrative.
+ */
+export const DM_RESPONSE_PHASES = ['narrative', 'combat', 'tactical', 'full'] as const;
+export type DmResponsePhase = (typeof DM_RESPONSE_PHASES)[number];
+
+const NARRATIVE_BASE_KEYS = [
+  'text',
+  'options',
+  'narration_segments',
+  'roll_requests',
+  'combat_transition',
+  'scene_spec',
+  'combatants',
+  'handout_actions',
+] as const;
+
+const COMBAT_BASE_KEYS = [
+  'text',
+  'options',
+  'narration_segments',
+  'roll_requests',
+  'combat_transition',
+  'combatants',
+  'handout_actions',
+  'combat_actions',
+] as const;
+
+const TACTICAL_BASE_KEYS = [...COMBAT_BASE_KEYS, 'map_actions'] as const;
+
+function basePropertiesForPhase(phase: DmResponsePhase): Record<string, unknown> {
+  if (phase === 'full') return baseProperties as unknown as Record<string, unknown>;
+  const keys =
+    phase === 'narrative'
+      ? NARRATIVE_BASE_KEYS
+      : phase === 'combat'
+        ? COMBAT_BASE_KEYS
+        : TACTICAL_BASE_KEYS;
+  const picked: Record<string, unknown> = {};
+  for (const key of keys) {
+    picked[key] =
+      key === 'map_actions' && phase === 'tactical'
+        ? tacticalMapActionsSchema
+        : (baseProperties as unknown as Record<string, unknown>)[key];
+  }
+  return picked;
+}
+
+/**
+ * Extension phase declarations for the seam: an extension declares its
+ * phases at registration and defaults to ALL phases, so in-flight extension
+ * work is never silently narrowed by a phase it did not consider.
+ */
+export type DmResponseExtensionPhases = Partial<Record<string, DmResponsePhase[]>>;
+
+function extensionAppliesToPhase(
+  declared: DmResponsePhase[] | undefined,
+  phase: DmResponsePhase,
+): boolean {
+  if (phase === 'full') return true;
+  if (!declared) return true;
+  return declared.includes(phase);
+}
+
 /** Extension seam for #1492/#1493: add strict top-level fields without reshaping the base contract. */
 export function createDmResponseSchema(
   extensionProperties: Record<string, unknown> = {},
   extensionRequired: string[] = [],
+  options: { phase?: DmResponsePhase; extensionPhases?: DmResponseExtensionPhases } = {},
 ): Record<string, unknown> {
+  const phase = options.phase ?? 'full';
+  const base = basePropertiesForPhase(phase);
+  const properties: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(extensionProperties)) {
+    if (!extensionAppliesToPhase(options.extensionPhases?.[key], phase)) continue;
+    properties[key] = value;
+  }
+  const required = [
+    // #782 item 7: scene_spec is a plain optional — the model omits it on
+    // turns that do not start combat; every other base property stays required.
+    ...Object.keys(base).filter((key) => key !== 'scene_spec'),
+    // A dropped extension must not leave its name in `required`.
+    ...extensionRequired.filter((key) => key in properties),
+  ];
   return {
     type: 'object',
     additionalProperties: false,
-    properties: { ...baseProperties, ...extensionProperties },
-    // #782 item 7: scene_spec is a plain optional — the model omits it on
-    // turns that do not start combat; every other base property stays required.
-    required: [
-      ...Object.keys(baseProperties).filter((key) => key !== 'scene_spec'),
-      ...extensionRequired,
-    ],
+    properties,
+    required,
   };
 }
 
@@ -521,7 +699,9 @@ const storyItemsProperty = {
     additionalProperties: false,
     properties: {
       name: { type: 'string' },
-      quantity: { type: 'integer', minimum: 1 },
+      // #782 item 5 tail (keyword move): bound in prose, not a keyword —
+      // the story writer validates an integer quantity of 1..99.
+      quantity: { type: 'integer', description: 'Whole number, 1 or greater.' },
       change: { type: 'string', enum: ['gain', 'lose'] },
     },
     required: ['name', 'quantity', 'change'],
@@ -546,7 +726,9 @@ const storyConditionsProperty = {
     properties: {
       name: { type: 'string' },
       change: { type: 'string', enum: ['apply', 'remove'] },
-      duration_minutes: { type: 'integer', minimum: 1 },
+      // #782 item 5 tail (keyword move): bound in prose, not a keyword —
+      // the story writer validates an integer duration of 1..1440 minutes.
+      duration_minutes: { type: 'integer', description: 'Minutes, 1 or greater.' },
     },
     required: ['name', 'change'],
   },
@@ -568,8 +750,13 @@ const storyDamageProperty = {
   type: 'object',
   additionalProperties: false,
   properties: {
-    amount: { type: 'integer', minimum: 1, maximum: 999 },
-    source: { type: 'string', minLength: 1, maxLength: 120 },
+    // #782 item 5 tail (keyword move): bounds in prose, not keywords — the
+    // story writer caps the amount (1..999, then tighter by current HP) and
+    // validDamage enforces the source at 1..120 characters (story-damage.ts),
+    // so the keyword move loses no server enforcement on this bound
+    // (self-review round 1, N1: the earlier "no cap" claim was wrong).
+    amount: { type: 'integer', description: 'Whole number of hit points, 1 to 999.' },
+    source: { type: 'string', description: 'Short source, 1 to 120 characters.' },
   },
   required: ['amount', 'source'],
   // #610: the model narrated injury ("the rope burns", "dragged to the edge") with no
@@ -666,7 +853,8 @@ const finalBeatReachedProperty = {
     'a roll, send it again on the result turn. Otherwise omit it.',
 };
 
-export const dmResponseSchema = createDmResponseSchema({
+/** The live extension set, shared by the full schema and every phase schema. */
+const liveExtensionProperties = {
   combat_exits: combatExitsProperty,
   xp_award: xpAwardProperty,
   items: storyItemsProperty,
@@ -676,7 +864,83 @@ export const dmResponseSchema = createDmResponseSchema({
   campaign_ending: campaignEndingProperty,
   tracker_changes: trackerChangesProperty,
   final_beat_reached: finalBeatReachedProperty,
-});
+};
+
+/**
+ * Phase declarations for the live extensions. The story extensions are
+ * narrative-only because the route's own behaviour makes them so: the
+ * story appliers in llm.ts refuse to run when dmReply.inCombat (XP, items,
+ * conditions, rest, damage, campaign ending, tracker changes, final beat
+ * are narrative-only effects in the code today), so carrying them on a
+ * combat turn would invite the model to emit fields the engine ignores.
+ * combat_exits restricts itself the other way (combat + tactical; an end
+ * is declared on a turn whose encounter is still active, which never picks
+ * narrative). A future extension with no declaration defaults to all
+ * phases, so in-flight extension work is never silently narrowed.
+ */
+const liveExtensionPhases: DmResponseExtensionPhases = {
+  combat_exits: ['combat', 'tactical'],
+  xp_award: ['narrative'],
+  items: ['narrative'],
+  conditions: ['narrative'],
+  rest: ['narrative'],
+  damage: ['narrative'],
+  campaign_ending: ['narrative'],
+  tracker_changes: ['narrative'],
+  final_beat_reached: ['narrative'],
+};
+
+export const dmResponseSchema = createDmResponseSchema(liveExtensionProperties);
+
+const phaseSchemaCache = new Map<DmResponsePhase, Record<string, unknown>>();
+
+/**
+ * #782 item 8: the per-phase schema for a phase, built from the live
+ * extension set through the same builder as the full schema. Cached per
+ * phase (one object per process, like dmResponseSchema) so the provider's
+ * validator cache compiles each variant once.
+ */
+export function dmResponseSchemaForPhase(phase: DmResponsePhase): Record<string, unknown> {
+  if (phase === 'full') return dmResponseSchema;
+  let schema = phaseSchemaCache.get(phase);
+  if (!schema) {
+    schema = createDmResponseSchema(liveExtensionProperties, [], {
+      phase,
+      extensionPhases: liveExtensionPhases,
+    });
+    phaseSchemaCache.set(phase, schema);
+  }
+  return schema;
+}
+
+/**
+ * #782 item 8 adapter: the sections each phase schema omits. The internal
+ * DMResponse envelope — and every consumer, client included — still sees
+ * exactly today's shape: omitted array sections are filled with [] before
+ * the strict parser runs. Optional story fields stay absent (the story
+ * appliers skip absent fields exactly as they skip null ones).
+ */
+const PHASE_OMITTED_SECTIONS: Record<DmResponsePhase, string[]> = {
+  // Narrative drops BOTH array sections (combat_actions and map_actions):
+  // the strict parser hard-requires both, so filling only one would still
+  // miss the rewrite success path on every schema-conformant narrative turn
+  // (self-review round 1, R1).
+  narrative: ['combat_actions', 'map_actions'],
+  combat: ['map_actions'],
+  tactical: [],
+  full: [],
+};
+
+export function fillPhaseOmissions(
+  envelope: Record<string, unknown>,
+  phase?: DmResponsePhase,
+): Record<string, unknown> {
+  if (!phase || phase === 'full') return envelope;
+  for (const section of PHASE_OMITTED_SECTIONS[phase] ?? []) {
+    if (envelope[section] === undefined) envelope[section] = [];
+  }
+  return envelope;
+}
 
 const isPoint = (value: unknown): value is Point =>
   !!value &&
@@ -974,11 +1238,16 @@ export function parseLlmEnvelope(text: string): Record<string, unknown> | null {
 export function rewriteNarrationSegmentsFromEnvelope(
   envelope: Record<string, unknown> | null,
   originalText: string,
+  phase?: DmResponsePhase,
 ): string {
   if (!envelope || typeof envelope.text !== 'string') return originalText;
   // #633: a malformed segment (null entry, non-string character) throws inside
   // segment derivation. The reply is already saved, so keep the original text.
   try {
+    // #782 item 8: fill the sections this turn's phase schema omitted before
+    // the strict parser runs, or every narrative turn (no combat_actions) and
+    // every combat turn (no map_actions) would miss the success path below.
+    if (phase) fillPhaseOmissions(envelope, phase);
     const parsed = parseDmResponse(envelope);
     if (parsed.success) return JSON.stringify(parsed.data);
     // #864 fail-closed: parseDmResponse dedupes the options field and strips

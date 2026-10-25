@@ -3,10 +3,16 @@
  * For those candidates the schema is sent as system-prompt instructions instead.
  * No live provider calls: fetch is stubbed.
  */
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it, spyOn } from 'bun:test';
 
+import { logger } from '../../lib/logger.js';
 import { resetCircuitBreakersForTests } from '../../utils/circuit-breaker.js';
-import { dmResponseSchema, parseDmResponse, parseLlmEnvelope } from '../dm/dm-response-schema.js';
+import {
+  dmResponseSchema,
+  dmResponseSchemaForPhase,
+  parseDmResponse,
+  parseLlmEnvelope,
+} from '../dm/dm-response-schema.js';
 import { modelSupportsStrictSchema } from '../llm-model-config.js';
 import { LLMProviderService } from '../llm-provider-service.js';
 import { resetModelHealthForTests } from '../model-health.js';
@@ -361,6 +367,60 @@ describe('#633 full-schema validation on the instructed branch', () => {
     expect(result.model).toBe('google/gemini-3.1-flash-lite');
     expect(result.text).toBe(VALID_DM_REPLY);
     expect(deltas.length).toBeGreaterThan(0);
+  });
+});
+
+describe('#782 item 8: instructed branch shadows phase-only mismatches', () => {
+  it('keeps a full-shape reply on a narrative turn and logs the phase shadow invalid', async () => {
+    useAnthropicThenGemini();
+    const bodies = stubOpenRouter([{ content: VALID_DM_REPLY }]);
+    const warn = spyOn(logger, 'warn').mockImplementation((() => {}) as typeof logger.warn);
+    try {
+      const result = await LLMProviderService.generate({
+        prompt: 'volatile user prompt',
+        systemPrompt: 'stable system block',
+        responseSchema: dmResponseSchemaForPhase('narrative'),
+        responseSchemaPhase: 'narrative',
+        maxTokens: 100,
+      });
+
+      // Kept, not retried or failed over: the reply is valid under the full
+      // schema, so its only defect is phase-narrowing (the dropped fight
+      // arrays it still pads, as the old full schema required).
+      expect(bodies).toHaveLength(1);
+      expect(result.model).toBe('anthropic/claude-haiku-5.5');
+      expect(result.text).toBe(VALID_DM_REPLY);
+      const shadow = warn.mock.calls
+        .map((call) => call[0] as { msg?: string; phase?: string })
+        .find((entry) => entry?.msg === 'LLM_SCHEMA_SHADOW_INVALID');
+      expect(shadow?.phase).toBe('narrative');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('still retries then fails over a reply malformed under the full schema too', async () => {
+    useAnthropicThenGemini();
+    const bodies = stubOpenRouter([
+      { content: BAD_DM_REPLY },
+      { content: BAD_DM_REPLY },
+      { content: VALID_DM_REPLY },
+    ]);
+
+    const result = await LLMProviderService.generate({
+      prompt: 'volatile user prompt',
+      systemPrompt: 'stable system block',
+      responseSchema: dmResponseSchemaForPhase('narrative'),
+      responseSchemaPhase: 'narrative',
+      maxTokens: 100,
+    });
+
+    expect(bodies.map((b) => (b as unknown as Body).model)).toEqual([
+      'anthropic/claude-haiku-5.5',
+      'anthropic/claude-haiku-5.5',
+      'google/gemini-3.1-flash-lite',
+    ]);
+    expect(result.model).toBe('google/gemini-3.1-flash-lite');
   });
 });
 

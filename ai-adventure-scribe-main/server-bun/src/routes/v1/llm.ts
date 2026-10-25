@@ -61,6 +61,7 @@ import {
   dmResponseSchema,
   parseLlmEnvelope,
   rewriteNarrationSegmentsFromEnvelope,
+  type DmResponsePhase,
 } from '../../services/dm/dm-response-schema.js';
 import { recordDmTurnActions } from '../../services/dm/dm-turn-action-registry.js';
 import { isRetryableUpstreamStatus } from '../../services/llm-errors.js';
@@ -669,7 +670,40 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       // #782 item 3: the DM reply schema is built server-side from the canonical
       // module. The client no longer sends `responseSchema`; a client-sent value
       // is ignored during the transition (the body type still accepts it).
-      const responseSchema = dmResponseSchema;
+      // #782 item 8: the phase schema is picked from session state before the
+      // provider call (live encounter + active map -> tactical, live encounter
+      // without a map -> combat, otherwise narrative). Fail-safe: any picker
+      // failure falls back to the full live schema (the picker logs it) — a
+      // picker failure never fails or silently narrows the turn. Shadow-only:
+      // the phase schema rides the request, mismatches log with the phase,
+      // replies are kept; enforcement flips come later, per phase, on a clean
+      // shadow day (#801). Loaded lazily like the other DB-backed services
+      // in this handler, so the route stays importable without DATABASE_URL.
+      let responseSchema: Record<string, unknown> = dmResponseSchema;
+      let responseSchemaPhase: DmResponsePhase = 'full';
+      try {
+        const { pickDmResponsePhase } = await import(
+          '../../services/dm/dm-response-phase-picker.js'
+        );
+        const picked = await pickDmResponsePhase(
+          sessionId ?? combatEntry?.sessionId ?? null,
+          user.userId,
+        );
+        responseSchema = picked.schema;
+        responseSchemaPhase = picked.phase;
+        logger.info({
+          msg: 'LLM_GENERATE_PHASE',
+          sessionId: sessionId ?? combatEntry?.sessionId ?? null,
+          phase: picked.phase,
+          fallback: picked.fallback,
+        });
+      } catch (error) {
+        logger.warn({
+          msg: 'LLM_GENERATE_PHASE_PICKER_FAILED',
+          sessionId: sessionId ?? combatEntry?.sessionId ?? null,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
       let dmReply = requestedDmReply;
       const safeModel = allowlistedModel(model);
       const safeMaxTokens = clampMaxTokens(maxTokens, 1000, MAX_GENERATE_TOKENS);
@@ -1114,6 +1148,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             history,
             provider,
             responseSchema,
+            responseSchemaPhase,
             // #633 PR2: stream provider tokens when the client opted in; the
             // full text still accumulates, so retry and everything downstream
             // behave exactly as non-streaming.
@@ -1150,6 +1185,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           history,
           provider,
           responseSchema,
+          responseSchemaPhase,
           playerInput,
           // #2563: a scene end deferred at generation time writes the refusal fact the
           // end route writes on a 409, so the DM's next read knows the fight is not over.
@@ -1913,6 +1949,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
                     ],
                     provider,
                     responseSchema,
+                    responseSchemaPhase,
                   });
                   if (retry.usage && retry.provider) {
                     const retryUsageId = await AIUsageService.recordProviderUsage({
@@ -2065,6 +2102,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
                   return seated;
                 })(),
             responseText,
+            responseSchemaPhase,
           ),
           provider: result.provider,
           model: result.model,

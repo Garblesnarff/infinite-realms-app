@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createDmResponseSchema, dmResponseSchema } from '../dm-response-schema.js';
+import {
+  createDmResponseSchema,
+  dmResponseSchemaForPhase,
+  type DmResponsePhase,
+} from '../dm-response-schema.js';
 
 /**
  * Epic #782 item 1 — Measure. (Refs #782)
@@ -28,6 +32,20 @@ import { createDmResponseSchema, dmResponseSchema } from '../dm-response-schema.
  * 063b58d9 with the item-8 schema. The ≤24 optionals target is item 8's
  * per-phase schema work (narrative phase holds a strict subset).
  *
+ * #782 item 8 (per-phase schemas) + item-5 tail (keyword move), measured at
+ * main be98ecd1 with the real producer and this file's walker: the live
+ * schema is 9,962 bytes / 7 unions / 44 optionals / 0 oneOf / 0 keywords
+ * (keywords 7 → 0 by the move; optionals unchanged); createDmResponseSchema()
+ * is 4,977 bytes / 7 / 32 / 0 / 0 (keywords 1 → 0). Per phase: narrative
+ * 7,053 bytes / 5 unions / 17 optionals / 0 keywords (design 5,477 / 5 /
+ * 13 / 0 — the +4 optionals are the post-design extensions tracker_changes
+ * +3 and final_beat_reached +1); combat 3,229 bytes / 6 / 7 / 0, exactly
+ * the design's numbers; tactical 6,063 bytes / 7 / 24 / 0 (design 5,626 /
+ * 7 / 22 / 0 — the +2 optionals are forced_move keeping origin/distance/
+ * destination optional, because the mode decides which are needed:
+ * teleport needs destination, shove/pull need origin + distance, so no
+ * single required-set is honest). All three phases fit the strict caps.
+ *
  * Counting follows the Anthropic convention from
  * dm-response-schema-anthropic.test.ts: every `anyOf` / `oneOf` node and every
  * `type: [..., 'null']` array counts as one union; every object property not
@@ -40,40 +58,43 @@ import { createDmResponseSchema, dmResponseSchema } from '../dm-response-schema.
 /**
  * Strict structured-output targets (docs checked 2026-10-16/17). Items 5-8 of
  * the epic tighten the ratchet from the baseline to these; each target starts
- * as a todo and becomes a real assertion when its item lands (the oneOf target
- * landed in #782 item 8; the remaining three are still todos).
+ * as a todo and becomes a real assertion when its item lands. The per-phase
+ * targets all landed with item 8 (this file); the default-schema keyword
+ * target landed with the item-5 tail (keyword move).
  */
 const TARGET_MAX_UNIONS = 16;
 const TARGET_MAX_OPTIONALS = 24;
 const TARGET_MAX_ONE_OF = 0;
 const TARGET_MAX_KEYWORDS = 0;
 
-/** Baseline budget per phase: unions/optionals re-measured for #782 item 7 —
- *  see header comment. ONE_OF lowered to 0 by #782 item 8 (was 1).
- *  OPTIONALS raised 39 → 40 by #1020 (2026-10-22): the `campaign_ending`
- *  story field is one new optional top-level property (its `summary` is
- *  required inside the sub-object, and it adds no unions or keywords). The
- *  growth is the fix's payload, recorded here rather than hidden; the ≤24
- *  strict target still waits on item 8's per-phase schemas.
- *  OPTIONALS raised 40 → 43 by #1042 (2026-10-23): the `tracker_changes`
- *  story field is one new optional top-level property plus two optional
- *  properties (`delta`, `set`) inside its item object (`name` is required
- *  there); it adds no unions or keywords. Recorded the same way.
- *  OPTIONALS raised 43 → 44 by #1042 round 2 (2026-10-23): the
- *  `final_beat_reached` story field is one new optional top-level boolean
- *  property (the final-beat trigger, Hark N23-003); it adds no unions or
- *  keywords. Recorded the same way. */
-const BASELINE_UNIONS = 7;
-const BASELINE_OPTIONALS = 44;
+/** Live-schema baselines, kept for the oneOf/keyword ratchets below. The
+ *  per-phase unions/optionals baselines moved to PHASE_BASELINES with
+ *  item 8 (the old single numbers, 7 unions / 44 optionals, no longer
+ *  describe any phase). History, recorded rather than hidden: unions and
+ *  optionals re-measured for #782 item 7; ONE_OF lowered to 0 by #782
+ *  item 8 (was 1); OPTIONALS raised 39 → 40 by #1020, 40 → 43 by #1042,
+ *  43 → 44 by #1042 round 2 (see header comment); KEYWORDS lowered
+ *  7 → 0 by the #782 item-5 tail (keyword move): bounds now live in
+ *  descriptions + existing server enforcement, not keywords. */
 const BASELINE_ONE_OF = 0;
-const BASELINE_KEYWORDS = 7;
+const BASELINE_KEYWORDS = 0;
+
+/** Per-phase baselines, measured with item 8's real phase schemas (see
+ *  header comment). Each phase ratchets on its own numbers, so growth in
+ *  any one phase fails even though all three sit far under the old 44. */
+const PHASE_BASELINES: Record<Exclude<DmResponsePhase, 'full'>, { unions: number; optionals: number }> = {
+  narrative: { unions: 5, optionals: 17 },
+  combat: { unions: 6, optionals: 7 },
+  tactical: { unions: 7, optionals: 24 },
+};
 
 /** Baseline budget for createDmResponseSchema(): re-measured for #782 item 7.
- *  ONE_OF lowered to 0 by #782 item 8 (was 1). */
+ *  ONE_OF lowered to 0 by #782 item 8 (was 1). KEYWORDS lowered 1 → 0 by
+ *  the item-5 tail (the base map distance minimum moved to a description). */
 const BASELINE_DEFAULT_UNIONS = 7;
 const BASELINE_DEFAULT_OPTIONALS = 32;
 const BASELINE_DEFAULT_ONE_OF = 0;
-const BASELINE_DEFAULT_KEYWORDS = 1;
+const BASELINE_DEFAULT_KEYWORDS = 0;
 
 /**
  * Placeholder body for the target todos. bun-types requires test.todo to take
@@ -101,17 +122,14 @@ const NUMERIC_OR_LENGTH_KEYWORDS = [
 
 /**
  * Phases from the epic (#782 item 8): narrative, combat, tactical.
- * Item 8 threads the phase through createDmResponseSchema; until then every
- * phase emits the one live schema, so the budget is measured per phase against
- * the same object.
+ * Item 8 threads the phase through createDmResponseSchema, so each phase
+ * is measured against its own real schema.
  */
 const PHASES = ['narrative', 'combat', 'tactical'] as const;
 type Phase = (typeof PHASES)[number];
 
 function schemaForPhase(phase: Phase): Record<string, unknown> {
-  // #782 item 8: createDmResponseSchema({ phase }). Today there is one live schema.
-  void phase;
-  return dmResponseSchema as unknown as Record<string, unknown>;
+  return dmResponseSchemaForPhase(phase);
 }
 
 type Budget = {
@@ -188,19 +206,20 @@ function measureSchemaBudget(schema: unknown, label: string): Budget {
 describe('dmResponseSchema strict budget (Refs #782 item 1)', () => {
   for (const phase of PHASES) {
     describe(`phase ${phase}`, () => {
+      const baseline = PHASE_BASELINES[phase];
       test(`ratchet: oneOf count stays at or below baseline (${BASELINE_ONE_OF})`, () => {
         const budget = measureSchemaBudget(schemaForPhase(phase), `dmResponseSchema:${phase}`);
         expect(budget.oneOfPaths.length).toBeLessThanOrEqual(BASELINE_ONE_OF);
       });
 
-      test(`ratchet: unions stay at or below baseline (${BASELINE_UNIONS})`, () => {
+      test(`ratchet: unions stay at or below baseline (${baseline.unions})`, () => {
         const budget = measureSchemaBudget(schemaForPhase(phase), `dmResponseSchema:${phase}`);
-        expect(budget.unions).toBeLessThanOrEqual(BASELINE_UNIONS);
+        expect(budget.unions).toBeLessThanOrEqual(baseline.unions);
       });
 
-      test(`ratchet: optional parameters stay at or below baseline (${BASELINE_OPTIONALS})`, () => {
+      test(`ratchet: optional parameters stay at or below baseline (${baseline.optionals})`, () => {
         const budget = measureSchemaBudget(schemaForPhase(phase), `dmResponseSchema:${phase}`);
-        expect(budget.optionals).toBeLessThanOrEqual(BASELINE_OPTIONALS);
+        expect(budget.optionals).toBeLessThanOrEqual(baseline.optionals);
       });
 
       test(`ratchet: numeric/length keywords stay at or below baseline (${BASELINE_KEYWORDS})`, () => {
@@ -213,18 +232,20 @@ describe('dmResponseSchema strict budget (Refs #782 item 1)', () => {
         const budget = measureSchemaBudget(schemaForPhase(phase), `dmResponseSchema:${phase}`);
         expect(budget.oneOfPaths).toEqual([]);
       });
-      test.todo(
-        `target: ≤${TARGET_MAX_UNIONS} unions (strict limit; baseline ${BASELINE_UNIONS})`,
-        todoStub,
-      );
-      test.todo(
-        `target: ≤${TARGET_MAX_OPTIONALS} optional parameters (strict limit; baseline ${BASELINE_OPTIONALS})`,
-        todoStub,
-      );
-      test.todo(
-        `target: ${TARGET_MAX_KEYWORDS} numeric/length keywords (strict limit; baseline ${BASELINE_KEYWORDS})`,
-        todoStub,
-      );
+      // #782 item 8: the per-phase targets are real assertions now — every
+      // phase fits the strict caps.
+      test(`target: ≤${TARGET_MAX_UNIONS} unions (strict limit)`, () => {
+        const budget = measureSchemaBudget(schemaForPhase(phase), `dmResponseSchema:${phase}`);
+        expect(budget.unions).toBeLessThanOrEqual(TARGET_MAX_UNIONS);
+      });
+      test(`target: ≤${TARGET_MAX_OPTIONALS} optional parameters (strict limit)`, () => {
+        const budget = measureSchemaBudget(schemaForPhase(phase), `dmResponseSchema:${phase}`);
+        expect(budget.optionals).toBeLessThanOrEqual(TARGET_MAX_OPTIONALS);
+      });
+      test(`target: ${TARGET_MAX_KEYWORDS} numeric/length keywords (strict limit)`, () => {
+        const budget = measureSchemaBudget(schemaForPhase(phase), `dmResponseSchema:${phase}`);
+        expect(budget.constraintPaths).toEqual([]);
+      });
     });
   }
 
@@ -254,18 +275,23 @@ describe('dmResponseSchema strict budget (Refs #782 item 1)', () => {
       const budget = measureSchemaBudget(createDmResponseSchema(), 'createDmResponseSchema()');
       expect(budget.oneOfPaths).toEqual([]);
     });
-    test.todo(
-      `target: ≤${TARGET_MAX_UNIONS} unions (strict limit; baseline ${BASELINE_DEFAULT_UNIONS})`,
-      todoStub,
-    );
+    // The item-5 tail landed the keyword target for the default schema too
+    // (the base map distance minimum moved to a description); the unions
+    // target holds as well (7 ≤ 16). Only the optionals target stays a todo:
+    // the default schema is the full schema, never strict-fit — only the
+    // per-phase schemas above meet it.
+    test(`target: ≤${TARGET_MAX_UNIONS} unions (strict limit)`, () => {
+      const budget = measureSchemaBudget(createDmResponseSchema(), 'createDmResponseSchema()');
+      expect(budget.unions).toBeLessThanOrEqual(TARGET_MAX_UNIONS);
+    });
     test.todo(
       `target: ≤${TARGET_MAX_OPTIONALS} optional parameters (strict limit; baseline ${BASELINE_DEFAULT_OPTIONALS})`,
       todoStub,
     );
-    test.todo(
-      `target: ${TARGET_MAX_KEYWORDS} numeric/length keywords (strict limit; baseline ${BASELINE_DEFAULT_KEYWORDS})`,
-      todoStub,
-    );
+    test(`target: ${TARGET_MAX_KEYWORDS} numeric/length keywords (strict limit)`, () => {
+      const budget = measureSchemaBudget(createDmResponseSchema(), 'createDmResponseSchema()');
+      expect(budget.constraintPaths).toEqual([]);
+    });
   });
 
   test('the walker fires on every budget violation (negative control)', () => {

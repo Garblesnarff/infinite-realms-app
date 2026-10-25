@@ -1,5 +1,6 @@
 import Ajv, { type ValidateFunction } from 'ajv';
 
+import { dmResponseSchema } from './dm/dm-response-schema.js';
 import { normalizeReplyNarration, type NarrationNormalization } from './dm/narration-text.js';
 import { isRetryableUpstreamStatus, LLMUpstreamError } from './llm-errors.js';
 import { llmFetch } from './llm-fixture-fetch.js';
@@ -56,6 +57,13 @@ export interface LLMGenerateOptions {
   history?: ChatMessage[];
   provider?: 'openrouter' | 'gemini';
   responseSchema?: Record<string, unknown>;
+  /**
+   * #782 item 8: the phase the route picked for this turn's schema
+   * ('narrative' | 'combat' | 'tactical' | 'full'). Carried only so the
+   * shadow logs can attribute mismatches to a phase; it changes no
+   * delivery decision. Absent on callers that predate phases.
+   */
+  responseSchemaPhase?: string;
   /**
    * #633 PR2: when set, the OpenRouter call uses `stream: true` and this
    * callback fires once per content delta as tokens arrive. The full text is
@@ -256,6 +264,21 @@ const validateFullSchemaText = (text: string, responseSchema: Record<string, unk
   }
 };
 
+/**
+ * #782 item 8: does this text validate against the full live schema? Never
+ * throws: bad JSON or a mismatch both read as false. Used only on the
+ * instructed branch's failure path, so it costs nothing when the phase
+ * schema passes.
+ */
+const validatesAgainstLiveSchema = (text: string): boolean => {
+  try {
+    const parsed = validateStructuredResponseText(text, dmResponseSchema);
+    return compiledSchemaValidator(dmResponseSchema)(parsed);
+  } catch {
+    return false;
+  }
+};
+
 // #783: the tool path validates after stripping keys the schema does not name.
 // Forced tool calls return extra top-level keys (e.g. `visual_prompt`) that the
 // schema never declared; removing them keeps the reply usable.
@@ -365,13 +388,19 @@ const valueAtPointer = (root: unknown, pointer: string): unknown => {
  * the JSON type found there, and the first 200 characters of the value. No
  * full payload. The slice is the only reply text that reaches the log.
  */
-const logToolSchemaFailure = (data: unknown, errors: ValidateFunction['errors']): void => {
+const logToolSchemaFailure = (
+  data: unknown,
+  errors: ValidateFunction['errors'],
+  phase?: string,
+): void => {
   const first = errors?.[0];
   const instancePath = first?.instancePath ?? '';
   const value = valueAtPointer(data, instancePath);
   const rendered = typeof value === 'string' ? value : (JSON.stringify(value) ?? '');
   logger.warn({
     msg: 'LLM_TOOL_SCHEMA_INVALID',
+    // #782 item 8: same phase attribution as the shadow log above.
+    ...(phase ? { phase } : {}),
     instancePath,
     keyword: first?.keyword ?? '',
     valueType: jsonTypeOf(value),
@@ -383,6 +412,7 @@ const logToolSchemaFailure = (data: unknown, errors: ValidateFunction['errors'])
 export const validateToolReplyText = (
   text: string,
   responseSchema: Record<string, unknown>,
+  phase?: string,
 ): string => {
   const parsed = stripOptionalNulls(
     parseStringifiedNested(validateStructuredResponseText(text, responseSchema), responseSchema),
@@ -390,7 +420,7 @@ export const validateToolReplyText = (
   );
   const validate = compiledStrippingValidator(responseSchema);
   if (!validate(parsed)) {
-    logToolSchemaFailure(parsed, validate.errors);
+    logToolSchemaFailure(parsed, validate.errors, phase);
     throw new Error(
       `Structured response does not match schema: ${strippingSchemaAjv.errorsText(validate.errors)}`,
     );
@@ -464,6 +494,7 @@ const validateStrictBranchText = (
   text: string,
   responseSchema: Record<string, unknown>,
   model: string,
+  phase?: string,
 ): number => {
   if (strictBranchValidationMode === 'enforce') {
     validateFullSchemaText(text, responseSchema);
@@ -476,6 +507,10 @@ const validateStrictBranchText = (
   logger.warn({
     msg: 'LLM_SCHEMA_SHADOW_INVALID',
     model,
+    // #782 item 8: the phase the turn's schema was picked for, so the shadow
+    // week can attribute mismatches per phase (and per model) instead of
+    // blending them. Absent on callers that predate phases.
+    ...(phase ? { phase } : {}),
     instancePath: first?.instancePath ?? '',
     keyword: first?.keyword ?? '',
     message: first?.message ?? '',
@@ -677,6 +712,7 @@ export class LLMProviderService {
       history,
       provider = 'openrouter',
       responseSchema,
+      responseSchemaPhase,
       onToken,
       onAttemptStart,
     } = options;
@@ -693,6 +729,7 @@ export class LLMProviderService {
           systemPrompt,
           onToken,
           onAttemptStart,
+          responseSchemaPhase,
         );
       }
 
@@ -705,6 +742,7 @@ export class LLMProviderService {
           history,
           responseSchema,
           systemPrompt,
+          responseSchemaPhase,
         );
       }
 
@@ -774,6 +812,7 @@ export class LLMProviderService {
     systemPrompt?: string,
     onToken?: (deltaText: string) => void,
     onAttemptStart?: () => void,
+    responseSchemaPhase?: string,
   ): Promise<LLMResponse> {
     const breaker = getCircuitBreaker('llm:openrouter');
     breaker.allowOrThrow();
@@ -1024,15 +1063,66 @@ export class LLMProviderService {
                 // used to trust the provider's enforcement; providers may
                 // silently ignore unsupported keywords, so validate here too.
                 // The strict branch runs in shadow mode by default (see
-                // validateStrictBranchText); the instructed branch is always hard.
+                // validateStrictBranchText); the instructed branch logs
+                // phase-only mismatches as shadow invalids and keeps the
+                // reply, and stays hard only for genuinely malformed replies
+                // (see the else branch below).
                 if (toolSchema) {
                   // #783: tool path validates after stripping unnamed keys, and
                   // the reply carries the stripped text.
-                  text = validateToolReplyText(text, responseSchema);
+                  text = validateToolReplyText(text, responseSchema, responseSchemaPhase);
                 } else if (strictSchema) {
-                  schemaShadowInvalid += validateStrictBranchText(text, responseSchema, candidate);
+                  schemaShadowInvalid += validateStrictBranchText(
+                    text,
+                    responseSchema,
+                    candidate,
+                    responseSchemaPhase,
+                  );
                 } else {
-                  validateFullSchemaText(text, responseSchema);
+                  // #782 item 8, shadow-only on the instructed branch too. A
+                  // phase-schema mismatch must not hard-fail a reply that was
+                  // valid under yesterday's full schema (the full schema
+                  // REQUIRED the dropped sections, so padding them is the
+                  // models' established habit). If the text validates against
+                  // the full live schema, it fails the phase schema but passes
+                  // the full one — a phase-only defect, whatever its shape
+                  // (a padded dropped section, a kind-split narrowing, a
+                  // story field on a fight turn): log it as a shadow invalid
+                  // with the phase and keep the reply. Genuinely malformed
+                  // replies (bad JSON, or a mismatch against the full schema
+                  // too) still throw, preserving today's retry/failover path
+                  // exactly.
+                  try {
+                    validateFullSchemaText(text, responseSchema);
+                  } catch (phaseError) {
+                    const details =
+                      phaseError instanceof Error ? phaseError.message : String(phaseError);
+                    if (
+                      responseSchemaPhase &&
+                      responseSchemaPhase !== 'full' &&
+                      !details.startsWith('Structured response is not valid JSON') &&
+                      validatesAgainstLiveSchema(text)
+                    ) {
+                      const phaseValidate = compiledSchemaValidator(responseSchema);
+                      const parsed = validateStructuredResponseText(text, responseSchema);
+                      phaseValidate(parsed);
+                      const first = phaseValidate.errors?.[0];
+                      logger.warn({
+                        msg: 'LLM_SCHEMA_SHADOW_INVALID',
+                        model: candidate,
+                        phase: responseSchemaPhase,
+                        instancePath: first?.instancePath ?? '',
+                        keyword: first?.keyword ?? '',
+                        message: first?.message ?? '',
+                      });
+                      // Counted like a strict-branch shadow keep, so
+                      // usage-based shadow accounting covers both branches
+                      // (self-review round 2, nit N1).
+                      schemaShadowInvalid += 1;
+                    } else {
+                      throw phaseError;
+                    }
+                  }
                 }
               } catch (validationError) {
                 lastFailure = {
@@ -1163,6 +1253,7 @@ export class LLMProviderService {
     history?: ChatMessage[],
     responseSchema?: Record<string, unknown>,
     systemPrompt?: string,
+    responseSchemaPhase?: string,
   ): Promise<LLMResponse> {
     const breaker = getCircuitBreaker('llm:gemini');
     breaker.allowOrThrow();
@@ -1274,6 +1365,7 @@ export class LLMProviderService {
                 attemptText,
                 responseSchema,
                 candidate,
+                responseSchemaPhase,
               );
             } catch (validationError) {
               lastFailure = {

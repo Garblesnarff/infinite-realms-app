@@ -71,7 +71,15 @@ const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
 const { llmRoutes } = await import('../llm.js');
 // What the old client sent: ai-service.ts imported this same export and put it
 // on the request body as `responseSchema`.
-const { dmResponseSchema } = await import('../../../services/dm/dm-response-schema.js');
+// #782 item 8: the server-built schema is now phase-picked. These turns post
+// no session, so the picker deterministically picks narrative (the no-session
+// rule) — the assertions below pin THAT server-built schema, not the old
+// single live schema. The anti-injection property is unchanged: whatever the
+// client sends is ignored.
+const { dmResponseSchemaForPhase } = await import(
+  '../../../services/dm/dm-response-schema.js'
+);
+const narrativeSchema = dmResponseSchemaForPhase('narrative');
 const app = createRequestPipelineApp().use(llmRoutes);
 
 const postGenerate = (body: Record<string, unknown>): Promise<Response> =>
@@ -121,9 +129,10 @@ describe('#782 item 3: DM reply schema built server-side', () => {
     expect(response.status).toBe(200);
     expect(generatedInputs).toHaveLength(1);
     // The provider must receive the canonical server-built schema, not the
-    // client-sent value — byte-identical to what the old client was sending.
+    // client-sent value — byte-identical to the phase schema the server
+    // picked for this session-less turn (narrative).
     expect(JSON.stringify(generatedInputs[0]?.responseSchema)).toBe(
-      JSON.stringify(dmResponseSchema),
+      JSON.stringify(narrativeSchema),
     );
   });
 
@@ -134,7 +143,7 @@ describe('#782 item 3: DM reply schema built server-side', () => {
     expect(response.status).toBe(200);
     expect(generatedInputs).toHaveLength(1);
     expect(JSON.stringify(generatedInputs[0]?.responseSchema)).toBe(
-      JSON.stringify(dmResponseSchema),
+      JSON.stringify(narrativeSchema),
     );
   });
 
@@ -152,6 +161,6 @@ describe('#782 item 3: DM reply schema built server-side', () => {
     // The Gemini request body is built from the provider input; identical
     // strings here mean a byte-identical schema on the wire before and after.
     expect(withClientValue).toBe(withoutClientValue);
-    expect(withClientValue).toBe(JSON.stringify(dmResponseSchema));
+    expect(withClientValue).toBe(JSON.stringify(narrativeSchema));
   });
 });
