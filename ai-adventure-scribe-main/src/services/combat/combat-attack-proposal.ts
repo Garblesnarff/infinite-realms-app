@@ -18,6 +18,8 @@ export interface CombatAttackProposal {
   attackBonus?: number;
   bless?: boolean;
   targetAc?: number;
+  baseAc?: number;
+  coverBonus?: number;
   advantage?: boolean;
   disadvantage?: boolean;
   advantageSources?: string[];

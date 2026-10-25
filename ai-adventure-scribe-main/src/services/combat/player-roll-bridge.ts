@@ -40,6 +40,8 @@ export interface PlayerAttackRollSpec {
   disadvantageSources?: string[];
   /** Spell attacks reuse this popup but must not claim a weapon AC line. */
   kind?: 'weapon' | 'spell-attack';
+  /** Cover bonus from the engine's proposal; used for display in the roll dialog. */
+  coverBonus?: number;
 }
 
 /** What the entry gate asks for before it seats the encounter. */

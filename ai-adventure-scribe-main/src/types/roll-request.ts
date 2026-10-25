@@ -5,6 +5,8 @@ export interface RollRequest {
   purpose: string; // "Arcana check to understand the mechanism"
   dc?: number; // Target DC if applicable
   ac?: number; // Target AC for attacks
+  /** #1086 (e): the part of `ac` that is cover, so the dialog shows 'AC 12 +2 half cover'. */
+  coverBonus?: number;
   advantage?: boolean;
   disadvantage?: boolean;
   modifier?: number; // Base modifier if not in formula

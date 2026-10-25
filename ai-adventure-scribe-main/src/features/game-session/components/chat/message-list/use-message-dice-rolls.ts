@@ -20,7 +20,10 @@ import {
   settleCombatInitiativeRoll,
 } from '@/hooks/combat/use-player-roll-host';
 import logger from '@/lib/logger';
-import { hasPendingPlayerRoll, markDeathSavePromptDismissed } from '@/services/combat/player-roll-bridge';
+import {
+  hasPendingPlayerRoll,
+  markDeathSavePromptDismissed,
+} from '@/services/combat/player-roll-bridge';
 import { declinedRollMessage } from '@/utils/dm-roll-recovery';
 import { handleAsyncError } from '@/utils/error-handler';
 import { isEngineChannelRollType } from '@/utils/roll-request/engine-channel';
@@ -169,6 +172,7 @@ export function useMessageDiceRolls({
       disadvantage: currentRoll.rollConfig.disadvantage,
       ...(currentRoll.dc !== undefined ? { dc: currentRoll.dc } : {}),
       ...(currentRoll.ac !== undefined ? { ac: currentRoll.ac } : {}),
+      ...(currentRoll.coverBonus !== undefined ? { coverBonus: currentRoll.coverBonus } : {}),
     };
   }, [currentRoll]);
 

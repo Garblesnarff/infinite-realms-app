@@ -119,6 +119,22 @@ describe('DiceRollRequest', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows the AC badge as base AC plus cover (#1086 (e))', () => {
+    render(
+      <DiceRollRequest
+        request={{
+          type: 'attack',
+          formula: '1d20+5',
+          purpose: 'Longbow attack',
+          ac: 14,
+          coverBonus: 2,
+        }}
+        onResult={mockOnManualResult}
+      />,
+    );
+    expect(screen.getByText('AC 12 +2 half cover')).toBeInTheDocument();
+  });
+
   it('names the purpose without a bare "Purpose:" label (#2292)', () => {
     render(<DiceRollRequest request={defaultRequest} onResult={mockOnManualResult} />);
 

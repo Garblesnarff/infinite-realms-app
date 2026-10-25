@@ -117,6 +117,7 @@ export async function askPlayerForAttackDie(params: PlayerAttackDieParams): Prom
       disadvantage: !!proposal.disadvantage,
       advantageSources: proposal.advantageSources,
       disadvantageSources: proposal.disadvantageSources,
+      ...(typeof proposal.coverBonus === 'number' ? { coverBonus: proposal.coverBonus } : {}),
     });
     if (outcome.d20 === null) {
       // The bridge's 45 s timer is the one auto-roll the popup promised ("Rolls for you in
