@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -16,6 +16,8 @@ import { mapAuthoritativeCombat } from '@/contexts/combat/authoritative-combat-s
 const live = vi.hoisted(() => ({
   encounter: null as CombatEncounter | null,
   messages: [] as Array<{ sender: string; context?: Record<string, unknown> }>,
+  campaignName: null as string | null,
+  character: null as unknown,
 }));
 
 vi.mock('@/contexts/CombatContext', () => ({
@@ -23,6 +25,14 @@ vi.mock('@/contexts/CombatContext', () => ({
 }));
 vi.mock('@/contexts/MessageContext', () => ({
   useMessageContext: () => ({ messages: live.messages }),
+}));
+vi.mock('@/contexts/CampaignContext', () => ({
+  useCampaign: () => ({
+    state: { campaign: live.campaignName ? { name: live.campaignName } : null },
+  }),
+}));
+vi.mock('@/contexts/CharacterContext', () => ({
+  useCharacter: () => ({ state: { character: live.character } }),
 }));
 
 type Seat = [id: string, name: string, type: string, initiative: number, inactive?: boolean];
@@ -60,17 +70,18 @@ const bar = (round: number, turnIndex: number, busy: 'casting' | 'acting' | null
   return render(<CombatTurnBar summary={summary} busy={busy} />);
 };
 
-describe('turn bar (#2417)', () => {
-  it('names the round, the turn and who holds it, and who is next', () => {
+describe('turn bar (#2417, copy #85)', () => {
+  it('names whose turn it is and the round, and drops the next line', () => {
     bar(2, 0);
 
-    expect(screen.getByTestId('combat-turn-bar').textContent).toContain('Round 2');
-    expect(screen.getByTestId('combat-turn-text').textContent).toBe('Turn 1 of 2 · Your turn');
-    expect(screen.getByText('Next: Captain Sarah Reeves.')).toBeTruthy();
+    expect(screen.getByTestId('combat-turn-text').textContent).toBe('Your turn');
+    expect(screen.getByTestId('combat-turn-sub').textContent).toBe('Round 2');
+    expect(screen.getByText('Your turn. Round 2.')).toBeTruthy();
+    expect(screen.queryByText('Next: Captain Sarah Reeves.')).toBeNull();
   });
 
-  it('says Dying on the turn of a player at 0 HP whose saves are owed (#2518)', () => {
-    // The Scholar as the server serves her, on the floor; the bar reads "Round 3 · Turn 1 of 2 · Dying".
+  it('says You are down on the turn of a player at 0 HP whose saves are owed (#2518)', () => {
+    // The Scholar as the server serves her, on the floor; the bar reads "You are down".
     const dying = mapAuthoritativeCombat({
       encounter: { ...DYING_SCHOLAR_ENCOUNTER, currentRound: 3, currentTurnOrder: 0 },
       participants: [
@@ -94,23 +105,26 @@ describe('turn bar (#2417)', () => {
     const summary = summarizeCombatTurn(dying)!;
     render(<CombatTurnBar summary={summary} busy={null} />);
 
-    expect(screen.getByTestId('combat-turn-text').textContent).toBe('Turn 1 of 2 · Dying');
-    expect(screen.getByText('Round 3. Turn 1 of 2. Dying.')).toBeTruthy();
+    expect(screen.getByTestId('combat-turn-text').textContent).toBe('You are down');
+    expect(screen.getByTestId('combat-turn-sub').textContent).toBe(
+      '0 HP · roll a death saving throw',
+    );
+    expect(screen.getByText('You are down. 0 HP · roll a death saving throw.')).toBeTruthy();
   });
 
-  it('names an enemy turn in red and says the round starts over after the last actor', () => {
+  it('names an enemy turn in teal and says to wait', () => {
     bar(2, 1);
 
     const text = screen.getByTestId('combat-turn-text');
-    expect(text.textContent).toBe('Turn 2 of 2 · Captain Sarah Reeves');
-    expect(text.className).toContain('text-red-400');
-    expect(screen.getByText('Next: The Scholar starts round 3.')).toBeTruthy();
+    expect(text.textContent).toBe("Captain Sarah Reeves's turn");
+    expect(text.className).toContain('text-infinite-teal');
+    expect(screen.getByTestId('combat-turn-sub').textContent).toBe('Round 2 · wait for it to act');
   });
 
   it('reads as one sentence for a screen reader', () => {
     bar(2, 0);
 
-    expect(screen.getByText('Round 2. Turn 1 of 2. Your turn.')).toBeTruthy();
+    expect(screen.getByText('Your turn. Round 2.')).toBeTruthy();
   });
 
   it('puts that sentence in page text, with the visual bar hidden from a screen reader', () => {
@@ -121,23 +135,29 @@ describe('turn bar (#2417)', () => {
     expect(sentence.closest('[aria-hidden="true"]')).toBeNull();
     expect(screen.getByTestId('combat-turn-bar').hasAttribute('aria-label')).toBe(false);
     expect(screen.getByTestId('combat-turn-text').closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(screen.getByTestId('combat-turn-bar').getAttribute('role')).toBe('status');
+    expect(screen.getByTestId('combat-turn-bar').getAttribute('aria-live')).toBe('polite');
   });
 
   it('reads an enemy turn, a cast and an enemy acting as one sentence too', () => {
     const enemy = bar(2, 1);
-    expect(screen.getByText('Round 2. Turn 2 of 2. Captain Sarah Reeves.')).toBeTruthy();
+    expect(
+      screen.getByText("Captain Sarah Reeves's turn. Round 2 · wait for it to act."),
+    ).toBeTruthy();
     enemy.unmount();
 
     const acting = bar(2, 1, 'acting');
     expect(screen.getByTestId('combat-turn-text').textContent).toContain(
       'Captain Sarah Reeves is acting…',
     );
-    expect(screen.getByText('Round 2. Turn 2 of 2. Captain Sarah Reeves is acting.')).toBeTruthy();
+    expect(
+      screen.getByText('Captain Sarah Reeves is acting. Round 2 · wait for it to act.'),
+    ).toBeTruthy();
     acting.unmount();
 
     bar(2, 0, 'casting');
     expect(screen.getByTestId('combat-turn-text').textContent).toContain('Casting…');
-    expect(screen.getByText('Round 2. Turn 1 of 2. Casting.')).toBeTruthy();
+    expect(screen.getByText('Casting. Round 2.')).toBeTruthy();
   });
 
   it('leaves out a participant the server has taken out of the order', () => {
@@ -159,15 +179,13 @@ describe('turn bar (#2417)', () => {
     ]);
   });
 
-  it('keeps Round N on one line and gives a phone the short turn text and initials', () => {
+  it('gives every token a 30 px circle and cuts a long title instead of scrolling sideways', () => {
     bar(2, 0);
 
-    expect(screen.getByText('Round 2').className).toContain('whitespace-nowrap');
-    expect(
-      within(screen.getByTestId('combat-turn-text')).getByText(/Turn 1 of 2/).className,
-    ).toContain('hidden sm:inline');
+    expect(screen.getByTestId('combat-turn-text').className).toContain('truncate');
     for (const pip of screen.getAllByTestId('combat-turn-pip')) {
-      expect(pip.className).toContain('sm:h-2.5');
+      expect(pip.className).toContain('h-[30px]');
+      expect(pip.className).toContain('w-[30px]');
     }
   });
 
@@ -182,17 +200,144 @@ describe('turn bar (#2417)', () => {
     expect(screen.getByTestId('combat-turn-text').className).toContain('truncate');
   });
 
+  it('numbers duplicate token initials instead of showing two TH tokens', () => {
+    const summary = summarizeCombatTurn(
+      encounter(1, 0, [
+        ['p1', 'The Hunter', 'player', 9],
+        ['m1', 'The Hound', 'monster', 4],
+      ]),
+    )!;
+    render(<CombatTurnBar summary={summary} busy={null} />);
+
+    expect(screen.getAllByTestId('combat-turn-pip').map((pip) => pip.textContent)).toEqual([
+      'H',
+      'H2',
+    ]);
+  });
+
+  it('shows one HP value in green at full health', () => {
+    const summary = summarizeCombatTurn(encounter(1, 0))!;
+    render(
+      <CombatTurnBar summary={summary} busy={null} hp={{ current: 5, maximum: 7, temp: 0 }} />,
+    );
+
+    expect(screen.getByTestId('combat-turn-hp').textContent).toContain('5 / 7');
+    expect(screen.getByTestId('combat-turn-hp').innerHTML).toContain('bg-ir-hp-good');
+  });
+
+  it('warns below half HP and goes red below a quarter', () => {
+    const summary = summarizeCombatTurn(encounter(1, 0))!;
+    const warned = render(
+      <CombatTurnBar summary={summary} busy={null} hp={{ current: 2, maximum: 7, temp: 0 }} />,
+    );
+    expect(screen.getByTestId('combat-turn-hp').innerHTML).toContain('bg-ir-hp-warn');
+    warned.unmount();
+
+    render(
+      <CombatTurnBar summary={summary} busy={null} hp={{ current: 1, maximum: 7, temp: 0 }} />,
+    );
+    expect(screen.getByTestId('combat-turn-hp').innerHTML).toContain('bg-ir-hp-bad');
+  });
+
+  it('shows temp HP as a plus, and a skeleton while HP is unknown', () => {
+    const summary = summarizeCombatTurn(encounter(1, 0))!;
+    const temp = render(
+      <CombatTurnBar summary={summary} busy={null} hp={{ current: 7, maximum: 10, temp: 3 }} />,
+    );
+    expect(screen.getByTestId('combat-turn-hp').textContent).toContain('7 + 3 temp');
+    temp.unmount();
+
+    render(
+      <CombatTurnBar
+        summary={summary}
+        busy={null}
+        hp={{ current: null, maximum: null, temp: 0 }}
+      />,
+    );
+    expect(screen.getByTestId('combat-turn-hp').getAttribute('aria-label')).toBe(
+      'Loading hit points',
+    );
+  });
+
+  it('names the nearest enemy and its distance on your turn', () => {
+    const summary = summarizeCombatTurn(encounter(1, 0))!;
+    render(
+      <CombatTurnBar
+        summary={summary}
+        busy={null}
+        enemyDistance={{ name: 'Glass Prowler', feet: 10 }}
+      />,
+    );
+
+    expect(screen.getByTestId('combat-turn-sub').textContent).toBe(
+      'Round 1 · Glass Prowler is 10 ft away',
+    );
+  });
+
+  it('opens the map sheet from its narrow-width Map button', () => {
+    const onOpenMap = vi.fn();
+    const summary = summarizeCombatTurn(encounter(1, 0))!;
+    render(<CombatTurnBar summary={summary} busy={null} onOpenMap={onOpenMap} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Map' }));
+    expect(onOpenMap).toHaveBeenCalledTimes(1);
+  });
+
   describe('wired to the fight', () => {
     beforeEach(() => {
       live.encounter = encounter(1, 0);
       live.messages = [];
+      live.campaignName = null;
+      live.character = null;
     });
 
-    it('is absent outside a fight', () => {
+    it('shows the Exploring strip outside a fight', () => {
+      live.encounter = null;
+      live.campaignName = 'The Eternal Feast';
+      live.messages = [{ sender: 'dm', context: { location: 'The Market' } }];
+      render(<CombatTurnBarLive turnInFlight={false} />);
+
+      expect(screen.getByTestId('combat-turn-text').textContent).toBe('Exploring');
+      expect(screen.getByTestId('combat-turn-sub').textContent).toBe(
+        'The Eternal Feast · The Market',
+      );
+    });
+
+    it('shows an HP skeleton on the Exploring strip while the sheet HP is unknown', () => {
       live.encounter = null;
       render(<CombatTurnBarLive turnInFlight={false} />);
 
-      expect(screen.queryByTestId('combat-turn-bar')).toBeNull();
+      expect(screen.getByTestId('combat-turn-hp').getAttribute('aria-label')).toBe(
+        'Loading hit points',
+      );
+    });
+
+    it('reads the sheet HP on the Exploring strip', () => {
+      live.encounter = null;
+      live.character = { character_stats: { current_hit_points: 5, max_hit_points: 7 } };
+      render(<CombatTurnBarLive turnInFlight={false} />);
+
+      expect(screen.getByTestId('combat-turn-hp').textContent).toContain('5 / 7');
+    });
+
+    it('reads the encounter HP in combat, not the sheet HP', () => {
+      live.character = { character_stats: { current_hit_points: 5, max_hit_points: 7 } };
+      render(<CombatTurnBarLive turnInFlight={false} />);
+
+      expect(screen.getByTestId('combat-turn-hp').textContent).toContain('7 / 7');
+    });
+
+    it('shows the loading strip while initiative is being rolled', () => {
+      live.encounter = {
+        ...encounter(1, 0),
+        currentTurnParticipantId: undefined,
+      };
+      render(<CombatTurnBarLive turnInFlight={false} />);
+
+      expect(screen.getByTestId('combat-turn-text').textContent).toBe('Setting up the fight…');
+      expect(screen.getByTestId('combat-turn-sub').textContent).toBe(
+        'Rolling initiative for Captain Sarah Reeves',
+      );
     });
 
     it('says Casting… while the sheet cast is being answered', () => {

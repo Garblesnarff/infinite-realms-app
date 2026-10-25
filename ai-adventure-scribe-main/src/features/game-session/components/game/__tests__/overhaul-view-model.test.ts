@@ -7,6 +7,7 @@ import {
 } from '../overhaul/useOverhaulViewModel';
 
 import type { Character } from '@/types/character';
+import type { CombatEncounter } from '@/types/combat-encounter';
 import type { SessionCompanion } from '@/webmcp/companion-api';
 
 describe('game-session character sheet view model', () => {
@@ -44,6 +45,53 @@ describe('game-session character sheet view model', () => {
     // Preview math would produce 55 for this level-5 Barbarian.
     expect(sheet.hpCurrent).toBe(7);
     expect(sheet.hpMax).toBe(20);
+  });
+
+  it('reads the encounter participant HP on the sheet while a fight is active (#85)', () => {
+    const character = {
+      id: 'char-encounter-hp',
+      name: 'The Scholar',
+      level: 1,
+      race: {
+        name: 'Human',
+        speed: 30,
+        traits: [],
+        languages: [],
+      },
+      class: {
+        name: 'Wizard',
+        hitDie: 6,
+      },
+      abilityScores: {
+        strength: { score: 10, modifier: 0, savingThrow: false },
+        dexterity: { score: 14, modifier: 2, savingThrow: false },
+        constitution: { score: 12, modifier: 1, savingThrow: false },
+        intelligence: { score: 10, modifier: 0, savingThrow: false },
+        wisdom: { score: 10, modifier: 0, savingThrow: false },
+        charisma: { score: 10, modifier: 0, savingThrow: false },
+      },
+      character_stats: {
+        current_hit_points: 7,
+        max_hit_points: 7,
+      },
+    } as unknown as Character;
+    const encounter = {
+      participants: [
+        {
+          participantType: 'player',
+          currentHitPoints: 4,
+          maxHitPoints: 7,
+          temporaryHitPoints: 0,
+          isActive: true,
+        },
+      ],
+    } as unknown as CombatEncounter;
+
+    const sheet = buildCharacterSheet(character, null, encounter);
+
+    // The panel already read 4/7 from the participant; the sheet used to read 7/7.
+    expect(sheet.hpCurrent).toBe(4);
+    expect(sheet.hpMax).toBe(7);
   });
 
   it('adapts stored spell groups, slots, and spellcasting stats for the sheet', () => {
@@ -497,7 +545,11 @@ describe('sheet weapon attack bonuses with a name-only class (#2519)', () => {
     } as unknown as Character;
 
     expect(buildCharacterSheet(concentrating).concentratingOn).toBe('Dancing Lights');
-    expect(buildCharacterSheet({ ...concentrating, concentration: null }).concentratingOn).toBeNull();
-    expect(buildCharacterSheet({ ...concentrating, concentration: undefined }).concentratingOn).toBeNull();
+    expect(
+      buildCharacterSheet({ ...concentrating, concentration: null }).concentratingOn,
+    ).toBeNull();
+    expect(
+      buildCharacterSheet({ ...concentrating, concentration: undefined }).concentratingOn,
+    ).toBeNull();
   });
 });

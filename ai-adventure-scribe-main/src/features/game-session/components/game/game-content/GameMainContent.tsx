@@ -57,20 +57,18 @@ function composerTurnStatus(input: {
   if (input.rollPillLabel) return null;
   // #219: recovery copy is a combat-turn concept. Out of combat the composer
   // lock is enough; this line used to read as a story row (#825).
-  if (
-    input.isCombatDetected &&
-    (input.preflight === 'unknown' || input.preflight === 'failed' || input.preflight === 'running')
-  ) {
+  // #85: while the turn state is loading the TurnBar owns it, so the running
+  // strip renders nothing; the failed/unknown states keep their Resume action.
+  if (input.preflight === 'running') return null;
+  if (input.isCombatDetected && (input.preflight === 'unknown' || input.preflight === 'failed')) {
     const text =
-      input.preflight === 'running'
-        ? 'Checking whose turn it is…'
-        : input.preflight === 'failed'
-          ? `Combat turn refresh failed: ${input.error ?? 'Unknown error.'}`
-          : 'Combat turn state needs to be refreshed.';
+      input.preflight === 'failed'
+        ? `Combat turn refresh failed: ${input.error ?? 'Unknown error.'}`
+        : 'Combat turn state needs to be refreshed.';
     return {
       text,
-      actionLabel: input.preflight === 'running' ? 'Resuming…' : 'Resume turn',
-      actionDisabled: input.preflight === 'running',
+      actionLabel: 'Resume turn',
+      actionDisabled: false,
       onAction: () => void input.onResumeTurn(),
     };
   }
@@ -347,9 +345,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     } | null>(null);
     const handleCampaignCompletedStateChange = React.useCallback(
       (state: { summary: string; sessionId: string } | null) => {
-        setCompletionUiState(
-          state ? { summary: state.summary, sessionId: state.sessionId } : null,
-        );
+        setCompletionUiState(state ? { summary: state.summary, sessionId: state.sessionId } : null);
       },
       [],
     );
@@ -497,7 +493,8 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                 </Button>
               </div>
             </div>
-            {isRightCollapsed && (
+            {/* StatsBar hides in combat: the TurnBar owns the one HP value (#85). */}
+            {isRightCollapsed && !isCombatDetected && (
               <div className="flex items-center justify-center gap-3 border-t border-white/5 px-3 py-2 text-sm">
                 <StatsBar />
               </div>
@@ -508,27 +505,6 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
           {/* No min-h-0 here: this column's minimum is the stream's floor plus the tray plus the
               chat box, and the header above shrinks instead. */}
           <div className="flex-1 flex flex-col relative bg-gradient-to-b from-card/60 via-card/40 to-card/60 transition-all duration-300">
-            {/* HUD Banner when combat is active/detected */}
-            {isCombatDetected && (
-              <div
-                className={`mx-3 mt-3 mb-1 px-3 py-2 bg-red-50 border border-red-200 rounded-md items-center justify-between ${
-                  // At phone width the tray is the fight's state while a roll is pending, and the
-                  // header already has Open Tracker; the space goes to the story instead.
-                  rollPillLabel ? 'hidden sm:flex' : 'flex'
-                }`}
-              >
-                <div className="text-sm text-red-700 font-medium">⚔️ Combat in progress</div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="ir-hit"
-                  onClick={() => setShowTracker(true)}
-                >
-                  Open Tracker
-                </Button>
-              </div>
-            )}
-
             <MessageHandler
               sessionId={sessionId}
               campaignId={campaignIdForHandler || null}
@@ -565,7 +541,10 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                     data-testid="story-box"
                     className="relative flex min-h-24 flex-1 flex-col overflow-hidden [contain:size]"
                   >
-                    <CombatTurnBarLive turnInFlight={isProcessing} />
+                    <CombatTurnBarLive
+                      turnInFlight={isProcessing}
+                      onOpenMap={showMapButton ? () => setMapSheetOpen(true) : undefined}
+                    />
                     <MessageList
                       onSendFullMessage={handleSendMessage}
                       retryInFlight={retryInFlight}

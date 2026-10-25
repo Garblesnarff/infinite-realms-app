@@ -21,6 +21,7 @@ import type {
   SpellsVM,
 } from './types';
 import type { Character } from '@/types/character';
+import type { CombatEncounter } from '@/types/combat-encounter';
 import type { ChatMessage } from '@/types/game';
 
 import { useCampaign } from '@/contexts/CampaignContext';
@@ -30,6 +31,7 @@ import { getExperienceForLevel } from '@/data/levelProgression';
 import { isHostileParticipantType } from '@/services/combat/engine-result-card';
 import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 import { formatClassWithSubclass } from '@/utils/character/class-with-subclass';
+import { resolvePlayerHitPoints } from '@/utils/character/player-hit-points';
 import { getWeaponAttackBonus } from '@/utils/character/weapon-attack-bonus';
 import { getWeaponDamageText } from '@/utils/character/weapon-damage-text';
 import { calculateAllCharacterStats } from '@/utils/character-calculations';
@@ -203,6 +205,7 @@ function sheetClassIdentity(character: Character): Pick<CharacterSheetVM, 'subti
 export function buildCharacterSheet(
   character: Character | null,
   liveVitalState?: SheetVitalState | null,
+  encounter?: CombatEncounter | null,
 ): CharacterSheetVM {
   const empty: CharacterSheetVM = {
     name: 'No Character',
@@ -246,7 +249,9 @@ export function buildCharacterSheet(
     : undefined;
   const xpCurrent = character.experience ?? getExperienceForLevel(level);
   const xpMax = getExperienceForLevel(Math.min(20, level + 1)) || xpCurrent;
-  const { current: hpCurrent, maximum: hpMax } = getCharacterSheetHitPoints(character);
+  const { current: hpCurrent, maximum: hpMax } = encounter
+    ? resolvePlayerHitPoints(encounter, character)
+    : getCharacterSheetHitPoints(character);
   const { spells, spellcasting } = buildSpellsViewModel(character, stats);
 
   const abilityScores = ABILITY_ORDER.map((a) => {
@@ -331,8 +336,7 @@ export function buildCharacterSheet(
       // #1059: a weapon or a piece of armor can be readied from the
       // in-session sheet; the rest of the pack stays inert text.
       equippable:
-        isWeaponInventoryRow(it) ||
-        ARMOR_HINTS.some((a) => it.itemId?.toLowerCase().includes(a)),
+        isWeaponInventoryRow(it) || ARMOR_HINTS.some((a) => it.itemId?.toLowerCase().includes(a)),
     }));
 
   // The engine mirrors combat vitals onto character_stats (write-through), so the sheet's
@@ -488,7 +492,7 @@ export function useOverhaulViewModel(opts?: {
           : protagonistParticipant.currentHitPoints <= 0
             ? 'dying'
             : 'standing';
-    const sheet = buildCharacterSheet(character, liveVitalState);
+    const sheet = buildCharacterSheet(character, liveVitalState, encounter);
 
     const turn = summarizeCombatTurn(encounter);
     const combatants: CombatantVM[] = (encounter?.participants ?? [])

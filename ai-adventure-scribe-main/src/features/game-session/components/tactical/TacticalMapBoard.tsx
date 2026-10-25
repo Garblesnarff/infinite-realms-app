@@ -142,13 +142,7 @@ function TacticalMapBoardView({
       )}
       aria-label="Tactical combat"
     >
-      <div className="flex items-center justify-between gap-2 px-3 py-2 text-sm text-infinite-gold">
-        <span className="font-display">
-          {combatState.activeEncounter
-            ? `Initiative · round ${combatState.activeEncounter.currentRound}`
-            : 'Tactical map'}
-          {activePlayer ? ' · your turn' : ''}
-        </span>
+      <div className="flex items-center justify-end gap-2 px-3 py-2 text-sm text-infinite-gold">
         <div className="flex gap-2">
           {aoeTemplate?.state === 'player-pending' && (
             <Button size="sm" onClick={confirmAoE}>
