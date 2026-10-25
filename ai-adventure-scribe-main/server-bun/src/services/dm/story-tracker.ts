@@ -456,6 +456,8 @@ export function trackerDirectiveText(input: {
    * (turn count vs budget); the model still narrates the move.
    */
   pacing?: { turns: number; budget: number; clockName: string | null } | null;
+  /** #1091: an encounter is active; the climax and pacing lines wait. */
+  inCombat?: boolean;
 }): string | null {
   const lines: string[] = [];
   for (const tracker of input.trackers) {
@@ -463,7 +465,18 @@ export function trackerDirectiveText(input: {
   }
   const phase = input.phase;
   const oneShot = input.campaignLength === 'one-shot';
-  if (phase?.phase === 'climax') {
+  // #1091: mid-fight, the climax, ending and pacing lines wait for the
+  // fight to end; the clock lines still render.
+  const combatHold =
+    input.inCombat === true &&
+    (phase?.phase === 'climax' ||
+      (!phase && !!input.pacing && input.pacing.turns >= pacingDirectiveTurn(input.pacing.budget)));
+  if (combatHold) {
+    lines.push(
+      'Combat is under way: resolve the fight first; the story’s climax and ending wait until it is over.',
+    );
+  }
+  if (!combatHold && phase?.phase === 'climax') {
     // Fail safe on the declared length, never on a stored phase flag:
     // the campaignLength doc says absent or non-'one-shot' lengths fail
     // safe, and a stored budget phase can outlive a campaign_length edit,
@@ -532,7 +545,7 @@ export function trackerDirectiveText(input: {
     }
   }
   const pacing = input.pacing;
-  if (!phase && pacing && pacing.turns >= pacingDirectiveTurn(pacing.budget)) {
+  if (!combatHold && !phase && pacing && pacing.turns >= pacingDirectiveTurn(pacing.budget)) {
     const clockRef = pacing.clockName ? `the ${pacing.clockName} Clock` : 'the story clock';
     lines.push(
       `The story is at turn ${pacing.turns} of ${pacing.budget} in this one-shot — move ` +
@@ -562,17 +575,13 @@ export function mergeStoredTrackers(
   definitions: ClockDefinition[],
   stored: Array<{ name: string; value: number; limit: number }>,
 ): Array<{ name: string; value: number; limit: number }> {
-  const storedByKey = new Map(
-    stored.map((tracker) => [normalizeClockName(tracker.name), tracker]),
-  );
+  const storedByKey = new Map(stored.map((tracker) => [normalizeClockName(tracker.name), tracker]));
   const trackers = definitions.map((definition) => {
     const row = storedByKey.get(normalizeClockName(definition.name));
     return row ?? { name: definition.name, value: 0, limit: definition.limit };
   });
   for (const tracker of stored) {
-    if (
-      !definitions.some((d) => normalizeClockName(d.name) === normalizeClockName(tracker.name))
-    ) {
+    if (!definitions.some((d) => normalizeClockName(d.name) === normalizeClockName(tracker.name))) {
       trackers.push(tracker);
     }
   }
@@ -643,7 +652,11 @@ async function loadTrackerState(
     definitions = parseClockDefinitions(rows);
   }
   const trackers = await db
-    .select({ name: sessionTrackers.name, value: sessionTrackers.value, limit: sessionTrackers.limit })
+    .select({
+      name: sessionTrackers.name,
+      value: sessionTrackers.value,
+      limit: sessionTrackers.limit,
+    })
     .from(sessionTrackers)
     .where(eq(sessionTrackers.sessionId, sessionId));
   const stored = (session.sessionState as { tracker?: TrackerPhaseState } | null)?.tracker;
@@ -652,6 +665,7 @@ async function loadTrackerState(
   // the saved player message, it inserts no new one). gameSessions'
   // turnCount is NOT the unit: it counts inserted messages of every
   // speaker type.
+  // #1091: count typed player turns only (exclude dice-roll answers).
   let playerTurns = 0;
   if (options?.countTurns && session.campaignLength === 'one-shot') {
     const [{ count }] = await db
@@ -661,6 +675,7 @@ async function loadTrackerState(
         and(
           eq(dialogueHistory.sessionId, sessionId),
           eq(dialogueHistory.speakerType, 'player'),
+          sql`coalesce(${dialogueHistory.context}->>'intent', '') <> 'dice_roll'`,
         ),
       );
     playerTurns = count;
@@ -724,14 +739,26 @@ export async function loadStoryTrackerDirective(input: {
     });
     const budget = pacingBudgetFor(state.campaignLength);
     const pacing = budget !== null ? { turns: state.playerTurns, budget } : null;
+    let inCombat = false;
+    if (state.campaignLength === 'one-shot') {
+      try {
+        const { CombatEncounterService } = await import('../combat/combat-encounter-service.js');
+        const encounter = await CombatEncounterService.getActiveEncounter(
+          input.sessionId,
+          input.userId,
+        );
+        inCombat = !!encounter;
+      } catch {
+        inCombat = false;
+      }
+    }
     return {
       text: trackerDirectiveText({
         trackers,
         phase: state.phase,
         campaignLength: state.campaignLength,
-        pacing: pacing
-          ? { ...pacing, clockName: state.definitions[0]?.name ?? null }
-          : null,
+        pacing: pacing ? { ...pacing, clockName: state.definitions[0]?.name ?? null } : null,
+        inCombat,
       }),
       phase: state.phase,
       endingAtLimit,
@@ -961,13 +988,18 @@ export async function applyStoryTrackers(input: {
     // the count cannot double-fire. This check runs even with no changes
     // and no final beat — a DM that never moves a clock sends no changes,
     // which is exactly the drift the budget exists to catch.
+    // #1091: count typed player turns only (exclude dice-roll answers).
     let pacingTrip = false;
     if (state.campaignLength === 'one-shot' && !phase) {
       const [{ count: playerTurns }] = await tx
         .select({ count: sql<number>`count(*)::int` })
         .from(dialogueHistory)
         .where(
-          and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'player')),
+          and(
+            eq(dialogueHistory.sessionId, sessionId),
+            eq(dialogueHistory.speakerType, 'player'),
+            sql`coalesce(${dialogueHistory.context}->>'intent', '') <> 'dice_roll'`,
+          ),
         );
       const budget = pacingBudgetFor(state.campaignLength);
       pacingTrip = budget !== null && playerTurns >= budget;
@@ -1174,22 +1206,42 @@ export async function applyStoryTrackers(input: {
         });
       }
     } else {
-      // The clock filled on a campaign whose rules end the story there:
-      // force the ending through #1034's applier (its claim, one-shot
-      // scope and completion write), with an engine summary — the DM's
-      // own declaration, when it comes, finds the stored ending and
-      // reports it back.
-      try {
-        const { applyStoryEnding } = await import('./story-ending.js');
-        await applyStoryEnding({
-          userId,
+      let inCombat = false;
+      if (input.changesDeferred === true) {
+        inCombat = true;
+      } else {
+        try {
+          const { CombatEncounterService } = await import('../combat/combat-encounter-service.js');
+          const encounter = await CombatEncounterService.getActiveEncounter(sessionId, userId);
+          inCombat = !!encounter;
+        } catch {
+          inCombat = false;
+        }
+      }
+      if (inCombat) {
+        logger.info({
+          msg: 'DM_STORY_TRACKER_ENDING_DEFERRED_COMBAT',
           sessionId,
-          ending: {
-            summary: `The ${clock.name} Clock reached ${clock.limit} of ${clock.limit} — the adventure ends.`,
-          },
+          clock: clock.name,
         });
-      } catch (error) {
-        logger.warn({ msg: 'DM_STORY_TRACKER_FORCE_ENDING_FAILED', sessionId, error });
+      } else {
+        // The clock filled on a campaign whose rules end the story there:
+        // force the ending through #1034's applier (its claim, one-shot
+        // scope and completion write), with an engine summary — the DM's
+        // own declaration, when it comes, finds the stored ending and
+        // reports it back.
+        try {
+          const { applyStoryEnding } = await import('./story-ending.js');
+          await applyStoryEnding({
+            userId,
+            sessionId,
+            ending: {
+              summary: `The ${clock.name} Clock reached ${clock.limit} of ${clock.limit} — the adventure ends.`,
+            },
+          });
+        } catch (error) {
+          logger.warn({ msg: 'DM_STORY_TRACKER_FORCE_ENDING_FAILED', sessionId, error });
+        }
       }
     }
   }

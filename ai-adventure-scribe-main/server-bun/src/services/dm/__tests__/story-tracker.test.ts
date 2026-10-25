@@ -82,9 +82,7 @@ describe('parseClockDefinitions', () => {
       { condition: 'the Score Clock reaches 3', metadata: {} },
       { condition: 'the Score Clock reaches 5', metadata: { limit: 6, at_limit: 'ending' } },
     ];
-    expect(parseClockDefinitions(rows)).toEqual([
-      { name: 'Score', limit: 6, atLimit: 'ending' },
-    ]);
+    expect(parseClockDefinitions(rows)).toEqual([{ name: 'Score', limit: 6, atLimit: 'ending' }]);
   });
 
   test('a metadata limit is not raised by a later higher reaches row', () => {
@@ -92,9 +90,7 @@ describe('parseClockDefinitions', () => {
       { condition: 'the Score Clock reaches 5', metadata: { limit: 5 } },
       { condition: 'the Score Clock reaches 6', metadata: {} },
     ];
-    expect(parseClockDefinitions(rows)).toEqual([
-      { name: 'Score', limit: 5, atLimit: 'climax' },
-    ]);
+    expect(parseClockDefinitions(rows)).toEqual([{ name: 'Score', limit: 5, atLimit: 'climax' }]);
   });
 
   test('non-parseable rows define nothing (the audit’s two unparseable campaigns)', () => {
@@ -840,5 +836,54 @@ describe('one-shot pacing budget (#1083)', () => {
     expect(
       engineWrittenEndingSummary({ clock: 'Breath', finalBeat: true, budgetForced: true }),
     ).toContain('final beat');
+  });
+});
+
+describe('trackerDirectiveText combat suppression (#1091)', () => {
+  test('a budget-forced climax phase with inCombat true renders no campaign_ending / turn budget text and renders the combat line', () => {
+    const text = trackerDirectiveText({
+      trackers: [{ name: 'Breath', value: 3, limit: 6 }],
+      campaignLength: 'one-shot',
+      phase: {
+        phase: 'climax',
+        clock: 'Breath',
+        climaxTurns: 0,
+        endingRequired: false,
+        budgetForced: true,
+        lastMessageId: 'm60',
+      },
+      inCombat: true,
+    });
+    expect(text).not.toContain('campaign_ending');
+    expect(text).not.toContain('turn budget is reached');
+    expect(text).toContain('Combat is under way');
+  });
+
+  test('with inCombat false the old text is unchanged', () => {
+    const text = trackerDirectiveText({
+      trackers: [{ name: 'Breath', value: 3, limit: 6 }],
+      campaignLength: 'one-shot',
+      phase: {
+        phase: 'climax',
+        clock: 'Breath',
+        climaxTurns: 0,
+        endingRequired: false,
+        budgetForced: true,
+        lastMessageId: 'm60',
+      },
+      inCombat: false,
+    });
+    expect(text).toContain('turn budget is reached');
+  });
+
+  test('pacing at turn 50 of 60 with inCombat true renders no move toward the climax', () => {
+    const text = trackerDirectiveText({
+      trackers: [{ name: 'Breath', value: 3, limit: 6 }],
+      phase: null,
+      pacing: { turns: 50, budget: 60, clockName: 'Breath' },
+      inCombat: true,
+    });
+    expect(text).not.toContain('move toward the climax');
+    expect(text).toContain('Combat is under way');
   });
 });

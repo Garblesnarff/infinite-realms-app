@@ -45,10 +45,7 @@ import {
 
 if (hasRealDb) {
   const target = new URL(realDbUrl);
-  if (
-    target.hostname !== '127.0.0.1' ||
-    !['55432', '55444'].includes(target.port)
-  ) {
+  if (target.hostname !== '127.0.0.1' || !['55432', '55444'].includes(target.port)) {
     throw new Error(
       `[story-ending] refusing real-DB fixtures against ${target.hostname}:${target.port}; use a dedicated local Postgres (CI 55432 / lane 55444)`,
     );
@@ -69,12 +66,8 @@ process.env.RATE_LIMIT_LLM_USER_PRO = '10000';
 process.env.RATE_LIMIT_LLM_USER_ENTERPRISE = '10000';
 
 const authModule = await importWithRealDb(() => import('../../lib/auth.js'));
-const { LLMProviderService } = await importWithRealDb(
-  () => import('../llm-provider-service.js'),
-);
-const { createRequestPipelineApp } = await importWithRealDb(
-  () => import('../../http-pipeline.js'),
-);
+const { LLMProviderService } = await importWithRealDb(() => import('../llm-provider-service.js'));
+const { createRequestPipelineApp } = await importWithRealDb(() => import('../../http-pipeline.js'));
 const { llmRoutes } = await importWithRealDb(() => import('../../routes/v1/llm.js'));
 const { SessionMessageService } = await importWithRealDb(
   () => import('../session/session-message-service.js'),
@@ -85,6 +78,7 @@ const {
   campaignRules,
   characters,
   characterStats,
+  combatEncounters,
   dialogueHistory,
   experienceEvents,
   gameSessions,
@@ -129,7 +123,7 @@ const GARDENERS_HEIR_RULES: Array<{
   },
   {
     ruleType: 'mechanic',
-    condition: 'Ombu, the hollow\'s heart, dies',
+    condition: "Ombu, the hollow's heart, dies",
     effect:
       'The Glass decays and the Heartwood wakes; the story moves to its final choice ' +
       'with the Clock at its last segment.',
@@ -138,12 +132,12 @@ const GARDENERS_HEIR_RULES: Array<{
   {
     ruleType: 'mechanic',
     condition: 'The party spends a Glass Prophet trick (3 per story)',
-    effect: 'A vision of one landing\'s ending is shown; Prophet tricks left decreases by one.',
+    effect: "A vision of one landing's ending is shown; Prophet tricks left decreases by one.",
     priority: 6,
   },
   {
     ruleType: 'mechanic',
-    condition: 'The party earns the grove\'s trust (Favor reaches 5 of 5)',
+    condition: "The party earns the grove's trust (Favor reaches 5 of 5)",
     effect: 'The Heartwood speaks plainly and the final choice is offered at once.',
     priority: 7,
   },
@@ -169,7 +163,7 @@ const GARDENERS_HEIR_RULES: Array<{
     ruleType: 'world_law',
     condition: 'The story ends at any landing',
     effect:
-      'The Gardener\'s Heir is a one-shot: the campaign is complete, the characters\' ' +
+      "The Gardener's Heir is a one-shot: the campaign is complete, the characters' " +
       'story is told, and there is no next session.',
     priority: 10,
   },
@@ -177,14 +171,14 @@ const GARDENERS_HEIR_RULES: Array<{
 
 const ENDING_SUMMARY =
   'The party chose the Sunken Temple landing as the Clock filled; the Hollow closed ' +
-  'over the Heartwood and the Gardener\'s Heir ended.';
+  "over the Heartwood and the Gardener's Heir ended.";
 
 const endingReply = {
   text:
     'The last segment of the Clock fills as your boots find the Sunken Temple landing. ' +
     'Roots sigh shut over the Heartwood behind you, and the Hollow — patient all along — ' +
     'closes like a held breath let go. Ombu is gone, the Glass is dark, and the grove ' +
-    'will keep what was planted here. The story of the Gardener\'s Heir is told.',
+    "will keep what was planted here. The story of the Gardener's Heir is told.",
   options: [],
   narration_segments: [],
   roll_requests: [],
@@ -194,7 +188,7 @@ const endingReply = {
   map_actions: [],
   handout_actions: [],
   scene_spec: null,
-  xp_award: { amount: 300, reason: 'Completed the Gardener\'s Heir one-shot' },
+  xp_award: { amount: 300, reason: "Completed the Gardener's Heir one-shot" },
   campaign_ending: { summary: ENDING_SUMMARY },
 };
 
@@ -240,9 +234,9 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
       isPublished: true,
       isComplete: true,
     });
-    await database.insert(campaignRules).values(
-      GARDENERS_HEIR_RULES.map((rule) => ({ campaignId: starterId, ...rule })),
-    );
+    await database
+      .insert(campaignRules)
+      .values(GARDENERS_HEIR_RULES.map((rule) => ({ campaignId: starterId, ...rule })));
   });
 
   afterAll(async () => {
@@ -257,10 +251,19 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
           .delete(experienceEvents)
           .where(eq(experienceEvents.sessionId, id))
           .catch(() => {});
-        await database.delete(gameSessions).where(eq(gameSessions.id, id)).catch(() => {});
+        await database
+          .delete(gameSessions)
+          .where(eq(gameSessions.id, id))
+          .catch(() => {});
       }
-      await database.delete(characters).where(eq(characters.userId, userId)).catch(() => {});
-      await database.delete(campaigns).where(eq(campaigns.userId, userId)).catch(() => {});
+      await database
+        .delete(characters)
+        .where(eq(characters.userId, userId))
+        .catch(() => {});
+      await database
+        .delete(campaigns)
+        .where(eq(campaigns.userId, userId))
+        .catch(() => {});
       const starterId = testId('the-gardeners-heir');
       await database
         .delete(campaignRules)
@@ -365,10 +368,9 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
       model: 't/m',
       usage: { inputTokens: 4200, outputTokens: 310 },
     } as never);
-    const watchdog = spyOn(
-      dmReplyPersistence,
-      'scheduleDmReplyWatchdog',
-    ).mockResolvedValue(undefined as never);
+    const watchdog = spyOn(dmReplyPersistence, 'scheduleDmReplyWatchdog').mockResolvedValue(
+      undefined as never,
+    );
     const trustProxyHeaders = process.env.TRUST_PROXY_HEADERS;
     process.env.TRUST_PROXY_HEADERS = 'true';
     try {
@@ -416,13 +418,7 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
   }
 
   const sessionRow = async (sessionId: string) =>
-    (
-      await database
-        .select()
-        .from(gameSessions)
-        .where(eq(gameSessions.id, sessionId))
-        .limit(1)
-    )[0];
+    (await database.select().from(gameSessions).where(eq(gameSessions.id, sessionId)).limit(1))[0];
 
   const endingRows = async (sessionId: string) =>
     (
@@ -546,9 +542,7 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
       ],
       userId,
     );
-    const { applyStoryEnding } = await importWithRealDb(
-      () => import('../dm/story-ending.js'),
-    );
+    const { applyStoryEnding } = await importWithRealDb(() => import('../dm/story-ending.js'));
 
     const first = await applyStoryEnding({
       userId,
@@ -603,9 +597,7 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
 
   test('a declaration after a manual end does not rewrite the ended session', async () => {
     const { characterId, sessionId } = await seedWorld('manual-end');
-    const { SessionService } = await importWithRealDb(
-      () => import('../session-service.js'),
-    );
+    const { SessionService } = await importWithRealDb(() => import('../session-service.js'));
     await SessionService.completeSession(sessionId, userId, 'Ended by hand at the Root Stair.');
 
     const { status, body } = await dmTurn({
@@ -770,9 +762,9 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
       isPublished: true,
       isComplete: true,
     });
-    await database.insert(campaignRules).values(
-      heldRestRules().map((rule) => ({ campaignId: starterIds.heldrest, ...rule })),
-    );
+    await database
+      .insert(campaignRules)
+      .values(heldRestRules().map((rule) => ({ campaignId: starterIds.heldrest, ...rule })));
   });
 
   afterAll(async () => {
@@ -787,10 +779,19 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
           .delete(dialogueHistory)
           .where(eq(dialogueHistory.sessionId, id))
           .catch(() => {});
-        await database.delete(gameSessions).where(eq(gameSessions.id, id)).catch(() => {});
+        await database
+          .delete(gameSessions)
+          .where(eq(gameSessions.id, id))
+          .catch(() => {});
       }
-      await database.delete(characters).where(eq(characters.userId, userId)).catch(() => {});
-      await database.delete(campaigns).where(eq(campaigns.userId, userId)).catch(() => {});
+      await database
+        .delete(characters)
+        .where(eq(characters.userId, userId))
+        .catch(() => {});
+      await database
+        .delete(campaigns)
+        .where(eq(campaigns.userId, userId))
+        .catch(() => {});
       for (const starterId of [
         starterIds.breath,
         starterIds.score,
@@ -824,7 +825,14 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
       .returning({ id: campaigns.id });
     const [{ id: characterId }] = await database
       .insert(characters)
-      .values({ userId, campaignId, name: 'Tavo Brejo', class: 'Ranger', level: 3, experiencePoints: 1050 })
+      .values({
+        userId,
+        campaignId,
+        name: 'Tavo Brejo',
+        class: 'Ranger',
+        level: 3,
+        experiencePoints: 1050,
+      })
       .returning({ id: characters.id });
     await database.insert(characterStats).values({
       characterId,
@@ -906,10 +914,9 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
         usage: { inputTokens: 4200, outputTokens: 310 },
       };
     }) as never);
-    const watchdog = spyOn(
-      dmReplyPersistence,
-      'scheduleDmReplyWatchdog',
-    ).mockResolvedValue(undefined as never);
+    const watchdog = spyOn(dmReplyPersistence, 'scheduleDmReplyWatchdog').mockResolvedValue(
+      undefined as never,
+    );
     const trustProxyHeaders = process.env.TRUST_PROXY_HEADERS;
     process.env.TRUST_PROXY_HEADERS = 'true';
     try {
@@ -985,12 +992,10 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
         .limit(1)
     )[0];
 
-  const sessionRow = async (
-    sessionId: string,
-  ): Promise<Record<string, unknown> | undefined> =>
-    (await database.select().from(gameSessions).where(eq(gameSessions.id, sessionId)).limit(1))[0] as
-      | Record<string, unknown>
-      | undefined;
+  const sessionRow = async (sessionId: string): Promise<Record<string, unknown> | undefined> =>
+    (
+      await database.select().from(gameSessions).where(eq(gameSessions.id, sessionId)).limit(1)
+    )[0] as Record<string, unknown> | undefined;
 
   const trackerPhase = async (
     sessionId: string,
@@ -1145,7 +1150,9 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
       capturedPrompts: prompts,
     });
     expect(quietAfter.status).toBe(200);
-    expect(envelopeOf(quietAfter.body).story_trackers).toEqual([{ name: 'Breath', value: 5, limit: 6 }]);
+    expect(envelopeOf(quietAfter.body).story_trackers).toEqual([
+      { name: 'Breath', value: 5, limit: 6 },
+    ]);
   }, 30_000);
 
   test('#1062 self-review: a model-supplied story_trackers value never renders as server truth', async () => {
@@ -1165,9 +1172,9 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
       capturedPrompts: prompts,
     });
     expect(quiet.status).toBe(200);
-    expect((JSON.parse(quiet.body.text as string) as Record<string, unknown>).story_trackers).toEqual([
-      { name: 'Breath', value: 0, limit: 6 },
-    ]);
+    expect(
+      (JSON.parse(quiet.body.text as string) as Record<string, unknown>).story_trackers,
+    ).toEqual([{ name: 'Breath', value: 0, limit: 6 }]);
 
     // Clock-moving turn: the stored post-apply value wins, not the forgery.
     const moved = await dmTurn({
@@ -1178,9 +1185,9 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
       capturedPrompts: prompts,
     });
     expect(moved.status).toBe(200);
-    expect((JSON.parse(moved.body.text as string) as Record<string, unknown>).story_trackers).toEqual([
-      { name: 'Breath', value: 5, limit: 6 },
-    ]);
+    expect(
+      (JSON.parse(moved.body.text as string) as Record<string, unknown>).story_trackers,
+    ).toEqual([{ name: 'Breath', value: 5, limit: 6 }]);
     expect((await trackerRow(sessionId, 'Breath'))?.value).toBe(5);
   }, 30_000);
 
@@ -1212,10 +1219,7 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
     // The forced ending went through applyStoryEnding: its engine row is
     // the one stored ending for the session.
     const rows = (
-      await database
-        .select()
-        .from(dialogueHistory)
-        .where(eq(dialogueHistory.sessionId, sessionId))
+      await database.select().from(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId))
     ).filter(
       (row) =>
         row.speakerType === 'system' &&
@@ -1508,7 +1512,10 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
       expect(await trackerRow(sessionId, 'Breath')).toBeUndefined();
       expect((await sessionRow(sessionId))?.status).toBe('active');
     } finally {
-      await database.delete(campaigns).where(eq(campaigns.id, otherCampaignId)).catch(() => {});
+      await database
+        .delete(campaigns)
+        .where(eq(campaigns.id, otherCampaignId))
+        .catch(() => {});
     }
   }, 30_000);
 
@@ -1672,10 +1679,7 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
     // ending), and the tracker change in the same reply never landed —
     // the tracker step found the session already completed.
     const rows = (
-      await database
-        .select()
-        .from(dialogueHistory)
-        .where(eq(dialogueHistory.sessionId, sessionId))
+      await database.select().from(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId))
     ).filter(
       (row) =>
         row.speakerType === 'system' &&
@@ -1753,10 +1757,7 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
   /** The session's stored ending rows (the applier's engine lines). */
   const endingRowsFor = async (sessionId: string) =>
     (
-      await database
-        .select()
-        .from(dialogueHistory)
-        .where(eq(dialogueHistory.sessionId, sessionId))
+      await database.select().from(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId))
     ).filter(
       (row) =>
         row.speakerType === 'system' &&
@@ -2110,4 +2111,150 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
     expect((await sessionRow(sessionId))?.status).toBe('active');
     expect(await endingRowsFor(sessionId)).toHaveLength(0);
   }, 180_000);
+  test('#1091: an ending clock filling during an active encounter waits for the fight to end', async () => {
+    const { characterId, sessionId } = await seedWorld('ending-combat', 'score');
+    const prompts: string[] = [];
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'The wedge comes free in my hands.',
+      reply: trackerReply([{ name: 'Score', set: 5 }]),
+      capturedPrompts: prompts,
+    });
+    // A fight is under way (server truth: an active encounter row), and
+    // the crossing turn reaches the ending limit.
+    const [encounter] = await database
+      .insert(combatEncounters)
+      .values({ sessionId, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
+      .returning({ id: combatEncounters.id });
+    try {
+      const crossing = await dmTurn({
+        sessionId,
+        characterId,
+        playerInput: 'I pull the last wedge while the guard swings at me.',
+        reply: trackerReply([{ name: 'Score', delta: 1 }]),
+        capturedPrompts: prompts,
+      });
+      expect(crossing.status).toBe(200);
+      expect((await trackerRow(sessionId, 'Score'))?.value).toBe(6);
+      expect((await sessionRow(sessionId))?.status).toBe('active');
+      expect(await endingRowsFor(sessionId)).toHaveLength(0);
+
+      // An in-combat turn with the ending owed still does not end it.
+      const combatTurn = await dmTurn({
+        sessionId,
+        characterId,
+        playerInput: 'I strike the guard.',
+        reply: { ...baseReply },
+        capturedPrompts: prompts,
+        inCombat: true,
+      });
+      expect(combatTurn.status).toBe(200);
+      expect((await sessionRow(sessionId))?.status).toBe('active');
+      expect(await endingRowsFor(sessionId)).toHaveLength(0);
+
+      // The fight ends: the first story turn after it delivers the ending.
+      await database
+        .update(combatEncounters)
+        .set({ status: 'completed' })
+        .where(eq(combatEncounters.id, encounter!.id));
+      const storyTurn = await dmTurn({
+        sessionId,
+        characterId,
+        playerInput: 'The guard falls. What happens now?',
+        reply: { ...baseReply },
+        capturedPrompts: prompts,
+      });
+      expect(storyTurn.status).toBe(200);
+      expect((await sessionRow(sessionId))?.status).toBe('completed');
+      expect(await endingRowsFor(sessionId)).toHaveLength(1);
+    } finally {
+      await database.delete(combatEncounters).where(eq(combatEncounters.id, encounter!.id));
+    }
+  }, 60_000);
+
+  test('#1091: dice-roll answers do not count toward the one-shot turn budget', async () => {
+    const { characterId, sessionId } = await seedWorld('pacing-rolls', 'breath');
+    const prompts: string[] = [];
+    // A fight-heavy one-shot: 70 roll answers (the real producer's shape,
+    // SessionMessageService saves them as player rows with
+    // context.intent = 'dice_roll') and only a handful of typed turns.
+    await database.insert(dialogueHistory).values(
+      Array.from({ length: 70 }, (_, n) => ({
+        sessionId,
+        speakerType: 'player',
+        message: `Rolled 1d20: ${(n % 20) + 1}`,
+        context: { intent: 'dice_roll', rollRequestId: `roll-${n}` },
+      })),
+    );
+    for (let n = 1; n <= 3; n++) {
+      const res = await dmTurn({
+        sessionId,
+        characterId,
+        playerInput: `I press on; typed turn ${n}.`,
+        reply: { ...baseReply },
+        capturedPrompts: prompts,
+      });
+      expect(res.status).toBe(200);
+    }
+    expect(prompts.some((prompt) => prompt.includes('move toward the climax'))).toBe(false);
+    expect(prompts.some((prompt) => prompt.includes('turn budget is reached'))).toBe(false);
+    expect((await trackerPhase(sessionId))?.tracker?.phase).toBeUndefined();
+    expect((await sessionRow(sessionId))?.status).toBe('active');
+  }, 60_000);
+  test('#1091: a budget trip during an active encounter holds the climax directive until the fight ends', async () => {
+    const { characterId, sessionId } = await seedWorld('pacing-combat', 'breath');
+    const prompts: string[] = [];
+    // 60 typed turns already played (the SessionMessageService player-row
+    // shape, no roll intent), then a fight opens.
+    await database.insert(dialogueHistory).values(
+      Array.from({ length: 60 }, (_, n) => ({
+        sessionId,
+        speakerType: 'player',
+        message: `Typed turn ${n + 1}.`,
+      })),
+    );
+    const [encounter] = await database
+      .insert(combatEncounters)
+      .values({ sessionId, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
+      .returning({ id: combatEncounters.id });
+    try {
+      for (let n = 1; n <= 2; n++) {
+        const res = await dmTurn({
+          sessionId,
+          characterId,
+          playerInput: `I strike the wraith; swing ${n}.`,
+          reply: { ...baseReply },
+          capturedPrompts: prompts,
+          inCombat: true,
+        });
+        expect(res.status).toBe(200);
+      }
+      expect((await trackerPhase(sessionId))?.tracker?.budgetForced).toBe(true);
+      for (const prompt of prompts) {
+        expect(prompt).not.toContain('move toward the climax');
+        expect(prompt).not.toContain('campaign_ending');
+        expect(prompt).toContain('Combat is under way');
+      }
+
+      await database
+        .update(combatEncounters)
+        .set({ status: 'completed' })
+        .where(eq(combatEncounters.id, encounter!.id));
+      const before = prompts.length;
+      const res = await dmTurn({
+        sessionId,
+        characterId,
+        playerInput: 'The wraith fades. I look around.',
+        reply: { ...baseReply },
+        capturedPrompts: prompts,
+      });
+      expect(res.status).toBe(200);
+      const after = prompts.slice(before).join('\n');
+      expect(after).not.toContain('Combat is under way');
+      expect(after).toContain('budget-forced climax');
+    } finally {
+      await database.delete(combatEncounters).where(eq(combatEncounters.id, encounter!.id));
+    }
+  }, 60_000);
 });
