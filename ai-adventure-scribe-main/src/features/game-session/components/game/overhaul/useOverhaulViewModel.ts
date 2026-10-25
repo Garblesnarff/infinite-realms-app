@@ -194,9 +194,17 @@ export type SheetVitalState = 'standing' | 'dying' | 'stabilized' | 'dead';
 
 function sheetClassIdentity(character: Character): Pick<CharacterSheetVM, 'subtitle' | 'features'> {
   const classLabel = formatClassWithSubclass(character.class?.name, character.subclassName);
+  // #824: the fighting-style feature row is named just "Fighting Style". Name the style
+  // on the line from the character's styles, so the sheet says "Fighting Style: Archery".
+  const styles = character.fightingStyles ?? [];
+  const features = character.grantedFeatureNames?.map((name) =>
+    name === 'Fighting Style' && styles.length > 0
+      ? `Fighting Style: ${styles.map(prettify).join(', ')}`
+      : name,
+  );
   return {
     subtitle: [character.race?.name, classLabel || null].filter(Boolean).join(' · '),
-    ...(character.grantedFeatureNames ? { features: character.grantedFeatureNames } : {}),
+    ...(features ? { features } : {}),
   };
 }
 
