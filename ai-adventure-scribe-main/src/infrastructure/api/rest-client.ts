@@ -455,6 +455,7 @@ export interface GenerateTextParams {
     messageId: string;
     inCombat?: boolean;
     narrationGated?: boolean;
+    holdProse?: boolean;
     rollRequestId?: string;
   };
   combatEntry?: {

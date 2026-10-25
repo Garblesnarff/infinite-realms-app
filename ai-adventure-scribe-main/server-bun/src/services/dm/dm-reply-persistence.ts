@@ -41,7 +41,8 @@ export type DmReplySkipReason =
   | 'combat_entry_pending'
   | 'combat_actions'
   | 'unverified_harm_claim'
-  | 'client_in_combat';
+  | 'client_in_combat'
+  | 'client_cancellable';
 
 const nonEmptyArray = (value: unknown): boolean => Array.isArray(value) && value.length > 0;
 
@@ -98,6 +99,8 @@ export interface PersistDmReplyParams {
   clientInCombat?: boolean;
   /** The client will run its narration gate on this turn. Absent means it will. */
   narrationGated?: boolean;
+  /** The client may cancel this sheet-cast turn after generation, so do not keep provisional prose. */
+  holdProse?: boolean;
 }
 
 export interface PersistDmReplyResult {
@@ -112,9 +115,11 @@ export interface PersistDmReplyResult {
 export async function persistGeneratedDmReply(
   params: PersistDmReplyParams,
 ): Promise<PersistDmReplyResult> {
-  const reason = params.clientInCombat
-    ? 'client_in_combat'
-    : dmReplySkipReason(params.envelope, { narrationGated: params.narrationGated });
+  const reason = params.holdProse
+    ? 'client_cancellable'
+    : params.clientInCombat
+      ? 'client_in_combat'
+      : dmReplySkipReason(params.envelope, { narrationGated: params.narrationGated });
   if (reason || !params.envelope)
     return { persisted: false, reason: reason ?? 'unparsed_envelope' };
 
@@ -174,6 +179,9 @@ const FALLBACK_SKIP_REASONS: ReadonlySet<string> = new Set([
   'combat_entry_pending',
   'combat_actions',
   'client_in_combat',
+  // A cancellable sheet cast the player gave up: resurrecting its prose would narrate a cast
+  // that never happened, and its roll popup with it (#1021).
+  'client_cancellable',
 ]);
 
 /**

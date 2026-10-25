@@ -14,9 +14,11 @@ import {
   characterConditions,
   characterEquipment,
   characterHitDice,
+  characterSpells,
   characterSpellSlots,
   characterStats,
   characters,
+  classes,
   combatEncounters,
   combatParticipantConditions,
   combatParticipantStatus,
@@ -25,6 +27,8 @@ import {
   dialogueHistory,
   gameSessions,
   restEvents,
+  spellSlotUsageLog,
+  spells,
 } from '../../../../../db/schema/index';
 import { equipmentSaveWireBody } from '../../../../../shared/test-fixtures/equipment-save-wire-body';
 import {
@@ -70,6 +74,11 @@ let generatedText = JSON.stringify({
   text: 'You catch your breath and press on.',
   rest: { type: 'short' },
 });
+// Hook a single test runs: when set, the provider stub calls it as generation
+// starts, so a test can abort the request signal mid-generation (the player
+// cancelling a sheet cast while the DM reads the scene). Null by default, so
+// every other test in this file is unaffected.
+let onGenerate: (() => void) | null = null;
 mock.module('../../../middleware/admin.js', () => ({ isAdmin: () => false }));
 mock.module('../../../middleware/rate-limit.js', () => ({
   planRateLimit: () => new Elysia({ name: 'test-plan-rate-limit' }),
@@ -86,11 +95,14 @@ mock.module('../../../services/ai-usage-service.js', () => ({
 }));
 mock.module('../../../services/llm-provider-service.js', () => ({
   LLMProviderService: {
-    generate: async () => ({
-      text: generatedText,
-      provider: 'openrouter',
-      model: 'test/model',
-    }),
+    generate: async () => {
+      onGenerate?.();
+      return {
+        text: generatedText,
+        provider: 'openrouter',
+        model: 'test/model',
+      };
+    },
   },
 }));
 mock.module('../../../services/session/session-message-service.js', () => ({
@@ -667,12 +679,18 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
   let unconsciousId: string;
   let poisonedId: string;
 
-  const request = (path: string, method: string, body?: unknown): Promise<Response> =>
+  const request = (
+    path: string,
+    method: string,
+    body?: unknown,
+    init?: { signal?: AbortSignal },
+  ): Promise<Response> =>
     pipeline.handle(
       new Request(`http://localhost${path}`, {
         method,
         headers: authHeaders,
         body: body === undefined ? undefined : JSON.stringify(body),
+        signal: init?.signal,
       }),
     );
 
@@ -1468,6 +1486,281 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
     await db.delete(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId));
     await db.delete(gameSessions).where(eq(gameSessions.id, sessionId));
     await db.delete(characterStats).where(eq(characterStats.characterId, charId));
+    await db.delete(characters).where(eq(characters.id, charId));
+    await db.delete(campaigns).where(eq(campaigns.id, campId));
+  });
+
+  it('#1021: a sheet cast spends a real story slot through POST /v1/llm/generate and its prose is held, not persisted', async () => {
+    if (!hasRealDb) return;
+
+    const [{ id: campId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('1021-cast-camp') })
+      .returning({ id: campaigns.id });
+    const [{ id: charId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId: campId,
+        name: testId('1021-wizard'),
+        level: 1,
+        class: 'Wizard',
+        knownSpells: 'Burning Hands',
+        preparedSpells: 'Burning Hands',
+      })
+      .returning({ id: characters.id });
+    const [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId: campId, characterId: charId, status: 'active' })
+      .returning({ id: gameSessions.id });
+    // Reference rows the test owns: inserted when the database has no seeds (a drizzle-kit
+    // push creates tables but no class/spell rows), left in place when seeds already exist —
+    // the same onConflictDoNothing pattern the #170 block uses for conditionsLibrary.
+    await db
+      .insert(classes)
+      .values({ name: 'Wizard', hitDie: 6, spellcastingAbility: 'INT', casterType: 'full' })
+      .onConflictDoNothing();
+    await db
+      .insert(spells)
+      .values({
+        name: 'Burning Hands',
+        level: 1,
+        school: 'Evocation',
+        castingTime: '1 action',
+        rangeText: 'Self (15-foot cone)',
+        duration: 'Instantaneous',
+        description: 'Flame rolls across the room.',
+      })
+      .onConflictDoNothing();
+    const [{ id: wizardClassId }] = await db
+      .select({ id: classes.id })
+      .from(classes)
+      .where(eq(classes.name, 'Wizard'))
+      .limit(1);
+    const [{ id: burningHandsId }] = await db
+      .select({ id: spells.id })
+      .from(spells)
+      .where(eq(spells.name, 'Burning Hands'))
+      .limit(1);
+    await db.insert(characterSpells).values({
+      characterId: charId,
+      spellId: burningHandsId,
+      sourceClassId: wizardClassId,
+      isPrepared: true,
+      spellLevelLearned: 1,
+    });
+    await db.insert(characterSpellSlots).values({
+      characterId: charId,
+      spellLevel: 1,
+      totalSlots: 1,
+      usedSlots: 0,
+    });
+    const playerInput = 'I cast Burning Hands.';
+    await db.insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'player',
+      speakerId: charId,
+      message: playerInput,
+    });
+
+    // The exact body the fixed client sends for an out-of-combat sheet cast (#1021): an
+    // ordinary narrative turn (inCombat: false) whose prose is provisional because the Cast
+    // button can still cancel it (holdProse: true). Fail-on-main note: on main this
+    // test fails only at dmReplyPersisted (the schema strips holdProse and persists);
+    // its slot assertions pass on main because the body hand-writes inCombat: false.
+    // The slot regression's proof is the client shape test proving the client now sends
+    // inCombat: false; this test proves the server spends given that body.
+    generatedText = JSON.stringify({
+      text: 'Flame rolls across the room.',
+      options: [],
+      roll_requests: [],
+      combat_transition: 'none',
+    });
+    const response = await request('/v1/llm/generate', 'POST', {
+      prompt: 'The wizard casts a spell while exploring. What happens?',
+      player_input: playerInput,
+      sessionId,
+      dmReply: { messageId: '11111111-2222-4333-8444-555555555559', inCombat: false, holdProse: true },
+      combatEntry: {
+        sessionId,
+        player: {
+          characterId: charId,
+          name: testId('1021-wizard'),
+          initiativeModifier: 1,
+        },
+      },
+      provider: 'openrouter',
+      requestType: 'user',
+      maxTokens: 8192,
+      temperature: 0.9,
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { dmReplyPersisted?: boolean };
+    // The slot spend runs through the story path, and the cancellable prose is held: the
+    // server keeps no provisional row for a cast the player may still give up.
+    expect(body.dmReplyPersisted).toBe(false);
+
+    const [slot] = await db
+      .select({ usedSlots: characterSpellSlots.usedSlots })
+      .from(characterSpellSlots)
+      .where(
+        and(eq(characterSpellSlots.characterId, charId), eq(characterSpellSlots.spellLevel, 1)),
+      );
+    expect(slot?.usedSlots).toBe(1);
+    const usage = await db
+      .select({
+        spellName: spellSlotUsageLog.spellName,
+        slotLevelUsed: spellSlotUsageLog.slotLevelUsed,
+      })
+      .from(spellSlotUsageLog)
+      .where(
+        and(eq(spellSlotUsageLog.characterId, charId), eq(spellSlotUsageLog.sessionId, sessionId)),
+      );
+    expect(usage).toEqual([{ spellName: 'Burning Hands', slotLevelUsed: 1 }]);
+
+    await db.delete(spellSlotUsageLog).where(eq(spellSlotUsageLog.characterId, charId));
+    await db.delete(characterSpellSlots).where(eq(characterSpellSlots.characterId, charId));
+    await db.delete(characterSpells).where(eq(characterSpells.characterId, charId));
+    await db.delete(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId));
+    await db.delete(gameSessions).where(eq(gameSessions.id, sessionId));
+    await db.delete(characters).where(eq(characters.id, charId));
+    await db.delete(campaigns).where(eq(campaigns.id, campId));
+  });
+
+  it('#1021 FIX round 1: a sheet cast cancelled while the DM generates spends no slot through POST /v1/llm/generate', async () => {
+    if (!hasRealDb) return;
+
+    const [{ id: campId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('1021-cancel-camp') })
+      .returning({ id: campaigns.id });
+    const [{ id: charId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId: campId,
+        name: testId('1021-cancel-wizard'),
+        level: 1,
+        class: 'Wizard',
+        knownSpells: 'Burning Hands',
+        preparedSpells: 'Burning Hands',
+      })
+      .returning({ id: characters.id });
+    const [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId: campId, characterId: charId, status: 'active' })
+      .returning({ id: gameSessions.id });
+    await db
+      .insert(classes)
+      .values({ name: 'Wizard', hitDie: 6, spellcastingAbility: 'INT', casterType: 'full' })
+      .onConflictDoNothing();
+    await db
+      .insert(spells)
+      .values({
+        name: 'Burning Hands',
+        level: 1,
+        school: 'Evocation',
+        castingTime: '1 action',
+        rangeText: 'Self (15-foot cone)',
+        duration: 'Instantaneous',
+        description: 'Flame rolls across the room.',
+      })
+      .onConflictDoNothing();
+    const [{ id: wizardClassId }] = await db
+      .select({ id: classes.id })
+      .from(classes)
+      .where(eq(classes.name, 'Wizard'))
+      .limit(1);
+    const [{ id: burningHandsId }] = await db
+      .select({ id: spells.id })
+      .from(spells)
+      .where(eq(spells.name, 'Burning Hands'))
+      .limit(1);
+    await db.insert(characterSpells).values({
+      characterId: charId,
+      spellId: burningHandsId,
+      sourceClassId: wizardClassId,
+      isPrepared: true,
+      spellLevelLearned: 1,
+    });
+    await db.insert(characterSpellSlots).values({
+      characterId: charId,
+      spellLevel: 1,
+      totalSlots: 1,
+      usedSlots: 0,
+    });
+    const playerInput = 'I cast Burning Hands.';
+    await db.insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'player',
+      speakerId: charId,
+      message: playerInput,
+    });
+
+    // The player cancels while the DM generates: the provider stub aborts the
+    // request signal as generation starts, exactly the state the server's spend
+    // gate reads. Without the gate, this turn spent the slot against a dead
+    // connection while the client reported "Cast cancelled. No spell slot was
+    // used." — the spend ran because nothing in the handler checked the signal.
+    generatedText = JSON.stringify({
+      text: 'Flame rolls across the room.',
+      options: [],
+      roll_requests: [],
+      combat_transition: 'none',
+    });
+    const controller = new AbortController();
+    onGenerate = () => controller.abort();
+    const response = await request(
+      '/v1/llm/generate',
+      'POST',
+      {
+        prompt: 'The wizard casts a spell while exploring. What happens?',
+        player_input: playerInput,
+        sessionId,
+        dmReply: { messageId: '11111111-2222-4333-8444-555555555560', inCombat: false, holdProse: true },
+        combatEntry: {
+          sessionId,
+          player: {
+            characterId: charId,
+            name: testId('1021-cancel-wizard'),
+            initiativeModifier: 1,
+          },
+        },
+        provider: 'openrouter',
+        requestType: 'user',
+        maxTokens: 8192,
+        temperature: 0.9,
+      },
+      { signal: controller.signal },
+    );
+    onGenerate = null;
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { dmReplyPersisted?: boolean };
+    expect(body.dmReplyPersisted).toBe(false);
+
+    const [slot] = await db
+      .select({ usedSlots: characterSpellSlots.usedSlots })
+      .from(characterSpellSlots)
+      .where(
+        and(eq(characterSpellSlots.characterId, charId), eq(characterSpellSlots.spellLevel, 1)),
+      );
+    expect(slot?.usedSlots).toBe(0);
+    const usage = await db
+      .select({
+        spellName: spellSlotUsageLog.spellName,
+        slotLevelUsed: spellSlotUsageLog.slotLevelUsed,
+      })
+      .from(spellSlotUsageLog)
+      .where(
+        and(eq(spellSlotUsageLog.characterId, charId), eq(spellSlotUsageLog.sessionId, sessionId)),
+      );
+    expect(usage).toEqual([]);
+
+    await db.delete(spellSlotUsageLog).where(eq(spellSlotUsageLog.characterId, charId));
+    await db.delete(characterSpellSlots).where(eq(characterSpellSlots.characterId, charId));
+    await db.delete(characterSpells).where(eq(characterSpells.characterId, charId));
+    await db.delete(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId));
+    await db.delete(gameSessions).where(eq(gameSessions.id, sessionId));
     await db.delete(characters).where(eq(characters.id, charId));
     await db.delete(campaigns).where(eq(campaigns.id, campId));
   });

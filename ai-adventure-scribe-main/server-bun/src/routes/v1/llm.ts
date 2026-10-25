@@ -1434,7 +1434,19 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // nothing was cast. A spend that fails is logged; it never costs the player their turn.
         const castsToSpend = allowedCasts as AllowedCasts | null;
         const castSessionId = sessionId ?? combatEntry?.sessionId;
-        if (castsToSpend && castSessionId && combatEntry && !envelope?.combat_entry_pending) {
+        // #1021 FIX round 1: a sheet cast the player cancelled while the DM was
+        // generating must not spend. The client aborts the fetch on cancel, but
+        // nothing stopped the server's handler: generation, gating and this spend
+        // all ran to completion against a dead connection, so the slot was
+        // decremented on a cast the player was told used no slot. The request
+        // signal is aborted by the time the spend runs, so skip it then.
+        if (
+          castsToSpend &&
+          castSessionId &&
+          combatEntry &&
+          !envelope?.combat_entry_pending &&
+          !request.signal.aborted
+        ) {
           try {
             const { spendStorySpellSlots } = await import('../../services/dm/story-spell-slots.js');
             await spendStorySpellSlots({
@@ -1950,6 +1962,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             envelope,
             clientInCombat: dmReply.inCombat === true,
             narrationGated: dmReply.narrationGated,
+            holdProse: dmReply.holdProse === true,
           });
           dmReplyPersisted = persistence.persisted;
           // #841: record this reply's action batches under its message id, so
@@ -2205,6 +2218,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             rollRequestId: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
             inCombat: t.Optional(t.Boolean()),
             narrationGated: t.Optional(t.Boolean()),
+            holdProse: t.Optional(t.Boolean()),
           }),
         ),
         model: t.Optional(t.String()),
