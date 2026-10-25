@@ -425,16 +425,19 @@ describe('starter-character-seeding', () => {
   });
 
   it('keeps both starter creation call sites on the shared helper', () => {
-    const page = readFileSync(
-      resolve(process.cwd(), 'src/pages/StarterCharacterSelectionPage.tsx'),
-      'utf8',
-    );
+    // #89 moved the page call site from the retired selection page to the
+    // campaign detail page; the hook call site is unchanged. The detail
+    // page imports sibling helpers from the same module, so its import
+    // assertion allows other names in the braces — the call count stays 1.
+    const page = readFileSync(resolve(process.cwd(), 'src/pages/CampaignDetailPage.tsx'), 'utf8');
     const hook = readFileSync(
       resolve(process.cwd(), 'src/features/campaign/hooks/use-character-selection.ts'),
       'utf8',
     );
 
-    expect(page).toMatch(/import \{ seedStarterCharacter \} from .*starter-character-seeding/);
+    expect(page).toMatch(
+      /import \{[^}]*seedStarterCharacter[^}]*\} from .*starter-character-seeding/,
+    );
     expect(hook).toMatch(/import \{ seedStarterCharacter \} from .*starter-character-seeding/);
     expect(page.match(/seedStarterCharacter\(/g)).toHaveLength(1);
     expect(hook.match(/seedStarterCharacter\(/g)).toHaveLength(1);
@@ -566,9 +569,7 @@ describe('starter template subclass (#829)', () => {
       mapTemplateRow({ ...championRow, subclass: null }),
       'campaign-829',
     );
-    const nullWire = prepareCharacterPayload(
-      nullSeed as unknown as Record<string, unknown>,
-    );
+    const nullWire = prepareCharacterPayload(nullSeed as unknown as Record<string, unknown>);
     expect(nullWire.subclass).toBeNull();
   });
 
@@ -614,10 +615,7 @@ describe('starter template subclass (#829)', () => {
     };
     const fixture = JSON.parse(
       readFileSync(
-        resolve(
-          __dirname,
-          '../../../../shared/test-fixtures/premade-rogue-create-payload.json',
-        ),
+        resolve(__dirname, '../../../../shared/test-fixtures/premade-rogue-create-payload.json'),
         'utf8',
       ),
     ) as Record<string, unknown>;
