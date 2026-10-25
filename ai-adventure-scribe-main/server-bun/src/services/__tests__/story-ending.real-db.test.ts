@@ -78,6 +78,7 @@ const {
   campaignRules,
   characters,
   characterStats,
+  combatEncounters,
   dialogueHistory,
   experienceEvents,
   gameSessions,
@@ -2143,4 +2144,158 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
     expect((await sessionRow(sessionId))?.status).toBe('active');
     expect(await endingRowsFor(sessionId)).toHaveLength(0);
   }, 180_000);
+
+  test('#1091: an ending clock filling during an active encounter waits for the fight to end', async () => {
+    const { characterId, sessionId } = await seedWorld('ending-combat', 'score');
+    const prompts: string[] = [];
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'The wedge comes free in my hands.',
+      reply: trackerReply([{ name: 'Score', set: 5 }]),
+      capturedPrompts: prompts,
+    });
+    // A fight is under way (server truth: an active encounter row), and
+    // the crossing turn reaches the ending limit.
+    const [encounter] = await database
+      .insert(combatEncounters)
+      .values({ sessionId, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
+      .returning({ id: combatEncounters.id });
+    try {
+      const crossing = await dmTurn({
+        sessionId,
+        characterId,
+        playerInput: 'I pull the last wedge while the guard swings at me.',
+        reply: trackerReply([{ name: 'Score', delta: 1 }]),
+        capturedPrompts: prompts,
+      });
+      expect(crossing.status).toBe(200);
+      expect((await trackerRow(sessionId, 'Score'))?.value).toBe(6);
+      expect((await sessionRow(sessionId))?.status).toBe('active');
+      expect(await endingRowsFor(sessionId)).toHaveLength(0);
+
+      // An in-combat turn with the ending owed still does not end it.
+      const combatTurn = await dmTurn({
+        sessionId,
+        characterId,
+        playerInput: 'I strike the guard.',
+        reply: { ...baseReply },
+        capturedPrompts: prompts,
+        inCombat: true,
+      });
+      expect(combatTurn.status).toBe(200);
+      expect((await sessionRow(sessionId))?.status).toBe('active');
+      expect(await endingRowsFor(sessionId)).toHaveLength(0);
+
+      // The fight ends: the first story turn after it delivers the ending.
+      await database
+        .update(combatEncounters)
+        .set({ status: 'completed' })
+        .where(eq(combatEncounters.id, encounter!.id));
+      const storyTurn = await dmTurn({
+        sessionId,
+        characterId,
+        playerInput: 'The guard falls. What happens now?',
+        reply: { ...baseReply },
+        capturedPrompts: prompts,
+      });
+      expect(storyTurn.status).toBe(200);
+      expect((await sessionRow(sessionId))?.status).toBe('completed');
+      expect(await endingRowsFor(sessionId)).toHaveLength(1);
+    } finally {
+      await database
+        .delete(combatEncounters)
+        .where(eq(combatEncounters.id, encounter!.id))
+        .catch(() => {});
+    }
+  }, 60_000);
+
+  test('#1091: dice-roll answers do not count toward the one-shot turn budget', async () => {
+    const { characterId, sessionId } = await seedWorld('pacing-rolls', 'breath');
+    const prompts: string[] = [];
+    // A fight-heavy one-shot: 70 roll answers (the real producer's shape,
+    // SessionMessageService saves them as player rows with
+    // context.intent = 'dice_roll') and only a handful of typed turns.
+    await database.insert(dialogueHistory).values(
+      Array.from({ length: 70 }, (_, n) => ({
+        sessionId,
+        speakerType: 'player',
+        message: `Rolled 1d20: ${(n % 20) + 1}`,
+        context: { intent: 'dice_roll', rollRequestId: `roll-${n}` },
+      })),
+    );
+    for (let n = 1; n <= 3; n++) {
+      const res = await dmTurn({
+        sessionId,
+        characterId,
+        playerInput: `I press on; typed turn ${n}.`,
+        reply: { ...baseReply },
+        capturedPrompts: prompts,
+      });
+      expect(res.status).toBe(200);
+    }
+    expect(prompts.some((prompt) => prompt.includes('move toward the climax'))).toBe(false);
+    expect(prompts.some((prompt) => prompt.includes('turn budget is reached'))).toBe(false);
+    expect((await trackerPhase(sessionId))?.tracker?.phase).toBeUndefined();
+    expect((await sessionRow(sessionId))?.status).toBe('active');
+  }, 60_000);
+
+  test('#1091: a budget trip during an active encounter holds the climax directive until the fight ends', async () => {
+    const { characterId, sessionId } = await seedWorld('pacing-combat', 'breath');
+    const prompts: string[] = [];
+    // 60 typed turns already played (the SessionMessageService player-row
+    // shape, no roll intent), then a fight opens.
+    await database.insert(dialogueHistory).values(
+      Array.from({ length: 60 }, (_, n) => ({
+        sessionId,
+        speakerType: 'player',
+        message: `Typed turn ${n + 1}.`,
+      })),
+    );
+    const [encounter] = await database
+      .insert(combatEncounters)
+      .values({ sessionId, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
+      .returning({ id: combatEncounters.id });
+    try {
+      for (let n = 1; n <= 2; n++) {
+        const res = await dmTurn({
+          sessionId,
+          characterId,
+          playerInput: `I strike the wraith; swing ${n}.`,
+          reply: { ...baseReply },
+          capturedPrompts: prompts,
+          inCombat: true,
+        });
+        expect(res.status).toBe(200);
+      }
+      expect((await trackerPhase(sessionId))?.tracker?.budgetForced).toBe(true);
+      for (const prompt of prompts) {
+        expect(prompt).not.toContain('move toward the climax');
+        expect(prompt).not.toContain('campaign_ending');
+        expect(prompt).toContain('Combat is under way');
+      }
+
+      await database
+        .update(combatEncounters)
+        .set({ status: 'completed' })
+        .where(eq(combatEncounters.id, encounter!.id));
+      const before = prompts.length;
+      const res = await dmTurn({
+        sessionId,
+        characterId,
+        playerInput: 'The wraith fades. I look around.',
+        reply: { ...baseReply },
+        capturedPrompts: prompts,
+      });
+      expect(res.status).toBe(200);
+      const after = prompts.slice(before).join('\n');
+      expect(after).not.toContain('Combat is under way');
+      expect(after).toContain('budget-forced climax');
+    } finally {
+      await database
+        .delete(combatEncounters)
+        .where(eq(combatEncounters.id, encounter!.id))
+        .catch(() => {});
+    }
+  }, 60_000);
 });
