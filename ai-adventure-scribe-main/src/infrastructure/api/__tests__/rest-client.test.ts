@@ -147,6 +147,45 @@ describe('fetchWithAuth', () => {
     });
   });
 
+  it('refreshes a token within one minute of expiry before sending the request', async () => {
+    const exp = Math.floor(Date.now() / 1000) + 30;
+    const expiringToken = `header.${btoa(JSON.stringify({ exp }))}.signature`;
+    accessToken.value = expiringToken;
+    loadCachedSessionMock.mockReturnValue({
+      access_token: expiringToken,
+      refresh_token: 'refresh-token',
+    });
+    refreshMock.mockResolvedValue({ accessToken: 'fresh-access', refreshToken: 'fresh-refresh' });
+    fetchMock.mockResolvedValueOnce(response(200, { ok: true }));
+
+    await expect(fetchWithAuth('/v1/sessions/session-1')).resolves.toMatchObject({ status: 200 });
+
+    expect(refreshMock).toHaveBeenCalledWith('refresh-token', expiringToken);
+    expect(persistSessionMock).toHaveBeenCalledWith({
+      access_token: 'fresh-access',
+      refresh_token: 'fresh-refresh',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1].headers).toMatchObject({
+      Authorization: 'Bearer fresh-access',
+    });
+  });
+
+  it('surfaces a typed session error when the pre-request refresh fails', async () => {
+    const exp = Math.floor(Date.now() / 1000) + 30;
+    const expiringToken = `header.${btoa(JSON.stringify({ exp }))}.signature`;
+    loadCachedSessionMock.mockReturnValue({
+      access_token: expiringToken,
+      refresh_token: 'refresh-token',
+    });
+    refreshMock.mockResolvedValue(null);
+
+    await expect(fetchWithAuth('/v1/sessions/session-1')).rejects.toBeInstanceOf(
+      SessionExpiredError,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('surfaces a typed session error when refresh fails', async () => {
     fetchMock.mockResolvedValueOnce(response(401));
     refreshMock.mockResolvedValue(null);

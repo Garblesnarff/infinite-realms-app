@@ -182,4 +182,74 @@ describe('AuthContext connection failures (#565)', () => {
     expect(state.connectionError).toBe(false);
     expect(state.userEmail).toBe('player@example.com');
   });
+
+  it('checks an expiring token again when the window regains focus', async () => {
+    const expiringToken = `header.${btoa(
+      JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 30 }),
+    )}.signature`;
+    persistSession({ access_token: expiringToken, refresh_token: 'old-refresh' });
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    fetchMock.mockImplementation((url: string) => {
+      if (String(url).includes('/api/trpc/auth.me')) {
+        return Promise.resolve(
+          authMe(200, { result: { data: { id: 'u1', email: 'player@example.com' } } }),
+        );
+      }
+      return Promise.resolve(
+        authMe(200, { accessToken: expiringToken, refreshToken: 'old-refresh' }),
+      );
+    });
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(probeState().loading).toBe(false));
+    fetchMock.mockClear();
+
+    act(() => window.dispatchEvent(new Event('focus')));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/v1/auth/refresh'))).toBe(
+        true,
+      ),
+    );
+  });
+
+  it('checks an expiring token again when the document becomes visible', async () => {
+    const expiringToken = `header.${btoa(
+      JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 30 }),
+    )}.signature`;
+    persistSession({ access_token: expiringToken, refresh_token: 'old-refresh' });
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    fetchMock.mockImplementation((url: string) => {
+      if (String(url).includes('/api/trpc/auth.me')) {
+        return Promise.resolve(
+          authMe(200, { result: { data: { id: 'u1', email: 'player@example.com' } } }),
+        );
+      }
+      return Promise.resolve(
+        authMe(200, { accessToken: expiringToken, refreshToken: 'old-refresh' }),
+      );
+    });
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(probeState().loading).toBe(false));
+    fetchMock.mockClear();
+
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible',
+    });
+    act(() => document.dispatchEvent(new Event('visibilitychange')));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/v1/auth/refresh'))).toBe(
+        true,
+      ),
+    );
+  });
 });
