@@ -1,10 +1,8 @@
 import { ArrowLeft } from 'lucide-react';
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
-import { useOptionalCampaign } from '@/contexts/CampaignContext';
-import { useOptionalCharacter } from '@/contexts/CharacterContext';
 
 export type CampaignEndMode = 'fallen' | 'complete';
 
@@ -30,6 +28,8 @@ export interface CampaignEndStateProps {
   epitaph?: string | null;
   narration?: string | null;
   runSummary?: CampaignRunSummary | null;
+  identity?: string | null;
+  experience?: number | null;
 }
 
 export const displayFinalLine = (line: string): string =>
@@ -88,23 +88,13 @@ function Portrait({ name, portraitUrl }: { name: string; portraitUrl?: string | 
 
 export const CampaignEndState: React.FC<CampaignEndStateProps> = (props) => {
   const navigate = useNavigate();
-  const optionalCharacter = useOptionalCharacter();
-  const optionalCampaign = useOptionalCampaign();
   const headingRef = React.useRef<HTMLHeadingElement>(null);
   const [view, setView] = React.useState<'end' | 'story'>('end');
 
-  const character = optionalCharacter?.state.character;
-  const campaign = optionalCampaign?.state.campaign;
-  const name = props.characterName?.trim() || character?.name?.trim() || 'Your character';
-  const campaignName = props.campaignName?.trim() || campaign?.name?.trim() || 'this campaign';
-  const portraitUrl = props.portraitUrl ?? character?.image_url ?? character?.avatar_url ?? null;
-  const identity = [
-    character?.race?.name,
-    character?.class?.name,
-    character?.level ? `Level ${character.level}` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const name = props.characterName?.trim() || 'Your character';
+  const campaignName = props.campaignName?.trim() || 'this campaign';
+  const portraitUrl = props.portraitUrl ?? null;
+  const identity = props.identity?.trim() || '';
   const isFallen = props.mode === 'fallen';
   const screenLabel = isFallen ? `${name} has fallen` : 'Adventure complete';
   const staticFinalLine = `${name} is dead.`;
@@ -114,7 +104,7 @@ export const CampaignEndState: React.FC<CampaignEndStateProps> = (props) => {
       ? [staticFinalLine]
       : [];
   const hasSummary = Boolean(props.summary?.trim());
-  const experience = typeof character?.experience === 'number' ? character.experience : null;
+  const experience = typeof props.experience === 'number' ? props.experience : null;
   const runSummary = isKnownRunSummary(props.runSummary) ? props.runSummary : null;
 
   React.useEffect(() => {
@@ -282,12 +272,12 @@ export const CampaignEndState: React.FC<CampaignEndStateProps> = (props) => {
             >
               Explore other campaigns
             </Button>
-            <Link
-              to="/app"
+            <a
+              href="/app"
               className="block min-h-11 py-3 text-center text-sm text-white/65 underline-offset-4 hover:text-infinite-gold-light hover:underline"
             >
               Back to your realm
-            </Link>
+            </a>
           </div>
         </div>
       </div>
