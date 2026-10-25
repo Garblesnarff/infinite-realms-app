@@ -562,17 +562,13 @@ export function mergeStoredTrackers(
   definitions: ClockDefinition[],
   stored: Array<{ name: string; value: number; limit: number }>,
 ): Array<{ name: string; value: number; limit: number }> {
-  const storedByKey = new Map(
-    stored.map((tracker) => [normalizeClockName(tracker.name), tracker]),
-  );
+  const storedByKey = new Map(stored.map((tracker) => [normalizeClockName(tracker.name), tracker]));
   const trackers = definitions.map((definition) => {
     const row = storedByKey.get(normalizeClockName(definition.name));
     return row ?? { name: definition.name, value: 0, limit: definition.limit };
   });
   for (const tracker of stored) {
-    if (
-      !definitions.some((d) => normalizeClockName(d.name) === normalizeClockName(tracker.name))
-    ) {
+    if (!definitions.some((d) => normalizeClockName(d.name) === normalizeClockName(tracker.name))) {
       trackers.push(tracker);
     }
   }
@@ -643,7 +639,11 @@ async function loadTrackerState(
     definitions = parseClockDefinitions(rows);
   }
   const trackers = await db
-    .select({ name: sessionTrackers.name, value: sessionTrackers.value, limit: sessionTrackers.limit })
+    .select({
+      name: sessionTrackers.name,
+      value: sessionTrackers.value,
+      limit: sessionTrackers.limit,
+    })
     .from(sessionTrackers)
     .where(eq(sessionTrackers.sessionId, sessionId));
   const stored = (session.sessionState as { tracker?: TrackerPhaseState } | null)?.tracker;
@@ -658,10 +658,7 @@ async function loadTrackerState(
       .select({ count: sql<number>`count(*)::int` })
       .from(dialogueHistory)
       .where(
-        and(
-          eq(dialogueHistory.sessionId, sessionId),
-          eq(dialogueHistory.speakerType, 'player'),
-        ),
+        and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'player')),
       );
     playerTurns = count;
   }
@@ -729,9 +726,7 @@ export async function loadStoryTrackerDirective(input: {
         trackers,
         phase: state.phase,
         campaignLength: state.campaignLength,
-        pacing: pacing
-          ? { ...pacing, clockName: state.definitions[0]?.name ?? null }
-          : null,
+        pacing: pacing ? { ...pacing, clockName: state.definitions[0]?.name ?? null } : null,
       }),
       phase: state.phase,
       endingAtLimit,

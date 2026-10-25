@@ -82,9 +82,7 @@ describe('parseClockDefinitions', () => {
       { condition: 'the Score Clock reaches 3', metadata: {} },
       { condition: 'the Score Clock reaches 5', metadata: { limit: 6, at_limit: 'ending' } },
     ];
-    expect(parseClockDefinitions(rows)).toEqual([
-      { name: 'Score', limit: 6, atLimit: 'ending' },
-    ]);
+    expect(parseClockDefinitions(rows)).toEqual([{ name: 'Score', limit: 6, atLimit: 'ending' }]);
   });
 
   test('a metadata limit is not raised by a later higher reaches row', () => {
@@ -92,9 +90,7 @@ describe('parseClockDefinitions', () => {
       { condition: 'the Score Clock reaches 5', metadata: { limit: 5 } },
       { condition: 'the Score Clock reaches 6', metadata: {} },
     ];
-    expect(parseClockDefinitions(rows)).toEqual([
-      { name: 'Score', limit: 5, atLimit: 'climax' },
-    ]);
+    expect(parseClockDefinitions(rows)).toEqual([{ name: 'Score', limit: 5, atLimit: 'climax' }]);
   });
 
   test('non-parseable rows define nothing (the audit’s two unparseable campaigns)', () => {
