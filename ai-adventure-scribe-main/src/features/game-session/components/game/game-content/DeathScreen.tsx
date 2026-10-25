@@ -36,6 +36,9 @@ export function buildChooseHeroHref(input: {
 interface FallenEndStateProps {
   /** Name of the fallen player character, when known. */
   characterName?: string | null;
+  /** Trusted character presentation data from the owning game route. */
+  portraitUrl?: string | null;
+  identity?: string | null;
   /**
    * #2517: the engine's final lines (killing blow, failed death saves). The
    * killing round gets no DM narration; the screen carries these instead.
@@ -71,6 +74,8 @@ interface FallenEndStateProps {
  */
 export const FallenEndState: React.FC<FallenEndStateProps> = ({
   characterName,
+  portraitUrl,
+  identity,
   finalLines,
   campaignName,
   chooseHeroHref,
@@ -80,6 +85,8 @@ export const FallenEndState: React.FC<FallenEndStateProps> = ({
   <CampaignEndState
     mode="fallen"
     characterName={characterName}
+    portraitUrl={portraitUrl}
+    identity={identity}
     finalLines={finalLines}
     campaignName={campaignName}
     chooseHeroHref={chooseHeroHref}

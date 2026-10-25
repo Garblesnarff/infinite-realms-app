@@ -5,6 +5,10 @@ import { CampaignEndState } from './CampaignEndState';
 interface CampaignCompleteEndStateProps {
   /** Name of the player character who finished the adventure, when known. */
   characterName?: string | null;
+  /** Trusted character presentation data from the owning game route. */
+  portraitUrl?: string | null;
+  identity?: string | null;
+  experience?: number | null;
   /** Campaign display name. */
   campaignName?: string | null;
   /** The stored ending summary from the completed one-shot session. */
@@ -19,6 +23,9 @@ interface CampaignCompleteEndStateProps {
 
 export const CampaignCompleteEndState: React.FC<CampaignCompleteEndStateProps> = ({
   characterName,
+  portraitUrl,
+  identity,
+  experience,
   campaignName,
   summary,
   chooseHeroHref,
@@ -28,6 +35,9 @@ export const CampaignCompleteEndState: React.FC<CampaignCompleteEndStateProps> =
   <CampaignEndState
     mode="complete"
     characterName={characterName}
+    portraitUrl={portraitUrl}
+    identity={identity}
+    experience={experience}
     campaignName={campaignName}
     summary={summary}
     chooseHeroHref={chooseHeroHref}
