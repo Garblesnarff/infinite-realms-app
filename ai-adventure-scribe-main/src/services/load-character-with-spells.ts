@@ -13,7 +13,7 @@ import type { Character, CharacterClass, CharacterBackground } from '@/types/cha
 import logger from '@/lib/logger';
 import { issue1784Api } from '@/services/issue-1784-api';
 import { userDataApi } from '@/services/user-data-api';
-import { resolveRace, resolveSubrace } from '@/utils/character/data-transformers';
+import { parseJsonField, resolveRace, resolveSubrace } from '@/utils/character/data-transformers';
 import { equipmentRowsToInventory } from '@/utils/character/equipment-rows-to-inventory';
 import {
   parseOptionalProficiencyList,
@@ -165,6 +165,22 @@ export async function loadCharacterWithSpells(
       typeof characterData.class === 'string' ? characterData.class : null,
     );
 
+    // #824: the session sheet's attack list reads fightingStyles off this object. The
+    // record's styles were never carried here, so a ranged weapon showed +5 on the sheet
+    // while the roll — which reads the DB row — used +7. Same normalization as
+    // transformCharacterData: a JSON string parses, an array passes through, and strings
+    // fold to the canonical lowercase snake spelling ('Archery' -> 'archery') that the
+    // FIGHTING_STYLES lookup is keyed by.
+    const fightingStylesRaw =
+      typeof characterData.fighting_styles === 'string'
+        ? parseJsonField<unknown>(characterData.fighting_styles, [])
+        : characterData.fighting_styles;
+    const fightingStyles = Array.isArray(fightingStylesRaw)
+      ? fightingStylesRaw
+          .filter((style): style is string => typeof style === 'string')
+          .map((style) => style.toLowerCase().replace(/\s+/g, '_'))
+      : [];
+
     // Construct complete character object
     const loadedCharacter: Character = {
       id: characterData.id,
@@ -177,6 +193,7 @@ export async function loadCharacterWithSpells(
       ...(classIdentity.grantedFeatureNames
         ? { grantedFeatureNames: classIdentity.grantedFeatureNames }
         : {}),
+      ...(fightingStyles.length > 0 ? { fightingStyles } : {}),
       level: characterData.level || 1,
       background: characterBackground as CharacterBackground | null,
       // The server stores and seats this AC value; do not recompute it from
