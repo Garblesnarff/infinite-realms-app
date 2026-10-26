@@ -12,11 +12,11 @@ export function stripOptionsAppendix(text: string): string {
  * is purely the argument (a JSON array/object, or a run of quoted strings),
  * and prose after a dangling tag survives.
  */
-const TOOL_PARAMETER_BLOCK = /<parameter\s+name\s*=\s*["']options["']\s*>[\s\S]*?<\/parameter\s*>/gi;
+const TOOL_PARAMETER_BLOCK =
+  /<parameter\s+name\s*=\s*["']options["']\s*>[\s\S]*?<\/parameter\s*>/gi;
 const TOOL_PARAMETER_OPEN = /<parameter\s+name\s*=\s*["']options["']\s*>/i;
 const TOOL_PARAMETER_CLOSE = /<\/parameter\s*>/gi;
-const TOOL_ARGUMENT_TAIL =
-  /^\s*(\[[\s\S]*\]|\{[\s\S]*\}|"[^"]*"(?:\s*,\s*"[^"]*")*)\s*$/;
+const TOOL_ARGUMENT_TAIL = /^\s*(\[[\s\S]*\]|\{[\s\S]*\}|"[^"]*"(?:\s*,\s*"[^"]*")*)\s*$/;
 
 export function stripToolParameterBlocks(text: string): string {
   let out = text.replace(TOOL_PARAMETER_BLOCK, '').replace(TOOL_PARAMETER_CLOSE, '');
@@ -58,15 +58,15 @@ export function stripProseOptionsList(text: string): string {
  * the shape and survive. #1062 removes this line for good via server-state
  * rendering; this strip is the safety net until then.
  */
-const TRAILING_BRACKET_RUN = /((?:\[[^[\]\n]{1,48}\]\s*){2,})\s*$/;
+const TRAILING_BRACKET_RUN = /((?:\[[^[\]\n]{1,96}\]\s*){2,})\s*$/;
 const TRACKER_GROUP =
-  /^[A-Za-z0-9][A-Za-z0-9'’\- ]{0,30}(?:: [^[\].]{1,40}| \d+(?:\/\?|\/\d+)?| \d+)?$/;
+  /^[A-Za-z0-9][A-Za-z0-9'’\- ]{0,30}(?:: [^[\].]{1,80}| \d+(?:\/\?|\/\d+)?| \d+)?$/;
 const TRACKER_ANCHOR = /^(HP|Clock|Scene)\b|: /;
 
 export function stripTrackerLine(text: string): string {
   const match = TRAILING_BRACKET_RUN.exec(text);
   if (!match) return text;
-  const groups = match[1].match(/\[[^[\]\n]{1,48}\]/g);
+  const groups = match[1].match(/\[[^[\]\n]{1,96}\]/g);
   if (!groups || groups.length < 2) return text;
   const inners = groups.map((group) => group.slice(1, -1));
   if (!inners.every((inner) => TRACKER_GROUP.test(inner))) return text;
@@ -185,7 +185,8 @@ export function stripInlineLetteredList(text: string): string {
  * options are') is story, not meta, and survives. The whole sentence goes,
  * so a trailing '; choose your next move' clause goes with it.
  */
-const META_PHRASE = /options\s+(?:are\s+not|aren't)\s+shown\s+here\b[^.!?]*[.!?]?/gi;
+const META_PHRASE =
+  /(?:options\s+(?:are\s+not|aren't)\s+shown\s+here|player\s+input\s+is\s+required)\b[^.!?]*[.!?]?/gi;
 
 export function stripMetaSentence(text: string): string {
   const matches = [...text.matchAll(META_PHRASE)];
@@ -317,7 +318,11 @@ function stripArtifacts(text: string): string {
   return strippedText;
 }
 
-const META_PHRASES = ['options are not shown here', "options aren't shown here"];
+const META_PHRASES = [
+  'options are not shown here',
+  "options aren't shown here",
+  'player input is required',
+];
 
 /**
  * #1067 follow-up: normalize a PARTIAL narration for the streaming preview
@@ -412,9 +417,7 @@ export function normalizePartialNarration(text: string): string {
   // complete argument followed by prose: that prose is story the final
   // text keeps (tag removed only), so cutting it would freeze the stream
   // at the tag forever. A prose tail is story and is left alone either way.
-  const openTags = [
-    ...out.matchAll(/<parameter\s+name\s*=\s*["']options["']\s*>/gi),
-  ];
+  const openTags = [...out.matchAll(/<parameter\s+name\s*=\s*["']options["']\s*>/gi)];
   if (openTags.length > 0) {
     const last = openTags[openTags.length - 1];
     const tagAt = last.index;
@@ -429,9 +432,7 @@ export function normalizePartialNarration(text: string): string {
     // first version of this gate).
     const afterArg = argEnd !== null ? tail.slice(argEnd).trim() : '';
     const completeArgPlusProse =
-      argEnd !== null &&
-      afterArg !== '' &&
-      !/^<\/?[A-Za-z]*$/.test(afterArg);
+      argEnd !== null && afterArg !== '' && !/^<\/?[A-Za-z]*$/.test(afterArg);
     if (
       /^\s*[[{"]/.test(tail) &&
       !TOOL_ARGUMENT_TAIL.test(tail) &&
@@ -456,7 +457,7 @@ export function normalizePartialNarration(text: string): string {
   const lastBracket = out.lastIndexOf('[');
   if (lastBracket !== -1 && !out.slice(lastBracket).includes(']')) {
     const inner = out.slice(lastBracket + 1);
-    if (/^(?:[A-Za-z0-9][A-Za-z0-9'’\- :/?]{0,47})?$/.test(inner)) {
+    if (/^(?:[A-Za-z0-9][A-Za-z0-9'’\- :/?,]{0,95})?$/.test(inner)) {
       cutAt(lastBracket);
     }
   }
@@ -468,13 +469,10 @@ export function normalizePartialNarration(text: string): string {
   // Trailing bracket run that could still grow into a tracker line: hold
   // every group that is tracker-shaped (a malformed group can never join
   // a strip, so it is released immediately).
-  const run = /((?:\[[^[\]\n]{1,48}\]\s*)+)\s*$/.exec(out);
+  const run = /((?:\[[^[\]\n]{1,96}\]\s*)+)\s*$/.exec(out);
   if (run) {
-    const groups = run[1].match(/\[[^[\]\n]{1,48}\]/g) ?? [];
-    if (
-      groups.length > 0 &&
-      groups.every((group) => TRACKER_GROUP.test(group.slice(1, -1)))
-    ) {
+    const groups = run[1].match(/\[[^[\]\n]{1,96}\]/g) ?? [];
+    if (groups.length > 0 && groups.every((group) => TRACKER_GROUP.test(group.slice(1, -1)))) {
       cutAt(run.index);
     }
   }
@@ -518,9 +516,7 @@ export function normalizePartialNarration(text: string): string {
       cutAt(runStart);
       break;
     }
-    if (
-      new RegExp(`^${expected}\\.\\s*[^.!?\\n]*$`).test(rest)
-    ) {
+    if (new RegExp(`^${expected}\\.\\s*[^.!?\\n]*$`).test(rest)) {
       cutAt(runStart);
       break;
     }
@@ -531,8 +527,7 @@ export function normalizePartialNarration(text: string): string {
   // it is emitted and the stream stalls when 'A.' arrives and the run
   // holdback cuts it back out. A following letter releases it (a word,
   // not a list); a following period routes it into the scanner above.
-  const bareA =
-    /(?:^|[.!?]\s+|\n\s*|—\s+|–\s+|["']?options["']?\s*:\s*)A$/.exec(out);
+  const bareA = /(?:^|[.!?]\s+|\n\s*|—\s+|–\s+|["']?options["']?\s*:\s*)A$/.exec(out);
   if (bareA) cutAt(bareA.index + bareA[0].length - 1);
   // Trailing sentence that is, or could still become, the meta sentence.
   // The meta sentence may start with an optional "The " (mirroring
@@ -550,8 +545,7 @@ export function normalizePartialNarration(text: string): string {
   const unthe = tail.replace(/^the\s+/, '');
   const isMetaPrefix = (s: string): boolean =>
     META_PHRASES.some(
-      (phrase) =>
-        phrase.startsWith(s) || s.startsWith(phrase) || `the ${phrase}`.startsWith(s),
+      (phrase) => phrase.startsWith(s) || s.startsWith(phrase) || `the ${phrase}`.startsWith(s),
     );
   if (tail.length > 0 && (isMetaPrefix(tail) || isMetaPrefix(unthe))) {
     cutAt(sentStart);
@@ -581,9 +575,7 @@ export function normalizeReplyNarration(
       }
       if (key === 'options') {
         if (isEmptyValue(staged.options) && Array.isArray(value)) {
-          staged.options = value.filter(
-            (option): option is string => typeof option === 'string',
-          );
+          staged.options = value.filter((option): option is string => typeof option === 'string');
         }
         continue;
       }
