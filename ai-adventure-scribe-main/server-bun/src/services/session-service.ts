@@ -12,6 +12,7 @@ import { ClassFeaturesService } from './class-features-service.js';
 import { actionSurgePreservingState } from './combat/combat-turn-resources.js';
 import { enginePreservingSessionState } from './combat/pending-combat-entry.js';
 import { trackerPreservingState } from './dm/story-tracker.js';
+import { pendingEndingXpPreservingState } from './dm/story-xp.js';
 import { getOwnershipCondition } from './session/session-authorization.js';
 import { SessionMessageService, type MessagePage } from './session/session-message-service.js';
 import { db } from '../../../db/client';
@@ -507,7 +508,8 @@ export class SessionService {
     // key wins over the client's snapshot, so a stale snapshot can neither
     // delete a live mark nor resurrect a spent one. #913 adds the pending
     // combat entry to that same merge, and #1042 the story-tracker state
-    // (climax phase, safety-net count, once-per-message marker). The merge
+    // (climax phase, safety-net count, once-per-message marker). #1139 adds
+    // the deferred ending award to that same merge. The merge
     // is folded into the UPDATE itself (enginePreservingSessionState)
     // rather than read first: a separate read would let an arm or a
     // consume committing between the two statements be undone by this
@@ -518,8 +520,10 @@ export class SessionService {
         ...updates,
         ...(updates.sessionState !== undefined
           ? {
-              sessionState: trackerPreservingState(
-                enginePreservingSessionState(actionSurgePreservingState(updates.sessionState)),
+              sessionState: pendingEndingXpPreservingState(
+                trackerPreservingState(
+                  enginePreservingSessionState(actionSurgePreservingState(updates.sessionState)),
+                ),
               ),
             }
           : {}),

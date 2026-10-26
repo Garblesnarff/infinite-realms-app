@@ -1600,6 +1600,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
               sessionId: castSessionId,
               xpAward: envelope.xp_award,
               rollRequested,
+              // #1139: a same-reply ending makes this the ending turn — its
+              // award pays at once, it is not deferred to an ending already here.
+              endingDeclared: Boolean(envelope?.campaign_ending),
             });
           } catch (error) {
             logger.warn({ msg: 'DM_STORY_XP_AWARD_FAILED', sessionId: castSessionId, error });

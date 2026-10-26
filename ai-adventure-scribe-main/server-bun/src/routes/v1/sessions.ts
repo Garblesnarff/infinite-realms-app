@@ -284,6 +284,40 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
       const { summary } = body;
 
       try {
+        // #1139: a deferred ending award pays on manual end too. The
+        // campaign_ending path already paid and cleared it, so this is a
+        // no-op there — but a session ended by the End Session button never
+        // reaches `applyStoryEnding`, and without this the deferred award
+        // would strand on the completed session, an XP loss this deferral
+        // introduced. The whole block is guarded: the payment is a side
+        // path, and a failure in it (including the latest-message lookup)
+        // must never fail the manual end itself — the route-contract tests
+        // exercise this handler without a real database.
+        try {
+          const { payPendingEndingXp } = await import(
+            '../../services/dm/story-xp.js'
+          );
+          const { playerMessage } = await import(
+            '../../services/dm/story-spell-slots.js'
+          );
+          const lastPlayerMessage = await playerMessage(id);
+          if (lastPlayerMessage?.createdAt) {
+            await payPendingEndingXp({
+              sessionId: id,
+              userId: (user as { userId: string }).userId,
+              since: lastPlayerMessage.createdAt,
+            });
+          }
+        } catch (pendingError) {
+          logger.warn({
+            msg: '[Sessions] Deferred ending XP payment skipped on manual end',
+            sessionId: id,
+            error:
+              pendingError instanceof Error
+                ? pendingError.message
+                : String(pendingError),
+          });
+        }
         const session = await SessionService.completeSession(
           id,
           (user as { userId: string }).userId,
