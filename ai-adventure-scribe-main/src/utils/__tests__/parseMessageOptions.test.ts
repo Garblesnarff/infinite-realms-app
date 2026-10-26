@@ -243,6 +243,16 @@ describe('parseMessageOptions', () => {
       );
     });
 
+    it('should still use objective case after a gerund that is not a "thing" compound (#1132)', () => {
+      const option = {
+        id: 'opt1',
+        number: 1,
+        text: 'The plan involves leaving you behind.',
+        fullText: '...',
+      };
+      expect(createPlayerMessageFromOption(option)).toBe('The plan involves leaving me behind.');
+    });
+
     it('should handle "you will" and "you\'ll" in both cases', () => {
       const option = {
         id: 'opt1',
