@@ -82,3 +82,71 @@ describeWithDb('#868 saved DM choices round trip through the real route and data
     expect(saved.message).toBe(DM_OPTIONS_RELOAD.message);
   });
 });
+
+describeWithDb('#1095 storyTrackers round trip through the real route and database', () => {
+  let campaignId = '';
+  let sessionId = '';
+  let app: any;
+  beforeAll(async () => {
+    userId = testId('story-trackers-1095-owner');
+    [{ id: campaignId }] = await realDb()
+      .insert(campaigns)
+      .values({ userId, name: testId('story-trackers-campaign') })
+      .returning({ id: campaigns.id });
+    [{ id: sessionId }] = await realDb()
+      .insert(gameSessions)
+      .values({ campaignId, sessionNumber: 1, status: 'active' })
+      .returning({ id: gameSessions.id });
+    const { createRequestPipelineApp, sessionMessageRoutes } = await importWithRealDb(async () => ({
+      ...(await import('../../../http-pipeline')),
+      ...(await import('../session-messages')),
+    }));
+    app = createRequestPipelineApp().use(sessionMessageRoutes);
+  });
+  afterAll(async () => {
+    await realDb().delete(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId));
+    await realDb().delete(gameSessions).where(eq(gameSessions.id, sessionId));
+    await realDb().delete(campaigns).where(eq(campaigns.id, campaignId));
+    await closeRealDb();
+  });
+  it('POSTs a DM reply with storyTrackers, reads JSONB, then hydrates the same line via GET', async () => {
+    // The exact body the client save path sends after the #1095 fix: the
+    // latch-shaped DM reply with its turn's clock line in context.
+    const messageId = crypto.randomUUID();
+    const body = {
+      id: messageId,
+      message: 'The clock ticks again.',
+      speaker_type: 'dm' as const,
+      timestamp: new Date().toISOString(),
+      context: {
+        emotion: 'neutral',
+        intent: 'response',
+        combat_transition: 'none',
+        storyTrackers: [{ name: 'Wall Clock', value: 2, limit: 6 }],
+      },
+    };
+    const response = await app.handle(
+      new Request(`http://localhost/v1/sessions/${sessionId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    );
+    expect(response.status).toBe(200);
+    const [row] = await realDb()
+      .select()
+      .from(dialogueHistory)
+      .where(eq(dialogueHistory.id, messageId));
+    expect((row?.context as { storyTrackers?: unknown } | null)?.storyTrackers).toEqual([
+      { name: 'Wall Clock', value: 2, limit: 6 },
+    ]);
+    const reloaded = await app.handle(
+      new Request(`http://localhost/v1/sessions/${sessionId}/messages`),
+    );
+    expect(reloaded.status).toBe(200);
+    const reloadedBody = await reloaded.json();
+    const saved = reloadedBody.messages.find((message: { id: string }) => message.id === messageId);
+    expect(saved.context.storyTrackers).toEqual([{ name: 'Wall Clock', value: 2, limit: 6 }]);
+    expect(saved.message).toBe('The clock ticks again.');
+  });
+});
