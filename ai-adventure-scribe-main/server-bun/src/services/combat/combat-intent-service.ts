@@ -2319,7 +2319,11 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
           (participant) =>
             participant.id !== actor.id &&
             participant.isActive &&
-            participant.participantType !== actor.participantType,
+            participant.participantType !== actor.participantType &&
+            // #1148: the same dead-target exclusion weapon targets carry (#314 CB-074).
+            // Without it a Cast chip lists a dead creature and the bar shows
+            // `Cast Chill Touch → {dead goblin}`. Monsters die at 0 HP.
+            vitalStateOf(participant as unknown as VitalsInput) !== 'dead',
         )
         .map((participant) => participant.id);
       // No targets, no chip: an attack-shaped option without targets would fall back to
