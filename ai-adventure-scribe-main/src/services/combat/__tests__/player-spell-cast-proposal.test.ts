@@ -92,9 +92,12 @@ describe('askPlayerForSpellCast with an engine proposal (#2233)', () => {
       ),
     );
 
+    // #1143: the refusal's text rides along, so the action bar can show why.
     await expect(castChillTouch('fire-bolt')).resolves.toEqual({
       autoRolled: true,
       movementOnly: false,
+      refusal:
+        "Spell refused: Fire Bolt is not on The Apprentice's sheet — cast a spell you know or have prepared",
     });
     expect(requestPlayerAttackRoll).not.toHaveBeenCalled();
   });
