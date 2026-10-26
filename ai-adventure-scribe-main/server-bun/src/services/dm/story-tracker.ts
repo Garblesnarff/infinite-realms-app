@@ -843,6 +843,12 @@ export interface StoryTrackerResult {
   /** Changes that landed on a stored tracker this call. */
   appliedChanges: number;
   /**
+   * #1160: the reply's final-beat flag armed the ending-required state on
+   * this call; the route keeps `final_beat_reached` on the envelope only
+   * when it landed.
+   */
+  finalBeatArmed?: boolean;
+  /**
    * #1084: the stored summary of an ending this call forced through
    * `applyStoryEnding` (an `at_limit: 'ending'` clock at its limit).
    * Present only when the force applied (now or earlier). The route
@@ -895,9 +901,18 @@ export async function applyStoryTrackers(input: {
   };
 
   const hasChanges = Array.isArray(input.changes) && input.changes.length > 0;
-  if (hasChanges && !validTrackerChanges(input.changes)) return done('invalid_changes');
+  // #1160: the tool path's normalizer (validateToolReplyText /
+  // stripOptionalNulls) drops optional nulls, so a model entry like
+  // {"name":"Sunset","delta":null,"set":null} becomes {"name":"Sunset"}:
+  // it passes the full JSON schema (only name is required) but fails
+  // validTrackerChanges (exactly one of delta/set). An invalid list still
+  // lands no changes, but it must not cancel the climax turn count, the
+  // final-beat arm, the owed-ending scan or the pacing budget.
+  const changesInvalid = hasChanges && !validTrackerChanges(input.changes);
   const changes: TrackerChange[] =
-    hasChanges && !input.changesDeferred ? (input.changes as TrackerChange[]) : [];
+    hasChanges && !changesInvalid && !input.changesDeferred
+      ? (input.changes as TrackerChange[])
+      : [];
 
   const { ownedSessionCharacter } = await import('./dm-feature-gate.js');
   const character = await ownedSessionCharacter(sessionId, userId);
@@ -1015,7 +1030,7 @@ export async function applyStoryTrackers(input: {
       pacingTrip = budget !== null && playerTurns >= budget;
     }
     if (!phase && changes.length === 0 && !armFinalBeat && !pacingTrip) {
-      return finish('no_changes', 0, owedEnding);
+      return finish(changesInvalid ? 'invalid_changes' : 'no_changes', 0, owedEnding);
     }
 
     const nextPhase: TrackerPhaseState | null = phase
@@ -1132,10 +1147,11 @@ export async function applyStoryTrackers(input: {
     if (armFinalBeat || pacingTrip)
       return finish('applied', appliedChanges, forceClock, forceIsNew);
     if (unknownClock) return finish('unknown_clock');
-    return finish('no_changes', 0, forceClock, forceIsNew);
+    return finish(changesInvalid ? 'invalid_changes' : 'no_changes', 0, forceClock, forceIsNew);
   });
 
   if (armedFinalBeatThisCall && result.outcome === 'applied') {
+    result.finalBeatArmed = true;
     // #1068: the flag is the DM's own report, and no machine-readable
     // final-location marker exists in campaign_rules to check it against
     // (condition/effect are free text; metadata carries only

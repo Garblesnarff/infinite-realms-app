@@ -190,4 +190,35 @@ describe('DM_STORY_TRACKER_FINAL_BEAT_FLAGGED (#1068 FIX round 2)', () => {
     ).rejects.toThrow('tx boom');
     expect(flagged()).toHaveLength(0);
   });
+
+  test('#1160: an invalid tracker entry on the same reply does not cancel the arm', async () => {
+    captured.length = 0;
+    sessionStateHolder.value = {};
+    updateShouldThrow = false;
+    const { applyStoryTrackers } = await import('../story-tracker.js');
+    const result = await applyStoryTrackers({
+      sessionId: 's1',
+      userId: 'u1',
+      changes: [{ name: 'Breath' }],
+      finalBeatReached: true,
+    });
+    expect(result.outcome).toBe('applied');
+    expect(flagged()).toHaveLength(1);
+    expect(result.finalBeatArmed).toBe(true);
+  });
+
+  test('#1160: an invalid tracker entry with no flag and no phase reports invalid_changes', async () => {
+    captured.length = 0;
+    sessionStateHolder.value = {};
+    updateShouldThrow = false;
+    const { applyStoryTrackers } = await import('../story-tracker.js');
+    const result = await applyStoryTrackers({
+      sessionId: 's1',
+      userId: 'u1',
+      changes: [{ name: 'Breath' }],
+    });
+    expect(result.outcome).toBe('invalid_changes');
+    expect(flagged()).toHaveLength(0);
+    expect(result.finalBeatArmed).toBeUndefined();
+  });
 });

@@ -66,7 +66,10 @@ process.env.RATE_LIMIT_LLM_USER_PRO = '10000';
 process.env.RATE_LIMIT_LLM_USER_ENTERPRISE = '10000';
 
 const authModule = await importWithRealDb(() => import('../../lib/auth.js'));
-const { LLMProviderService } = await importWithRealDb(() => import('../llm-provider-service.js'));
+const { LLMProviderService, validateToolReplyText } = await importWithRealDb(
+  () => import('../llm-provider-service.js'),
+);
+const { dmResponseSchema } = await importWithRealDb(() => import('../dm/dm-response-schema.js'));
 const { createRequestPipelineApp } = await importWithRealDb(() => import('../../http-pipeline.js'));
 const { llmRoutes } = await importWithRealDb(() => import('../../routes/v1/llm.js'));
 const { sessionsRoutes } = await importWithRealDb(() => import('../../routes/v1/sessions.js'));
@@ -1470,6 +1473,15 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
     tracker_changes: changes,
   });
 
+  /** #1160: a reply as the anthropic/ forced-tool path ships it — the raw
+   *  tool arguments run through that path's own normalizer
+   *  (validateToolReplyText: optional nulls dropped, schema-validated). */
+  const toolPathReply = (raw: Record<string, unknown>): Record<string, unknown> =>
+    JSON.parse(validateToolReplyText(JSON.stringify(raw), dmResponseSchema)) as Record<
+      string,
+      unknown
+    >;
+
   const trackerRow = async (
     sessionId: string,
     name: string,
@@ -2433,6 +2445,104 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
       campaign_ending?: { summary?: string } | null;
     };
     expect(envelope.campaign_ending?.summary).toContain('final beat');
+  }, 60_000);
+
+  test('#1160: a final-beat flag beside a null-stripped tracker entry arms the ending, and the next turn completes the session', async () => {
+    const { characterId, sessionId } = await seedWorld('final-beat-tool-path', 'breath');
+    const prompts: string[] = [];
+
+    const reply = toolPathReply({
+      ...baseReply,
+      scene_spec: null,
+      tracker_changes: [{ name: 'Breath', delta: null, set: null }],
+      final_beat_reached: true,
+    });
+    expect(reply.tracker_changes).toEqual([{ name: 'Breath' }]);
+    expect(reply.final_beat_reached).toBe(true);
+
+    const first = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We step into the sundial chamber at last.',
+      reply,
+      capturedPrompts: prompts,
+    });
+    expect(first.status).toBe(200);
+    expect((await sessionRow(sessionId))?.status).toBe('active');
+    const armed = (await trackerPhase(sessionId))?.tracker as
+      | { endingRequired?: boolean; finalBeat?: boolean }
+      | undefined;
+    expect(armed?.endingRequired).toBe(true);
+    expect(armed?.finalBeat).toBe(true);
+    const envelope = JSON.parse(String(first.body.text)) as { final_beat_reached?: boolean };
+    expect(envelope.final_beat_reached).toBe(true);
+
+    const second = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'What happens now?',
+      reply: toolPathReply({ ...baseReply }),
+      capturedPrompts: prompts,
+    });
+    expect(second.status).toBe(200);
+    expect((await sessionRow(sessionId))?.status).toBe('completed');
+    const rows = await endingRowsFor(sessionId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.message).toContain('The story reached its final beat');
+  }, 60_000);
+
+  test('#1160: at_limit climax, six narrative turns carrying the null-stripped tracker entry, no combat — the seventh reply is the engine ending', async () => {
+    const { characterId, sessionId } = await seedWorld('climax-tool-path', 'breath');
+    const prompts: string[] = [];
+
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We finish the last landing.',
+      reply: trackerReply([{ name: 'Breath', set: 6 }]),
+      capturedPrompts: prompts,
+    });
+    expect((await trackerPhase(sessionId))?.tracker?.phase).toBe('climax');
+
+    for (let turn = 1; turn <= 6; turn += 1) {
+      const { status } = await dmTurn({
+        sessionId,
+        characterId,
+        playerInput: `We press on through the climax (turn ${turn}).`,
+        reply: toolPathReply({
+          ...baseReply,
+          tracker_changes: [{ name: 'Breath', delta: null, set: null }],
+        }),
+        inCombat: false,
+        capturedPrompts: prompts,
+      });
+      expect(status).toBe(200);
+    }
+    const phase = (await trackerPhase(sessionId))?.tracker;
+    expect(phase?.climaxTurns).toBe(6);
+    expect(phase?.endingRequired).toBe(true);
+    expect((await sessionRow(sessionId))?.status).toBe('active');
+
+    const promptsBefore = prompts.length;
+    const turn = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'And then?',
+      reply: toolPathReply({ ...baseReply }),
+      capturedPrompts: prompts,
+    });
+    expect(turn.status).toBe(200);
+    expect(prompts.slice(promptsBefore)[0]).toContain('the ending is required');
+    expect((await sessionRow(sessionId))?.status).toBe('completed');
+    const rows = await endingRowsFor(sessionId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.message).toContain(
+      'Breath Clock reached its limit and the climax ran its course',
+    );
+    const envelope = JSON.parse(String(turn.body.text)) as {
+      campaign_ending?: { summary?: string } | null;
+    };
+    expect(envelope.campaign_ending?.summary).toContain('Breath Clock reached its limit');
   }, 60_000);
 
   test('safety net: a non-one-shot climax arms the state but never buys a corrective call', async () => {

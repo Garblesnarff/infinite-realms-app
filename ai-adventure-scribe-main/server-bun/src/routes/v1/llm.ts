@@ -1763,6 +1763,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // nulled on the envelope, so an unapplied claim never reads as
         // engine-applied.
         let storyTrackersApplied = false;
+        let trackerFinalBeatLanded = false;
         let trackerStepRan = false;
         let trackerForcedEndingSummary: string | undefined;
         // #1083: a one-shot turn runs the step even with no tracker flags.
@@ -1807,6 +1808,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
               trackerResult.outcome === 'already_applied' ||
               (trackerResult.outcome === 'applied' &&
                 trackerResult.appliedChanges >= submittedChanges);
+            trackerFinalBeatLanded =
+              trackerResult.outcome === 'already_applied' || trackerResult.finalBeatArmed === true;
             trackerForcedEndingSummary = trackerResult.forcedEndingSummary;
           } catch (error) {
             logger.warn({ msg: 'DM_STORY_TRACKER_FAILED', sessionId: castSessionId, error });
@@ -1821,7 +1824,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // roll-request turn: the tracker step defers (roll_pending) and
         // the flag belongs to the result turn — the schema tells the DM
         // to send it again there.
-        if (envelope?.final_beat_reached === true && !storyTrackersApplied) {
+        // #1160: keyed on the flag itself landing, not on every tracker
+        // change landing.
+        if (envelope?.final_beat_reached === true && !trackerFinalBeatLanded) {
           envelope.final_beat_reached = null;
         }
         // #1084: a tracker-forced ending completes the session through
