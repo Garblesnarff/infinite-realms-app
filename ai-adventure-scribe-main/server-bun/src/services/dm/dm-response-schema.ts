@@ -918,6 +918,23 @@ export const PHASE_OMITTED_SECTIONS: Record<DmResponsePhase, string[]> = {
   full: [],
 };
 
+/**
+ * #1159: the extensions each phase schema omits, derived from the live
+ * extension set and its phase declarations above (an extension with no
+ * declaration defaults to all phases, so it is never omitted). Iterating
+ * the extension set — the same set the builder iterates — keeps this
+ * from drifting from the declarations. Used only by the shadow counter:
+ * an empty omitted extension is padding, exactly like an empty omitted
+ * base section. The phase schemas themselves still reject omitted
+ * extensions, populated or empty — the counter measures content, not
+ * padding, same deliberate asymmetry as the base sections.
+ */
+export function phaseOmittedExtensionSections(phase: DmResponsePhase): string[] {
+  return Object.keys(liveExtensionProperties).filter(
+    (name) => !extensionAppliesToPhase(liveExtensionPhases[name], phase),
+  );
+}
+
 export function fillPhaseOmissions(
   envelope: Record<string, unknown>,
   phase?: DmResponsePhase,

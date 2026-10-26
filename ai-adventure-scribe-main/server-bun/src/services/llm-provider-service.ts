@@ -3,6 +3,7 @@ import Ajv, { type ValidateFunction } from 'ajv';
 import {
   dmResponseSchema,
   dmResponseSchemaForPhase,
+  phaseOmittedExtensionSections,
   PHASE_OMITTED_SECTIONS,
 } from './dm/dm-response-schema.js';
 import { normalizeReplyNarration, type NarrationNormalization } from './dm/narration-text.js';
@@ -300,7 +301,10 @@ const validatesAgainstLiveSchema = (text: string): boolean => {
  * A dropped section carried as an empty array is padding, not content,
  * and is removed before validation, so the counter does not fire on
  * nearly every narrative/combat turn; a non-empty dropped section still
- * flags by name.
+ * flags by name. Dropped means base sections the phase omits (#782) and
+ * extensions the phase does not declare (#1159): an empty-array
+ * combat_exits on a narrative turn, or an empty-array story extension
+ * on a combat turn, carries no content either.
  * Only the first error is returned: for a root-level defect that is the
  * additionalProperties error naming the key, while a nested anyOf defect
  * may surface a different first keyword (the count is still correct).
@@ -323,11 +327,20 @@ export const findPhaseShadowMismatch = (
     // full-required), while narrative/combat phase schemas drop them with
     // additionalProperties:false — so without this, the counter fires on
     // nearly every narrative/combat turn and the zero-invalid flip gate
-    // can never be met for those phases. Remove a dropped section when
-    // it is an empty array (padding, not content); a non-empty one stays
-    // and still flags by name. The copy is never shipped.
+    // can never be met for those phases. #1159 extends the same rule to
+    // extensions: a narrative turn carrying an empty-array combat_exits,
+    // or a combat/tactical turn carrying an empty-array story extension,
+    // is padding too — the phase declarations omit those sections, but
+    // an empty array carries no content. (Object/boolean extensions have
+    // no empty-array form, so only array extensions are ever padded.)
+    // Remove a dropped section when it is an empty array (padding, not
+    // content); a non-empty one stays and still flags by name. The copy
+    // is never shipped.
     const comparison = { ...parsed };
-    for (const section of PHASE_OMITTED_SECTIONS[phase] ?? []) {
+    for (const section of [
+      ...(PHASE_OMITTED_SECTIONS[phase] ?? []),
+      ...phaseOmittedExtensionSections(phase),
+    ]) {
       if (Array.isArray(comparison[section]) && comparison[section].length === 0) {
         delete comparison[section];
       }
