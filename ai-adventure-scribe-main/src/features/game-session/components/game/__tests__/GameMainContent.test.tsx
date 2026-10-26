@@ -467,9 +467,26 @@ describe('GameMainContent overhaul behavior contract', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('Your roll: Wisdom saving throw');
     expect(
-      screen.getByText('Tap the Roll Dice button above to complete the Wisdom saving throw roll'),
+      screen.getByText('Tap the Roll d20 above to complete the Wisdom saving throw roll'),
     ).toBeInTheDocument();
     expect(screen.getByTestId('chat-input')).toBeDisabled();
+    expect(screen.getByTestId('chat-input')).toHaveAttribute(
+      'data-disabled-reason',
+      'Tap the Roll d20 above to continue',
+    );
+  });
+
+  it('shows no Roll required badge in the composer strip (M-002, #84)', () => {
+    state.currentRoll = {
+      id: 'save-1',
+      status: 'pending',
+      requestType: 'saving_throw',
+      description: 'Wisdom saving throw',
+    };
+    render(<GameMainContent {...baseProps} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Your roll: Wisdom saving throw');
+    expect(screen.queryByText('Roll required')).not.toBeInTheDocument();
   });
 
   it('mounts the action bar above the chat box and hides it while a roll is pending (#90)', () => {
@@ -538,7 +555,7 @@ describe('GameMainContent overhaul behavior contract', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('Your roll: Longsword attack vs …');
     expect(
-      screen.getByText('Tap the Roll Dice button above to complete the Longsword attack vs … roll'),
+      screen.getByText('Tap the Roll d20 above to complete the Longsword attack vs … roll'),
     ).toBeInTheDocument();
     expect(screen.queryByText('Checking whose turn it is…')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Resume turn' })).not.toBeInTheDocument();
@@ -559,7 +576,7 @@ describe('GameMainContent overhaul behavior contract', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('Your roll: Longsword attack vs …');
     expect(
-      screen.getByText('Tap the Roll Dice button above to complete the Longsword attack vs … roll'),
+      screen.getByText('Tap the Roll d20 above to complete the Longsword attack vs … roll'),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Wisdom saving throw/)).not.toBeInTheDocument();
     expect(screen.queryByText(/saving throw roll above/)).not.toBeInTheDocument();

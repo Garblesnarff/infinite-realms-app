@@ -28,7 +28,6 @@ import type { CombatTurnPreflightStatus } from '@/hooks/ai/combat-turn-preflight
 import type { ExtendedGameSession, SessionStateUpdater } from '@/hooks/game-session/session-utils';
 
 import { SafetyBanner } from '@/components/safety/SafetyBanner';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Z_INDEX } from '@/constants/z-index';
@@ -382,7 +381,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     const rollPillLabel = queuedRoll ? queueRollLabel(queuedRoll) : null;
     const rollBlocksInput = Boolean(rollPillLabel);
     const completionBanner = rollPillLabel
-      ? `Tap the Roll Dice button above to complete the ${rollPillLabel} roll`
+      ? `Tap the Roll d20 above to complete the ${rollPillLabel} roll`
       : null;
     // Saved descriptions from before #2256 may still hold "⚙️ Engine:" lines.
     const sceneBlurb = stripEngineGeneratedLines(
@@ -641,7 +640,6 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-infinite-gold">
                           <Dice6 className="h-4 w-4 shrink-0" aria-hidden="true" />
                           <span className="font-semibold">Your roll: {rollPillLabel}</span>
-                          <Badge variant="warning">Roll required</Badge>
                           <span className="text-muted-foreground">{completionBanner}</span>
                         </div>
                       </div>
@@ -692,7 +690,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                             isGeneratingGreeting
                               ? 'You can type once the scene appears'
                               : rollBlocksInput && !isProcessing
-                                ? 'Tap the Roll Dice button above to continue'
+                                ? 'Tap the Roll d20 above to continue'
                                 : undefined
                           }
                           isDisabled={
