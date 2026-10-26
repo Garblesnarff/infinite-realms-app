@@ -65,13 +65,29 @@ const TRACKER_ANCHOR = /^(HP|Clock|Scene)\b|: /;
 
 export function stripTrackerLine(text: string): string {
   const match = TRAILING_BRACKET_RUN.exec(text);
-  if (!match) return text;
-  const groups = match[1].match(/\[[^[\]\n]{1,96}\]/g);
-  if (!groups || groups.length < 2) return text;
-  const inners = groups.map((group) => group.slice(1, -1));
-  if (!inners.every((inner) => TRACKER_GROUP.test(inner))) return text;
-  if (!inners.some((inner) => TRACKER_ANCHOR.test(inner))) return text;
-  return text.slice(0, match.index).trimEnd();
+  if (match) {
+    const groups = match[1].match(/\[[^[\]\n]{1,96}\]/g);
+    if (groups && groups.length >= 2) {
+      const inners = groups.map((group) => group.slice(1, -1));
+      if (
+        inners.every((inner) => TRACKER_GROUP.test(inner)) &&
+        inners.some((inner) => TRACKER_ANCHOR.test(inner))
+      ) {
+        return text.slice(0, match.index).trimEnd();
+      }
+    }
+  }
+  // #1067 follow-up: a trailing UNTERMINATED bracket group whose inner text
+  // starts with a tracker anchor (HP/Clock/Scene) is a cut-off tracker line
+  // and goes too. Only the last '[' counts, and only when nothing closes it.
+  const lastBracket = text.lastIndexOf('[');
+  if (lastBracket !== -1 && !text.slice(lastBracket).includes(']')) {
+    const inner = text.slice(lastBracket + 1);
+    if (inner.length <= 96 && !inner.includes('\n') && /^(HP|Clock|Scene)\b/.test(inner)) {
+      return text.slice(0, lastBracket).trimEnd();
+    }
+  }
+  return text;
 }
 
 /**
