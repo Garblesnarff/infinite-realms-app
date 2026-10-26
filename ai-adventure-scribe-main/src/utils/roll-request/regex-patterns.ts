@@ -12,7 +12,7 @@ export interface ParsedRollRequest extends RollRequest {
 
 /** Common skill regex used across multiple patterns */
 export const SKILL_REGEX_STR =
-  '(perception|stealth|investigation|insight|persuasion|deception|intimidation|athletics|acrobatics|arcana|history|medicine|nature|religion|survival|performance|sleight\\s+of\\s+hand|animal\\s+handling)';
+  '(perception|stealth|investigation|insight|persuasion|deception|intimidation|athletics|acrobatics|arcana|history|medicine|nature|religion|survival|performance|sleight\\s+of\\s+hand|animal\\s+handling|sleight|animal|handle)';
 
 /** Enhanced attack roll detection (without explicit dice) */
 export const ATTACK_PATTERNS = [
@@ -62,14 +62,17 @@ export const INITIATIVE_PATTERNS = [/roll\s+initiative.*?\(([^)]+)\)/gi, /roll\s
 export const CHECK_EXPLICIT_PATTERN =
   /make\s+an?\s+(constitution|dexterity|strength|intelligence|wisdom|charisma|[\w\s]+)\s+(check|save|saving\s+throw).*?\((?!\s*DC\s*\d+\s*\))([^,)]+)(?:,\s*DC\s+(\d+))?\)/gi;
 
-/** "Roll for <skill> (DC 14)" without explicit dice */
+/** "Roll for <skill> (DC 14)" without explicit dice; article and "check" optional (#1086 (c)) */
 export const ROLL_FOR_SKILL_PATTERN = new RegExp(
-  `(?:please\\s+)?roll\\s+for\\s+${SKILL_REGEX_STR}(?:\\s*\\((?:dc|DC)\\s*(\\d+)\\))?`,
+  `(?:please\\s+)?roll\\s+for\\s+(?:an?\\s+)?${SKILL_REGEX_STR}(?:\\s+check)?(?:\\s*\\((?:dc|DC)\\s*(\\d+)\\))?`,
   'gi',
 );
 
 /** Skill checks without explicit dice (article-agnostic: a/an) */
-export const SKILL_CHECK_STRICT_PATTERN = new RegExp(`make\\s+an?\\s+${SKILL_REGEX_STR}\\s+check`, 'gi');
+export const SKILL_CHECK_STRICT_PATTERN = new RegExp(
+  `make\\s+an?\\s+${SKILL_REGEX_STR}\\s+check`,
+  'gi',
+);
 
 /** "Roll an <skill> check" (optional DC) */
 export const ROLL_SKILL_CHECK_PATTERN = new RegExp(

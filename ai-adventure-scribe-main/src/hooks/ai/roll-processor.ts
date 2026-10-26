@@ -17,6 +17,7 @@ import { executeAllNPCRolls } from '@/services/combat/npc-auto-roller';
 import { encounterParticipantsFromContext } from '@/services/combat/roll-routing';
 import { rollStateManager } from '@/services/combat/rollStateManager';
 import { DiceEngine } from '@/services/dice/DiceEngine';
+import { reconcileNarratedSkill } from '@/utils/roll-request/declared-roll';
 import { dropEngineOwnedRollRequests } from '@/utils/roll-request/engine-channel';
 import {
   parseRollRequests,
@@ -64,6 +65,12 @@ export function parseAndAugmentRollRequests(
     // mapping below does. Attack resolution reads this value downstream.
     ac: request.ac,
   }));
+
+  // #1086 (c): the DM's narration is the authority the player reads. When it
+  // asks for exactly one skill check and the single structured skill request
+  // names another skill, the request takes the narrated skill. Anything
+  // ambiguous is left exactly as the envelope sent it (see declared-roll).
+  rollRequests = reconcileNarratedSkill(rollRequests, responseText);
 
   if (rollRequests.length === 0) {
     const parsedRequests = parseRollRequests(responseText);

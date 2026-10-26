@@ -228,3 +228,54 @@ describe('fighting styles (#824)', () => {
     ).toMatchObject({ attackBonus: 10, damageBonus: 6 });
   });
 });
+
+describe('one AC whatever the weapon (#1086 (e))', () => {
+  const base = { strength: 16, dexterity: 14, level: 5, baseTargetAc: 12 };
+  const longbow: WeaponRuleProfile = {
+    ...longsword,
+    id: 'longbow',
+    name: 'Longbow',
+    damageDice: '1d8',
+    damageType: 'piercing',
+    ranged: true,
+    normalRange: 80,
+    longRange: 320,
+  };
+  const shortsword: WeaponRuleProfile = {
+    ...longsword,
+    id: 'shortsword',
+    name: 'Shortsword',
+    damageDice: '1d6',
+    damageType: 'piercing',
+  };
+
+  test('a longbow and a shortsword see the same target AC, with and without cover', () => {
+    for (const cover of [0, 1, 2] as const) {
+      const geometry = { distanceFeet: 5, hasLineOfSight: true, cover };
+      const bow = resolveAttackRules({ ...base, weapon: longbow, geometry });
+      const sword = resolveAttackRules({ ...base, weapon: shortsword, geometry });
+      expect(bow.targetAc).toBe(sword.targetAc);
+    }
+    expect(
+      resolveAttackRules({
+        ...base,
+        weapon: longbow,
+        geometry: { distanceFeet: 5, hasLineOfSight: true, cover: 0 },
+      }).targetAc,
+    ).toBe(12);
+    expect(
+      resolveAttackRules({
+        ...base,
+        weapon: longbow,
+        geometry: { distanceFeet: 5, hasLineOfSight: true, cover: 1 },
+      }).targetAc,
+    ).toBe(14);
+    expect(
+      resolveAttackRules({
+        ...base,
+        weapon: longbow,
+        geometry: { distanceFeet: 5, hasLineOfSight: true, cover: 2 },
+      }).targetAc,
+    ).toBe(17);
+  });
+});
