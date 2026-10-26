@@ -666,9 +666,7 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
     expect((await sessionRow(sessionId))?.status).toBe('active');
     const pendingAfterFirst = (
       (await sessionRow(sessionId))?.sessionState as Record<string, unknown> | null
-    )?.pendingEndingXp as
-      | { awards?: { amount?: number; reason?: string }[] }
-      | undefined;
+    )?.pendingEndingXp as { awards?: { amount?: number; reason?: string }[] } | undefined;
     expect(pendingAfterFirst?.awards).toHaveLength(1);
     expect(pendingAfterFirst?.awards?.[0]?.amount).toBe(450);
     const [characterAfterFirst] = await database
@@ -720,10 +718,7 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
       .select()
       .from(dialogueHistory)
       .where(
-        and(
-          eq(dialogueHistory.sessionId, sessionId),
-          eq(dialogueHistory.speakerType, 'player'),
-        ),
+        and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'player')),
       )
       .orderBy(asc(dialogueHistory.createdAt));
     expect(playerMessages).toHaveLength(2);
@@ -780,7 +775,7 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
     expect(pendingAfter).toBeUndefined();
   });
 
-  test('#1139: later ordinary awards cannot eat a deferred award\'s share of the cap', async () => {
+  test("#1139: later ordinary awards cannot eat a deferred award's share of the cap", async () => {
     const { characterId, sessionId } = await seedWorld('deferred-reserve');
     // Level 3's story cap is one quarter of the 2700-900 milestone band:
     // 450 — exactly the deferred award. The deferred award was earned first,
@@ -851,11 +846,8 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
   test('#1139: two distinct ending-named awards both defer and pay as one sum', async () => {
     const { characterId, sessionId } = await seedWorld('deferred-two-awards');
     const pendingOf = async () =>
-      (
-        (await sessionRow(sessionId))?.sessionState as Record<string, unknown> | null
-      )?.pendingEndingXp as
-        | { awards?: { amount?: number; reason?: string }[] }
-        | undefined;
+      ((await sessionRow(sessionId))?.sessionState as Record<string, unknown> | null)
+        ?.pendingEndingXp as { awards?: { amount?: number; reason?: string }[] } | undefined;
     const eventsOf = () =>
       database
         .select()
@@ -1073,9 +1065,8 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
         xp_award: { amount: 450, reason: "Completed the Gardener's Heir one-shot" },
       },
     });
-    const deferred = (
-      (await sessionRow(sessionId))?.sessionState as Record<string, unknown> | null
-    )?.pendingEndingXp as
+    const deferred = ((await sessionRow(sessionId))?.sessionState as Record<string, unknown> | null)
+      ?.pendingEndingXp as
       | { characterId?: string; awards?: { amount?: number; reason?: string }[] }
       | undefined;
     expect(deferred?.awards).toHaveLength(1);
@@ -1086,9 +1077,9 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
     const wiped = await SessionService.updateSession(sessionId, userId, {
       sessionState: { clientKey: 'snapshot' },
     });
-    expect(
-      (wiped.sessionState as Record<string, unknown> | null)?.pendingEndingXp,
-    ).toEqual(deferred);
+    expect((wiped.sessionState as Record<string, unknown> | null)?.pendingEndingXp).toEqual(
+      deferred,
+    );
     // And a forged pending award in the client's blob never replaces the
     // engine's stored value.
     const forged = await SessionService.updateSession(sessionId, userId, {
@@ -1099,9 +1090,9 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
         },
       },
     });
-    expect(
-      (forged.sessionState as Record<string, unknown> | null)?.pendingEndingXp,
-    ).toEqual(deferred);
+    expect((forged.sessionState as Record<string, unknown> | null)?.pendingEndingXp).toEqual(
+      deferred,
+    );
 
     // The ending turn still pays the engine's 450, not the forged 999.
     const second = await dmTurn({
