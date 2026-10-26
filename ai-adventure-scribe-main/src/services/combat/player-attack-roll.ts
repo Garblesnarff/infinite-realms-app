@@ -56,7 +56,7 @@ export interface PlayerAttackDieParams {
  * proposal itself.
  *
  * `autoRolled` is reported rather than left implicit so callers can decide. The action-bar
- * caller (`useCombatLegalActions`, behind the ActionBar) treats it as a stop: the chip shows a menu alert and spends
+ * caller (`DynamicOptionsSection`) treats it as a stop: the chip shows a menu alert and spends
  * nothing, because committing an undefined die would let the engine roll for the player —
  * the bug #2652 exists to close. Other callers (typed attacks, the DM pipeline) keep the old
  * deliberate-and-total fallback: the turn must always be resolvable, because a combat that

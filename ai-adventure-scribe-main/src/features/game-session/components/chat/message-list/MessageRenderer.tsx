@@ -36,6 +36,7 @@ interface MessageRendererProps {
   genErrorByMessage: Record<string, string>;
   onGenerateScene: (message: ChatMessage & { id?: string; timestamp?: string }) => Promise<void>;
   onOptionSelect: (optionText: string) => Promise<void>;
+  onSendMessage?: (message: ChatMessage) => Promise<void>;
   /** #88: retry a failed player send (the bubble's Try again button). */
   onRetryFailed?: (message: ChatMessage) => void | Promise<void>;
   characterName?: string;
@@ -79,6 +80,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
     genErrorByMessage,
     onGenerateScene,
     onOptionSelect,
+    onSendMessage,
     onRetryFailed,
     characterName,
     previousEngineKey,
@@ -239,6 +241,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
             <DynamicOptionsSection
               options={parsedMessage?.options ?? []}
               onOptionSelect={onOptionSelect}
+              onSendMessage={onSendMessage}
               hasDynamicOverlay={false}
               isLatest={isLatestMessage}
               showNoOptionsNotice={message.context?.noActionOptions === true}
@@ -267,6 +270,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
       prev.onGenerateScene === next.onGenerateScene &&
       prev.onOptionSelect === next.onOptionSelect;
 
+    if (prev.onSendMessage !== next.onSendMessage) return false;
     if (prev.onRetryFailed !== next.onRetryFailed) return false;
 
     if (

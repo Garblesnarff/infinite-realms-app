@@ -11,8 +11,8 @@ import { useAIResponse } from '../use-ai-response';
 
 import { mapAuthoritativeCombat } from '@/contexts/combat/authoritative-combat-state';
 import { useCombat } from '@/contexts/CombatContext';
+import { DynamicOptionsSection } from '@/features/game-session/components/chat/message-list/DynamicOptionsSection';
 import { buildSpellCastMessage } from '@/features/game-session/components/game/overhaul/spell-view-model';
-import { CombatLegalActionsHarness } from '@/features/game-session/hooks/__tests__/combat-legal-actions-harness';
 import { AIService } from '@/services/ai-service';
 import { setPlayerRollHost } from '@/services/combat/player-roll-bridge';
 import { userDataApi } from '@/services/user-data-api';
@@ -493,8 +493,10 @@ describe('D3: combat options use the real response hook (#2547)', () => {
         {playerMessage && (
           <button onClick={() => void onOptionSelect(playerMessage)}>Cast from sheet</button>
         )}
-        <CombatLegalActionsHarness
-          onSendText={onOptionSelect}
+        <DynamicOptionsSection
+          options={[]}
+          hasDynamicOverlay={true}
+          onOptionSelect={onOptionSelect}
           onSendMessage={async (message) => {
             persisted.push(message);
           }}

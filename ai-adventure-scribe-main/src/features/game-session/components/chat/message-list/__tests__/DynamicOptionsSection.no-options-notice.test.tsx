@@ -3,8 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DynamicOptionsSection } from '../DynamicOptionsSection';
 
-// #90: no CombatContext mock — the component no longer reads combat state (its combat cases
-// moved to combat-legal-actions.menu.test.tsx).
+const combat = vi.hoisted(() => ({ isInCombat: false, activeEncounter: null as any }));
+vi.mock('@/contexts/CombatContext', () => ({ useCombat: () => ({ state: combat }) }));
+vi.mock('@/services/combat/combat-action-executor', () => ({
+  executeAuthoritativeCombatIntent: vi.fn().mockResolvedValue({}),
+  executeStructuredCombatActionWithBoundary: vi.fn().mockResolvedValue({}),
+}));
+
 // Mock the dependent component
 vi.mock('@/components/game/ActionOptions', () => ({
   ActionOptions: ({ options }: { options: any[] }) => (
@@ -20,6 +25,8 @@ describe('DynamicOptionsSection no-action-options notice (GP-015, #219)', () => 
   const mockOnOptionSelect = vi.fn();
 
   beforeEach(() => {
+    combat.isInCombat = false;
+    combat.activeEncounter = null;
     vi.restoreAllMocks();
   });
 
@@ -76,6 +83,31 @@ describe('DynamicOptionsSection no-action-options notice (GP-015, #219)', () => 
 
     expect(screen.getByTestId('action-options')).toBeInTheDocument();
     expect(screen.getByText('Sneak past the guards')).toBeInTheDocument();
+    expect(screen.queryByTestId('no-action-options-notice')).not.toBeInTheDocument();
+  });
+
+  it('never shows the notice while the combat menu owns the slot', () => {
+    combat.isInCombat = true;
+    combat.activeEncounter = {
+      id: 'encounter-1',
+      currentTurnParticipantId: 'player-1',
+      participants: [{ id: 'player-1', participantType: 'player' }],
+    } as any;
+    // The combat menu fetches legal actions; stub it so no real request escapes.
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ actorId: 'player-1', actions: [] }),
+    } as Response);
+    render(
+      <DynamicOptionsSection
+        options={[]}
+        onOptionSelect={mockOnOptionSelect}
+        hasDynamicOverlay={false}
+        isLatest
+        showNoOptionsNotice
+      />,
+    );
+
     expect(screen.queryByTestId('no-action-options-notice')).not.toBeInTheDocument();
   });
 });

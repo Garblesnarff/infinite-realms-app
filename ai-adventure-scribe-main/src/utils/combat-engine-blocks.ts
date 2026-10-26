@@ -96,7 +96,7 @@ export function combatMessageEndedCombat(message: {
   if (!(message.context?.combatEnded ?? message.context?.combat_ended)) return false;
   // The flag is stamped by three producers: use-ai-response on the DM reply that
   // narrates the end, buildNpcEngineMessage on the terminal row it persists for
-  // a server-ended fight, and useCombatLegalActions on the local notice it posts
+  // a server-ended fight, and DynamicOptionsSection on the local notice it posts
   // when no row was persisted (#976). Engine presentations are 'system'
   // messages; without them a server-ended fight never matches this gate and its
   // Combat Summary waits out the fallback timer.

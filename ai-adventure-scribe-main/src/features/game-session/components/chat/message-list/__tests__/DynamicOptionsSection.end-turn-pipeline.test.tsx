@@ -1,7 +1,8 @@
 import { render, fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 
-import { CombatLegalActionsHarness } from '@/features/game-session/hooks/__tests__/combat-legal-actions-harness';
+import { DynamicOptionsSection } from '../DynamicOptionsSection';
+
 import { executeAuthoritativeCombatIntent } from '@/services/combat/combat-action-executor';
 
 /**
@@ -129,7 +130,14 @@ describe('the End turn option leaves the NPC turns to the server (#2641, #2658 s
   });
 
   const clickEndTurn = async () => {
-    render(<CombatLegalActionsHarness onSendText={onOptionSelect} onSendMessage={onSendMessage} />);
+    render(
+      <DynamicOptionsSection
+        options={[]}
+        onOptionSelect={onOptionSelect}
+        onSendMessage={onSendMessage}
+        hasDynamicOverlay
+      />,
+    );
     fireEvent.click(await screen.findByText('End turn'));
   };
 
