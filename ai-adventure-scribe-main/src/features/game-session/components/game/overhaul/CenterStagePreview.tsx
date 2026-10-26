@@ -30,7 +30,9 @@ const DiceResultCard: React.FC = () => (
           Success
         </span>
       </div>
-      <p className="mt-0.5 ir-text-min text-muted-foreground">vs DC 15 (Persuasion) · +6 Persuasion Modifier</p>
+      <p className="mt-0.5 ir-text-min text-muted-foreground">
+        vs DC 15 (Persuasion) · +6 Persuasion Modifier
+      </p>
     </div>
   </div>
 );
@@ -49,7 +51,10 @@ const DmMessage: React.FC<{ time: string; children: React.ReactNode }> = ({ time
   </div>
 );
 
-const PlayerMessage: React.FC<{ time: string; children: React.ReactNode }> = ({ time, children }) => (
+const PlayerMessage: React.FC<{ time: string; children: React.ReactNode }> = ({
+  time,
+  children,
+}) => (
   <div className="flex flex-col items-end">
     <p className="ir-display mb-1 ir-text-min font-semibold uppercase tracking-[1.5px] text-muted-foreground">
       <span className="mr-1">{time}</span> You
@@ -72,24 +77,29 @@ const CHIPS = [
   { label: 'Roll Dice', cls: 'border-sky-500/40 text-sky-300 hover:bg-sky-500/10' },
 ];
 
-export const CenterStagePreview: React.FC<{ title: string; blurb: string }> = ({ title, blurb }) => (
+export const CenterStagePreview: React.FC<{ title: string; blurb: string }> = ({
+  title,
+  blurb,
+}) => (
   <div className="ir-panel flex h-full flex-col">
     <SceneHeader title={title} blurb={blurb} />
     <div className="flex-1 space-y-5 overflow-y-auto border-t border-white/5 px-4 py-4">
       <DmMessage time="10:24 AM">
         <p>
-          The trail leads you through gnarled trees and into a veil of thick fog. Ahead looms the crumbling watchtower,
-          its stones cloaked in moss and shadow. A chill wind whispers through the broken windows.
+          The trail leads you through gnarled trees and into a veil of thick fog. Ahead looms the
+          crumbling watchtower, its stones cloaked in moss and shadow. A chill wind whispers through
+          the broken windows.
         </p>
         <p>As you approach the rusted gate, it creaks open on its own.</p>
         <Quote>
-          A figure steps into view atop the stairs — tall, shrouded, eyes glimmering with unearthly light. "You trespass
-          where you do not belong…"
+          A figure steps into view atop the stairs — tall, shrouded, eyes glimmering with unearthly
+          light. "You trespass where you do not belong…"
         </Quote>
       </DmMessage>
 
       <PlayerMessage time="10:25 AM">
-        I raise my shield and step forward. "We mean no harm. We seek only answers. Who are you, and what is this place?"
+        I raise my shield and step forward. "We mean no harm. We seek only answers. Who are you, and
+        what is this place?"
       </PlayerMessage>
 
       <DmMessage time="10:26 AM">
@@ -98,7 +108,9 @@ export const CenterStagePreview: React.FC<{ title: string; blurb: string }> = ({
         <DiceResultCard />
       </DmMessage>
 
-      <PlayerMessage time="10:26 AM">I hold my ground. "We've come too far to turn back now."</PlayerMessage>
+      <PlayerMessage time="10:26 AM">
+        I hold my ground. "We've come too far to turn back now."
+      </PlayerMessage>
     </div>
 
     {/* Input */}
@@ -107,7 +119,7 @@ export const CenterStagePreview: React.FC<{ title: string; blurb: string }> = ({
         <input
           disabled
           placeholder="What do you do next?"
-          className="flex-1 bg-transparent text-sm text-foreground/80 placeholder:text-muted-foreground focus:outline-none"
+          className="flex-1 bg-transparent text-sm text-foreground/80 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-infinite-gold focus-visible:ring-offset-2 focus-visible:ring-offset-infinite-dark"
         />
         <button className="ir-btn-gold !px-3 !py-2">
           <Send className="h-4 w-4" />

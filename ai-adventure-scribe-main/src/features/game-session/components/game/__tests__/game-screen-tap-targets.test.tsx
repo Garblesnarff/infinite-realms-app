@@ -290,9 +290,22 @@ describe('guard: no sub-12px text classes on the game screen (#228)', () => {
     'src/features/game-session/components/chat/message-list/DMMessage.tsx',
     'src/components/game/ActionOptions.tsx',
     'src/components/game/DiceRollRequest.tsx',
+    'src/components/combat/CombatEntryConfirmation.tsx',
   ];
   it.each(GAME_SCREEN_FILES)('has no text-[9/10/11px] in %s', (file) => {
     const source = readFileSync(file, 'utf8');
     expect(source).not.toMatch(/text-\[(9|10|11)px\]/);
+  });
+
+  it('keeps the named game dialogs and preview input from suppressing focus without a replacement', () => {
+    for (const file of [
+      'src/features/game-session/components/game/overhaul/CenterStagePreview.tsx',
+      'src/features/game-session/components/handouts/HandoutCard.tsx',
+      'src/features/game-session/components/chat/message-list/MessageAssetDisplay.tsx',
+    ]) {
+      const source = readFileSync(file, 'utf8');
+      expect(source).not.toContain('focus:outline-none');
+      expect(source).toMatch(/focus-visible:ring-2/);
+    }
   });
 });

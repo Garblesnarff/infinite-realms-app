@@ -26,7 +26,7 @@ export const HandoutCard: React.FC<{ entry: JournalHandoutEntry; className?: str
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          'group w-full overflow-hidden rounded-xl border text-left transition hover:-translate-y-0.5 hover:shadow-lg',
+          'group w-full overflow-hidden rounded-xl border text-left transition hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-infinite-gold focus-visible:ring-offset-2',
           authored
             ? 'border-amber-300/25 bg-gradient-to-br from-amber-950/45 to-[#1b1428]'
             : 'border-amber-700/35 bg-[#f3e5c1] text-stone-900',
@@ -60,7 +60,7 @@ export const HandoutCard: React.FC<{ entry: JournalHandoutEntry; className?: str
           style={{ zIndex: Z_INDEX.IMAGE_LIGHTBOX_BACKDROP }}
         />
         <DialogPrimitive.Content
-          className="fixed left-1/2 top-1/2 max-h-[90vh] w-[min(92vw,42rem)] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-xl border border-amber-200/20 bg-[#16101f] p-0 shadow-2xl focus:outline-none"
+          className="fixed left-1/2 top-1/2 max-h-[90vh] w-[min(92vw,42rem)] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-xl border border-amber-200/20 bg-[#16101f] p-0 shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-infinite-gold focus-visible:ring-offset-2"
           style={{ zIndex: Z_INDEX.IMAGE_LIGHTBOX }}
         >
           <DialogPrimitive.Title className="sr-only">{entry.title}</DialogPrimitive.Title>
@@ -68,7 +68,7 @@ export const HandoutCard: React.FC<{ entry: JournalHandoutEntry; className?: str
             Handout given to {recipient}
           </DialogPrimitive.Description>
           <DialogPrimitive.Close
-            className="absolute right-3 top-3 rounded-full bg-black/50 p-2 text-white/80 hover:bg-black/70 hover:text-white"
+            className="ir-hit-slop absolute right-3 top-3 rounded-full bg-black/50 p-2 text-white/80 hover:bg-black/70 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-infinite-gold"
             style={{ zIndex: Z_INDEX.POPOVER }}
             aria-label={`Close ${entry.title}`}
           >
