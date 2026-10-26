@@ -119,6 +119,106 @@ describe('AuthContext connection failures (#565)', () => {
     expect(window.localStorage.getItem('workos_access_token')).toBeNull();
   });
 
+  it('retries auth.me with the refreshed access token after a 401', async () => {
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    let authMeAttempts = 0;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (String(url).includes('/api/trpc/auth.me')) {
+        authMeAttempts += 1;
+        if (authMeAttempts === 1) return Promise.resolve(authMe(401));
+        expect((init?.headers as Record<string, string>).Authorization).toBe(
+          'Bearer refreshed-access',
+        );
+        return Promise.resolve(
+          authMe(200, { result: { data: { id: 'u1', email: 'player@example.com' } } }),
+        );
+      }
+      if (String(url).includes('/v1/auth/refresh')) {
+        return Promise.resolve(
+          authMe(200, { accessToken: 'refreshed-access', refreshToken: 'refreshed-refresh' }),
+        );
+      }
+      return Promise.resolve(authMe(404));
+    });
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(probeState().userEmail).toBe('player@example.com'));
+    expect(authMeAttempts).toBe(2);
+    expect(window.localStorage.getItem('workos_access_token')).toBe('refreshed-access');
+    expect(window.localStorage.getItem('workos_refresh_token')).toBeNull();
+    expect(window.sessionStorage.getItem('workos_refresh_token')).toBe('refreshed-refresh');
+  });
+
+  it('keeps the player signed in when a refresh 200 races a winning cross-tab pair', async () => {
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    let authMeAttempts = 0;
+    let secondAuthorization: string | undefined;
+    let winningPairPublished = false;
+    const originalSetItem = Storage.prototype.setItem;
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      originalSetItem.call(this, key, value);
+      if (
+        !winningPairPublished &&
+        this === window.localStorage &&
+        key === 'aas_workos_cached_session' &&
+        value.includes('refreshed-access')
+      ) {
+        winningPairPublished = true;
+        originalSetItem.call(window.localStorage, 'workos_access_token', 'winning-access');
+        originalSetItem.call(
+          window.localStorage,
+          'aas_workos_cached_session',
+          JSON.stringify({ access_token: 'winning-access', refresh_token: 'winning-refresh' }),
+        );
+        window.sessionStorage.setItem('workos_refresh_token', 'winning-refresh');
+      }
+    });
+
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (String(url).includes('/api/trpc/auth.me')) {
+        authMeAttempts += 1;
+        if (authMeAttempts === 1) return Promise.resolve(authMe(401));
+        secondAuthorization = (init?.headers as Record<string, string>).Authorization;
+        if (secondAuthorization !== 'Bearer winning-access') return Promise.resolve(authMe(401));
+        return Promise.resolve(
+          authMe(200, { result: { data: { id: 'u1', email: 'player@example.com' } } }),
+        );
+      }
+      if (String(url).includes('/v1/auth/refresh')) {
+        return Promise.resolve(
+          authMe(200, { accessToken: 'refreshed-access', refreshToken: 'refreshed-refresh' }),
+        );
+      }
+      return Promise.resolve(authMe(404));
+    });
+
+    try {
+      render(
+        <AuthProvider>
+          <Probe />
+        </AuthProvider>,
+      );
+
+      await waitFor(() => expect(probeState().userEmail).toBe('player@example.com'));
+      expect(authMeAttempts).toBe(2);
+      expect(secondAuthorization).toBe('Bearer winning-access');
+      expect(winningPairPublished).toBe(true);
+      expect(window.localStorage.getItem('workos_access_token')).toBe('winning-access');
+      expect(window.sessionStorage.getItem('workos_refresh_token')).toBe('winning-refresh');
+    } finally {
+      setItemSpy.mockRestore();
+    }
+  });
+
   it('keeps the stored session when the refresh endpoint hangs during a 401', async () => {
     vi.useFakeTimers();
     (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {

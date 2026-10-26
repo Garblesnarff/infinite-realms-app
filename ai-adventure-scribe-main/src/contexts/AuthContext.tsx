@@ -165,10 +165,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             cachedSession.access_token,
           );
           if (newTokens) {
-            activeSession = {
-              access_token: newTokens.accessToken,
-              refresh_token: newTokens.refreshToken,
-            };
+            // The shared refresh path persists the winning pair before
+            // releasing its cross-tab lease. Re-read it so a caller that was
+            // queued behind another tab never retries auth.me with a stale
+            // pair or publishes the old pair back into storage (#1087).
+            const storedSession = loadCachedSession();
+            activeSession =
+              storedSession && storedSession.access_token !== cachedSession.access_token
+                ? storedSession
+                : {
+                    access_token: newTokens.accessToken,
+                    refresh_token: newTokens.refreshToken,
+                  };
             persistSession(activeSession);
             result = await verifyToken(activeSession.access_token);
           }

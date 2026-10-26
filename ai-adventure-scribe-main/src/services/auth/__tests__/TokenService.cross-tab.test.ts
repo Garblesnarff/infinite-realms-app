@@ -10,6 +10,7 @@ vi.mock('@/lib/logger', () => ({
 
 describe('TokenService cross-tab refresh coordination', () => {
   let originalLocks: unknown;
+  let defaultLockRequest: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     localStorage.clear();
@@ -33,6 +34,7 @@ describe('TokenService cross-tab refresh coordination', () => {
         }
       },
     );
+    defaultLockRequest = request;
 
     Object.defineProperty(navigator, 'locks', {
       configurable: true,
@@ -40,8 +42,7 @@ describe('TokenService cross-tab refresh coordination', () => {
     });
   });
 
-  afterEach(() => {
-    vi.unstubAllGlobals();
+  const restoreNavigatorLocks = (): void => {
     if (originalLocks === undefined) {
       Reflect.deleteProperty(navigator, 'locks');
     } else {
@@ -50,9 +51,14 @@ describe('TokenService cross-tab refresh coordination', () => {
         value: originalLocks,
       });
     }
+  };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    restoreNavigatorLocks();
   });
 
-  it('lets two simulated tabs complete one rotating-token exchange', async () => {
+  it('uses one storage lease for two simulated browser contenders', async () => {
     localStorage.setItem(
       'aas_workos_cached_session',
       JSON.stringify({ access_token: 'old-access', refresh_token: 'old-refresh' }),
@@ -88,5 +94,34 @@ describe('TokenService cross-tab refresh coordination', () => {
     ]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(tabTwo.getAccessToken()).toBe('new-access');
+    expect(tabOne.getAccessToken()).toBe('new-access');
+    expect(defaultLockRequest).not.toHaveBeenCalled();
+  });
+
+  it('uses the expiring storage lease when a Web Lock is held by a frozen tab', async () => {
+    const lockRequest = vi.fn(() => new Promise<never>(() => {}));
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: { request: lockRequest },
+    });
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ accessToken: 'new-access', refreshToken: 'new-refresh' }),
+    } as Response);
+
+    vi.resetModules();
+    const { refreshAccessToken } = await import('../TokenService');
+
+    try {
+      await expect(refreshAccessToken('old-refresh', 'old-access')).resolves.toEqual({
+        accessToken: 'new-access',
+        refreshToken: 'new-refresh',
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(lockRequest).not.toHaveBeenCalled();
+    } finally {
+      restoreNavigatorLocks();
+    }
   });
 });
