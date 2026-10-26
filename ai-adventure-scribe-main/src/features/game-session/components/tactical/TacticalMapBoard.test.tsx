@@ -232,7 +232,11 @@ describe('tactical map combat flow', () => {
     ).toBeInTheDocument();
   });
 
-  it('reads the round from the authoritative encounter, not the stale map field (#179 item 3)', async () => {
+  it('shows no initiative round on the map header even with an active encounter (#85)', async () => {
+    // The TurnBar owns the turn readout now: the map header carried a second copy, and
+    // the map payload's round field is never updated after creation (NT-046), so the
+    // header could claim a stale round. #179 item 3's point stands for the TurnBar;
+    // the map header shows nothing.
     combatStateHolder.current = {
       activeEncounter: { id: 'enc-1', currentTurnParticipantId: 'pc', currentRound: 3 },
     };
@@ -253,7 +257,8 @@ describe('tactical map combat flow', () => {
           new CustomEvent('tactical-map-delta', { detail: { type: 'map_created', map: map() } }),
         ),
       );
-      expect(await screen.findByText(/Initiative · round 3/)).toBeInTheDocument();
+      expect(await screen.findByRole('region', { name: 'Tactical combat' })).toBeInTheDocument();
+      expect(screen.queryByText(/Initiative · round/)).not.toBeInTheDocument();
     } finally {
       combatStateHolder.current = {
         activeEncounter: { id: 'enc-1', currentTurnParticipantId: 'pc' },
@@ -264,9 +269,8 @@ describe('tactical map combat flow', () => {
   it('shows no initiative round when no encounter is active (#864)', async () => {
     // The old expectation here — fall back to the map's round field — was the #864 bug:
     // the map payload's round is never updated after creation (NT-046), so after a fight
-    // ended the header kept claiming "Initiative · round 1" with no fight active. #179
-    // item 3's point stands for an active encounter (previous test); with none, there is
-    // no initiative order to label.
+    // ended the header kept claiming "Initiative · round 1" with no fight active. #85
+    // deletes the header text outright, so the absence holds with or without a fight.
     combatStateHolder.current = { activeEncounter: null };
     try {
       vi.stubGlobal(
@@ -283,7 +287,7 @@ describe('tactical map combat flow', () => {
           new CustomEvent('tactical-map-delta', { detail: { type: 'map_created', map: map() } }),
         ),
       );
-      expect(await screen.findByText('Tactical map')).toBeInTheDocument();
+      expect(await screen.findByRole('region', { name: 'Tactical combat' })).toBeInTheDocument();
       expect(screen.queryByText(/Initiative · round/)).not.toBeInTheDocument();
     } finally {
       combatStateHolder.current = {
