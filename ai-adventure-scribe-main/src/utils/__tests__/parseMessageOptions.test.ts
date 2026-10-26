@@ -213,7 +213,7 @@ describe('parseMessageOptions', () => {
       );
     });
 
-    it('should keep "you have" as "I have" after "nothing" and "anything" (#1132)', () => {
+    it('should keep "you have" as "I have" after "nothing", "anything" and "everything" (#1132)', () => {
       const nothingOption = {
         id: 'opt1',
         number: 1,
@@ -226,11 +226,20 @@ describe('parseMessageOptions', () => {
         text: 'Tell them about anything you have truly lost.',
         fullText: '...',
       };
+      const everythingOption = {
+        id: 'opt3',
+        number: 3,
+        text: 'Tell them about everything you have truly lost.',
+        fullText: '...',
+      };
       expect(createPlayerMessageFromOption(nothingOption)).toBe(
         'Tell them about nothing I have truly lost.',
       );
       expect(createPlayerMessageFromOption(anythingOption)).toBe(
         'Tell them about anything I have truly lost.',
+      );
+      expect(createPlayerMessageFromOption(everythingOption)).toBe(
+        'Tell them about everything I have truly lost.',
       );
     });
 
