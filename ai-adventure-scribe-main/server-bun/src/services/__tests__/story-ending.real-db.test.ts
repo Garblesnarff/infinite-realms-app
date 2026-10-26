@@ -479,6 +479,33 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
     expect(events.some((event) => event.xpGained === 300)).toBe(true);
   });
 
+  test('#1084: the "Adventure complete" row comes after the DM\'s ending reply', async () => {
+    const { characterId, sessionId } = await seedWorld('ending-order');
+
+    const { status } = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'I take the Sunken Temple landing.',
+      reply: endingReply,
+    });
+    expect(status).toBe(200);
+
+    // Hark V-001: the ending row was claimed before the reply row existed,
+    // so the log read "Adventure complete" above the ending narration.
+    const rows = await database
+      .select()
+      .from(dialogueHistory)
+      .where(eq(dialogueHistory.sessionId, sessionId))
+      .orderBy(asc(dialogueHistory.sequenceNumber));
+    const dmIndex = rows.findIndex((row) => row.speakerType === 'dm');
+    const endingIndex = rows.findIndex(
+      (row) => (row.context as { intent?: string } | null)?.intent === 'campaign_ending',
+    );
+    expect(dmIndex).toBeGreaterThanOrEqual(0);
+    expect(endingIndex).toBeGreaterThan(dmIndex);
+    expect(endingIndex).toBe(rows.length - 1);
+  });
+
   test('an ordinary turn declares no ending: the session stays active', async () => {
     const { characterId, sessionId } = await seedWorld('ordinary');
 

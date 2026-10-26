@@ -334,10 +334,10 @@ export function validStoryTrackers(
       !!entry &&
       typeof entry === 'object' &&
       typeof (entry as { name?: unknown }).name === 'string' &&
-      ((entry as { name: string }).name.trim().length > 0) &&
+      (entry as { name: string }).name.trim().length > 0 &&
       Number.isFinite((entry as { value?: unknown }).value) &&
       Number.isFinite((entry as { limit?: unknown }).limit) &&
-      ((entry as { limit: number }).limit > 0),
+      (entry as { limit: number }).limit > 0,
   );
   return trackers.length > 0 ? trackers : undefined;
 }
@@ -354,9 +354,7 @@ export function validStoryTrackers(
  * actually set wins; `combat_transition: 'none'` counts as unset), and it fails open —
  * a normalization that would empty a non-empty narration leaves the reply untouched.
  */
-export function unwrapNestedReplyEnvelope(
-  envelope: Record<string, any>,
-): Record<string, any> {
+export function unwrapNestedReplyEnvelope(envelope: Record<string, any>): Record<string, any> {
   if (typeof envelope.text !== 'string') return envelope;
   const originalText = envelope.text;
   let current = envelope;
@@ -379,9 +377,7 @@ export function unwrapNestedReplyEnvelope(
       }
       if (key === 'options') {
         if (isEmptyReplyValue(staged.options) && Array.isArray(value)) {
-          staged.options = value.filter(
-            (option): option is string => typeof option === 'string',
-          );
+          staged.options = value.filter((option): option is string => typeof option === 'string');
         }
         continue;
       }
@@ -671,6 +667,8 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     items: structuredResponse?.items,
     conditions: structuredResponse?.conditions,
     rest: structuredResponse?.rest,
+    // #1084: the server-applied ending (stored summary, or null when it did not apply) rides the envelope; the completion latch in use-ai-response reads it.
+    campaign_ending: structuredResponse?.campaign_ending,
     combatants: structuredResponse?.combatants || [],
     combatDetection: {
       isCombat:
