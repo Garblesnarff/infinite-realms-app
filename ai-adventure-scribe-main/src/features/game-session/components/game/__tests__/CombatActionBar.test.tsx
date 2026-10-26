@@ -1,13 +1,11 @@
 // Fixtures follow the producer shape from getLegalCombatActions
 // (ai-adventure-scribe-main/server-bun/src/services/combat/combat-intent-service.ts)
 // and buildCombatWeaponOptions (server-bun/src/services/combat/combat-weapon-options.ts).
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { LEGAL_ACTION_TYPES } from '../../../../../../shared/combat-legal-action-types';
 import { CombatActionBar, LEGAL_ACTION_PLACEMENT } from '../CombatActionBar';
 
 import type { LegalAction } from '@/features/game-session/hooks/use-combat-legal-actions';
@@ -249,27 +247,31 @@ describe('CombatActionBar', () => {
     );
   });
 
+  it('More menu: unknown action type renders by its label', async () => {
+    const unknownAction = { type: 'teleport', label: 'Teleport' } as unknown as LegalAction;
+    const onAction = vi.fn();
+    render(
+      <CombatActionBar
+        {...defaultProps}
+        actions={[unknownAction, endTurnAction]}
+        onAction={onAction}
+      />,
+    );
+    const toolbar = screen.getByRole('toolbar', { name: 'Your actions' });
+    const user = userEvent.setup();
+    await user.click(within(toolbar).getByRole('button', { name: /^More/ }));
+    const item = await screen.findByRole('menuitem', { name: 'Teleport' });
+    expect(item).toHaveTextContent('Teleport');
+    await user.click(item);
+    expect(onAction).toHaveBeenCalledWith(unknownAction);
+  });
+
   describe('legal-action coverage (#1143)', () => {
-    // The server has no exported union for its legal actions (an inferred inline type), so the
-    // type list is read from the producers' source: getLegalCombatActions and the
-    // buildCombatWeaponOptions it spreads in. A type added there and not placed fails here.
-    const serverDir = resolve(__dirname, '../../../../../../server-bun/src/services/combat');
-    const serverLegalActionTypes = (): string[] => {
-      const intentService = readFileSync(resolve(serverDir, 'combat-intent-service.ts'), 'utf8');
-      const start = intentService.indexOf('export async function getLegalCombatActions');
-      expect(start).toBeGreaterThan(-1);
-      const end = intentService.indexOf('\n}\n', start);
-      const body = intentService.slice(start, end);
-      const weaponOptions = readFileSync(resolve(serverDir, 'combat-weapon-options.ts'), 'utf8');
-      const types = [...`${body}\n${weaponOptions}`.matchAll(/type: '([a-z_]+)'/g)].map(
-        (match) => match[1],
-      );
-      return [...new Set(types)].sort();
-    };
+    // The server exports the list of legal action types it can return; every one must be placed.
+    const serverLegalActionTypes = (): string[] => [...LEGAL_ACTION_TYPES].sort();
 
     it('places every action type the server can return', () => {
       const types = serverLegalActionTypes();
-      // Sanity: the scan found the list the review cited (~2242-2292), not an empty file.
       expect(types).toEqual(
         expect.arrayContaining(['attack', 'spell', 'dash', 'flee', 'yield', 'end_turn']),
       );

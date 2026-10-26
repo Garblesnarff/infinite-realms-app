@@ -10,14 +10,19 @@ import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { Elysia } from 'elysia';
 
 import { describeAttackRoll } from '../../../../../../shared/describe-attack-roll';
+import {
+  ACTION_BAR_CAST_INTENT,
+  ACTION_BAR_ACTOR_ID,
+  ACTION_BAR_TARGET_ID,
+} from '../../../../../../shared/test-fixtures/combat-action-bar-intent';
 import { setRngSeed } from '../../../../lib/rng.js';
 
 import type { MapEntity, TacticalMap } from '../../../../tactical/types.js';
 
 const SESSION_ID = '235c24e4-f776-43fa-8f70-4b8478317953';
 const ENCOUNTER_ID = 'e570e444-197c-43c9-a43b-edbd61e11792';
-const MERLIN_ID = '465816e1-0000-4000-8000-000000000001';
-const BALTHAZAR_ID = '779792b2-0000-4000-8000-000000000002';
+const MERLIN_ID = ACTION_BAR_ACTOR_ID;
+const BALTHAZAR_ID = ACTION_BAR_TARGET_ID;
 const ENCOUNTER_VERSION = 3;
 
 const hp = new Map<string, number>([
@@ -928,20 +933,11 @@ describe('#1143 a Cast chosen from the ActionBar, through the real route and res
     refusal?: string;
   };
   type Execution = { result: unknown; boundary: string | null };
-  const barCast = (): ClientAction => ({
-    actor_id: MERLIN_ID,
-    action_type: 'cast_spell',
-    target_ids: [BALTHAZAR_ID],
-    weapon_id: null,
-    spell_id: 'chill-touch',
-    slot_level: null,
-    movement_feet: 0,
-  });
   const askCast = async (): Promise<CastResult> => {
     const { askPlayerForSpellCast } = await import(spellCastModule);
     return askPlayerForSpellCast({
       encounterId: ENCOUNTER_ID,
-      action: barCast(),
+      action: ACTION_BAR_CAST_INTENT,
       actorLabel: 'Merlin Swift',
       participants: PARTICIPANTS,
     });
@@ -950,7 +946,7 @@ describe('#1143 a Cast chosen from the ActionBar, through the real route and res
     const { executeStructuredCombatActionWithBoundary } = await import(executorModule);
     return executeStructuredCombatActionWithBoundary(
       ENCOUNTER_ID,
-      barCast(),
+      ACTION_BAR_CAST_INTENT,
       cast.d20,
       cast.d20Rolls,
       'action_bar',
@@ -1023,7 +1019,9 @@ describe('#1143 a Cast chosen from the ActionBar, through the real route and res
     expect(result.totalAttackRoll).toBe(15 + Number(result.attackBonus));
     const { formatCombatActionParts } = await import(transcriptModule);
     const lines = (
-      formatCombatActionParts(barCast(), execution.result, []) as Array<{ line: string }>
+      formatCombatActionParts(ACTION_BAR_CAST_INTENT, execution.result, []) as Array<{
+        line: string;
+      }>
     )
       .map((part) => part.line)
       .join('\n');

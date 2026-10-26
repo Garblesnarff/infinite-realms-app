@@ -78,8 +78,13 @@ export const LEGAL_ACTION_PLACEMENT = {
   Record<LegalAction['type'], 'button' | 'cast' | 'move' | 'more' | 'hidden'>
 >;
 
-const isMoreAction = (action: LegalAction): boolean =>
-  (LEGAL_ACTION_PLACEMENT as Partial<Record<LegalAction['type'], string>>)[action.type] === 'more';
+const isMoreAction = (action: LegalAction): boolean => {
+  const placement = (LEGAL_ACTION_PLACEMENT as Partial<Record<LegalAction['type'], string>>)[
+    action.type
+  ];
+  // Unknown types (not a key of LEGAL_ACTION_PLACEMENT) fall through to More by their label.
+  return placement === 'more' || placement === undefined;
+};
 
 const buttonBase =
   'inline-flex min-h-11 items-center gap-2 rounded-lg border border-[color:var(--ir-control-border)] bg-white/[0.03] px-3.5 text-sm font-semibold max-[699px]:flex-1 max-[699px]:basis-[calc(33%-8px)] max-[699px]:justify-center';

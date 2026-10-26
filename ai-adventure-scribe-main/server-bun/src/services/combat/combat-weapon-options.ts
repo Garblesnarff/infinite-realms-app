@@ -1,6 +1,7 @@
 import { findCatalogWeapon } from './weapon-catalog.js';
 
 import type { WeaponRuleProfile } from './combat-rules.js';
+import type { LegalActionType } from '../../../../shared/combat-legal-action-types';
 
 export function isEquippedWeaponCandidate(candidate: {
   itemType: string | null | undefined;
@@ -50,7 +51,7 @@ export function buildCombatWeaponOptions(
     equipFirst?: boolean;
   },
 ): Array<{
-  type: 'attack';
+  type: LegalActionType;
   label: string;
   weaponId: string;
   targetIds: string[];

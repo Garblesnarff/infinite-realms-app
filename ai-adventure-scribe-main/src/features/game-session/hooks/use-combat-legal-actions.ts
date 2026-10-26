@@ -126,6 +126,7 @@ export function useCombatLegalActions(input: {
       );
       if (!response.ok) {
         setLoadFailed(true);
+        setLegalState((previous) => ({ actorId: previous.actorId, actions: [] }));
         return;
       }
       const payload = (await response.json()) as { actorId?: string; actions?: LegalAction[] };
@@ -141,6 +142,7 @@ export function useCombatLegalActions(input: {
       // the chat box stays open either way.
       logger.warn('[CombatLegalActions] legal-action fetch failed', loadError);
       setLoadFailed(true);
+      setLegalState((previous) => ({ actorId: previous.actorId, actions: [] }));
     } finally {
       setIsRefreshingLegalActions(false);
     }
