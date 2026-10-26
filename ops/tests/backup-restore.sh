@@ -15,12 +15,22 @@
 #   * with PGDATABASE unset the script still dumps the database it names;
 #   * the pre-#38 behaviour is pinned as a contrast: psql without
 #     ON_ERROR_STOP exits 0 over the same error shape;
-#   * flags, overwrite refusal, and a BACKUP_DIR containing spaces.
+#   * flags, overwrite refusal, and a BACKUP_DIR containing spaces;
+#   * the drop-in's additions: 30-day pruning (old artifacts go, recent
+#     ones and .unverified evidence stay, --verify-only never prunes)
+#     and the Slack alert path (alert file + webhook call on failure,
+#     silence on success, dry-run print when BACKUP_NOTIFY=0).
 #
-# The cluster is self-provisioned (initdb on a temp datadir, random
-# port, socket-less TCP on 127.0.0.1). When no Postgres server binaries
-# exist the suite SKIPs cleanly (exit 0) with a message, like
-# ops/tests/http-alarm.sh. Run by hand or on the box:
+# The script under test talks to Postgres only through `docker exec`,
+# so the suite provides a `docker` shim in a temp bin dir: exec runs the
+# command locally against the scratch cluster (the "container" name is
+# ignored) and cp copies between local paths. No host docker is needed.
+# The Slack webhook is likewise stubbed: a fake `curl` that logs its
+# arguments instead of posting. The cluster itself is self-provisioned
+# (initdb on a temp datadir, random port, socket-less TCP on
+# 127.0.0.1). When no Postgres server binaries exist the suite SKIPs
+# cleanly (exit 0) with a message, like ops/tests/http-alarm.sh. Run by
+# hand or on the box:
 #   bash ops/tests/backup-restore.sh
 # Run ONE suite per host at a time: the prod-shape case installs a
 # probe extension into the shared extension directory.
@@ -45,7 +55,7 @@ expect_has() { # description haystack needle
   if has "$1" "$2"; then ok "$3"; else bad "$3"; fi
 }
 
-for tool in pg_dump pg_restore psql createdb dropdb gzip; do
+for tool in pg_dump pg_restore psql gzip jq; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     say "skip - $tool not on PATH; cannot run the backup drill"
     say "0 passed, 0 failed, 1 skipped"
@@ -78,6 +88,52 @@ PORT=""
 INITDB_LOG="$TMP/initdb.log"
 SERVER_LOG="$TMP/server.log"
 EXT_FILES=""
+
+# --- docker + curl shims (the script's only host dependencies) -----------
+# The script under test reaches Postgres only via `docker exec` / `docker
+# cp`, and alerts only via curl. Neither needs to be real here: exec runs
+# the command locally against the scratch cluster, cp copies between
+# local paths, and the curl stub logs its arguments to $CURL_LOG.
+mkdir -p "$TMP/bin"
+cat > "$TMP/bin/docker" <<'SHIM'
+#!/usr/bin/env bash
+# docker shim for the backup drill: the "container" is fictional, but
+# its NAME is checked — the script defaults to supabase-db, and a shim
+# that silently accepted any name would pass a test the production run
+# (wrong CONTAINER) would fail.
+EXPECTED="${DOCKER_SHIM_CONTAINER:-supabase-db}"
+if [ "${1:-}" = "exec" ]; then
+  shift
+  while [ "${1:-}" = "-i" ] || [ "${1:-}" = "-t" ]; do shift; done
+  container=$1; shift
+  [ "$container" = "$EXPECTED" ] || { echo "docker shim: unexpected container: $container" >&2; exit 1; }
+  exec "$@"
+elif [ "${1:-}" = "cp" ]; then
+  src=$2; dst=$3
+  case "$src" in *:* ) c=${src%%:*}; [ "$c" = "$EXPECTED" ] || { echo "docker shim: unexpected container: $c" >&2; exit 1; }; src=${src#*:} ;; esac
+  case "$dst" in *:* ) c=${dst%%:*}; [ "$c" = "$EXPECTED" ] || { echo "docker shim: unexpected container: $c" >&2; exit 1; }; dst=${dst#*:} ;; esac
+  exec cp "$src" "$dst"
+else
+  echo "docker shim: unsupported subcommand: ${1:-}" >&2
+  exit 1
+fi
+SHIM
+cat > "$TMP/bin/curl" <<'SHIM'
+#!/usr/bin/env bash
+echo "curl $*" >> "${CURL_LOG:-/dev/null}"
+exit 0
+SHIM
+chmod +x "$TMP/bin/docker" "$TMP/bin/curl"
+export PATH="$TMP/bin:$PATH"
+
+# Hermetic alerting: failing runs in this suite must not write to the
+# host's real alert log or env file. Point the script's alert paths at
+# $TMP unless a case overrides them explicitly (the alert cases do).
+# The default env file is deliberately NOT created: an unreadable env
+# file means no Slack attempt, silently.
+export BACKUP_ALERT_FILE="$TMP/alerts-default.log"
+export BACKUP_ALERTS_ENV="$TMP/alerts-default.env"
+printf '%s\n' 'SLACK_ALERT_WEBHOOK_URL=stub://test' > "$TMP/alerts.env"
 
 # The cluster must run as a non-root user when we are root (initdb
 # refuses root), and as ourselves otherwise.
@@ -337,12 +393,16 @@ CREATE FUNCTION graphql_public.graphql(text, text) RETURNS jsonb LANGUAGE sql AS
 ALTER EXTENSION ir_backup_probe_ext ADD FUNCTION graphql_public.graphql(text, text);
 GRANT EXECUTE ON FUNCTION graphql_public.graphql(text, text) TO authenticated;
 SQL
-  OUT=$(env PGDATABASE=proddb BACKUP_DIR="$TMP/backups-prod2" bash "$SCRIPT" 2>&1); RC=$?
+  OUT=$(env PGDATABASE=proddb BACKUP_DIR="$TMP/backups-prod2" BACKUP_ALERTS_ENV="$TMP/alerts.env" BACKUP_ALERT_FILE="$TMP/alerts-prod2.log" BACKUP_NOTIFY=1 CURL_LOG="$TMP/curl-prod2.log" bash "$SCRIPT" 2>&1); RC=$?
   expect "a second matching TOC entry makes the run FAIL (exit 1)" test "$RC" -eq 1
   expect_has "$OUT" "entries match the graphql_public.graphql exclusion" \
     "the refusal names the widened exclusion"
   expect "the failed run's artifacts are renamed .unverified" \
     bash -c "ls '$TMP'/backups-prod2/*.dump.unverified >/dev/null 2>&1"
+  expect "the failed main-path run writes the alert file" \
+    bash -c "grep -q 'FAILED' '$TMP/alerts-prod2.log'"
+  expect "the failed main-path run calls the Slack webhook once" \
+    bash -c "test \"\$(grep -c 'FAILED' '$TMP/curl-prod2.log')\" = '1'"
 fi
 
 # --- case: the old verify, pinned as a contrast -----------------------------
@@ -385,15 +445,145 @@ for i in 0 1 2 3 4; do
   s=$(date -d "+$i seconds" +%Y%m%d_%H%M%S)
   : > "$TMP/backups6/infiniterealms_$s.dump"
 done
+: > "$TMP/backups6/infiniterealms_20200101_000000.dump"
+touch -d '40 days ago' "$TMP/backups6/infiniterealms_20200101_000000.dump"
 OUT=$(env PGDATABASE=srcdb BACKUP_DIR="$TMP/backups6" bash "$SCRIPT" 2>&1); RC=$?
 expect "a same-second rerun refuses to overwrite (exit 1)" test "$RC" -eq 1
 expect_has "$OUT" "refusing to overwrite" "the refusal is named"
+expect "a failed run never prunes (old backup survives the refusal)" \
+  bash -c "test -e '$TMP/backups6/infiniterealms_20200101_000000.dump'"
 
 # --- case: BACKUP_DIR with spaces --------------------------------------------
 OUT=$(env PGDATABASE=srcdb BACKUP_DIR="$TMP/backup dir spaced" bash "$SCRIPT" 2>&1); RC=$?
 expect "a BACKUP_DIR containing spaces works" test "$RC" -eq 0
 expect "the spaced-dir run produced a .dump" \
   bash -c "ls '$TMP/backup dir spaced'/*.dump >/dev/null 2>&1"
+
+# --- case: pruning (installed script's 30-day retention) --------------------
+mkdir -p "$TMP/backups-prune"
+: > "$TMP/backups-prune/infiniterealms_20200101_000000.dump"
+: > "$TMP/backups-prune/infiniterealms_20200101_000000.sql.gz"
+: > "$TMP/backups-prune/infiniterealms_20200101_000000.dump.unverified"
+: > "$TMP/backups-prune/infiniterealms_20200101_000000.sql.gz.unverified"
+: > "$TMP/backups-prune/infiniterealms_20200101_000000.dump.partial.999"
+: > "$TMP/backups-prune/infiniterealms_20200101_000000.dump.partial.fresh"
+: > "$TMP/backups-prune/.in-progress_20200101_000000"
+: > "$TMP/backups-prune/infiniterealms_20250101_000000.dump"
+: > "$TMP/backups-prune/infiniterealms_20250101_000000.sql.gz"
+: > "/tmp/ir_backup_suite_stale_$$.dump"
+touch -d '40 days ago' "$TMP/backups-prune/infiniterealms_20200101_000000.dump" \
+  "$TMP/backups-prune/infiniterealms_20200101_000000.sql.gz" \
+  "$TMP/backups-prune/infiniterealms_20200101_000000.dump.unverified" \
+  "$TMP/backups-prune/infiniterealms_20200101_000000.sql.gz.unverified"
+touch -d '4 hours ago' "$TMP/backups-prune/infiniterealms_20200101_000000.dump.partial.999" \
+  "$TMP/backups-prune/.in-progress_20200101_000000" \
+  "/tmp/ir_backup_suite_stale_$$.dump"
+OUT=$(env PGDATABASE=srcdb BACKUP_DIR="$TMP/backups-prune" RETENTION_DAYS=30 bash "$SCRIPT" 2>&1); RC=$?
+expect "pruning run exits 0" test "$RC" -eq 0
+expect "pruning removes a .dump older than RETENTION_DAYS" \
+  bash -c "test ! -e '$TMP/backups-prune/infiniterealms_20200101_000000.dump'"
+expect "pruning removes a .sql.gz older than RETENTION_DAYS" \
+  bash -c "test ! -e '$TMP/backups-prune/infiniterealms_20200101_000000.sql.gz'"
+expect "pruning keeps a recent .dump" \
+  bash -c "test -e '$TMP/backups-prune/infiniterealms_20250101_000000.dump'"
+expect "pruning keeps a recent .sql.gz" \
+  bash -c "test -e '$TMP/backups-prune/infiniterealms_20250101_000000.sql.gz'"
+expect "pruning never touches .unverified evidence" \
+  bash -c "test -e '$TMP/backups-prune/infiniterealms_20200101_000000.dump.unverified'"
+expect "pruning never touches .sql.gz.unverified evidence" \
+  bash -c "test -e '$TMP/backups-prune/infiniterealms_20200101_000000.sql.gz.unverified'"
+expect "pruning removes a stale partial" \
+  bash -c "test ! -e '$TMP/backups-prune/infiniterealms_20200101_000000.dump.partial.999'"
+expect "pruning keeps a fresh partial (younger than 180 min)" \
+  bash -c "test -e '$TMP/backups-prune/infiniterealms_20200101_000000.dump.partial.fresh'"
+expect "pruning removes an abandoned pre-drop-in .in-progress file" \
+  bash -c "test ! -e '$TMP/backups-prune/.in-progress_20200101_000000'"
+expect "pruning removes a stale container /tmp archive" \
+  bash -c "test ! -e '/tmp/ir_backup_suite_stale_$$.dump'"
+rm -f "/tmp/ir_backup_suite_stale_$$.dump"
+expect "pruning run still wrote its own new backup" \
+  bash -c "ls '$TMP/backups-prune'/infiniterealms_*.dump | grep -vq '20200101_000000\|20250101_000000'"
+
+# --- case: BACKUP_VERIFY=0 does NOT prune ----------------------------------
+# Pruning runs only after a verified backup: an unverified backup must
+# never be the reason the last good backups disappear.
+mkdir -p "$TMP/backups-noverify-prune"
+: > "$TMP/backups-noverify-prune/infiniterealms_20200101_000000.dump"
+touch -d '40 days ago' "$TMP/backups-noverify-prune/infiniterealms_20200101_000000.dump"
+OUT=$(env PGDATABASE=srcdb BACKUP_DIR="$TMP/backups-noverify-prune" BACKUP_VERIFY=0 bash "$SCRIPT" 2>&1); RC=$?
+expect "BACKUP_VERIFY=0 run exits 0 (prune case)" test "$RC" -eq 0
+expect_has "$OUT" "prune SKIPPED" "BACKUP_VERIFY=0 announces the skipped prune"
+expect "BACKUP_VERIFY=0 leaves old backups alone (no pruning)" \
+  bash -c "test -e '$TMP/backups-noverify-prune/infiniterealms_20200101_000000.dump'"
+
+# --- case: --verify-only never prunes ----------------------------------------
+mkdir -p "$TMP/backups-no-prune"
+: > "$TMP/backups-no-prune/infiniterealms_20200101_000000.dump"
+touch -d '40 days ago' "$TMP/backups-no-prune/infiniterealms_20200101_000000.dump"
+OUT=$(env PGDATABASE=srcdb BACKUP_DIR="$TMP/backups-no-prune" RETENTION_DAYS=30 bash "$SCRIPT" --verify-only "$DUMP1" 2>&1); RC=$?
+expect "--verify-only still exits 0" test "$RC" -eq 0
+expect "--verify-only leaves old backups alone (no pruning)" \
+  bash -c "test -e '$TMP/backups-no-prune/infiniterealms_20200101_000000.dump'"
+
+# --- case: the Slack alert path (stubbed) ------------------------------------
+# (The alerts.env file was created with the shims, above.)
+# (a) a failing verify alerts: alert file entry + one stub curl call.
+rm -f "$TMP/alerts-a.log" "$TMP/curl-a.log"
+OUT=$(env PGDATABASE=srcdb BACKUP_ALERTS_ENV="$TMP/alerts.env" BACKUP_ALERT_FILE="$TMP/alerts-a.log" BACKUP_NOTIFY=1 CURL_LOG="$TMP/curl-a.log" bash "$SCRIPT" --verify-only "$TMP/truncated.dump" 2>&1); RC=$?
+expect "failing verify exits non-zero (alert case)" test "$RC" -ne 0
+expect "failing verify writes the alert file" \
+  bash -c "grep -q 'backup:' '$TMP/alerts-a.log' && grep -q 'FAILED' '$TMP/alerts-a.log'"
+expect "failing verify calls the Slack webhook once" \
+  bash -c "test \"\$(grep -c 'FAILED' '$TMP/curl-a.log')\" = '1'"
+expect "the webhook payload is JSON built by jq" \
+  bash -c "grep -q '\"text\"' '$TMP/curl-a.log'"
+# (b) a successful backup does not alert.
+rm -f "$TMP/alerts-b.log" "$TMP/curl-b.log"
+OUT=$(env PGDATABASE=srcdb BACKUP_DIR="$TMP/backups-alertb" BACKUP_ALERTS_ENV="$TMP/alerts.env" BACKUP_ALERT_FILE="$TMP/alerts-b.log" BACKUP_NOTIFY=1 CURL_LOG="$TMP/curl-b.log" bash "$SCRIPT" 2>&1); RC=$?
+expect "successful backup exits 0 (alert case)" test "$RC" -eq 0
+expect "successful backup writes no alert" \
+  bash -c "test ! -e '$TMP/alerts-b.log'"
+expect "successful backup makes no webhook call" \
+  bash -c "test ! -e '$TMP/curl-b.log'"
+# (c) BACKUP_NOTIFY=0 dry-runs: alert file still written, no webhook call.
+rm -f "$TMP/alerts-c.log" "$TMP/curl-c.log"
+OUT=$(env PGDATABASE=srcdb BACKUP_ALERTS_ENV="$TMP/alerts.env" BACKUP_ALERT_FILE="$TMP/alerts-c.log" BACKUP_NOTIFY=0 CURL_LOG="$TMP/curl-c.log" bash "$SCRIPT" --verify-only "$TMP/truncated.dump" 2>&1); RC=$?
+expect "dry-run failing verify exits non-zero" test "$RC" -ne 0
+expect_has "$OUT" "[dry-run] slack:" "dry-run prints instead of posting"
+expect "dry-run still writes the alert file" \
+  bash -c "grep -q 'FAILED' '$TMP/alerts-c.log'"
+expect "dry-run makes no webhook call" \
+  bash -c "test ! -e '$TMP/curl-c.log'"
+
+# --- case: RETENTION_DAYS validation -----------------------------------------
+OUT=$(env PGDATABASE=srcdb BACKUP_DIR="$TMP/backups-ret" RETENTION_DAYS=banana bash "$SCRIPT" 2>&1); RC=$?
+expect "RETENTION_DAYS=banana is a usage error (exit 2)" test "$RC" -eq 2
+OUT=$(env PGDATABASE=srcdb BACKUP_DIR="$TMP/backups-ret" RETENTION_DAYS=-1 bash "$SCRIPT" 2>&1); RC=$?
+expect "RETENTION_DAYS=-1 is a usage error (exit 2)" test "$RC" -eq 2
+
+mkdir -p "$TMP/backups-ret0"
+: > "$TMP/backups-ret0/infiniterealms_20200101_000000.dump"
+touch -d '40 days ago' "$TMP/backups-ret0/infiniterealms_20200101_000000.dump"
+OUT=$(env PGDATABASE=srcdb BACKUP_DIR="$TMP/backups-ret0" RETENTION_DAYS=0 bash "$SCRIPT" 2>&1); RC=$?
+expect "RETENTION_DAYS=0 exits 0" test "$RC" -eq 0
+expect "RETENTION_DAYS=0 prunes anything older than a day" \
+  bash -c "test ! -e '$TMP/backups-ret0/infiniterealms_20200101_000000.dump'"
+
+mkdir -p "$TMP/backups-retempty"
+: > "$TMP/backups-retempty/infiniterealms_20200101_000000.dump"
+touch -d '40 days ago' "$TMP/backups-retempty/infiniterealms_20200101_000000.dump"
+OUT=$(env PGDATABASE=srcdb BACKUP_DIR="$TMP/backups-retempty" RETENTION_DAYS= bash "$SCRIPT" 2>&1); RC=$?
+expect "RETENTION_DAYS= (empty) falls back to the 30-day default, exits 0" test "$RC" -eq 0
+expect "RETENTION_DAYS= (empty) prunes a 40-day-old backup" \
+  bash -c "test ! -e '$TMP/backups-retempty/infiniterealms_20200101_000000.dump'"
+
+# --- case: --verify-only on a missing file, and a wrong container -----------
+OUT=$(env PGDATABASE=srcdb bash "$SCRIPT" --verify-only "$TMP/does-not-exist.dump" 2>&1); RC=$?
+expect "--verify-only on a missing file exits 1" test "$RC" -eq 1
+expect_has "$OUT" "no such file" "the missing file is named"
+OUT=$(env PGDATABASE=srcdb CONTAINER=not-supabase bash "$SCRIPT" --verify-only "$DUMP1" 2>&1); RC=$?
+expect "a wrong CONTAINER fails (the shim rejects the name)" test "$RC" -ne 0
+expect_has "$OUT" "unexpected container" "the wrong container is named"
 
 say "$pass passed, $fail failed, $skip skipped"
 [ "$fail" -eq 0 ]
