@@ -34,8 +34,13 @@
  *
  * The completion XP rides the same reply's `xp_award` through story-xp.ts;
  * this applier runs after it in /generate, so the award lands while the
- * session is still active. A declaration on a roll-request turn waits for the
- * result turn, as the other story appliers do.
+ * session is still active. #1139: an award that named the ending on an
+ * earlier turn was deferred by story-xp.ts instead of paying mid-story; it
+ * is paid here, before the session completes, so its event lands on the
+ * ending turn — and if the ending turn carries its own award, that one wins
+ * the once-per-message dedupe and the deferred one is dropped, never paid
+ * twice. A declaration on a roll-request turn waits for the result turn,
+ * as the other story appliers do.
  *
  * Database imports stay inside the functions, as in story-damage.ts: the pure
  * validator tests run outside the real-DB suite, and /v1/llm/generate's route
@@ -113,6 +118,42 @@ async function storedEndingSummary(sessionId: string): Promise<string | null> {
   return row ? summaryFromEndingLine(row.message) : null;
 }
 
+/**
+ * #1139: the ending turn's player message timestamp, or null when it cannot
+ * be recovered. The ending row is moved last by `placeEndingLineAfterReply`,
+ * so the ending turn's message is the latest player message sequenced before
+ * it. A recovered message that is EARLIER than the ending turn (an
+ * unsequenced ending-turn message falls out of the comparison) only widens
+ * the dedupe window toward under-paying, never toward paying twice — the
+ * unsafe direction would be a message later than the ending turn, which this
+ * query cannot return.
+ */
+async function endingTurnPlayerMessage(sessionId: string): Promise<Date | null> {
+  const { engineLineUuid } = await import('../engine-chat-line.js');
+  const { db } = await import('../../../../db/client');
+  const { and, desc, eq, lt } = await import('drizzle-orm');
+  const { dialogueHistory } = await import('../../../../db/schema/index');
+  const [endingRow] = await db
+    .select({ sequenceNumber: dialogueHistory.sequenceNumber })
+    .from(dialogueHistory)
+    .where(eq(dialogueHistory.id, engineLineUuid(`campaign-ending:${sessionId}`)))
+    .limit(1);
+  if (!endingRow || endingRow.sequenceNumber === null) return null;
+  const [message] = await db
+    .select({ createdAt: dialogueHistory.createdAt })
+    .from(dialogueHistory)
+    .where(
+      and(
+        eq(dialogueHistory.sessionId, sessionId),
+        eq(dialogueHistory.speakerType, 'player'),
+        lt(dialogueHistory.sequenceNumber, endingRow.sequenceNumber),
+      ),
+    )
+    .orderBy(desc(dialogueHistory.sequenceNumber))
+    .limit(1);
+  return message?.createdAt ?? null;
+}
+
 /** Reads the reply's `campaign_ending` and completes the one-shot session it ends. */
 export async function applyStoryEnding(input: {
   userId: string;
@@ -159,7 +200,36 @@ export async function applyStoryEnding(input: {
     // Completed by this applier (the ending row is there) or by something
     // else (it is not). Only the first is this ending applied.
     const stored = await storedEndingSummary(sessionId);
-    return stored !== null ? done('already_applied', stored) : done('already_completed');
+    if (stored !== null) {
+      // #1139: a retry lands here. The applied path below normally paid or
+      // dropped any deferred award already — but if its payment threw, the
+      // award was deliberately left in place, so this path pays it rather
+      // than clearing it unpaid. The dedupe window must be the ENDING turn's
+      // player message, not the latest one: a retry message is later, and
+      // paying against it would not see the ending turn's own award and
+      // could pay twice. The ending turn's message is the latest player
+      // message sequenced before the ending row (the row is moved last by
+      // `placeEndingLineAfterReply`, so later messages sequence after it).
+      // If it cannot be recovered, the award stays in place — a stale key on
+      // a completed session, never a silent drop — and the outcome still
+      // reports already-applied.
+      const endingSince = await endingTurnPlayerMessage(sessionId);
+      if (endingSince) {
+        const { payPendingEndingXp } = await import('./story-xp.js');
+        await payPendingEndingXp({ sessionId, userId, since: endingSince });
+      } else {
+        const { readPendingEndingXp } = await import('./story-xp.js');
+        if (await readPendingEndingXp(sessionId)) {
+          logger.warn({
+            msg: 'DM_STORY_ENDING_XP_UNRECOVERED',
+            sessionId,
+            characterId,
+          });
+        }
+      }
+      return done('already_applied', stored);
+    }
+    return done('already_completed');
   }
 
   // Claim first, as story damage does: winning the deterministic row's
@@ -185,6 +255,15 @@ export async function applyStoryEnding(input: {
     const stored = await storedEndingSummary(sessionId);
     return done('already_applied', stored ?? summary);
   }
+
+  // #1139: pay a deferred ending award now, while the session is still
+  // active — its event lands on the ending turn. The ending turn's own award
+  // (applied by story-xp.ts just before this applier in /generate) wins the
+  // once-per-message dedupe, so a deferred award alongside it pays nothing.
+  // The helper never throws, so a payment failure cannot block the ending:
+  // the pending award is left in place and the ending still applies.
+  const { payPendingEndingXp } = await import('./story-xp.js');
+  await payPendingEndingXp({ sessionId, userId, since: message.createdAt });
 
   try {
     const { SessionService } = await import('../session-service.js');

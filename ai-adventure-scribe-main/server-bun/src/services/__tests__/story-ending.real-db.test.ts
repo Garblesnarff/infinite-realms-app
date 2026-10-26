@@ -69,6 +69,7 @@ const authModule = await importWithRealDb(() => import('../../lib/auth.js'));
 const { LLMProviderService } = await importWithRealDb(() => import('../llm-provider-service.js'));
 const { createRequestPipelineApp } = await importWithRealDb(() => import('../../http-pipeline.js'));
 const { llmRoutes } = await importWithRealDb(() => import('../../routes/v1/llm.js'));
+const { sessionsRoutes } = await importWithRealDb(() => import('../../routes/v1/sessions.js'));
 const { SessionMessageService } = await importWithRealDb(
   () => import('../session/session-message-service.js'),
 );
@@ -644,6 +645,477 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
     expect(session?.status).toBe('completed');
     expect(session?.summary).toBe('Ended by hand at the Root Stair.');
     expect(await endingRows(sessionId)).toHaveLength(0);
+  });
+
+  test('#1139: an ending-named award on a mid-story turn defers to the ending turn', async () => {
+    const { characterId, sessionId } = await seedWorld('deferred');
+
+    // Hark's run: the +450 named the ending but landed mid-story, and the
+    // ending reply itself carried no XP. Now the mid-story award waits.
+    const midStoryEndingAward = {
+      ...ordinaryReply,
+      xp_award: { amount: 450, reason: "Completed the Gardener's Heir one-shot" },
+    };
+    const first = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We press on toward the Heartwood.',
+      reply: midStoryEndingAward,
+    });
+    expect(first.status).toBe(200);
+    expect((await sessionRow(sessionId))?.status).toBe('active');
+    const pendingAfterFirst = (
+      (await sessionRow(sessionId))?.sessionState as Record<string, unknown> | null
+    )?.pendingEndingXp as
+      | { awards?: { amount?: number; reason?: string }[] }
+      | undefined;
+    expect(pendingAfterFirst?.awards).toHaveLength(1);
+    expect(pendingAfterFirst?.awards?.[0]?.amount).toBe(450);
+    const [characterAfterFirst] = await database
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect(characterAfterFirst?.xp).toBe(1050);
+    const eventsAfterFirst = await database
+      .select()
+      .from(experienceEvents)
+      .where(
+        and(
+          eq(experienceEvents.sessionId, sessionId),
+          eq(experienceEvents.characterId, characterId),
+        ),
+      );
+    expect(eventsAfterFirst).toHaveLength(0);
+
+    // The ending turn carries no xp_award of its own: the deferred award lands here.
+    const endingWithoutAward = { ...endingReply, xp_award: null };
+    const second = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'I take the Sunken Temple landing.',
+      reply: endingWithoutAward,
+    });
+    expect(second.status).toBe(200);
+    expect((await sessionRow(sessionId))?.status).toBe('completed');
+    const [characterAfterSecond] = await database
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect(characterAfterSecond?.xp).toBe(1500);
+    const events = await database
+      .select()
+      .from(experienceEvents)
+      .where(
+        and(
+          eq(experienceEvents.sessionId, sessionId),
+          eq(experienceEvents.characterId, characterId),
+        ),
+      );
+    expect(events).toHaveLength(1);
+    expect(events[0]?.xpGained).toBe(450);
+    // The event lands on the ending turn, not the mid-story one: its timestamp
+    // is at or after the SECOND turn's player message. (After the first
+    // message alone would pass even for an immediate first-turn payment.)
+    const playerMessages = await database
+      .select()
+      .from(dialogueHistory)
+      .where(
+        and(
+          eq(dialogueHistory.sessionId, sessionId),
+          eq(dialogueHistory.speakerType, 'player'),
+        ),
+      )
+      .orderBy(asc(dialogueHistory.createdAt));
+    expect(playerMessages).toHaveLength(2);
+    const secondTurnAt = playerMessages[1]?.createdAt?.getTime() ?? 0;
+    expect(events[0]?.timestamp?.getTime() ?? 0).toBeGreaterThanOrEqual(secondTurnAt);
+    const pendingAfterSecond = (
+      (await sessionRow(sessionId))?.sessionState as Record<string, unknown> | null
+    )?.pendingEndingXp;
+    expect(pendingAfterSecond).toBeUndefined();
+  });
+
+  test('#1139: an ending turn with its own award pays once, not twice', async () => {
+    const { characterId, sessionId } = await seedWorld('deferred-twice');
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We press on toward the Heartwood.',
+      reply: {
+        ...ordinaryReply,
+        xp_award: { amount: 450, reason: "Completed the Gardener's Heir one-shot" },
+      },
+    });
+    expect((await sessionRow(sessionId))?.status).toBe('active');
+
+    // The ending turn carries its own 300 award: it pays at once (it IS the
+    // ending turn), and the deferred 450 is dropped rather than added to it.
+    const second = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'I take the Sunken Temple landing.',
+      reply: endingReply,
+    });
+    expect(second.status).toBe(200);
+    expect((await sessionRow(sessionId))?.status).toBe('completed');
+    const [character] = await database
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect(character?.xp).toBe(1350);
+    const events = await database
+      .select()
+      .from(experienceEvents)
+      .where(
+        and(
+          eq(experienceEvents.sessionId, sessionId),
+          eq(experienceEvents.characterId, characterId),
+        ),
+      );
+    expect(events).toHaveLength(1);
+    expect(events[0]?.xpGained).toBe(300);
+    const pendingAfter = (
+      (await sessionRow(sessionId))?.sessionState as Record<string, unknown> | null
+    )?.pendingEndingXp;
+    expect(pendingAfter).toBeUndefined();
+  });
+
+  test('#1139: later ordinary awards cannot eat a deferred award\'s share of the cap', async () => {
+    const { characterId, sessionId } = await seedWorld('deferred-reserve');
+    // Level 3's story cap is one quarter of the 2700-900 milestone band:
+    // 450 — exactly the deferred award. The deferred award was earned first,
+    // so ordinary deeds after it must reserve its amount, not consume it.
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We press on toward the Heartwood.',
+      reply: {
+        ...ordinaryReply,
+        xp_award: { amount: 450, reason: "Completed the Gardener's Heir one-shot" },
+      },
+    });
+    const ordinary = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'I look down the Root Stair.',
+      reply: ordinaryReply,
+    });
+    expect(ordinary.status).toBe(200);
+    // The ordinary 50 caps to 0 while the 450 is reserved for the ending.
+    const [characterAfterOrdinary] = await database
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect(characterAfterOrdinary?.xp).toBe(1050);
+    const eventsAfterOrdinary = await database
+      .select()
+      .from(experienceEvents)
+      .where(
+        and(
+          eq(experienceEvents.sessionId, sessionId),
+          eq(experienceEvents.characterId, characterId),
+        ),
+      );
+    expect(eventsAfterOrdinary).toHaveLength(0);
+
+    const second = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'I take the Sunken Temple landing.',
+      reply: { ...endingReply, xp_award: null },
+    });
+    expect(second.status).toBe(200);
+    expect((await sessionRow(sessionId))?.status).toBe('completed');
+    const [character] = await database
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect(character?.xp).toBe(1500);
+    const events = await database
+      .select()
+      .from(experienceEvents)
+      .where(
+        and(
+          eq(experienceEvents.sessionId, sessionId),
+          eq(experienceEvents.characterId, characterId),
+        ),
+      );
+    expect(events).toHaveLength(1);
+    expect(events[0]?.xpGained).toBe(450);
+    const pendingAfter = (
+      (await sessionRow(sessionId))?.sessionState as Record<string, unknown> | null
+    )?.pendingEndingXp;
+    expect(pendingAfter).toBeUndefined();
+  });
+
+  test('#1139: two distinct ending-named awards both defer and pay as one sum', async () => {
+    const { characterId, sessionId } = await seedWorld('deferred-two-awards');
+    const pendingOf = async () =>
+      (
+        (await sessionRow(sessionId))?.sessionState as Record<string, unknown> | null
+      )?.pendingEndingXp as
+        | { awards?: { amount?: number; reason?: string }[] }
+        | undefined;
+    const eventsOf = () =>
+      database
+        .select()
+        .from(experienceEvents)
+        .where(
+          and(
+            eq(experienceEvents.sessionId, sessionId),
+            eq(experienceEvents.characterId, characterId),
+          ),
+        );
+
+    // First completion defers.
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We press on toward the Heartwood.',
+      reply: {
+        ...ordinaryReply,
+        xp_award: { amount: 300, reason: "Completed the Gardener's Heir one-shot" },
+      },
+    });
+    expect((await pendingOf())?.awards).toHaveLength(1);
+
+    // A second, DIFFERENT completion is a distinct deed, not a repeat of the
+    // first: completion language also names sub-goal completions, so it
+    // joins the pending list instead of being dropped.
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'I climb down the Root Stair.',
+      reply: {
+        ...ordinaryReply,
+        xp_award: { amount: 50, reason: 'Completed the Root Stair' },
+      },
+    });
+    expect((await sessionRow(sessionId))?.status).toBe('active');
+    const pendingAfterTwo = await pendingOf();
+    expect(pendingAfterTwo?.awards).toHaveLength(2);
+    expect(pendingAfterTwo?.awards?.map((award) => award.amount)).toEqual([300, 50]);
+    const [characterBefore] = await database
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect(characterBefore?.xp).toBe(1050);
+    expect(await eventsOf()).toHaveLength(0);
+
+    // Same reason again: a retry (or the DM repeating itself) — first-wins,
+    // nothing is added.
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We press on toward the Heartwood once more.',
+      reply: {
+        ...ordinaryReply,
+        xp_award: { amount: 300, reason: "Completed the Gardener's Heir one-shot" },
+      },
+    });
+    const pendingAfterRetry = await pendingOf();
+    expect(pendingAfterRetry?.awards).toHaveLength(2);
+
+    // The ending turn pays the list as one summed event, with both reasons.
+    const second = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'I take the Sunken Temple landing.',
+      reply: { ...endingReply, xp_award: null },
+    });
+    expect(second.status).toBe(200);
+    expect((await sessionRow(sessionId))?.status).toBe('completed');
+    const [character] = await database
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect(character?.xp).toBe(1400);
+    const events = await eventsOf();
+    expect(events).toHaveLength(1);
+    expect(events[0]?.xpGained).toBe(350);
+    expect(events[0]?.description).toContain('Root Stair');
+    expect(await pendingOf()).toBeUndefined();
+  });
+
+  test('#1139: a manual end pays a deferred award instead of stranding it', async () => {
+    const { characterId, sessionId } = await seedWorld('deferred-manual');
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We press on toward the Heartwood.',
+      reply: {
+        ...ordinaryReply,
+        xp_award: { amount: 450, reason: "Completed the Gardener's Heir one-shot" },
+      },
+    });
+    expect((await sessionRow(sessionId))?.status).toBe('active');
+    const [characterBefore] = await database
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect(characterBefore?.xp).toBe(1050);
+
+    // The End Session button: the real complete route, not the ending applier.
+    const auth = spyOn(authModule, 'authenticateRequest').mockResolvedValue({
+      user: { userId, email: 'story-ending@example.test', plan: 'tester' },
+      error: null,
+    } as never);
+    const trustProxyHeaders = process.env.TRUST_PROXY_HEADERS;
+    process.env.TRUST_PROXY_HEADERS = 'true';
+    try {
+      const response = await createRequestPipelineApp()
+        .use(sessionsRoutes)
+        .handle(
+          new Request(`http://localhost/v1/sessions/${sessionId}/complete`, {
+            method: 'POST',
+            headers: {
+              authorization: `Bearer ${userId}`,
+              'content-type': 'application/json',
+              'x-forwarded-for': `198.51.100.${(clientAddress = (clientAddress % 254) + 1)}`,
+            },
+            body: JSON.stringify({ summary: 'Ended by hand at the Root Stair.' }),
+          }),
+        );
+      expect(response.status).toBe(200);
+    } finally {
+      process.env.TRUST_PROXY_HEADERS = trustProxyHeaders;
+      auth.mockRestore();
+    }
+    expect((await sessionRow(sessionId))?.status).toBe('completed');
+    const [character] = await database
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect(character?.xp).toBe(1500);
+    const events = await database
+      .select()
+      .from(experienceEvents)
+      .where(
+        and(
+          eq(experienceEvents.sessionId, sessionId),
+          eq(experienceEvents.characterId, characterId),
+        ),
+      );
+    expect(events).toHaveLength(1);
+    expect(events[0]?.xpGained).toBe(450);
+    const pendingAfter = (
+      (await sessionRow(sessionId))?.sessionState as Record<string, unknown> | null
+    )?.pendingEndingXp;
+    expect(pendingAfter).toBeUndefined();
+    expect(await endingRows(sessionId)).toHaveLength(0);
+  });
+
+  test('#1139: an award that does not name the ending still pays at once', async () => {
+    const { characterId, sessionId } = await seedWorld('ordinary-xp');
+
+    const { status } = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'I look down the Root Stair.',
+      reply: ordinaryReply,
+    });
+    expect(status).toBe(200);
+    const [character] = await database
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect(character?.xp).toBe(1100);
+  });
+
+  test('#1139: a multi-session campaign never defers an ending-named award', async () => {
+    const { characterId, sessionId } = await seedWorld('full-defer', 'full');
+
+    const { status } = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We press on toward the Heartwood.',
+      reply: {
+        ...ordinaryReply,
+        xp_award: { amount: 450, reason: "Completed the Gardener's Heir one-shot" },
+      },
+    });
+    expect(status).toBe(200);
+    // No campaign_ending ever fires here, so deferring would strand the award.
+    const [character] = await database
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect(character?.xp).toBe(1500);
+    const session = await sessionRow(sessionId);
+    expect(session?.status).toBe('active');
+    expect(
+      (session?.sessionState as Record<string, unknown> | null)?.pendingEndingXp,
+    ).toBeUndefined();
+  });
+
+  test('#1139: client session_state writes cannot erase or forge the deferred award', async () => {
+    const { characterId, sessionId } = await seedWorld('deferred-preserve');
+    const { SessionService } = await importWithRealDb(() => import('../session-service.js'));
+    // The create case: with nothing stored, a forged pending award in the
+    // client's blob is stripped, not stored.
+    const noStored = await SessionService.updateSession(sessionId, userId, {
+      sessionState: {
+        pendingEndingXp: {
+          characterId,
+          awards: [{ amount: 999, reason: 'Forged ending' }],
+        },
+      },
+    });
+    expect(
+      (noStored.sessionState as Record<string, unknown> | null)?.pendingEndingXp,
+    ).toBeUndefined();
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We press on toward the Heartwood.',
+      reply: {
+        ...ordinaryReply,
+        xp_award: { amount: 450, reason: "Completed the Gardener's Heir one-shot" },
+      },
+    });
+    const deferred = (
+      (await sessionRow(sessionId))?.sessionState as Record<string, unknown> | null
+    )?.pendingEndingXp as
+      | { characterId?: string; awards?: { amount?: number; reason?: string }[] }
+      | undefined;
+    expect(deferred?.awards).toHaveLength(1);
+    expect(deferred?.awards?.[0]?.amount).toBe(450);
+
+    // A routine whole-blob client write (its snapshot predates the deferral)
+    // must not delete the pending award.
+    const wiped = await SessionService.updateSession(sessionId, userId, {
+      sessionState: { clientKey: 'snapshot' },
+    });
+    expect(
+      (wiped.sessionState as Record<string, unknown> | null)?.pendingEndingXp,
+    ).toEqual(deferred);
+    // And a forged pending award in the client's blob never replaces the
+    // engine's stored value.
+    const forged = await SessionService.updateSession(sessionId, userId, {
+      sessionState: {
+        pendingEndingXp: {
+          characterId,
+          awards: [{ amount: 999, reason: 'Forged ending' }],
+        },
+      },
+    });
+    expect(
+      (forged.sessionState as Record<string, unknown> | null)?.pendingEndingXp,
+    ).toEqual(deferred);
+
+    // The ending turn still pays the engine's 450, not the forged 999.
+    const second = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'I take the Sunken Temple landing.',
+      reply: { ...endingReply, xp_award: null },
+    });
+    expect(second.status).toBe(200);
+    const [character] = await database
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect(character?.xp).toBe(1500);
   });
 });
 
