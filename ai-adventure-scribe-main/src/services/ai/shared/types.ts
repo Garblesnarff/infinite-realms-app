@@ -148,6 +148,8 @@ export interface AIResponse {
    */
   xp_award?: { amount: number; reason: string } | null;
   damage?: { amount: number; source: string } | null;
+  /** #1084: the one-shot ending the server applied this turn (its stored summary); null when a declared ending did not apply. */
+  campaign_ending?: { summary: string } | null;
   items?: Array<{ name: string; quantity: number; change: 'gain' | 'lose' }> | null;
   conditions?: Array<{
     name: string;

@@ -667,6 +667,8 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     items: structuredResponse?.items,
     conditions: structuredResponse?.conditions,
     rest: structuredResponse?.rest,
+    // #1084: the server-applied ending (stored summary, or null when it did not apply) rides the envelope; the completion latch in use-ai-response reads it.
+    campaign_ending: structuredResponse?.campaign_ending,
     combatants: structuredResponse?.combatants || [],
     combatDetection: {
       isCombat:

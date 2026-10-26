@@ -2,6 +2,8 @@ import React from 'react';
 
 import { CampaignEndState } from './CampaignEndState';
 
+import { useOptionalCharacter } from '@/contexts/CharacterContext';
+
 interface CampaignCompleteEndStateProps {
   /** Name of the player character who finished the adventure, when known. */
   characterName?: string | null;
@@ -31,17 +33,25 @@ export const CampaignCompleteEndState: React.FC<CampaignCompleteEndStateProps> =
   chooseHeroHref,
   chooseHeroPending,
   storyContent,
-}) => (
-  <CampaignEndState
-    mode="complete"
-    characterName={characterName}
-    portraitUrl={portraitUrl}
-    identity={identity}
-    experience={experience}
-    campaignName={campaignName}
-    summary={summary}
-    chooseHeroHref={chooseHeroHref}
-    chooseHeroPending={chooseHeroPending}
-    storyContent={storyContent}
-  />
-);
+}) => {
+  // #1084: the live end state passes no experience; read the run's XP from the loaded sheet.
+  const characterContext = useOptionalCharacter();
+  return (
+    <CampaignEndState
+      mode="complete"
+      characterName={characterName}
+      portraitUrl={portraitUrl}
+      identity={identity}
+      experience={
+        experience !== undefined
+          ? experience
+          : (characterContext?.state.character?.experience ?? null)
+      }
+      campaignName={campaignName}
+      summary={summary}
+      chooseHeroHref={chooseHeroHref}
+      chooseHeroPending={chooseHeroPending}
+      storyContent={storyContent}
+    />
+  );
+};
