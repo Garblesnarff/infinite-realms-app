@@ -30,8 +30,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Z_INDEX } from '@/constants/z-index';
-import { useCampaign } from '@/contexts/CampaignContext';
-import { useCharacter } from '@/contexts/CharacterContext';
+import { useCampaign, useOptionalCampaign } from '@/contexts/CampaignContext';
+import { useCharacter, useOptionalCharacter } from '@/contexts/CharacterContext';
 import { useGame } from '@/contexts/GameContext';
 import { useMessageContext } from '@/contexts/MessageContext';
 import { useStarterCampaigns } from '@/hooks/use-starter-campaigns';
@@ -72,9 +72,9 @@ function composerTurnStatus(input: {
       onAction: () => void input.onResumeTurn(),
     };
   }
-  if (input.dmWaiting || input.queueProcessing) {
-    return { text: 'The DM is thinking…' };
-  }
+  // #88: the DM-waiting state moved to the stream's writing row, so the
+  // composer line renders nothing for it. dmWaiting/queueProcessing stay on
+  // the input so the caller contract is unchanged.
   return null;
 }
 
@@ -315,6 +315,10 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     // The pill covers the whole wait for the DM, not only the database write the queue reports
     // (#2418). A cast's result is shown by scrolling the feed to its newest card.
     const dmWaiting = useDmWaiting();
+    // #88: names for the opening-scene body, read optionally so this column
+    // still renders without the character/campaign providers (#2517).
+    const greetingCharacterName = useOptionalCharacter()?.state?.character?.name ?? null;
+    const greetingCampaignName = useOptionalCampaign()?.state?.campaign?.name ?? null;
     const castPhase = useSheetCastProgress().cast?.phase;
     React.useEffect(() => {
       const feed = chatScrollRef.current;
@@ -547,6 +551,11 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                     />
                     <MessageList
                       onSendFullMessage={handleSendMessage}
+                      onRetryTurn={onRetry}
+                      // A waiting roll owns the wait (the tray shows it), so the
+                      // writing row stays away exactly like the old composer
+                      // line did when rollPillLabel was set.
+                      isDmWriting={(dmWaiting || queueStatus === 'processing') && !rollPillLabel}
                       retryInFlight={retryInFlight}
                       sessionId={sessionId}
                       containerRef={chatScrollRef}
@@ -563,19 +572,17 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                     >
                       <div className="bg-card border border-border/60 rounded-xl p-8 shadow-2xl max-w-md mx-4 transform animate-in slide-in-from-bottom-4 duration-500">
                         <div className="flex flex-col items-center text-center space-y-6">
-                          <div className="relative">
-                            <div className="w-16 h-16 bg-gradient-to-br from-infinite-gold via-infinite-teal to-infinite-gold rounded-full flex items-center justify-center animate-pulse shadow-lg">
-                              <span className="text-3xl">🎭</span>
-                            </div>
-                            <div className="absolute -inset-1 bg-gradient-to-r from-infinite-gold to-infinite-teal rounded-full blur opacity-30 animate-ping"></div>
-                          </div>
+                          {/* #88: one opening state — title, body, dots. The second
+                              spinner is gone; the stalled branch below stays (#865). */}
                           <div className="space-y-3">
-                            <h3 className="text-lg font-semibold text-card-foreground">
-                              Crafting Opening Scene
+                            <h3 className="font-heading text-xl text-infinite-gold">
+                              Your story is starting
                             </h3>
                             <p className="text-sm text-muted-foreground leading-relaxed">
-                              The Dungeon Master is generating your personalized adventure
-                              introduction based on your character and campaign.
+                              The Dungeon Master is writing the opening scene for{' '}
+                              {greetingCharacterName ?? 'your character'} in{' '}
+                              {greetingCampaignName ?? 'this campaign'}. This takes about ten
+                              seconds.
                             </p>
                           </div>
                           {greetingTimedOut ? (
@@ -589,14 +596,11 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                               )}
                             </div>
                           ) : (
-                            <>
-                              <div className="flex items-center justify-center gap-1">
-                                <div className="w-2 h-2 bg-infinite-gold rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                                <div className="w-2 h-2 bg-infinite-teal rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                                <div className="w-2 h-2 bg-infinite-gold rounded-full animate-bounce"></div>
-                              </div>
-                              <div className="w-8 h-8 border-2 border-infinite-gold/20 border-t-infinite-gold rounded-full animate-spin"></div>
-                            </>
+                            <div className="flex items-center justify-center gap-1">
+                              <div className="w-2 h-2 bg-infinite-gold rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                              <div className="w-2 h-2 bg-infinite-teal rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                              <div className="w-2 h-2 bg-infinite-gold rounded-full animate-bounce"></div>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -660,11 +664,14 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                           onRetry={onRetry}
                           retryInFlight={retryInFlight}
                           disabledReason={
-                            rollBlocksInput && !isProcessing
-                              ? 'Tap the Roll Dice button above to continue'
-                              : undefined
+                            isGeneratingGreeting
+                              ? 'You can type once the scene appears'
+                              : rollBlocksInput && !isProcessing
+                                ? 'Tap the Roll Dice button above to continue'
+                                : undefined
                           }
                           isDisabled={
+                            isGeneratingGreeting ||
                             isProcessing ||
                             rollBlocksInput ||
                             // 'running' is the turn lock, in and out of combat. 'unknown'/'failed'

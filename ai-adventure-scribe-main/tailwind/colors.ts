@@ -59,6 +59,9 @@ export const colors = {
   'ir-hp-bad': 'var(--ir-hp-bad)',
   'infinite-teal': 'rgb(var(--c-infinite-teal) / <alpha-value>)',
   'infinite-dark': 'rgb(var(--c-infinite-dark) / <alpha-value>)',
+  // #88: the DM bubble's navy. Hex-valued var, like ir-steel-text above:
+  // no `/<alpha>` support, so opacity utilities must use arbitrary values.
+  'infinite-dark-lighter': 'var(--infinite-dark-lighter)',
 
   // Lore-based Color Aliases
   shadowweave: 'rgb(var(--c-infinite-purple) / <alpha-value>)',

@@ -7,6 +7,10 @@ import logger from '@/lib/logger';
 
 const SCROLL_THRESHOLD = 100; // px from top to trigger load more
 
+// #88: a player at (or within 120 px of) the bottom follows new messages;
+// further up, the stream holds still and the "New message" pill appears.
+const FOLLOW_THRESHOLD = 120; // px from bottom to count as at the bottom
+
 /**
  * Hook to manage auto-scroll behavior and pagination trigger
  * Automatically scrolls to bottom when new messages arrive unless user scrolled up
@@ -33,7 +37,7 @@ export const useScrollBehavior = (
     if (!el) return;
 
     const onScroll = () => {
-      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < FOLLOW_THRESHOLD;
       isUserScrolledUpRef.current = !atBottom;
       setIsUserScrolledUp(!atBottom);
       const progress = el.scrollTop / (el.scrollHeight - el.clientHeight);

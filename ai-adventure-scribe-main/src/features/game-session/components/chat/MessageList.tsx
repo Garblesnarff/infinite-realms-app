@@ -76,6 +76,10 @@ export type MessageSendContext =
 interface MessageListProps {
   retryInFlight?: boolean;
   onSendFullMessage?: (message: string, context?: MessageSendContext) => Promise<void>;
+  /** #88: re-run a failed turn (the composer banner's retry action). */
+  onRetryTurn?: (input: string) => void | Promise<void>;
+  /** #88: the DM is composing; the container shows the writing row. */
+  isDmWriting?: boolean;
   sessionId?: string;
   containerRef?: React.RefObject<HTMLDivElement>;
   suppressEmptyState?: boolean;
@@ -91,7 +95,15 @@ interface MessageListProps {
  * memoized or optimized via custom hooks.
  */
 export const MessageList: React.FC<MessageListProps> = React.memo(
-  ({ onSendFullMessage, sessionId, containerRef, suppressEmptyState, retryInFlight }) => {
+  ({
+    onSendFullMessage,
+    onRetryTurn,
+    isDmWriting = false,
+    sessionId,
+    containerRef,
+    suppressEmptyState,
+    retryInFlight,
+  }) => {
     const {
       messages = [],
       isLoading,
@@ -100,6 +112,8 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
       hasMore,
       loadMore,
       isFetchingMore,
+      failedSends = [],
+      clearFailedSend,
     } = useMessageContext();
     const { state: characterState } = useCharacter();
     const { state: campaignState } = useCampaign();
@@ -129,6 +143,29 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
       loadMore,
       isFetchingMore,
       combatState.isInCombat,
+    );
+
+    // #88: retry a failed send. The row clears first so a failed retry
+    // replaces it instead of stacking a second one. The turn retry is the
+    // same action as the composer banner's Retry, so a retried turn clears
+    // the banner and runs the whole turn — a plain re-persist would leave
+    // the turn dead with no DM reply.
+    const handleRetryFailed = React.useCallback(
+      async (message: ChatMessage) => {
+        clearFailedSend?.(message);
+        if (onRetryTurn) {
+          await onRetryTurn(message.text);
+        } else if (onSendFullMessage) {
+          await onSendFullMessage(message.text);
+        } else {
+          const { context, ...rest } = message;
+          await sendMessage({
+            ...rest,
+            ...(context ? { context: { ...context, sendFailed: false } } : {}),
+          });
+        }
+      },
+      [clearFailedSend, onRetryTurn, onSendFullMessage, sendMessage],
     );
 
     // Handle option selection
@@ -182,6 +219,9 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
             onOptionSelect={handleOptionSelect}
             onSendMessage={sendMessage}
             onSendFullMessage={onSendFullMessage}
+            failedMessages={failedSends}
+            onRetryFailed={handleRetryFailed}
+            isDmWriting={isDmWriting}
             retryInFlight={retryInFlight}
             sessionId={sessionId}
             messagesReady={messagesReady && !isLoading}

@@ -49,6 +49,18 @@ type QueueStatus = 'idle' | 'processing' | 'error' | 'retrying';
 export const useMessageQueue = (sessionId: string | null) => {
   const [queueStatus, setQueueStatus] = useState<QueueStatus>('idle');
   const [messageQueue, setMessageQueue] = useState<ChatMessage[]>([]);
+  /**
+   * #88: player sends the server never recorded. They stay visible as failed
+   * bubbles with a Try again button instead of vanishing on rollback. Only
+   * retryable failures land here — a refused (4xx) or expired-session save
+   * would fail verbatim again, and a fallen-character refusal is owned by the
+   * death screen, not a bubble. Client-only: context.sendFailed is never in
+   * the persistence allowlist below, so it can't reach dialogue_history.
+   */
+  const [failedSends, setFailedSends] = useState<ChatMessage[]>([]);
+  const clearFailedSend = useCallback((message: ChatMessage): void => {
+    setFailedSends((prev) => prev.filter((failed) => failed !== message));
+  }, []);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -299,7 +311,7 @@ export const useMessageQueue = (sessionId: string | null) => {
       }
       throw new Error('Message persistence retries exhausted');
     },
-    onError: (error, _variables, context) => {
+    onError: (error, variables, context) => {
       logger.error('Error saving message:', error);
 
       // ⚡ Bolt: Rollback to the previous state on error to maintain data integrity.
@@ -315,6 +327,24 @@ export const useMessageQueue = (sessionId: string | null) => {
       // generic error the round-1 fix review forbade.
       if (isTerminalDefeatError(error)) {
         return;
+      }
+
+      // #88: a retryable player send that never recorded stays visible as a
+      // failed bubble. The row is the variables object with a client-only
+      // flag; the retry clears it before re-sending, so a failed retry
+      // replaces it rather than stacking a second row.
+      if (
+        variables.sender === 'player' &&
+        !isSessionExpiredError(error) &&
+        !isClientRefusal(error)
+      ) {
+        setFailedSends((prev) => [
+          ...prev,
+          {
+            ...variables,
+            context: { ...variables.context, sendFailed: true },
+          },
+        ]);
       }
 
       toast({
@@ -396,7 +426,9 @@ export const useMessageQueue = (sessionId: string | null) => {
       queueStatus,
       updateMessage,
       removeMessage,
+      failedSends,
+      clearFailedSend,
     }),
-    [messageMutation, queueStatus, updateMessage, removeMessage],
+    [messageMutation, queueStatus, updateMessage, removeMessage, failedSends, clearFailedSend],
   );
 };

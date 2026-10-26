@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import { MessageRenderer } from './MessageRenderer';
 import { RollAutoCountdown } from './RollAutoCountdown';
@@ -49,6 +49,12 @@ interface MessageListContainerProps {
   onOptionSelect: (optionText: string) => Promise<void>;
   onSendMessage: (message: ChatMessage) => Promise<void>;
   onSendFullMessage?: (message: string, context?: MessageSendContext) => Promise<void>;
+  /** #88: player sends the server never recorded; rendered after real messages. */
+  failedMessages?: ChatMessage[];
+  /** #88: retry a failed send (the bubble's Try again button). */
+  onRetryFailed?: (message: ChatMessage) => void | Promise<void>;
+  /** #88: the DM is composing; show the writing row at the stream's bottom. */
+  isDmWriting?: boolean;
   sessionId?: string;
   isFetchingMore?: boolean;
   hasMore?: boolean;
@@ -67,7 +73,7 @@ interface MessageListContainerProps {
 export const MessageListContainer: React.FC<MessageListContainerProps> = React.memo(
   ({
     messages,
-    messagesRef: _messagesRef,
+    messagesRef,
     expandedMessages,
     setExpandedMessages,
     imageByMessage,
@@ -77,6 +83,9 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
     onOptionSelect,
     onSendMessage,
     onSendFullMessage,
+    failedMessages = [],
+    onRetryFailed,
+    isDmWriting = false,
     retryInFlight = false,
     sessionId,
     isFetchingMore,
@@ -121,13 +130,65 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
       [messages],
     );
 
+    // #88: whether the player sits away from the bottom, and the newest real
+    // message's key — the pill fires only when a NEW newest message lands
+    // while scrolled up, never on first load and never for loadMore prepends
+    // (those leave the newest message untouched).
+    const scrolledUpRef = useRef(false);
+    const lastMessageKeyRef = useRef<string | null>(null);
+    const hasSeenMessagesRef = useRef(false);
+    const [showNewMessagePill, setShowNewMessagePill] = useState(false);
+
+    useEffect(() => {
+      const el = messagesRef.current;
+      if (!el) return;
+      const onScroll = (): void => {
+        const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+        scrolledUpRef.current = distance >= 120;
+        if (distance < 120) setShowNewMessagePill(false);
+      };
+      el.addEventListener('scroll', onScroll, { passive: true });
+      return () => el.removeEventListener('scroll', onScroll);
+    }, [messagesRef]);
+
+    useEffect(() => {
+      const newest = messages[messages.length - 1];
+      const newestKey = newest
+        ? (newest.id ?? newest.timestamp ?? `index-${messages.length - 1}`)
+        : null;
+      const prevKey = lastMessageKeyRef.current;
+      lastMessageKeyRef.current = newestKey;
+      if (!hasSeenMessagesRef.current) {
+        hasSeenMessagesRef.current = true;
+        return;
+      }
+      if (newestKey !== null && newestKey !== prevKey && scrolledUpRef.current) {
+        setShowNewMessagePill(true);
+      }
+    }, [messages]);
+
+    const scrollToNewest = (): void => {
+      const el = messagesRef.current;
+      if (!el) return;
+      const reduced =
+        typeof window !== 'undefined' &&
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      el.scrollTo({ top: el.scrollHeight, behavior: reduced ? 'auto' : 'smooth' });
+      setShowNewMessagePill(false);
+    };
+
     // Group consecutive messages from the same sender
     const groupedMessages = useMemo(() => {
       // A DM reply waiting on its narrative roll keeps its prose off screen until the roll is
       // answered (#2280); the roll tray is what the player sees for that turn.
       const withheld = withheldDmRollReplies(messages);
       const transcriptMessages = messages.filter((message) => !withheld.has(message));
-      if (!transcriptMessages.length) {
+      // #88: failed sends render after the real transcript. They join grouping
+      // only — the dice, recovery, and engine hooks above still see real
+      // messages, so a failed row can't disturb them.
+      const renderMessages = [...transcriptMessages, ...failedMessages];
+      if (!renderMessages.length) {
         return [];
       }
 
@@ -138,14 +199,14 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
         isCompanion: boolean;
       }[] = [];
       let currentGroup = {
-        sender: transcriptMessages[0].sender,
-        messages: [transcriptMessages[0]],
-        isPlayer: isPlayerChatBubble(transcriptMessages[0]),
-        isCompanion: transcriptMessages[0].sender === 'companion',
+        sender: renderMessages[0].sender,
+        messages: [renderMessages[0]],
+        isPlayer: isPlayerChatBubble(renderMessages[0]),
+        isCompanion: renderMessages[0].sender === 'companion',
       };
 
-      for (let i = 1; i < transcriptMessages.length; i++) {
-        const message = transcriptMessages[i];
+      for (let i = 1; i < renderMessages.length; i++) {
+        const message = renderMessages[i];
         const sameBubble =
           message.sender === currentGroup.sender &&
           isPlayerChatBubble(message) === currentGroup.isPlayer;
@@ -163,7 +224,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
       }
       groups.push(currentGroup);
       return groups;
-    }, [messages]);
+    }, [messages, failedMessages]);
 
     return (
       <>
@@ -269,6 +330,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
                       onGenerateScene={onGenerateScene}
                       onOptionSelect={onOptionSelect}
                       onSendMessage={onSendMessage}
+                      onRetryFailed={onRetryFailed}
                       combatOptionsVisible={combatOptionsVisible}
                       isLatestMessage={isLastMessage}
                       optionsSuperseded={supersededByCombatEnd.has(message)}
@@ -339,7 +401,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
         )}
 
         {/* Loading state */}
-        {!suppressEmptyState && messages?.length === 0 && (
+        {!suppressEmptyState && messages?.length === 0 && failedMessages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center py-12">
             <div className="w-16 h-16 bg-gradient-to-br from-infinite-purple to-infinite-teal rounded-full flex items-center justify-center mb-6 animate-pulse">
               <span className="text-2xl">🎭</span>
@@ -355,6 +417,33 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
                 The Dungeon Master is crafting your opening scene and preparing your world.
               </p>
             </div>
+          </div>
+        )}
+
+        {/* #88: the DM writing row, at the bottom of the stream. */}
+        {isDmWriting && (
+          <div data-testid="dm-writing-row" role="status" className="flex items-center gap-2">
+            <span className="flex items-center gap-1" aria-hidden>
+              <span className="h-1.5 w-1.5 rounded-full bg-infinite-gold animate-pulse"></span>
+              <span className="h-1.5 w-1.5 rounded-full bg-infinite-teal animate-pulse [animation-delay:-0.15s]"></span>
+              <span className="h-1.5 w-1.5 rounded-full bg-infinite-gold animate-pulse [animation-delay:-0.3s]"></span>
+            </span>
+            <span className="text-[13px] text-muted-foreground">Dungeon Master is writing…</span>
+          </div>
+        )}
+
+        {/* #88: a new message while scrolled up raises this pill instead of
+            jumping the stream. It sticks to the visible bottom of the scroll
+            area; tapping it scrolls to the newest message. */}
+        {showNewMessagePill && (
+          <div className="sticky bottom-4 z-10 flex justify-center pointer-events-none">
+            <button
+              type="button"
+              onClick={scrollToNewest}
+              className="pointer-events-auto rounded-full border border-white/10 bg-infinite-dark-lighter px-3 py-1 text-xs font-medium text-infinite-gold shadow-lg"
+            >
+              New message ↓
+            </button>
           </div>
         )}
       </>

@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useScrollBehavior } from '../useScrollBehavior';
 
+import type { ChatMessage } from '@/types/game';
+
 class FakeResizeObserver {
   static instances: FakeResizeObserver[] = [];
 
@@ -108,6 +110,42 @@ describe('useScrollBehavior content growth (#713)', () => {
     expect(element.scrollTop).toBe(0);
     unmount();
     element.remove();
+  });
+
+  it('follows within the 120 px threshold and holds still beyond it (#88)', () => {
+    // Within 120 px of the bottom: a new message pulls the stream down.
+    const near = createContainer();
+    const nearHook = renderHook(
+      ({ messages }: { messages: ChatMessage[] }) => useScrollBehavior(near.messagesRef, messages),
+      { initialProps: { messages: [] as ChatMessage[] } },
+    );
+    near.element.scrollTop = 100; // 500 - 100 - 300 = 100 px from the bottom
+    act(() => {
+      near.element.dispatchEvent(new Event('scroll'));
+    });
+    act(() => {
+      nearHook.rerender({ messages: [{ text: 'hi', sender: 'dm' }] });
+    });
+    expect(near.element.scrollTop).toBe(500);
+    nearHook.unmount();
+    near.element.remove();
+
+    // Beyond 120 px: the stream holds still for the pill instead.
+    const far = createContainer();
+    const farHook = renderHook(
+      ({ messages }: { messages: ChatMessage[] }) => useScrollBehavior(far.messagesRef, messages),
+      { initialProps: { messages: [] as ChatMessage[] } },
+    );
+    far.element.scrollTop = 0; // 500 - 0 - 300 = 200 px from the bottom
+    act(() => {
+      far.element.dispatchEvent(new Event('scroll'));
+    });
+    act(() => {
+      farHook.rerender({ messages: [{ text: 'hi', sender: 'dm' }] });
+    });
+    expect(far.element.scrollTop).toBe(0);
+    farHook.unmount();
+    far.element.remove();
   });
 
   it('observes a child appended after mount', async () => {

@@ -40,7 +40,7 @@ interface DMMessageProps {
 
 /**
  * DMMessage Component
- * Renders DM-specific message bubbles with purple gradient styling
+ * Renders DM-specific message bubbles with navy styling (#88)
  * Integrates voice controls, image generation, and action options
  */
 export const DMMessage: React.FC<DMMessageProps> = React.memo(
@@ -177,8 +177,10 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
     const exceedsClampThreshold = charCount > 800 || paragraphCount > 4;
     const shouldClamp = exceedsClampThreshold && !isExpanded;
 
+    // #88: narration uses the ir-narr token (EB Garamond, italic per ticket 3).
+    // The bubble caps width at 72ch, so the old lg:78ch narrative cap is dead.
     const narrativeClass = cn(
-      'dm-narrative max-w-[72ch] lg:max-w-[78ch] text-[15px] md:text-base leading-7 text-white/90 tracking-normal hyphens-auto',
+      'ir-narr text-[16px] md:text-[17px] leading-[1.65] text-foreground hyphens-auto',
       'selection:bg-infinite-purple/20 selection:text-white break-words',
       shouldClamp && 'max-h-[22rem] overflow-hidden clamp-fade',
     );
@@ -244,11 +246,18 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
             showLabel={index === 0}
           />
         ))}
+        {/* #88: the label sits directly above the bubble, first in group only,
+            so consecutive DM messages don't repeat it. */}
+        {isFirstInGroup && (
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[.1em] text-infinite-gold">
+            Dungeon Master
+          </div>
+        )}
         <article
           aria-label="Dungeon Master message"
           className={cn(
-            'message-bubble dm-bubble relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[#2d1155]/95 via-[#251147]/93 to-[#0b2336]/90',
-            'px-5 py-4 md:px-6 md:py-5 shadow-lg md:shadow-xl transition-all duration-300 hover:shadow-2xl hover:shadow-infinite-purple/20',
+            'message-bubble dm-bubble relative overflow-hidden rounded-2xl rounded-tl-[4px] border border-white/10 bg-infinite-dark-lighter',
+            'px-[18px] py-3.5 max-w-[72ch] transition-all duration-300',
           )}
         >
           {message.context?.previouslyOn && (
