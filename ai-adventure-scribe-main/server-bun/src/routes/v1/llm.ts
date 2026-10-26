@@ -686,9 +686,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       const responseSchema: Record<string, unknown> = dmResponseSchema;
       let responseSchemaPhase: DmResponsePhase = 'full';
       try {
-        const { pickDmResponsePhase } = await import(
-          '../../services/dm/dm-response-phase-picker.js'
-        );
+        const { pickDmResponsePhase } =
+          await import('../../services/dm/dm-response-phase-picker.js');
         const picked = await pickDmResponsePhase(
           sessionId ?? combatEntry?.sessionId ?? null,
           user.userId,
@@ -1132,9 +1131,12 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             : untargetedSpell
               ? appendUntargetedSpellDirective(prompt, untargetedSpell.name)
               : prompt;
-        const engineDirectives = [layOnHandsDirective, secondWindDirective, equipDirective, trackerDirective].filter(
-          (directive): directive is string => directive !== null,
-        );
+        const engineDirectives = [
+          layOnHandsDirective,
+          secondWindDirective,
+          equipDirective,
+          trackerDirective,
+        ].filter((directive): directive is string => directive !== null);
         const llmPrompt =
           engineDirectives.length > 0
             ? `${llmPromptBase}\n\n${engineDirectives.join('\n\n')}`
@@ -1863,8 +1865,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         }
         if (envelope && trackerStepRan && castSessionId) {
           try {
-            const { loadStoredStoryTrackers } =
-              await import('../../services/dm/story-tracker.js');
+            const { loadStoredStoryTrackers } = await import('../../services/dm/story-tracker.js');
             const storedTrackers = await loadStoredStoryTrackers({
               sessionId: castSessionId,
               userId,
@@ -1873,9 +1874,19 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
               envelope.story_trackers = storedTrackers;
             }
           } catch (error) {
-            logger.warn({ msg: 'DM_STORY_TRACKER_ENVELOPE_FAILED', sessionId: castSessionId, error });
+            logger.warn({
+              msg: 'DM_STORY_TRACKER_ENVELOPE_FAILED',
+              sessionId: castSessionId,
+              error,
+            });
           }
-        } else if (envelope && !trackerStepRan && castSessionId && directiveTrackers && directiveTrackers.length > 0) {
+        } else if (
+          envelope &&
+          !trackerStepRan &&
+          castSessionId &&
+          directiveTrackers &&
+          directiveTrackers.length > 0
+        ) {
           // #1062 round 2: the clock line stays on quiet turns. The
           // directive session (defenseSessionId) and the attach session
           // (castSessionId) agree whenever the attach can fire, and the
@@ -1930,8 +1941,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
               .where(eq(gameSessions.id, castSessionId))
               .limit(1);
             if (currentSession?.status !== 'completed') {
-              const { enforceRequiredEnding } =
-                await import('../../services/dm/story-tracker.js');
+              const { enforceRequiredEnding } = await import('../../services/dm/story-tracker.js');
               const enforced = await enforceRequiredEnding({
                 userId,
                 sessionId: castSessionId,
@@ -2005,6 +2015,17 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             holdProse: dmReply.holdProse === true,
           });
           dmReplyPersisted = persistence.persisted;
+          // #1084: the ending row was claimed before this reply row existed;
+          // move it behind the ending narration it closes.
+          if (persistence.persisted && envelope?.campaign_ending) {
+            try {
+              const { placeEndingLineAfterReply } =
+                await import('../../services/dm/story-ending.js');
+              await placeEndingLineAfterReply({ sessionId: dmSessionId, userId });
+            } catch (error) {
+              logger.warn({ msg: 'DM_STORY_ENDING_REORDER_FAILED', sessionId: dmSessionId, error });
+            }
+          }
           // #841: record this reply's action batches under its message id, so
           // the corrective reprompts in the handout-actions and
           // tactical-map/dm-actions routes can only ever correct actions the
@@ -2099,7 +2120,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
                     // #1084: same carry for the server-attached ending —
                     // a tracker-forced ending on a seating turn would
                     // otherwise be dropped by the pre-applier snapshot.
-                    if (envelope?.campaign_ending) seated.campaign_ending = envelope.campaign_ending;
+                    if (envelope?.campaign_ending)
+                      seated.campaign_ending = envelope.campaign_ending;
                     else delete seated.campaign_ending;
                   }
                   return seated;

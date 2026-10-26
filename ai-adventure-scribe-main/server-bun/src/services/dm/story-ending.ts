@@ -213,3 +213,54 @@ export async function applyStoryEnding(input: {
   }
   return done('applied', summary);
 }
+
+/**
+ * #1084 (Hark V-001): the ending row is claimed inside the appliers, before
+ * the turn's DM reply is persisted, so `dialogue_history` ordered it ahead of
+ * the ending narration ("Adventure complete" above the DM's ending reply).
+ * Once the reply row is stored, move the ending row behind it: the next
+ * sequence number for the session, then broadcast with that number so a
+ * live client re-sorts. A no-op when no ending row exists or it is already
+ * the session's last row.
+ */
+export async function placeEndingLineAfterReply(input: {
+  sessionId: string;
+  userId: string;
+}): Promise<boolean> {
+  const { sessionId } = input;
+  const { engineLineUuid } = await import('../engine-chat-line.js');
+  const { db } = await import('../../../../db/client');
+  const { and, eq, sql } = await import('drizzle-orm');
+  const { dialogueHistory } = await import('../../../../db/schema/index');
+  const id = engineLineUuid(`campaign-ending:${sessionId}`);
+  const lastSequence = sql`(SELECT MAX(d.sequence_number) FROM dialogue_history d WHERE d.session_id = ${sessionId})`;
+  const [row] = await db
+    .update(dialogueHistory)
+    .set({ sequenceNumber: sql`${lastSequence} + 1`, updatedAt: new Date() })
+    .where(
+      and(
+        eq(dialogueHistory.id, id),
+        eq(dialogueHistory.sessionId, sessionId),
+        sql`${dialogueHistory.sequenceNumber} < ${lastSequence}`,
+      ),
+    )
+    .returning();
+  if (!row) return false;
+  const { broadcastToRoom } = await import('../collaboration/room-manager.js');
+  broadcastToRoom(sessionId, null as never, {
+    type: 'chat',
+    sessionId,
+    engineRows: [
+      {
+        id: row.id,
+        sequence: row.sequenceNumber,
+        text: row.message,
+        kind: 'system',
+        sessionId,
+        timestamp: (row.timestamp ?? new Date()).toISOString(),
+        context: row.context,
+      },
+    ],
+  });
+  return true;
+}
