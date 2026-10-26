@@ -404,6 +404,8 @@ const OBJECT_VERBS = new Set([
   'welcomed',
 ]);
 
+const THING_COMPOUNDS = new Set(['something', 'nothing', 'anything', 'everything']);
+
 function isObjectPosition(text: string, offset: number): boolean {
   const precedingWord = text
     .slice(0, offset)
@@ -413,7 +415,7 @@ function isObjectPosition(text: string, offset: number): boolean {
   return Boolean(
     precedingWord &&
     (OBJECT_PREPOSITIONS.has(precedingWord) ||
-      precedingWord.endsWith('ing') ||
+      (precedingWord.endsWith('ing') && !THING_COMPOUNDS.has(precedingWord)) ||
       OBJECT_VERBS.has(precedingWord)),
   );
 }
