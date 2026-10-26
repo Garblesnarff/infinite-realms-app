@@ -81,6 +81,9 @@ const { seatCombatEntry } = await importWithRealDb(() => import('../combat/comba
 const { combatEntryGateDeps } = await importWithRealDb(
   () => import('../combat/combat-entry-gate-deps.js'),
 );
+const { NarrativeLedgerService } = await importWithRealDb(
+  () => import('../narrative/narrative-ledger-service.js'),
+);
 
 if (!hasRealDb) {
   console.warn(
@@ -287,5 +290,52 @@ describeWithDb('combat intent roster and player-intent seating', () => {
     expect(outcome.firstAction?.target).toBe(
       participants.find((participant) => participant.name === 'Ledger Warden')?.id,
     );
+  });
+  test('#1086 (g): a creature the ledger records as dead is not an attack target', async () => {
+    // The fact combat-ending.ts writes when a fight ends with the creature dead
+    // (subjectName is the seat name, value { state: 'dead', encounterId }).
+    await NarrativeLedgerService.assertFact(
+      {
+        sessionId,
+        subjectType: 'npc',
+        subjectName: 'Glass-Hide Ape',
+        predicate: 'status',
+        value: { state: 'dead', encounterId: crypto.randomUUID() },
+        knownBy: ['dm'],
+        source: 'engine',
+      },
+      userId,
+    );
+
+    const roster = await loadCombatIntentActorRoster(sessionId, userId);
+    const names = roster.map((actor) => actor.name.toLowerCase());
+    expect(names).not.toContain('glass-hide ape');
+    // A live ledger NPC is still a target.
+    expect(names).toContain('ledger warden');
+
+    // The QA-reported clicked option from #1086 (g), verbatim.
+    const option =
+      'Catch the Falling Hunter, lunge across the slick root and grab the sliding glass arm before it goes over the edge.';
+    const declaredAttack = detectDeclaredAttack(option, roster);
+    expect(declaredAttack).toBeNull();
+
+    const gated = await applyCombatEntryGate({
+      // DM #47's stored shape: no transition, no rolls (Hetzner's read).
+      result: {
+        text: JSON.stringify({
+          text: 'You throw yourself across the root.',
+          combat_transition: 'none',
+          roll_requests: [],
+        }),
+      } as never,
+      userId,
+      combatEntry: {
+        sessionId,
+        player: { characterId, name: 'Roster Player', initiativeModifier: 3 },
+      },
+      declaredAttack,
+    });
+    const envelope = JSON.parse(gated.text) as { combat_entry_pending?: unknown };
+    expect(envelope.combat_entry_pending).toBeUndefined();
   });
 });
