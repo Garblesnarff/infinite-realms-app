@@ -203,7 +203,9 @@ const withRefreshLock = <T>(work: () => Promise<T>): Promise<T> => {
   if (typeof window !== 'undefined') return withLocalStorageLease(work);
 
   const locks = getLockManager();
-  return locks ? locks.request(TOKEN_REFRESH_LOCK_NAME, { mode: 'exclusive' }, work) : work();
+  return locks
+    ? locks.request(TOKEN_REFRESH_LOCK_NAME, { mode: 'exclusive' }, work)
+    : withLocalStorageLease(work);
 };
 
 export const isSessionEnded = (): boolean => {

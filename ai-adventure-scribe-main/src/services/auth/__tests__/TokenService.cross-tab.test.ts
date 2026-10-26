@@ -40,8 +40,7 @@ describe('TokenService cross-tab refresh coordination', () => {
     });
   });
 
-  afterEach(() => {
-    vi.unstubAllGlobals();
+  const restoreNavigatorLocks = (): void => {
     if (originalLocks === undefined) {
       Reflect.deleteProperty(navigator, 'locks');
     } else {
@@ -50,6 +49,11 @@ describe('TokenService cross-tab refresh coordination', () => {
         value: originalLocks,
       });
     }
+  };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    restoreNavigatorLocks();
   });
 
   it('lets two simulated tabs complete one rotating-token exchange', async () => {
@@ -105,11 +109,15 @@ describe('TokenService cross-tab refresh coordination', () => {
     vi.resetModules();
     const { refreshAccessToken } = await import('../TokenService');
 
-    await expect(refreshAccessToken('old-refresh', 'old-access')).resolves.toEqual({
-      accessToken: 'new-access',
-      refreshToken: 'new-refresh',
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(lockRequest).not.toHaveBeenCalled();
+    try {
+      await expect(refreshAccessToken('old-refresh', 'old-access')).resolves.toEqual({
+        accessToken: 'new-access',
+        refreshToken: 'new-refresh',
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(lockRequest).not.toHaveBeenCalled();
+    } finally {
+      restoreNavigatorLocks();
+    }
   });
 });
