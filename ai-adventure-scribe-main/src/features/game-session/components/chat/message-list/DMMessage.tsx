@@ -178,9 +178,13 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
     const shouldClamp = exceedsClampThreshold && !isExpanded;
 
     // #88: narration uses the ir-narr token (EB Garamond, italic per ticket 3).
+    // `dm-narrative` stays alongside it: the #464 display path (FallenStoryLog's
+    // chat-display test) selects on it, and inside `.ir-app` the two-class
+    // `.ir-app .ir-narr` selector outranks the single-class `.dm-narrative`
+    // (Inter) rule, so EB Garamond still governs in the app.
     // The bubble caps width at 72ch, so the old lg:78ch narrative cap is dead.
     const narrativeClass = cn(
-      'ir-narr text-[16px] md:text-[17px] leading-[1.65] text-foreground hyphens-auto',
+      'dm-narrative ir-narr text-[16px] md:text-[17px] leading-[1.65] text-foreground hyphens-auto',
       'selection:bg-infinite-purple/20 selection:text-white break-words',
       shouldClamp && 'max-h-[22rem] overflow-hidden clamp-fade',
     );
@@ -248,8 +252,10 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
         ))}
         {/* #88: the label sits directly above the bubble, first in group only,
             so consecutive DM messages don't repeat it. */}
+        {/* #88 label at the #228 12px floor (text-xs), not the ticket's 11px:
+            the guard forbids sub-12px classes on the game screen. */}
         {isFirstInGroup && (
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[.1em] text-infinite-gold">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-[.1em] text-infinite-gold">
             Dungeon Master
           </div>
         )}

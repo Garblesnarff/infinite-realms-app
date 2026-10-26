@@ -47,8 +47,9 @@ export const PlayerMessage: React.FC<PlayerMessageProps> = React.memo(
     return (
       <div className="flex w-full flex-col items-end">
         {/* #88: label above the bubble, first in group only. */}
+        {/* Same 12px floor as the DM label (strategist queue 03:15Z), not the ticket's 11px. */}
         {isFirstInGroup && (
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[.1em] text-ir-steel-text">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-[.1em] text-ir-steel-text">
             {characterName ? `You · ${characterName}` : 'You'}
           </div>
         )}

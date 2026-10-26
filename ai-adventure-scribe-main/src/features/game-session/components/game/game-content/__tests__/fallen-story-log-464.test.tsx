@@ -55,8 +55,7 @@ const renderChatNarrative = (): string => {
       onGenerateImage={vi.fn()}
     />,
   );
-  // #88 replaced the `dm-narrative` class with the `ir-narr` token on DM narration.
-  const narrative = container.querySelector('.ir-narr');
+  const narrative = container.querySelector('.dm-narrative');
   expect(narrative).not.toBeNull();
   return narrative?.textContent ?? '';
 };

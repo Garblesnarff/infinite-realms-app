@@ -42,7 +42,9 @@ describe('DMMessage styles (#88)', () => {
     expect(bubble.className).toMatch(/px-\[18px\] py-3\.5/);
     expect(bubble.className).not.toMatch(/from-\[#2d1155\]/);
     expect(bubble.className).not.toMatch(/bg-gradient-to-br/);
-    expect(container.querySelector('.dm-narrative')).toBeNull();
+    // Strategist direction (round-1 FIX): dm-narrative stays alongside ir-narr
+    // as the #464 display-path hook; ir-narr still governs type inside .ir-app.
+    expect(container.querySelector('.dm-narrative')).not.toBeNull();
   });
 
   it('renders narration with the ir-narr token', () => {

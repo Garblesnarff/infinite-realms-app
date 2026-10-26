@@ -274,13 +274,8 @@ describe('game screen tap targets and text (#228)', () => {
 });
 
 describe('guard: no sub-12px text classes on the game screen (#228)', () => {
-  // The named game files: every text-[9px]/text-[10px]/text-[11px] must use the
-  // ir-text-min (12px) token instead — EXCEPT DMMessage.tsx, which #88
-  // explicitly mandates to carry an 11px "Dungeon Master" label. That file is
-  // covered by the dedicated test below instead of this list, so the guard
-  // still fails if anyone adds any other sub-12px class to it. (Strategist:
-  // if the 11px label should become 12px, delete the dedicated test and put
-  // DMMessage.tsx back in this list.)
+  // The 12 named game files plus RightSheet: every text-[9px]/text-[10px]/text-[11px]
+  // must use the ir-text-min (12px) token instead.
   const GAME_SCREEN_FILES = [
     'src/features/game-session/components/game/overhaul/RightSheet.tsx',
     'src/features/game-session/components/game/overhaul/CenterStagePreview.tsx',
@@ -292,19 +287,12 @@ describe('guard: no sub-12px text classes on the game screen (#228)', () => {
     'src/features/game-session/components/handouts/HandoutCard.tsx',
     'src/features/game-session/components/chat/message-list/CompanionMessage.tsx',
     'src/features/game-session/components/chat/message-list/MessageAssetCards.tsx',
+    'src/features/game-session/components/chat/message-list/DMMessage.tsx',
     'src/components/game/ActionOptions.tsx',
     'src/components/game/DiceRollRequest.tsx',
   ];
   it.each(GAME_SCREEN_FILES)('has no text-[9/10/11px] in %s', (file) => {
     const source = readFileSync(file, 'utf8');
     expect(source).not.toMatch(/text-\[(9|10|11)px\]/);
-  });
-  it('DMMessage carries only the #88 11px Dungeon Master label', () => {
-    const source = readFileSync(
-      'src/features/game-session/components/chat/message-list/DMMessage.tsx',
-      'utf8',
-    );
-    expect(source).not.toMatch(/text-\[(9|10)px\]/);
-    expect(source.match(/text-\[11px\]/g)).toEqual(['text-[11px]']);
   });
 });
