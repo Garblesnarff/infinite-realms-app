@@ -340,6 +340,18 @@ describe('turn bar (#2417, copy #85)', () => {
       );
     });
 
+    it('shows the 150 px HP skeleton on the loading strip (#85)', () => {
+      live.encounter = {
+        ...encounter(1, 0),
+        currentTurnParticipantId: undefined,
+      };
+      render(<CombatTurnBarLive turnInFlight={false} />);
+
+      const hp = screen.getByTestId('combat-turn-hp');
+      expect(hp.getAttribute('aria-label')).toBe('Loading hit points');
+      expect(hp.className).toContain('w-[150px]');
+    });
+
     it('says Casting… while the sheet cast is being answered', () => {
       live.messages = [{ sender: 'player', context: { intent: 'spell_cast' } }];
       render(<CombatTurnBarLive turnInFlight />);

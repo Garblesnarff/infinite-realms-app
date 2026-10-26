@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import CombatInterface from '../CombatInterface';
 
+import { mapAuthoritativeCombat } from '@/contexts/combat/authoritative-combat-state';
 import { useCombatActions } from '@/hooks/use-combat-actions';
 
 vi.mock('@/hooks/use-combat-actions', () => ({
@@ -148,5 +149,77 @@ describe('CombatInterface', () => {
     ]) {
       expect(screen.getByRole('button', { name: action })).toBeEnabled();
     }
+  });
+
+  // The combat dot's accessible name is the TurnBar copy (#85 follow-up), not the
+  // deleted pink banner's copy.
+  describe('combat status dot', () => {
+    // The encounter the client holds, from its only producer of one.
+    const turnEncounter = (turnIndex: number) =>
+      mapAuthoritativeCombat({
+        encounter: {
+          id: 'enc-1',
+          sessionId: 'session-1',
+          status: 'active',
+          currentRound: 2,
+          currentTurnOrder: turnIndex,
+          startedAt: '2026-09-29T00:00:00.000Z',
+        },
+        participants: [
+          {
+            id: 'p1',
+            name: 'The Scholar',
+            participantType: 'player',
+            initiative: 9,
+            initiativeModifier: 0,
+            armorClass: 11,
+            maxHp: 7,
+            speed: 30,
+            isActive: true,
+            status: { currentHp: 7, maxHp: 7, tempHp: 0, isConscious: true },
+          },
+          {
+            id: 'm1',
+            name: 'Captain Sarah Reeves',
+            participantType: 'monster',
+            initiative: 4,
+            initiativeModifier: 0,
+            armorClass: 11,
+            maxHp: 7,
+            speed: 30,
+            isActive: true,
+            status: { currentHp: 7, maxHp: 7, tempHp: 0, isConscious: true },
+          },
+        ],
+      });
+
+    it('names the TurnBar copy on the player turn', () => {
+      vi.mocked(useCombatActions).mockReturnValue({
+        ...mockCombatActions(),
+        activeEncounter: turnEncounter(0),
+      } as never);
+      render(<CombatInterface />);
+
+      expect(screen.getByRole('status', { name: 'Your turn' })).toBeInTheDocument();
+      expect(screen.queryByLabelText('Combat in progress')).toBeNull();
+    });
+
+    it('names the enemy turn from the TurnBar copy', () => {
+      vi.mocked(useCombatActions).mockReturnValue({
+        ...mockCombatActions(),
+        activeEncounter: turnEncounter(1),
+      } as never);
+      render(<CombatInterface />);
+
+      expect(
+        screen.getByRole('status', { name: "Captain Sarah Reeves's turn" }),
+      ).toBeInTheDocument();
+    });
+
+    it('falls back to the TurnBar loading copy with no turn holder', () => {
+      render(<CombatInterface />);
+
+      expect(screen.getByRole('status', { name: 'Setting up the fight…' })).toBeInTheDocument();
+    });
   });
 });
