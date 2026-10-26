@@ -154,7 +154,7 @@ describe('AuthContext connection failures (#565)', () => {
     expect(window.sessionStorage.getItem('workos_refresh_token')).toBe('refreshed-refresh');
   });
 
-  it('uses a winning cross-tab pair published after refresh before retrying auth.me', async () => {
+  it('keeps the player signed in when a refresh 200 races a winning cross-tab pair', async () => {
     const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
     let authMeAttempts = 0;
     let secondAuthorization: string | undefined;
@@ -188,6 +188,7 @@ describe('AuthContext connection failures (#565)', () => {
         authMeAttempts += 1;
         if (authMeAttempts === 1) return Promise.resolve(authMe(401));
         secondAuthorization = (init?.headers as Record<string, string>).Authorization;
+        if (secondAuthorization !== 'Bearer winning-access') return Promise.resolve(authMe(401));
         return Promise.resolve(
           authMe(200, { result: { data: { id: 'u1', email: 'player@example.com' } } }),
         );
