@@ -521,14 +521,18 @@ describe('getLegalCombatActions', () => {
 
     const result = await getLegalCombatActions('encounter-1', 'user-1');
 
+    const targetIdsOf = (action: unknown): string[] => {
+      const ids = (action as { targetIds?: unknown }).targetIds;
+      return Array.isArray(ids) ? (ids as string[]) : [];
+    };
     const spellTargets = result.actions
       .filter((action) => action.type === 'spell')
-      .flatMap((action) => action.targetIds ?? []);
+      .flatMap((action) => targetIdsOf(action));
     expect(spellTargets).toContain('monster-2');
     expect(spellTargets).not.toContain('monster-1');
     const attackTargets = result.actions
       .filter((action) => action.type === 'attack')
-      .flatMap((action) => action.targetIds ?? []);
+      .flatMap((action) => targetIdsOf(action));
     expect(attackTargets).not.toContain('monster-1');
     // Self-review F3: the weapon half is not negative-only — the live monster
     // still gets a weapon chip even with no tactical-map entity (the weapon
@@ -536,4 +540,3 @@ describe('getLegalCombatActions', () => {
     expect(attackTargets).toContain('monster-2');
   });
 });
-
