@@ -23,6 +23,7 @@ const TOKEN_REFRESH_LEASE_KEY = 'aas_workos_token_refresh_lease';
 const TOKEN_REFRESH_LEASE_MS = 10 * 1000;
 const TOKEN_REFRESH_LEASE_RENEW_MS = 3 * 1000;
 const TOKEN_REFRESH_LEASE_POLL_MS = 50;
+const TOKEN_REFRESH_LEASE_SETTLE_MS = 40;
 
 type RefreshResult = AccessTokenPair | null;
 type StoredRefreshLease = { owner: string; expiresAt: number };
@@ -154,6 +155,11 @@ const waitForRefreshLease = (): Promise<void> =>
     window.setTimeout(resolve, TOKEN_REFRESH_LEASE_POLL_MS);
   });
 
+const waitForRefreshLeaseSettle = (): Promise<void> =>
+  new Promise((resolve) => {
+    window.setTimeout(resolve, TOKEN_REFRESH_LEASE_SETTLE_MS);
+  });
+
 const withLocalStorageLease = async <T>(work: () => Promise<T>): Promise<T> => {
   if (typeof window === 'undefined') return work();
 
@@ -168,6 +174,10 @@ const withLocalStorageLease = async <T>(work: () => Promise<T>): Promise<T> => {
         expiresAt: now + TOKEN_REFRESH_LEASE_MS,
       };
       window.localStorage.setItem(TOKEN_REFRESH_LEASE_KEY, JSON.stringify(candidate));
+
+      // Let competing tabs observe this write before the final ownership
+      // check. Storage writes are not a compare-and-swap operation.
+      await waitForRefreshLeaseSettle();
 
       // Re-read after writing. This confirmation prevents a waiting tab from
       // proceeding when another tab replaced the lease between our read/write.
@@ -347,7 +357,7 @@ const requestTokenRefresh = async (refreshToken: string): Promise<RefreshResult>
       const payload = await readResponseJson(response);
       const error = getRefreshError(payload, response.status);
       logger.warn('Token refresh failed:', { status: response.status, error });
-      if (isTerminalRefreshFailure(error)) markSessionEnded(error);
+      if (isTerminalRefreshFailure(error)) throw error;
       return null;
     }
 
@@ -355,8 +365,7 @@ const requestTokenRefresh = async (refreshToken: string): Promise<RefreshResult>
     const responseError = getRefreshError(data, response.status);
     if (isTerminalRefreshFailure(responseError)) {
       logger.warn('Token refresh failed:', { status: response.status, error: responseError });
-      markSessionEnded(responseError);
-      return null;
+      throw responseError;
     }
 
     if (!data || typeof data.accessToken !== 'string' || typeof data.refreshToken !== 'string') {
@@ -377,6 +386,7 @@ const requestTokenRefresh = async (refreshToken: string): Promise<RefreshResult>
     // A blackholed endpoint is not an auth verdict — propagate it so callers
     // keep the stored session instead of signing the player out (#565).
     if (isTransportFailure(error)) throw new TokenRefreshTransportError();
+    if (error instanceof TokenRefreshError) throw error;
     return null;
   }
 };
@@ -400,13 +410,29 @@ const refreshWithCoordination = async (
       return sharedTokens;
     }
 
-    const tokens = await requestTokenRefresh(refreshToken);
-    if (tokens) {
-      // Publish before releasing the cross-tab lock so the next tab adopts
-      // these tokens instead of making a second exchange.
-      persistSession({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken });
+    try {
+      const tokens = await requestTokenRefresh(refreshToken);
+      if (tokens) {
+        // Publish before releasing the cross-tab lock so the next tab adopts
+        // these tokens instead of making a second exchange.
+        persistSession({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken });
+      }
+      return tokens;
+    } catch (error) {
+      if (error instanceof TokenRefreshError && isTerminalRefreshFailure(error)) {
+        // A contender may have spent the single-use refresh token just before
+        // this tab. Adopt its newer pair instead of signing out the loser.
+        const sharedTokens = getSharedRefreshResult(refreshToken, currentAccessToken);
+        if (sharedTokens) {
+          persistSession({
+            access_token: sharedTokens.accessToken,
+            refresh_token: sharedTokens.refreshToken,
+          });
+          return sharedTokens;
+        }
+      }
+      throw error;
     }
-    return tokens;
   });
 };
 
@@ -423,6 +449,10 @@ export const refreshAccessToken = (
         // Transport failures propagate: they are not auth verdicts, so the
         // caller's stored session must stay intact (#565).
         if (error instanceof TokenRefreshTransportError) throw error;
+        if (error instanceof TokenRefreshError && isTerminalRefreshFailure(error)) {
+          markSessionEnded(error);
+          return null;
+        }
         logger.error('Token refresh coordination failed:', { error });
         return null;
       },

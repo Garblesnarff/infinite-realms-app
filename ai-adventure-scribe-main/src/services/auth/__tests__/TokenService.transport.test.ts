@@ -54,7 +54,7 @@ describe('TokenService transport failures (#565)', () => {
 
     const attempt = refreshAccessTokenOnce('old-refresh');
     const assertion = expect(attempt).rejects.toBeInstanceOf(TokenRefreshTransportError);
-    await vi.advanceTimersByTimeAsync(15_000);
+    await vi.advanceTimersByTimeAsync(15_040);
     await assertion;
 
     // Not an auth verdict: the session is not ended and nothing was wiped.
@@ -63,11 +63,14 @@ describe('TokenService transport failures (#565)', () => {
 
   it('rejects with TokenRefreshTransportError on a network failure', async () => {
     persistSession({ access_token: 'old-access', refresh_token: 'old-refresh' });
-    (fetch as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(new TypeError('Failed to fetch'));
-
-    await expect(refreshAccessTokenOnce('old-refresh')).rejects.toBeInstanceOf(
-      TokenRefreshTransportError,
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new TypeError('Failed to fetch'),
     );
+
+    const attempt = refreshAccessTokenOnce('old-refresh');
+    const assertion = expect(attempt).rejects.toBeInstanceOf(TokenRefreshTransportError);
+    await vi.advanceTimersByTimeAsync(40);
+    await assertion;
     // Not an auth verdict: the session is not ended and the stored pair is intact.
     expect(isSessionEnded()).toBe(false);
     expect(loadCachedSession()).toMatchObject({ access_token: 'old-access' });
@@ -76,6 +79,8 @@ describe('TokenService transport failures (#565)', () => {
   it('still resolves null for a non-transport failure', async () => {
     (fetch as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('boom'));
 
-    await expect(refreshAccessTokenOnce('old-refresh')).resolves.toBeNull();
+    const attempt = refreshAccessTokenOnce('old-refresh');
+    await vi.advanceTimersByTimeAsync(40);
+    await expect(attempt).resolves.toBeNull();
   });
 });

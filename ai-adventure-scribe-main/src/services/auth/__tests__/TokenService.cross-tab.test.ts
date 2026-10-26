@@ -80,7 +80,7 @@ describe('TokenService cross-tab refresh coordination', () => {
     const first = tabOne.refreshAccessTokenOnce('old-refresh', 'old-access');
     const second = tabTwo.refreshAccessTokenOnce('old-refresh', 'old-access');
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await new Promise<void>((resolve) => setTimeout(resolve, 60));
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     resolveFetch({

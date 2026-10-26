@@ -37,10 +37,7 @@ describe('TokenService localStorage lease fallback for refresh lock', () => {
   it('waits while another owner holds a live lease and calls fetch once after lease key is cleared', async () => {
     const LEASE_KEY = 'aas_workos_token_refresh_lease';
     const now = Date.now();
-    localStorage.setItem(
-      LEASE_KEY,
-      JSON.stringify({ owner: 'other-tab', expiresAt: now + 10000 }),
-    );
+    localStorage.setItem(LEASE_KEY, JSON.stringify({ owner: 'other-tab', expiresAt: now + 10000 }));
 
     let resolveFetch!: (response: Response) => void;
     const fetchMock = vi.mocked(fetch);
@@ -60,7 +57,7 @@ describe('TokenService localStorage lease fallback for refresh lock', () => {
 
     localStorage.removeItem(LEASE_KEY);
 
-    await vi.advanceTimersByTimeAsync(50);
+    await vi.advanceTimersByTimeAsync(90);
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     resolveFetch({
@@ -91,9 +88,45 @@ describe('TokenService localStorage lease fallback for refresh lock', () => {
 
     const refreshPromise = refreshAccessToken('fake-refresh-2', 'fake-access-2');
 
+    await vi.advanceTimersByTimeAsync(40);
     const result = await refreshPromise;
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ accessToken: 'new-access-2', refreshToken: 'new-refresh-2' });
+  });
+
+  it('rechecks ownership after an interleaved contender write before refreshing', async () => {
+    const LEASE_KEY = 'aas_workos_token_refresh_lease';
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        accessToken: 'new-access-interleaved',
+        refreshToken: 'new-refresh-interleaved',
+      }),
+    } as Response);
+
+    vi.resetModules();
+    const { refreshAccessToken } = await import('../TokenService');
+    const refreshPromise = refreshAccessToken(
+      'fake-refresh-interleaved',
+      'fake-access-interleaved',
+    );
+
+    // A second tab wins the storage race during the settle window.
+    localStorage.setItem(
+      LEASE_KEY,
+      JSON.stringify({ owner: 'other-tab', expiresAt: Date.now() + 10000 }),
+    );
+    await vi.advanceTimersByTimeAsync(40);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    localStorage.removeItem(LEASE_KEY);
+    await vi.advanceTimersByTimeAsync(90);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await expect(refreshPromise).resolves.toEqual({
+      accessToken: 'new-access-interleaved',
+      refreshToken: 'new-refresh-interleaved',
+    });
   });
 
   it('renews the stored lease expiresAt while the refresh fetch is pending', async () => {
@@ -112,7 +145,7 @@ describe('TokenService localStorage lease fallback for refresh lock', () => {
 
     const refreshPromise = refreshAccessToken('fake-refresh-3', 'fake-access-3');
 
-    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(40);
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     const initialLeaseRaw = localStorage.getItem(LEASE_KEY);
@@ -148,7 +181,9 @@ describe('TokenService localStorage lease fallback for refresh lock', () => {
     vi.resetModules();
     const { refreshAccessToken } = await import('../TokenService');
 
-    const result = await refreshAccessToken('fake-refresh-4', 'fake-access-4');
+    const refreshPromise = refreshAccessToken('fake-refresh-4', 'fake-access-4');
+    await vi.advanceTimersByTimeAsync(40);
+    const result = await refreshPromise;
     expect(result).toEqual({ accessToken: 'new-access-4', refreshToken: 'new-refresh-4' });
     expect(localStorage.getItem(LEASE_KEY)).toBeNull();
   });
@@ -162,7 +197,9 @@ describe('TokenService localStorage lease fallback for refresh lock', () => {
     vi.resetModules();
     const { refreshAccessToken } = await import('../TokenService');
 
-    const result = await refreshAccessToken('fake-refresh-5', 'fake-access-5');
+    const refreshPromise = refreshAccessToken('fake-refresh-5', 'fake-access-5');
+    await vi.advanceTimersByTimeAsync(40);
+    const result = await refreshPromise;
     expect(result).toBeNull();
     expect(localStorage.getItem(LEASE_KEY)).toBeNull();
   });
