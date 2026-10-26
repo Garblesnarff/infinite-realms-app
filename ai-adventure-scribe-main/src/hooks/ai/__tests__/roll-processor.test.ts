@@ -153,6 +153,181 @@ describe('roll-processor', () => {
       });
     });
 
+    // #1086 (c): the roll request's skill must be the one the DM names. When the
+    // DM's narration asks for one skill check but the structured request names
+    // another skill, the dialog must roll the narrated skill — not the envelope's.
+    it('should rewrite a structured skill request to the skill the DM narration names (#1086 (c))', () => {
+      const responseText = 'Make an Insight check to judge whether he is lying. (DC 11)';
+      const structuredRequest = {
+        type: 'skill_check',
+        formula: '1d20+modifier',
+        purpose: 'Perception check',
+        dc: 11,
+        advantage: true,
+        rollRequestId: 'rr-1',
+      };
+
+      const result = parseAndAugmentRollRequests(responseText, [structuredRequest as any]);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        type: 'skill_check',
+        formula: '1d20+modifier',
+        purpose: 'Insight check',
+        dc: 11,
+        advantage: true,
+        rollRequestId: 'rr-1',
+      });
+    });
+
+    it('should leave a structured request alone when it already names the narrated skill', () => {
+      const result = parseAndAugmentRollRequests('Make an Insight check. (DC 11)', [
+        { type: 'skill_check', formula: '1d20+modifier', purpose: 'Insight check', dc: 11 } as any,
+      ]);
+      expect(result[0].purpose).toBe('Insight check');
+    });
+
+    it('should leave a structured request alone when the narration names no skill check', () => {
+      const result = parseAndAugmentRollRequests('You crouch low, scanning the room.', [
+        {
+          type: 'skill_check',
+          formula: '1d20+modifier',
+          purpose: 'Perception check',
+          dc: 13,
+        } as any,
+      ]);
+      expect(result[0].purpose).toBe('Perception check');
+    });
+
+    it('should leave structured requests alone when the narration names two different skills', () => {
+      const result = parseAndAugmentRollRequests(
+        'Make an Insight check. Then roll a Perception check.',
+        [
+          {
+            type: 'skill_check',
+            formula: '1d20+modifier',
+            purpose: 'Perception check',
+            dc: 11,
+          } as any,
+        ],
+      );
+      expect(result[0].purpose).toBe('Perception check');
+    });
+
+    it('should leave structured requests alone when two skill requests are present', () => {
+      const result = parseAndAugmentRollRequests('Make an Insight check. (DC 11)', [
+        {
+          type: 'skill_check',
+          formula: '1d20+modifier',
+          purpose: 'Perception check',
+          dc: 11,
+        } as any,
+        {
+          type: 'skill_check',
+          formula: '1d20+modifier',
+          purpose: 'Investigation check',
+          dc: 12,
+        } as any,
+      ]);
+      expect(result.map((r) => r.purpose)).toEqual(['Perception check', 'Investigation check']);
+    });
+
+    it('should leave an ability-only request alone even when the narration names a skill', () => {
+      const result = parseAndAugmentRollRequests('Make an Insight check. (DC 11)', [
+        { type: 'check', formula: '1d20+wis', purpose: 'Wisdom check', dc: 11 } as any,
+      ]);
+      expect(result[0].purpose).toBe('Wisdom check');
+    });
+
+    it('should title-case a multi-word narrated skill the way the text parser does', () => {
+      const result = parseAndAugmentRollRequests('Make a sleight of hand check. (DC 12)', [
+        {
+          type: 'skill_check',
+          formula: '1d20+modifier',
+          purpose: 'Perception check',
+          dc: 12,
+        } as any,
+      ]);
+      expect(result[0].purpose).toBe('Sleight Of Hand check');
+    });
+
+    it('should replace only the declared skill term, preserving trailing context', () => {
+      const result = parseAndAugmentRollRequests(
+        'Make an Insight check to judge whether he is lying.',
+        [
+          {
+            type: 'skill_check',
+            formula: '1d20+modifier',
+            purpose: 'Perception check to spot the trap',
+            dc: 11,
+          } as any,
+        ],
+      );
+      expect(result[0].purpose).toBe('Insight check to spot the trap');
+    });
+
+    it('should preserve a tool mention elsewhere in the purpose', () => {
+      const result = parseAndAugmentRollRequests('Make an Insight check.', [
+        {
+          type: 'skill_check',
+          formula: '1d20+modifier',
+          purpose: 'Perception check to pick the lock with thieves tools',
+          dc: 11,
+        } as any,
+      ]);
+      expect(result[0].purpose).toBe('Insight check to pick the lock with thieves tools');
+    });
+
+    it('should rewrite only the skill request in a mixed envelope, leaving the attack byte-identical', () => {
+      const result = parseAndAugmentRollRequests('Make an Insight check. (DC 11)', [
+        { type: 'attack', formula: '1d20+5', purpose: 'Longsword attack', ac: 14 } as any,
+        {
+          type: 'skill_check',
+          formula: '1d20+modifier',
+          purpose: 'Perception check',
+          dc: 11,
+        } as any,
+      ]);
+      expect(result).toHaveLength(2);
+      expect(result[0]).toMatchObject({ type: 'attack', purpose: 'Longsword attack', ac: 14 });
+      expect(result[1].purpose).toBe('Insight check');
+    });
+
+    it('should rewrite on "roll for an <skill> check" and "roll <skill>" phrasings', () => {
+      const request = {
+        type: 'skill_check',
+        formula: '1d20+modifier',
+        purpose: 'Perception check',
+        dc: 11,
+      } as any;
+      expect(
+        parseAndAugmentRollRequests('Please roll for an Insight check.', [request])[0].purpose,
+      ).toBe('Insight check');
+      expect(parseAndAugmentRollRequests('Roll Insight.', [request])[0].purpose).toBe(
+        'Insight check',
+      );
+    });
+
+    it('should leave an engine-owned skill request alone even when the narration names another skill', () => {
+      const result = parseAndAugmentRollRequests('Make an Insight check. (DC 11)', [
+        {
+          type: 'skill_check',
+          formula: '1d20+5',
+          purpose: 'Perception check',
+          dc: 11,
+          engineOwned: true,
+        } as any,
+      ]);
+      expect(result[0].purpose).toBe('Perception check');
+    });
+
+    it('should leave an ability-only request alone when its skill comes only from the formula', () => {
+      const result = parseAndAugmentRollRequests('Make an Insight check. (DC 11)', [
+        { type: 'check', formula: '1d20+perception', purpose: 'Wisdom check', dc: 11 } as any,
+      ]);
+      expect(result[0].purpose).toBe('Wisdom check');
+    });
+
     it('should add automatic damage roll on successful attack if awaiting damage', () => {
       const responseText = 'Your longsword hits the goblin!';
       (detectsSuccessfulAttack as any).mockReturnValue(true);
