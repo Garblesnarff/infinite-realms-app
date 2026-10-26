@@ -160,11 +160,7 @@ describe('#1067 follow-up: the stream is normalized too', () => {
     let emitted = '';
     for (let i = 0; i <= raw.length; i++) {
       const preview = extractPartialNarration(raw.slice(0, i));
-      if (
-        preview !== null &&
-        preview.length > emitted.length &&
-        preview.startsWith(emitted)
-      ) {
+      if (preview !== null && preview.length > emitted.length && preview.startsWith(emitted)) {
         emitted = preview;
       }
     }
@@ -210,9 +206,7 @@ describe('#1067 follow-up: the stream is normalized too', () => {
   it('never emits an inline lettered list, and releases a lone A. item once prose follows', () => {
     const story = 'The hollow yawns before you, dark and cold.';
     const raw = JSON.stringify({
-      text:
-        story +
-        ' A. Race for the hollow. B. Hide among the roots. The wind answers nothing.',
+      text: story + ' A. Race for the hollow. B. Hide among the roots. The wind answers nothing.',
       options: [],
     });
     const emitted = simulateStream(raw);
@@ -232,14 +226,46 @@ describe('#1067 follow-up: the stream is normalized too', () => {
     const story = 'The prince studies you, waiting for an answer.';
     const raw = JSON.stringify({
       text:
-        story +
-        ' Options are not shown here; choose your next move. The room holds its breath.',
+        story + ' Options are not shown here; choose your next move. The room holds its breath.',
       options: [],
     });
     const emitted = simulateStream(raw);
     expect(emitted.includes('Options are not shown here')).toBe(false);
     expect(emitted.includes('choose your next move')).toBe(false);
     expect(emitted.includes('The room holds its breath.')).toBe(true);
+  });
+
+  it('#1067 V-008: never emits the long trailing tracker run (Scene group with commas)', () => {
+    const story = 'The king smiles and says nothing more.';
+    const raw = JSON.stringify({
+      text:
+        story +
+        ' [HP 100/100] [Clock 6/6] [Contentment 0] [Spare Wish: unused] ' +
+        "[Prince's tricks left: 2] [Scene: the Palace of the Contented King, the throne room, sunset]",
+      options: [],
+    });
+    const emitted = simulateStream(raw);
+    expect(emitted.includes('[')).toBe(false);
+    expect(emitted.includes('Contented King')).toBe(false);
+    expect(story.startsWith(emitted.trimEnd())).toBe(true);
+  });
+
+  it('#1067 V-009: never emits the player-input meta sentence, and converges when prose follows', () => {
+    const story = 'The king smiles and says nothing more.';
+    const raw = JSON.stringify({
+      text: story + ' Player input is required on what you do next.',
+      options: [],
+    });
+    const emitted = simulateStream(raw);
+    expect(emitted.includes('Player input')).toBe(false);
+    expect(story.startsWith(emitted.trimEnd())).toBe(true);
+    const followed = JSON.stringify({
+      text: story + ' Player input is required on what you do next. The court waits.',
+      options: [],
+    });
+    const followedEmitted = simulateStream(followed);
+    expect(followedEmitted.includes('Player input')).toBe(false);
+    expect(followedEmitted.includes('The court waits.')).toBe(true);
   });
 
   it('never emits a tool-parameter block, including its partial argument tail', () => {
@@ -290,9 +316,7 @@ describe('#1067 follow-up: the stream is normalized too', () => {
     expect(emitted).toBe(finalText(text));
     const arent =
       "The prince studies you. The options aren't shown here. The room holds its breath.";
-    expect(simulateStream(JSON.stringify({ text: arent, options: [] }))).toBe(
-      finalText(arent),
-    );
+    expect(simulateStream(JSON.stringify({ text: arent, options: [] }))).toBe(finalText(arent));
   });
 
   it('an A/B/C list converges exactly, including the bare-C boundary (self-review Required 2)', () => {
@@ -312,15 +336,12 @@ describe('#1067 follow-up: the stream is normalized too', () => {
   });
 
   it('an unterminated bracket releases once it breaks tracker shape (self-review Required 4)', () => {
-    const text =
-      'Story here. [to himself, walking on and on through the dark forest road.';
+    const text = 'Story here. [to himself, walking on and on through the dark forest road.';
     const emitted = simulateStream(JSON.stringify({ text, options: [] }));
     expect(emitted).toBe(finalText(text));
     expect(emitted.includes('walking on and on')).toBe(true);
     // ...but a tracker-plausible prefix is still held.
-    const held = simulateStream(
-      JSON.stringify({ text: 'Story here. [HP 18/?', options: [] }),
-    );
+    const held = simulateStream(JSON.stringify({ text: 'Story here. [HP 18/?', options: [] }));
     expect(held.includes('[HP')).toBe(false);
   });
 });

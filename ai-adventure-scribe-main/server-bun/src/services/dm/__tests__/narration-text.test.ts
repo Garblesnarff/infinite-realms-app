@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { normalizeReplyNarration } from '../narration-text.js';
+import { normalizePartialNarration, normalizeReplyNarration } from '../narration-text.js';
 
 /**
  * #1067: the server normalizer (#875/#992, extended here) must strip the
@@ -48,9 +48,7 @@ describe('normalizeReplyNarration #1067 artifact strips', () => {
     expect(dangling.kind).toBe('stripped');
     // Dangling fragment followed by real prose: only the tag goes, the
     // prose tail survives (the tail is not purely the tool argument).
-    const proseTail = normalizedText(
-      'Story.<parameter name="options">She turns and runs.',
-    );
+    const proseTail = normalizedText('Story.<parameter name="options">She turns and runs.');
     expect(proseTail.text).toBe('Story.She turns and runs.');
     expect(proseTail.kind).toBe('stripped');
   });
@@ -124,9 +122,7 @@ describe('normalizeReplyNarration #1067 new shapes (follow-up)', () => {
         'The wind answers nothing.',
     );
     expect(kind).toBe('stripped');
-    expect(text).toBe(
-      'The hollow yawns before you, dark and cold. The wind answers nothing.',
-    );
+    expect(text).toBe('The hollow yawns before you, dark and cold. The wind answers nothing.');
   });
 
   test('shape (d): an options:-labelled list mid-text still leaks (the #1081 pin owns that shape)', () => {
@@ -307,12 +303,68 @@ describe('normalizeReplyNarration #1067 regression pins', () => {
   });
 
   test('the structured options field is untouched by every strip', () => {
-    const env = envelope(
-      'The prince waits. options: A. Give the password. B. Refuse.',
-    );
+    const env = envelope('The prince waits. options: A. Give the password. B. Refuse.');
     env.options = ['Give the password', 'Refuse'];
     expect(normalizeReplyNarration(env)).toBe('stripped');
     expect(env.text).toBe('The prince waits.');
     expect(env.options).toEqual(['Give the password', 'Refuse']);
+  });
+});
+
+const BRACKET_RUN_1067 =
+  '[HP 100/100] [Clock 6/6] [Contentment 0] [Spare Wish: unused] ' +
+  "[Prince's tricks left: 2] [Scene: the Palace of the Contented King, the throne room, sunset]";
+
+describe('normalizeReplyNarration #1067 V-008/V-009', () => {
+  const story = 'The king smiles and says nothing more.';
+
+  test('strips the long trailing bracket tracker run', () => {
+    const { text, kind } = normalizedText(story + ' ' + BRACKET_RUN_1067);
+    expect(kind).toBe('stripped');
+    expect(text).toBe(story);
+  });
+
+  test('strips the player input is required meta sentence', () => {
+    const { text, kind } = normalizedText(
+      'The king smiles and says nothing more. Player input is required on what you do next.',
+    );
+    expect(kind).toBe('stripped');
+    expect(text).toBe('The king smiles and says nothing more.');
+  });
+
+  test('untouched: a single trailing long group', () => {
+    const input =
+      'The throne room glows. [Scene: the Palace of the Contented King, the throne room, sunset]';
+    const { text, kind } = normalizedText(input);
+    expect(kind).toBeNull();
+    expect(text).toBe(input);
+  });
+
+  test('untouched: one bracket group mid-sentence', () => {
+    const input = 'The herald reads [Spare Wish: unused] aloud and bows.';
+    const { text, kind } = normalizedText(input);
+    expect(kind).toBeNull();
+    expect(text).toBe(input);
+  });
+
+  test('untouched: a mid-sentence mention of player input is required', () => {
+    const input = 'The oracle says that player input is required on what you do next.';
+    const { text, kind } = normalizedText(input);
+    expect(kind).toBeNull();
+    expect(text).toBe(input);
+  });
+});
+
+describe('normalizePartialNarration #1067 V-008/V-009', () => {
+  const story = 'The king smiles and says nothing more.';
+
+  test('holds back the long trailing bracket tracker run', () => {
+    expect(normalizePartialNarration(story + ' ' + BRACKET_RUN_1067)).toBe(story);
+  });
+
+  test('holds back the player input is required meta sentence', () => {
+    expect(
+      normalizePartialNarration(story + ' Player input is required on what you do next.'),
+    ).toBe(story);
   });
 });
