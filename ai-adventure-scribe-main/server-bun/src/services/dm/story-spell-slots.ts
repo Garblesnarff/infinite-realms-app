@@ -74,12 +74,13 @@ async function castingClassName(
  */
 export async function playerMessage(
   sessionId: string,
-): Promise<{ createdAt: Date | null; context: unknown; message: string } | null> {
+): Promise<{ id: string; createdAt: Date | null; context: unknown; message: string } | null> {
   const { db } = await import('../../../../db/client');
   const { and, desc, eq } = await import('drizzle-orm');
   const { dialogueHistory } = await import('../../../../db/schema/index');
   const [row] = await db
     .select({
+      id: dialogueHistory.id,
       createdAt: dialogueHistory.createdAt,
       context: dialogueHistory.context,
       message: dialogueHistory.message,
