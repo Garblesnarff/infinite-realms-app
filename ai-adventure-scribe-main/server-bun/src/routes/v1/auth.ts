@@ -52,7 +52,8 @@ function normalizeReturnTo(value: string | undefined): string | null {
       value,
       process.env.CORS_ORIGIN?.split(',')[0] || 'https://infiniterealms.app',
     );
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    return path.startsWith('//') ? null : path;
   } catch {
     return null;
   }

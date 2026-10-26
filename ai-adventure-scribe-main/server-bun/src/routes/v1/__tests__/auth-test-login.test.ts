@@ -115,6 +115,16 @@ describe('GET /v1/auth/login return destinations', () => {
     expect(await response.json()).toEqual({ error: 'Invalid return destination' });
     expect(lastAuthorizationUrl).toBeNull();
   });
+
+  it('refuses a normalized protocol-relative return destination at the real login route', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/v1/auth/login?returnTo=%2F.%2F%2Fevil.example%2Fsteal'),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'Invalid return destination' });
+    expect(lastAuthorizationUrl).toBeNull();
+  });
 });
 
 describe('GET /v1/auth/test-login', () => {

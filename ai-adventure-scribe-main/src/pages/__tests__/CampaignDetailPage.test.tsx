@@ -374,15 +374,18 @@ describe('CampaignDetailPage heroes (#89)', () => {
 
     const originalLocation = window.location;
     delete (window as unknown as { location?: Location }).location;
-    window.location = { ...originalLocation, href: '' } as Location;
+    try {
+      window.location = { ...originalLocation, href: '' } as Location;
 
-    fireEvent.click(screen.getByText('Sign in to play as Bram'));
+      fireEvent.click(screen.getByText('Sign in to play as Bram'));
 
-    expect(window.location.href).toBe(
-      '/v1/auth/login?returnTo=%2Fexplore%2Fthe-eternal-feast%23heroes',
-    );
-    expect(state.seed).not.toHaveBeenCalled();
-    window.location = originalLocation;
+      expect(window.location.href).toBe(
+        '/v1/auth/login?returnTo=%2Fexplore%2Fthe-eternal-feast%23heroes',
+      );
+      expect(state.seed).not.toHaveBeenCalled();
+    } finally {
+      window.location = originalLocation;
+    }
   });
 
   it('auto-starts the pending hero when returning from sign-in', async () => {
