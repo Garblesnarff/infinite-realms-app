@@ -11,12 +11,14 @@ import { concludeEncounter } from './combat-ending.js';
 import { trackCombatEvent } from './combat-events.js';
 import { resolveCombatIntentRefsWithRetry } from './combat-intent-refs.js';
 import { assertActorTurn } from './combat-intent-turn.js';
+import { resolveUseItem, type ResolveUseItemResult } from './combat-item-service.js';
 import { buildCombatWeaponOptions, type WeaponTargetResolution } from './combat-weapon-options.js';
 import {
   getParticipantAbilityProfile,
   getActiveConditionNames,
   listCarriedWeaponProfiles,
   listEquippedWeaponProfiles,
+  listHealingConsumables,
 } from './data-access.js';
 import {
   describeGoingDown,
@@ -161,7 +163,12 @@ export type CombatIntent =
    * Action Surge costs no action itself and grants one additional action this turn. Both
    * spend the tracked use on the character's sheet.
    */
-  | { type: 'second_wind' | 'action_surge'; actorId: string; expectedVersion: number };
+  | { type: 'second_wind' | 'action_surge'; actorId: string; expectedVersion: number }
+  /**
+   * Drinking a healing consumable (#1147). Costs the Action and spends the item; the
+   * resolver heals first and decrements second, refusing at full health before spending.
+   */
+  | { type: 'use_item'; actorId: string; itemId: string; expectedVersion: number };
 
 export type CombatActionSource = 'player' | 'dm';
 
@@ -198,6 +205,8 @@ const PLAYER_ORIGIN_GUARDED_TYPES = new Set([
   // declaration must not burn it without the player's input, like any other action.
   'second_wind',
   'action_surge',
+  // #1147: an item spend is the player's own resource, same as a feature spend.
+  'use_item',
 ]);
 
 /**
@@ -266,6 +275,7 @@ const VERSIONED_INTENT_TYPES = new Set([
   'yield',
   'second_wind',
   'action_surge',
+  'use_item',
 ]);
 
 /**
@@ -531,6 +541,31 @@ async function recordFeatureActionFact(
     actorSlug: engineSlugForParticipant(map, actorId, label),
     actorIsPlayer: participant?.participantType === 'player',
   });
+}
+
+/**
+ * The engine fact for a resolved item use (#1147), sibling to the feature fact above:
+ * without it the DM has nothing to narrate for a drunk potion but its own invention —
+ * the Fabrication fail #1143 removed the control over.
+ */
+async function recordItemUseFact(
+  sessionId: string,
+  state: CombatState,
+  actorId: string,
+  result: ResolveUseItemResult,
+): Promise<void> {
+  const participant = state.participants.find((p) => p.id === actorId);
+  const label = facingName(participant?.name, actorId, rosterFrom(state.participants));
+  const map = await loadActiveTacticalMap(sessionId);
+  await recordDmTacticalFact(
+    sessionId,
+    `${label} used ${result.itemName} and regained ${result.healed} HP.`,
+    {
+      kind: 'use_item',
+      actorSlug: engineSlugForParticipant(map, actorId, label),
+      actorIsPlayer: participant?.participantType === 'player',
+    },
+  );
 }
 
 type CombatState = Awaited<ReturnType<typeof CombatEncounterService.getCombatState>>;
@@ -1853,6 +1888,39 @@ export async function executeCombatIntent(
         'action_surge',
         result as ActionSurgeResult,
       );
+    } else if (intent.type === 'use_item') {
+      // #1147: drinking a healing consumable costs the Action. The claim wraps the
+      // resolution, so a refusal inside (not owned, not a consumable, no healing
+      // dice, none left, already at full health) refunds the Action and the turn
+      // is untouched — the item and the HP are never spent on a refusal.
+      const actorCharacterId = (actor as unknown as { characterId?: string | null }).characterId;
+      result = await claimTurnActionAndResolve(
+        intent.actorId,
+        encounterId,
+        intent.expectedVersion,
+        async () => {
+          if (!actorCharacterId) {
+            throw new BusinessLogicError("Use item is not on this character's sheet", {
+              reason: 'feature_not_on_sheet',
+              featureName: 'Use item',
+            });
+          }
+          return resolveUseItem({
+            characterId: actorCharacterId,
+            userId,
+            participantId: intent.actorId,
+            encounterId,
+            sessionId: encounter.sessionId,
+            itemId: intent.itemId,
+          });
+        },
+      );
+      await recordItemUseFact(
+        encounter.sessionId,
+        state,
+        intent.actorId,
+        result as ResolveUseItemResult,
+      );
     } else if (intent.type === 'death_save') {
       // The dying player's whole turn: one save, rolled by the player (or auto-rolled by the
       // prompt's timer), then the turn ends. It runs before the board moves so the result and
@@ -2088,7 +2156,12 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
       encounterId,
       version: state.encounter.version,
       actorId: actor.id,
-      actions: [{ type: 'death_save', label: 'Death saving throw' }],
+      // The same element type as the main path below: without it the inferred
+      // return type is a union and callers cannot read per-type fields (#1148's
+      // test reads targetIds off the spell/attack actions).
+      actions: [{ type: 'death_save', label: 'Death saving throw' }] as Array<
+        { type: LegalActionType } & Record<string, unknown>
+      >,
     };
   }
   const map = await loadActiveTacticalMap(state.encounter.sessionId);
@@ -2227,6 +2300,22 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
             equipFirst: true,
           }),
         );
+      }
+    }
+    // #1147: one Use chip per healing consumable on the sheet, gated on being hurt
+    // like Second Wind below: the resolver refuses at full health before spending
+    // anything, so a chip at full health could only produce a refusal.
+    if (actor.participantType === 'player' && actor.characterId) {
+      const actorCurrentHp = actor.status?.currentHp ?? actor.maxHp ?? 0;
+      if (actorCurrentHp < (actor.maxHp ?? 0)) {
+        const consumables = await listHealingConsumables(actor.characterId);
+        for (const consumable of consumables) {
+          actions.push({
+            type: 'use_item',
+            label: `Use ${consumable.name}`,
+            itemId: consumable.id,
+          });
+        }
       }
     }
     actions.push(

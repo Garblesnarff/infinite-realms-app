@@ -32,6 +32,12 @@ const actionSurgeAction: LegalAction = { type: 'action_surge', label: 'Action Su
 // Labels as getLegalCombatActions builds them: `Flee (N attacks)` when foes are adjacent.
 const fleeAction: LegalAction = { type: 'flee', label: 'Flee (2 attacks)' };
 const yieldAction: LegalAction = { type: 'yield', label: 'Yield' };
+// Label as getLegalCombatActions builds it: `Use {name}` per healing consumable (#1147).
+const useItemAction: LegalAction = {
+  type: 'use_item',
+  label: 'Use Potion of Healing',
+  itemId: 'potion-1',
+};
 
 const nameOf = (id: string): string =>
   id === 'goblin-1' ? 'Goblin' : id === 'goblin-2' ? 'Goblin 2' : id;
@@ -273,7 +279,15 @@ describe('CombatActionBar', () => {
     it('places every action type the server can return', () => {
       const types = serverLegalActionTypes();
       expect(types).toEqual(
-        expect.arrayContaining(['attack', 'spell', 'dash', 'flee', 'yield', 'end_turn']),
+        expect.arrayContaining([
+          'attack',
+          'spell',
+          'dash',
+          'flee',
+          'yield',
+          'end_turn',
+          'use_item',
+        ]),
       );
       for (const type of types) expect(Object.keys(LEGAL_ACTION_PLACEMENT)).toContain(type);
     });
@@ -291,6 +305,7 @@ describe('CombatActionBar', () => {
         action_surge: actionSurgeAction,
         flee: fleeAction,
         yield: yieldAction,
+        use_item: useItemAction,
         death_save: { type: 'death_save', label: 'Death saving throw' },
       };
       expect(Object.keys(oneOfEach).sort()).toEqual(Object.keys(LEGAL_ACTION_PLACEMENT).sort());

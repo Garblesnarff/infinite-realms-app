@@ -118,7 +118,8 @@ export interface DmFactAction {
     | 'disengage'
     | 'death_save'
     | 'second_wind'
-    | 'action_surge';
+    | 'action_surge'
+    | 'use_item';
   /** Engine slug of the actor (the tactical digest id). */
   actorSlug: string;
   actorIsPlayer: boolean;

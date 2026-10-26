@@ -454,6 +454,8 @@ function actionSentence(
       return `${voice.subject} use${s} Second Wind.`;
     case 'action_surge':
       return `${voice.subject} use${s} Action Surge.`;
+    case 'use_item':
+      return `${voice.subject} use${s} an item.`;
     default:
       return `${voice.subject} take${s} an action.`;
   }

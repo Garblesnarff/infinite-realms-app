@@ -12,6 +12,7 @@ const markPlayerDamageProvocation = vi.fn();
 const random = vi.spyOn(Math, 'random');
 
 vi.mock('../combat/data-access.js', () => ({
+  listHealingConsumables: vi.fn(async () => []),
   getParticipantWithStats: vi.fn(),
   getParticipantsWithStatsBatch,
   getWeaponAttack: vi.fn(),

@@ -112,6 +112,8 @@ export type ClientCombatIntent =
   | { type: 'dash' | 'dodge' | 'disengage'; actorId: string; expectedVersion?: number }
   /** #975: the Fighter's short-rest features; the server spends the tracked use. */
   | { type: 'second_wind' | 'action_surge'; actorId: string; expectedVersion?: number }
+  /** #1147: drinking a healing consumable; the server heals, then spends the item. */
+  | { type: 'use_item'; actorId: string; itemId: string; expectedVersion?: number }
   /** #2580: the player's own exits — the way out of a fight nothing else can end. */
   | { type: 'flee' | 'yield'; actorId: string; expectedVersion?: number }
   /**
@@ -151,6 +153,7 @@ const INTENT_TYPES_REQUIRING_VERSION = new Set([
   'yield',
   'second_wind',
   'action_surge',
+  'use_item',
 ]);
 
 type VersionedClientIntent = Extract<ClientCombatIntent, { expectedVersion?: number }>;

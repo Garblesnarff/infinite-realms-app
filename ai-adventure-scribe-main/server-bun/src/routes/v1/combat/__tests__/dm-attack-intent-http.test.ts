@@ -228,6 +228,7 @@ mock.module('../../../../services/combat/combat-attack-service.js', () => ({
 // The sheet-reading leaf. `weapon-grounding` on top of it is the real thing, so what these
 // tests exercise is the grounding rule, not a stub of it.
 mock.module('../../../../services/combat/data-access.js', () => ({
+  listHealingConsumables: async () => [],
   listEquippedWeaponProfiles: async (participant: { id: string }) =>
     equippedByActor[participant.id] ?? [],
   listCarriedWeaponProfiles: async (participant: { id: string }) =>

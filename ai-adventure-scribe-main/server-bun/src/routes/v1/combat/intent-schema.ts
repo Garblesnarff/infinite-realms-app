@@ -131,6 +131,17 @@ const fighterFeatureFields = {
   actionId,
 };
 
+/**
+ * Drinking a healing consumable (#1147): the item spent, like the feature fields above
+ * versioned because it mutates the sheet (quantity) and the board (HP).
+ */
+const itemFields = {
+  type: t.Literal('use_item'),
+  actorId: participantId,
+  actionId,
+  itemId: t.String({ minLength: 1, maxLength: 255 }),
+};
+
 const playerCombatIntentSchema = t.Union([
   ...unversionedIntentVariants,
   t.Object({ ...attackFields, expectedVersion }),
@@ -138,6 +149,7 @@ const playerCombatIntentSchema = t.Union([
   t.Object({ ...checkFields, expectedVersion }),
   t.Object({ ...defensiveFields, expectedVersion }),
   t.Object({ ...fighterFeatureFields, expectedVersion }),
+  t.Object({ ...itemFields, expectedVersion }),
 ]);
 
 /**
@@ -155,6 +167,7 @@ const dmCombatIntentSchema = t.Union([
   t.Object({ ...checkFields, expectedVersion: t.Optional(expectedVersion) }),
   t.Object({ ...defensiveFields, expectedVersion: t.Optional(expectedVersion) }),
   t.Object({ ...fighterFeatureFields, expectedVersion: t.Optional(expectedVersion) }),
+  t.Object({ ...itemFields, expectedVersion: t.Optional(expectedVersion) }),
 ]);
 
 /**

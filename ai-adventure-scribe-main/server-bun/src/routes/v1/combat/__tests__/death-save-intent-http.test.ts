@@ -171,6 +171,7 @@ mock.module('../../../../services/combat/combat-attack-service.js', () => ({
   CombatAttackService: class {},
 }));
 mock.module('../../../../services/combat/data-access.js', () => ({
+  listHealingConsumables: async () => [],
   listEquippedWeaponProfiles: async () => [],
   listCarriedWeaponProfiles: async () => [],
   getEquippedWeaponProfile: async () => ({}),

@@ -447,6 +447,26 @@ describe('fighter feature engine lines (#975)', () => {
     expect(parts).toHaveLength(1);
     expect(parts[0].line).toContain('used Action Surge — one additional action this turn');
   });
+
+  it('Use item names the item, the healed amount, and the new HP (#1147)', () => {
+    const parts = formatCombatActionParts(
+      { actor_id: 'ghorza', action_type: 'use_item', target_ids: [] },
+      {
+        applied: true,
+        action: 'use_item',
+        itemName: 'Potion of Healing',
+        itemId: 'potion-1',
+        healed: 9,
+        newHp: 18,
+        maxHp: 20,
+        remainingQuantity: 1,
+        itemDeleted: false,
+      },
+      [{ id: 'ghorza', name: 'Ghorza' }],
+    );
+    expect(parts).toHaveLength(1);
+    expect(parts[0].line).toContain('used Potion of Healing and regained 9 HP (HP 18/20)');
+  });
 });
 describe('combat end line player text (#976)', () => {
   // Every member of the CombatEndReason union (server-bun/src/types/combat.ts),

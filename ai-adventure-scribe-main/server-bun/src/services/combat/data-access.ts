@@ -11,8 +11,9 @@
 
 /* eslint-disable max-lines */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { and, asc, desc, eq, exists, inArray, or, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, exists, gt, inArray, or, isNotNull, sql } from 'drizzle-orm';
 
+import { parseHealingDice } from './combat-healing-dice.js';
 import { isEquippedWeaponCandidate } from './combat-weapon-options.js';
 import {
   catalogWeaponIsRanged,
@@ -239,6 +240,40 @@ export async function listEquippedWeaponProfiles(participant: any): Promise<Weap
   // all. Its attack profile was resolved and stored when combat started (see
   // `combat-encounter-service.startCombat`), so this reads a decision rather than making one.
   return storedMonsterWeapons;
+}
+
+export interface HealingConsumable {
+  id: string;
+  name: string;
+  healingDice: string;
+}
+
+/**
+ * Every consumable on the character's sheet that the engine can resolve, in a stable order.
+ *
+ * #1147: only consumables whose properties carry a parseable healing-dice expression are
+ * offered — the engine has no model for any other item effect, and offering one would let the
+ * DM narrate an effect the engine never produced (the #1143 Fabrication fail, in reverse).
+ */
+export async function listHealingConsumables(characterId: string): Promise<HealingConsumable[]> {
+  const rows = await db
+    .select()
+    .from(inventoryItems)
+    .where(
+      and(
+        eq(inventoryItems.characterId, characterId),
+        eq(inventoryItems.itemType, 'consumable'),
+        gt(inventoryItems.quantity, 0),
+      ),
+    )
+    .orderBy(asc(inventoryItems.createdAt), asc(inventoryItems.id));
+  const consumables: HealingConsumable[] = [];
+  for (const row of rows) {
+    const healingDice = parseInventoryProperties(row.properties).healingDice;
+    if (typeof healingDice !== 'string' || !parseHealingDice(healingDice)) continue;
+    consumables.push({ id: row.id, name: row.name, healingDice });
+  }
+  return consumables;
 }
 
 /**

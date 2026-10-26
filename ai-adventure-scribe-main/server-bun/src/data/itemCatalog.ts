@@ -59,6 +59,23 @@ function toItemType(category: Equipment['category']): string {
   }
 }
 
+/**
+ * #1147 FIX round: the healing a story-granted potion restores. The SRD rows
+ * carry no machine-readable field for it (their descriptions spell it out in
+ * prose), and the catalog builds properties from weapon/armor stats only, so
+ * without this table a granted Potion of Healing lands with no healingDice and
+ * the offer filter never sees it. Keyed on the canonical catalog name (the
+ * same trim + lowercase as byName); the values are the SRD Potions of Healing
+ * table. A name in this table is a consumable with healing dice, not the
+ * gear -> equipment default.
+ */
+const HEALING_DICE_BY_NAME: Record<string, string> = {
+  'potion of healing': '2d4+2',
+  'potion of greater healing': '4d4+4',
+  'potion of superior healing': '8d4+8',
+  'potion of supreme healing': '10d4+20',
+};
+
 /** Case-insensitive catalog lookup. Null when the name is not cataloged. */
 export function resolveCatalogItem(name: string): CatalogItem | null {
   const item = byName.get(name.trim().toLowerCase());
@@ -73,9 +90,11 @@ export function resolveCatalogItem(name: string): CatalogItem | null {
   if (item.armorType) stats.armorType = item.armorType;
   if (item.isMagic) stats.isMagic = true;
   if (item.magicItemRarity) stats.magicItemRarity = item.magicItemRarity;
+  const healingDice = HEALING_DICE_BY_NAME[item.name.trim().toLowerCase()];
+  if (healingDice) stats.healingDice = healingDice;
   return {
     name: item.name,
-    itemType: toItemType(item.category),
+    itemType: healingDice ? 'consumable' : toItemType(item.category),
     weight: typeof item.weight === 'number' ? item.weight : 0,
     description: item.description || 'Found in the story',
     properties: Object.keys(stats).length ? JSON.stringify(stats) : null,

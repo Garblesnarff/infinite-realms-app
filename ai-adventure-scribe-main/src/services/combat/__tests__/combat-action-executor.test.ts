@@ -90,6 +90,26 @@ describe('combat-action-executor', () => {
       expect(result).toBe('dash-success');
     });
 
+    it('should post a use_item intent with its itemId intact (#1147)', async () => {
+      const intent = { type: 'use_item' as const, actorId: 'actor-1', itemId: 'potion-1' };
+      const mockResponse = { ok: true, json: async () => ({ result: 'use-item-success' }) };
+      (globalThis.fetch as any).mockResolvedValue(mockResponse);
+
+      const result = await executeAuthoritativeCombatIntent(encounterId, intent, 'dm', 12345);
+
+      // The dm source skips the version fill: the hook sends the chip as-is, and the server's
+      // dm dialect carries expectedVersion as optional.
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        'http://localhost:8888/v1/combat/encounter-123/intent',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ intent, source: 'dm', dmStartedAt: 12345 }),
+        }),
+      );
+      expect(result).toBe('use-item-success');
+    });
+
     it('should fetch the combat status first if a player intent has no expectedVersion', async () => {
       const intent = { type: 'dash' as const, actorId: 'actor-1', expectedVersion: undefined };
 
