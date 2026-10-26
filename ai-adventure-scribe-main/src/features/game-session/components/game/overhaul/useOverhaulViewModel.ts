@@ -418,6 +418,25 @@ export function buildCharacterSheet(
   };
 }
 
+export function buildEncounterCombatants(
+  encounter: CombatEncounter | null,
+  turn: ReturnType<typeof summarizeCombatTurn>,
+): CombatantVM[] {
+  return (encounter?.participants ?? [])
+    .filter((p) => p.isActive !== false)
+    .slice()
+    .sort((a, b) => (b.initiative ?? 0) - (a.initiative ?? 0))
+    .map((p) => ({
+      id: p.id,
+      initiative: p.initiative ?? 0,
+      // #876: the tracker shows the same facing name as the feed and turn bar.
+      name: p.displayName ?? p.name,
+      isEnemy: isHostileParticipantType(p.participantType),
+      isActive: encounter?.currentTurnParticipantId === p.id,
+      state: turn?.actors.find((actor) => actor.id === p.id)?.state,
+    }));
+}
+
 /**
  * Adapts the live game contexts (campaign / character / combat) into the
  * presentational GameOverhaulViewModel consumed by the navy+gold side rails.
@@ -503,18 +522,7 @@ export function useOverhaulViewModel(opts?: {
     const sheet = buildCharacterSheet(character, liveVitalState, encounter);
 
     const turn = summarizeCombatTurn(encounter);
-    const combatants: CombatantVM[] = (encounter?.participants ?? [])
-      .filter((p) => p.isActive !== false)
-      .slice()
-      .sort((a, b) => (b.initiative ?? 0) - (a.initiative ?? 0))
-      .map((p) => ({
-        id: p.id,
-        initiative: p.initiative ?? 0,
-        name: p.name,
-        isEnemy: isHostileParticipantType(p.participantType),
-        isActive: encounter?.currentTurnParticipantId === p.id,
-        state: turn?.actors.find((actor) => actor.id === p.id)?.state,
-      }));
+    const combatants: CombatantVM[] = buildEncounterCombatants(encounter, turn);
 
     const protagonist = character
       ? {
