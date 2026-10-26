@@ -59,7 +59,8 @@ export interface CombatActionBarProps {
  *   of a fight the end guard holds open).
  * - `move`: the Move button opens the map in move mode instead of the planned approach step.
  * - `hidden`: owned elsewhere — the dying slot runs the death save (the hook filters it out).
- * There is no item intent in the engine, so there is no Use item control (follow-up issue).
+ * Use item (#1147) rides the More menu: the engine resolves a healing consumable, so the
+ * chip is back on the bar through `runAction`.
  */
 export const LEGAL_ACTION_PLACEMENT = {
   attack: 'button',
@@ -71,6 +72,7 @@ export const LEGAL_ACTION_PLACEMENT = {
   disengage: 'more',
   second_wind: 'more',
   action_surge: 'more',
+  use_item: 'more',
   flee: 'more',
   yield: 'more',
   death_save: 'hidden',

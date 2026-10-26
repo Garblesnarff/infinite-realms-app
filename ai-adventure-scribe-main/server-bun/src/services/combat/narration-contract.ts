@@ -111,6 +111,7 @@ const KIND_LABEL: Record<ContractActionKind, string> = {
   death_save: 'death save',
   second_wind: 'second wind',
   action_surge: 'action surge',
+  use_item: 'use item',
 };
 
 const outcomeLabel = (action: AggregatedContractAction): string => {

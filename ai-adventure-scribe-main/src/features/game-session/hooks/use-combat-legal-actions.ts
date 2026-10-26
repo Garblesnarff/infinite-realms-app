@@ -36,6 +36,8 @@ export type LegalAction = {
   label: string;
   weaponId?: string;
   spellId?: string;
+  /** #1147: the inventory item a Use chip spends. */
+  itemId?: string;
   targetIds?: string[];
   x?: number;
   y?: number;
@@ -322,6 +324,45 @@ export function useCombatLegalActions(input: {
             text: parts.map((part) => part.line).join('\n\n'),
             cards: parts.map((part) => part.card),
           });
+          await refreshCombatState();
+        } else if (action.type === 'use_item') {
+          // #1147: drinking a healing consumable, like Second Wind — the engine
+          // heals and spends the item, the notice prints the engine line. Unlike
+          // Second Wind it costs the Action, so the turn settles like an attack:
+          // with no movement left and the fight still open, the turn ends here.
+          if (!action.itemId) {
+            setError('That item could not be used. Nothing was spent.');
+            return;
+          }
+          const result = await executeAuthoritativeCombatIntent(
+            encounter.id,
+            { type: 'use_item', actorId, itemId: action.itemId },
+            'dm',
+            Date.now(),
+            'typed',
+          );
+          const parts = [
+            ...formatCombatActionParts(
+              { actor_id: actorId, action_type: 'use_item' },
+              result,
+              roster,
+            ),
+            ...formatWakeParts(result),
+          ];
+          await sendEngineNotice(input.onSendMessage, {
+            text: parts.map((part) => part.line).join('\n\n'),
+            cards: parts.map((part) => part.card),
+          });
+          if (combatBoundaryFromResult(result) === null) {
+            const movementLeft = await actorMovementRemaining(encounter.sessionId, actorId);
+            if (movementLeft === null || movementLeft <= 0) {
+              await executeAuthoritativeCombatIntent(encounter.id, {
+                type: 'end_turn',
+                actorId,
+                actionId: crypto.randomUUID(),
+              });
+            }
+          }
           await refreshCombatState();
         } else if (action.type === 'attack' && action.targetIds?.[0]) {
           // #1059: an 'Equip and attack' choice readies the weapon first —

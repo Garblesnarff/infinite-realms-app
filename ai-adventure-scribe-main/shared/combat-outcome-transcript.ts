@@ -471,6 +471,26 @@ export function formatCombatActionParts(
       },
     ];
   }
+  if (action.action_type === 'use_item' && isFiniteNumber(value.healed)) {
+    const actor = facingName(undefined, action.actor_id, roster);
+    const itemName = typeof value.itemName === 'string' ? value.itemName : 'an item';
+    const hpSuffix =
+      isFiniteNumber(value.newHp) && isFiniteNumber(value.maxHp)
+        ? ` (HP ${value.newHp}/${value.maxHp})`
+        : '';
+    const line = `⚙️ Engine: ${actor} used ${itemName} and regained ${value.healed} HP${hpSuffix}.`;
+    return [
+      {
+        line,
+        card: {
+          kind: 'move',
+          side: engineCardSide(action.actor_id, roster, false),
+          line,
+          title: `${actor} uses ${itemName}`,
+        },
+      },
+    ];
+  }
 
   const verb: Record<string, string> = {
     dash: 'dashed',

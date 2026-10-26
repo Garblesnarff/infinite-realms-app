@@ -229,6 +229,18 @@ describe('fallback and text helpers', () => {
     ).toBe("The Spider 1 dashes. It is still the Vitruvian Spider's turn.");
   });
 
+  it('names an item use in the fallback instead of the generic action sentence (#1147)', () => {
+    expect(
+      buildDeterministicFallback({
+        currentTurn: { slug: 'vitruvian-spider', isPlayer: false, round: 4 },
+        actions: [
+          { kind: 'use_item', count: 1, actors: ['the-veteran'], hit: undefined, mixed: false },
+        ],
+        sceneDescription: null,
+      }),
+    ).toBe("The Veteran uses an item. It is still the Vitruvian Spider's turn.");
+  });
+
   it('extracts narration text from a DM JSON response', () => {
     expect(
       narrationTextFromRawResponse(JSON.stringify({ text: 'Hello.', combat_actions: [] })),

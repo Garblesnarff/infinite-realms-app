@@ -169,10 +169,22 @@ mock.module('../data-access.js', () => ({
   getCharacterWeapons: async () => [],
   listEquippedWeaponProfiles: async () => equippedWeapons,
   listCarriedWeaponProfiles: async () => [],
+  listHealingConsumables: async () => healingConsumables,
   monsterAttackSource: () => 'derived',
   verifyCharacterOwnership: async () => {},
   verifyEncounterAccess: async () => {},
 }));
+
+/**
+ * #1147: the healing consumables on the character's sheet, as `listHealingConsumables`
+ * (data-access.ts) returns them: id, name, and the healing-dice expression from the item's
+ * properties. The legal-action computation is what this suite pins, so the read is stubbed
+ * at its module boundary behind a mutable holder.
+ */
+let healingConsumables: Array<{ id: string; name: string; healingDice: string }> = [
+  { id: 'potion-1', name: 'Potion of Healing', healingDice: '2d4+2' },
+  { id: 'potion-2', name: 'Potion of Greater Healing', healingDice: '4d4+4' },
+];
 
 /**
  * #975: the Fighter features' tracked uses live behind `fighterFeatureUses`
@@ -205,6 +217,10 @@ describe('getLegalCombatActions', () => {
     player.bonusActionUsed = false;
     player.status.currentHp = 20;
     featureUses = { secondWind: null, actionSurge: null };
+    healingConsumables = [
+      { id: 'potion-1', name: 'Potion of Healing', healingDice: '2d4+2' },
+      { id: 'potion-2', name: 'Potion of Greater Healing', healingDice: '4d4+4' },
+    ];
     monster.isActive = true;
     // #1148: a test that kills the monster must not leak 0 HP (or a longer
     // participant list) into the tests after it.
@@ -538,5 +554,35 @@ describe('getLegalCombatActions', () => {
     // still gets a weapon chip even with no tactical-map entity (the weapon
     // path tolerates a missing entity via its geometry-undefined branch).
     expect(attackTargets).toContain('monster-2');
+  });
+
+  // #1147: one Use chip per healing consumable on the sheet, while the Action is
+  // free — and, mirroring Second Wind, only while hurt: at full health the
+  // resolver refuses before spending anything, so the chip is not shown.
+  test('offers one Use chip per healing consumable while hurt with the Action free (#1147)', async () => {
+    player.status.currentHp = 9;
+
+    const result = await getLegalCombatActions('encounter-1', 'user-1');
+    const uses = result.actions.filter((action) => action.type === 'use_item');
+
+    expect(uses).toEqual([
+      { type: 'use_item', label: 'Use Potion of Healing', itemId: 'potion-1' },
+      { type: 'use_item', label: 'Use Potion of Greater Healing', itemId: 'potion-2' },
+    ]);
+  });
+
+  test('offers no Use chip at full health, once the Action is spent, or with no healing consumable (#1147)', async () => {
+    const full = await getLegalCombatActions('encounter-1', 'user-1');
+    expect(full.actions.some((action) => action.type === 'use_item')).toBe(false);
+
+    player.status.currentHp = 9;
+    player.actionUsed = true;
+    const spent = await getLegalCombatActions('encounter-1', 'user-1');
+    expect(spent.actions.some((action) => action.type === 'use_item')).toBe(false);
+
+    player.actionUsed = false;
+    healingConsumables = [];
+    const none = await getLegalCombatActions('encounter-1', 'user-1');
+    expect(none.actions.some((action) => action.type === 'use_item')).toBe(false);
   });
 });

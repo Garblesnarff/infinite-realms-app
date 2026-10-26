@@ -125,6 +125,7 @@ const profile = (entity: { id: string }) =>
         spellIds: [],
       };
 mock.module('../../../services/combat/data-access.js', () => ({
+  listHealingConsumables: async () => [],
   getParticipantWithStats: async (id: string) => ({
     participant: roster().find((p) => p.id === id),
     stats: null,
