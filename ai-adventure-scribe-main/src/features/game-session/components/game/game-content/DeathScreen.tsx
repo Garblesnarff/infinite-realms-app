@@ -1,13 +1,12 @@
-import { ArrowLeft, Skull } from 'lucide-react';
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 
+import { CampaignEndState } from './CampaignEndState';
 import { formatNarrative } from '../../chat/message-list/formatNarrative';
 import { prepareChatDisplayText } from '../../chat/message-list/prepare-chat-display-text';
 
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { useMessageContext } from '@/contexts/MessageContext';
+
+export { displayFinalLine } from './CampaignEndState';
 
 /**
  * The route back into a campaign with a new hero. A starter campaign goes
@@ -34,12 +33,12 @@ export function buildChooseHeroHref(input: {
  * already saw those lines rendered from the formatter; on this screen the
  * raw prefix must not leak through.
  */
-export const displayFinalLine = (line: string): string =>
-  line.replace(/^⚙\uFE0F?\s*Engine:\s*/, '');
-
 interface FallenEndStateProps {
   /** Name of the fallen player character, when known. */
   characterName?: string | null;
+  /** Trusted character presentation data from the owning game route. */
+  portraitUrl?: string | null;
+  identity?: string | null;
   /**
    * #2517: the engine's final lines (killing blow, failed death saves). The
    * killing round gets no DM narration; the screen carries these instead.
@@ -75,105 +74,26 @@ interface FallenEndStateProps {
  */
 export const FallenEndState: React.FC<FallenEndStateProps> = ({
   characterName,
+  portraitUrl,
+  identity,
   finalLines,
   campaignName,
   chooseHeroHref,
   chooseHeroPending,
   storyContent,
-}) => {
-  const navigate = useNavigate();
-  const [view, setView] = React.useState<'end' | 'story'>('end');
-  const name = characterName?.trim() || 'Your character';
-  const campaign = campaignName?.trim() || 'this campaign';
-
-  if (view === 'story' && storyContent) {
-    return (
-      <div data-testid="death-screen-story" className="flex h-full flex-col">
-        <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
-          <Button
-            data-testid="death-screen-story-back"
-            variant="ghost"
-            size="sm"
-            onClick={() => setView('end')}
-          >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            Back
-          </Button>
-          <span className="text-sm font-medium text-card-foreground">{name} — fallen</span>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">{storyContent}</div>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      data-testid="death-screen"
-      className="flex h-full items-center justify-center overflow-y-auto bg-background p-4"
-    >
-      <Card className="max-w-lg w-full p-8 text-center space-y-6 border-border/60 shadow-2xl">
-        <div className="flex justify-center">
-          <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
-            <Skull className="w-8 h-8 text-destructive" aria-hidden="true" />
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <h2 className="text-2xl font-bold text-card-foreground">{name} has fallen</h2>
-          <p className="text-muted-foreground leading-relaxed">
-            The party was defeated and the tale of {name} ends here. The story cannot continue with
-            a fallen hero — but every ending is a new beginning.
-          </p>
-        </div>
-
-        {finalLines && finalLines.length > 0 && (
-          <div
-            data-testid="death-screen-final-lines"
-            className="space-y-1 border-y border-border/40 py-3 text-sm text-muted-foreground"
-          >
-            {finalLines.map((line, index) => (
-              <p key={index}>{displayFinalLine(line)}</p>
-            ))}
-          </div>
-        )}
-
-        <div className="flex flex-col gap-3 pt-2">
-          <div className="space-y-1">
-            <Button
-              data-testid="death-screen-new-character"
-              onClick={() => navigate(chooseHeroHref)}
-              disabled={chooseHeroPending}
-              className="w-full"
-            >
-              Choose a new hero
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              Begin {campaign} again with a new hero. {name}&rsquo;s story is kept.
-            </p>
-          </div>
-          {storyContent && (
-            <Button
-              data-testid="death-screen-read-story"
-              variant="secondary"
-              onClick={() => setView('story')}
-              className="w-full"
-            >
-              Read the story so far
-            </Button>
-          )}
-          <Button
-            data-testid="death-screen-explore"
-            variant="ghost"
-            onClick={() => navigate('/explore')}
-            className="w-full"
-          >
-            Explore other campaigns
-          </Button>
-        </div>
-      </Card>
-    </div>
-  );
-};
+}) => (
+  <CampaignEndState
+    mode="fallen"
+    characterName={characterName}
+    portraitUrl={portraitUrl}
+    identity={identity}
+    finalLines={finalLines}
+    campaignName={campaignName}
+    chooseHeroHref={chooseHeroHref}
+    chooseHeroPending={chooseHeroPending}
+    storyContent={storyContent}
+  />
+);
 
 /**
  * The saved session log, read-only: no composer, no roll tray, no sheet.
