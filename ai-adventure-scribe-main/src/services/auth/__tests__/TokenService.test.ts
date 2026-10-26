@@ -155,7 +155,9 @@ describe('TokenService', () => {
         json: async () => mockResponse,
       });
 
-      const result = await refreshAccessToken('old-refresh');
+      const refreshPromise = refreshAccessToken('old-refresh');
+      await vi.advanceTimersByTimeAsync(40);
+      const result = await refreshPromise;
       expect(result).toEqual({
         accessToken: 'new-access',
         refreshToken: 'new-refresh',
@@ -172,7 +174,9 @@ describe('TokenService', () => {
         status: 401,
       });
 
-      const result = await refreshAccessToken('old-refresh');
+      const refreshPromise = refreshAccessToken('old-refresh');
+      await vi.advanceTimersByTimeAsync(40);
+      const result = await refreshPromise;
       expect(result).toBeNull();
       expect(logger.warn).toHaveBeenCalled();
     });
@@ -180,7 +184,9 @@ describe('TokenService', () => {
     it('should return null and log error on fetch exception', async () => {
       (fetch as any).mockRejectedValue(new Error('Network error'));
 
-      const result = await refreshAccessToken('old-refresh');
+      const refreshPromise = refreshAccessToken('old-refresh');
+      await vi.advanceTimersByTimeAsync(40);
+      const result = await refreshPromise;
       expect(result).toBeNull();
       expect(logger.error).toHaveBeenCalled();
     });
@@ -196,6 +202,7 @@ describe('TokenService', () => {
       const first = refreshAccessTokenOnce('old-refresh');
       const second = refreshAccessTokenOnce('old-refresh');
 
+      await vi.advanceTimersByTimeAsync(40);
       expect(fetch).toHaveBeenCalledTimes(1);
 
       resolveFetch({
@@ -216,12 +223,16 @@ describe('TokenService', () => {
         json: async () => ({ error: 'invalid_grant' }),
       });
 
-      await expect(refreshAccessTokenOnce('ended-refresh')).resolves.toBeNull();
+      const secondRefreshPromise = refreshAccessTokenOnce('ended-refresh');
+      await vi.advanceTimersByTimeAsync(40);
+      await expect(secondRefreshPromise).resolves.toBeNull();
       expect(isSessionEnded()).toBe(true);
       expect(fetch).toHaveBeenCalledTimes(1);
       expect(getAccessToken()).toBeNull();
 
-      await expect(refreshAccessTokenOnce('ended-refresh')).resolves.toBeNull();
+      const refreshPromise = refreshAccessTokenOnce('ended-refresh');
+      await vi.advanceTimersByTimeAsync(40);
+      await expect(refreshPromise).resolves.toBeNull();
       expect(fetch).toHaveBeenCalledTimes(1);
     });
 
@@ -232,7 +243,9 @@ describe('TokenService', () => {
         json: async () => ({ error: 'invalid_grant' }),
       });
 
-      await expect(refreshAccessTokenOnce('ended-refresh')).resolves.toBeNull();
+      const refreshPromise = refreshAccessTokenOnce('ended-refresh');
+      await vi.advanceTimersByTimeAsync(40);
+      await expect(refreshPromise).resolves.toBeNull();
       expect(isSessionEnded()).toBe(true);
       expect(fetch).toHaveBeenCalledTimes(1);
     });

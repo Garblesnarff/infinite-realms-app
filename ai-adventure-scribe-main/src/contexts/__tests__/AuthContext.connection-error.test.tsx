@@ -73,7 +73,7 @@ describe('AuthContext connection failures (#565)', () => {
     expect(probeState().loading).toBe(true);
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(15_000);
+      await vi.advanceTimersByTimeAsync(15_040);
     });
 
     const state = probeState();
@@ -219,6 +219,42 @@ describe('AuthContext connection failures (#565)', () => {
     }
   });
 
+  it('adopts a newer cross-tab session when the refresh token is rejected', async () => {
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    let authMeAttempts = 0;
+    let refreshAttempts = 0;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (String(url).includes('/api/trpc/auth.me')) {
+        authMeAttempts += 1;
+        if (authMeAttempts === 1) return Promise.resolve(authMe(401));
+        expect((init?.headers as Record<string, string>).Authorization).toBe(
+          'Bearer winning-access',
+        );
+        return Promise.resolve(
+          authMe(200, { result: { data: { id: 'u1', email: 'player@example.com' } } }),
+        );
+      }
+      if (String(url).includes('/v1/auth/refresh')) {
+        refreshAttempts += 1;
+        persistSession({ access_token: 'winning-access', refresh_token: 'winning-refresh' });
+        return Promise.resolve(authMe(401, { error: 'invalid_grant' }));
+      }
+      return Promise.resolve(authMe(404));
+    });
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(probeState().userEmail).toBe('player@example.com'));
+    expect(authMeAttempts).toBe(2);
+    expect(refreshAttempts).toBe(1);
+    expect(window.localStorage.getItem('workos_access_token')).toBe('winning-access');
+    expect(window.sessionStorage.getItem('workos_refresh_token')).toBe('winning-refresh');
+  });
+
   it('keeps the stored session when the refresh endpoint hangs during a 401', async () => {
     vi.useFakeTimers();
     (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
@@ -235,7 +271,7 @@ describe('AuthContext connection failures (#565)', () => {
     );
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(15_000);
+      await vi.advanceTimersByTimeAsync(15_040);
     });
 
     const state = probeState();
@@ -260,7 +296,7 @@ describe('AuthContext connection failures (#565)', () => {
       </AuthProvider>,
     );
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(15_000);
+      await vi.advanceTimersByTimeAsync(15_040);
     });
     expect(probeState().connectionError).toBe(true);
 
