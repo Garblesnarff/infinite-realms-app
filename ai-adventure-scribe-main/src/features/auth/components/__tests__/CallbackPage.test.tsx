@@ -80,6 +80,42 @@ describe('CallbackPage', () => {
     expect(toastSuccess).toHaveBeenCalledWith('Signed in as player@example.com');
   });
 
+  it('returns to a validated campaign path after the exchange', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/auth/callback?code=one-time-code&returnTo=%2Fexplore%2Fthe-eternal-feast%23heroes',
+    );
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ accessToken: 'test-access-token', refreshToken: 'test-refresh-token' }),
+    });
+
+    render(<CallbackPage />);
+    await waitFor(() => expect(persistSession).toHaveBeenCalled());
+    window.dispatchEvent(new CustomEvent('auth-ready'));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/explore/the-eternal-feast#heroes'));
+  });
+
+  it('falls back to the app when the return path is off-site', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/auth/callback?code=one-time-code&returnTo=https%3A%2F%2Fevil.example%2Fsteal',
+    );
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ accessToken: 'test-access-token', refreshToken: 'test-refresh-token' }),
+    });
+
+    render(<CallbackPage />);
+    await waitFor(() => expect(persistSession).toHaveBeenCalled());
+    window.dispatchEvent(new CustomEvent('auth-ready'));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/app'));
+  });
+
   it('uses the deprecated fragment fallback only when no code is present', async () => {
     window.history.replaceState(
       null,
