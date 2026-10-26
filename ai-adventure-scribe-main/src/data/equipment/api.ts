@@ -59,15 +59,15 @@ export function getStartingEquipment(className: string): Equipment[] {
     ],
     wizard: ['dagger', 'quarterstaff'],
     rogue: ['leather-armor', 'dagger', 'dagger', 'thieves-tools', 'shortbow', 'arrows-20'],
-    cleric: ['chain-shirt', 'shield', 'mace', 'light-crossbow'],
+    cleric: ['chain-shirt', 'shield', 'mace', 'light-crossbow', 'bolts-20'],
     barbarian: ['leather-armor', 'shield', 'handaxe', 'handaxe'],
     bard: ['leather-armor', 'dagger', 'rapier'],
     druid: ['leather-armor', 'shield', 'scimitar'],
     monk: ['dagger'],
     paladin: ['chain-mail', 'shield', 'longsword'],
-    ranger: ['leather-armor', 'dagger', 'dagger', 'longbow'],
-    sorcerer: ['dagger', 'dagger', 'light-crossbow'],
-    warlock: ['leather-armor', 'dagger', 'light-crossbow'],
+    ranger: ['leather-armor', 'dagger', 'dagger', 'longbow', 'arrows-20'],
+    sorcerer: ['dagger', 'dagger', 'light-crossbow', 'bolts-20'],
+    warlock: ['leather-armor', 'dagger', 'light-crossbow', 'bolts-20'],
   };
   const equipmentIds = packages[classId] || [];
 

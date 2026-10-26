@@ -504,9 +504,7 @@ describeWithDb('character create XP seeding + awardXP demotion guard (#829 findi
     return row;
   }
 
-  async function progressionRow(
-    id: string,
-  ): Promise<typeof levelProgression.$inferSelect> {
+  async function progressionRow(id: string): Promise<typeof levelProgression.$inferSelect> {
     const [row] = await db
       .select()
       .from(levelProgression)
@@ -980,17 +978,28 @@ describeWithDb('package gear reaches the session (#1007)', () => {
       const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');
       const { charactersRoutes } = await import('../characters.ts');
       const { issue1784DataRoutes } = await import('../issue-1784-data.ts');
+      const { inventoryRoutes } = await import('../inventory.ts');
       const intentService = await import('../../../services/combat/combat-intent-service.ts');
       const dataAccess = await import('../../../services/combat/data-access.ts');
-      return { createRequestPipelineApp, charactersRoutes, issue1784DataRoutes, intentService, dataAccess };
+      return {
+        createRequestPipelineApp,
+        charactersRoutes,
+        issue1784DataRoutes,
+        inventoryRoutes,
+        intentService,
+        dataAccess,
+      };
     });
     app = pipeline
       .createRequestPipelineApp()
       .use(pipeline.charactersRoutes)
+      .use(pipeline.inventoryRoutes)
       .use(pipeline.issue1784DataRoutes);
     executeCombatIntent = pipeline.intentService.executeCombatIntent as typeof executeCombatIntent;
-    getLegalCombatActions = pipeline.intentService.getLegalCombatActions as unknown as typeof getLegalCombatActions;
-    listCarriedWeaponProfiles = pipeline.dataAccess.listCarriedWeaponProfiles as typeof listCarriedWeaponProfiles;
+    getLegalCombatActions = pipeline.intentService
+      .getLegalCombatActions as unknown as typeof getLegalCombatActions;
+    listCarriedWeaponProfiles = pipeline.dataAccess
+      .listCarriedWeaponProfiles as typeof listCarriedWeaponProfiles;
   });
 
   afterAll(async () => {
@@ -1039,7 +1048,9 @@ describeWithDb('package gear reaches the session (#1007)', () => {
 
   /** Seat the character in a real encounter (rows copied from the producers
    * encounter-lifecycle uses) and return the ids the intent service needs. */
-  async function seat(characterId: string): Promise<{ encounterId: string; heroId: string; foeId: string }> {
+  async function seat(
+    characterId: string,
+  ): Promise<{ encounterId: string; heroId: string; foeId: string }> {
     const [{ id: campaignId }] = await db
       .insert(campaigns)
       .values({ userId, name: testId('camp-1007') })
@@ -1054,7 +1065,9 @@ describeWithDb('package gear reaches the session (#1007)', () => {
       .insert(combatEncounters)
       .values({ sessionId, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
       .returning({ id: combatEncounters.id });
-    cleanup.push(async () => db.delete(combatEncounters).where(eq(combatEncounters.id, encounterId)));
+    cleanup.push(async () =>
+      db.delete(combatEncounters).where(eq(combatEncounters.id, encounterId)),
+    );
     const inserted = await db
       .insert(combatParticipants)
       .values([
@@ -1160,6 +1173,55 @@ describeWithDb('package gear reaches the session (#1007)', () => {
     expect(outcome.weaponResolution?.substituted).toBe(false);
   });
 
+  it('#1124 wizard fighter with a Longbow pick: the bow fires on turn 1 of the first fight', async () => {
+    // The exact wizard body for Greatsword + Longbow (#921 fixture, produced by
+    // EquipmentSelection -> mapWizardEquipmentToInventory -> transformEquipmentForStorage).
+    const fixture = fighterChoices.find((entry) => entry.name === 'two-martial')!;
+    const id = await create({ ...fixture.body, name: testId('wiz-archer-1124') });
+
+    const rows = await equipmentRows(id);
+    expect(rows.find((row) => row.item_name === 'Longbow')).toBeDefined();
+    expect(rows.find((row) => row.item_name === 'Arrows (20)')?.quantity).toBe(1);
+
+    // Turn 1 of the first fight: the picker offers the carried Longbow as
+    // equip-and-attack (it is hidden when the bow has no arrows), the client
+    // sends the in-session equip with the offered weaponId (#1059), then the attack.
+    const { encounterId, heroId, foeId } = await seat(id);
+    const legal = (await getLegalCombatActions(encounterId, userId)) as {
+      actions: Array<{ type: string; label?: string; weaponId?: string; equipFirst?: boolean }>;
+    };
+    const offered = legal.actions.find((a) => a.label === 'Equip and attack with Longbow');
+    expect(offered?.equipFirst).toBe(true);
+    expect(offered?.weaponId).toBeTruthy();
+    const equipRes = await app.handle(
+      new Request(
+        `http://localhost/v1/characters/${id}/equip/${encodeURIComponent(offered!.weaponId!)}`,
+        { method: 'POST' },
+      ),
+    );
+    expect(equipRes.status, await equipRes.clone().text()).toBe(200);
+
+    await resetTurn(encounterId);
+    const [{ version }] = await db
+      .select({ version: combatEncounters.version })
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, encounterId));
+    const outcome = await executeCombatIntent(
+      encounterId,
+      {
+        type: 'attack',
+        actorId: heroId,
+        targetId: foeId,
+        weaponId: 'Longbow',
+        expectedVersion: version,
+      },
+      userId,
+      'player',
+    );
+    expect(outcome.weaponResolution?.resolved).toBe('Longbow');
+    expect(outcome.weaponResolution?.substituted).toBe(false);
+  });
+
   it('premade rogue: the seeded shortbow is equipped, offered and resolves as a Shortbow', async () => {
     const [{ id: campaignId }] = await db
       .insert(campaigns)
@@ -1221,9 +1283,9 @@ describeWithDb('package gear reaches the session (#1007)', () => {
     // exact state Grimnir was in on Hark's build.
     const noAmmoPayload = {
       ...premadeRoguePayload,
-      equipment: (
-        premadeRoguePayload.equipment as Array<{ item_name: string }>
-      ).filter((row) => row.item_name !== 'Arrows (20)'),
+      equipment: (premadeRoguePayload.equipment as Array<{ item_name: string }>).filter(
+        (row) => row.item_name !== 'Arrows (20)',
+      ),
     };
     const id = await create({
       ...noAmmoPayload,

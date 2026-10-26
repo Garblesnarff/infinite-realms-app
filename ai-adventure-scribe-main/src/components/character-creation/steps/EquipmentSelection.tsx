@@ -7,6 +7,7 @@ import { StartingGoldOption } from '@/components/character-creation/steps/equipm
 import { Card } from '@/components/ui/card';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { backgrounds } from '@/data/backgroundOptions';
+import { resolveEquipmentById } from '@/data/equipment';
 import { getStartingEquipment, startingGoldByClass, weapons } from '@/data/equipmentOptions';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
 import { useToast } from '@/hooks/use-toast';
@@ -45,13 +46,21 @@ const EquipmentSelection: React.FC = () => {
     selectedMartial.length >= 2 && !state.character?.equipment?.includes('Shield')
       ? 'two'
       : 'shield';
-  const fighterPackage = (mode: string, first: string, second: string): Equipment[] => [
-    ...classEquipment.filter((item) => item.id !== 'shield' && item.weaponType !== 'martial'),
-    martialWeapons.find((weapon) => weapon.id === first)!,
-    ...(mode === 'two'
-      ? [martialWeapons.find((weapon) => weapon.id === second)!]
-      : classEquipment.filter((item) => item.id === 'shield')),
-  ];
+  const fighterPackage = (mode: string, first: string, second: string): Equipment[] => {
+    const items: Equipment[] = [
+      ...classEquipment.filter((item) => item.id !== 'shield' && item.weaponType !== 'martial'),
+      martialWeapons.find((weapon) => weapon.id === first)!,
+      ...(mode === 'two'
+        ? [martialWeapons.find((weapon) => weapon.id === second)!]
+        : classEquipment.filter((item) => item.id === 'shield')),
+    ];
+    const hasLongbow = first === 'longbow' || (mode === 'two' && second === 'longbow');
+    if (hasLongbow && !items.some((item) => item.id === 'arrows-20')) {
+      const arrows = resolveEquipmentById('arrows-20');
+      if (arrows) items.push(arrows);
+    }
+    return items;
+  };
   const startingEquipment = isFighter
     ? fighterPackage(fighterMode, firstWeapon.id, secondWeapon.id)
     : classEquipment;
