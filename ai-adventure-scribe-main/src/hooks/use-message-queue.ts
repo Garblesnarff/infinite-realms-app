@@ -46,6 +46,34 @@ type QueueStatus = 'idle' | 'processing' | 'error' | 'retrying';
  * Hook for managing message queue and persistence with enhanced error handling
  * @param sessionId Current game session ID
  */
+/**
+ * #1095: the #1062 clock line lives in message.context.storyTrackers, but
+ * the save whitelists below dropped it — so a reply showed the line live,
+ * then lost it on the post-save refetch and on every reload (Hark V-003:
+ * the element on 3 of 64 replies). Shape-checked exactly like DMMessage's
+ * render check: a malformed entry drops out rather than persisting a half
+ * line. Absent (not empty) when nothing well-formed survives, so a
+ * clock-less session persists exactly as today. Used by both save paths
+ * (the mutation and the queued-batch flush) so a retried save cannot lose
+ * the line the first save kept.
+ */
+export const persistableStoryTrackers = (
+  context: ChatMessage['context'],
+): { storyTrackers?: Array<{ name: string; value: number; limit: number }> } => {
+  if (!context || !Array.isArray(context.storyTrackers)) return {};
+  const trackers = context.storyTrackers.filter(
+    (entry): entry is { name: string; value: number; limit: number } =>
+      !!entry &&
+      typeof entry === 'object' &&
+      typeof (entry as { name?: unknown }).name === 'string' &&
+      (entry as { name: string }).name.trim().length > 0 &&
+      Number.isFinite((entry as { value?: unknown }).value) &&
+      Number.isFinite((entry as { limit?: unknown }).limit) &&
+      (entry as { limit: number }).limit > 0,
+  );
+  return trackers.length > 0 ? { storyTrackers: trackers } : {};
+};
+
 export const useMessageQueue = (sessionId: string | null) => {
   const [queueStatus, setQueueStatus] = useState<QueueStatus>('idle');
   const [messageQueue, setMessageQueue] = useState<ChatMessage[]>([]);
@@ -233,6 +261,7 @@ export const useMessageQueue = (sessionId: string | null) => {
                   ? { engineCards: message.context.engineCards }
                   : {}),
                 ...persistableCombatData(message.context),
+                ...persistableStoryTrackers(message.context),
               }
             : narrationSegments
               ? {
@@ -402,6 +431,7 @@ export const useMessageQueue = (sessionId: string | null) => {
                   ? { engineCards: message.context.engineCards }
                   : {}),
                 ...persistableCombatData(message.context),
+                ...persistableStoryTrackers(message.context),
               }
             : narrationSegments
               ? {
