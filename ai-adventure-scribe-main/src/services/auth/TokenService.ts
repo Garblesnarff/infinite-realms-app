@@ -196,11 +196,14 @@ const withLocalStorageLease = async <T>(work: () => Promise<T>): Promise<T> => {
 };
 
 const withRefreshLock = <T>(work: () => Promise<T>): Promise<T> => {
+  // Web Locks can remain queued indefinitely when a background tab is frozen
+  // while holding the lock. The storage lease has a bounded expiry and is
+  // renewed while the refresh is active, so another visible tab can recover
+  // after the frozen owner stops renewing (#1087).
+  if (typeof window !== 'undefined') return withLocalStorageLease(work);
+
   const locks = getLockManager();
-  if (locks) {
-    return locks.request(TOKEN_REFRESH_LOCK_NAME, { mode: 'exclusive' }, work);
-  }
-  return withLocalStorageLease(work);
+  return locks ? locks.request(TOKEN_REFRESH_LOCK_NAME, { mode: 'exclusive' }, work) : work();
 };
 
 export const isSessionEnded = (): boolean => {

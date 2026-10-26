@@ -89,4 +89,27 @@ describe('TokenService cross-tab refresh coordination', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(tabTwo.getAccessToken()).toBe('new-access');
   });
+
+  it('uses the expiring storage lease when a Web Lock is held by a frozen tab', async () => {
+    const lockRequest = vi.fn(() => new Promise<never>(() => {}));
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: { request: lockRequest },
+    });
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ accessToken: 'new-access', refreshToken: 'new-refresh' }),
+    } as Response);
+
+    vi.resetModules();
+    const { refreshAccessToken } = await import('../TokenService');
+
+    await expect(refreshAccessToken('old-refresh', 'old-access')).resolves.toEqual({
+      accessToken: 'new-access',
+      refreshToken: 'new-refresh',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(lockRequest).not.toHaveBeenCalled();
+  });
 });
