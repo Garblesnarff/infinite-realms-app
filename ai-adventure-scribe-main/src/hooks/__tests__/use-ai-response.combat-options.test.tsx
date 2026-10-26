@@ -724,7 +724,7 @@ describe('D3: combat options use the real response hook (#2547)', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Chill Touch/ }));
     await waitFor(() => expect(AIService.chatWithDM).toHaveBeenCalled());
     expect(userDataApi.detectDeclaredAttack).not.toHaveBeenCalled();
-    expect(screen.queryByRole('alert', { name: 'Combat entry confirmation' })).toBeNull();
+    expect(screen.queryByTestId('combat-entry-confirmation-overlay')).toBeNull();
   });
 
   it('declares a hinted attack directly — the move hint never reaches the DM or the engine', async () => {
@@ -974,9 +974,7 @@ describe('D3: combat options use the real response hook (#2547)', () => {
         id: expect.any(String),
         sender: 'system',
         persist: true,
-        text:
-          '⚙️ Engine: The Scholar yielded.\n\n' +
-          '⚙️ Engine: Combat ended — you yielded.',
+        text: '⚙️ Engine: The Scholar yielded.\n\n' + '⚙️ Engine: Combat ended — you yielded.',
         context: expect.objectContaining({
           intent: 'combat_pending_intent',
           combatEnded: true,
@@ -987,4 +985,3 @@ describe('D3: combat options use the real response hook (#2547)', () => {
     expect(response).toBeUndefined();
   });
 });
-

@@ -52,7 +52,7 @@ describe('MessageListContainer combat entry hit testing', () => {
     Reflect.deleteProperty(document, 'elementFromPoint');
   });
 
-  it('keeps the Strike hit target above the composer and dice popup anchor', async () => {
+  it('keeps the Start the fight hit target above the composer and dice popup anchor', async () => {
     let confirmationPromise: Promise<boolean> | undefined;
 
     render(
@@ -83,7 +83,7 @@ describe('MessageListContainer combat entry hit testing', () => {
 
     const overlay = await screen.findByTestId('combat-entry-confirmation-overlay');
     const composer = screen.getByTestId('composer');
-    const strike = screen.getByRole('button', { name: '[Strike]' });
+    const start = screen.getByRole('button', { name: 'Start the fight' });
     vi.spyOn(overlay, 'getBoundingClientRect').mockReturnValue({
       top: 100,
       right: 700,
@@ -108,20 +108,21 @@ describe('MessageListContainer combat entry hit testing', () => {
     });
     Object.defineProperty(document, 'elementFromPoint', {
       configurable: true,
-      value: vi.fn().mockReturnValue(strike),
+      value: vi.fn().mockReturnValue(start),
     });
 
-    const strikeRect = strike.getBoundingClientRect();
-    const elementAtStrike = document.elementFromPoint(strikeRect.left + 1, strikeRect.top + 1);
-    expect(elementAtStrike).toBe(strike);
+    const startRect = start.getBoundingClientRect();
+    const elementAtStart = document.elementFromPoint(startRect.left + 1, startRect.top + 1);
+    expect(elementAtStart).toBe(start);
     expect(overlay.parentElement).toHaveAttribute('data-testid', 'roll-tray');
     expect(overlay).not.toHaveClass('fixed', 'absolute', 'sticky');
     expect(overlay.getBoundingClientRect().bottom).toBeLessThanOrEqual(
       composer.getBoundingClientRect().top,
     );
 
-    if (!elementAtStrike) throw new Error('No element found at the Strike button coordinates');
-    fireEvent.click(elementAtStrike);
+    if (!elementAtStart)
+      throw new Error('No element found at the Start the fight button coordinates');
+    fireEvent.click(elementAtStart);
     if (!confirmationPromise) throw new Error('Combat entry confirmation was not requested');
     await expect(confirmationPromise).resolves.toBe(true);
   });
