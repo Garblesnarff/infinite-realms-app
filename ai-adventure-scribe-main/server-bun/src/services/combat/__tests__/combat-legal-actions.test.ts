@@ -36,12 +36,33 @@ const monster = {
   maxHp: 27,
   status: { currentHp: 27, isConscious: true },
 };
+// #1148: a second, live monster so a test can put a dead monster and a live one
+// side by side and prove the chips list only the live one. Same shape as the
+// `getCombatState` producer's rows (no map entity: spell targets never read it,
+// and the weapon path tolerates the missing entity via its geometry-undefined
+// branch, so the live monster still gets a weapon chip).
+const liveMonster = {
+  id: 'monster-2',
+  name: 'Goblin Skirmisher',
+  participantType: 'monster',
+  isActive: true,
+  actionUsed: false,
+  bonusActionUsed: false,
+  armorClass: 12,
+  encounterId: 'encounter-1',
+  turnOrder: 2,
+  maxHp: 15,
+  status: { currentHp: 15, isConscious: true },
+};
+// #1148: the participants the mocked `getCombatState` returns. Defaults to the
+// original pair; a test that needs more hands the holder a longer list.
+let participants = [player, monster];
 
 mock.module('../combat-encounter-service.js', () => ({
   CombatEncounterService: {
     getCombatState: async () => ({
       encounter: { id: 'encounter-1', sessionId: 'session-1', version: 1 },
-      participants: [player, monster],
+      participants,
       // Derived, as `getCombatState` does, so a test can hand the turn to the monster: pinning
       // the player here would have made "no exit chip on a monster's turn" untestable.
       currentParticipant: (player as { turnOrder?: number }).turnOrder === 0 ? player : monster,
@@ -185,6 +206,10 @@ describe('getLegalCombatActions', () => {
     player.status.currentHp = 20;
     featureUses = { secondWind: null, actionSurge: null };
     monster.isActive = true;
+    // #1148: a test that kills the monster must not leak 0 HP (or a longer
+    // participant list) into the tests after it.
+    monster.status.currentHp = 27;
+    participants = [player, monster];
     equippedWeapons = [
       {
         id: 'quarterstaff',
@@ -481,6 +506,34 @@ describe('getLegalCombatActions', () => {
     const spent = await getLegalCombatActions('encounter-1', 'user-1');
     expect(spent.actions.some((action) => action.type === 'second_wind')).toBe(false);
     expect(spent.actions.some((action) => action.type === 'action_surge')).toBe(false);
+  });
+
+  // #1148: weapon targets already skipped the dead (#314 CB-074); attack-roll
+  // spell targets filtered only on `isActive` and side, so a Cast chip listed a
+  // dead creature. With one dead monster and one live one, neither a weapon
+  // chip nor a spell chip may name the dead one, and the spell chip must still
+  // name the live one (a filter that dropped everything would pass the
+  // negatives and still be wrong).
+  test('offers a dead monster as neither a weapon target nor a spell target (#1148)', async () => {
+    profile = APPRENTICE_PROFILE;
+    monster.status.currentHp = 0;
+    participants = [player, monster, liveMonster];
+
+    const result = await getLegalCombatActions('encounter-1', 'user-1');
+
+    const spellTargets = result.actions
+      .filter((action) => action.type === 'spell')
+      .flatMap((action) => action.targetIds ?? []);
+    expect(spellTargets).toContain('monster-2');
+    expect(spellTargets).not.toContain('monster-1');
+    const attackTargets = result.actions
+      .filter((action) => action.type === 'attack')
+      .flatMap((action) => action.targetIds ?? []);
+    expect(attackTargets).not.toContain('monster-1');
+    // Self-review F3: the weapon half is not negative-only — the live monster
+    // still gets a weapon chip even with no tactical-map entity (the weapon
+    // path tolerates a missing entity via its geometry-undefined branch).
+    expect(attackTargets).toContain('monster-2');
   });
 });
 
