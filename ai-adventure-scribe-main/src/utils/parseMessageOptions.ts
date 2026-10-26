@@ -413,7 +413,7 @@ function isObjectPosition(text: string, offset: number): boolean {
   return Boolean(
     precedingWord &&
     (OBJECT_PREPOSITIONS.has(precedingWord) ||
-      precedingWord.endsWith('ing') ||
+      (precedingWord.endsWith('ing') && !precedingWord.endsWith('thing')) ||
       OBJECT_VERBS.has(precedingWord)),
   );
 }

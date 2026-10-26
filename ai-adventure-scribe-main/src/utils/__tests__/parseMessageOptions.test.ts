@@ -201,6 +201,39 @@ describe('parseMessageOptions', () => {
       expect(createPlayerMessageFromOption(option)).toBe("I have my gear and I've prepared.");
     });
 
+    it('should keep "you have" as "I have" after "something" (#1132)', () => {
+      const option = {
+        id: 'opt1',
+        number: 1,
+        text: 'Tell Jubal and Osric about something you have truly lost.',
+        fullText: '...',
+      };
+      expect(createPlayerMessageFromOption(option)).toBe(
+        'Tell Jubal and Osric about something I have truly lost.',
+      );
+    });
+
+    it('should keep "you have" as "I have" after "nothing" and "anything" (#1132)', () => {
+      const nothingOption = {
+        id: 'opt1',
+        number: 1,
+        text: 'Tell them about nothing you have truly lost.',
+        fullText: '...',
+      };
+      const anythingOption = {
+        id: 'opt2',
+        number: 2,
+        text: 'Tell them about anything you have truly lost.',
+        fullText: '...',
+      };
+      expect(createPlayerMessageFromOption(nothingOption)).toBe(
+        'Tell them about nothing I have truly lost.',
+      );
+      expect(createPlayerMessageFromOption(anythingOption)).toBe(
+        'Tell them about anything I have truly lost.',
+      );
+    });
+
     it('should handle "you will" and "you\'ll" in both cases', () => {
       const option = {
         id: 'opt1',
