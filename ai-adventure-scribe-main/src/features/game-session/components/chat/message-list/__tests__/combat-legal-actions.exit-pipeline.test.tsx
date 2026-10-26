@@ -6,8 +6,8 @@ import {
   EXIT_SCHOLAR_ID,
   playerExitIntentBody,
 } from '../../../../../../../shared/test-fixtures/player-exit-intent';
-import { DynamicOptionsSection } from '../DynamicOptionsSection';
 
+import { CombatLegalActionsHarness } from '@/features/game-session/hooks/__tests__/combat-legal-actions-harness';
 import { executeAuthoritativeCombatIntent } from '@/services/combat/combat-action-executor';
 
 /**
@@ -102,9 +102,7 @@ describe('Flee and Yield are options the player can actually take (#2580)', () =
       sent.push(intent);
       return { encounterId } as never;
     });
-    render(
-      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
-    );
+    render(<CombatLegalActionsHarness onSendText={onOptionSelect} />);
     fireEvent.click(await screen.findByText('Yield'));
 
     await waitFor(() => expect(sent).toHaveLength(1));
@@ -114,9 +112,7 @@ describe('Flee and Yield are options the player can actually take (#2580)', () =
   });
 
   it('commits the flee intent through the executor, never as DM text', async () => {
-    render(
-      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
-    );
+    render(<CombatLegalActionsHarness onSendText={onOptionSelect} />);
     fireEvent.click(await screen.findByText('Flee (Light-Eater Swarm 1 attacks)'));
 
     await waitFor(() => expect(executeAuthoritativeCombatIntent).toHaveBeenCalled());
@@ -132,9 +128,7 @@ describe('Flee and Yield are options the player can actually take (#2580)', () =
   });
 
   it('warns, in one line, that a hostile in reach gets its attack', async () => {
-    render(
-      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
-    );
+    render(<CombatLegalActionsHarness onSendText={onOptionSelect} />);
     fireEvent.click(await screen.findByText('Flee (Light-Eater Swarm 1 attacks)'));
 
     await waitFor(() => expect(window.confirm).toHaveBeenCalled());
@@ -145,9 +139,7 @@ describe('Flee and Yield are options the player can actually take (#2580)', () =
 
   it('a declined confirm flees nobody: nothing is posted', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(false);
-    render(
-      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
-    );
+    render(<CombatLegalActionsHarness onSendText={onOptionSelect} />);
     fireEvent.click(await screen.findByText('Flee (Light-Eater Swarm 1 attacks)'));
 
     await waitFor(() => expect(window.confirm).toHaveBeenCalled());
@@ -159,9 +151,7 @@ describe('Flee and Yield are options the player can actually take (#2580)', () =
       { type: 'flee', label: 'Flee' },
       { type: 'yield', label: 'Yield' },
     ]);
-    render(
-      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
-    );
+    render(<CombatLegalActionsHarness onSendText={onOptionSelect} />);
     fireEvent.click(await screen.findByText('Flee'));
 
     await waitFor(() => expect(executeAuthoritativeCombatIntent).toHaveBeenCalled());
@@ -171,9 +161,7 @@ describe('Flee and Yield are options the player can actually take (#2580)', () =
   });
 
   it('Yield commits its own slug and provokes no confirm at all', async () => {
-    render(
-      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
-    );
+    render(<CombatLegalActionsHarness onSendText={onOptionSelect} />);
     fireEvent.click(await screen.findByText('Yield'));
 
     await waitFor(() => expect(executeAuthoritativeCombatIntent).toHaveBeenCalled());

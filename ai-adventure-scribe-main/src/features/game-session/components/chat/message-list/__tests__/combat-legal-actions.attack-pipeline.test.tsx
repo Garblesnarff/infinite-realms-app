@@ -2,8 +2,8 @@ import { act, render, fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 
 import { buildNpcEngineMessage } from '../../../../../../../shared/npc-engine-message';
-import { DynamicOptionsSection } from '../DynamicOptionsSection';
 
+import { CombatLegalActionsHarness } from '@/features/game-session/hooks/__tests__/combat-legal-actions-harness';
 import { equipCharacterItem } from '@/services/character-equipment-api';
 import {
   executeAuthoritativeCombatIntent,
@@ -163,9 +163,7 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
   };
 
   it('opens the dialog and posts the declare intent with the engine id', async () => {
-    render(
-      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
-    );
+    render(<CombatLegalActionsHarness onSendText={onOptionSelect} />);
     fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
 
     await waitFor(() => expect(askPlayerForAttackDie).toHaveBeenCalled());
@@ -208,9 +206,7 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
       movementOnly: false,
       timedOut: true,
     });
-    render(
-      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
-    );
+    render(<CombatLegalActionsHarness onSendText={onOptionSelect} />);
     fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
 
     await waitFor(() => expect(askPlayerForAttackDie).toHaveBeenCalled());
@@ -231,14 +227,7 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
     // The Scholar still has 30 ft after the swing: the turn stays open and the refreshed
     // menu offers Move / End turn instead of the attack spending the whole turn.
     vi.mocked(actorMovementRemaining).mockResolvedValue(30);
-    render(
-      <DynamicOptionsSection
-        options={[]}
-        onOptionSelect={onOptionSelect}
-        onSendMessage={onSendMessage}
-        hasDynamicOverlay
-      />,
-    );
+    render(<CombatLegalActionsHarness onSendText={onOptionSelect} onSendMessage={onSendMessage} />);
     fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
 
     await waitFor(() => expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalled());
@@ -255,14 +244,7 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
     // via onSendMessage and sends no end_turn: the turn-end (and any enemy actions) can
     // only happen after, when the player explicitly ends the turn.
     vi.mocked(actorMovementRemaining).mockResolvedValue(30);
-    render(
-      <DynamicOptionsSection
-        options={[]}
-        onOptionSelect={onOptionSelect}
-        onSendMessage={onSendMessage}
-        hasDynamicOverlay
-      />,
-    );
+    render(<CombatLegalActionsHarness onSendText={onOptionSelect} onSendMessage={onSendMessage} />);
     fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
 
     // The player's result is posted first.
@@ -306,12 +288,7 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
     window.addEventListener('session-engine-rows', capture);
     try {
       render(
-        <DynamicOptionsSection
-          options={[]}
-          onOptionSelect={onOptionSelect}
-          onSendMessage={onSendMessage}
-          hasDynamicOverlay
-        />,
+        <CombatLegalActionsHarness onSendText={onOptionSelect} onSendMessage={onSendMessage} />,
       );
       fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
 
@@ -320,10 +297,7 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
       expect((onSendMessage.mock.calls[0][0] as { text: string }).text).toContain('HIT');
       // 2) Then the end_turn intent is sent.
       await waitFor(() =>
-        expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith(
-          'encounter-d5',
-          keyedEndTurn,
-        ),
+        expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith('encounter-d5', keyedEndTurn),
       );
       // 3) Then the enemy line arrives via the server's end_turn response.
       await waitFor(() => expect(npcRows).toHaveLength(1));
@@ -369,19 +343,10 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
       boundary: 'combat_ended',
       result: { ...killResult, engineRows: [playerRow] },
     } as any);
-    render(
-      <DynamicOptionsSection
-        options={[]}
-        onOptionSelect={onOptionSelect}
-        onSendMessage={onSendMessage}
-        hasDynamicOverlay
-      />,
-    );
+    render(<CombatLegalActionsHarness onSendText={onOptionSelect} onSendMessage={onSendMessage} />);
     fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
 
-    await waitFor(() =>
-      expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledTimes(1),
-    );
+    await waitFor(() => expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledTimes(1));
     // Let the branch run to its finally: a macrotask drains the whole chain of
     // already-resolved mocked promises the branch awaits after the execution.
     await act(async () => {
@@ -424,14 +389,7 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
         engineRows: [npcRow],
       },
     } as any);
-    render(
-      <DynamicOptionsSection
-        options={[]}
-        onOptionSelect={onOptionSelect}
-        onSendMessage={onSendMessage}
-        hasDynamicOverlay
-      />,
-    );
+    render(<CombatLegalActionsHarness onSendText={onOptionSelect} onSendMessage={onSendMessage} />);
     fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
 
     await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(1));
@@ -453,9 +411,7 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
       boundary: null,
       result: { resolvedAs: 'movement_only' },
     } as any);
-    render(
-      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
-    );
+    render(<CombatLegalActionsHarness onSendText={onOptionSelect} />);
     fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
 
     await waitFor(() => expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalled());
@@ -548,12 +504,7 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
     window.addEventListener('session-engine-rows', capture);
     try {
       render(
-        <DynamicOptionsSection
-          options={[]}
-          onOptionSelect={onOptionSelect}
-          onSendMessage={onSendMessage}
-          hasDynamicOverlay
-        />,
+        <CombatLegalActionsHarness onSendText={onOptionSelect} onSendMessage={onSendMessage} />,
       );
       fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
 
@@ -636,12 +587,7 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
       vi.mocked(executeAuthoritativeCombatIntent).mockResolvedValue(testCase.result as any);
 
       const view = render(
-        <DynamicOptionsSection
-          options={[]}
-          onOptionSelect={onOptionSelect}
-          onSendMessage={onSendMessage}
-          hasDynamicOverlay
-        />,
+        <CombatLegalActionsHarness onSendText={onOptionSelect} onSendMessage={onSendMessage} />,
       );
       fireEvent.click(await screen.findByText(testCase.action.label));
 
@@ -708,12 +654,7 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
     window.addEventListener('session-engine-rows', capture);
     try {
       render(
-        <DynamicOptionsSection
-          options={[]}
-          onOptionSelect={onOptionSelect}
-          onSendMessage={onSendMessage}
-          hasDynamicOverlay
-        />,
+        <CombatLegalActionsHarness onSendText={onOptionSelect} onSendMessage={onSendMessage} />,
       );
       fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
 
@@ -760,14 +701,7 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
       },
     } as any);
 
-    render(
-      <DynamicOptionsSection
-        options={[]}
-        onOptionSelect={onOptionSelect}
-        onSendMessage={onSendMessage}
-        hasDynamicOverlay
-      />,
-    );
+    render(<CombatLegalActionsHarness onSendText={onOptionSelect} onSendMessage={onSendMessage} />);
     fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
 
     await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(1));
@@ -828,9 +762,7 @@ describe('the spell-attack option runs the declare pipeline, never DM text (#258
   });
 
   it('opens the dialog and posts the declare intent with the engine ids', async () => {
-    render(
-      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
-    );
+    render(<CombatLegalActionsHarness onSendText={onOptionSelect} />);
     fireEvent.click(await screen.findByText('Cast Chill Touch'));
 
     await waitFor(() => expect(askPlayerForSpellCast).toHaveBeenCalled());
@@ -889,9 +821,7 @@ describe('the spell-attack option runs the declare pipeline, never DM text (#258
         ],
       }),
     } as Response);
-    render(
-      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
-    );
+    render(<CombatLegalActionsHarness onSendText={onOptionSelect} />);
     fireEvent.click(await screen.findByText('Cast Sacred Flame'));
 
     await waitFor(() => expect(onOptionSelect).toHaveBeenCalledWith('Cast Sacred Flame'));
@@ -907,9 +837,7 @@ describe('the spell-attack option runs the declare pipeline, never DM text (#258
       autoRolled: true,
       movementOnly: false,
     });
-    render(
-      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
-    );
+    render(<CombatLegalActionsHarness onSendText={onOptionSelect} />);
     fireEvent.click(await screen.findByText('Cast Chill Touch'));
 
     await waitFor(() => expect(askPlayerForSpellCast).toHaveBeenCalled());
@@ -930,9 +858,7 @@ describe('the spell-attack option runs the declare pipeline, never DM text (#258
       movementOnly: false,
       timedOut: true,
     });
-    render(
-      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
-    );
+    render(<CombatLegalActionsHarness onSendText={onOptionSelect} />);
     fireEvent.click(await screen.findByText('Cast Chill Touch'));
 
     await waitFor(() => expect(askPlayerForSpellCast).toHaveBeenCalled());
@@ -967,9 +893,7 @@ describe('the spell-attack option runs the declare pipeline, never DM text (#258
         ],
       }),
     } as Response);
-    render(
-      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
-    );
+    render(<CombatLegalActionsHarness onSendText={onOptionSelect} />);
     fireEvent.click(await screen.findByText('Cast Chill Touch'));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('needs a target');
@@ -1033,9 +957,7 @@ describe('an equip-and-attack option equips before it declares (#1059)', () => {
   });
 
   it('equips the weapon, then runs the same declare → dialog → commit pipeline', async () => {
-    render(
-      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
-    );
+    render(<CombatLegalActionsHarness onSendText={onOptionSelect} />);
     fireEvent.click(await screen.findByText('Equip and attack with Shortbow'));
 
     await waitFor(() => expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalled());
@@ -1058,9 +980,7 @@ describe('an equip-and-attack option equips before it declares (#1059)', () => {
 
   it('a failed equip declares nothing and spends nothing', async () => {
     vi.mocked(equipCharacterItem).mockRejectedValue(new Error('Unable to equip Shortbow.'));
-    render(
-      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
-    );
+    render(<CombatLegalActionsHarness onSendText={onOptionSelect} />);
     fireEvent.click(await screen.findByText('Equip and attack with Shortbow'));
 
     await waitFor(() =>

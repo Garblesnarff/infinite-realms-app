@@ -321,7 +321,6 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
                       genErrorByMessage={genErrorByMessage}
                       onGenerateScene={onGenerateScene}
                       onOptionSelect={onOptionSelect}
-                      onSendMessage={onSendMessage}
                       onRetryFailed={onRetryFailed}
                       encounterActive={combatState.isInCombat}
                       isLatestMessage={isLastMessage}
