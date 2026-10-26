@@ -243,14 +243,14 @@ describe('parseMessageOptions', () => {
       );
     });
 
-    it('should still use objective case after a gerund that is not a "thing" compound (#1132)', () => {
+    it('should still use objective case after a gerund that merely ends in "thing" (#1132)', () => {
       const option = {
         id: 'opt1',
         number: 1,
-        text: 'The plan involves leaving you behind.',
+        text: 'The bard is soothing you to sleep.',
         fullText: '...',
       };
-      expect(createPlayerMessageFromOption(option)).toBe('The plan involves leaving me behind.');
+      expect(createPlayerMessageFromOption(option)).toBe('The bard is soothing me to sleep.');
     });
 
     it('should handle "you will" and "you\'ll" in both cases', () => {
