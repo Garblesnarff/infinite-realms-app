@@ -19,7 +19,13 @@
 #   * the drop-in's additions: 30-day pruning (old artifacts go, recent
 #     ones and .unverified evidence stay, --verify-only never prunes)
 #     and the Slack alert path (alert file + webhook call on failure,
-#     silence on success, dry-run print when BACKUP_NOTIFY=0).
+#     silence on success, dry-run print when BACKUP_NOTIFY=0);
+#   * the FIX round's additions: the MIN_TABLES restored-table floor
+#     (default 20 — a 0-table archive fails verify), a render failure
+#     renaming the unverified .dump to .unverified instead of leaving
+#     it under its final name, pruning skipped on a failed verify, an
+#     ERR trap alerting on an unexpected exit, and gzip -t on the
+#     rendered .sql.gz.
 #
 # The script under test talks to Postgres only through `docker exec`,
 # so the suite provides a `docker` shim in a temp bin dir: exec runs the
@@ -133,6 +139,11 @@ export PATH="$TMP/bin:$PATH"
 # file means no Slack attempt, silently.
 export BACKUP_ALERT_FILE="$TMP/alerts-default.log"
 export BACKUP_ALERTS_ENV="$TMP/alerts-default.env"
+# Small fixtures: srcdb restores 5 tables, proddb 1 — both below the
+# script's default MIN_TABLES floor of 20, so the harness runs with the
+# floor off except in the dedicated floor tests, which set it explicitly
+# (env -u MIN_TABLES for the default, or an explicit value).
+export MIN_TABLES=0
 printf '%s\n' 'SLACK_ALERT_WEBHOOK_URL=stub://test' > "$TMP/alerts.env"
 
 # The cluster must run as a non-root user when we are root (initdb
@@ -524,6 +535,99 @@ OUT=$(env PGDATABASE=srcdb BACKUP_DIR="$TMP/backups-no-prune" RETENTION_DAYS=30 
 expect "--verify-only still exits 0" test "$RC" -eq 0
 expect "--verify-only leaves old backups alone (no pruning)" \
   bash -c "test -e '$TMP/backups-no-prune/infiniterealms_20200101_000000.dump'"
+
+# --- case (FIX round): MIN_TABLES floor, failed-verify prune skip, --------
+# --- render-failure rename, ERR trap ----------------------------------------
+# A 0-table archive count-matches at 0 == 0 — without the floor it
+# publishes as verified. With the default floor (MIN_TABLES unset -> 20)
+# it must fail verify, naming the floor.
+psql_admin -d postgres -c "CREATE DATABASE emptydb" >/dev/null
+pg_dump -Fc -d emptydb -f "$TMP/empty.dump"
+OUT=$(env -u MIN_TABLES PGDATABASE=srcdb bash "$SCRIPT" --verify-only "$TMP/empty.dump" 2>&1); RC=$?
+expect "a 0-table archive FAILS verify at the default MIN_TABLES floor (exit 1)" test "$RC" -eq 1
+expect_has "$OUT" "MIN_TABLES floor" "the floor failure names MIN_TABLES"
+expect "no scratch database leaks after the floor failure" \
+  bash -c "test -z \"\$1\"" _ "$(verify_db_names)"
+OUT=$(env MIN_TABLES= PGDATABASE=srcdb bash "$SCRIPT" --verify-only "$TMP/empty.dump" 2>&1); RC=$?
+expect "MIN_TABLES= (empty) falls back to the 20 default: the 0-table archive still fails" test "$RC" -eq 1
+expect_has "$OUT" "MIN_TABLES floor" "the empty-MIN_TABLES floor failure names MIN_TABLES"
+expect "no scratch database leaks after the empty-MIN_TABLES floor failure" \
+  bash -c "test -z \"\$1\"" _ "$(verify_db_names)"
+
+# A failed verify must not prune: an old backup present, the main-path
+# run fails verify (here via the floor: srcdb's 5 tables under the
+# default 20), the old backup survives and the new dump is .unverified.
+mkdir -p "$TMP/backups-failedverify-prune"
+: > "$TMP/backups-failedverify-prune/infiniterealms_20200101_000000.dump"
+touch -d '40 days ago' "$TMP/backups-failedverify-prune/infiniterealms_20200101_000000.dump"
+OUT=$(env -u MIN_TABLES PGDATABASE=srcdb BACKUP_DIR="$TMP/backups-failedverify-prune" bash "$SCRIPT" 2>&1); RC=$?
+expect "a main-path run whose verify fails exits non-zero" test "$RC" -ne 0
+expect_has "$OUT" "MIN_TABLES floor" "the failed verify names the floor"
+expect "a failed verify never prunes (old backup survives)" \
+  bash -c "test -e '$TMP/backups-failedverify-prune/infiniterealms_20200101_000000.dump'"
+expect "the failed run's new dump is kept as .unverified" \
+  bash -c "ls '$TMP/backups-failedverify-prune'/*.dump.unverified >/dev/null 2>&1"
+expect "the failed run's plain copy is kept as .sql.gz.unverified" \
+  bash -c "ls '$TMP/backups-failedverify-prune'/*.sql.gz.unverified >/dev/null 2>&1"
+
+# A plain-SQL render failure must not leave the .dump under its final
+# name: the dump was written before the render ran and was never
+# verified, so it is renamed to .unverified like a verify failure.
+# The failure is forced with a gzip shim that exits 1 — the dump step
+# (pg_dump -Fc) never calls gzip, so only the render pipeline breaks.
+mkdir -p "$TMP/bin-failgzip"
+printf '#!/usr/bin/env bash\nexit 1\n' > "$TMP/bin-failgzip/gzip"
+chmod +x "$TMP/bin-failgzip/gzip"
+mkdir -p "$TMP/backups-renderfail"
+rm -f "$TMP/alerts-renderfail.log" "$TMP/curl-renderfail.log"
+OUT=$(env PGDATABASE=srcdb BACKUP_DIR="$TMP/backups-renderfail" BACKUP_ALERTS_ENV="$TMP/alerts.env" BACKUP_ALERT_FILE="$TMP/alerts-renderfail.log" BACKUP_NOTIFY=1 CURL_LOG="$TMP/curl-renderfail.log" PATH="$TMP/bin-failgzip:$PATH" bash "$SCRIPT" 2>&1); RC=$?
+expect "a render failure exits non-zero" test "$RC" -ne 0
+expect_has "$OUT" "plain-SQL render failed" "the render failure is named (die message on stderr; the alert itself goes to the alert file + webhook, not stdout)"
+expect "a render failure leaves no final-named .dump" \
+  bash -c "test -z \"\$(ls '$TMP/backups-renderfail'/*.dump 2>/dev/null)\""
+expect "a render failure keeps the dump as .unverified" \
+  bash -c "ls '$TMP/backups-renderfail'/*.dump.unverified >/dev/null 2>&1"
+expect "a render failure writes no final-named .sql.gz" \
+  bash -c "test -z \"\$(ls '$TMP/backups-renderfail'/*.sql.gz 2>/dev/null)\""
+expect "a render failure writes the alert file" \
+  bash -c "grep -q 'FAILED' '$TMP/alerts-renderfail.log'"
+expect "a render failure writes exactly one alert line (no double alert under set -E)" \
+  bash -c "test \"\$(grep -c 'FAILED' '$TMP/alerts-renderfail.log')\" = '1'"
+expect "a render failure calls the Slack webhook exactly once" \
+  bash -c "test \"\$(grep -c 'FAILED' '$TMP/curl-renderfail.log')\" = '1'"
+
+# The gzip -t branch needs its own case: the exit-1 gzip shim above
+# fails the render pipeline before -t is ever reached. This shim
+# passes data through but fails -t, so only the integrity check fails.
+mkdir -p "$TMP/bin-failgzip-t"
+printf '%s\n' '#!/usr/bin/env bash' 'case "$*" in *-t*) exit 1 ;; *) cat ;; esac' > "$TMP/bin-failgzip-t/gzip"
+chmod +x "$TMP/bin-failgzip-t/gzip"
+mkdir -p "$TMP/backups-gziptfail"
+rm -f "$TMP/alerts-gziptfail.log" "$TMP/curl-gziptfail.log"
+OUT=$(env PGDATABASE=srcdb BACKUP_DIR="$TMP/backups-gziptfail" BACKUP_ALERTS_ENV="$TMP/alerts.env" BACKUP_ALERT_FILE="$TMP/alerts-gziptfail.log" BACKUP_NOTIFY=1 CURL_LOG="$TMP/curl-gziptfail.log" PATH="$TMP/bin-failgzip-t:$PATH" bash "$SCRIPT" 2>&1); RC=$?
+expect "a gzip -t failure exits non-zero" test "$RC" -ne 0
+expect_has "$OUT" "plain: gzip integrity check failed" "the gzip -t failure is named"
+expect "a gzip -t failure leaves no final-named .dump" \
+  bash -c "test -z \"\$(ls '$TMP/backups-gziptfail'/*.dump 2>/dev/null)\""
+expect "a gzip -t failure keeps the dump as .unverified" \
+  bash -c "ls '$TMP/backups-gziptfail'/*.dump.unverified >/dev/null 2>&1"
+expect "a gzip -t failure writes no final-named .sql.gz" \
+  bash -c "test -z \"\$(ls '$TMP/backups-gziptfail'/*.sql.gz 2>/dev/null)\""
+expect "a gzip -t failure writes exactly one alert line" \
+  bash -c "test \"\$(grep -c 'FAILED' '$TMP/alerts-gziptfail.log')\" = '1'"
+expect "a gzip -t failure calls the Slack webhook exactly once" \
+  bash -c "test \"\$(grep -c 'FAILED' '$TMP/curl-gziptfail.log')\" = '1'"
+
+# An unexpected exit (here: stdout closed onto /dev/full, so the first
+# log write fails) must alert through the ERR trap, not die silently.
+mkdir -p "$TMP/backups-errtrap"
+rm -f "$TMP/alerts-errtrap.log" "$TMP/curl-errtrap.log"
+OUT=$(env PGDATABASE=srcdb BACKUP_DIR="$TMP/backups-errtrap" BACKUP_ALERTS_ENV="$TMP/alerts.env" BACKUP_ALERT_FILE="$TMP/alerts-errtrap.log" BACKUP_NOTIFY=1 CURL_LOG="$TMP/curl-errtrap.log" bash "$SCRIPT" > /dev/full 2>"$TMP/errtrap-stderr.log"); RC=$?
+expect "an unexpected exit is non-zero (ERR trap case)" test "$RC" -ne 0
+expect "the ERR trap writes the alert file naming the unexpected error" \
+  bash -c "grep -q 'unexpected error' '$TMP/alerts-errtrap.log'"
+expect "the ERR trap calls the Slack webhook once" \
+  bash -c "test \"\$(grep -c 'FAILED' '$TMP/curl-errtrap.log')\" = '1'"
 
 # --- case: the Slack alert path (stubbed) ------------------------------------
 # (The alerts.env file was created with the shims, above.)

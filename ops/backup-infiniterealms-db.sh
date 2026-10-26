@@ -52,13 +52,12 @@
 # consumes the .sql.gz today.
 #
 # WHAT THE DROP-IN DOES NOT CARRY OVER from the installed script: its
-# absolute size floor, relative-size check, and restored-table floor.
-# The #1003 verify subsumes them — a truncated or empty archive fails
-# pg_restore --list, a corrupt archive fails the restore, and the
-# restored-table count must match the archive exactly. One gap remains
-# by design: a dump of an empty database would count-match at 0 == 0;
-# restoring a MIN_TABLES floor for that case is a one-line follow-up if
-# the strategist wants it.
+# absolute size floor and relative-size check. The #1003 verify subsumes
+# them — a truncated or empty archive fails pg_restore --list, a corrupt
+# archive fails the restore, and the restored-table count must match the
+# archive exactly. The installed script's restored-table floor IS carried
+# over as MIN_TABLES (default 20): without it a dump of an empty database
+# would count-match at 0 == 0 and publish as verified.
 #
 # Usage:
 #   backup-infiniterealms-db.sh                    dump + verify + prune
@@ -89,6 +88,11 @@
 #   RETENTION_DAYS    prune backups older than this many days (default
 #                     30, the installed script's retention); must be a
 #                     non-negative integer
+#   MIN_TABLES        restored-table floor (default 20, the installed
+#                     script's floor); a dump restoring fewer tables
+#                     fails verify — this closes the empty-database
+#                     0 == 0 count-match case; must be a non-negative
+#                     integer
 #   BACKUP_NOTIFY     1 (default) attempt the Slack alert on failure;
 #                     anything else prints a dry-run line instead
 #   BACKUP_ALERTS_ENV file holding SLACK_ALERT_WEBHOOK_URL (default
@@ -119,7 +123,13 @@
 # Merging this installs nothing (the repo convention for ops scripts,
 # per ops/README.md). Hetzner installs on Rob's line.
 
-set -euo pipefail
+# -E (errtrace) is what lets the ERR trap below fire for failures inside
+# functions (log/err): without it a failing printf inside log() would
+# kill the run silently under set -e. Handled paths stay exempt — a
+# failure inside a function called in a || list, an if condition, or
+# under ! never reaches the trap — so handled failures alert exactly
+# once through their own alert call.
+set -Eeuo pipefail
 umask 077
 
 PROG=backup-infiniterealms-db
@@ -162,7 +172,7 @@ ALERTS_ENV=${BACKUP_ALERTS_ENV:-/etc/infiniterealms/alerts.env}
 ALERT_FILE=${BACKUP_ALERT_FILE:-/var/log/infiniterealms/alerts.log}
 
 post_slack() {
-  [ "$NOTIFY" = "1" ] || { echo "[dry-run] slack: $1"; return 0; }
+  [ "$NOTIFY" = "1" ] || { echo "[dry-run] slack: $1" || true; return 0; }
   [ -r "$ALERTS_ENV" ] || return 0
   command -v curl >/dev/null 2>&1 || return 0
   command -v jq >/dev/null 2>&1 || return 0
@@ -189,6 +199,38 @@ alert() {
   return 0
 }
 
+# Unexpected-exit alert, kept from the installed script (its trap at
+# ~92): a command failing outside an explicitly handled path alerts
+# before the run dies, so a failure nobody wrote a branch for is still
+# reported. Guarded commands (|| lists, if/while conditions, ! tests)
+# never reach this trap — the exemption propagates into functions
+# called in those contexts — so the handled paths alert exactly once
+# through their own alert call. (This needs the set -E above: without
+# errtrace the trap would not fire inside functions at all.)
+# The trap is removed in cleanup (so teardown cannot re-alert),
+# before prune (best-effort tail work — a published, verified backup
+# must not re-alert on a tail-step failure, the installed ordering),
+# and before the final OK log.
+# Line numbers: $LINENO inside the trap is the failing builtin's line
+# inside log() (the same line for every log failure);
+# ${BASH_LINENO[0]} is the log call site. At top level
+# BASH_LINENO[0] is 0-or-unset, so fall back to $LINENO there (at top
+# level $LINENO IS the failing line). Both shapes verified empirically.
+trap 'trap - ERR; l=${BASH_LINENO[0]:-0}; [ "$l" = "0" ] && l=$LINENO; alert "unexpected error near line $l"; exit 1' ERR
+
+# Rename $1 to $1.unverified for failure evidence; logs success or
+# failure and returns non-zero when the rename itself fails, so callers
+# never claim evidence was kept when it was not.
+rename_evidence() {
+  if mv "$1" "$1.unverified"; then
+    log "evidence: $1 renamed to $1.unverified"
+    return 0
+  else
+    err "could not rename $1 to $1.unverified — the UNVERIFIED artifact is still at its original name"
+    return 1
+  fi
+}
+
 SRC_DB=${PGDATABASE:-postgres}
 CONTAINER=${CONTAINER:-supabase-db}
 BACKUP_DIR=${BACKUP_DIR:-/var/backups/infiniterealms/postgres}
@@ -206,6 +248,10 @@ case "$DO_VERIFY" in
 esac
 case "$RETENTION_DAYS" in
   *[!0-9]*) err "RETENTION_DAYS must be a non-negative integer (got: $RETENTION_DAYS)"; exit 2 ;;
+esac
+MIN_TABLES=${MIN_TABLES:-20}
+case "$MIN_TABLES" in
+  *[!0-9]*) err "MIN_TABLES must be a non-negative integer (got: $MIN_TABLES)"; exit 2 ;;
 esac
 
 # The one unrestorable TOC entry class (#38): ACLs on the pg_graphql
@@ -228,6 +274,8 @@ CTR_DUMP="$CTR_BASE.dump"
 CTR_LIST="$CTR_BASE.list"
 
 cleanup() {
+  # Teardown must never re-alert: the ERR trap is off from here on.
+  trap - ERR
   if [ "$VERIFY_CREATED" = "1" ] && [ -n "$VERIFY_DB" ]; then
     docker exec "$CONTAINER" psql -U postgres -w -X -q -d "$ADMIN_DB" \
       -c "DROP DATABASE IF EXISTS \"$VERIFY_DB\";" >/dev/null 2>&1 || true
@@ -361,6 +409,13 @@ verify_dump() {
   [ "$actual" = "$expected" ] \
     || { err "verify: restored table count $actual does not match the archive's $expected"; return 1; }
 
+  # Restored-table floor, carried over from the installed script
+  # (MIN_TABLES, default 20): without it an empty or wrong-database
+  # dump count-matches at 0 == 0 and publishes as verified. Checked
+  # against the restored count, like the installed script's check.
+  [ "$actual" -ge "$MIN_TABLES" ] \
+    || { err "verify: restored $actual tables, below the MIN_TABLES floor of $MIN_TABLES"; return 1; }
+
   local size
   size=$(docker exec "$CONTAINER" psql -U postgres -w -X -q -t -A -d "$VERIFY_DB" -c "SELECT pg_database_size('$VERIFY_DB')") || size="?"
   docker exec "$CONTAINER" psql -U postgres -w -X -q -d "$ADMIN_DB" \
@@ -385,6 +440,8 @@ render_plain() {
     || { err "plain: docker cp $dump into $CONTAINER failed"; return 1; }
   docker exec "$CONTAINER" pg_restore -f - "$CTR_DUMP" | gzip > "$plain_partial" \
     || { rm -f "$plain_partial"; err "plain: pg_restore render failed; the .dump is intact: $dump"; return 1; }
+  gzip -t "$plain_partial" \
+    || { rm -f "$plain_partial"; err "plain: gzip integrity check failed for the rendered copy"; return 1; }
   docker exec "$CONTAINER" rm -f "$CTR_DUMP" >/dev/null 2>&1 || true
   return 0
 }
@@ -403,7 +460,7 @@ prune_backups() {
   find "$BACKUP_DIR" -type f -name '.in-progress_*' -mmin +180 -delete 2>/dev/null || true
   docker exec "$CONTAINER" find /tmp -maxdepth 1 -name 'ir_backup_*.dump' -mmin +180 -delete >/dev/null 2>&1 || true
   docker exec "$CONTAINER" find /tmp -maxdepth 1 -name 'ir_backup_*.list' -mmin +180 -delete >/dev/null 2>&1 || true
-  log "pruned backups older than $RETENTION_DAYS days; retained: $(find "$BACKUP_DIR" -type f -name 'infiniterealms_*.dump' -o -type f -name 'infiniterealms_*.sql.gz' | wc -l)"
+  log "pruned backups older than $RETENTION_DAYS days; retained: $(find "$BACKUP_DIR" -type f -name 'infiniterealms_*.dump' -o -type f -name 'infiniterealms_*.sql.gz' 2>/dev/null | wc -l)" || true
 }
 
 if [ -n "$VERIFY_ONLY" ]; then
@@ -435,10 +492,30 @@ if [ "$KEEP_PLAIN" = "1" ]; then
   # archive so both files are the same snapshot. pipefail makes a
   # pg_restore failure fail this step even though gzip exits 0.
   if ! render_plain "$DUMP" "$PLAIN_PARTIAL"; then
-    alert "plain-SQL render FAILED for $DUMP"
-    die "plain-SQL render failed; the .dump is intact: $DUMP"
+    # A render failure must not leave a final-named .dump that was
+    # never verified: rename it to .unverified first, like the
+    # verify-failure path below, so the prune invariant (only
+    # verified artifacts exist under final names) holds.
+    if rename_evidence "$DUMP"; then
+      alert "plain-SQL render FAILED for $DUMP"
+      die "plain-SQL render failed; the .dump is kept as evidence under the .unverified suffix"
+    else
+      alert "plain-SQL render FAILED for $DUMP (WARNING: evidence rename failed — unverified dump still at final name)"
+      die "plain-SQL render failed; WARNING: evidence rename failed, unverified dump still at final name"
+    fi
   fi
-  mv "$PLAIN_PARTIAL" "$PLAIN" || { alert "could not move the plain copy into place: $PLAIN"; die "could not move the plain copy into place: $PLAIN"; }
+  if ! mv "$PLAIN_PARTIAL" "$PLAIN"; then
+    # Same invariant as the render failure above: the .dump is
+    # unverified at this point, so it must not stay under its final
+    # name. (PLAIN_PARTIAL is removed by the EXIT trap.)
+    if rename_evidence "$DUMP"; then
+      alert "could not move the plain copy into place: $PLAIN; the .dump is kept as evidence under the .unverified suffix"
+      die "could not move the plain copy into place: $PLAIN; the .dump is kept as evidence under the .unverified suffix"
+    else
+      alert "could not move the plain copy into place: $PLAIN (WARNING: evidence rename failed — unverified dump still at final name)"
+      die "could not move the plain copy into place: $PLAIN; WARNING: evidence rename failed, unverified dump still at final name"
+    fi
+  fi
   log "plain copy written: $PLAIN"
 fi
 
@@ -446,21 +523,27 @@ if [ "$DO_VERIFY" = "1" ]; then
   if ! verify_dump "$DUMP"; then
     # A failed verify must not leave final-named artifacts that look
     # verified to anything globbing infiniterealms_*.dump downstream.
-    if mv "$DUMP" "$DUMP.unverified"; then
-      log "evidence: $DUMP renamed to $DUMP.unverified"
+    rename_ok=1
+    rename_evidence "$DUMP" || rename_ok=0
+    if [ -f "$PLAIN" ]; then rename_evidence "$PLAIN" || rename_ok=0; fi
+    if [ "$rename_ok" = "1" ]; then
+      alert "verify FAILED for $DUMP"
+      die "verify failed — artifacts kept as evidence under the .unverified suffix"
     else
-      err "could not rename $DUMP to $DUMP.unverified — the UNVERIFIED dump is still at its original name"
+      alert "verify FAILED for $DUMP (WARNING: evidence rename failed — unverified artifact still at final name)"
+      die "verify failed — WARNING: evidence rename failed, unverified artifact still at final name"
     fi
-    if [ -f "$PLAIN" ]; then mv "$PLAIN" "$PLAIN.unverified" || true; fi
-    alert "verify FAILED for $DUMP"
-    die "verify failed — artifacts kept as evidence under the .unverified suffix"
   fi
   # Prune only after a verified publish (the installed script's
   # invariant): an unverified backup must never be the reason the last
-  # good backups disappear.
+  # good backups disappear. The ERR trap is off from here on: prune
+  # is best-effort tail work, and a published, verified backup must
+  # not re-alert on a tail-step failure (the installed ordering).
+  trap - ERR
   prune_backups
 else
   log "verify SKIPPED (BACKUP_VERIFY=0) — this backup is UNVERIFIED; prune SKIPPED (pruning runs only after verified backups)"
 fi
 
-log "OK $DUMP"
+trap - ERR
+log "OK $DUMP" || true

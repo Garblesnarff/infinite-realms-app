@@ -396,7 +396,8 @@ installed copy still runs the option-2 verify (psql + error classifier,
 2026-09-13). This copy is option 3:
 
 - `pg_dump -Fc` to `infiniterealms_<stamp>.dump` in `BACKUP_DIR`
-  (default `/var/backups/infiniterealms`), plus the legacy plain-SQL
+  (default `/var/backups/infiniterealms/postgres`, the installed script's
+  default), plus the legacy plain-SQL
   `infiniterealms_<stamp>.sql.gz` rendered from the same archive with
   `pg_restore` (kept for one retention cycle, per #38).
 - Verify (default on): the archive is restored into a throwaway
@@ -413,20 +414,32 @@ installed copy still runs the option-2 verify (psql + error classifier,
   path the script controls (and scratch databases orphaned by a killed
   run are swept at the start of the next verify). A second entry ever
   matching the exclusion makes the run refuse rather than widen it
-  silently, and a failed verify renames the run's artifacts to
-  `*.unverified`, so nothing downstream mistakes them for a verified
-  backup while they stay on disk as evidence. Artifacts are written
+  silently, and a failed verify in a backup run renames the run's
+  artifacts to `*.unverified`, so nothing downstream mistakes them for
+  a verified backup while they stay on disk as evidence
+  (`--verify-only` never renames its input). Artifacts are written
   mode 0600. The verify restores a second full copy of the database on
   the same server — keep disk headroom of at least the database's size
   free.
 - `--verify-only <dump>` runs just the verify against an existing archive —
   the shape the monthly restore drill (#38) needs.
-- No retention/pruning: the host's existing prune behaviour was never
-  tracked here, so parity is confirmed at install time, not invented here.
+- Retention/pruning, like the installed script: after a verified backup
+  only, `infiniterealms_*.dump` and `infiniterealms_*.sql.gz` older than
+  `RETENTION_DAYS` (default 30) are deleted, plus stale partials and
+  abandoned pre-drop-in `.in-progress_*` files older than 180 minutes
+  and stale container `/tmp` `ir_backup_*` files older than 180 minutes.
+  Failed backup runs prune nothing and their artifacts stay as
+  `*.unverified` evidence; `--verify-only` never prunes. `.unverified`
+  evidence is never pruned by the script — remove it by hand after
+  triage.
 
-Connection is the standard libpq environment (`PGHOST`, `PGPORT`, `PGUSER`,
-`PGDATABASE`, `PGPASSWORD`); overrides: `BACKUP_DIR`, `BACKUP_KEEP_PLAIN`,
-`BACKUP_VERIFY`, `BACKUP_ADMIN_DB`. Two operator notes: the verify's sweep
+Connection is `docker exec` into `CONTAINER` (default `supabase-db`), like
+the installed script — no `PGHOST`/`PGPORT`/`PGUSER`/`PGPASSWORD`
+connection environment is needed on the host; `PGDATABASE` names the
+source database (default `postgres`), and the installed script's `DB`
+is not read. Overrides: `BACKUP_DIR`,
+`BACKUP_KEEP_PLAIN`, `BACKUP_VERIFY`, `BACKUP_ADMIN_DB`, `RETENTION_DAYS`,
+`MIN_TABLES` (restored-table floor, default 20). Two operator notes: the verify's sweep
 drops any database under the `ir_backup_verify_` prefix whose embedded
 stamp is more than 24 hours old — that namespace belongs to this script
 alone, so never park anything else under it; and the overwrite refusal is
@@ -442,10 +455,14 @@ ON_ERROR_STOP swallow as a contrast).
 Nothing is installed by merging. On Rob's line: run
 `bash ops/tests/backup-restore.sh` on the box, install
 `ops/backup-infiniterealms-db.sh` next to the current backup script (keeping
-the old one as `.bak-<stamp>`), point the existing 02:00 cron at it with the
-same `PG*` environment the current script runs under, and confirm the first
-night's log ends in `verify: OK` + `OK …`. The separate restore script and
-the monthly drill cron are unchanged by this PR.
+the old one as `.bak-<stamp>`), point the existing 02:00 cron at it, first
+confirming the cron sets neither `DB` nor `PGDATABASE` (if it sets `DB`,
+translate that value to `PGDATABASE` — the drop-in does not read `DB`);
+the script reaches Postgres only via `docker exec`, so no `PGHOST`/
+`PGPORT`/`PGUSER`/`PGPASSWORD` connection environment is needed on the
+host, and confirm the first night's log ends in `verify: OK` + `OK …`.
+The separate restore script and the monthly drill cron are unchanged by
+this PR.
 
 ### What is installed today: `backup-infiniterealms-db.installed.sh` (#1003)
 
@@ -465,7 +482,7 @@ installed from here. What it does, and what a drop-in must keep:
   `supabase-db`; `DB`, default `postgres`). The host's own client tools are
   not used.
 - **Output:** `BACKUP_DIR`, default `/var/backups/infiniterealms/postgres`
-  (note: the replacement defaults to the parent directory). One
+  (note: the drop-in replacement defaults to the same directory). One
   `infiniterealms_<YYYYmmdd_HHMMSS>.sql.gz` per night, plain SQL from
   `pg_dump | gzip`, written as `.in-progress_<stamp>.sql.gz` and renamed only
   after every check passes. Files are left at the default umask (0644); the
