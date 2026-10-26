@@ -86,7 +86,7 @@ const spellLevelLabel = (level: number | null): string => {
 
 const SpellEntry: React.FC<{
   spell: SpellVM;
-  /** Cast stays offered in combat (#2233): it is the one cast path that reaches the engine. */
+  /** In combat the Cast button is hidden: the action bar is the one place to act (#90). */
   isInCombat: boolean;
   showActions: boolean;
   pendingSpellId?: string;
@@ -94,7 +94,15 @@ const SpellEntry: React.FC<{
   castingSpellId?: string;
   onCastSpell?: (spell: SpellVM) => void | Promise<void>;
   onTogglePrepared?: (spellId: string, isPrepared: boolean) => void | Promise<void>;
-}> = ({ spell, showActions, pendingSpellId, castingSpellId, onCastSpell, onTogglePrepared }) => (
+}> = ({
+  spell,
+  isInCombat,
+  showActions,
+  pendingSpellId,
+  castingSpellId,
+  onCastSpell,
+  onTogglePrepared,
+}) => (
   <div className="rounded border border-white/5 bg-white/[0.02] p-2">
     <div className="flex items-start gap-2">
       <div className="min-w-0 flex-1">
@@ -120,7 +128,7 @@ const SpellEntry: React.FC<{
               {pendingSpellId === spell.id ? 'Saving…' : spell.isPrepared ? 'Prepared' : 'Prepare'}
             </Button>
           )}
-          {onCastSpell && (
+          {!isInCombat && onCastSpell && (
             // aria-disabled, not disabled (#2418): the button stays in the tab order and a screen
             // reader says why nothing happens. The click is ignored while a cast is in flight.
             <Button
@@ -247,6 +255,9 @@ const SpellsSection: React.FC<{
         </p>
       )}
 
+      {isInCombat && c.spellcasting && onCastSpell && (
+        <p className="text-xs text-muted-foreground">To cast, use Cast in the action bar.</p>
+      )}
       <SpellGroup
         title="Cantrips"
         spells={c.spells.cantrips}

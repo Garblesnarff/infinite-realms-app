@@ -635,7 +635,9 @@ describe('D3: combat options use the real response hook (#2547)', () => {
     render(<Game />);
     fireEvent.click(await screen.findByRole('button', { name: /Cast Chill Touch/ }));
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('could not be cast');
+    // #1143: the alert carries the engine's own refusal (this route stub's error text), not
+    // the generic "could not be cast" — that line is now only for a propose that throws.
+    expect(alert).toHaveTextContent('Spell proposal refused. Nothing was spent.');
     expect(requests.filter((r) => r.intent?.type === 'spell')).toEqual([]);
     expect(presented).toEqual([]);
     expect(vi.mocked(AIService.chatWithDM)).not.toHaveBeenCalled();

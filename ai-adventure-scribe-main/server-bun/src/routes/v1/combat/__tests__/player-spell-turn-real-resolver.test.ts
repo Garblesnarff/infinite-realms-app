@@ -67,20 +67,23 @@ const entity = (id: string, name: string, x: number, type: 'pc' | 'monster') =>
     movementRemaining: 30,
   }) satisfies MapEntity;
 
+// #1143: the action-bar range cases move Balthazar; every other case keeps him at x=4 (15 ft).
+let balthazarX = 4;
 function board(): TacticalMap {
   const entities = [
     entity(MERLIN_ID, 'Merlin Swift', 1, 'pc'),
-    entity(BALTHAZAR_ID, 'Head Chef Balthazar', 4, 'monster'),
+    entity(BALTHAZAR_ID, 'Head Chef Balthazar', balthazarX, 'monster'),
   ];
+  const width = Math.max(10, balthazarX + 2);
   return {
     id: 'map',
     sessionId: SESSION_ID,
-    width: 10,
+    width,
     height: 10,
     round: 1,
     sceneDescription: 'the feast hall',
     cells: Array.from({ length: 10 }, () =>
-      Array.from({ length: 10 }, () => ({
+      Array.from({ length: width }, () => ({
         terrain: 'floor' as const,
         blocksMovement: false,
         blocksSight: false,
@@ -177,6 +180,8 @@ mock.module(import.meta.resolve('../helpers.js'), () => ({
   verifyEncounterOwnership: async () => ({ success: true, session: { id: SESSION_ID } }),
 }));
 let holderId = MERLIN_ID;
+// #1143: Chill Touch is added to Merlin's sheet only for the action-bar range cases.
+let extraSpellIds: string[] = [];
 mock.module('../../../../services/combat/combat-encounter-service.js', () => ({
   CombatEncounterService: {
     getCombatState: async () => ({
@@ -237,6 +242,7 @@ mock.module('../../../../services/combat/data-access.js', () => ({
           scores: { str: 8, dex: 14, con: 12, int: 16, wis: 12, cha: 10 },
           saveBonuses: {},
           spellIds: [
+            ...extraSpellIds,
             'fire-bolt',
             'burning-hands',
             'magic-missile',
@@ -257,6 +263,8 @@ mock.module('../../../../services/combat/data-access.js', () => ({
   monsterAttackSource: () => 'generic',
   countStandingMooks: async () => 0,
   verifyEncounterAccess: async () => {},
+  // #1143: read by the legal-action list's lazy imports; Merlin's sheet is the owner's.
+  verifyCharacterOwnership: async () => {},
 }));
 mock.module('../../../../services/combat/tactical-action-service.js', () => ({
   recordDmTacticalFact: async () => {},
@@ -385,6 +393,13 @@ mock.module('../../../../services/combat/concentration-service.js', () => ({
 }));
 mock.module('../../../../services/combat/npc-provocation.js', () => ({
   markPlayerDamageProvocation: async () => [],
+}));
+// #1143: the legal-action list reads the Fighter feature rows from the DB; Merlin is a Wizard
+// with none, which is what the real query returns for him (null = no row).
+const realFighterFeatures = await import('../../../../services/combat/fighter-features-service.js');
+mock.module('../../../../services/combat/fighter-features-service.js', () => ({
+  ...realFighterFeatures,
+  fighterFeatureUses: async () => ({ secondWind: null, actionSurge: null }),
 }));
 
 // ---- The client side: real resolution step and spell popup; only its edges are stubbed. ----
@@ -571,6 +586,8 @@ const spellIntent = () => ({
 
 beforeEach(() => {
   setRngSeed(902);
+  balthazarX = 4;
+  extraSpellIds = [];
   concentration = null;
   availableSlotLevels = [1];
   slotSpends.length = 0;
@@ -891,5 +908,158 @@ describe('#715 a utility spell casts in combat and spends the action', () => {
       spellId: 'dancing-lights',
       spellName: 'Dancing Lights',
     });
+  });
+});
+
+describe('#1143 a Cast chosen from the ActionBar, through the real route and resolver', () => {
+  // The two client calls the bar's spell branch makes (use-combat-legal-actions.ts): the tray
+  // prompt (askPlayerForSpellCast, which proposes first) and then the commit
+  // (executeStructuredCombatActionWithBoundary, origin 'action_bar'), with the exact
+  // StructuredCombatAction that branch builds from a `Cast Chill Touch` legal action. Merlin is
+  // at x=1 on a 5-ft grid; Chill Touch is a 120-ft ranged spell attack (SRD).
+  const spellCastModule = `${CLIENT}/services/combat/player-spell-cast`;
+  const executorModule = `${CLIENT}/services/combat/combat-action-executor`;
+  const transcriptModule = `${CLIENT}/services/combat/combat-outcome-transcript`;
+  type CastResult = {
+    d20?: number;
+    d20Rolls?: [number, number];
+    autoRolled: boolean;
+    movementOnly?: boolean;
+    refusal?: string;
+  };
+  type Execution = { result: unknown; boundary: string | null };
+  const barCast = (): ClientAction => ({
+    actor_id: MERLIN_ID,
+    action_type: 'cast_spell',
+    target_ids: [BALTHAZAR_ID],
+    weapon_id: null,
+    spell_id: 'chill-touch',
+    slot_level: null,
+    movement_feet: 0,
+  });
+  const askCast = async (): Promise<CastResult> => {
+    const { askPlayerForSpellCast } = await import(spellCastModule);
+    return askPlayerForSpellCast({
+      encounterId: ENCOUNTER_ID,
+      action: barCast(),
+      actorLabel: 'Merlin Swift',
+      participants: PARTICIPANTS,
+    });
+  };
+  const commitCast = async (cast: CastResult): Promise<Execution> => {
+    const { executeStructuredCombatActionWithBoundary } = await import(executorModule);
+    return executeStructuredCombatActionWithBoundary(
+      ENCOUNTER_ID,
+      barCast(),
+      cast.d20,
+      cast.d20Rolls,
+      'action_bar',
+    );
+  };
+  const legalActionTypes = async (): Promise<string[]> => {
+    const response = await app.handle(
+      new Request(`http://localhost/v1/combat/${ENCOUNTER_ID}/legal-actions`, {
+        headers: { authorization: 'Bearer <redacted>' },
+      }),
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { actions: Array<{ type: string }> };
+    return body.actions.map((action) => action.type);
+  };
+  const OUT_OF_RANGE =
+    'Spell refused: Chill Touch: Head Chef Balthazar is out of its 120-foot reach — move closer and cast it again';
+
+  beforeEach(() => {
+    extraSpellIds = ['chill-touch'];
+  });
+
+  it('Chill Touch at 25 ft resolves as a ranged spell attack with the player die, no approach', async () => {
+    balthazarX = 6; // 5 squares = 25 ft
+    setPlayerRollHost(playerRolls(15));
+
+    const cast = await askCast();
+    expect(cast).toEqual({ d20: 15, autoRolled: false, movementOnly: false });
+    expect(prompts).toHaveLength(1);
+    const execution = await commitCast(cast);
+
+    // The exact bodies the bar sent, and the route accepted both.
+    expect(intentExchanges().map(({ body, status }) => ({ body, status }))).toEqual([
+      {
+        body: {
+          intent: {
+            type: 'spell',
+            actorId: MERLIN_ID,
+            targetIds: [BALTHAZAR_ID],
+            spellId: 'chill-touch',
+            spellName: 'Chill Touch',
+          },
+          source: 'dm',
+          phase: 'propose',
+        },
+        status: 200,
+      },
+      {
+        body: {
+          intent: {
+            type: 'spell',
+            actorId: MERLIN_ID,
+            targetIds: [BALTHAZAR_ID],
+            spellId: 'chill-touch',
+            spellName: 'Chill Touch',
+            d20: 15,
+          },
+          source: 'dm',
+          dmStartedAt: expect.any(Number),
+          origin: 'action_bar',
+        },
+        status: 200,
+      },
+    ]);
+    // The real resolver rolled a spell attack with the player's die: not a movement-only
+    // approach ("could not move closer"), and no move was applied to the board.
+    const result = (execution.result as { results: Array<Record<string, unknown>> }).results[0];
+    expect(result).toMatchObject({ spellName: 'Chill Touch', d20: 15, hit: expect.any(Boolean) });
+    expect(result.resolvedAs).toBeUndefined();
+    expect(result.totalAttackRoll).toBe(15 + Number(result.attackBonus));
+    const { formatCombatActionParts } = await import(transcriptModule);
+    const lines = (
+      formatCombatActionParts(barCast(), execution.result, []) as Array<{ line: string }>
+    )
+      .map((part) => part.line)
+      .join('\n');
+    expect(lines).toContain('Chill Touch');
+    expect(lines).not.toMatch(/could not move closer|moved \d+ ft toward|no attack was rolled/);
+    expect(actionClaims).toEqual([MERLIN_ID]);
+  });
+
+  it('an out-of-range Chill Touch is refused with a readable reason; End turn is still offered', async () => {
+    balthazarX = 27; // 26 squares = 130 ft, past the 120-ft range
+    setPlayerRollHost(playerRolls(15));
+
+    // The bar's first call: the proposal is refused, no die is asked for, and the reason comes
+    // back for the bar to show ("…. Nothing was spent.").
+    const cast = await askCast();
+    expect(cast).toEqual({ autoRolled: true, movementOnly: false, refusal: OUT_OF_RANGE });
+    expect(prompts).toHaveLength(0);
+    expect(intentExchanges()).toEqual([
+      expect.objectContaining({ body: expect.objectContaining({ phase: 'propose' }), status: 422 }),
+    ]);
+    // The bar stops there. The commit it would send (the 45 s timer path, no die) is refused
+    // by the route the same way: a 422 with the same reason, nothing resolved or spent.
+    await expect(commitCast({ autoRolled: true })).rejects.toMatchObject({
+      name: 'CombatIntentRefusedError',
+      status: 422,
+      message: OUT_OF_RANGE,
+      details: expect.objectContaining({ refusal: 'out_of_range' }),
+    });
+    expect(damageCalls).toEqual([]);
+    expect(actionClaims).toEqual([]);
+
+    // The turn survives: the legal actions after the refusal still end in End turn (the bar's
+    // End turn button stays enabled — CombatActionBarLive.test.tsx), and the Action is unspent.
+    const types = await legalActionTypes();
+    expect(types).toContain('end_turn');
+    expect(types).toContain('dodge');
+    expect(types).toContain('flee');
   });
 });

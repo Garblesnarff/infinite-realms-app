@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { requestMapMoveMode } from './map-move-mode';
 import { TacticalMapBoard } from './TacticalMapBoard';
 import { TacticalMapProvider } from './TacticalMapProvider';
 
@@ -176,6 +177,50 @@ describe('tactical map combat flow', () => {
     );
     expect(screen.queryByTestId('canvas')).not.toBeInTheDocument();
   });
+  it("opens in move mode when the ActionBar's Move asks: the token is selected (#90)", async () => {
+    const fetchMock = vi.fn((url: string) => {
+      let data: unknown = { accepted: true, result: { applied: true } };
+      if (url.includes('/status')) data = { encounter: { version: 3 } };
+      if (url.includes('valid-moves')) data = { moves: [{ x: 1, y: 1 }] };
+      return Promise.resolve({
+        ok: !url.endsWith('/tactical-map'),
+        status: 200,
+        headers: new Headers(),
+        json: async () => data,
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(
+      <TacticalMapProvider sessionId="s">
+        <TacticalMapBoard sessionId="s" />
+      </TacticalMapProvider>,
+    );
+    await act(async () =>
+      window.dispatchEvent(
+        new CustomEvent('tactical-map-delta', { detail: { type: 'map_created', map: map() } }),
+      ),
+    );
+    expect(await screen.findByText('2×2')).toBeInTheDocument();
+    act(() => requestMapMoveMode());
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('valid-moves/pc'),
+        expect.anything(),
+      ),
+    );
+    // No click on the token: the destination alone sends the move, so the token was selected.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    fireEvent.click(screen.getByText('destination'));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/combat/enc-1/intent'),
+        expect.anything(),
+      ),
+    );
+  });
+
   it('keeps one map when the board moves between the rail and the sheet (#2252)', async () => {
     const fetchMock = vi.fn(() => Promise.resolve({ ok: false, json: async () => null }));
     vi.stubGlobal('fetch', fetchMock);

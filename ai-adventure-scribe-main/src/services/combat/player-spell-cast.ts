@@ -34,6 +34,12 @@ export interface PlayerSpellCastResult {
    * a dismissed or refused popup reports plain `autoRolled: true` and stops there.
    */
   timedOut?: boolean;
+  /**
+   * #1143: the engine refused the proposal (e.g. "Spell refused: Chill Touch: the Goblin is out
+   * of its 120-foot reach — move closer and cast it again"). The action bar shows it instead of
+   * a bare "could not be cast".
+   */
+  refusal?: string;
 }
 
 const labelFor = (
@@ -139,7 +145,14 @@ export async function askPlayerForSpellCast(
         spellId: action.spell_id,
         reason: reasonForLog(error),
       });
-      return { autoRolled: true, movementOnly: false };
+      return {
+        autoRolled: true,
+        movementOnly: false,
+        // By name, not instanceof: many suites mock the executor module without its classes.
+        ...(error instanceof Error && error.name === 'CombatIntentRefusedError'
+          ? { refusal: error.message }
+          : {}),
+      };
     }
   }
 

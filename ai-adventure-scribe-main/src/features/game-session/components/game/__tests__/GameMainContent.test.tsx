@@ -51,6 +51,9 @@ const state = vi.hoisted(() => ({
   },
   resumeCombatTurn: vi.fn(),
   tacticalMap: null as null | { id: string },
+  combatChatPlaceholder: undefined as string | undefined,
+  /** The real bar renders nothing out of combat. */
+  barInCombat: false,
 }));
 
 // #2517: the fallen story log reads MessageContext; the rows are
@@ -149,20 +152,35 @@ vi.mock('@/contexts/CharacterContext', () => ({
     },
   }),
 }));
+// #90: the bar's own states are covered in CombatActionBar(.Live).test.tsx; here only its mount.
+vi.mock('../CombatActionBar', () => ({
+  CombatActionBarLive: ({ onMove }: { onMove: () => void }) =>
+    state.barInCombat ? (
+      <div role="toolbar" aria-label="Your actions">
+        <button type="button" onClick={onMove}>
+          Move
+        </button>
+      </div>
+    ) : null,
+  useCombatChatPlaceholder: () => state.combatChatPlaceholder,
+}));
 vi.mock('../../chat/ChatInput', () => ({
   ChatInput: ({
     onSendMessage,
     isDisabled,
     disabledReason,
+    placeholder,
   }: {
     onSendMessage: (value: string) => void;
     isDisabled: boolean;
     disabledReason?: string;
+    placeholder?: string;
   }) => (
     <button
       data-testid="chat-input"
       disabled={isDisabled}
       data-disabled-reason={disabledReason}
+      data-placeholder={placeholder}
       onClick={() => onSendMessage('I advance')}
     >
       Send
@@ -250,6 +268,8 @@ const handlerRef = { spellCastHandlerRef: { current: null } };
 
 describe('GameMainContent overhaul behavior contract', () => {
   beforeEach(() => {
+    state.combatChatPlaceholder = undefined;
+    state.barInCombat = false;
     mockStoryMessages = [];
     state.queueStatus = 'idle';
     state.hasPendingRolls = false;
@@ -450,6 +470,40 @@ describe('GameMainContent overhaul behavior contract', () => {
       screen.getByText('Tap the Roll Dice button above to complete the Wisdom saving throw roll'),
     ).toBeInTheDocument();
     expect(screen.getByTestId('chat-input')).toBeDisabled();
+  });
+
+  it('mounts the action bar above the chat box and hides it while a roll is pending (#90)', () => {
+    state.barInCombat = true;
+    state.combatChatPlaceholder =
+      'Or describe what you do… e.g. “I feint high and cut at its legs”';
+    const { unmount } = render(<GameMainContent {...baseProps} isCombatDetected />);
+    const bar = screen.getByRole('toolbar', { name: 'Your actions' });
+    const input = screen.getByTestId('chat-input');
+    // The bar sits above the chat box in document order.
+    expect(bar.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(input).toHaveAttribute(
+      'data-placeholder',
+      'Or describe what you do… e.g. “I feint high and cut at its legs”',
+    );
+    unmount();
+
+    state.currentRoll = {
+      id: 'attack-1',
+      status: 'pending',
+      requestType: 'attack',
+      description: 'Longsword attack',
+    };
+    render(<GameMainContent {...baseProps} isCombatDetected />);
+    expect(screen.queryByRole('toolbar', { name: 'Your actions' })).toBeNull();
+  });
+
+  it('opens the map sheet when the bar asks for move mode on a phone (#90)', () => {
+    state.barInCombat = true;
+    state.tacticalMap = { id: 'map-1' };
+    render(<GameMainContent {...baseProps} isCombatDetected />);
+    expect(screen.queryByRole('dialog', { name: 'Tactical map' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+    expect(screen.getByRole('dialog', { name: 'Tactical map' })).toBeInTheDocument();
   });
 
   it('enables the composer after a move-only action and the NPC turn hand back to the player', () => {

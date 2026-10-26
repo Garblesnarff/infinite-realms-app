@@ -333,13 +333,12 @@ describe('CombatInterface player view (#2257)', () => {
     expect(cast).toBeInTheDocument();
     fireEvent.click(cast);
     expect(screen.getByRole('dialog')).toHaveTextContent('Cast Spell — your character');
-    fireEvent.click(screen.getByRole('button', { name: 'Cast Chill Touch' }));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(closeTracker).toHaveBeenCalledOnce();
-    expect(castHandler).toHaveBeenCalledWith(
-      'I cast Chill Touch [spell_id=chill-touch, spell_level=cantrip].',
-      { intent: 'spell_cast', spellId: 'chill-touch', spellLevel: 0 },
-    );
+    // #90: the sheet's Cast buttons leave while an encounter is active — the ActionBar is the
+    // one place to act — so the dev-only GM dialog shows the pointer line, and nothing casts.
+    expect(screen.queryByRole('button', { name: 'Cast Chill Touch' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toHaveTextContent('To cast, use Cast in the action bar.');
+    expect(closeTracker).not.toHaveBeenCalled();
+    expect(castHandler).not.toHaveBeenCalled();
     expect(
       vi.mocked(useCombatActions).mock.results.at(-1)?.value.handleCombatAction,
     ).not.toHaveBeenCalled();
