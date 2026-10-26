@@ -33,6 +33,10 @@ import {
 } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useOptionalCharacter } from '@/contexts/CharacterContext';
+import {
+  summarizeCombatTurn,
+  turnBarTitle,
+} from '@/features/game-session/components/game/overhaul/combat-turn-order';
 import { RightSheetLive } from '@/features/game-session/components/game/overhaul/RightSheetLive';
 import { useCombatActions } from '@/hooks/use-combat-actions';
 
@@ -95,6 +99,19 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({
 
   const { showCombatLog = false } = state;
 
+  // The dot's accessible name is the TurnBar copy (#85): the title the bar shows for
+  // the current turn, or the loading title while no one holds the turn yet.
+  const turnSummary = React.useMemo(() => summarizeCombatTurn(activeEncounter), [activeEncounter]);
+  const playerDown = React.useMemo(() => {
+    const playerParticipant = activeEncounter?.participants.find(
+      (participant) => participant.participantType === 'player' && participant.isActive !== false,
+    );
+    return (playerParticipant?.currentHitPoints ?? 1) <= 0;
+  }, [activeEncounter]);
+  const combatStatusLabel = turnSummary
+    ? turnBarTitle(turnSummary, null, playerDown)
+    : 'Setting up the fight…';
+
   const handleEnemyKeyDown = (enemyId: string) => (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
@@ -145,7 +162,7 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({
               <div
                 className="w-3 h-3 bg-red-500 rounded-full animate-pulse"
                 role="status"
-                aria-label="Combat in progress"
+                aria-label={combatStatusLabel}
               ></div>
               <CardTitle className="text-xl">
                 Turn order · Round {activeEncounter?.currentRound || 1}

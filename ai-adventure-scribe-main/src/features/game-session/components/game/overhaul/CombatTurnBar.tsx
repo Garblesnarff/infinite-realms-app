@@ -213,7 +213,11 @@ export const CombatTurnBarLoading: React.FC<{ enemyName: string }> = ({ enemyNam
     hpSentence={null}
     edge="gold"
     titleClassName="text-infinite-gold"
-  />
+  >
+    <div aria-hidden="true" className="order-3 max-[699px]:order-2">
+      <TurnBarHitPointsBlock hp={{ current: null, maximum: null, temp: 0 }} />
+    </div>
+  </TurnBarShell>
 );
 
 /** Outside a fight the bar stays up as the Exploring strip (#85). */
