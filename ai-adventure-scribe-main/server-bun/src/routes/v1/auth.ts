@@ -44,8 +44,38 @@ if (process.env.NODE_ENV === 'production' && process.env.ENABLE_TEST_AUTH !== un
   });
 }
 
-function createOAuthState(): string {
-  return crypto.randomBytes(32).toString('base64url');
+function normalizeReturnTo(value: string | undefined): string | null {
+  if (!value || !value.startsWith('/') || value.startsWith('//')) return null;
+
+  try {
+    const parsed = new URL(
+      value,
+      process.env.CORS_ORIGIN?.split(',')[0] || 'https://infiniterealms.app',
+    );
+    const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    return path.startsWith('//') ? null : path;
+  } catch {
+    return null;
+  }
+}
+
+function createOAuthState(returnTo: string | null): string {
+  const payload = JSON.stringify({
+    nonce: crypto.randomBytes(32).toString('base64url'),
+    returnTo,
+  });
+  return Buffer.from(payload, 'utf8').toString('base64url');
+}
+
+function returnToFromOAuthState(state: string): string | null {
+  try {
+    const payload = JSON.parse(Buffer.from(state, 'base64url').toString('utf8')) as {
+      returnTo?: unknown;
+    };
+    return typeof payload.returnTo === 'string' ? normalizeReturnTo(payload.returnTo) : null;
+  } catch {
+    return null;
+  }
 }
 
 function getCookieValue(cookieHeader: string | null, name: string): string | null {
@@ -65,10 +95,16 @@ function buildOAuthStateCookie(value: string, maxAgeSec: number): string {
   return `${OAUTH_STATE_COOKIE}=${value}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${maxAgeSec}${secure}`;
 }
 
-function createFrontendTokenExchangeRedirect(accessToken: string, refreshToken: string): string {
+function createFrontendTokenExchangeRedirect(
+  accessToken: string,
+  refreshToken: string,
+  returnTo: string | null,
+): string {
   const exchangeCode = authTokenExchangeCodes.issue({ accessToken, refreshToken });
   const frontendUrl = process.env.CORS_ORIGIN?.split(',')[0] || 'https://infiniterealms.app';
-  return `${frontendUrl}/auth/callback?code=${encodeURIComponent(exchangeCode)}`;
+  const params = new URLSearchParams({ code: exchangeCode });
+  if (returnTo) params.set('returnTo', returnTo);
+  return `${frontendUrl}/auth/callback?${params.toString()}`;
 }
 
 export const authRoutes = new Elysia({ prefix: '/v1/auth' })
@@ -107,9 +143,15 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
    * Start OAuth flow - redirect to WorkOS hosted login
    * GET /v1/auth/login
    */
-  .get('/login', ({ redirect, request, set }) => {
+  .get('/login', ({ redirect, request, set, query }) => {
     try {
-      const state = createOAuthState();
+      const requestedReturnTo = typeof query?.returnTo === 'string' ? query.returnTo : undefined;
+      if (requestedReturnTo !== undefined && !normalizeReturnTo(requestedReturnTo)) {
+        set.status = 400;
+        return { error: 'Invalid return destination' };
+      }
+      const returnTo = normalizeReturnTo(requestedReturnTo);
+      const state = createOAuthState(returnTo);
       const authorizationUrl = workos.userManagement.getAuthorizationUrl({
         provider: 'authkit',
         clientId: authConfig.clientId,
@@ -142,6 +184,7 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
   .get('/callback', async ({ query, request, redirect, set }) => {
     const code = query.code as string | undefined;
     const state = query.state as string | undefined;
+    const returnTo = state ? returnToFromOAuthState(state) : null;
 
     const cookieState = getCookieValue(request.headers.get('cookie'), OAUTH_STATE_COOKIE);
     set.headers['Set-Cookie'] = buildOAuthStateCookie('', 0);
@@ -239,7 +282,7 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
         });
       }
 
-      return redirect(createFrontendTokenExchangeRedirect(accessToken, refreshToken));
+      return redirect(createFrontendTokenExchangeRedirect(accessToken, refreshToken, returnTo));
     } catch (error) {
       logger.error({ msg: 'OAuth callback error', error });
       const frontendUrl = process.env.CORS_ORIGIN?.split(',')[0] || 'https://infiniterealms.app';
@@ -370,7 +413,7 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
       const { accessToken, refreshToken } = mintTestTokens(testUser);
 
       logger.info({ msg: '[TEST AUTH] Generated tokens for test user', email: testUser.email });
-      return redirect(createFrontendTokenExchangeRedirect(accessToken, refreshToken));
+      return redirect(createFrontendTokenExchangeRedirect(accessToken, refreshToken, null));
     } catch (error) {
       logger.error({ msg: 'Test login error', error });
       set.status = 500;

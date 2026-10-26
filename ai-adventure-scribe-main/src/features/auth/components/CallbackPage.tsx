@@ -18,6 +18,18 @@ import { persistSession } from '@/services/auth/TokenService';
  *  page on "Completing sign in..." forever (#565). */
 const AUTH_EXCHANGE_TIMEOUT_MS = 15_000;
 
+function safeReturnTo(value: string | null): string | null {
+  if (!value || !value.startsWith('/') || value.startsWith('//')) return null;
+
+  try {
+    const parsed = new URL(value, window.location.origin);
+    if (parsed.origin !== window.location.origin) return null;
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return null;
+  }
+}
+
 export default function CallbackPage() {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +37,9 @@ export default function CallbackPage() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        const exchangeCode = new URLSearchParams(window.location.search).get('code');
+        const callbackParams = new URLSearchParams(window.location.search);
+        const exchangeCode = callbackParams.get('code');
+        const returnTo = safeReturnTo(callbackParams.get('returnTo'));
         let accessToken: string | null = null;
         let refreshToken: string | null = null;
 
@@ -103,9 +117,11 @@ export default function CallbackPage() {
         // Wait for either auth-ready event or timeout
         await Promise.race([authReadyPromise, timeoutPromise]);
 
-        // Redirect to app
-        logger.info('Redirecting to /app');
-        navigate('/app');
+        // Redirect to the campaign that initiated sign-in, or the app for a
+        // normal sign-in with no return destination.
+        const destination = returnTo ?? '/app';
+        logger.info(`Redirecting to ${destination}`);
+        navigate(destination);
         // AuthKit can resume a remembered session without asking for
         // credentials, so always say which account this is (#2292).
         if (signedInEmail) toast.success(`Signed in as ${signedInEmail}`);

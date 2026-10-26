@@ -235,7 +235,8 @@ const CampaignDetailPage: React.FC = () => {
           // Storage unavailable: sign-in still proceeds, auto-start just
           // cannot resume afterwards.
         }
-        navigate(`/auth/callback?returnTo=${encodeURIComponent(`/explore/${slug}#heroes`)}`);
+        const apiUrl = import.meta.env?.VITE_API_URL || '';
+        window.location.href = `${apiUrl}/v1/auth/login?returnTo=${encodeURIComponent(`/explore/${slug}#heroes`)}`;
         return;
       }
 
@@ -343,8 +344,9 @@ const CampaignDetailPage: React.FC = () => {
   }, [campaign]);
 
   const handleSignIn = React.useCallback((): void => {
-    navigate(`/auth/callback?returnTo=${encodeURIComponent(`/explore/${slug}#heroes`)}`);
-  }, [navigate, slug]);
+    const apiUrl = import.meta.env?.VITE_API_URL || '';
+    window.location.href = `${apiUrl}/v1/auth/login?returnTo=${encodeURIComponent(`/explore/${slug}#heroes`)}`;
+  }, [slug]);
 
   const showSessionExpired =
     sessionExpired || (templatesError !== null && isUnauthorizedError(templatesError));

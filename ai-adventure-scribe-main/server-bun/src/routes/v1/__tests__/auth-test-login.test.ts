@@ -13,6 +13,7 @@ const TEST_USER = { id: 'user_TEST_AUTOMATION_BOT_001', email: 'test-bot@example
 
 let dbUser: { id: string; email: string } | null = { ...TEST_USER };
 let refreshCalls: string[] = [];
+let lastAuthorizationUrl: URL | null = null;
 
 mock.module('../../../lib/drizzle.js', () => ({
   db: {
@@ -21,12 +22,31 @@ mock.module('../../../lib/drizzle.js', () => ({
         findFirst: async () => dbUser,
       },
     },
+    insert: () => ({
+      values: () => ({
+        onConflictDoUpdate: async () => undefined,
+      }),
+    }),
   },
 }));
 mock.module('../../../lib/logger.js', () => ({ logger }));
+mock.module('../../../services/account-relink.js', () => ({
+  relinkWorkosAccountIfNeeded: async () => undefined,
+}));
 mock.module('../../../services/workos.js', () => ({
   workos: {
     userManagement: {
+      getAuthorizationUrl: (options: { state: string }) => {
+        lastAuthorizationUrl = new URL(
+          `https://auth.example.test/authorize?state=${options.state}`,
+        );
+        return lastAuthorizationUrl.toString();
+      },
+      authenticateWithCode: async () => ({
+        user: { id: TEST_USER.id, email: TEST_USER.email, emailVerified: true },
+        accessToken: 'workos-access-token',
+        refreshToken: 'workos-refresh-token',
+      }),
       authenticateWithRefreshToken: async ({ refreshToken }: { refreshToken: string }) => {
         refreshCalls.push(refreshToken);
         return { accessToken: 'workos-access-token', refreshToken: 'workos-refresh-token' };
@@ -56,6 +76,55 @@ afterEach(() => {
   delete process.env.ENABLE_TEST_AUTH;
   dbUser = { ...TEST_USER };
   refreshCalls = [];
+  lastAuthorizationUrl = null;
+});
+
+describe('GET /v1/auth/login return destinations', () => {
+  it('carries a same-origin return path through the real callback route', async () => {
+    const login = await app.handle(
+      new Request(
+        'http://localhost/v1/auth/login?returnTo=%2Fexplore%2Fthe-eternal-feast%23heroes',
+      ),
+    );
+
+    expect(login.status).toBe(302);
+    expect(lastAuthorizationUrl).not.toBeNull();
+    const state = lastAuthorizationUrl!.searchParams.get('state');
+    const cookie = login.headers.get('set-cookie');
+    expect(state).not.toBeNull();
+    expect(cookie).toContain(`ir_oauth_state=${state}`);
+
+    const callback = await app.handle(
+      new Request(`http://localhost/v1/auth/callback?code=callback-code&state=${state}`, {
+        headers: { cookie: cookie!.split(';')[0] },
+      }),
+    );
+
+    expect(callback.status).toBe(302);
+    const location = new URL(callback.headers.get('location')!);
+    expect(location.pathname).toBe('/auth/callback');
+    expect(location.searchParams.get('returnTo')).toBe('/explore/the-eternal-feast#heroes');
+  });
+
+  it('refuses an off-site return destination at the real login route', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/v1/auth/login?returnTo=https%3A%2F%2Fevil.example%2Fsteal'),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'Invalid return destination' });
+    expect(lastAuthorizationUrl).toBeNull();
+  });
+
+  it('refuses a normalized protocol-relative return destination at the real login route', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/v1/auth/login?returnTo=%2F.%2F%2Fevil.example%2Fsteal'),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'Invalid return destination' });
+    expect(lastAuthorizationUrl).toBeNull();
+  });
 });
 
 describe('GET /v1/auth/test-login', () => {
