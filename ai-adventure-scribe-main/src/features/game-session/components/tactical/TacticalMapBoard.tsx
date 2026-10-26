@@ -1,5 +1,5 @@
 import { Maximize2, Minimize2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { consumeMapMoveMode, useMapMoveModeRequested } from './map-move-mode';
@@ -57,21 +57,25 @@ function TacticalMapBoardView({
   // #90: the ActionBar's Move opens the map with the player's token already selected and its
   // reachable squares showing, the same state a click on the token gives.
   const moveModeRequested = useMapMoveModeRequested();
+  const mountedRef = useRef(true);
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
   useEffect(() => {
     if (!moveModeRequested || !activePlayer) return;
+    // Taking the request re-renders with it cleared, so the reply is kept unless the board left.
     consumeMapMoveMode();
-    let cancelled = false;
     void request<{ moves: Point[] }>(`/valid-moves/${encodeURIComponent(activePlayer.id)}`).then(
       (response) => {
-        if (cancelled || !response.ok) return;
+        if (!mountedRef.current || !response.ok) return;
         setSelectedId(activePlayer.id);
         setMoves(response.data.moves);
         setLineOfSight(null);
       },
     );
-    return () => {
-      cancelled = true;
-    };
   }, [moveModeRequested, activePlayer, request]);
   const previewPath =
     activePlayer && hovered && moves.some((move) => move.x === hovered.x && move.y === hovered.y)
