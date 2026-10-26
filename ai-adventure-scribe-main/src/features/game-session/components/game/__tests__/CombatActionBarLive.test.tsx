@@ -9,7 +9,11 @@ import {
 } from '../CombatActionBar';
 
 import { mapAuthoritativeCombat } from '@/contexts/combat/authoritative-combat-state';
-import { executeAuthoritativeCombatIntent } from '@/services/combat/combat-action-executor';
+import {
+  executeAuthoritativeCombatIntent,
+  executeStructuredCombatActionWithBoundary,
+} from '@/services/combat/combat-action-executor';
+import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
 
 // Encounter fixture built with the real mapper over a server-shaped payload
 // (producer: mapAuthoritativeCombat over the /v1/combat/:sessionId/active payload).
@@ -89,13 +93,23 @@ type CombatValue = {
   refreshCombatState: () => void;
 };
 const combatHolder = vi.hoisted(() => ({ current: undefined as CombatValue | undefined }));
-const pack = vi.hoisted(() => ({ inventory: [] as Array<{ id: string; name: string }> }));
+const pack = vi.hoisted(() => ({
+  inventory: [] as Array<{ id: string; name: string }>,
+  cantrips: [] as Array<Record<string, unknown>>,
+  spellcasting: null as Record<string, unknown> | null,
+}));
 
 // Only the engine call is stubbed: the hook's own flee/yield branch runs for real.
 vi.mock('@/services/combat/combat-action-executor', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   executeAuthoritativeCombatIntent: vi.fn().mockResolvedValue({}),
+  executeStructuredCombatActionWithBoundary: vi
+    .fn()
+    .mockResolvedValue({ outcomes: [], result: { results: [] }, boundary: null }),
 }));
+// The tray prompt; its real behaviour against the route is in
+// server-bun/src/routes/v1/combat/__tests__/player-spell-turn-real-resolver.test.ts (#1143).
+vi.mock('@/services/combat/player-spell-cast', () => ({ askPlayerForSpellCast: vi.fn() }));
 
 vi.mock('@/contexts/CombatContext', () => ({
   useCombat: () => combatHolder.current,
@@ -105,8 +119,8 @@ vi.mock('@/contexts/CombatContext', () => ({
 vi.mock('../overhaul/useOverhaulViewModel', () => ({
   useOverhaulViewModel: () => ({
     character: {
-      spells: { cantrips: [], known: [], prepared: [] },
-      spellcasting: null,
+      spells: { cantrips: pack.cantrips, known: [], prepared: [] },
+      spellcasting: pack.spellcasting,
       inventory: pack.inventory,
       attacks: [{ id: 'longsword', name: 'Longsword', bonus: '+5', damage: '1d8+3' }],
     },
@@ -158,6 +172,8 @@ beforeEach(() => {
   vi.restoreAllMocks();
   combatHolder.current = undefined;
   pack.inventory = [];
+  pack.cantrips = [];
+  pack.spellcasting = null;
 });
 
 afterEach(() => {
@@ -347,5 +363,109 @@ describe('CombatActionBarLive', () => {
     expect(screen.queryByText(/Could not load actions/)).toBeNull();
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     expect(screen.getByRole('button', { name: /^End turn/ })).not.toBeDisabled();
+  });
+
+  describe('Cast Chill Touch from the bar (#1143)', () => {
+    // Legal action as getLegalCombatActions returns it for a known attack cantrip.
+    const chillTouch = {
+      type: 'spell',
+      label: 'Cast Chill Touch',
+      spellId: 'chill-touch',
+      targetIds: ['goblin-1'],
+    };
+    const barAction = {
+      actor_id: 'pc-1',
+      action_type: 'cast_spell',
+      target_ids: ['goblin-1'],
+      weapon_id: null,
+      spell_id: 'chill-touch',
+      slot_level: null,
+      movement_feet: 0,
+    };
+    const setup = () => {
+      pack.cantrips = [
+        { id: 'chill-touch', name: 'Chill Touch', range: '120 feet', castingTime: '1 action' },
+      ];
+      pack.spellcasting = { ability: 'INT' };
+      combatHolder.current = {
+        state: { isInCombat: true, activeEncounter: buildEncounter('pc-1') },
+        refreshCombatState: vi.fn(),
+      };
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          actorId: 'pc-1',
+          actions: [
+            ...playerPayload.actions.slice(0, -1),
+            chillTouch,
+            { type: 'end_turn', label: 'End turn' },
+          ],
+        }),
+      } as Response);
+    };
+    const chooseChillTouch = async () => {
+      const user = userEvent.setup();
+      const cast = await screen.findByRole('button', { name: /^Cast/ });
+      await waitFor(() => expect(cast).not.toBeDisabled());
+      await user.click(cast);
+      const item = (await screen.findAllByRole('menuitem')).find((menuItem) =>
+        menuItem.textContent?.startsWith('Cast Chill Touch → Goblin'),
+      )!;
+      expect(item).toHaveTextContent('120 feet · action');
+      await user.click(item);
+    };
+
+    it('sends the cast intent the route resolves: tray prompt, then the commit with the die', async () => {
+      setup();
+      vi.mocked(askPlayerForSpellCast).mockResolvedValue({
+        d20: 15,
+        autoRolled: false,
+        movementOnly: false,
+      });
+      const onSendText = vi.fn().mockResolvedValue(undefined);
+      render(<CombatActionBarLive {...defaultProps} onSendText={onSendText} />);
+      await chooseChillTouch();
+      await waitFor(() =>
+        expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledWith(
+          'enc-1',
+          barAction,
+          15,
+          undefined,
+          'action_bar',
+        ),
+      );
+      expect(askPlayerForSpellCast).toHaveBeenCalledWith(
+        expect.objectContaining({ encounterId: 'enc-1', action: barAction }),
+      );
+      // A spell attack, not a move toward the target, and not chat text for the DM.
+      expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalledWith(
+        'enc-1',
+        expect.objectContaining({ type: 'move' }),
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+      );
+      expect(onSendText).not.toHaveBeenCalled();
+    });
+
+    it('shows the engine refusal for an out-of-range cast, spends nothing, and keeps End turn enabled', async () => {
+      setup();
+      // The shape askPlayerForSpellCast returns for the route's 422 (real-resolver suite).
+      vi.mocked(askPlayerForSpellCast).mockResolvedValue({
+        autoRolled: true,
+        movementOnly: false,
+        refusal:
+          'Spell refused: Chill Touch: Goblin is out of its 120-foot reach — move closer and cast it again',
+      });
+      render(<CombatActionBarLive {...defaultProps} />);
+      await chooseChillTouch();
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Spell refused: Chill Touch: Goblin is out of its 120-foot reach — move closer and cast it again. Nothing was spent.',
+      );
+      expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /^End turn/ })).not.toBeDisabled(),
+      );
+    });
   });
 });

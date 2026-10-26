@@ -463,7 +463,9 @@ export function useCombatLegalActions(input: {
               setError(
                 cast.cancelled
                   ? 'The cast was cancelled. Nothing was spent.'
-                  : 'The spell could not be cast. Nothing was spent.',
+                  : cast.refusal
+                    ? `${cast.refusal}. Nothing was spent.`
+                    : 'The spell could not be cast. Nothing was spent.',
               );
               return;
             }
