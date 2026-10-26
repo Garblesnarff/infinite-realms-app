@@ -214,7 +214,10 @@ it('reloads separate saved choices, with only the latest reply clickable (#868)'
 });
 
 describe('past suggestion groups stay as the DM offered them when combat begins (#2641)', () => {
-  it('keeps every earlier group and shows the combat menu once, on the newest message', async () => {
+  // #90: while an encounter is active the ActionBar is the one place to act, so no DM option
+  // buttons render in the list — neither the live combat menu nor the earlier groups. They come
+  // back, as the DM offered them, once the fight ends (the #2641 point: history is not rewritten).
+  it('hides every option group during the encounter and brings each one back unchanged after it', async () => {
     render(list());
     await settle();
     for (const label of ['Listen to the abyss', 'Search the ledge', 'Descend into the chute']) {
@@ -229,17 +232,36 @@ describe('past suggestion groups stay as the DM offered them when combat begins 
     });
     await settle();
 
+    expect(screen.queryByText('Listen to the abyss')).not.toBeInTheDocument();
+    expect(screen.queryByText('Search the ledge')).not.toBeInTheDocument();
+    // No combat menu in the list either: the ActionBar above the chat box owns it.
+    expect(screen.queryByText('Dash')).not.toBeInTheDocument();
+    expect(screen.queryByText('End turn')).not.toBeInTheDocument();
+    expect(screen.queryByText('Attack with Crossbow, light')).not.toBeInTheDocument();
+
+    // The fight ends: the frame carries the concluded encounter.
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('combat-state-updated', {
+          detail: {
+            combat: {
+              ...combatPayload,
+              encounter: { ...combatPayload.encounter, status: 'completed' },
+            },
+          },
+        }),
+      );
+    });
+    await settle();
+
     expect(screen.getByText('Listen to the abyss')).toBeInTheDocument();
     expect(screen.getByText('Light a torch')).toBeInTheDocument();
     expect(screen.getByText('Search the ledge')).toBeInTheDocument();
     expect(screen.getByText('Secure the items')).toBeInTheDocument();
-    // Exactly one live menu, under the newest message.
-    expect(screen.getAllByText('Dash')).toHaveLength(1);
-    expect(screen.getAllByText('End turn')).toHaveLength(1);
-    expect(screen.getAllByText('Attack with Crossbow, light')).toHaveLength(1);
+    expect(screen.queryByText('Dash')).not.toBeInTheDocument();
   });
 
-  it('shows the live menu at once under a notice row that follows the newest DM message', async () => {
+  it('renders no live menu under a notice row that follows the newest DM message (#90)', async () => {
     const withNoticeRow: ChatMessage[] = [
       ...HISTORY,
       {
@@ -255,15 +277,14 @@ describe('past suggestion groups stay as the DM offered them when combat begins 
         new CustomEvent('combat-state-updated', { detail: { combat: combatPayload } }),
       );
     });
-    // No timers advanced past the fetch: the player must not wait on the roleplay delay.
     for (let pass = 0; pass < 3; pass += 1) {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(50);
       });
     }
 
-    expect(screen.getAllByText('Dash')).toHaveLength(1);
-    expect(screen.getAllByText('End turn')).toHaveLength(1);
-    expect(screen.getByText('Search the ledge')).toBeInTheDocument();
+    expect(screen.queryByText('Dash')).not.toBeInTheDocument();
+    expect(screen.queryByText('End turn')).not.toBeInTheDocument();
+    expect(screen.queryByText('Search the ledge')).not.toBeInTheDocument();
   });
 });

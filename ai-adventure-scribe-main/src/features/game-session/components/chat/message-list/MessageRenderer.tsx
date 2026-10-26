@@ -42,8 +42,11 @@ interface MessageRendererProps {
   characterName?: string;
   /** The divider key of the last engine block printed before this message (#2417). */
   previousEngineKey?: string;
-  /** Keep the current player's combat menu mounted after a DM notice without inline options. */
-  combatOptionsVisible?: boolean;
+  /**
+   * #90: an encounter is active. The ActionBar is the one place to act, so the DM's option
+   * buttons do not render; they come back once combat ends.
+   */
+  encounterActive?: boolean;
   /**
    * Only the newest message carries the live combat menu. An earlier group shows the options the
    * DM saved with it, whatever the game mode is now (#2641).
@@ -81,7 +84,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
     onRetryFailed,
     characterName,
     previousEngineKey,
-    combatOptionsVisible = false,
+    encounterActive = false,
     isLatestMessage = true,
     optionsSuperseded = false,
   }) => {
@@ -232,10 +235,9 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
             renders, so it can say why there are none. */}
         {isLastInGroup &&
           !optionsSuperseded &&
-          (isDM || combatOptionsVisible) &&
-          (parsedMessage?.hasOptions ||
-            combatOptionsVisible ||
-            message.context?.noActionOptions === true) && (
+          !encounterActive &&
+          isDM &&
+          (parsedMessage?.hasOptions || message.context?.noActionOptions === true) && (
             <DynamicOptionsSection
               options={parsedMessage?.options ?? []}
               onOptionSelect={onOptionSelect}
@@ -273,7 +275,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
 
     if (
       !basicPropsMatch ||
-      prev.combatOptionsVisible !== next.combatOptionsVisible ||
+      prev.encounterActive !== next.encounterActive ||
       prev.isLatestMessage !== next.isLatestMessage ||
       prev.optionsSuperseded !== next.optionsSuperseded
     ) {

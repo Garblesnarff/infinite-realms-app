@@ -125,24 +125,23 @@ describe('RightSheet attacks list', () => {
     );
   });
 
-  it('keeps Cast available in combat and routes it to the same turn handler (#2233)', () => {
+  it('routes Cast to the turn handler out of combat; in combat the action bar owns it (#2233, #90)', () => {
     const onCastSpell = vi.fn().mockResolvedValue(undefined);
-    render(<RightSheet c={casterSheet} isInCombat onCastSpell={onCastSpell} />);
+    const { rerender } = render(<RightSheet c={casterSheet} onCastSpell={onCastSpell} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Cast Magic Missile' }));
     expect(onCastSpell).toHaveBeenCalledWith(casterSheet.spells.known[0]);
+
+    // #90: one place to act — the sheet's Cast leaves while an encounter is active.
+    rerender(<RightSheet c={casterSheet} isInCombat onCastSpell={onCastSpell} />);
+    expect(screen.queryByRole('button', { name: 'Cast Magic Missile' })).not.toBeInTheDocument();
   });
 
   it('holds every Cast button while a cast is in flight (#2305)', () => {
     const onCastSpell = vi.fn();
     const castingSpellId = casterSheet.spells.known[0].id;
     render(
-      <RightSheet
-        c={casterSheet}
-        isInCombat
-        castingSpellId={castingSpellId}
-        onCastSpell={onCastSpell}
-      />,
+      <RightSheet c={casterSheet} castingSpellId={castingSpellId} onCastSpell={onCastSpell} />,
     );
 
     const cast = screen.getByRole('button', { name: 'Cast Magic Missile' });
@@ -214,6 +213,22 @@ describe('RightSheet attacks list', () => {
     } satisfies CharacterSheetVM;
     render(<RightSheet c={nonCaster} />);
     expect(screen.queryByRole('button', { name: /Prepare Stored Spell/i })).not.toBeInTheDocument();
+  });
+
+  it('hides Cast buttons in combat and shows the action-bar hint (#90)', () => {
+    const onCastSpell = vi.fn();
+    render(<RightSheet c={casterSheet} isInCombat onCastSpell={onCastSpell} />);
+
+    expect(screen.queryByRole('button', { name: /^Cast / })).not.toBeInTheDocument();
+    expect(screen.getAllByText('To cast, use Cast in the action bar.')).toHaveLength(1);
+  });
+
+  it('shows Cast buttons out of combat and no action-bar hint (#90)', () => {
+    const onCastSpell = vi.fn();
+    render(<RightSheet c={casterSheet} onCastSpell={onCastSpell} />);
+
+    expect(screen.getByRole('button', { name: 'Cast Magic Missile' })).toBeInTheDocument();
+    expect(screen.queryByText('To cast, use Cast in the action bar.')).not.toBeInTheDocument();
   });
 });
 

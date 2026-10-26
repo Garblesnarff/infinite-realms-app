@@ -302,14 +302,6 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
                   const isLastMessage =
                     groupIndex === groupedMessages.length - 1 &&
                     msgIndex === group.messages.length - 1;
-                  const combatOptionsVisible =
-                    isLastMessage &&
-                    combatState.isInCombat &&
-                    combatState.activeEncounter?.participants.some(
-                      (participant) =>
-                        participant.id === combatState.activeEncounter?.currentTurnParticipantId &&
-                        participant.participantType === 'player',
-                    );
                   return (
                     <MessageRenderer
                       key={messageId}
@@ -331,7 +323,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
                       onOptionSelect={onOptionSelect}
                       onSendMessage={onSendMessage}
                       onRetryFailed={onRetryFailed}
-                      combatOptionsVisible={combatOptionsVisible}
+                      encounterActive={combatState.isInCombat}
                       isLatestMessage={isLastMessage}
                       optionsSuperseded={supersededByCombatEnd.has(message)}
                       characterName={group.messages[0].characterName}

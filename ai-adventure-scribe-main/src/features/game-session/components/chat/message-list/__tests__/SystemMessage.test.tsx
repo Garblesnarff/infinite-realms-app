@@ -69,7 +69,8 @@ describe('SystemMessage', () => {
     );
   });
 
-  it('keeps the combat menu mounted after a persisted system notice', async () => {
+  // #90: the combat menu moved to the ActionBar; a system notice in the list carries none.
+  it('renders no combat menu under a persisted system notice while an encounter is active', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -88,7 +89,7 @@ describe('SystemMessage', () => {
         isPlayer={false}
         isDM={false}
         isCompanion={false}
-        combatOptionsVisible
+        encounterActive
         expandedMessages={new Set()}
         setExpandedMessages={vi.fn() as never}
         imageByMessage={{}}
@@ -98,7 +99,8 @@ describe('SystemMessage', () => {
         onOptionSelect={vi.fn().mockResolvedValue(undefined)}
       />,
     );
-    expect(await screen.findByText('End turn')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'System message' })).toBeInTheDocument();
+    expect(screen.queryByText('End turn')).not.toBeInTheDocument();
   });
 
   it('renders a short status line as a centered hairline rule (#88)', () => {

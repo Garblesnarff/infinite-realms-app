@@ -10,8 +10,10 @@ import { RollTraySlotProvider } from './roll-tray-slot';
 import { TargetNumbersToggle } from './TargetNumbersToggle';
 import { ChatInput } from '../../chat/ChatInput';
 import { MessageList } from '../../chat/MessageList';
+import { requestMapMoveMode } from '../../tactical/map-move-mode';
 import { TacticalMapBoard } from '../../tactical/TacticalMapBoard';
 import { useTacticalMapContext } from '../../tactical/TacticalMapProvider';
+import { CombatActionBarLive, useCombatChatPlaceholder } from '../CombatActionBar';
 import { DyingComposerSlot } from '../dying/DyingComposerSlot';
 import { MessageHandler } from '../message/MessageHandler';
 import { resolveCampaignChapterLabel } from '../overhaul/campaign-chapter';
@@ -311,7 +313,19 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     const cardRef = React.useRef<HTMLDivElement>(null);
     const dockRef = React.useRef<HTMLDivElement>(null);
     const mapSheetHeight = useHeightAboveDock(showMapSheet, cardRef, dockRef);
-    const { queueStatus } = useMessageContext();
+    const { queueStatus, sendMessage } = useMessageContext();
+    // #90: in combat the chat box says what to do, or whose turn it is.
+    const combatChatPlaceholder = useCombatChatPlaceholder();
+    // #90: the ActionBar's Move opens the map in move mode — the rail on desktop, the sheet on
+    // a phone (#2252).
+    const openMapInMoveMode = React.useCallback(() => {
+      requestMapMoveMode();
+      if (mapInRail) {
+        if (isLeftCollapsed) onLeftToggle();
+      } else {
+        setMapSheetOpen(true);
+      }
+    }, [mapInRail, isLeftCollapsed, onLeftToggle]);
     // The pill covers the whole wait for the DM, not only the database write the queue reports
     // (#2418). A cast's result is shown by scrolling the feed to its newest card.
     const dmWaiting = useDmWaiting();
@@ -646,6 +660,16 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                         isProcessing={isProcessing}
                         promptOpen={rollBlocksInput}
                       >
+                        {/* #90: the one place to act in combat. A pending roll owns the turn
+                            (the tray shows it), so the bar waits for it. */}
+                        {!rollBlocksInput && (
+                          <CombatActionBarLive
+                            turnInFlight={isProcessing}
+                            onSendMessage={sendMessage}
+                            onSendText={(text) => handleSendMessage(text)}
+                            onMove={openMapInMoveMode}
+                          />
+                        )}
                         <TurnStatusLine
                           rollPillLabel={rollPillLabel}
                           isCombatDetected={isCombatDetected}
@@ -663,6 +687,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                           sendError={sendError ?? undefined}
                           onRetry={onRetry}
                           retryInFlight={retryInFlight}
+                          placeholder={combatChatPlaceholder}
                           disabledReason={
                             isGeneratingGreeting
                               ? 'You can type once the scene appears'

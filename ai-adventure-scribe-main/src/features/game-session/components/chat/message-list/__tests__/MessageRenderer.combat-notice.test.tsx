@@ -27,7 +27,9 @@ vi.mock('@/components/game/ActionOptions', () => ({
 }));
 
 describe('combat options after a non-action notice', () => {
-  it('re-renders the current turn option group when the notice has no inline options', async () => {
+  // #90: the current turn's actions live in the ActionBar above the chat box (see
+  // CombatActionBar.test.tsx, same legal-action fixture), so a notice in the list renders none.
+  it('renders no option group under the notice while an encounter is active', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -57,7 +59,7 @@ describe('combat options after a non-action notice', () => {
         isPlayer={false}
         isDM
         isCompanion={false}
-        combatOptionsVisible
+        encounterActive
         expandedMessages={new Set()}
         setExpandedMessages={vi.fn() as never}
         imageByMessage={{}}
@@ -69,12 +71,15 @@ describe('combat options after a non-action notice', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Move (30 ft remaining)')).toBeInTheDocument();
-      expect(screen.getByText('Attack with Quarterstaff (move closer first)')).toBeInTheDocument();
-      expect(screen.getByText('Dash')).toBeInTheDocument();
-      expect(screen.getByText('Dodge')).toBeInTheDocument();
-      expect(screen.getByText('Disengage')).toBeInTheDocument();
-      expect(screen.getByText('End turn')).toBeInTheDocument();
+      expect(screen.getByText(/That was not a combat action/)).toBeInTheDocument();
     });
+    expect(screen.queryByTestId('action-options')).not.toBeInTheDocument();
+    expect(screen.queryByText('Move (30 ft remaining)')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Attack with Quarterstaff (move closer first)'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('End turn')).not.toBeInTheDocument();
+    // Nothing asked the engine for a menu the list will not show.
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });
