@@ -924,6 +924,7 @@ describe('#1143 a Cast chosen from the ActionBar, through the real route and res
     d20?: number;
     d20Rolls?: [number, number];
     autoRolled: boolean;
+    movementOnly?: boolean;
     refusal?: string;
   };
   type Execution = { result: unknown; boundary: string | null };
