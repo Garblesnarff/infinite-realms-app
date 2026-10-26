@@ -137,7 +137,7 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
           />
           {/* Content with very high z-index */}
           <DialogPrimitive.Content
-            className="fixed left-[50%] top-[50%] -translate-x-1/2 -translate-y-1/2 max-w-2xl w-[95vw] p-0 overflow-hidden bg-black/95 border border-white/10 rounded-lg shadow-xl focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+            className="fixed left-[50%] top-[50%] -translate-x-1/2 -translate-y-1/2 max-w-2xl w-[95vw] p-0 overflow-hidden bg-black/95 border border-white/10 rounded-lg shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-infinite-gold focus-visible:ring-offset-2 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
             style={{ zIndex: Z_INDEX.IMAGE_LIGHTBOX }}
           >
             {/* Screen reader accessible title */}
@@ -151,7 +151,7 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
               <div className="relative">
                 {/* Close button */}
                 <DialogPrimitive.Close
-                  className="absolute top-3 right-3 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors"
+                  className="ir-hit-slop absolute top-3 right-3 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-infinite-gold"
                   style={{ zIndex: Z_INDEX.POPOVER }}
                   aria-label={`Close ${expandedAsset.name} preview`}
                   title={`Close ${expandedAsset.name} preview`}
@@ -200,7 +200,7 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
             style={{ zIndex: Z_INDEX.IMAGE_LIGHTBOX_BACKDROP }}
           />
           <DialogPrimitive.Content
-            className="fixed left-[50%] top-[50%] -translate-x-1/2 -translate-y-1/2 max-w-2xl w-[95vw] p-0 overflow-hidden bg-black/95 border border-white/10 rounded-lg shadow-xl focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+            className="fixed left-[50%] top-[50%] -translate-x-1/2 -translate-y-1/2 max-w-2xl w-[95vw] p-0 overflow-hidden bg-black/95 border border-white/10 rounded-lg shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-infinite-gold focus-visible:ring-offset-2 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
             style={{ zIndex: Z_INDEX.IMAGE_LIGHTBOX }}
           >
             <DialogPrimitive.Title className="sr-only">
@@ -212,7 +212,7 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
             {generatedImage?.url && (
               <div className="relative">
                 <DialogPrimitive.Close
-                  className="absolute top-3 right-3 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors"
+                  className="ir-hit-slop absolute top-3 right-3 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-infinite-gold"
                   style={{ zIndex: Z_INDEX.POPOVER }}
                   aria-label="Close generated scene preview"
                   title="Close generated scene preview"

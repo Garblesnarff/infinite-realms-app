@@ -134,7 +134,7 @@ export const CombatEntryConfirmation: React.FC<CombatEntryConfirmationProps> = (
             </p>
           ) : (
             <>
-              <p className="text-[11px] font-semibold uppercase tracking-[.12em] text-infinite-gold">
+              <p className="ir-text-min font-semibold uppercase tracking-[.12em] text-infinite-gold">
                 A fight is starting
               </p>
               <p id={titleId} className="text-[17px] font-semibold text-card-foreground">
