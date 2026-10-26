@@ -63,8 +63,8 @@ export const StarterCampaignsSection: React.FC = () => {
         {/* Bottom CTA */}
         <div className="mt-16 text-center">
           <p className="text-gray-400 text-lg mb-4">
-            More adventures coming soon! Each campaign is hand-crafted with unique storylines,
-            memorable NPCs, and rich world-building.
+            Each campaign is hand-crafted with unique storylines, memorable NPCs, and rich
+            world-building.
           </p>
           <p className="text-infinite-gold font-semibold">
             Create your own campaigns or explore our curated collection

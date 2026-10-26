@@ -19,7 +19,7 @@ export interface RoadmapPhase {
 export interface PlannedFeature {
   title: string;
   description: string;
-  status: 'live' | 'in_development' | 'planned' | 'beta' | 'coming_soon';
+  status: 'live' | 'in_development' | 'planned' | 'beta';
   icon: string;
 }
 
@@ -95,13 +95,6 @@ This isn't about replacing human Dungeon Masters. It's about giving every advent
           'Hear your adventures read aloud. Every plan includes standard narration voices; Legend adds premium ElevenLabs voices for NPCs and the narrator.',
         status: 'live' as const,
         icon: 'Mic',
-      },
-      {
-        title: 'Your Campaign as a Book',
-        description:
-          'Transform your entire adventure into a beautiful storybook. Share your legend with friends, complete with artwork, maps, and narrative summaries of your greatest moments.',
-        status: 'coming_soon' as const,
-        icon: 'Download',
       },
     ] as PlannedFeature[],
   },

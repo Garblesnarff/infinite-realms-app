@@ -25,7 +25,6 @@ export const FeaturesSection: React.FC = () => {
       'NPCs With Real Memory': '/feature-npc.jpg',
       'Seamless D&D Rules': '/feature-rules.jpg',
       'Immersive Voice Acting': '/feature-voice.jpg',
-      'Your Campaign as a Book': '/feature-story.jpg',
     };
 
     return imageMap[title] || '/feature-story.jpg';
@@ -52,10 +51,6 @@ export const FeaturesSection: React.FC = () => {
         return {
           badge: 'bg-gray-500/20 text-gray-300 border-gray-500/30 backdrop-blur-md',
         };
-      case 'coming_soon':
-        return {
-          badge: 'bg-blue-500/20 text-blue-300 border-blue-500/30 backdrop-blur-md',
-        };
       default:
         return {
           badge: 'bg-gray-500/20 text-gray-300 border-gray-500/30 backdrop-blur-md',
@@ -76,8 +71,6 @@ export const FeaturesSection: React.FC = () => {
         return 'Beta Ready';
       case 'planned':
         return 'Planned';
-      case 'coming_soon':
-        return 'Coming Soon';
       default:
         return 'Planned';
     }
