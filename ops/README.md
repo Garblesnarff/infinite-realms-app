@@ -446,3 +446,43 @@ the old one as `.bak-<stamp>`), point the existing 02:00 cron at it with the
 same `PG*` environment the current script runs under, and confirm the first
 night's log ends in `verify: OK` + `OK …`. The separate restore script and
 the monthly drill cron are unchanged by this PR.
+
+### What is installed today: `backup-infiniterealms-db.installed.sh` (#1003)
+
+`ops/backup-infiniterealms-db.installed.sh` is a byte-for-byte copy of the
+script the host runs now, `/usr/local/bin/backup-infiniterealms-db.sh`
+(installed 2026-09-13; the previous copy is kept beside it as
+`.bak-20260913020451`). It holds no secret values, only env names. It is
+tracked so that the replacement above can be checked against it; it is not
+installed from here. What it does, and what a drop-in must keep:
+
+- **Cron:** `/etc/cron.d/infiniterealms-backup`, as root, at 02:00 host time
+  (UTC), appending to `/var/log/infiniterealms/backup.log`:
+  `0 2 * * * root /usr/local/bin/backup-infiniterealms-db.sh >> /var/log/infiniterealms/backup.log 2>&1`.
+  There is no restore-drill cron on the host.
+- **Connection:** no libpq environment and no password. Every command runs as
+  `docker exec supabase-db … -U postgres` (`CONTAINER`, default
+  `supabase-db`; `DB`, default `postgres`). The host's own client tools are
+  not used.
+- **Output:** `BACKUP_DIR`, default `/var/backups/infiniterealms/postgres`
+  (note: the replacement defaults to the parent directory). One
+  `infiniterealms_<YYYYmmdd_HHMMSS>.sql.gz` per night, plain SQL from
+  `pg_dump | gzip`, written as `.in-progress_<stamp>.sql.gz` and renamed only
+  after every check passes. Files are left at the default umask (0644); the
+  replacement writes 0600. Other files in `/var/backups/infiniterealms/`
+  (`archive/`, one-off `*.dump` files) are manual and not touched.
+- **Checks before publish:** `pipefail` on the dump, `gzip -t`, a size floor
+  (`MIN_BYTES`, 1 MB), a shrink check against the largest earlier backup
+  (`SHRINK_PCT`, 50), a plain-SQL restore into a throwaway `backup_verify_<pid>`
+  database inside `supabase-db` with errors classified against a one-entry
+  allowlist (`graphql_public.graphql`), and a restored-table floor
+  (`MIN_TABLES`, 20).
+- **Retention:** after a successful publish only:
+  `find … -name 'infiniterealms_*.sql.gz' -mtime +30 -delete`
+  (`RETENTION_DAYS`, 30), plus `.in-progress_*` files older than 180 minutes.
+  A failed night prunes nothing.
+- **Alerts:** on any failure, one line to `/var/log/infiniterealms/alerts.log`
+  (`BACKUP_ALERT_FILE`) and a Slack post through `SLACK_ALERT_WEBHOOK_URL`,
+  read in a subshell from `/etc/infiniterealms/alerts.env`
+  (`BACKUP_ALERTS_ENV`); then exit 1. `BACKUP_NOTIFY=0` prints the alert
+  instead of posting it.
