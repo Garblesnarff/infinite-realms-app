@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { ChatMessage } from '@/types/game';
 
 import { useCombat } from '@/contexts/CombatContext';
+import logger from '@/lib/logger';
 import { getAuthHeaders } from '@/services/auth/TokenService';
 import { equipCharacterItem } from '@/services/character-equipment-api';
 import {
@@ -90,6 +91,9 @@ export function useCombatLegalActions(input: {
   isPlayerTurn: boolean;
   isRefreshing: boolean;
   error: string | null;
+  /** #1143: the last legal-action fetch failed (network or non-2xx); `retryLoad` asks again. */
+  loadFailed: boolean;
+  retryLoad: () => Promise<void>;
   runAction: (action: LegalAction) => Promise<void>;
 } {
   const { state: combatState, refreshCombatState } = useCombat();
@@ -105,6 +109,7 @@ export function useCombatLegalActions(input: {
   // until that re-fetch settles, so ActionOptions retains disabled old options
   // only during an actual refresh and clears a settled empty menu immediately.
   const [isRefreshingLegalActions, setIsRefreshingLegalActions] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const refreshLegalActions = useCallback(async () => {
     if (!showCombatMenu || !encounter?.id) {
@@ -119,14 +124,23 @@ export function useCombatLegalActions(input: {
           headers: getAuthHeaders(),
         },
       );
-      if (!response.ok) return;
+      if (!response.ok) {
+        setLoadFailed(true);
+        return;
+      }
       const payload = (await response.json()) as { actorId?: string; actions?: LegalAction[] };
+      setLoadFailed(false);
       // A dying player's only legal action is the death save, and the dying panel owns it: a
       // chip here would send the label as a typed action to a character who cannot act.
       setLegalState({
         actorId: payload.actorId,
         actions: (payload.actions ?? []).filter((action) => action.type !== 'death_save'),
       });
+    } catch (loadError) {
+      // #1143: a failed fetch used to leave the bar silently empty. Say so and offer a retry;
+      // the chat box stays open either way.
+      logger.warn('[CombatLegalActions] legal-action fetch failed', loadError);
+      setLoadFailed(true);
     } finally {
       setIsRefreshingLegalActions(false);
     }
@@ -533,6 +547,8 @@ export function useCombatLegalActions(input: {
     actions: legalState.actions,
     isPlayerTurn,
     isRefreshing: isRefreshingLegalActions,
+    loadFailed,
+    retryLoad: refreshLegalActions,
     error,
     runAction,
   };

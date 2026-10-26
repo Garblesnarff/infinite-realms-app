@@ -15,7 +15,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useCombat, useOptionalCombat } from '@/contexts/CombatContext';
-import { resolveEquipmentById, resolveEquipmentByName } from '@/data/equipment/resolver';
 import {
   useCombatLegalActions,
   type LegalAction,
@@ -25,11 +24,6 @@ import { cn } from '@/lib/utils';
 /** The chat box's placeholder in combat (#90): the chat box stays available. */
 export const COMBAT_CHAT_PLACEHOLDER =
   'Or describe what you do… e.g. “I feint high and cut at its legs”';
-
-export interface ActionBarItem {
-  id: string;
-  name: string;
-}
 
 export interface ActionBarSpellInfo {
   range?: string;
@@ -43,8 +37,6 @@ export interface CombatActionBarProps {
   enabled: boolean;
   /** The character has spells: Cast shows. */
   hasSpells: boolean;
-  /** Consumables in the pack: Use item shows only when there is one. */
-  consumables: ActionBarItem[];
   /** Name for a participant id (targets). */
   nameOf: (participantId: string) => string;
   /** "{Weapon} · +{bonus}" for the default attack. */
@@ -56,8 +48,38 @@ export interface CombatActionBarProps {
   spellInfo: (action: LegalAction) => ActionBarSpellInfo | null;
   onAction: (action: LegalAction) => void;
   onMove: () => void;
-  onUseItem: (item: ActionBarItem) => void;
 }
+
+/**
+ * #1143: where each legal-action type the engine can return (getLegalCombatActions,
+ * combat-intent-service.ts; attack from buildCombatWeaponOptions) shows on the bar. A type the
+ * server adds must be placed here, or the coverage test fails — so no legal action drops
+ * silently again.
+ * - `button` / `cast`: its own control. `more`: the More menu (Flee and Yield are the way out
+ *   of a fight the end guard holds open).
+ * - `move`: the Move button opens the map in move mode instead of the planned approach step.
+ * - `hidden`: owned elsewhere — the dying slot runs the death save (the hook filters it out).
+ * There is no item intent in the engine, so there is no Use item control (follow-up issue).
+ */
+export const LEGAL_ACTION_PLACEMENT = {
+  attack: 'button',
+  spell: 'cast',
+  move: 'move',
+  dodge: 'button',
+  end_turn: 'button',
+  dash: 'more',
+  disengage: 'more',
+  second_wind: 'more',
+  action_surge: 'more',
+  flee: 'more',
+  yield: 'more',
+  death_save: 'hidden',
+} as const satisfies Partial<
+  Record<LegalAction['type'], 'button' | 'cast' | 'move' | 'more' | 'hidden'>
+>;
+
+const isMoreAction = (action: LegalAction): boolean =>
+  (LEGAL_ACTION_PLACEMENT as Partial<Record<LegalAction['type'], string>>)[action.type] === 'more';
 
 const buttonBase =
   'inline-flex min-h-11 items-center gap-2 rounded-lg border border-[color:var(--ir-control-border)] bg-white/[0.03] px-3.5 text-sm font-semibold max-[699px]:flex-1 max-[699px]:basis-[calc(33%-8px)] max-[699px]:justify-center';
@@ -101,7 +123,6 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
   actions,
   enabled,
   hasSpells,
-  consumables,
   nameOf,
   attackSub,
   moveSub,
@@ -109,12 +130,13 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
   spellInfo,
   onAction,
   onMove,
-  onUseItem,
 }) => {
   const attacks = choicesFor(actions.filter((action) => action.type === 'attack'));
   const spells = choicesFor(actions.filter((action) => action.type === 'spell'));
   const dodge = actions.find((action) => action.type === 'dodge');
   const endTurn = actions.find((action) => action.type === 'end_turn');
+  // Server order: dash, disengage, second wind, action surge, flee, yield.
+  const more = actions.filter(isMoreAction);
   const withTarget = (action: LegalAction): string =>
     action.targetIds?.[0] ? `${action.label} → ${nameOf(action.targetIds[0])}` : action.label;
   const attackOn = enabled && attacks.length > 0;
@@ -187,15 +209,15 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
       <BarButton disabled={!enabled || !dodge} onClick={() => dodge && onAction(dodge)}>
         Dodge
       </BarButton>
-      {consumables.length > 0 && (
+      {more.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild disabled={!enabled}>
-            <BarButton disabled={!enabled}>Use item</BarButton>
+            <BarButton disabled={!enabled}>More</BarButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            {consumables.map((item) => (
-              <DropdownMenuItem key={item.id} onSelect={() => onUseItem(item)}>
-                {item.name}
+            {more.map((action, index) => (
+              <DropdownMenuItem key={`${action.type}-${index}`} onSelect={() => onAction(action)}>
+                {action.label}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -261,11 +283,12 @@ const CombatActionBarInCombat: React.FC<CombatActionBarLiveProps> = ({
 }) => {
   const { state } = useCombat();
   const encounter = state.isInCombat ? state.activeEncounter : null;
-  const { actions, isPlayerTurn, isRefreshing, error, runAction } = useCombatLegalActions({
-    enabled: Boolean(encounter),
-    onSendMessage,
-    onSendText,
-  });
+  const { actions, isPlayerTurn, isRefreshing, error, loadFailed, retryLoad, runAction } =
+    useCombatLegalActions({
+      enabled: Boolean(encounter),
+      onSendMessage,
+      onSendText,
+    });
   const vm = useOverhaulViewModel();
   const map = useTacticalMapContext()?.map ?? null;
   const [running, setRunning] = React.useState(false);
@@ -283,13 +306,6 @@ const CombatActionBarInCombat: React.FC<CombatActionBarLiveProps> = ({
   const character = vm.character;
   const allSpells = [...character.spells.cantrips, ...character.spells.known];
   const hasSpells = Boolean(character.spellcasting) && allSpells.length > 0;
-  const consumables = character.inventory
-    .filter(
-      (item) =>
-        (resolveEquipmentById(item.id) ?? resolveEquipmentByName(item.name))?.category ===
-        'consumable',
-    )
-    .map((item) => ({ id: item.id, name: item.name }));
   const defaultAttack = actions.find((action) => action.type === 'attack');
   const attackVm = defaultAttack
     ? character.attacks.find(
@@ -326,11 +342,22 @@ const CombatActionBarInCombat: React.FC<CombatActionBarLiveProps> = ({
           {error}
         </p>
       )}
+      {loadFailed && (
+        <p role="alert" className="px-3 pt-2 text-sm text-destructive">
+          Could not load actions —{' '}
+          <button
+            type="button"
+            className="underline underline-offset-2"
+            onClick={() => void retryLoad()}
+          >
+            retry
+          </button>
+        </p>
+      )}
       <CombatActionBar
         actions={actions}
         enabled={isPlayerTurn && !turnInFlight && !isRefreshing && !running}
         hasSpells={hasSpells}
-        consumables={consumables}
         nameOf={nameOf}
         attackSub={attackSub}
         moveSub={moveSub}
@@ -338,7 +365,6 @@ const CombatActionBarInCombat: React.FC<CombatActionBarLiveProps> = ({
         spellInfo={spellInfo}
         onAction={(action) => run(() => runAction(action))}
         onMove={onMove}
-        onUseItem={(item) => run(() => onSendText(`I use my ${item.name}.`))}
       />
     </>
   );

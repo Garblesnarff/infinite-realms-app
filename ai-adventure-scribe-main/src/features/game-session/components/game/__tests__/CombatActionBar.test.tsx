@@ -1,11 +1,14 @@
 // Fixtures follow the producer shape from getLegalCombatActions
 // (ai-adventure-scribe-main/server-bun/src/services/combat/combat-intent-service.ts)
 // and buildCombatWeaponOptions (server-bun/src/services/combat/combat-weapon-options.ts).
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { CombatActionBar } from '../CombatActionBar';
+import { CombatActionBar, LEGAL_ACTION_PLACEMENT } from '../CombatActionBar';
 
 import type { LegalAction } from '@/features/game-session/hooks/use-combat-legal-actions';
 
@@ -26,6 +29,11 @@ const spellAction: LegalAction = {
   targetIds: ['goblin-1'],
 };
 const endTurnAction: LegalAction = { type: 'end_turn', label: 'End turn' };
+const secondWindAction: LegalAction = { type: 'second_wind', label: 'Second Wind' };
+const actionSurgeAction: LegalAction = { type: 'action_surge', label: 'Action Surge' };
+// Labels as getLegalCombatActions builds them: `Flee (N attacks)` when foes are adjacent.
+const fleeAction: LegalAction = { type: 'flee', label: 'Flee (2 attacks)' };
+const yieldAction: LegalAction = { type: 'yield', label: 'Yield' };
 
 const nameOf = (id: string): string =>
   id === 'goblin-1' ? 'Goblin' : id === 'goblin-2' ? 'Goblin 2' : id;
@@ -38,11 +46,14 @@ const defaultProps = {
     dodgeAction,
     disengageAction,
     spellAction,
+    secondWindAction,
+    actionSurgeAction,
+    fleeAction,
+    yieldAction,
     endTurnAction,
   ],
   enabled: true,
   hasSpells: true,
-  consumables: [{ id: 'rations', name: 'Rations' }],
   nameOf,
   attackSub: 'Longsword · +5',
   moveSub: '30 ft',
@@ -50,7 +61,6 @@ const defaultProps = {
   spellInfo: () => ({ range: '120 feet', timing: 'action' as const }),
   onAction: vi.fn(),
   onMove: vi.fn(),
-  onUseItem: vi.fn(),
 };
 
 describe('CombatActionBar', () => {
@@ -68,7 +78,8 @@ describe('CombatActionBar', () => {
     expect(buttons[1]).toHaveTextContent(/^Cast/);
     expect(buttons[2]).toHaveTextContent(/^Move/);
     expect(buttons[3]).toHaveTextContent(/^Dodge/);
-    expect(buttons[4]).toHaveTextContent(/^Use item/);
+    // #1143: Use item is gone (no engine item intent); More holds the other legal actions.
+    expect(buttons[4]).toHaveTextContent(/^More/);
     expect(buttons[5]).toHaveTextContent(/^End turn/);
     buttons.forEach((b) => expect(b).not.toBeDisabled());
 
@@ -115,9 +126,42 @@ describe('CombatActionBar', () => {
   });
 
   it('no items', () => {
-    render(<CombatActionBar {...defaultProps} consumables={[]} />);
+    // #1143: there is no Use item control at all until the engine has an item intent.
+    render(<CombatActionBar {...defaultProps} />);
     const toolbar = screen.getByRole('toolbar', { name: 'Your actions' });
     expect(within(toolbar).queryByRole('button', { name: 'Use item' })).toBeNull();
+    expect(screen.queryByText(/Use item/)).toBeNull();
+  });
+
+  it('More menu: dash, disengage, second wind, action surge, flee and yield, in server order', async () => {
+    const onAction = vi.fn();
+    render(<CombatActionBar {...defaultProps} onAction={onAction} />);
+    const toolbar = screen.getByRole('toolbar', { name: 'Your actions' });
+    const user = userEvent.setup();
+    await user.click(within(toolbar).getByRole('button', { name: /^More/ }));
+    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual([
+      'Dash',
+      'Disengage',
+      'Second Wind',
+      'Action Surge',
+      'Flee (2 attacks)',
+      'Yield',
+    ]);
+    await user.click(screen.getByRole('menuitem', { name: 'Flee (2 attacks)' }));
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(onAction).toHaveBeenCalledWith(fleeAction);
+
+    await user.click(within(toolbar).getByRole('button', { name: /^More/ }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Yield' }));
+    expect(onAction).toHaveBeenLastCalledWith(yieldAction);
+  });
+
+  it('More is disabled off-turn and absent when the server offers none of its actions', () => {
+    const { unmount } = render(<CombatActionBar {...defaultProps} enabled={false} />);
+    expect(screen.getByRole('button', { name: /^More/ })).toBeDisabled();
+    unmount();
+    render(<CombatActionBar {...defaultProps} actions={[attackAction, endTurnAction]} />);
+    expect(screen.queryByRole('button', { name: /^More/ })).toBeNull();
   });
 
   it('two targets', async () => {
@@ -203,5 +247,87 @@ describe('CombatActionBar', () => {
       'text-muted-foreground',
       'max-[699px]:hidden',
     );
+  });
+
+  describe('legal-action coverage (#1143)', () => {
+    // The server has no exported union for its legal actions (an inferred inline type), so the
+    // type list is read from the producers' source: getLegalCombatActions and the
+    // buildCombatWeaponOptions it spreads in. A type added there and not placed fails here.
+    const serverDir = resolve(__dirname, '../../../../../../server-bun/src/services/combat');
+    const serverLegalActionTypes = (): string[] => {
+      const intentService = readFileSync(resolve(serverDir, 'combat-intent-service.ts'), 'utf8');
+      const start = intentService.indexOf('export async function getLegalCombatActions');
+      expect(start).toBeGreaterThan(-1);
+      const end = intentService.indexOf('\n}\n', start);
+      const body = intentService.slice(start, end);
+      const weaponOptions = readFileSync(resolve(serverDir, 'combat-weapon-options.ts'), 'utf8');
+      const types = [...`${body}\n${weaponOptions}`.matchAll(/type: '([a-z_]+)'/g)].map(
+        (match) => match[1],
+      );
+      return [...new Set(types)].sort();
+    };
+
+    it('places every action type the server can return', () => {
+      const types = serverLegalActionTypes();
+      // Sanity: the scan found the list the review cited (~2242-2292), not an empty file.
+      expect(types).toEqual(
+        expect.arrayContaining(['attack', 'spell', 'dash', 'flee', 'yield', 'end_turn']),
+      );
+      for (const type of types) expect(Object.keys(LEGAL_ACTION_PLACEMENT)).toContain(type);
+    });
+
+    it('renders a working control for every placed type, and none for a hidden one', async () => {
+      const oneOfEach: Record<string, LegalAction> = {
+        attack: attackAction,
+        spell: spellAction,
+        move: moveAction,
+        dodge: dodgeAction,
+        end_turn: endTurnAction,
+        dash: dashAction,
+        disengage: disengageAction,
+        second_wind: secondWindAction,
+        action_surge: actionSurgeAction,
+        flee: fleeAction,
+        yield: yieldAction,
+        death_save: { type: 'death_save', label: 'Death saving throw' },
+      };
+      expect(Object.keys(oneOfEach).sort()).toEqual(Object.keys(LEGAL_ACTION_PLACEMENT).sort());
+      const user = userEvent.setup();
+      for (const [type, placement] of Object.entries(LEGAL_ACTION_PLACEMENT)) {
+        const action = oneOfEach[type];
+        const onAction = vi.fn();
+        const onMove = vi.fn();
+        const { unmount } = render(
+          <CombatActionBar
+            {...defaultProps}
+            actions={[action]}
+            onAction={onAction}
+            onMove={onMove}
+          />,
+        );
+        const toolbar = screen.getByRole('toolbar', { name: 'Your actions' });
+        if (placement === 'button') {
+          const name = { attack: /^Attack/, dodge: /^Dodge/, end_turn: /^End turn/ }[type]!;
+          await user.click(within(toolbar).getByRole('button', { name }));
+          expect(onAction).toHaveBeenCalledWith(action);
+        } else if (placement === 'cast' || placement === 'more') {
+          await user.click(
+            within(toolbar).getByRole('button', { name: placement === 'cast' ? /^Cast/ : /^More/ }),
+          );
+          const item = (await screen.findAllByRole('menuitem')).find((menuItem) =>
+            menuItem.textContent?.startsWith(action.label),
+          )!;
+          await user.click(item);
+          expect(onAction).toHaveBeenCalledWith(action);
+        } else if (placement === 'move') {
+          await user.click(within(toolbar).getByRole('button', { name: /^Move/ }));
+          expect(onMove).toHaveBeenCalled();
+        } else {
+          expect(screen.queryByText(action.label)).toBeNull();
+          expect(within(toolbar).queryByRole('button', { name: /^More/ })).toBeNull();
+        }
+        unmount();
+      }
+    });
   });
 });

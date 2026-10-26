@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -8,6 +9,7 @@ import {
 } from '../CombatActionBar';
 
 import { mapAuthoritativeCombat } from '@/contexts/combat/authoritative-combat-state';
+import { executeAuthoritativeCombatIntent } from '@/services/combat/combat-action-executor';
 
 // Encounter fixture built with the real mapper over a server-shaped payload
 // (producer: mapAuthoritativeCombat over the /v1/combat/:sessionId/active payload).
@@ -87,6 +89,13 @@ type CombatValue = {
   refreshCombatState: () => void;
 };
 const combatHolder = vi.hoisted(() => ({ current: undefined as CombatValue | undefined }));
+const pack = vi.hoisted(() => ({ inventory: [] as Array<{ id: string; name: string }> }));
+
+// Only the engine call is stubbed: the hook's own flee/yield branch runs for real.
+vi.mock('@/services/combat/combat-action-executor', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  executeAuthoritativeCombatIntent: vi.fn().mockResolvedValue({}),
+}));
 
 vi.mock('@/contexts/CombatContext', () => ({
   useCombat: () => combatHolder.current,
@@ -98,7 +107,7 @@ vi.mock('../overhaul/useOverhaulViewModel', () => ({
     character: {
       spells: { cantrips: [], known: [], prepared: [] },
       spellcasting: null,
-      inventory: [],
+      inventory: pack.inventory,
       attacks: [{ id: 'longsword', name: 'Longsword', bonus: '+5', damage: '1d8+3' }],
     },
   }),
@@ -148,6 +157,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.restoreAllMocks();
   combatHolder.current = undefined;
+  pack.inventory = [];
 });
 
 afterEach(() => {
@@ -257,5 +267,85 @@ describe('CombatActionBarLive', () => {
     toolbar.querySelectorAll('button').forEach((btn) => {
       expect(btn).toBeDisabled();
     });
+  });
+
+  it('Flee and Yield from More run the exit intents through the hook (#1143)', async () => {
+    combatHolder.current = {
+      state: { isInCombat: true, activeEncounter: buildEncounter('pc-1') },
+      refreshCombatState: vi.fn(),
+    };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => playerPayload,
+    } as Response);
+    const onSendText = vi.fn().mockResolvedValue(undefined);
+    render(<CombatActionBarLive {...defaultProps} onSendText={onSendText} />);
+    const user = userEvent.setup();
+    const more = await screen.findByRole('button', { name: /^More/ });
+    await waitFor(() => expect(more).not.toBeDisabled());
+    await user.click(more);
+    await user.click(await screen.findByRole('menuitem', { name: 'Flee' }));
+    await waitFor(() =>
+      expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith(
+        'enc-1',
+        { type: 'flee', actorId: 'pc-1' },
+        'dm',
+        expect.any(Number),
+        'action_bar',
+      ),
+    );
+    await waitFor(() => expect(screen.getByRole('button', { name: /^More/ })).not.toBeDisabled());
+    await user.click(screen.getByRole('button', { name: /^More/ }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Yield' }));
+    await waitFor(() =>
+      expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith(
+        'enc-1',
+        { type: 'yield', actorId: 'pc-1' },
+        'dm',
+        expect.any(Number),
+        'action_bar',
+      ),
+    );
+    // Engine intents, never chat text for the DM to narrate.
+    expect(onSendText).not.toHaveBeenCalled();
+  });
+
+  it('shows no Use item even with a consumable in the pack (#1143: no engine item intent)', async () => {
+    pack.inventory = [{ id: 'potion-of-healing', name: 'Potion of Healing' }];
+    combatHolder.current = {
+      state: { isInCombat: true, activeEncounter: buildEncounter('pc-1') },
+      refreshCombatState: vi.fn(),
+    };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => playerPayload,
+    } as Response);
+    render(<CombatActionBarLive {...defaultProps} />);
+    await waitFor(() => expect(screen.getByText('Longsword · +5')).toBeTruthy());
+    expect(screen.queryByText('Use item')).toBeNull();
+    expect(screen.queryByText(/Potion of Healing/)).toBeNull();
+  });
+
+  it.each([
+    ['a network error', () => Promise.reject(new TypeError('Failed to fetch'))],
+    ['a 500', () => Promise.resolve({ ok: false, status: 500 } as Response)],
+  ])('says "Could not load actions — retry" after %s, and retry loads them', async (_, fail) => {
+    combatHolder.current = {
+      state: { isInCombat: true, activeEncounter: buildEncounter('pc-1') },
+      refreshCombatState: vi.fn(),
+    };
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(fail as () => Promise<Response>)
+      .mockResolvedValue({ ok: true, json: async () => playerPayload } as Response);
+    render(<CombatActionBarLive {...defaultProps} />);
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Could not load actions — retry');
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'retry' }));
+    await waitFor(() => expect(screen.getByText('Longsword · +5')).toBeTruthy());
+    expect(screen.queryByText(/Could not load actions/)).toBeNull();
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: /^End turn/ })).not.toBeDisabled();
   });
 });
