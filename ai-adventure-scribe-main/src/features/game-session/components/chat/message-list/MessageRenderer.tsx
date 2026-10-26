@@ -37,6 +37,8 @@ interface MessageRendererProps {
   onGenerateScene: (message: ChatMessage & { id?: string; timestamp?: string }) => Promise<void>;
   onOptionSelect: (optionText: string) => Promise<void>;
   onSendMessage?: (message: ChatMessage) => Promise<void>;
+  /** #88: retry a failed player send (the bubble's Try again button). */
+  onRetryFailed?: (message: ChatMessage) => void | Promise<void>;
   characterName?: string;
   /** The divider key of the last engine block printed before this message (#2417). */
   previousEngineKey?: string;
@@ -76,7 +78,8 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
     onGenerateScene,
     onOptionSelect,
     onSendMessage,
-    characterName: _characterName,
+    onRetryFailed,
+    characterName,
     previousEngineKey,
     combatOptionsVisible = false,
     isLatestMessage = true,
@@ -219,6 +222,8 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
             isLongMessage={isLongMessage}
             isExpanded={isExpanded}
             onToggleExpanded={toggleExpanded}
+            characterName={characterName}
+            onRetrySend={onRetryFailed ? () => void onRetryFailed(message) : undefined}
           />
         )}
 
@@ -264,6 +269,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
       prev.onOptionSelect === next.onOptionSelect;
 
     if (prev.onSendMessage !== next.onSendMessage) return false;
+    if (prev.onRetryFailed !== next.onRetryFailed) return false;
 
     if (
       !basicPropsMatch ||

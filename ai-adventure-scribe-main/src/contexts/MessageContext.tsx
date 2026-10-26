@@ -54,6 +54,10 @@ interface MessageContextType {
   /** #633 PR2: remove a render-only row (the streaming narration preview). */
   removeMessage: (id: string) => void;
   queueStatus: 'idle' | 'processing' | 'error' | 'retrying';
+  /** #88: player sends the server never recorded (failed bubbles). */
+  failedSends: ChatMessage[];
+  /** #88: drop a failed row, e.g. when its retry starts. */
+  clearFailedSend: (message: ChatMessage) => void;
 }
 
 const MessageContext = createContext<MessageContextType | undefined>(undefined);
@@ -77,8 +81,14 @@ export const MessageProvider: React.FC<{
   } = useMessages(sessionId, {
     pollForCompanions,
   });
-  const { messageMutation, queueStatus, updateMessage, removeMessage } =
-    useMessageQueue(sessionId);
+  const {
+    messageMutation,
+    queueStatus,
+    updateMessage,
+    removeMessage,
+    failedSends,
+    clearFailedSend,
+  } = useMessageQueue(sessionId);
   const { mutateAsync } = messageMutation;
   const queryClient = useQueryClient();
   const handleRemoteMessage = useCallback(() => {
@@ -109,6 +119,8 @@ export const MessageProvider: React.FC<{
       updateMessage,
       removeMessage,
       queueStatus,
+      failedSends,
+      clearFailedSend,
     }),
     [
       messages,
@@ -121,6 +133,8 @@ export const MessageProvider: React.FC<{
       updateMessage,
       removeMessage,
       queueStatus,
+      failedSends,
+      clearFailedSend,
     ],
   );
 

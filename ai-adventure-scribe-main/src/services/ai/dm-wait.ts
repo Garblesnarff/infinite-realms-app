@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
 /**
- * Whether a call to the DM is in flight. The composer status "The DM is thinking…" reads this: the
+ * Whether a call to the DM is in flight. The stream's writing row reads this: the
  * message queue's own status only covers the database write of the player's message, so the pill
  * went out long before the 20 to 60 s the model takes (#2418). Calls are counted, because one turn
  * can make two (the declaration, then the narration of what the engine resolved).

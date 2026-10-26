@@ -675,4 +675,109 @@ describe('useMessageQueue', () => {
       expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'destructive' }));
     });
   });
+
+  describe('failed sends (#88)', () => {
+    // The #2517 block above sets mockRejectedValue on the wrapper; the outer
+    // beforeEach's clearAllMocks clears calls, not implementations — so a
+    // stale 409 would swallow these mockInsert-driven failures. Restore the
+    // wrapper (same shape as the hoisted factory) before each case here.
+    beforeEach(() => {
+      mockSaveSessionMessages.mockImplementation(async (_sessionId: string, payload: unknown) => {
+        const result = await mockInsert(payload);
+        if (result.error) throw result.error;
+        return { messages: [] };
+      });
+    });
+
+    it('keeps a retryable player failure visible as a failed row', async () => {
+      mockInsert.mockResolvedValue({ error: new TypeError('Failed to fetch') });
+      const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+
+      await act(async () => {
+        await expect(
+          result.current.messageMutation.mutateAsync({ text: 'Hello?', sender: 'player' } as any),
+        ).rejects.toThrow('Failed to fetch');
+      });
+
+      expect(result.current.failedSends).toHaveLength(1);
+      expect(result.current.failedSends[0]).toMatchObject({
+        text: 'Hello?',
+        sender: 'player',
+        context: { sendFailed: true },
+      });
+      // The bubble is the retry UI now, but the toast stays (existing tests pin it).
+      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'destructive' }));
+    });
+
+    it('adds no failed row for a refused save (retrying it verbatim fails again)', async () => {
+      mockSaveSessionMessages.mockRejectedValue(
+        Object.assign(new Error('Conflict (409)'), { status: 409, payload: { error: 'conflict' } }),
+      );
+      const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+
+      await act(async () => {
+        await expect(
+          result.current.messageMutation.mutateAsync({ text: 'Hello?', sender: 'player' } as any),
+        ).rejects.toMatchObject({ status: 409 });
+      });
+
+      expect(result.current.failedSends).toHaveLength(0);
+    });
+
+    it('adds no failed row for the fallen-character refusal', async () => {
+      mockSaveSessionMessages.mockRejectedValue(
+        Object.assign(new Error('This character has fallen and the tale has ended. (409)'), {
+          status: 409,
+          payload: {
+            error:
+              'This character has fallen and the tale has ended. No further messages can be sent in this session.',
+            terminalState: 'party_defeated',
+          },
+        }),
+      );
+      const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+
+      await act(async () => {
+        await expect(
+          result.current.messageMutation.mutateAsync({ text: 'Hello?', sender: 'player' } as any),
+        ).rejects.toMatchObject({ status: 409 });
+      });
+
+      expect(result.current.failedSends).toHaveLength(0);
+      expect(mockToast).not.toHaveBeenCalled();
+    });
+
+    it('adds no failed row for a non-player send', async () => {
+      mockInsert.mockResolvedValue({ error: new TypeError('Failed to fetch') });
+      const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+
+      await act(async () => {
+        await expect(
+          result.current.messageMutation.mutateAsync({
+            text: 'Engine note',
+            sender: 'system',
+          } as any),
+        ).rejects.toThrow('Failed to fetch');
+      });
+
+      expect(result.current.failedSends).toHaveLength(0);
+    });
+
+    it('clearFailedSend drops the row', async () => {
+      mockInsert.mockResolvedValue({ error: new TypeError('Failed to fetch') });
+      const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+
+      await act(async () => {
+        await expect(
+          result.current.messageMutation.mutateAsync({ text: 'Hello?', sender: 'player' } as any),
+        ).rejects.toThrow('Failed to fetch');
+      });
+      expect(result.current.failedSends).toHaveLength(1);
+
+      act(() => {
+        result.current.clearFailedSend(result.current.failedSends[0]);
+      });
+      expect(result.current.failedSends).toHaveLength(0);
+    });
+  });
 });

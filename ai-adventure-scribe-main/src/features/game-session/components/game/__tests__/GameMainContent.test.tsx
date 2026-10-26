@@ -62,7 +62,9 @@ vi.mock('@/contexts/MessageContext', () => ({
 // #2517: the fallen end state reads the campaign name and the starter slug.
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({ state: { campaign: { id: 'campaign-1', name: 'Abyssal Descent' } } }),
-  useOptionalCampaign: () => null,
+  useOptionalCampaign: () => ({
+    state: { campaign: { id: 'campaign-1', name: 'Abyssal Descent' } },
+  }),
 }));
 vi.mock('@/hooks/use-starter-campaigns', () => ({
   useStarterCampaigns: () => ({
@@ -112,12 +114,15 @@ vi.mock('../../chat/MessageList', () => ({
   MessageList: ({
     suppressEmptyState,
     containerRef,
+    isDmWriting,
   }: {
     suppressEmptyState: boolean;
     containerRef?: React.RefObject<HTMLDivElement>;
+    isDmWriting?: boolean;
   }) => (
     <div ref={containerRef} data-testid="message-list" data-suppress-empty={suppressEmptyState}>
       streamed DM narrative
+      {isDmWriting && <div>Dungeon Master is writing…</div>}
       <div data-testid="dice-card">d20: 18</div>
       <button>Quick action</button>
       {/* The real list portals the queue's roll prompt into the tray the same way. */}
@@ -138,18 +143,26 @@ vi.mock('@/contexts/CharacterContext', () => ({
       character: { id: 'test-char-id', name: 'Test Character' },
     },
   }),
+  useOptionalCharacter: () => ({
+    state: {
+      character: { id: 'test-char-id', name: 'Test Character' },
+    },
+  }),
 }));
 vi.mock('../../chat/ChatInput', () => ({
   ChatInput: ({
     onSendMessage,
     isDisabled,
+    disabledReason,
   }: {
     onSendMessage: (value: string) => void;
     isDisabled: boolean;
+    disabledReason?: string;
   }) => (
     <button
       data-testid="chat-input"
       disabled={isDisabled}
+      data-disabled-reason={disabledReason}
       onClick={() => onSendMessage('I advance')}
     >
       Send
@@ -273,11 +286,18 @@ describe('GameMainContent overhaul behavior contract', () => {
     state.queueStatus = 'processing';
     render(<GameMainContent {...baseProps} isGeneratingGreeting />);
 
-    expect(screen.getByTestId('composer-status')).toHaveTextContent('The DM is thinking…');
-    expect(screen.getByTestId('message-list')).not.toHaveTextContent('The DM is thinking');
+    // #88: the wait moved from the composer line to the stream's writing row.
+    expect(screen.queryByTestId('composer-status')).not.toBeInTheDocument();
+    expect(screen.getByTestId('message-list')).toHaveTextContent('Dungeon Master is writing…');
     expect(screen.getByTestId('story-box')).not.toHaveTextContent('Checking whose turn');
-    expect(screen.getByText('Crafting Opening Scene')).toBeInTheDocument();
+    expect(screen.getByText('Your story is starting')).toBeInTheDocument();
+    expect(screen.getByText(/for Test Character in Abyssal Descent/)).toBeInTheDocument();
     expect(screen.getByTestId('message-list')).toHaveAttribute('data-suppress-empty', 'true');
+    expect(screen.getByTestId('chat-input')).toBeDisabled();
+    expect(screen.getByTestId('chat-input')).toHaveAttribute(
+      'data-disabled-reason',
+      'You can type once the scene appears',
+    );
   });
 
   // #865: a greeting generation that outlives its stall deadline swaps the
@@ -293,7 +313,7 @@ describe('GameMainContent overhaul behavior contract', () => {
       />,
     );
 
-    expect(screen.getByText('Crafting Opening Scene')).toBeInTheDocument();
+    expect(screen.getByText('Your story is starting')).toBeInTheDocument();
     expect(screen.getByText(/taking longer than usual/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(onRetryGreeting).toHaveBeenCalledTimes(1);
@@ -302,7 +322,7 @@ describe('GameMainContent overhaul behavior contract', () => {
   it('shows no retry control while the opening scene is within its deadline', () => {
     render(<GameMainContent {...baseProps} isGeneratingGreeting />);
 
-    expect(screen.getByText('Crafting Opening Scene')).toBeInTheDocument();
+    expect(screen.getByText('Your story is starting')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
   });
 
@@ -315,29 +335,30 @@ describe('GameMainContent overhaul behavior contract', () => {
 
   // #2418: the pill read the message queue, which only covers the database write of the player's
   // message. It must stay up for the whole wait for the DM, whatever the queue says.
-  it('keeps the "Dungeon Master is thinking" pill up for the whole DM call, not the queue write', async () => {
+  // #88: the pill is now the stream's writing row.
+  it('keeps the "Dungeon Master is writing" row up for the whole DM call, not the queue write', async () => {
     state.queueStatus = 'idle';
     let answer!: () => void;
     const call = new Promise<void>((resolve) => {
       answer = resolve;
     });
     const { rerender } = render(<GameMainContent {...baseProps} {...handlerRef} />);
-    expect(screen.queryByText('The DM is thinking…')).not.toBeInTheDocument();
+    expect(screen.queryByText('Dungeon Master is writing…')).not.toBeInTheDocument();
 
     act(() => {
       void trackDmWait(call);
     });
-    expect(screen.getByText('The DM is thinking…')).toBeInTheDocument();
-    // The queue write finishes long before the reply: the pill stays.
+    expect(screen.getByText('Dungeon Master is writing…')).toBeInTheDocument();
+    // The queue write finishes long before the reply: the row stays.
     state.queueStatus = 'idle';
     rerender(<GameMainContent {...baseProps} {...handlerRef} />);
-    expect(screen.getByText('The DM is thinking…')).toBeInTheDocument();
+    expect(screen.getByText('Dungeon Master is writing…')).toBeInTheDocument();
 
     await act(async () => {
       answer();
       await call;
     });
-    expect(screen.queryByText('The DM is thinking…')).not.toBeInTheDocument();
+    expect(screen.queryByText('Dungeon Master is writing…')).not.toBeInTheDocument();
   });
 
   it('scrolls the feed to its newest card when a cast resolves (#2418)', () => {
@@ -376,7 +397,7 @@ describe('GameMainContent overhaul behavior contract', () => {
     act(() => {
       void trackDmWait(call);
     });
-    expect(screen.queryByText('The DM is thinking…')).not.toBeInTheDocument();
+    expect(screen.queryByText('Dungeon Master is writing…')).not.toBeInTheDocument();
 
     await act(async () => {
       answer();

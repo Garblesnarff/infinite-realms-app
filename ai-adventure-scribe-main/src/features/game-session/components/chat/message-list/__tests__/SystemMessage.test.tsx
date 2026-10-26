@@ -100,4 +100,67 @@ describe('SystemMessage', () => {
     );
     expect(await screen.findByText('End turn')).toBeInTheDocument();
   });
+
+  it('renders a short status line as a centered hairline rule (#88)', () => {
+    render(
+      <SystemMessage
+        message={{ text: 'Combat has ended.', sender: 'system' }}
+        isFirstInGroup
+        isLastInGroup
+        displayText="Combat has ended."
+      />,
+    );
+
+    const line = screen.getByText('Combat has ended.');
+    const row = line.parentElement;
+    expect(row?.className).toMatch(/flex items-center gap-2\.5/);
+    expect(row?.className).toMatch(/uppercase/);
+    expect(row?.className).toMatch(/tracking-\[\.06em\]/);
+    const hairlines = Array.from(row?.children ?? []).filter((child) =>
+      child.className.includes('bg-white/10'),
+    );
+    expect(hairlines).toHaveLength(2);
+  });
+
+  it('renders an error system message with the alert variant (#88)', () => {
+    render(
+      <SystemMessage
+        message={{
+          text: 'Failed to execute dice roll. Please try again.',
+          sender: 'system',
+          context: { intent: 'dice_roll_error' },
+        }}
+        isFirstInGroup
+        isLastInGroup
+        displayText="Failed to execute dice roll. Please try again."
+      />,
+    );
+
+    expect(screen.getByRole('alert', { name: 'System message' })).toBeInTheDocument();
+    const line = screen.getByText('Failed to execute dice roll. Please try again.');
+    const row = line.parentElement;
+    expect(row?.className).toMatch(/text-ir-hp-bad/);
+    expect(row?.className).toMatch(/normal-case/);
+    expect(row?.className).not.toMatch(/uppercase/);
+    const hairlines = Array.from(row?.children ?? []).filter((child) =>
+      child.className.includes('bg-[color:color-mix(in_srgb,var(--ir-hp-bad)_35%,transparent)]'),
+    );
+    expect(hairlines).toHaveLength(2);
+  });
+
+  it('keeps long multi-paragraph system text readable instead of hairlining it (#88)', () => {
+    const longText = `The scene has been immediately stopped.\n\nThe content will be rewound to before the uncomfortable element. We can take a break or continue in a different direction that works for everyone.`;
+    render(
+      <SystemMessage
+        message={{ text: longText, sender: 'system' }}
+        isFirstInGroup
+        isLastInGroup
+        displayText={longText}
+      />,
+    );
+
+    const block = screen.getByText(/The scene has been immediately stopped/);
+    expect(block.className).not.toMatch(/items-center gap-2\.5/);
+    expect(block.className).toMatch(/text-sm/);
+  });
 });
