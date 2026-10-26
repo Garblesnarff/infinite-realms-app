@@ -308,4 +308,13 @@ describe('guard: no sub-12px text classes on the game screen (#228)', () => {
       expect(source).toMatch(/focus-visible:ring-2/);
     }
   });
+
+  it('keeps DM enemy selection in a native button instead of nesting controls', () => {
+    const combatInterface = readFileSync('src/components/combat/CombatInterface.tsx', 'utf8');
+    const enemyCard = readFileSync('src/components/combat/EnemyCard.tsx', 'utf8');
+
+    expect(combatInterface).not.toContain('role="button"');
+    expect(enemyCard).toContain('aria-pressed={isSelected}');
+    expect(enemyCard).toContain('className="ir-hit-slop mt-2 min-h-9 w-full justify-center"');
+  });
 });

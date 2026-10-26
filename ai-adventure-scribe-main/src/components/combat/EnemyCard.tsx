@@ -24,169 +24,192 @@ interface EnemyCardProps {
   className?: string;
   /** Attack buttons show only when a game-master surface passes a handler (#2257). */
   onAttack?: (attack: MonsterAttack) => void;
+  onSelect?: () => void;
+  isSelected?: boolean;
 }
 
 /**
  * ⚡ Bolt: Wrapped in React.memo to prevent unnecessary re-renders during combat
  * state updates when this specific enemy's data hasn't changed.
  */
-const EnemyCard: React.FC<EnemyCardProps> = React.memo(({ enemyId, className = '', onAttack }) => {
-  const { state } = useCombat();
-  const { getAssetImageUrl } = useCampaignAssetsContext();
-  const enemy = state.activeEncounter?.participants.find((p) => p.id === enemyId);
+const EnemyCard: React.FC<EnemyCardProps> = React.memo(
+  ({ enemyId, className = '', onAttack, onSelect, isSelected = false }) => {
+    const { state } = useCombat();
+    const { getAssetImageUrl } = useCampaignAssetsContext();
+    const enemy = state.activeEncounter?.participants.find((p) => p.id === enemyId);
 
-  if (!enemy || enemy.participantType !== 'monster') {
-    return null;
-  }
+    if (!enemy || enemy.participantType !== 'monster') {
+      return null;
+    }
 
-  // The name the rest of combat shows for this creature (#876): the bestiary
-  // heading when the seat carries one, so the card agrees with the tracker.
-  const label = enemy.displayName ?? enemy.name;
+    // The name the rest of combat shows for this creature (#876): the bestiary
+    // heading when the seat carries one, so the card agrees with the tracker.
+    const label = enemy.displayName ?? enemy.name;
 
-  // Look up portrait from campaign assets
-  const assetKey = enemy.name.toLowerCase().replace(/\s+/g, '-');
-  const portraitUrl = enemy.portraitUrl || getAssetImageUrl('monster', assetKey);
+    // Look up portrait from campaign assets
+    const assetKey = enemy.name.toLowerCase().replace(/\s+/g, '-');
+    const portraitUrl = enemy.portraitUrl || getAssetImageUrl('monster', assetKey);
 
-  const getChallengeRatingColor = (cr: string) => {
-    const numCR = parseFloat(cr);
-    if (numCR >= 5) return 'bg-red-600 text-white';
-    if (numCR >= 1) return 'bg-orange-500 text-white';
-    if (numCR >= 0.25) return 'bg-yellow-500 text-white';
-    if (numCR >= 0.125) return 'bg-blue-500 text-white';
-    return 'bg-green-500 text-white';
-  };
+    const getChallengeRatingColor = (cr: string) => {
+      const numCR = parseFloat(cr);
+      if (numCR >= 5) return 'bg-red-600 text-white';
+      if (numCR >= 1) return 'bg-orange-500 text-white';
+      if (numCR >= 0.25) return 'bg-yellow-500 text-white';
+      if (numCR >= 0.125) return 'bg-blue-500 text-white';
+      return 'bg-green-500 text-white';
+    };
 
-  const renderAttackButton = (attack: MonsterAttack, index: number) => {
-    const damageModifier = enemy.monsterData?.attacks?.[index]?.attackBonus || 0;
-    const damageType = enemy.monsterData?.attacks?.[index]?.damageType || 'bludgeoning';
+    const renderAttackButton = (attack: MonsterAttack, index: number) => {
+      const damageModifier = enemy.monsterData?.attacks?.[index]?.attackBonus || 0;
+      const damageType = enemy.monsterData?.attacks?.[index]?.damageType || 'bludgeoning';
+
+      return (
+        <Button
+          key={index}
+          variant="outline"
+          size="sm"
+          className="w-full mb-1 justify-start"
+          onClick={() => onAttack?.(attack)}
+        >
+          <Sword className="w-3 h-3 mr-2" />
+          <span className="text-xs mr-2">{attack.name}</span>
+          {attack.damageRoll && (
+            <DiceRoller
+              dice={attack.damageRoll}
+              modifier={damageModifier}
+              label=""
+              className="flex-shrink-0"
+              displayOnly
+            />
+          )}
+          {(damageType as string) !== 'none' && (
+            <Badge variant="secondary" className="ml-auto text-xs">
+              {damageType}
+            </Badge>
+          )}
+        </Button>
+      );
+    };
 
     return (
-      <Button
-        key={index}
-        variant="outline"
-        size="sm"
-        className="w-full mb-1 justify-start"
-        onClick={() => onAttack?.(attack)}
-      >
-        <Sword className="w-3 h-3 mr-2" />
-        <span className="text-xs mr-2">{attack.name}</span>
-        {attack.damageRoll && (
-          <DiceRoller
-            dice={attack.damageRoll}
-            modifier={damageModifier}
-            label=""
-            className="flex-shrink-0"
-            displayOnly
-          />
-        )}
-        {(damageType as string) !== 'none' && (
-          <Badge variant="secondary" className="ml-auto text-xs">
-            {damageType}
-          </Badge>
-        )}
-      </Button>
-    );
-  };
+      <Card className={`w-full max-w-sm ${className}`}>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-3">
+            {/* Portrait thumbnail */}
+            {portraitUrl ? (
+              <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-red-500/50 shadow-lg flex-shrink-0">
+                <img src={portraitUrl} alt={label} className="w-full h-full object-cover" />
+              </div>
+            ) : (
+              <div className="w-12 h-12 rounded-full bg-red-900/30 border-2 border-red-500/30 flex items-center justify-center flex-shrink-0">
+                <Skull className="w-6 h-6 text-red-500" />
+              </div>
+            )}
 
-  return (
-    <Card className={`w-full max-w-sm ${className}`}>
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-3">
-          {/* Portrait thumbnail */}
-          {portraitUrl ? (
-            <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-red-500/50 shadow-lg flex-shrink-0">
-              <img src={portraitUrl} alt={label} className="w-full h-full object-cover" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg font-semibold text-red-400 flex items-center gap-2">
+                  {label}
+                </CardTitle>
+
+                {enemy.monsterData?.challengeRating && (
+                  <Badge
+                    className={getChallengeRatingColor(enemy.monsterData.challengeRating)}
+                    variant="secondary"
+                  >
+                    CR {enemy.monsterData.challengeRating}
+                  </Badge>
+                )}
+              </div>
             </div>
-          ) : (
-            <div className="w-12 h-12 rounded-full bg-red-900/30 border-2 border-red-500/30 flex items-center justify-center flex-shrink-0">
-              <Skull className="w-6 h-6 text-red-500" />
+          </div>
+
+          {onSelect && (
+            <Button
+              type="button"
+              variant={isSelected ? 'destructive' : 'outline'}
+              size="sm"
+              className="ir-hit-slop mt-2 min-h-9 w-full justify-center"
+              onClick={onSelect}
+              aria-pressed={isSelected}
+              aria-label={`${isSelected ? 'Deselect' : 'Select'} ${label}`}
+            >
+              {isSelected ? 'Target selected' : 'Select target'}
+            </Button>
+          )}
+
+          {enemy.monsterData?.type && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+              <Target className="w-3 h-3" />
+              <span>{enemy.monsterData.type}</span>
+              {enemy.monsterData?.alignment && (
+                <span className="ml-2">({enemy.monsterData.alignment})</span>
+              )}
+            </div>
+          )}
+        </CardHeader>
+
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between text-sm">
+            <span className="flex items-center gap-1">
+              <Heart className="w-4 h-4" aria-hidden="true" />
+              <span aria-live="polite">
+                <span className="sr-only">{label} health: </span>
+                {getEnemyHealthTier(enemy.currentHitPoints, enemy.maxHitPoints)}
+              </span>
+            </span>
+            <span
+              className="flex items-center gap-1"
+              aria-label={`Armor Class: ${enemy.armorClass}`}
+            >
+              <Shield className="w-4 h-4" aria-hidden="true" />
+              AC: {enemy.armorClass}
+            </span>
+          </div>
+
+          {enemy.monsterData?.specialAbilities && enemy.monsterData.specialAbilities.length > 0 && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-xs font-medium text-purple-700 mb-1">
+                <Zap className="w-3 h-3" />
+                Special Abilities
+              </div>
+              {enemy.monsterData.specialAbilities.map((ability, index) => (
+                <Badge key={index} variant="secondary" className="text-xs w-full justify-start">
+                  {ability}
+                </Badge>
+              ))}
             </div>
           )}
 
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg font-semibold text-red-400 flex items-center gap-2">
-                {label}
-              </CardTitle>
+          {onAttack && enemy.monsterData?.attacks && enemy.monsterData.attacks.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-xs font-medium text-red-700">
+                <Sword className="w-3 h-3" />
+                Actions
+              </div>
+              <div className="space-y-1">
+                {enemy.monsterData.attacks.map((attack, index) =>
+                  renderAttackButton(attack, index),
+                )}
+              </div>
+            </div>
+          )}
 
-              {enemy.monsterData?.challengeRating && (
-                <Badge
-                  className={getChallengeRatingColor(enemy.monsterData.challengeRating)}
-                  variant="secondary"
-                >
-                  CR {enemy.monsterData.challengeRating}
+          {enemy.conditions.length > 0 && (
+            <div className="flex flex-wrap gap-1 pt-2 border-t">
+              {enemy.conditions.map((condition, index) => (
+                <Badge key={index} variant="destructive" className="text-xs">
+                  {condition.name}
+                  {condition.duration > 0 && ` (${condition.duration})`}
                 </Badge>
-              )}
+              ))}
             </div>
-          </div>
-        </div>
-
-        {enemy.monsterData?.type && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-            <Target className="w-3 h-3" />
-            <span>{enemy.monsterData.type}</span>
-            {enemy.monsterData?.alignment && (
-              <span className="ml-2">({enemy.monsterData.alignment})</span>
-            )}
-          </div>
-        )}
-      </CardHeader>
-
-      <CardContent className="space-y-3">
-        <div className="flex items-center justify-between text-sm">
-          <span className="flex items-center gap-1">
-            <Heart className="w-4 h-4" aria-hidden="true" />
-            <span aria-live="polite">
-              <span className="sr-only">{label} health: </span>
-              {getEnemyHealthTier(enemy.currentHitPoints, enemy.maxHitPoints)}
-            </span>
-          </span>
-          <span className="flex items-center gap-1" aria-label={`Armor Class: ${enemy.armorClass}`}>
-            <Shield className="w-4 h-4" aria-hidden="true" />
-            AC: {enemy.armorClass}
-          </span>
-        </div>
-
-        {enemy.monsterData?.specialAbilities && enemy.monsterData.specialAbilities.length > 0 && (
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-xs font-medium text-purple-700 mb-1">
-              <Zap className="w-3 h-3" />
-              Special Abilities
-            </div>
-            {enemy.monsterData.specialAbilities.map((ability, index) => (
-              <Badge key={index} variant="secondary" className="text-xs w-full justify-start">
-                {ability}
-              </Badge>
-            ))}
-          </div>
-        )}
-
-        {onAttack && enemy.monsterData?.attacks && enemy.monsterData.attacks.length > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs font-medium text-red-700">
-              <Sword className="w-3 h-3" />
-              Actions
-            </div>
-            <div className="space-y-1">
-              {enemy.monsterData.attacks.map((attack, index) => renderAttackButton(attack, index))}
-            </div>
-          </div>
-        )}
-
-        {enemy.conditions.length > 0 && (
-          <div className="flex flex-wrap gap-1 pt-2 border-t">
-            {enemy.conditions.map((condition, index) => (
-              <Badge key={index} variant="destructive" className="text-xs">
-                {condition.name}
-                {condition.duration > 0 && ` (${condition.duration})`}
-              </Badge>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-});
+          )}
+        </CardContent>
+      </Card>
+    );
+  },
+);
 
 EnemyCard.displayName = 'EnemyCard';
 

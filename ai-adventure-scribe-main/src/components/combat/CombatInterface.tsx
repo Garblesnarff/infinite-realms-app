@@ -112,13 +112,6 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({
     ? turnBarTitle(turnSummary, null, playerDown)
     : 'Setting up the fight…';
 
-  const handleEnemyKeyDown = (enemyId: string) => (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      setSelectedEnemy(selectedEnemy === enemyId ? null : enemyId);
-    }
-  };
-
   // Show the pre-combat card only if combat hasn't started
   if (!isInCombat && !showCombatMode) {
     return (
@@ -299,24 +292,15 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({
                   <div className="grid grid-cols-1 gap-4">
                     {enemyParticipants.map((enemy) =>
                       isDM ? (
-                        <div
+                        <EnemyCard
                           key={enemy.id}
-                          role="button"
-                          tabIndex={0}
-                          aria-pressed={selectedEnemy === enemy.id}
-                          aria-label={`Select ${enemy.displayName ?? enemy.name}`}
-                          onKeyDown={handleEnemyKeyDown(enemy.id)}
-                          className={`cursor-pointer transition-all focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:outline-none focus-visible:ring-offset-2 ${
-                            selectedEnemy === enemy.id
-                              ? 'ring-2 ring-red-500 ring-opacity-50'
-                              : 'hover:ring-1 hover:ring-red-200'
-                          }`}
-                          onClick={() =>
+                          enemyId={enemy.id}
+                          onAttack={handleEnemyAttack}
+                          isSelected={selectedEnemy === enemy.id}
+                          onSelect={() =>
                             setSelectedEnemy(selectedEnemy === enemy.id ? null : enemy.id)
                           }
-                        >
-                          <EnemyCard enemyId={enemy.id} onAttack={handleEnemyAttack} />
-                        </div>
+                        />
                       ) : (
                         <EnemyCard key={enemy.id} enemyId={enemy.id} />
                       ),
