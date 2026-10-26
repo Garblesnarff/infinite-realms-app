@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ACTION_BAR_CAST_INTENT } from '../../../../../../shared/test-fixtures/combat-action-bar-intent';
 import {
   COMBAT_CHAT_PLACEHOLDER,
   CombatActionBarLive,
@@ -373,15 +374,6 @@ describe('CombatActionBarLive', () => {
       spellId: 'chill-touch',
       targetIds: ['goblin-1'],
     };
-    const barAction = {
-      actor_id: 'pc-1',
-      action_type: 'cast_spell',
-      target_ids: ['goblin-1'],
-      weapon_id: null,
-      spell_id: 'chill-touch',
-      slot_level: null,
-      movement_feet: 0,
-    };
     const setup = () => {
       pack.cantrips = [
         { id: 'chill-touch', name: 'Chill Touch', range: '120 feet', castingTime: '1 action' },
@@ -428,14 +420,14 @@ describe('CombatActionBarLive', () => {
       await waitFor(() =>
         expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledWith(
           'enc-1',
-          barAction,
+          ACTION_BAR_CAST_INTENT,
           15,
           undefined,
           'action_bar',
         ),
       );
       expect(askPlayerForSpellCast).toHaveBeenCalledWith(
-        expect.objectContaining({ encounterId: 'enc-1', action: barAction }),
+        expect.objectContaining({ encounterId: 'enc-1', action: ACTION_BAR_CAST_INTENT }),
       );
       // A spell attack, not a move toward the target, and not chat text for the DM.
       expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalledWith(

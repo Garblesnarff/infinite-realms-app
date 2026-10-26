@@ -11,10 +11,7 @@ import { concludeEncounter } from './combat-ending.js';
 import { trackCombatEvent } from './combat-events.js';
 import { resolveCombatIntentRefsWithRetry } from './combat-intent-refs.js';
 import { assertActorTurn } from './combat-intent-turn.js';
-import {
-  buildCombatWeaponOptions,
-  type WeaponTargetResolution,
-} from './combat-weapon-options.js';
+import { buildCombatWeaponOptions, type WeaponTargetResolution } from './combat-weapon-options.js';
 import {
   getParticipantAbilityProfile,
   getActiveConditionNames,
@@ -94,6 +91,7 @@ import { planApproach } from '../../tactical/approach.js';
 import { entitySlug, resolveEntityRef, slugify } from '../../tactical/identity.js';
 
 import type { CombatAttackService as CombatAttackServiceType } from './combat-attack-service.js';
+import type { LegalActionType } from '../../../../shared/combat-legal-action-types';
 import type { TacticalMap } from '../../tactical/types.js';
 import type { AttackRollInput, CombatEndReason, SpellAttackInput } from '../../types/combat.js';
 
@@ -629,9 +627,9 @@ async function resolveActorTurn(
 }> {
   const current = initial.currentParticipant as TurnResourceView | null;
   const known = initial.participants.some((participant) => participant.id === actorId);
-  const addressed = initial.participants.find(
-    (participant) => participant.id === actorId,
-  ) as (TurnResourceView & { participantType?: string }) | undefined;
+  const addressed = initial.participants.find((participant) => participant.id === actorId) as
+    | (TurnResourceView & { participantType?: string })
+    | undefined;
   // An explicit `end_turn` is never absorbed: it is itself a turn boundary, so advancing to
   // reach its actor and then advancing again would consume two turns for one instruction.
   // Player-sourced intents are never absorbed either — a player client acting out of turn is a
@@ -688,16 +686,13 @@ async function resolveActorTurn(
       advancedPastParticipantId: current!.id,
       advancedPastParticipantSlug: index.slugFor(current!.id) ?? null,
     });
-    throw new BusinessLogicError(
-      'That action was declared in a turn that has already ended',
-      {
-        encounterId,
-        sessionId: state.encounter.sessionId,
-        actorId,
-        reason: 'declared_after_turn_ended',
-        roster: index.roster(),
-      },
-    );
+    throw new BusinessLogicError('That action was declared in a turn that has already ended', {
+      encounterId,
+      sessionId: state.encounter.sessionId,
+      actorId,
+      reason: 'declared_after_turn_ended',
+      roster: index.roster(),
+    });
   }
   logger.warn({
     msg: 'DM_IMPLICIT_TURN_ADVANCE',
@@ -1349,9 +1344,7 @@ export async function executeCombatIntent(
     const writesEngineRow =
       actor.participantType !== 'player' ||
       (submitted.actionId !== undefined &&
-        (resolved.type === 'end_turn' ||
-          resolved.type === 'attack' ||
-          resolved.type === 'spell'));
+        (resolved.type === 'end_turn' || resolved.type === 'attack' || resolved.type === 'spell'));
     // After the turn gate, not before: an absorbed advance that then refuses must stand (#2666).
     if (!inNpcTransaction && writesEngineRow) {
       const { withNpcActionTransaction } = await import('../../../../db/client');
@@ -1810,7 +1803,7 @@ export async function executeCombatIntent(
         intent.expectedVersion,
         async () => {
           if (!actorCharacterId) {
-            throw new BusinessLogicError('Second Wind is not on this character\'s sheet', {
+            throw new BusinessLogicError("Second Wind is not on this character's sheet", {
               reason: 'feature_not_on_sheet',
               featureName: 'Second Wind',
             });
@@ -1839,7 +1832,7 @@ export async function executeCombatIntent(
       const actorCharacterId = (actor as unknown as { characterId?: string | null }).characterId;
       await claimTurnVersion(intent.actorId, encounterId, intent.expectedVersion);
       if (!actorCharacterId) {
-        throw new BusinessLogicError('Action Surge is not on this character\'s sheet', {
+        throw new BusinessLogicError("Action Surge is not on this character's sheet", {
           reason: 'feature_not_on_sheet',
           featureName: 'Action Surge',
         });
@@ -2100,7 +2093,7 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
   }
   const map = await loadActiveTacticalMap(state.encounter.sessionId);
   const mapActor = map?.entities.find((entity) => entity.id === actor.id);
-  const actions: Array<Record<string, unknown>> = [];
+  const actions: Array<{ type: LegalActionType } & Record<string, unknown>> = [];
   if (map && mapActor && mapActor.movementRemaining > 0) {
     const nearestHostile = state.participants
       .filter(
@@ -2192,9 +2185,7 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
         });
         return { targetId: target.id, legal: rules.legal, refusal: rules.refusal };
       });
-    actions.push(
-      ...buildCombatWeaponOptions(weapons, targetsForWeapon, { canCloseDistance }),
-    );
+    actions.push(...buildCombatWeaponOptions(weapons, targetsForWeapon, { canCloseDistance }));
     // #1059: a carried ranged weapon the package left unequipped (the
     // shortbow, the light crossbow) while a melee weapon holds the main
     // hand is offered as 'Equip and attack': the client equips it — the
@@ -2304,7 +2295,7 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
   for (const spell of spells) {
     const usesBonusAction = spell!.castingTime.toLowerCase().includes('bonus action');
     if (usesBonusAction ? actor.bonusActionUsed : actor.actionUsed) continue;
-    const action: Record<string, unknown> = {
+    const action: { type: LegalActionType } & Record<string, unknown> = {
       type: 'spell',
       label: `Cast ${spell!.name}`,
       spellId: spell!.id,
