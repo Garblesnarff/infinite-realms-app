@@ -5,17 +5,9 @@
  * location name in the DM's prose resolves to the same chunk the uploader linked.
  */
 
-import type { CampaignAsset } from '@/hooks/use-campaign-assets';
+import { slugForLookup } from '../../../../../../shared/slug-for-lookup';
 
-export function slugForLookup(value: string): string {
-  return value
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[’']/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
+import type { CampaignAsset } from '@/hooks/use-campaign-assets';
 
 /**
  * Returns the location asset named last in the text, or null when no location
