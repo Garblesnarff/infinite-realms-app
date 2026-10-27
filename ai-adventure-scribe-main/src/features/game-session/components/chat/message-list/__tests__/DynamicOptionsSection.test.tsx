@@ -139,6 +139,45 @@ describe('DynamicOptionsSection', () => {
     expect(queryByText('Option 1')).toBeNull();
   });
 
+  it('does not list a narrated Cast row, and the next chip still runs its own action (#1171)', async () => {
+    combat.isInCombat = true;
+    combat.activeEncounter = {
+      id: 'enc-1',
+      currentTurnParticipantId: 'pc-1',
+      participants: [{ id: 'pc-1', participantType: 'player' }],
+    };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        actorId: 'pc-1',
+        actions: [
+          { type: 'spell', label: 'Charm Person', spellId: 'charm-person', narrated: true },
+          { type: 'dodge', label: 'Dodge' },
+        ],
+      }),
+    } as Response);
+    const onOptionSelect = vi.fn().mockResolvedValue(undefined);
+    render(
+      <DynamicOptionsSection
+        options={mockOptions as any}
+        onOptionSelect={onOptionSelect}
+        hasDynamicOverlay={false}
+      />,
+    );
+    fireEvent.click(await screen.findByText('Dodge'));
+    expect(screen.queryByText('Charm Person')).toBeNull();
+    await waitFor(() =>
+      expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith(
+        'enc-1',
+        { type: 'dodge', actorId: 'pc-1' },
+        'dm',
+        expect.any(Number),
+        'typed',
+      ),
+    );
+    expect(onOptionSelect).not.toHaveBeenCalled();
+  });
+
   it('posts a planned Move to the engine and leaves DM text out of the action path', async () => {
     combat.isInCombat = true;
     combat.activeEncounter = {
