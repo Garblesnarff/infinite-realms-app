@@ -77,7 +77,7 @@ function tabUntil(target: HTMLElement): Promise<void> {
   })();
 }
 
-function KeyboardCombatTurn(): React.ReactElement {
+function KeyboardCombatTurnHarness(): React.ReactElement {
   const [step, setStep] = useState<'bar' | 'roll' | 'end'>('bar');
   const completed = step === 'end';
   if (step === 'roll') {
@@ -108,7 +108,7 @@ function KeyboardCombatTurn(): React.ReactElement {
   );
 }
 
-describe('game-screen keyboard paths (#91)', () => {
+describe('keyboard combat harness paths (#91)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useCharacter).mockReturnValue({
@@ -142,8 +142,8 @@ describe('game-screen keyboard paths (#91)', () => {
     expect(onSendMessage).toHaveBeenCalledWith('Look around the ruined watchtower');
   });
 
-  it('completes Attack, roll, and End turn with keyboard activation', async () => {
-    render(<KeyboardCombatTurn />);
+  it('completes the local Attack, roll, and End turn harness with keyboard activation', async () => {
+    render(<KeyboardCombatTurnHarness />);
     const attack = screen.getByRole('button', { name: /^Attack/ });
     await tabUntil(attack);
     const user = userEvent.setup();
