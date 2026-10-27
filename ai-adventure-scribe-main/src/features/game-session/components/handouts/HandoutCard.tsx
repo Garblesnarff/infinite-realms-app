@@ -16,6 +16,9 @@ export const HandoutCard: React.FC<{ entry: JournalHandoutEntry; className?: str
   className,
 }) => {
   const [open, setOpen] = React.useState(false);
+  // #1192: a handout image whose storage object is missing must hide instead
+  // of showing a broken-image icon; the imageless rendering is the fallback.
+  const [imageFailed, setImageFailed] = React.useState(false);
   const imageUrl = imageUrlFor(entry);
   const authored = entry.mode === 'authored';
   const recipient = entry.recipient || entry.giver;
@@ -33,8 +36,13 @@ export const HandoutCard: React.FC<{ entry: JournalHandoutEntry; className?: str
           className,
         )}
       >
-        {authored && imageUrl ? (
-          <img src={imageUrl} alt={entry.title} className="h-32 w-full object-cover" />
+        {authored && imageUrl && !imageFailed ? (
+          <img
+            src={imageUrl}
+            alt={entry.title}
+            className="h-32 w-full object-cover"
+            onError={() => setImageFailed(true)}
+          />
         ) : (
           <div className="border-b border-amber-900/20 bg-[radial-gradient(circle_at_top,_#fff6d6,_#dfc48c)] px-4 py-3">
             <div className="flex items-center gap-2 text-amber-900">
@@ -74,8 +82,13 @@ export const HandoutCard: React.FC<{ entry: JournalHandoutEntry; className?: str
           >
             <X className="h-5 w-5" />
           </DialogPrimitive.Close>
-          {authored && imageUrl ? (
-            <img src={imageUrl} alt={entry.title} className="max-h-[72vh] w-full object-contain" />
+          {authored && imageUrl && !imageFailed ? (
+            <img
+              src={imageUrl}
+              alt={entry.title}
+              className="max-h-[72vh] w-full object-contain"
+              onError={() => setImageFailed(true)}
+            />
           ) : (
             <article className="min-h-80 bg-[radial-gradient(circle_at_top,_#fff8dc,_#ddbf81)] p-8 text-stone-900">
               <div className="mb-5 flex items-center gap-2 text-amber-900">
