@@ -70,6 +70,7 @@ import {
   askPlayerForDeathSaveDie,
   isPlayerActor,
 } from '@/services/combat/player-attack-roll';
+import { actorHasUsableBonusAction } from '@/services/combat/player-bonus-action-remaining';
 import {
   playerCombatSpellLabel,
   resolvePlayerCombatSpell,
@@ -1106,8 +1107,23 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       (action.action_type === 'attack' || action.action_type === 'cast_spell') &&
       isPlayerActor(action.actor_id, participants)
     ) {
-      const movementLeft = await actorMovementRemaining(sessionId, action.actor_id);
+      // #1185: the DM names the player by digest slug; the board and the legal-action menu
+      // key the player by participant id, so a slug read was always "unknown".
+      const playerId =
+        participants?.find(
+          (participant) =>
+            participant.participantType === 'player' &&
+            (participant.id === action.actor_id ||
+              slugify(participant.name ?? '') === action.actor_id),
+        )?.id ?? action.actor_id;
+      const movementLeft = await actorMovementRemaining(sessionId, playerId);
       if (movementLeft !== null && movementLeft > 0) return null;
+      // #1185: a cast that spent the Action leaves the turn open while a bonus action is usable.
+      if (
+        action.action_type === 'cast_spell' &&
+        (await actorHasUsableBonusAction(encounterId, playerId))
+      )
+        return null;
     }
     return crossTurnBoundary(
       action.actor_id,

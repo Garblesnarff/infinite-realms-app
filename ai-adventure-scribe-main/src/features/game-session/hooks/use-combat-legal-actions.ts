@@ -26,6 +26,7 @@ import {
 } from '@/services/combat/combat-outcome-transcript';
 import { endTurnUnlessAlreadyMoved } from '@/services/combat/end-turn-already-moved';
 import { askPlayerForAttackDie } from '@/services/combat/player-attack-roll';
+import { actorHasUsableBonusAction } from '@/services/combat/player-bonus-action-remaining';
 import { resolvePlayerCombatSpell } from '@/services/combat/player-combat-spell';
 import { actorMovementRemaining } from '@/services/combat/player-movement-remaining';
 import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
@@ -503,9 +504,7 @@ export function useCombatLegalActions(input: {
             // choice the DM default makes for a text cast. Upcast selection is a
             // separate feature. An unresolvable spell keeps slot_level null and the
             // engine refuses it with a readable reason, as before.
-            const catalogSpell = action.spellId
-              ? getSpellById(action.spellId, false)
-              : null;
+            const catalogSpell = action.spellId ? getSpellById(action.spellId, false) : null;
             const spellLevel =
               typeof catalogSpell?.level === 'number' && catalogSpell.level >= 1
                 ? catalogSpell.level
@@ -579,10 +578,13 @@ export function useCombatLegalActions(input: {
             // A resolved cast settles the turn only when the player has nothing left to do
             // (#263 CB-011). With movement remaining the turn stays open and the refreshed
             // menu offers Move / End turn. A movement-only resolution spent no Action,
-            // so the turn stays open.
+            // so the turn stays open. #1185: a usable bonus action also keeps it open.
             if (!movementOnly && execution.boundary === null) {
               const movementLeft = await actorMovementRemaining(encounter.sessionId, actorId);
-              if (movementLeft === null || movementLeft <= 0) {
+              if (
+                (movementLeft === null || movementLeft <= 0) &&
+                !(await actorHasUsableBonusAction(encounter.id, actorId))
+              ) {
                 await endTurnUnlessAlreadyMoved(encounter.id, {
                   type: 'end_turn',
                   actorId,

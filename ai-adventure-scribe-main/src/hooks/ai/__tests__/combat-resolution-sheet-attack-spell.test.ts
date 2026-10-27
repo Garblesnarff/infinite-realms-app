@@ -47,6 +47,9 @@ vi.mock('@/services/combat/combat-action-executor', async (importOriginal) => ({
 vi.mock('@/services/combat/player-movement-remaining', () => ({
   actorMovementRemaining: vi.fn().mockResolvedValue(0),
 }));
+vi.mock('@/services/combat/player-bonus-action-remaining', () => ({
+  actorHasUsableBonusAction: vi.fn().mockResolvedValue(false),
+}));
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     resolveAoECast: (...args: any[]) => resolveAoECast(...args),
@@ -331,9 +334,7 @@ describe('the sheet Cast of an attack-roll spell in combat (#2343 A1)', () => {
   it('keeps the turn open when the caster has movement left (#263 CB-011)', async () => {
     // The DM pipeline's settleExecutedAction gate: a resolved attack-roll spell with
     // movement remaining returns null (no boundary crossed) instead of sending end_turn.
-    const { actorMovementRemaining } = await import(
-      '@/services/combat/player-movement-remaining'
-    );
+    const { actorMovementRemaining } = await import('@/services/combat/player-movement-remaining');
     vi.mocked(actorMovementRemaining).mockResolvedValue(30);
 
     await resolve([dmChillTouchAction], 'Chill Touch');
@@ -348,9 +349,7 @@ describe('the sheet Cast of an attack-roll spell in combat (#2343 A1)', () => {
   it('sends end_turn when the caster has no movement left (#263 CB-011 positive control)', async () => {
     // Positive control for the settleExecutedAction gate: with movement spent, a resolved
     // attack-roll spell settles the turn via end_turn.
-    const { actorMovementRemaining } = await import(
-      '@/services/combat/player-movement-remaining'
-    );
+    const { actorMovementRemaining } = await import('@/services/combat/player-movement-remaining');
     vi.mocked(actorMovementRemaining).mockResolvedValue(0);
 
     await resolve([dmChillTouchAction], 'Chill Touch');
@@ -359,5 +358,41 @@ describe('the sheet Cast of an attack-roll spell in combat (#2343 A1)', () => {
       ([, intent]: any[]) => intent?.type === 'end_turn',
     );
     expect(endTurnCalls).toHaveLength(1);
+  });
+
+  it('keeps the turn open with no movement left while a bonus action is usable (#1185)', async () => {
+    const { actorMovementRemaining } = await import('@/services/combat/player-movement-remaining');
+    const { actorHasUsableBonusAction } =
+      await import('@/services/combat/player-bonus-action-remaining');
+    vi.mocked(actorMovementRemaining).mockResolvedValue(0);
+    vi.mocked(actorHasUsableBonusAction).mockResolvedValueOnce(true);
+
+    await resolve([dmChillTouchAction], 'Chill Touch');
+
+    expect(actorHasUsableBonusAction).toHaveBeenCalledWith(expect.any(String), APPRENTICE_ID);
+    const endTurnCalls = executeAuthoritativeCombatIntent.mock.calls.filter(
+      ([, intent]: any[]) => intent?.type === 'end_turn',
+    );
+    expect(endTurnCalls).toHaveLength(0);
+  });
+
+  it('reads movement for the participant the DM names by slug (#1185)', async () => {
+    // The board keys the player by participant id. The DM's action names them by digest
+    // slug ('the-apprentice'); reading the board by the slug found nobody, so every DM-declared
+    // cast settled as if movement were spent.
+    const { actorMovementRemaining } = await import('@/services/combat/player-movement-remaining');
+    vi.mocked(actorMovementRemaining).mockImplementation(async (_sessionId, actorId) =>
+      actorId === APPRENTICE_ID ? 30 : null,
+    );
+
+    await resolve([dmChillTouchAction], 'Chill Touch');
+
+    expect(actorMovementRemaining).toHaveBeenCalledWith(expect.any(String), APPRENTICE_ID);
+    const endTurnCalls = executeAuthoritativeCombatIntent.mock.calls.filter(
+      ([, intent]: any[]) => intent?.type === 'end_turn',
+    );
+    expect(endTurnCalls).toHaveLength(0);
+    vi.mocked(actorMovementRemaining).mockReset();
+    vi.mocked(actorMovementRemaining).mockResolvedValue(0);
   });
 });

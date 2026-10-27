@@ -30,9 +30,15 @@ export async function actorMovementRemaining(
       { headers: getAuthHeaders({ includeEmptyToken: true }) },
     );
     if (!response.ok) return null;
-    const payload = (await response.json()) as { map?: TacticalMapLike | null } | null;
+    // #1185: the route returns the active map itself; only the no-map read is `{ map: null }`.
+    // Reading `.map` alone made every active map look unknown, so every cast ended the turn.
+    const payload: unknown = await response.json();
     const map: TacticalMapLike | null =
-      payload && typeof payload === 'object' ? (payload.map ?? null) : null;
+      payload && typeof payload === 'object'
+        ? 'map' in payload
+          ? ((payload as { map?: TacticalMapLike | null }).map ?? null)
+          : (payload as TacticalMapLike)
+        : null;
     const entity = map?.entities?.find((candidate) => candidate.id === actorId);
     return typeof entity?.movementRemaining === 'number' ? entity.movementRemaining : null;
   } catch {
