@@ -104,13 +104,7 @@ export async function resetTacticalMovementForTurn(
 export async function grantTacticalDash(
   sessionId: string,
   entityId: string,
-): Promise<
-  | (TacticalMap & {
-      movementGainedFeet: number;
-      engineRows: Array<{ kind: 'dash'; movementGainedFeet: number }>;
-    })
-  | null
-> {
+): Promise<TacticalMap | null> {
   const map = await loadActiveTacticalMap(sessionId);
   const entity = map?.entities.find((candidate) => candidate.id === entityId);
   if (!map || !entity) return map;
