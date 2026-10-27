@@ -130,7 +130,15 @@ describeWithDb('Dash More-menu body resolves through the real route (#613)', () 
         sessionId,
         width: 3,
         height: 3,
-        cells: [],
+        cells: Array.from({ length: 3 }, () =>
+          Array.from({ length: 3 }, () => ({
+            terrain: 'floor',
+            blocksMovement: false,
+            blocksSight: false,
+            cover: 0,
+            elevation: 0,
+          })),
+        ),
         entities: [
           {
             id: heroId,
