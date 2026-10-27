@@ -194,8 +194,10 @@ vi.mock('../../tactical/TacticalMapBoard', () => ({
 }));
 vi.mock('@/components/safety/SafetyBanner', () => ({ SafetyBanner: () => <div>Safety</div> }));
 // #2456: DeathScreen uses useNavigate; mock it for terminal-state tests.
+// #1215: one shared mock, so a test can assert where the hero pick goes.
+const routerMock = vi.hoisted(() => ({ navigate: vi.fn() }));
 vi.mock('react-router-dom', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => routerMock.navigate,
 }));
 vi.mock('../game-content/GamePanelControls', () => ({
   GamePanelControls: () => <div>Panel controls</div>,
@@ -789,6 +791,22 @@ describe('GameMainContent overhaul behavior contract', () => {
     };
     render(<GameMainContent {...baseProps} />);
     expect(screen.getByTestId('death-screen')).toBeInTheDocument();
+  });
+
+  it("#1215 session path: the fallen hero pick is enabled and opens this campaign's hero choice", () => {
+    mockTerminalDeathState = {
+      state: 'party_defeated',
+      encounterId: 'encounter-789',
+      receivedAt: Date.now(),
+    };
+    routerMock.navigate.mockClear();
+    render(<GameMainContent {...baseProps} />);
+
+    const chooseHero = screen.getByTestId('death-screen-new-character');
+    expect(chooseHero).toBeEnabled();
+    expect(screen.getByText(/Begin Abyssal Descent again with a new hero/)).toBeInTheDocument();
+    fireEvent.click(chooseHero);
+    expect(routerMock.navigate).toHaveBeenCalledWith('/app/characters/create?campaign=campaign-1');
   });
 
   it('#2517: a defeated session renders no composer under the death screen', () => {

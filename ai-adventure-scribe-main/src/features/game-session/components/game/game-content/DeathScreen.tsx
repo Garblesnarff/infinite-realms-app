@@ -48,8 +48,11 @@ interface FallenEndStateProps {
   finalLines?: string[];
   /** Campaign display name for the hero-pick helper line. */
   campaignName?: string | null;
-  /** Route back into this campaign with a new hero (buildChooseHeroHref). */
-  chooseHeroHref: string;
+  /**
+   * Route back into this campaign with a new hero (buildChooseHeroHref);
+   * null hides the offer when there is no campaign to return to (#1215).
+   */
+  chooseHeroHref: string | null;
   /**
    * #2517: the hero-pick route is not final yet (the starter-campaign list
    * that resolves the slug is still loading). A wrong-route click in that
