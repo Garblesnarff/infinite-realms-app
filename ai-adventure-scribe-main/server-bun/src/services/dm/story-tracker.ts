@@ -460,10 +460,19 @@ export function trackerDirectiveText(input: {
   inCombat?: boolean;
 }): string | null {
   const lines: string[] = [];
-  for (const tracker of input.trackers) {
-    lines.push(`- ${tracker.name} Clock: ${tracker.value}/${tracker.limit}`);
-  }
   const phase = input.phase;
+  for (const tracker of input.trackers) {
+    // #1170: the phase's own clock line shows "Climax" when the phase changes,
+    // so the DM reads the phase off the line itself. A phase whose clock is
+    // not among the trackers (a budget-forced 'Final beat' with no defined
+    // clock) leaves the lines unchanged; the climax lines below carry it.
+    const marker =
+      phase?.phase === 'climax' &&
+      normalizeClockName(tracker.name) === normalizeClockName(phase.clock)
+        ? ' — Climax'
+        : '';
+    lines.push(`- ${tracker.name} Clock: ${tracker.value}/${tracker.limit}${marker}`);
+  }
   const oneShot = input.campaignLength === 'one-shot';
   // #1091: mid-fight, the climax, ending and pacing lines wait for the
   // fight to end; the clock lines still render.
@@ -505,8 +514,13 @@ export function trackerDirectiveText(input: {
           'campaign_ending in this reply and narrate the ending.',
       );
     } else if (phase.climaxTurns === 0 && phase.budgetForced && oneShot) {
+      // #1170: the entry turn must SHOW the climax in the story, not only
+      // name it — the Last Toll run's DM kept asking questions at 2/6
+      // while the budget-forced climax sat invisible in the prompt.
       lines.push(
-        'The one-shot’s turn budget is reached — the climax is now. Drive the story ' +
+        'The one-shot’s turn budget is reached — the climax is now. Show it in this ' +
+          'reply: move the clock, raise the stakes, put the final beat on the page — ' +
+          'do not carry on asking questions as if nothing changed. Drive the story ' +
           'to its final beats and declare campaign_ending when the story completes.',
       );
     } else if (phase.climaxTurns === 0) {
@@ -757,14 +771,29 @@ export async function loadStoryTrackerDirective(input: {
         inCombat = false;
       }
     }
+    const text = trackerDirectiveText({
+      trackers,
+      phase: state.phase,
+      campaignLength: state.campaignLength,
+      pacing: pacing ? { ...pacing, clockName: state.definitions[0]?.name ?? null } : null,
+      inCombat,
+    });
+    // #1170: one grep-able line per pacing event, with the typed-turn
+    // number, so the budget's course can be counted from prod logs. The
+    // directive line fires on every turn the pacing line renders (turns
+    // 45-59); the first line's turn is the directive turn. Combat-held
+    // turns do not log: the DM was not told on those turns. The condition
+    // mirrors the pacing branch in trackerDirectiveText exactly.
+    if (
+      pacing &&
+      !state.phase &&
+      !inCombat &&
+      pacing.turns >= pacingDirectiveTurn(pacing.budget)
+    ) {
+      logger.info({ msg: `DM_PACING directive turn=${pacing.turns}`, sessionId: input.sessionId });
+    }
     return {
-      text: trackerDirectiveText({
-        trackers,
-        phase: state.phase,
-        campaignLength: state.campaignLength,
-        pacing: pacing ? { ...pacing, clockName: state.definitions[0]?.name ?? null } : null,
-        inCombat,
-      }),
+      text,
       phase: state.phase,
       endingAtLimit,
       campaignLength: state.campaignLength,
@@ -960,6 +989,13 @@ export async function applyStoryTrackers(input: {
   // read after commit for the #1068 audit log below. A rollback throws
   // out of the transaction, so the log never fires for an uncommitted arm.
   let armedFinalBeatThisCall = false;
+  // #1170: the same commit-gated pattern for the budget's own event
+  // lines. pacedClimaxTurn / pacedEndingRequiredTurn are the typed-turn
+  // counts at the trip turns, captured inside the transaction.
+  let pacedClimaxThisCall = false;
+  let pacedClimaxTurn: number | null = null;
+  let pacedEndingRequiredThisCall = false;
+  let pacedEndingRequiredTurn: number | null = null;
   const { result, forceEndingClock, forceIsNew } = await db.transaction(async (tx) => {
     const finish = (
       outcome: StoryTrackerOutcome,
@@ -1019,9 +1055,15 @@ export async function applyStoryTrackers(input: {
     // and no final beat — a DM that never moves a clock sends no changes,
     // which is exactly the drift the budget exists to catch.
     // #1091: count typed player turns only (exclude dice-roll answers).
+    // #1170: the count serves the budget trip AND the pacing log lines,
+    // so it runs on every one-shot turn without a phase, plus on turns
+    // of a budget-forced climax (where the ending-required trip needs
+    // its own turn number). Clock-limit and final-beat climaxes never
+    // pay for it.
+    let playerTurns: number | null = null;
     let pacingTrip = false;
-    if (state.campaignLength === 'one-shot' && !phase) {
-      const [{ count: playerTurns }] = await tx
+    if (state.campaignLength === 'one-shot' && (!phase || phase.budgetForced)) {
+      const [{ count }] = await tx
         .select({ count: sql<number>`count(*)::int` })
         .from(dialogueHistory)
         .where(
@@ -1031,8 +1073,9 @@ export async function applyStoryTrackers(input: {
             sql`coalesce(${dialogueHistory.context}->>'intent', '') <> 'dice_roll'`,
           ),
         );
+      playerTurns = count;
       const budget = pacingBudgetFor(state.campaignLength);
-      pacingTrip = budget !== null && playerTurns >= budget;
+      pacingTrip = !phase && budget !== null && playerTurns >= budget;
     }
     if (!phase && changes.length === 0 && !armFinalBeat && !pacingTrip) {
       return finish(changesInvalid ? 'invalid_changes' : 'no_changes', 0, owedEnding);
@@ -1045,6 +1088,22 @@ export async function applyStoryTrackers(input: {
     if (nextPhase) {
       nextPhase.climaxTurns += 1;
       if (nextPhase.climaxTurns >= CLIMAX_TURN_LIMIT) nextPhase.endingRequired = true;
+    }
+    // #1170: the ending-required trip on a budget-forced phase captures
+    // its typed-turn number for the post-commit log line below. Only the
+    // false -> true transition logs: later turns keep endingRequired
+    // true, and their turns are not new events. A finalBeat arming on a
+    // budget phase also trips this log: the ending became required on
+    // that turn via the trigger, not the 6-turn net.
+    if (
+      nextPhase !== null &&
+      nextPhase.budgetForced === true &&
+      nextPhase.endingRequired === true &&
+      phase?.endingRequired !== true &&
+      playerTurns !== null
+    ) {
+      pacedEndingRequiredThisCall = true;
+      pacedEndingRequiredTurn = playerTurns;
     }
 
     let appliedChanges = 0;
@@ -1137,6 +1196,10 @@ export async function applyStoryTrackers(input: {
         budgetForced: true,
         lastMessageId: message.id,
       };
+      // #1170: the trip turn's typed-turn number, for the post-commit log
+      // line below. playerTurns is non-null here: the trip ran the COUNT.
+      pacedClimaxThisCall = true;
+      pacedClimaxTurn = playerTurns;
     }
     if (phaseToStore || changes.length > 0) {
       const trackerJson = phaseToStore ?? { lastMessageId: message.id };
@@ -1154,6 +1217,22 @@ export async function applyStoryTrackers(input: {
     if (unknownClock) return finish('unknown_clock');
     return finish(changesInvalid ? 'invalid_changes' : 'no_changes', 0, forceClock, forceIsNew);
   });
+
+  // #1170: the budget's own event lines, one per event with the typed-turn
+  // number, so Hetzner can count the budget's course from prod logs. The
+  // climax line gates on outcome like the audit line below; the
+  // ending-required line gates on the flag alone — the trip turn stores
+  // the phase but reports 'no_changes', so an outcome gate would miss it.
+  // Both sit post-commit: a rolled-back transaction logs nothing.
+  if (pacedClimaxThisCall && result.outcome === 'applied' && pacedClimaxTurn !== null) {
+    logger.info({ msg: `DM_PACING climax turn=${pacedClimaxTurn}`, sessionId });
+  }
+  if (pacedEndingRequiredThisCall && pacedEndingRequiredTurn !== null) {
+    logger.info({
+      msg: `DM_PACING ending_required turn=${pacedEndingRequiredTurn}`,
+      sessionId,
+    });
+  }
 
   if (armedFinalBeatThisCall && result.outcome === 'applied') {
     result.finalBeatArmed = true;
@@ -1361,6 +1440,8 @@ export async function enforceRequiredEnding(input: {
   finalBeat?: boolean;
   /** #1083: the pacing budget forced the climax, not a clock limit. */
   budgetForced?: boolean;
+  /** #1170: typed player turns at the enforcement turn; logged on the engine-ending event. */
+  turns: number;
   /** One more generate with the ending required; the route owns the call shape. */
   regenerate: (correctivePrompt: string) => Promise<{ text: string; error?: string }>;
 }): Promise<{ outcome: EndingEnforcementOutcome; summary?: string }> {
@@ -1412,6 +1493,12 @@ export async function enforceRequiredEnding(input: {
     const summary = engineWrittenEndingSummary(input);
     const forced = await applyStoryEnding({ userId, sessionId, ending: { summary } });
     if (forced.outcome === 'applied' || forced.outcome === 'already_applied') {
+      // #1170: the budget's engine-ending event, with its typed-turn number.
+      // Rung 1's declared ending logs no pacing line: the DM declared it,
+      // so the ending is visible without a log line.
+      if (input.budgetForced === true) {
+        logger.info({ msg: `DM_PACING engine_ending turn=${input.turns}`, sessionId });
+      }
       return done('engine_forced', forced.summary ?? summary);
     }
   } catch (error) {
