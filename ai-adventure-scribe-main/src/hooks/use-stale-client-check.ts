@@ -49,6 +49,11 @@ export function useStaleClientCheck({
         onClick: () => window.location.reload(),
       },
       duration: Infinity,
+      // #1161 (Hark T27-006): at the default bottom-right the toast sat on the
+      // composer's Send button for the rest of the run. Top-center keeps the
+      // composer clear, and the close button lets the player dismiss it.
+      position: 'top-center',
+      closeButton: true,
     }).id;
   }, [toast]);
 

@@ -10,16 +10,32 @@ type CompatToastOptions = {
     onClick: () => void;
   };
   duration?: number;
+  /** Sonner placement for this toast only; the Toaster default (bottom-right) otherwise. */
+  position?:
+    | 'top-left'
+    | 'top-center'
+    | 'top-right'
+    | 'bottom-left'
+    | 'bottom-center'
+    | 'bottom-right';
+  /** Show sonner's close (X) button on this toast. */
+  closeButton?: boolean;
 };
 
 // Sonner-backed toast function compatible with existing call sites
 function toast(opts: CompatToastOptions) {
-  const { title, description, variant, action, duration } = opts || {};
-  const hasSonnerOptions = action !== undefined || duration !== undefined;
+  const { title, description, variant, action, duration, position, closeButton } = opts || {};
+  const hasSonnerOptions =
+    action !== undefined ||
+    duration !== undefined ||
+    position !== undefined ||
+    closeButton !== undefined;
   const sonnerOptions = {
     ...(description ? { description: String(description) } : {}),
     ...(action ? { action } : {}),
     ...(duration !== undefined ? { duration } : {}),
+    ...(position !== undefined ? { position } : {}),
+    ...(closeButton !== undefined ? { closeButton } : {}),
   };
   const message = String(description || title || '');
 

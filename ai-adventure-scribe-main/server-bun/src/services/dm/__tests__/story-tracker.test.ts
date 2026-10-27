@@ -488,6 +488,22 @@ describe('trackerDirectiveText', () => {
     expect(text).toContain('two segments');
   });
 
+  test('clock prose must state the value the chip shows after the reply (#1161)', () => {
+    // Hark T27-006: at 5/6 the DM's prose said two segments were left while
+    // the chip said 5/6. The directive must tell the DM to narrate the
+    // post-reply value as "N of LIMIT" and derive any "segments left" from it.
+    const text = trackerDirectiveText({
+      trackers: [{ name: 'Sunset', value: 5, limit: 6 }],
+      phase: null,
+    });
+    expect(text).toContain('the value the UI will show after this reply');
+    expect(text).toContain("the value below plus this reply's tracker_changes");
+    expect(text).toContain('"N of LIMIT"');
+    expect(text).toContain('LIMIT minus N');
+    // The value the DM reads is still the stored line itself.
+    expect(text).toContain('Sunset Clock: 5/6');
+  });
+
   test('nothing to say is null', () => {
     expect(trackerDirectiveText({ trackers: [], phase: null })).toBeNull();
   });
