@@ -40,6 +40,23 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
     ? getCharacterResources(character.class.name, character.level || 1)
     : null;
 
+  // #712: the Lay on Hands bar reads static level x 5 values. When the
+  // server has mirrored the real pool into the sheet JSON (a spend or a
+  // rest), show the real pool so the bar and the feature row agree.
+  const layOnHandsTracked = trackedClassFeatures.find(
+    (feature) => feature.name === 'lay_on_hands',
+  );
+  const displayResources =
+    characterResources && layOnHandsTracked?.currentUses !== undefined
+      ? {
+          ...characterResources,
+          layOnHands: {
+            current: layOnHandsTracked.currentUses,
+            max: layOnHandsTracked.maxUses ?? characterResources.layOnHands?.max ?? 0,
+          },
+        }
+      : characterResources;
+
   // #264: rests go through the shared SheetRestControls (hit-dice prompt on short
   // rest), the same path as the Main tab.
 
@@ -100,8 +117,8 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
       />
 
       {/* Character Resources */}
-      {characterResources && (
-        <ResourceSection characterResources={characterResources} hitDice={character.hitDice} />
+      {displayResources && (
+        <ResourceSection characterResources={displayResources} hitDice={character.hitDice} />
       )}
 
       {/* Rest Actions */}

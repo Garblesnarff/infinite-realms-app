@@ -261,6 +261,60 @@ export async function featureSpentSinceMessage(input: {
 }
 
 /**
+ * Mirror a pooled feature's state onto the sheet (#712). The sheet's
+ * ClassFeatureTracker overlays `characters.classFeatures` JSON onto the
+ * static class definitions, and no turn path writes that JSON — a spend
+ * that only moves the `character_features` row never shows on the sheet
+ * (Divine Sense has no static uses fields at all, and the Lay on Hands bar
+ * reads static level x 5). Best-effort: a failed mirror logs and never
+ * fails the spend it follows, and every other JSON key is preserved.
+ */
+async function syncSheetPool(input: {
+  characterId: string;
+  userId: string;
+  featureKey: 'divine_sense' | 'lay_on_hands';
+  max: number;
+  remaining: number;
+}): Promise<void> {
+  try {
+    const [row] = await db
+      .select({ classFeatures: characters.classFeatures })
+      .from(characters)
+      .where(
+        and(
+          eq(characters.id, input.characterId),
+          or(eq(characters.userId, input.userId), eq(characters.ownerId, input.userId)),
+        ),
+      )
+      .limit(1);
+    if (!row) return;
+    const base =
+      row.classFeatures &&
+      typeof row.classFeatures === 'object' &&
+      !Array.isArray(row.classFeatures)
+        ? { ...(row.classFeatures as Record<string, unknown>) }
+        : {};
+    base[input.featureKey] = { maxUses: input.max, currentUses: input.remaining };
+    await db
+      .update(characters)
+      .set({ classFeatures: base })
+      .where(
+        and(
+          eq(characters.id, input.characterId),
+          or(eq(characters.userId, input.userId), eq(characters.ownerId, input.userId)),
+        ),
+      );
+  } catch (error) {
+    logger.warn({
+      msg: 'PALADIN_POOL_SHEET_SYNC_FAILED',
+      characterId: input.characterId,
+      feature: input.featureKey,
+      error,
+    });
+  }
+}
+
+/**
  * Spend one Divine Sense use. Initializes the pool (1 + CHA mod, min 1) on first
  * use, then decrements through ClassFeatureUsageService so the sheet, the usage
  * log, and the long-rest restore all see the same row.
@@ -283,6 +337,15 @@ export async function spendDivineSense(input: {
     sessionId,
     context: context ?? 'divine-sense',
   });
+  if (result.usesRemaining >= 0) {
+    await syncSheetPool({
+      characterId,
+      userId,
+      featureKey: 'divine_sense',
+      max: pool.max,
+      remaining: result.usesRemaining,
+    });
+  }
   return {
     success: result.success,
     usesRemaining: result.usesRemaining,
@@ -423,7 +486,7 @@ async function currentPoolRemaining(rowId: string): Promise<number> {
  * the pool, and refuse clearly when the pool cannot cover it. The pool row is
  * the single source of truth the sheet reads.
  */
-export async function resolveLayOnHands(
+async function resolveLayOnHandsAgainstPool(
   input: ResolveLayOnHandsInput,
 ): Promise<LayOnHandsResult> {
   const {
@@ -597,6 +660,28 @@ export async function resolveLayOnHands(
 }
 
 /**
+ * Resolve Lay on Hands, then mirror the pool onto the sheet (#712) so the
+ * sheet's Lay on Hands row and pool bar show the spend. Every return path
+ * of the inner resolver carries poolRemaining/poolMax, so one mirror site
+ * covers heals, cures, and refusals alike.
+ */
+export async function resolveLayOnHands(
+  input: ResolveLayOnHandsInput,
+): Promise<LayOnHandsResult> {
+  const result = await resolveLayOnHandsAgainstPool(input);
+  if (result.poolMax > 0) {
+    await syncSheetPool({
+      characterId: input.characterId,
+      userId: input.userId,
+      featureKey: 'lay_on_hands',
+      max: result.poolMax,
+      remaining: result.poolRemaining,
+    });
+  }
+  return result;
+}
+
+/**
  * Initialize the tracked pool for a feature the seed left with a NULL uses_count
  * (Divine Sense, Lay on Hands). Returns the pool's remaining value and its unit
  * label, or null when the feature is not a pooled paladin feature. Shared by
@@ -652,6 +737,13 @@ export async function replenishPaladinPools(
       .update(characterFeatures)
       .set({ usesRemaining: loh.max })
       .where(eq(characterFeatures.id, loh.row.id));
+    await syncSheetPool({
+      characterId,
+      userId,
+      featureKey: 'lay_on_hands',
+      max: loh.max,
+      remaining: loh.max,
+    });
     replenished.push(LAY_ON_HANDS_NAME);
   }
   const sense = await divineSenseUses(characterId, userId);
@@ -660,6 +752,13 @@ export async function replenishPaladinPools(
       .update(characterFeatures)
       .set({ usesRemaining: sense.max })
       .where(eq(characterFeatures.id, sense.row.id));
+    await syncSheetPool({
+      characterId,
+      userId,
+      featureKey: 'divine_sense',
+      max: sense.max,
+      remaining: sense.max,
+    });
     replenished.push(DIVINE_SENSE_NAME);
   }
   return replenished;
