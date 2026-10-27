@@ -66,9 +66,7 @@ describe('mapCharacterToApi vital state (#2517)', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any)!;
 
-    expect(
-      (api.stats as { vital_state?: string; died_at?: Date }).vital_state,
-    ).toBe('dead');
+    expect((api.stats as { vital_state?: string; died_at?: Date }).vital_state).toBe('dead');
     expect((api.stats as { died_at?: Date }).died_at).toEqual(diedAt);
   });
 });
@@ -95,5 +93,32 @@ describe('mapCharacterToApi proficiency round-trip (#1827)', () => {
     ]) {
       expect(Object.keys(api)).toContain(key);
     }
+  });
+});
+
+describe('mapCharacterToApi wire row for the client transform (#1226)', () => {
+  it('serializes a campaign-linked character to exactly the shared fixture the client test reads', async () => {
+    // The fixture is the JSON body the GET serves (undefined keys drop out on
+    // the wire); src/utils/character/__tests__/data-transformers.test.ts runs
+    // the real transformCharacterData on it.
+    const fixture = (
+      await import('../../../../../shared/test-fixtures/character-get-row-1226.json')
+    ).default;
+    const at = new Date('2026-10-27T20:00:00.000Z');
+    const api = mapCharacterToApi({
+      id: 'c1226000-0000-4000-8000-000000000001',
+      userId: 'user-1226',
+      ownerId: 'user-1226',
+      campaignId: 'a1226000-0000-4000-8000-000000000002',
+      name: 'Clarice Faro',
+      race: 'Human',
+      class: 'Sorcerer',
+      level: 3,
+      background: 'Sage',
+      theme: null,
+      createdAt: at,
+      updatedAt: at,
+    } as never);
+    expect(JSON.parse(JSON.stringify(api))).toEqual(fixture);
   });
 });

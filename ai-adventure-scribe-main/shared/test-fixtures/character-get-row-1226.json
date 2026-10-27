@@ -1,0 +1,14 @@
+{
+  "id": "c1226000-0000-4000-8000-000000000001",
+  "name": "Clarice Faro",
+  "race": "Human",
+  "class": "Sorcerer",
+  "level": 3,
+  "background": "Sage",
+  "theme": null,
+  "campaign_id": "a1226000-0000-4000-8000-000000000002",
+  "user_id": "user-1226",
+  "owner_id": "user-1226",
+  "created_at": "2026-10-27T20:00:00.000Z",
+  "updated_at": "2026-10-27T20:00:00.000Z"
+}
