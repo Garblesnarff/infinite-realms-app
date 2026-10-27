@@ -18,6 +18,14 @@ vi.mock('@/lib/auth-gate', () => ({
   waitForAuth: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('@/infrastructure/api/rest-client', () => ({
+  fetchWithAuth: (path: string, init?: RequestInit) =>
+    fetch(`http://localhost:8888${path}`, {
+      ...init,
+      headers: { Authorization: 'Bearer test-token', ...init?.headers },
+    }),
+}));
+
 const responseFor = (body: unknown, status = 200): Response =>
   ({
     ok: status >= 200 && status < 300,

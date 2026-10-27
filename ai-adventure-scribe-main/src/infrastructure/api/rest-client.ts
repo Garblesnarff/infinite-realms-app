@@ -22,6 +22,7 @@ export const NETWORK_RETRY_BUDGET_MS = 20_000;
 export const BACKGROUND_LLM_RETRY_BUDGET_MS = 5_000;
 const NETWORK_RETRY_INITIAL_DELAY_MS = 1_000;
 const NETWORK_RETRY_MAX_DELAY_MS = 8_000;
+const TOKEN_REFRESH_MARGIN_MS = 2 * 60 * 1000;
 
 export type FetchWithAuthOptions = RequestInit & { retryBudgetMs?: number };
 
@@ -276,8 +277,6 @@ function buildRequestInit(options: RequestInit, accessToken?: string): RequestIn
   };
 }
 
-const TOKEN_REFRESH_MARGIN_MS = 60 * 1000;
-
 function getAccessTokenExpiry(token: string): number | null {
   try {
     const parts = token.split('.');
@@ -343,7 +342,7 @@ export async function fetchWithAuth(
 
   try {
     // A backgrounded tab can miss the periodic AuthContext timer. Refresh
-    // before the request when its access token is inside the one-minute window.
+    // before the request when its access token is inside the two-minute window.
     const refreshedAccessToken = await refreshExpiringSession();
     const response = await request(refreshedAccessToken);
     if (response.status !== 401 || !isV1Route(path)) return response;

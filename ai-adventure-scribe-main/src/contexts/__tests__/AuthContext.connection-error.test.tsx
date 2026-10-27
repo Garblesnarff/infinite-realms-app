@@ -354,7 +354,7 @@ describe('AuthContext connection failures (#565)', () => {
 
   it('checks an expiring token again when the document becomes visible', async () => {
     const expiringToken = `header.${btoa(
-      JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 30 }),
+      JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 90 }),
     )}.signature`;
     persistSession({ access_token: expiringToken, refresh_token: 'old-refresh' });
     const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;

@@ -147,7 +147,26 @@ describe('fetchWithAuth', () => {
     });
   });
 
-  it('refreshes a token within one minute of expiry before sending the request', async () => {
+  it('refreshes and retries a 401 from the combat poller route', async () => {
+    fetchMock.mockResolvedValueOnce(response(401, { error: 'Unauthorized' }));
+    fetchMock.mockResolvedValueOnce(response(200, { combat: { id: 'encounter-1' } }));
+    refreshMock.mockResolvedValue({ accessToken: 'new-access', refreshToken: 'new-refresh' });
+
+    await expect(
+      fetchWithAuth('/v1/combat/sessions/session-1/active', {
+        signal: new AbortController().signal,
+      }),
+    ).resolves.toMatchObject({ status: 200 });
+
+    expect(refreshMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/v1/combat/sessions/session-1/active');
+    expect(fetchMock.mock.calls[1][1].headers).toMatchObject({
+      Authorization: 'Bearer new-access',
+    });
+  });
+
+  it('refreshes a token within two minutes of expiry before sending the request', async () => {
     const exp = Math.floor(Date.now() / 1000) + 30;
     const expiringToken = `header.${btoa(JSON.stringify({ exp }))}.signature`;
     accessToken.value = expiringToken;

@@ -128,7 +128,7 @@ describe('TokenService', () => {
     });
 
     it('should return true for token with near expiry', () => {
-      const exp = Math.floor(Date.now() / 1000) + 30; // 30 seconds (margin is 60s)
+      const exp = Math.floor(Date.now() / 1000) + 90; // 90 seconds (margin is 2 minutes)
       const token = 'a.' + btoa(JSON.stringify({ exp })) + '.b';
       expect(isTokenExpiringSoon(token)).toBe(true);
     });

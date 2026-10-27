@@ -24,9 +24,7 @@ import type { CombatEncounter } from '@/types/combat';
 import type { Dispatch } from 'react';
 
 import { logServerRequestId } from '@/infrastructure/api/request-id-log';
-import { getAuthHeaders } from '@/services/auth/TokenService';
-
-const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
+import { fetchWithAuth, SessionExpiredError } from '@/infrastructure/api/rest-client';
 
 /**
  * A read of server combat truth. `unknown` is deliberately distinct from `none`: a request that
@@ -43,10 +41,8 @@ export async function readAuthoritativeCombat(
   signal?: AbortSignal,
 ): Promise<AuthoritativeCombatRead> {
   try {
-    const response = await fetch(
-      `${apiBase}/v1/combat/sessions/${encodeURIComponent(sessionId)}/active`,
-      { headers: getAuthHeaders(), ...(signal ? { signal } : {}) },
-    );
+    const path = `/v1/combat/sessions/${encodeURIComponent(sessionId)}/active`;
+    const response = await fetchWithAuth(path, signal ? { signal } : {});
     logServerRequestId('/v1/combat', response);
     if (response.status === 404) return { state: 'none' };
     if (!response.ok) return { state: 'unknown' };
@@ -66,6 +62,7 @@ export async function readAuthoritativeCombat(
     ) {
       throw error;
     }
+    if (error instanceof SessionExpiredError) throw error;
     return { state: 'unknown' };
   }
 }
@@ -142,7 +139,9 @@ export function useAuthoritativeCombatSync(
     const apply = (read: AuthoritativeCombatRead): void => {
       if (!cancelled) applyAuthoritativeCombat(read, dispatch, getEncounter());
     };
-    void readAuthoritativeCombat(sessionId).then(apply);
+    void readAuthoritativeCombat(sessionId)
+      .then(apply)
+      .catch(() => undefined);
     const listener = (event: Event): void => {
       const detail = (event as CustomEvent<{ combat?: AuthoritativeCombatPayload }>).detail;
       if (detail?.combat) apply({ state: 'combat', combat: detail.combat });
@@ -151,7 +150,9 @@ export function useAuthoritativeCombatSync(
     // hung. That path has no DM result to refresh from, so the seat event
     // re-reads the board the way a reload does.
     const onSeated = (): void => {
-      void readAuthoritativeCombat(sessionId).then(apply);
+      void readAuthoritativeCombat(sessionId)
+        .then(apply)
+        .catch(() => undefined);
     };
     window.addEventListener('combat-state-updated', listener);
     window.addEventListener('combat-entry-seated', onSeated);
