@@ -141,6 +141,25 @@ export function getStarterSpellQuotas(
   return getSrdSpellQuotas(className, level, abilityModifier);
 }
 
+/**
+ * Highest spell level the class can cast at this level, from the same slot
+ * progression the seed's spellSlots derive from (2014 PHB tables in
+ * shared/spell-slot-tables.ts). Half-casters top out at 1st-level slots at
+ * levels 2-4; Warlocks use their pact slot level. Returns 0 when the class
+ * has no slots at this level.
+ */
+function getMaxSpellLevel(className: string, level: number): number {
+  if (className.toLowerCase() === 'warlock') {
+    return getPactMagicProgression(level)?.pactSlotLevel ?? 0;
+  }
+  const slots = getSpellSlotsByLevel(className, level);
+  let max = 0;
+  for (let index = 0; index < slots.length; index++) {
+    if (slots[index] > 0) max = index + 1;
+  }
+  return max;
+}
+
 function uniqueSpellIds(spellIds: string[]): string[] {
   return [...new Set(spellIds)];
 }
@@ -190,13 +209,16 @@ export function buildStarterSpellSeed(
   );
 
   const quotas = getStarterSpellQuotas(className, level, abilityScores);
-  const maxSpellLevel = Math.min(5, Math.ceil(level / 2));
+  const maxSpellLevel = getMaxSpellLevel(className, level);
   const eligibleAuthoredSpells = authoredAvailable.spells.filter(
     (spell) => spell.level <= maxSpellLevel,
   );
   const validSpells = new Set(eligibleAuthoredSpells.map((spell) => spell.id));
+  // Fill the lower slots first (#1025): the fallback fills from the lowest
+  // eligible spell level upward, keeping catalog order within a level.
   const availableKnownSpells = available.spells
     .filter((spell) => spell.level <= maxSpellLevel)
+    .sort((a, b) => a.level - b.level)
     .map((spell) => spell.id);
   const curatedKnownSpells = (curated?.knownSpells || []).filter((id) => validSpells.has(id));
   const curatedPreparedSpells = (curated?.preparedSpells || []).filter((id) => validSpells.has(id));
