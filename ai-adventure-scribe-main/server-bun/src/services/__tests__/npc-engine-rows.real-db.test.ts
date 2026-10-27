@@ -26,6 +26,7 @@ import {
   combatDamageLog,
   dialogueHistory,
   inventoryItems,
+  tacticalMaps,
 } from '../../../../db/schema/index';
 import { ENEMY_HITS_PLAYER, REEVES } from '../../../../shared/test-fixtures/engine-results';
 import { parseAuthoredStatBlock } from '../combat/authored-stat-block-parser.js';
@@ -82,6 +83,7 @@ const { getLegalCombatActions } = await importWithRealDb(
 const { runBossMoveWindow, armDefy } = await importWithRealDb(
   () => import('../combat/boss-move-window.js'),
 );
+const { saveTacticalMap } = await importWithRealDb(() => import('../combat/tactical-map-store.js'));
 
 describeWithDb('server NPC engine rows through the real routes (#2658 step 2)', () => {
   const database = hasRealDb ? realDb() : (null as never);
@@ -581,7 +583,7 @@ describeWithDb('the server runs NPC turns on End turn (#2658 step 3)', () => {
     },
   );
 
-  test('a fled player leaves nothing to hand the turn to: the route runs no creature', async () => {
+  test("a fled player ends the fight (#1169): the route runs no creature, and the only row is the flee's own", async () => {
     const { sessionId, encounterId, playerId } = await seedFight();
 
     const fled = await post(`${encounterId}/intent`, {
@@ -590,17 +592,148 @@ describeWithDb('the server runs NPC turns on End turn (#2658 step 3)', () => {
 
     expect(fled.result.exit).toBe('fled');
     expect(fled.result.npcTurns).toBeUndefined();
-    expect(await rowsOf(sessionId)).toHaveLength(0);
+    expect(fled.result.combatEnded).toBe(true);
+    expect(fled.result.endedReason).toBe('abandoned');
+    const rows = await rowsOf(sessionId);
+    expect(rows).toHaveLength(1);
+    expect(
+      (rows[0].context as { combatEngineBlocks: Array<{ source: string }> }).combatEngineBlocks[0]
+        .source,
+    ).toBe('player');
+    expect(rows[0].message).toContain('fled from combat');
+    expect(
+      rows.some((row) =>
+        (
+          row.context as { combatEngineBlocks?: Array<{ source: string }> }
+        )?.combatEngineBlocks?.some((block) => block.source === 'npc'),
+      ),
+    ).toBe(false);
+    await finish(encounterId);
+  });
+
+  test('a flee whose opportunity attack downs the player (#1169): no exit, the fight stays open, one player row carries the downed line', async () => {
+    const { sessionId, encounterId, playerId } = await seedFight({ playerHp: 1 });
+    const participants = await database
+      .select()
+      .from(combatParticipants)
+      .where(eq(combatParticipants.encounterId, encounterId));
+    const reeves = participants.find((participant) => participant.name === 'Captain Sarah Reeves')!;
+    const guard = participants.find((participant) => participant.name === 'Second Guard')!;
+    // Adjacent, one cell apart: five feet, inside the reach of the Strike this guard fights
+    // with. Without a board there is no opportunity attack at all (the selector returns null
+    // with no map), so the board is what makes this the downed-by-the-blow case. The second
+    // guard sits far away so only the adjacent one provokes.
+    await saveTacticalMap({
+      id: crypto.randomUUID(),
+      sessionId,
+      width: 12,
+      height: 10,
+      cells: Array.from({ length: 10 }, () =>
+        Array.from({ length: 12 }, () => ({
+          terrain: 'floor' as const,
+          blocksMovement: false,
+          blocksSight: false,
+          cover: 0 as const,
+          elevation: 0,
+        })),
+      ),
+      entities: [
+        {
+          id: playerId!,
+          slug: 'the-scholar',
+          x: 4,
+          y: 4,
+          size: 'medium',
+          type: 'pc',
+          speedFeet: 30,
+          movementRemaining: 30,
+        },
+        {
+          id: reeves.id,
+          slug: 'captain-sarah-reeves',
+          x: 5,
+          y: 4,
+          size: 'medium',
+          type: 'monster',
+          speedFeet: 30,
+          movementRemaining: 30,
+        },
+        {
+          id: guard.id,
+          slug: 'second-guard',
+          x: 10,
+          y: 8,
+          size: 'medium',
+          type: 'monster',
+          speedFeet: 30,
+          movementRemaining: 30,
+        },
+      ],
+      round: 1,
+      sceneDescription: 'D5 gallery',
+    });
+
+    const fled = await post(`${encounterId}/intent`, {
+      intent: { type: 'flee', actorId: playerId, expectedVersion: 1 },
+    });
+
+    // The blow downed the hero, so the flee is not an exit and the fight does not close.
+    // Dice are the file's module mock (rollD20 14 + bonus 20 vs AC 11 hits for 3), so the
+    // 1 HP hero goes to 0 on a pinned hit, not on a lucky roll.
+    expect(fled.result.exit).toBeNull();
+    expect(fled.result.opportunityAttack).toMatchObject({
+      attackerName: 'Captain Sarah Reeves',
+      hit: true,
+      finalDamage: 3,
+    });
+    const [encounter] = await database
+      .select()
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, encounterId));
+    expect(encounter.status).toBe('active');
+    expect(encounter.endedReason).toBeNull();
+    // No exit is recorded: the hero stays in the turn order for the death-save flow.
+    const [hero] = await database
+      .select()
+      .from(combatParticipants)
+      .where(eq(combatParticipants.id, playerId!));
+    expect(hero.isActive).toBe(true);
+    const [heroStatus] = await database
+      .select()
+      .from(combatParticipantStatus)
+      .where(eq(combatParticipantStatus.participantId, playerId!));
+    expect(heroStatus.currentHp).toBe(0);
+    expect(heroStatus.isConscious).toBe(false);
+    // Exactly one source 'player' row, and it carries the downed line the strategist quotes.
+    const rows = await rowsOf(sessionId);
+    const playerRows = rows.filter((row) =>
+      (row.context as { combatEngineBlocks?: Array<{ source: string }> })?.combatEngineBlocks?.some(
+        (block) => block.source === 'player',
+      ),
+    );
+    expect(playerRows).toHaveLength(1);
+    expect(playerRows[0].message).toContain('did not get away; they are downed');
+    // Death saves are owed: the hero's next end_turn is refused until a death_save pays it.
+    const refused = await app!.handle(
+      new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ intent: { type: 'end_turn', actorId: playerId } }),
+      }),
+    );
+    expect(refused.status).toBe(422);
+    const refusedBody = (await refused.json()) as { details?: { reason?: string } };
+    expect(refusedBody.details?.reason).toBe('death_save_required');
+    await database.delete(tacticalMaps).where(eq(tacticalMaps.sessionId, sessionId));
     await finish(encounterId);
   });
 
   test('a loop that stays at the safety cap writes the cap line as one row', async () => {
+    // The player's exit is marked directly because a flee intent now concludes the encounter (#1169).
     // The same fled fight, run directly: nobody to fight and nobody to hand the turn to, so only
     // the cap stops the creatures (2 x 3 participants = six iterations, one call).
     const { sessionId, encounterId, playerId } = await seedFight();
-    await post(`${encounterId}/intent`, {
-      intent: { type: 'flee', actorId: playerId, expectedVersion: 1 },
-    });
+    await CombatEncounterService.markParticipantExited(encounterId, playerId!);
 
     const drained = await runNpcTurnsToPlayer(encounterId, userId);
 
@@ -886,7 +1019,13 @@ describeWithDb('a keyed player attack roll resolves exactly once (#974)', () => 
       .returning();
     const [{ id: duelCharacterId }] = await database
       .insert(characters)
-      .values({ userId, campaignId: duelCampaignId, name: 'The Scholar', class: 'Fighter', level: 1 })
+      .values({
+        userId,
+        campaignId: duelCampaignId,
+        name: 'The Scholar',
+        class: 'Fighter',
+        level: 1,
+      })
       .returning();
     await database.insert(characterStats).values({
       characterId: duelCharacterId,
@@ -1213,9 +1352,7 @@ describeWithDb('a keyed player attack roll resolves exactly once (#974)', () => 
       .from(dialogueHistory)
       .where(eq(dialogueHistory.sessionId, duel.sessionId));
     expect(rows.length).toBeGreaterThanOrEqual(2);
-    const blowRow = rows.find(
-      (row) => (row.context as { actionId?: string }).actionId === rollId,
-    );
+    const blowRow = rows.find((row) => (row.context as { actionId?: string }).actionId === rollId);
     const victoryRow = rows.find((row) => row.message.includes('Victory'));
     expect(blowRow).toBeDefined();
     expect(victoryRow).toBeDefined();
@@ -1257,18 +1394,16 @@ describeWithDb('a keyed player attack roll resolves exactly once (#974)', () => 
     // back and the retry of the same roll must land it — exactly once.
     const original = SessionMessageService.addMessages.bind(SessionMessageService);
     let armed = true;
-    const failKeyedRow = spyOn(SessionMessageService, 'addMessages').mockImplementation(
-      (async (messages: Array<{ context?: Record<string, unknown> }>, userId: string) => {
-        if (
-          armed &&
-          messages.some((message) => message.context?.actionId === rollId)
-        ) {
-          armed = false;
-          throw new Error('engine row insert failed (simulated by the #974 test)');
-        }
-        return original(messages as never, userId);
-      }) as never,
-    );
+    const failKeyedRow = spyOn(SessionMessageService, 'addMessages').mockImplementation((async (
+      messages: Array<{ context?: Record<string, unknown> }>,
+      userId: string,
+    ) => {
+      if (armed && messages.some((message) => message.context?.actionId === rollId)) {
+        armed = false;
+        throw new Error('engine row insert failed (simulated by the #974 test)');
+      }
+      return original(messages as never, userId);
+    }) as never);
     const failed = await postTo(duel.encounterId, body);
     failKeyedRow.mockRestore();
     expect(failed.status).toBe(500);

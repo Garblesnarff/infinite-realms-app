@@ -48,7 +48,12 @@ import {
   gameSessions,
   tacticalMaps,
 } from '../../../../db/schema/index';
+import { formatCombatEndLine } from '../../../../shared/combat-outcome-transcript';
 import { describeDeathSave } from '../../../../shared/death-save-lines';
+import {
+  actionBarFleeIntentBody,
+  typedFleeIntentBody,
+} from '../../../../shared/test-fixtures/combat-action-bar-intent';
 import {
   DYING_SCHOLAR_ENCOUNTER,
   DYING_SCHOLAR_PARTICIPANT,
@@ -1929,5 +1934,250 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
     expect(result.deathSaveFailuresAdded).toBeUndefined();
     expect(result.deathSavesFailures).toBeUndefined();
     expect((await statusOf(scene.spiderId)).currentHp).toBe(0);
+  });
+
+  // -----------------------------------------------------------------------------------------
+  // 11. Flee through the real route (#1169)
+  // -----------------------------------------------------------------------------------------
+  const fleeRoute = async (randomValue: number) => {
+    const restore: Array<() => void> = [];
+    const authSpy = spyOn(authModule, 'authenticateRequest').mockImplementation(
+      async (request: Request) => {
+        const caller = request.headers.get('authorization')?.replace(/^Bearer /, '');
+        return caller === userId
+          ? { user: { userId: caller, email: 'gate@example.test', plan: 'free' }, error: null }
+          : { user: null, error: 'Unauthorized' };
+      },
+    );
+    restore.push(() => authSpy.mockRestore());
+    const random = spyOn(Math, 'random').mockReturnValue(randomValue);
+    restore.push(() => random.mockRestore());
+    const app = new Elysia({ prefix: '/v1/combat' }).use(intentRoutes);
+    return {
+      post: async (encounterId: string, body: unknown) => {
+        const response = await app.handle(
+          new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', authorization: `Bearer ${userId}` },
+            body: JSON.stringify(body),
+          }),
+        );
+        const json = response.status === 200 ? await response.json() : null;
+        return { status: response.status, json: json as Record<string, any> | null };
+      },
+      restore: () => {
+        for (const undo of restore) undo();
+      },
+    };
+  };
+
+  test('the Flee click body, through the real route: the opportunity attack is an engine row, and the encounter closes as abandoned', async () => {
+    const route = await fleeRoute(0.7);
+    try {
+      const scene = await seedScene({ heroHp: 7 });
+      const beforeHp = (await statusOf(scene.heroId)).currentHp;
+      const postResult = await route.post(
+        scene.encounterId,
+        actionBarFleeIntentBody(scene.heroId, Date.now()),
+      );
+      expect(postResult.status).toBe(200);
+      const result = postResult.json as Record<string, any>;
+      expect(result.result.exit).toBe('fled');
+      expect(result.result.opportunityAttack.hit).toBe(true);
+      expect(result.result.combatEnded).toBe(true);
+      expect(result.result.endedReason).toBe('abandoned');
+      expect(result.result.engineRows).toHaveLength(1);
+      expect(result.result.engineRows[0].kind).toBe('player');
+
+      const finalDamage = result.result.opportunityAttack.finalDamage;
+      expect(finalDamage).toBeGreaterThan(0);
+      expect((await statusOf(scene.heroId)).currentHp).toBe(beforeHp - finalDamage);
+
+      const dmgRows = await db
+        .select()
+        .from(combatDamageLog)
+        .where(eq(combatDamageLog.participantId, scene.heroId));
+      expect(dmgRows).toHaveLength(1);
+      expect(dmgRows[0].damageAmount).toBe(finalDamage);
+
+      const drows = await db
+        .select()
+        .from(dialogueHistory)
+        .where(
+          and(
+            eq(dialogueHistory.sessionId, scene.sessionId),
+            eq(dialogueHistory.speakerType, 'system'),
+          ),
+        )
+        .orderBy(asc(dialogueHistory.createdAt));
+      const mapped = drows.map((row) => ({
+        id: row.id,
+        text: row.message,
+        source: (row.context as { combatEngineBlocks?: Array<{ source: string }> })
+          ?.combatEngineBlocks?.[0]?.source,
+      }));
+      const matching = mapped.filter(
+        (r) =>
+          /for \d+ damage|\d+ damage/.test(r.text) &&
+          r.text.includes('fled from combat') &&
+          r.text.includes(formatCombatEndLine('abandoned')!) &&
+          r.text.includes(String(finalDamage)) &&
+          r.text.includes('Vitruvian Spider'),
+      );
+      expect(matching).toHaveLength(1);
+      expect(matching[0].source).toBe('player');
+      expect(mapped.filter((r) => r.source === 'player')).toHaveLength(1);
+
+      expect(await encounterOf(scene.encounterId)).toMatchObject({
+        status: 'completed',
+        endedReason: 'abandoned',
+      });
+
+      const facts = await consumeDmTacticalFacts(scene.sessionId);
+      const joined = facts.join('\n');
+      expect(joined).toContain('flees the fight.');
+      expect(joined).toContain('abandoned mid-fight');
+      expect(joined).toMatch(/for \d+ damage|\d+ damage/);
+      expect(
+        facts.some(
+          (line) =>
+            line.includes('attacked') &&
+            line.includes('The Scholar') &&
+            line.includes(String(finalDamage)),
+        ),
+      ).toBe(true);
+    } finally {
+      route.restore();
+    }
+  });
+
+  test('the typed "I flee from the fight" body resolves the same way', async () => {
+    const route = await fleeRoute(0.01);
+    try {
+      const scene = await seedScene({ heroHp: 7 });
+      const beforeHp = (await statusOf(scene.heroId)).currentHp;
+      const postResult = await route.post(
+        scene.encounterId,
+        typedFleeIntentBody(scene.heroId, Date.now()),
+      );
+      expect(postResult.status).toBe(200);
+      const result = postResult.json as Record<string, any>;
+      expect(result.result.exit).toBe('fled');
+      expect(result.result.opportunityAttack.hit).toBe(false);
+      expect(result.result.combatEnded).toBe(true);
+      expect(result.result.endedReason).toBe('abandoned');
+      expect(result.result.engineRows).toHaveLength(1);
+      expect(result.result.engineRows[0].kind).toBe('player');
+      expect((await statusOf(scene.heroId)).currentHp).toBe(beforeHp);
+
+      const dmgRows = await db
+        .select()
+        .from(combatDamageLog)
+        .where(eq(combatDamageLog.participantId, scene.heroId));
+      expect(dmgRows).toHaveLength(0);
+
+      const rows = await db
+        .select()
+        .from(dialogueHistory)
+        .where(
+          and(
+            eq(dialogueHistory.sessionId, scene.sessionId),
+            eq(dialogueHistory.speakerType, 'system'),
+          ),
+        );
+      const mapped = rows.map((row) => ({
+        id: row.id,
+        text: row.message,
+        source: (row.context as { combatEngineBlocks?: Array<{ source: string }> })
+          ?.combatEngineBlocks?.[0]?.source,
+      }));
+      const row = mapped.find((r) => r.text.includes('fled from combat'));
+      expect(row).toBeDefined();
+      expect(row!.text.toLowerCase()).toContain('miss');
+      expect(mapped.filter((r) => r.source === 'player')).toHaveLength(1);
+
+      expect(await encounterOf(scene.encounterId)).toMatchObject({
+        status: 'completed',
+        endedReason: 'abandoned',
+      });
+    } finally {
+      route.restore();
+    }
+  });
+
+  test('a flee with an ally still fighting writes the row but leaves the encounter active', async () => {
+    const route = await fleeRoute(0.7);
+    try {
+      const scene = await seedScene({ heroHp: 7, extraAlly: true });
+      const postResult = await route.post(
+        scene.encounterId,
+        actionBarFleeIntentBody(scene.heroId, Date.now()),
+      );
+      expect(postResult.status).toBe(200);
+      const result = postResult.json as Record<string, any>;
+      expect(result.result.exit).toBe('fled');
+      expect(result.result.engineRows).toHaveLength(1);
+      expect(result.result.engineRows[0].kind).toBe('player');
+      expect(result.result.combatEnded).not.toBe(true);
+      expect(await encounterOf(scene.encounterId)).toMatchObject({
+        status: 'active',
+        endedReason: null,
+      });
+
+      const heroRows = await db
+        .select()
+        .from(combatParticipants)
+        .where(eq(combatParticipants.id, scene.heroId));
+      expect(heroRows[0].isActive).toBe(false);
+    } finally {
+      route.restore();
+    }
+  });
+
+  test('a repeated Flee body after the fight closed resolves nothing more', async () => {
+    const route = await fleeRoute(0.7);
+    try {
+      const scene = await seedScene({ heroHp: 7 });
+      const body = actionBarFleeIntentBody(scene.heroId, Date.now());
+      const first = await route.post(scene.encounterId, body);
+      expect(first.status).toBe(200);
+
+      const dmgBefore = await db
+        .select()
+        .from(combatDamageLog)
+        .where(eq(combatDamageLog.participantId, scene.heroId));
+      const rowsBefore = await db
+        .select()
+        .from(dialogueHistory)
+        .where(
+          and(
+            eq(dialogueHistory.sessionId, scene.sessionId),
+            eq(dialogueHistory.speakerType, 'system'),
+          ),
+        );
+
+      const second = await route.post(scene.encounterId, body);
+      expect(second.status).toBe(200);
+      const secondJson = second.json as Record<string, any>;
+      expect(secondJson.result.encounterAlreadyConcluded).toBe(true);
+
+      const dmgAfter = await db
+        .select()
+        .from(combatDamageLog)
+        .where(eq(combatDamageLog.participantId, scene.heroId));
+      const rowsAfter = await db
+        .select()
+        .from(dialogueHistory)
+        .where(
+          and(
+            eq(dialogueHistory.sessionId, scene.sessionId),
+            eq(dialogueHistory.speakerType, 'system'),
+          ),
+        );
+      expect(dmgAfter.length).toBe(dmgBefore.length);
+      expect(rowsAfter.length).toBe(rowsBefore.length);
+    } finally {
+      route.restore();
+    }
   });
 });
