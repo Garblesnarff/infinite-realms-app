@@ -249,11 +249,14 @@ export function useCombatLegalActions(input: {
             combatBoundaryFromResult(result) === 'combat_ended'
               ? formatCombatEndLine((result as { endedReason?: string | null } | null)?.endedReason)
               : null;
-          await sendEngineNotice(input.onSendMessage, {
-            text: [...parts.map((part) => part.line), ...(endLine ? [endLine] : [])].join('\n\n'),
-            cards: parts.map((part) => part.card),
-            combatEnded: endLine != null,
-          });
+          // #1169: the server already persisted the exit row.
+          if (!resultCarriesPersistedPlayerRow(result)) {
+            await sendEngineNotice(input.onSendMessage, {
+              text: [...parts.map((part) => part.line), ...(endLine ? [endLine] : [])].join('\n\n'),
+              cards: parts.map((part) => part.card),
+              combatEnded: endLine != null,
+            });
+          }
           // No `end_turn` after it: the exit has already taken the player out of the turn order,
           // and a turn boundary for a participant who no longer has one is a second refusal.
           await refreshCombatState();

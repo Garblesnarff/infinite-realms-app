@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ACTION_BAR_FLEE_INTENT_BODY } from '../../../../../../shared/test-fixtures/combat-action-bar-intent';
+import { ACTION_BAR_FLEE_INTENT_BODY } from '../../../../../../shared/test-fixtures/combat-action-bar-flee-intent';
 import { CombatActionBarLive } from '../CombatActionBar';
 
 import { mapAuthoritativeCombat } from '@/contexts/combat/authoritative-combat-state';
@@ -287,5 +287,61 @@ describe('CombatActionBar flee #1169', () => {
     await user.click(endTurnBtn);
     await waitFor(() => expect(refresh).toHaveBeenCalled());
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it("a flee whose result carries the server's persisted player row posts no second notice (#1169)", async () => {
+    const onSendMessage = vi.fn().mockResolvedValue(undefined);
+    const refresh = vi.fn();
+    intentHolder.response = {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        result: {
+          engineRows: [
+            {
+              id: 'row-flee',
+              sessionId: 'sess-1',
+              kind: 'player',
+              text: 'Mira flees. Goblin gets an opportunity attack.',
+            },
+          ],
+        },
+      }),
+    };
+    combatHolder.current = {
+      state: { isInCombat: true, activeEncounter: buildEncounter('pc-1') },
+      refreshCombatState: refresh,
+    };
+    render(<CombatActionBarLive {...defaultProps} onSendMessage={onSendMessage} />);
+    const user = userEvent.setup();
+    const more = await screen.findByRole('button', { name: /^More/ });
+    await waitFor(() => expect(more).not.toBeDisabled());
+    await user.click(more);
+    await user.click(await screen.findByRole('menuitem', { name: 'Flee (Goblin attacks)' }));
+    await user.click(screen.getByRole('button', { name: 'Flee anyway' }));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(onSendMessage).not.toHaveBeenCalled();
+  });
+
+  it('a flee result with no persisted row still posts the client notice', async () => {
+    const onSendMessage = vi.fn().mockResolvedValue(undefined);
+    const refresh = vi.fn();
+    intentHolder.response = {
+      ok: true,
+      status: 200,
+      json: async () => ({ result: {} }),
+    };
+    combatHolder.current = {
+      state: { isInCombat: true, activeEncounter: buildEncounter('pc-1') },
+      refreshCombatState: refresh,
+    };
+    render(<CombatActionBarLive {...defaultProps} onSendMessage={onSendMessage} />);
+    const user = userEvent.setup();
+    const more = await screen.findByRole('button', { name: /^More/ });
+    await waitFor(() => expect(more).not.toBeDisabled());
+    await user.click(more);
+    await user.click(await screen.findByRole('menuitem', { name: 'Flee (Goblin attacks)' }));
+    await user.click(screen.getByRole('button', { name: 'Flee anyway' }));
+    await waitFor(() => expect(onSendMessage).toHaveBeenCalled());
   });
 });
