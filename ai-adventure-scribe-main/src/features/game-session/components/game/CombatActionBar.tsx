@@ -81,6 +81,13 @@ export const LEGAL_ACTION_PLACEMENT = {
   Record<LegalAction['type'], 'button' | 'cast' | 'move' | 'more' | 'hidden'>
 >;
 
+/** #1206: the slot a leveled spell chip spends, as the Cast menu names it (`2nd-level slot`). */
+function slotLabel(slotLevel: number | undefined): string | null {
+  if (!slotLevel) return null;
+  const suffix = slotLevel === 1 ? 'st' : slotLevel === 2 ? 'nd' : slotLevel === 3 ? 'rd' : 'th';
+  return `${slotLevel}${suffix}-level slot`;
+}
+
 /** Why a sheet spell is greyed in the Cast menu (#1171). */
 export const NARRATED_CAST_REASON =
   'Describe it to the DM: the engine resolves attack and damage spells';
@@ -212,9 +219,11 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
                   className="flex flex-col items-start"
                 >
                   <span>{withTarget(action)}</span>
-                  {info && (
+                  {(info || action.slotLevel) && (
                     <span className="text-xs text-muted-foreground">
-                      {[info.range, info.timing].filter(Boolean).join(' · ')}
+                      {[info?.range, info?.timing, slotLabel(action.slotLevel)]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </span>
                   )}
                 </DropdownMenuItem>

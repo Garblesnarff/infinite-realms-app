@@ -264,6 +264,34 @@ describe('CombatActionBar', () => {
     expect(item).not.toBeDisabled();
   });
 
+  it('Cast menu names the slot a leveled spell spends (#1206)', async () => {
+    const onAction = vi.fn();
+    // As getLegalCombatActions builds it with no 1st-level slot left and 2nd-level slots remaining.
+    const upcast: LegalAction = {
+      type: 'spell',
+      label: 'Cast Burning Hands (2nd-level slot)',
+      spellId: 'burning-hands',
+      slotLevel: 2,
+    };
+    render(
+      <CombatActionBar
+        {...defaultProps}
+        actions={[upcast, endTurnAction]}
+        spellInfo={() => ({ range: 'Self (15-foot cone)', timing: 'action' as const })}
+        onAction={onAction}
+      />,
+    );
+    const toolbar = screen.getByRole('toolbar', { name: 'Your actions' });
+    const user = userEvent.setup();
+    await user.click(within(toolbar).getByRole('button', { name: /^Cast/ }));
+    const item = (await screen.findAllByRole('menuitem')).find((mi) =>
+      mi.textContent?.includes('Cast Burning Hands (2nd-level slot)'),
+    )!;
+    expect(item).toHaveTextContent('Self (15-foot cone) · action · 2nd-level slot');
+    await user.click(item);
+    expect(onAction).toHaveBeenCalledWith(upcast);
+  });
+
   it('a bard whose spells the engine does not resolve still opens Cast, greyed', async () => {
     const onAction = vi.fn();
     const withoutSpells = defaultProps.actions.filter((action) => action.type !== 'spell');
