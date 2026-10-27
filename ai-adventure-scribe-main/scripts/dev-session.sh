@@ -47,8 +47,7 @@ cd "$PROJECT_ROOT"
 
 CONTAINER_NAME="ir-dev-session-pg"
 DEV_PG_PORT="${DEV_PG_PORT:-54329}"
-DEV_PG_SECRET="${DEV_PG_SECRET:-devsession}"
-PG_PASSWORD_ENV_KEY=POSTGRES_PASSWORD
+DEV_PG_PASSWORD="${DEV_PG_PASSWORD:-devsession}"
 DEV_PG_USER="${DEV_PG_USER:-postgres}"
 DEV_PG_DB="${DEV_PG_DB:-postgres}"
 SERVER_PORT="${PORT:-${DEV_SERVER_PORT:-8888}}"
@@ -62,7 +61,7 @@ case "$SERVER_LLM_FIXTURE_DIR" in
   server-bun/*) SERVER_LLM_FIXTURE_DIR="${SERVER_LLM_FIXTURE_DIR#server-bun/}" ;;
 esac
 
-TEST_DATABASE_URL="postgres://${DEV_PG_USER}:${DEV_PG_SECRET}@localhost:${DEV_PG_PORT}/${DEV_PG_DB}"
+TEST_DATABASE_URL="postgres://${DEV_PG_USER}:${DEV_PG_PASSWORD}@localhost:${DEV_PG_PORT}/${DEV_PG_DB}"
 
 if [[ "$DRY_RUN" == "1" ]]; then
   DRY_CLI_ARGS="play --campaign the-eternal-feast --new --auto --turns 20"
@@ -105,7 +104,7 @@ elif docker ps -aq -f "name=^${CONTAINER_NAME}$" | grep -q .; then
 else
   echo "Starting new pgvector container ${CONTAINER_NAME} on port ${DEV_PG_PORT}."
   docker run -d --name "${CONTAINER_NAME}" \
-    -e "${PG_PASSWORD_ENV_KEY}=${DEV_PG_SECRET}" \
+    -e "POSTGRES_PASSWORD=${DEV_PG_PASSWORD}" \
     -p "${DEV_PG_PORT}:5432" \
     pgvector/pgvector:pg15 >/dev/null
   CREATED_DB=1
@@ -135,7 +134,7 @@ fi
 echo "Using replayed database ${SESSION_DB}."
 
 # 3. Start Bun server
-export DATABASE_URL="postgres://${DEV_PG_USER}:${DEV_PG_SECRET}@localhost:${DEV_PG_PORT}/${SESSION_DB}"
+export DATABASE_URL="postgres://${DEV_PG_USER}:${DEV_PG_PASSWORD}@localhost:${DEV_PG_PORT}/${SESSION_DB}"
 export NODE_ENV="development"
 export ENABLE_TEST_AUTH="true"
 export TEST_AUTH_SECRET="${TEST_AUTH_SECRET_GENERATED}"
