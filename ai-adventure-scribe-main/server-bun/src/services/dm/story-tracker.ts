@@ -580,7 +580,15 @@ export function trackerDirectiveText(input: {
     'entries for the same clock, or one entry with a delta larger than one — ' +
     'say how many segments in your prose (e.g. "the Sunset Clock ticks forward ' +
     'two segments"): the UI shows only the final value (#1161), so an unnumbered ' +
-    '"ticks forward" leaves the reader unable to follow a jump.\n' +
+    '"ticks forward" leaves the reader unable to follow a jump. ' +
+    // #1161 (Hark T27-006): at 5/6 the DM's prose said two segments were left
+    // while the chip said 5/6. The prose and the chip must agree, so the
+    // prose states the chip's value, not a count of its own.
+    'When your prose says where a clock stands, use the value the UI will show ' +
+    "after this reply: the value below plus this reply's tracker_changes, " +
+    'written as "N of LIMIT" (e.g. the Sunset Clock at 4/6 that ticks once: ' +
+    '"the Sunset Clock stands at 5 of 6"). If you say how many segments are ' +
+    'left, that is LIMIT minus N — never a count of your own.\n' +
     lines.join('\n') +
     '\n</story_clock>'
   );
@@ -788,12 +796,7 @@ export async function loadStoryTrackerDirective(input: {
     // 45-59); the first line's turn is the directive turn. Combat-held
     // turns do not log: the DM was not told on those turns. The condition
     // mirrors the pacing branch in trackerDirectiveText exactly.
-    if (
-      pacing &&
-      !state.phase &&
-      !inCombat &&
-      pacing.turns >= pacingDirectiveTurn(pacing.budget)
-    ) {
+    if (pacing && !state.phase && !inCombat && pacing.turns >= pacingDirectiveTurn(pacing.budget)) {
       logger.info({ msg: `DM_PACING directive turn=${pacing.turns}`, sessionId: input.sessionId });
     }
     return {
