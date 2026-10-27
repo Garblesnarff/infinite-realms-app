@@ -177,12 +177,31 @@ describe('CombatActionBar', () => {
       'Yield',
     ]);
     await user.click(screen.getByRole('menuitem', { name: 'Flee (2 attacks)' }));
+    await user.click(screen.getByRole('button', { name: 'Flee anyway' }));
     expect(onAction).toHaveBeenCalledTimes(1);
     expect(onAction).toHaveBeenCalledWith(fleeAction);
 
     await user.click(within(toolbar).getByRole('button', { name: /^More/ }));
     await user.click(await screen.findByRole('menuitem', { name: 'Yield' }));
     expect(onAction).toHaveBeenLastCalledWith(yieldAction);
+  });
+
+  it('selecting a flee with label Flee (no attacker) calls onAction immediately with no confirm group', async () => {
+    const onAction = vi.fn();
+    const noProvokerFlee: LegalAction = { type: 'flee', label: 'Flee' };
+    render(
+      <CombatActionBar
+        {...defaultProps}
+        actions={[...defaultProps.actions.filter((a) => a.type !== 'flee'), noProvokerFlee]}
+        onAction={onAction}
+      />,
+    );
+    const toolbar = screen.getByRole('toolbar', { name: 'Your actions' });
+    const user = userEvent.setup();
+    await user.click(within(toolbar).getByRole('button', { name: /^More/ }));
+    await user.click(screen.getByRole('menuitem', { name: 'Flee' }));
+    expect(onAction).toHaveBeenCalledWith(noProvokerFlee);
+    expect(screen.queryByRole('group', { name: 'Confirm flee' })).toBeNull();
   });
 
   it('More is disabled off-turn and absent when the server offers none of its actions', () => {
@@ -360,6 +379,9 @@ describe('CombatActionBar', () => {
             menuItem.textContent?.startsWith(action.label),
           )!;
           await user.click(item);
+          if (action.type === 'flee' && /Flee \(.+? attacks\)/.test(action.label)) {
+            await user.click(screen.getByRole('button', { name: 'Flee anyway' }));
+          }
           expect(onAction).toHaveBeenCalledWith(action);
         } else if (placement === 'move') {
           await user.click(within(toolbar).getByRole('button', { name: /^Move/ }));
