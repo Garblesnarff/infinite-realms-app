@@ -95,7 +95,12 @@ describe('CallbackPage', () => {
     await waitFor(() => expect(persistSession).toHaveBeenCalled());
     window.dispatchEvent(new CustomEvent('auth-ready'));
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/explore/the-eternal-feast#heroes'));
+    // #1122: the return carries `authReturn`, the only signal that resumes a pending hero.
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith('/explore/the-eternal-feast#heroes', {
+        state: { authReturn: true },
+      }),
+    );
   });
 
   it('falls back to the app when the return path is off-site', async () => {

@@ -11,7 +11,7 @@
 
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import {
   computeServerArmorClass,
@@ -283,13 +283,31 @@ const CampaignDetailPage: React.FC = () => {
   const playAsRef = React.useRef(playAs);
   playAsRef.current = playAs;
 
+  // #1122: the pending hero is a promise made for one trip, the sign-in round
+  // trip. Only the auth callback's navigation back here carries
+  // `state.authReturn` (CallbackPage). Read once per mount: any other visit
+  // (a link, a reload, the back button) drops a leftover entry instead of
+  // starting a campaign the player did not just ask for.
+  const location = useLocation();
+  const authReturnRef = React.useRef(
+    (location.state as { authReturn?: unknown } | null)?.authReturn === true,
+  );
+  React.useEffect(() => {
+    if (authReturnRef.current) return;
+    try {
+      sessionStorage.removeItem(PENDING_HERO_KEY);
+    } catch {
+      // Storage unavailable: there is no entry to drop either.
+    }
+  }, []);
+
   // Continue the start automatically when a signed-out visitor comes back
   // from sign-in with a pending hero for this campaign. The pending hero
   // survives a failed templates fetch (the retry can still resume it); it
   // is only dropped once the templates load cleanly and the hero is not
   // among them, i.e. genuinely gone rather than transiently missing.
   React.useEffect(() => {
-    if (!user || !campaign || templatesLoading) return;
+    if (!authReturnRef.current || !user || !campaign || templatesLoading) return;
     let pending: unknown = null;
     try {
       pending = JSON.parse(sessionStorage.getItem(PENDING_HERO_KEY) ?? 'null');
@@ -521,6 +539,8 @@ const CampaignDetailPage: React.FC = () => {
             >
               <p className="font-semibold text-foreground">Your sign-in has expired.</p>
               <p className="text-sm text-muted-foreground mt-1">Sign in again to pick a hero.</p>
+              {/* #1122: the return is real now (login carries returnTo; the callback comes back here). */}
+              <p className="text-sm text-muted-foreground">You come back to this page.</p>
               <Button variant="ir-gold" onClick={handleSignIn} className="mt-3 min-h-11">
                 Sign in
               </Button>

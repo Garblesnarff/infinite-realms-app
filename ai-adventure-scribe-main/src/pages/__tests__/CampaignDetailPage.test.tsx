@@ -112,10 +112,19 @@ function LocationCapture({ label }: { label: string }): ReactElement {
   return <div>{label}</div>;
 }
 
-function renderPage(): RenderResult {
+/** #1122: the entry CallbackPage navigates to after sign-in (returnTo + authReturn state). */
+const AUTH_RETURN_ENTRY = {
+  pathname: '/explore/the-eternal-feast',
+  hash: '#heroes',
+  state: { authReturn: true },
+};
+
+function renderPage(
+  entry: string | typeof AUTH_RETURN_ENTRY = '/explore/the-eternal-feast',
+): RenderResult {
   return render(
     <HelmetProvider>
-      <MemoryRouter initialEntries={['/explore/the-eternal-feast']}>
+      <MemoryRouter initialEntries={[entry]}>
         <Routes>
           <Route path="/explore/:slug" element={<CampaignDetailPage />} />
           <Route path="/app/game/:campaignId" element={<LocationCapture label="game page" />} />
@@ -396,10 +405,43 @@ describe('CampaignDetailPage heroes (#89)', () => {
       'ir-pending-starter-hero',
       JSON.stringify({ slug: 'the-eternal-feast', templateId: 't1', at: Date.now() }),
     );
-    renderPage();
+    renderPage(AUTH_RETURN_ENTRY);
 
     expect(await screen.findByText('game page')).toBeInTheDocument();
     expect(window.sessionStorage.getItem('ir-pending-starter-hero')).toBeNull();
+  });
+
+  it('does not start a fresh pending hero on a plain visit, and drops it (#1122)', async () => {
+    state.campaign = campaign({});
+    state.user = { id: 'u1' };
+    state.templates = [template()];
+    window.sessionStorage.setItem(
+      'ir-pending-starter-hero',
+      JSON.stringify({ slug: 'the-eternal-feast', templateId: 't1', at: Date.now() }),
+    );
+    renderPage();
+
+    expect(await screen.findByText('Play as Bram')).toBeInTheDocument();
+    expect(state.seed).not.toHaveBeenCalled();
+    expect(screen.queryByText('game page')).not.toBeInTheDocument();
+    expect(window.sessionStorage.getItem('ir-pending-starter-hero')).toBeNull();
+  });
+
+  it('a plain visit after a dropped entry cannot be resumed by a later return (#1122)', async () => {
+    state.campaign = campaign({});
+    state.user = { id: 'u1' };
+    state.templates = [template()];
+    window.sessionStorage.setItem(
+      'ir-pending-starter-hero',
+      JSON.stringify({ slug: 'the-eternal-feast', templateId: 't1', at: Date.now() }),
+    );
+    const first = renderPage();
+    await screen.findByText('Play as Bram');
+    first.unmount();
+
+    renderPage(AUTH_RETURN_ENTRY);
+    expect(await screen.findByText('Play as Bram')).toBeInTheDocument();
+    expect(state.seed).not.toHaveBeenCalled();
   });
 
   it('keeps the pending hero when templates fail, so a retry can resume it', () => {
@@ -410,7 +452,7 @@ describe('CampaignDetailPage heroes (#89)', () => {
       'ir-pending-starter-hero',
       JSON.stringify({ slug: 'the-eternal-feast', templateId: 't1', at: Date.now() }),
     );
-    renderPage();
+    renderPage(AUTH_RETURN_ENTRY);
 
     expect(screen.getByText('We could not load the heroes.')).toBeInTheDocument();
     expect(state.seed).not.toHaveBeenCalled();
@@ -425,7 +467,7 @@ describe('CampaignDetailPage heroes (#89)', () => {
       'ir-pending-starter-hero',
       JSON.stringify({ slug: 'the-eternal-feast', templateId: 't1', at: Date.now() }),
     );
-    renderPage();
+    renderPage(AUTH_RETURN_ENTRY);
 
     expect(screen.getByText('Heroes for this campaign are not ready yet.')).toBeInTheDocument();
     expect(state.seed).not.toHaveBeenCalled();
@@ -444,7 +486,7 @@ describe('CampaignDetailPage heroes (#89)', () => {
         at: Date.now() - 11 * 60 * 1000,
       }),
     );
-    renderPage();
+    renderPage(AUTH_RETURN_ENTRY);
 
     expect(screen.getByText('Play as Bram')).toBeInTheDocument();
     expect(state.seed).not.toHaveBeenCalled();
@@ -459,7 +501,7 @@ describe('CampaignDetailPage heroes (#89)', () => {
       'ir-pending-starter-hero',
       JSON.stringify({ slug: 'the-eternal-feast', templateId: 't1' }),
     );
-    renderPage();
+    renderPage(AUTH_RETURN_ENTRY);
 
     expect(screen.getByText('Play as Bram')).toBeInTheDocument();
     expect(state.seed).not.toHaveBeenCalled();
@@ -551,9 +593,9 @@ describe('CampaignDetailPage heroes (#89)', () => {
 
     expect(screen.getByText('Your sign-in has expired.')).toBeInTheDocument();
     expect(screen.getByText('Sign in again to pick a hero.')).toBeInTheDocument();
-    // The return promise was removed with the banner sentence (see the
-    // follow-up linked from #89): it must not reappear.
-    expect(screen.queryByText('You come back to this page.')).not.toBeInTheDocument();
+    // #1122: the return chain is real now (login carries returnTo, and the
+    // callback navigates back here), so the return promise is restored.
+    expect(screen.getByText('You come back to this page.')).toBeInTheDocument();
     expect(screen.queryByText('Something Went Wrong')).not.toBeInTheDocument();
   });
 
