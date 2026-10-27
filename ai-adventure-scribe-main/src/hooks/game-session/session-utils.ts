@@ -58,6 +58,22 @@ export const IMMUTABLE_SESSION_FIELDS = new Set<keyof ExtendedGameSession | stri
 ]);
 
 /**
+ * #1191: fields the server owns on the PATCH path. Status and end_time are
+ * set only by the server (completeSession / the defeat path in combat-ending);
+ * the client never PATCHes them — creation POSTs status 'active', cleanup
+ * POSTs /complete. The functional updaters in updateGameSessionState spread
+ * the stale full session (`...prev`) into the PATCH, so a save fired after a
+ * one-shot completed carried status 'active' with end_time null and overwrote
+ * the server's completed state. Stripping them here stops every such save at
+ * the source; the server guard in SessionService.updateSession is the
+ * backstop for any other caller.
+ */
+export const SERVER_OWNED_SESSION_FIELDS = new Set<keyof ExtendedGameSession | string>([
+  'status',
+  'end_time',
+]);
+
+/**
  * Validates that a session object has required properties.
  */
 export function isValidSession(session: unknown): session is ExtendedGameSession {
@@ -66,7 +82,7 @@ export function isValidSession(session: unknown): session is ExtendedGameSession
 }
 
 /**
- * Sanitize a session patch by removing immutable fields.
+ * Sanitize a session patch by removing immutable and server-owned fields.
  * @returns Object with sanitized patch and list of removed field names
  */
 export function sanitizeSessionPatch(patch: Partial<ExtendedGameSession>): {
@@ -77,7 +93,7 @@ export function sanitizeSessionPatch(patch: Partial<ExtendedGameSession>): {
   const removed: string[] = [];
 
   for (const [key, value] of Object.entries(patch)) {
-    if (IMMUTABLE_SESSION_FIELDS.has(key)) {
+    if (IMMUTABLE_SESSION_FIELDS.has(key) || SERVER_OWNED_SESSION_FIELDS.has(key)) {
       removed.push(key);
       continue;
     }

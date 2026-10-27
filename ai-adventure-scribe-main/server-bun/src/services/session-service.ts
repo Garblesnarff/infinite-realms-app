@@ -198,6 +198,24 @@ async function sessionCharacterSpellLists(character: {
 }
 
 /**
+ * #1191: status and endTime are server-owned once a session completed. The
+ * client's post-reply saves spread a stale full-session snapshot (`...prev`)
+ * into PATCH, so a completed session was reset to active with end_time null.
+ * These expressions fold the guard into the UPDATE itself — the stored values
+ * win when the stored status is 'completed', the client's values win otherwise
+ * — following the enginePreservingSessionState pattern: a separate read would
+ * reopen the race the sessionState merge exists to close. Only callers that
+ * sent the field get the expression; an omitted field stays omitted.
+ */
+function completedPreservingStatus(clientStatus: string | null): SQL {
+  return sql`CASE WHEN ${gameSessions.status} = 'completed' THEN ${gameSessions.status} ELSE ${clientStatus} END`;
+}
+
+function completedPreservingEndTime(clientEndTime: Date | null): SQL {
+  return sql`CASE WHEN ${gameSessions.status} = 'completed' THEN ${gameSessions.endTime} ELSE ${clientEndTime} END`;
+}
+
+/**
  * Session Service
  * Provides type-safe database operations for game sessions and messages
  */
@@ -514,10 +532,19 @@ export class SessionService {
     // rather than read first: a separate read would let an arm or a
     // consume committing between the two statements be undone by this
     // write.
+    // #1191: status/endTime get the same treatment (completedPreservingStatus /
+    // completedPreservingEndTime below) — a stale client snapshot must not
+    // move a completed session back to active.
     const [updated] = await db
       .update(gameSessions)
       .set({
         ...updates,
+        ...(updates.status !== undefined
+          ? { status: completedPreservingStatus(updates.status) }
+          : {}),
+        ...(updates.endTime !== undefined
+          ? { endTime: completedPreservingEndTime(updates.endTime) }
+          : {}),
         ...(updates.sessionState !== undefined
           ? {
               sessionState: pendingEndingXpPreservingState(
