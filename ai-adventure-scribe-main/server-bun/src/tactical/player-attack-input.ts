@@ -141,10 +141,16 @@ function clauseDeclares(clause: string, objects: AttackObjects): boolean {
  * Defensive, movement, passive, conditional and question phrasing ("I dodge their attack", "I
  * throw the rope", "Should I attack?", "If it moves, I attack") is not one.
  */
-export function readPlayerAttack(playerInput: string, objects: AttackObjects): PlayerAttackRead {
+/** The player's words with a refusal cut out, the same cut `readPlayerAttack` uses. */
+export function playerAffirmedText(playerInput: string): string {
   const input = playerInput.replace(/[’‘]/g, "'");
-  if (CONDITIONAL.test(input)) return NOT_DECLARED;
-  const affirmed = input.replace(REFUSED_SPAN, ' | ');
+  if (CONDITIONAL.test(input)) return '';
+  return input.replace(REFUSED_SPAN, ' | ');
+}
+
+export function readPlayerAttack(playerInput: string, objects: AttackObjects): PlayerAttackRead {
+  const affirmed = playerAffirmedText(playerInput);
+  if (!affirmed.trim()) return NOT_DECLARED;
   const declaring = clausesOf(affirmed)
     .filter((clause) => !clause.question)
     .map((clause) => clause.text)
