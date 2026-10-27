@@ -3,6 +3,7 @@ import {
   COMBAT_INTENT_VERBS,
   looksLikeCombatIntent,
 } from '../../../../shared/combat-intent-prefilter';
+import { FLEE_DECLARATION_SOURCE } from '../../../../shared/player-exit-wording';
 import {
   getSpellByName,
   isPlayerCombatCurseSpell,
@@ -105,11 +106,15 @@ const DEFENSIVE_DECLARATION_PATTERNS: Array<{ type: DefensiveDeclaration; patter
   // #1199: "I flee from the fight" / "I run from the fight" are the same declaration
   // as "I flee" — the fight being left may be named. The tail is one optional phrase, so a
   // compound ("I flee from the fight and attack") still falls through to the attack parser.
-  // "fled" needs its own alternative: flee[sd]? never matched it (one 'e' before the 'd').
+  // #1208: the verbs are the shared flee vocabulary the #749 wording gate also reads, so a
+  // typed flee this accepts is never refused there. The input is whitespace-normalized
+  // before matching, so the vocabulary's single spaces match as \s+ did.
   {
     type: 'flee',
-    pattern:
-      /^(?:i\s+)?(?:flee[sd]?|fled|run\s+away|run\s+from\s+the\s+fight)(?:\s+from\s+the\s+fight)?\s*[.!]?$/i,
+    pattern: new RegExp(
+      `^(?:i\\s+)?(?:${FLEE_DECLARATION_SOURCE})(?:\\s+from\\s+the\\s+fight)?\\s*[.!]?$`,
+      'i',
+    ),
   },
 ];
 
@@ -971,16 +976,12 @@ export function detectDeclaredEquip(
         // instrument marker) and no other weapon's head in between —
         // "I take out the goblin with my shortbow" and "I draw a map …
         // with my shortbow beside me" declare no equip.
-        const headIdx = tokens.findIndex(
-          (token, idx) => idx > verbEnd && token.stem === headWord,
-        );
+        const headIdx = tokens.findIndex((token, idx) => idx > verbEnd && token.stem === headWord);
         if (headIdx < 0) continue;
         const gap = tokens.slice(verbEnd + 1, headIdx);
         if (gap.length > 4) continue;
         if (gap.some((token) => token.raw === 'with')) continue;
-        if (
-          gap.some((token) => token.stem !== headWord && headWords.has(token.stem))
-        ) {
+        if (gap.some((token) => token.stem !== headWord && headWords.has(token.stem))) {
           continue;
         }
         const score = nameWords.filter((word) => clauseStems.has(word)).length;

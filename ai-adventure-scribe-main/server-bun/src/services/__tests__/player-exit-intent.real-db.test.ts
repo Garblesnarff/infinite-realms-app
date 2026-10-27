@@ -962,14 +962,22 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
     ]);
   });
 
-  // #1199 (Hark T2-003): the three typed flee sentences go through the same `flee` intent
+  // #1208: "I fled" / "I fled from the fight" are in the matrix too — the parser always
+  // accepted them, and the shared flee vocabulary now lets the #749 gate accept them as well.
+  // #1199 (Hark T2-003): the typed flee sentences go through the same `flee` intent
   // as the More -> Flee button, at any distance. The sentences differ only upstream: the
   // generate-route directive (detectDeclaredDefense) and the #749 wording gate
   // (playerTextDeclares). Down here the intent is identical, so the matrix pins the
   // distance half — an opportunity attack at 5 ft, none at 55 ft — for each sentence.
   // The dice are pinned low (0.01) at 5 ft, so the provoked attack misses deterministically
   // instead of the test asserting that the dice went the hero's way.
-  const fleeSentences = ['I flee', 'I run from the fight', 'I flee from the fight'] as const;
+  const fleeSentences = [
+    'I flee',
+    'I run from the fight',
+    'I flee from the fight',
+    'I fled',
+    'I fled from the fight',
+  ] as const;
   for (const sentence of fleeSentences) {
     test(`typed "${sentence}" at 5 ft flees with a missed opportunity attack (#1199)`, async () => {
       randomSpy(0.01);
