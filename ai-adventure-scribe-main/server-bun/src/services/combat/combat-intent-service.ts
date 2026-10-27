@@ -1752,12 +1752,16 @@ export async function executeCombatIntent(
         }
       }
     } else if (intent.type === 'flee' || intent.type === 'yield') {
-      // #2580: the player's own exit. Fleeing is movement and yielding is a declaration, so it
-      // claims the turn and the encounter version but NOT the Action: "Disengage, then Flee" has
-      // to work, and so does leaving with the Action already spent. It provokes one opportunity
-      // attack on the way out (flee only), then marks the player exited. A flee leaves the
-      // DM's next `dm_ended_scene` to be judged against a roster with nobody left to be fought;
-      // a yield ends the fight itself below (#262).
+      // #2580, as reversed for flee by #1169: the player's own exit. Fleeing is movement and
+      // yielding is a declaration, so it claims the turn and the encounter version but NOT the
+      // Action: "Disengage, then Flee" has to work, and so does leaving with the Action already
+      // spent. It provokes at most one opportunity attack on the way out (flee only, and only
+      // when a live hostile is in melee reach with line of sight). A recorded player flee no
+      // longer leaves the fight for the DM's next `dm_ended_scene` to judge: when the party
+      // has left the fight it closes the encounter itself as abandoned (below), and only a
+      // flee with others still fighting leaves just that player. A flee whose opportunity
+      // attack downs the player records no exit at all and does not conclude the fight; a
+      // yield ends the fight itself below (#262).
       // A dying character is not choosing to leave: the death-save flow owns them.
       const exiting = state.participants.find((participant) => participant.id === intent.actorId);
       if (vitalStateOf(exiting as unknown as VitalsInput) !== 'standing')
