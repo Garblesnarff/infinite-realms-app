@@ -19,7 +19,7 @@
  * @module server/services/combat/fighter-features-service
  */
 
-import { and, eq, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, or, sql } from 'drizzle-orm';
 
 import { armActionSurge, readActionSurgeMark } from './combat-turn-resources.js';
 import { db } from '../../../../db/client';
@@ -39,6 +39,28 @@ export const FIGHTER_CLASS = 'Fighter';
 export const SECOND_WIND_NAME = 'Second Wind';
 export const ACTION_SURGE_NAME = 'Action Surge';
 
+/**
+ * The legacy class-feature seed called the level-2 row "Action Surge" while
+ * the generated SRD seed calls it "Action Surge (1 use)". Both rows describe
+ * the same PHB feature; the engine must spend whichever canonical row the
+ * database carries instead of treating the generated spelling as missing.
+ */
+const featureNameCandidates = (featureName: string): string[] =>
+  featureName === ACTION_SURGE_NAME
+    ? [
+        featureName,
+        `${featureName} (1 use)`,
+        `${featureName} (2 uses)`,
+        `${featureName} (two uses)`,
+      ]
+    : [featureName];
+
+const canonicalFeatureName = (featureName: string): string =>
+  featureName
+    .replace(/\s*\([^)]*\)\s*$/, '')
+    .trim()
+    .toLowerCase();
+
 type CharacterRow = typeof characters.$inferSelect;
 
 /** Fighter levels: `classLevels` entries ({ className, level }) win; else class/level. */
@@ -54,7 +76,7 @@ export function fighterLevelOf(character: {
       entry &&
       typeof entry === 'object' &&
       typeof (entry as { className?: unknown }).className === 'string' &&
-      ((entry as { className: string }).className.toLowerCase() === 'fighter')
+      (entry as { className: string }).className.toLowerCase() === 'fighter'
     ) {
       const entryLevel = (entry as { level?: unknown }).level;
       multiclass += typeof entryLevel === 'number' && entryLevel > 0 ? Math.trunc(entryLevel) : 0;
@@ -102,7 +124,10 @@ export async function fighterFeatureUses(
       ),
     );
   const remainingOf = (featureName: string): number | null => {
-    const row = rows.find((candidate) => candidate.featureName === featureName);
+    const row = rows.find(
+      (candidate) =>
+        canonicalFeatureName(candidate.featureName) === canonicalFeatureName(featureName),
+    );
     if (!row) return null;
     return row.usesRemaining ?? row.usesCount;
   };
@@ -139,7 +164,7 @@ async function spendFighterFeatureUse(input: {
       and(
         eq(characterFeatures.characterId, characterId),
         eq(classFeaturesLibrary.className, FIGHTER_CLASS),
-        eq(classFeaturesLibrary.featureName, featureName),
+        inArray(classFeaturesLibrary.featureName, featureNameCandidates(featureName)),
         or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
       ),
     )
@@ -230,7 +255,10 @@ async function releaseFighterFeatureUse(
           : sql`LEAST(COALESCE(${characterFeatures.usesRemaining}, 0) + 1, ${usesCount})`,
     })
     .where(
-      and(eq(characterFeatures.characterId, characterId), eq(characterFeatures.featureId, featureId)),
+      and(
+        eq(characterFeatures.characterId, characterId),
+        eq(characterFeatures.featureId, featureId),
+      ),
     );
 }
 
