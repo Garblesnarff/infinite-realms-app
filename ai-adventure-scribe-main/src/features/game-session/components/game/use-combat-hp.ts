@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 
@@ -45,10 +46,15 @@ export function useCombatHP(characterId: string | undefined): CombatHP | null {
             : null,
         );
       } catch (error) {
-        if (!cancelled) {
-          setCombatHP(null);
-          logger.error('[useCombatHP] Failed to fetch combat status:', error);
+        if (cancelled) return;
+        setCombatHP(null);
+        if (error instanceof SessionExpiredError) {
+          // The session ended: stop polling instead of sending 401s
+          // until unmount. Other failures keep retrying on the interval.
+          clearInterval(interval);
+          return;
         }
+        logger.error('[useCombatHP] Failed to fetch combat status:', error);
       }
     };
 
