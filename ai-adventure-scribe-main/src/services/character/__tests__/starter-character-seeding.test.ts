@@ -729,7 +729,9 @@ describe('starter spell picker respects the 2014 slot rules (#1025)', () => {
   // Every caster the repo's seed SQL actually ships (24 rows, all level 1),
   // with the ability scores the seeds carry. The remaining premades are prod
   // rows, not repo content; any premade is a (class, level, scores) triple,
-  // which the matrix above covers at every level.
+  // which the matrix above covers at every level. The seed SQL names two
+  // rows 'The Chaplain'; the second is labelled '(II)' here only so the
+  // test titles are unique.
   const seededCasters = [
     { name: 'The Scholar', className: 'Wizard', level: 1, abilityScores: { strength: 8, dexterity: 12, constitution: 12, intelligence: 18, wisdom: 14, charisma: 10 } },
     { name: 'The Hunter', className: 'Ranger', level: 1, abilityScores: { strength: 14, dexterity: 16, constitution: 14, intelligence: 12, wisdom: 14, charisma: 8 } },
@@ -748,7 +750,7 @@ describe('starter spell picker respects the 2014 slot rules (#1025)', () => {
     { name: 'The Windspeaker', className: 'Cleric', level: 1, abilityScores: { strength: 12, dexterity: 12, constitution: 14, intelligence: 10, wisdom: 16, charisma: 14 } },
     { name: 'The Deserter', className: 'Ranger', level: 1, abilityScores: { strength: 15, dexterity: 15, constitution: 14, intelligence: 10, wisdom: 14, charisma: 8 } },
     { name: 'The Surveyor', className: 'Wizard', level: 1, abilityScores: { strength: 9, dexterity: 15, constitution: 14, intelligence: 16, wisdom: 13, charisma: 11 } },
-    { name: 'The Chaplain', className: 'Cleric', level: 1, abilityScores: { strength: 14, dexterity: 11, constitution: 15, intelligence: 9, wisdom: 16, charisma: 13 } },
+    { name: 'The Chaplain (II)', className: 'Cleric', level: 1, abilityScores: { strength: 14, dexterity: 11, constitution: 15, intelligence: 9, wisdom: 16, charisma: 13 } },
     { name: 'The Echo', className: 'Bard', level: 1, abilityScores: { strength: 8, dexterity: 16, constitution: 13, intelligence: 10, wisdom: 13, charisma: 15 } },
     { name: 'The Thespian', className: 'Bard', level: 1, abilityScores: { strength: 10, dexterity: 14, constitution: 12, intelligence: 12, wisdom: 10, charisma: 16 } },
     { name: 'The Lovesick', className: 'Sorcerer', level: 1, abilityScores: { strength: 8, dexterity: 14, constitution: 14, intelligence: 12, wisdom: 10, charisma: 16 } },
