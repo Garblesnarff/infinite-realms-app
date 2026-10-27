@@ -5,7 +5,31 @@
   "class": "Sorcerer",
   "level": 3,
   "background": "Sage",
-  "theme": null,
+  "theme": "Gothic",
+  "pact_slots": {
+    "maximum": 1,
+    "current": 0,
+    "level": 1
+  },
+  "active_concentration": "Hex",
+  "damage_resistances": ["fire"],
+  "damage_immunities": ["poison"],
+  "damage_vulnerabilities": ["cold"],
+  "class_levels": [
+    {
+      "classId": "sorcerer",
+      "className": "Sorcerer",
+      "level": 2,
+      "hitDie": 6
+    },
+    {
+      "classId": "warlock",
+      "className": "Warlock",
+      "level": 1,
+      "hitDie": 8
+    }
+  ],
+  "total_level": 3,
   "campaign_id": "a1226000-0000-4000-8000-000000000002",
   "user_id": "user-1226",
   "owner_id": "user-1226",

@@ -146,6 +146,65 @@ describe('data-transformers', () => {
       );
     });
 
+    it('keeps the declared fields the real GET row serves (#1230)', () => {
+      const row = getRow1226 as unknown as CharacterRow;
+      const character = transformCharacterData(row, null, null);
+
+      expect(character.theme).toBe('Gothic');
+      expect(character.pactSlots).toEqual({ maximum: 1, current: 0, level: 1 });
+      expect(character.activeConcentration).toBe('Hex');
+      expect(character.damageResistances).toEqual(['fire']);
+      expect(character.damageImmunities).toEqual(['poison']);
+      expect(character.damageVulnerabilities).toEqual(['cold']);
+      expect(character.classLevels).toEqual([
+        { classId: 'sorcerer', className: 'Sorcerer', level: 2, hitDie: 6, features: [] },
+        { classId: 'warlock', className: 'Warlock', level: 1, hitDie: 8, features: [] },
+      ]);
+      expect(character.totalLevel).toBe(3);
+      expect(character.created_at).toBe('2026-10-27T20:00:00.000Z');
+      expect(character.updated_at).toBe('2026-10-27T20:00:00.000Z');
+    });
+
+    it('reads the #1230 columns from an older string-encoded row and ignores empty shapes', () => {
+      const row = getRow1226 as unknown as CharacterRow;
+      const fromStrings = transformCharacterData(
+        {
+          ...row,
+          pact_slots: '{"maximum":2,"current":1,"level":3}',
+          damage_resistances: '["fire","necrotic"]',
+          class_levels: '[{"className":"Fighter","level":5}]',
+        },
+        null,
+        null,
+      );
+      expect(fromStrings.pactSlots).toEqual({ maximum: 2, current: 1, level: 3 });
+      expect(fromStrings.damageResistances).toEqual(['fire', 'necrotic']);
+      expect(fromStrings.classLevels).toEqual([
+        { classId: 'fighter', className: 'Fighter', level: 5, hitDie: 10, features: [] },
+      ]);
+
+      // The wizard stores `{}` for a non-caster's pact slots and `[]` for no multiclass.
+      const empty = transformCharacterData(
+        {
+          ...row,
+          theme: null,
+          pact_slots: {},
+          active_concentration: null,
+          damage_resistances: null,
+          class_levels: [],
+          total_level: null,
+        },
+        null,
+        null,
+      );
+      expect(empty.theme).toBeUndefined();
+      expect(empty.pactSlots).toBeUndefined();
+      expect(empty.activeConcentration).toBeNull();
+      expect(empty.damageResistances).toEqual([]);
+      expect(empty.classLevels).toBeUndefined();
+      expect(empty.totalLevel).toBeUndefined();
+    });
+
     const mockCharacterRow: CharacterRow = {
       id: 'char-123',
       user_id: 'user-456',

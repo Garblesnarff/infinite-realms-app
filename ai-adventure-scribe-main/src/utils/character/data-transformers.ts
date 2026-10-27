@@ -10,7 +10,7 @@ import type {
   CharacterRace,
   Subrace,
 } from '@/types/character';
-import type { ConditionName } from '@/types/combat';
+import type { ConditionName, DamageType } from '@/types/combat';
 
 import { lookupBackgrounds } from '@/data/backgroundOptions';
 import { classes } from '@/data/classes';
@@ -65,6 +65,20 @@ export interface CharacterRow {
   user_id: string;
   /** #1226: served by GET /v1/characters/:id (mapCharacterToApi); null when unlinked. */
   campaign_id?: string | null;
+  /**
+   * #1230: declared on Character and served by the GET, but dropped by this transform until
+   * now. The JSON columns arrive parsed (jsonb) or, from an older writer, as a JSON string.
+   */
+  theme?: string | null;
+  pact_slots?: unknown;
+  active_concentration?: string | null;
+  damage_resistances?: unknown;
+  damage_immunities?: unknown;
+  damage_vulnerabilities?: unknown;
+  class_levels?: unknown;
+  total_level?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
   name: string;
   description?: string | null;
   race: string;
@@ -406,6 +420,57 @@ const resolveStoredItemName = (itemName: string): string => {
   return resolveEquipmentById(itemName)?.name ?? 'Unknown item';
 };
 
+/** #1230: a jsonb column the GET serves parsed, or an older writer stored as a JSON string. */
+const jsonColumn = (raw: unknown): unknown =>
+  typeof raw === 'string' ? parseJsonField<unknown>(raw, null) : raw;
+
+/** #1230: damage types as the sheet lists them; anything but a string entry is dropped. */
+const parseDamageTypes = (raw: unknown): DamageType[] => {
+  const value = jsonColumn(raw);
+  return Array.isArray(value)
+    ? (value.filter((entry) => typeof entry === 'string' && entry.length > 0) as DamageType[])
+    : [];
+};
+
+/** #1230: pact slots in the { maximum, current, level } shape the wizard stores; `{}` is none. */
+const parsePactSlots = (raw: unknown): Character['pactSlots'] => {
+  const value = jsonColumn(raw) as Record<string, unknown> | null;
+  if (!value || typeof value !== 'object') return undefined;
+  const { maximum, current, level } = value;
+  return typeof maximum === 'number' && typeof current === 'number' && typeof level === 'number'
+    ? { maximum, current, level }
+    : undefined;
+};
+
+/**
+ * #1230: multiclass levels. An entry needs a class name and a level; the wizard also stores
+ * classId, hitDie and features; a server-written entry ({ className, level }) takes its hit
+ * die from the class data, since the multiclass cards print it (ClassDetailCard "d{hitDie}").
+ */
+const parseClassLevels = (raw: unknown): Character['classLevels'] => {
+  const value = jsonColumn(raw);
+  if (!Array.isArray(value)) return undefined;
+  const entries = value.flatMap((entry) => {
+    const item = entry as Record<string, unknown> | null;
+    if (!item || typeof item.className !== 'string' || typeof item.level !== 'number') return [];
+    return [
+      {
+        classId: typeof item.classId === 'string' ? item.classId : item.className.toLowerCase(),
+        className: item.className,
+        level: item.level,
+        hitDie:
+          typeof item.hitDie === 'number'
+            ? item.hitDie
+            : (findCharacterData(classes, item.className)?.hitDie ?? 0),
+        features: Array.isArray(item.features)
+          ? item.features.filter((f): f is string => typeof f === 'string')
+          : [],
+      },
+    ];
+  });
+  return entries.length > 0 ? entries : undefined;
+};
+
 /**
  * Transforms database character data into Character type
  * @param characterData - Raw character data from database
@@ -434,6 +499,19 @@ export const transformCharacterData = (
     // character.campaign_id after the transform got undefined (#1215's fallen
     // hero pick fell back to /explore).
     campaign_id: characterData.campaign_id ?? null,
+    // #1230: the declared fields the GET serves. Read-only here: the sheet's update payload
+    // (buildSheetUpdatePayload) never writes them back.
+    theme: characterData.theme ?? undefined,
+    pactSlots: parsePactSlots(characterData.pact_slots),
+    activeConcentration: characterData.active_concentration ?? null,
+    damageResistances: parseDamageTypes(characterData.damage_resistances),
+    damageImmunities: parseDamageTypes(characterData.damage_immunities),
+    damageVulnerabilities: parseDamageTypes(characterData.damage_vulnerabilities),
+    classLevels: parseClassLevels(characterData.class_levels),
+    totalLevel:
+      typeof characterData.total_level === 'number' ? characterData.total_level : undefined,
+    created_at: characterData.created_at ?? undefined,
+    updated_at: characterData.updated_at ?? undefined,
     name: characterData.name,
     description: characterData.description as string | undefined,
     race,

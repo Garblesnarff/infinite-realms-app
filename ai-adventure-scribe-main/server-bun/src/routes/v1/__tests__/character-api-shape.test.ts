@@ -115,7 +115,18 @@ describe('mapCharacterToApi wire row for the client transform (#1226)', () => {
       class: 'Sorcerer',
       level: 3,
       background: 'Sage',
-      theme: null,
+      // #1230: the declared fields the client transform used to drop.
+      theme: 'Gothic',
+      pactSlots: { maximum: 1, current: 0, level: 1 },
+      activeConcentration: 'Hex',
+      damageResistances: ['fire'],
+      damageImmunities: ['poison'],
+      damageVulnerabilities: ['cold'],
+      classLevels: [
+        { classId: 'sorcerer', className: 'Sorcerer', level: 2, hitDie: 6 },
+        { classId: 'warlock', className: 'Warlock', level: 1, hitDie: 8 },
+      ],
+      totalLevel: 3,
       createdAt: at,
       updatedAt: at,
     } as never);
