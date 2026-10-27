@@ -62,6 +62,7 @@ const TRAILING_BRACKET_RUN = /((?:\[[^[\]\n]{1,96}\]\s*){2,})\s*$/;
 const TRACKER_GROUP =
   /^[A-Za-z0-9][A-Za-z0-9'’\- ]{0,30}(?:: [^[\].]{1,80}| \d+(?:\/\?|\/\d+)?| \d+)?$/;
 const TRACKER_ANCHOR = /^(HP|Clock|Scene)\b|: /;
+const TRACKER_ANCHOR_KEY = /^(HP|Clock|Scene)\b/;
 
 export function stripTrackerLine(text: string): string {
   const match = TRAILING_BRACKET_RUN.exec(text);
@@ -79,12 +80,28 @@ export function stripTrackerLine(text: string): string {
   }
   // #1067 follow-up: a trailing UNTERMINATED bracket group whose inner text
   // starts with a tracker anchor (HP/Clock/Scene) is a cut-off tracker line
-  // and goes too. Only the last '[' counts, and only when nothing closes it.
+  // and goes too. Walk back over closed tracker-shaped groups directly in
+  // front of it so a cut-off tracker run is removed as a whole, while a prose
+  // aside (e.g. [old]) sitting right before the run is kept.
   const lastBracket = text.lastIndexOf('[');
   if (lastBracket !== -1 && !text.slice(lastBracket).includes(']')) {
     const inner = text.slice(lastBracket + 1);
-    if (inner.length <= 96 && !inner.includes('\n') && /^(HP|Clock|Scene)\b/.test(inner)) {
-      return text.slice(0, lastBracket).trimEnd();
+    if (inner.length <= 96 && !inner.includes('\n') && TRACKER_ANCHOR_KEY.test(inner)) {
+      const walked: Array<{ start: number; inner: string }> = [];
+      let cut = lastBracket;
+      for (;;) {
+        const prefix = text.slice(0, cut);
+        const m = prefix.match(/\[([^[\]\n]{1,96})\]\s*$/);
+        if (!m) break;
+        const gInner = m[1];
+        if (!TRACKER_GROUP.test(gInner)) break;
+        walked.push({ start: m.index as number, inner: gInner });
+        cut = m.index as number;
+      }
+      walked.reverse();
+      const firstAnchored = walked.findIndex((g) => TRACKER_ANCHOR.test(g.inner));
+      const cutAt = firstAnchored === -1 ? lastBracket : walked[firstAnchored].start;
+      return text.slice(0, cutAt).trimEnd();
     }
   }
   return text;

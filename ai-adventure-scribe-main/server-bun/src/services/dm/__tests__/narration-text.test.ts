@@ -373,6 +373,30 @@ describe('stripTrackerLine #1067 trailing unterminated bracket group', () => {
   test('leaves an unterminated non-tracker bracket group untouched', () => {
     expect(stripTrackerLine('He mutters [something')).toBe('He mutters [something');
   });
+
+  test('strips closed tracker groups before an unterminated fragment', () => {
+    expect(stripTrackerLine('The Sun rises. [HP 18/?] [Clock 0/6] [Scene: The Sun')).toBe(
+      'The Sun rises.',
+    );
+  });
+
+  test('strips closed tracker groups including non-anchored ones before fragment', () => {
+    expect(
+      stripTrackerLine('The Sun rises. [HP 18/?] [Clock 0/6] [Contentment 0] [Scene: The Sun'),
+    ).toBe('The Sun rises.');
+  });
+
+  test('keeps a prose aside before the tracker run', () => {
+    expect(stripTrackerLine('You see a sign [old] [HP 18/?] [Scene: The Sun')).toBe(
+      'You see a sign [old]',
+    );
+  });
+
+  test('keeps a closed non-tracker group before the tracker run', () => {
+    expect(stripTrackerLine('You read [the long sentence about doom.] [HP 3/')).toBe(
+      'You read [the long sentence about doom.]',
+    );
+  });
 });
 
 describe('normalizePartialNarration #1067 V-008/V-009', () => {
