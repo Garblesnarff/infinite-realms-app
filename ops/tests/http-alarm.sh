@@ -2,7 +2,8 @@
 # Cases for ops/http-alarm.sh (#2293), with fixture nginx "combined" log lines
 # and a stub `gh`: a quiet window, 3 x 422 on the #2280 route, a repeat inside
 # the hour, a 5xx, smoke requests, a timezone offset, the rotated file, a log
-# it cannot parse and the 24 h 4xx-rate alarm (#350).
+# it cannot parse, no log at all, and the 24 h 4xx-rate alarm (#350), state
+# retention pruning (#1174), and a missing state file (#1174).
 #
 #   bash ops/tests/http-alarm.sh
 #
@@ -190,6 +191,38 @@ alarm "$D" $((T0 + 3600 + 300))
 expect "rate: a 5xx alert an hour later fires alone" grep -qF "HTTP ALARM: POST /v1/sessions/:id/messages 1×5xx in the last 15m (" "$D/alerts.log"
 alarm "$D" $((T0 + 3 * 3600))
 expect "rate: still remembered after the 5xx alert pruned the state" test "$(alerts "$D")" = 2
+
+# 11. Retention (#1174): a state entry older than 24 h is pruned on the next
+# firing run, an entry inside the repeat window is kept with its epoch, and
+# the newly fired route is remembered. KEEP is max(RATE_REPEAT, REPEAT) =
+# 86400, the script's prune boundary, so the 25 h seed is past it; the fresh
+# seed (10 min) is inside it. No awk here at all, so nothing to keep mawk-safe.
+D="$TMP/retention"; mkdir -p "$D/state"
+OLD=$((T0 - 90000)) FRESH=$((T0 - 600))
+printf '%s\t%s\n' "$OLD" "GET /old/retention" > "$D/state/http-alarm.state"
+printf '%s\t%s\n' "$FRESH" "GET /fresh/retention" >> "$D/state/http-alarm.state"
+{
+  line 03:02:17 POST "$S1" 422; line 03:02:18 POST "$S1" 422; line 03:03:35 POST "$S2" 422
+} > "$D/access.log"
+expect "retention: seeded state present" bash -c "grep -qF 'old/retention' '$D/state/http-alarm.state' && grep -qF 'fresh/retention' '$D/state/http-alarm.state'"
+alarm "$D"
+expect "retention: exit 0" test "$RC" = 0
+expect "retention: fires" test "$(alerts "$D")" = 1
+expect "retention: old entry pruned" bash -c "! grep -qF 'old/retention' '$D/state/http-alarm.state'"
+expect "retention: fresh entry kept with its epoch" grep -qF "$(printf '%s\t%s' "$FRESH" 'GET /fresh/retention')" "$D/state/http-alarm.state"
+expect "retention: fired route remembered" grep -qF 'POST /v1/sessions/:id/messages' "$D/state/http-alarm.state"
+
+# 12. No state file at all (#1174): the script creates it and fires, rather
+# than dying on the missing read. alarm() makes the state dir, not the file.
+D="$TMP/nostate"; mkdir -p "$D"
+{
+  line 03:02:17 POST "$S1" 422; line 03:02:18 POST "$S1" 422; line 03:03:35 POST "$S2" 422
+} > "$D/access.log"
+expect "no state: state file absent before the run" bash -c "! test -e '$D/state/http-alarm.state'"
+alarm "$D"
+expect "no state: exit 0" test "$RC" = 0
+expect "no state: fires" test "$(alerts "$D")" = 1
+expect "no state: state file created with the fired route" grep -qF 'POST /v1/sessions/:id/messages' "$D/state/http-alarm.state"
 
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
