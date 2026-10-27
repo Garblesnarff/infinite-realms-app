@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
 import { useOptionalCombat } from '@/contexts/CombatContext';
 import { useSceneBackground, type AssetType } from '@/contexts/SceneBackgroundContext';
+import { findPlaceInText } from './scene-place';
 import { cn } from '@/lib/utils';
 import { isEngineResultCard } from '@/services/combat/engine-result-card';
 import { combatEngineBlocksFromContext, engineBlockDividerKey } from '@/utils/combat-engine-blocks';
@@ -73,7 +74,7 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
       [participants],
     );
     // Get campaign assets for displaying entity images
-    const { getAsset } = useCampaignAssetsContext();
+    const { getAsset, assets } = useCampaignAssetsContext();
     const { setSceneBackground } = useSceneBackground();
     const hasSetBackgroundRef = useRef(false);
 
@@ -130,7 +131,19 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
     // Set scene background based on referenced assets (priority: location > scene > monster > npc)
     useEffect(() => {
       // Only set background once per message and only for the last message in a group
-      if (hasSetBackgroundRef.current || !isLastInGroup || assetTags.length === 0) {
+      if (hasSetBackgroundRef.current || !isLastInGroup) {
+        return;
+      }
+
+      // The DM rarely tags a place, but names it in the prose. The place named last
+      // is a candidate after the tags; a place with no chunk adds nothing, so the
+      // previous image stays up.
+      const locations = assets.filter((asset) => asset.type === 'location');
+      const placeInText = findPlaceInText(cleanContent, locations);
+      const candidateTags = placeInText
+        ? [...assetTags, { type: 'location', key: placeInText.key }]
+        : assetTags;
+      if (candidateTags.length === 0) {
         return;
       }
 
@@ -148,7 +161,7 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
       let bestAsset = null;
       let bestPriority = Infinity;
 
-      for (const tag of assetTags) {
+      for (const tag of candidateTags) {
         const asset = getAsset(tag.type, tag.key);
         if (asset?.imageUrl) {
           const priority = priorityOrder.indexOf(tag.type as AssetType);
@@ -163,7 +176,7 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
         setSceneBackground(bestAsset.imageUrl, bestAsset.name, bestAsset.type as AssetType);
         hasSetBackgroundRef.current = true;
       }
-    }, [assetTags, getAsset, setSceneBackground, isLastInGroup]);
+    }, [assetTags, cleanContent, assets, getAsset, setSceneBackground, isLastInGroup]);
 
     // Don't render if content is empty after removing roll requests — unless the
     // engine still has a fact to show as a chip.
