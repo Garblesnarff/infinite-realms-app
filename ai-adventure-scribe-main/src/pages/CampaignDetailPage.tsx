@@ -285,21 +285,42 @@ const CampaignDetailPage: React.FC = () => {
 
   // #1122: the pending hero is a promise made for one trip, the sign-in round
   // trip. Only the auth callback's navigation back here carries
-  // `state.authReturn` (CallbackPage). Read once per mount: any other visit
-  // (a link, a reload, the back button) drops a leftover entry instead of
-  // starting a campaign the player did not just ask for.
+  // `state.authReturn` (CallbackPage). The marker belongs to that one
+  // navigation, not to the mount (the route has no key, so an in-app link to
+  // the same slug keeps this component mounted):
+  // - On the return, the marker is read and cleared from history at once
+  //   (replace, state null), so back/forward/reload of that entry cannot
+  //   re-arm it. The replaced entry's key is then the return visit's key.
+  // - Any other navigation (a link, a reload, back/forward) ends the return
+  //   visit and drops a leftover entry instead of starting a campaign the
+  //   player did not just ask for.
+  // - The return visit resumes the pending hero at most once.
   const location = useLocation();
-  const authReturnRef = React.useRef(
-    (location.state as { authReturn?: unknown } | null)?.authReturn === true,
-  );
+  const returnVisitKeyRef = React.useRef<string | null>(null);
+  const clearingMarkerRef = React.useRef(false);
   React.useEffect(() => {
-    if (authReturnRef.current) return;
+    if ((location.state as { authReturn?: unknown } | null)?.authReturn === true) {
+      clearingMarkerRef.current = true;
+      navigate(`${location.pathname}${location.search}${location.hash}`, {
+        replace: true,
+        state: null,
+      });
+      return;
+    }
+    if (clearingMarkerRef.current) {
+      clearingMarkerRef.current = false;
+      returnVisitKeyRef.current = location.key;
+      return;
+    }
+    returnVisitKeyRef.current = null;
     try {
       sessionStorage.removeItem(PENDING_HERO_KEY);
     } catch {
       // Storage unavailable: there is no entry to drop either.
     }
-  }, []);
+    // location.key changes on every navigation, including a same-path one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key]);
 
   // Continue the start automatically when a signed-out visitor comes back
   // from sign-in with a pending hero for this campaign. The pending hero
@@ -307,7 +328,8 @@ const CampaignDetailPage: React.FC = () => {
   // is only dropped once the templates load cleanly and the hero is not
   // among them, i.e. genuinely gone rather than transiently missing.
   React.useEffect(() => {
-    if (!authReturnRef.current || !user || !campaign || templatesLoading) return;
+    if (returnVisitKeyRef.current === null || returnVisitKeyRef.current !== location.key) return;
+    if (!user || !campaign || templatesLoading) return;
     let pending: unknown = null;
     try {
       pending = JSON.parse(sessionStorage.getItem(PENDING_HERO_KEY) ?? 'null');
@@ -330,13 +352,17 @@ const CampaignDetailPage: React.FC = () => {
     // timestamp is treated as stale (this build always writes one).
     if (typeof at !== 'number' || Date.now() - at > PENDING_HERO_TTL_MS) {
       sessionStorage.removeItem(PENDING_HERO_KEY);
+      returnVisitKeyRef.current = null;
       return;
     }
     if (templatesError) return;
     const template = templates.find((candidate) => candidate.id === templateId);
     sessionStorage.removeItem(PENDING_HERO_KEY);
+    // Resumed (or found gone) once: an entry the start re-arms (a 401 inside
+    // playAs) waits for the next return, never for this visit's next render.
+    returnVisitKeyRef.current = null;
     if (template) void playAsRef.current(template);
-  }, [user, campaign, templatesLoading, templatesError, templates, slug]);
+  }, [user, campaign, templatesLoading, templatesError, templates, slug, location.key]);
 
   // A sign-in by any path clears a stale session-expired banner and refetches
   // the heroes, so a signed-in user never stares at "Your sign-in has

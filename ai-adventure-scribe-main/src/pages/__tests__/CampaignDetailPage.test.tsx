@@ -1,6 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { HelmetProvider } from 'react-helmet-async';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { Link, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import CampaignDetailPage from '../CampaignDetailPage';
@@ -112,6 +112,20 @@ function LocationCapture({ label }: { label: string }): ReactElement {
   return <div>{label}</div>;
 }
 
+/** #1122: the router state of the current entry, as back/forward/reload would find it. */
+const routerState: { current: unknown } = { current: undefined };
+function RouterStateProbe(): null {
+  routerState.current = useLocation().state;
+  return null;
+}
+
+/** #1122: let every pending promise (resolve -> seed -> navigate) settle before a "nothing started" check. */
+async function flushPromises(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
 /** #1122: the entry CallbackPage navigates to after sign-in (returnTo + authReturn state). */
 const AUTH_RETURN_ENTRY = {
   pathname: '/explore/the-eternal-feast',
@@ -125,6 +139,9 @@ function renderPage(
   return render(
     <HelmetProvider>
       <MemoryRouter initialEntries={[entry]}>
+        <RouterStateProbe />
+        {/* #1122: an in-app link to the same campaign; same route, so no remount. */}
+        <Link to="/explore/the-eternal-feast">same campaign link</Link>
         <Routes>
           <Route path="/explore/:slug" element={<CampaignDetailPage />} />
           <Route path="/app/game/:campaignId" element={<LocationCapture label="game page" />} />
@@ -422,6 +439,7 @@ describe('CampaignDetailPage heroes (#89)', () => {
     renderPage();
 
     expect(await screen.findByText('Play as Bram')).toBeInTheDocument();
+    await flushPromises();
     expect(state.seed).not.toHaveBeenCalled();
     expect(screen.queryByText('game page')).not.toBeInTheDocument();
     expect(window.sessionStorage.getItem('ir-pending-starter-hero')).toBeNull();
@@ -441,10 +459,13 @@ describe('CampaignDetailPage heroes (#89)', () => {
 
     renderPage(AUTH_RETURN_ENTRY);
     expect(await screen.findByText('Play as Bram')).toBeInTheDocument();
+    await flushPromises();
     expect(state.seed).not.toHaveBeenCalled();
   });
 
-  it('keeps the pending hero when templates fail, so a retry can resume it', () => {
+  it('the return is consumed per navigation: a later same-slug link with a re-armed entry starts nothing (#1122)', async () => {
+    // The return visit keeps the entry while the heroes fetch fails (a retry
+    // may still resume it) -- the case the strategist's FIX names.
     state.campaign = campaign({});
     state.user = { id: 'u1' };
     state.templatesError = new Error('boom');
@@ -453,13 +474,61 @@ describe('CampaignDetailPage heroes (#89)', () => {
       JSON.stringify({ slug: 'the-eternal-feast', templateId: 't1', at: Date.now() }),
     );
     renderPage(AUTH_RETURN_ENTRY);
+    expect(await screen.findByText('We could not load the heroes.')).toBeInTheDocument();
+    // The marker is cleared from history at once: back/forward/reload of this
+    // entry cannot re-arm it.
+    expect(routerState.current).toBeNull();
+    expect(window.sessionStorage.getItem('ir-pending-starter-hero')).not.toBeNull();
+
+    // The heroes now load, and the player follows an in-app link to the same
+    // campaign (same route: the page stays mounted).
+    state.templatesError = null;
+    state.templates = [template()];
+    window.sessionStorage.setItem(
+      'ir-pending-starter-hero',
+      JSON.stringify({ slug: 'the-eternal-feast', templateId: 't1', at: Date.now() }),
+    );
+    fireEvent.click(screen.getByText('same campaign link'));
+
+    expect(await screen.findByText('Play as Bram')).toBeInTheDocument();
+    await flushPromises();
+    expect(state.seed).not.toHaveBeenCalled();
+    expect(screen.queryByText('game page')).not.toBeInTheDocument();
+    expect(window.sessionStorage.getItem('ir-pending-starter-hero')).toBeNull();
+  });
+
+  it('the return visit resumes once and clears the marker from history (#1122)', async () => {
+    state.campaign = campaign({});
+    state.user = { id: 'u1' };
+    state.templates = [template()];
+    window.sessionStorage.setItem(
+      'ir-pending-starter-hero',
+      JSON.stringify({ slug: 'the-eternal-feast', templateId: 't1', at: Date.now() }),
+    );
+    renderPage(AUTH_RETURN_ENTRY);
+
+    expect(await screen.findByText('game page')).toBeInTheDocument();
+    expect(state.seed).toHaveBeenCalledTimes(1);
+    expect(window.sessionStorage.getItem('ir-pending-starter-hero')).toBeNull();
+  });
+
+  it('keeps the pending hero when templates fail, so a retry can resume it', async () => {
+    state.campaign = campaign({});
+    state.user = { id: 'u1' };
+    state.templatesError = new Error('boom');
+    window.sessionStorage.setItem(
+      'ir-pending-starter-hero',
+      JSON.stringify({ slug: 'the-eternal-feast', templateId: 't1', at: Date.now() }),
+    );
+    renderPage(AUTH_RETURN_ENTRY);
+    await flushPromises();
 
     expect(screen.getByText('We could not load the heroes.')).toBeInTheDocument();
     expect(state.seed).not.toHaveBeenCalled();
     expect(window.sessionStorage.getItem('ir-pending-starter-hero')).not.toBeNull();
   });
 
-  it('drops the pending hero when templates load cleanly without it', () => {
+  it('drops the pending hero when templates load cleanly without it', async () => {
     state.campaign = campaign({});
     state.user = { id: 'u1' };
     state.templates = [];
@@ -468,13 +537,14 @@ describe('CampaignDetailPage heroes (#89)', () => {
       JSON.stringify({ slug: 'the-eternal-feast', templateId: 't1', at: Date.now() }),
     );
     renderPage(AUTH_RETURN_ENTRY);
+    await flushPromises();
 
     expect(screen.getByText('Heroes for this campaign are not ready yet.')).toBeInTheDocument();
     expect(state.seed).not.toHaveBeenCalled();
     expect(window.sessionStorage.getItem('ir-pending-starter-hero')).toBeNull();
   });
 
-  it('does not start from a stale pending hero, and removes it', () => {
+  it('does not start from a stale pending hero, and removes it', async () => {
     state.campaign = campaign({});
     state.user = { id: 'u1' };
     state.templates = [template()];
@@ -487,13 +557,14 @@ describe('CampaignDetailPage heroes (#89)', () => {
       }),
     );
     renderPage(AUTH_RETURN_ENTRY);
+    await flushPromises();
 
     expect(screen.getByText('Play as Bram')).toBeInTheDocument();
     expect(state.seed).not.toHaveBeenCalled();
     expect(window.sessionStorage.getItem('ir-pending-starter-hero')).toBeNull();
   });
 
-  it('treats a pending hero without a timestamp as stale', () => {
+  it('treats a pending hero without a timestamp as stale', async () => {
     state.campaign = campaign({});
     state.user = { id: 'u1' };
     state.templates = [template()];
@@ -502,6 +573,7 @@ describe('CampaignDetailPage heroes (#89)', () => {
       JSON.stringify({ slug: 'the-eternal-feast', templateId: 't1' }),
     );
     renderPage(AUTH_RETURN_ENTRY);
+    await flushPromises();
 
     expect(screen.getByText('Play as Bram')).toBeInTheDocument();
     expect(state.seed).not.toHaveBeenCalled();
