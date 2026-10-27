@@ -10,12 +10,9 @@ import jwt from 'jsonwebtoken';
 
 export const TEST_AUTH_USER_ID = 'user_TEST_AUTOMATION_BOT_001';
 
-const DISABLED_FLAG_VALUES = new Set(['', 'false', '0', 'no', 'off']);
-
-/** ENABLE_TEST_AUTH is on: set and not a "false"-like value (`.env.example` ships `false`). */
+/** ENABLE_TEST_AUTH is on only for the explicit, case-sensitive literal `true`. */
 export function isTestAuthFlagOn(): boolean {
-  const flag = process.env.ENABLE_TEST_AUTH;
-  return Boolean(flag) && !DISABLED_FLAG_VALUES.has((flag as string).trim().toLowerCase());
+  return process.env.ENABLE_TEST_AUTH === 'true';
 }
 
 export function isTestAuthEnabled(): boolean {
