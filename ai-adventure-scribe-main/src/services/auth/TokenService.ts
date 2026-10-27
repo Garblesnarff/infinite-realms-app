@@ -15,9 +15,9 @@ export interface AccessTokenPair {
 export const SESSION_STORAGE_KEY = 'aas_workos_cached_session';
 export const SESSION_ENDED_STORAGE_KEY = 'aas_workos_session_ended';
 export const SESSION_ENDED_EVENT = 'workos-session-ended';
-export const SESSION_ENDED_MESSAGE = 'Session ended — sign in again';
+export const SESSION_ENDED_MESSAGE = 'Your session ended, sign in again';
 export const PENDING_INPUT_STORAGE_KEY = 'aas_workos_pending_input';
-export const TOKEN_REFRESH_MARGIN_MS = 60 * 1000; // Refresh 1 minute before expiry
+export const TOKEN_REFRESH_MARGIN_MS = 2 * 60 * 1000; // Refresh 2 minutes before expiry
 const TOKEN_REFRESH_LOCK_NAME = 'aas-workos-token-refresh';
 const TOKEN_REFRESH_LEASE_KEY = 'aas_workos_token_refresh_lease';
 const TOKEN_REFRESH_LEASE_MS = 10 * 1000;

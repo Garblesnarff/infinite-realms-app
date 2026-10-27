@@ -7,14 +7,17 @@
 
 import { ArrowLeft, ArrowRight, BookOpen, Sparkles } from 'lucide-react';
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+
+import { authLoginUrl } from './auth-login-url';
 
 const AuthPage: React.FC = () => {
+  const location = useLocation();
+
   const handleSignIn = (): void => {
-    // Redirect directly to backend auth endpoint
-    // Backend will generate WorkOS URL and redirect
     const apiUrl = import.meta.env.VITE_API_URL || '';
-    window.location.href = `${apiUrl}/v1/auth/login`;
+    const returnTo = `${location.pathname}${location.search}${location.hash}` || '/app';
+    window.location.href = authLoginUrl(apiUrl, returnTo);
   };
 
   return (

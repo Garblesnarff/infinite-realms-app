@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
 import ProtectedRoute from '../ProtectedRoute';
@@ -13,7 +14,7 @@ vi.mock('@/contexts/AuthContext', () => ({
 
 vi.mock('@/services/auth/TokenService', async (importOriginal) =>
   (await import('@/test/token-service-mock')).createTokenServiceMock(importOriginal, {
-    SESSION_ENDED_MESSAGE: 'Session ended — sign in again',
+    SESSION_ENDED_MESSAGE: 'Your session ended, sign in again',
   }),
 );
 
@@ -69,5 +70,20 @@ describe('ProtectedRoute connection error (#565)', () => {
     );
 
     expect(screen.getByText('app')).toBeInTheDocument();
+  });
+
+  it('shows the ended-session message before the sign-in action', () => {
+    useAuthMock.mockReturnValue({ ...baseAuth, sessionEnded: true });
+
+    render(
+      <MemoryRouter initialEntries={['/app?tab=combat#turn-3']}>
+        <ProtectedRoute>
+          <div>app</div>
+        </ProtectedRoute>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Your session ended, sign in again');
+    expect(screen.getByRole('button', { name: /sign in or create an account/i })).toBeVisible();
   });
 });

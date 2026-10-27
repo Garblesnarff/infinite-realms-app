@@ -1,7 +1,5 @@
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 import { waitForAuth } from '@/lib/auth-gate';
-import { getAuthHeaders } from '@/services/auth/TokenService';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
 type JsonObject = Record<string, unknown>;
 
@@ -117,12 +115,11 @@ const requestJson = async <T>(
   signal?: AbortSignal,
 ): Promise<T> => {
   await waitForAuth();
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetchWithAuth(path, {
     ...init,
     signal: signal ?? init.signal,
     headers: {
       'Content-Type': 'application/json',
-      ...getAuthHeaders(),
       ...init.headers,
     },
   });
