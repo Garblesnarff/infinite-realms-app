@@ -44,7 +44,6 @@ import {
   ACTION_NOT_SUPPORTED_REASON,
   CombatIntentRefusedError,
   combatBoundaryFromResult,
-  executeAuthoritativeCombatIntent,
   executeStructuredCombatActionWithBoundary,
   HIDE_CHECK_UNROUTABLE_REASON,
   resultCarriesPersistedPlayerRow,
@@ -65,6 +64,7 @@ import {
 import { repairRefusedCombatAction } from '@/services/combat/combat-repair';
 import { isSameSpell } from '@/services/combat/declared-player-spell';
 import { dmFacingResolvedAction, ENGINE_FACT_NOTE } from '@/services/combat/dm-resolved-action';
+import { endTurnUnlessAlreadyMoved } from '@/services/combat/end-turn-already-moved';
 import {
   askPlayerForAttackDie,
   askPlayerForDeathSaveDie,
@@ -918,26 +918,25 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     // player has to be told when their own declaration was refused.
     const turn = endedWithAction
       ? turnEndedByAction
-      : signal
-        ? await executeAuthoritativeCombatIntent(
-            encounterId,
-            { type: 'end_turn', actorId, actionId: boundaryActionId },
-            'dm',
-            undefined,
-            undefined,
-            signal,
-          )
-        : await executeAuthoritativeCombatIntent(
-            encounterId,
-            { type: 'end_turn', actorId, actionId: boundaryActionId },
-            'dm',
-          );
+      : await endTurnUnlessAlreadyMoved(
+          encounterId,
+          { type: 'end_turn', actorId, actionId: boundaryActionId },
+          'dm',
+          signal,
+        );
     // The boundary's death saves, wake and ending are in the row the server wrote for it.
     if (combatBoundaryFromResult(turn)) return 'combat_ended';
     const turnState = turn as {
       currentParticipant?: { id?: string; name?: string; displayName?: string | null } | null;
     } | null;
-    if (turnState?.currentParticipant) turnHolder = withCardName(turnState.currentParticipant);
+    if (turnState?.currentParticipant) {
+      const holder = turnState.currentParticipant;
+      turnHolder = withCardName(
+        holder.name
+          ? holder
+          : ((participants?.find((p) => p.id === holder.id) as typeof holder) ?? holder),
+      );
+    }
     // The server ran the creatures that followed before it answered (#2658).
     const npcTurns = (turn as { npcTurns?: AdvanceNpcTurnsResponse } | null)?.npcTurns;
     return npcTurns ? retainNpcResults(npcTurns) : 'turn_ended';

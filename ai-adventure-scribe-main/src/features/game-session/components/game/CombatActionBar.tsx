@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useCombat, useOptionalCombat } from '@/contexts/CombatContext';
 import {
+  fleeProvokerOf,
   useCombatLegalActions,
   type LegalAction,
 } from '@/features/game-session/hooks/use-combat-legal-actions';
@@ -149,6 +150,11 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
   const attackOn = enabled && attacks.length > 0;
   const castOn = enabled && spells.length > 0;
 
+  const [pendingFlee, setPendingFlee] = React.useState<LegalAction | null>(null);
+  React.useEffect(() => {
+    if (!enabled) setPendingFlee(null);
+  }, [enabled]);
+
   return (
     <div
       role="toolbar"
@@ -223,7 +229,16 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
             {more.map((action, index) => (
-              <DropdownMenuItem key={`${action.type}-${index}`} onSelect={() => onAction(action)}>
+              <DropdownMenuItem
+                key={`${action.type}-${index}`}
+                onSelect={() => {
+                  if (action.type === 'flee' && fleeProvokerOf(action.label)) {
+                    setPendingFlee(action);
+                  } else {
+                    onAction(action);
+                  }
+                }}
+              >
                 {action.label}
               </DropdownMenuItem>
             ))}
@@ -237,6 +252,27 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
       >
         End turn
       </BarButton>
+      {pendingFlee && (
+        <div
+          role="group"
+          aria-label="Confirm flee"
+          data-testid="combat-flee-confirm"
+          className="flex w-full flex-wrap items-center gap-2 text-sm"
+        >
+          <span>Flee? {fleeProvokerOf(pendingFlee.label)} gets one attack as you turn.</span>
+          <BarButton
+            disabled={!enabled}
+            onClick={() => {
+              const a = pendingFlee;
+              setPendingFlee(null);
+              onAction(a);
+            }}
+          >
+            Flee anyway
+          </BarButton>
+          <BarButton onClick={() => setPendingFlee(null)}>Stay</BarButton>
+        </div>
+      )}
     </div>
   );
 };
@@ -370,7 +406,7 @@ const CombatActionBarInCombat: React.FC<CombatActionBarLiveProps> = ({
         moveSub={moveSub}
         canMove={Boolean(mapActor && mapActor.movementRemaining > 0)}
         spellInfo={spellInfo}
-        onAction={(action) => run(() => runAction(action))}
+        onAction={(action) => run(() => runAction(action, { exitConfirmed: true }))}
         onMove={onMove}
       />
     </>

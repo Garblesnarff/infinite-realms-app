@@ -24,12 +24,17 @@ import {
   formatDeathSaveParts,
   formatWakeParts,
 } from '@/services/combat/combat-outcome-transcript';
+import { endTurnUnlessAlreadyMoved } from '@/services/combat/end-turn-already-moved';
 import { askPlayerForAttackDie } from '@/services/combat/player-attack-roll';
 import { resolvePlayerCombatSpell } from '@/services/combat/player-combat-spell';
 import { actorMovementRemaining } from '@/services/combat/player-movement-remaining';
 import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
 
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
+
+export function fleeProvokerOf(label: string): string | null {
+  return label.match(/\((.+?) attacks\)/)?.[1] ?? null;
+}
 
 export type LegalAction = {
   type: ClientCombatIntent['type'];
@@ -96,7 +101,7 @@ export function useCombatLegalActions(input: {
   /** #1143: the last legal-action fetch failed (network or non-2xx); `retryLoad` asks again. */
   loadFailed: boolean;
   retryLoad: () => Promise<void>;
-  runAction: (action: LegalAction) => Promise<void>;
+  runAction: (action: LegalAction, options?: { exitConfirmed?: boolean }) => Promise<void>;
 } {
   const { state: combatState, refreshCombatState } = useCombat();
   const showCombatMenu = input.enabled;
@@ -162,7 +167,7 @@ export function useCombatLegalActions(input: {
     );
 
   const runAction = useCallback(
-    async (action: LegalAction) => {
+    async (action: LegalAction, options?: { exitConfirmed?: boolean }) => {
       if (!encounter?.id) return;
       const actorId = legalState.actorId || encounter.currentTurnParticipantId;
       if (
@@ -182,7 +187,7 @@ export function useCombatLegalActions(input: {
         if (action.type === 'end_turn') {
           // The server writes the boundary's row (death saves, a stable hero waking, the
           // ending) and runs the creatures that follow before it answers (#2658).
-          await executeAuthoritativeCombatIntent(encounter.id, {
+          await endTurnUnlessAlreadyMoved(encounter.id, {
             type: 'end_turn',
             actorId,
             actionId: crypto.randomUUID(),
@@ -214,10 +219,11 @@ export function useCombatLegalActions(input: {
           // the attacker the engine put in the legal-action label, and is asked only when one is
           // in reach — so a flee into empty space is never dressed up as dangerous, and a real
           // opportunity attack is never sprung on a player who was not warned first.
-          const provoked = action.label.match(/\((.+?) attacks\)/)?.[1];
+          const provoked = fleeProvokerOf(action.label);
           if (
             action.type === 'flee' &&
             provoked &&
+            !options?.exitConfirmed &&
             !window.confirm(`Flee? ${provoked} gets one attack as you turn.`)
           )
             return;
@@ -461,7 +467,7 @@ export function useCombatLegalActions(input: {
           if (!movementOnly && execution.boundary === null) {
             const movementLeft = await actorMovementRemaining(encounter.sessionId, actorId);
             if (movementLeft === null || movementLeft <= 0) {
-              await executeAuthoritativeCombatIntent(encounter.id, {
+              await endTurnUnlessAlreadyMoved(encounter.id, {
                 type: 'end_turn',
                 actorId,
                 actionId: crypto.randomUUID(),
@@ -552,7 +558,7 @@ export function useCombatLegalActions(input: {
             if (!movementOnly && execution.boundary === null) {
               const movementLeft = await actorMovementRemaining(encounter.sessionId, actorId);
               if (movementLeft === null || movementLeft <= 0) {
-                await executeAuthoritativeCombatIntent(encounter.id, {
+                await endTurnUnlessAlreadyMoved(encounter.id, {
                   type: 'end_turn',
                   actorId,
                   actionId: crypto.randomUUID(),
