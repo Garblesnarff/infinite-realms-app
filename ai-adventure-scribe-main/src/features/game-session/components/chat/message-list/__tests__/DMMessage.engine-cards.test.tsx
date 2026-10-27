@@ -29,7 +29,7 @@ vi.mock('@/contexts/CampaignContext', () => ({
   useOptionalCampaign: () => ({ state: { campaign: { difficulty_level: campaign.difficulty } } }),
 }));
 vi.mock('@/contexts/CampaignAssetsContext', () => ({
-  useCampaignAssetsContext: () => ({ getAsset: vi.fn() }),
+  useCampaignAssetsContext: () => ({ getAsset: vi.fn(), assets: [] }),
 }));
 vi.mock('@/contexts/SceneBackgroundContext', () => ({
   useSceneBackground: () => ({ setSceneBackground: vi.fn() }),

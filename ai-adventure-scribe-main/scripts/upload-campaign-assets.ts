@@ -32,6 +32,8 @@ import { fileURLToPath } from 'node:url';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
 
+import { slugForLookup } from '../shared/slug-for-lookup';
+
 config();
 config({ path: join(process.cwd(), 'server-bun/.env') });
 
@@ -485,16 +487,6 @@ function errorMessage(error: unknown): string {
     if (typeof message === 'string') return message;
   }
   return String(error);
-}
-
-function slugForLookup(value: string): string {
-  return value
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[’']/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
 }
 
 async function findCampaign(client: SupabaseClient, campaignSlug: string): Promise<CampaignRow> {

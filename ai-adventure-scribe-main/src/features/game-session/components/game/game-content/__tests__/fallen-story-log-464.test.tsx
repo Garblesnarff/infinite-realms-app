@@ -25,7 +25,7 @@ vi.mock('@/contexts/MessageContext', () => ({
   useMessageContext: () => ({ messages: state.messages }),
 }));
 vi.mock('@/contexts/CampaignAssetsContext', () => ({
-  useCampaignAssetsContext: () => ({ getAsset: vi.fn() }),
+  useCampaignAssetsContext: () => ({ getAsset: vi.fn(), assets: [] }),
 }));
 vi.mock('@/contexts/SceneBackgroundContext', () => ({
   useSceneBackground: () => ({ setSceneBackground: vi.fn() }),

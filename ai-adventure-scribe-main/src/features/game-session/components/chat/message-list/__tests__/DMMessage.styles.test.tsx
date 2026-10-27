@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { DMMessage } from '../DMMessage';
 
 vi.mock('@/contexts/CampaignAssetsContext', () => ({
-  useCampaignAssetsContext: () => ({ getAsset: vi.fn() }),
+  useCampaignAssetsContext: () => ({ getAsset: vi.fn(), assets: [] }),
 }));
 vi.mock('@/contexts/SceneBackgroundContext', () => ({
   useSceneBackground: () => ({ setSceneBackground: vi.fn() }),
