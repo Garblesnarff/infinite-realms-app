@@ -581,7 +581,7 @@ describeWithDb('the server runs NPC turns on End turn (#2658 step 3)', () => {
     },
   );
 
-  test('a fled player leaves nothing to hand the turn to: the route runs no creature', async () => {
+  test("a fled player ends the fight (#1169): the route runs no creature, and the only row is the flee's own", async () => {
     const { sessionId, encounterId, playerId } = await seedFight();
 
     const fled = await post(`${encounterId}/intent`, {
@@ -590,17 +590,31 @@ describeWithDb('the server runs NPC turns on End turn (#2658 step 3)', () => {
 
     expect(fled.result.exit).toBe('fled');
     expect(fled.result.npcTurns).toBeUndefined();
-    expect(await rowsOf(sessionId)).toHaveLength(0);
+    expect(fled.result.combatEnded).toBe(true);
+    expect(fled.result.endedReason).toBe('abandoned');
+    const rows = await rowsOf(sessionId);
+    expect(rows).toHaveLength(1);
+    expect(
+      (rows[0].context as { combatEngineBlocks: Array<{ source: string }> }).combatEngineBlocks[0]
+        .source,
+    ).toBe('player');
+    expect(rows[0].message).toContain('fled from combat');
+    expect(
+      rows.some((row) =>
+        (
+          row.context as { combatEngineBlocks?: Array<{ source: string }> }
+        )?.combatEngineBlocks?.some((block) => block.source === 'npc'),
+      ),
+    ).toBe(false);
     await finish(encounterId);
   });
 
   test('a loop that stays at the safety cap writes the cap line as one row', async () => {
+    // The player's exit is marked directly because a flee intent now concludes the encounter (#1169).
     // The same fled fight, run directly: nobody to fight and nobody to hand the turn to, so only
     // the cap stops the creatures (2 x 3 participants = six iterations, one call).
     const { sessionId, encounterId, playerId } = await seedFight();
-    await post(`${encounterId}/intent`, {
-      intent: { type: 'flee', actorId: playerId, expectedVersion: 1 },
-    });
+    await CombatEncounterService.markParticipantExited(encounterId, playerId!);
 
     const drained = await runNpcTurnsToPlayer(encounterId, userId);
 

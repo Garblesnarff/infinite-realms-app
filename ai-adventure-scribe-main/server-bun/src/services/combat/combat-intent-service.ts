@@ -391,7 +391,7 @@ async function endCombatIfResolved(
   const state = await CombatEncounterService.getCombatState(encounterId, userId);
   // A player who fled or yielded has left the fight, not lost it (#2580). With nobody of the
   // party in the order, the check below would read a defeat on the next end_turn, damage or NPC
-  // auto-advance; only the DM's own end closes a fight the party walked out of.
+  // auto-advance; the flee itself (#1169) or the DM's own end closes it, as an abandonment.
   // Only a roster that HAD a player row can have lost it to an exit: an encounter with no player
   // participant at all still ends the ordinary way.
   const hasPlayerRow = state.participants.some(
@@ -1420,6 +1420,7 @@ export async function executeCombatIntent(
     // after the exit (NT-036/NT-113), so waiting for its `dm_ended_scene` leaves the turn
     // stalled with the player out of the order and nothing left to act.
     let yieldEndedCombat = false;
+    let fleeEndedCombat = false;
     if (intent.type === 'move') {
       result = await applyTacticalMapAction(encounter.sessionId, {
         action: 'move',
@@ -1776,13 +1777,35 @@ export async function executeCombatIntent(
       // No discrete-action fact here: `describePlayerExit` is the engine line, and a second
       // "dashed" line under it would tell the DM the player ran and then dashed.
       if (
+        intent.type === 'flee' &&
+        exitResult.exit === 'fled' &&
+        actor.participantType === 'player'
+      ) {
+        // #1169: a recorded flee ends the fight when the party has left it — the same
+        // abandonment the yield path claims, so a solo fleeing player does not leave an
+        // active encounter behind. If another player or an ally is still fighting, the
+        // fleeing player alone leaves and the fight goes on. A flee whose opportunity
+        // attack downed the player (exit === null) never concludes.
+        const freshState = await CombatEncounterService.getCombatState(encounterId, userId);
+        if (
+          partyHasLeftTheFight(
+            freshState.participants as unknown as Parameters<typeof partyHasLeftTheFight>[0],
+          )
+        ) {
+          await concludeEncounter(encounterId, encounter.sessionId, userId, 'abandoned', {
+            deferVictoryNotice: true,
+          });
+          fleeEndedCombat = true;
+        }
+      }
+      if (
         intent.type === 'yield' &&
         exitResult.exit !== null &&
         actor.participantType === 'player'
       ) {
         // #262: the surrender is the ending, with its own reason — the engine end line names
         // it, so a typed or clicked yield can never again read as "Combat has ended." with no
-        // reason. Flee keeps the #2580 design: the player leaves and the DM ends the scene.
+        // reason. Flee concludes the fight itself when the party has left (#1169).
         // The player gate matters: a DM-hallucinated monster yield must not end the fight
         // with false "party surrendered" fiction (the bogus exit itself is a #2580 gap).
         await concludeEncounter(encounterId, encounter.sessionId, userId, 'player_surrendered');
@@ -1987,11 +2010,13 @@ export async function executeCombatIntent(
     // notice is a chat row like any other, and chat order is insertion order — posted
     // inside the conclusion it would land ahead of this action's own row, which is
     // only written once the settled result exists.
-    let ending: CombatEnding | null = yieldEndedCombat
-      ? { reason: 'player_surrendered', wake: [] }
-      : damage > 0 || intent.type === 'end_turn' || intent.type === 'death_save'
-        ? await endCombatIfResolved(encounterId, userId, { deferVictoryNotice: true })
-        : null;
+    let ending: CombatEnding | null = fleeEndedCombat
+      ? { reason: 'abandoned', wake: [] }
+      : yieldEndedCombat
+        ? { reason: 'player_surrendered', wake: [] }
+        : damage > 0 || intent.type === 'end_turn' || intent.type === 'death_save'
+          ? await endCombatIfResolved(encounterId, userId, { deferVictoryNotice: true })
+          : null;
     let combatBoundary = ending !== null;
     if (!ending) {
       // After the end check, never before: a killing blow ends the fight, and there is no next
@@ -2045,13 +2070,19 @@ export async function executeCombatIntent(
       await flushVictoryNotice();
       return { ...npcResult, engineRows, sessionId: encounter.sessionId };
     }
-    if (ending?.reason === 'last_hostile_defeated') {
+    if (
+      ending?.reason === 'last_hostile_defeated' ||
+      (intent.type === 'flee' && actor.participantType === 'player')
+    ) {
       // A player's own killing action wrote no row above: its only transcript record
       // was the notice the client posts from this result, which is inserted after
       // the response — behind a Victory posted here. So the actor's row is written
       // from the settled result, exactly as a creature's is (the message builder
       // already renders a player's row, end line included), the notice flushes
       // behind it, and the client renders the row instead of its own notice.
+      // #1169: a player FLEE also writes its own engine row here (opportunity-attack
+      // line(s) plus "fled from combat." or "did not get away; they are downed"),
+      // stamped source 'player', so the client skips its duplicate notice.
       const { writeNpcEngineRow } = await import('./npc-engine-row.js');
       const actionId = submitted.actionId ?? randomUUID();
       const npcResult = { ...(settled as Record<string, unknown>), actionId };

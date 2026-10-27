@@ -346,10 +346,12 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
     // about it moves. A fled player must never read back as a dead one.
     expect(await heroRow()).toMatchObject({ isActive: false, maxHp: HERO_MAX_HP });
     expect(await heroHp()).toBe(5);
-    expect(await consumeDmTacticalFacts(sessionId)).toEqual(['The Scholar flees the fight.']);
-    // The fight is not over by itself: nobody declared an end, so the encounter is still standing
-    // and it is the DM's next turn that closes it.
-    expect(await encounterRow()).toMatchObject({ status: 'active', endedReason: null });
+    expect(await consumeDmTacticalFacts(sessionId)).toEqual([
+      'The Scholar flees the fight.',
+      expect.stringContaining('abandoned mid-fight'),
+    ]);
+    // #1169: the recorded flee now concludes the encounter as abandoned.
+    expect(await encounterRow()).toMatchObject({ status: 'completed', endedReason: 'abandoned' });
   });
 
   test('fleeing out of every hostile’s reach provokes no attack at all', async () => {
@@ -358,7 +360,10 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
     await setGap(4);
     await flee();
 
-    expect(await consumeDmTacticalFacts(sessionId)).toEqual(['The Scholar flees the fight.']);
+    expect(await consumeDmTacticalFacts(sessionId)).toEqual([
+      'The Scholar flees the fight.',
+      expect.stringContaining('abandoned mid-fight'),
+    ]);
     expect(await heroHp()).toBe(5);
   });
 
@@ -396,8 +401,9 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
     // Exactly one, never a round's worth, and it lands before the exit line — the ordering is
     // the rule's: the blow is struck while the player is still in reach.
     expect(attacks).toHaveLength(1);
-    expect(facts.at(-1)).toBe('The Scholar flees the fight.');
-    expect(facts.indexOf(attacks[0])).toBeLessThan(facts.length - 1);
+    expect(facts.at(-2)).toBe('The Scholar flees the fight.');
+    expect(facts.at(-1)).toContain('abandoned mid-fight');
+    expect(facts.indexOf(attacks[0])).toBeLessThan(facts.length - 2);
     // The line must be a real resolution, not a sentence written because an attack was expected:
     // `describeResolvedAttack` says MISSED or reports the roll that hit, and either way it is a
     // die the engine threw. A refused reaction must leave no line at all, and this is the only
@@ -516,7 +522,8 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
     // way or the DM narrates a fight the engine has already ended — which is the failure this
     // whole change exists to stop (#2524).
     const facts = await consumeDmTacticalFacts(sessionId);
-    expect(facts.at(-1)).toBe('The Scholar flees the fight.');
+    expect(facts.at(-2)).toBe('The Scholar flees the fight.');
+    expect(facts.at(-1)).toContain('abandoned mid-fight');
     // It is one engine line the DM can read as narration, not a chat message the player typed:
     // the exit is the engine's decision and must never read back as the player's prose.
     expect(facts.some((fact) => fact.startsWith('⚙️ Engine:'))).toBe(false);
@@ -612,7 +619,10 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
     await flee();
 
     expect(await heroRow()).toMatchObject({ isActive: false, actionUsed: true });
-    expect(await consumeDmTacticalFacts(sessionId)).toEqual(['The Scholar flees the fight.']);
+    expect(await consumeDmTacticalFacts(sessionId)).toEqual([
+      'The Scholar flees the fight.',
+      expect.stringContaining('abandoned mid-fight'),
+    ]);
   });
 
   test('a stale expectedVersion is refused: no exit, no attack', async () => {
@@ -654,7 +664,10 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
     );
 
     expect(await heroRow()).toMatchObject({ isActive: false });
-    expect(await consumeDmTacticalFacts(sessionId)).toEqual(['The Scholar flees the fight.']);
+    expect(await consumeDmTacticalFacts(sessionId)).toEqual([
+      'The Scholar flees the fight.',
+      expect.stringContaining('abandoned mid-fight'),
+    ]);
     expect(await heroHp()).toBe(5);
     expect(await swarmRow()).toMatchObject({ actionUsed: false, reactionUsed: false });
   });
@@ -675,7 +688,10 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
     await setGap(6);
     await flee();
 
-    expect(await consumeDmTacticalFacts(sessionId)).toEqual(['The Scholar flees the fight.']);
+    expect(await consumeDmTacticalFacts(sessionId)).toEqual([
+      'The Scholar flees the fight.',
+      expect.stringContaining('abandoned mid-fight'),
+    ]);
     expect(await heroHp()).toBe(5);
     expect(await swarmRow()).toMatchObject({ reactionUsed: false });
   });
@@ -695,28 +711,30 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
 
     await flee();
 
-    expect(await consumeDmTacticalFacts(sessionId)).toEqual(['The Scholar flees the fight.']);
+    expect(await consumeDmTacticalFacts(sessionId)).toEqual([
+      'The Scholar flees the fight.',
+      expect.stringContaining('abandoned mid-fight'),
+    ]);
     expect(await swarmRow()).toMatchObject({ reactionUsed: false });
   });
 
-  test('a fled player is an exit, not a defeat: the next end_turn does not conclude the fight', async () => {
+  test('a flee concludes the encounter as abandoned (never party_defeated); a following end_turn changes nothing', async () => {
     await setGap(3);
     await flee();
     await consumeDmTacticalFacts(sessionId);
 
-    // The Swarm is the current turn now — `getCombatState` indexes the turn into the ACTIVE list.
-    await executeCombatIntent(
+    expect(await encounterRow()).toMatchObject({ status: 'completed', endedReason: 'abandoned' });
+
+    // The fight is already closed: a following end_turn resolves nothing more.
+    const result = await executeCombatIntent(
       encounterId,
       { type: 'end_turn', actorId: swarmId },
       userId,
       'dm',
       Date.now(),
     );
-
-    expect(await encounterRow()).toMatchObject({ status: 'active', endedReason: null });
-    // Only the DM's own end closes it, and it closes as the abandonment it is.
-    expect(await concludeEncounter(encounterId, sessionId, userId, 'dm_ended_scene')).toBe(true);
-    expect((await encounterRow()).endedReason).toBe('abandoned');
+    expect(result).toMatchObject({ encounterAlreadyConcluded: true, status: 'completed' });
+    expect(await encounterRow()).toMatchObject({ status: 'completed', endedReason: 'abandoned' });
   });
 
   test('yielding is recorded as surrendered in the ledger, and fleeing as fled', async () => {
@@ -787,7 +805,10 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
 
     await flee();
 
-    expect(await consumeDmTacticalFacts(sessionId)).toEqual(['The Scholar flees the fight.']);
+    expect(await consumeDmTacticalFacts(sessionId)).toEqual([
+      'The Scholar flees the fight.',
+      expect.stringContaining('abandoned mid-fight'),
+    ]);
     expect(await heroHp()).toBe(5);
     expect(await heroRow()).toMatchObject({ isActive: false });
   });
@@ -913,7 +934,10 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
     await declaredExit('flee', 'I flee!');
 
     expect(await heroRow()).toMatchObject({ isActive: false });
-    expect(await consumeDmTacticalFacts(sessionId)).toEqual(['The Scholar flees the fight.']);
+    expect(await consumeDmTacticalFacts(sessionId)).toEqual([
+      'The Scholar flees the fight.',
+      expect.stringContaining('abandoned mid-fight'),
+    ]);
   });
 
   test('the generation-time guard lets the DM end stand once the player has left, and defers it before', async () => {
@@ -983,20 +1007,22 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
     expect(accepted.combat_transition).toBe('end');
   });
 
-  test('a second Flee click is refused: the player is already out of the order', async () => {
+  test('a second Flee after the fight closed returns encounterAlreadyConcluded and changes nothing', async () => {
     await setGap(3);
     await flee();
-    await expect(
-      executeCombatIntent(
-        encounterId,
-        { type: 'flee', actorId: heroId, expectedVersion: await encounterVersion() },
-        userId,
-        'player',
-        Date.now(),
-        'action_bar',
-      ),
-    ).rejects.toThrow();
-    expect(await consumeDmTacticalFacts(sessionId)).toEqual(['The Scholar flees the fight.']);
+    const second = await executeCombatIntent(
+      encounterId,
+      { type: 'flee', actorId: heroId, expectedVersion: await encounterVersion() },
+      userId,
+      'player',
+      Date.now(),
+      'action_bar',
+    );
+    expect(second).toMatchObject({ encounterAlreadyConcluded: true, status: 'completed' });
+    expect(await consumeDmTacticalFacts(sessionId)).toEqual([
+      'The Scholar flees the fight.',
+      expect.stringContaining('abandoned mid-fight'),
+    ]);
   });
 
   test('a downed player cannot Flee: no exit is recorded', async () => {
