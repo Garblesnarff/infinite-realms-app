@@ -61,6 +61,47 @@ const canonicalFeatureName = (featureName: string): string =>
     .trim()
     .toLowerCase();
 
+type FeatureRowCandidate = {
+  // Optional: the spend query selects the row id (its caller keys the
+  // decrement to it); the display query does not select it. The
+  // pickFeatureRow generic preserves whichever shape the caller passes.
+  featureId?: string;
+  usesRemaining: number | null;
+  usesCount: number | null;
+  levelAcquired: number;
+  featureName: string;
+};
+
+/**
+ * #1181 Required 1 — deterministic row choice. A character can hold more
+ * than one row for the same canonical feature: the level-2 "Action Surge"
+ * row and the level-17 "Action Surge (two uses)" row accumulate on a
+ * level-17+ Fighter through the level-up grants, and the legacy and
+ * generated spellings of one level's row can both be present. Matching by
+ * canonical name with `limit(1)` and no ORDER BY spent whichever row the
+ * database happened to return first, and the displayed count followed the
+ * same arbitrary row. The row for the highest library level at or below
+ * the character's fighter level wins (the L17 row at L17, the L2 row at
+ * L2); rows tied on level break on the feature name. Exact duplicates —
+ * two library rows with the same name and level — have no distinguishing
+ * field (the library carries no unique constraint on name+level), so
+ * that pre-existing case still resolves by return order. A character
+ * holding only rows above their level — a grant that ran ahead of the
+ * character's level — still spends a row deterministically (the lowest
+ * held) instead of refusing a row the sheet carries. That fallback is
+ * deliberate: gating here is grant-time only, and the old code spent
+ * whatever its unordered match returned regardless of level.
+ */
+function pickFeatureRow<T extends FeatureRowCandidate>(rows: T[], fighterLevel: number): T | null {
+  if (rows.length === 0) return null;
+  const ordered = [...rows].sort(
+    (a, b) =>
+      b.levelAcquired - a.levelAcquired ||
+      (a.featureName < b.featureName ? -1 : a.featureName > b.featureName ? 1 : 0),
+  );
+  return ordered.find((row) => row.levelAcquired <= fighterLevel) ?? ordered[ordered.length - 1];
+}
+
 type CharacterRow = typeof characters.$inferSelect;
 
 /** Fighter levels: `classLevels` entries ({ className, level }) win; else class/level. */
@@ -102,18 +143,27 @@ async function ownedCharacter(characterId: string, userId: string): Promise<Char
 
 /**
  * The tracked uses of the Fighter's short-rest features, for the legal-action
- * list. `null` means the sheet carries no row for the feature at all; a row
+ * list; when the sheet carries more than one row for a feature, the row for
+ * the highest library level at or below the character's fighter level wins
+ * (see `pickFeatureRow`). `null` means the sheet carries no row for the feature at all; a row
  * granted before uses were tracked reads as its library count, which is what
  * the spend below treats it as.
  */
 export async function fighterFeatureUses(
   characterId: string,
 ): Promise<{ secondWind: number | null; actionSurge: number | null }> {
+  const [character] = await db
+    .select()
+    .from(characters)
+    .where(eq(characters.id, characterId))
+    .limit(1);
+  const fighterLevel = character ? fighterLevelOf(character) : 0;
   const rows = await db
     .select({
       featureName: classFeaturesLibrary.featureName,
       usesRemaining: characterFeatures.usesRemaining,
       usesCount: classFeaturesLibrary.usesCount,
+      levelAcquired: classFeaturesLibrary.levelAcquired,
     })
     .from(characterFeatures)
     .innerJoin(classFeaturesLibrary, eq(characterFeatures.featureId, classFeaturesLibrary.id))
@@ -124,9 +174,12 @@ export async function fighterFeatureUses(
       ),
     );
   const remainingOf = (featureName: string): number | null => {
-    const row = rows.find(
-      (candidate) =>
-        canonicalFeatureName(candidate.featureName) === canonicalFeatureName(featureName),
+    const row = pickFeatureRow(
+      rows.filter(
+        (candidate) =>
+          canonicalFeatureName(candidate.featureName) === canonicalFeatureName(featureName),
+      ),
+      fighterLevel,
     );
     if (!row) return null;
     return row.usesRemaining ?? row.usesCount;
@@ -150,25 +203,37 @@ async function spendFighterFeatureUse(input: {
   context: string;
 }): Promise<{ usesRemaining: number; featureId: string; usesCount: number | null }> {
   const { characterId, userId, featureName, sessionId, context } = input;
-  const [row] = await db
+  // The character's fighter level decides which row the spend hits (#1181):
+  // the L17 "Action Surge (two uses)" row, not the L2 row, at L17+. The
+  // ownership check doubles as the missing/unowned refusal, keeping the
+  // same error this path threw before the row choice existed.
+  const character = await ownedCharacter(characterId, userId);
+  if (!character) {
+    throw new BusinessLogicError(`${featureName} is not on this character's sheet`, {
+      reason: 'feature_not_on_sheet',
+      featureName,
+    });
+  }
+  const fighterLevel = fighterLevelOf(character);
+  const candidates = await db
     .select({
       characterFeatureId: characterFeatures.id,
       featureId: characterFeatures.featureId,
       usesRemaining: characterFeatures.usesRemaining,
       usesCount: classFeaturesLibrary.usesCount,
+      levelAcquired: classFeaturesLibrary.levelAcquired,
+      featureName: classFeaturesLibrary.featureName,
     })
     .from(characterFeatures)
     .innerJoin(classFeaturesLibrary, eq(characterFeatures.featureId, classFeaturesLibrary.id))
-    .innerJoin(characters, eq(characterFeatures.characterId, characters.id))
     .where(
       and(
         eq(characterFeatures.characterId, characterId),
         eq(classFeaturesLibrary.className, FIGHTER_CLASS),
         inArray(classFeaturesLibrary.featureName, featureNameCandidates(featureName)),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
       ),
-    )
-    .limit(1);
+    );
+  const row = pickFeatureRow(candidates, fighterLevel);
 
   if (!row) {
     throw new BusinessLogicError(`${featureName} is not on this character's sheet`, {

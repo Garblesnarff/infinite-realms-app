@@ -1935,7 +1935,7 @@ describeWithDb('premade level-3 heroes carry subclass and features (#1019)', () 
  * actually hits: the wizard payload (class_levels present) and the starter
  * seed shape (class/level/total_level + campaign_id, no class_levels).
  */
-describeWithDb('a new level-1 Fighter sheet exposes Second Wind (#975)', () => {
+describeWithDb('Fighter sheet exposes level-gated features (#975)', () => {
   let app: any;
   let db: any;
   let request: (path: string, method: string, body?: unknown) => Promise<Response>;
@@ -1997,13 +1997,53 @@ describeWithDb('a new level-1 Fighter sheet exposes Second Wind (#975)', () => {
     return list;
   };
 
+  // Canonical feature names: the library carries legacy and generated
+  // spellings of one feature ("Action Surge" vs "Action Surge (1 use)"),
+  // and the sheet must match them as one feature — the same
+  // canonicalization the engine uses (fighter-features-service.ts).
+  // Exact-name matching would pass the absence assertion vacuously on a
+  // suffix-spelled library and false-fail the presence assertion there.
+  const canonicalSheetName = (featureName: string): string =>
+    featureName
+      .replace(/\s*\([^)]*\)\s*$/, '')
+      .trim()
+      .toLowerCase();
+
   const expectSecondWindOnSheet = async (characterId: string) => {
     const features = await sheetFeatures(characterId);
     const secondWind = features.find(
-      (row) => (row.feature as { featureName?: string } | undefined)?.featureName === 'Second Wind',
+      (row) =>
+        canonicalSheetName(
+          (row.feature as { featureName?: string } | undefined)?.featureName ?? '',
+        ) === 'second wind',
     );
     expect(secondWind, JSON.stringify(features).slice(0, 400)).toBeDefined();
     expect(secondWind?.usesRemaining).toBe(1);
+  };
+
+  const expectSheetFeature = async (characterId: string, featureName: string, uses: number) => {
+    const features = await sheetFeatures(characterId);
+    const row = features.find(
+      (entry) =>
+        canonicalSheetName(
+          (entry.feature as { featureName?: string } | undefined)?.featureName ?? '',
+        ) === canonicalSheetName(featureName),
+    );
+    expect(row, JSON.stringify(features).slice(0, 400)).toBeDefined();
+    expect(row?.usesRemaining).toBe(uses);
+  };
+
+  const expectSheetFeatureAbsent = async (characterId: string, featureName: string) => {
+    const features = await sheetFeatures(characterId);
+    expect(
+      features.find(
+        (entry) =>
+          canonicalSheetName(
+            (entry.feature as { featureName?: string } | undefined)?.featureName ?? '',
+          ) === canonicalSheetName(featureName),
+      ),
+      JSON.stringify(features).slice(0, 400),
+    ).toBeUndefined();
   };
 
   it('wizard create: the sheet endpoint lists Second Wind with its use', async () => {
@@ -2036,5 +2076,51 @@ describeWithDb('a new level-1 Fighter sheet exposes Second Wind (#975)', () => {
     const { id } = JSON.parse(text) as { id: string };
     createdIds.push(id);
     await expectSecondWindOnSheet(id);
+  });
+
+  it("starter-seed shape at L3 (the premades' level): Second Wind and Action Surge, one use each", async () => {
+    // #1181 Required 2: the wizard wire shape minus class_levels (the
+    // pre-existing starter-seed test's shape) at the premades' level —
+    // level/total_level 3. The grant loop reads none of the extra wizard
+    // fields, so this pins the grant for the premade shape; it is not
+    // the literal buildStarterCharacterSeed output. Hark N22-010 saw NO
+    // Second Wind on a premade Fighter's sheet; if the grant loop does
+    // not run for this shape, this test is the tripwire.
+    const body = level3FighterBody(`Premade Fighter ${testId('975-l3')}`) as Record<
+      string,
+      unknown
+    >;
+    delete body.class_levels;
+    expect('class_levels' in body).toBe(false);
+    const res = await request('/v1/characters', 'POST', {
+      ...body,
+      campaign_id: campaignId,
+    });
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+    await expectSheetFeature(id, 'Second Wind', 1);
+    await expectSheetFeature(id, 'Action Surge', 1);
+  });
+
+  it('starter-seed shape at L1: Action Surge is absent below level 2', async () => {
+    const body = wizardBody({ name: 'Fighter', hitDie: '1d10', baseHp: 14 }) as Record<
+      string,
+      unknown
+    >;
+    delete body.class_levels;
+    expect('class_levels' in body).toBe(false);
+    const res = await request('/v1/characters', 'POST', {
+      ...body,
+      name: `Starter Fighter L1 ${testId('975')}`,
+      campaign_id: campaignId,
+    });
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+    await expectSecondWindOnSheet(id);
+    await expectSheetFeatureAbsent(id, 'Action Surge');
   });
 });
