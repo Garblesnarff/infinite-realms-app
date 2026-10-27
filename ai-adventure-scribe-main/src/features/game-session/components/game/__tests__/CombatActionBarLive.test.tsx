@@ -250,15 +250,29 @@ describe('CombatActionBarLive', () => {
       { id: 'bane', name: 'Bane' },
       { id: 'charm-person', name: 'Charm Person' },
     ];
+    const onSendText = vi.fn().mockResolvedValue(undefined);
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => playerPayload,
+      json: async () => ({
+        ...playerPayload,
+        actions: [
+          ...playerPayload.actions,
+          {
+            type: 'spell',
+            label: 'Blindness/Deafness',
+            spellId: 'blindness-deafness',
+            narrated: true,
+          },
+          { type: 'spell', label: 'Bane', spellId: 'bane', narrated: true },
+          { type: 'spell', label: 'Charm Person', spellId: 'charm-person', narrated: true },
+        ],
+      }),
     } as Response);
 
-    render(<CombatActionBarLive {...defaultProps} />);
+    render(<CombatActionBarLive {...defaultProps} onSendText={onSendText} />);
     const cast = await screen.findByRole('button', { name: /^Cast/ });
     expect(cast).not.toBeDisabled();
-    const user = userEvent.setup();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
     await user.click(cast);
     const items = await screen.findAllByRole('menuitem');
     expect(items.map((item) => item.textContent)).toEqual([
@@ -267,6 +281,43 @@ describe('CombatActionBarLive', () => {
       `Charm Person${NARRATED_CAST_REASON}`,
     ]);
     items.forEach((item) => expect(item).toHaveAttribute('aria-disabled', 'true'));
+    await user.click(items[2]);
+    expect(onSendText).not.toHaveBeenCalled();
+    expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
+    expect(askPlayerForSpellCast).not.toHaveBeenCalled();
+  });
+
+  it('a live server chip is not also greyed from the client spell table (#1171)', async () => {
+    combatHolder.current = {
+      state: { isInCombat: true, activeEncounter: buildEncounter('pc-1') },
+      refreshCombatState: vi.fn(),
+    };
+    pack.spellcasting = { ability: 'CHA' };
+    pack.known = [{ id: 'charm-person', name: 'Charm Person' }];
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...playerPayload,
+        actions: [
+          ...playerPayload.actions,
+          {
+            type: 'spell',
+            label: 'Cast Charm Person',
+            spellId: 'charm-person',
+            targetIds: ['goblin-1'],
+          },
+        ],
+      }),
+    } as Response);
+
+    render(<CombatActionBarLive {...defaultProps} />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: /^Cast/ }));
+    const items = await screen.findAllByRole('menuitem');
+    expect(items).toHaveLength(1);
+    expect(items[0].textContent).toContain('Cast Charm Person');
+    expect(items[0].textContent).not.toContain(NARRATED_CAST_REASON);
+    expect(items[0]).not.toHaveAttribute('aria-disabled', 'true');
   });
 
   it('a wizard with Fire Bolt gets a live Cast chip (#1171)', async () => {

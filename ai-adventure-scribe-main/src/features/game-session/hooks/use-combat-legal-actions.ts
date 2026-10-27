@@ -48,6 +48,11 @@ export type LegalAction = {
   y?: number;
   /** #1059: an 'Equip and attack' choice — equip the weapon before declaring the attack. */
   equipFirst?: boolean;
+  /**
+   * A sheet spell `getLegalCombatActions` will not resolve (#1171). The Cast menu shows it
+   * greyed. `runAction` does not send it.
+   */
+  narrated?: boolean;
 };
 
 type EngineNotice = {
@@ -178,6 +183,8 @@ export function useCombatLegalActions(input: {
         )
       )
         return;
+      // A greyed Cast row is a description, not an intent (#1171).
+      if (action.narrated) return;
       setError(null);
       // The refresh cycle starts with the dispatch: every path below re-fetches
       // legal actions in the finally, and the combat-state update in between can
