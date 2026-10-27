@@ -293,12 +293,70 @@ describe('starter-character-seeding', () => {
   });
 
   it('grants arrows and the SRD quiver for the quiver-with-arrows bundle', () => {
-    expect(transformStarterEquipment(['quiver with 20 arrows'])).toEqual(
+    expect(transformStarterEquipment(['quiver with 20 arrows'])).toEqual([
+      { item_name: 'Arrows (20)', item_type: 'gear', quantity: 20, equipped: false },
+      { item_name: 'Quiver', item_type: 'gear', quantity: 1, equipped: false },
+    ]);
+  });
+
+  it('seeds the bolt bundle at 20 with its case', () => {
+    expect(transformStarterEquipment(['case with 20 crossbow bolts'])).toEqual([
+      { item_name: 'Crossbow Bolts (20)', item_type: 'gear', quantity: 20, equipped: false },
+      { item_name: 'Case, crossbow bolt', item_type: 'gear', quantity: 1, equipped: false },
+    ]);
+  });
+
+  it('seeds 20 arrows for the Longbow + quiver template (#1096)', () => {
+    expect(transformStarterEquipment(['Longbow', 'quiver with 20 arrows'])).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ item_name: 'Arrows (20)', item_type: 'gear', quantity: 1 }),
-        expect.objectContaining({ item_name: 'Quiver', item_type: 'gear', quantity: 1 }),
+        expect.objectContaining({
+          item_name: 'Longbow',
+          item_type: 'weapon',
+          quantity: 1,
+          equipped: true,
+        }),
+        expect.objectContaining({ item_name: 'Arrows (20)', quantity: 20 }),
+        expect.objectContaining({ item_name: 'Quiver', quantity: 1 }),
       ]),
     );
+  });
+
+  it('accepts an object entry with an explicit quantity', () => {
+    expect(transformStarterEquipment([{ name: 'Arrow', quantity: 20 }])).toEqual([
+      { item_name: 'Arrow', item_type: 'gear', quantity: 20, equipped: false },
+    ]);
+    // An explicit quantity wins over the bundle count.
+    expect(transformStarterEquipment([{ name: 'Arrows (20)', quantity: 5 }])).toEqual([
+      { item_name: 'Arrows (20)', item_type: 'gear', quantity: 5, equipped: false },
+    ]);
+    // A non-positive quantity is not a count; the bundle rule still applies.
+    expect(transformStarterEquipment([{ name: 'Arrows (20)', quantity: 0 }])).toEqual([
+      { item_name: 'Arrows (20)', item_type: 'gear', quantity: 20, equipped: false },
+    ]);
+    expect(
+      transformStarterEquipment([{ name: 'an item not in the SRD', quantity: 3 }]),
+    ).toEqual([
+      {
+        item_name: 'an item not in the SRD',
+        item_type: 'trinket',
+        quantity: 3,
+        equipped: false,
+        weight: 0,
+        description: 'A campaign-specific item from the starter template: an item not in the SRD.',
+      },
+    ]);
+    expect(
+      transformStarterInventory([{ name: 'an item not in the SRD', quantity: 3 }]),
+    ).toEqual([
+      {
+        name: 'an item not in the SRD',
+        item_type: 'trinket',
+        quantity: 3,
+        weight: 0,
+        description: 'A campaign-specific item from the starter template: an item not in the SRD.',
+        is_equipped: false,
+      },
+    ]);
   });
 
   it('uses class data for Cleric cantrips and WIS-based preparation', () => {

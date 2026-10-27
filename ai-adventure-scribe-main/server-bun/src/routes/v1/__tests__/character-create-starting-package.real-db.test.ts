@@ -1269,7 +1269,95 @@ describeWithDb('package gear reaches the session (#1007)', () => {
       .where(
         and(eq(characterEquipment.characterId, id), eq(characterEquipment.itemName, 'Arrows (20)')),
       );
-    expect(remainingArrows).toEqual([]);
+    // One shot spends one round: 20 seeded, 19 remain (#1096).
+    expect(remainingArrows.map((row) => row.quantity)).toEqual([19]);
+  });
+
+  it('premade archer seeded from a Longbow + quiver template: three shots resolve and 17 arrows remain (#1096)', async () => {
+    // Full producer chain: template -> seed -> wire -> real creation route.
+    // The client modules load through the same computed-specifier helper
+    // the #260 ammunition suite uses, which keeps them out of the server
+    // typecheck program; the seed transform is the code under test, so a
+    // hand-built wire body would prove nothing about it.
+    const clientModule = (path: string) => import(`../../../../../src/${path}`);
+    const { buildStarterCharacterSeed } = await clientModule(
+      'services/character/starter-character-seeding',
+    );
+    const { prepareCharacterPayload } = await clientModule('services/user-data-payload-helpers');
+    const [{ id: campaignId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('archer-camp-1096') })
+      .returning({ id: campaigns.id });
+    cleanup.push(async () => db.delete(campaigns).where(eq(campaigns.id, campaignId)));
+    const seed = buildStarterCharacterSeed(
+      {
+        name: 'Archer Probe',
+        race: 'Human',
+        class: 'Fighter',
+        level: 1,
+        background: 'Outlander',
+        ability_scores: {
+          strength: 10,
+          dexterity: 16,
+          constitution: 14,
+          intelligence: 10,
+          wisdom: 14,
+          charisma: 8,
+        },
+        equipment: ['Leather Armor', 'Longbow', 'quiver with 20 arrows'],
+        skills: [],
+        languages: [],
+      },
+      campaignId,
+    );
+    const wire = prepareCharacterPayload(seed as unknown as Record<string, unknown>);
+    const id = await create({ ...wire, name: testId('archer-1096') });
+
+    // The seat reads 20 arrows: the bundle string seeded the PHB count.
+    const rows = await equipmentRows(id);
+    expect(rows.find((row) => row.item_name === 'Longbow')?.equipped).toBe(true);
+    expect(rows.find((row) => row.item_name === 'Arrows (20)')?.quantity).toBe(20);
+
+    const { encounterId, heroId, foeId } = await seat(id);
+    const arrowQuantity = async (): Promise<Array<number | null>> =>
+      (
+        await db
+          .select({ quantity: characterEquipment.quantity })
+          .from(characterEquipment)
+          .where(
+            and(
+              eq(characterEquipment.characterId, id),
+              eq(characterEquipment.itemName, 'Arrows (20)'),
+            ),
+          )
+      ).map((row) => row.quantity);
+
+    // d20 5 misses AC 12 (+5 attack bonus) without a natural 1 or 20, so the
+    // foe survives all three shots and the encounter stays active; the spend
+    // runs on resolution, not on a hit, so each shot must still cost one arrow.
+    for (const expected of [19, 18, 17]) {
+      await resetTurn(encounterId);
+      const [{ version }] = await db
+        .select({ version: combatEncounters.version })
+        .from(combatEncounters)
+        .where(eq(combatEncounters.id, encounterId));
+      const outcome = await executeCombatIntent(
+        encounterId,
+        {
+          type: 'attack',
+          actorId: heroId,
+          targetId: foeId,
+          weaponId: 'Longbow',
+          expectedVersion: version,
+          d20: 5,
+        },
+        userId,
+        'player',
+      );
+      expect(outcome.weaponResolution?.resolved).toBe('Longbow');
+      expect(outcome.weaponResolution?.substituted).toBe(false);
+      expect(await arrowQuantity()).toEqual([expected]);
+    }
   });
 
   it('premade rogue without arrows: the equipped shortbow is refused for ammunition, never swapped to Unarmed (#1013)', async () => {

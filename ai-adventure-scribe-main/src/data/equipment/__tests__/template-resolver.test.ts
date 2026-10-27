@@ -163,7 +163,7 @@ describe('starter template equipment resolver audit', () => {
     ];
     const records = transformStarterEquipment(sousChefKit);
     expect(records).toContainEqual(
-      expect.objectContaining({ item_name: 'Crossbow Bolts (20)', quantity: 1 }),
+      expect.objectContaining({ item_name: 'Crossbow Bolts (20)', quantity: 20 }),
     );
     expect(records).not.toContainEqual(expect.objectContaining({ item_name: 'Crossbow bolt' }));
   });
@@ -212,8 +212,9 @@ describe('starter template equipment resolver audit', () => {
         if (bundle) {
           hasAmmo = true;
           checked += 1;
-          // Assert quantity, not only presence: one bundle = the PHB count.
-          expect(bundle.quantity).toBe(1);
+          // Assert quantity, not only presence: the bundle row carries the
+          // PHB count, so the combat spend finds 20 rounds (#1096).
+          expect(bundle.quantity).toBe(20);
         }
       }
       // A lone single bolt is the #268 bug, never a valid kit.
