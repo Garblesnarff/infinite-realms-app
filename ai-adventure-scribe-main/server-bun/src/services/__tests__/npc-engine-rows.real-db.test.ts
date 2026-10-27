@@ -886,7 +886,13 @@ describeWithDb('a keyed player attack roll resolves exactly once (#974)', () => 
       .returning();
     const [{ id: duelCharacterId }] = await database
       .insert(characters)
-      .values({ userId, campaignId: duelCampaignId, name: 'The Scholar', class: 'Fighter', level: 1 })
+      .values({
+        userId,
+        campaignId: duelCampaignId,
+        name: 'The Scholar',
+        class: 'Fighter',
+        level: 1,
+      })
       .returning();
     await database.insert(characterStats).values({
       characterId: duelCharacterId,
@@ -1213,9 +1219,7 @@ describeWithDb('a keyed player attack roll resolves exactly once (#974)', () => 
       .from(dialogueHistory)
       .where(eq(dialogueHistory.sessionId, duel.sessionId));
     expect(rows.length).toBeGreaterThanOrEqual(2);
-    const blowRow = rows.find(
-      (row) => (row.context as { actionId?: string }).actionId === rollId,
-    );
+    const blowRow = rows.find((row) => (row.context as { actionId?: string }).actionId === rollId);
     const victoryRow = rows.find((row) => row.message.includes('Victory'));
     expect(blowRow).toBeDefined();
     expect(victoryRow).toBeDefined();
@@ -1257,18 +1261,16 @@ describeWithDb('a keyed player attack roll resolves exactly once (#974)', () => 
     // back and the retry of the same roll must land it — exactly once.
     const original = SessionMessageService.addMessages.bind(SessionMessageService);
     let armed = true;
-    const failKeyedRow = spyOn(SessionMessageService, 'addMessages').mockImplementation(
-      (async (messages: Array<{ context?: Record<string, unknown> }>, userId: string) => {
-        if (
-          armed &&
-          messages.some((message) => message.context?.actionId === rollId)
-        ) {
-          armed = false;
-          throw new Error('engine row insert failed (simulated by the #974 test)');
-        }
-        return original(messages as never, userId);
-      }) as never,
-    );
+    const failKeyedRow = spyOn(SessionMessageService, 'addMessages').mockImplementation((async (
+      messages: Array<{ context?: Record<string, unknown> }>,
+      userId: string,
+    ) => {
+      if (armed && messages.some((message) => message.context?.actionId === rollId)) {
+        armed = false;
+        throw new Error('engine row insert failed (simulated by the #974 test)');
+      }
+      return original(messages as never, userId);
+    }) as never);
     const failed = await postTo(duel.encounterId, body);
     failKeyedRow.mockRestore();
     expect(failed.status).toBe(500);
