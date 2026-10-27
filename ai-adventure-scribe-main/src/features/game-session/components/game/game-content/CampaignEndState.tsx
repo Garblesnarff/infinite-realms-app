@@ -18,7 +18,8 @@ export interface CampaignEndStateProps {
   mode: CampaignEndMode;
   characterName?: string | null;
   campaignName?: string | null;
-  chooseHeroHref: string;
+  /** #1215: null hides the hero-pick button and its sentence (no campaign to return to). */
+  chooseHeroHref: string | null;
   chooseHeroPending?: boolean;
   finalLines?: string[];
   summary?: string | null;
@@ -251,19 +252,23 @@ export const CampaignEndState: React.FC<CampaignEndStateProps> = (props) => {
                 Read the story so far
               </Button>
             )}
-            <div className="sticky bottom-0 -mx-1 space-y-1 rounded-lg bg-infinite-dark/95 p-1 backdrop-blur md:static md:bg-transparent md:p-0">
-              <Button
-                data-testid={`${isFallen ? 'death' : 'completion'}-screen-${isFallen ? 'new-character' : 'new-character'}`}
-                className="ir-gold-button min-h-11 w-full"
-                onClick={() => navigate(props.chooseHeroHref)}
-                disabled={props.chooseHeroPending}
-              >
-                {isFallen ? 'Choose a new hero' : 'Begin again with a new hero'}
-              </Button>
-              <p className="text-center text-xs leading-relaxed text-white/60">
-                Begin {campaignName} again with a new hero. {name}&rsquo;s story is kept.
-              </p>
-            </div>
+            {props.chooseHeroHref !== null && (
+              <div className="sticky bottom-0 -mx-1 space-y-1 rounded-lg bg-infinite-dark/95 p-1 backdrop-blur md:static md:bg-transparent md:p-0">
+                <Button
+                  data-testid={`${isFallen ? 'death' : 'completion'}-screen-${isFallen ? 'new-character' : 'new-character'}`}
+                  className="ir-gold-button min-h-11 w-full"
+                  onClick={() => {
+                    if (props.chooseHeroHref) navigate(props.chooseHeroHref);
+                  }}
+                  disabled={props.chooseHeroPending}
+                >
+                  {isFallen ? 'Choose a new hero' : 'Begin again with a new hero'}
+                </Button>
+                <p className="text-center text-xs leading-relaxed text-white/60">
+                  Begin {campaignName} again with a new hero. {name}&rsquo;s story is kept.
+                </p>
+              </div>
+            )}
             <Button
               data-testid={`${isFallen ? 'death' : 'completion'}-screen-explore`}
               variant="ghost"

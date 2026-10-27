@@ -14,61 +14,102 @@ import {
 } from '@/features/game-session/components/game/game-content/DeathScreen';
 import { useCharacterData } from '@/hooks/use-character-data';
 import { useStarterCampaigns } from '@/hooks/use-starter-campaigns';
+import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 import { isFallenCharacter } from '@/utils/character/vital-state';
 
+/** How long the roster end state waits before it asks for the dead run's session again. */
+const SESSION_LOOKUP_RETRY_MS = 1500;
+
 /**
  * #2517: the end state shown when a fallen character is opened from
- * /app/characters. A character alone does not carry its starter campaign,
- * so the starter id is loaded from the character's sessions (the dead run)
- * and resolved against the starter-campaign list — the same resolution
- * the game screen performs. Until both settle, the hero-pick button waits
- * rather than racing to the custom-campaign route.
+ * /app/characters. The sheet's character does not carry its campaign
+ * (transformCharacterData keeps no campaign_id) nor its starter campaign, so
+ * both come from the character's sessions (the dead run) — the starter id
+ * resolved against the starter-campaign list, the same resolution the game
+ * screen performs. Until both settle, the hero-pick button waits rather than
+ * racing to the custom-campaign route.
+ *
+ * #1215 (Hark T3-010): a failed lookup used to leave the button disabled for
+ * good under the offer text. It is retried once; if it still fails, or if the
+ * fallen hero truly has no campaign, the button and its sentence are hidden
+ * instead of offered and disabled.
  */
 function FallenSheetEndState({ character }: { character: Character }): React.JSX.Element {
   const { campaigns: starterCampaigns, isLoading: startersLoading } = useStarterCampaigns();
-  const [starterCampaignId, setStarterCampaignId] = React.useState<string | null>(null);
-  const [sessionLookupDone, setSessionLookupDone] = React.useState(false);
+  const [lookup, setLookup] = React.useState<
+    | { status: 'pending' }
+    | { status: 'failed' }
+    | { status: 'done'; campaignId: string | null; starterCampaignId: string | null }
+  >({ status: 'pending' });
 
   React.useEffect(() => {
     let cancelled = false;
-    void (async () => {
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const attempt = async (retriesLeft: number): Promise<void> => {
       try {
         const sessions = await userDataApi.listSessions({
           campaignId: character.campaign_id ?? undefined,
           characterId: character.id,
           limit: 5,
         });
-        if (!cancelled) {
-          setStarterCampaignId(
-            sessions.find((s) => s.starter_campaign_id)?.starter_campaign_id ?? null,
-          );
-          setSessionLookupDone(true);
+        if (cancelled) return;
+        // The run with a starter link wins; otherwise the newest run with a campaign.
+        const starterRun = sessions.find((s) => s.starter_campaign_id);
+        const run = starterRun ?? sessions.find((s) => s.campaign_id);
+        setLookup({
+          status: 'done',
+          campaignId: character.campaign_id ?? run?.campaign_id ?? null,
+          starterCampaignId: starterRun?.starter_campaign_id ?? null,
+        });
+      } catch (error) {
+        if (cancelled) return;
+        if (retriesLeft > 0) {
+          retryTimer = setTimeout(() => void attempt(retriesLeft - 1), SESSION_LOOKUP_RETRY_MS);
+          return;
         }
-      } catch {
-        // Without the session the route cannot be determined: a starter
-        // hero must not fall back to the custom-campaign form, so the
-        // button stays disabled rather than guessing (#2517).
+        // Without the session the route cannot be determined: a starter hero
+        // must not fall back to the custom-campaign form by guessing (#2517),
+        // so the offer is hidden rather than shown disabled (#1215).
+        logger.warn('Fallen hero end state: session lookup failed; hero pick hidden', {
+          characterId: character.id,
+          error,
+        });
+        setLookup({ status: 'failed' });
       }
-    })();
+    };
+    void attempt(1);
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
     };
   }, [character.id, character.campaign_id]);
 
-  const starter = starterCampaignId
-    ? starterCampaigns.find((c) => c.id === starterCampaignId)
+  const resolved = lookup.status === 'done' ? lookup : null;
+  const starter = resolved?.starterCampaignId
+    ? starterCampaigns.find((c) => c.id === resolved.starterCampaignId)
     : undefined;
+
+  // null hides the offer (no campaign, or the lookup failed). While the lookup
+  // is pending the button is shown disabled, so it has no route yet.
+  const chooseHeroHref =
+    lookup.status === 'pending'
+      ? ''
+      : resolved?.campaignId
+        ? buildChooseHeroHref({
+            starterSlug: starter?.slug ?? null,
+            campaignId: resolved.campaignId,
+          })
+        : null;
 
   return (
     <FallenEndState
       characterName={character.name}
       campaignName={starter?.title ?? null}
-      chooseHeroHref={buildChooseHeroHref({
-        starterSlug: starter?.slug ?? null,
-        campaignId: character.campaign_id ?? null,
-      })}
-      chooseHeroPending={!sessionLookupDone || startersLoading}
+      chooseHeroHref={chooseHeroHref}
+      chooseHeroPending={
+        lookup.status === 'pending' || Boolean(resolved?.starterCampaignId && startersLoading)
+      }
     />
   );
 }
