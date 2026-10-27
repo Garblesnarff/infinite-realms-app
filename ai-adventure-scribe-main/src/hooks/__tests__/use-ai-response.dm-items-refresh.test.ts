@@ -17,8 +17,9 @@
  * until Hark saw it live. This file drives the joined path: the only mocked
  * network call is `llmApiClient.generateText`, returning the same
  * server-envelope JSON shape the processor test uses. Everything from
- * `chatWithDM` inward — narration-contract check, processDMResponse, the
- * story-effects gate — runs for real.
+ * `chatWithDM` inward — the narration-contract check (which no-ops
+ * without tactical context), `processDMResponse`, the story-effects gate —
+ * runs for real.
  *
  * The window event is the seam: `character-state-updated.test.tsx` already
  * proves the event refetches the panel, so asserting the dispatch here pins
@@ -45,10 +46,7 @@ vi.mock('@/contexts/CombatContext', () => ({
 
 vi.mock('@/contexts/GameContext', () => ({
   useGame: vi.fn(() => ({
-    state: {
-      currentPhase: 'exploration',
-      diceRollQueue: { pendingRolls: [] },
-    },
+    state: { currentPhase: 'exploration', diceRollQueue: { pendingRolls: [] } },
     setGamePhase: vi.fn(),
   })),
 }));
@@ -60,6 +58,7 @@ vi.mock('@/services/user-data-api', () => ({
     endTacticalMap: vi.fn(),
     applyDmTacticalActions: vi.fn(),
     clearPendingCombatIntent: vi.fn(),
+    applyDmHandoutActions: vi.fn(),
     fetchSessionFallenState: vi.fn(),
     reportClientFailure: vi.fn(),
   },
@@ -156,15 +155,18 @@ vi.mock('@/services/session-state-service', () => ({
   SessionStateService: { getLatestRollOutcome: vi.fn().mockResolvedValue(null) },
 }));
 
+vi.mock('@/services/session-trackers', () => ({
+  fetchSessionTrackers: vi.fn().mockResolvedValue(null),
+}));
+
 vi.mock('@/infrastructure/api', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
   return {
     ...actual,
-    // The ONLY mocked network call: the model reply. Everything downstream
-    // of the envelope string runs for real.
-    llmApiClient: {
-      generateText: vi.fn(),
-    },
+    // The model reply. Scene, tracker, and session reads are mocked to
+    // their fail-open values; everything downstream of the envelope string
+    // runs for real.
+    llmApiClient: { generateText: vi.fn() },
   };
 });
 
