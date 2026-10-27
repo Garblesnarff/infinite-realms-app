@@ -63,7 +63,7 @@ vi.mock('@/services/combat/player-attack-roll', async (importOriginal) => ({
   askPlayerForAttackDie: (...args: any[]) => askPlayerForAttackDie(...args),
 }));
 vi.mock('@/contexts/CampaignAssetsContext', () => ({
-  useCampaignAssetsContext: () => ({ getAsset: vi.fn() }),
+  useCampaignAssetsContext: () => ({ getAsset: vi.fn(), assets: [] }),
 }));
 vi.mock('@/contexts/SceneBackgroundContext', () => ({
   useSceneBackground: () => ({ setSceneBackground: vi.fn() }),
