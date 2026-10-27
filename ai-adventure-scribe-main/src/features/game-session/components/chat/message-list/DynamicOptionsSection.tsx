@@ -54,16 +54,19 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
       onSendText: onOptionSelect,
     });
 
+    // A greyed Cast row is a description on the action bar, not a numbered choice (#1171).
+    // The same filter feeds the click, so a later chip keeps the action it names.
+    const choosableActions = useMemo(() => actions.filter((action) => !action.narrated), [actions]);
     const renderedOptions = useMemo<ActionOption[]>(() => {
       if (!showCombatMenu) return options;
       if (!isPlayerTurn) return [];
-      return actions.map((action, index) => ({
+      return choosableActions.map((action, index) => ({
         id: `combat-${action.type}-${index}`,
         number: index + 1,
         text: action.label,
         fullText: action.label,
       }));
-    }, [showCombatMenu, isPlayerTurn, actions, options]);
+    }, [showCombatMenu, isPlayerTurn, choosableActions, options]);
 
     if (!renderedOptions || renderedOptions.length === 0) {
       // GP-015 (#219): a narration turn with no suggested actions says why,
@@ -89,7 +92,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
         await onOptionSelect(createPlayerMessageFromOption(option));
         return;
       }
-      const action = actions[option.number - 1];
+      const action = choosableActions[option.number - 1];
       if (!action) return;
       await runAction(action);
     };

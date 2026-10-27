@@ -270,8 +270,17 @@ describe('CombatActionBar', () => {
     render(
       <CombatActionBar
         {...defaultProps}
-        actions={withoutSpells}
-        narratedCasts={[{ name: 'Blindness/Deafness' }, { name: 'Bane' }, { name: 'Charm Person' }]}
+        actions={[
+          ...withoutSpells,
+          {
+            type: 'spell',
+            label: 'Blindness/Deafness',
+            spellId: 'blindness-deafness',
+            narrated: true,
+          },
+          { type: 'spell', label: 'Bane', spellId: 'bane', narrated: true },
+          { type: 'spell', label: 'Charm Person', spellId: 'charm-person', narrated: true },
+        ]}
         onAction={onAction}
       />,
     );

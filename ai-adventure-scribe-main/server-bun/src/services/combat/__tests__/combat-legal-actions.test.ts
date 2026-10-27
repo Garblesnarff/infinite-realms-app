@@ -379,7 +379,7 @@ describe('getLegalCombatActions', () => {
     const result = await getLegalCombatActions('encounter-1', 'user-1');
     const labels = result.actions.map((action) => action.label);
 
-    expect(result.actions.filter((action) => action.type === 'spell')).toEqual([
+    expect(result.actions.filter((action) => action.type === 'spell' && !action.narrated)).toEqual([
       { type: 'spell', label: 'Cast Acid Splash', spellId: 'acid-splash' },
       {
         type: 'spell',
@@ -391,6 +391,12 @@ describe('getLegalCombatActions', () => {
         targetIds: ['monster-1'],
       },
       { type: 'spell', label: 'Cast Burning Hands', spellId: 'burning-hands' },
+    ]);
+    expect(result.actions.filter((action) => action.type === 'spell' && action.narrated)).toEqual([
+      { type: 'spell', label: 'Dancing Lights', spellId: 'dancing-lights', narrated: true },
+      { type: 'spell', label: 'Alarm', spellId: 'alarm', narrated: true },
+      { type: 'spell', label: 'Charm Person', spellId: 'charm-person', narrated: true },
+      { type: 'spell', label: 'Color Spray', spellId: 'color-spray', narrated: true },
     ]);
     expect(labels).not.toContain('Cast a prepared spell');
     expect(labels).not.toContain('Cast Fire Bolt');

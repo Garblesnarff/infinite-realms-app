@@ -21,7 +21,6 @@ import {
   type LegalAction,
 } from '@/features/game-session/hooks/use-combat-legal-actions';
 import { cn } from '@/lib/utils';
-import { resolvePlayerCombatSpell } from '@/services/combat/player-combat-spell';
 
 /** The chat box's placeholder in combat (#90): the chat box stays available. */
 export const COMBAT_CHAT_PLACEHOLDER =
@@ -39,12 +38,6 @@ export interface CombatActionBarProps {
   enabled: boolean;
   /** The character has spells: Cast shows. */
   hasSpells: boolean;
-  /**
-   * Spells on the sheet the combat engine will not resolve (no attack roll or damage).
-   * Cast stays open and shows each one greyed, with {@link NARRATED_CAST_REASON}.
-   * A "Cast (narrated)" slot-spend path is not wired here (#1021 is outside combat).
-   */
-  narratedCasts?: ReadonlyArray<{ name: string }>;
   /** Name for a participant id (targets). */
   nameOf: (participantId: string) => string;
   /** "{Weapon} · +{bonus}" for the default attack. */
@@ -91,21 +84,6 @@ export const LEGAL_ACTION_PLACEMENT = {
 /** Why a sheet spell is greyed in the Cast menu (#1171). */
 export const NARRATED_CAST_REASON =
   'Describe it to the DM: the engine resolves attack and damage spells';
-
-/** Sheet spells that are not attack-roll or damage spells the client can commit. */
-export function narratedCastsFromSheet(
-  spells: ReadonlyArray<{ id: string; name: string }>,
-): Array<{ name: string }> {
-  const seen = new Set<string>();
-  const narrated: Array<{ name: string }> = [];
-  for (const spell of spells) {
-    if (seen.has(spell.id)) continue;
-    seen.add(spell.id);
-    if (resolvePlayerCombatSpell(spell.id, spell.name) !== null) continue;
-    narrated.push({ name: spell.name });
-  }
-  return narrated;
-}
 
 const isMoreAction = (action: LegalAction): boolean => {
   const placement = (LEGAL_ACTION_PLACEMENT as Partial<Record<LegalAction['type'], string>>)[
@@ -162,12 +140,14 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
   moveSub,
   canMove,
   spellInfo,
-  narratedCasts = [],
   onAction,
   onMove,
 }) => {
   const attacks = choicesFor(actions.filter((action) => action.type === 'attack'));
-  const spells = choicesFor(actions.filter((action) => action.type === 'spell'));
+  const spells = choicesFor(
+    actions.filter((action) => action.type === 'spell' && !action.narrated),
+  );
+  const narratedCasts = actions.filter((action) => action.type === 'spell' && action.narrated);
   const dodge = actions.find((action) => action.type === 'dodge');
   const endTurn = actions.find((action) => action.type === 'end_turn');
   // Server order: dash, disengage, second wind, action surge, flee, yield.
@@ -240,13 +220,13 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
                 </DropdownMenuItem>
               );
             })}
-            {narratedCasts.map((spell, index) => (
+            {narratedCasts.map((action, index) => (
               <DropdownMenuItem
-                key={`narrated-${index}-${spell.name}`}
+                key={`narrated-${index}-${action.spellId ?? action.label}`}
                 disabled
                 className="flex flex-col items-start opacity-45"
               >
-                <span>{spell.name}</span>
+                <span>{action.label}</span>
                 <span className="text-xs text-muted-foreground">{NARRATED_CAST_REASON}</span>
               </DropdownMenuItem>
             ))}
@@ -386,7 +366,6 @@ const CombatActionBarInCombat: React.FC<CombatActionBarLiveProps> = ({
   const character = vm.character;
   const allSpells = [...character.spells.cantrips, ...character.spells.known];
   const hasSpells = Boolean(character.spellcasting) && allSpells.length > 0;
-  const narratedCasts = narratedCastsFromSheet(allSpells);
   const defaultAttack = actions.find((action) => action.type === 'attack');
   const attackVm = defaultAttack
     ? character.attacks.find(
@@ -439,7 +418,6 @@ const CombatActionBarInCombat: React.FC<CombatActionBarLiveProps> = ({
         actions={actions}
         enabled={isPlayerTurn && !turnInFlight && !isRefreshing && !running}
         hasSpells={hasSpells}
-        narratedCasts={narratedCasts}
         nameOf={nameOf}
         attackSub={attackSub}
         moveSub={moveSub}

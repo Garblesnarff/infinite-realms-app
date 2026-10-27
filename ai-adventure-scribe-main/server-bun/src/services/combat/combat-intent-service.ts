@@ -2448,6 +2448,30 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
     }
     actions.push(action);
   }
+  // Sheet spells the engine does not resolve (#1171). They ride the same list as the live
+  // chips, marked narrated, so the Cast menu greys them from this payload and not from the
+  // client's spell table. The Action gate matches a live chip: once the Action is spent the
+  // row is gone, and a greyed row is not an intent.
+  const offeredSpellIds = new Set(
+    actions
+      .filter((action) => action.type === 'spell' && typeof action.spellId === 'string')
+      .map((action) => action.spellId as string),
+  );
+  const narratedSpellIds = new Set<string>();
+  for (const id of profile.spellIds) {
+    const spell = resolveCatalogSpell(id);
+    if (!spell || isPlayerCombatSpell(spell)) continue;
+    if (offeredSpellIds.has(spell.id) || narratedSpellIds.has(spell.id)) continue;
+    narratedSpellIds.add(spell.id);
+    const usesBonusAction = spell.castingTime.toLowerCase().includes('bonus action');
+    if (usesBonusAction ? actor.bonusActionUsed : actor.actionUsed) continue;
+    actions.push({
+      type: 'spell',
+      label: spell.name,
+      spellId: spell.id,
+      narrated: true,
+    });
+  }
   actions.push({ type: 'end_turn', label: 'End turn' });
   return { encounterId, version: state.encounter.version, actorId: actor.id, actions };
 }
