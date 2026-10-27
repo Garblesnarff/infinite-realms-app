@@ -557,7 +557,12 @@ export function trackerDirectiveText(input: {
     '<story_clock>\n' +
     'Engine story clock state (server truth — never from your own count). The game UI ' +
     'shows the tracker line from these values (#1062), so do NOT render a tracker line ' +
-    'in your prose. When the story ticks a clock, report it in tracker_changes.\n' +
+    'in your prose. When the story ticks a clock, report it in tracker_changes. ' +
+    'If one reply moves a clock by more than one segment — two tracker_changes ' +
+    'entries for the same clock, or one entry with a delta larger than one — ' +
+    'say how many segments in your prose (e.g. "the Sunset Clock ticks forward ' +
+    'two segments"): the UI shows only the final value (#1161), so an unnumbered ' +
+    '"ticks forward" leaves the reader unable to follow a jump.\n' +
     lines.join('\n') +
     '\n</story_clock>'
   );
