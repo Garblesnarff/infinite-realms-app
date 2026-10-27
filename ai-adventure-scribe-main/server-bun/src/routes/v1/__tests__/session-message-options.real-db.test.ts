@@ -83,6 +83,82 @@ describeWithDb('#868 saved DM choices round trip through the real route and data
   });
 });
 
+describeWithDb('#1191 a completed session stays completed after the stale client PATCH', () => {
+  let campaignId = '';
+  let sessionId = '';
+  let app: any;
+  let completedEndTime: Date | null = null;
+  beforeAll(async () => {
+    userId = testId('completed-patch-1191-owner');
+    [{ id: campaignId }] = await realDb()
+      .insert(campaigns)
+      .values({ userId, name: testId('completed-patch-1191-campaign') })
+      .returning({ id: campaigns.id });
+    [{ id: sessionId }] = await realDb()
+      .insert(gameSessions)
+      .values({
+        campaignId,
+        sessionNumber: 1,
+        status: 'active',
+        turnCount: 7,
+        currentSceneDescription: 'Before the ending.',
+      })
+      .returning({ id: gameSessions.id });
+    const { createRequestPipelineApp, sessionsRoutes, SessionService } =
+      await importWithRealDb(async () => ({
+        ...(await import('../../../http-pipeline')),
+        ...(await import('../sessions')),
+        ...(await import('../../../services/session-service.js')),
+      }));
+    app = createRequestPipelineApp().use(sessionsRoutes);
+    // The real producer of the completed state: the engine's session_completed
+    // path completes the session through SessionService.completeSession.
+    const completed = await SessionService.completeSession(sessionId, userId, 'The ending.');
+    completedEndTime = completed.endTime;
+  });
+  afterAll(async () => {
+    await realDb().delete(gameSessions).where(eq(gameSessions.id, sessionId));
+    await realDb().delete(campaigns).where(eq(campaigns.id, campaignId));
+    await closeRealDb();
+  });
+  it('PATCHing status active with end_time null reads back completed with end_time set', async () => {
+    // The exact stale-client save: the full `...prev` spread from a snapshot
+    // taken before the ending landed (status active, end_time null), plus the
+    // turn's own legitimate field updates.
+    const response = await app.handle(
+      new Request(`http://localhost/v1/sessions/${sessionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'active',
+          end_time: null,
+          turn_count: 8,
+          current_scene_description: 'After the ending.',
+        }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    const patched = await response.json();
+    expect(patched.status).toBe('completed');
+    expect(patched.end_time).not.toBeNull();
+    const reloaded = await app.handle(new Request(`http://localhost/v1/sessions/${sessionId}`));
+    expect(reloaded.status).toBe(200);
+    const body = await reloaded.json();
+    expect(body.status).toBe('completed');
+    expect(body.end_time).not.toBeNull();
+    const [row] = await realDb()
+      .select()
+      .from(gameSessions)
+      .where(eq(gameSessions.id, sessionId));
+    expect(row?.status).toBe('completed');
+    expect(row?.endTime).not.toBeNull();
+    expect(row?.endTime?.getTime()).toBe(completedEndTime?.getTime());
+    // The guard is surgical: the same PATCH's non-status fields still land.
+    expect(row?.turnCount).toBe(8);
+    expect(row?.currentSceneDescription).toBe('After the ending.');
+  });
+});
+
 describeWithDb('#1095 storyTrackers round trip through the real route and database', () => {
   let campaignId = '';
   let sessionId = '';

@@ -100,6 +100,24 @@ describe('session-utils', () => {
       expect(removed).toContain('sequence_number');
     });
 
+    it('should strip server-owned status and end_time from the patch (#1191)', () => {
+      const patch = {
+        status: 'active',
+        end_time: null,
+        current_scene_description: 'Updated scene',
+        turn_count: 5,
+      };
+
+      const { sanitized, removed } = sanitizeSessionPatch(patch as any);
+
+      expect(sanitized).toEqual({
+        current_scene_description: 'Updated scene',
+        turn_count: 5,
+      });
+      expect(removed).toContain('status');
+      expect(removed).toContain('end_time');
+    });
+
     it('should return an empty sanitized object if only immutable fields are provided', () => {
       const patch = { id: 'new-id' };
       const { sanitized, removed } = sanitizeSessionPatch(patch as any);
