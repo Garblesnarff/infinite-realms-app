@@ -677,8 +677,13 @@ export class CombatAttackService {
       // Everything the telemetry line knows before damage is rolled. Both branches below
       // finish it with their own outcome, so a miss is logged as fully as a hit -- see
       // attack-telemetry.ts for why the miss is the case that actually matters.
+      // #974: the round is read where applyDamage reads it for `combat_damage_log.round_number`
+      // (the prefetched target's encounter), so the result, the log line and the damage row agree.
+      const attackRound: number = targetParticipant.encounter?.currentRound || 1;
       const observed = {
         encounterId,
+        sessionId: attackerData.participant.encounter?.sessionId ?? null,
+        round: attackRound,
         attackerId,
         attackerSlug: participantSlug(
           tacticalMap,
@@ -735,6 +740,7 @@ export class CombatAttackService {
           isNaturalOne: hitCheck.isNaturalOne,
           isNaturalTwenty: hitCheck.isNaturalTwenty,
           autoRolled,
+          round: attackRound,
         };
       }
 
@@ -877,6 +883,7 @@ export class CombatAttackService {
           isNaturalOne: hitCheck.isNaturalOne,
           isNaturalTwenty: hitCheck.isNaturalTwenty,
           autoRolled,
+          round: attackRound,
           ...(concentration ? { concentration } : {}),
           ...(transcriptLines.length ? { transcriptLines } : {}),
         };

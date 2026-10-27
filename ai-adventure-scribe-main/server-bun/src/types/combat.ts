@@ -686,6 +686,11 @@ export interface AttackResult {
    * be able to see that the die was not theirs, and never suspect hidden dice.
    */
   autoRolled?: boolean;
+  /**
+   * #974: the round this attack resolved in, the `round_number` its damage row carries. The
+   * client labels the engine line with it rather than with its own, possibly stale, round.
+   */
+  round?: number;
   /** Engine-only transcript facts produced during this resolution. */
   transcriptLines?: string[];
   /**
