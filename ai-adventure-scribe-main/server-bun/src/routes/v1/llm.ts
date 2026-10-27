@@ -1102,6 +1102,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         let trackerEndingFinalBeat = false;
         let trackerEndingBudgetForced = false;
         let trackerOneShot = false;
+        // #1170: the pacing turn count at this turn's start, for the
+        // engine-ending log line. Set by the same load as the flags above.
+        let trackerPacingTurns: number | null = null;
         if (dmReply && defenseSessionId) {
           try {
             const { loadStoryTrackerDirective } =
@@ -1118,6 +1121,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             trackerEndingFinalBeat = loaded.phase?.finalBeat === true;
             trackerEndingBudgetForced = loaded.phase?.budgetForced === true;
             trackerOneShot = loaded.campaignLength === 'one-shot';
+            trackerPacingTurns = loaded.pacing?.turns ?? null;
             directiveTrackers = loaded.trackers;
           } catch {
             trackerDirective = null;
@@ -1931,6 +1935,10 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           envelope &&
           trackerEndingRequired &&
           trackerOneShot &&
+          // #1170: behaviorally a no-op — the flags above come from the
+          // same successful load that sets pacing — but it narrows the
+          // count to a number for the call below.
+          trackerPacingTurns !== null &&
           !storyEndingApplied &&
           !envelope.campaign_ending &&
           dmReply &&
@@ -1957,6 +1965,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
                 clock: trackerEndingClock ?? 'story',
                 finalBeat: trackerEndingFinalBeat,
                 budgetForced: trackerEndingBudgetForced,
+                turns: trackerPacingTurns,
                 regenerate: async (correctivePrompt: string) => {
                   const retry = await LLMProviderService.generate({
                     prompt: correctivePrompt,

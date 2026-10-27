@@ -853,6 +853,114 @@ describe('one-shot pacing budget (#1083)', () => {
   });
 });
 
+describe('visible pacing (#1170)', () => {
+  test('a budget-forced climax entry tells the DM to show the climax in this reply', () => {
+    const text = trackerDirectiveText({
+      trackers: [{ name: 'Breath', value: 3, limit: 6 }],
+      campaignLength: 'one-shot',
+      phase: {
+        phase: 'climax',
+        clock: 'Breath',
+        climaxTurns: 0,
+        endingRequired: false,
+        budgetForced: true,
+        lastMessageId: 'm60',
+      },
+    });
+    expect(text).toContain('turn budget is reached');
+    expect(text).toContain('the climax is now');
+    expect(text).toContain('Show it in this reply');
+    expect(text).toContain('move the clock');
+    expect(text).toContain('do not carry on asking questions');
+    expect(text).not.toContain('reached its limit');
+  });
+
+  test('the phase clock line shows Climax when the phase changes', () => {
+    const text = trackerDirectiveText({
+      trackers: [{ name: 'Breath', value: 6, limit: 6 }],
+      campaignLength: 'one-shot',
+      phase: {
+        phase: 'climax',
+        clock: 'Breath',
+        climaxTurns: 0,
+        endingRequired: false,
+        lastMessageId: 'm1',
+      },
+    });
+    expect(text).toContain('Breath Clock: 6/6 — Climax');
+    expect(text).toContain('the climax is now');
+  });
+
+  test('non-phase clock lines carry no Climax marker', () => {
+    const text = trackerDirectiveText({
+      trackers: [
+        { name: 'Breath', value: 6, limit: 6 },
+        { name: 'Glass', value: 2, limit: 3 },
+      ],
+      phase: {
+        phase: 'climax',
+        clock: 'Breath',
+        climaxTurns: 2,
+        endingRequired: false,
+        lastMessageId: 'm1',
+      },
+    });
+    expect(text).toContain('Breath Clock: 6/6 — Climax');
+    expect(text).toContain('Glass Clock: 2/3');
+    expect(text).not.toContain('Glass Clock: 2/3 — Climax');
+  });
+
+  test('a budget-forced Final beat with no matching tracker leaves the lines unchanged', () => {
+    const text = trackerDirectiveText({
+      trackers: [{ name: 'Breath', value: 3, limit: 6 }],
+      campaignLength: 'one-shot',
+      phase: {
+        phase: 'climax',
+        clock: 'Final beat',
+        climaxTurns: 0,
+        endingRequired: false,
+        budgetForced: true,
+        lastMessageId: 'm60',
+      },
+    });
+    expect(text).toContain('Breath Clock: 3/6');
+    expect(text).not.toContain('— Climax');
+    expect(text).toContain('turn budget is reached');
+  });
+
+  test('the marker matches by normalized clock name', () => {
+    const text = trackerDirectiveText({
+      trackers: [{ name: 'Breath', value: 6, limit: 6 }],
+      phase: {
+        phase: 'climax',
+        clock: 'the Breath Clock',
+        climaxTurns: 0,
+        endingRequired: false,
+        lastMessageId: 'm1',
+      },
+    });
+    expect(text).toContain('Breath Clock: 6/6 — Climax');
+  });
+
+  test('a combat-held climax phase renders the clock line without Climax (#1091, FIX round 1)', () => {
+    const text = trackerDirectiveText({
+      trackers: [{ name: 'Breath', value: 6, limit: 6 }],
+      campaignLength: 'one-shot',
+      phase: {
+        phase: 'climax',
+        clock: 'Breath',
+        climaxTurns: 0,
+        endingRequired: false,
+        lastMessageId: 'm1',
+      },
+      inCombat: true,
+    });
+    expect(text).toContain('Breath Clock: 6/6');
+    expect(text).not.toContain('— Climax');
+    expect(text).toContain('Combat is under way');
+  });
+});
+
 describe('trackerDirectiveText combat suppression (#1091)', () => {
   test('a budget-forced climax phase with inCombat true renders no campaign_ending / turn budget text and renders the combat line', () => {
     const text = trackerDirectiveText({
