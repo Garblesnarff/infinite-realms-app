@@ -294,6 +294,28 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
     await saveTacticalMap(map);
   };
 
+  /**
+   * Widen the board with floor cells so a wide gap stays on-board with clear line of
+   * sight: coordinates past the board's edge are persisted unchecked and kill line of
+   * sight, which would suppress the opportunity attack for the wrong reason (#1199).
+   */
+  const widenBoard = async (width: number): Promise<void> => {
+    const map = await loadActiveTacticalMap(sessionId);
+    if (!map) throw new Error('fixture board missing');
+    const floorCell = () => ({
+      terrain: 'floor' as const,
+      blocksMovement: false,
+      blocksSight: false,
+      cover: 0 as const,
+      elevation: 0,
+    });
+    for (const row of map.cells) {
+      while (row.length < width) row.push(floorCell());
+    }
+    map.width = width;
+    await saveTacticalMap(map);
+  };
+
   /** The Swarm's attack as `MonsterAttackProfile` stores it on the participant row. */
   const setSwarmAttack = async (attack: MonsterAttackProfile['attacks'][number]): Promise<void> => {
     const profile: MonsterAttackProfile = { source: 'authored', attacks: [attack] };
@@ -939,6 +961,63 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
       expect.stringContaining('abandoned mid-fight'),
     ]);
   });
+
+  // #1199 (Hark T2-003): the three typed flee sentences go through the same `flee` intent
+  // as the More -> Flee button, at any distance. The sentences differ only upstream: the
+  // generate-route directive (detectDeclaredDefense) and the #749 wording gate
+  // (playerTextDeclares). Down here the intent is identical, so the matrix pins the
+  // distance half — an opportunity attack at 5 ft, none at 55 ft — for each sentence.
+  // The dice are pinned low (0.01) at 5 ft, so the provoked attack misses deterministically
+  // instead of the test asserting that the dice went the hero's way.
+  const fleeSentences = ['I flee', 'I run from the fight', 'I flee from the fight'] as const;
+  for (const sentence of fleeSentences) {
+    test(`typed "${sentence}" at 5 ft flees with a missed opportunity attack (#1199)`, async () => {
+      randomSpy(0.01);
+      const result = (await declaredExit('flee', sentence)) as Record<string, unknown>;
+
+      expect(result.exit).toBe('fled');
+      expect(result.combatEnded).toBe(true);
+      expect(result.endedReason).toBe('abandoned');
+      expect(result.opportunityAttack).toMatchObject({ hit: false });
+      expect(await heroHp()).toBe(5);
+      expect(await heroRow()).toMatchObject({ isActive: false });
+      expect(await encounterRow()).toMatchObject({
+        status: 'completed',
+        endedReason: 'abandoned',
+      });
+      // The missed opportunity attack writes its own engine fact before the exit line,
+      // so the facts are three lines, not two.
+      const facts = await consumeDmTacticalFacts(sessionId);
+      expect(facts).toHaveLength(3);
+      expect(facts[0]).toMatch(/attacked The Scholar.*Unarmed Strike.*MISSED/);
+      expect(facts[1]).toBe('The Scholar flees the fight.');
+      expect(facts[2]).toContain('abandoned mid-fight');
+    });
+
+    test(`typed "${sentence}" at 55 ft flees with no opportunity attack (#1199)`, async () => {
+      // Eleven cells at five feet a cell: Hark's 55 ft. Widen the board first so the
+      // gap stays on-board with clear line of sight — distance alone, not a lost
+      // line of sight, is what keeps the hostile out of melee reach.
+      await widenBoard(16);
+      await setGap(11);
+      const result = (await declaredExit('flee', sentence)) as Record<string, unknown>;
+
+      expect(result.exit).toBe('fled');
+      expect(result.combatEnded).toBe(true);
+      expect(result.endedReason).toBe('abandoned');
+      expect(result.opportunityAttack).toBeNull();
+      expect(await heroHp()).toBe(5);
+      expect(await heroRow()).toMatchObject({ isActive: false });
+      expect(await encounterRow()).toMatchObject({
+        status: 'completed',
+        endedReason: 'abandoned',
+      });
+      expect(await consumeDmTacticalFacts(sessionId)).toEqual([
+        'The Scholar flees the fight.',
+        expect.stringContaining('abandoned mid-fight'),
+      ]);
+    });
+  }
 
   test('the generation-time guard lets the DM end stand once the player has left, and defers it before', async () => {
     // Two hostiles, so one is always OFF the current turn: the generation-time roster drops the

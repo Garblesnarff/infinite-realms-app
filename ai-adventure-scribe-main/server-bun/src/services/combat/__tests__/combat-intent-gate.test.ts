@@ -361,6 +361,23 @@ describe('detectDeclaredDefense (#262)', () => {
     expect(detectDeclaredDefense('run away')).toBe('flee');
   });
 
+  it('detects flee declarations that name the fight being left (#1199)', () => {
+    expect(detectDeclaredDefense('I flee from the fight')).toBe('flee');
+    expect(detectDeclaredDefense('I run from the fight')).toBe('flee');
+    expect(detectDeclaredDefense('flee from the fight')).toBe('flee');
+    expect(detectDeclaredDefense('I run away from the fight')).toBe('flee');
+    expect(detectDeclaredDefense('I fled from the fight')).toBe('flee');
+    expect(detectDeclaredDefense('I flee from the fight.')).toBe('flee');
+  });
+
+  it('rejects flee sentences that add a second act or a different object (#1199)', () => {
+    expect(detectDeclaredDefense('I flee from the fight and attack')).toBeNull();
+    expect(detectDeclaredDefense('I run from the fight to the door')).toBeNull();
+    expect(detectDeclaredDefense('I flee the goblin')).toBeNull();
+    expect(detectDeclaredDefense('Should I flee from the fight?')).toBeNull();
+    expect(detectDeclaredDefense('The goblin flees the fight')).toBeNull();
+  });
+
   it('rejects sentences that merely mention dodging', () => {
     expect(detectDeclaredDefense('I dodge behind the pillar and attack')).toBeNull();
     expect(detectDeclaredDefense('Should I dodge or attack?')).toBeNull();

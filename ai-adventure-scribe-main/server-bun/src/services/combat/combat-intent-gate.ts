@@ -102,7 +102,15 @@ const DEFENSIVE_DECLARATION_PATTERNS: Array<{ type: DefensiveDeclaration; patter
   // declaration falls through to the DM as free text and the end guard and the
   // DM prompt disagree about what ends the fight.
   { type: 'yield', pattern: /^(?:i\s+)?(?:yield[sd]?|surrender[sd]?)\s*[.!]?$/i },
-  { type: 'flee', pattern: /^(?:i\s+)?(?:flee[sd]?|run\s+away)\s*[.!]?$/i },
+  // #1199: "I flee from the fight" / "I run from the fight" are the same declaration
+  // as "I flee" — the fight being left may be named. The tail is one optional phrase, so a
+  // compound ("I flee from the fight and attack") still falls through to the attack parser.
+  // "fled" needs its own alternative: flee[sd]? never matched it (one 'e' before the 'd').
+  {
+    type: 'flee',
+    pattern:
+      /^(?:i\s+)?(?:flee[sd]?|fled|run\s+away|run\s+from\s+the\s+fight)(?:\s+from\s+the\s+fight)?\s*[.!]?$/i,
+  },
 ];
 
 export function detectDeclaredDefense(playerInput: string): DefensiveDeclaration | null {
