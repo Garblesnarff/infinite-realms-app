@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 
 import { SRD_CLASS_TABLE } from '../../../../shared/srd-class-data';
+import getRow1226 from '../../../../shared/test-fixtures/character-get-row-1226.json';
 import {
   findUnresolvedCharacterData,
   parseJsonField,
@@ -132,6 +133,19 @@ describe('data-transformers', () => {
   });
 
   describe('transformCharacterData', () => {
+    it('keeps the campaign link from the real GET row (#1226)', () => {
+      // The JSON the server's mapCharacterToApi serves; the server suite
+      // character-api-shape.test.ts pins that the mapper produces exactly this.
+      const row = getRow1226 as unknown as CharacterRow;
+      expect(row.campaign_id).toBe('a1226000-0000-4000-8000-000000000002');
+      expect(transformCharacterData(row, null, null).campaign_id).toBe(
+        'a1226000-0000-4000-8000-000000000002',
+      );
+      expect(transformCharacterData({ ...row, campaign_id: null }, null, null).campaign_id).toBe(
+        null,
+      );
+    });
+
     const mockCharacterRow: CharacterRow = {
       id: 'char-123',
       user_id: 'user-456',

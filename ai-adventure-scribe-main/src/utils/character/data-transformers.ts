@@ -63,6 +63,8 @@ export interface CharacterRow {
   concentration?: Character['concentration'];
   id: string;
   user_id: string;
+  /** #1226: served by GET /v1/characters/:id (mapCharacterToApi); null when unlinked. */
+  campaign_id?: string | null;
   name: string;
   description?: string | null;
   race: string;
@@ -428,6 +430,10 @@ export const transformCharacterData = (
     id: characterData.id,
     concentration: characterData.concentration ?? null,
     user_id: characterData.user_id,
+    // #1226: the campaign link the GET serves. Dropped here, every reader of
+    // character.campaign_id after the transform got undefined (#1215's fallen
+    // hero pick fell back to /explore).
+    campaign_id: characterData.campaign_id ?? null,
     name: characterData.name,
     description: characterData.description as string | undefined,
     race,
