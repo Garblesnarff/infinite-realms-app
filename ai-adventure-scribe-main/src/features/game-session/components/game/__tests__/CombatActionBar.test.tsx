@@ -6,7 +6,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { LEGAL_ACTION_TYPES } from '../../../../../../shared/combat-legal-action-types';
-import { CombatActionBar, LEGAL_ACTION_PLACEMENT } from '../CombatActionBar';
+import { CombatActionBar, LEGAL_ACTION_PLACEMENT, NARRATED_CAST_REASON } from '../CombatActionBar';
 
 import type { LegalAction } from '@/features/game-session/hooks/use-combat-legal-actions';
 
@@ -261,6 +261,33 @@ describe('CombatActionBar', () => {
     expect(item).toHaveTextContent('120 feet · action');
     await user.click(item);
     expect(onAction).toHaveBeenCalledWith(spellAction);
+    expect(item).not.toBeDisabled();
+  });
+
+  it('a bard whose spells the engine does not resolve still opens Cast, greyed', async () => {
+    const onAction = vi.fn();
+    const withoutSpells = defaultProps.actions.filter((action) => action.type !== 'spell');
+    render(
+      <CombatActionBar
+        {...defaultProps}
+        actions={withoutSpells}
+        narratedCasts={[{ name: 'Blindness/Deafness' }, { name: 'Bane' }, { name: 'Charm Person' }]}
+        onAction={onAction}
+      />,
+    );
+    const toolbar = screen.getByRole('toolbar', { name: 'Your actions' });
+    const cast = within(toolbar).getByRole('button', { name: /^Cast/ });
+    expect(cast).not.toBeDisabled();
+    const user = userEvent.setup();
+    await user.click(cast);
+    const items = await screen.findAllByRole('menuitem');
+    expect(items.map((item) => item.textContent)).toEqual([
+      `Blindness/Deafness${NARRATED_CAST_REASON}`,
+      `Bane${NARRATED_CAST_REASON}`,
+      `Charm Person${NARRATED_CAST_REASON}`,
+    ]);
+    items.forEach((item) => expect(item).toHaveAttribute('aria-disabled', 'true'));
+    expect(onAction).not.toHaveBeenCalled();
   });
 
   it('classes', () => {
