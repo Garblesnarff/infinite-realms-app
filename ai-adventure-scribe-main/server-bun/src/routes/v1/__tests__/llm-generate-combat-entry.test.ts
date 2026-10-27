@@ -28,7 +28,11 @@ const defaultIntentActors = [
   { name: 'The Ghoul', monsterId: 'srd:ghoul' },
   { name: 'Valerius' },
 ];
-let intentActors: Array<{ name: string; monsterId?: string }> = defaultIntentActors;
+let intentActors: Array<{
+  name: string;
+  monsterId?: string;
+  source?: 'ledger' | 'map' | 'campaign';
+}> = defaultIntentActors;
 
 mock.module('../../../lib/auth.js', () => ({
   authenticateRequest: async () => ({
@@ -840,6 +844,119 @@ describe('POST /v1/llm/generate — combat entry gate', () => {
       expect(ambush.combat_entry_pending).toMatchObject({
         combatants: [{ name: 'The Unseen Shadow', count: 1 }],
       });
+    });
+  });
+
+  describe('a hostile act when the roster holds exactly one actor (#862)', () => {
+    it('offers combat entry when the player grabs the one creature present', async () => {
+      // Hark N1019-015 / N21-015: "I grab the Professor" became an Athletics
+      // check and never opened the Strike panel. Narrow case only: the total
+      // roster holds exactly one actor, so the roster-length-1 fallback in
+      // `unambiguousCreature` resolves the unmatched title "Professor" to
+      // Dr. Marrow (ledger). This is NOT #1044's antecedent logic — the
+      // generate route passes no antecedent, so a ledger creature beside the
+      // campaign cast does not resolve here; that parity gap stays open on
+      // #862 and this test must not be read as closing it.
+      intentActors = [{ name: 'Dr. Marrow', source: 'ledger' }];
+      generatedResult = {
+        text: 'You lunge for the Professor, meaning to drag him away from the edge.',
+        provider: 'openrouter',
+        model: 'test/model',
+      };
+
+      const response = await generate({
+        prompt: 'Continue the scene.',
+        player_input: 'I grab the Professor',
+        combatEntry: COMBAT_ENTRY,
+      });
+      expect(response.status).toBe(200);
+      const envelope = JSON.parse(((await response.json()) as { text: string }).text) as Record<
+        string,
+        unknown
+      >;
+
+      expect(envelope.combat_entry_pending).toMatchObject({
+        trigger: 'player_intent',
+        detail: 'player declared an attack on Dr. Marrow',
+        combatants: [{ name: 'Dr. Marrow', count: 1 }],
+        declaredAttack: {
+          verb: 'grab',
+          actorName: 'Dr. Marrow',
+          attackSource: 'unarmed',
+          weaponStated: false,
+        },
+      });
+      // The handoff is an offer, not a started fight: the transition stays
+      // 'none' and the DM's prose survives verbatim beside the pending entry.
+      expect(envelope.combat_transition).toBe('none');
+      expect(envelope.text).toContain('You lunge for the Professor');
+      // The title resolved through the honorific path, not a name match.
+      expect(infoLogs).toContainEqual(
+        expect.objectContaining({
+          msg: 'COMBAT_INTENT_HONORIFIC_RESOLVED',
+          verb: 'grab',
+          honorific: 'professor',
+          actorName: 'Dr. Marrow',
+        }),
+      );
+      expect(generatedInputs).toHaveLength(1);
+      expect(generatedInputs[0]?.prompt).toContain('<declared_attack actor="Dr. Marrow">');
+      expect(generatedInputs[0]?.prompt).toContain('Do NOT resolve it.');
+    });
+
+    it('leaves smashing an object a check, not combat, with the same creature present', async () => {
+      // The same single-actor roster, the same verb family — but the act is
+      // aimed at an object, so the detector must return null, no combat
+      // directive may reach the model, and the DM's check stands.
+      intentActors = [{ name: 'Dr. Marrow', source: 'ledger' }];
+      generatedResult = {
+        text: dmEnvelope({
+          text: 'The cauldron rings like a bell and rocks on its base.',
+          roll_requests: [
+            {
+              type: 'check',
+              formula: '1d20+3',
+              purpose: 'Athletics',
+              dc: 13,
+              ac: null,
+              advantage: false,
+              disadvantage: false,
+            },
+          ],
+        }),
+        provider: 'openrouter',
+        model: 'test/model',
+      };
+
+      const response = await generate({
+        prompt: 'Continue the scene.',
+        player_input: 'I smash the cauldron',
+        combatEntry: COMBAT_ENTRY,
+      });
+      expect(response.status).toBe(200);
+      const envelope = JSON.parse(((await response.json()) as { text: string }).text) as Record<
+        string,
+        unknown
+      >;
+
+      expect(envelope.combat_entry_pending).toBeUndefined();
+      expect(envelope.roll_requests).toContainEqual(
+        expect.objectContaining({ type: 'check', purpose: 'Athletics' }),
+      );
+      expect(generatedInputs).toHaveLength(1);
+      expect(generatedInputs[0]?.prompt).not.toContain('<declared_attack');
+      // The detector ran and decided null: the prefilter matched "smash", so
+      // this is not a prefilter miss. (The log carries no reason; the
+      // object-target half is the joint fact that no entry was offered, no
+      // directive was sent, and the check survives.)
+      expect(infoLogs).toContainEqual(
+        expect.objectContaining({
+          msg: 'COMBAT_INTENT_NO_DECLARATION',
+          sessionId: SESSION_ID,
+          prefilter: true,
+          detector: null,
+        }),
+      );
     });
   });
 });
