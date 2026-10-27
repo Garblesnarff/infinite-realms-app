@@ -276,7 +276,7 @@ export async function runApiSmoke(options: SmokeOptions = {}): Promise<SmokeResu
       },
       body: JSON.stringify({
         prompt: realisticPrompt,
-        maxTokens: 120,
+        maxTokens: 8192,
         temperature: 0.4,
         provider: env.LLM_SMOKE_PROVIDER || 'openrouter',
         requestType: 'user',
