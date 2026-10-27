@@ -104,7 +104,13 @@ export async function resetTacticalMovementForTurn(
 export async function grantTacticalDash(
   sessionId: string,
   entityId: string,
-): Promise<TacticalMap | null> {
+): Promise<
+  | (TacticalMap & {
+      movementGainedFeet: number;
+      engineRows: Array<{ kind: 'dash'; movementGainedFeet: number }>;
+    })
+  | null
+> {
   const map = await loadActiveTacticalMap(sessionId);
   const entity = map?.entities.find((candidate) => candidate.id === entityId);
   if (!map || !entity) return map;
@@ -115,7 +121,13 @@ export async function grantTacticalDash(
     entityId,
     movementRemaining: entity.movementRemaining,
   });
-  return map;
+  // Keep the distance on the authoritative result (after the persisted map write) so the
+  // action-bar transcript can show what Dash actually added without inventing a value.
+  return {
+    ...map,
+    movementGainedFeet: entity.speedFeet,
+    engineRows: [{ kind: 'dash', movementGainedFeet: entity.speedFeet }],
+  };
 }
 
 export async function destroyTacticalCombatMap(sessionId: string): Promise<void> {
