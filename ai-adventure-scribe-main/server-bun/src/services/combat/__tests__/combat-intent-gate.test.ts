@@ -13,6 +13,7 @@ const {
   detectDeclaredLayOnHands,
   detectDeclaredSecondWind,
 } = await import('../combat-intent-gate.js');
+const { playerTextDeclares } = await import('../../../../../shared/player-exit-wording');
 
 const actors = [
   { name: 'Professor Emil Darkwater' },
@@ -370,6 +371,23 @@ describe('detectDeclaredDefense (#262)', () => {
     expect(detectDeclaredDefense('I flee from the fight.')).toBe('flee');
   });
 
+  it('every typed flee the parser accepts also passes the #749 wording gate (#1208)', () => {
+    const typedFlees = [
+      'I flee',
+      'flees',
+      'I fled',
+      'I fled from the fight',
+      'I flee from the fight.',
+      'run away',
+      'I run away from the fight',
+      'I run from the fight!',
+    ];
+    for (const sentence of typedFlees) {
+      expect(detectDeclaredDefense(sentence)).toBe('flee');
+      expect(playerTextDeclares('flee', sentence)).toBe(true);
+    }
+  });
+
   it('rejects flee sentences that add a second act or a different object (#1199)', () => {
     expect(detectDeclaredDefense('I flee from the fight and attack')).toBeNull();
     expect(detectDeclaredDefense('I run from the fight to the door')).toBeNull();
@@ -565,9 +583,10 @@ describe('detectDeclaredEquip (#1059)', () => {
       name: 'Shortbow',
       carried: true,
     });
-    expect(
-      detectDeclaredEquip('Sera draws her shortbow', candidates, ['Sera Voss']),
-    ).toEqual({ name: 'Shortbow', carried: true });
+    expect(detectDeclaredEquip('Sera draws her shortbow', candidates, ['Sera Voss'])).toEqual({
+      name: 'Shortbow',
+      carried: true,
+    });
   });
 
   it('declares nothing without an equip verb, a named weapon, or from a blocked clause', () => {
@@ -594,9 +613,7 @@ describe('detectDeclaredEquip (#1059)', () => {
     // The character's name merely occurring in the clause is not
     // subjecthood either: the name must sit immediately before the verb.
     expect(
-      detectDeclaredEquip('Sera watches the goblin draw his dagger', candidates, [
-        'Sera Voss',
-      ]),
+      detectDeclaredEquip('Sera watches the goblin draw his dagger', candidates, ['Sera Voss']),
     ).toBeNull();
     expect(
       detectDeclaredEquip('I tell Sera to watch the goblin draw his dagger', candidates, [

@@ -32,6 +32,11 @@ describe('playerTextDeclares', () => {
     expect(playerTextDeclares('flee', 'I flee from the fight')).toBe(true);
   });
 
+  it('recognises past-tense "fled" as flee wording (#1208)', () => {
+    expect(playerTextDeclares('flee', 'I fled')).toBe(true);
+    expect(playerTextDeclares('flee', 'I fled from the fight')).toBe(true);
+  });
+
   it.each(['I yield', 'I surrender', 'I give up'])('recognises yield wording: %s', (text) => {
     expect(playerTextDeclares('yield', text)).toBe(true);
   });
