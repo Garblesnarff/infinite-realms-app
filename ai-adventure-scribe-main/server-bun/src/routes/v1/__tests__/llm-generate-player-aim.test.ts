@@ -376,3 +376,48 @@ describe('#1171 a typed non-engine cast is not a weapon attack', () => {
     });
   });
 });
+
+// Hark N3-097 (#612). The model answered a typed longsword attack with a miss and no
+// roll. The route under test is POST /v1/llm/generate, the same one the client uses.
+const veteranMap: TacticalMap = {
+  ...map,
+  entities: [
+    map.entities[0],
+    {
+      id: 'veteran',
+      name: 'Veteran',
+      type: 'monster',
+      x: 2,
+      y: 1,
+      size: 'medium',
+      speedFeet: 30,
+      movementRemaining: 30,
+    },
+  ],
+};
+
+describe('#612 a declared longsword attack is rolled, not narrated as a miss', () => {
+  it('turns "I attack the Veteran with my longsword" into an engine attack with no miss prose', async () => {
+    const result = await turn(
+      'I attack the Veteran with my longsword',
+      veteranMap,
+      JSON.stringify({
+        ...envelope(),
+        text: 'The Veteran waits. Your longsword swings and misses the Veteran.',
+        combat_actions: [],
+        roll_requests: [],
+      }),
+    );
+    expect(result.combat_actions).toEqual([
+      expect.objectContaining({
+        action_type: 'attack',
+        actor_id: 'hero',
+        weapon_id: 'longsword',
+        target_ids: ['veteran'],
+      }),
+    ]);
+    expect(result.roll_requests).toEqual([]);
+    expect(result.text).not.toMatch(/\bmiss(?:es|ed|ing)?\b/i);
+    expect(result.text).toContain('The Veteran waits.');
+  });
+});
