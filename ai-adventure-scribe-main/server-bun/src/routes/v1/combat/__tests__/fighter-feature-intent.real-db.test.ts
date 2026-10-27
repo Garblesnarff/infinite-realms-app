@@ -94,6 +94,7 @@ describeWithDb('Fighter feature More-menu bodies resolve through the real route 
   let level1Hero: SeededHero;
   let suffixHero: SeededHero;
   let bothRowsHero: SeededHero;
+  let oneRowL17Hero: SeededHero;
 
   const postChip = async (type: 'second_wind' | 'action_surge') => {
     const response = await app!.handle(
@@ -603,6 +604,19 @@ describeWithDb('Fighter feature More-menu bodies resolve through the real route 
         { featureId: level17SurgeId, usesRemaining: 2, acquiredAtLevel: 17 },
       ],
     });
+    // #1187: a level-17 Fighter holding only the level-2 Action Surge row -- the one-row
+    // library after the #1187 data migration. Starts spent, so the rest is what refills it.
+    oneRowL17Hero = await seedHero({
+      actorId: 'e7e569df-0000-4000-8000-000000000006',
+      name: 'One Row L17 Fighter',
+      level: 17,
+      maxHp: 100,
+      currentHp: 50,
+      grants: [
+        { featureId: secondWindId, usesRemaining: 1, acquiredAtLevel: 1 },
+        { featureId: actionSurgeId, usesRemaining: 0, acquiredAtLevel: 2 },
+      ],
+    });
   });
 
   beforeEach(async () => {
@@ -962,6 +976,81 @@ describeWithDb('Fighter feature More-menu bodies resolve through the real route 
     expect(await fighterFeatureUses(suffixHero.characterId)).toEqual({
       secondWind: 1,
       actionSurge: 0,
+    });
+  });
+
+  test('#1187: the replayed library holds one Action Surge row, at level 2', async () => {
+    // One feature, one row: the level-17 "two uses" row is gone (db/migrations/
+    // 20261027_merge_action_surge_rows.sql). Rows this suite inserts for the #1181 backstop
+    // cases are marked "Test-only" and are not the seed.
+    const rows = await db
+      .select({
+        name: classFeaturesLibrary.featureName,
+        levelAcquired: classFeaturesLibrary.levelAcquired,
+        usesCount: classFeaturesLibrary.usesCount,
+        description: classFeaturesLibrary.description,
+      })
+      .from(classFeaturesLibrary)
+      .where(
+        and(
+          eq(classFeaturesLibrary.className, 'Fighter'),
+          inArray(classFeaturesLibrary.featureName, [
+            'Action Surge',
+            'Action Surge (1 use)',
+            'Action Surge (2 uses)',
+            'Action Surge (two uses)',
+          ]),
+        ),
+      );
+    const seeded = rows.filter((row) => !row.description.startsWith('Test-only'));
+    expect(
+      seeded.map(({ name, levelAcquired, usesCount }) => ({ name, levelAcquired, usesCount })),
+    ).toEqual([{ name: 'Action Surge', levelAcquired: 2, usesCount: 1 }]);
+  });
+
+  test('#1187: a level-17 sheet with only the level-2 row rests to two uses and spends one', async () => {
+    await RestService.takeShortRest(oneRowL17Hero.characterId, userId, 0);
+    const [refilled] = await db
+      .select({ usesRemaining: characterFeatures.usesRemaining })
+      .from(characterFeatures)
+      .where(
+        and(
+          eq(characterFeatures.characterId, oneRowL17Hero.characterId),
+          eq(characterFeatures.featureId, actionSurgeId),
+        ),
+      );
+    expect(refilled.usesRemaining).toBe(2);
+    expect(await fighterFeatureUses(oneRowL17Hero.characterId)).toEqual({
+      secondWind: 1,
+      actionSurge: 2,
+    });
+
+    const { status, body } = await postChipFor(
+      oneRowL17Hero.encounterId,
+      oneRowL17Hero.actorId,
+      'action_surge',
+    );
+    expect(status).toBe(200);
+    expect(body.result).toMatchObject({ applied: true, action: 'action_surge', usesRemaining: 1 });
+    expect(await fighterFeatureUses(oneRowL17Hero.characterId)).toEqual({
+      secondWind: 1,
+      actionSurge: 1,
+    });
+  });
+
+  test('#1187: an untracked level-2 row reads as two uses at level 17', async () => {
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: null })
+      .where(
+        and(
+          eq(characterFeatures.characterId, oneRowL17Hero.characterId),
+          eq(characterFeatures.featureId, actionSurgeId),
+        ),
+      );
+    expect(await fighterFeatureUses(oneRowL17Hero.characterId)).toEqual({
+      secondWind: 1,
+      actionSurge: 2,
     });
   });
 });

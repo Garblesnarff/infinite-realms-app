@@ -61,6 +61,27 @@ const canonicalFeatureName = (featureName: string): string =>
     .trim()
     .toLowerCase();
 
+/**
+ * #1187: one feature, one library row. The PHB gives Action Surge a second use per rest at
+ * fighter level 17; that is a uses count keyed to the fighter level, not a second library row
+ * for the same feature. Every Action Surge row's full count is read here, so a sheet holding
+ * only the level-2 row has two uses at 17, and a sheet that still holds a legacy level-17 row
+ * (prod before the #1187 data migration) reads the same number from either row.
+ */
+export function actionSurgeUsesAt(fighterLevel: number): number {
+  return fighterLevel >= 17 ? 2 : 1;
+}
+
+/** A row's full uses per rest at this fighter level: the library count, level-keyed for Action Surge. */
+function fullUsesOf(
+  row: { featureName: string; usesCount: number | null },
+  fighterLevel: number,
+): number | null {
+  return canonicalFeatureName(row.featureName) === canonicalFeatureName(ACTION_SURGE_NAME)
+    ? actionSurgeUsesAt(fighterLevel)
+    : row.usesCount;
+}
+
 type FeatureRowCandidate = {
   // Optional: the spend query selects the row id (its caller keys the
   // decrement to it); the display query does not select it. The
@@ -182,7 +203,7 @@ export async function fighterFeatureUses(
       fighterLevel,
     );
     if (!row) return null;
-    return row.usesRemaining ?? row.usesCount;
+    return row.usesRemaining ?? fullUsesOf(row, fighterLevel);
   };
   return {
     secondWind: remainingOf(SECOND_WIND_NAME),
@@ -242,10 +263,11 @@ async function spendFighterFeatureUse(input: {
     });
   }
 
+  const fullUses = fullUsesOf(row, fighterLevel);
   // A row with no count anywhere is an untracked, unlimited feature (the
   // ClassFeatureUsageService rule); the two Fighter features are seeded with
   // a count, so this is only a guard against a future library edit.
-  if (row.usesCount === null && row.usesRemaining === null) {
+  if (fullUses === null && row.usesRemaining === null) {
     await ClassFeatureUsageService.logFeatureUsage(
       characterId,
       row.featureId,
@@ -262,12 +284,12 @@ async function spendFighterFeatureUse(input: {
   const [updated] = await db
     .update(characterFeatures)
     .set({
-      usesRemaining: sql`COALESCE(${characterFeatures.usesRemaining}, ${row.usesCount}) - 1`,
+      usesRemaining: sql`COALESCE(${characterFeatures.usesRemaining}, ${fullUses}) - 1`,
     })
     .where(
       and(
         eq(characterFeatures.id, row.characterFeatureId),
-        sql`COALESCE(${characterFeatures.usesRemaining}, ${row.usesCount}) > 0`,
+        sql`COALESCE(${characterFeatures.usesRemaining}, ${fullUses}) > 0`,
       ),
     )
     .returning({ usesRemaining: characterFeatures.usesRemaining });
@@ -291,13 +313,13 @@ async function spendFighterFeatureUse(input: {
       sessionId,
     );
   } catch (error) {
-    await releaseFighterFeatureUse(characterId, row.featureId, row.usesCount);
+    await releaseFighterFeatureUse(characterId, row.featureId, fullUses);
     throw error;
   }
   return {
     usesRemaining: updated.usesRemaining ?? 0,
     featureId: row.featureId,
-    usesCount: row.usesCount,
+    usesCount: fullUses,
   };
 }
 
@@ -504,4 +526,45 @@ export async function resolveActionSurge(input: {
     await releaseFighterFeatureUse(characterId, spend.featureId, spend.usesCount);
     throw error;
   }
+}
+
+/**
+ * #1187: a rest refills Action Surge to its level-keyed count. The generic restore
+ * (`ClassFeatureUsageService.restoreFeatures`) sets each row to its library `uses_count`,
+ * which is 1 on the level-2 row; at fighter level 17 the row holds 2. Both rest types refill
+ * it (Action Surge is a short-rest feature). Returns the feature names it refilled.
+ */
+export async function refillActionSurgeUses(
+  characterId: string,
+  userId: string,
+): Promise<string[]> {
+  const character = await ownedCharacter(characterId, userId);
+  if (!character) return [];
+  const fighterLevel = fighterLevelOf(character);
+  if (fighterLevel <= 0) return [];
+  const held = await db
+    .select({
+      characterFeatureId: characterFeatures.id,
+      featureName: classFeaturesLibrary.featureName,
+    })
+    .from(characterFeatures)
+    .innerJoin(classFeaturesLibrary, eq(characterFeatures.featureId, classFeaturesLibrary.id))
+    .where(
+      and(
+        eq(characterFeatures.characterId, characterId),
+        eq(classFeaturesLibrary.className, FIGHTER_CLASS),
+        inArray(classFeaturesLibrary.featureName, featureNameCandidates(ACTION_SURGE_NAME)),
+      ),
+    );
+  if (held.length === 0) return [];
+  await db
+    .update(characterFeatures)
+    .set({ usesRemaining: actionSurgeUsesAt(fighterLevel) })
+    .where(
+      inArray(
+        characterFeatures.id,
+        held.map((row) => row.characterFeatureId),
+      ),
+    );
+  return [ACTION_SURGE_NAME];
 }
