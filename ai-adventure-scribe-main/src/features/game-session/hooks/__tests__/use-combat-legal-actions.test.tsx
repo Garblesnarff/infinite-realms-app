@@ -224,7 +224,9 @@ describe('useCombatLegalActions spell cast (#1185)', () => {
     targetIds: ['monster-1'],
   };
 
-  function routeFetch(): MockInstance<typeof fetch> {
+  function routeFetch(
+    legalActions: Array<Record<string, unknown>> = [castAction],
+  ): MockInstance<typeof fetch> {
     return vi
       .spyOn(globalThis, 'fetch')
       .mockImplementation(async (url: unknown, init?: unknown) => {
@@ -232,7 +234,7 @@ describe('useCombatLegalActions spell cast (#1185)', () => {
         if (href.includes('/legal-actions')) {
           return {
             ok: true,
-            json: async () => ({ actorId: 'pc-1', actions: [castAction] }),
+            json: async () => ({ actorId: 'pc-1', actions: legalActions }),
           } as Response;
         }
         if (href.includes('/intent')) {
@@ -343,6 +345,52 @@ describe('useCombatLegalActions spell cast (#1185)', () => {
     const intents = intentCalls(fetchSpy);
     expect(intents).toHaveLength(2);
     expect(intents[0].body.intent.type).toBe('spell');
+    expect(intents[1].body.intent.type).toBe('end_turn');
+  });
+
+  it('keeps the turn open after the cast with no movement left while a bonus-action spell is offered', async () => {
+    movementHolder.remaining.mockResolvedValue(0);
+    // The server offers a bonus-action spell only while the bonus action is unspent.
+    const healingWord = { type: 'spell', label: 'Cast Healing Word', spellId: 'healing-word' };
+    const fetchSpy = routeFetch([castAction, healingWord, { type: 'end_turn', label: 'End turn' }]);
+    const onSendMessage = vi.fn(async (_message: ChatMessage) => {});
+    const { result } = renderHook(() =>
+      useCombatLegalActions({ enabled: true, onSendMessage, onSendText: vi.fn() }),
+    );
+
+    await waitFor(() => expect(result.current.actions).toHaveLength(3));
+
+    await act(async () => {
+      await result.current.runAction(castAction as never);
+    });
+
+    const intents = intentCalls(fetchSpy);
+    expect(intents).toHaveLength(1);
+    expect(intents[0].body.intent.type).toBe('spell');
+  });
+
+  it('ends the turn after the cast when the only offered bonus-action spell is narrated', async () => {
+    movementHolder.remaining.mockResolvedValue(0);
+    const narratedMistyStep = {
+      type: 'spell',
+      label: 'Misty Step',
+      spellId: 'misty-step',
+      narrated: true,
+    };
+    const fetchSpy = routeFetch([castAction, narratedMistyStep]);
+    const onSendMessage = vi.fn(async (_message: ChatMessage) => {});
+    const { result } = renderHook(() =>
+      useCombatLegalActions({ enabled: true, onSendMessage, onSendText: vi.fn() }),
+    );
+
+    await waitFor(() => expect(result.current.actions).toHaveLength(2));
+
+    await act(async () => {
+      await result.current.runAction(castAction as never);
+    });
+
+    const intents = intentCalls(fetchSpy);
+    expect(intents).toHaveLength(2);
     expect(intents[1].body.intent.type).toBe('end_turn');
   });
 });

@@ -59,6 +59,9 @@ vi.mock('@/services/combat/combat-repair', () => ({
 vi.mock('@/services/combat/player-movement-remaining', () => ({
   actorMovementRemaining: vi.fn().mockResolvedValue(0),
 }));
+vi.mock('@/services/combat/player-bonus-action-remaining', () => ({
+  actorHasUsableBonusAction: vi.fn().mockResolvedValue(false),
+}));
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     listSessionMessages: vi.fn(),
@@ -262,7 +265,13 @@ const orderThroughUseMessages = async (
 
 describe('the turn-order transcript of a settled player attack (#263)', () => {
   const rollPrompts: unknown[] = [];
-  const dispatchedRows: Array<{ id: string; sequence: number; text: string; timestamp: string; context: unknown }> = [];
+  const dispatchedRows: Array<{
+    id: string;
+    sequence: number;
+    text: string;
+    timestamp: string;
+    context: unknown;
+  }> = [];
   /**
    * Temporal order of the settle's two commits. `appendEngineBlock` is synchronous in
    * `settleExecutedAction`, ahead of the awaited movement check; the end_turn fetch is
@@ -272,7 +281,17 @@ describe('the turn-order transcript of a settled player attack (#263)', () => {
   const timeline: string[] = [];
 
   const collectRows = (event: Event): void => {
-    for (const row of (event as CustomEvent<Array<{ id?: string; sequence?: number; text?: string; timestamp?: string; context?: unknown }>>).detail ?? []) {
+    for (const row of (
+      event as CustomEvent<
+        Array<{
+          id?: string;
+          sequence?: number;
+          text?: string;
+          timestamp?: string;
+          context?: unknown;
+        }>
+      >
+    ).detail ?? []) {
       if (row.text) {
         dispatchedRows.push({
           id: row.id ?? `row-${row.sequence}`,
@@ -325,7 +344,11 @@ describe('the turn-order transcript of a settled player attack (#263)', () => {
       if (body.intent.type === 'attack')
         return jsonResponse(200, { accepted: true, result: PLAYER_HITS_ENEMY, engineRows: [] });
       if (body.intent.type === 'spell')
-        return jsonResponse(200, { accepted: true, result: PLAYER_SPELL_ATTACK_HITS, engineRows: [] });
+        return jsonResponse(200, {
+          accepted: true,
+          result: PLAYER_SPELL_ATTACK_HITS,
+          engineRows: [],
+        });
       if (body.intent.type === 'end_turn') {
         timeline.push('end_turn-sent');
         return jsonResponse(200, {
@@ -351,7 +374,10 @@ describe('the turn-order transcript of a settled player attack (#263)', () => {
   });
 
   it('reads attack, then the player result row, then "ended their turn", then the enemy rows', async () => {
-    const result = await resolve([dmAttackAction], 'I attack Captain Sarah Reeves with my longsword.');
+    const result = await resolve(
+      [dmAttackAction],
+      'I attack Captain Sarah Reeves with my longsword.',
+    );
 
     // The player threw their own die through the real prompt.
     expect(rollPrompts).toHaveLength(1);
@@ -395,7 +421,9 @@ describe('the turn-order transcript of a settled player attack (#263)', () => {
     );
     expect(ordered).toHaveLength(3);
     // The reply carries the player's result in its blocks.
-    const replyBlocks = combatEngineBlocksFromContext(ordered[0].context as Record<string, unknown>);
+    const replyBlocks = combatEngineBlocksFromContext(
+      ordered[0].context as Record<string, unknown>,
+    );
     expect(replyBlocks).toHaveLength(1);
     expect(replyBlocks[0].lines[0]).toContain('The Scholar rolled 14 + 4 = 18 vs AC 13');
     // Then "ended their turn", then the enemy rows — the CB-024 / N2-034 order.
@@ -437,7 +465,9 @@ describe('the turn-order transcript of a settled player attack (#263)', () => {
       dispatchedRows,
     );
     expect(ordered).toHaveLength(3);
-    const replyBlocks = combatEngineBlocksFromContext(ordered[0].context as Record<string, unknown>);
+    const replyBlocks = combatEngineBlocksFromContext(
+      ordered[0].context as Record<string, unknown>,
+    );
     expect(replyBlocks).toHaveLength(1);
     expect(replyBlocks[0].lines[0]).toContain('Chill Touch');
     expect(ordered[1].text).toContain('The Scholar ended their turn');
