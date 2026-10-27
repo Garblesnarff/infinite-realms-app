@@ -72,7 +72,7 @@ describe('isTestAuthEnabled', () => {
     expect(isTestAuthEnabled()).toBe(false);
   });
 
-  it('is false for false, 0, empty, and unset ENABLE_TEST_AUTH values', () => {
+  it('is false for every non-true ENABLE_TEST_AUTH value', () => {
     enabled();
     for (const value of ['false', '0', '', '1', 'TRUE', 'yes']) {
       process.env.ENABLE_TEST_AUTH = value;
