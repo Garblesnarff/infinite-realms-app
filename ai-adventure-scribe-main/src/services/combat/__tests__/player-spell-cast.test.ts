@@ -60,6 +60,22 @@ describe('askPlayerForSpellCast', () => {
     expect(requestSpellTargetSave).not.toHaveBeenCalled();
   });
 
+  it('opens a spell-attack roll popup for Acid Arrow (#1185)', async () => {
+    await expect(ask('acid-arrow')).resolves.toEqual({
+      d20: 17,
+      autoRolled: false,
+      movementOnly: false,
+    });
+    expect(requestPlayerAttackRoll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'spell-attack',
+        weaponName: 'Acid Arrow',
+        targetLabel: 'Professor Umeboshi',
+      }),
+    );
+    expect(requestSpellTargetSave).not.toHaveBeenCalled();
+  });
+
   it('carries the spell popup’s dropped die with the kept one (#263 CB-028)', async () => {
     vi.mocked(requestPlayerAttackRoll).mockResolvedValue({ d20: 8, d20Rolls: [8, 14] });
 

@@ -19,6 +19,7 @@ import {
   listCarriedWeaponProfiles,
   listEquippedWeaponProfiles,
   listHealingConsumables,
+  remainingSpellSlots,
 } from './data-access.js';
 import {
   describeGoingDown,
@@ -2414,10 +2415,21 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
         isPlayerCombatSpell(spell) &&
         all.findIndex((candidate) => candidate?.id === spell.id) === index,
     );
+  // #1185: a leveled spell is offered only while a slot of its own level remains. The
+  // ledger is read once, and only when a leveled candidate exists; a null ledger (no slot
+  // rows, #2459) offers ungated and the commit enforces. Cantrips are never gated.
+  const hasLeveledSpell = spells.some((spell) => (spell?.level ?? 0) >= 1);
+  const slotRemaining =
+    hasLeveledSpell && actor.participantType === 'player' && actor.characterId
+      ? await remainingSpellSlots(actor.characterId)
+      : null;
   // One suggestion per spell on the character's own list. A single "Cast a prepared spell" chip
   // went to the DM as text, and the DM picked Fire Bolt for a wizard who does not have it (#2343 A3).
   for (const spell of spells) {
     const usesBonusAction = spell!.castingTime.toLowerCase().includes('bonus action');
+    if (spell!.level >= 1 && slotRemaining && (slotRemaining.get(spell!.level) ?? 0) <= 0) {
+      continue;
+    }
     if (usesBonusAction ? actor.bonusActionUsed : actor.actionUsed) continue;
     const action: { type: LegalActionType } & Record<string, unknown> = {
       type: 'spell',

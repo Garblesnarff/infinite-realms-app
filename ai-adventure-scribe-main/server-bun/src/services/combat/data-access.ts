@@ -38,6 +38,7 @@ import {
   combatParticipantConditions,
   conditionsLibrary,
   characterSpells,
+  characterSpellSlots,
   spells,
   npcs,
   inventoryItems,
@@ -246,6 +247,27 @@ export interface HealingConsumable {
   id: string;
   name: string;
   healingDice: string;
+}
+
+/**
+ * Remaining spell slots by level for a character's slot ledger, or null when the character
+ * has no slot rows at all. Null means the offer path cannot know: characters whose slots
+ * were never seeded (premade starter-campaign characters, #2459) have their row derived on
+ * demand at commit, so the menu offers their leveled spells ungated and the commit enforces.
+ */
+export async function remainingSpellSlots(
+  characterId: string,
+): Promise<Map<number, number> | null> {
+  const rows = await db
+    .select()
+    .from(characterSpellSlots)
+    .where(eq(characterSpellSlots.characterId, characterId));
+  if (rows.length === 0) return null;
+  const remaining = new Map<number, number>();
+  for (const row of rows) {
+    remaining.set(row.spellLevel, Math.max(0, row.totalSlots - row.usedSlots));
+  }
+  return remaining;
 }
 
 /**

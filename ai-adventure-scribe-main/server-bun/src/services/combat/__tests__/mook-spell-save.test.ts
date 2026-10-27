@@ -144,6 +144,7 @@ mock.module('../../combat-initiative-service.js', () => ({
 }));
 
 mock.module('../data-access.js', () => ({
+  remainingSpellSlots: async () => null,
   getParticipantWithStats: async () => null,
   getParticipantsWithStatsBatch: async () => roster(),
   getWeaponAttack: async () => null,

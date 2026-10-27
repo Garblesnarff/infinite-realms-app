@@ -21,6 +21,9 @@ const PLAYER_COMBAT_SPELLS: readonly PlayerCombatSpell[] = [
   { id: 'ray-of-frost', name: 'Ray of Frost', kind: 'attack' },
   { id: 'chill-touch', name: 'Chill Touch', kind: 'attack' },
   { id: 'eldritch-blast', name: 'Eldritch Blast', kind: 'attack' },
+  // #1185: a prepared leveled attack spell (90 ft, ranged spell attack); the lingering 2d4 at
+  // the end of the next turn has no engine support, so only the immediate damage resolves.
+  { id: 'acid-arrow', name: 'Acid Arrow', kind: 'attack' },
   { id: 'acid-splash', name: 'Acid Splash', kind: 'save', saveAbility: 'DEX', singleTarget: true },
   {
     id: 'sacred-flame',

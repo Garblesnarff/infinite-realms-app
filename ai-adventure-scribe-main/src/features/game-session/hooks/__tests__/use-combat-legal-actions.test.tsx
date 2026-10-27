@@ -5,6 +5,16 @@ import { useCombatLegalActions } from '../use-combat-legal-actions';
 
 import type { ChatMessage } from '@/types/game';
 
+import { requestPlayerAttackRoll } from '@/services/combat/player-roll-bridge';
+import { requestSpellTargetSave } from '@/services/combat/spell-target-save-bridge';
+
+vi.mock('@/services/combat/player-roll-bridge', () => ({
+  requestPlayerAttackRoll: vi.fn(),
+}));
+vi.mock('@/services/combat/spell-target-save-bridge', () => ({
+  requestSpellTargetSave: vi.fn(),
+}));
+
 const combatHolder = vi.hoisted(() => ({
   current: {
     state: {
@@ -196,5 +206,143 @@ describe('useCombatLegalActions use_item (#1147)', () => {
 
     expect(intentCalls(fetchSpy)).toHaveLength(0);
     expect(result.current.error).toBe('That item could not be used. Nothing was spent.');
+  });
+});
+
+describe('useCombatLegalActions spell cast (#1185)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
+    vi.mocked(requestPlayerAttackRoll).mockResolvedValue({ d20: 17 });
+    vi.mocked(requestSpellTargetSave).mockResolvedValue('continue');
+  });
+
+  const castAction = {
+    type: 'spell',
+    label: 'Cast Acid Arrow',
+    spellId: 'acid-arrow',
+    targetIds: ['monster-1'],
+  };
+
+  function routeFetch(): MockInstance<typeof fetch> {
+    return vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async (url: unknown, init?: unknown) => {
+        const href = String(url);
+        if (href.includes('/legal-actions')) {
+          return {
+            ok: true,
+            json: async () => ({ actorId: 'pc-1', actions: [castAction] }),
+          } as Response;
+        }
+        if (href.includes('/intent')) {
+          const body = JSON.parse(String((init as { body?: string }).body ?? '{}')) as {
+            intent?: { type?: string };
+            phase?: string;
+          };
+          // The dice popup reads its bonus and target AC from the engine's proposal.
+          if (body.phase === 'propose') {
+            return {
+              ok: true,
+              json: async () => ({
+                proposal: {
+                  movementOnly: false,
+                  spellId: 'acid-arrow',
+                  spellName: 'Acid Arrow',
+                  kind: 'attack',
+                  attackBonus: 5,
+                  saveDC: 13,
+                  targetAc: 11,
+                  advantage: false,
+                  disadvantage: false,
+                  targetLabel: 'Rubble Sentinel',
+                },
+              }),
+            } as Response;
+          }
+          return { ok: true, json: async () => ({ accepted: true, result: {} }) } as Response;
+        }
+        return { ok: false, status: 404 } as Response;
+      });
+  }
+
+  interface IntentCallBody {
+    intent: { type: string; actorId?: string; spellId?: string; spellName?: string };
+    source?: string;
+    origin?: string;
+    phase?: string;
+  }
+
+  function intentCalls(
+    fetchSpy: ReturnType<typeof routeFetch>,
+  ): Array<{ url: string; body: IntentCallBody }> {
+    return fetchSpy.mock.calls
+      .map(([url, init]) => ({
+        url: String(url),
+        body: JSON.parse(String((init as { body?: string }).body ?? '{}')),
+      }))
+      .filter((call) => call.url.includes('/intent') && !call.body.phase);
+  }
+
+  it('commits the cast through the declare → dialog → commit pipeline and keeps the turn open when movement remains', async () => {
+    movementHolder.remaining.mockResolvedValue(5);
+    const fetchSpy = routeFetch();
+    const onSendMessage = vi.fn(async (_message: ChatMessage) => {});
+    const { result } = renderHook(() =>
+      useCombatLegalActions({ enabled: true, onSendMessage, onSendText: vi.fn() }),
+    );
+
+    await waitFor(() => expect(result.current.actions).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.runAction(castAction as never);
+    });
+
+    const intents = intentCalls(fetchSpy);
+    expect(intents).toHaveLength(1);
+    // The exact wire body the ActionBar sends for a cast: the spell's own level rides
+    // as slotLevel — the engine refuses a leveled spell with no slot level
+    // (missing_spell_slot_level), so a null here would refuse the cast. The commit
+    // carries the player's own die from the popup.
+    expect(intents[0].body.intent).toEqual({
+      type: 'spell',
+      actorId: 'pc-1',
+      targetIds: ['monster-1'],
+      spellId: 'acid-arrow',
+      spellName: 'Acid Arrow',
+      slotLevel: 2,
+      d20: 17,
+    });
+    expect(intents[0].body.source).toBe('dm');
+    expect(intents[0].body.origin).toBe('action_bar');
+    // The dice popup's proposal names the same slot level.
+    const proposals = fetchSpy.mock.calls
+      .map(([, init]) => JSON.parse(String((init as { body?: string }).body ?? '{}')))
+      .filter((body: { phase?: string }) => body.phase === 'propose');
+    expect(proposals).toHaveLength(1);
+    expect(proposals[0].intent).toMatchObject({ spellId: 'acid-arrow', slotLevel: 2 });
+    // The mocked commit carries no engine lines, so no notice is composed; the turn
+    // staying open is the movement read plus the refresh below.
+    expect(combatHolder.current.refreshCombatState).toHaveBeenCalled();
+  });
+
+  it('ends the turn after the cast when no movement remains', async () => {
+    movementHolder.remaining.mockResolvedValue(0);
+    const fetchSpy = routeFetch();
+    const onSendMessage = vi.fn(async (_message: ChatMessage) => {});
+    const { result } = renderHook(() =>
+      useCombatLegalActions({ enabled: true, onSendMessage, onSendText: vi.fn() }),
+    );
+
+    await waitFor(() => expect(result.current.actions).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.runAction(castAction as never);
+    });
+
+    const intents = intentCalls(fetchSpy);
+    expect(intents).toHaveLength(2);
+    expect(intents[0].body.intent.type).toBe('spell');
+    expect(intents[1].body.intent.type).toBe('end_turn');
   });
 });

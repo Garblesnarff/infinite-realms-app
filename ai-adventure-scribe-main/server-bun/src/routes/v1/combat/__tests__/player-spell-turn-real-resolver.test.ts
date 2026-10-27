@@ -219,6 +219,7 @@ mock.module('../../../../services/combat-initiative-service.js', () => ({
 }));
 // The union data-access mock: the intent gateway's leaves plus the real attack service's.
 mock.module('../../../../services/combat/data-access.js', () => ({
+  remainingSpellSlots: async () => null,
   listHealingConsumables: async () => [],
   listEquippedWeaponProfiles: async () => [],
   listCarriedWeaponProfiles: async () => [],

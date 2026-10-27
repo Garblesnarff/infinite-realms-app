@@ -1598,3 +1598,227 @@ describeWithDb('a keyed player attack roll resolves exactly once (#974)', () => 
     expect(await keyedRowsOf(wizSessionId, rollId)).toHaveLength(1);
   });
 });
+
+describeWithDb('a prepared leveled attack spell is offered and resolves through the real routes (#1185)', () => {
+  const app = hasRealDb ? new Elysia({ prefix: '/v1/combat' }).use(intentRoutes) : null;
+  const duels: Array<{ campaignId: string; characterId: string; sessionId: string }> = [];
+  const postTo = async (targetEncounterId: string, body: unknown) => {
+    const response = await app!.handle(
+      new Request(`http://localhost/v1/combat/${targetEncounterId}/intent`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    );
+    return { status: response.status, body: (await response.json()) as Record<string, any> };
+  };
+  /** A fresh L3 Wizard-vs-Rubble Sentinel duel: Acid Arrow prepared, Fire Bolt a cantrip. */
+  const seedWizardDuel = async () => {
+    const database = realDb();
+    const [{ id: duelCampaignId }] = await database
+      .insert(campaigns)
+      .values({ userId, name: testId('camp') })
+      .returning();
+    const [{ id: duelCharacterId }] = await database
+      .insert(characters)
+      .values({
+        userId,
+        campaignId: duelCampaignId,
+        name: 'Adda',
+        class: 'Wizard',
+        level: 3,
+        cantrips: 'Fire Bolt',
+        preparedSpells: 'Acid Arrow',
+      })
+      .returning();
+    await database.insert(characterStats).values({
+      characterId: duelCharacterId,
+      intelligence: 16,
+      currentHitPoints: 30,
+      maxHitPoints: 30,
+      armorClass: 12,
+    });
+    // The slot rows the sheet writes (dm-reply-reconcile's slot-wizard shape).
+    await database.insert(characterSpellSlots).values([
+      { characterId: duelCharacterId, spellLevel: 1, totalSlots: 4, usedSlots: 0 },
+      { characterId: duelCharacterId, spellLevel: 2, totalSlots: 2, usedSlots: 0 },
+    ]);
+    const [{ id: duelSessionId }] = await database
+      .insert(gameSessions)
+      .values({
+        campaignId: duelCampaignId,
+        characterId: duelCharacterId,
+        sessionNumber: 1,
+        status: 'active',
+      })
+      .returning();
+    const [{ id: duelEncounterId }] = await database
+      .insert(combatEncounters)
+      .values({
+        sessionId: duelSessionId,
+        status: 'active',
+        currentRound: 1,
+        currentTurnOrder: 0,
+        version: 1,
+      })
+      .returning();
+    const monsterAttack = resolveMonsterAttackProfile({
+      authored: {
+        attackName: 'Slam',
+        attackBonus: 5,
+        damageDice: '1d6 + 2',
+        damageType: 'bludgeoning',
+      },
+    });
+    const participants = await database
+      .insert(combatParticipants)
+      .values([
+        {
+          encounterId: duelEncounterId,
+          characterId: duelCharacterId,
+          name: 'Adda',
+          participantType: 'player',
+          turnOrder: 0,
+          initiative: 20,
+          armorClass: 12,
+          maxHp: 30,
+          speed: 30,
+        },
+        {
+          encounterId: duelEncounterId,
+          name: 'Rubble Sentinel',
+          participantType: 'monster',
+          turnOrder: 1,
+          initiative: 10,
+          armorClass: 11,
+          maxHp: 30,
+          speed: 30,
+          monsterAttack,
+        },
+      ])
+      .returning();
+    await database.insert(combatParticipantStatus).values(
+      participants.map((participant) => ({
+        participantId: participant.id,
+        currentHp: participant.maxHp,
+        maxHp: participant.maxHp,
+        isConscious: true,
+      })),
+    );
+    duels.push({
+      campaignId: duelCampaignId,
+      characterId: duelCharacterId,
+      sessionId: duelSessionId,
+    });
+    return {
+      characterId: duelCharacterId,
+      sessionId: duelSessionId,
+      encounterId: duelEncounterId,
+      wizardId: participants[0].id,
+      sentinelId: participants[1].id,
+    };
+  };
+  const usedSlotsOf = async (characterId: string, spellLevel: number) => {
+    const [row] = await realDb()
+      .select()
+      .from(characterSpellSlots)
+      .where(
+        and(
+          eq(characterSpellSlots.characterId, characterId),
+          eq(characterSpellSlots.spellLevel, spellLevel),
+        ),
+      );
+    return row.usedSlots;
+  };
+  afterAll(async () => {
+    const database = realDb();
+    for (const duel of duels) {
+      await database.delete(gameSessions).where(eq(gameSessions.id, duel.sessionId));
+      await database.delete(characters).where(eq(characters.id, duel.characterId));
+      await database.delete(campaigns).where(eq(campaigns.id, duel.campaignId));
+    }
+  });
+
+  test('the Cast menu offers Acid Arrow while a 2nd-level slot remains, and withholds it when none does', async () => {
+    const { characterId, encounterId, sentinelId } = await seedWizardDuel();
+
+    const offered = await getLegalCombatActions(encounterId, userId);
+    expect(offered.actions).toContainEqual({
+      type: 'spell',
+      label: 'Cast Acid Arrow',
+      spellId: 'acid-arrow',
+      targetIds: [sentinelId],
+    });
+
+    await realDb()
+      .update(characterSpellSlots)
+      .set({ usedSlots: 2 })
+      .where(
+        and(
+          eq(characterSpellSlots.characterId, characterId),
+          eq(characterSpellSlots.spellLevel, 2),
+        ),
+      );
+    const exhausted = await getLegalCombatActions(encounterId, userId);
+    expect(
+      exhausted.actions.some(
+        (action) => action.type === 'spell' && action.spellId === 'acid-arrow',
+      ),
+    ).toBe(false);
+    // The cantrip is never slot-gated.
+    expect(exhausted.actions).toContainEqual({
+      type: 'spell',
+      label: 'Cast Fire Bolt',
+      spellId: 'fire-bolt',
+      targetIds: [sentinelId],
+    });
+  });
+
+  test('the exact ActionBar wire body casts Acid Arrow: damage lands, one 2nd-level slot is spent, the turn stays open', async () => {
+    const { characterId, encounterId, wizardId, sentinelId } = await seedWizardDuel();
+
+    // The wire body executeStructuredCombatActionWithBoundary sends for the ActionBar
+    // cast: the spell's own level rides as slotLevel — the engine refuses a leveled
+    // spell with no slot level (missing_spell_slot_level), so the bar names it. The
+    // player's own die rides as d20.
+    const cast = await postTo(encounterId, {
+      source: 'dm',
+      intent: {
+        type: 'spell',
+        actorId: wizardId,
+        targetIds: [sentinelId],
+        spellId: 'acid-arrow',
+        spellName: 'Acid Arrow',
+        slotLevel: 2,
+        d20: 15,
+      },
+      dmStartedAt: 1730000000000,
+      origin: 'action_bar',
+    });
+    expect(cast.status).toBe(200);
+    const results = cast.body.result.results as Array<{
+      finalDamage: number;
+      targetNewHp: number;
+    }>;
+    expect(results).toHaveLength(1);
+    // Melf's Acid Arrow deals 4d4 acid damage on a hit.
+    expect(results[0].finalDamage).toBeGreaterThanOrEqual(4);
+    expect(results[0].finalDamage).toBeLessThanOrEqual(16);
+    const [damageRow] = await realDb()
+      .select()
+      .from(combatDamageLog)
+      .where(
+        and(
+          eq(combatDamageLog.encounterId, encounterId),
+          eq(combatDamageLog.participantId, sentinelId),
+        ),
+      );
+    expect(damageRow.damageAmount).toBe(results[0].finalDamage);
+    expect(results[0].targetNewHp).toBe(30 - results[0].finalDamage);
+    expect(await usedSlotsOf(characterId, 2)).toBe(1);
+    expect(await usedSlotsOf(characterId, 1)).toBe(0);
+    // The cast claims the Action but does not advance the turn: the wizard still holds it.
+    const state = await CombatEncounterService.getCombatState(encounterId, userId);
+    expect(state.currentParticipant?.id).toBe(wizardId);
+  });
+});

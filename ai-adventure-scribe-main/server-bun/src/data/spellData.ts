@@ -58,6 +58,10 @@ export const PLAYER_COMBAT_SPELL_IDS = [
   // #2233: the premade Wizard and Sorcerer carry it as their one damaging leveled spell. A DEX
   // save for half, resolved by the same save branch as Acid Splash and spending a slot.
   'burning-hands',
+  // #1185: a prepared leveled attack spell, resolved by the attack branch with a slot of its
+  // own level. The lingering 2d4 at the end of the next turn has no engine support; the
+  // immediate damage resolves and the rest is DM narration.
+  'acid-arrow',
 ] as const;
 
 const PLAYER_COMBAT_SPELL_ID_SET = new Set<string>(PLAYER_COMBAT_SPELL_IDS);

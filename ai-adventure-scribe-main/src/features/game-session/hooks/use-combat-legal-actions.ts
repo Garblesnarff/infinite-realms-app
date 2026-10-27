@@ -29,6 +29,7 @@ import { askPlayerForAttackDie } from '@/services/combat/player-attack-roll';
 import { resolvePlayerCombatSpell } from '@/services/combat/player-combat-spell';
 import { actorMovementRemaining } from '@/services/combat/player-movement-remaining';
 import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
+import { getSpellById } from '@/utils/spell-lookup';
 
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
@@ -495,13 +496,27 @@ export function useCombatLegalActions(input: {
           if (spell?.kind !== 'attack') {
             await input.onSendText(action.label);
           } else {
+            // #1185: the engine never guesses a slot level — a leveled spell with no
+            // slotLevel is refused (missing_spell_slot_level, pinned by
+            // combat-spell-resolution.vitest.ts and the Bless explicit-choice test).
+            // The ActionBar names the spell's own level: a base-level cast, the same
+            // choice the DM default makes for a text cast. Upcast selection is a
+            // separate feature. An unresolvable spell keeps slot_level null and the
+            // engine refuses it with a readable reason, as before.
+            const catalogSpell = action.spellId
+              ? getSpellById(action.spellId, false)
+              : null;
+            const spellLevel =
+              typeof catalogSpell?.level === 'number' && catalogSpell.level >= 1
+                ? catalogSpell.level
+                : null;
             const structuredAction: StructuredCombatAction = {
               actor_id: actorId,
               action_type: 'cast_spell',
               target_ids: [action.targetIds[0]],
               weapon_id: null,
               spell_id: action.spellId ?? null,
-              slot_level: null,
+              slot_level: spellLevel,
               movement_feet: 0,
             };
             const actor = encounter.participants.find((participant) => participant.id === actorId);
