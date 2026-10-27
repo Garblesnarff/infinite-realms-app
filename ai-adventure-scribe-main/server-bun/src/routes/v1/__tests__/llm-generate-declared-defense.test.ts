@@ -192,4 +192,30 @@ describe('#262 declared-defense directive on /v1/llm/generate', () => {
     expect(generatedPrompts[0]).toContain("combat_action of type 'flee'");
     expect(generatedPrompts[0]).not.toContain("combat_transition:'end'");
   });
+
+  it("directs 'I flee from the fight' at a combat_action of type 'flee' (#1199)", async () => {
+    mockActiveEncounter = { id: 'encounter-defense-1' };
+    generatedPrompts = [];
+
+    const response = await postGenerate(dmTurnBody('I flee from the fight'));
+
+    expect(response.status).toBe(200);
+    expect(generatedPrompts).toHaveLength(1);
+    expect(generatedPrompts[0]).toContain('<declared_defense type="flee">');
+    expect(generatedPrompts[0]).toContain("combat_action of type 'flee'");
+    expect(generatedPrompts[0]).not.toContain("combat_transition:'end'");
+  });
+
+  it("directs 'I run from the fight' at a combat_action of type 'flee' (#1199)", async () => {
+    mockActiveEncounter = { id: 'encounter-defense-1' };
+    generatedPrompts = [];
+
+    const response = await postGenerate(dmTurnBody('I run from the fight'));
+
+    expect(response.status).toBe(200);
+    expect(generatedPrompts).toHaveLength(1);
+    expect(generatedPrompts[0]).toContain('<declared_defense type="flee">');
+    expect(generatedPrompts[0]).toContain("combat_action of type 'flee'");
+    expect(generatedPrompts[0]).not.toContain("combat_transition:'end'");
+  });
 });

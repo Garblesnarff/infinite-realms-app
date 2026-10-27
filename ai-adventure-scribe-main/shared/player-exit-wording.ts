@@ -9,7 +9,9 @@
 export type PlayerExitKind = 'flee' | 'yield' | 'disengage';
 
 const EXIT_WORDING: Record<PlayerExitKind, RegExp> = {
-  flee: /\b(flee|flees|fleeing|run away|run for|escape|bolt for|make a run for)\b/i,
+  // #1199: "I run from the fight" names the departure as plainly as "I run away" —
+  // without it the #749 gate skips the DM-declared flee the directive produces.
+  flee: /\b(flee|flees|fleeing|run away|run for|run from the fight|escape|bolt for|make a run for)\b/i,
   yield: /\b(yield|surrender|give up)\b/i,
   disengage: /\bdisengag/i,
 };
