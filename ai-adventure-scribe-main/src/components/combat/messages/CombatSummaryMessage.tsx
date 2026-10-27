@@ -42,7 +42,9 @@ export const CombatSummaryMessage: React.FC<CombatSummaryProps> = React.memo(
               <strong>Rounds:</strong> {summary.rounds}
             </div>
             <div className="text-sm">
-              <strong>Total Damage:</strong> {summary.totalDamage}
+              {/* #974: the total sums every combatant's damage, the enemies' too; say so. */}
+              <strong>Total Damage:</strong> {summary.totalDamage}{' '}
+              <span className="text-muted-foreground">(all combatants)</span>
             </div>
           </div>
         </div>

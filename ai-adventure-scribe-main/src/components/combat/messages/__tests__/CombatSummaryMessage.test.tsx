@@ -32,6 +32,13 @@ describe('CombatSummaryMessage', () => {
     expect(screen.getByText('Combat concluded')).toBeInTheDocument();
   });
 
+  it('says the total counts every combatant, not only the player (#974)', () => {
+    // Hark N21-020 read "Total Damage 35" as the fighter's own damage; it was 29 dealt plus 6 taken.
+    render(<CombatSummaryMessage summary={summary} />);
+    const damageDiv = screen.getByText(/Total Damage:/).closest('div');
+    expect(damageDiv).toHaveTextContent('Total Damage: 15 (all combatants)');
+  });
+
   it('renders each participant with damage dealt, taken and status', () => {
     render(<CombatSummaryMessage summary={summary} />);
     expect(screen.getByText('Hero')).toBeInTheDocument();

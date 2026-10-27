@@ -23,13 +23,14 @@
  * Requires TEST_DATABASE_URL or DATABASE_URL — see fixtures/real-db.ts.
  */
 import { afterAll, beforeAll, beforeEach, expect, mock, test } from 'bun:test';
-import { eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 
 import { closeRealDb, describeWithDb, hasRealDb, realDb, testId } from './fixtures/real-db.js';
 import {
   campaigns,
   characters,
   characterStats,
+  combatDamageLog,
   combatEncounters,
   combatParticipantStatus,
   combatParticipants,
@@ -248,6 +249,8 @@ describeWithDb('attack resolution telemetry', () => {
 
   const REQUIRED_FIELDS = [
     'encounterId',
+    'sessionId',
+    'round',
     'attackerId',
     'attackerSlug',
     'targetId',
@@ -274,6 +277,9 @@ describeWithDb('attack resolution telemetry', () => {
   const expectStructurallyComplete = (line: LogPayload) => {
     for (const field of REQUIRED_FIELDS) expect(line).toHaveProperty(field);
     expect(line.encounterId).toBe(encounterId);
+    // #974: a log read names the session and the round without a join through the encounter.
+    expect(line.sessionId).toBe(sessionId);
+    expect(typeof line.round).toBe('number');
     // A d20 face, not a total, and inside the only range a d20 has.
     expect(line.d20).toBeGreaterThanOrEqual(1);
     expect(line.d20).toBeLessThanOrEqual(20);
@@ -317,6 +323,48 @@ describeWithDb('attack resolution telemetry', () => {
     // This is the "was damage silently dropped?" question, answered against the database.
     return;
   }
+
+  test('#974: the line and the result carry the round the damage row is written with', async () => {
+    // Hark N21-020: an R2 hit read as R1 because the client labelled it with its own round.
+    await db
+      .update(combatEncounters)
+      .set({ currentRound: 2 })
+      .where(eq(combatEncounters.id, encounterId));
+    await setAc(monsterId, UNMISSABLE_AC);
+    try {
+      let line: LogPayload | null = null;
+      let result: { round?: number; hit: boolean } | null = null;
+      for (let attempt = 0; attempt < 12 && !line; attempt += 1) {
+        const expectedVersion = await giveTurnTo(heroId);
+        emitted.length = 0;
+        const outcome = await combatAttackService!.resolveAttack(
+          encounterId,
+          { attackerId: heroId, targetId: monsterId, expectedVersion, attackType: 'melee' },
+          userId,
+        );
+        if (emitted[0]?.outcome === 'hit') {
+          line = emitted[0];
+          result = outcome;
+        }
+      }
+      expect(line).not.toBeNull();
+      expect(line!.sessionId).toBe(sessionId);
+      expect(line!.round).toBe(2);
+      expect(result!.round).toBe(2);
+      const [damageRow] = await db
+        .select({ roundNumber: combatDamageLog.roundNumber })
+        .from(combatDamageLog)
+        .where(eq(combatDamageLog.encounterId, encounterId))
+        .orderBy(desc(combatDamageLog.createdAt))
+        .limit(1);
+      expect(damageRow.roundNumber).toBe(2);
+    } finally {
+      await db
+        .update(combatEncounters)
+        .set({ currentRound: 1 })
+        .where(eq(combatEncounters.id, encounterId));
+    }
+  });
 
   test('the HP the line reports is the HP that was written', async () => {
     await setAc(monsterId, UNMISSABLE_AC);
@@ -468,7 +516,13 @@ describeWithDb('mook group attack bonus', () => {
       .returning({ id: campaigns.id });
     const [character] = await db
       .insert(characters)
-      .values({ userId, campaignId: campaign.id, name: testId('mook-group-hero'), class: 'Fighter', level: 1 })
+      .values({
+        userId,
+        campaignId: campaign.id,
+        name: testId('mook-group-hero'),
+        class: 'Fighter',
+        level: 1,
+      })
       .returning({ id: characters.id });
     await db.insert(characterStats).values({
       characterId: character.id,
@@ -480,11 +534,22 @@ describeWithDb('mook group attack bonus', () => {
     });
     const [session] = await db
       .insert(gameSessions)
-      .values({ campaignId: campaign.id, characterId: character.id, sessionNumber: 1, status: 'active' })
+      .values({
+        campaignId: campaign.id,
+        characterId: character.id,
+        sessionNumber: 1,
+        status: 'active',
+      })
       .returning({ id: gameSessions.id });
     const [encounter] = await db
       .insert(combatEncounters)
-      .values({ sessionId: session.id, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
+      .values({
+        sessionId: session.id,
+        status: 'active',
+        currentRound: 1,
+        currentTurnOrder: 0,
+        version: 1,
+      })
       .returning({ id: combatEncounters.id });
     encounterId = encounter.id;
 

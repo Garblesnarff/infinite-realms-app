@@ -35,6 +35,10 @@ import type { TacticalMap } from '../../tactical/types.js';
 /** Everything one attack resolution knows about itself, in the order a reader wants it. */
 export type AttackTelemetry = {
   encounterId: string;
+  /** #974: the session, so a log read needs no join through the encounter. */
+  sessionId: string | null;
+  /** #974: the round this attack resolved in: the `round_number` its damage row is written with. */
+  round: number;
   attackerId: string;
   attackerSlug: string;
   targetId: string;

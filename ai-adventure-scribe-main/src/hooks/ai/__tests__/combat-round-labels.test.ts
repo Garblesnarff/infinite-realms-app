@@ -242,4 +242,35 @@ describe('engine line round labels (#2393)', () => {
       'ROUND 3 · NPC',
     ]);
   });
+
+  // #974 (Hark N21-020): an R2 hit read as R1. The server now names the round the attack resolved
+  // in (`round`, the `round_number` of its damage row); the line takes it over the client's own.
+  it("a player hit is labelled with the round the server resolved it in, not the client's stale round", async () => {
+    executeStructuredCombatActionWithBoundary.mockResolvedValueOnce({
+      outcomes: [{ participantId: 'npc1', hit: true, finalDamage: 10, newHp: 2 }],
+      result: {
+        actorName: ROUND_FIGHT_PLAYER_NAME,
+        targetName: 'Balthazar',
+        d20: 12,
+        attackBonus: 5,
+        totalAttackRoll: 17,
+        targetAC: 14,
+        hit: true,
+        finalDamage: 10,
+        damageType: 'slashing',
+        round: 2,
+      },
+      boundary: null,
+    });
+
+    const labels = await playerTurn({
+      round: 1,
+      order: ['player', 'npc1'],
+      target: 'npc1',
+      advance: [TWO_ACTOR_PLAYER_FIRST_NPC_BATCHES[0]],
+    });
+
+    expect(labels).toContain('ROUND 2 · PLAYER');
+    expect(labels).not.toContain('ROUND 1 · PLAYER');
+  });
 });
