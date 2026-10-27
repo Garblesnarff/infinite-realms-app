@@ -181,13 +181,17 @@ const envelope = () => ({
   handout_actions: [],
   options: [],
 });
-const turn = async (words: string) => {
+const turn = async (
+  words: string,
+  board: TacticalMap = map,
+  reply: string = JSON.stringify(envelope()),
+) => {
   mockActiveEncounter = { id: 'encounter-defense-1' };
   generatedPrompts = [];
-  modelReply = JSON.stringify(envelope());
+  modelReply = reply;
   const response = await postGenerate({
     ...dmTurnBody(words),
-    prompt: `<tactical_context>\n${buildTacticalPrompt(map, 'hero')}\n</tactical_context>\n<immutable_game_state>{"isInCombat":true,"encounterId":"encounter-defense-1"}</immutable_game_state>`,
+    prompt: `<tactical_context>\n${buildTacticalPrompt(board, 'hero')}\n</tactical_context>\n<immutable_game_state>{"isInCombat":true,"encounterId":"encounter-defense-1"}</immutable_game_state>`,
     responseSchema: createDmResponseSchema(),
   });
   expect(response.status).toBe(200);
@@ -267,4 +271,108 @@ describe('#823 player aim on the real LLM route (provider stub, no model calls)'
       expect(result.roll_requests).toEqual([]);
     },
   );
+});
+
+// Hark N2-003 (#1171). The id `knight` is what "the knight" matches; the display name is
+// what "Static Knight" matches. The model's reply is the unasked dagger from #823.
+const knightMap: TacticalMap = {
+  ...map,
+  entities: [
+    map.entities[0],
+    {
+      id: 'knight',
+      name: 'Static Knight',
+      type: 'monster',
+      x: 2,
+      y: 1,
+      size: 'medium',
+      speedFeet: 30,
+      movementRemaining: 30,
+    },
+  ],
+};
+
+describe('#1171 a typed non-engine cast is not a weapon attack', () => {
+  it('replaces the model dagger with the declared Charm Person cast', async () => {
+    const result = await turn('I cast Charm Person on the Static Knight', knightMap);
+    expect(result.combat_actions).toEqual([
+      {
+        actor_id: 'hero',
+        action_type: 'cast_spell',
+        spell_id: 'charm-person',
+        slot_level: 1,
+        target_ids: ['knight'],
+        weapon_id: null,
+        movement_feet: 0,
+      },
+    ]);
+    expect(result.roll_requests).toEqual([]);
+    expect(JSON.stringify(result.combat_actions)).not.toContain('dagger');
+  });
+
+  it('does not translate a dagger attack roll_request into a weapon attack', async () => {
+    const result = await turn(
+      'I cast Charm Person on the Static Knight',
+      knightMap,
+      JSON.stringify({
+        ...envelope(),
+        combat_actions: [],
+        roll_requests: [
+          {
+            type: 'attack',
+            formula: '1d20+4',
+            purpose: 'Dagger attack against the Static Knight',
+            dc: null,
+            ac: 16,
+            advantage: false,
+            disadvantage: false,
+          },
+        ],
+      }),
+    );
+    expect(result.combat_actions).toEqual([
+      expect.objectContaining({ action_type: 'cast_spell', spell_id: 'charm-person' }),
+    ]);
+    expect(
+      result.combat_actions.some(
+        (action: { action_type: string }) => action.action_type === 'attack',
+      ),
+    ).toBe(false);
+    expect(result.roll_requests).toEqual([]);
+  });
+
+  it('still resolves Fire Bolt at the knight as a spell attack', async () => {
+    const result = await turn('I cast Fire Bolt at the knight', knightMap);
+    expect(result.combat_actions[0]).toMatchObject({
+      action_type: 'cast_spell',
+      spell_id: 'fire-bolt',
+      target_ids: ['knight'],
+      weapon_id: null,
+    });
+  });
+
+  it('still treats "I attack with my dagger" as a weapon attack', async () => {
+    const untargeted = await turn('I attack with my dagger', knightMap);
+    expect(untargeted.text).toBe('Who do you aim at?');
+    expect(untargeted.combat_actions).toEqual([]);
+
+    const aimed = await turn('I attack the Static Knight with my dagger', knightMap);
+    expect(aimed.combat_actions[0]).toMatchObject({
+      action_type: 'attack',
+      weapon_id: 'dagger',
+      target_ids: ['knight'],
+    });
+  });
+
+  it('keeps a dagger the player also declared beside the narrated cast', async () => {
+    const result = await turn(
+      'I cast Charm Person on the Static Knight and I attack the Static Knight with my dagger',
+      knightMap,
+    );
+    expect(result.combat_actions[0]).toMatchObject({
+      action_type: 'attack',
+      weapon_id: 'dagger',
+      target_ids: ['knight'],
+    });
+  });
 });

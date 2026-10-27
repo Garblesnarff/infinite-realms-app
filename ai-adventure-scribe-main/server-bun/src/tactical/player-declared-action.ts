@@ -1,9 +1,10 @@
 import { collectEntityMentions } from './attack-pair.js';
 import { parseTacticalDigest } from './digest-parse.js';
+import { narratedCastInsteadOfWeaponAttack } from './narrated-player-cast.js';
 import { readPlayerAttack, WEAPON_NOUN } from './player-attack-input.js';
 import { findPlayerCombatSpellInText } from '../data/spellData.js';
 
-import type { DMResponse, DMCombatAction } from '../services/dm/dm-response-schema.js';
+import type { DMCombatAction, DMResponse } from '../services/dm/dm-response-schema.js';
 
 function requestPlayerAim(response: DMResponse): { response: DMResponse; awaitingTarget: boolean } {
   return {
@@ -35,7 +36,11 @@ export function groundPlayerDeclaredAction(
     namesHostile: (text) => collectEntityMentions(digest, text).length > 0,
     namesWeapon: (text) => new RegExp(`\\b(?:${WEAPON_NOUN})\\b`, 'i').test(text),
   });
-  if (!read.declared) return null;
+  // A cast the engine cannot resolve must not keep the model's weapon attack (#1171).
+  // A swing declared beside it still owns the turn: `read.declared` is already true.
+  if (!read.declared) {
+    return narratedCastInsteadOfWeaponAttack(response, digest, actor, playerInput);
+  }
   const spell = findPlayerCombatSpellInText(read.source);
   const targets = [
     ...new Set(
