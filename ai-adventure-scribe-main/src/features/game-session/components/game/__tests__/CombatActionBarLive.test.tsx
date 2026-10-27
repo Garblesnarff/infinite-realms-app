@@ -6,6 +6,7 @@ import { ACTION_BAR_CAST_INTENT } from '../../../../../../shared/test-fixtures/c
 import {
   COMBAT_CHAT_PLACEHOLDER,
   CombatActionBarLive,
+  NARRATED_CAST_REASON,
   useCombatChatPlaceholder,
 } from '../CombatActionBar';
 
@@ -97,6 +98,7 @@ const combatHolder = vi.hoisted(() => ({ current: undefined as CombatValue | und
 const pack = vi.hoisted(() => ({
   inventory: [] as Array<{ id: string; name: string }>,
   cantrips: [] as Array<Record<string, unknown>>,
+  known: [] as Array<Record<string, unknown>>,
   spellcasting: null as Record<string, unknown> | null,
 }));
 
@@ -120,7 +122,7 @@ vi.mock('@/contexts/CombatContext', () => ({
 vi.mock('../overhaul/useOverhaulViewModel', () => ({
   useOverhaulViewModel: () => ({
     character: {
-      spells: { cantrips: pack.cantrips, known: [], prepared: [] },
+      spells: { cantrips: pack.cantrips, known: pack.known, prepared: [] },
       spellcasting: pack.spellcasting,
       inventory: pack.inventory,
       attacks: [{ id: 'longsword', name: 'Longsword', bonus: '+5', damage: '1d8+3' }],
@@ -174,6 +176,7 @@ beforeEach(() => {
   combatHolder.current = undefined;
   pack.inventory = [];
   pack.cantrips = [];
+  pack.known = [];
   pack.spellcasting = null;
 });
 
@@ -234,6 +237,71 @@ describe('CombatActionBarLive', () => {
     const placeholders = screen.getAllByTestId('placeholder');
     const last = placeholders[placeholders.length - 1];
     expect(last.textContent).toBe(COMBAT_CHAT_PLACEHOLDER);
+  });
+
+  it('a bard with only unresolved spells opens Cast on three greyed entries (#1171)', async () => {
+    combatHolder.current = {
+      state: { isInCombat: true, activeEncounter: buildEncounter('pc-1') },
+      refreshCombatState: vi.fn(),
+    };
+    pack.spellcasting = { ability: 'CHA' };
+    pack.known = [
+      { id: 'blindness-deafness', name: 'Blindness/Deafness' },
+      { id: 'bane', name: 'Bane' },
+      { id: 'charm-person', name: 'Charm Person' },
+    ];
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => playerPayload,
+    } as Response);
+
+    render(<CombatActionBarLive {...defaultProps} />);
+    const cast = await screen.findByRole('button', { name: /^Cast/ });
+    expect(cast).not.toBeDisabled();
+    const user = userEvent.setup();
+    await user.click(cast);
+    const items = await screen.findAllByRole('menuitem');
+    expect(items.map((item) => item.textContent)).toEqual([
+      `Blindness/Deafness${NARRATED_CAST_REASON}`,
+      `Bane${NARRATED_CAST_REASON}`,
+      `Charm Person${NARRATED_CAST_REASON}`,
+    ]);
+    items.forEach((item) => expect(item).toHaveAttribute('aria-disabled', 'true'));
+  });
+
+  it('a wizard with Fire Bolt gets a live Cast chip (#1171)', async () => {
+    combatHolder.current = {
+      state: { isInCombat: true, activeEncounter: buildEncounter('pc-1') },
+      refreshCombatState: vi.fn(),
+    };
+    pack.spellcasting = { ability: 'INT' };
+    pack.cantrips = [
+      { id: 'fire-bolt', name: 'Fire Bolt', range: '120 feet', castingTime: '1 action' },
+    ];
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...playerPayload,
+        actions: [
+          ...playerPayload.actions,
+          {
+            type: 'spell',
+            label: 'Cast Fire Bolt',
+            spellId: 'fire-bolt',
+            targetIds: ['goblin-1'],
+          },
+        ],
+      }),
+    } as Response);
+
+    render(<CombatActionBarLive {...defaultProps} />);
+    const cast = await screen.findByRole('button', { name: /^Cast/ });
+    expect(cast).not.toBeDisabled();
+    const user = userEvent.setup();
+    await user.click(cast);
+    const item = await screen.findByRole('menuitem', { name: /Cast Fire Bolt/ });
+    expect(item).not.toBeDisabled();
+    expect(screen.queryByText(NARRATED_CAST_REASON)).toBeNull();
   });
 
   it('enemy turn: every toolbar button disabled; placeholder renders exactly enemy turn text', async () => {
