@@ -466,7 +466,11 @@ export function trackerDirectiveText(input: {
     // so the DM reads the phase off the line itself. A phase whose clock is
     // not among the trackers (a budget-forced 'Final beat' with no defined
     // clock) leaves the lines unchanged; the climax lines below carry it.
+    // FIX round 1 (#1091): mid-fight the marker waits like every other
+    // climax line — the bare clock line still renders, but it must not
+    // announce a climax the DM has been told to defer.
     const marker =
+      input.inCombat !== true &&
       phase?.phase === 'climax' &&
       normalizeClockName(tracker.name) === normalizeClockName(phase.clock)
         ? ' — Climax'

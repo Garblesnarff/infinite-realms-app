@@ -941,6 +941,24 @@ describe('visible pacing (#1170)', () => {
     });
     expect(text).toContain('Breath Clock: 6/6 — Climax');
   });
+
+  test('a combat-held climax phase renders the clock line without Climax (#1091, FIX round 1)', () => {
+    const text = trackerDirectiveText({
+      trackers: [{ name: 'Breath', value: 6, limit: 6 }],
+      campaignLength: 'one-shot',
+      phase: {
+        phase: 'climax',
+        clock: 'Breath',
+        climaxTurns: 0,
+        endingRequired: false,
+        lastMessageId: 'm1',
+      },
+      inCombat: true,
+    });
+    expect(text).toContain('Breath Clock: 6/6');
+    expect(text).not.toContain('— Climax');
+    expect(text).toContain('Combat is under way');
+  });
 });
 
 describe('trackerDirectiveText combat suppression (#1091)', () => {
