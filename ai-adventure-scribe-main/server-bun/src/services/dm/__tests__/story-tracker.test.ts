@@ -474,6 +474,20 @@ describe('trackerDirectiveText', () => {
     expect(text).toContain('Breath Clock: 4/6');
   });
 
+  test('a multi-segment tick must be narrated with its count (#1161)', () => {
+    // The widget shows only the final value: a turn that moves a clock
+    // 3/6 -> 5/6 renders as 5/6 with no 4/6 in between, so an unnumbered
+    // "ticks forward" leaves the jump unexplained. The directive must
+    // tell the DM to state the count when one reply moves a clock by
+    // more than one segment.
+    const text = trackerDirectiveText({
+      trackers: [{ name: 'Sunset', value: 3, limit: 6 }],
+      phase: null,
+    });
+    expect(text).toContain('more than one segment');
+    expect(text).toContain('two segments');
+  });
+
   test('nothing to say is null', () => {
     expect(trackerDirectiveText({ trackers: [], phase: null })).toBeNull();
   });

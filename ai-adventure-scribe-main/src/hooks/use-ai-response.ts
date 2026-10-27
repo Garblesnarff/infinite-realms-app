@@ -1216,6 +1216,12 @@ export const useAIResponse = (): {
         // its session id, so a late-arriving turn can never render its ending
         // over a different session's screen.
         const declaredEnding = (result as { campaign_ending?: unknown }).campaign_ending;
+        // #1161: the ending turn always potentially moves the sheet — its own
+        // award via xp_award, or the deferred #1139 payment story-ending.ts
+        // pays on this turn without attaching xp_award to the reply. The
+        // story-effects gate below reads this flag so the ending turn
+        // refreshes even when the final result carries no story-effect fields.
+        let endingLatchedThisTurn = false;
         if (
           sessionId &&
           declaredEnding !== null &&
@@ -1223,6 +1229,7 @@ export const useAIResponse = (): {
           typeof (declaredEnding as { summary?: unknown }).summary === 'string' &&
           (declaredEnding as { summary: string }).summary.trim().length > 0
         ) {
+          endingLatchedThisTurn = true;
           setCampaignCompletedState({
             summary: (declaredEnding as { summary: string }).summary,
             sessionId,
@@ -1491,10 +1498,21 @@ export const useAIResponse = (): {
           storyEffectPresent((result as AIResponse).items) ||
           storyEffectPresent((result as AIResponse).conditions) ||
           storyEffectPresent((result as AIResponse).rest);
-        if (typeof window !== 'undefined' && sessionId && storyEffectsChangedCharacter) {
+        // #1161: the ending turn refreshes even with no story-effect fields
+        // (see the latch above) — one dispatch per turn, at this single
+        // site, so an ending turn carrying its own award still fires once.
+        // The completion screen waits for this refresh before showing XP.
+        if (
+          typeof window !== 'undefined' &&
+          sessionId &&
+          (storyEffectsChangedCharacter || endingLatchedThisTurn)
+        ) {
           window.dispatchEvent(
             new CustomEvent('character-state-updated', {
-              detail: { type: 'character_state_updated', reason: 'story_effects' },
+              detail: {
+                type: 'character_state_updated',
+                reason: endingLatchedThisTurn ? 'campaign_ending' : 'story_effects',
+              },
             }),
           );
         }

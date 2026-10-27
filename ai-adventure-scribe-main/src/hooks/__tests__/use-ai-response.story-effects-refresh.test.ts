@@ -221,4 +221,33 @@ describe('useAIResponse: story effects refresh the sheet (#1085)', () => {
       }),
     ).toBe(0);
   });
+
+  it('an ending turn refreshes even with no story-effect fields (#1161)', async () => {
+    // The ending turn's award may be the deferred #1139 payment, which
+    // story-ending.ts pays without attaching xp_award to the reply — so
+    // the story-effects gate alone would dispatch nothing, and with a
+    // dead socket the completion screen would read the pre-award sheet
+    // forever. The ending latch itself must trigger the refresh.
+    const count = await playAndCountRefreshes({
+      campaign_ending: { summary: 'The adventure ends at dawn.' },
+    });
+    expect(count).toBe(1);
+  });
+
+  it('an ending turn carrying its own award still dispatches once (#1161)', async () => {
+    // Single dispatch site: the ending and the award must not each fire
+    // their own refresh (the hook coalesces, but one event is the contract).
+    const count = await playAndCountRefreshes({
+      campaign_ending: { summary: 'The adventure ends at dawn.' },
+      xp_award: { amount: 325, reason: 'finished the story' },
+    });
+    expect(count).toBe(1);
+  });
+
+  it('a blank ending summary latches nothing and refreshes nothing (#1161)', async () => {
+    const count = await playAndCountRefreshes({
+      campaign_ending: { summary: '   ' },
+    });
+    expect(count).toBe(0);
+  });
 });

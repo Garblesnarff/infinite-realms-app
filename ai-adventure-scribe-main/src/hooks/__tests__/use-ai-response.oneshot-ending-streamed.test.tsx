@@ -32,6 +32,13 @@ import { userDataApi } from '@/services/user-data-api';
 
 const { fetchMock } = vi.hoisted(() => ({ fetchMock: vi.fn() }));
 const RUN_XP = 1500;
+// #1161: the mocked sheet starts at the PRE-award total and lands the run XP
+// only when the test simulates the award-triggered refresh (holder swap +
+// rerender). A constant 1500 object would model a sheet that never refreshes,
+// which the #1161 wait-for-refresh screen correctly holds hidden.
+const { sheetHolder } = vi.hoisted(() => ({
+  sheetHolder: { current: { experience: 1175 } },
+}));
 
 vi.mock('@/lib/auth-gate', () => ({
   waitForAuth: vi.fn(() => Promise.resolve()),
@@ -68,8 +75,9 @@ vi.mock('@/contexts/GameContext', () => ({
 
 vi.mock('@/contexts/CharacterContext', () => ({
   useCharacter: () => ({ state: { character: null } }),
-  // The loaded sheet after the run's awards: what the live end state reads.
-  useOptionalCharacter: () => ({ state: { character: { experience: 1500 } } }),
+  // The live end state reads the sheet from here; the object identity
+  // changes only when the award-triggered refresh lands (#1161).
+  useOptionalCharacter: () => ({ state: { character: sheetHolder.current } }),
 }));
 
 vi.mock('@/services/user-data-api', () => ({
@@ -175,16 +183,30 @@ describe('one-shot ending on the streamed path reaches the end-state screen (#10
       }),
     );
 
-    render(
+    const summary = result.current.campaignCompletedState!.summary;
+    const { rerender } = render(
       <MemoryRouter>
         <CampaignCompleteEndState
-          summary={result.current.campaignCompletedState!.summary}
+          summary={summary}
           chooseHeroHref="/app/characters"
         />
       </MemoryRouter>,
     );
     expect(screen.getByRole('heading', { name: /adventure complete/i })).toBeInTheDocument();
     expect(screen.getByText(ONESHOT_ENDING_SUMMARY)).toBeInTheDocument();
+    // #1161: before the award-triggered refresh lands, the live path holds
+    // the XP line rather than showing the pre-award total.
+    expect(screen.queryByTestId('completion-screen-experience')).not.toBeInTheDocument();
+    // Simulate the sheet refresh landing (the #1130 hook's SET_CHARACTER).
+    sheetHolder.current = { experience: RUN_XP };
+    rerender(
+      <MemoryRouter>
+        <CampaignCompleteEndState
+          summary={summary}
+          chooseHeroHref="/app/characters"
+        />
+      </MemoryRouter>,
+    );
     expect(screen.getByTestId('completion-screen-experience')).toHaveTextContent(
       `${RUN_XP.toLocaleString()} XP`,
     );
