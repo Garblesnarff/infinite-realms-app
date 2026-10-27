@@ -463,6 +463,192 @@ describeWithDb('paladin Lay on Hands llm.ts wiring (#712)', () => {
 });
 
 /**
+ * #712: Divine Sense through the DM route. The service-level test
+ * (paladin-divine-sense.real-db.test.ts) proves spendDivineSense decrements
+ * the pool; this block proves the typed story turn does: the DM feature gate
+ * claims "I use Divine Sense", the story spend decrements the
+ * character_features row, and the spend lands on the sheet — the
+ * characters.classFeatures JSON the sheet's ClassFeatureTracker overlays —
+ * so the sheet shows the use. A second identical turn spends nothing more.
+ */
+describeWithDb('paladin Divine Sense story-turn spend through the DM route (#712)', () => {
+  let db: ReturnType<typeof realDb>;
+  const senseUserId = testId('712-sense-user');
+
+  const request = (path: string, method: string, body?: unknown): Promise<Response> =>
+    pipeline.handle(
+      new Request(`http://localhost${path}`, {
+        method,
+        headers: authHeaders,
+        body: body === undefined ? undefined : JSON.stringify(body),
+      }),
+    );
+
+  /** The SRD seed shape: limited_use features with a NULL uses_count (#224). */
+  const ensureLibraryRow = async (featureName: string): Promise<string> => {
+    const existing = await db
+      .select({ id: classFeaturesLibrary.id })
+      .from(classFeaturesLibrary)
+      .where(
+        and(
+          eq(classFeaturesLibrary.className, 'Paladin'),
+          eq(classFeaturesLibrary.featureName, featureName),
+        ),
+      )
+      .limit(1);
+    if (existing.length > 0) return existing[0].id;
+    const [row] = await db
+      .insert(classFeaturesLibrary)
+      .values({
+        className: 'Paladin',
+        featureName,
+        levelAcquired: 1,
+        description: 'test',
+        usageType: 'action',
+        usesPerRest: 'long_rest',
+        usesCount: null,
+      })
+      .returning({ id: classFeaturesLibrary.id });
+    return row.id;
+  };
+
+  beforeAll(async () => {
+    if (!hasRealDb) return;
+    db = realDb();
+    userId = senseUserId;
+    await ensureLibraryRow('Divine Sense');
+  });
+
+  afterAll(async () => {
+    await closeRealDb();
+  });
+
+  it('a typed Divine Sense on an ordinary story turn spends one use and lands on the sheet', async () => {
+    // Self-contained: a fresh paladin and session owned by the current auth
+    // user. CHA 8, so the pool is max(1, 1 + CHA mod) = 1 use — the QA
+    // character from the issue (Hark D5-015). A fresh session has no
+    // encounter, which is what an ordinary story turn looks like.
+    const owner = userId;
+    const [{ id: routeCampaignId }] = await db
+      .insert(campaigns)
+      .values({ userId: owner, name: testId('712-sense-camp') })
+      .returning({ id: campaigns.id });
+    const [{ id: routePaladinId }] = await db
+      .insert(characters)
+      .values({
+        userId: owner,
+        campaignId: routeCampaignId,
+        name: testId('712-sense-pal'),
+        class: 'Paladin',
+        level: 1,
+      })
+      .returning({ id: characters.id });
+    await db.insert(characterStats).values({
+      characterId: routePaladinId,
+      charisma: 8,
+      maxHitPoints: 12,
+      currentHitPoints: 12,
+      temporaryHitPoints: 0,
+      isConscious: true,
+      vitalState: 'standing',
+    });
+    const [{ id: routeSessionId }] = await db
+      .insert(gameSessions)
+      .values({
+        campaignId: routeCampaignId,
+        characterId: routePaladinId,
+        sessionNumber: 1,
+        status: 'active',
+      })
+      .returning({ id: gameSessions.id });
+    const senseFeatureId = await ensureLibraryRow('Divine Sense');
+
+    const poolRow = async (): Promise<number | null> =>
+      (
+        await db
+          .select({ usesRemaining: characterFeatures.usesRemaining })
+          .from(characterFeatures)
+          .where(
+            and(
+              eq(characterFeatures.characterId, routePaladinId),
+              eq(characterFeatures.featureId, senseFeatureId),
+            ),
+          )
+          .limit(1)
+      )[0]?.usesRemaining ?? null;
+    const logCount = async (): Promise<number> =>
+      (
+        await db
+          .select({ id: featureUsageLog.id })
+          .from(featureUsageLog)
+          .where(
+            and(
+              eq(featureUsageLog.characterId, routePaladinId),
+              eq(featureUsageLog.featureId, senseFeatureId),
+              eq(featureUsageLog.sessionId, routeSessionId),
+            ),
+          )
+      ).length;
+    const sheetEntry = async (): Promise<unknown> => {
+      const [row] = await db
+        .select({ classFeatures: characters.classFeatures })
+        .from(characters)
+        .where(eq(characters.id, routePaladinId))
+        .limit(1);
+      const sheet = (row?.classFeatures ?? {}) as Record<string, unknown>;
+      return sheet['divine_sense'];
+    };
+
+    // No pool row exists before the first use: the pool initializes lazily.
+    expect(await poolRow()).toBeNull();
+    expect(await sheetEntry()).toBeUndefined();
+
+    const playerInput = 'I use Divine Sense to scan the room.';
+    const postTurn = async (messageId: string) => {
+      await db.insert(dialogueHistory).values({
+        sessionId: routeSessionId,
+        speakerType: 'player',
+        speakerId: routePaladinId,
+        message: playerInput,
+      });
+      generatedText = JSON.stringify({
+        text: 'You sense a faint undead presence nearby.',
+      });
+      return request('/v1/llm/generate', 'POST', {
+        prompt: 'The paladin opens their awareness. What happens?',
+        player_input: playerInput,
+        sessionId: routeSessionId,
+        dmReply: { messageId, inCombat: false },
+        combatEntry: {
+          sessionId: routeSessionId,
+          player: { name: 'Test Paladin', initiativeModifier: 2 },
+        },
+        provider: 'openrouter',
+        requestType: 'user',
+        maxTokens: 8192,
+        temperature: 0.9,
+      });
+    };
+
+    const res = await postTurn('55555555-6666-7777-8888-999999999999');
+    expect(res.status).toBe(200);
+    // One use spent: the pool row initializes to 1 (CHA 8) and decrements
+    // to 0, one usage-log row lands, and the sheet JSON carries the use.
+    expect(await poolRow()).toBe(0);
+    expect(await logCount()).toBe(1);
+    expect(await sheetEntry()).toEqual({ maxUses: 1, currentUses: 0 });
+
+    // A second identical story turn spends nothing more: the pool is empty,
+    // so no second log row and the sheet entry is unchanged.
+    const res2 = await postTurn('66666666-7777-8888-9999-000000000000');
+    expect(res2.status).toBe(200);
+    expect(await poolRow()).toBe(0);
+    expect(await logCount()).toBe(1);
+    expect(await sheetEntry()).toEqual({ maxUses: 1, currentUses: 0 });
+  });
+});
+
+/**
  * #751 (live-failing): a typed long rest through the DM route. The #990 pin
  * proved applyStoryRest applies a typed rest when called directly; the live
  * failure is here, on the route: the rest applied but NO engine line ever
