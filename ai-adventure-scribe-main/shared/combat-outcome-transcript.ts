@@ -492,6 +492,22 @@ export function formatCombatActionParts(
     ];
   }
 
+  if (action.action_type === 'dash' && isFiniteNumber(value.movementGainedFeet)) {
+    const actor = facingName(undefined, action.actor_id, roster);
+    const line = `⚙️ Engine: ${actor} dashed and gained ${value.movementGainedFeet} ft of movement.`;
+    return [
+      {
+        line,
+        card: {
+          kind: 'move',
+          side: engineCardSide(action.actor_id, roster, false),
+          line,
+          title: `${actor} Dashes (+${value.movementGainedFeet} ft)`,
+        },
+      },
+    ];
+  }
+
   const verb: Record<string, string> = {
     dash: 'dashed',
     dodge: 'dodged',

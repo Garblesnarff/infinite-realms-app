@@ -115,7 +115,15 @@ export async function grantTacticalDash(
     entityId,
     movementRemaining: entity.movementRemaining,
   });
-  return map;
+  // Keep the distance on the authoritative result (after the persisted map write) so the
+  // action-bar transcript can show what Dash actually added without inventing a value.
+  const dashResult = map as TacticalMap & {
+    movementGainedFeet: number;
+    engineRows: Array<{ kind: 'dash'; movementGainedFeet: number }>;
+  };
+  dashResult.movementGainedFeet = entity.speedFeet;
+  dashResult.engineRows = [{ kind: 'dash', movementGainedFeet: entity.speedFeet }];
+  return dashResult;
 }
 
 export async function destroyTacticalCombatMap(sessionId: string): Promise<void> {
