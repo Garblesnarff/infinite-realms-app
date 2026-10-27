@@ -130,7 +130,7 @@ describe('GET /v1/auth/login return destinations', () => {
 describe('GET /v1/auth/test-login', () => {
   it('returns 404 in production even when test auth is enabled', async () => {
     process.env.NODE_ENV = 'production';
-    process.env.ENABLE_TEST_AUTH = '1';
+    process.env.ENABLE_TEST_AUTH = 'true';
 
     const response = await app.handle(testLoginRequest());
 
@@ -139,7 +139,7 @@ describe('GET /v1/auth/test-login', () => {
 
   it('mints a test login redirect outside production when explicitly enabled', async () => {
     process.env.NODE_ENV = 'test';
-    process.env.ENABLE_TEST_AUTH = '1';
+    process.env.ENABLE_TEST_AUTH = 'true';
 
     const response = await app.handle(testLoginRequest());
 
@@ -178,7 +178,7 @@ describe('POST /v1/auth/refresh', () => {
 
   it('returns a new test token pair for a test refresh token off-production', async () => {
     process.env.NODE_ENV = 'development';
-    process.env.ENABLE_TEST_AUTH = '1';
+    process.env.ENABLE_TEST_AUTH = 'true';
 
     const response = await app.handle(refreshRequest(signRefreshToken()));
 
@@ -197,7 +197,7 @@ describe('POST /v1/auth/refresh', () => {
 
   it('returns 401 off-production when the test user row is missing', async () => {
     process.env.NODE_ENV = 'development';
-    process.env.ENABLE_TEST_AUTH = '1';
+    process.env.ENABLE_TEST_AUTH = 'true';
     dbUser = null;
 
     const response = await app.handle(refreshRequest(signRefreshToken()));
@@ -207,7 +207,7 @@ describe('POST /v1/auth/refresh', () => {
 
   it('falls through to WorkOS in production even for a test refresh token', async () => {
     process.env.NODE_ENV = 'production';
-    process.env.ENABLE_TEST_AUTH = '1';
+    process.env.ENABLE_TEST_AUTH = 'true';
 
     const token = signRefreshToken();
     const response = await app.handle(refreshRequest(token));

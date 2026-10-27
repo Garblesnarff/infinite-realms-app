@@ -42,7 +42,7 @@ Use `--json`. Every output line is a JSON object with a `type` of `narration`, `
 
 `scripts/dev-session.sh` boots a throwaway pgvector Postgres container (reuses
 `ir-dev-session-pg`), replays migrations via `scripts/test-migrations.sh`, starts
-the Bun server with `ENABLE_TEST_AUTH=1`, smoke-checks the test account via
+the Bun server with `ENABLE_TEST_AUTH=true`, smoke-checks the test account via
 `GET /v1/auth/test-login`, and then launches this CLI. It never uses WorkOS
 password auth for the smoke check; the CLI still needs its own
 `cli/.env.cli` credentials (see above). Use `--dry-run` to print the plan and

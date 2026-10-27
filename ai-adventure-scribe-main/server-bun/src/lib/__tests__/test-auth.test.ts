@@ -42,7 +42,7 @@ function restoreEnv() {
 
 function enabled() {
   process.env.NODE_ENV = 'development';
-  process.env.ENABLE_TEST_AUTH = '1';
+  process.env.ENABLE_TEST_AUTH = 'true';
   process.env.TEST_AUTH_SECRET = SECRET;
 }
 
@@ -72,12 +72,14 @@ describe('isTestAuthEnabled', () => {
     expect(isTestAuthEnabled()).toBe(false);
   });
 
-  it('is false when ENABLE_TEST_AUTH is a disabled value', () => {
+  it('is false for false, 0, empty, and unset ENABLE_TEST_AUTH values', () => {
     enabled();
-    for (const value of ['', 'false', 'FALSE', '0', 'no', 'off']) {
+    for (const value of ['false', '0', '', '1', 'TRUE', 'yes']) {
       process.env.ENABLE_TEST_AUTH = value;
       expect(isTestAuthEnabled()).toBe(false);
     }
+    delete process.env.ENABLE_TEST_AUTH;
+    expect(isTestAuthEnabled()).toBe(false);
   });
 
   it('is false when the secret is missing', () => {

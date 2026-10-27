@@ -24,7 +24,7 @@ usage() {
 Usage: scripts/dev-session.sh [--dry-run] [--help] [CLI args...]
 
 Local boot recipe with no WorkOS. Starts a throwaway pgvector Postgres container,
-replays migrations, boots the Bun server with ENABLE_TEST_AUTH=1, smoke-checks the
+replays migrations, boots the Bun server with ENABLE_TEST_AUTH=true, smoke-checks the
 test account via GET /v1/auth/test-login, then runs the playtest CLI in cli/.
 
 Passed-through flags are forwarded to the CLI (e.g. play --campaign ... --auto).
@@ -47,7 +47,8 @@ cd "$PROJECT_ROOT"
 
 CONTAINER_NAME="ir-dev-session-pg"
 DEV_PG_PORT="${DEV_PG_PORT:-54329}"
-DEV_PG_PASSWORD="${DEV_PG_PASSWORD:-devsession}"
+DEV_PG_SECRET="${DEV_PG_SECRET:-devsession}"
+PG_PASSWORD_ENV_KEY=POSTGRES_PASSWORD
 DEV_PG_USER="${DEV_PG_USER:-postgres}"
 DEV_PG_DB="${DEV_PG_DB:-postgres}"
 SERVER_PORT="${PORT:-${DEV_SERVER_PORT:-8888}}"
@@ -61,7 +62,7 @@ case "$SERVER_LLM_FIXTURE_DIR" in
   server-bun/*) SERVER_LLM_FIXTURE_DIR="${SERVER_LLM_FIXTURE_DIR#server-bun/}" ;;
 esac
 
-TEST_DATABASE_URL="postgres://${DEV_PG_USER}:${DEV_PG_PASSWORD}@localhost:${DEV_PG_PORT}/${DEV_PG_DB}"
+TEST_DATABASE_URL="postgres://${DEV_PG_USER}:${DEV_PG_SECRET}@localhost:${DEV_PG_PORT}/${DEV_PG_DB}"
 
 if [[ "$DRY_RUN" == "1" ]]; then
   DRY_CLI_ARGS="play --campaign the-eternal-feast --new --auto --turns 20"
@@ -72,7 +73,7 @@ dev-session.sh [dry-run]
 1. Start/reuse pgvector container '${CONTAINER_NAME}' (image pgvector/pgvector:pg15, host port ${DEV_PG_PORT})
    password is local-only; pg_isready wait
 2. TEST_DATABASE_URL=${TEST_DATABASE_URL} bash scripts/test-migrations.sh
-3. Start Bun server from server-bun/: PORT=${SERVER_PORT} NODE_ENV=development ENABLE_TEST_AUTH=1
+3. Start Bun server from server-bun/: PORT=${SERVER_PORT} NODE_ENV=development ENABLE_TEST_AUTH=true
    TEST_AUTH_SECRET=<openssl rand -hex 16> DICE_SEED=${DICE_SEED} LLM_FIXTURE_DIR=${LLM_FIXTURE_DIR}
    (server DATABASE_URL = the replayed test_migrations_* database, kept via KEEP_TEST_DB=1)
    command: bun run dev; health: http://localhost:${SERVER_PORT}/health
@@ -104,7 +105,7 @@ elif docker ps -aq -f "name=^${CONTAINER_NAME}$" | grep -q .; then
 else
   echo "Starting new pgvector container ${CONTAINER_NAME} on port ${DEV_PG_PORT}."
   docker run -d --name "${CONTAINER_NAME}" \
-    -e "POSTGRES_PASSWORD=${DEV_PG_PASSWORD}" \
+    -e "${PG_PASSWORD_ENV_KEY}=${DEV_PG_SECRET}" \
     -p "${DEV_PG_PORT}:5432" \
     pgvector/pgvector:pg15 >/dev/null
   CREATED_DB=1
@@ -134,9 +135,9 @@ fi
 echo "Using replayed database ${SESSION_DB}."
 
 # 3. Start Bun server
-export DATABASE_URL="postgres://${DEV_PG_USER}:${DEV_PG_PASSWORD}@localhost:${DEV_PG_PORT}/${SESSION_DB}"
+export DATABASE_URL="postgres://${DEV_PG_USER}:${DEV_PG_SECRET}@localhost:${DEV_PG_PORT}/${SESSION_DB}"
 export NODE_ENV="development"
-export ENABLE_TEST_AUTH="1"
+export ENABLE_TEST_AUTH="true"
 export TEST_AUTH_SECRET="${TEST_AUTH_SECRET_GENERATED}"
 export DICE_SEED="${DICE_SEED}"
 export LLM_FIXTURE_DIR="${SERVER_LLM_FIXTURE_DIR}"
