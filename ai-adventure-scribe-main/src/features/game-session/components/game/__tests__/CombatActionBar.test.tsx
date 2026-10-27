@@ -102,6 +102,31 @@ describe('CombatActionBar', () => {
     expect(onMove).toHaveBeenCalled();
   });
 
+  it('completes an attack, movement, and end-turn sequence with keyboard-only activation', async () => {
+    const onAction = vi.fn();
+    const onMove = vi.fn();
+    render(
+      <CombatActionBar
+        {...defaultProps}
+        actions={[attackAction, moveAction, endTurnAction]}
+        onAction={onAction}
+        onMove={onMove}
+      />,
+    );
+
+    const user = userEvent.setup();
+    await user.tab();
+    await user.keyboard('{Enter}');
+    await user.tab();
+    await user.keyboard('{Enter}');
+    await user.tab();
+    await user.keyboard('{Enter}');
+
+    expect(onAction).toHaveBeenNthCalledWith(1, attackAction);
+    expect(onMove).toHaveBeenCalledTimes(1);
+    expect(onAction).toHaveBeenNthCalledWith(2, endTurnAction);
+  });
+
   it('action used', () => {
     render(<CombatActionBar {...defaultProps} actions={[moveAction, endTurnAction]} />);
     const toolbar = screen.getByRole('toolbar', { name: 'Your actions' });

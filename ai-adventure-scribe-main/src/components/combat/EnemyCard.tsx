@@ -132,7 +132,7 @@ const EnemyCard: React.FC<EnemyCardProps> = React.memo(
               className="ir-hit-slop mt-2 min-h-9 w-full justify-center"
               onClick={onSelect}
               aria-pressed={isSelected}
-              aria-label={`${isSelected ? 'Deselect' : 'Select'} ${label}`}
+              aria-label={`${isSelected ? 'Target selected' : 'Select target'}: ${label}`}
             >
               {isSelected ? 'Target selected' : 'Select target'}
             </Button>
