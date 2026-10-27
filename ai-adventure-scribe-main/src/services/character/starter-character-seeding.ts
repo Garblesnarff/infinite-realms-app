@@ -59,6 +59,8 @@ export type CreateStarterCharacter = (
 export interface StarterTemplateEquipment {
   name: string;
   description?: string | null;
+  /** Explicit count for this entry (e.g. `{ name: 'Arrow', quantity: 20 }`). */
+  quantity?: number;
 }
 
 export type StarterTemplateEquipmentInput = string | StarterTemplateEquipment;
@@ -305,6 +307,28 @@ function resolvedTemplateEquipment(
   });
 }
 
+function explicitEntryQuantity(item: StarterTemplateEquipment): number | undefined {
+  const quantity = item.quantity;
+  return typeof quantity === 'number' && Number.isSafeInteger(quantity) && quantity > 0
+    ? quantity
+    : undefined;
+}
+
+/**
+ * Ammunition bundles carry their round count in the catalog name
+ * ("Arrows (20)"). The combat spend decrements one round per shot, so the
+ * seeded row must carry the count, not one bundle (#1096).
+ */
+function ammunitionBundleQuantity(
+  equipment: ReturnType<typeof resolveEquipmentByName>,
+): number | undefined {
+  if (!equipment) return undefined;
+  const match = /\((\d+)\)\s*$/.exec(equipment.name);
+  if (!match || !/arrow|bolt/i.test(equipment.name)) return undefined;
+  const quantity = Number(match[1]);
+  return Number.isSafeInteger(quantity) && quantity > 0 ? quantity : undefined;
+}
+
 /** Transform template items into the validated character_equipment shape. */
 export function transformStarterEquipment(
   equipmentNames: StarterTemplateEquipmentInput[] = [],
@@ -314,9 +338,11 @@ export function transformStarterEquipment(
 
   for (const { item, equipment } of resolvedTemplateEquipment(equipmentNames)) {
     const key = templateEquipmentKey(item);
+    const contributed =
+      explicitEntryQuantity(item) ?? ammunitionBundleQuantity(equipment) ?? 1;
     const existing = records.get(key);
     if (existing) {
-      existing.quantity += 1;
+      existing.quantity += contributed;
       continue;
     }
 
@@ -329,7 +355,7 @@ export function transformStarterEquipment(
     records.set(key, {
       item_name: equipment?.name || item.name,
       item_type: equipment?.category || 'trinket',
-      quantity: 1,
+      quantity: contributed,
       equipped: shouldEquip,
       ...(equipment ? {} : { description: customItemDescription(item), weight: 0 }),
     });
@@ -346,15 +372,16 @@ export function transformStarterInventory(
   for (const { item, equipment } of resolvedTemplateEquipment(equipmentNames)) {
     if (equipment) continue;
     const key = normalizeEquipmentLookupKey(item.name);
+    const contributed = explicitEntryQuantity(item) ?? 1;
     const existing = records.get(key);
     if (existing) {
-      existing.quantity += 1;
+      existing.quantity += contributed;
       continue;
     }
     records.set(key, {
       name: item.name,
       item_type: 'trinket',
-      quantity: 1,
+      quantity: contributed,
       weight: 0,
       description: customItemDescription(item),
       is_equipped: false,
