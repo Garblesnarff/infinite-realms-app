@@ -18,7 +18,7 @@
     "Draconic"
   ],
   "cantrips": "acid-splash, chill-touch, dancing-lights, fire-bolt",
-  "known_spells": "alter-self, blindness-deafness, blur, burning-hands",
+  "known_spells": "burning-hands, charm-person, color-spray, comprehend-languages",
   "prepared_spells": "",
   "total_level": 3,
   "stats": {

@@ -18,8 +18,13 @@ import {
   transformStarterEquipment,
 } from '../starter-character-seeding';
 
-import type { StarterCharacterTemplateLike } from '../starter-character-seeding';
+import type {
+  StarterCharacterTemplateLike,
+  StarterSpellSeed,
+} from '../starter-character-seeding';
 
+import { getPactMagicProgression, getSpellSlotsByLevel } from '@/data/spellcastingFeatures';
+import { getSpellById, getSrdClassSpells } from '@/data/spells/api';
 import { mapTemplateRow } from '@/hooks/use-starter-character-templates';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
@@ -624,5 +629,184 @@ describe('starter template subclass (#829)', () => {
     // The fixture carries campaign_id: null because the server test binds
     // its own campaign; everything else must match byte-for-byte in shape.
     expect({ ...wire, campaign_id: null }).toEqual(fixture);
+  });
+});
+
+describe('starter spell picker respects the 2014 slot rules (#1025)', () => {
+  const CASTING_ABILITY: Record<string, string> = {
+    Bard: 'charisma',
+    Cleric: 'wisdom',
+    Druid: 'wisdom',
+    Paladin: 'charisma',
+    Ranger: 'wisdom',
+    Sorcerer: 'charisma',
+    Warlock: 'charisma',
+    Wizard: 'intelligence',
+  };
+
+  const spellLevel = (id: string): number => {
+    const spell = getSpellById(id);
+    if (!spell) throw new Error(`spell catalog has no entry for id ${id}`);
+    return spell.level;
+  };
+
+  // Highest spell level the class can cast at this level, derived
+  // independently from the same slot tables the seed's spellSlots use
+  // (not from the picker's own cap), so this pins the picker against
+  // the tables. It does not pin the tables themselves against the PHB.
+  const slotMaxSpellLevel = (className: string, level: number): number => {
+    if (className === 'Warlock') return getPactMagicProgression(level)?.pactSlotLevel ?? 0;
+    const slots = getSpellSlotsByLevel(className, level);
+    let max = 0;
+    slots.forEach((count, index) => {
+      if (count > 0) max = index + 1;
+    });
+    return max;
+  };
+
+  const assertLegalSeed = (
+    className: string,
+    level: number,
+    abilityScores: Record<string, number>,
+  ): StarterSpellSeed => {
+    const seed = buildStarterSpellSeed({
+      name: `Probe ${className} ${level}`,
+      race: 'Human',
+      class: className,
+      level,
+      ability_scores: abilityScores,
+    } as unknown as StarterCharacterTemplateLike);
+    const quotas = getStarterSpellQuotas(className, level, abilityScores);
+    const maxLevel = slotMaxSpellLevel(className, level);
+    const poolSize = getSrdClassSpells(className).spells.filter(
+      (spell) => spell.level <= maxLevel,
+    ).length;
+    expect(seed.knownSpells).toHaveLength(Math.min(quotas.known, poolSize));
+    const expectedPrepared =
+      className === 'Wizard'
+        ? Math.min(quotas.prepared, seed.knownSpells.length)
+        : Math.min(quotas.prepared, poolSize);
+    expect(seed.preparedSpells).toHaveLength(expectedPrepared);
+    for (const id of [...seed.knownSpells, ...seed.preparedSpells]) {
+      expect(spellLevel(id)).toBeLessThanOrEqual(maxLevel);
+    }
+    expect(new Set(seed.knownSpells).size).toBe(seed.knownSpells.length);
+    expect(new Set(seed.preparedSpells).size).toBe(seed.preparedSpells.length);
+    expect(new Set(seed.cantrips).size).toBe(seed.cantrips.length);
+    // The fallback fills the lower slots first: picked levels never
+    // decrease in seed order when no curated list is given. Prepared
+    // lists fill from the same sorted fallback, so the same holds there.
+    const levels = seed.knownSpells.map(spellLevel);
+    expect(levels).toEqual([...levels].sort((a, b) => a - b));
+    const preparedLevels = seed.preparedSpells.map(spellLevel);
+    expect(preparedLevels).toEqual([...preparedLevels].sort((a, b) => a - b));
+    if (className === 'Wizard') {
+      expect(seed.preparedSpells.every((id) => seed.knownSpells.includes(id))).toBe(true);
+    }
+    return seed;
+  };
+
+  const matrixCases: Array<[string, number]> = [];
+  for (const className of Object.keys(CASTING_ABILITY)) {
+    for (let level = 1; level <= 20; level++) {
+      matrixCases.push([className, level]);
+    }
+  }
+
+  it.each(matrixCases)('picks a legal list for %s at level %s', (className, level) => {
+    const ability = CASTING_ABILITY[className];
+    assertLegalSeed(className, level, {
+      strength: 10,
+      dexterity: 10,
+      constitution: 10,
+      intelligence: 10,
+      wisdom: 10,
+      charisma: 10,
+      [ability]: 16,
+    });
+  });
+
+  // Every caster the repo's seed SQL actually ships (24 rows, all level 1),
+  // with the ability scores the seeds carry. The remaining premades are prod
+  // rows, not repo content; any premade is a (class, level, scores) triple,
+  // which the matrix above covers at every level. The seed SQL names two
+  // rows 'The Chaplain'; the second is labelled '(II)' here only so the
+  // test titles are unique.
+  const seededCasters = [
+    { name: 'The Scholar', className: 'Wizard', level: 1, abilityScores: { strength: 8, dexterity: 12, constitution: 12, intelligence: 18, wisdom: 14, charisma: 10 } },
+    { name: 'The Hunter', className: 'Ranger', level: 1, abilityScores: { strength: 14, dexterity: 16, constitution: 14, intelligence: 12, wisdom: 14, charisma: 8 } },
+    { name: 'The Pact-Bound', className: 'Warlock', level: 1, abilityScores: { strength: 8, dexterity: 14, constitution: 14, intelligence: 12, wisdom: 10, charisma: 18 } },
+    { name: 'The Exile', className: 'Ranger', level: 1, abilityScores: { strength: 10, dexterity: 18, constitution: 12, intelligence: 12, wisdom: 14, charisma: 10 } },
+    { name: 'The Storyteller', className: 'Bard', level: 1, abilityScores: { strength: 8, dexterity: 14, constitution: 12, intelligence: 14, wisdom: 12, charisma: 18 } },
+    { name: 'The Faithful', className: 'Cleric', level: 1, abilityScores: { strength: 14, dexterity: 10, constitution: 14, intelligence: 10, wisdom: 18, charisma: 12 } },
+    { name: 'The Seeker', className: 'Ranger', level: 1, abilityScores: { strength: 10, dexterity: 16, constitution: 12, intelligence: 14, wisdom: 16, charisma: 10 } },
+    { name: 'The Tracker', className: 'Ranger', level: 1, abilityScores: { strength: 12, dexterity: 16, constitution: 14, intelligence: 10, wisdom: 15, charisma: 9 } },
+    { name: 'The Circuit Preacher', className: 'Cleric', level: 1, abilityScores: { strength: 14, dexterity: 10, constitution: 15, intelligence: 11, wisdom: 16, charisma: 12 } },
+    { name: 'The Almanac-Keeper', className: 'Wizard', level: 1, abilityScores: { strength: 8, dexterity: 14, constitution: 14, intelligence: 16, wisdom: 13, charisma: 11 } },
+    { name: 'The Cardsharp', className: 'Bard', level: 1, abilityScores: { strength: 8, dexterity: 14, constitution: 12, intelligence: 12, wisdom: 10, charisma: 17 } },
+    { name: 'The Chaplain', className: 'Cleric', level: 1, abilityScores: { strength: 12, dexterity: 10, constitution: 14, intelligence: 10, wisdom: 17, charisma: 13 } },
+    { name: 'The Luck Scholar', className: 'Wizard', level: 1, abilityScores: { strength: 8, dexterity: 14, constitution: 13, intelligence: 17, wisdom: 12, charisma: 10 } },
+    { name: 'The Cartographer', className: 'Wizard', level: 1, abilityScores: { strength: 8, dexterity: 14, constitution: 14, intelligence: 16, wisdom: 13, charisma: 10 } },
+    { name: 'The Windspeaker', className: 'Cleric', level: 1, abilityScores: { strength: 12, dexterity: 12, constitution: 14, intelligence: 10, wisdom: 16, charisma: 14 } },
+    { name: 'The Deserter', className: 'Ranger', level: 1, abilityScores: { strength: 15, dexterity: 15, constitution: 14, intelligence: 10, wisdom: 14, charisma: 8 } },
+    { name: 'The Surveyor', className: 'Wizard', level: 1, abilityScores: { strength: 9, dexterity: 15, constitution: 14, intelligence: 16, wisdom: 13, charisma: 11 } },
+    { name: 'The Chaplain (II)', className: 'Cleric', level: 1, abilityScores: { strength: 14, dexterity: 11, constitution: 15, intelligence: 9, wisdom: 16, charisma: 13 } },
+    { name: 'The Echo', className: 'Bard', level: 1, abilityScores: { strength: 8, dexterity: 16, constitution: 13, intelligence: 10, wisdom: 13, charisma: 15 } },
+    { name: 'The Thespian', className: 'Bard', level: 1, abilityScores: { strength: 10, dexterity: 14, constitution: 12, intelligence: 12, wisdom: 10, charisma: 16 } },
+    { name: 'The Lovesick', className: 'Sorcerer', level: 1, abilityScores: { strength: 8, dexterity: 14, constitution: 14, intelligence: 12, wisdom: 10, charisma: 16 } },
+    { name: 'The Woodsman', className: 'Ranger', level: 1, abilityScores: { strength: 12, dexterity: 16, constitution: 12, intelligence: 10, wisdom: 14, charisma: 10 } },
+    { name: 'The Hedgewitch', className: 'Druid', level: 1, abilityScores: { strength: 8, dexterity: 12, constitution: 14, intelligence: 12, wisdom: 16, charisma: 10 } },
+    { name: 'The Oathbound', className: 'Paladin', level: 1, abilityScores: { strength: 16, dexterity: 10, constitution: 14, intelligence: 10, wisdom: 12, charisma: 14 } },
+  ];
+
+  it.each(seededCasters)(
+    'seeds a legal list for premade $name ($className, level $level)',
+    (row) => {
+      assertLegalSeed(row.className, row.level, row.abilityScores);
+    },
+  );
+
+  it('Tavo Brejo (Ranger 3) knows 3 first-level spells, never Animal Messenger', () => {
+    const seed = buildStarterSpellSeed({
+      name: 'Tavo Brejo',
+      race: 'Half-Orc',
+      class: 'Ranger',
+      subclass: 'Hunter',
+      level: 3,
+      ability_scores: {
+        strength: 12,
+        dexterity: 17,
+        constitution: 15,
+        intelligence: 10,
+        wisdom: 13,
+        charisma: 8,
+      },
+    } as unknown as StarterCharacterTemplateLike);
+
+    expect(seed.knownSpells).toHaveLength(3);
+    expect(seed.knownSpells.map(spellLevel)).toEqual([1, 1, 1]);
+    expect(seed.knownSpells).not.toContain('animal-messenger');
+    expect(seed.cantrips).toEqual([]);
+  });
+
+  it('Clarice Faro (Sorcerer 3) fills her lower slots first', () => {
+    const seed = buildStarterSpellSeed({
+      name: 'Clarice Faro',
+      race: 'Human',
+      class: 'Sorcerer',
+      subclass: 'Draconic',
+      level: 3,
+      ability_scores: {
+        strength: 10,
+        dexterity: 10,
+        constitution: 10,
+        intelligence: 10,
+        wisdom: 10,
+        charisma: 16,
+      },
+    } as unknown as StarterCharacterTemplateLike);
+
+    expect(seed.knownSpells).toHaveLength(4);
+    expect(seed.knownSpells.map(spellLevel)).toEqual([1, 1, 1, 1]);
   });
 });

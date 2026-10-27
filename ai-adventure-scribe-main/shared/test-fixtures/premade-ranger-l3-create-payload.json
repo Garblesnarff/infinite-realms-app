@@ -17,7 +17,7 @@
     "Common"
   ],
   "cantrips": "",
-  "known_spells": "alarm, animal-friendship, animal-messenger",
+  "known_spells": "alarm, animal-friendship, cure-wounds",
   "prepared_spells": "",
   "total_level": 3,
   "stats": {
