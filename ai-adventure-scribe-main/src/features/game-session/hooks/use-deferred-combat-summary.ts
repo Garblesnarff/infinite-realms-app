@@ -36,9 +36,7 @@ export interface ServerDamageSummary {
   participants: ServerDamageSummaryParticipant[];
 }
 
-export async function fetchCombatDamageSummary(
-  encounterId: string,
-): Promise<ServerDamageSummary> {
+export async function fetchCombatDamageSummary(encounterId: string): Promise<ServerDamageSummary> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), COMBAT_DAMAGE_SUMMARY_TIMEOUT_MS);
   try {
@@ -56,9 +54,7 @@ export async function fetchCombatDamageSummary(
 }
 
 /** The CombatSummaryMessage card shape, from a server damage summary. */
-export function buildCombatSummaryMessageFromServer(
-  summary: ServerDamageSummary,
-): ChatMessage {
+export function buildCombatSummaryMessageFromServer(summary: ServerDamageSummary): ChatMessage {
   return {
     text: 'Combat has ended.',
     sender: 'system',
@@ -145,7 +141,10 @@ async function postCombatSummary(
     } catch (error) {
       // A failed fetch must not silently produce a zero-damage summary (#570 D4-013):
       // log it so the fallback is visible in diagnostics.
-      console.warn('[combat-summary] server damage-summary fetch failed, using in-memory fallback', error);
+      console.warn(
+        '[combat-summary] server damage-summary fetch failed, using in-memory fallback',
+        error,
+      );
       // Fall through to the in-memory build below.
     }
     if (summary) {
@@ -219,7 +218,15 @@ export function useDeferredCombatSummary({
     if (endedCombat) {
       pendingRef.current = { encounter: activeEncounter ?? lastEncounterRef.current };
       onCombatEndedRef.current?.();
-      fallbackRef.current = setTimeout(flush, COMBAT_SUMMARY_FALLBACK_MS);
+      fallbackRef.current = setTimeout(() => {
+        // #976: the fight's terminal message never matched, so the card is late. Say so, with the
+        // encounter, so a "no summary" or "summary 16 s late" report can be read from the console.
+        console.warn('[combat-summary] fallback: no terminal message after the wait; posting now', {
+          encounterId: pendingRef.current?.encounter?.id ?? null,
+          waitedMs: COMBAT_SUMMARY_FALLBACK_MS,
+        });
+        flush();
+      }, COMBAT_SUMMARY_FALLBACK_MS);
     }
 
     if (!pendingRef.current) return;

@@ -109,6 +109,42 @@ describe('useDeferredCombatSummary', () => {
     expect(summaries()).toHaveLength(1);
   });
 
+  it('logs a line when the fallback timer posts the summary (#976)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const { rerender } = setup({ isInCombat: true, messages: [dm('a')] });
+
+      rerender({ isInCombat: false, messages: [dm('a')] });
+      vi.advanceTimersByTime(COMBAT_SUMMARY_FALLBACK_MS - 1);
+      expect(warn).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(1);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringMatching(/^\[combat-summary\] fallback/),
+        expect.objectContaining({ waitedMs: COMBAT_SUMMARY_FALLBACK_MS }),
+      );
+      expect(summaries()).toHaveLength(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('logs no fallback line when the terminal message arrives in time (#976)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const { rerender } = setup({ isInCombat: true, messages: [] });
+
+      rerender({ isInCombat: false, messages: [] });
+      rerender({ isInCombat: false, messages: [dm('kill', true)] });
+      vi.advanceTimersByTime(COMBAT_SUMMARY_FALLBACK_MS * 2);
+
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('does not post twice when the terminal message beats the fallback', () => {
     const { rerender } = setup({ isInCombat: true, messages: [] });
 
@@ -248,7 +284,13 @@ describe('server damage summary (#570)', () => {
     rounds: 1,
     totalDamage: 7,
     participants: [
-      { participantId: 'pc-1', name: 'The Sous Chef', damageDealt: 7, damageTaken: 0, status: 'ok' },
+      {
+        participantId: 'pc-1',
+        name: 'The Sous Chef',
+        damageDealt: 7,
+        damageTaken: 0,
+        status: 'ok',
+      },
       { participantId: 'm-1', name: 'Proctor', damageDealt: 0, damageTaken: 7, status: 'dead' },
     ],
   };
@@ -337,10 +379,7 @@ describe('server damage summary (#570)', () => {
   });
 
   it('falls back to the in-memory build when the damage-summary fetch fails', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockRejectedValue(new Error('network down')),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
     const { rerender } = setupServer({ isInCombat: true, messages: [] });
 
     rerender({ isInCombat: false, messages: [dm('kill', true)] });
