@@ -33,8 +33,11 @@ const SheetHeader: React.FC<{ c: CharacterSheetVM }> = ({ c }) => {
         <div className="flex items-start gap-3">
           <IRThumb src={c.avatarUrl} size={48} />
           <div className="min-w-0 flex-1">
-            <p className="ir-display truncate text-sm font-semibold text-foreground">{c.name}</p>
-            <p className="truncate ir-text-min text-muted-foreground">{c.subtitle}</p>
+            {/* #1216: wrap, never cut: "Stone Giant · Barbarian (Path of the Berserker)" read as
+                "… (Path of the B…" at 1280 px. break-words breaks inside a word only when it
+                cannot fit on a line by itself. */}
+            <p className="ir-display break-words text-sm font-semibold text-foreground">{c.name}</p>
+            <p className="break-words ir-text-min text-muted-foreground">{c.subtitle}</p>
             <p className="mt-1 ir-text-min font-semibold text-infinite-gold">Level {c.level}</p>
           </div>
         </div>

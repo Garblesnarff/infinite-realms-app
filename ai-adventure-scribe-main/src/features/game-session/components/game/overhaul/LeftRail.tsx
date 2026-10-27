@@ -11,7 +11,10 @@ const CurrentCampaign: React.FC<{ campaign: CampaignSummaryVM }> = ({ campaign }
     <div className="flex items-center gap-3 p-3">
       <IRThumb src={campaign.thumbnailUrl} size={40} />
       <div className="min-w-0">
-        <p className="ir-display truncate text-sm font-semibold text-foreground">{campaign.name}</p>
+        {/* #1216: the title wraps ("THE NOON TITHE: SIEG…" at 1280 px). */}
+        <p className="ir-display break-words text-sm font-semibold text-foreground">
+          {campaign.name}
+        </p>
         <p className="ir-text-min truncate text-xs text-infinite-gold/80">{campaign.chapter}</p>
       </div>
     </div>
