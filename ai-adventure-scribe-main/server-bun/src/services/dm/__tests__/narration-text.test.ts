@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
-import { normalizePartialNarration, normalizeReplyNarration } from '../narration-text.js';
+import {
+  normalizePartialNarration,
+  normalizeReplyNarration,
+  stripTrackerLine,
+} from '../narration-text.js';
 
 /**
  * #1067: the server normalizer (#875/#992, extended here) must strip the
@@ -352,6 +356,46 @@ describe('normalizeReplyNarration #1067 V-008/V-009', () => {
     const { text, kind } = normalizedText(input);
     expect(kind).toBeNull();
     expect(text).toBe(input);
+  });
+});
+
+describe('stripTrackerLine #1067 trailing unterminated bracket group', () => {
+  test('strips a trailing unterminated tracker bracket group', () => {
+    expect(stripTrackerLine('The goblin staggers back. [HP 3/')).toBe('The goblin staggers back.');
+  });
+
+  test('leaves a bracketed aside inside prose untouched', () => {
+    expect(stripTrackerLine('You see a sign [old] by the road.')).toBe(
+      'You see a sign [old] by the road.',
+    );
+  });
+
+  test('leaves an unterminated non-tracker bracket group untouched', () => {
+    expect(stripTrackerLine('He mutters [something')).toBe('He mutters [something');
+  });
+
+  test('strips closed tracker groups before an unterminated fragment', () => {
+    expect(stripTrackerLine('The Sun rises. [HP 18/?] [Clock 0/6] [Scene: The Sun')).toBe(
+      'The Sun rises.',
+    );
+  });
+
+  test('strips closed tracker groups including non-anchored ones before fragment', () => {
+    expect(
+      stripTrackerLine('The Sun rises. [HP 18/?] [Clock 0/6] [Contentment 0] [Scene: The Sun'),
+    ).toBe('The Sun rises.');
+  });
+
+  test('keeps a prose aside before the tracker run', () => {
+    expect(stripTrackerLine('You see a sign [old] [HP 18/?] [Scene: The Sun')).toBe(
+      'You see a sign [old]',
+    );
+  });
+
+  test('keeps a closed non-tracker group before the tracker run', () => {
+    expect(stripTrackerLine('You read [the long sentence about doom.] [HP 3/')).toBe(
+      'You read [the long sentence about doom.]',
+    );
   });
 });
 
