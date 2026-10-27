@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 
 import { readAuthoritativeCombat } from '@/contexts/combat/use-authoritative-combat-sync';
 import { useCombat } from '@/contexts/CombatContext';
+import { SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import {
   combatEntryTurnConfirmed,
@@ -70,9 +71,25 @@ export function usePendingCombatEntryOffer(sessionId: string | undefined): void 
       deliver(detail?.combatEntryPending);
     };
     const poll = (): void => {
-      void readAuthoritativeCombat(sessionId).then((read) => {
-        if (read.state === 'none') deliver(read.pending);
-      });
+      void readAuthoritativeCombat(sessionId)
+        .then((read) => {
+          if (read.state === 'none') deliver(read.pending);
+        })
+        .catch((error: unknown) => {
+          if (error instanceof SessionExpiredError) {
+            // The session ended: stop the interval instead of leaking an
+            // unhandled rejection on every poll until unmount.
+            clearInterval(timer);
+            return;
+          }
+          // Any other rejection is unexpected here (readAuthoritativeCombat
+          // turns every other failure into { state: 'unknown' }, except an
+          // AbortError from the request timeout, which it rethrows). Log it
+          // and keep polling; it must not escape this voided promise.
+          logger.warn('[CombatEntry] pending combat poll failed', {
+            message: error instanceof Error ? error.message : 'unknown',
+          });
+        });
     };
     window.addEventListener('combat-state-updated', onCombatState);
     poll();
