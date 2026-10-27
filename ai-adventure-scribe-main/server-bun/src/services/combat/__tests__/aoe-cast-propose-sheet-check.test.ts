@@ -52,6 +52,7 @@ mock.module('../../../lib/logger.js', () => ({
 // The Apprentice's sheet, as the seed writes it: Burning Hands is known, Fireball is not.
 let apprenticeSpellIds: string[] = [];
 mock.module('../../../services/combat/data-access.js', () => ({
+  remainingSpellSlots: async () => null,
   listHealingConsumables: async () => [],
   getParticipantWithStats: async () => ({ participant: null, stats: null }),
   getParticipantsWithStatsBatch: async () => new Map(),

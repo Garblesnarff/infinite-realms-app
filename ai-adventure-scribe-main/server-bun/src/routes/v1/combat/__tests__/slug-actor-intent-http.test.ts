@@ -163,6 +163,7 @@ const CLAWS = {
   proficient: true,
 };
 mock.module('../../../../services/combat/data-access.js', () => ({
+  remainingSpellSlots: async () => null,
   listHealingConsumables: async () => [],
   listEquippedWeaponProfiles: async () => [CLAWS],
   listCarriedWeaponProfiles: async () => [],

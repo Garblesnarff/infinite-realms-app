@@ -199,6 +199,7 @@ mock.module('../combat-approach-service.js', () => ({
   describeUnreachableApproach: () => '',
 }));
 mock.module('../data-access.js', () => ({
+  remainingSpellSlots: async () => null,
   listHealingConsumables: async () => [],
   getParticipantAbilityProfile: async () => ({
     level: 1,

@@ -170,6 +170,7 @@ mock.module('../data-access.js', () => ({
   listEquippedWeaponProfiles: async () => equippedWeapons,
   listCarriedWeaponProfiles: async () => [],
   listHealingConsumables: async () => healingConsumables,
+  remainingSpellSlots: async () => slotRemaining,
   monsterAttackSource: () => 'derived',
   verifyCharacterOwnership: async () => {},
   verifyEncounterAccess: async () => {},
@@ -185,6 +186,16 @@ let healingConsumables: Array<{ id: string; name: string; healingDice: string }>
   { id: 'potion-1', name: 'Potion of Healing', healingDice: '2d4+2' },
   { id: 'potion-2', name: 'Potion of Greater Healing', healingDice: '4d4+4' },
 ];
+
+/**
+ * #1185: the remaining spell slots behind `remainingSpellSlots` (data-access.ts), as a
+ * level-to-remaining map, or null when the character has no slot rows at all. The
+ * legal-action computation is what this suite pins, so the read is stubbed at its module
+ * boundary behind a mutable holder, defaulting to "no slot rows" — the fail-open ledger
+ * state every pre-#1185 actor reads as. The end-to-end behaviour (real rows, spends,
+ * refusals) is pinned against a real database in npc-engine-rows.real-db.test.ts.
+ */
+let slotRemaining: Map<number, number> | null = null;
 
 /**
  * #975: the Fighter features' tracked uses live behind `fighterFeatureUses`
@@ -217,6 +228,7 @@ describe('getLegalCombatActions', () => {
     player.bonusActionUsed = false;
     player.status.currentHp = 20;
     featureUses = { secondWind: null, actionSurge: null };
+    slotRemaining = null;
     healingConsumables = [
       { id: 'potion-1', name: 'Potion of Healing', healingDice: '2d4+2' },
       { id: 'potion-2', name: 'Potion of Greater Healing', healingDice: '4d4+4' },
@@ -406,6 +418,73 @@ describe('getLegalCombatActions', () => {
     const result = await getLegalCombatActions('encounter-1', 'user-1');
 
     expect(result.actions.some((action) => action.type === 'spell')).toBe(false);
+  });
+
+  // #1185: Melf's Acid Arrow is a prepared leveled attack spell. While a 2nd-level slot
+  // remains it is offered as an attack-shaped chip (the client runs the declare → dialog →
+  // commit pipeline from it); with no 2nd-level slot it is not offered at all — not even
+  // as a narrated row, since the engine does resolve it. A cantrip is never slot-gated.
+  test('offers a prepared leveled attack spell as an attack-shaped chip while its slot remains (#1185)', async () => {
+    profile = { ...APPRENTICE_PROFILE, level: 3, spellIds: ['fire-bolt', 'acid-arrow'] };
+    slotRemaining = new Map([
+      [1, 4],
+      [2, 2],
+    ]);
+
+    const result = await getLegalCombatActions('encounter-1', 'user-1');
+
+    expect(result.actions.filter((action) => action.type === 'spell')).toEqual([
+      {
+        type: 'spell',
+        label: 'Cast Fire Bolt',
+        spellId: 'fire-bolt',
+        targetIds: ['monster-1'],
+      },
+      {
+        type: 'spell',
+        label: 'Cast Acid Arrow',
+        spellId: 'acid-arrow',
+        targetIds: ['monster-1'],
+      },
+    ]);
+  });
+
+  test('withholds a leveled attack spell with no slot of its level left, and keeps the cantrip (#1185)', async () => {
+    profile = { ...APPRENTICE_PROFILE, level: 3, spellIds: ['fire-bolt', 'acid-arrow'] };
+    slotRemaining = new Map([
+      [1, 4],
+      [2, 0],
+    ]);
+
+    const result = await getLegalCombatActions('encounter-1', 'user-1');
+
+    expect(result.actions.filter((action) => action.type === 'spell')).toEqual([
+      {
+        type: 'spell',
+        label: 'Cast Fire Bolt',
+        spellId: 'fire-bolt',
+        targetIds: ['monster-1'],
+      },
+    ]);
+    expect(
+      result.actions.some(
+        (action) => action.type === 'spell' && action.spellId === 'acid-arrow',
+      ),
+    ).toBe(false);
+  });
+
+  test('offers leveled spells ungated when the character has no slot rows (#1185)', async () => {
+    profile = { ...APPRENTICE_PROFILE, level: 3, spellIds: ['acid-arrow'] };
+    slotRemaining = null;
+
+    const result = await getLegalCombatActions('encounter-1', 'user-1');
+
+    expect(result.actions).toContainEqual({
+      type: 'spell',
+      label: 'Cast Acid Arrow',
+      spellId: 'acid-arrow',
+      targetIds: ['monster-1'],
+    });
   });
 
   // #2580: the way out of a fight. Offered outside the Action gate on purpose — a player whose

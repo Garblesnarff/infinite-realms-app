@@ -265,6 +265,7 @@ mock.module('../combat-approach-service.js', () => ({
   describeUnreachableApproach: () => '',
 }));
 mock.module('../data-access.js', () => ({
+  remainingSpellSlots: async () => null,
   listHealingConsumables: async () => [],
   // The real reader returns the participant's own profile: scores keyed str/dex/con/int/wis/cha
   // and a level. Fixtures below carry every key so a check cannot pass by reading a missing one.
