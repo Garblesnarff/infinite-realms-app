@@ -178,7 +178,9 @@ describe('CharacterSpellService', () => {
 
       // Assert
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining(`/v1/characters/${mockCharacterId}/spells/${mockSpellId}/preparation`),
+        expect.stringContaining(
+          `/v1/characters/${mockCharacterId}/spells/${mockSpellId}/preparation`,
+        ),
         expect.objectContaining({
           method: 'PATCH',
           body: JSON.stringify({ is_prepared: isPrepared }),
@@ -222,7 +224,7 @@ describe('CharacterSpellService', () => {
 
       // Act & Assert
       await expect(characterSpellService.getCharacterSpells(mockCharacterId)).rejects.toThrow(
-        'Authentication expired. Please sign in again.',
+        'Your session has expired. Please sign in again.',
       );
     });
 

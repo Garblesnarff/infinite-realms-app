@@ -442,7 +442,7 @@ describe('session-continuity regression', () => {
     mockSendMessage.mockRejectedValueOnce({
       name: 'SessionExpiredError',
       status: 401,
-      message: 'Session expired — sign in again',
+      message: 'Your sign-in expired — sign in again; your game is saved',
     });
 
     const { ref } = renderHandler('session-expired');
@@ -454,7 +454,7 @@ describe('session-continuity regression', () => {
     expect(ref.processing.current).toBe(false);
     expect(mockToast).toHaveBeenCalledWith(
       expect.objectContaining({
-        description: 'Session expired — sign in again',
+        description: 'Your sign-in expired — sign in again; your game is saved',
         variant: 'destructive',
       }),
     );

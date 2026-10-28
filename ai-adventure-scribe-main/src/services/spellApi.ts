@@ -3,6 +3,7 @@ import { localSpellService } from './localSpellService';
 import type { Spell } from '@/types/character';
 
 import { fetchWithAuth } from '@/infrastructure/api/rest-client';
+import { waitForAuth } from '@/lib/auth-gate';
 import logger from '@/lib/logger';
 
 interface SpellProgression {
@@ -104,8 +105,10 @@ class SpellApiService {
     }
 
     try {
+      await waitForAuth();
       const response = await fetchWithAuth(url, {
         ...options,
+        retryBudgetMs: 0,
         headers: { 'Content-Type': 'application/json', ...options.headers },
       });
 

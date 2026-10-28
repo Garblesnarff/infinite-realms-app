@@ -4,6 +4,7 @@ import type { UserPlan } from '../../../shared/plan-features';
 
 import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
+import { getAccessToken } from '@/services/auth/TokenService';
 import { isOffline } from '@/utils/network';
 
 export type { UserPlan };
@@ -88,6 +89,10 @@ export function useUserPlan({ user, loading }: UseUserPlanProps): {
 
     const requestedFor = user.id;
     setUserPlanLoading(true);
+    if (!getAccessToken()) {
+      fail('Failed to load user plan: no authentication token');
+      return;
+    }
     try {
       const response = await fetchWithAuth('/v1/llm/quota', {
         headers: { 'Content-Type': 'application/json' },

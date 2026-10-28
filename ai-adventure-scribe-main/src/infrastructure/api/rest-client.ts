@@ -73,7 +73,7 @@ const TOKEN_REFRESH_MARGIN_MS = 2 * 60 * 1000;
 
 export type FetchWithAuthOptions = RequestInit & {
   retryBudgetMs?: number;
-  timeoutMs?: number;
+  timeoutMs?: number | null;
 };
 
 export interface MemoryExtractionJob {
@@ -378,7 +378,8 @@ export async function fetchWithAuth(
   // #565: bound the whole attempt so a blackholed connection (deploy swap)
   // fails instead of hanging the caller forever. Exempt routes (model work,
   // memory extraction) keep no ceiling — see getRouteTimeoutMs.
-  const timeoutMs = requestedTimeoutMs ?? getRouteTimeoutMs(path);
+  const timeoutMs =
+    requestedTimeoutMs === null ? undefined : (requestedTimeoutMs ?? getRouteTimeoutMs(path));
   const timeoutHandle =
     timeoutMs === undefined ? undefined : startRequestTimeout(timeoutMs, requestInit.signal);
   // The timeout signal replaces the caller's signal on the wire: it fires on

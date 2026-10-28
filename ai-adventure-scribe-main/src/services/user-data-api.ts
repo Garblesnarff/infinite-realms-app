@@ -252,7 +252,7 @@ export type NarrativeSceneStateResponse = {
 
 async function requestResponse(path: string, init: RequestInit = {}): Promise<Response> {
   await waitForAuth();
-  const res = await fetchWithAuth(path, init);
+  const res = await fetchWithAuth(path, { ...init, timeoutMs: null });
   logServerRequestId(path, res);
   return res;
 }
@@ -312,6 +312,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   await waitForAuth();
   const response = await fetchWithAuth(path, {
     ...init,
+    retryBudgetMs: 0,
+    timeoutMs: null,
     headers: {
       'Content-Type': 'application/json',
       ...init.headers,

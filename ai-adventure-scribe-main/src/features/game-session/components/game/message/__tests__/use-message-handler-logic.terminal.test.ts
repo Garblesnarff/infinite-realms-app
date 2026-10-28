@@ -55,7 +55,10 @@ vi.mock('@/contexts/CombatContext', () => ({
     refreshCombatState: vi.fn(async () => null),
   })),
 }));
-vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: toastMock }) }));
+vi.mock('@/hooks/use-toast', () => ({
+  toast: toastMock,
+  useToast: () => ({ toast: toastMock }),
+}));
 
 vi.mock('../use-message-command-handler', () => ({
   useMessageCommandHandler: () => ({
@@ -80,6 +83,7 @@ vi.mock('../use-held-entry-recovery', () => ({ useHeldEntryRecovery: () => {} })
 
 vi.mock('@/infrastructure/api/rest-client', () => ({
   createTurnPhaseReporter: () => () => {},
+  fetchWithAuth: (input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init),
   isNetworkError: () => false,
   QuotaExceededError: class QuotaExceededError extends Error {},
   SessionExpiredError: class SessionExpiredError extends Error {},

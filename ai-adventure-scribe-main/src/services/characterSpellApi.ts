@@ -1,7 +1,9 @@
 import type { Spell } from '../types/character';
 
-import { fetchWithAuth } from '@/infrastructure/api/rest-client';
+import { fetchWithAuth, SessionExpiredError } from '@/infrastructure/api/rest-client';
+import { waitForAuth } from '@/lib/auth-gate';
 import logger from '@/lib/logger';
+import { getAccessToken } from '@/services/auth/TokenService';
 
 export interface CharacterSpellData extends Spell {
   is_prepared: boolean;
@@ -50,8 +52,13 @@ class CharacterSpellService {
 
   private async fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
     try {
+      await waitForAuth();
+      if (!getAccessToken()) {
+        throw new Error('No authentication token found. Please log in.');
+      }
       const response = await fetchWithAuth(url, {
         ...options,
+        retryBudgetMs: 0,
         headers: { 'Content-Type': 'application/json', ...options.headers },
       });
 
@@ -71,6 +78,9 @@ class CharacterSpellService {
       return response;
     } catch (error) {
       logger.error('[CharacterSpellService] Authenticated request failed:', error);
+      if (error instanceof SessionExpiredError) {
+        throw new Error('Your session has expired. Please sign in again.');
+      }
       throw error;
     }
   }

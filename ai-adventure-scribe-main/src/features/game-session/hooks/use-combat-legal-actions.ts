@@ -6,7 +6,6 @@ import type { ChatMessage } from '@/types/game';
 import { useCombat } from '@/contexts/CombatContext';
 import { fetchWithAuth, SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
-import { isSessionEnded } from '@/services/auth/TokenService';
 import { equipCharacterItem } from '@/services/character-equipment-api';
 import {
   combatBoundaryFromResult,
@@ -153,7 +152,7 @@ export function useCombatLegalActions(input: {
         actions: (payload.actions ?? []).filter((action) => action.type !== 'death_save'),
       });
     } catch (loadError) {
-      if (loadError instanceof SessionExpiredError || isSessionEnded()) {
+      if (loadError instanceof SessionExpiredError) {
         setSessionEnded(true);
         setLoadFailed(false);
         setLegalState((previous) => ({ actorId: previous.actorId, actions: [] }));

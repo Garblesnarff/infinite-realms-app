@@ -229,7 +229,11 @@ export async function executeAuthoritativeCombatIntent(
     ) {
       const statusResponse = await fetchWithAuth(
         `/v1/combat/${encodeURIComponent(encounterId)}/status`,
-        { headers: { 'Content-Type': 'application/json' }, ...(signal ? { signal } : {}) },
+        {
+          retryBudgetMs: 0,
+          headers: { 'Content-Type': 'application/json' },
+          ...(signal ? { signal } : {}),
+        },
       );
       logServerRequestId('/v1/combat', statusResponse);
       if (!statusResponse.ok)
@@ -240,6 +244,7 @@ export async function executeAuthoritativeCombatIntent(
       };
     }
     const response = await fetchWithAuth(`/v1/combat/${encodeURIComponent(encounterId)}/intent`, {
+      retryBudgetMs: 0,
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
