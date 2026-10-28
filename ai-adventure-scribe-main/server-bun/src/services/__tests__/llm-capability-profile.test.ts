@@ -1541,7 +1541,7 @@ describe('#782 HOLD item 1: true shadow compares every branch against the phase'
     useModel('anthropic/claude-haiku-5.5');
     const reply = JSON.stringify({
       ...JSON.parse(VALID_DM_REPLY),
-      scene_spec: { environment: 'corridor', seed: 7 },
+      xp_award: { amount: 50, reason: 'solved the mystery' },
       visual_prompt: 'a lantern',
     });
     const bodies = stubOpenRouter([{ toolArguments: reply }]);
@@ -1557,11 +1557,11 @@ describe('#782 HOLD item 1: true shadow compares every branch against the phase'
 
       expect(bodies).toHaveLength(1);
       expect(result.error).toBeUndefined();
-      // scene_spec ships (it is full-named); only the unnamed key is stripped.
+      // xp_award ships (it is full-named); only the unnamed key is stripped.
       expect(result.text).toBe(
         JSON.stringify({
           ...JSON.parse(VALID_DM_REPLY),
-          scene_spec: { environment: 'corridor', seed: 7 },
+          xp_award: { amount: 50, reason: 'solved the mystery' },
         }),
       );
       expect(result.usage?.schemaShadowInvalid).toBe(1);
@@ -1569,7 +1569,7 @@ describe('#782 HOLD item 1: true shadow compares every branch against the phase'
         .map((call) => call[0] as { msg?: string; phase?: string; additionalProperty?: string })
         .find((entry) => entry?.msg === 'LLM_SCHEMA_SHADOW_INVALID');
       expect(shadow?.phase).toBe('tactical');
-      expect(shadow?.additionalProperty).toBe('scene_spec');
+      expect(shadow?.additionalProperty).toBe('xp_award');
       const calls = warn.mock.calls.map((call) => call[0] as { msg?: string });
       expect(calls.find((entry) => entry?.msg === 'LLM_TOOL_SCHEMA_INVALID')).toBeUndefined();
     } finally {
