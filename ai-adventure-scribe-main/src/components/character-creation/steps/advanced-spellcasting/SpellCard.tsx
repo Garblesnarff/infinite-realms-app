@@ -10,6 +10,8 @@ interface SpellCardProps {
   isSelected: boolean;
   onSelectionChange: (id: string, checked: boolean) => void;
   disabled?: boolean;
+  /** Granted by the subclass (cleric domain spell): always prepared, never a choice. */
+  alwaysPrepared?: boolean;
 }
 
 /**
@@ -20,6 +22,7 @@ export const SpellCard: React.FC<SpellCardProps> = ({
   isSelected,
   onSelectionChange,
   disabled = false,
+  alwaysPrepared = false,
 }) => (
   <div
     className={`p-3 border rounded-lg cursor-pointer transition-all ${
@@ -37,6 +40,11 @@ export const SpellCard: React.FC<SpellCardProps> = ({
           {spell.ritual && (
             <Badge variant="secondary" className="text-xs">
               Ritual
+            </Badge>
+          )}
+          {alwaysPrepared && (
+            <Badge variant="default" className="text-xs">
+              Always prepared
             </Badge>
           )}
           {spell.concentration && (

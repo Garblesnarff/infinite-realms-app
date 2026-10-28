@@ -32,6 +32,7 @@ const AdvancedSpellcastingSelection: React.FC = () => {
     usesPactMagic,
     usesMetamagic,
     maxPreparedSpells,
+    alwaysPreparedSpells,
     availableSpells,
     availableRitualSpells,
     pactProgression,
@@ -147,6 +148,7 @@ const AdvancedSpellcastingSelection: React.FC = () => {
             preparedSpells={preparedSpells}
             maxPreparedSpells={maxPreparedSpells}
             availableSpells={availableSpells}
+            alwaysPreparedSpells={alwaysPreparedSpells}
             handleSpellPreparation={handleSpellPreparation}
           />
         )}
