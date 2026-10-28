@@ -563,12 +563,22 @@ const baseProperties = {
  * #782 item 8: per-phase DM reply schemas. `full` is today's single live
  * schema (every base property + every extension). The three phases are
  * strict subsets, chosen by the route from session state it already trusts:
- * narrative keeps the entry fields (a fight can only start on a narrative
- * turn) and the story extensions; combat keeps the fight fields and drops
- * the map surface and the story extensions; tactical is the combat set plus
- * the kind-split map actions. combat_exits is the one extension narrative
- * drops: an end is declared on a turn whose encounter is still active, and
- * such a turn picks combat or tactical, never narrative.
+ * narrative keeps the entry fields and the story extensions; combat keeps
+ * the fight fields plus the scene declaration (a `start` can land on a
+ * fight turn) and drops the map surface; tactical is the combat set plus
+ * the kind-split map actions. #1258: combat_exits is a narrative field too
+ * (the 10-28 nightly carried populated exits on narrative turns — an `end`
+ * rides with `combat_transition`, which narrative keeps, and the exits ride
+ * with the end declaration; the guard judges them when combat is active),
+ * and rest, damage and
+ * final_beat_reached ride on fight turns as well (the route's tracker step
+ * arms the ending from a final-beat flag on a combat turn, the damage
+ * applier gates on inCombat and nulls what it does not apply, and the rest
+ * applier gates on inCombat and skips — the phase schema must not reject
+ * a reply the route handles).
+ * The extensions that stay narrative-only (xp_award, items, conditions,
+ * campaign_ending, tracker_changes) are the ones with no fight-turn
+ * evidence and no fight-turn consumer.
  */
 export const DM_RESPONSE_PHASES = ['narrative', 'combat', 'tactical', 'full'] as const;
 export type DmResponsePhase = (typeof DM_RESPONSE_PHASES)[number];
@@ -590,6 +600,10 @@ const COMBAT_BASE_KEYS = [
   'narration_segments',
   'roll_requests',
   'combat_transition',
+  // #1258: a `start` can land on a fight turn (half-transition), and the
+  // prompt requires scene_spec with it — the reply is legitimate there
+  // even when a live encounter means the gate seats nothing new.
+  'scene_spec',
   'combatants',
   'handout_actions',
   'combat_actions',
@@ -854,27 +868,34 @@ const liveExtensionProperties = {
 };
 
 /**
- * Phase declarations for the live extensions. The story extensions are
+ * Phase declarations for the live extensions. Most story extensions stay
  * narrative-only because the route's own behaviour makes them so: the
- * story appliers in llm.ts refuse to run when dmReply.inCombat (XP, items,
- * conditions, rest, damage, campaign ending, tracker changes, final beat
- * are narrative-only effects in the code today), so carrying them on a
- * combat turn would invite the model to emit fields the engine ignores.
- * combat_exits restricts itself the other way (combat + tactical; an end
- * is declared on a turn whose encounter is still active, which never picks
- * narrative). A future extension with no declaration defaults to all
+ * story appliers in llm.ts refuse to run when dmReply.inCombat, so
+ * carrying XP, items, conditions, campaign ending or tracker changes on
+ * a combat turn would invite the model to emit fields the engine ignores.
+ * #1258 corrects four declarations the 10-28 nightly disproved. Rest and
+ * damage ride on fight turns too: the appliers gate on inCombat and the
+ * route nulls unapplied damage and skips unapplied rest, so the phase
+ * schema must not reject a reply the route handles. Final_beat_reached
+ * does as well:
+ * the tracker step arms the ending-required state from the flag on a
+ * combat turn ("a climax spent fighting is still a climax"). And
+ * combat_exits is a narrative field too: the nightly carried populated
+ * exits on narrative turns, an `end` rides with `combat_transition`
+ * (which narrative keeps), and the exits ride with the end declaration;
+ * the guard judges them when combat is active. A future extension with no declaration defaults to all
  * phases, so in-flight extension work is never silently narrowed.
  */
 const liveExtensionPhases: DmResponseExtensionPhases = {
-  combat_exits: ['combat', 'tactical'],
+  combat_exits: ['narrative', 'combat', 'tactical'],
   xp_award: ['narrative'],
   items: ['narrative'],
   conditions: ['narrative'],
-  rest: ['narrative'],
-  damage: ['narrative'],
+  rest: ['narrative', 'combat', 'tactical'],
+  damage: ['narrative', 'combat', 'tactical'],
   campaign_ending: ['narrative'],
   tracker_changes: ['narrative'],
-  final_beat_reached: ['narrative'],
+  final_beat_reached: ['narrative', 'combat', 'tactical'],
 };
 
 export const dmResponseSchema = createDmResponseSchema(liveExtensionProperties);

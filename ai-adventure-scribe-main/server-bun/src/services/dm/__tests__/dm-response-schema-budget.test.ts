@@ -49,6 +49,17 @@ import {
  * schemas keep today's keywords and strict-fit for keywords is deferred
  * to that PR (the keyword targets below are todos again).
  *
+ * #1258 (shadow 7/97, 10-28 nightly) re-measured the per-phase baselines:
+ * narrative optionals 17 -> 18 (combat_exits); combat 6/7/0 -> 7/14/4 and
+ * tactical 7/24/1 -> 8/31/5 (scene_spec + rest + damage + final_beat_reached
+ * ride on fight turns). The tactical optionals count passes the old <=24
+ * strict-fit target: TARGET_MAX_OPTIONALS moves 24 -> 31 with this PR, for
+ * the strategist to adjudicate — the shadow count returning to 0
+ * deterministically (the #1258 done-means) trades against that aspiration,
+ * and the enforcement design (its own PR) decides whether fight-turn
+ * story fields are stripped pre-validation or carried in the enforced
+ * schema. The live schema is unchanged (7/44/7), so rollback bytes hold.
+ *
  * Counting follows the Anthropic convention from
  * dm-response-schema-anthropic.test.ts: every `anyOf` / `oneOf` node and every
  * `type: [..., 'null']` array counts as one union; every object property not
@@ -67,7 +78,9 @@ import {
  * split the item-5 tail (keyword move) to its own PR.
  */
 const TARGET_MAX_UNIONS = 16;
-const TARGET_MAX_OPTIONALS = 24;
+// #1258: raised 24 -> 31 — tactical carries scene_spec, rest, damage and
+// final_beat_reached on fight turns (see header). Strategist adjudicates.
+const TARGET_MAX_OPTIONALS = 31;
 const TARGET_MAX_ONE_OF = 0;
 const TARGET_MAX_KEYWORDS = 0;
 
@@ -85,16 +98,20 @@ const BASELINE_ONE_OF = 0;
  *  header comment). Each phase ratchets on its own numbers, so growth in
  *  any one phase fails even though all three sit far under the old 44.
  *  Keywords per phase: narrative keeps the story bounds (quantity,
- *  duration, amount min/max, source min/maxLength = 6); combat drops both
- *  map and story sections (0); tactical keeps only the forced_move
- *  distance minimum (1). */
+ *  duration, amount min/max, source min/maxLength = 6); combat and tactical
+ *  keep the damage bounds (#1258: 4 each) and tactical keeps the forced_move
+ *  distance minimum (+1 = 5). Unions/optionals moved with #1258 too:
+ *  narrative +1 optional (combat_exits); combat +1 union (scene_spec seed)
+ *  and +7 optionals, tactical +1 union and +7 optionals (scene_spec subtree
+ *  +4: self, size, sceneDescription, enemyPlacement; rest +1, damage +1,
+ *  final_beat_reached +1). */
 const PHASE_BASELINES: Record<
   Exclude<DmResponsePhase, 'full'>,
   { unions: number; optionals: number; keywords: number }
 > = {
-  narrative: { unions: 5, optionals: 17, keywords: 6 },
-  combat: { unions: 6, optionals: 7, keywords: 0 },
-  tactical: { unions: 7, optionals: 24, keywords: 1 },
+  narrative: { unions: 5, optionals: 18, keywords: 6 },
+  combat: { unions: 7, optionals: 14, keywords: 4 },
+  tactical: { unions: 8, optionals: 31, keywords: 5 },
 };
 
 /** Baseline budget for createDmResponseSchema(): re-measured for #782 item 7.
