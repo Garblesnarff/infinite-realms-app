@@ -252,7 +252,7 @@ export type NarrativeSceneStateResponse = {
 
 async function requestResponse(path: string, init: RequestInit = {}): Promise<Response> {
   await waitForAuth();
-  const res = await fetchWithAuth(path, { ...init, timeoutMs: null });
+  const res = await fetchWithAuth(path, init);
   logServerRequestId(path, res);
   return res;
 }
@@ -306,14 +306,18 @@ function requestErrorMessage(status: number, payload: Record<string, unknown> | 
   return `${label} (${status})${detail ? `: ${detail}` : ''}`;
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  timeoutMs?: number | null,
+): Promise<T> {
   // Wait for AuthContext to verify/refresh the session before reading the
   // token — otherwise cold page loads race out with a stale/expired token.
   await waitForAuth();
   const response = await fetchWithAuth(path, {
     ...init,
     retryBudgetMs: 0,
-    timeoutMs: null,
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
     headers: {
       'Content-Type': 'application/json',
       ...init.headers,
@@ -616,10 +620,14 @@ export const userDataApi = {
     sessionId: string,
     messages: SessionMessagePayload | SessionMessagePayload[],
   ): Promise<any> =>
-    request(`/v1/sessions/${encodeURIComponent(sessionId)}/messages`, {
-      method: 'POST',
-      body: JSON.stringify(messages),
-    }),
+    request(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/messages`,
+      {
+        method: 'POST',
+        body: JSON.stringify(messages),
+      },
+      null,
+    ),
   listMemories: (sessionId: string, options: MemoryQuery = {}): Promise<any[]> => {
     const query = new URLSearchParams({ session_id: sessionId });
     if (options.limit) query.set('limit', String(options.limit));
