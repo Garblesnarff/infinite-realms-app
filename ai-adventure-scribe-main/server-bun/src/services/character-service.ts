@@ -371,6 +371,21 @@ export class CharacterService {
     const seededEquipment = nonGoldEquipment?.length
       ? withStartingPackageEquipped(nonGoldEquipment)
       : nonGoldEquipment;
+    // Every creation path needs the one-to-one stats row: feature and roll
+    // services read ability scores from it, even when the producer omitted a
+    // stats object. These are the database defaults for character_stats.
+    const effectiveStats = {
+      ...stats,
+      strength: stats?.strength ?? 10,
+      dexterity: stats?.dexterity ?? 10,
+      constitution: stats?.constitution ?? 10,
+      intelligence: stats?.intelligence ?? 10,
+      wisdom: stats?.wisdom ?? 10,
+      charisma: stats?.charisma ?? 10,
+      temporaryHitPoints: stats?.temporaryHitPoints ?? 0,
+      initiativeBonus: stats?.initiativeBonus ?? 0,
+      speed: stats?.speed ?? 30,
+    };
     const created = await db.transaction(async (tx) => {
       const [character] = await tx
         .insert(characters)
@@ -430,43 +445,42 @@ export class CharacterService {
         );
       }
 
-      if (stats) {
-        // #620: the server is the only place that computes HP and AC.
-        // The client sends inputs (class, ability scores, equipment); any
-        // armor_class or hit-point values it sent are ignored. #829: HP is
-        // computed for the character's real level — a level-3 template gets
-        // level-3 HP, not the level-1 value.
-        // #1019: Draconic Bloodline reaches HP/AC from either carrier of
-        // the pick — the wizard's classFeatures choice string, or the
-        // subclass this create just recorded from the body's subclass.
-        const draconicBloodline =
-          isDraconicBloodline(data.classFeatures) || resolvedSubclass === 'Draconic Bloodline';
-        const tough = hasToughFeat(undefined, data.classFeatures);
-        const maxHitPoints = computeMaxHitPointsForLevel(
+      // #620: the server is the only place that computes HP and AC.
+      // The client sends inputs (class, ability scores, equipment); any
+      // armor_class or hit-point values it sent are ignored. #829: HP is
+      // computed for the character's real level — a level-3 template gets
+      // level-3 HP, not the level-1 value. The row is written even when the
+      // producer omitted stats, so every create path has usable ability scores.
+      // #1019: Draconic Bloodline reaches HP/AC from either carrier of
+      // the pick — the wizard's classFeatures choice string, or the
+      // subclass this create just recorded from the body's subclass.
+      const draconicBloodline =
+        isDraconicBloodline(data.classFeatures) || resolvedSubclass === 'Draconic Bloodline';
+      const tough = hasToughFeat(undefined, data.classFeatures);
+      const maxHitPoints = computeMaxHitPointsForLevel(
+        data.class,
+        effectiveStats.constitution,
+        data.subrace,
+        character.level ?? 1,
+        { draconicBloodline, tough },
+      );
+      await tx.insert(characterStats).values({
+        ...effectiveStats,
+        characterId: character.id,
+        armorClass: computeServerArmorClass(
           data.class,
-          stats.constitution,
-          data.subrace,
-          character.level ?? 1,
-          { draconicBloodline, tough },
-        );
-        await tx.insert(characterStats).values({
-          ...stats,
-          characterId: character.id,
-          armorClass: computeServerArmorClass(
-            data.class,
-            {
-              dexterity: stats.dexterity,
-              constitution: stats.constitution,
-              wisdom: stats.wisdom,
-            },
-            seededEquipment ? toArmorClassItems(seededEquipment) : [],
-            data.fightingStyles,
-            draconicBloodline,
-          ),
-          maxHitPoints,
-          currentHitPoints: maxHitPoints,
-        });
-      }
+          {
+            dexterity: effectiveStats.dexterity,
+            constitution: effectiveStats.constitution,
+            wisdom: effectiveStats.wisdom,
+          },
+          seededEquipment ? toArmorClassItems(seededEquipment) : [],
+          data.fightingStyles,
+          draconicBloodline,
+        ),
+        maxHitPoints,
+        currentHitPoints: maxHitPoints,
+      });
 
       if (seededEquipment?.length) {
         // #388: starting kits list some items twice (the Fighter kit's two
@@ -1052,18 +1066,18 @@ export class CharacterService {
       throw new InternalServerError('Failed to import character');
     }
 
-    // Create stats if provided
-    if (characterData.stats) {
-      await db.insert(characterStats).values({
-        characterId: character.id,
-        strength: characterData.stats.strength || 10,
-        dexterity: characterData.stats.dexterity || 10,
-        constitution: characterData.stats.constitution || 10,
-        intelligence: characterData.stats.intelligence || 10,
-        wisdom: characterData.stats.wisdom || 10,
-        charisma: characterData.stats.charisma || 10,
-      });
-    }
+    // Imports can omit stats, but downstream feature and roll paths require
+    // the one-to-one row. Use the schema defaults for omitted values.
+    const importedStats = characterData.stats ?? {};
+    await db.insert(characterStats).values({
+      characterId: character.id,
+      strength: importedStats.strength ?? 10,
+      dexterity: importedStats.dexterity ?? 10,
+      constitution: importedStats.constitution ?? 10,
+      intelligence: importedStats.intelligence ?? 10,
+      wisdom: importedStats.wisdom ?? 10,
+      charisma: importedStats.charisma ?? 10,
+    });
 
     // #270: same seed as CharacterService.create — an imported caster gets
     // slot rows from the single slot source. The export carries no slot
