@@ -23,6 +23,8 @@ vi.mock('lucide-react', () => ({
   Pause: () => <div data-testid="pause-icon" />,
   Volume2: () => <div data-testid="volume-icon" />,
   VolumeX: () => <div data-testid="mute-icon" />,
+  Loader2: () => <div data-testid="loader-icon" />,
+  RotateCw: () => <div data-testid="retry-icon" />,
 }));
 
 // Mock UI components
@@ -41,16 +43,7 @@ vi.mock('@/components/ui/slider', () => ({
 vi.mock('@/components/ui/button', () => ({
   Button: React.forwardRef<HTMLButtonElement, any>(
     (
-      {
-        children,
-        onClick,
-        ariaLabel,
-        title,
-        className,
-        variant: _variant,
-        size: _size,
-        ...props
-      },
+      { children, onClick, ariaLabel, title, className, variant: _variant, size: _size, ...props },
       ref,
     ) => (
       <button
@@ -106,14 +99,15 @@ describe('DMMessageVoiceControls', () => {
     });
   });
 
-  it('renders nothing if speechSynthesis is not available', () => {
-    // We need to delete it from window to make 'speechSynthesis' in window false
+  it('still renders the Listen control when speechSynthesis is missing (ElevenLabs audio)', () => {
+    // Clips play through an audio element, so the browser's speech API is not the gate (#1236 C).
     const originalSpeechSynthesis = window.speechSynthesis;
     // @ts-ignore - explicitly testing unavailability
     delete (window as any).speechSynthesis;
     try {
-      const { container } = render(<DMMessageVoiceControls {...defaultProps} />);
-      expect(container.firstChild).toBeNull();
+      render(<DMMessageVoiceControls {...defaultProps} />);
+      expect(screen.getByRole('button', { name: /play this message/i })).toBeInTheDocument();
+      expect(screen.getByText('Listen')).toBeInTheDocument();
     } finally {
       Object.defineProperty(window, 'speechSynthesis', {
         value: originalSpeechSynthesis,
@@ -121,6 +115,64 @@ describe('DMMessageVoiceControls', () => {
         writable: true,
       });
     }
+  });
+
+  it('renders nothing when the browser has no audio element', () => {
+    const originalAudio = window.Audio;
+    // @ts-ignore - explicitly testing unavailability
+    delete (window as any).Audio;
+    try {
+      const { container } = render(<DMMessageVoiceControls {...defaultProps} />);
+      expect(container.firstChild).toBeNull();
+    } finally {
+      window.Audio = originalAudio;
+    }
+  });
+
+  it('shows Preparing voice while this message is being generated, with no play button', () => {
+    (useVoiceContext as any).mockReturnValue({
+      ...mockVoiceContext,
+      currentPlayingId: 'msg-123',
+      isPlaying: false,
+      isProcessing: true,
+    });
+
+    render(<DMMessageVoiceControls {...defaultProps} />);
+
+    expect(screen.getByText('Preparing voice…')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /play this message/i })).toBeNull();
+  });
+
+  it('shows the failure and a Retry that plays the message again', () => {
+    const retryMessage = vi.fn();
+    (useVoiceContext as any).mockReturnValue({
+      ...mockVoiceContext,
+      currentPlayingId: 'msg-123',
+      isPlaying: false,
+      isProcessing: false,
+      playbackError: 'Audio generation failed',
+      retryMessage,
+    });
+
+    render(<DMMessageVoiceControls {...defaultProps} />);
+
+    expect(screen.getByText('Voice unavailable')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry voice for this message' }));
+    expect(retryMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not show an error for a different message', () => {
+    (useVoiceContext as any).mockReturnValue({
+      ...mockVoiceContext,
+      currentPlayingId: 'msg-other',
+      isPlaying: false,
+      playbackError: 'Audio generation failed',
+    });
+
+    render(<DMMessageVoiceControls {...defaultProps} />);
+
+    expect(screen.queryByText('Voice unavailable')).toBeNull();
+    expect(screen.getByRole('button', { name: /play this message/i })).toBeInTheDocument();
   });
 
   it('renders play button when not playing', () => {
@@ -260,16 +312,11 @@ describe('DMMessageVoiceControls', () => {
     expect(parentClick).not.toHaveBeenCalled();
   });
 
-  it('is always visible on touch devices', () => {
-    Object.defineProperty(navigator, 'maxTouchPoints', {
-      value: 5,
-      configurable: true,
-    });
-
+  it('is visible at rest on every device, not only on hover', () => {
     const { container } = render(<DMMessageVoiceControls {...defaultProps} />);
     const wrapper = container.firstChild as HTMLElement;
 
-    expect(wrapper).toHaveClass('opacity-100');
+    expect(wrapper.className).not.toMatch(/opacity-0|group-hover/);
   });
 
   it('includes screen reader only text for narration segments', () => {

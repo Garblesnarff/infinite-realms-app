@@ -17,6 +17,12 @@ interface VoiceContextType {
   isMuted: boolean;
   setVolume: (volume: number) => void;
   toggleMute: () => void;
+  /** True while the clip for currentPlayingId is being fetched or generated. */
+  isProcessing: boolean;
+  /** The failure for currentPlayingId, or null. Cleared when that message plays again. */
+  playbackError: string | null;
+  /** Plays the last requested message again, for the Retry control after an error. */
+  retryMessage: () => void;
 }
 
 const VoiceContext = createContext<VoiceContextType | undefined>(undefined);
@@ -37,12 +43,18 @@ interface VoiceProviderProps {
 export function VoiceProvider({ children, sessionId }: VoiceProviderProps) {
   const [currentPlayingId, setCurrentPlayingId] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState<string>('');
+  const lastRequestRef = React.useRef<{
+    messageId: string;
+    text: string;
+    narrationSegments?: NarrationSegment[];
+  } | null>(null);
 
   // Use the existing progressive voice hook
   const {
     isPlaying,
     isPaused,
     isProcessing,
+    error: playbackError,
     volume,
     isMuted,
     isVoiceEnabled: _isVoiceEnabled,
@@ -60,6 +72,7 @@ export function VoiceProvider({ children, sessionId }: VoiceProviderProps) {
     (messageId: string, text: string, narrationSegments?: NarrationSegment[]) => {
       // Initialize audio context for browser compatibility
       initializeAudioContext();
+      lastRequestRef.current = { messageId, text, narrationSegments };
 
       // If this is the same message and it's paused, resume it
       if (currentPlayingId === messageId && isPaused) {
@@ -108,13 +121,19 @@ export function VoiceProvider({ children, sessionId }: VoiceProviderProps) {
     setAnnouncement('Message playback stopped');
   }, [stopPlayback]);
 
-  // Handle when playback ends naturally (but not when paused)
+  const retryMessage = useCallback(() => {
+    const last = lastRequestRef.current;
+    if (last) playMessage(last.messageId, last.text, last.narrationSegments);
+  }, [playMessage]);
+
+  // Handle when playback ends naturally (but not when paused). A failed clip keeps its
+  // message id so the failure and Retry stay on that message.
   React.useEffect(() => {
-    if (!isPlaying && !isProcessing && !isPaused && currentPlayingId) {
+    if (!isPlaying && !isProcessing && !isPaused && currentPlayingId && !playbackError) {
       // Audio finished naturally (not paused)
       setCurrentPlayingId(null);
     }
-  }, [isPlaying, isProcessing, isPaused, currentPlayingId]);
+  }, [isPlaying, isProcessing, isPaused, currentPlayingId, playbackError]);
 
   /**
    * ⚡ Bolt: Memoize the context value to prevent unnecessary re-renders
@@ -132,6 +151,9 @@ export function VoiceProvider({ children, sessionId }: VoiceProviderProps) {
       isMuted,
       setVolume,
       toggleMute,
+      isProcessing: isProcessing && !!currentPlayingId,
+      playbackError: currentPlayingId ? (playbackError ?? null) : null,
+      retryMessage,
     }),
     [
       currentPlayingId,
@@ -144,6 +166,9 @@ export function VoiceProvider({ children, sessionId }: VoiceProviderProps) {
       isMuted,
       setVolume,
       toggleMute,
+      isProcessing,
+      playbackError,
+      retryMessage,
     ],
   );
 
