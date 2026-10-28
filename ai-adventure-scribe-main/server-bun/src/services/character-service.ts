@@ -457,13 +457,21 @@ export class CharacterService {
       const draconicBloodline =
         isDraconicBloodline(data.classFeatures) || resolvedSubclass === 'Draconic Bloodline';
       const tough = hasToughFeat(undefined, data.classFeatures);
-      const maxHitPoints = computeMaxHitPointsForLevel(
-        data.class,
-        effectiveStats.constitution,
-        data.subrace,
-        character.level ?? 1,
-        { draconicBloodline, tough },
-      );
+      // A non-empty class the SRD tables do not know (a fixture's own classes
+      // row) makes computeMaxHitPointsForLevel throw. That used to run only
+      // when the body sent stats, so those creates still succeeded. Keep that,
+      // and still write the row: HP stays at the schema default.
+      const namedButUnknown =
+        (data.class ?? '').trim().length > 0 && !findSrdClassForHitPoints(data.class);
+      const maxHitPoints = namedButUnknown
+        ? 10
+        : computeMaxHitPointsForLevel(
+            data.class,
+            effectiveStats.constitution,
+            data.subrace,
+            character.level ?? 1,
+            { draconicBloodline, tough },
+          );
       await tx.insert(characterStats).values({
         ...effectiveStats,
         characterId: character.id,
