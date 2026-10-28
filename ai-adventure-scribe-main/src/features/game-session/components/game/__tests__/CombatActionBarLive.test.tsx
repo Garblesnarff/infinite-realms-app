@@ -17,6 +17,7 @@ import {
   executeAuthoritativeCombatIntent,
   executeStructuredCombatActionWithBoundary,
 } from '@/services/combat/combat-action-executor';
+import { askPlayerForAttackDie } from '@/services/combat/player-attack-roll';
 import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
 
 // Encounter fixture built with the real mapper over a server-shaped payload
@@ -115,6 +116,7 @@ vi.mock('@/services/combat/combat-action-executor', async (importOriginal) => ({
 // The tray prompt; its real behaviour against the route is in
 // server-bun/src/routes/v1/combat/__tests__/player-spell-turn-real-resolver.test.ts (#1143).
 vi.mock('@/services/combat/player-spell-cast', () => ({ askPlayerForSpellCast: vi.fn() }));
+vi.mock('@/services/combat/player-attack-roll', () => ({ askPlayerForAttackDie: vi.fn() }));
 
 vi.mock('@/contexts/CombatContext', () => ({
   useCombat: () => combatHolder.current,
@@ -205,6 +207,32 @@ describe('CombatActionBarLive', () => {
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(SESSION_ENDED_MESSAGE));
     expect(screen.queryByText(/Could not load actions/)).toBeNull();
+  });
+
+  it('shows the session-ended message when an attack click is rejected', async () => {
+    combatHolder.current = {
+      state: { isInCombat: true, activeEncounter: buildEncounter('pc-1') },
+      refreshCombatState: vi.fn(),
+    };
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({ ok: true, json: async () => playerPayload } as Response)
+      .mockRejectedValueOnce(new restClient.SessionExpiredError());
+    vi.mocked(askPlayerForAttackDie).mockResolvedValue({
+      d20: 17,
+      d20Rolls: [17, 17],
+      autoRolled: false,
+      movementOnly: false,
+    });
+    vi.mocked(executeStructuredCombatActionWithBoundary).mockRejectedValue(
+      new restClient.SessionExpiredError(),
+    );
+
+    render(<CombatActionBarLive {...defaultProps} />);
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    await user.click(await screen.findByRole('button', { name: /Attack/i }));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(SESSION_ENDED_MESSAGE));
+    expect(screen.queryByText(/The attack could not be made/)).toBeNull();
   });
 
   it('out of combat: renders nothing and fetch is not called; placeholder shows nothing', () => {

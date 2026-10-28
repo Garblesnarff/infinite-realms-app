@@ -396,9 +396,10 @@ describe('AuthContext connection failures (#565)', () => {
 
   it('refreshes from the token deadline without waiting for a focus or visibility event', async () => {
     vi.useFakeTimers();
-    const expiringToken = tokenWithExpiry(360);
+    const expiringToken = tokenWithExpiry(300);
     persistSession({ access_token: expiringToken, refresh_token: 'old-refresh' });
     const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    let refreshAttempts = 0;
     fetchMock.mockImplementation((url: string) => {
       if (String(url).includes('/api/trpc/auth.me')) {
         return Promise.resolve(
@@ -406,6 +407,7 @@ describe('AuthContext connection failures (#565)', () => {
         );
       }
       if (String(url).includes('/v1/auth/refresh')) {
+        refreshAttempts += 1;
         return Promise.resolve(
           authMe(200, { accessToken: 'fresh-access', refreshToken: 'fresh-refresh' }),
         );
@@ -430,9 +432,10 @@ describe('AuthContext connection failures (#565)', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/v1/auth/refresh'))).toBe(
-      true,
-    );
+    expect(refreshAttempts).toBe(1);
+    const originalExpiry = getTokenExpiry(expiringToken);
+    expect(originalExpiry).toEqual(expect.any(Number));
+    expect(Date.now()).toBeLessThan(originalExpiry ?? Number.POSITIVE_INFINITY);
   });
 
   it('backs off a transient scheduled refresh and retries while keeping the session', async () => {

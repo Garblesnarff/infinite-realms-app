@@ -614,6 +614,13 @@ export function useCombatLegalActions(input: {
           await input.onSendText(action.label);
         }
       } catch (failure) {
+        if (failure instanceof SessionExpiredError) {
+          setSessionEnded(true);
+          setLoadFailed(false);
+          setError(null);
+          setLegalState((previous) => ({ actorId: previous.actorId, actions: [] }));
+          return;
+        }
         setError(
           failure instanceof Error
             ? failure.message
