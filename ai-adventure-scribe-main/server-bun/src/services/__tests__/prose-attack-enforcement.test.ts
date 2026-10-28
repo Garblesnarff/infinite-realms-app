@@ -217,9 +217,19 @@ describe("the prose floor reads an attack the player declared, not the monsters'
     expect(firedLayers().prose).toBe(false);
   });
 
+  // A swing that names the hostile is the intent gate's (#612). The floor stays the
+  // path for a spell, a nameless "finish it off", and a bare attack-roll continuation.
   test.each([
     ['a swing', 'I swing my longsword at the Shadow Roach.'],
     ['a verb outside the prose list', 'I hit the Shadow Roach.'],
+    ['an attack beside a pass', 'I attack the Shadow Roach and then end my turn.'],
+  ])('%s reaches the engine through the intent gate', async (_name, input) => {
+    const result = await inputFor(input, 'gate');
+    expect(declaredActionsFrom(result.text)).toHaveLength(1);
+    expect(firedLayers().prose).toBe(false);
+  });
+
+  test.each([
     ['a spell typed without "cast"', 'I use Sacred Flame on the Shadow Roach.'],
     [
       'a refusal that is not a decline',
@@ -227,7 +237,6 @@ describe("the prose floor reads an attack the player declared, not the monsters'
     ],
     ['a wait before the strike', 'I wait for it to close, then finish it off.'],
     ['a verb no list holds', 'I finish it off.'],
-    ['an attack beside a pass', 'I attack the Shadow Roach and then end my turn.'],
     ['the continuation of an attack roll', 'Attack roll: 15 (nat 10+5) hit'],
   ])('%s still reaches the engine through the floor', async (_name, input) => {
     const result = await inputFor(input, 'attack');

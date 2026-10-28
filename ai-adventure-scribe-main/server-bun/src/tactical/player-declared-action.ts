@@ -2,9 +2,44 @@ import { collectEntityMentions } from './attack-pair.js';
 import { parseTacticalDigest } from './digest-parse.js';
 import { narratedCastInsteadOfWeaponAttack } from './narrated-player-cast.js';
 import { readPlayerAttack, WEAPON_NOUN } from './player-attack-input.js';
+import {
+  contradictsEngineOutcome,
+  spliceContradictingSentences,
+} from '../../../shared/narration-harm.js';
 import { findPlayerCombatSpellInText } from '../data/spellData.js';
 
 import type { DMCombatAction, DMResponse } from '../services/dm/dm-response-schema.js';
+
+/** An unrolled attack has not hit, missed, or dealt damage (#612). */
+const UNROLLED_HIT = /\b(?:hits?|strikes?|damage[ds]?)\b/i;
+
+/** Shown when every sentence was a verdict. Must not itself be a hit, miss, or damage claim. */
+const UNROLLED_ATTACK_FALLBACK = 'The attack waits on your roll.';
+
+/**
+ * A declared attack has not been rolled yet (#612). Drop a sentence that already
+ * calls it a miss or a hit. The shared detector, run both ways, catches a miss.
+ * A hit or a damage figure is not a contradiction of either side, so those
+ * sentences are dropped on their own. A reply that was only the verdict keeps
+ * one neutral line.
+ */
+function withoutUnrolledAttackVerdict(text: string, description: string): string {
+  let next = text;
+  for (const success of [true, false]) {
+    const claims = contradictsEngineOutcome(next, {
+      success,
+      requestType: 'attack',
+      description,
+    });
+    if (claims.length) next = spliceContradictingSentences(next, claims, '');
+  }
+  const kept = next
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 0 && !UNROLLED_HIT.test(sentence));
+  const joined = kept.join(' ').trim();
+  return joined.length > 0 ? joined : UNROLLED_ATTACK_FALLBACK;
+}
 
 function requestPlayerAim(response: DMResponse): { response: DMResponse; awaitingTarget: boolean } {
   return {
@@ -56,9 +91,13 @@ export function groundPlayerDeclaredAction(
         a.actor_id === actor.id && (a.action_type === 'attack' || a.action_type === 'cast_spell'),
     ) || response.roll_requests.some((r) => r.type === 'attack');
   if (!spell) {
-    if (!modelDeclaredAttack) return null;
     const weapon = new RegExp(`\\b(?:${WEAPON_NOUN})\\b`, 'i').exec(read.source)?.[0];
-    if (!target) return requestPlayerAim(response);
+    // No named target: keep today's split. A model attack asks who to aim at. A model
+    // that declared nothing falls through to the prose floor, which may take the nearest hostile.
+    if (!target) {
+      if (!modelDeclaredAttack) return null;
+      return requestPlayerAim(response);
+    }
     const unarmed = /\b(?:punch\w*|kick\w*|unarmed(?: strike)?|fists?)\b/i.test(read.source);
     const action: DMCombatAction = {
       actor_id: actor.id,
@@ -73,9 +112,15 @@ export function groundPlayerDeclaredAction(
       slot_level: null,
       movement_feet: 0,
     };
+    // The player named one hostile. That is the attack, even when the model wrote
+    // only a miss and no action (#612). The die has not been rolled.
+    const description = `${action.weapon_id ?? 'attack'} against ${target.name || target.id}`;
     return {
       response: {
         ...response,
+        text: withoutUnrolledAttackVerdict(response.text ?? '', description),
+        // The die has not been rolled, so a fabricated hit cannot change HP (#612).
+        damage: null,
         combat_actions: [
           ...response.combat_actions.filter(
             (a) =>
@@ -84,7 +129,9 @@ export function groundPlayerDeclaredAction(
           ),
           action,
         ],
-        roll_requests: response.roll_requests.filter((r) => r.type !== 'attack'),
+        roll_requests: response.roll_requests.filter(
+          (r) => r.type !== 'attack' && r.type !== 'damage',
+        ),
       },
       awaitingTarget: false,
     };
