@@ -2,7 +2,7 @@ import { irVoice } from '../../../shared/npc-voices';
 import { ELEVENLABS_MODEL } from '../voice-routing';
 import { type VoiceProvider, voiceErrorForStatus } from './voice-provider';
 
-import { getAuthHeaders } from '@/services/auth/TokenService';
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 
 /**
  * Premium voice: ElevenLabs through the server proxy. Request shape is
@@ -16,15 +16,13 @@ export const ElevenLabsProvider: VoiceProvider = {
   },
 
   async generateAudio(text, voice, settings, signal, sessionId) {
-    const apiBase = import.meta.env.VITE_API_URL || '';
-    const response = await fetch(
-      `${apiBase}/v1/ai-proxy/voice/${encodeURIComponent(ElevenLabsProvider.resolveVoiceId(voice))}`,
+    const response = await fetchWithAuth(
+      `/v1/ai-proxy/voice/${encodeURIComponent(ElevenLabsProvider.resolveVoiceId(voice))}`,
       {
         method: 'POST',
         headers: {
           Accept: 'audio/mpeg',
           'Content-Type': 'application/json',
-          ...getAuthHeaders(),
         },
         signal,
         body: JSON.stringify({

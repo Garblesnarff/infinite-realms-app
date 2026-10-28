@@ -4,10 +4,8 @@ import type {
 } from '@/services/combat/combat-action-executor';
 
 import { logServerRequestId } from '@/infrastructure/api/request-id-log';
-import { getAuthHeaders } from '@/services/auth/TokenService';
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 import { CombatIntentRefusedError } from '@/services/combat/combat-action-executor';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
 /** The engine's answer to "what would this attack be?", as the popup needs to render it. */
 export interface CombatAttackProposal {
@@ -41,15 +39,11 @@ export async function proposeAuthoritativeAttack(
   encounterId: string,
   intent: Extract<ClientCombatIntent, { type: 'attack' }>,
 ): Promise<CombatAttackProposal> {
-  const headers = { 'Content-Type': 'application/json', ...getAuthHeaders() };
-  const response = await fetch(
-    `${API_BASE_URL}/v1/combat/${encodeURIComponent(encounterId)}/intent`,
-    {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ intent, source: 'dm', phase: 'propose' }),
-    },
-  );
+  const response = await fetchWithAuth(`/v1/combat/${encodeURIComponent(encounterId)}/intent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ intent, source: 'dm', phase: 'propose' }),
+  });
   logServerRequestId('/v1/combat', response);
   const payload = await response.json().catch(() => ({}));
   if (!response.ok)
@@ -88,15 +82,11 @@ export async function proposeAuthoritativeSpell(
   encounterId: string,
   intent: Extract<ClientCombatIntent, { type: 'spell' }>,
 ): Promise<CombatSpellProposal> {
-  const headers = { 'Content-Type': 'application/json', ...getAuthHeaders() };
-  const response = await fetch(
-    `${API_BASE_URL}/v1/combat/${encodeURIComponent(encounterId)}/intent`,
-    {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ intent, source: 'dm', phase: 'propose' }),
-    },
-  );
+  const response = await fetchWithAuth(`/v1/combat/${encodeURIComponent(encounterId)}/intent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ intent, source: 'dm', phase: 'propose' }),
+  });
   logServerRequestId('/v1/combat', response);
   const payload = await response.json().catch(() => ({}));
   if (!response.ok)

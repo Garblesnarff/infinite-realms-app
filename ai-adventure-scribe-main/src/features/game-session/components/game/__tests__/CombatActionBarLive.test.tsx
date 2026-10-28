@@ -11,6 +11,8 @@ import {
 } from '../CombatActionBar';
 
 import { mapAuthoritativeCombat } from '@/contexts/combat/authoritative-combat-state';
+import * as restClient from '@/infrastructure/api/rest-client';
+import { SESSION_ENDED_MESSAGE } from '@/services/auth/TokenService';
 import {
   executeAuthoritativeCombatIntent,
   executeStructuredCombatActionWithBoundary,
@@ -136,6 +138,13 @@ vi.mock('../../tactical/TacticalMapProvider', () => ({
 
 vi.mock('@/services/auth/TokenService', () => ({
   getAuthHeaders: vi.fn(() => ({})),
+  isSessionEnded: vi.fn(() => false),
+  loadCachedSession: vi.fn(() => null),
+  markSessionEnded: vi.fn(),
+  persistSession: vi.fn(),
+  refreshAccessTokenOnce: vi.fn(),
+  SESSION_ENDED_MESSAGE: 'Your sign-in expired — sign in again; your game is saved',
+  TokenRefreshTransportError: class TokenRefreshTransportError extends Error {},
 }));
 
 function PlaceholderProbe() {
@@ -185,6 +194,19 @@ afterEach(() => {
 });
 
 describe('CombatActionBarLive', () => {
+  it('shows the session-ended message instead of the generic action-load error', async () => {
+    combatHolder.current = {
+      state: { isInCombat: true, activeEncounter: buildEncounter('pc-1') },
+      refreshCombatState: vi.fn(),
+    };
+    vi.spyOn(restClient, 'fetchWithAuth').mockRejectedValue(new restClient.SessionExpiredError());
+
+    render(<CombatActionBarLive {...defaultProps} />);
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(SESSION_ENDED_MESSAGE));
+    expect(screen.queryByText(/Could not load actions/)).toBeNull();
+  });
+
   it('out of combat: renders nothing and fetch is not called; placeholder shows nothing', () => {
     combatHolder.current = {
       state: { isInCombat: false, activeEncounter: null },

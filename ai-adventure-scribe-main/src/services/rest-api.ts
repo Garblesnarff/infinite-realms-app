@@ -1,9 +1,7 @@
 import type { Character } from '@/types/character';
 import type { CombatParticipant, Condition } from '@/types/combat';
 
-import { getAuthHeaders } from '@/services/auth/TokenService';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 
 export interface RestHitDie {
   id: string;
@@ -107,10 +105,7 @@ export function applyLongRestSemantics(entity: LongRestEntity): {
   return { conditions, activeConcentration: null };
 }
 
-export function applyRestResultToCharacter(
-  character: Character,
-  result: RestApiResult,
-): Character {
+export function applyRestResultToCharacter(character: Character, result: RestApiResult): Character {
   const spellSlots = normalizeSpellSlots(result.spellSlots);
   const hitDice = aggregateHitDice(result.hitDiceRemaining);
 
@@ -179,14 +174,11 @@ async function requestRest(
   restType: 'short' | 'long',
   hitDiceToSpend: number = 0,
 ): Promise<RestApiResult> {
-  const response = await fetch(
-    `${API_BASE_URL}/v1/rest/characters/${encodeURIComponent(characterId)}/${restType}`,
+  const response = await fetchWithAuth(
+    `/v1/rest/characters/${encodeURIComponent(characterId)}/${restType}`,
     {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders(),
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(restType === 'short' ? { hitDiceToSpend } : {}),
     },
   );
@@ -202,11 +194,10 @@ export const restApi = {
     requestRest(characterId, 'short', hitDiceToSpend),
   longRest: (characterId: string) => requestRest(characterId, 'long'),
   attuneItem: async (characterId: string, itemId: string): Promise<void> => {
-    const response = await fetch(
-      `${API_BASE_URL}/v1/characters/${encodeURIComponent(characterId)}/attune/${encodeURIComponent(itemId)}`,
+    const response = await fetchWithAuth(
+      `/v1/characters/${encodeURIComponent(characterId)}/attune/${encodeURIComponent(itemId)}`,
       {
         method: 'POST',
-        headers: getAuthHeaders(),
       },
     );
     if (!response.ok) {

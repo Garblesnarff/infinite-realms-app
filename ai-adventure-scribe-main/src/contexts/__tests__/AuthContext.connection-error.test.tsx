@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AuthProvider, useAuth } from '../AuthContext';
@@ -47,6 +47,9 @@ function probeState(): { loading: boolean; connectionError: boolean; userEmail: 
 const authMe = (status: number, body: unknown = {}) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
+const tokenWithExpiry = (secondsFromNow: number): string =>
+  `header.${btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + secondsFromNow }))}.signature`;
+
 describe('AuthContext connection failures (#565)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -57,6 +60,7 @@ describe('AuthContext connection failures (#565)', () => {
   });
 
   afterEach(() => {
+    cleanup();
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
@@ -386,6 +390,48 @@ describe('AuthContext connection failures (#565)', () => {
       expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/v1/auth/refresh'))).toBe(
         true,
       ),
+    );
+  });
+
+  it('refreshes from the token deadline without waiting for a focus or visibility event', async () => {
+    vi.useFakeTimers();
+    const expiringToken = tokenWithExpiry(360);
+    persistSession({ access_token: expiringToken, refresh_token: 'old-refresh' });
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    fetchMock.mockImplementation((url: string) => {
+      if (String(url).includes('/api/trpc/auth.me')) {
+        return Promise.resolve(
+          authMe(200, { result: { data: { id: 'u1', email: 'player@example.com' } } }),
+        );
+      }
+      if (String(url).includes('/v1/auth/refresh')) {
+        return Promise.resolve(
+          authMe(200, { accessToken: 'fresh-access', refreshToken: 'fresh-refresh' }),
+        );
+      }
+      return Promise.resolve(authMe(404));
+    });
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(probeState().loading).toBe(false);
+    fetchMock.mockClear();
+
+    // The two-minute margin schedules this at four minutes, before the six-minute expiry.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4 * 60 * 1000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/v1/auth/refresh'))).toBe(
+      true,
     );
   });
 });

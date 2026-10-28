@@ -17,11 +17,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { httpBatchLink } from '@trpc/client';
 import { useState, useMemo } from 'react';
 
+import { fetchWithAuthUrl } from './rest-client';
 import { trpc } from './trpc-client';
 
 import type { ReactNode } from 'react';
 
-import { useAuth } from '@/contexts/AuthContext';
 import logger from '@/lib/logger';
 
 /**
@@ -53,8 +53,6 @@ const API_URL = import.meta.env?.VITE_TRPC_API_URL || '/api/trpc';
  * ```
  */
 export function TRPCProvider({ children }: TRPCProviderProps) {
-  const { session } = useAuth();
-
   /**
    * Create a stable QueryClient instance
    * Configured with defaults for caching and retry behavior
@@ -96,23 +94,12 @@ export function TRPCProvider({ children }: TRPCProviderProps) {
            * Add authentication headers to every request
            * Includes Supabase access token if user is authenticated
            */
-          headers() {
-            const headers: Record<string, string> = {
-              'content-type': 'application/json',
-            };
-
-            // Add authorization header if user is authenticated
-            if (session?.access_token) {
-              headers.authorization = `Bearer ${session.access_token}`;
-            }
-
-            return headers;
-          },
+          headers: { 'content-type': 'application/json' },
           /**
            * Handle fetch errors
            */
           fetch(url, options) {
-            return fetch(url, {
+            return fetchWithAuthUrl(url, {
               ...options,
               credentials: 'include', // Include cookies for CORS
             }).catch((error) => {
@@ -123,7 +110,7 @@ export function TRPCProvider({ children }: TRPCProviderProps) {
         }),
       ],
     });
-  }, [session?.access_token]);
+  }, []);
 
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>

@@ -1,9 +1,6 @@
 import type { Character } from '@/types/character';
 
 import { fetchWithAuth } from '@/infrastructure/api/rest-client';
-import { getAuthHeaders } from '@/services/auth/TokenService';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
 /** Library row joined onto a granted feature (`class_features_library`). */
 export interface CharacterFeatureRow {
@@ -75,12 +72,9 @@ export async function updateCharacterClassFeatures(
   characterId: string,
   classFeatures: Character['classFeatures'],
 ): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/v1/characters/${encodeURIComponent(characterId)}`, {
+  const response = await fetchWithAuth(`/v1/characters/${encodeURIComponent(characterId)}`, {
     method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      ...getAuthHeaders(),
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ class_features: classFeatures }),
   });
 

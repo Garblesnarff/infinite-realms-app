@@ -1,6 +1,4 @@
-import { getAuthHeaders } from '@/services/auth/TokenService';
-
-const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 
 /**
  * Equip a carried item in-session (#1059): POST /v1/characters/:id/equip/:itemId.
@@ -20,9 +18,9 @@ export async function equipCharacterItem(
   characterId: string,
   itemToken: string,
 ): Promise<EquipCharacterItemResult> {
-  const response = await fetch(
-    `${apiBase}/v1/characters/${encodeURIComponent(characterId)}/equip/${encodeURIComponent(itemToken)}`,
-    { method: 'POST', headers: getAuthHeaders() },
+  const response = await fetchWithAuth(
+    `/v1/characters/${encodeURIComponent(characterId)}/equip/${encodeURIComponent(itemToken)}`,
+    { method: 'POST' },
   );
   if (!response.ok) {
     throw new Error(`Unable to equip ${itemToken}.`);

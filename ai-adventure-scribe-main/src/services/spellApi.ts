@@ -2,11 +2,8 @@ import { localSpellService } from './localSpellService';
 
 import type { Spell } from '@/types/character';
 
-import { waitForAuth } from '@/lib/auth-gate';
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
-import { getAuthHeaders } from '@/services/auth/TokenService';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
 interface SpellProgression {
   character_level: number;
@@ -106,17 +103,10 @@ class SpellApiService {
       throw new Error('API unavailable, using local fallback');
     }
 
-    // Wait for auth verification to complete before making API calls
-    await waitForAuth();
-
     try {
-      const response = await fetch(`${API_BASE_URL}${url}`, {
+      const response = await fetchWithAuth(url, {
         ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders(),
-          ...options.headers,
-        },
+        headers: { 'Content-Type': 'application/json', ...options.headers },
       });
 
       if (!response.ok) {

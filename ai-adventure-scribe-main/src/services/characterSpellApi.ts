@@ -1,8 +1,7 @@
 import type { Spell } from '../types/character';
 
-import { waitForAuth } from '@/lib/auth-gate';
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
-import { getAccessToken as getStoredAccessToken } from '@/services/auth/TokenService';
 
 export interface CharacterSpellData extends Spell {
   is_prepared: boolean;
@@ -33,32 +32,6 @@ export interface SaveSpellsResponse {
 }
 
 class CharacterSpellService {
-  private baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8888';
-
-  private async getAccessToken(): Promise<string> {
-    const token = getStoredAccessToken();
-    if (token) {
-      return token;
-    }
-
-    throw new Error('No authentication token found. Please log in.');
-  }
-
-  private async executeRequest(
-    url: string,
-    options: RequestInit,
-    token: string,
-  ): Promise<Response> {
-    return fetch(`${this.baseUrl}${url}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        ...options.headers,
-      },
-    });
-  }
-
   private async parseError(response: Response): Promise<string> {
     const body = await response.json().catch(() => ({ error: 'Unknown error' }));
     const rawMessage =
@@ -77,11 +50,10 @@ class CharacterSpellService {
 
   private async fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
     try {
-      // Wait for auth verification to complete before making API calls
-      await waitForAuth();
-
-      const token = await this.getAccessToken();
-      const response = await this.executeRequest(url, options, token);
+      const response = await fetchWithAuth(url, {
+        ...options,
+        headers: { 'Content-Type': 'application/json', ...options.headers },
+      });
 
       if (!response.ok) {
         if (response.status === 401) {

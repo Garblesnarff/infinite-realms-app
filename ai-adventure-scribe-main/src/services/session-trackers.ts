@@ -1,6 +1,4 @@
-import { getAuthHeaders } from '@/services/auth/TokenService';
-
-const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:8888').replace(/\/+$/, '');
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 
 export interface SessionTracker {
   name: string;
@@ -29,10 +27,9 @@ export async function fetchSessionTrackers(
   signal?: AbortSignal,
 ): Promise<SessionTracker[] | null> {
   try {
-    const response = await fetch(
-      `${apiBase}/v1/sessions/${encodeURIComponent(sessionId)}/trackers`,
-      { headers: getAuthHeaders(), signal },
-    );
+    const response = await fetchWithAuth(`/v1/sessions/${encodeURIComponent(sessionId)}/trackers`, {
+      signal,
+    });
     if (!response.ok) return null;
     const body = (await response.json().catch(() => null)) as { trackers?: unknown } | null;
     if (!body || !Array.isArray(body.trackers)) return null;

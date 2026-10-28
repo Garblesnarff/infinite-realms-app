@@ -2,11 +2,12 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 
 import { useBlogRole, type BlogRole } from '@/hooks/auth/use-blog-role';
 import { useUserPlan, type UserPlan } from '@/hooks/auth/use-user-plan';
-import { fetchWithTimeout } from '@/infrastructure/api/fetch-with-timeout';
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 import { resetAuthGate, markAuthReady } from '@/lib/auth-gate';
 import logger from '@/lib/logger';
 import {
   clearSessionEnded,
+  getTokenExpiry,
   isSessionEnded,
   isTokenExpiringSoon,
   loadCachedSession,
@@ -24,6 +25,7 @@ export type { BlogRole, UserPlan };
 /** Ceiling for the session-verification round trip so a hung backend cannot
  *  leave the app on "Loading..." forever (#565). */
 const AUTH_VERIFY_TIMEOUT_MS = 15_000;
+const TOKEN_REFRESH_MARGIN_MS = 2 * 60 * 1000;
 
 // WorkOS User type (compatible with existing code)
 interface WorkOSUser {
@@ -70,7 +72,9 @@ export const useAuth = (): AuthContextType => {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<WorkOSUser | null>(null);
-  const [session, setSession] = useState<WorkOSSession | null>(null);
+  // Hydrate before effects run so the persistence effect cannot clear a valid
+  // cached session while the first verification request is awaiting auth.
+  const [session, setSession] = useState<WorkOSSession | null>(() => loadCachedSession());
   const [sessionEnded, setSessionEnded] = useState(() => isSessionEnded());
   const [loading, setLoading] = useState(true);
   const [connectionError, setConnectionError] = useState(false);
@@ -79,7 +83,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Extract Blog Role and User Plan logic to specialized hooks
   const { blogRole, blogRoleLoading, isBlogAdmin, refreshBlogRole } = useBlogRole({ user });
-  const { userPlan, userPlanLoading, userPlanError, refreshUserPlan } = useUserPlan({ user, loading });
+  const { userPlan, userPlanLoading, userPlanError, refreshUserPlan } = useUserPlan({
+    user,
+    loading,
+  });
 
   const endSession = useCallback(() => {
     // TokenService clears the browser tokens when it enters the terminal
@@ -132,27 +139,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       // Verify token and get user data from backend
-      const apiUrl = import.meta.env?.VITE_API_URL || '';
-      const verifyToken = async (accessToken: string) => {
+      const verifyToken = async () => {
         // #565: bound the round trip — a blackholed connection must fail,
         // not leave the app on "Loading..." forever.
-        const res = await fetchWithTimeout(
-          `${apiUrl}/api/trpc/auth.me`,
-          {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-            },
-          },
-          AUTH_VERIFY_TIMEOUT_MS,
-        );
+        const res = await fetchWithAuth('/api/trpc/auth.me', {
+          headers: { 'Content-Type': 'application/json' },
+          timeoutMs: AUTH_VERIFY_TIMEOUT_MS,
+        });
         if (!res.ok) return { ok: false as const, status: res.status };
         const payload = await res.json();
         return { ok: true as const, userData: payload.result?.data };
       };
 
       let activeSession = cachedSession;
-      let result = await verifyToken(activeSession.access_token);
+      let result = await verifyToken();
+      // fetchWithAuth may have refreshed and persisted the pair while verifying
+      // auth.me; do not let the initial cached object overwrite that winner.
+      activeSession = loadCachedSession() ?? activeSession;
 
       // Access token may simply be expired (15 min TTL) — refresh with the
       // stored refresh token before wiping the session. Without this, any
@@ -178,7 +181,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     refresh_token: newTokens.refreshToken,
                   };
             persistSession(activeSession);
-            result = await verifyToken(activeSession.access_token);
+            result = await verifyToken();
           }
         } catch (error) {
           if (error instanceof TokenRefreshTransportError) {
@@ -310,7 +313,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [endSession, refreshAuth]);
 
-  // Auto-refresh token before it expires (WorkOS tokens expire every ~5 minutes)
+  // Auto-refresh token before it expires (WorkOS tokens expire every ~5 minutes).
+  // A recursive deadline timer is used instead of relying only on a fixed
+  // interval: when a background tab throttles timers, the first callback after
+  // visibility is restored still sees the absolute expiry and refreshes.
   const hasRefreshToken = Boolean(session?.refresh_token);
   useEffect(() => {
     if (!hasRefreshToken || sessionEnded) return;
@@ -352,23 +358,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
 
-    // Check immediately
-    checkAndRefresh();
+    let refreshTimer: number | null = null;
+    const scheduleRefreshCheck = (): void => {
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+      const activeSession = sessionRef.current;
+      const expiry = activeSession ? getTokenExpiry(activeSession.access_token) : null;
+      const delay = expiry
+        ? Math.max(1_000, expiry - TOKEN_REFRESH_MARGIN_MS - Date.now())
+        : 30 * 1000;
+      refreshTimer = window.setTimeout(() => {
+        void checkAndRefresh().finally(scheduleRefreshCheck);
+      }, delay);
+    };
+
+    // Check immediately, then schedule against the token's absolute expiry.
+    void checkAndRefresh().finally(scheduleRefreshCheck);
 
     const handleFocus = (): void => {
-      void checkAndRefresh();
+      void checkAndRefresh().finally(scheduleRefreshCheck);
     };
     const handleVisibilityChange = (): void => {
-      if (document.visibilityState === 'visible') void checkAndRefresh();
+      if (document.visibilityState === 'visible') {
+        void checkAndRefresh().finally(scheduleRefreshCheck);
+      }
     };
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // Then check every 30 seconds
-    const interval = setInterval(checkAndRefresh, 30 * 1000);
-
     return () => {
-      clearInterval(interval);
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer);
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };

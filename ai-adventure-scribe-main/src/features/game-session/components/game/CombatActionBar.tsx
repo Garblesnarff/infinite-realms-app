@@ -21,6 +21,7 @@ import {
   type LegalAction,
 } from '@/features/game-session/hooks/use-combat-legal-actions';
 import { cn } from '@/lib/utils';
+import { SESSION_ENDED_MESSAGE } from '@/services/auth/TokenService';
 
 /** The chat box's placeholder in combat (#90): the chat box stays available. */
 export const COMBAT_CHAT_PLACEHOLDER =
@@ -343,12 +344,20 @@ const CombatActionBarInCombat: React.FC<CombatActionBarLiveProps> = ({
 }) => {
   const { state } = useCombat();
   const encounter = state.isInCombat ? state.activeEncounter : null;
-  const { actions, isPlayerTurn, isRefreshing, error, loadFailed, retryLoad, runAction } =
-    useCombatLegalActions({
-      enabled: Boolean(encounter),
-      onSendMessage,
-      onSendText,
-    });
+  const {
+    actions,
+    isPlayerTurn,
+    isRefreshing,
+    error,
+    loadFailed,
+    sessionEnded,
+    retryLoad,
+    runAction,
+  } = useCombatLegalActions({
+    enabled: Boolean(encounter),
+    onSendMessage,
+    onSendText,
+  });
   const vm = useOverhaulViewModel();
   const map = useTacticalMapContext()?.map ?? null;
   const [running, setRunning] = React.useState(false);
@@ -402,7 +411,12 @@ const CombatActionBarInCombat: React.FC<CombatActionBarLiveProps> = ({
           {error}
         </p>
       )}
-      {loadFailed && (
+      {sessionEnded && (
+        <p role="alert" className="px-3 pt-2 text-sm text-destructive">
+          {SESSION_ENDED_MESSAGE}
+        </p>
+      )}
+      {loadFailed && !sessionEnded && (
         <p role="alert" className="px-3 pt-2 text-sm text-destructive">
           Could not load actions —{' '}
           <button

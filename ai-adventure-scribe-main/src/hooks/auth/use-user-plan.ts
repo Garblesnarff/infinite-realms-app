@@ -2,8 +2,8 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 
 import type { UserPlan } from '../../../shared/plan-features';
 
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
-import { getAccessToken } from '@/services/auth/TokenService';
 import { isOffline } from '@/utils/network';
 
 export type { UserPlan };
@@ -81,13 +81,6 @@ export function useUserPlan({ user, loading }: UseUserPlanProps): {
       }, delay);
     };
 
-    // Read the current token fresh to avoid stale closure issues.
-    const freshToken = getAccessToken();
-    if (!freshToken) {
-      fail('Cannot load user plan: no access token');
-      return;
-    }
-
     if (isOffline()) {
       fail('Cannot load user plan: offline');
       return;
@@ -96,12 +89,8 @@ export function useUserPlan({ user, loading }: UseUserPlanProps): {
     const requestedFor = user.id;
     setUserPlanLoading(true);
     try {
-      const apiUrl = import.meta.env?.VITE_API_URL || '';
-      const response = await fetch(`${apiUrl}/v1/llm/quota`, {
-        headers: {
-          Authorization: `Bearer ${freshToken}`,
-          'Content-Type': 'application/json',
-        },
+      const response = await fetchWithAuth('/v1/llm/quota', {
+        headers: { 'Content-Type': 'application/json' },
       });
 
       if (!response.ok) {

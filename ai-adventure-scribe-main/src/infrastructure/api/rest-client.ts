@@ -6,13 +6,60 @@ import {
 } from '@/infrastructure/api/fetch-with-timeout';
 import { waitForAuth } from '@/lib/auth-gate';
 import logger from '@/lib/logger';
-import {
-  getAuthHeaders,
-  loadCachedSession,
-  persistSession,
-  refreshAccessTokenOnce,
-  TokenRefreshTransportError,
-} from '@/services/auth/TokenService';
+import * as TokenService from '@/services/auth/TokenService';
+
+function getTokenServiceExport<T>(name: string, fallback: T): T {
+  try {
+    const value = (TokenService as unknown as Record<string, unknown>)[name];
+    return (value ?? fallback) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+const getAuthHeaders = getTokenServiceExport<typeof TokenService.getAuthHeaders>(
+  'getAuthHeaders',
+  () => ({}),
+);
+const loadCachedSession = getTokenServiceExport<typeof TokenService.loadCachedSession>(
+  'loadCachedSession',
+  () => null,
+);
+const persistSession = getTokenServiceExport<typeof TokenService.persistSession>(
+  'persistSession',
+  () => undefined,
+);
+const refreshAccessTokenOnce = getTokenServiceExport<typeof TokenService.refreshAccessTokenOnce>(
+  'refreshAccessTokenOnce',
+  async () => null,
+);
+const TokenRefreshTransportError = getTokenServiceExport<
+  typeof TokenService.TokenRefreshTransportError
+>(
+  'TokenRefreshTransportError',
+  class TokenRefreshTransportErrorFallback extends Error {
+    constructor(message = 'Token refresh endpoint unreachable') {
+      super(message);
+      this.name = 'TokenRefreshTransportError';
+    }
+  },
+);
+const safeLoadCachedSession = (): ReturnType<typeof loadCachedSession> => {
+  try {
+    return loadCachedSession();
+  } catch {
+    // Storage can be unavailable in embedded/test contexts; that is an
+    // anonymous request, not a transport failure.
+    return null;
+  }
+};
+const markSessionEnded = (error: Error): void => {
+  const mark = getTokenServiceExport<typeof TokenService.markSessionEnded | undefined>(
+    'markSessionEnded',
+    undefined,
+  );
+  mark?.(error);
+};
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 const LLM_GENERATE_ROUTE_PREFIX = '/v1/llm/generate';
@@ -24,7 +71,10 @@ const NETWORK_RETRY_INITIAL_DELAY_MS = 1_000;
 const NETWORK_RETRY_MAX_DELAY_MS = 8_000;
 const TOKEN_REFRESH_MARGIN_MS = 2 * 60 * 1000;
 
-export type FetchWithAuthOptions = RequestInit & { retryBudgetMs?: number };
+export type FetchWithAuthOptions = RequestInit & {
+  retryBudgetMs?: number;
+  timeoutMs?: number;
+};
 
 export interface MemoryExtractionJob {
   sessionId: string;
@@ -53,7 +103,7 @@ export function subscribeToNetworkRetry(listener: NetworkRetryListener): () => v
   listener(activeNetworkRetries > 0);
   return () => networkRetryListeners.delete(listener);
 }
-export const SESSION_EXPIRED_MESSAGE = 'Session expired — sign in again';
+export const SESSION_EXPIRED_MESSAGE = 'Your sign-in expired — sign in again; your game is saved';
 
 export type TurnPhase =
   | 'submit'
@@ -263,7 +313,7 @@ export class PartyDefeatedError extends Error {
 }
 
 function isV1Route(path: string): boolean {
-  return path.startsWith('/v1/');
+  return path.startsWith('/v1/') || path.startsWith('/api/trpc/');
 }
 
 function buildRequestInit(options: RequestInit, accessToken?: string): RequestInit {
@@ -296,7 +346,7 @@ function isAccessTokenExpiringSoon(token: string): boolean {
 }
 
 async function refreshExpiringSession(): Promise<string | undefined> {
-  const session = loadCachedSession();
+  const session = safeLoadCachedSession();
   if (!session?.refresh_token || !isAccessTokenExpiringSoon(session.access_token)) return undefined;
 
   let tokens: Awaited<ReturnType<typeof refreshAccessTokenOnce>>;
@@ -320,11 +370,15 @@ export async function fetchWithAuth(
   path: string,
   options: FetchWithAuthOptions = {},
 ): Promise<Response> {
-  const { retryBudgetMs = NETWORK_RETRY_BUDGET_MS, ...requestInit } = options;
+  const {
+    retryBudgetMs = NETWORK_RETRY_BUDGET_MS,
+    timeoutMs: requestedTimeoutMs,
+    ...requestInit
+  } = options;
   // #565: bound the whole attempt so a blackholed connection (deploy swap)
   // fails instead of hanging the caller forever. Exempt routes (model work,
   // memory extraction) keep no ceiling — see getRouteTimeoutMs.
-  const timeoutMs = getRouteTimeoutMs(path);
+  const timeoutMs = requestedTimeoutMs ?? getRouteTimeoutMs(path);
   const timeoutHandle =
     timeoutMs === undefined ? undefined : startRequestTimeout(timeoutMs, requestInit.signal);
   // The timeout signal replaces the caller's signal on the wire: it fires on
@@ -332,24 +386,54 @@ export async function fetchWithAuth(
   const effectiveInit = timeoutHandle
     ? { ...requestInit, signal: timeoutHandle.signal }
     : requestInit;
+  const timeoutSignal = timeoutHandle?.signal ?? requestInit.signal;
+  const timeoutPromise = timeoutHandle
+    ? (() => {
+        const handle = timeoutHandle;
+        return new Promise<never>((_, reject) => {
+          const rejectOnAbort = (): void =>
+            reject(new DOMException('The request was aborted.', 'AbortError'));
+          if (handle.signal.aborted) {
+            rejectOnAbort();
+          } else {
+            handle.signal.addEventListener('abort', rejectOnAbort, { once: true });
+          }
+        });
+      })()
+    : null;
   const request = (accessToken?: string): Promise<Response> =>
-    requestWithNetworkRetry(
-      path,
-      () => fetch(`${API_BASE_URL}${path}`, buildRequestInit(effectiveInit, accessToken)),
-      timeoutHandle?.signal ?? requestInit.signal,
-      retryBudgetMs,
-    );
+    (timeoutPromise
+      ? Promise.race([
+          requestWithNetworkRetry(
+            path,
+            () => fetch(`${API_BASE_URL}${path}`, buildRequestInit(effectiveInit, accessToken)),
+            timeoutSignal,
+            retryBudgetMs,
+          ),
+          timeoutPromise,
+        ])
+      : requestWithNetworkRetry(
+          path,
+          () => fetch(`${API_BASE_URL}${path}`, buildRequestInit(effectiveInit, accessToken)),
+          timeoutSignal,
+          retryBudgetMs,
+        )) as Promise<Response>;
 
   try {
     // A backgrounded tab can miss the periodic AuthContext timer. Refresh
     // before the request when its access token is inside the two-minute window.
-    const refreshedAccessToken = await refreshExpiringSession();
+    const preflightSession = safeLoadCachedSession();
+    const refreshedAccessToken =
+      preflightSession?.refresh_token && isAccessTokenExpiringSoon(preflightSession.access_token)
+        ? await refreshExpiringSession()
+        : undefined;
     const response = await request(refreshedAccessToken);
     if (response.status !== 401 || !isV1Route(path)) return response;
 
-    const session = loadCachedSession();
+    const session = safeLoadCachedSession();
     if (!session?.refresh_token) {
       logger.warn('AUTH_RETRY_AFTER_401', { route: path, outcome: 'refresh_unavailable' });
+      markSessionEnded(new SessionExpiredError());
       throw new SessionExpiredError();
     }
 
@@ -366,13 +450,26 @@ export async function fetchWithAuth(
     }
     if (!tokens) {
       logger.warn('AUTH_RETRY_AFTER_401', { route: path, outcome: 'refresh_failed' });
+      markSessionEnded(new SessionExpiredError());
       throw new SessionExpiredError();
     }
 
-    persistSession({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken });
-    const retryResponse = await request(tokens.accessToken);
+    // A competing tab may have published a newer pair while this refresh was
+    // in flight. Retry with that winner rather than replaying a rotated token.
+    const storedSession = safeLoadCachedSession();
+    const retryAccessToken =
+      storedSession && storedSession.access_token !== session.access_token
+        ? storedSession.access_token
+        : tokens.accessToken;
+    const retryRefreshToken =
+      storedSession && storedSession.access_token !== session.access_token
+        ? storedSession.refresh_token || tokens.refreshToken
+        : tokens.refreshToken;
+    persistSession({ access_token: retryAccessToken, refresh_token: retryRefreshToken });
+    const retryResponse = await request(retryAccessToken);
     if (retryResponse.status === 401) {
       logger.warn('AUTH_RETRY_AFTER_401', { route: path, outcome: 'session_expired' });
+      markSessionEnded(new SessionExpiredError());
       throw new SessionExpiredError();
     }
 
@@ -384,6 +481,19 @@ export async function fetchWithAuth(
   } finally {
     timeoutHandle?.done();
   }
+}
+
+/**
+ * tRPC and other clients hand the transport a fully resolved URL. Keep those
+ * calls on the same refresh/retry seam by reducing the URL to its API path.
+ */
+export function fetchWithAuthUrl(
+  input: RequestInfo | URL,
+  options: FetchWithAuthOptions = {},
+): Promise<Response> {
+  const inputUrl = typeof input === 'string' || input instanceof URL ? input.toString() : input.url;
+  const parsed = new URL(inputUrl, API_BASE_URL);
+  return fetchWithAuth(`${parsed.pathname}${parsed.search}`, options);
 }
 
 export interface LLMHistoryMessage {

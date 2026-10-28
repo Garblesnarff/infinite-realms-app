@@ -8,10 +8,7 @@ import {
   type TacticalMap,
 } from './tactical-map-state';
 
-import { getAuthHeaders } from '@/services/auth/TokenService';
-
-const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
-const headers = () => getAuthHeaders({ includeEmptyToken: true });
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 
 export function useTacticalMap(sessionId: string) {
   const [map, setMap] = useState<TacticalMap | null>(null);
@@ -49,9 +46,7 @@ export function useTacticalMap(sessionId: string) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${apiBase}/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map`, {
-      headers: headers(),
-    })
+    fetchWithAuth(`/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map`)
       .then(async (response): Promise<TacticalMap | null> => {
         if (!response.ok) return null;
         const payload: unknown = await response.json();
@@ -146,11 +141,11 @@ export function useTacticalMap(sessionId: string) {
 
   const request = useCallback(
     async <T>(path: string, init?: RequestInit) => {
-      const response = await fetch(
-        `${apiBase}/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map${path}`,
+      const response = await fetchWithAuth(
+        `/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map${path}`,
         {
           ...init,
-          headers: { ...headers(), 'Content-Type': 'application/json', ...init?.headers },
+          headers: { 'Content-Type': 'application/json', ...init?.headers },
         },
       );
       const data = await response.json().catch(() => ({}));
