@@ -50,6 +50,7 @@ vi.mock('@/services/analytics', () => ({
 
 import { useCombat } from '@/contexts/CombatContext';
 import { useMemoryContext } from '@/contexts/MemoryContext';
+import { usePanelResize } from '@/features/game-session/hooks/use-panel-resize';
 
 const EMOJI_OR_SYMBOL = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]/u;
 
@@ -85,6 +86,16 @@ describe('game side panel shell (#1236 section A)', () => {
     vi.clearAllMocks();
     (useCombat as any).mockReturnValue({ state: { isInCombat: false } });
     (useMemoryContext as any).mockReturnValue({ memories: [], isLoading: false });
+    (usePanelResize as any).mockReturnValue({
+      isExpanded: true,
+      setIsExpanded: vi.fn(),
+      activeTab: 'character',
+      setActiveTab: vi.fn(),
+      panelWidth: '340px',
+      panelRef: { current: null },
+      dragHandleRef: { current: null },
+      isDraggingRef: { current: false },
+    });
   });
 
   afterEach(() => {
@@ -166,13 +177,32 @@ describe('game side panel shell (#1236 section A)', () => {
       expect(dialog).toHaveClass('h-[85vh]');
     });
 
-    it('gives tabs and the close control a 44px box', () => {
+    it('gives every tab a 44px min height and keeps one close control', () => {
       openMobilePanel();
 
       for (const tab of within(screen.getByRole('tablist')).getAllByRole('tab')) {
         expect(tab).toHaveClass('min-h-11');
       }
-      expect(screen.getByRole('button', { name: 'Close panel' })).toHaveClass('h-11', 'w-11');
+      expect(screen.queryByRole('button', { name: 'Close panel' })).not.toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: /Close \(Esc\)/ })).toHaveLength(1);
+    });
+
+    it('falls back to Sheet when combat ends while the Combat tab is open', () => {
+      setWidth(1280);
+      const setActiveTab = vi.fn();
+      (usePanelResize as any).mockReturnValue({
+        isExpanded: true,
+        setIsExpanded: vi.fn(),
+        activeTab: 'combat',
+        setActiveTab,
+        panelWidth: '340px',
+        panelRef: { current: null },
+        dragHandleRef: { current: null },
+        isDraggingRef: { current: false },
+      });
+      renderPanel({ combatMode: false });
+
+      expect(setActiveTab).toHaveBeenCalledWith('character');
     });
 
     it('renders no emoji in the tab list', () => {

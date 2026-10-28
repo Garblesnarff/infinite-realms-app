@@ -81,7 +81,7 @@ export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = React.m
     }, [sessionData, updateGameSessionState, localSessionNotes]);
 
     return (
-      <div className="flex flex-col h-full bg-background">
+      <div className="flex min-h-0 flex-1 flex-col bg-background">
         {/* Mobile Header with Tabs */}
         <div className="p-4 border-b border-border">
           <Tabs
