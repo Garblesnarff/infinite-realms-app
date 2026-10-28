@@ -15,18 +15,21 @@ import * as THREE from 'three';
 
 export type DieType = 'd4' | 'd6' | 'd8' | 'd10' | 'd12' | 'd20' | 'd100';
 
-const GOLD = '#f3deb0';
+// The prototype's default Brass theme (#93): warm metal dice with dark ink.
+const BRASS_FACE = 0xcfa862;
+const BRASS_INK = '#2a1a0c';
 const FACE_BG = '#11203a';
 
 function numberTexture(label: string, withBg: boolean): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
-  const x = c.getContext('2d')!;
+  const x = c.getContext('2d');
+  if (!x) return new THREE.CanvasTexture(c);
   if (withBg) {
     x.fillStyle = FACE_BG;
     x.fillRect(0, 0, 128, 128);
   }
-  x.fillStyle = GOLD;
+  x.fillStyle = BRASS_INK;
   x.textAlign = 'center';
   x.textBaseline = 'middle';
   x.shadowColor = 'rgba(0,0,0,.5)';
@@ -99,7 +102,8 @@ interface FaceInfo {
 
 /** Group a (non-indexed) geometry's triangles into faces by shared normal. */
 function groupFaces(geo: THREE.BufferGeometry): FaceInfo[] {
-  const pos = geo.attributes.position;
+  const source = geo.index ? geo.toNonIndexed() : geo;
+  const pos = source.attributes.position;
   const tris: { n: THREE.Vector3; c: THREE.Vector3 }[] = [];
   for (let i = 0; i < pos.count; i += 3) {
     const a = new THREE.Vector3().fromBufferAttribute(pos, i);
@@ -163,13 +167,84 @@ const SIDES: Record<DieType, number> = { d4: 4, d6: 6, d8: 8, d10: 10, d12: 12, 
 
 export interface Die {
   type: DieType;
+  tens: boolean;
   mesh: THREE.Mesh;
   shape: CANNON.ConvexPolyhedron;
   /** center height when resting flat on a face (≈ inradius) */
   rest: number;
   faces: { normal: THREE.Vector3; value: number }[];
+  /** Unit directions used by the symmetry mapper and result reader. */
+  directions: THREE.Vector3[];
   /** result face given an orientation quaternion */
   readResult: (q: THREE.Quaternion) => number;
+  /** Convert an engine value into the corresponding numbered face. */
+  faceIndexForValue: (value: number) => number;
+}
+
+export interface TopFace {
+  idx: number;
+  dot: number;
+}
+
+/** Read the face direction nearest the table normal after a physics frame. */
+export function topIndex(die: Pick<Die, 'type' | 'directions'>, q: THREE.Quaternion): TopFace {
+  const sign = die.type === 'd4' ? -1 : 1;
+  let best = -Infinity;
+  let idx = 0;
+  die.directions.forEach((direction, i) => {
+    const transformed = direction.clone().applyQuaternion(q);
+    const dot = transformed.y * sign;
+    if (dot > best) {
+      best = dot;
+      idx = i;
+    }
+  });
+  return { idx, dot: best };
+}
+
+function frameMatrix(a: THREE.Vector3, b: THREE.Vector3): THREE.Matrix4 {
+  const first = a.clone().normalize();
+  const second = b.clone().addScaledVector(first, -first.dot(b)).normalize();
+  const third = new THREE.Vector3().crossVectors(first, second);
+  return new THREE.Matrix4().makeBasis(first, second, third);
+}
+
+/**
+ * Return a rotation of the solid that carries face `from` to face `to`.
+ * It is deliberately validated against every direction: an arbitrary
+ * shortest-arc rotation would carry the selected face but change the die.
+ */
+export function symmetry(die: Pick<Die, 'directions'>, from: number, to: number): THREE.Quaternion {
+  if (from === to) return new THREE.Quaternion();
+  const directions = die.directions;
+  const source = directions[from];
+  const destination = directions[to];
+  let neighbor: THREE.Vector3 | null = null;
+  let best = -Infinity;
+  directions.forEach((candidate, i) => {
+    if (i === from) return;
+    const score = candidate.dot(source);
+    if (score < 0.999 && score > best) {
+      best = score;
+      neighbor = candidate;
+    }
+  });
+  if (!neighbor) {
+    throw new Error(`No solid symmetry neighbor for face ${from}`);
+  }
+
+  const sourceFrame = frameMatrix(source, neighbor).transpose();
+  const targetSpacing = source.dot(neighbor);
+  for (const candidate of directions) {
+    if (Math.abs(destination.dot(candidate) - targetSpacing) > 1e-4) continue;
+    const rotation = frameMatrix(destination, candidate).multiply(sourceFrame);
+    const preservesSolid = directions.every((direction) => {
+      const mapped = direction.clone().applyMatrix4(rotation);
+      return directions.some((other) => other.dot(mapped) > 0.9999);
+    });
+    if (preservesSolid) return new THREE.Quaternion().setFromRotationMatrix(rotation);
+  }
+  throw new Error(`No solid symmetry maps face ${from} to ${to}`);
 }
 
 /**
@@ -183,9 +258,9 @@ export function makeDie(type: DieType, r = 1, tens = false): Die {
 
   // material with a subtle navy body
   const bodyMat = new THREE.MeshStandardMaterial({
-    color: 0x0f1c34,
-    roughness: 0.4,
-    metalness: 0.35,
+    color: BRASS_FACE,
+    roughness: 0.34,
+    metalness: 0.82,
     flatShading: true,
   });
   const mesh = new THREE.Mesh(geo, bodyMat);
@@ -197,13 +272,13 @@ export function makeDie(type: DieType, r = 1, tens = false): Die {
     let value = i + 1;
     let label = String(value);
     if (type === 'd10') {
-      value = i; // 0-9
-      label = String(i);
+      value = tens ? i * 10 : i; // 00,10,...,90 or 0-9
+      label = tens ? (i === 0 ? '00' : String(i * 10)) : String(i);
     } else if (type === 'd100') {
       value = i * 10; // 00,10,...,90
       label = (i * 10).toString().padStart(2, '0');
     }
-    faces.push({ normal: f.normal.clone(), value: tens ? value * 10 : value });
+    faces.push({ normal: f.normal.clone(), value });
 
     const planeSize = r * (type === 'd6' ? 0.9 : type === 'd12' ? 0.78 : 0.85);
     const plane = new THREE.Mesh(
@@ -217,25 +292,26 @@ export function makeDie(type: DieType, r = 1, tens = false): Die {
 
   const rest = faceInfos.slice(0, sides).reduce((s, f) => s + f.centroid.dot(f.normal), 0) / sides;
 
+  const directions = faces.map((face) => face.normal.clone().normalize());
+
   return {
     type,
+    tens,
     mesh,
     shape: toConvex(geo),
     rest: Math.max(0.4, Math.abs(rest)),
     faces,
+    directions,
     readResult(q: THREE.Quaternion) {
-      // d4 reads the downward face (resting face); everything else reads up
-      const dir = type === 'd4' ? -1 : 1;
-      let best = -2;
-      let val = faces[0]?.value ?? 1;
-      faces.forEach((f) => {
-        const d = f.normal.clone().applyQuaternion(q).y * dir;
-        if (d > best) {
-          best = d;
-          val = f.value;
-        }
-      });
-      return val;
+      return faces[topIndex({ type, directions }, q).idx]?.value ?? 1;
+    },
+    faceIndexForValue(value: number) {
+      const normalized = type === 'd10' && !tens && value === 10 ? 0 : value;
+      const index = faces.findIndex((face) => face.value === normalized);
+      if (index < 0) {
+        throw new Error(`No ${type}${tens ? ' tens' : ''} face for value ${value}`);
+      }
+      return index;
     },
   };
 }
