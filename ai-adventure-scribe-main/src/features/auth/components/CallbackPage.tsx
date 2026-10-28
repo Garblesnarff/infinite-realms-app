@@ -10,9 +10,10 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
+import { finishSignIn } from './finish-sign-in';
+
 import { fetchWithTimeout } from '@/infrastructure/api/fetch-with-timeout';
 import logger from '@/lib/logger';
-import { persistSession } from '@/services/auth/TokenService';
 
 /** Ceiling for the one-time code exchange so a hung backend cannot leave the
  *  page on "Completing sign in..." forever (#565). */
@@ -79,43 +80,15 @@ export default function CallbackPage() {
 
         logger.info('Successfully completed authentication callback');
 
-        // Keep the established TokenService storage and AuthContext event flow.
-        persistSession({
-          access_token: accessToken,
-          ...(refreshToken ? { refresh_token: refreshToken } : {}),
-        });
-
         // Clear the one-time code or deprecated fragment from browser history.
         window.history.replaceState(null, '', window.location.pathname);
 
-        // Notify AuthContext that tokens have been updated
-        logger.info('Dispatching auth-tokens-updated event');
-        window.dispatchEvent(new CustomEvent('auth-tokens-updated'));
-
-        // Wait for AuthContext to verify and set user before navigating
-        let signedInEmail: string | null = null;
-        const authReadyPromise = new Promise<void>((resolve) => {
-          const handleAuthReady = (event: Event) => {
-            logger.info('Received auth-ready event, proceeding to /app');
-            window.removeEventListener('auth-ready', handleAuthReady);
-            signedInEmail =
-              (event as CustomEvent<{ user?: { email?: string | null } }>).detail?.user?.email ??
-              null;
-            resolve();
-          };
-          window.addEventListener('auth-ready', handleAuthReady);
+        // Finish sign-in through the shared helper (persist + notify + wait for
+        // AuthContext), the same handoff the tester page uses (#1256).
+        const signedInEmail = await finishSignIn({
+          accessToken,
+          ...(refreshToken ? { refreshToken } : {}),
         });
-
-        // Add timeout fallback (5 seconds) in case event doesn't fire
-        const timeoutPromise = new Promise<void>((resolve) => {
-          setTimeout(() => {
-            logger.warn('Auth ready timeout reached, proceeding to /app anyway');
-            resolve();
-          }, 5000);
-        });
-
-        // Wait for either auth-ready event or timeout
-        await Promise.race([authReadyPromise, timeoutPromise]);
 
         // Redirect to the campaign that initiated sign-in, or the app for a
         // normal sign-in with no return destination.

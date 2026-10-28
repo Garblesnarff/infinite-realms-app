@@ -24,6 +24,7 @@ const multiplayerInvitesEnabled = (): boolean =>
   parseBoolean(import.meta.env.VITE_ENABLE_MULTIPLAYER_INVITES);
 const customCampaignsEnabled = (): boolean =>
   parseBoolean(import.meta.env.VITE_ENABLE_CUSTOM_CAMPAIGNS);
+const testerLoginEnabled = (): boolean => parseBoolean(import.meta.env.VITE_TESTER_LOGIN);
 
 export const featureFlags = {
   get worldBuilder(): boolean {
@@ -38,9 +39,13 @@ export const featureFlags = {
   get customCampaigns(): boolean {
     return customCampaignsEnabled();
   },
+  get testerLogin(): boolean {
+    return testerLoginEnabled();
+  },
 };
 
 export const isWorldBuilderEnabled = (): boolean => featureFlags.worldBuilder;
 export const isCampaignCharacterFlowEnabled = (): boolean => featureFlags.campaignCharacterFlow;
 export const isMultiplayerInvitesEnabled = (): boolean => featureFlags.multiplayerInvites;
 export const isCustomCampaignsEnabled = (): boolean => featureFlags.customCampaigns;
+export const isTesterLoginEnabled = (): boolean => featureFlags.testerLogin;

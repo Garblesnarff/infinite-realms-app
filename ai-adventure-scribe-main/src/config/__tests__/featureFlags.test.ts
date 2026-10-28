@@ -5,6 +5,7 @@ import {
   isCampaignCharacterFlowEnabled,
   isCustomCampaignsEnabled,
   isMultiplayerInvitesEnabled,
+  isTesterLoginEnabled,
   isWorldBuilderEnabled,
 } from '@/config/featureFlags';
 
@@ -13,6 +14,7 @@ const FLAG_ENV = {
   VITE_ENABLE_CAMPAIGN_CHARACTER_FLOW: isCampaignCharacterFlowEnabled,
   VITE_ENABLE_MULTIPLAYER_INVITES: isMultiplayerInvitesEnabled,
   VITE_ENABLE_CUSTOM_CAMPAIGNS: isCustomCampaignsEnabled,
+  VITE_TESTER_LOGIN: isTesterLoginEnabled,
 } as const;
 
 describe('feature flag getters', () => {
@@ -29,10 +31,12 @@ describe('feature flag getters', () => {
     expect(isCampaignCharacterFlowEnabled()).toBe(false);
     expect(isMultiplayerInvitesEnabled()).toBe(false);
     expect(isCustomCampaignsEnabled()).toBe(false);
+    expect(isTesterLoginEnabled()).toBe(false);
     expect(featureFlags.worldBuilder).toBe(false);
     expect(featureFlags.campaignCharacterFlow).toBe(false);
     expect(featureFlags.multiplayerInvites).toBe(false);
     expect(featureFlags.customCampaigns).toBe(false);
+    expect(featureFlags.testerLogin).toBe(false);
   });
 
   it('reads vi.stubEnv values', () => {
@@ -40,21 +44,26 @@ describe('feature flag getters', () => {
     vi.stubEnv('VITE_ENABLE_CAMPAIGN_CHARACTER_FLOW', '1');
     vi.stubEnv('VITE_ENABLE_MULTIPLAYER_INVITES', 'yes');
     vi.stubEnv('VITE_ENABLE_CUSTOM_CAMPAIGNS', 'on');
+    vi.stubEnv('VITE_TESTER_LOGIN', 'true');
 
     expect(isWorldBuilderEnabled()).toBe(true);
     expect(isCampaignCharacterFlowEnabled()).toBe(true);
     expect(isMultiplayerInvitesEnabled()).toBe(true);
     expect(isCustomCampaignsEnabled()).toBe(true);
+    expect(isTesterLoginEnabled()).toBe(true);
     expect(featureFlags.customCampaigns).toBe(true);
+    expect(featureFlags.testerLogin).toBe(true);
 
     vi.stubEnv('VITE_ENABLE_WORLD_BUILDER', 'false');
     vi.stubEnv('VITE_ENABLE_CAMPAIGN_CHARACTER_FLOW', '0');
     vi.stubEnv('VITE_ENABLE_MULTIPLAYER_INVITES', 'no');
     vi.stubEnv('VITE_ENABLE_CUSTOM_CAMPAIGNS', '');
+    vi.stubEnv('VITE_TESTER_LOGIN', 'false');
 
     expect(isWorldBuilderEnabled()).toBe(false);
     expect(isCampaignCharacterFlowEnabled()).toBe(false);
     expect(isMultiplayerInvitesEnabled()).toBe(false);
     expect(isCustomCampaignsEnabled()).toBe(false);
+    expect(isTesterLoginEnabled()).toBe(false);
   });
 });
