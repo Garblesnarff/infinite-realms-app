@@ -210,6 +210,37 @@ describeWithDb('character JSON export and import (#319)', () => {
     expect(stats[0]?.dexterity).toBe(17);
   });
 
+  it('writes default ability scores when an import omits stats', async () => {
+    const imported = await request(
+      '/v1/characters/import',
+      'POST',
+      {
+        format: 'infinite-realms.character',
+        version: 1,
+        character: { name: `Imported without stats ${testId('1232')}`, class: 'Bard', level: 1 },
+      },
+      'other',
+    );
+    expect(imported.status).toBe(201);
+    const created = (await imported.json()) as { id: string };
+    createdIds.push(created.id);
+
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, created.id));
+    expect(stats).toEqual(
+      expect.objectContaining({
+        strength: 10,
+        dexterity: 10,
+        constitution: 10,
+        intelligence: 10,
+        wisdom: 10,
+        charisma: 10,
+      }),
+    );
+  });
+
   it("refuses to export another user's character and one shared with the caller", async () => {
     const id = await makeCharacter();
     expect((await request(`/v1/characters/${id}/export`, 'GET', undefined, 'other')).status).toBe(

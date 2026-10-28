@@ -12,6 +12,7 @@ import { eq, and, desc, sql, exists, or } from 'drizzle-orm';
 import { db } from '../../../../db/client';
 import {
   characterFeatures,
+  characterStats,
   featureUsageLog,
   characters,
   classFeaturesLibrary,
@@ -29,6 +30,28 @@ import type {
   CharacterFeaturesWithUsage,
   FeatureUsageHistoryParams,
 } from '../../types/class-features.js';
+
+/** CHA for Bardic Inspiration, WIS for War Priest. Other features are not gated (#1232). */
+function abilityScoreForFeature(featureName: string): 'charisma' | 'wisdom' | null {
+  if (featureName === 'Bardic Inspiration' || featureName.startsWith('Bardic Inspiration ')) {
+    return 'charisma';
+  }
+  if (featureName === 'War Priest') return 'wisdom';
+  return null;
+}
+
+/**
+ * A Divine Intervention spend is a success unless the caller records a failure.
+ * The long-rest refill reads these tokens (#1232).
+ */
+function divineInterventionContext(
+  featureName: string,
+  context: string | null | undefined,
+): string | undefined {
+  if (featureName !== 'Divine Intervention') return context ?? undefined;
+  if ((context ?? '').includes('divine-intervention:failure')) return context ?? undefined;
+  return `${context ?? ''} divine-intervention:success`.trim();
+}
 
 /**
  * Class Feature Usage Service
@@ -89,7 +112,9 @@ export class ClassFeatureUsageService {
   /**
    * Spend one use of a limited-use feature
    */
-  static async spendFeatureUse(input: UseFeatureInput & { userId: string }): Promise<UseFeatureResult> {
+  static async spendFeatureUse(
+    input: UseFeatureInput & { userId: string },
+  ): Promise<UseFeatureResult> {
     const { characterId, featureId, context, sessionId, userId } = input;
 
     // Get character feature with ownership check
@@ -125,6 +150,33 @@ export class ClassFeatureUsageService {
 
     const feature = characterFeature.feature!;
 
+    // Bardic Inspiration (CHA) and War Priest (WIS) have no count without a
+    // stored ability score (#1232). A missing characterStats row is that case:
+    // the columns themselves are NOT NULL. Refuse instead of treating the
+    // feature as unlimited.
+    const gatedAbility = abilityScoreForFeature(feature.featureName);
+    if (gatedAbility) {
+      const [stats] = await db
+        .select({
+          charisma: characterStats.charisma,
+          wisdom: characterStats.wisdom,
+        })
+        .from(characterStats)
+        .where(eq(characterStats.characterId, characterId))
+        .limit(1);
+      const score = stats?.[gatedAbility];
+      if (typeof score !== 'number') {
+        return {
+          success: false,
+          usesRemaining: 0,
+          effect: '',
+          message: `${feature.featureName} is not spent: its uses depend on an ability score this character has none of`,
+        };
+      }
+    }
+
+    const usageContext = divineInterventionContext(feature.featureName, context);
+
     // A NULL uses_count with an explicitly tracked uses_remaining is a pool, not an
     // unlimited feature (#712: Divine Sense tracks 1 + CHA mod, Lay on Hands tracks
     // paladin level x 5 HP). Only a row with no remaining value at all is unlimited:
@@ -137,7 +189,7 @@ export class ClassFeatureUsageService {
       if (ensured) {
         characterFeature.usesRemaining = ensured.usesRemaining;
       } else {
-        await this.logFeatureUsage(characterId, featureId, userId, context, sessionId);
+        await this.logFeatureUsage(characterId, featureId, userId, usageContext, sessionId);
 
         return {
           success: true,
@@ -184,7 +236,7 @@ export class ClassFeatureUsageService {
       );
 
     // Log the usage
-    await this.logFeatureUsage(characterId, featureId, userId, context, sessionId);
+    await this.logFeatureUsage(characterId, featureId, userId, usageContext, sessionId);
 
     // #712: a pooled feature (Lay on Hands) counts HP, not uses.
     const { poolUnitLabel } = await import('./paladin-features-service.js');
@@ -223,6 +275,26 @@ export class ClassFeatureUsageService {
           (${restType} = 'short' AND cfl.uses_per_rest = 'short_rest')
           OR
           (${restType} = 'long' AND (cfl.uses_per_rest = 'short_rest' OR cfl.uses_per_rest = 'long_rest'))
+        )
+        -- Divine Intervention stays spent for 7 days after a success (#1232).
+        -- A later logged failure is the failed attempt, and a long rest may refill it.
+        AND NOT (
+          ${restType} = 'long'
+          AND cfl.feature_name = 'Divine Intervention'
+          AND EXISTS (
+            SELECT 1 FROM ${featureUsageLog} ful
+            WHERE ful.character_id = cf.character_id
+              AND ful.feature_id = cf.feature_id
+              AND ful.context LIKE '%divine-intervention:success%'
+              AND ful.used_at > NOW() - INTERVAL '7 days'
+              AND NOT EXISTS (
+                SELECT 1 FROM ${featureUsageLog} later
+                WHERE later.character_id = ful.character_id
+                  AND later.feature_id = ful.feature_id
+                  AND later.used_at > ful.used_at
+                  AND later.context LIKE '%divine-intervention:failure%'
+              )
+          )
         )
         AND EXISTS (
           SELECT 1 FROM ${characters} c

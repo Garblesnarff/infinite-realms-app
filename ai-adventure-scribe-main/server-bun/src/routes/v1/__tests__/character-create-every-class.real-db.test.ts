@@ -342,6 +342,33 @@ describeWithDb('character create every class (#388)', () => {
     expect(handaxes[0].quantity).toBe(2);
   });
 
+  it('writes default ability scores when the wizard route omits stats', async () => {
+    const body = {
+      ...wizardBody({ name: 'Fighter', hitDie: '1d10', baseHp: 10 }),
+      stats: undefined,
+    };
+    const res = await request('/v1/characters', 'POST', body);
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    expect(stats).toEqual(
+      expect.objectContaining({
+        strength: 10,
+        dexterity: 10,
+        constitution: 10,
+        intelligence: 10,
+        wisdom: 10,
+        charisma: 10,
+      }),
+    );
+  });
+
   for (const cls of CLASSES) {
     it(`creates a Hill Dwarf ${cls.name} at L1`, async () => {
       const res = await request('/v1/characters', 'POST', wizardBody(cls));
@@ -1698,6 +1725,35 @@ describeWithDb('premade level-3 heroes carry subclass and features (#1019)', () 
         .catch(() => {});
     }
     await closeRealDb();
+  });
+
+  it('writes a stats row when the premade route payload omits ability scores', async () => {
+    const body = {
+      ...premadeFixture('premade-ranger-l3-create-payload.json'),
+      name: `Ranger without stats ${testId('1232')}`,
+      campaign_id: campaignId,
+      stats: undefined,
+    };
+    const res = await request('/v1/characters', 'POST', body);
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    expect(stats).toEqual(
+      expect.objectContaining({
+        strength: 10,
+        dexterity: 10,
+        constitution: 10,
+        intelligence: 10,
+        wisdom: 10,
+        charisma: 10,
+      }),
+    );
   });
 
   it('creates the Tavo Brejo template (Ranger/Hunter L3) with subclass and the full feature list', async () => {
