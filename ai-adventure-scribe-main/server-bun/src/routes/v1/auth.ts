@@ -32,6 +32,8 @@ import { authTokenExchangeCodes } from '../../services/auth-token-exchange.js';
 import { authenticatePassword } from '../../services/password-login.js';
 import { workos, authConfig } from '../../services/workos';
 
+import type { WorkOS } from '@workos-inc/node';
+
 const OAUTH_STATE_COOKIE = 'ir_oauth_state';
 const OAUTH_STATE_MAX_AGE_SECONDS = 60 * 10; // 10 minutes
 
@@ -107,38 +109,144 @@ function createFrontendTokenExchangeRedirect(
   return `${frontendUrl}/auth/callback?${params.toString()}`;
 }
 
+function getPendingAuthenticationToken(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null;
+  const err = error as Record<string, unknown>;
+
+  if (typeof err.pending_authentication_token === 'string' && err.pending_authentication_token) {
+    return err.pending_authentication_token;
+  }
+  if (typeof err.pendingAuthenticationToken === 'string' && err.pendingAuthenticationToken) {
+    return err.pendingAuthenticationToken;
+  }
+
+  if (err.rawData && typeof err.rawData === 'object') {
+    const raw = err.rawData as Record<string, unknown>;
+    if (typeof raw.pending_authentication_token === 'string' && raw.pending_authentication_token) {
+      return raw.pending_authentication_token;
+    }
+    if (typeof raw.pendingAuthenticationToken === 'string' && raw.pendingAuthenticationToken) {
+      return raw.pendingAuthenticationToken;
+    }
+  }
+
+  if (Array.isArray(err.errors)) {
+    for (const item of err.errors) {
+      if (item && typeof item === 'object') {
+        const itemObj = item as Record<string, unknown>;
+        if (
+          typeof itemObj.pending_authentication_token === 'string' &&
+          itemObj.pending_authentication_token
+        ) {
+          return itemObj.pending_authentication_token;
+        }
+        if (
+          typeof itemObj.pendingAuthenticationToken === 'string' &&
+          itemObj.pendingAuthenticationToken
+        ) {
+          return itemObj.pendingAuthenticationToken;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+function getPendingAuthReasonCode(error: unknown): 'mfa_required' | 'email_verification_required' {
+  if (error && typeof error === 'object') {
+    const err = error as Record<string, unknown>;
+    const code = String(err.code || err.error || '').toLowerCase();
+    const msg = String(err.message || err.errorDescription || '').toLowerCase();
+    const raw = err.rawData ? JSON.stringify(err.rawData).toLowerCase() : '';
+
+    if (
+      code.includes('mfa') ||
+      code.includes('totp') ||
+      msg.includes('mfa') ||
+      msg.includes('totp') ||
+      raw.includes('mfa') ||
+      raw.includes('totp')
+    ) {
+      return 'mfa_required';
+    }
+  }
+  return 'email_verification_required';
+}
+
+const DEFAULT_PASSWORD_LOGIN_RATE_LIMIT = {
+  windowMs: 60_000,
+  max: 5,
+  key: 'auth-password-login',
+};
+
+export interface PasswordLoginRouteOptions {
+  workos?: Pick<WorkOS, 'userManagement'>;
+  clientId?: string;
+  getTesterEmails?: () => string | undefined;
+  rateLimit?: typeof DEFAULT_PASSWORD_LOGIN_RATE_LIMIT;
+}
+
+export function createPasswordLoginRoutes({
+  workos: workosClient = workos,
+  clientId = authConfig.clientId,
+  getTesterEmails = () => process.env.TESTER_LOGIN_EMAILS,
+  rateLimit = DEFAULT_PASSWORD_LOGIN_RATE_LIMIT,
+}: PasswordLoginRouteOptions = {}) {
+  return new Elysia({ name: 'auth-password-login' })
+    .use(createSimpleRateLimit(rateLimit))
+    .post(
+      '/password-login',
+      async ({ body, set }) => {
+        const rawTesterEmails = getTesterEmails() ?? '';
+        const allowedEmails = rawTesterEmails
+          .split(',')
+          .map((e) => e.trim().toLowerCase())
+          .filter(Boolean);
+
+        const requestEmail = body.email.trim().toLowerCase();
+
+        if (allowedEmails.length === 0 || !allowedEmails.includes(requestEmail)) {
+          set.status = 404;
+          return { error: 'Not found' };
+        }
+
+        try {
+          return await authenticatePassword(
+            body.email,
+            body.password,
+            clientId,
+            workosClient,
+          );
+        } catch (error) {
+          logger.warn({
+            msg: 'Password login failed',
+            error: error instanceof Error ? error.message : String(error),
+          });
+
+          set.status = 401;
+
+          if (getPendingAuthenticationToken(error)) {
+            return { error: getPendingAuthReasonCode(error) };
+          }
+
+          return { error: 'Invalid email or password' };
+        }
+      },
+      {
+        body: t.Object({
+          email: t.String({ format: 'email', maxLength: 320 }),
+          password: t.String({ minLength: 1, maxLength: 1024 }),
+        }),
+      },
+    );
+}
+
+export const passwordLoginRoutes = createPasswordLoginRoutes();
+
 export const authRoutes = new Elysia({ prefix: '/v1/auth' })
   .use(authTokenExchangeRoutes)
-  .use(
-    new Elysia({ name: 'auth-password-login' })
-      .use(createSimpleRateLimit({ windowMs: 60_000, max: 5, key: 'auth-password-login' }))
-      .post(
-        '/password-login',
-        async ({ body, set }) => {
-          try {
-            return await authenticatePassword(
-              body.email,
-              body.password,
-              authConfig.clientId,
-              workos,
-            );
-          } catch (error) {
-            logger.warn({
-              msg: 'Password login failed',
-              error: error instanceof Error ? error.message : String(error),
-            });
-            set.status = 401;
-            return { error: 'Invalid email or password' };
-          }
-        },
-        {
-          body: t.Object({
-            email: t.String({ format: 'email', maxLength: 320 }),
-            password: t.String({ minLength: 1, maxLength: 1024 }),
-          }),
-        },
-      ),
-  )
+  .use(passwordLoginRoutes)
   /**
    * Start OAuth flow - redirect to WorkOS hosted login
    * GET /v1/auth/login
