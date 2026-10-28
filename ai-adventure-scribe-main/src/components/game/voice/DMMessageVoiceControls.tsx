@@ -121,28 +121,28 @@ export const DMMessageVoiceControls: React.FC<DMMessageVoiceControlsProps> = Rea
               type="button"
               variant="ghost"
               size="sm"
-              className="ir-hit-slop ir-tts h-11 min-w-11 gap-1 px-3 text-xs text-primary"
+              className="ir-hit-slop ir-tts gap-1 px-3 text-xs text-primary"
               onClick={handleRetry}
               aria-label="Retry voice for this message"
             >
-              <RotateCw className="h-3 w-3" aria-hidden="true" />
+              <RotateCw className="h-4 w-4" aria-hidden="true" />
               Retry
             </Button>
           </>
         ) : isPreparing ? (
           <>
             <span
-              className="flex h-11 items-center gap-2 text-xs text-muted-foreground"
+              className="flex items-center gap-2 text-xs text-muted-foreground"
               aria-live="polite"
             >
-              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               Preparing voice…
             </span>
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="ir-hit-slop h-11 min-w-11 px-3 text-xs text-muted-foreground hover:text-primary"
+              className="ir-hit-slop px-3 text-xs text-muted-foreground hover:text-primary"
               onClick={handleCancel}
               aria-label="Cancel preparing voice for this message"
             >
@@ -155,7 +155,7 @@ export const DMMessageVoiceControls: React.FC<DMMessageVoiceControlsProps> = Rea
             variant="ghost"
             size="sm"
             className={cn(
-              'ir-hit-slop ir-tts h-11 min-w-11 gap-1 px-3 text-xs',
+              'ir-hit-slop ir-tts gap-1 px-3 text-xs',
               'hover:bg-accent/50 active:scale-95',
               'text-muted-foreground hover:text-primary',
               isCurrentlyPlaying && 'text-primary bg-accent/30',
@@ -169,9 +169,9 @@ export const DMMessageVoiceControls: React.FC<DMMessageVoiceControlsProps> = Rea
             aria-pressed={isCurrentlyPlaying}
           >
             {isCurrentlyPlaying ? (
-              <Pause className="h-3 w-3" aria-hidden="true" />
+              <Pause className="h-4 w-4" aria-hidden="true" />
             ) : (
-              <Play className="h-3 w-3" aria-hidden="true" />
+              <Play className="h-4 w-4" aria-hidden="true" />
             )}
             {isCurrentlyPlaying ? 'Pause' : 'Listen'}
           </Button>
@@ -208,15 +208,15 @@ export const DMMessageVoiceControls: React.FC<DMMessageVoiceControlsProps> = Rea
               type="button"
               variant="ghost"
               size="sm"
-              className="ir-hit-slop ir-tts h-11 min-w-11 p-0 text-muted-foreground hover:text-primary"
+              className="ir-hit-slop ir-tts p-0 text-muted-foreground hover:text-primary"
               onClick={handleVolumeToggle}
               aria-label={isMuted ? 'Unmute' : 'Mute'}
               aria-pressed={isMuted}
             >
               {isMuted ? (
-                <VolumeX className="h-3 w-3" aria-hidden="true" />
+                <VolumeX className="h-4 w-4" aria-hidden="true" />
               ) : (
-                <Volume2 className="h-3 w-3" aria-hidden="true" />
+                <Volume2 className="h-4 w-4" aria-hidden="true" />
               )}
             </Button>
 
