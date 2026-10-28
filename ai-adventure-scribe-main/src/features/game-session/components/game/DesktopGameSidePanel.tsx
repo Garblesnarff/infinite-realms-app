@@ -35,6 +35,7 @@ export interface DesktopGameSidePanelProps {
   selectedType: string | null;
   setSelectedType: (type: string | null) => void;
   memoriesLoading: boolean;
+  allMemories: Memory[];
   sortedMemories: Memory[];
   journalLoading: boolean;
   journalEntries: JournalHandoutEntry[];
@@ -66,6 +67,7 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
     selectedType,
     setSelectedType,
     memoriesLoading,
+    allMemories,
     sortedMemories,
     journalLoading,
     journalEntries,
@@ -211,6 +213,7 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
                     selectedType={selectedType}
                     setSelectedType={setSelectedType}
                     memoriesLoading={memoriesLoading}
+                    allMemories={allMemories}
                     sortedMemories={sortedMemories}
                   />
                 </TabsContent>

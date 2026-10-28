@@ -202,6 +202,7 @@ describe('game screen tap targets and text (#228)', () => {
           selectedType={null}
           setSelectedType={vi.fn()}
           memoriesLoading={false}
+          allMemories={[]}
           sortedMemories={[]}
           journalLoading={false}
           journalEntries={[]}

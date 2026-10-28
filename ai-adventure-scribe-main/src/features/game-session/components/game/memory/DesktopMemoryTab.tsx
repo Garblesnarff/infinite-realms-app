@@ -1,7 +1,6 @@
 import React from 'react';
 
-import { MemoryCard } from './MemoryCard';
-import { MemoryFilter } from './MemoryFilter';
+import { MemoryList } from './MemoryList';
 
 import type { Memory } from '@/types/memory';
 
@@ -18,6 +17,7 @@ export interface DesktopMemoryTabProps {
   selectedType: string | null;
   setSelectedType: (type: string | null) => void;
   memoriesLoading: boolean;
+  allMemories: Memory[];
   sortedMemories: Memory[];
 }
 
@@ -30,6 +30,7 @@ export const DesktopMemoryTab: React.FC<DesktopMemoryTabProps> = React.memo(
     selectedType,
     setSelectedType,
     memoriesLoading,
+    allMemories,
     sortedMemories,
   }) => {
     return (
@@ -55,21 +56,14 @@ export const DesktopMemoryTab: React.FC<DesktopMemoryTabProps> = React.memo(
           </Button>
         </section>
 
-        {/* Memories Section */}
-        <div className="flex-shrink-0 border-b border-white/5 p-4">
-          <MemoryFilter selectedType={selectedType} onTypeSelect={setSelectedType} />
-        </div>
-
         <ScrollArea className="flex-1 bg-black/10 p-4" style={{ maxHeight: '56vh' }}>
-          {memoriesLoading && <p className="text-xs text-muted-foreground">Loading memories...</p>}
-          {!memoriesLoading && sortedMemories.length === 0 && (
-            <p className="text-xs text-muted-foreground">No memories logged yet.</p>
-          )}
-          <div className="space-y-2">
-            {sortedMemories.map((memory) => (
-              <MemoryCard key={memory.id} memory={memory} />
-            ))}
-          </div>
+          <MemoryList
+            allMemories={allMemories}
+            sortedMemories={sortedMemories}
+            selectedType={selectedType}
+            setSelectedType={setSelectedType}
+            memoriesLoading={memoriesLoading}
+          />
         </ScrollArea>
       </div>
     );

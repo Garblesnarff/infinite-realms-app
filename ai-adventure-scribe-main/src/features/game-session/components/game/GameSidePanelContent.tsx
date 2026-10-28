@@ -1,8 +1,7 @@
 import React, { useId, useCallback } from 'react';
 
 import { CombatSummary } from './CombatSummary';
-import { MemoryCard } from './memory/MemoryCard';
-import { MemoryFilter } from './memory/MemoryFilter';
+import { MemoryList } from './memory/MemoryList';
 import { HandoutCard } from '../handouts/HandoutCard';
 import { RightSheetLive } from './overhaul/RightSheetLive';
 
@@ -32,6 +31,7 @@ export interface GameSidePanelContentProps {
   localSessionNotes: string;
   setLocalSessionNotes: (notes: string) => void;
   memoriesLoading: boolean;
+  allMemories: Memory[];
   sortedMemories: Memory[];
   characterState: CharacterState;
   isInCombat: boolean;
@@ -66,6 +66,7 @@ export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = React.m
     localSessionNotes,
     setLocalSessionNotes,
     memoriesLoading,
+    allMemories,
     sortedMemories,
     isInCombat,
     journalEntries = [],
@@ -145,23 +146,16 @@ export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = React.m
                 </Button>
               </div>
 
-              {/* Memory Filtering */}
-              <div className="p-4 border-b flex-shrink-0">
-                <MemoryFilter selectedType={selectedType} onTypeSelect={setSelectedType} />
-              </div>
-
-              {/* Memories List */}
+              {/* Memory list: same header, chips and cards as desktop */}
               <ScrollArea className="flex-1">
-                <div className="p-4 space-y-2">
-                  {memoriesLoading && (
-                    <p className="text-xs text-muted-foreground">Loading memories...</p>
-                  )}
-                  {!memoriesLoading && sortedMemories.length === 0 && (
-                    <p className="text-xs text-muted-foreground">No memories logged yet.</p>
-                  )}
-                  {sortedMemories.map((memory) => (
-                    <MemoryCard key={memory.id} memory={memory} />
-                  ))}
+                <div className="p-4">
+                  <MemoryList
+                    allMemories={allMemories}
+                    sortedMemories={sortedMemories}
+                    selectedType={selectedType}
+                    setSelectedType={setSelectedType}
+                    memoriesLoading={memoriesLoading}
+                  />
                 </div>
               </ScrollArea>
             </div>

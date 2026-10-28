@@ -221,7 +221,7 @@ describe('GameSidePanel', () => {
     });
 
     const { rerender } = renderPanel();
-    expect(screen.getByText(/No memories logged yet./i)).toBeInTheDocument();
+    expect(screen.getByText(/The DM has not written anything down yet/i)).toBeInTheDocument();
 
     // Test with memories
     const mockMemories = [
