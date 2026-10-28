@@ -10,7 +10,7 @@ import type { SpellCastHandlerRef } from './spell-cast-handler';
 import type { ExtendedGameSession } from '@/hooks/use-game-session';
 
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetClose, SheetTitle } from '@/components/ui/sheet';
 import { Z_INDEX } from '@/constants/z-index';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useCharacter } from '@/contexts/CharacterContext';
@@ -159,7 +159,13 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
                   )}
                 </Button>
               </SheetTrigger>
-              <SheetContent side="right" className="w-[80vw] max-w-sm p-0">
+              <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl p-0">
+                <SheetTitle className="sr-only">Game panel</SheetTitle>
+                <div
+                  aria-hidden="true"
+                  data-testid="game-panel-drag-handle"
+                  className="mx-auto mt-2 h-1.5 w-12 flex-shrink-0 rounded-full bg-muted-foreground/40"
+                />
                 <GameSidePanelContent
                   sessionId={sessionId}
                   sessionData={sessionData}
@@ -193,7 +199,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="absolute left-4 top-4"
+                    className="absolute right-2 top-2 h-11 w-11 p-0"
                     aria-label="Close panel"
                     title="Close panel"
                   >

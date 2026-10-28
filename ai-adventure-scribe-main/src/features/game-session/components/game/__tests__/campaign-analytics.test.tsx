@@ -64,21 +64,8 @@ describe('Campaign hub tab analytics', () => {
       </QueryClientProvider>,
     );
 
-    // Find any button that, when clicked, switches header to Memories.
-    // Anchored regex (was /Memories/i) to avoid ambiguously matching the empty-state
-    // copy "No memories logged yet." (see MemoryPanel.tsx line 390) once the memory tab
-    // is active, which made queryByText throw a multiple-elements-found error.
-    const buttons = screen.getAllByRole('button');
-    let switched = false;
-    for (const btn of buttons) {
-      fireEvent.click(btn);
-      if (screen.queryByText(/^📚 Memories$/)) {
-        switched = true;
-        break;
-      }
-    }
+    fireEvent.click(screen.getByRole('button', { name: 'Memory' }));
 
-    expect(switched).toBe(true);
-    expect(spy).toHaveBeenCalled();
+    expect(spy).toHaveBeenCalledWith('memory', expect.anything());
   });
 });

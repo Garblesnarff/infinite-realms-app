@@ -93,73 +93,61 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
           }`}
         >
           <div className="p-3 border-b border-white/10 flex items-center justify-between">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <div className="flex gap-1 flex-shrink-0">
+            <div className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto">
+              <Button
+                variant={activeTab === 'character' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => handleTabChange('character')}
+                aria-pressed={activeTab === 'character'}
+                className="ir-hit-slop h-8 px-2 gap-1.5 flex-shrink-0"
+              >
+                <User className="h-4 w-4" aria-hidden="true" />
+                Sheet
+              </Button>
+              <Button
+                variant={activeTab === 'memory' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => handleTabChange('memory')}
+                aria-pressed={activeTab === 'memory'}
+                className={`ir-hit-slop h-8 px-2 gap-1.5 flex-shrink-0 transition-all duration-200 ${
+                  activeTab === 'memory'
+                    ? 'bg-infinite-gold/15 text-infinite-gold shadow-glow-gold'
+                    : 'text-foreground/60 hover:bg-white/5 hover:text-infinite-gold'
+                }`}
+              >
+                <List className="h-4 w-4" aria-hidden="true" />
+                Memory
+              </Button>
+              {isInCombat && (
                 <Button
-                  variant={activeTab === 'character' ? 'default' : 'ghost'}
+                  variant={activeTab === 'combat' ? 'default' : 'ghost'}
                   size="sm"
-                  onClick={() => handleTabChange('character')}
-                  aria-label="Character Sheet"
-                  title="Character Sheet"
-                  aria-pressed={activeTab === 'character'}
-                  className="ir-hit-slop h-8 px-2"
-                >
-                  <User className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={activeTab === 'memory' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => handleTabChange('memory')}
-                  aria-label="Memories"
-                  title="Memories"
-                  aria-pressed={activeTab === 'memory'}
-                  className={`ir-hit-slop h-8 px-2 transition-all duration-200 ${
-                    activeTab === 'memory'
-                      ? 'bg-infinite-gold/15 text-infinite-gold shadow-glow-gold'
-                      : 'text-foreground/60 hover:bg-white/5 hover:text-infinite-gold'
+                  onClick={() => handleTabChange('combat')}
+                  aria-pressed={activeTab === 'combat'}
+                  className={`ir-hit-slop h-8 px-2 gap-1.5 flex-shrink-0 transition-all duration-200 ${
+                    activeTab === 'combat'
+                      ? 'bg-red-500 text-white shadow-lg animate-pulse'
+                      : 'hover:bg-red-500/20'
                   }`}
                 >
-                  <List className="h-4 w-4" />
+                  <Sword className="h-4 w-4" aria-hidden="true" />
+                  Combat
                 </Button>
-                {isInCombat && (
-                  <Button
-                    variant={activeTab === 'combat' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => handleTabChange('combat')}
-                    aria-label="Combat"
-                    title="Combat"
-                    aria-pressed={activeTab === 'combat'}
-                    className={`ir-hit-slop h-8 px-2 transition-all duration-200 ${
-                      activeTab === 'combat'
-                        ? 'bg-red-500 text-white shadow-lg animate-pulse'
-                        : 'hover:bg-red-500/20'
-                    }`}
-                  >
-                    <Sword className="h-4 w-4" />
-                  </Button>
-                )}
-                <Button
-                  variant={activeTab === 'journal' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => handleTabChange('journal')}
-                  aria-label="Journal"
-                  title="Journal"
-                  aria-pressed={activeTab === 'journal'}
-                  className={`ir-hit-slop h-8 px-2 transition-all duration-200 ${
-                    activeTab === 'journal'
-                      ? 'bg-amber-500/20 text-amber-100 shadow-lg'
-                      : 'text-foreground/60 hover:bg-white/5 hover:text-amber-100'
-                  }`}
-                >
-                  <BookOpen className="h-4 w-4" />
-                </Button>
-              </div>
-              <h3 className="font-display font-semibold text-card-foreground capitalize truncate text-sm">
-                {activeTab === 'character' && '🎭 Character'}
-                {activeTab === 'memory' && '📚 Memories'}
-                {activeTab === 'combat' && '⚔️ Combat'}
-                {activeTab === 'journal' && '📜 Journal'}
-              </h3>
+              )}
+              <Button
+                variant={activeTab === 'journal' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => handleTabChange('journal')}
+                aria-pressed={activeTab === 'journal'}
+                className={`ir-hit-slop h-8 px-2 gap-1.5 flex-shrink-0 transition-all duration-200 ${
+                  activeTab === 'journal'
+                    ? 'bg-amber-500/20 text-amber-100 shadow-lg'
+                    : 'text-foreground/60 hover:bg-white/5 hover:text-amber-100'
+                }`}
+              >
+                <BookOpen className="h-4 w-4" aria-hidden="true" />
+                Journal
+              </Button>
             </div>
             <div className="flex gap-1">
               <Button

@@ -89,17 +89,19 @@ export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = React.m
             onValueChange={(v) => setActiveTab(v as 'character' | 'memory' | 'combat' | 'journal')}
             className="w-full"
           >
-            <TabsList className="grid w-full grid-cols-4 h-10">
-              <TabsTrigger value="character" className="text-xs">
-                Character
+            <TabsList className={`grid w-full h-11 ${isInCombat ? 'grid-cols-4' : 'grid-cols-3'}`}>
+              <TabsTrigger value="character" className="text-xs min-h-11">
+                Sheet
               </TabsTrigger>
-              <TabsTrigger value="memory" className="text-xs">
-                Memories
+              <TabsTrigger value="memory" className="text-xs min-h-11">
+                Memory
               </TabsTrigger>
-              <TabsTrigger value="combat" disabled={!isInCombat} className="text-xs">
-                Combat
-              </TabsTrigger>
-              <TabsTrigger value="journal" className="text-xs">
+              {isInCombat && (
+                <TabsTrigger value="combat" className="text-xs min-h-11">
+                  Combat
+                </TabsTrigger>
+              )}
+              <TabsTrigger value="journal" className="text-xs min-h-11">
                 Journal
               </TabsTrigger>
             </TabsList>

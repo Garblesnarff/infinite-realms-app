@@ -116,7 +116,7 @@ describe('GameSidePanel', () => {
   it('renders character tab by default', () => {
     renderPanel();
     expect(screen.getByTestId('character-header')).toBeInTheDocument();
-    expect(screen.getByText('🎭 Character')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sheet' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('switches to memory tab and displays notes', async () => {
@@ -135,7 +135,7 @@ describe('GameSidePanel', () => {
 
     renderPanel();
 
-    const memoryTabButton = screen.getByLabelText(/Memories/i);
+    const memoryTabButton = screen.getByRole('button', { name: 'Memory' });
     fireEvent.click(memoryTabButton);
 
     expect(setActiveTab).toHaveBeenCalledWith('memory');
@@ -182,7 +182,7 @@ describe('GameSidePanel', () => {
 
     renderPanel({ combatMode: true });
 
-    const combatTabButton = screen.getByLabelText(/Combat/i);
+    const combatTabButton = screen.getByRole('button', { name: 'Combat' });
     fireEvent.click(combatTabButton);
 
     expect(setActiveTab).toHaveBeenCalledWith('combat');
@@ -382,10 +382,10 @@ describe('GameSidePanel', () => {
     fireEvent.click(trigger);
 
     // Character tab is default in Content too
-    expect(await screen.findByText('Character')).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: 'Sheet' })).toBeInTheDocument();
 
-    // Switch to memories
-    const memoriesTab = screen.getByRole('tab', { name: /Memories/i });
+    // Switch to memory
+    const memoriesTab = screen.getByRole('tab', { name: 'Memory' });
     fireEvent.click(memoriesTab);
 
     // Wait for the memory tab content to be visible

@@ -207,7 +207,7 @@ describe('game screen tap targets and text (#228)', () => {
           journalEntries={[]}
         />,
       );
-      for (const name of ['Character Sheet', 'Memories', 'Journal', 'Expand', 'Close Panel']) {
+      for (const name of ['Sheet', 'Memory', 'Journal', 'Expand', 'Close Panel']) {
         const button = screen.getByRole('button', { name });
         expect(button.className).toContain('h-8');
         expectSlop(button);
