@@ -311,12 +311,16 @@ export class HeadlessGameClient {
         timestamp: new Date().toISOString(),
       });
     }
-    await userDataApi.saveSessionMessages(this.sessionId, {
-      speaker_type: 'player',
-      message: effectiveInput,
-      context,
-      timestamp: new Date().toISOString(),
-    });
+    await userDataApi.saveSessionMessages(
+      this.sessionId,
+      {
+        speaker_type: 'player',
+        message: effectiveInput,
+        context,
+        timestamp: new Date().toISOString(),
+      },
+      diceRoll ? null : undefined,
+    );
     await userDataApi.saveSessionMessages(this.sessionId, {
       speaker_type: 'dm',
       message: text,

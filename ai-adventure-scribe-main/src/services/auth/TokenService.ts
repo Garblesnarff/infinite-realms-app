@@ -57,6 +57,14 @@ export class TokenRefreshTransportError extends Error {
   }
 }
 
+/** The refresh endpoint answered, but temporarily cannot complete the exchange. */
+export class TokenRefreshTransientError extends TokenRefreshError {
+  constructor(message: string, status: number, code?: string) {
+    super(message, status, code);
+    this.name = 'TokenRefreshTransientError';
+  }
+}
+
 /** True for failures that mean "no answer", never "the server rejected us". */
 const isTransportFailure = (error: unknown): boolean => {
   const name =
@@ -358,7 +366,7 @@ const requestTokenRefresh = async (refreshToken: string): Promise<RefreshResult>
       const error = getRefreshError(payload, response.status);
       logger.warn('Token refresh failed:', { status: response.status, error });
       if (isTerminalRefreshFailure(error)) throw error;
-      return null;
+      throw new TokenRefreshTransientError(error.message, error.status, error.code);
     }
 
     const data = (await readResponseJson(response)) as Record<string, unknown> | null;
@@ -374,7 +382,7 @@ const requestTokenRefresh = async (refreshToken: string): Promise<RefreshResult>
         response.status,
       );
       logger.error('Token refresh returned an invalid payload:', { error });
-      return null;
+      throw new TokenRefreshTransientError(error.message, error.status, error.code);
     }
 
     return {
@@ -449,6 +457,7 @@ export const refreshAccessToken = (
         // Transport failures propagate: they are not auth verdicts, so the
         // caller's stored session must stay intact (#565).
         if (error instanceof TokenRefreshTransportError) throw error;
+        if (error instanceof TokenRefreshTransientError) throw error;
         if (error instanceof TokenRefreshError && isTerminalRefreshFailure(error)) {
           markSessionEnded(error);
           return null;

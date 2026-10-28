@@ -44,6 +44,9 @@ const TokenRefreshTransportError = getTokenServiceExport<
     }
   },
 );
+const isTransientRefreshFailure = (error: unknown): boolean =>
+  error instanceof TokenRefreshTransportError ||
+  (error instanceof Error && error.name === 'TokenRefreshTransientError');
 const safeLoadCachedSession = (): ReturnType<typeof loadCachedSession> => {
   try {
     return loadCachedSession();
@@ -353,10 +356,16 @@ async function refreshExpiringSession(): Promise<string | undefined> {
   try {
     tokens = await refreshAccessTokenOnce(session.refresh_token, session.access_token);
   } catch (error) {
-    if (error instanceof TokenRefreshTransportError) throw error;
-    throw new SessionExpiredError();
+    if (isTransientRefreshFailure(error)) throw error;
+    const expired = new SessionExpiredError();
+    markSessionEnded(expired);
+    throw expired;
   }
-  if (!tokens) throw new SessionExpiredError();
+  if (!tokens) {
+    const expired = new SessionExpiredError();
+    markSessionEnded(expired);
+    throw expired;
+  }
 
   persistSession({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken });
   return tokens.accessToken;
@@ -444,7 +453,7 @@ export async function fetchWithAuth(
       // A transport failure reaching the refresh endpoint is not an auth
       // verdict — let it surface as-is instead of reporting session-expired
       // (#565). The stored session stays intact.
-      if (error instanceof TokenRefreshTransportError) throw error;
+      if (isTransientRefreshFailure(error)) throw error;
       logger.warn('AUTH_RETRY_AFTER_401', { route: path, outcome: 'refresh_failed' });
       throw new SessionExpiredError();
     }

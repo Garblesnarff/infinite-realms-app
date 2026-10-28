@@ -85,6 +85,25 @@ describe('userDataApi tactical transport', () => {
       vi.useRealTimers();
     }
   });
+
+  it('keeps the shared timeout for a non-roll message save', async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockReturnValue(new Promise<Response>(() => {}));
+
+      const pending = userDataApi.saveSessionMessages('session-1', {
+        id: 'dm-1',
+        message: 'A quiet room.',
+        speaker_type: 'dm',
+      });
+      const failure = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      await failure;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('userDataApi request errors (#2280)', () => {

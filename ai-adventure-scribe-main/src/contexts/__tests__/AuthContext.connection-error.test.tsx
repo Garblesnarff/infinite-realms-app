@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AuthProvider, useAuth } from '../AuthContext';
 
-import { persistSession } from '@/services/auth/TokenService';
+import { getTokenExpiry, persistSession } from '@/services/auth/TokenService';
 
 vi.mock('@/lib/logger', () => ({
   default: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -61,6 +61,7 @@ describe('AuthContext connection failures (#565)', () => {
 
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
@@ -424,7 +425,6 @@ describe('AuthContext connection failures (#565)', () => {
     expect(probeState().loading).toBe(false);
     fetchMock.mockClear();
 
-    // The two-minute margin schedules this at four minutes, before the six-minute expiry.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(4 * 60 * 1000);
       await Promise.resolve();
@@ -433,5 +433,65 @@ describe('AuthContext connection failures (#565)', () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/v1/auth/refresh'))).toBe(
       true,
     );
+  });
+
+  it('backs off a transient scheduled refresh and retries while keeping the session', async () => {
+    vi.useFakeTimers();
+    const expiringToken = tokenWithExpiry(360);
+    persistSession({ access_token: expiringToken, refresh_token: 'old-refresh' });
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    let refreshAttempts = 0;
+    fetchMock.mockImplementation((url: string) => {
+      if (String(url).includes('/api/trpc/auth.me')) {
+        return Promise.resolve(
+          authMe(200, { result: { data: { id: 'u1', email: 'u1@example.com' } } }),
+        );
+      }
+      if (String(url).includes('/v1/auth/refresh')) {
+        refreshAttempts += 1;
+        return Promise.resolve(
+          refreshAttempts === 1
+            ? authMe(502)
+            : authMe(200, { accessToken: 'fresh-access', refreshToken: 'fresh-refresh' }),
+        );
+      }
+      return Promise.resolve(authMe(404));
+    });
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    fetchMock.mockClear();
+
+    const refreshDelay = getTokenExpiry(expiringToken)! - 2 * 60 * 1000 - Date.now();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(refreshDelay);
+      await vi.advanceTimersByTimeAsync(100);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(refreshAttempts).toBe(1);
+    expect(window.localStorage.getItem('workos_access_token')).toBe(expiringToken);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_899);
+      await Promise.resolve();
+    });
+    expect(refreshAttempts).toBe(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(101);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(refreshAttempts).toBe(2);
+    expect(window.localStorage.getItem('workos_access_token')).toBe('fresh-access');
   });
 });

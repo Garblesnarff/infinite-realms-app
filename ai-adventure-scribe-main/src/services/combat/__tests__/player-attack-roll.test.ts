@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { askPlayerForAttackDie, isPlayerActor } from '../player-attack-roll';
 
+import { SessionExpiredError } from '@/infrastructure/api/rest-client';
 import { proposeAuthoritativeAttack } from '@/services/combat/combat-attack-proposal';
 import { requestPlayerAttackRoll } from '@/services/combat/player-roll-bridge';
 
@@ -131,6 +132,13 @@ describe('the player attack die', () => {
       vi.mocked(proposeAuthoritativeAttack).mockRejectedValue(new Error('gateway down'));
 
       await expect(ask()).resolves.toEqual({ autoRolled: true, movementOnly: false });
+      expect(requestPlayerAttackRoll).not.toHaveBeenCalled();
+    });
+
+    it('surfaces an expired session instead of hiding it behind an engine roll', async () => {
+      vi.mocked(proposeAuthoritativeAttack).mockRejectedValue(new SessionExpiredError());
+
+      await expect(ask()).rejects.toBeInstanceOf(SessionExpiredError);
       expect(requestPlayerAttackRoll).not.toHaveBeenCalled();
     });
 

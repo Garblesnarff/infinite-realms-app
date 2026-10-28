@@ -16,6 +16,7 @@ import {
   SESSION_ENDED_EVENT,
   SESSION_ENDED_STORAGE_KEY,
   SESSION_STORAGE_KEY,
+  TokenRefreshTransientError,
   TokenRefreshTransportError,
   type WorkOSSession,
 } from '@/services/auth/TokenService';
@@ -26,6 +27,9 @@ export type { BlogRole, UserPlan };
  *  leave the app on "Loading..." forever (#565). */
 const AUTH_VERIFY_TIMEOUT_MS = 15_000;
 const TOKEN_REFRESH_MARGIN_MS = 2 * 60 * 1000;
+const TOKEN_REFRESH_RETRY_INITIAL_MS = 2 * 1000;
+const TOKEN_REFRESH_RETRY_MAX_MS = 60 * 1000;
+const TOKEN_REFRESH_RETRY_JITTER_MS = 500;
 
 // WorkOS User type (compatible with existing code)
 interface WorkOSUser {
@@ -334,14 +338,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             activeSession.access_token,
           );
         } catch (error) {
-          // #565: the refresh endpoint is unreachable (deploy swap) — not an
-          // auth verdict. Leave the session alone; the next tick retries.
-          if (!(error instanceof TokenRefreshTransportError)) {
+          // #565: transport and temporary HTTP failures are not auth verdicts.
+          // Keep the session and back off so every tab does not hammer a
+          // recovering refresh endpoint once per second.
+          if (
+            error instanceof TokenRefreshTransportError ||
+            error instanceof TokenRefreshTransientError
+          ) {
+            scheduleTransientRetry();
+          } else {
             logger.error('Unexpected token refresh rejection:', { error });
           }
         }
 
         if (newTokens) {
+          transientFailureCount = 0;
+          retryDelayMs = null;
           logger.info('Token refreshed successfully');
           const newSession = {
             access_token: newTokens.accessToken,
@@ -359,13 +371,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     let refreshTimer: number | null = null;
+    let transientFailureCount = 0;
+    let retryDelayMs: number | null = null;
+    const scheduleTransientRetry = (): void => {
+      transientFailureCount += 1;
+      const exponentialDelay = Math.min(
+        TOKEN_REFRESH_RETRY_MAX_MS,
+        TOKEN_REFRESH_RETRY_INITIAL_MS * 2 ** (transientFailureCount - 1),
+      );
+      retryDelayMs = Math.min(
+        TOKEN_REFRESH_RETRY_MAX_MS,
+        exponentialDelay + Math.floor(Math.random() * TOKEN_REFRESH_RETRY_JITTER_MS),
+      );
+    };
     const scheduleRefreshCheck = (): void => {
       if (refreshTimer !== null) window.clearTimeout(refreshTimer);
       const activeSession = sessionRef.current;
       const expiry = activeSession ? getTokenExpiry(activeSession.access_token) : null;
-      const delay = expiry
-        ? Math.max(1_000, expiry - TOKEN_REFRESH_MARGIN_MS - Date.now())
-        : 30 * 1000;
+      const delay =
+        retryDelayMs ??
+        (expiry ? Math.max(1_000, expiry - TOKEN_REFRESH_MARGIN_MS - Date.now()) : 30 * 1000);
+      retryDelayMs = null;
       refreshTimer = window.setTimeout(() => {
         void checkAndRefresh().finally(scheduleRefreshCheck);
       }, delay);

@@ -618,6 +618,7 @@ export const userDataApi = {
   saveSessionMessages: (
     sessionId: string,
     messages: SessionMessagePayload | SessionMessagePayload[],
+    timeoutMs?: number | null,
   ): Promise<any> =>
     request(
       `/v1/sessions/${encodeURIComponent(sessionId)}/messages`,
@@ -625,7 +626,7 @@ export const userDataApi = {
         method: 'POST',
         body: JSON.stringify(messages),
       },
-      null,
+      timeoutMs,
     ),
   listMemories: (sessionId: string, options: MemoryQuery = {}): Promise<any[]> => {
     const query = new URLSearchParams({ session_id: sessionId });

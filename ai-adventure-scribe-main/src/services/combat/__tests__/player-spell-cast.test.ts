@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { askPlayerForSpellCast } from '../player-spell-cast';
 
+import { SessionExpiredError } from '@/infrastructure/api/rest-client';
 import { requestPlayerAttackRoll } from '@/services/combat/player-roll-bridge';
 import { requestSpellTargetSave } from '@/services/combat/spell-target-save-bridge';
 
@@ -58,6 +59,12 @@ describe('askPlayerForSpellCast', () => {
       }),
     );
     expect(requestSpellTargetSave).not.toHaveBeenCalled();
+  });
+
+  it('surfaces an expired session instead of hiding it behind an engine roll', async () => {
+    vi.mocked(requestPlayerAttackRoll).mockRejectedValue(new SessionExpiredError());
+
+    await expect(ask('fire-bolt')).rejects.toBeInstanceOf(SessionExpiredError);
   });
 
   it('opens a spell-attack roll popup for Acid Arrow (#1185)', async () => {
