@@ -213,7 +213,7 @@ export function createPasswordLoginRoutes({
 
         try {
           return await authenticatePassword(
-            body.email,
+            requestEmail,
             body.password,
             clientId,
             workosClient,

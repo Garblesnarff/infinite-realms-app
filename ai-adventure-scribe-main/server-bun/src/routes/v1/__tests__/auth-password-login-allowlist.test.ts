@@ -16,6 +16,10 @@ mock.module('../../../../../db/client', () => ({
 
 const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
 const { createPasswordLoginRoutes } = await import('../auth.js');
+// The real error class, so the pending-token tests below throw exactly what
+// @workos-inc/node 7.82.0 throws (see OauthException in the installed SDK:
+// handleHttpError passes the full response body as rawData).
+const { OauthException } = await import('@workos-inc/node');
 
 describe('POST /v1/auth/password-login allowlist', () => {
   it('returns 200 with access and refresh tokens for an allowlisted email', async () => {
@@ -53,7 +57,7 @@ describe('POST /v1/auth/password-login allowlist', () => {
     expect(body).toEqual({ accessToken: 'access_abc', refreshToken: 'refresh_xyz' });
     expect(calls).toHaveLength(1);
     expect(calls[0]).toEqual({
-      email: 'TESTER@example.com',
+      email: 'tester@example.com',
       password: 'secretpassword',
       clientId: 'test-client-id',
     });
@@ -229,5 +233,133 @@ describe('POST /v1/auth/password-login allowlist', () => {
     expect(res2.status).toBe(401);
     const body2 = await res2.json();
     expect(body2).toEqual({ error: 'mfa_required' });
+  });
+
+  it('returns 401 with specific reason code when the real WorkOS OauthException carries the pending token in rawData', async () => {
+    // Shape pinned here, not WorkOS's literal error strings: the SDK throws
+    // OauthException(status, requestID, error, errorDescription, rawData)
+    // with rawData set to the full response body, so the pending token is
+    // only reachable through rawData. A hand-shaped top-level `code` + token
+    // would never exercise the rawData branch in auth.ts.
+    const emailVerificationError = new OauthException(
+      400,
+      'req_test_email_verification',
+      'invalid_grant',
+      'The user must verify their email address before signing in.',
+      {
+        error: 'invalid_grant',
+        error_description: 'The user must verify their email address before signing in.',
+        pending_authentication_token: 'pat_email_real_shape',
+      },
+    );
+
+    const mfaError = new OauthException(
+      400,
+      'req_test_mfa',
+      'mfa_required',
+      'MFA challenge required.',
+      {
+        error: 'mfa_required',
+        error_description: 'MFA challenge required.',
+        pending_authentication_token: 'pat_mfa_real_shape',
+      },
+    );
+
+    let currentError: unknown = emailVerificationError;
+    const calls: unknown[] = [];
+
+    const fakeWorkOS = {
+      userManagement: {
+        authenticateWithPassword: async (params: unknown) => {
+          calls.push(params);
+          throw currentError;
+        },
+      },
+    };
+
+    const routes = createPasswordLoginRoutes({
+      workos: fakeWorkOS as never,
+      clientId: 'test-client-id',
+      getTesterEmails: () => 'tester@example.com',
+      rateLimit: { windowMs: 60_000, max: 10, key: 'test-sdk-pending-token' },
+    });
+
+    const app = createRequestPipelineApp().use(
+      new Elysia({ prefix: '/v1/auth' }).use(routes),
+    );
+
+    // Email verification case
+    const res1 = await app.handle(
+      new Request('http://localhost/v1/auth/password-login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: 'tester@example.com', password: 'secretpassword' }),
+      }),
+    );
+
+    expect(res1.status).toBe(401);
+    const body1 = await res1.json();
+    expect(body1).toEqual({ error: 'email_verification_required' });
+
+    // MFA case
+    currentError = mfaError;
+    const res2 = await app.handle(
+      new Request('http://localhost/v1/auth/password-login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: 'tester@example.com', password: 'secretpassword' }),
+      }),
+    );
+
+    expect(res2.status).toBe(401);
+    const body2 = await res2.json();
+    expect(body2).toEqual({ error: 'mfa_required' });
+    expect(calls).toHaveLength(2);
+  });
+
+  it('returns 401 Invalid email or password when the WorkOS error carries no pending token', async () => {
+    const calls: unknown[] = [];
+
+    const fakeWorkOS = {
+      userManagement: {
+        authenticateWithPassword: async (params: unknown) => {
+          calls.push(params);
+          throw new OauthException(
+            400,
+            'req_test_wrong_password',
+            'invalid_grant',
+            'The email or password is incorrect.',
+            {
+              error: 'invalid_grant',
+              error_description: 'The email or password is incorrect.',
+            },
+          );
+        },
+      },
+    };
+
+    const routes = createPasswordLoginRoutes({
+      workos: fakeWorkOS as never,
+      clientId: 'test-client-id',
+      getTesterEmails: () => 'tester@example.com',
+      rateLimit: { windowMs: 60_000, max: 5, key: 'test-wrong-password' },
+    });
+
+    const app = createRequestPipelineApp().use(
+      new Elysia({ prefix: '/v1/auth' }).use(routes),
+    );
+
+    const res = await app.handle(
+      new Request('http://localhost/v1/auth/password-login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: 'tester@example.com', password: 'wrongpassword' }),
+      }),
+    );
+
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body).toEqual({ error: 'Invalid email or password' });
+    expect(calls).toHaveLength(1);
   });
 });
