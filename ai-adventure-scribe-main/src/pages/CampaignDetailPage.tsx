@@ -319,8 +319,7 @@ const CampaignDetailPage: React.FC = () => {
       // Storage unavailable: there is no entry to drop either.
     }
     // location.key changes on every navigation, including a same-path one.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.key]);
+  }, [location.key, location.pathname, location.search, location.hash, location.state, navigate]);
 
   // Continue the start automatically when a signed-out visitor comes back
   // from sign-in with a pending hero for this campaign. The pending hero
