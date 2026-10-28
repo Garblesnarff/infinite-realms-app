@@ -12,6 +12,7 @@ interface PreparationTabProps {
   preparedSpells: string[];
   maxPreparedSpells: number;
   availableSpells: Spell[];
+  alwaysPreparedSpells: string[];
   handleSpellPreparation: (id: string, checked: boolean) => void;
 }
 
@@ -22,6 +23,7 @@ export const PreparationTab: React.FC<PreparationTabProps> = ({
   preparedSpells,
   maxPreparedSpells,
   availableSpells,
+  alwaysPreparedSpells,
   handleSpellPreparation,
 }) => (
   <TabsContent value="preparation">
@@ -58,10 +60,12 @@ export const PreparationTab: React.FC<PreparationTabProps> = ({
             <SpellCard
               key={spell.id}
               spell={spell}
-              isSelected={preparedSpells.includes(spell.id)}
+              isSelected={preparedSpells.includes(spell.id) || alwaysPreparedSpells.includes(spell.name)}
+              alwaysPrepared={alwaysPreparedSpells.includes(spell.name)}
               onSelectionChange={handleSpellPreparation}
               disabled={
-                !preparedSpells.includes(spell.id) && preparedSpells.length >= maxPreparedSpells
+                alwaysPreparedSpells.includes(spell.name) ||
+                (!preparedSpells.includes(spell.id) && preparedSpells.length >= maxPreparedSpells)
               }
             />
           ))}

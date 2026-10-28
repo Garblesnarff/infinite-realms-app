@@ -37,3 +37,22 @@ export function isDraconicBloodline(classFeatures: unknown): boolean {
   const choice = getClassFeatureChoice(classFeatures, 'sorcerous-origin');
   return choice !== null && choice.startsWith('Draconic Bloodline');
 }
+
+/**
+ * The subclass the wizard recorded in a class feature's choice string, or null.
+ * A cleric's `'Life Domain: ...'` under `divine-domain` yields `'Life Domain'`.
+ * Only names in `subclassNames` count, so an unrelated choice never matches.
+ */
+export function subclassFromClassFeatureChoices(
+  classFeatures: unknown,
+  subclassNames: readonly string[],
+): string | null {
+  if (!classFeatures || typeof classFeatures !== 'object') return null;
+  for (const entry of Object.values(classFeatures)) {
+    const choice = (entry as ClassFeatureChoiceEntry | null)?.choice;
+    if (typeof choice !== 'string') continue;
+    const match = subclassNames.find((name) => choice.startsWith(name));
+    if (match) return match;
+  }
+  return null;
+}

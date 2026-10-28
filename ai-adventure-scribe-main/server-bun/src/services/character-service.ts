@@ -34,7 +34,10 @@ import {
   characters,
 } from '../../../db/schema/index';
 import { computeArmorClass, type ArmorClassEquipmentItem } from '../../../shared/armor-class';
-import { isDraconicBloodline } from '../../../shared/class-feature-choices';
+import {
+  isDraconicBloodline,
+  subclassFromClassFeatureChoices,
+} from '../../../shared/class-feature-choices';
 import {
   computeServerArmorClass,
   withStartingPackageEquipped,
@@ -350,7 +353,15 @@ export class CharacterService {
     // service would reject (unknown for the class, or the character is
     // below the class's subclass choice level) is ignored: the character
     // is created exactly as before, never failed by its subclass.
-    const requestedSubclass = subclassName?.trim() || null;
+    // A wizard pick is a choice string in classFeatures, not a body column, so
+    // read it from there when the body carries no subclass (#899: a Life Cleric
+    // gets Disciple of Life at creation).
+    const requestedSubclass =
+      subclassName?.trim() ||
+      subclassFromClassFeatureChoices(
+        data.classFeatures,
+        (data.class && AVAILABLE_SUBCLASSES[data.class]) || [],
+      );
     const resolvedSubclass =
       requestedSubclass &&
       data.class &&

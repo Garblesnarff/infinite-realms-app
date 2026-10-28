@@ -51,6 +51,17 @@ export const CLASS_FEATURES_MAP: Record<string, (level: number) => ClassFeature[
 
     if (level >= 1) {
       features.push({
+        name: 'expertise' as ClassFeatureName,
+        displayName: 'Expertise',
+        description:
+          "At 1st level, choose two of your skill proficiencies, or one of your skill proficiencies and your proficiency with thieves' tools. Your proficiency bonus is doubled for any ability check you make that uses either of the chosen proficiencies.",
+        className: 'rogue',
+        level: 1,
+        type: 'passive',
+        usesPerRest: 'none',
+      });
+
+      features.push({
         name: 'sneak_attack',
         displayName: 'Sneak Attack',
         description:

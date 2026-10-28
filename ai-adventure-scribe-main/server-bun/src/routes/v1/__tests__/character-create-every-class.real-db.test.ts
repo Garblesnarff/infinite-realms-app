@@ -1201,6 +1201,34 @@ describeWithDb('character create grants class features for levels 1..N (#829)', 
     ]);
   });
 
+  // #899: a Life Cleric picked in the wizard is stored as a divine-domain
+  // choice string, not a subclass column. Create must record that subclass so
+  // its level-1 feature (Disciple of Life) is granted, as a premade's is.
+  it('PIN: a wizard-created Life Cleric gets Disciple of Life at level 1 (#899)', async () => {
+    const res = await request(
+      '/v1/characters',
+      'POST',
+      {
+        ...wizardBody({ name: 'Cleric', hitDie: '1d8', baseHp: 8 }),
+        class_features: {
+          'divine-domain': {
+            name: 'Divine Domain',
+            description: 'Choose one domain related to your deity.',
+            choice: 'Life Domain: Focuses on healing and protection',
+          },
+        },
+      },
+    );
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const granted = await grantedFeatures(id);
+    expect(granted).toContain('Disciple of Life@1');
+    expect(granted).not.toContain('Channel Divinity: Preserve Life@1');
+  });
+
   it('re-granting duplicates nothing; granting level 4 completes the 1–4 set', async () => {
     const body = wizardBody({ name: 'Fighter', hitDie: '1d10', baseHp: 14 }) as Record<
       string,
