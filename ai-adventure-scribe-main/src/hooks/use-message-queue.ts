@@ -272,13 +272,17 @@ export const useMessageQueue = (sessionId: string | null) => {
                 ? { rollRequests }
                 : {};
 
-          const saved = await userDataApi.saveSessionMessages(sessionId, {
-            id: messageId,
-            message: message.text,
-            speaker_type: message.sender,
-            context: contextData,
-            timestamp: now,
-          });
+          const saved = await userDataApi.saveSessionMessages(
+            sessionId,
+            {
+              id: messageId,
+              message: message.text,
+              speaker_type: message.sender,
+              context: contextData,
+              timestamp: now,
+            },
+            message.context?.intent === 'dice_roll' ? null : undefined,
+          );
 
           const existingAnswer =
             message.context?.intent === 'dice_roll' && message.context.rollRequestId
