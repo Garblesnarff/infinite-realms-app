@@ -1849,7 +1849,7 @@ describeWithDb('a prepared leveled attack spell is offered and resolves through 
       slotLevel: 2,
     });
 
-    // Pin the upcast dice (#1223 round 2): the save roll is already deterministic —
+    // Pin the upcast dice: the save roll is already deterministic —
     // this file mocks rollD20 to 14, and 14 + the sentinel's +0 DEX save meets DC 13,
     // so the save succeeds and the damage is halved. Seeding the damage roller makes
     // the 4d6 roll exact: seed 42 draws 4, 3, 6, 5 = 18, halved to 9. A 3d6 pick would
@@ -1903,7 +1903,7 @@ describeWithDb('a prepared leveled attack spell is offered and resolves through 
       slotLevel: 3,
     });
 
-    // Pin the upcast dice (#1223 round 2): the d20 is player-supplied (15), and no
+    // Pin the upcast dice: the d20 is player-supplied (15), and no
     // Bless/Hex is live, so those riders return 0 without drawing — the damage dice
     // are the only rolls. Seeding the roller makes the 5d4 roll exact:
     // seed 42 draws 3, 2, 4, 3, 1 = 13. A 4d4 pick would draw 3, 2, 4, 3 = 12 —
