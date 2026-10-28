@@ -397,6 +397,29 @@ const veteranMap: TacticalMap = {
 };
 
 describe('#612 a declared longsword attack is rolled, not narrated as a miss', () => {
+  const expectUnrolledLongsword = (result: {
+    combat_actions: unknown[];
+    roll_requests: unknown[];
+    text: string;
+    damage?: { amount: number; source: string } | null;
+    combatants?: unknown[];
+  }): void => {
+    expect(result.combat_actions).toEqual([
+      expect.objectContaining({
+        action_type: 'attack',
+        actor_id: 'hero',
+        weapon_id: 'longsword',
+        target_ids: ['veteran'],
+      }),
+    ]);
+    expect(result.roll_requests).toEqual([]);
+    expect(result.damage ?? null).toBeNull();
+    expect(result.combatants ?? []).toEqual([]);
+    expect(result.text.trim().length).toBeGreaterThan(0);
+    expect(result.text).not.toMatch(/\bmiss(?:es|ed|ing)?\b/i);
+    expect(result.text).not.toMatch(/\b(hits?|strikes?|damage[ds]?)\b/i);
+  };
+
   it('turns "I attack the Veteran with my longsword" into an engine attack with no miss prose', async () => {
     const result = await turn(
       'I attack the Veteran with my longsword',
@@ -408,16 +431,48 @@ describe('#612 a declared longsword attack is rolled, not narrated as a miss', (
         roll_requests: [],
       }),
     );
-    expect(result.combat_actions).toEqual([
-      expect.objectContaining({
-        action_type: 'attack',
-        actor_id: 'hero',
-        weapon_id: 'longsword',
-        target_ids: ['veteran'],
-      }),
-    ]);
-    expect(result.roll_requests).toEqual([]);
-    expect(result.text).not.toMatch(/\bmiss(?:es|ed|ing)?\b/i);
+    expectUnrolledLongsword(result);
     expect(result.text).toContain('The Veteran waits.');
+  });
+
+  it('drops a fabricated hit and does not apply its damage', async () => {
+    const result = await turn(
+      'I attack the Veteran with my longsword',
+      veteranMap,
+      JSON.stringify({
+        ...envelope(),
+        text: 'Your longsword hits the Veteran for 6 damage.',
+        damage: { amount: 6, source: 'longsword' },
+        combat_actions: [],
+        roll_requests: [
+          {
+            type: 'damage',
+            formula: '1d8+3',
+            purpose: 'longsword',
+            dc: null,
+            ac: null,
+            advantage: false,
+            disadvantage: false,
+          },
+        ],
+      }),
+    );
+    expectUnrolledLongsword(result);
+    expect(result.text).toBe('The attack waits on your roll.');
+  });
+
+  it('keeps a reply when the model wrote only the miss', async () => {
+    const result = await turn(
+      'I attack the Veteran with my longsword',
+      veteranMap,
+      JSON.stringify({
+        ...envelope(),
+        text: 'Your longsword swings and misses the Veteran.',
+        combat_actions: [],
+        roll_requests: [],
+      }),
+    );
+    expectUnrolledLongsword(result);
+    expect(result.text).toBe('The attack waits on your roll.');
   });
 });

@@ -10,10 +10,18 @@ import { findPlayerCombatSpellInText } from '../data/spellData.js';
 
 import type { DMCombatAction, DMResponse } from '../services/dm/dm-response-schema.js';
 
+/** An unrolled attack has not hit, missed, or dealt damage (#612). */
+const UNROLLED_HIT = /\b(?:hits?|strikes?|damage[ds]?)\b/i;
+
+/** Shown when every sentence was a verdict. Must not itself be a hit, miss, or damage claim. */
+const UNROLLED_ATTACK_FALLBACK = 'The attack waits on your roll.';
+
 /**
  * A declared attack has not been rolled yet (#612). Drop a sentence that already
- * calls it a miss or a hit. The same detector the narration gate uses, run both
- * ways, so "you miss the sunrise" is not an attack and a scene sentence stays.
+ * calls it a miss or a hit. The shared detector, run both ways, catches a miss.
+ * A hit or a damage figure is not a contradiction of either side, so those
+ * sentences are dropped on their own. A reply that was only the verdict keeps
+ * one neutral line.
  */
 function withoutUnrolledAttackVerdict(text: string, description: string): string {
   let next = text;
@@ -25,7 +33,12 @@ function withoutUnrolledAttackVerdict(text: string, description: string): string
     });
     if (claims.length) next = spliceContradictingSentences(next, claims, '');
   }
-  return next;
+  const kept = next
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 0 && !UNROLLED_HIT.test(sentence));
+  const joined = kept.join(' ').trim();
+  return joined.length > 0 ? joined : UNROLLED_ATTACK_FALLBACK;
 }
 
 function requestPlayerAim(response: DMResponse): { response: DMResponse; awaitingTarget: boolean } {
@@ -106,6 +119,8 @@ export function groundPlayerDeclaredAction(
       response: {
         ...response,
         text: withoutUnrolledAttackVerdict(response.text ?? '', description),
+        // The die has not been rolled, so a fabricated hit cannot change HP (#612).
+        damage: null,
         combat_actions: [
           ...response.combat_actions.filter(
             (a) =>
@@ -114,7 +129,9 @@ export function groundPlayerDeclaredAction(
           ),
           action,
         ],
-        roll_requests: response.roll_requests.filter((r) => r.type !== 'attack'),
+        roll_requests: response.roll_requests.filter(
+          (r) => r.type !== 'attack' && r.type !== 'damage',
+        ),
       },
       awaitingTarget: false,
     };
