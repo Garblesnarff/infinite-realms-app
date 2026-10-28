@@ -21,6 +21,7 @@ Authored monster attack lines (name, reach, and range) are in `docs/content/stat
 - On 2026-08-11, five PRs (#1702, #1716, #1719, #1723, #1725) were merged by an unidentified agent session.
 - On 2026-08-30, #1945 and #1946 were merged by an unidentified agent session. Two incidents so far; these rules exist so there is no third.
 - When Muse or the Hetzner ops session merges, check stacked-PR rules first. If the PR is a stack parent, merging it the normal way closes its children. Then follow the pre-merge check procedure below.
+- When a PR says `Refs #N` and its body states that it covers everything #N asks, the merger closes #N in the merge comment, citing the squash SHA. If a retest fails, the strategist reopens #N.
 - Rob's own typed line is required for prod config or data changes, any `.github/workflows/*` edit, repo settings, and reverts.
 
 ## 2. Do not push directly to `main`
