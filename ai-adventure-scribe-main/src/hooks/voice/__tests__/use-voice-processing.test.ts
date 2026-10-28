@@ -404,6 +404,54 @@ describe('useVoiceProcessing', () => {
     expect(mockPlayAudioSegment).not.toHaveBeenCalled();
   });
 
+  it('sets an error when every segment fails to generate, so the message can offer Retry', async () => {
+    const aiSegments = [{ type: 'dm', text: 'Broken' }];
+    (VoiceDirector.validateAISegments as any).mockReturnValue(aiSegments);
+    (VoiceDirector.processAISegments as any).mockReturnValue([{ character: 'DM', text: 'Broken' }]);
+    (VoiceDirector.generateAudio as any).mockResolvedValue({
+      character: 'DM',
+      text: 'Broken',
+      error: 'Generation failed',
+    });
+
+    const { result } = renderHook(() => useVoiceProcessing(defaultProps));
+
+    await act(async () => {
+      await result.current.speakAISegments(aiSegments as any);
+    });
+
+    const updates = mockSetState.mock.calls.map(([update]) =>
+      typeof update === 'function' ? update({ segments: [] }) : update,
+    );
+    expect(updates.some((u) => u.error === 'Voice unavailable for this message')).toBe(true);
+  });
+
+  it('starts a new request even when the closure still reports a run in progress (Listen on another message)', async () => {
+    const aiSegments = [{ type: 'dm', text: 'Second Request' }];
+    (VoiceDirector.validateAISegments as any).mockImplementation((segs: any) => segs);
+    (VoiceDirector.processAISegments as any).mockImplementation((segs: any) =>
+      segs.map((s: any) => ({ character: 'DM', text: s.text })),
+    );
+    (VoiceDirector.generateAudio as any).mockImplementation(async (segment: any) => ({
+      ...segment,
+      audioUrl: `http://test.com/${segment.text}.mp3`,
+    }));
+
+    const { result } = renderHook(() =>
+      useVoiceProcessing({ ...defaultProps, state: { ...defaultProps.state, isProcessing: true } }),
+    );
+
+    await act(async () => {
+      await result.current.speakAISegments(aiSegments as any);
+    });
+
+    expect(VoiceDirector.generateAudio).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'Second Request' }),
+      expect.any(AbortSignal),
+      undefined,
+    );
+  });
+
   it('should abort previous processing when a new request comes in', async () => {
     const aiSegments1 = [{ type: 'dm', text: 'First Request' }];
     const aiSegments2 = [{ type: 'dm', text: 'Second Request' }];

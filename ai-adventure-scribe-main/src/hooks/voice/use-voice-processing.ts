@@ -155,6 +155,7 @@ export const useVoiceProcessing = ({
       setState((prev) => ({ ...prev, isPlaying: true, isStalled: false }));
 
       const readyFlags = segments.map(() => false);
+      let failedGenerations = 0;
       const timings = segments.map(() => ({ requestMs: 0, readyMs: 0 }));
       const slots = segments.map(() => createDeferred<VoiceSegment>());
 
@@ -235,6 +236,7 @@ export const useVoiceProcessing = ({
               `⚠️ Audio generation failed for segment ${actualIndex + 1}:`,
               segmentWithAudio.error,
             );
+            failedGenerations += 1;
             continue;
           }
 
@@ -258,6 +260,11 @@ export const useVoiceProcessing = ({
           logger.error(`❌ Error processing segment ${actualIndex + 1}:`, error);
           continue;
         }
+      }
+
+      // Every segment failed to generate: say so, so the message shows Retry instead of Listen.
+      if (segments.length > 0 && failedGenerations === segments.length) {
+        setState((prev) => ({ ...prev, error: 'Voice unavailable for this message' }));
       }
 
       setState((prev) => ({
@@ -285,8 +292,10 @@ export const useVoiceProcessing = ({
         isProcessing: state.isProcessing,
       });
 
-      if (!state.isVoiceEnabled || !aiSegments?.length || state.isProcessing) {
-        logger.info('🚫 Voice not enabled, no segments, or already processing');
+      // A run already in progress is aborted below, so a stale isProcessing value here must not
+      // swallow a new request (the Listen click on another message while one is preparing).
+      if (!state.isVoiceEnabled || !aiSegments?.length) {
+        logger.info('🚫 Voice not enabled or no segments');
         return;
       }
 

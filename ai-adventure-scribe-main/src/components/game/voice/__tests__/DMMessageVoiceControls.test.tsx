@@ -143,6 +143,24 @@ describe('DMMessageVoiceControls', () => {
     expect(screen.queryByRole('button', { name: /play this message/i })).toBeNull();
   });
 
+  it('lets the player cancel a clip that is still being prepared', () => {
+    const stopMessage = vi.fn();
+    (useVoiceContext as any).mockReturnValue({
+      ...mockVoiceContext,
+      currentPlayingId: 'msg-123',
+      isPlaying: false,
+      isProcessing: true,
+      stopMessage,
+    });
+
+    render(<DMMessageVoiceControls {...defaultProps} />);
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Cancel preparing voice for this message' }),
+    );
+    expect(stopMessage).toHaveBeenCalledTimes(1);
+  });
+
   it('shows the failure and a Retry that plays the message again', () => {
     const retryMessage = vi.fn();
     (useVoiceContext as any).mockReturnValue({

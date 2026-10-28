@@ -32,6 +32,7 @@ export const DMMessageVoiceControls: React.FC<DMMessageVoiceControlsProps> = Rea
       isProcessing,
       playbackError,
       retryMessage,
+      stopMessage,
       playMessage,
       pauseMessage,
       volume,
@@ -66,6 +67,15 @@ export const DMMessageVoiceControls: React.FC<DMMessageVoiceControlsProps> = Rea
         }
       },
       [isCurrentlyPlaying, pauseMessage, playMessage, messageId, messageText, narrationSegments],
+    );
+
+    const handleCancel = useCallback(
+      (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        stopMessage();
+      },
+      [stopMessage],
     );
 
     const handleRetry = useCallback(
@@ -120,13 +130,25 @@ export const DMMessageVoiceControls: React.FC<DMMessageVoiceControlsProps> = Rea
             </Button>
           </>
         ) : isPreparing ? (
-          <span
-            className="flex h-11 items-center gap-2 text-xs text-muted-foreground"
-            aria-live="polite"
-          >
-            <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-            Preparing voice…
-          </span>
+          <>
+            <span
+              className="flex h-11 items-center gap-2 text-xs text-muted-foreground"
+              aria-live="polite"
+            >
+              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+              Preparing voice…
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="ir-hit-slop h-11 min-w-11 px-3 text-xs text-muted-foreground hover:text-primary"
+              onClick={handleCancel}
+              aria-label="Cancel preparing voice for this message"
+            >
+              Cancel
+            </Button>
+          </>
         ) : (
           <Button
             type="button"

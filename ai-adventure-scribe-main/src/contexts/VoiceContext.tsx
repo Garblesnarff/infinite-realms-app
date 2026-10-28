@@ -126,14 +126,32 @@ export function VoiceProvider({ children, sessionId }: VoiceProviderProps) {
     if (last) playMessage(last.messageId, last.text, last.narrationSegments);
   }, [playMessage]);
 
+  // The hook keeps one error for the whole player. A new error belongs to the message that was
+  // current when it first appeared, so a failure from one message never shows on another.
+  const seenErrorRef = React.useRef<string | undefined>(undefined);
+  const [errorOwnerId, setErrorOwnerId] = useState<string | null>(null);
+  const isNewError = !!playbackError && playbackError !== seenErrorRef.current;
+  const errorOwner = isNewError ? currentPlayingId : errorOwnerId;
+  React.useEffect(() => {
+    if (!playbackError) {
+      seenErrorRef.current = undefined;
+      return;
+    }
+    if (playbackError !== seenErrorRef.current) {
+      seenErrorRef.current = playbackError;
+      setErrorOwnerId(errorOwner);
+    }
+  }, [playbackError, errorOwner]);
+  const ownedError = playbackError && errorOwner === currentPlayingId ? playbackError : null;
+
   // Handle when playback ends naturally (but not when paused). A failed clip keeps its
   // message id so the failure and Retry stay on that message.
   React.useEffect(() => {
-    if (!isPlaying && !isProcessing && !isPaused && currentPlayingId && !playbackError) {
+    if (!isPlaying && !isProcessing && !isPaused && currentPlayingId && !ownedError) {
       // Audio finished naturally (not paused)
       setCurrentPlayingId(null);
     }
-  }, [isPlaying, isProcessing, isPaused, currentPlayingId, playbackError]);
+  }, [isPlaying, isProcessing, isPaused, currentPlayingId, ownedError]);
 
   /**
    * ⚡ Bolt: Memoize the context value to prevent unnecessary re-renders
@@ -152,7 +170,7 @@ export function VoiceProvider({ children, sessionId }: VoiceProviderProps) {
       setVolume,
       toggleMute,
       isProcessing: isProcessing && !!currentPlayingId,
-      playbackError: currentPlayingId ? (playbackError ?? null) : null,
+      playbackError: ownedError,
       retryMessage,
     }),
     [
@@ -167,7 +185,7 @@ export function VoiceProvider({ children, sessionId }: VoiceProviderProps) {
       setVolume,
       toggleMute,
       isProcessing,
-      playbackError,
+      ownedError,
       retryMessage,
     ],
   );
