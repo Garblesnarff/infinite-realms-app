@@ -5,7 +5,9 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { GameLoadingOverlay, GameLayout } from './game-content';
 import { CampaignCompleteEndState } from './game-content/CompletionScreen';
 import { buildChooseHeroHref, FallenEndState, FallenStoryLog } from './game-content/DeathScreen';
+import { SessionRestPrompt } from './game-content/SessionRestPrompt';
 import { useGameRails } from './game-content/use-game-rails';
+import { useSessionRestGate } from './game-content/use-session-rest-gate';
 import { useSessionVitalGate } from './game-content/use-session-vital-gate';
 import GameProviders from './GameProviders';
 import { MissingGameTargetPanel } from './MissingGameTargetPanel';
@@ -95,7 +97,17 @@ const GameContent: React.FC = () => {
   // session load payload. Until it is known, nothing of the game renders.
   const vitalGate = useSessionVitalGate(sessionId);
   const { campaigns: starterCampaigns, isLoading: starterCampaignsLoading } = useStarterCampaigns();
-  const { state: characterState } = useCharacter();
+  const { state: characterState, dispatch: characterDispatch } = useCharacter();
+
+  // #1239 item 1: a fresh continuation session starting below max HP asks
+  // "Rest first?" before the game (and its greeting) renders. Dead and
+  // completed sessions never reach it — their end states render below.
+  const restGate = useSessionRestGate({
+    sessionId,
+    session: sessionData,
+    character: characterState.character,
+    dispatch: characterDispatch,
+  });
 
   // A link without ?character: put the hero we found into the URL, then load as usual.
   useEffect(() => {
@@ -287,6 +299,20 @@ const GameContent: React.FC = () => {
           />
         </div>
       </GameProviders>
+    );
+  }
+
+  if (restGate.showPrompt) {
+    return (
+      <SessionRestPrompt
+        characterName={characterState.character?.name ?? 'Your hero'}
+        currentHp={restGate.currentHp ?? 0}
+        maxHp={restGate.maxHp ?? 0}
+        resting={restGate.resting}
+        restError={restGate.restError}
+        onRestFirst={restGate.restFirst}
+        onContinue={restGate.continueAsIs}
+      />
     );
   }
 
