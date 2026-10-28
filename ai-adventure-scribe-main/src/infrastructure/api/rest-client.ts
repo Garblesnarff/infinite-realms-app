@@ -380,14 +380,13 @@ export async function fetchWithAuth(
   // memory extraction) keep no ceiling — see getRouteTimeoutMs.
   const timeoutMs =
     requestedTimeoutMs === null ? undefined : (requestedTimeoutMs ?? getRouteTimeoutMs(path));
+  const noTimeoutSignal = requestedTimeoutMs === null ? new AbortController().signal : undefined;
   const timeoutHandle =
     timeoutMs === undefined ? undefined : startRequestTimeout(timeoutMs, requestInit.signal);
   // The timeout signal replaces the caller's signal on the wire: it fires on
   // timeout AND when the caller's signal aborts (see startRequestTimeout).
-  const effectiveInit = timeoutHandle
-    ? { ...requestInit, signal: timeoutHandle.signal }
-    : requestInit;
-  const timeoutSignal = timeoutHandle?.signal ?? requestInit.signal;
+  const timeoutSignal = timeoutHandle?.signal ?? requestInit.signal ?? noTimeoutSignal;
+  const effectiveInit = timeoutSignal ? { ...requestInit, signal: timeoutSignal } : requestInit;
   const timeoutPromise = timeoutHandle
     ? (() => {
         const handle = timeoutHandle;
