@@ -316,7 +316,6 @@ async function request<T>(
   await waitForAuth();
   const response = await fetchWithAuth(path, {
     ...init,
-    retryBudgetMs: 0,
     ...(timeoutMs !== undefined ? { timeoutMs } : {}),
     headers: {
       'Content-Type': 'application/json',

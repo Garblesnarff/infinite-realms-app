@@ -73,14 +73,17 @@ describe('userDataApi tactical transport', () => {
 
   it('keeps the shared timeout for non-roll user-data requests', async () => {
     vi.useFakeTimers();
-    fetchMock.mockReturnValue(new Promise<Response>(() => {}));
+    try {
+      fetchMock.mockReturnValue(new Promise<Response>(() => {}));
 
-    const pending = userDataApi.getSession('session-1');
-    const failure = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
-    await vi.advanceTimersByTimeAsync(30_000);
+      const pending = userDataApi.getSession('session-1');
+      const failure = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+      await vi.advanceTimersByTimeAsync(30_000);
 
-    await failure;
-    vi.useRealTimers();
+      await failure;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
