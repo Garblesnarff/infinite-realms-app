@@ -11,7 +11,7 @@
 
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import {
   computeServerArmorClass,
@@ -283,12 +283,51 @@ const CampaignDetailPage: React.FC = () => {
   const playAsRef = React.useRef(playAs);
   playAsRef.current = playAs;
 
+  // #1122: the pending hero is a promise made for one trip, the sign-in round
+  // trip. Only the auth callback's navigation back here carries
+  // `state.authReturn` (CallbackPage). The marker belongs to that one
+  // navigation, not to the mount (the route has no key, so an in-app link to
+  // the same slug keeps this component mounted):
+  // - On the return, the marker is read and cleared from history at once
+  //   (replace, state null), so back/forward/reload of that entry cannot
+  //   re-arm it. The replaced entry's key is then the return visit's key.
+  // - Any other navigation (a link, a reload, back/forward) ends the return
+  //   visit and drops a leftover entry instead of starting a campaign the
+  //   player did not just ask for.
+  // - The return visit resumes the pending hero at most once.
+  const location = useLocation();
+  const returnVisitKeyRef = React.useRef<string | null>(null);
+  const clearingMarkerRef = React.useRef(false);
+  React.useEffect(() => {
+    if ((location.state as { authReturn?: unknown } | null)?.authReturn === true) {
+      clearingMarkerRef.current = true;
+      navigate(`${location.pathname}${location.search}${location.hash}`, {
+        replace: true,
+        state: null,
+      });
+      return;
+    }
+    if (clearingMarkerRef.current) {
+      clearingMarkerRef.current = false;
+      returnVisitKeyRef.current = location.key;
+      return;
+    }
+    returnVisitKeyRef.current = null;
+    try {
+      sessionStorage.removeItem(PENDING_HERO_KEY);
+    } catch {
+      // Storage unavailable: there is no entry to drop either.
+    }
+    // location.key changes on every navigation, including a same-path one.
+  }, [location.key, location.pathname, location.search, location.hash, location.state, navigate]);
+
   // Continue the start automatically when a signed-out visitor comes back
   // from sign-in with a pending hero for this campaign. The pending hero
   // survives a failed templates fetch (the retry can still resume it); it
   // is only dropped once the templates load cleanly and the hero is not
   // among them, i.e. genuinely gone rather than transiently missing.
   React.useEffect(() => {
+    if (returnVisitKeyRef.current === null || returnVisitKeyRef.current !== location.key) return;
     if (!user || !campaign || templatesLoading) return;
     let pending: unknown = null;
     try {
@@ -312,13 +351,17 @@ const CampaignDetailPage: React.FC = () => {
     // timestamp is treated as stale (this build always writes one).
     if (typeof at !== 'number' || Date.now() - at > PENDING_HERO_TTL_MS) {
       sessionStorage.removeItem(PENDING_HERO_KEY);
+      returnVisitKeyRef.current = null;
       return;
     }
     if (templatesError) return;
     const template = templates.find((candidate) => candidate.id === templateId);
     sessionStorage.removeItem(PENDING_HERO_KEY);
+    // Resumed (or found gone) once: an entry the start re-arms (a 401 inside
+    // playAs) waits for the next return, never for this visit's next render.
+    returnVisitKeyRef.current = null;
     if (template) void playAsRef.current(template);
-  }, [user, campaign, templatesLoading, templatesError, templates, slug]);
+  }, [user, campaign, templatesLoading, templatesError, templates, slug, location.key]);
 
   // A sign-in by any path clears a stale session-expired banner and refetches
   // the heroes, so a signed-in user never stares at "Your sign-in has
@@ -521,6 +564,8 @@ const CampaignDetailPage: React.FC = () => {
             >
               <p className="font-semibold text-foreground">Your sign-in has expired.</p>
               <p className="text-sm text-muted-foreground mt-1">Sign in again to pick a hero.</p>
+              {/* #1122: the return is real now (login carries returnTo; the callback comes back here). */}
+              <p className="text-sm text-muted-foreground">You come back to this page.</p>
               <Button variant="ir-gold" onClick={handleSignIn} className="mt-3 min-h-11">
                 Sign in
               </Button>

@@ -121,7 +121,10 @@ export default function CallbackPage() {
         // normal sign-in with no return destination.
         const destination = returnTo ?? '/app';
         logger.info(`Redirecting to ${destination}`);
-        navigate(destination);
+        // #1122: `authReturn` marks this navigation as the return from sign-in;
+        // the campaign page resumes a pending hero only on it.
+        if (returnTo) navigate(returnTo, { state: { authReturn: true } });
+        else navigate(destination);
         // AuthKit can resume a remembered session without asking for
         // credentials, so always say which account this is (#2292).
         if (signedInEmail) toast.success(`Signed in as ${signedInEmail}`);
