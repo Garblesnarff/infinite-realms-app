@@ -141,11 +141,13 @@ const pipeline = await importWithRealDb(async () => {
   const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
   const { charactersRoutes } = await import('../characters.js');
   const { restRoutes } = await import('../rest.js');
+  const { sessionsRoutes } = await import('../sessions.js');
   const { issue1784DataRoutes } = await import('../issue-1784-data.js');
   const { llmRoutes } = await import('../llm.js');
   return createRequestPipelineApp()
     .use(charactersRoutes)
     .use(restRoutes)
+    .use(sessionsRoutes)
     .use(issue1784DataRoutes)
     .use(llmRoutes);
 });
@@ -2053,5 +2055,116 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
     await db.delete(characterHitDice).where(eq(characterHitDice.characterId, charId));
     await db.delete(characters).where(eq(characters.id, charId));
     await db.delete(campaigns).where(eq(campaigns.id, campId));
+  });
+});
+
+describeWithDb('a continuation session carries HP until the long rest (#1239)', () => {
+  // Fresh client per block: the block above closes the shared one in its
+  // afterAll, and realDb() reconnects when the cached client is gone.
+  let db: ReturnType<typeof realDb>;
+
+  let campaignId: string;
+  let characterId: string;
+  let priorSessionId: string;
+
+  const request = (path: string, method: string, body?: unknown): Promise<Response> =>
+    pipeline.handle(
+      new Request(`http://localhost${path}`, {
+        method,
+        headers: authHeaders,
+        body: body === undefined ? undefined : JSON.stringify(body),
+      }),
+    );
+
+  beforeAll(async () => {
+    if (!hasRealDb) return;
+    db = realDb();
+    userId = testId('rest-first-user');
+
+    [{ id: campaignId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('camp') })
+      .returning({ id: campaigns.id });
+
+    [{ id: characterId }] = await db
+      .insert(characters)
+      .values({ userId, campaignId, name: testId('hero'), level: 1, class: 'Fighter' })
+      .returning({ id: characters.id });
+
+    await db.insert(characterStats).values({
+      characterId,
+      maxHitPoints: 10,
+      currentHitPoints: 4,
+      temporaryHitPoints: 0,
+      isConscious: true,
+      vitalState: 'standing',
+    });
+
+    // The finished first session of the adventure.
+    [{ id: priorSessionId }] = await db
+      .insert(gameSessions)
+      .values({
+        campaignId,
+        characterId,
+        sessionNumber: 1,
+        status: 'completed',
+        currentSceneDescription: 'The first session ended.',
+      })
+      .returning({ id: gameSessions.id });
+    expect(priorSessionId).toBeTruthy();
+  });
+
+  afterAll(async () => {
+    if (!hasRealDb) return;
+    const drop = async (run: () => Promise<unknown>): Promise<void> => {
+      try {
+        await run();
+      } catch {
+        /* fixture teardown is best-effort */
+      }
+    };
+    await drop(() => db.delete(restEvents).where(eq(restEvents.characterId, characterId)));
+    await drop(() =>
+      db.delete(gameSessions).where(eq(gameSessions.characterId, characterId)),
+    );
+    await drop(() =>
+      db.delete(characterStats).where(eq(characterStats.characterId, characterId)),
+    );
+    await drop(() => db.delete(characters).where(eq(characters.id, characterId)));
+    await drop(() => db.delete(campaigns).where(eq(campaigns.id, campaignId)));
+    await closeRealDb();
+  });
+
+  it('creating the continuation leaves HP alone; the long rest restores it', async () => {
+    // The exact body the campaign-sessions Continue flow posts: a new
+    // session must not heal — HP carries inside one adventure (#1071).
+    const created = await request('/v1/sessions', 'POST', {
+      campaign_id: campaignId,
+      character_id: characterId,
+      status: 'active',
+      session_number: 2,
+      current_scene_description: 'Continuing your adventure...',
+      session_notes: 'Continuing from Session 1',
+      turn_count: 0,
+    });
+    expect(created.status).toBe(201);
+    const session = (await created.json()) as { id: string; session_number: number };
+    expect(session.session_number).toBe(2);
+
+    const before = (await (await request(`/v1/characters/${characterId}`, 'GET')).json()) as {
+      stats?: { current_hit_points?: number; max_hit_points?: number };
+    };
+    expect(before.stats?.current_hit_points).toBe(4);
+    expect(before.stats?.max_hit_points).toBe(10);
+
+    // The exact body restApi.longRest posts: an empty object.
+    const rested = await request(`/v1/rest/characters/${characterId}/long`, 'POST', {});
+    expect(rested.status).toBe(200);
+
+    const after = (await (await request(`/v1/characters/${characterId}`, 'GET')).json()) as {
+      stats?: { current_hit_points?: number; max_hit_points?: number };
+    };
+    expect(after.stats?.current_hit_points).toBe(10);
+    expect(after.stats?.max_hit_points).toBe(10);
   });
 });
