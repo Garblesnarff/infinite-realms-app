@@ -64,7 +64,7 @@ describe('Campaign hub tab analytics', () => {
       </QueryClientProvider>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Memory' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Memory' }));
 
     expect(spy).toHaveBeenCalledWith('memory', expect.anything());
   });
