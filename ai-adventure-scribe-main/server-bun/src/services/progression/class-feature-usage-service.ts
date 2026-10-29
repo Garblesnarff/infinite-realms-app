@@ -89,9 +89,7 @@ export class ClassFeatureUsageService {
   /**
    * Spend one use of a limited-use feature
    */
-  static async spendFeatureUse(
-    input: UseFeatureInput & { userId: string },
-  ): Promise<UseFeatureResult> {
+  static async spendFeatureUse(input: UseFeatureInput & { userId: string }): Promise<UseFeatureResult> {
     const { characterId, featureId, context, sessionId, userId } = input;
 
     // Get character feature with ownership check
