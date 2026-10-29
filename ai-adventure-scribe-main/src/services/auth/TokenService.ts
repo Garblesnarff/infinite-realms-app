@@ -450,10 +450,17 @@ const refreshWithCoordination = async (
       return sharedTokens;
     }
 
+    // The deadline race rejects while the exchange itself may still settle:
+    // a slow response body can complete after the 20 s ceiling, and the
+    // server rotates the refresh token on success. Keep the work promise in
+    // a holder (a closure-assigned local narrows to never here) so a late
+    // success can still be adopted below (#1263).
+    const pendingWork: { current: Promise<RefreshResult> | null } = { current: null };
     try {
-      const tokens = await withRefreshDeadline((signal) =>
-        requestTokenRefresh(refreshToken, signal),
-      );
+      const tokens = await withRefreshDeadline((signal) => {
+        pendingWork.current = requestTokenRefresh(refreshToken, signal);
+        return pendingWork.current;
+      });
       if (tokens) {
         // Publish before releasing the cross-tab lock so the next tab adopts
         // these tokens instead of making a second exchange.
@@ -461,6 +468,29 @@ const refreshWithCoordination = async (
       }
       return tokens;
     } catch (error) {
+      const lateWork = pendingWork.current;
+      if (error instanceof TokenRefreshTransportError && lateWork) {
+        // The deadline fired, but the exchange may still complete on the
+        // server and rotate the refresh token. If it succeeds late, persist
+        // its pair when the stored session still holds the token we sent —
+        // dropping it would make the next refresh fail with invalid_grant.
+        // A newer published pair (another tab won the race) is never
+        // overwritten, and a late failure is already surfaced as transient.
+        void lateWork
+          .then((lateTokens) => {
+            if (!lateTokens || isSessionEnded()) return;
+            const stored = readSharedSession();
+            if (stored?.refresh_token === refreshToken) {
+              persistSession({
+                access_token: lateTokens.accessToken,
+                refresh_token: lateTokens.refreshToken,
+              });
+            }
+          })
+          .catch(() => {
+            // Late failure: the caller already got the transient verdict.
+          });
+      }
       if (error instanceof TokenRefreshError && isTerminalRefreshFailure(error)) {
         // A contender may have spent the single-use refresh token just before
         // this tab. Adopt its newer pair instead of signing out the loser.

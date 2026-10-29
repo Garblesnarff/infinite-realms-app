@@ -244,6 +244,59 @@ describe('TokenService', () => {
       expect(fetch).toHaveBeenCalledTimes(2);
     });
 
+    it('persists a late refresh success that lands after the overall deadline (#1263)', async () => {
+      persistSession({ access_token: 'old-access', refresh_token: 'old-refresh' });
+      let resolveBody!: (value: unknown) => void;
+      const bodyPromise = new Promise((resolve) => {
+        resolveBody = resolve;
+      });
+      (fetch as any).mockImplementation(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => bodyPromise,
+        }),
+      );
+
+      const stalled = refreshAccessToken('old-refresh');
+      const stalledExpectation = expect(stalled).rejects.toBeInstanceOf(TokenRefreshTransportError);
+      await vi.advanceTimersByTimeAsync(40);
+      await vi.advanceTimersByTimeAsync(TOKEN_REFRESH_OVERALL_TIMEOUT_MS + 1);
+      await stalledExpectation;
+      expect(fetch).toHaveBeenCalledTimes(1);
+
+      // The server-side exchange completes after the deadline: WorkOS
+      // rotated the refresh token, and the late pair must be kept — the
+      // next refresh with the spent token would get invalid_grant.
+      resolveBody({ accessToken: 'late-access', refreshToken: 'late-refresh' });
+      await vi.advanceTimersByTimeAsync(0);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(getAccessToken()).toBe('late-access');
+      expect(loadCachedSession()).toEqual({
+        access_token: 'late-access',
+        refresh_token: 'late-refresh',
+      });
+      expect(isSessionEnded()).toBe(false);
+      expect(fetch).toHaveBeenCalledTimes(1);
+
+      // The next refresh uses the late pair, not the spent one.
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: async () => ({ accessToken: 'next-access', refreshToken: 'next-refresh' }),
+      });
+      const recovered = refreshAccessToken('late-refresh');
+      await vi.advanceTimersByTimeAsync(40);
+      await expect(recovered).resolves.toEqual({
+        accessToken: 'next-access',
+        refreshToken: 'next-refresh',
+      });
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/auth/refresh'),
+        expect.objectContaining({ body: JSON.stringify({ refreshToken: 'late-refresh' }) }),
+      );
+    });
+
     it('enters a terminal state on a refresh 401 and never retries', async () => {
       (fetch as any).mockResolvedValue({
         ok: false,

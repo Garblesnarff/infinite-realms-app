@@ -663,4 +663,102 @@ describe('AuthContext connection failures (#565)', () => {
     expect(refreshAttempts).toBe(2);
     expect(window.localStorage.getItem('workos_access_token')).toBe('fresh-access');
   });
+
+  it('keeps the session and raises connectionError when the page-load refresh returns 502 (#1264)', async () => {
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    fetchMock.mockImplementation((url: string) => {
+      if (String(url).includes('/v1/auth/refresh')) {
+        return Promise.resolve(authMe(502));
+      }
+      return Promise.resolve(authMe(401));
+    });
+
+    let refreshAuth!: () => Promise<void>;
+    function Capture() {
+      ({ refreshAuth } = useAuth());
+      return <Probe />;
+    }
+    render(
+      <AuthProvider>
+        <Capture />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(probeState().loading).toBe(false));
+    expect(probeState().connectionError).toBe(true);
+    expect(window.localStorage.getItem('workos_access_token')).toBe('old-access');
+    expect(window.sessionStorage.getItem('workos_refresh_token')).toBe('old-refresh');
+    expect(isSessionEnded()).toBe(false);
+    expect(
+      fetchMock.mock.calls.some(([url]) => String(url).includes('/v1/auth/refresh')),
+    ).toBe(true);
+
+    // The outage ends: the next attempt succeeds and clears the error.
+    fetchMock.mockImplementation((url: string) => {
+      if (String(url).includes('/api/trpc/auth.me')) {
+        return Promise.resolve(
+          authMe(200, { result: { data: { id: 'u1', email: 'player@example.com' } } }),
+        );
+      }
+      return Promise.resolve(authMe(404));
+    });
+
+    await act(async () => {
+      await refreshAuth();
+    });
+
+    const state = probeState();
+    expect(state.connectionError).toBe(false);
+    expect(state.userEmail).toBe('player@example.com');
+    expect(window.localStorage.getItem('workos_access_token')).toBe('old-access');
+  });
+
+  it('keeps the session and raises connectionError when the page-load refresh returns 429 (#1264)', async () => {
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    fetchMock.mockImplementation((url: string) => {
+      if (String(url).includes('/v1/auth/refresh')) {
+        return Promise.resolve(authMe(429));
+      }
+      return Promise.resolve(authMe(401));
+    });
+
+    let refreshAuth!: () => Promise<void>;
+    function Capture() {
+      ({ refreshAuth } = useAuth());
+      return <Probe />;
+    }
+    render(
+      <AuthProvider>
+        <Capture />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(probeState().loading).toBe(false));
+    expect(probeState().connectionError).toBe(true);
+    expect(window.localStorage.getItem('workos_access_token')).toBe('old-access');
+    expect(window.sessionStorage.getItem('workos_refresh_token')).toBe('old-refresh');
+    expect(isSessionEnded()).toBe(false);
+    expect(
+      fetchMock.mock.calls.some(([url]) => String(url).includes('/v1/auth/refresh')),
+    ).toBe(true);
+
+    // The outage ends: the next attempt succeeds and clears the error.
+    fetchMock.mockImplementation((url: string) => {
+      if (String(url).includes('/api/trpc/auth.me')) {
+        return Promise.resolve(
+          authMe(200, { result: { data: { id: 'u1', email: 'player@example.com' } } }),
+        );
+      }
+      return Promise.resolve(authMe(404));
+    });
+
+    await act(async () => {
+      await refreshAuth();
+    });
+
+    const state = probeState();
+    expect(state.connectionError).toBe(false);
+    expect(state.userEmail).toBe('player@example.com');
+    expect(window.localStorage.getItem('workos_access_token')).toBe('old-access');
+  });
 });
