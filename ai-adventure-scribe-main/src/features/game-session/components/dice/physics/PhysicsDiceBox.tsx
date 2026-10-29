@@ -254,6 +254,11 @@ function expandRolls(result: DiceRollResult): RollSpec[] {
   });
 }
 
+/** Text for the polite live region, announced only once the dice have stopped. */
+function diceResultAnnouncement(result: DiceRollResult): string {
+  return `Dice result ${result.total}: ${result.rolls.map((roll) => roll.value).join(', ')}`;
+}
+
 function placeTrack(track: Track, frame: Frame, next: Frame, fraction: number) {
   track.die.mesh.position.set(
     frame.p[0] + (next.p[0] - frame.p[0]) * fraction,
@@ -397,17 +402,26 @@ export const PhysicsDiceBox: React.FC<Props> = ({
     tracksRef.current.forEach(settleTrack);
   }, [reducedMotion]);
 
+  // Without animation there is no tumble to wait for, but the live region
+  // must still announce the result.
+  useEffect(() => {
+    if (showAnimation || !result) return;
+    setAnnouncement(diceResultAnnouncement(result));
+  }, [result, showAnimation]);
+
   useEffect(() => {
     const scene = sceneRef.current;
     if (!result || !showAnimation || !scene) return;
     if (result === lastResult.current) return;
     if (result === pendingResult.current) return;
     const specs = expandRolls(result);
-    setAnnouncement(
-      `Dice result ${result.total}: ${result.rolls.map((roll) => roll.value).join(', ')}`,
-    );
+    const announcementText = diceResultAnnouncement(result);
     setPhysicsFallback('');
-    if (specs.length === 0) return;
+    if (specs.length === 0) {
+      // No dice to animate; the result is final as soon as it arrives.
+      setAnnouncement(announcementText);
+      return;
+    }
     pendingResult.current = result;
 
     disposeTracks(tracksRef.current, scene);
@@ -420,28 +434,43 @@ export const PhysicsDiceBox: React.FC<Props> = ({
       pendingResult.current = null;
       lastResult.current = result;
       if (!simulation.flat) {
+        setAnnouncement(announcementText);
         setPhysicsFallback(
           `Physics preview unavailable; the rules-engine result is ${result.total}.`,
         );
         return;
       }
       const finalFrames = simulation.frames[simulation.frames.length - 1] ?? [];
-      const tracks = specs.map((spec, index) => {
-        const physicsQuaternion = new THREE.Quaternion(...finalFrames[index].q);
-        const observedIndex = topIndex(spec.die, physicsQuaternion).idx;
-        const targetIndex = spec.die.faceIndexForValue(spec.target);
-        const rotation = symmetry(spec.die, targetIndex, observedIndex);
-        scene.add(spec.die.mesh);
-        return {
-          die: spec.die,
-          frames: simulation.frames.map((frame) => frame[index]),
-          rotation,
-          itemIndex: spec.itemIndex,
-          useInTotal: spec.useInTotal,
-          t: 0,
-          done: false,
-        };
-      });
+      let tracks: Track[];
+      try {
+        tracks = specs.map((spec, index) => {
+          const physicsQuaternion = new THREE.Quaternion(...finalFrames[index].q);
+          const observedIndex = topIndex(spec.die, physicsQuaternion).idx;
+          const targetIndex = spec.die.faceIndexForValue(spec.target);
+          const rotation = symmetry(spec.die, targetIndex, observedIndex);
+          return {
+            die: spec.die,
+            frames: simulation.frames.map((frame) => frame[index]),
+            rotation,
+            itemIndex: spec.itemIndex,
+            useInTotal: spec.useInTotal,
+            t: 0,
+            done: false,
+          };
+        });
+      } catch (error) {
+        // A symmetry failure must never blank the tray: show the same text
+        // result the non-flat fallback uses, and log the failure.
+        logger.warn('[dice] symmetry failed, showing text result', error);
+        setAnnouncement(announcementText);
+        setPhysicsFallback(
+          `Physics preview unavailable; the rules-engine result is ${result.total}.`,
+        );
+        return;
+      }
+      // Add meshes only after every track built: a throw above must not
+      // leave earlier dice visible under the text fallback.
+      tracks.forEach((track) => scene.add(track.die.mesh));
       tracksRef.current = tracks;
 
       const finish = () => {
@@ -461,6 +490,7 @@ export const PhysicsDiceBox: React.FC<Props> = ({
       if (reducedMotionRef.current) {
         tracks.forEach(settleTrack);
         finish();
+        setAnnouncement(announcementText);
         return;
       }
       if (!mutedRef.current) {
@@ -474,6 +504,7 @@ export const PhysicsDiceBox: React.FC<Props> = ({
         if (tracks.every((track) => track.done)) {
           if (watcher !== undefined) window.clearInterval(watcher);
           finish();
+          setAnnouncement(announcementText);
         }
       }, 50);
     });
@@ -485,7 +516,13 @@ export const PhysicsDiceBox: React.FC<Props> = ({
     };
   }, [height, result, showAnimation, simulate]);
 
-  if (!showAnimation) return null;
+  if (!showAnimation) {
+    return (
+      <div className="sr-only" role="status" aria-live="polite">
+        {announcement}
+      </div>
+    );
+  }
   return (
     <div ref={mountRef} style={{ width: '100%', height, position: 'relative' }}>
       {webglAvailable && (
