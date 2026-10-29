@@ -2,6 +2,7 @@ import { ChevronDown } from 'lucide-react';
 import React from 'react';
 
 import { facingName, rosterEntryForParticipant } from '../../../../../shared/engine-display-name';
+import { slotOrdinal } from '../../../../../shared/slot-ordinal';
 import { useTacticalMapContext } from '../tactical/TacticalMapProvider';
 import { summarizeCombatTurn } from './overhaul/combat-turn-order';
 import { useOverhaulViewModel } from './overhaul/useOverhaulViewModel';
@@ -80,13 +81,6 @@ export const LEGAL_ACTION_PLACEMENT = {
 } as const satisfies Partial<
   Record<LegalAction['type'], 'button' | 'cast' | 'move' | 'more' | 'hidden'>
 >;
-
-/** #1206: the slot a leveled spell chip spends, as the Cast menu names it (`2nd-level slot`). */
-function slotLabel(slotLevel: number | undefined): string | null {
-  if (!slotLevel) return null;
-  const suffix = slotLevel === 1 ? 'st' : slotLevel === 2 ? 'nd' : slotLevel === 3 ? 'rd' : 'th';
-  return `${slotLevel}${suffix}-level slot`;
-}
 
 /** Why a sheet spell is greyed in the Cast menu (#1171). */
 export const NARRATED_CAST_REASON =
@@ -221,7 +215,11 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
                   <span>{withTarget(action)}</span>
                   {(info || action.slotLevel) && (
                     <span className="text-xs text-muted-foreground">
-                      {[info?.range, info?.timing, slotLabel(action.slotLevel)]
+                      {[
+                        info?.range,
+                        info?.timing,
+                        action.slotLevel ? `${slotOrdinal(action.slotLevel)}-level slot` : null,
+                      ]
                         .filter(Boolean)
                         .join(' · ')}
                     </span>

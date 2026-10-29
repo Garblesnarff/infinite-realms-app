@@ -43,6 +43,7 @@ import {
 } from './weapon-catalog.js';
 import { groundRequestedWeapon, type GroundedWeapon } from './weapon-grounding.js';
 import { resolveWeaponName } from '../../../../shared/equipment-weapon-resolver';
+import { slotOrdinal } from '../../../../shared/slot-ordinal';
 import { logger } from '../../lib/logger.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
@@ -2173,14 +2174,6 @@ export async function executeCombatIntent(
     }
     throw error;
   }
-}
-
-/** `2nd`, `3rd`, `4th`: a spell-slot level as the PHB writes it (#1206). */
-function slotOrdinal(level: number): string {
-  if (level === 1) return '1st';
-  if (level === 2) return '2nd';
-  if (level === 3) return '3rd';
-  return `${level}th`;
 }
 
 export async function getLegalCombatActions(encounterId: string, userId: string) {
