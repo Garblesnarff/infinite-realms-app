@@ -149,9 +149,7 @@ export const RightSheetLive: React.FC<{
           },
         });
       } catch (error) {
-        setEquipActionError(
-          error instanceof Error ? error.message : 'Unable to equip that item.',
-        );
+        setEquipActionError(error instanceof Error ? error.message : 'Unable to equip that item.');
       } finally {
         equipInFlightRef.current = false;
         setEquippingItemId(undefined);
@@ -186,7 +184,11 @@ export const RightSheetLive: React.FC<{
       }
       try {
         onCastStart?.();
-        await handler(buildSpellCastMessage(spell), buildSpellCastContext(spell));
+        await handler(
+          // #1227: the tag names the slot the cast spends, from the sheet's own slots.
+          buildSpellCastMessage(spell, vm.character.spellcasting?.slots),
+          buildSpellCastContext(spell),
+        );
       } catch (error) {
         setSpellActionError(error instanceof Error ? error.message : 'Unable to cast spell.');
       } finally {
@@ -195,7 +197,7 @@ export const RightSheetLive: React.FC<{
         setCastingSpellId(undefined);
       }
     },
-    [spellCastHandlerRef, onCastStart],
+    [spellCastHandlerRef, onCastStart, vm.character.spellcasting?.slots],
   );
 
   return (

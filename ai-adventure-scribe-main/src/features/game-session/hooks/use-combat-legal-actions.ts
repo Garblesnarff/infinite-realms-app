@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
+import { chooseSpellSlotLevel } from '../../../../shared/spell-slot-choice';
+
 import type { ChatMessage } from '@/types/game';
 
 import { useCombat } from '@/contexts/CombatContext';
 import { fetchWithAuth, SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import { equipCharacterItem } from '@/services/character-equipment-api';
+import { executeAoECombatAction } from '@/services/combat/aoe-combat-action';
 import {
   combatBoundaryFromResult,
   resultCarriesPersistedPlayerRow,
@@ -28,7 +31,10 @@ import { endTurnUnlessAlreadyMoved } from '@/services/combat/end-turn-already-mo
 import { askPlayerForAttackDie } from '@/services/combat/player-attack-roll';
 import { actorHasUsableBonusAction } from '@/services/combat/player-bonus-action-remaining';
 import { resolvePlayerCombatSpell } from '@/services/combat/player-combat-spell';
-import { actorMovementRemaining } from '@/services/combat/player-movement-remaining';
+import {
+  actorMovementRemaining,
+  participantBoardCell,
+} from '@/services/combat/player-movement-remaining';
 import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
 import { getSpellById } from '@/utils/spell-lookup';
 
@@ -502,74 +508,107 @@ export function useCombatLegalActions(input: {
           // #2581: an attack-roll spell chip runs the same declare → dialog → commit
           // pipeline as a weapon attack. It used to send "Cast Fire Bolt" as chat text
           // for the DM to declare, so a spell attack could be narrated as a hit before
-          // any roll (run M2's Chill Touch). Save-based and auto-hit spells keep the
-          // text path below.
+          // any roll (run M2's Chill Touch).
+          // #1227: save, auto-hit and area chips commit to the engine too, with the chip's
+          // slot and target. As chat text the DM could cast them with another slot or at other
+          // targets, or narrate them without the engine at all.
           const spell = resolvePlayerCombatSpell(action.spellId, action.spellId);
-          if (spell?.kind !== 'attack') {
+          if (!spell) {
             await input.onSendText(action.label);
           } else {
             // #1185: the engine never guesses a slot level — a leveled spell with no
             // slotLevel is refused (missing_spell_slot_level, pinned by
             // combat-spell-resolution.vitest.ts and the Bless explicit-choice test).
-            // The ActionBar names the slot the chip names (#1206), else the spell's own
-            // level. An unresolvable spell keeps slot_level null and the
-            // engine refuses it with a readable reason, as before.
+            // #1227: the shared slot rule: the chip's slot (#1206), else the spell's own level.
             const catalogSpell = action.spellId ? getSpellById(action.spellId, false) : null;
-            const ownLevel =
-              typeof catalogSpell?.level === 'number' && catalogSpell.level >= 1
-                ? catalogSpell.level
-                : null;
-            // #1206: the chip names the slot it spends (an upcast when the spell's own level
-            // is spent); with no ledger the chip names none and the bar sends the own level.
-            const spellLevel =
-              ownLevel !== null &&
-              typeof action.slotLevel === 'number' &&
-              action.slotLevel >= ownLevel
-                ? action.slotLevel
-                : ownLevel;
+            const slotLevel = chooseSpellSlotLevel(catalogSpell?.level, {
+              chosen: action.slotLevel,
+            });
+            const targetId = action.targetIds[0];
             const structuredAction: StructuredCombatAction = {
               actor_id: actorId,
               action_type: 'cast_spell',
-              target_ids: [action.targetIds[0]],
+              target_ids: [targetId],
               weapon_id: null,
               spell_id: action.spellId ?? null,
-              slot_level: spellLevel,
+              slot_level: slotLevel,
               movement_feet: 0,
             };
-            const actor = encounter.participants.find((participant) => participant.id === actorId);
-            const cast = await askPlayerForSpellCast({
-              encounterId: encounter.id,
-              action: structuredAction,
-              actorLabel: actor?.name ?? 'You',
-              participants: encounter.participants,
-            });
-            // #2652 round 4: if the proposal was refused/failed or the popup did not
-            // produce a die, stop here. Committing with an undefined d20 would let the
-            // engine roll for the player — the bug this PR exists to close.
-            // A movement-only cast needs no die.
-            // #566: the 45 s timer is the exception — its countdown promised the game
-            // rolls for the player, so the commit below runs with no player die and the
-            // engine rolls. A dismissed or refused popup still stops here.
-            if (!cast.movementOnly && !cast.timedOut && (cast.autoRolled || cast.d20 == null)) {
-              setError(
-                cast.cancelled
-                  ? 'The cast was cancelled. Nothing was spent.'
-                  : cast.refusal
+            let committedAction = structuredAction;
+            let execution: Awaited<ReturnType<typeof executeStructuredCombatActionWithBoundary>>;
+            if (spell.areaOfEffect) {
+              // The chip's target is the aim: the area goes to the target's cell, the same
+              // conversion a typed cast gets when the DM names a creature for Burning Hands
+              // (combat-resolution-step `areaActionFromTargeted`, #823). The server owns the
+              // caster's cell and the cone. No board, no aim: nothing is sent.
+              const aim = await participantBoardCell(encounter.sessionId, targetId);
+              if (!encounter.sessionId || !aim) {
+                setError('That spell needs the battle map to aim. Nothing was spent.');
+                return;
+              }
+              const cast = await executeAoECombatAction(
+                encounter.sessionId,
+                {
+                  actor_id: actorId,
+                  action_type: 'cast_spell',
+                  spell_id: action.spellId!,
+                  origin: aim,
+                  direction: null,
+                  slot_level: slotLevel,
+                },
+                'action_bar',
+              );
+              execution = cast.execution;
+              committedAction = cast.resolvedAction;
+            } else {
+              const actor = encounter.participants.find(
+                (participant) => participant.id === actorId,
+              );
+              const cast = await askPlayerForSpellCast({
+                encounterId: encounter.id,
+                action: structuredAction,
+                actorLabel: actor?.name ?? 'You',
+                participants: encounter.participants,
+              });
+              // A save spell's "target saves" card can be cancelled; nothing is spent.
+              if (cast.cancelled) {
+                setError('The cast was cancelled. Nothing was spent.');
+                return;
+              }
+              // #2652 round 4: if the proposal was refused/failed or the popup did not
+              // produce a die, stop here. Committing with an undefined d20 would let the
+              // engine roll for the player — the bug this PR exists to close.
+              // A movement-only cast needs no die.
+              // #566: the 45 s timer is the exception — its countdown promised the game
+              // rolls for the player, so the commit below runs with no player die and the
+              // engine rolls. A dismissed or refused popup still stops here.
+              // A refusal stops the cast for every spell kind: a save or auto-hit chip
+              // whose proposal was refused must not be committed. The no-die check stays
+              // attack-only — save and auto-hit spells have no player die; the engine
+              // rolls the saves.
+              if (
+                !cast.movementOnly &&
+                !cast.timedOut &&
+                (cast.refusal || (spell.kind === 'attack' && (cast.autoRolled || cast.d20 == null)))
+              ) {
+                setError(
+                  cast.refusal
                     ? `${cast.refusal}. Nothing was spent.`
                     : 'The spell could not be cast. Nothing was spent.',
+                );
+                return;
+              }
+              execution = await executeStructuredCombatActionWithBoundary(
+                encounter.id,
+                structuredAction,
+                cast.d20,
+                cast.d20Rolls,
+                'action_bar',
               );
-              return;
             }
-            const execution = await executeStructuredCombatActionWithBoundary(
-              encounter.id,
-              structuredAction,
-              cast.d20,
-              cast.d20Rolls,
-              'action_bar',
-            );
             // The cast's engine result persists like a weapon attack's (#2622): one row.
             const playerParts = [
-              ...formatCombatActionParts(structuredAction, execution.result, roster),
+              ...formatCombatActionParts(committedAction, execution.result, roster),
               ...formatDeathSaveParts(execution.result, roster),
               ...formatWakeParts(execution.result),
             ];

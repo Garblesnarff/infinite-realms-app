@@ -1,3 +1,4 @@
+import { chooseSpellSlotLevel } from '../../../../../../shared/spell-slot-choice';
 import { findSrdClass } from '../../../../../../shared/srd-class-data';
 
 import type { SpellVM, SpellSlotVM, SpellcastingVM, SpellsVM } from './types';
@@ -129,8 +130,22 @@ export function buildSpellCastContext(spell: Pick<SpellVM, 'id' | 'level'>): {
   };
 }
 
-export function buildSpellCastMessage(spell: Pick<SpellVM, 'name' | 'id' | 'level'>): string {
+/**
+ * The sheet's Cast message. Its tag's `spell_level` is the slot the cast spends, which the
+ * dm-actions-handler carries into the engine action (#1058): with the sheet's slots, the lowest
+ * remaining slot at or above the spell's level (#1227, the rule every player cast shares).
+ */
+export function buildSpellCastMessage(
+  spell: Pick<SpellVM, 'name' | 'id' | 'level'>,
+  slots?: ReadonlyArray<Pick<SpellSlotVM, 'level' | 'current'>> | null,
+): string {
+  const slotLevel =
+    typeof spell.level === 'number' && spell.level > 0
+      ? (chooseSpellSlotLevel(spell.level, {
+          remaining: slots ? new Map(slots.map((slot) => [slot.level, slot.current])) : null,
+        }) ?? spell.level)
+      : spell.level;
   const level =
-    spell.level === 0 ? 'cantrip' : spell.level == null ? 'unknown level' : `level ${spell.level}`;
+    slotLevel === 0 ? 'cantrip' : slotLevel == null ? 'unknown level' : `level ${slotLevel}`;
   return `I cast ${spell.name} [spell_id=${spell.id}, spell_level=${level}].`;
 }

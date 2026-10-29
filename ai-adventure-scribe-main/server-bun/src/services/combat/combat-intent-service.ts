@@ -44,6 +44,7 @@ import {
 import { groundRequestedWeapon, type GroundedWeapon } from './weapon-grounding.js';
 import { resolveWeaponName } from '../../../../shared/equipment-weapon-resolver';
 import { slotOrdinal } from '../../../../shared/slot-ordinal';
+import { chooseSpellSlotLevel } from '../../../../shared/spell-slot-choice';
 import { logger } from '../../lib/logger.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
@@ -2426,14 +2427,10 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
       : null;
   // #1206: a leveled spell can be cast with any slot of its level or higher (2014 PHB). It is
   // offered while one remains, and the chip names the slot the cast spends: the lowest
-  // remaining slot at or above the spell's level. With no ledger (null) the chip names none.
-  const lowestSlotFor = (spellLevel: number): number | null => {
-    if (!slotRemaining) return null;
-    for (let level = spellLevel; level <= 9; level += 1) {
-      if ((slotRemaining.get(level) ?? 0) > 0) return level;
-    }
-    return null;
-  };
+  // remaining slot at or above the spell's level (#1227: the shared rule the client's casts
+  // use). With no ledger (null) the chip names none.
+  const lowestSlotFor = (spellLevel: number): number | null =>
+    slotRemaining ? chooseSpellSlotLevel(spellLevel, { remaining: slotRemaining }) : null;
   // One suggestion per spell on the character's own list. A single "Cast a prepared spell" chip
   // went to the DM as text, and the DM picked Fire Bolt for a wizard who does not have it (#2343 A3).
   for (const spell of spells) {
@@ -2443,8 +2440,7 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
     if (usesBonusAction ? actor.bonusActionUsed : actor.actionUsed) continue;
     const action: { type: LegalActionType } & Record<string, unknown> = {
       type: 'spell',
-      // An upcast names its slot in the label too: a save or auto-hit chip reaches the DM as
-      // this text, so the text has to say which slot the player chose.
+      // An upcast names its slot in the label too, so the player reads the slot it spends.
       label:
         slotLevel !== null && slotLevel > spell!.level
           ? `Cast ${spell!.name} (${slotOrdinal(slotLevel)}-level slot)`
@@ -2455,25 +2451,24 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
     // #2581: attack-roll spell chips are attack-shaped — they carry their targets so the
     // client can run the declare → dialog → commit pipeline itself instead of sending chat
     // text for the DM to declare (a Chill Touch narrated as a hit before any roll, run M2).
-    // Save-based and auto-hit spells keep today's text-to-DM behavior.
-    if (spell!.attackType) {
-      const targetIds = state.participants
-        .filter(
-          (participant) =>
-            participant.id !== actor.id &&
-            participant.isActive &&
-            participant.participantType !== actor.participantType &&
-            // #1148: the same dead-target exclusion weapon targets carry (#314 CB-074).
-            // Without it a Cast chip lists a dead creature and the bar shows
-            // `Cast Chill Touch → {dead goblin}`. Monsters die at 0 HP.
-            vitalStateOf(participant as unknown as VitalsInput) !== 'dead',
-        )
-        .map((participant) => participant.id);
-      // No targets, no chip: an attack-shaped option without targets would fall back to
-      // chat text on the client — the M2 shape again. Weapons skip the same way.
-      if (!targetIds.length) continue;
-      action.targetIds = targetIds;
-    }
+    // #1227: save, auto-hit and area chips too. Every live spell here strikes creatures, and
+    // as chat text the DM could cast it with another slot or at other targets.
+    const targetIds = state.participants
+      .filter(
+        (participant) =>
+          participant.id !== actor.id &&
+          participant.isActive &&
+          participant.participantType !== actor.participantType &&
+          // #1148: the same dead-target exclusion weapon targets carry (#314 CB-074).
+          // Without it a Cast chip lists a dead creature and the bar shows
+          // `Cast Chill Touch → {dead goblin}`. Monsters die at 0 HP.
+          vitalStateOf(participant as unknown as VitalsInput) !== 'dead',
+      )
+      .map((participant) => participant.id);
+    // No targets, no chip: an attack-shaped option without targets would fall back to
+    // chat text on the client — the M2 shape again. Weapons skip the same way.
+    if (!targetIds.length) continue;
+    action.targetIds = targetIds;
     actions.push(action);
   }
   // Sheet spells the engine does not resolve (#1171). They ride the same list as the live
