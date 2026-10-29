@@ -1,7 +1,8 @@
 /**
- * #866 item 3: the finalization panel and the skill step must label the
- * Rogue's class skill clause ("select exactly 4"). The clause was reported
- * unlabeled. Harness follows proficiencies-899.test.tsx.
+ * #866 item 3 (skill step only): the Rogue's class skill card on the
+ * Proficiencies step carries its title and class sentence. NOT covered here:
+ * the finalization panel's skill clause, which has no test yet. Harness
+ * follows proficiencies-899.test.tsx.
  */
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
