@@ -306,6 +306,17 @@ export class ClassFeatureUsageService {
 
     const featuresRestored = restoredRows.map((row) => row.feature_name);
 
+    // #1187: Action Surge is one library row with a level-keyed count (2 at fighter level
+    // 17), so the library `uses_count` written above is not its full count. Dynamic import:
+    // fighter-features-service imports this service. A failed refill is logged, never a
+    // failed rest.
+    try {
+      const { refillActionSurgeUses } = await import('../combat/fighter-features-service.js');
+      await refillActionSurgeUses(characterId, userId);
+    } catch (error) {
+      logger.warn({ msg: 'ACTION_SURGE_REFILL_FAILED', characterId, error });
+    }
+
     // #712: Divine Sense (1 + CHA mod) and Lay on Hands (paladin level x 5) are
     // seeded with a NULL uses_count, so the SQL above skips them; their pools live
     // in uses_remaining and are replenished here on a long rest. A failed reset is
