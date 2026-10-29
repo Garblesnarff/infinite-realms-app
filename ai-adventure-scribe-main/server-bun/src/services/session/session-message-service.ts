@@ -11,6 +11,7 @@ import {
 } from '../../../../db/schema/index';
 import { transactionContext } from '../../../../db/transaction-context';
 import { ConflictError, InternalServerError, NotFoundError } from '../../lib/errors.js';
+import { logger } from '../../lib/logger.js';
 
 /**
  * Message with pagination metadata
@@ -36,6 +37,107 @@ const oncePerSessionMark = (message: {
   message.speakerType === 'dm'
     ? ONCE_PER_SESSION_MARKS.find((mark) => message.context?.[mark] === true)
     : undefined;
+
+/**
+ * Context key carrying a completed DM-turn response for replay under its reply
+ * id (#51). Follows the `rollTurnResult` / `npcResult` precedents: the response
+ * lives in a dialogue row's context, so it needs no new table and no TTL — it
+ * lives as long as the row does.
+ */
+const CACHED_TURN_RESPONSE_KEY = 'cachedTurnResponse';
+
+/**
+ * A completed turn body is replayable: a plain object carrying reply text,
+ * not an error, and not a degraded placeholder. A degraded body ("try your
+ * action again") must never be frozen as the canonical replay — the retry has
+ * to generate anew.
+ */
+function asCachedTurnResponse(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  if ('error' in record || record.degraded === true || typeof record.text !== 'string')
+    return undefined;
+  return record;
+}
+
+/**
+ * Best-effort: store a completed turn response under its reply id, then read
+ * back whatever the row now holds under that key (#51). Never throws: a failed
+ * write degrades to today's behavior (the retry regenerates). The first
+ * completed response wins: the write is a no-op once the key exists, so a
+ * concurrent duplicate cannot overwrite the canonical response — and the
+ * read-back lets a duplicate that also generated return the winner's body
+ * instead of its own, when the winner's write is still the row's context at
+ * read-back time. It is not airtight under concurrency: the duplicate's own
+ * provisional persist replaces a provisional row's context wholesale (#2218),
+ * so a persist that lands after the winner's write drops the cached entry
+ * and the duplicate keeps its own body. The guaranteed case is the
+ * sequential lost-response retry. The write runs under a 5 s lock bound: it
+ * must never stall the response behind a contended row.
+ *
+ * Returns the cached body when the row exists, or undefined when there is no
+ * row to cache onto: turns the server does not persist (the dmReply skip
+ * reasons — in-combat, roll-request, and like cases) have no provisional row,
+ * so a retry of one regenerates. That miss is logged, so the boundary stays
+ * observable instead of silent.
+ */
+async function cacheTurnResponseAndReplay(
+  sessionId: string,
+  replyId: string,
+  response: Record<string, unknown>,
+): Promise<Record<string, unknown> | undefined> {
+  try {
+    const outcome = await db.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+      await tx
+        .update(dialogueHistory)
+        .set({
+          context: sql`coalesce(${dialogueHistory.context}, '{}'::jsonb) || ${JSON.stringify({ [CACHED_TURN_RESPONSE_KEY]: response })}::jsonb`,
+        })
+        .where(
+          and(
+            eq(dialogueHistory.id, replyId),
+            eq(dialogueHistory.sessionId, sessionId),
+            eq(dialogueHistory.speakerType, 'dm'),
+            sql`${dialogueHistory.context}->>(${CACHED_TURN_RESPONSE_KEY}::text) IS NULL`,
+          ),
+        );
+      const [row] = await tx
+        .select({ context: dialogueHistory.context })
+        .from(dialogueHistory)
+        .where(
+          and(
+            eq(dialogueHistory.id, replyId),
+            eq(dialogueHistory.sessionId, sessionId),
+            eq(dialogueHistory.speakerType, 'dm'),
+          ),
+        )
+        .limit(1);
+      if (!row) return { found: false as const };
+      return {
+        found: true as const,
+        cached: asCachedTurnResponse(
+          (row.context as Record<string, unknown> | null)?.[CACHED_TURN_RESPONSE_KEY],
+        ),
+      };
+    });
+    if (!outcome.found)
+      logger.warn({
+        msg: 'DM_TURN_RESPONSE_CACHE_ROW_MISSING',
+        sessionId,
+        messageId: replyId,
+      });
+    return outcome.found ? outcome.cached : undefined;
+  } catch (error) {
+    logger.warn({
+      msg: 'DM_TURN_RESPONSE_CACHE_WRITE_FAILED',
+      sessionId,
+      messageId: replyId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
+  }
+}
 
 /**
  * Session Message Service
@@ -375,6 +477,42 @@ export class SessionMessageService {
         throw new ConflictError(
           'This roll is missing or has been superseded by another player turn.',
         );
+      // #51: a retry of a completed DM turn replays the stored response instead of
+      // generating twice. The key is the reply id the client reserved for the turn
+      // (dmReply.messageId), which transport retries resend unchanged; the id is
+      // the idempotency key, so the same id means the same turn. The lookup runs
+      // after the roll-mismatch throw above, so a reused id with a different roll
+      // still gets the 409 the roll guard exists to return. It runs inside this
+      // transaction behind the player-row lock, so a sequential retry — the
+      // lost-response case — always sees a committed cache entry. The lock does
+      // NOT serialize plain-turn generation itself: generation runs after this
+      // transaction commits, so two simultaneous same-id submits can both
+      // generate, and the duplicate's own provisional persist can replace the
+      // row's context after the winner's write (#2218 reconcile), so the
+      // canonical-body property is best-effort under concurrency, guaranteed
+      // for sequential retries.
+      // The cache lives in the DM row's context: a client save replaces that
+      // context wholesale, dropping an entry cached before the save, but a
+      // duplicate arriving after the save re-caches on completion. Turns the
+      // server never persists have no row to cache onto (see the store below)
+      // and regenerate on retry.
+      if (requestedReplyId) {
+        const [dmRow] = await tx
+          .select({ context: dialogueHistory.context })
+          .from(dialogueHistory)
+          .where(
+            and(
+              eq(dialogueHistory.id, requestedReplyId),
+              eq(dialogueHistory.sessionId, sessionId),
+              eq(dialogueHistory.speakerType, 'dm'),
+            ),
+          )
+          .limit(1);
+        const cached = asCachedTurnResponse(
+          (dmRow?.context as Record<string, unknown> | null)?.[CACHED_TURN_RESPONSE_KEY],
+        );
+        if (cached) return { guarded: true as const, response: cached as T };
+      }
       if (!rollId || (!suppliedRollId && playerInput !== answer?.message))
         return { guarded: false as const };
       const cached = context?.rollTurnResult;
@@ -396,7 +534,20 @@ export class SessionMessageService {
       });
     });
     for (const publish of afterCommit) publish();
-    return result.guarded ? result.response : generate();
+    const response = result.guarded ? result.response : await generate();
+    // #51: keep the completed response under the turn's reply id for a retry to
+    // replay, and return whatever the row now holds: a concurrent duplicate
+    // that also generated replays the first-completed body. Best-effort and
+    // first-wins; error and degraded bodies are never cached, so a failed turn
+    // stays retryable.
+    if (requestedReplyId) {
+      const cacheable = asCachedTurnResponse(response);
+      if (cacheable) {
+        const replay = await cacheTurnResponseAndReplay(sessionId, requestedReplyId, cacheable);
+        if (replay) return replay as T;
+      }
+    }
+    return response;
   }
 
   /**
