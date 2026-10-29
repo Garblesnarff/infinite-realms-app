@@ -52,13 +52,16 @@ import {
  * #1258 (shadow 7/97, 10-28 nightly) re-measured the per-phase baselines:
  * narrative optionals 17 -> 18 (combat_exits); combat 6/7/0 -> 7/14/4 and
  * tactical 7/24/1 -> 8/31/5 (scene_spec + rest + damage + final_beat_reached
- * ride on fight turns). The tactical optionals count passes the old <=24
- * strict-fit target: TARGET_MAX_OPTIONALS moves 24 -> 31 with this PR, for
- * the strategist to adjudicate — the shadow count returning to 0
- * deterministically (the #1258 done-means) trades against that aspiration,
- * and the enforcement design (its own PR) decides whether fight-turn
- * story fields are stripped pre-validation or carried in the enforced
- * schema. The live schema is unchanged (7/44/7), so rollback bytes hold.
+ * ride on fight turns). The live schema is unchanged (7/44/7), so rollback bytes hold.
+ *
+ * #1258 round 3 (strategist FIX at 774c634b) keeps the 24-optional budget:
+ * the fight-phase schemas declare the five keys required + nullable instead
+ * of optional (null when unused — the shadow pads an absent key with null,
+ * matching the route, which skips absent story fields exactly as null ones),
+ * so tactical measures 23 optionals / 16 unions and combat 6 / 15. The
+ * narrative phase keeps the round-1 shape (18 / 5). The enforcement design
+ * (its own PR) still decides whether fight-turn story fields are stripped
+ * pre-validation or carried in the enforced schema.
  *
  * Counting follows the Anthropic convention from
  * dm-response-schema-anthropic.test.ts: every `anyOf` / `oneOf` node and every
@@ -78,9 +81,10 @@ import {
  * split the item-5 tail (keyword move) to its own PR.
  */
 const TARGET_MAX_UNIONS = 16;
-// #1258: raised 24 -> 31 — tactical carries scene_spec, rest, damage and
-// final_beat_reached on fight turns (see header). Strategist adjudicates.
-const TARGET_MAX_OPTIONALS = 31;
+// #1258 round 3: the 24-optional budget stands — the fight-phase schemas
+// declare the five keys required + nullable (see header). The strategist
+// adjudicated: 24 is Anthropic's strict structured-output limit (#782).
+const TARGET_MAX_OPTIONALS = 24;
 const TARGET_MAX_ONE_OF = 0;
 const TARGET_MAX_KEYWORDS = 0;
 
@@ -104,14 +108,18 @@ const BASELINE_ONE_OF = 0;
  *  narrative +1 optional (combat_exits); combat +1 union (scene_spec seed)
  *  and +7 optionals, tactical +1 union and +7 optionals (scene_spec subtree
  *  +4: self, size, sceneDescription, enemyPlacement; rest +1, damage +1,
- *  final_beat_reached +1). */
+ *  final_beat_reached +1). Round 3 re-fits the fight phases inside the
+ *  24-optional budget: the five keys are required + nullable there, so
+ *  combat measures 6 optionals / 15 unions and tactical 23 / 16 (each
+ *  required-nullable key trades one optional for one null-pad union; the
+ *  scene_spec clone adds three nested pads). Narrative is untouched. */
 const PHASE_BASELINES: Record<
   Exclude<DmResponsePhase, 'full'>,
   { unions: number; optionals: number; keywords: number }
 > = {
   narrative: { unions: 5, optionals: 18, keywords: 6 },
-  combat: { unions: 7, optionals: 14, keywords: 4 },
-  tactical: { unions: 8, optionals: 31, keywords: 5 },
+  combat: { unions: 15, optionals: 6, keywords: 4 },
+  tactical: { unions: 16, optionals: 23, keywords: 5 },
 };
 
 /** Baseline budget for createDmResponseSchema(): re-measured for #782 item 7.

@@ -305,10 +305,94 @@ const validatesAgainstLiveSchema = (text: string): boolean => {
  * extensions the phase does not declare (#1159): an empty-array
  * combat_exits on a narrative turn, or an empty-array story extension
  * on a combat turn, carries no content either.
+ * A required-nullable key carried as absent is padding too (#1258 round
+ * 3): the fight-phase schemas declare five keys required + nullable, and
+ * the route treats an absent story field exactly as a null one, so the
+ * comparison is filled with null before validation. A present-but-wrong
+ * value still fails its own type, and an undeclared key still flags.
  * Only the first error is returned: for a root-level defect that is the
  * additionalProperties error naming the key, while a nested anyOf defect
  * may surface a different first keyword (the count is still correct).
  */
+
+/**
+ * #1258 round 3: does this property schema accept an explicit null? The
+ * null-pad shape is `anyOf: [schema, { type: 'null' }]` (see `nullable` in
+ * dm-response-schema.ts); a `type: [..., 'null']` array counts the same way.
+ */
+const schemaAcceptsNull = (schema: unknown): boolean => {
+  if (!schema || typeof schema !== 'object') return false;
+  const record = schema as Record<string, unknown>;
+  for (const branchKey of ['anyOf', 'oneOf'] as const) {
+    const branches = record[branchKey];
+    if (Array.isArray(branches) && branches.some(schemaAcceptsNull)) return true;
+  }
+  if (Array.isArray(record['type'])) {
+    return (record['type'] as unknown[]).includes('null');
+  }
+  return record['type'] === 'null';
+};
+
+/**
+ * #1258 round 3: fill absent required-nullable keys with null in a
+ * comparison copy, so a phase schema that declares a key required +
+ * nullable does not flag the ordinary case of the model omitting it.
+ * Absence is equivalent to null for these keys — the route's story
+ * appliers skip absent fields exactly as they skip null ones — so the
+ * fill preserves every genuine signal: a present-but-wrong-typed value
+ * still fails its own type, and an undeclared key still fails
+ * additionalProperties. Nullable pads (`anyOf: [schema, { type: 'null' }]`)
+ * are followed into their single non-null branch; multi-variant unions
+ * are never descended into — filling a key one variant requires would
+ * corrupt values matching another variant (a targeted combat action must
+ * not gain the AoE variant's `direction`). The caller deep-clones first:
+ * the fill mutates nested objects.
+ */
+const fillRequiredNullableKeys = (value: unknown, schema: unknown): void => {
+  if (!value || typeof value !== 'object' || !schema || typeof schema !== 'object') return;
+  const record = schema as Record<string, unknown>;
+  const branches = record['anyOf'] ?? record['oneOf'];
+  if (Array.isArray(branches)) {
+    // Nullable pad only: exactly one non-null branch plus a `{ type: 'null' }`
+    // branch. Anything else is a variant union — never guess a branch.
+    const nonNullBranches = branches.filter(
+      (branch) =>
+        !(
+          branch &&
+          typeof branch === 'object' &&
+          !Array.isArray(branch) &&
+          Object.keys(branch as Record<string, unknown>).length === 1 &&
+          (branch as Record<string, unknown>)['type'] === 'null'
+        ),
+    );
+    if (nonNullBranches.length === 1 && nonNullBranches.length < branches.length) {
+      fillRequiredNullableKeys(value, nonNullBranches[0]);
+    }
+    return;
+  }
+  if (!Array.isArray(value)) {
+    const properties = record['properties'];
+    if (properties && typeof properties === 'object') {
+      const objectValue = value as Record<string, unknown>;
+      const required = Array.isArray(record['required']) ? (record['required'] as string[]) : [];
+      for (const [key, propSchema] of Object.entries(properties as Record<string, unknown>)) {
+        if (!(key in objectValue)) {
+          if (required.includes(key) && schemaAcceptsNull(propSchema)) {
+            objectValue[key] = null;
+          }
+        } else if (objectValue[key] !== null) {
+          fillRequiredNullableKeys(objectValue[key], propSchema);
+        }
+      }
+    }
+    return;
+  }
+  const items = record['items'];
+  if (items && typeof items === 'object' && !Array.isArray(items)) {
+    for (const item of value) fillRequiredNullableKeys(item, items);
+  }
+};
+
 export const findPhaseShadowMismatch = (
   parsed: unknown,
   phase: string | undefined,
@@ -334,9 +418,11 @@ export const findPhaseShadowMismatch = (
     // an empty array carries no content. (Object/boolean extensions have
     // no empty-array form, so only array extensions are ever padded.)
     // Remove a dropped section when it is an empty array (padding, not
-    // content); a non-empty one stays and still flags by name. The copy
-    // is never shipped.
-    const comparison = { ...parsed };
+    // content); a non-empty one stays and still flags by name. Deep copy:
+    // the required-nullable fill below mutates nested objects, and the
+    // caller's parsed reply must never gain keys. The JSON round-trip is
+    // exact here — parsed came from JSON.parse.
+    const comparison = JSON.parse(JSON.stringify(parsed)) as Record<string, unknown>;
     for (const section of [
       ...(PHASE_OMITTED_SECTIONS[phase] ?? []),
       ...phaseOmittedExtensionSections(phase),
@@ -345,7 +431,12 @@ export const findPhaseShadowMismatch = (
         delete comparison[section];
       }
     }
-    const validate = compiledSchemaValidator(dmResponseSchemaForPhase(phase));
+    // #1258 round 3: an absent required-nullable key is null, not a
+    // mismatch — fill it before validation so the counter only fires on
+    // present-but-wrong values and undeclared keys.
+    const phaseSchema = dmResponseSchemaForPhase(phase);
+    fillRequiredNullableKeys(comparison, phaseSchema);
+    const validate = compiledSchemaValidator(phaseSchema);
     if (validate(comparison)) return null;
     const first = validate.errors?.[0];
     const additionalProperty =

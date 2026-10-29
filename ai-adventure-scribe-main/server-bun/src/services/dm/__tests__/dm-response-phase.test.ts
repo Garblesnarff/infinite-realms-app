@@ -63,10 +63,16 @@ const narrativeTurn = {
   final_beat_reached: true,
 };
 
+// #1258 round 3: the fight-phase schemas declare the five keys required +
+// nullable, so a fight turn carries them by value or as null — never omitted.
 const combatTurn = {
   ...baseTurn,
   combat_actions: [],
   combat_exits: [],
+  scene_spec: null,
+  rest: null,
+  damage: null,
+  final_beat_reached: null,
 };
 
 const tacticalTurn = {
@@ -134,6 +140,24 @@ describe('phase schemas (Refs #782 item 8)', () => {
         'final_beat_reached',
       ].sort(),
     );
+    // #1258 round 3: fight phases require the five keys (nullable) — the
+    // strict-fit shape. Base keys first, then scene_spec, then the
+    // extensions in declaration order.
+    expect((schema as { required: string[] }).required).toEqual([
+      'text',
+      'options',
+      'narration_segments',
+      'roll_requests',
+      'combat_transition',
+      'combatants',
+      'handout_actions',
+      'combat_actions',
+      'scene_spec',
+      'combat_exits',
+      'rest',
+      'damage',
+      'final_beat_reached',
+    ]);
   });
 
   test('tactical is the combat set plus the kind-split map actions', () => {
@@ -157,6 +181,22 @@ describe('phase schemas (Refs #782 item 8)', () => {
         'map_actions',
       ].sort(),
     );
+    expect((schema as { required: string[] }).required).toEqual([
+      'text',
+      'options',
+      'narration_segments',
+      'roll_requests',
+      'combat_transition',
+      'combatants',
+      'handout_actions',
+      'combat_actions',
+      'map_actions',
+      'scene_spec',
+      'combat_exits',
+      'rest',
+      'damage',
+      'final_beat_reached',
+    ]);
   });
 
   test('each turn validates under its own phase and no other', () => {
@@ -173,7 +213,16 @@ describe('phase schemas (Refs #782 item 8)', () => {
     expect(
       validate(dmResponseSchemaForPhase('tactical'), {
         ...tacticalTurn,
-        scene_spec: { environment: 'dungeon_room', seed: 1 },
+        // Full scene_spec shape: the phase-scoped scene_spec requires the
+        // descriptive fields (nullable) — a minimal shape validates only
+        // through the shadow, which pads absent required-nullable keys.
+        scene_spec: {
+          environment: 'dungeon_room',
+          size: 'small',
+          sceneDescription: 'A torch-lit guardroom.',
+          seed: 1,
+          enemyPlacement: 'guarding',
+        },
         rest: { type: 'short' },
         damage: { amount: 3, source: 'falling debris' },
         final_beat_reached: true,

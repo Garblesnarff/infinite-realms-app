@@ -182,7 +182,10 @@ export type DMResponse = {
   /**
    * Non-lethal exits declared alongside `combat_transition: 'end'` (#2524): a hostile
    * still standing may leave the fight only as fled, surrendered or withdrew — never
-   * as dead. Absent on envelopes that do not end combat.
+   * as dead. #1258: populated exits also arrive on narrative turns — an `end`
+   * rides with `combat_transition`, which the narrative phase keeps, and the exits
+   * ride with the end declaration; the guard judges them when combat is active.
+   * Absent on envelopes that declare no exits.
    */
   combat_exits?: Array<{
     participant_id: string;
@@ -673,8 +676,10 @@ export function createDmResponseSchema(
   };
 }
 
-/** #2524: non-lethal exits the DM may declare with `combat_transition: 'end'`. Optional —
- *  a legal field in structured output, never a required one. */
+/** #2524: non-lethal exits the DM may declare with `combat_transition: 'end'`. Optional
+ * in the live schema — a legal field in structured output, never a required one there.
+ * The fight-phase shadow schemas declare it required + nullable (#1258 round 3);
+ * the shadow treats an absent key as null. */
 const combatExitsProperty = {
   type: 'array',
   items: {
@@ -900,13 +905,87 @@ const liveExtensionPhases: DmResponseExtensionPhases = {
 
 export const dmResponseSchema = createDmResponseSchema(liveExtensionProperties);
 
+/**
+ * #1258 round 3 (strategist FIX at 774c634b): the fight-phase shadow schemas
+ * declare the five #1258 keys required + nullable instead of optional, so the
+ * tactical phase fits the 24-optional strict budget (31 -> 23; unions 8 -> 16,
+ * still within the 16 cap) without narrowing what the shadow accepts. The
+ * live schema sent to the provider is untouched — the wrappers and the
+ * scene_spec clone below exist only on the combat/tactical phase objects,
+ * and the narrative phase keeps the round-1 shape (18 optionals, already
+ * within budget). The shadow treats an absent required-nullable key as null
+ * (see findPhaseShadowMismatch), which matches the route: the story appliers
+ * skip absent fields exactly as they skip null ones. Precedent for the shape:
+ * scene_spec's own `seed` is already required + nullable in the live schema.
+ * The clone's nested required keys are safe for the same reason — the
+ * combat-entry gate sanitizes partial scene_specs with defaults, so a start
+ * turn carrying only environment + seed is a real shape, and the shadow pads
+ * the missing descriptive fields rather than flagging them.
+ */
+const FIGHT_PHASE_REQUIRED_NULLABLE = [
+  'scene_spec',
+  'combat_exits',
+  'rest',
+  'damage',
+  'final_beat_reached',
+] as const;
+
+/**
+ * Phase-scoped scene_spec: the live value shape, with the three descriptive
+ * fields required + nullable (null when the start turn does not describe
+ * them). Built once and shared by both fight phases; the live property
+ * object is never mutated, so the live schema stays byte-identical.
+ */
+const fightSceneSpecSchema: Record<string, unknown> = (() => {
+  const live = (
+    baseProperties as unknown as {
+      scene_spec: Record<string, unknown>;
+    }
+  ).scene_spec;
+  const props = live['properties'] as Record<string, Record<string, unknown>>;
+  return {
+    ...live,
+    properties: {
+      ...props,
+      size: nullable(props['size']),
+      sceneDescription: nullable(props['sceneDescription']),
+      enemyPlacement: nullable(props['enemyPlacement']),
+    },
+    required: ['environment', 'seed', 'size', 'sceneDescription', 'enemyPlacement'],
+  };
+})();
+
+/**
+ * Strict-fit shape for a fight-phase schema: wrap the four #1258 extension
+ * values in the null pad, swap in the phase-scoped scene_spec, and require
+ * all five keys. Returns a fresh top-level object; the input schema and the
+ * shared live property objects are never mutated.
+ */
+function strictFitFightPhaseSchema(schema: Record<string, unknown>): Record<string, unknown> {
+  const properties = {
+    ...(schema['properties'] as Record<string, unknown>),
+  };
+  for (const key of ['combat_exits', 'rest', 'damage', 'final_beat_reached']) {
+    properties[key] = nullable(properties[key] as Record<string, unknown>);
+  }
+  // The scene_spec clone is wrapped too: the key is required, so its schema
+  // must accept the null the shadow pads an absent key with.
+  properties['scene_spec'] = nullable(fightSceneSpecSchema);
+  return {
+    ...schema,
+    properties,
+    required: [...(schema['required'] as string[]), ...FIGHT_PHASE_REQUIRED_NULLABLE],
+  };
+}
+
 const phaseSchemaCache = new Map<DmResponsePhase, Record<string, unknown>>();
 
 /**
  * #782 item 8: the per-phase schema for a phase, built from the live
  * extension set through the same builder as the full schema. Cached per
  * phase (one object per process, like dmResponseSchema) so the provider's
- * validator cache compiles each variant once.
+ * validator cache compiles each variant once. Combat and tactical get the
+ * #1258 round-3 strict-fit shape (five keys required + nullable).
  */
 export function dmResponseSchemaForPhase(phase: DmResponsePhase): Record<string, unknown> {
   if (phase === 'full') return dmResponseSchema;
@@ -916,6 +995,9 @@ export function dmResponseSchemaForPhase(phase: DmResponsePhase): Record<string,
       phase,
       extensionPhases: liveExtensionPhases,
     });
+    if (phase === 'combat' || phase === 'tactical') {
+      schema = strictFitFightPhaseSchema(schema);
+    }
     phaseSchemaCache.set(phase, schema);
   }
   return schema;
