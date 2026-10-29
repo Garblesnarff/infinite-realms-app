@@ -10,7 +10,7 @@
  * suffix-row case the old test named without setting up.
  */
 import { afterAll, beforeAll, beforeEach, expect, mock, test } from 'bun:test';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { Elysia } from 'elysia';
 
 import {
@@ -979,10 +979,10 @@ describeWithDb('Fighter feature More-menu bodies resolve through the real route 
     });
   });
 
-  test('#1187: the replayed library holds one Action Surge row, at level 2', async () => {
-    // One feature, one row: the level-17 "two uses" row is gone (db/migrations/
-    // 20261027_merge_action_surge_rows.sql). Rows this suite inserts for the #1181 backstop
-    // cases are marked "Test-only" and are not the seed.
+  test('#1187: the replayed library holds both Action Surge rows until the follow-up merge (step 1 only)', async () => {
+    // Step 1 only (option (a)): the level-17 "two uses" row stays until the follow-up
+    // migration merges it (db/migrations/20261027_merge_action_surge_rows.sql). Rows this
+    // suite inserts for the #1181 backstop cases are marked "Test-only" and are not the seed.
     const rows = await db
       .select({
         name: classFeaturesLibrary.featureName,
@@ -1001,11 +1001,15 @@ describeWithDb('Fighter feature More-menu bodies resolve through the real route 
             'Action Surge (two uses)',
           ]),
         ),
-      );
+      )
+      .orderBy(asc(classFeaturesLibrary.levelAcquired));
     const seeded = rows.filter((row) => !row.description.startsWith('Test-only'));
     expect(
       seeded.map(({ name, levelAcquired, usesCount }) => ({ name, levelAcquired, usesCount })),
-    ).toEqual([{ name: 'Action Surge', levelAcquired: 2, usesCount: 1 }]);
+    ).toEqual([
+      { name: 'Action Surge', levelAcquired: 2, usesCount: 1 },
+      { name: 'Action Surge (two uses)', levelAcquired: 17, usesCount: 2 },
+    ]);
   });
 
   test('#1187: a level-17 sheet with only the level-2 row rests to two uses and spends one', async () => {
