@@ -138,4 +138,60 @@ describe('PhysicsDiceBox reduced motion', () => {
     ).toBeInTheDocument();
     view.unmount();
   });
+
+  it('still announces the result when animation is off', async () => {
+    const result = {
+      expression: '1d20',
+      total: 7,
+      rolls: [{ dice: 20, value: 7, sign: 1 as const, critical: false }],
+      modifiers: 0,
+      advantage: false,
+      disadvantage: false,
+      critical: false,
+      naturalRoll: 7,
+      timestamp: 3,
+    } as DiceRollResult;
+
+    const view = render(
+      <PhysicsDiceBox result={result} isRolling={false} showAnimation={false} height={150} />,
+    );
+
+    expect(view.container.querySelector('.sr-only')).not.toBeNull();
+    expect(await screen.findByText('Dice result 7: 7')).toBeInTheDocument();
+    view.unmount();
+  });
+
+  it('announces the result only after the dice stop', async () => {
+    const result = {
+      expression: '1d20',
+      total: 7,
+      rolls: [{ dice: 20, value: 7, sign: 1 as const, critical: false }],
+      modifiers: 0,
+      advantage: false,
+      disadvantage: false,
+      critical: false,
+      naturalRoll: 7,
+      timestamp: 4,
+    } as DiceRollResult;
+    const specs = expandRolls(result);
+    const expected = await simulateTrayAsync(specs);
+    const finalFrame = expected.frames.at(-1)?.[0];
+    if (!finalFrame) throw new Error('simulation did not record a final frame');
+    const frames = [[finalFrame], [finalFrame]];
+
+    const view = render(
+      <PhysicsDiceBox
+        result={result}
+        isRolling={false}
+        showAnimation
+        height={150}
+        simulate={async () => ({ frames, flat: true })}
+      />,
+    );
+
+    expect(view.container.querySelector('.sr-only')?.textContent).toBe('');
+    expect(await screen.findByText('Dice result 7: 7')).toBeInTheDocument();
+    expect(screen.queryByText(/Physics preview unavailable/)).not.toBeInTheDocument();
+    view.unmount();
+  });
 });
