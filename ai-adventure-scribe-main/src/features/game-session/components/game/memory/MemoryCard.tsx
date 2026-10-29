@@ -9,6 +9,8 @@ import { Card } from '@/components/ui/card';
 
 interface MemoryCardProps {
   memory: Memory;
+  /** Session number when the memory's session is known; omitted otherwise. */
+  sessionNumber?: number | null;
 }
 
 /**
@@ -16,7 +18,7 @@ interface MemoryCardProps {
  * One remembered fact: icon, content (two lines, expandable), metadata, when, importance.
  * Read-only: no pin, lock or edit controls yet (#1236 section B).
  */
-export const MemoryCard: React.FC<MemoryCardProps> = React.memo(({ memory }) => {
+export const MemoryCard: React.FC<MemoryCardProps> = React.memo(({ memory, sessionNumber }) => {
   const [expanded, setExpanded] = useState(false);
   const category = MEMORY_CATEGORIES.find((cat) => cat.type === memory.type);
   const importance = importanceLevel(memory.importance);
@@ -48,7 +50,10 @@ export const MemoryCard: React.FC<MemoryCardProps> = React.memo(({ memory }) => 
             </div>
           )}
           <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
-            <span>{formatWhen(memory.created_at)}</span>
+            <span>
+              {sessionNumber ? `Session ${sessionNumber} · ` : ''}
+              {formatWhen(memory.created_at)}
+            </span>
             <span className="inline-flex items-center gap-1.5">
               <span aria-hidden="true" className="inline-flex gap-0.5">
                 {[1, 2, 3].map((n) => (

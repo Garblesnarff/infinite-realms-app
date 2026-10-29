@@ -1,9 +1,15 @@
 import { render, screen, fireEvent, within } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { MemoryList } from '../MemoryList';
 
 import type { Memory } from '../types';
+
+import { userDataApi } from '@/services/user-data-api';
+
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: { listSessions: vi.fn(async () => []) },
+}));
 
 const mem = (id: string, type: Memory['type'], content = `memory ${id}`): Memory =>
   ({
@@ -23,6 +29,36 @@ const baseProps = {
 };
 
 describe('MemoryList (#1236 section B)', () => {
+  beforeEach(() => {
+    vi.mocked(userDataApi.listSessions).mockClear();
+  });
+
+  it('labels a memory with its session number when the campaign sessions are loaded', async () => {
+    vi.mocked(userDataApi.listSessions).mockResolvedValueOnce([
+      { id: 's-2', session_number: 2 } as never,
+    ]);
+    const known = { ...mem('1', 'npc'), session_id: 's-2' } as Memory;
+    const unknown = { ...mem('2', 'npc'), session_id: 's-missing' } as Memory;
+    render(
+      <MemoryList
+        {...baseProps}
+        campaignId="camp-1"
+        allMemories={[known, unknown]}
+        sortedMemories={[known, unknown]}
+      />,
+    );
+
+    expect(await screen.findByText(/^Session 2 · /)).toBeInTheDocument();
+    expect(userDataApi.listSessions).toHaveBeenCalledWith({ campaignId: 'camp-1' });
+    expect(screen.getAllByText(/^Session /)).toHaveLength(1);
+  });
+
+  it('does not load sessions when there is no campaign id', () => {
+    const all = [mem('1', 'npc')];
+    render(<MemoryList {...baseProps} allMemories={all} sortedMemories={all} />);
+    expect(userDataApi.listSessions).not.toHaveBeenCalled();
+  });
+
   it('states the count of all memories, not the filtered view', () => {
     const all = [mem('1', 'npc'), mem('2', 'item'), mem('3', 'location')];
     render(<MemoryList {...baseProps} allMemories={all} sortedMemories={[all[0]]} />);

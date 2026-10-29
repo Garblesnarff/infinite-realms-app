@@ -3,6 +3,7 @@ import React from 'react';
 import { groupMemoriesByCategory } from './memory-format';
 import { MemoryCard } from './MemoryCard';
 import { MemoryFilter } from './MemoryFilter';
+import { useCampaignSessionNumbers } from './useCampaignSessionNumbers';
 
 import type { Memory } from './types';
 
@@ -14,6 +15,8 @@ export interface MemoryListProps {
   selectedType: string | null;
   setSelectedType: (type: string | null) => void;
   memoriesLoading: boolean;
+  /** Campaign whose sessions give the "Session N" part of each when line. */
+  campaignId?: string | null;
 }
 
 /**
@@ -22,8 +25,9 @@ export interface MemoryListProps {
  * header count, filter chips, and cards grouped by category with counts.
  */
 export const MemoryList: React.FC<MemoryListProps> = React.memo(
-  ({ allMemories, sortedMemories, selectedType, setSelectedType, memoriesLoading }) => {
+  ({ allMemories, sortedMemories, selectedType, setSelectedType, memoriesLoading, campaignId }) => {
     const groups = groupMemoriesByCategory(sortedMemories);
+    const sessionNumbers = useCampaignSessionNumbers(campaignId);
     const total = allMemories.length;
 
     return (
@@ -59,7 +63,11 @@ export const MemoryList: React.FC<MemoryListProps> = React.memo(
               <span className="font-normal">({group.items.length})</span>
             </h3>
             {group.items.map((memory) => (
-              <MemoryCard key={memory.id} memory={memory} />
+              <MemoryCard
+                key={memory.id}
+                memory={memory}
+                sessionNumber={memory.session_id ? sessionNumbers.get(memory.session_id) : null}
+              />
             ))}
           </section>
         ))}

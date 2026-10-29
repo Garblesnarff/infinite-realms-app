@@ -19,6 +19,7 @@ export interface DesktopMemoryTabProps {
   memoriesLoading: boolean;
   allMemories: Memory[];
   sortedMemories: Memory[];
+  campaignId?: string | null;
 }
 
 export const DesktopMemoryTab: React.FC<DesktopMemoryTabProps> = React.memo(
@@ -32,6 +33,7 @@ export const DesktopMemoryTab: React.FC<DesktopMemoryTabProps> = React.memo(
     memoriesLoading,
     allMemories,
     sortedMemories,
+    campaignId,
   }) => {
     return (
       <div className="flex flex-col h-full overflow-hidden">
@@ -63,6 +65,7 @@ export const DesktopMemoryTab: React.FC<DesktopMemoryTabProps> = React.memo(
             selectedType={selectedType}
             setSelectedType={setSelectedType}
             memoriesLoading={memoriesLoading}
+            campaignId={campaignId}
           />
         </ScrollArea>
       </div>

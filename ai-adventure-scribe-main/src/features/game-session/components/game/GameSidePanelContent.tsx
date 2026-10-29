@@ -32,6 +32,7 @@ export interface GameSidePanelContentProps {
   setLocalSessionNotes: (notes: string) => void;
   memoriesLoading: boolean;
   allMemories: Memory[];
+  campaignId?: string | null;
   sortedMemories: Memory[];
   characterState: CharacterState;
   isInCombat: boolean;
@@ -67,6 +68,7 @@ export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = React.m
     setLocalSessionNotes,
     memoriesLoading,
     allMemories,
+    campaignId,
     sortedMemories,
     isInCombat,
     journalEntries = [],
@@ -151,6 +153,7 @@ export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = React.m
                 <div className="p-4">
                   <MemoryList
                     allMemories={allMemories}
+                    campaignId={campaignId}
                     sortedMemories={sortedMemories}
                     selectedType={selectedType}
                     setSelectedType={setSelectedType}

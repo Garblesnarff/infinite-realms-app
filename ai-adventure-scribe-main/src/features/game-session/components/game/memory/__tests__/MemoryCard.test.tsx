@@ -24,6 +24,17 @@ describe('MemoryCard (#1236 section B)', () => {
     expect(screen.getByText('3 days ago')).toBeInTheDocument();
   });
 
+  it('shows the session number before the when line when the session is known', () => {
+    render(<MemoryCard memory={base({})} sessionNumber={2} />);
+    expect(screen.getByText('Session 2 · 3 days ago')).toBeInTheDocument();
+  });
+
+  it('keeps the when line relative-only when the session is not known', () => {
+    render(<MemoryCard memory={base({})} sessionNumber={null} />);
+    expect(screen.getByText('3 days ago')).toBeInTheDocument();
+    expect(screen.queryByText(/^Session /)).not.toBeInTheDocument();
+  });
+
   it('gives importance a text label and a matching number of pips', () => {
     const { container, rerender } = render(<MemoryCard memory={base({ importance: 9 })} />);
     expect(screen.getByText('Important')).toBeInTheDocument();
