@@ -2,6 +2,8 @@ import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 
 interface TacticalEntityLike {
   id: string;
+  x?: number;
+  y?: number;
   movementRemaining?: number | null;
 }
 
@@ -21,6 +23,31 @@ export async function actorMovementRemaining(
   sessionId: string | undefined,
   actorId: string,
 ): Promise<number | null> {
+  const entity = (await readActiveTacticalMap(sessionId))?.entities?.find(
+    (candidate) => candidate.id === actorId,
+  );
+  return typeof entity?.movementRemaining === 'number' ? entity.movementRemaining : null;
+}
+
+/**
+ * #1227: the board cell a participant stands on, or `null` when the board cannot say. An area
+ * chip aims at its target's cell, the same conversion a DM's targeted area cast gets.
+ */
+export async function participantBoardCell(
+  sessionId: string | undefined,
+  participantId: string,
+): Promise<{ x: number; y: number } | null> {
+  const entity = (await readActiveTacticalMap(sessionId))?.entities?.find(
+    (candidate) => candidate.id === participantId,
+  );
+  return typeof entity?.x === 'number' && typeof entity?.y === 'number'
+    ? { x: entity.x, y: entity.y }
+    : null;
+}
+
+async function readActiveTacticalMap(
+  sessionId: string | undefined,
+): Promise<TacticalMapLike | null> {
   if (!sessionId) return null;
   try {
     const response = await fetchWithAuth(
@@ -36,8 +63,7 @@ export async function actorMovementRemaining(
           ? ((payload as { map?: TacticalMapLike | null }).map ?? null)
           : (payload as TacticalMapLike)
         : null;
-    const entity = map?.entities?.find((candidate) => candidate.id === actorId);
-    return typeof entity?.movementRemaining === 'number' ? entity.movementRemaining : null;
+    return map;
   } catch {
     return null;
   }

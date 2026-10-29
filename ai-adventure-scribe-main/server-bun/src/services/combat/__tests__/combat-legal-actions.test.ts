@@ -392,7 +392,14 @@ describe('getLegalCombatActions', () => {
     const labels = result.actions.map((action) => action.label);
 
     expect(result.actions.filter((action) => action.type === 'spell' && !action.narrated)).toEqual([
-      { type: 'spell', label: 'Cast Acid Splash', spellId: 'acid-splash' },
+      // #1227: save, auto-hit and area chips carry their targets too: the client commits them
+      // to the engine instead of sending the label to the DM.
+      {
+        type: 'spell',
+        label: 'Cast Acid Splash',
+        spellId: 'acid-splash',
+        targetIds: ['monster-1'],
+      },
       {
         type: 'spell',
         label: 'Cast Chill Touch',
@@ -402,7 +409,12 @@ describe('getLegalCombatActions', () => {
         // chat text for the DM to declare.
         targetIds: ['monster-1'],
       },
-      { type: 'spell', label: 'Cast Burning Hands', spellId: 'burning-hands' },
+      {
+        type: 'spell',
+        label: 'Cast Burning Hands',
+        spellId: 'burning-hands',
+        targetIds: ['monster-1'],
+      },
     ]);
     expect(result.actions.filter((action) => action.type === 'spell' && action.narrated)).toEqual([
       { type: 'spell', label: 'Dancing Lights', spellId: 'dancing-lights', narrated: true },
@@ -491,6 +503,7 @@ describe('getLegalCombatActions', () => {
         label: 'Cast Burning Hands (2nd-level slot)',
         spellId: 'burning-hands',
         slotLevel: 2,
+        targetIds: ['monster-1'],
       },
     ]);
   });
@@ -511,6 +524,7 @@ describe('getLegalCombatActions', () => {
         label: 'Cast Burning Hands',
         spellId: 'burning-hands',
         slotLevel: 1,
+        targetIds: ['monster-1'],
       },
       {
         type: 'spell',

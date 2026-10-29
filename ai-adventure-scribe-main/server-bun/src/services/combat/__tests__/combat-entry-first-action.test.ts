@@ -44,6 +44,8 @@ const state = {
 };
 
 const deps = {
+  // #1227: no slot ledger, so the first action names the spell's own level.
+  remainingSpellSlots: async () => null,
   getParticipantAbilityProfile: async () => ({
     level: 1,
     scores: { str: 16, dex: 14 },
@@ -620,6 +622,43 @@ describe('deriveCombatEntryFirstAction', () => {
       },
     });
     expect(firstAction?.roll_request).toBeUndefined();
+  });
+
+  it('names the lowest remaining slot at or above the spell level for a first-action cast (#1227)', async () => {
+    const declaredAttack = detectDeclaredAttack(
+      'I cast Magic Missile at Professor Emil Darkwater',
+      [{ name: 'Professor Emil Darkwater' }],
+    );
+    expect(declaredAttack).toMatchObject({ attackSource: 'spell', spellId: 'magic-missile' });
+    const ledgerReads: string[] = [];
+
+    const firstAction = await deriveCombatEntryFirstAction(
+      {
+        sessionId: 'session-1',
+        combatState: state,
+        player: { characterId: 'character-1', name: 'Rook' },
+        declaredAttack: declaredAttack!,
+      },
+      {
+        ...deps,
+        // The 1st-level slots are spent; a 2nd-level slot remains.
+        remainingSpellSlots: async (characterId: string) => {
+          ledgerReads.push(characterId);
+          return new Map([
+            [1, 0],
+            [2, 1],
+          ]);
+        },
+      },
+    );
+
+    expect(ledgerReads).toEqual(['character-1']);
+    expect(firstAction).toMatchObject({
+      type: 'spell',
+      spellId: 'magic-missile',
+      slotLevel: 2,
+      combat_action: { action_type: 'cast_spell', spell_id: 'magic-missile', slot_level: 2 },
+    });
   });
 
   it('refuses an unknown or out-of-scope declared spell without fabricating a weapon attack', async () => {

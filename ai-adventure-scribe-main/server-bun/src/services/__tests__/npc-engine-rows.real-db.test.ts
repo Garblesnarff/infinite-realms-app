@@ -1847,6 +1847,8 @@ describeWithDb('a prepared leveled attack spell is offered and resolves through 
       label: 'Cast Burning Hands (2nd-level slot)',
       spellId: 'burning-hands',
       slotLevel: 2,
+      // #1227: an area chip carries the creatures it can be aimed at.
+      targetIds: [sentinelId],
     });
 
     // Pin the upcast dice: the save roll is already deterministic —

@@ -11,12 +11,14 @@ import {
   getActiveConditionNames,
   getParticipantAbilityProfile,
   listEquippedWeaponProfiles,
+  remainingSpellSlots,
 } from './data-access.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { isUnarmedAttackVerb, isUnarmedWeaponClaim, UNARMED_STRIKE } from './weapon-catalog.js';
 import { groundRequestedWeapon } from './weapon-grounding.js';
 import { displayNameOf } from '../../../../shared/engine-display-name';
+import { chooseSpellSlotLevel } from '../../../../shared/spell-slot-choice';
 import {
   isPlayerCombatCurseSpell,
   isPlayerCombatSpell,
@@ -137,6 +139,7 @@ export interface CombatEntryFirstActionDeps {
   getParticipantAbilityProfile: typeof getParticipantAbilityProfile;
   getActiveConditionNames: typeof getActiveConditionNames;
   loadActiveTacticalMap: typeof loadActiveTacticalMap;
+  remainingSpellSlots: typeof remainingSpellSlots;
   logger: Pick<typeof combatLogger, 'warn'>;
 }
 
@@ -145,6 +148,7 @@ const defaultDeps: CombatEntryFirstActionDeps = {
   getParticipantAbilityProfile,
   getActiveConditionNames,
   loadActiveTacticalMap,
+  remainingSpellSlots,
   logger: combatLogger,
 };
 
@@ -343,7 +347,14 @@ export async function deriveCombatEntryFirstAction(
       ((isPlayerCombatSpell(spell) && spell.damage) || isPlayerCombatCurseSpell(spell)) &&
       profileKnowsSpell(profile, spell)
     ) {
-      const slotLevel = spell.level > 0 ? spell.level : null;
+      // #1227: the slot rule every player cast shares: the lowest remaining slot at or above
+      // the spell's level, or its own level when the ledger is unknown (the commit enforces).
+      const slotLevel = chooseSpellSlotLevel(spell.level, {
+        remaining:
+          spell.level > 0 && playerParticipant.characterId
+            ? await deps.remainingSpellSlots(playerParticipant.characterId)
+            : null,
+      });
       return {
         type: 'spell',
         actor: playerParticipant.id,

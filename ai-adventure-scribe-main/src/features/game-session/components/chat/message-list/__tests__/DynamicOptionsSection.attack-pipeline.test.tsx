@@ -320,10 +320,7 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
       expect((onSendMessage.mock.calls[0][0] as { text: string }).text).toContain('HIT');
       // 2) Then the end_turn intent is sent.
       await waitFor(() =>
-        expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith(
-          'encounter-d5',
-          keyedEndTurn,
-        ),
+        expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith('encounter-d5', keyedEndTurn),
       );
       // 3) Then the enemy line arrives via the server's end_turn response.
       await waitFor(() => expect(npcRows).toHaveLength(1));
@@ -379,9 +376,7 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
     );
     fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
 
-    await waitFor(() =>
-      expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledTimes(1),
-    );
+    await waitFor(() => expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledTimes(1));
     // Let the branch run to its finally: a macrotask drains the whole chain of
     // already-resolved mocked promises the branch awaits after the execution.
     await act(async () => {
@@ -869,16 +864,16 @@ describe('the spell-attack option runs the declare pipeline, never DM text (#258
     expect(onOptionSelect).not.toHaveBeenCalled();
   });
 
-  it('a save spell still goes out as chat text', async () => {
-    // #2581: only attack-roll spells take the pipeline. A save spell keeps today's
-    // behavior: its label goes to the DM as text. `resolvePlayerCombatSpell` is the
-    // real one here — the save classification is what the chip contract depends on.
+  it('a save spell commits to the engine after its target-saves card, never as chat text (#1227)', async () => {
+    // #2581 sent only attack-roll spells down the pipeline and a save spell's label to the DM.
+    // #1227: that let the DM cast the chip with another slot or at other targets, so a save
+    // spell now commits too. The card is the save spell's step (`askPlayerForSpellCast` shows
+    // "target saves" and returns no die); the engine rolls the save.
+    vi.mocked(askPlayerForSpellCast).mockResolvedValue({ autoRolled: true, movementOnly: false });
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({
         actorId: SCHOLAR_ID,
-        // Attack-shaped on purpose: with targets present the component reaches the kind
-        // gate, so this test pins the gate itself rather than the missing-targets fallthrough.
         actions: [
           {
             type: 'spell',
@@ -894,9 +889,25 @@ describe('the spell-attack option runs the declare pipeline, never DM text (#258
     );
     fireEvent.click(await screen.findByText('Cast Sacred Flame'));
 
-    await waitFor(() => expect(onOptionSelect).toHaveBeenCalledWith('Cast Sacred Flame'));
-    expect(askPlayerForSpellCast).not.toHaveBeenCalled();
-    expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledWith(
+        'encounter-d5',
+        {
+          actor_id: SCHOLAR_ID,
+          action_type: 'cast_spell',
+          target_ids: [SWARM_1_ID],
+          weapon_id: null,
+          spell_id: 'sacred-flame',
+          slot_level: null,
+          movement_feet: 0,
+        },
+        undefined,
+        undefined,
+        'action_bar',
+      ),
+    );
+    expect(askPlayerForSpellCast).toHaveBeenCalledTimes(1);
+    expect(onOptionSelect).not.toHaveBeenCalled();
   });
 
   it('stops with a menu alert when the spell proposal is refused (autoRolled, no d20)', async () => {
