@@ -63,10 +63,16 @@ const narrativeTurn = {
   final_beat_reached: true,
 };
 
+// #1258 round 3: the fight-phase schemas declare the five keys required +
+// nullable, so a fight turn carries them by value or as null — never omitted.
 const combatTurn = {
   ...baseTurn,
   combat_actions: [],
   combat_exits: [],
+  scene_spec: null,
+  rest: null,
+  damage: null,
+  final_beat_reached: null,
 };
 
 const tacticalTurn = {
@@ -79,7 +85,7 @@ describe('phase schemas (Refs #782 item 8)', () => {
     expect(dmResponseSchemaForPhase('full')).toBe(dmResponseSchema);
   });
 
-  test('narrative carries the entry + story fields and drops the fight sections', () => {
+  test('narrative carries the entry + story fields, combat_exits, and drops the fight sections', () => {
     const schema = dmResponseSchemaForPhase('narrative');
     const properties = (schema as { properties: Record<string, unknown> }).properties;
     expect(Object.keys(properties).sort()).toEqual(
@@ -100,6 +106,7 @@ describe('phase schemas (Refs #782 item 8)', () => {
         'campaign_ending',
         'tracker_changes',
         'final_beat_reached',
+        'combat_exits',
       ].sort(),
     );
     expect((schema as { required: string[] }).required).toEqual([
@@ -113,7 +120,7 @@ describe('phase schemas (Refs #782 item 8)', () => {
     ]);
   });
 
-  test('combat carries the fight fields and drops the map + story extensions', () => {
+  test('combat carries the fight fields, scene_spec and the #1258 extensions, and drops the map surface', () => {
     const schema = dmResponseSchemaForPhase('combat');
     const properties = (schema as { properties: Record<string, unknown> }).properties;
     expect(Object.keys(properties).sort()).toEqual(
@@ -127,8 +134,30 @@ describe('phase schemas (Refs #782 item 8)', () => {
         'handout_actions',
         'combat_actions',
         'combat_exits',
+        'scene_spec',
+        'rest',
+        'damage',
+        'final_beat_reached',
       ].sort(),
     );
+    // #1258 round 3: fight phases require the five keys (nullable) — the
+    // strict-fit shape. Base keys first, then scene_spec, then the
+    // extensions in declaration order.
+    expect((schema as { required: string[] }).required).toEqual([
+      'text',
+      'options',
+      'narration_segments',
+      'roll_requests',
+      'combat_transition',
+      'combatants',
+      'handout_actions',
+      'combat_actions',
+      'scene_spec',
+      'combat_exits',
+      'rest',
+      'damage',
+      'final_beat_reached',
+    ]);
   });
 
   test('tactical is the combat set plus the kind-split map actions', () => {
@@ -145,9 +174,29 @@ describe('phase schemas (Refs #782 item 8)', () => {
         'handout_actions',
         'combat_actions',
         'combat_exits',
+        'scene_spec',
+        'rest',
+        'damage',
+        'final_beat_reached',
         'map_actions',
       ].sort(),
     );
+    expect((schema as { required: string[] }).required).toEqual([
+      'text',
+      'options',
+      'narration_segments',
+      'roll_requests',
+      'combat_transition',
+      'combatants',
+      'handout_actions',
+      'combat_actions',
+      'map_actions',
+      'scene_spec',
+      'combat_exits',
+      'rest',
+      'damage',
+      'final_beat_reached',
+    ]);
   });
 
   test('each turn validates under its own phase and no other', () => {
@@ -158,6 +207,33 @@ describe('phase schemas (Refs #782 item 8)', () => {
     expect(validate(dmResponseSchemaForPhase('narrative'), combatTurn).length).toBeGreaterThan(0);
     expect(validate(dmResponseSchemaForPhase('tactical'), combatTurn).length).toBeGreaterThan(0);
     expect(validate(dmResponseSchemaForPhase('tactical'), tacticalTurn)).toEqual([]);
+  });
+
+  test('#1258: fight turns carry scene_spec, rest, damage and final_beat_reached; narrative turns carry combat_exits', () => {
+    expect(
+      validate(dmResponseSchemaForPhase('tactical'), {
+        ...tacticalTurn,
+        // Full scene_spec shape: the phase-scoped scene_spec requires the
+        // descriptive fields (nullable) — a minimal shape validates only
+        // through the shadow, which pads absent required-nullable keys.
+        scene_spec: {
+          environment: 'dungeon_room',
+          size: 'small',
+          sceneDescription: 'A torch-lit guardroom.',
+          seed: 1,
+          enemyPlacement: 'guarding',
+        },
+        rest: { type: 'short' },
+        damage: { amount: 3, source: 'falling debris' },
+        final_beat_reached: true,
+      }),
+    ).toEqual([]);
+    expect(
+      validate(dmResponseSchemaForPhase('narrative'), {
+        ...narrativeTurn,
+        combat_exits: [{ participant_id: 'goblin-1', exit: 'fled' }],
+      }),
+    ).toEqual([]);
     expect(validate(dmResponseSchemaForPhase('narrative'), tacticalTurn).length).toBeGreaterThan(0);
     expect(validate(dmResponseSchemaForPhase('combat'), tacticalTurn).length).toBeGreaterThan(0);
   });
@@ -233,9 +309,10 @@ const findKeywords = (node: unknown, seen = new Set<object>()): string[] => {
 describe('keyword split (strategist HOLD on PR 1110: item-5 tail moves to its own PR)', () => {
   test('keywords stay at exactly their pre-move counts per schema', () => {
     // Narrative keeps the story bounds (quantity, duration, amount min/max,
-    // source min/maxLength); combat drops map and story sections (none);
-    // tactical keeps only the forced_move distance minimum; the default
-    // builder keeps the base map distance minimum; live keeps all seven.
+    // source min/maxLength); combat and tactical keep the damage bounds
+    // (#1258: damage rides on fight turns) plus tactical's forced_move
+    // distance minimum; the default builder keeps the base map distance
+    // minimum; live keeps all seven.
     expect(findKeywords(dmResponseSchemaForPhase('narrative')).sort()).toEqual([
       'maxLength',
       'maximum',
@@ -244,8 +321,19 @@ describe('keyword split (strategist HOLD on PR 1110: item-5 tail moves to its ow
       'minimum',
       'minimum',
     ]);
-    expect(findKeywords(dmResponseSchemaForPhase('combat'))).toEqual([]);
-    expect(findKeywords(dmResponseSchemaForPhase('tactical'))).toEqual(['minimum']);
+    expect(findKeywords(dmResponseSchemaForPhase('combat')).sort()).toEqual([
+      'maxLength',
+      'maximum',
+      'minLength',
+      'minimum',
+    ]);
+    expect(findKeywords(dmResponseSchemaForPhase('tactical')).sort()).toEqual([
+      'maxLength',
+      'maximum',
+      'minLength',
+      'minimum',
+      'minimum',
+    ]);
     expect(findKeywords(dmResponseSchemaForPhase('full')).sort()).toEqual([
       'maxLength',
       'maximum',
@@ -564,11 +652,11 @@ describe('phase schema budgets (Refs #782 item 8)', () => {
     // Unions/optionals/oneOf fit the strict caps (asserted exactly by the
     // budget test); keywords do NOT claim strict-fit — the HOLD split the
     // item-5 tail out, so each phase keeps today's keywords at its pinned
-    // count (narrative 6, combat 0, tactical 1).
+    // count (narrative 6, combat 4, tactical 5 — the damage bounds, #1258).
     const expectedKeywords: Record<'narrative' | 'combat' | 'tactical', number> = {
       narrative: 6,
-      combat: 0,
-      tactical: 1,
+      combat: 4,
+      tactical: 5,
     };
     for (const phase of ['narrative', 'combat', 'tactical'] as const) {
       expect(findKeywords(dmResponseSchemaForPhase(phase))).toHaveLength(

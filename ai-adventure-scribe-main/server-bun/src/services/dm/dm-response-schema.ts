@@ -182,7 +182,10 @@ export type DMResponse = {
   /**
    * Non-lethal exits declared alongside `combat_transition: 'end'` (#2524): a hostile
    * still standing may leave the fight only as fled, surrendered or withdrew — never
-   * as dead. Absent on envelopes that do not end combat.
+   * as dead. #1258: populated exits also arrive on narrative turns — an `end`
+   * rides with `combat_transition`, which the narrative phase keeps, and the exits
+   * ride with the end declaration; the guard judges them when combat is active.
+   * Absent on envelopes that declare no exits.
    */
   combat_exits?: Array<{
     participant_id: string;
@@ -563,12 +566,22 @@ const baseProperties = {
  * #782 item 8: per-phase DM reply schemas. `full` is today's single live
  * schema (every base property + every extension). The three phases are
  * strict subsets, chosen by the route from session state it already trusts:
- * narrative keeps the entry fields (a fight can only start on a narrative
- * turn) and the story extensions; combat keeps the fight fields and drops
- * the map surface and the story extensions; tactical is the combat set plus
- * the kind-split map actions. combat_exits is the one extension narrative
- * drops: an end is declared on a turn whose encounter is still active, and
- * such a turn picks combat or tactical, never narrative.
+ * narrative keeps the entry fields and the story extensions; combat keeps
+ * the fight fields plus the scene declaration (a `start` can land on a
+ * fight turn) and drops the map surface; tactical is the combat set plus
+ * the kind-split map actions. #1258: combat_exits is a narrative field too
+ * (the 10-28 nightly carried populated exits on narrative turns — an `end`
+ * rides with `combat_transition`, which narrative keeps, and the exits ride
+ * with the end declaration; the guard judges them when combat is active),
+ * and rest, damage and
+ * final_beat_reached ride on fight turns as well (the route's tracker step
+ * arms the ending from a final-beat flag on a combat turn, the damage
+ * applier gates on inCombat and nulls what it does not apply, and the rest
+ * applier gates on inCombat and skips — the phase schema must not reject
+ * a reply the route handles).
+ * The extensions that stay narrative-only (xp_award, items, conditions,
+ * campaign_ending, tracker_changes) are the ones with no fight-turn
+ * evidence and no fight-turn consumer.
  */
 export const DM_RESPONSE_PHASES = ['narrative', 'combat', 'tactical', 'full'] as const;
 export type DmResponsePhase = (typeof DM_RESPONSE_PHASES)[number];
@@ -590,6 +603,10 @@ const COMBAT_BASE_KEYS = [
   'narration_segments',
   'roll_requests',
   'combat_transition',
+  // #1258: a `start` can land on a fight turn (half-transition), and the
+  // prompt requires scene_spec with it — the reply is legitimate there
+  // even when a live encounter means the gate seats nothing new.
+  'scene_spec',
   'combatants',
   'handout_actions',
   'combat_actions',
@@ -659,8 +676,10 @@ export function createDmResponseSchema(
   };
 }
 
-/** #2524: non-lethal exits the DM may declare with `combat_transition: 'end'`. Optional —
- *  a legal field in structured output, never a required one. */
+/** #2524: non-lethal exits the DM may declare with `combat_transition: 'end'`. Optional
+ * in the live schema — a legal field in structured output, never a required one there.
+ * The fight-phase shadow schemas declare it required + nullable (#1258 round 3);
+ * the shadow treats an absent key as null. */
 const combatExitsProperty = {
   type: 'array',
   items: {
@@ -854,30 +873,110 @@ const liveExtensionProperties = {
 };
 
 /**
- * Phase declarations for the live extensions. The story extensions are
+ * Phase declarations for the live extensions. Most story extensions stay
  * narrative-only because the route's own behaviour makes them so: the
- * story appliers in llm.ts refuse to run when dmReply.inCombat (XP, items,
- * conditions, rest, damage, campaign ending, tracker changes, final beat
- * are narrative-only effects in the code today), so carrying them on a
- * combat turn would invite the model to emit fields the engine ignores.
- * combat_exits restricts itself the other way (combat + tactical; an end
- * is declared on a turn whose encounter is still active, which never picks
- * narrative). A future extension with no declaration defaults to all
+ * story appliers in llm.ts refuse to run when dmReply.inCombat, so
+ * carrying XP, items, conditions, campaign ending or tracker changes on
+ * a combat turn would invite the model to emit fields the engine ignores.
+ * #1258 corrects four declarations the 10-28 nightly disproved. Rest and
+ * damage ride on fight turns too: the appliers gate on inCombat and the
+ * route nulls unapplied damage and skips unapplied rest, so the phase
+ * schema must not reject a reply the route handles. Final_beat_reached
+ * does as well:
+ * the tracker step arms the ending-required state from the flag on a
+ * combat turn ("a climax spent fighting is still a climax"). And
+ * combat_exits is a narrative field too: the nightly carried populated
+ * exits on narrative turns, an `end` rides with `combat_transition`
+ * (which narrative keeps), and the exits ride with the end declaration;
+ * the guard judges them when combat is active. A future extension with no declaration defaults to all
  * phases, so in-flight extension work is never silently narrowed.
  */
 const liveExtensionPhases: DmResponseExtensionPhases = {
-  combat_exits: ['combat', 'tactical'],
+  combat_exits: ['narrative', 'combat', 'tactical'],
   xp_award: ['narrative'],
   items: ['narrative'],
   conditions: ['narrative'],
-  rest: ['narrative'],
-  damage: ['narrative'],
+  rest: ['narrative', 'combat', 'tactical'],
+  damage: ['narrative', 'combat', 'tactical'],
   campaign_ending: ['narrative'],
   tracker_changes: ['narrative'],
-  final_beat_reached: ['narrative'],
+  final_beat_reached: ['narrative', 'combat', 'tactical'],
 };
 
 export const dmResponseSchema = createDmResponseSchema(liveExtensionProperties);
+
+/**
+ * #1258 round 3 (strategist FIX at 774c634b): the fight-phase shadow schemas
+ * declare the five #1258 keys required + nullable instead of optional, so the
+ * tactical phase fits the 24-optional strict budget (31 -> 23; unions 8 -> 16,
+ * still within the 16 cap) without narrowing what the shadow accepts. The
+ * live schema sent to the provider is untouched — the wrappers and the
+ * scene_spec clone below exist only on the combat/tactical phase objects,
+ * and the narrative phase keeps the round-1 shape (18 optionals, already
+ * within budget). The shadow treats an absent required-nullable key as null
+ * (see findPhaseShadowMismatch), which matches the route: the story appliers
+ * skip absent fields exactly as they skip null ones. Precedent for the shape:
+ * scene_spec's own `seed` is already required + nullable in the live schema.
+ * The clone's nested required keys are safe for the same reason — the
+ * combat-entry gate sanitizes partial scene_specs with defaults, so a start
+ * turn carrying only environment + seed is a real shape, and the shadow pads
+ * the missing descriptive fields rather than flagging them.
+ */
+const FIGHT_PHASE_REQUIRED_NULLABLE = [
+  'scene_spec',
+  'combat_exits',
+  'rest',
+  'damage',
+  'final_beat_reached',
+] as const;
+
+/**
+ * Phase-scoped scene_spec: the live value shape, with the three descriptive
+ * fields required + nullable (null when the start turn does not describe
+ * them). Built once and shared by both fight phases; the live property
+ * object is never mutated, so the live schema stays byte-identical.
+ */
+const fightSceneSpecSchema: Record<string, unknown> = (() => {
+  const live = (
+    baseProperties as unknown as {
+      scene_spec: Record<string, unknown>;
+    }
+  ).scene_spec;
+  const props = live['properties'] as Record<string, Record<string, unknown>>;
+  return {
+    ...live,
+    properties: {
+      ...props,
+      size: nullable(props['size']),
+      sceneDescription: nullable(props['sceneDescription']),
+      enemyPlacement: nullable(props['enemyPlacement']),
+    },
+    required: ['environment', 'seed', 'size', 'sceneDescription', 'enemyPlacement'],
+  };
+})();
+
+/**
+ * Strict-fit shape for a fight-phase schema: wrap the four #1258 extension
+ * values in the null pad, swap in the phase-scoped scene_spec, and require
+ * all five keys. Returns a fresh top-level object; the input schema and the
+ * shared live property objects are never mutated.
+ */
+function strictFitFightPhaseSchema(schema: Record<string, unknown>): Record<string, unknown> {
+  const properties = {
+    ...(schema['properties'] as Record<string, unknown>),
+  };
+  for (const key of ['combat_exits', 'rest', 'damage', 'final_beat_reached']) {
+    properties[key] = nullable(properties[key] as Record<string, unknown>);
+  }
+  // The scene_spec clone is wrapped too: the key is required, so its schema
+  // must accept the null the shadow pads an absent key with.
+  properties['scene_spec'] = nullable(fightSceneSpecSchema);
+  return {
+    ...schema,
+    properties,
+    required: [...(schema['required'] as string[]), ...FIGHT_PHASE_REQUIRED_NULLABLE],
+  };
+}
 
 const phaseSchemaCache = new Map<DmResponsePhase, Record<string, unknown>>();
 
@@ -885,7 +984,8 @@ const phaseSchemaCache = new Map<DmResponsePhase, Record<string, unknown>>();
  * #782 item 8: the per-phase schema for a phase, built from the live
  * extension set through the same builder as the full schema. Cached per
  * phase (one object per process, like dmResponseSchema) so the provider's
- * validator cache compiles each variant once.
+ * validator cache compiles each variant once. Combat and tactical get the
+ * #1258 round-3 strict-fit shape (five keys required + nullable).
  */
 export function dmResponseSchemaForPhase(phase: DmResponsePhase): Record<string, unknown> {
   if (phase === 'full') return dmResponseSchema;
@@ -895,6 +995,9 @@ export function dmResponseSchemaForPhase(phase: DmResponsePhase): Record<string,
       phase,
       extensionPhases: liveExtensionPhases,
     });
+    if (phase === 'combat' || phase === 'tactical') {
+      schema = strictFitFightPhaseSchema(schema);
+    }
     phaseSchemaCache.set(phase, schema);
   }
   return schema;
