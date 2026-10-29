@@ -39,7 +39,8 @@ const REFRESH_SKIP_REPORT_INTERVAL_MS = 10 * 60 * 1000;
 type RefreshSkipReason = 'no_refresh_token' | 'no_expiry' | 'not_due' | 'lease_held';
 const lastRefreshSkipReportAt = new Map<RefreshSkipReason, number>();
 
-const reportRefreshSkip = (reason: RefreshSkipReason): void => {
+const reportRefreshSkip = (reason: RefreshSkipReason, accessToken?: string): void => {
+  if (!accessToken) return;
   const now = Date.now();
   const lastReportedAt = lastRefreshSkipReportAt.get(reason);
   if (lastReportedAt !== undefined && now - lastReportedAt < REFRESH_SKIP_REPORT_INTERVAL_MS) {
@@ -341,11 +342,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // A recursive deadline timer is used instead of relying only on a fixed
   // interval: when a background tab throttles timers, the first callback after
   // visibility is restored still sees the absolute expiry and refreshes.
+  const hasAccessToken = Boolean(session?.access_token);
   const hasRefreshToken = Boolean(session?.refresh_token);
   useEffect(() => {
     if (sessionEnded) return;
+    if (!hasAccessToken) return;
     if (!hasRefreshToken) {
-      reportRefreshSkip('no_refresh_token');
+      reportRefreshSkip('no_refresh_token', session?.access_token);
       return;
     }
 
@@ -353,25 +356,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const activeSession = sessionRef.current;
       if (!activeSession?.access_token || isSessionEnded()) return;
       if (!activeSession.refresh_token) {
-        reportRefreshSkip('no_refresh_token');
+        reportRefreshSkip('no_refresh_token', activeSession.access_token);
         return;
       }
 
       const expiry = getTokenExpiry(activeSession.access_token);
       const hasOpaqueExpiry = expiry === null;
       if (hasOpaqueExpiry) {
-        reportRefreshSkip('no_expiry');
         // There is no safe deadline to calculate for an opaque token. The
-        // scheduled cadence below still refreshes it; the initial check waits
-        // for that cadence so startup does not immediately rotate a token.
-        if (trigger === 'initial') return;
+        // scheduled cadence below refreshes it; startup and focus/visibility
+        // checks only record the reason they deliberately skip.
+        if (trigger !== 'scheduled') {
+          reportRefreshSkip('no_expiry', activeSession.access_token);
+          return;
+        }
       } else if (!isTokenExpiringSoon(activeSession.access_token)) {
-        reportRefreshSkip('not_due');
+        reportRefreshSkip('not_due', activeSession.access_token);
         return;
       }
 
       if (isRefreshLeaseHeld() && !isRefreshInFlight()) {
-        reportRefreshSkip('lease_held');
+        reportRefreshSkip('lease_held', activeSession.access_token);
         scheduleLeaseRetry();
         return;
       }
@@ -466,7 +471,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [endSession, hasRefreshToken, sessionEnded]);
+  }, [endSession, hasAccessToken, hasRefreshToken, session?.access_token, sessionEnded]);
 
   // Persist session to localStorage
   useEffect(() => {

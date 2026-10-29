@@ -3,7 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AuthProvider, useAuth } from '../AuthContext';
 
-import { clearSessionEnded, getTokenExpiry, persistSession } from '@/services/auth/TokenService';
+import {
+  clearSessionEnded,
+  getTokenExpiry,
+  isSessionEnded,
+  persistSession,
+} from '@/services/auth/TokenService';
 
 const authTelemetryMocks = vi.hoisted(() => ({ reportClientFailure: vi.fn() }));
 
@@ -95,6 +100,25 @@ describe('AuthContext connection failures (#565)', () => {
     expect(state.userEmail).toBeNull();
     // The stored session is intact — no silent sign-out.
     expect(window.localStorage.getItem('workos_access_token')).toBe('old-access');
+  });
+
+  it('does not end a logged-out visitor session or send refresh telemetry', async () => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    clearSessionEnded();
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(isSessionEnded()).toBe(false);
+    expect(authTelemetryMocks.reportClientFailure).not.toHaveBeenCalled();
   });
 
   it('keeps the stored session and raises connectionError on a 5xx', async () => {
@@ -486,6 +510,46 @@ describe('AuthContext connection failures (#565)', () => {
       await Promise.resolve();
     });
     expect(refreshAttempts).toBe(1);
+  });
+
+  it('does not refresh an opaque token on a focus event', async () => {
+    vi.useFakeTimers();
+    persistSession({ access_token: 'opaque-workos-token', refresh_token: 'old-refresh' });
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    let refreshAttempts = 0;
+    fetchMock.mockImplementation((url: string) => {
+      if (String(url).includes('/api/trpc/auth.me')) {
+        return Promise.resolve(
+          authMe(200, { result: { data: { id: 'u1', email: 'player@example.com' } } }),
+        );
+      }
+      if (String(url).includes('/v1/auth/refresh')) {
+        refreshAttempts += 1;
+        return Promise.resolve(
+          authMe(200, { accessToken: 'opaque-workos-token', refreshToken: 'old-refresh' }),
+        );
+      }
+      return Promise.resolve(authMe(404));
+    });
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    act(() => window.dispatchEvent(new Event('focus')));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(refreshAttempts).toBe(0);
   });
 
   it('rate-limits a repeated no-refresh-token diagnostic for ten minutes per tab', async () => {
