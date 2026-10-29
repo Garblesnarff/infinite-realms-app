@@ -24,6 +24,8 @@ const TOKEN_REFRESH_LEASE_MS = 10 * 1000;
 const TOKEN_REFRESH_LEASE_RENEW_MS = 3 * 1000;
 const TOKEN_REFRESH_LEASE_POLL_MS = 50;
 const TOKEN_REFRESH_LEASE_SETTLE_MS = 40;
+/** Overall ceiling for the refresh exchange, including response-body parsing (#1087). */
+export const TOKEN_REFRESH_OVERALL_TIMEOUT_MS = 20_000;
 
 type RefreshResult = AccessTokenPair | null;
 type StoredRefreshLease = { owner: string; expiresAt: number };
@@ -80,6 +82,23 @@ const isTransportFailure = (error: unknown): boolean => {
 
 /** Ceiling for the refresh POST so a hung endpoint cannot stall auth forever (#565). */
 const TOKEN_REFRESH_REQUEST_TIMEOUT_MS = 15_000;
+
+const withRefreshDeadline = async <T>(work: (signal: AbortSignal) => Promise<T>): Promise<T> => {
+  const controller = new AbortController();
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      controller.abort();
+      reject(new TokenRefreshTransportError('Token refresh exceeded its overall deadline'));
+    }, TOKEN_REFRESH_OVERALL_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([work(controller.signal), deadline]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+};
 
 const readSession = (raw: string | null): WorkOSSession | null => {
   if (!raw) return null;
@@ -157,6 +176,15 @@ const readRefreshLease = (): StoredRefreshLease | null => {
     return null;
   }
 };
+
+/** Whether a cross-tab refresh lease is currently present. */
+export const isRefreshLeaseHeld = (): boolean => {
+  const lease = readRefreshLease();
+  return Boolean(lease && lease.expiresAt > Date.now());
+};
+
+/** Whether this tab already owns an in-flight refresh promise. */
+export const isRefreshInFlight = (): boolean => refreshInFlight !== null;
 
 const waitForRefreshLease = (): Promise<void> =>
   new Promise((resolve) => {
@@ -348,7 +376,10 @@ export const isTokenExpiringSoon = (token: string): boolean => {
   return Date.now() >= expiry - TOKEN_REFRESH_MARGIN_MS;
 };
 
-const requestTokenRefresh = async (refreshToken: string): Promise<RefreshResult> => {
+const requestTokenRefresh = async (
+  refreshToken: string,
+  signal?: AbortSignal,
+): Promise<RefreshResult> => {
   try {
     const apiUrl = import.meta.env?.VITE_API_URL || '';
     const response = await fetchWithTimeout(
@@ -357,6 +388,7 @@ const requestTokenRefresh = async (refreshToken: string): Promise<RefreshResult>
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
+        signal,
       },
       TOKEN_REFRESH_REQUEST_TIMEOUT_MS,
     );
@@ -419,7 +451,9 @@ const refreshWithCoordination = async (
     }
 
     try {
-      const tokens = await requestTokenRefresh(refreshToken);
+      const tokens = await withRefreshDeadline((signal) =>
+        requestTokenRefresh(refreshToken, signal),
+      );
       if (tokens) {
         // Publish before releasing the cross-tab lock so the next tab adopts
         // these tokens instead of making a second exchange.

@@ -224,7 +224,8 @@ export type ClientFailureKind =
   | 'invalid_ability_score_key'
   | 'unhandled_promise_rejection'
   | 'react_error_boundary'
-  | 'client_turn_failure';
+  | 'client_turn_failure'
+  | 'auth_refresh_check_skipped';
 
 /** Optional context the server logs alongside a client failure (#2515). */
 export type ClientFailureDetails = {

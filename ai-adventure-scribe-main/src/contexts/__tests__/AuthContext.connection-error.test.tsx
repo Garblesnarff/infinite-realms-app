@@ -3,10 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AuthProvider, useAuth } from '../AuthContext';
 
-import { getTokenExpiry, persistSession } from '@/services/auth/TokenService';
+import { clearSessionEnded, getTokenExpiry, persistSession } from '@/services/auth/TokenService';
+
+const authTelemetryMocks = vi.hoisted(() => ({ reportClientFailure: vi.fn() }));
 
 vi.mock('@/lib/logger', () => ({
   default: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: authTelemetryMocks,
 }));
 
 vi.mock('@/hooks/auth/use-blog-role', () => ({
@@ -53,6 +59,8 @@ const tokenWithExpiry = (secondsFromNow: number): string =>
 describe('AuthContext connection failures (#565)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    authTelemetryMocks.reportClientFailure.mockClear();
+    clearSessionEnded();
     window.localStorage.clear();
     window.sessionStorage.clear();
     persistSession({ access_token: 'old-access', refresh_token: 'old-refresh' });
@@ -436,6 +444,100 @@ describe('AuthContext connection failures (#565)', () => {
     const originalExpiry = getTokenExpiry(expiringToken);
     expect(originalExpiry).toEqual(expect.any(Number));
     expect(Date.now()).toBeLessThan(originalExpiry ?? Number.POSITIVE_INFINITY);
+  });
+
+  it('refreshes opaque tokens on a fixed cadence and records the no-expiry decision', async () => {
+    vi.useFakeTimers();
+    persistSession({ access_token: 'opaque-workos-token', refresh_token: 'old-refresh' });
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    let refreshAttempts = 0;
+    fetchMock.mockImplementation((url: string) => {
+      if (String(url).includes('/api/trpc/auth.me')) {
+        return Promise.resolve(
+          authMe(200, { result: { data: { id: 'u1', email: 'player@example.com' } } }),
+        );
+      }
+      if (String(url).includes('/v1/auth/refresh')) {
+        refreshAttempts += 1;
+        return Promise.resolve(
+          authMe(200, { accessToken: 'opaque-workos-token', refreshToken: 'old-refresh' }),
+        );
+      }
+      return Promise.resolve(authMe(404));
+    });
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4 * 60 * 1000 + 100);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(refreshAttempts).toBe(1);
+  });
+
+  it('rate-limits a repeated no-refresh-token diagnostic for ten minutes per tab', async () => {
+    vi.useFakeTimers();
+    persistSession({ access_token: 'opaque-workos-token' });
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      authMe(200, { result: { data: { id: 'u1', email: 'player@example.com' } } }),
+    );
+
+    const first = render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    first.unmount();
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(
+      authTelemetryMocks.reportClientFailure.mock.calls.filter(
+        ([kind, , , details]) =>
+          kind === 'auth_refresh_check_skipped' && details?.message === 'reason=no_refresh_token',
+      ),
+    ).toHaveLength(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10 * 60 * 1000 + 1);
+    });
+    cleanup();
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(
+      authTelemetryMocks.reportClientFailure.mock.calls.filter(
+        ([kind, , , details]) =>
+          kind === 'auth_refresh_check_skipped' && details?.message === 'reason=no_refresh_token',
+      ),
+    ).toHaveLength(2);
   });
 
   it('backs off a transient scheduled refresh and retries while keeping the session', async () => {

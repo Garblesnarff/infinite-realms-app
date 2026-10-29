@@ -13,6 +13,8 @@ import {
   loadCachedSession,
   persistSession,
   SESSION_STORAGE_KEY,
+  TOKEN_REFRESH_OVERALL_TIMEOUT_MS,
+  TokenRefreshTransportError,
 } from '../TokenService';
 
 import logger from '@/lib/logger';
@@ -214,6 +216,32 @@ describe('TokenService', () => {
         { accessToken: 'new-access', refreshToken: 'new-refresh' },
         { accessToken: 'new-access', refreshToken: 'new-refresh' },
       ]);
+    });
+
+    it('releases the single-flight refresh after a response body stalls past the overall deadline', async () => {
+      let responseBody: Promise<unknown> = new Promise(() => {});
+      (fetch as any).mockImplementation(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => responseBody,
+        }),
+      );
+
+      const stalled = refreshAccessToken('old-refresh');
+      const stalledExpectation = expect(stalled).rejects.toBeInstanceOf(TokenRefreshTransportError);
+      await vi.advanceTimersByTimeAsync(40);
+      await vi.advanceTimersByTimeAsync(TOKEN_REFRESH_OVERALL_TIMEOUT_MS + 1);
+      await stalledExpectation;
+
+      responseBody = Promise.resolve({ accessToken: 'new-access', refreshToken: 'new-refresh' });
+      const recovered = refreshAccessToken('old-refresh');
+      await vi.advanceTimersByTimeAsync(40);
+      await Promise.resolve();
+      await expect(recovered).resolves.toEqual({
+        accessToken: 'new-access',
+        refreshToken: 'new-refresh',
+      });
+      expect(fetch).toHaveBeenCalledTimes(2);
     });
 
     it('enters a terminal state on a refresh 401 and never retries', async () => {

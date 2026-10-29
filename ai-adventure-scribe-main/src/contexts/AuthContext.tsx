@@ -8,7 +8,9 @@ import logger from '@/lib/logger';
 import {
   clearSessionEnded,
   getTokenExpiry,
+  isRefreshInFlight,
   isSessionEnded,
+  isRefreshLeaseHeld,
   isTokenExpiringSoon,
   loadCachedSession,
   persistSession,
@@ -20,6 +22,7 @@ import {
   TokenRefreshTransportError,
   type WorkOSSession,
 } from '@/services/auth/TokenService';
+import { userDataApi } from '@/services/user-data-api';
 
 export type { BlogRole, UserPlan };
 
@@ -30,6 +33,23 @@ const TOKEN_REFRESH_MARGIN_MS = 2 * 60 * 1000;
 const TOKEN_REFRESH_RETRY_INITIAL_MS = 2 * 1000;
 const TOKEN_REFRESH_RETRY_MAX_MS = 60 * 1000;
 const TOKEN_REFRESH_RETRY_JITTER_MS = 500;
+const TOKEN_OPAQUE_REFRESH_CADENCE_MS = 4 * 60 * 1000;
+const REFRESH_SKIP_REPORT_INTERVAL_MS = 10 * 60 * 1000;
+
+type RefreshSkipReason = 'no_refresh_token' | 'no_expiry' | 'not_due' | 'lease_held';
+const lastRefreshSkipReportAt = new Map<RefreshSkipReason, number>();
+
+const reportRefreshSkip = (reason: RefreshSkipReason): void => {
+  const now = Date.now();
+  const lastReportedAt = lastRefreshSkipReportAt.get(reason);
+  if (lastReportedAt !== undefined && now - lastReportedAt < REFRESH_SKIP_REPORT_INTERVAL_MS) {
+    return;
+  }
+  lastRefreshSkipReportAt.set(reason, now);
+  userDataApi.reportClientFailure('auth_refresh_check_skipped', undefined, undefined, {
+    message: `reason=${reason}`,
+  });
+};
 
 // WorkOS User type (compatible with existing code)
 interface WorkOSUser {
@@ -323,50 +343,75 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // visibility is restored still sees the absolute expiry and refreshes.
   const hasRefreshToken = Boolean(session?.refresh_token);
   useEffect(() => {
-    if (!hasRefreshToken || sessionEnded) return;
+    if (sessionEnded) return;
+    if (!hasRefreshToken) {
+      reportRefreshSkip('no_refresh_token');
+      return;
+    }
 
-    const checkAndRefresh = async (): Promise<void> => {
+    const checkAndRefresh = async (trigger: 'initial' | 'scheduled' | 'event'): Promise<void> => {
       const activeSession = sessionRef.current;
-      if (!activeSession?.access_token || !activeSession.refresh_token || isSessionEnded()) return;
+      if (!activeSession?.access_token || isSessionEnded()) return;
+      if (!activeSession.refresh_token) {
+        reportRefreshSkip('no_refresh_token');
+        return;
+      }
 
-      if (isTokenExpiringSoon(activeSession.access_token)) {
-        logger.info('Access token expiring soon, refreshing...');
-        let newTokens: Awaited<ReturnType<typeof refreshAccessTokenOnce>> = null;
-        try {
-          newTokens = await refreshAccessTokenOnce(
-            activeSession.refresh_token,
-            activeSession.access_token,
-          );
-        } catch (error) {
-          // #565: transport and temporary HTTP failures are not auth verdicts.
-          // Keep the session and back off so every tab does not hammer a
-          // recovering refresh endpoint once per second.
-          if (
-            error instanceof TokenRefreshTransportError ||
-            error instanceof TokenRefreshTransientError
-          ) {
-            scheduleTransientRetry();
-          } else {
-            logger.error('Unexpected token refresh rejection:', { error });
-          }
-        }
+      const expiry = getTokenExpiry(activeSession.access_token);
+      const hasOpaqueExpiry = expiry === null;
+      if (hasOpaqueExpiry) {
+        reportRefreshSkip('no_expiry');
+        // There is no safe deadline to calculate for an opaque token. The
+        // scheduled cadence below still refreshes it; the initial check waits
+        // for that cadence so startup does not immediately rotate a token.
+        if (trigger === 'initial') return;
+      } else if (!isTokenExpiringSoon(activeSession.access_token)) {
+        reportRefreshSkip('not_due');
+        return;
+      }
 
-        if (newTokens) {
-          transientFailureCount = 0;
-          retryDelayMs = null;
-          logger.info('Token refreshed successfully');
-          const newSession = {
-            access_token: newTokens.accessToken,
-            refresh_token: newTokens.refreshToken,
-          };
-          if (!isSessionEnded()) {
-            sessionRef.current = newSession;
-            setSession(newSession);
-            persistSession(newSession);
-          }
-        } else if (isSessionEnded()) {
-          endSession();
+      if (isRefreshLeaseHeld() && !isRefreshInFlight()) {
+        reportRefreshSkip('lease_held');
+        scheduleLeaseRetry();
+        return;
+      }
+
+      logger.info('Access token expiring soon, refreshing...');
+      let newTokens: Awaited<ReturnType<typeof refreshAccessTokenOnce>> = null;
+      try {
+        newTokens = await refreshAccessTokenOnce(
+          activeSession.refresh_token,
+          activeSession.access_token,
+        );
+      } catch (error) {
+        // #565: transport and temporary HTTP failures are not auth verdicts.
+        // Keep the session and back off so every tab does not hammer a
+        // recovering refresh endpoint once per second.
+        if (
+          error instanceof TokenRefreshTransportError ||
+          error instanceof TokenRefreshTransientError
+        ) {
+          scheduleTransientRetry();
+        } else {
+          logger.error('Unexpected token refresh rejection:', { error });
         }
+      }
+
+      if (newTokens) {
+        transientFailureCount = 0;
+        retryDelayMs = null;
+        logger.info('Token refreshed successfully');
+        const newSession = {
+          access_token: newTokens.accessToken,
+          refresh_token: newTokens.refreshToken,
+        };
+        if (!isSessionEnded()) {
+          sessionRef.current = newSession;
+          setSession(newSession);
+          persistSession(newSession);
+        }
+      } else if (isSessionEnded()) {
+        endSession();
       }
     };
 
@@ -384,28 +429,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         exponentialDelay + Math.floor(Math.random() * TOKEN_REFRESH_RETRY_JITTER_MS),
       );
     };
+    const scheduleLeaseRetry = (): void => {
+      retryDelayMs = TOKEN_REFRESH_RETRY_INITIAL_MS;
+    };
     const scheduleRefreshCheck = (): void => {
       if (refreshTimer !== null) window.clearTimeout(refreshTimer);
       const activeSession = sessionRef.current;
       const expiry = activeSession ? getTokenExpiry(activeSession.access_token) : null;
       const delay =
         retryDelayMs ??
-        (expiry ? Math.max(1_000, expiry - TOKEN_REFRESH_MARGIN_MS - Date.now()) : 30 * 1000);
+        (expiry
+          ? Math.max(1_000, expiry - TOKEN_REFRESH_MARGIN_MS - Date.now())
+          : TOKEN_OPAQUE_REFRESH_CADENCE_MS);
       retryDelayMs = null;
       refreshTimer = window.setTimeout(() => {
-        void checkAndRefresh().finally(scheduleRefreshCheck);
+        void checkAndRefresh('scheduled').finally(scheduleRefreshCheck);
       }, delay);
     };
 
     // Check immediately, then schedule against the token's absolute expiry.
-    void checkAndRefresh().finally(scheduleRefreshCheck);
+    void checkAndRefresh('initial').finally(scheduleRefreshCheck);
 
     const handleFocus = (): void => {
-      void checkAndRefresh().finally(scheduleRefreshCheck);
+      void checkAndRefresh('event').finally(scheduleRefreshCheck);
     };
     const handleVisibilityChange = (): void => {
       if (document.visibilityState === 'visible') {
-        void checkAndRefresh().finally(scheduleRefreshCheck);
+        void checkAndRefresh('event').finally(scheduleRefreshCheck);
       }
     };
     window.addEventListener('focus', handleFocus);

@@ -43,6 +43,7 @@ const ALLOWED_CLIENT_FAILURE_KINDS = [
   'unhandled_promise_rejection',
   'react_error_boundary',
   'client_turn_failure',
+  'auth_refresh_check_skipped',
 ] as const;
 type ClientFailureKind = (typeof ALLOWED_CLIENT_FAILURE_KINDS)[number];
 
@@ -128,10 +129,14 @@ export const telemetryRoutes = new Elysia({ prefix: '/v1/telemetry' })
       provisionalFetched: payload.provisionalFetched,
     });
 
-    alert(payload.kind, {
-      sessionId: payload.sessionId,
-      error: payload.error ?? payload.message,
-    });
+    // Scheduled refresh decisions are diagnostic breadcrumbs, not failures:
+    // keep them in the structured log without paging the alert channel.
+    if (payload.kind !== 'auth_refresh_check_skipped') {
+      alert(payload.kind, {
+        sessionId: payload.sessionId,
+        error: payload.error ?? payload.message,
+      });
+    }
 
     return new Response(null, { status: 204 });
   });
