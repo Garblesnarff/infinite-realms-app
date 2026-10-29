@@ -1,6 +1,7 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, type MockInstance } from 'vitest';
 
+import { upcastAcidArrowIntent } from '../../../../../shared/test-fixtures/upcast-spell-intent';
 import { useCombatLegalActions } from '../use-combat-legal-actions';
 
 import type { ChatMessage } from '@/types/game';
@@ -326,6 +327,52 @@ describe('useCombatLegalActions spell cast (#1185)', () => {
     // The mocked commit carries no engine lines, so no notice is composed; the turn
     // staying open is the movement read plus the refresh below.
     expect(combatHolder.current.refreshCombatState).toHaveBeenCalled();
+  });
+
+  it('sends the slot the chip names for an upcast cast (#1206)', async () => {
+    movementHolder.remaining.mockResolvedValue(5);
+    const upcastChip = { ...castAction, label: 'Cast Acid Arrow (3rd-level slot)', slotLevel: 3 };
+    const fetchSpy = routeFetch([upcastChip]);
+    const { result } = renderHook(() =>
+      useCombatLegalActions({ enabled: true, onSendMessage: vi.fn(), onSendText: vi.fn() }),
+    );
+
+    await waitFor(() => expect(result.current.actions).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.runAction(upcastChip as never);
+    });
+
+    const intents = intentCalls(fetchSpy);
+    expect(intents).toHaveLength(1);
+    // The exact commit the real-route test posts (npc-engine-rows.real-db.test.ts).
+    expect(intents[0].body.intent).toEqual(upcastAcidArrowIntent('pc-1', 'monster-1', 17));
+    const proposals = fetchSpy.mock.calls
+      .map(([, init]) => JSON.parse(String((init as { body?: string }).body ?? '{}')))
+      .filter((body: { phase?: string }) => body.phase === 'propose');
+    expect(proposals[0].intent).toMatchObject({ spellId: 'acid-arrow', slotLevel: 3 });
+  });
+
+  it('sends a save spell chip to the DM as its label, which names the upcast slot (#1206)', async () => {
+    const burningHands = {
+      type: 'spell',
+      label: 'Cast Burning Hands (2nd-level slot)',
+      spellId: 'burning-hands',
+      slotLevel: 2,
+    };
+    routeFetch([burningHands]);
+    const onSendText = vi.fn(async () => {});
+    const { result } = renderHook(() =>
+      useCombatLegalActions({ enabled: true, onSendMessage: vi.fn(), onSendText }),
+    );
+
+    await waitFor(() => expect(result.current.actions).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.runAction(burningHands as never);
+    });
+
+    expect(onSendText).toHaveBeenCalledWith('Cast Burning Hands (2nd-level slot)');
   });
 
   it('ends the turn after the cast when no movement remains', async () => {

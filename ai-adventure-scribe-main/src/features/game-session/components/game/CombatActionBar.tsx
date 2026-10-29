@@ -2,6 +2,7 @@ import { ChevronDown } from 'lucide-react';
 import React from 'react';
 
 import { facingName, rosterEntryForParticipant } from '../../../../../shared/engine-display-name';
+import { slotOrdinal } from '../../../../../shared/slot-ordinal';
 import { useTacticalMapContext } from '../tactical/TacticalMapProvider';
 import { summarizeCombatTurn } from './overhaul/combat-turn-order';
 import { useOverhaulViewModel } from './overhaul/useOverhaulViewModel';
@@ -213,9 +214,15 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
                   className="flex flex-col items-start"
                 >
                   <span>{withTarget(action)}</span>
-                  {info && (
+                  {(info || action.slotLevel) && (
                     <span className="text-xs text-muted-foreground">
-                      {[info.range, info.timing].filter(Boolean).join(' · ')}
+                      {[
+                        info?.range,
+                        info?.timing,
+                        action.slotLevel ? `${slotOrdinal(action.slotLevel)}-level slot` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </span>
                   )}
                 </DropdownMenuItem>

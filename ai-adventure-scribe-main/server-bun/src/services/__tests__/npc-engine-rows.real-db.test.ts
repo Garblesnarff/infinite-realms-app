@@ -29,6 +29,8 @@ import {
   tacticalMaps,
 } from '../../../../db/schema/index';
 import { ENEMY_HITS_PLAYER, REEVES } from '../../../../shared/test-fixtures/engine-results';
+import { upcastAcidArrowIntent } from '../../../../shared/test-fixtures/upcast-spell-intent';
+import { setRngSeed } from '../../lib/rng.js';
 import { parseAuthoredStatBlock } from '../combat/authored-stat-block-parser.js';
 import { resolveMonsterAttackProfile } from '../combat/monster-attack-profile.js';
 
@@ -1613,7 +1615,7 @@ describeWithDb('a prepared leveled attack spell is offered and resolves through 
     return { status: response.status, body: (await response.json()) as Record<string, any> };
   };
   /** A fresh L3 Wizard-vs-Rubble Sentinel duel: Acid Arrow prepared, Fire Bolt a cantrip. */
-  const seedWizardDuel = async () => {
+  const seedWizardDuel = async (preparedSpells = 'Acid Arrow') => {
     const database = realDb();
     const [{ id: duelCampaignId }] = await database
       .insert(campaigns)
@@ -1628,7 +1630,7 @@ describeWithDb('a prepared leveled attack spell is offered and resolves through 
         class: 'Wizard',
         level: 3,
         cantrips: 'Fire Bolt',
-        preparedSpells: 'Acid Arrow',
+        preparedSpells,
       })
       .returning();
     await database.insert(characterStats).values({
@@ -1748,6 +1750,8 @@ describeWithDb('a prepared leveled attack spell is offered and resolves through 
       label: 'Cast Acid Arrow',
       spellId: 'acid-arrow',
       targetIds: [sentinelId],
+      // #1206: the chip names the slot it spends.
+      slotLevel: 2,
     });
 
     await realDb()
@@ -1820,5 +1824,104 @@ describeWithDb('a prepared leveled attack spell is offered and resolves through 
     // The cast claims the Action but does not advance the turn: the wizard still holds it.
     const state = await CombatEncounterService.getCombatState(encounterId, userId);
     expect(state.currentParticipant?.id).toBe(wizardId);
+  });
+
+  // #1206: L1 0/4, L2 2/2. Burning Hands is offered and names the 2nd-level slot; cast with
+  // that slot through the real intent route, it spends a 2nd-level slot and leaves L1 alone.
+  test('with no 1st-level slot left, Burning Hands is offered with a 2nd-level slot and the cast spends it', async () => {
+    const { characterId, encounterId, wizardId, sentinelId } =
+      await seedWizardDuel('Burning Hands');
+    await realDb()
+      .update(characterSpellSlots)
+      .set({ usedSlots: 4 })
+      .where(
+        and(
+          eq(characterSpellSlots.characterId, characterId),
+          eq(characterSpellSlots.spellLevel, 1),
+        ),
+      );
+
+    const offered = await getLegalCombatActions(encounterId, userId);
+    expect(offered.actions).toContainEqual({
+      type: 'spell',
+      label: 'Cast Burning Hands (2nd-level slot)',
+      spellId: 'burning-hands',
+      slotLevel: 2,
+    });
+
+    // Pin the upcast dice: the save roll is already deterministic —
+    // this file mocks rollD20 to 14, and 14 + the sentinel's +0 DEX save meets DC 13,
+    // so the save succeeds and the damage is halved. Seeding the damage roller makes
+    // the 4d6 roll exact: seed 42 draws 4, 3, 6, 5 = 18, halved to 9. A 3d6 pick would
+    // draw 4, 3, 6 = 13, halved to 6 — so 9 proves the 2nd-level dice expression.
+    setRngSeed(42);
+    const cast = await postTo(encounterId, {
+      source: 'dm',
+      intent: {
+        type: 'spell',
+        actorId: wizardId,
+        targetIds: [sentinelId],
+        spellId: 'burning-hands',
+        spellName: 'Burning Hands',
+        slotLevel: 2,
+      },
+      dmStartedAt: 1730000000000,
+      origin: 'typed',
+    }).finally(() => setRngSeed(undefined));
+    expect(cast.status, JSON.stringify(cast.body)).toBe(200);
+    expect(await usedSlotsOf(characterId, 2)).toBe(1);
+    expect(await usedSlotsOf(characterId, 1)).toBe(4);
+    const results = cast.body.result.results as Array<{ finalDamage: number }>;
+    expect(results).toHaveLength(1);
+    expect(results[0].finalDamage).toBe(9);
+  });
+
+  // #1206: the exact ActionBar commit for an upcast attack chip (shared fixture, asserted on the
+  // client in use-combat-legal-actions.test.tsx): Acid Arrow from a 3rd-level slot spends that
+  // slot and rolls 5d4.
+  test('the exact ActionBar wire body for an upcast Acid Arrow spends a 3rd-level slot', async () => {
+    const { characterId, encounterId, wizardId, sentinelId } = await seedWizardDuel();
+    await realDb()
+      .update(characterSpellSlots)
+      .set({ usedSlots: 2 })
+      .where(
+        and(
+          eq(characterSpellSlots.characterId, characterId),
+          eq(characterSpellSlots.spellLevel, 2),
+        ),
+      );
+    await realDb()
+      .insert(characterSpellSlots)
+      .values({ characterId, spellLevel: 3, totalSlots: 2, usedSlots: 0 });
+
+    const offered = await getLegalCombatActions(encounterId, userId);
+    expect(offered.actions).toContainEqual({
+      type: 'spell',
+      label: 'Cast Acid Arrow (3rd-level slot)',
+      spellId: 'acid-arrow',
+      targetIds: [sentinelId],
+      slotLevel: 3,
+    });
+
+    // Pin the upcast dice: the d20 is player-supplied (15), and no
+    // Bless/Hex is live, so those riders return 0 without drawing — the damage dice
+    // are the only rolls. Seeding the roller makes the 5d4 roll exact:
+    // seed 42 draws 3, 2, 4, 3, 1 = 13. A 4d4 pick would draw 3, 2, 4, 3 = 12 —
+    // so 13 proves the 3rd-level dice expression.
+    setRngSeed(42);
+    const cast = await postTo(encounterId, {
+      source: 'dm',
+      intent: upcastAcidArrowIntent(wizardId, sentinelId, 15),
+      dmStartedAt: 1730000000000,
+      origin: 'action_bar',
+    }).finally(() => setRngSeed(undefined));
+    expect(cast.status, JSON.stringify(cast.body)).toBe(200);
+    expect(await usedSlotsOf(characterId, 3)).toBe(1);
+    expect(await usedSlotsOf(characterId, 2)).toBe(2);
+    const results = cast.body.result.results as Array<{ hit: boolean; finalDamage: number }>;
+    expect(results).toHaveLength(1);
+    // d20 15 + the wizard's spell attack bonus beats AC 11, so it hits: 5d4 from a 3rd-level slot.
+    expect(results[0].hit).toBe(true);
+    expect(results[0].finalDamage).toBe(13);
   });
 });

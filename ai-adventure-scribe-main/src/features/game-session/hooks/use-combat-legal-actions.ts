@@ -43,6 +43,11 @@ export type LegalAction = {
   spellId?: string;
   /** #1147: the inventory item a Use chip spends. */
   itemId?: string;
+  /**
+   * #1206: the slot a leveled spell chip spends: the lowest remaining slot at or above the
+   * spell's level. Absent when the engine has no slot ledger for the character.
+   */
+  slotLevel?: number;
   targetIds?: string[];
   x?: number;
   y?: number;
@@ -506,15 +511,22 @@ export function useCombatLegalActions(input: {
             // #1185: the engine never guesses a slot level — a leveled spell with no
             // slotLevel is refused (missing_spell_slot_level, pinned by
             // combat-spell-resolution.vitest.ts and the Bless explicit-choice test).
-            // The ActionBar names the spell's own level: a base-level cast, the same
-            // choice the DM default makes for a text cast. Upcast selection is a
-            // separate feature. An unresolvable spell keeps slot_level null and the
+            // The ActionBar names the slot the chip names (#1206), else the spell's own
+            // level. An unresolvable spell keeps slot_level null and the
             // engine refuses it with a readable reason, as before.
             const catalogSpell = action.spellId ? getSpellById(action.spellId, false) : null;
-            const spellLevel =
+            const ownLevel =
               typeof catalogSpell?.level === 'number' && catalogSpell.level >= 1
                 ? catalogSpell.level
                 : null;
+            // #1206: the chip names the slot it spends (an upcast when the spell's own level
+            // is spent); with no ledger the chip names none and the bar sends the own level.
+            const spellLevel =
+              ownLevel !== null &&
+              typeof action.slotLevel === 'number' &&
+              action.slotLevel >= ownLevel
+                ? action.slotLevel
+                : ownLevel;
             const structuredAction: StructuredCombatAction = {
               actor_id: actorId,
               action_type: 'cast_spell',

@@ -43,6 +43,7 @@ import {
 } from './weapon-catalog.js';
 import { groundRequestedWeapon, type GroundedWeapon } from './weapon-grounding.js';
 import { resolveWeaponName } from '../../../../shared/equipment-weapon-resolver';
+import { slotOrdinal } from '../../../../shared/slot-ordinal';
 import { logger } from '../../lib/logger.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
@@ -2415,7 +2416,7 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
         isPlayerCombatSpell(spell) &&
         all.findIndex((candidate) => candidate?.id === spell.id) === index,
     );
-  // #1185: a leveled spell is offered only while a slot of its own level remains. The
+  // #1185: a leveled spell is offered only while a usable slot remains (#1206, below). The
   // ledger is read once, and only when a leveled candidate exists; a null ledger (no slot
   // rows, #2459) offers ungated and the commit enforces. Cantrips are never gated.
   const hasLeveledSpell = spells.some((spell) => (spell?.level ?? 0) >= 1);
@@ -2423,18 +2424,33 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
     hasLeveledSpell && actor.participantType === 'player' && actor.characterId
       ? await remainingSpellSlots(actor.characterId)
       : null;
+  // #1206: a leveled spell can be cast with any slot of its level or higher (2014 PHB). It is
+  // offered while one remains, and the chip names the slot the cast spends: the lowest
+  // remaining slot at or above the spell's level. With no ledger (null) the chip names none.
+  const lowestSlotFor = (spellLevel: number): number | null => {
+    if (!slotRemaining) return null;
+    for (let level = spellLevel; level <= 9; level += 1) {
+      if ((slotRemaining.get(level) ?? 0) > 0) return level;
+    }
+    return null;
+  };
   // One suggestion per spell on the character's own list. A single "Cast a prepared spell" chip
   // went to the DM as text, and the DM picked Fire Bolt for a wizard who does not have it (#2343 A3).
   for (const spell of spells) {
     const usesBonusAction = spell!.castingTime.toLowerCase().includes('bonus action');
-    if (spell!.level >= 1 && slotRemaining && (slotRemaining.get(spell!.level) ?? 0) <= 0) {
-      continue;
-    }
+    const slotLevel = spell!.level >= 1 ? lowestSlotFor(spell!.level) : null;
+    if (spell!.level >= 1 && slotRemaining && slotLevel === null) continue;
     if (usesBonusAction ? actor.bonusActionUsed : actor.actionUsed) continue;
     const action: { type: LegalActionType } & Record<string, unknown> = {
       type: 'spell',
-      label: `Cast ${spell!.name}`,
+      // An upcast names its slot in the label too: a save or auto-hit chip reaches the DM as
+      // this text, so the text has to say which slot the player chose.
+      label:
+        slotLevel !== null && slotLevel > spell!.level
+          ? `Cast ${spell!.name} (${slotOrdinal(slotLevel)}-level slot)`
+          : `Cast ${spell!.name}`,
       spellId: spell!.id,
+      ...(slotLevel !== null ? { slotLevel } : {}),
     };
     // #2581: attack-roll spell chips are attack-shaped — they carry their targets so the
     // client can run the declare → dialog → commit pipeline itself instead of sending chat

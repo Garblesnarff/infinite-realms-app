@@ -445,11 +445,13 @@ describe('getLegalCombatActions', () => {
         label: 'Cast Acid Arrow',
         spellId: 'acid-arrow',
         targetIds: ['monster-1'],
+        // #1206: the chip names the slot it spends.
+        slotLevel: 2,
       },
     ]);
   });
 
-  test('withholds a leveled attack spell with no slot of its level left, and keeps the cantrip (#1185)', async () => {
+  test('withholds a leveled attack spell with no slot of its level or higher left, and keeps the cantrip (#1185, #1206)', async () => {
     profile = { ...APPRENTICE_PROFILE, level: 3, spellIds: ['fire-bolt', 'acid-arrow'] };
     slotRemaining = new Map([
       [1, 4],
@@ -467,10 +469,70 @@ describe('getLegalCombatActions', () => {
       },
     ]);
     expect(
-      result.actions.some(
-        (action) => action.type === 'spell' && action.spellId === 'acid-arrow',
-      ),
+      result.actions.some((action) => action.type === 'spell' && action.spellId === 'acid-arrow'),
     ).toBe(false);
+  });
+
+  // #1206: a leveled spell can be cast with any slot of its level or higher. With the 1st-level
+  // slots spent and 2nd-level slots left, Burning Hands is offered and names the 2nd-level slot
+  // it spends — in the label too, since a save spell's chip reaches the DM as its label.
+  test('offers Burning Hands with a 2nd-level slot when no 1st-level slot remains (#1206)', async () => {
+    profile = { ...APPRENTICE_PROFILE, level: 3, spellIds: ['burning-hands'] };
+    slotRemaining = new Map([
+      [1, 0],
+      [2, 2],
+    ]);
+
+    const result = await getLegalCombatActions('encounter-1', 'user-1');
+
+    expect(result.actions.filter((action) => action.type === 'spell')).toEqual([
+      {
+        type: 'spell',
+        label: 'Cast Burning Hands (2nd-level slot)',
+        spellId: 'burning-hands',
+        slotLevel: 2,
+      },
+    ]);
+  });
+
+  test('names the lowest remaining slot at or above the spell level (#1206)', async () => {
+    profile = { ...APPRENTICE_PROFILE, level: 5, spellIds: ['burning-hands', 'acid-arrow'] };
+    slotRemaining = new Map([
+      [1, 1],
+      [2, 0],
+      [3, 2],
+    ]);
+
+    const result = await getLegalCombatActions('encounter-1', 'user-1');
+
+    expect(result.actions.filter((action) => action.type === 'spell')).toEqual([
+      {
+        type: 'spell',
+        label: 'Cast Burning Hands',
+        spellId: 'burning-hands',
+        slotLevel: 1,
+      },
+      {
+        type: 'spell',
+        label: 'Cast Acid Arrow (3rd-level slot)',
+        spellId: 'acid-arrow',
+        targetIds: ['monster-1'],
+        slotLevel: 3,
+      },
+    ]);
+  });
+
+  test('withholds a leveled spell when only lower-level slots remain (#1206)', async () => {
+    profile = { ...APPRENTICE_PROFILE, level: 3, spellIds: ['acid-arrow'] };
+    slotRemaining = new Map([
+      [1, 4],
+      [2, 0],
+      [3, 0],
+    ]);
+
+    const result = await getLegalCombatActions('encounter-1', 'user-1');
+
+    expect(result.actions.some((action) => action.spellId === 'acid-arrow')).toBe(false);
   });
 
   test('offers leveled spells ungated when the character has no slot rows (#1185)', async () => {
