@@ -21,6 +21,7 @@ import { TRPCProvider } from '@/infrastructure/api';
 // Lazy load route page components for code splitting
 const LaunchPage = lazy(() => import('./pages/LaunchPage'));
 const CallbackPage = lazy(() => import('./features/auth/components/CallbackPage'));
+const TesterLoginPage = lazy(() => import('./features/auth/components/TesterLoginPage'));
 const GameUIPreview = lazy(() => import('./pages/GameUIPreview'));
 const BlogAdminLogin = lazy(() => import('./pages/BlogAdminLogin'));
 const BlogAdmin = lazy(() => import('./pages/BlogAdmin'));
@@ -42,6 +43,9 @@ export function AppRoutes() {
 
       {/* OAuth callback route for WorkOS */}
       <Route path="/auth/callback" element={withRouteSuspense(<CallbackPage />)} />
+
+      {/* Hidden tester sign-in for allowlisted accounts (#1256). Not linked. */}
+      <Route path="/auth/tester" element={withRouteSuspense(<TesterLoginPage />)} />
 
       {/* Pricing - the landing page's plans on their own URL (#227) */}
       <Route path="/pricing" element={withRouteSuspense(<PricingPage />)} />
