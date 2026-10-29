@@ -106,7 +106,7 @@ describe('DMMessageVoiceControls', () => {
     delete (window as any).speechSynthesis;
     try {
       render(<DMMessageVoiceControls {...defaultProps} />);
-      expect(screen.getByRole('button', { name: /play this message/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /listen to this message/i })).toBeInTheDocument();
       expect(screen.getByText('Listen')).toBeInTheDocument();
     } finally {
       Object.defineProperty(window, 'speechSynthesis', {
@@ -140,7 +140,7 @@ describe('DMMessageVoiceControls', () => {
     render(<DMMessageVoiceControls {...defaultProps} />);
 
     expect(screen.getByText('Preparing voice…')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /play this message/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /listen to this message/i })).toBeNull();
   });
 
   it('lets the player cancel a clip that is still being prepared', () => {
@@ -190,13 +190,13 @@ describe('DMMessageVoiceControls', () => {
     render(<DMMessageVoiceControls {...defaultProps} />);
 
     expect(screen.queryByText('Voice unavailable')).toBeNull();
-    expect(screen.getByRole('button', { name: /play this message/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /listen to this message/i })).toBeInTheDocument();
   });
 
   it('renders play button when not playing', () => {
     render(<DMMessageVoiceControls {...defaultProps} />);
 
-    const playButton = screen.getByRole('button', { name: /play this message/i });
+    const playButton = screen.getByRole('button', { name: /listen to this message/i });
     expect(playButton).toBeInTheDocument();
     expect(screen.getByTestId('play-icon')).toBeInTheDocument();
   });
@@ -210,7 +210,7 @@ describe('DMMessageVoiceControls', () => {
 
     render(<DMMessageVoiceControls {...defaultProps} />);
 
-    const pauseButton = screen.getByRole('button', { name: /pause reading/i });
+    const pauseButton = screen.getByRole('button', { name: /pause this message/i });
     expect(pauseButton).toBeInTheDocument();
     expect(screen.getByTestId('pause-icon')).toBeInTheDocument();
     // Use a more specific matcher for "Playing" text to avoid matches in sr-only
@@ -220,7 +220,7 @@ describe('DMMessageVoiceControls', () => {
   it('calls playMessage when play button is clicked', () => {
     render(<DMMessageVoiceControls {...defaultProps} />);
 
-    const playButton = screen.getByRole('button', { name: /play this message/i });
+    const playButton = screen.getByRole('button', { name: /listen to this message/i });
     fireEvent.click(playButton);
 
     expect(extractNarrativeContent).toHaveBeenCalledWith('Hello world');
@@ -236,7 +236,7 @@ describe('DMMessageVoiceControls', () => {
 
     render(<DMMessageVoiceControls {...defaultProps} />);
 
-    const pauseButton = screen.getByRole('button', { name: /pause reading/i });
+    const pauseButton = screen.getByRole('button', { name: /pause this message/i });
     fireEvent.click(pauseButton);
 
     expect(mockVoiceContext.pauseMessage).toHaveBeenCalled();
@@ -320,7 +320,7 @@ describe('DMMessageVoiceControls', () => {
       </div>,
     );
 
-    const playButton = screen.getByRole('button', { name: /play/i });
+    const playButton = screen.getByRole('button', { name: /listen/i });
     const wrapper = playButton.parentElement;
     if (!wrapper) {
       throw new Error('Wrapper not found');
@@ -365,7 +365,7 @@ describe('DMMessageVoiceControls', () => {
       const { container } = render(withSegments);
 
       expect(container.textContent).not.toMatch(/voice segments/i);
-      expect(screen.getByRole('button', { name: /play/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /listen/i })).toBeInTheDocument();
     });
 
     it('renders the note when DEV is true', () => {

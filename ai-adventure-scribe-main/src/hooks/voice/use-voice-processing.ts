@@ -143,6 +143,10 @@ export const useVoiceProcessing = ({
     async (segments: VoiceSegment[], startIndex: number = 0): Promise<void> => {
       // ⚡ Capture the current abort signal to avoid race conditions when a new request starts
       const signal = abortController.current?.signal;
+      // Writes from a run that a newer request replaced are dropped: the newer run owns the state.
+      const setStateForRun: typeof setState = (update) => {
+        if (abortController.current?.signal === signal) setState(update);
+      };
       const prefetchStartedAt = performance.now();
 
       logger.info(
@@ -152,7 +156,7 @@ export const useVoiceProcessing = ({
         startIndex > 0 ? `from index ${startIndex}` : '',
       );
 
-      setState((prev) => ({ ...prev, isPlaying: true, isStalled: false }));
+      setStateForRun((prev) => ({ ...prev, isPlaying: true, isStalled: false }));
 
       const readyFlags = segments.map(() => false);
       let failedGenerations = 0;
@@ -205,7 +209,7 @@ export const useVoiceProcessing = ({
         try {
           logger.info(`🎵 Processing segment ${actualIndex + 1}: ${segments[i].character}`);
 
-          setState((prev) => ({
+          setStateForRun((prev) => ({
             ...prev,
             currentSegmentIndex: actualIndex,
             segments: prev.segments.map((s, idx) =>
@@ -216,17 +220,17 @@ export const useVoiceProcessing = ({
           const stalled = i > 0 && !readyFlags[i];
           const waitStartedAt = performance.now();
           if (stalled) {
-            setState((prev) => ({ ...prev, isStalled: true }));
+            setStateForRun((prev) => ({ ...prev, isStalled: true }));
           }
 
           const segmentWithAudio = await slots[i].promise;
           const waitMs = performance.now() - waitStartedAt;
           if (stalled) {
             logger.info('VOICE_SEGMENT_STALL', { index: actualIndex, waitMs });
-            setState((prev) => ({ ...prev, isStalled: false }));
+            setStateForRun((prev) => ({ ...prev, isStalled: false }));
           }
 
-          setState((prev) => ({
+          setStateForRun((prev) => ({
             ...prev,
             segments: prev.segments.map((s, idx) => (idx === actualIndex ? segmentWithAudio : s)),
           }));
@@ -263,11 +267,18 @@ export const useVoiceProcessing = ({
       }
 
       // Every segment failed to generate: say so, so the message shows Retry instead of Listen.
-      if (segments.length > 0 && failedGenerations === segments.length) {
-        setState((prev) => ({ ...prev, error: 'Voice unavailable for this message' }));
+      // A run that a newer request replaced writes nothing: that run owns the state now.
+      // A run that was stopped still resets the flags below.
+      if (abortController.current?.signal !== signal) {
+        logger.info('🛑 Superseded run finished; not touching the current state');
+        return;
       }
 
-      setState((prev) => ({
+      if (!signal?.aborted && segments.length > 0 && failedGenerations === segments.length) {
+        setStateForRun((prev) => ({ ...prev, error: 'Voice unavailable for this message' }));
+      }
+
+      setStateForRun((prev) => ({
         ...prev,
         isPlaying: false,
         isPaused: false,
@@ -278,7 +289,7 @@ export const useVoiceProcessing = ({
 
       logger.info('🏁 Progressive processing complete');
     },
-    [playAudioSegment, setState, sessionId],
+    [playAudioSegment, setState, sessionId, abortController],
   );
 
   /**
@@ -391,7 +402,9 @@ export const useVoiceProcessing = ({
    */
   const speakPlainText = React.useCallback(
     async (text: string): Promise<void> => {
-      if (!state.isVoiceEnabled || !text?.trim() || state.isProcessing) {
+      // A run already in progress is aborted by speakAISegments, so a stale isProcessing value
+      // must not drop a click on another message.
+      if (!state.isVoiceEnabled || !text?.trim()) {
         return;
       }
 
@@ -408,7 +421,7 @@ export const useVoiceProcessing = ({
         },
       ]);
     },
-    [state.isVoiceEnabled, state.isProcessing, speakAISegments],
+    [state.isVoiceEnabled, speakAISegments],
   );
 
   /**

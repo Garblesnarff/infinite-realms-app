@@ -161,12 +161,7 @@ export const DMMessageVoiceControls: React.FC<DMMessageVoiceControlsProps> = Rea
               isCurrentlyPlaying && 'text-primary bg-accent/30',
             )}
             onClick={handlePlay}
-            aria-label={
-              isCurrentlyPlaying
-                ? 'Pause reading this message'
-                : 'Play this message with text-to-speech'
-            }
-            aria-pressed={isCurrentlyPlaying}
+            aria-label={isCurrentlyPlaying ? 'Pause this message' : 'Listen to this message'}
           >
             {isCurrentlyPlaying ? (
               <Pause className="h-4 w-4" aria-hidden="true" />

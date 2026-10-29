@@ -452,6 +452,102 @@ describe('useVoiceProcessing', () => {
     );
   });
 
+  it('a replaced run writes nothing: the newer message keeps its own state', async () => {
+    let releaseA!: () => void;
+    const aGate = new Promise<void>((resolve) => {
+      releaseA = resolve;
+    });
+    (VoiceDirector.validateAISegments as any).mockImplementation((segs: any) => segs);
+    (VoiceDirector.processAISegments as any).mockImplementation((segs: any) =>
+      segs.map((s: any) => ({ character: 'DM', text: s.text })),
+    );
+    (VoiceDirector.generateAudio as any).mockImplementation(async (segment: any) => {
+      if (segment.text === 'A') {
+        await aGate;
+        return { ...segment, error: 'Generation failed' };
+      }
+      return { ...segment, audioUrl: `http://test.com/${segment.text}.mp3` };
+    });
+    // Apply each state update to one local state, as React would.
+    let local: any = {
+      segments: [],
+      currentSegmentIndex: -1,
+      isPlaying: false,
+      isPaused: false,
+      isProcessing: false,
+      isStalled: false,
+    };
+    mockSetState.mockImplementation((update: any) => {
+      local = typeof update === 'function' ? update(local) : update;
+    });
+
+    const { result } = renderHook(() => useVoiceProcessing(defaultProps));
+
+    let runA!: Promise<void>;
+    act(() => {
+      runA = result.current.speakAISegments([{ type: 'dm', text: 'A' }] as any);
+    });
+    await act(async () => {
+      await result.current.speakAISegments([{ type: 'dm', text: 'B' }] as any);
+    });
+    const afterB = { ...local };
+
+    releaseA();
+    await act(async () => {
+      await runA;
+    });
+
+    expect(local).toEqual(afterB);
+    expect(local.error).toBeUndefined();
+  });
+
+  it('a plain-text click starts even when the closure still reports a run in progress', async () => {
+    (VoiceDirector.validateAISegments as any).mockImplementation((segs: any) => segs);
+    (VoiceDirector.processAISegments as any).mockImplementation((segs: any) =>
+      segs.map((s: any) => ({ character: 'DM', text: s.text })),
+    );
+    (VoiceDirector.generateAudio as any).mockImplementation(async (segment: any) => ({
+      ...segment,
+      audioUrl: `http://test.com/${segment.text}.mp3`,
+    }));
+
+    const { result } = renderHook(() =>
+      useVoiceProcessing({ ...defaultProps, state: { ...defaultProps.state, isProcessing: true } }),
+    );
+
+    await act(async () => {
+      await result.current.speakPlainText('The door creaks open.');
+    });
+
+    expect(VoiceDirector.generateAudio).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'The door creaks open.' }),
+      expect.any(AbortSignal),
+      undefined,
+    );
+  });
+
+  it('one Listen click makes exactly one TTS request per segment', async () => {
+    (VoiceDirector.validateAISegments as any).mockImplementation((segs: any) => segs);
+    (VoiceDirector.processAISegments as any).mockImplementation((segs: any) =>
+      segs.map((s: any) => ({ character: 'DM', text: s.text })),
+    );
+    (VoiceDirector.generateAudio as any).mockImplementation(async (segment: any) => ({
+      ...segment,
+      audioUrl: `http://test.com/${segment.text}.mp3`,
+    }));
+
+    const { result } = renderHook(() => useVoiceProcessing(defaultProps));
+
+    await act(async () => {
+      await result.current.speakAISegments([
+        { type: 'dm', text: 'One request for the first segment.' },
+        { type: 'dm', text: 'One request for the second segment.' },
+      ] as any);
+    });
+
+    expect(VoiceDirector.generateAudio).toHaveBeenCalledTimes(2);
+  });
+
   it('should abort previous processing when a new request comes in', async () => {
     const aiSegments1 = [{ type: 'dm', text: 'First Request' }];
     const aiSegments2 = [{ type: 'dm', text: 'Second Request' }];

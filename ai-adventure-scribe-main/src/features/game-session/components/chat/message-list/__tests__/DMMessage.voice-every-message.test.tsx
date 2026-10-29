@@ -41,7 +41,7 @@ describe('DM message voice control (#1236 C)', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: /play this message/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /listen to this message/i })).toBeInTheDocument();
     expect(screen.getByText('Listen')).toBeInTheDocument();
   });
 });
