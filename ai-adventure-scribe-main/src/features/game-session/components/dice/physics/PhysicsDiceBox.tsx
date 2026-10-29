@@ -448,7 +448,6 @@ export const PhysicsDiceBox: React.FC<Props> = ({
           const observedIndex = topIndex(spec.die, physicsQuaternion).idx;
           const targetIndex = spec.die.faceIndexForValue(spec.target);
           const rotation = symmetry(spec.die, targetIndex, observedIndex);
-          scene.add(spec.die.mesh);
           return {
             die: spec.die,
             frames: simulation.frames.map((frame) => frame[index]),
@@ -469,6 +468,9 @@ export const PhysicsDiceBox: React.FC<Props> = ({
         );
         return;
       }
+      // Add meshes only after every track built: a throw above must not
+      // leave earlier dice visible under the text fallback.
+      tracks.forEach((track) => scene.add(track.die.mesh));
       tracksRef.current = tracks;
 
       const finish = () => {
