@@ -388,4 +388,261 @@ describeWithDb('resolved narrative roll identity through real routes and Postgre
       auth.mockRestore();
     }
   });
+
+  test('a lost DM-turn response replays instead of generating twice (#51)', async () => {
+    const auth = spyOn(authModule, 'authenticateRequest').mockResolvedValue({
+      user: { userId, email: 'roll@example.test', plan: 'free' },
+      error: null,
+    } as never);
+    const model = spyOn(LLMProviderService, 'generate').mockResolvedValue({
+      text: JSON.stringify({
+        text: 'You find a hidden lever behind the tapestry.',
+        options: [],
+        roll_requests: [],
+        combat_transition: 'none',
+        combatants: [],
+        combat_actions: [],
+      }),
+      provider: 'openrouter',
+      model: 't/m',
+    } as never);
+    try {
+      const app = createRequestPipelineApp().use(sessionMessageRoutes).use(llmRoutes);
+      // A plain player message (no dice-roll intent): the roll guard does not
+      // engage, so without the reply-id cache a retry would run the provider
+      // a second time.
+      const playerId = crypto.randomUUID();
+      const playerMessage = 'I inspect the practice room.';
+      const saved = await app.handle(
+        post(`/v1/sessions/${sessionId}/messages`, {
+          id: playerId,
+          timestamp: '2026-01-01T00:00:00.000Z',
+          message: playerMessage,
+          speaker_type: 'player',
+          context: {
+            location: null,
+            emotion: null,
+            intent: 'response',
+            handouts: null,
+            combat_transition: 'none',
+            scene_spec: false,
+            combat_engine_blocks: null,
+            combat_ended: false,
+            narration_segments: null,
+          },
+        }),
+      );
+      expect(saved.status).toBe(200);
+      const replyId = crypto.randomUUID();
+      const request = (messageId: string) => ({
+        prompt: 'Continue after the player inspects the room.',
+        sessionId,
+        player_input: playerMessage,
+        dmReply: { messageId, inCombat: false, narrationGated: false },
+      });
+      const first = await app.handle(post('/v1/llm/generate', request(replyId)));
+      expect(first.status).toBe(200);
+      const firstBody = await first.json();
+      expect(firstBody.dmReplyMessageId).toBe(replyId);
+      // The lost-response retry: the identical body, same reply id.
+      const second = await app.handle(post('/v1/llm/generate', request(replyId)));
+      expect(second.status).toBe(200);
+      expect(await second.json()).toEqual(firstBody);
+      expect(model).toHaveBeenCalledTimes(1);
+      // A new turn with a new id generates anew.
+      const third = await app.handle(post('/v1/llm/generate', request(crypto.randomUUID())));
+      expect(third.status).toBe(200);
+      expect(model).toHaveBeenCalledTimes(2);
+      const thirdBody = await third.json();
+      expect(thirdBody.dmReplyMessageId).not.toBe(replyId);
+      expect(thirdBody).not.toEqual(firstBody);
+      // The completed response is cached on the DM row under its reply id.
+      const [dmRow] = await database
+        .select()
+        .from(dialogueHistory)
+        .where(eq(dialogueHistory.id, replyId));
+      expect(dmRow).toBeDefined();
+      const cached = (dmRow.context as Record<string, unknown> | null)?.cachedTurnResponse as
+        | Record<string, unknown>
+        | undefined;
+      expect(cached?.text).toBe(firstBody.text);
+    } finally {
+      model.mockRestore();
+      auth.mockRestore();
+    }
+  });
+
+  test('a turn the server does not persist is not deduped (#51)', async () => {
+    const auth = spyOn(authModule, 'authenticateRequest').mockResolvedValue({
+      user: { userId, email: 'roll@example.test', plan: 'free' },
+      error: null,
+    } as never);
+    const model = spyOn(LLMProviderService, 'generate').mockResolvedValue({
+      text: JSON.stringify({
+        text: 'Steel rings as the blades meet.',
+        options: [],
+        roll_requests: [],
+        combat_transition: 'none',
+        combatants: [],
+        combat_actions: [],
+      }),
+      provider: 'openrouter',
+      model: 't/m',
+    } as never);
+    try {
+      const app = createRequestPipelineApp().use(sessionMessageRoutes).use(llmRoutes);
+      const playerId = crypto.randomUUID();
+      const playerMessage = 'I swing at the goblin.';
+      const saved = await app.handle(
+        post(`/v1/sessions/${sessionId}/messages`, {
+          id: playerId,
+          timestamp: '2026-01-01T00:00:00.000Z',
+          message: playerMessage,
+          speaker_type: 'player',
+          context: {
+            location: null,
+            emotion: null,
+            intent: 'response',
+            handouts: null,
+            combat_transition: 'none',
+            scene_spec: false,
+            combat_engine_blocks: null,
+            combat_ended: false,
+            narration_segments: null,
+          },
+        }),
+      );
+      expect(saved.status).toBe(200);
+      const replyId = crypto.randomUUID();
+      const request = (messageId: string) => ({
+        prompt: 'Continue the fight.',
+        sessionId,
+        player_input: playerMessage,
+        dmReply: { messageId, inCombat: true, narrationGated: false },
+      });
+      const first = await app.handle(post('/v1/llm/generate', request(replyId)));
+      expect(first.status).toBe(200);
+      const firstBody = await first.json();
+      // The server does not persist an in-combat reply, so there is no row
+      // for the cache to live on — and the miss is logged, not silent.
+      expect(firstBody.dmReplyPersisted).toBe(false);
+      const second = await app.handle(post('/v1/llm/generate', request(replyId)));
+      expect(second.status).toBe(200);
+      // The retry regenerates: the boundary is pinned, not silently assumed.
+      expect(model).toHaveBeenCalledTimes(2);
+      const rows = await database
+        .select()
+        .from(dialogueHistory)
+        .where(eq(dialogueHistory.id, replyId));
+      expect(rows).toHaveLength(0);
+    } finally {
+      model.mockRestore();
+      auth.mockRestore();
+    }
+  });
+
+  test(
+    'concurrent same-id submits both generate but keep one cached body (#51)',
+    async () => {
+      const auth = spyOn(authModule, 'authenticateRequest').mockResolvedValue({
+        user: { userId, email: 'roll@example.test', plan: 'free' },
+        error: null,
+      } as never);
+      let calls = 0;
+      let started!: () => void;
+      const generating = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      let startedSecond!: () => void;
+      const generatingSecond = new Promise<void>((resolve) => {
+        startedSecond = resolve;
+      });
+      let finish!: () => void;
+      const held = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      const model = spyOn(LLMProviderService, 'generate').mockImplementation(async () => {
+        calls += 1;
+        if (calls === 1) started();
+        if (calls === 2) startedSecond();
+        await held;
+        return {
+          text: JSON.stringify({
+            text: 'You find a hidden lever behind the tapestry.',
+            options: [],
+            roll_requests: [],
+            combat_transition: 'none',
+            combatants: [],
+            combat_actions: [],
+          }),
+          provider: 'openrouter',
+          model: 't/m',
+        } as never;
+      });
+      try {
+        const app = createRequestPipelineApp().use(sessionMessageRoutes).use(llmRoutes);
+        const playerId = crypto.randomUUID();
+        const playerMessage = 'I inspect the practice room.';
+        const saved = await app.handle(
+          post(`/v1/sessions/${sessionId}/messages`, {
+            id: playerId,
+            timestamp: '2026-01-01T00:00:00.000Z',
+            message: playerMessage,
+            speaker_type: 'player',
+            context: {
+              location: null,
+              emotion: null,
+              intent: 'response',
+              handouts: null,
+              combat_transition: 'none',
+              scene_spec: false,
+              combat_engine_blocks: null,
+              combat_ended: false,
+              narration_segments: null,
+            },
+          }),
+        );
+        expect(saved.status).toBe(200);
+        const replyId = crypto.randomUUID();
+        const request = (messageId: string) => ({
+          prompt: 'Continue after the player inspects the room.',
+          sessionId,
+          player_input: playerMessage,
+          dmReply: { messageId, inCombat: false, narrationGated: false },
+        });
+        const first = app.handle(post('/v1/llm/generate', request(replyId)));
+        await generating;
+        const second = app.handle(post('/v1/llm/generate', request(replyId)));
+        await generatingSecond;
+        finish();
+        const [firstRes, secondRes] = await Promise.all([first, second]);
+        expect(firstRes.status).toBe(200);
+        expect(secondRes.status).toBe(200);
+        const firstBody = await firstRes.json();
+        const secondBody = await secondRes.json();
+        expect(firstBody.dmReplyMessageId).toBe(replyId);
+        expect(secondBody.dmReplyMessageId).toBe(replyId);
+        // Both generated (the lock does not serialize plain-turn generation).
+        // The bodies may differ in usageIds: the duplicate's own provisional
+        // persist can replace the row's context after the winner's cache write
+        // (#2218 reconcile), so the canonical-body property is best-effort
+        // under concurrency. What is guaranteed: one DM row, and a cached body
+        // on it.
+        expect(model).toHaveBeenCalledTimes(2);
+        const rows = await database
+          .select()
+          .from(dialogueHistory)
+          .where(eq(dialogueHistory.id, replyId));
+        expect(rows).toHaveLength(1);
+        const cached = (rows[0].context as Record<string, unknown> | null)
+          ?.cachedTurnResponse as Record<string, unknown> | undefined;
+        expect(cached?.text).toBe(firstBody.text);
+      } finally {
+        finish();
+        model.mockRestore();
+        auth.mockRestore();
+      }
+    },
+    30_000,
+  );
 });
