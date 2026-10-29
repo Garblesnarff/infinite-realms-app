@@ -9,7 +9,6 @@ import { characterLoaderService } from '@/services/character-loader';
 import { restApi } from '@/services/rest-api';
 import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 
-
 /**
  * #1239 item 1: the session-start "Rest first?" gate. Inside one adventure
  * HP carries between sessions (#1071 decision), so a continuation session

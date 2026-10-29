@@ -12,7 +12,7 @@ import { userDataApi } from '@/services/user-data-api';
 const stable = vi.hoisted(() => ({
   user: { id: 'user-1' },
   campaignValue: { state: { campaign: null }, dispatch: () => undefined },
-  characterValue: { dispatch: () => undefined },
+  characterValue: { state: { character: null }, dispatch: () => undefined },
 }));
 
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: stable.user }) }));
