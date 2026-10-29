@@ -72,14 +72,26 @@ export function actionSurgeUsesAt(fighterLevel: number): number {
   return fighterLevel >= 17 ? 2 : 1;
 }
 
-/** A row's full uses per rest at this fighter level: the library count, level-keyed for Action Surge. */
+/**
+ * A row's full uses per rest at this fighter level: the library count, level-keyed for Action
+ * Surge (#1187), and 1 for a Second Wind whose library row carries no count (#975).
+ *
+ * #975 (Hark T3-001): the generated SRD seed (`20261009_seed_srd_class_features.sql`) carries
+ * the Fighter's "Second Wind" with `uses_count` NULL (progressions.json names a count only for
+ * Action Surge, "(1 use)"), and a library seeded from it -- a premade's sheet shows the
+ * generated "Action Surge (1 use)" spelling -- grants Second Wind with no count anywhere. The
+ * legal-action list read that as no use left and never offered Second Wind; the spend read it
+ * as unlimited and never refused a second use. Second Wind is once per short rest at every
+ * level (2014 PHB); a library count, when present, always wins.
+ */
 function fullUsesOf(
   row: { featureName: string; usesCount: number | null },
   fighterLevel: number,
 ): number | null {
-  return canonicalFeatureName(row.featureName) === canonicalFeatureName(ACTION_SURGE_NAME)
-    ? actionSurgeUsesAt(fighterLevel)
-    : row.usesCount;
+  const name = canonicalFeatureName(row.featureName);
+  if (name === canonicalFeatureName(ACTION_SURGE_NAME)) return actionSurgeUsesAt(fighterLevel);
+  if (name === canonicalFeatureName(SECOND_WIND_NAME)) return row.usesCount ?? 1;
+  return row.usesCount;
 }
 
 type FeatureRowCandidate = {
@@ -265,8 +277,9 @@ async function spendFighterFeatureUse(input: {
 
   const fullUses = fullUsesOf(row, fighterLevel);
   // A row with no count anywhere is an untracked, unlimited feature (the
-  // ClassFeatureUsageService rule); the two Fighter features are seeded with
-  // a count, so this is only a guard against a future library edit.
+  // ClassFeatureUsageService rule). `fullUsesOf` gives both Fighter features a
+  // count even when the library row has none (#975), so this is only a guard
+  // against a future caller with another feature name.
   if (fullUses === null && row.usesRemaining === null) {
     await ClassFeatureUsageService.logFeatureUsage(
       characterId,
@@ -567,4 +580,38 @@ export async function refillActionSurgeUses(
       ),
     );
   return [ACTION_SURGE_NAME];
+}
+
+/**
+ * #975: a rest refills a Second Wind whose library row has no count (see `fullUsesOf`).
+ * `ClassFeatureUsageService.restoreFeatures` resets only rows with a library `uses_count`, so
+ * a spent Second Wind from the generated seed would stay at 0 for good. Second Wind refreshes
+ * on a short rest, so both rest types refill it. Returns the feature names it refilled.
+ */
+export async function refillSecondWindUses(characterId: string, userId: string): Promise<string[]> {
+  const character = await ownedCharacter(characterId, userId);
+  if (!character) return [];
+  const held = await db
+    .select({ characterFeatureId: characterFeatures.id })
+    .from(characterFeatures)
+    .innerJoin(classFeaturesLibrary, eq(characterFeatures.featureId, classFeaturesLibrary.id))
+    .where(
+      and(
+        eq(characterFeatures.characterId, characterId),
+        eq(classFeaturesLibrary.className, FIGHTER_CLASS),
+        eq(classFeaturesLibrary.featureName, SECOND_WIND_NAME),
+        sql`${classFeaturesLibrary.usesCount} IS NULL`,
+      ),
+    );
+  if (held.length === 0) return [];
+  await db
+    .update(characterFeatures)
+    .set({ usesRemaining: 1 })
+    .where(
+      inArray(
+        characterFeatures.id,
+        held.map((row) => row.characterFeatureId),
+      ),
+    );
+  return [SECOND_WIND_NAME];
 }

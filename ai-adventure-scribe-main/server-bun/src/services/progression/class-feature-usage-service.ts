@@ -317,6 +317,15 @@ export class ClassFeatureUsageService {
       logger.warn({ msg: 'ACTION_SURGE_REFILL_FAILED', characterId, error });
     }
 
+    // #975: a Fighter's Second Wind from the generated SRD seed has a NULL uses_count, so the
+    // SQL above skips it. Same dynamic import and log-and-continue pattern as above.
+    try {
+      const { refillSecondWindUses } = await import('../combat/fighter-features-service.js');
+      featuresRestored.push(...(await refillSecondWindUses(characterId, userId)));
+    } catch (error) {
+      logger.warn({ msg: 'SECOND_WIND_REFILL_FAILED', characterId, error });
+    }
+
     // #712: Divine Sense (1 + CHA mod) and Lay on Hands (paladin level x 5) are
     // seeded with a NULL uses_count, so the SQL above skips them; their pools live
     // in uses_remaining and are replenished here on a long rest. A failed reset is
