@@ -1,8 +1,9 @@
 import type { Spell } from '../types/character';
 
+import { fetchWithAuth, SessionExpiredError } from '@/infrastructure/api/rest-client';
 import { waitForAuth } from '@/lib/auth-gate';
 import logger from '@/lib/logger';
-import { getAccessToken as getStoredAccessToken } from '@/services/auth/TokenService';
+import { getAccessToken } from '@/services/auth/TokenService';
 
 export interface CharacterSpellData extends Spell {
   is_prepared: boolean;
@@ -33,32 +34,6 @@ export interface SaveSpellsResponse {
 }
 
 class CharacterSpellService {
-  private baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8888';
-
-  private async getAccessToken(): Promise<string> {
-    const token = getStoredAccessToken();
-    if (token) {
-      return token;
-    }
-
-    throw new Error('No authentication token found. Please log in.');
-  }
-
-  private async executeRequest(
-    url: string,
-    options: RequestInit,
-    token: string,
-  ): Promise<Response> {
-    return fetch(`${this.baseUrl}${url}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        ...options.headers,
-      },
-    });
-  }
-
   private async parseError(response: Response): Promise<string> {
     const body = await response.json().catch(() => ({ error: 'Unknown error' }));
     const rawMessage =
@@ -77,11 +52,15 @@ class CharacterSpellService {
 
   private async fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
     try {
-      // Wait for auth verification to complete before making API calls
       await waitForAuth();
-
-      const token = await this.getAccessToken();
-      const response = await this.executeRequest(url, options, token);
+      if (!getAccessToken()) {
+        throw new Error('No authentication token found. Please log in.');
+      }
+      const response = await fetchWithAuth(url, {
+        ...options,
+        retryBudgetMs: 0,
+        headers: { 'Content-Type': 'application/json', ...options.headers },
+      });
 
       if (!response.ok) {
         if (response.status === 401) {
@@ -99,6 +78,9 @@ class CharacterSpellService {
       return response;
     } catch (error) {
       logger.error('[CharacterSpellService] Authenticated request failed:', error);
+      if (error instanceof SessionExpiredError) {
+        throw new Error('Your session has expired. Please sign in again.');
+      }
       throw error;
     }
   }

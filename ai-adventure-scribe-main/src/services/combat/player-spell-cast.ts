@@ -1,5 +1,6 @@
 import type { StructuredCombatAction } from '@/services/combat/combat-action-executor';
 
+import { SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import { proposeAuthoritativeSpell } from '@/services/combat/combat-attack-proposal';
 import { resolvePlayerCombatSpell } from '@/services/combat/player-combat-spell';
@@ -138,6 +139,7 @@ export async function askPlayerForSpellCast(
         disadvantageSources: proposal.disadvantageSources,
       };
     } catch (error) {
+      if (error instanceof SessionExpiredError) throw error;
       // A silent engine roll here would look like a popup that never opened, so say why (no
       // player text: ids and the refusal reason only).
       logger.warn('[SpellAttack] proposal refused or failed; the engine resolves the cast', {
@@ -177,6 +179,7 @@ export async function askPlayerForSpellCast(
     }
     return { d20: outcome.d20, d20Rolls: outcome.d20Rolls, autoRolled: false, movementOnly: false };
   } catch (error) {
+    if (error instanceof SessionExpiredError) throw error;
     logger.warn('[SpellAttack] popup failed; the engine rolls this spell', error);
     return { autoRolled: true, movementOnly: false };
   }

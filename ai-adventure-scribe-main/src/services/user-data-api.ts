@@ -224,7 +224,8 @@ export type ClientFailureKind =
   | 'invalid_ability_score_key'
   | 'unhandled_promise_rejection'
   | 'react_error_boundary'
-  | 'client_turn_failure';
+  | 'client_turn_failure'
+  | 'auth_refresh_check_skipped';
 
 /** Optional context the server logs alongside a client failure (#2515). */
 export type ClientFailureDetails = {
@@ -306,12 +307,17 @@ function requestErrorMessage(status: number, payload: Record<string, unknown> | 
   return `${label} (${status})${detail ? `: ${detail}` : ''}`;
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  timeoutMs?: number | null,
+): Promise<T> {
   // Wait for AuthContext to verify/refresh the session before reading the
   // token — otherwise cold page loads race out with a stale/expired token.
   await waitForAuth();
   const response = await fetchWithAuth(path, {
     ...init,
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
     headers: {
       'Content-Type': 'application/json',
       ...init.headers,
@@ -613,11 +619,16 @@ export const userDataApi = {
   saveSessionMessages: (
     sessionId: string,
     messages: SessionMessagePayload | SessionMessagePayload[],
+    timeoutMs?: number | null,
   ): Promise<any> =>
-    request(`/v1/sessions/${encodeURIComponent(sessionId)}/messages`, {
-      method: 'POST',
-      body: JSON.stringify(messages),
-    }),
+    request(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/messages`,
+      {
+        method: 'POST',
+        body: JSON.stringify(messages),
+      },
+      timeoutMs,
+    ),
   listMemories: (sessionId: string, options: MemoryQuery = {}): Promise<any[]> => {
     const query = new URLSearchParams({ session_id: sessionId });
     if (options.limit) query.set('limit', String(options.limit));

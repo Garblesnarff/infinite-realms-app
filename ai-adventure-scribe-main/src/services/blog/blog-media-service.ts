@@ -1,36 +1,13 @@
-import type {
-  BlogMediaAsset,
-  SignedUploadRequest,
-  SignedUploadResponse,
-} from '@/types/blog';
+import type { BlogMediaAsset, SignedUploadRequest, SignedUploadResponse } from '@/types/blog';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 import { supabase } from '@/integrations/supabase/client';
-import { getAuthHeaders } from '@/services/auth/TokenService';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 const BLOG_MEDIA_BUCKET = 'blog-media';
 const BLOG_MEDIA_PREFIX = 'uploads';
 
 const supabaseClient = supabase as SupabaseClient<any, any, any>;
-
-const fetchWithAuth = async (path: string, options: RequestInit = {}): Promise<Response> => {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-      ...getAuthHeaders(),
-    },
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(text || res.statusText);
-  }
-
-  return res;
-};
 
 export const listBlogMedia = async (
   prefix: string = BLOG_MEDIA_PREFIX,
@@ -80,6 +57,10 @@ export const requestSignedUpload = async (
       bucket: params.bucket || BLOG_MEDIA_BUCKET,
     }),
   });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(text || res.statusText);
+  }
   const data = (await res.json()) as SignedUploadResponse;
   return data;
 };

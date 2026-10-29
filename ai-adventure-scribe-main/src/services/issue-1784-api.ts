@@ -1,16 +1,8 @@
 import type { CastingSegment, CastSegment } from '../../shared/npc-voices';
 
-import { waitForAuth } from '@/lib/auth-gate';
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 import { logger } from '@/lib/logger';
-import {
-  getAuthHeaders,
-  loadCachedSession,
-  persistSession,
-  refreshAccessTokenOnce,
-} from '@/services/auth/TokenService';
 import { parseJsonIfString } from '@/utils/parse-json-if-string';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
 export class Issue1784ApiError extends Error {
   readonly status: number;
@@ -70,29 +62,10 @@ export type Issue1784VoiceProfile = {
 export type Issue1784SafetyEventPayload = Record<string, unknown>;
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  await waitForAuth();
-
-  const send = (): Promise<Response> =>
-    fetch(`${API_BASE_URL}${path}`, {
-      ...init,
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders(),
-        ...init.headers,
-      },
-    });
-
-  let response = await send();
-  if (response.status === 401) {
-    const session = loadCachedSession();
-    if (session?.refresh_token) {
-      const tokens = await refreshAccessTokenOnce(session.refresh_token);
-      if (tokens) {
-        persistSession({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken });
-        response = await send();
-      }
-    }
-  }
+  const response = await fetchWithAuth(path, {
+    ...init,
+    headers: { 'Content-Type': 'application/json', ...init.headers },
+  });
 
   const bodyText = await response.text().catch(() => '');
   type ErrorPayload = { error?: string | { message?: string }; message?: string; code?: string };

@@ -4,6 +4,7 @@ import { Elysia } from 'elysia';
 // Captures the object-form info log lines so tests can assert what the route
 // actually wrote to the server log (#2515).
 const loggedInfo: Record<string, unknown>[] = [];
+const alertCalls: unknown[][] = [];
 const capturingLogger = {
   debug: () => {},
   info: (entry: unknown) => {
@@ -25,6 +26,11 @@ mock.module('../../../lib/env.js', () => ({
 
 // Mock logger everywhere it's imported from, so tests stay quiet and assertable.
 mock.module('../../../lib/logger.js', () => ({ logger: capturingLogger }));
+mock.module('../../../lib/alerting.js', () => ({
+  alert: (...args: unknown[]) => {
+    alertCalls.push(args);
+  },
+}));
 
 // Mock auth: only 'Bearer valid-user-token' is accepted.
 mock.module('../../../lib/auth.js', () => ({
@@ -57,6 +63,7 @@ const authedRequest = (body: unknown) =>
 describe('POST /v1/telemetry/client-failure', () => {
   beforeEach(() => {
     loggedInfo.length = 0;
+    alertCalls.length = 0;
   });
 
   it('no bearer and no body returns 401 (auth runs before body validation, #2120)', async () => {
@@ -128,6 +135,21 @@ describe('POST /v1/telemetry/client-failure', () => {
     expect(response.status).toBe(204);
   });
 
+  it('accepts scheduled refresh diagnostics without paging', async () => {
+    const response = await app.handle(
+      authedRequest({
+        kind: 'auth_refresh_check_skipped',
+        message: 'reason=not_due',
+      }),
+    );
+    expect(response.status).toBe(204);
+    expect(alertCalls).toHaveLength(0);
+    expect(loggedInfo.find((entry) => entry.msg === 'CLIENT_FAILURE')).toMatchObject({
+      kind: 'auth_refresh_check_skipped',
+      message: 'reason=not_due',
+    });
+  });
+
   it('accepts malformed WebSocket frame reports', async () => {
     const response = await app.handle(
       authedRequest({
@@ -178,7 +200,9 @@ describe('POST /v1/telemetry/client-failure', () => {
     );
     expect(response.status).toBe(204);
 
-    const line = loggedInfo.find((entry) => entry.msg === 'CLIENT_FAILURE' && entry.kind === 'client_turn_failure');
+    const line = loggedInfo.find(
+      (entry) => entry.msg === 'CLIENT_FAILURE' && entry.kind === 'client_turn_failure',
+    );
     expect(line).toBeDefined();
     expect(line?.sessionId).toBe('sess-turn-1');
   });

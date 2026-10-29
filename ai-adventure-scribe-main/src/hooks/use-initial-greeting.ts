@@ -8,9 +8,9 @@ import type { Memory } from '@/types/memory';
 import type { RollRequest } from '@/types/roll-request';
 
 import { useToast } from '@/hooks/use-toast';
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
-import { getAccessToken } from '@/services/auth/TokenService';
 import { fetchSessionTrackers } from '@/services/session-trackers';
 import { userDataApi } from '@/services/user-data-api';
 import { ensureActionOptions } from '@/utils/ensure-action-options';
@@ -224,12 +224,10 @@ export const useInitialGreeting = ({
         sessionId
       ) {
         try {
-          const token = getAccessToken();
-          const res = await fetch(
+          const res = await fetchWithAuth(
             `/api/trpc/chronicles.getPreviouslyOn?input=${encodeURIComponent(
               JSON.stringify({ newSessionId: sessionId, campaignId }),
             )}`,
-            token ? { headers: { Authorization: `Bearer ${token}` } } : {},
           );
           if (res.ok) {
             const json = await res.json();

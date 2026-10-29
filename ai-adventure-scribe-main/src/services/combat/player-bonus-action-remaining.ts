@@ -1,7 +1,5 @@
-import { getAuthHeaders } from '@/services/auth/TokenService';
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 import { getSpellById } from '@/utils/spell-lookup';
-
-const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
 interface LegalActionLike {
   type?: string;
@@ -22,9 +20,8 @@ export async function actorHasUsableBonusAction(
   actorId: string,
 ): Promise<boolean> {
   try {
-    const response = await fetch(
-      `${apiBase}/v1/combat/${encodeURIComponent(encounterId)}/legal-actions`,
-      { headers: getAuthHeaders() },
+    const response = await fetchWithAuth(
+      `/v1/combat/${encodeURIComponent(encounterId)}/legal-actions`,
     );
     if (!response.ok) return false;
     const payload = (await response.json()) as {

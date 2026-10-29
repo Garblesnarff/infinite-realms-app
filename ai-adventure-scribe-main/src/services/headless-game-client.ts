@@ -8,6 +8,7 @@ import type { RollRequest } from '@/types/roll-request';
 
 import { buildAIContext } from '@/hooks/ai/ai-utils';
 import { processRollRequests } from '@/hooks/ai/roll-processor';
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 import { stripAssetTags } from '@/lib/utils';
 import { AIService } from '@/services/ai-service';
 import {
@@ -310,12 +311,16 @@ export class HeadlessGameClient {
         timestamp: new Date().toISOString(),
       });
     }
-    await userDataApi.saveSessionMessages(this.sessionId, {
-      speaker_type: 'player',
-      message: effectiveInput,
-      context,
-      timestamp: new Date().toISOString(),
-    });
+    await userDataApi.saveSessionMessages(
+      this.sessionId,
+      {
+        speaker_type: 'player',
+        message: effectiveInput,
+        context,
+        timestamp: new Date().toISOString(),
+      },
+      diceRoll ? null : undefined,
+    );
     await userDataApi.saveSessionMessages(this.sessionId, {
       speaker_type: 'dm',
       message: text,
@@ -639,9 +644,8 @@ export class HeadlessGameClient {
   }
 
   async getMap(): Promise<unknown | null> {
-    const response = await fetch(
-      `${(import.meta.env.VITE_API_URL || 'http://localhost:8888').replace(/\/$/, '')}/v1/sessions/${encodeURIComponent(this.sessionId)}/tactical-map`,
-      { headers: (await import('@/services/auth/TokenService')).getAuthHeaders() },
+    const response = await fetchWithAuth(
+      `/v1/sessions/${encodeURIComponent(this.sessionId)}/tactical-map`,
     );
     if (response.status === 404) return null;
     if (!response.ok) throw new Error(`Tactical map failed (${response.status})`);

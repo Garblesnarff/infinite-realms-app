@@ -1,6 +1,4 @@
-import { getAuthHeaders } from '@/services/auth/TokenService';
-
-const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 
 interface TacticalEntityLike {
   id: string;
@@ -25,9 +23,8 @@ export async function actorMovementRemaining(
 ): Promise<number | null> {
   if (!sessionId) return null;
   try {
-    const response = await fetch(
-      `${apiBase}/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map`,
-      { headers: getAuthHeaders({ includeEmptyToken: true }) },
+    const response = await fetchWithAuth(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map`,
     );
     if (!response.ok) return null;
     // #1185: the route returns the active map itself; only the no-map read is `{ map: null }`.

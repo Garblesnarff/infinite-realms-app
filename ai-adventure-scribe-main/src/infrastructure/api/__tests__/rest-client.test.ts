@@ -15,6 +15,8 @@ vi.mock('@/lib/logger', () => ({
 
 vi.mock('@/services/auth/TokenService', () => ({
   getAuthHeaders: vi.fn(() => ({ Authorization: `Bearer ${accessToken.value}` })),
+  markSessionEnded: vi.fn(),
+  SESSION_ENDED_MESSAGE: 'Your sign-in expired — sign in again; your game is saved',
   loadCachedSession: loadCachedSessionMock,
   persistSession: persistSessionMock,
   refreshAccessTokenOnce: refreshMock,
@@ -166,6 +168,28 @@ describe('fetchWithAuth', () => {
     });
   });
 
+  it('refreshes and retries an expired token on the combat intent POST', async () => {
+    fetchMock.mockResolvedValueOnce(response(401, { error: 'Unauthorized' }));
+    fetchMock.mockResolvedValueOnce(response(200, { accepted: true }));
+    refreshMock.mockResolvedValue({ accessToken: 'new-access', refreshToken: 'new-refresh' });
+    const body = JSON.stringify({ intent: { type: 'attack', actorId: 'pc-1' }, source: 'player' });
+
+    await expect(
+      fetchWithAuth('/v1/combat/session-1/intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      }),
+    ).resolves.toMatchObject({ status: 200 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'POST', body });
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: 'POST', body });
+    expect(fetchMock.mock.calls[1][1].headers).toMatchObject({
+      Authorization: 'Bearer new-access',
+    });
+  });
+
   it('refreshes a token within two minutes of expiry before sending the request', async () => {
     const exp = Math.floor(Date.now() / 1000) + 30;
     const expiringToken = `header.${btoa(JSON.stringify({ exp }))}.signature`;
@@ -266,13 +290,13 @@ describe('fetchWithAuth', () => {
   it('aborts a hung request on a default route after 30 s (#565)', async () => {
     vi.useFakeTimers();
     try {
-    blackholedFetch();
+      blackholedFetch();
 
-    const request = fetchWithAuth('/v1/characters', { method: 'POST' });
-    const rejection = expect(request).rejects.toMatchObject({ name: 'AbortError' });
-    await vi.advanceTimersByTimeAsync(30_000);
-    await rejection;
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+      const request = fetchWithAuth('/v1/characters', { method: 'POST' });
+      const rejection = expect(request).rejects.toMatchObject({ name: 'AbortError' });
+      await vi.advanceTimersByTimeAsync(30_000);
+      await rejection;
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }
@@ -281,23 +305,23 @@ describe('fetchWithAuth', () => {
   it('keeps the 90 s ceiling for /v1/llm/generate (#565)', async () => {
     vi.useFakeTimers();
     try {
-    blackholedFetch();
+      blackholedFetch();
 
-    const request = fetchWithAuth('/v1/llm/generate', { method: 'POST' });
-    const rejection = expect(request).rejects.toMatchObject({ name: 'AbortError' });
-    let settled = false;
-    void request.then(
-      () => {
-        settled = true;
-      },
-      () => {
-        settled = true;
-      },
-    );
-    await vi.advanceTimersByTimeAsync(30_000);
-    expect(settled).toBe(false);
-    await vi.advanceTimersByTimeAsync(60_000);
-    await rejection;
+      const request = fetchWithAuth('/v1/llm/generate', { method: 'POST' });
+      const rejection = expect(request).rejects.toMatchObject({ name: 'AbortError' });
+      let settled = false;
+      void request.then(
+        () => {
+          settled = true;
+        },
+        () => {
+          settled = true;
+        },
+      );
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(60_000);
+      await rejection;
     } finally {
       vi.useRealTimers();
     }
@@ -306,21 +330,21 @@ describe('fetchWithAuth', () => {
   it('leaves memory-extraction jobs without a ceiling (#2148, #565)', async () => {
     vi.useFakeTimers();
     try {
-    fetchMock.mockReturnValue(new Promise(() => {})); // hangs
+      fetchMock.mockReturnValue(new Promise(() => {})); // hangs
 
-    const request = fetchWithAuth('/v1/memory-extraction/jobs', { method: 'POST' });
-    let settled = false;
-    void request.then(
-      () => {
-        settled = true;
-      },
-      () => {
-        settled = true;
-      },
-    );
-    await vi.advanceTimersByTimeAsync(180_000);
-    expect(settled).toBe(false);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+      const request = fetchWithAuth('/v1/memory-extraction/jobs', { method: 'POST' });
+      let settled = false;
+      void request.then(
+        () => {
+          settled = true;
+        },
+        () => {
+          settled = true;
+        },
+      );
+      await vi.advanceTimersByTimeAsync(180_000);
+      expect(settled).toBe(false);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }
@@ -329,21 +353,21 @@ describe('fetchWithAuth', () => {
   it('leaves image generation without a ceiling (#565)', async () => {
     vi.useFakeTimers();
     try {
-    fetchMock.mockReturnValue(new Promise(() => {})); // hangs
+      fetchMock.mockReturnValue(new Promise(() => {})); // hangs
 
-    const request = fetchWithAuth('/v1/images/generate', { method: 'POST' });
-    let settled = false;
-    void request.then(
-      () => {
-        settled = true;
-      },
-      () => {
-        settled = true;
-      },
-    );
-    await vi.advanceTimersByTimeAsync(180_000);
-    expect(settled).toBe(false);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+      const request = fetchWithAuth('/v1/images/generate', { method: 'POST' });
+      let settled = false;
+      void request.then(
+        () => {
+          settled = true;
+        },
+        () => {
+          settled = true;
+        },
+      );
+      await vi.advanceTimersByTimeAsync(180_000);
+      expect(settled).toBe(false);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }

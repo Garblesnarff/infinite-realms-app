@@ -96,7 +96,10 @@ describe('useUserPlan', () => {
       expect(result.current.userPlan).toBe('pro');
     });
 
-    expect(global.fetch).toHaveBeenCalledWith(`/v1/llm/quota`, expect.any(Object));
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/v1/llm/quota'),
+      expect.any(Object),
+    );
   });
 
   it('keeps the last known plan on fetch error instead of downgrading to free (#351)', async () => {

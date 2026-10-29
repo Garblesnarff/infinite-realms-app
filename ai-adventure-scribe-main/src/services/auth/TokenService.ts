@@ -15,7 +15,7 @@ export interface AccessTokenPair {
 export const SESSION_STORAGE_KEY = 'aas_workos_cached_session';
 export const SESSION_ENDED_STORAGE_KEY = 'aas_workos_session_ended';
 export const SESSION_ENDED_EVENT = 'workos-session-ended';
-export const SESSION_ENDED_MESSAGE = 'Your session ended, sign in again';
+export const SESSION_ENDED_MESSAGE = 'Your sign-in expired — sign in again; your game is saved';
 export const PENDING_INPUT_STORAGE_KEY = 'aas_workos_pending_input';
 export const TOKEN_REFRESH_MARGIN_MS = 2 * 60 * 1000; // Refresh 2 minutes before expiry
 const TOKEN_REFRESH_LOCK_NAME = 'aas-workos-token-refresh';
@@ -24,6 +24,8 @@ const TOKEN_REFRESH_LEASE_MS = 10 * 1000;
 const TOKEN_REFRESH_LEASE_RENEW_MS = 3 * 1000;
 const TOKEN_REFRESH_LEASE_POLL_MS = 50;
 const TOKEN_REFRESH_LEASE_SETTLE_MS = 40;
+/** Overall ceiling for the refresh exchange, including response-body parsing (#1087). */
+export const TOKEN_REFRESH_OVERALL_TIMEOUT_MS = 20_000;
 
 type RefreshResult = AccessTokenPair | null;
 type StoredRefreshLease = { owner: string; expiresAt: number };
@@ -57,6 +59,14 @@ export class TokenRefreshTransportError extends Error {
   }
 }
 
+/** The refresh endpoint answered, but temporarily cannot complete the exchange. */
+export class TokenRefreshTransientError extends TokenRefreshError {
+  constructor(message: string, status: number, code?: string) {
+    super(message, status, code);
+    this.name = 'TokenRefreshTransientError';
+  }
+}
+
 /** True for failures that mean "no answer", never "the server rejected us". */
 const isTransportFailure = (error: unknown): boolean => {
   const name =
@@ -72,6 +82,23 @@ const isTransportFailure = (error: unknown): boolean => {
 
 /** Ceiling for the refresh POST so a hung endpoint cannot stall auth forever (#565). */
 const TOKEN_REFRESH_REQUEST_TIMEOUT_MS = 15_000;
+
+const withRefreshDeadline = async <T>(work: (signal: AbortSignal) => Promise<T>): Promise<T> => {
+  const controller = new AbortController();
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      controller.abort();
+      reject(new TokenRefreshTransportError('Token refresh exceeded its overall deadline'));
+    }, TOKEN_REFRESH_OVERALL_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([work(controller.signal), deadline]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+};
 
 const readSession = (raw: string | null): WorkOSSession | null => {
   if (!raw) return null;
@@ -149,6 +176,15 @@ const readRefreshLease = (): StoredRefreshLease | null => {
     return null;
   }
 };
+
+/** Whether a cross-tab refresh lease is currently present. */
+export const isRefreshLeaseHeld = (): boolean => {
+  const lease = readRefreshLease();
+  return Boolean(lease && lease.expiresAt > Date.now());
+};
+
+/** Whether this tab already owns an in-flight refresh promise. */
+export const isRefreshInFlight = (): boolean => refreshInFlight !== null;
 
 const waitForRefreshLease = (): Promise<void> =>
   new Promise((resolve) => {
@@ -231,7 +267,7 @@ export const clearSessionEnded = (): void => {
   }
 };
 
-const markSessionEnded = (error: unknown): void => {
+export const markSessionEnded = (error: unknown): void => {
   if (isSessionEnded()) return;
 
   sessionEnded = true;
@@ -340,7 +376,10 @@ export const isTokenExpiringSoon = (token: string): boolean => {
   return Date.now() >= expiry - TOKEN_REFRESH_MARGIN_MS;
 };
 
-const requestTokenRefresh = async (refreshToken: string): Promise<RefreshResult> => {
+const requestTokenRefresh = async (
+  refreshToken: string,
+  signal?: AbortSignal,
+): Promise<RefreshResult> => {
   try {
     const apiUrl = import.meta.env?.VITE_API_URL || '';
     const response = await fetchWithTimeout(
@@ -349,6 +388,7 @@ const requestTokenRefresh = async (refreshToken: string): Promise<RefreshResult>
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
+        signal,
       },
       TOKEN_REFRESH_REQUEST_TIMEOUT_MS,
     );
@@ -358,7 +398,7 @@ const requestTokenRefresh = async (refreshToken: string): Promise<RefreshResult>
       const error = getRefreshError(payload, response.status);
       logger.warn('Token refresh failed:', { status: response.status, error });
       if (isTerminalRefreshFailure(error)) throw error;
-      return null;
+      throw new TokenRefreshTransientError(error.message, error.status, error.code);
     }
 
     const data = (await readResponseJson(response)) as Record<string, unknown> | null;
@@ -374,7 +414,7 @@ const requestTokenRefresh = async (refreshToken: string): Promise<RefreshResult>
         response.status,
       );
       logger.error('Token refresh returned an invalid payload:', { error });
-      return null;
+      throw new TokenRefreshTransientError(error.message, error.status, error.code);
     }
 
     return {
@@ -411,7 +451,9 @@ const refreshWithCoordination = async (
     }
 
     try {
-      const tokens = await requestTokenRefresh(refreshToken);
+      const tokens = await withRefreshDeadline((signal) =>
+        requestTokenRefresh(refreshToken, signal),
+      );
       if (tokens) {
         // Publish before releasing the cross-tab lock so the next tab adopts
         // these tokens instead of making a second exchange.
@@ -449,6 +491,7 @@ export const refreshAccessToken = (
         // Transport failures propagate: they are not auth verdicts, so the
         // caller's stored session must stay intact (#565).
         if (error instanceof TokenRefreshTransportError) throw error;
+        if (error instanceof TokenRefreshTransientError) throw error;
         if (error instanceof TokenRefreshError && isTerminalRefreshFailure(error)) {
           markSessionEnded(error);
           return null;

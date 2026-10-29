@@ -16,10 +16,8 @@ import type { CombatActionOrigin } from './combat-action-origin';
 import type { DamageType } from '@/types/combat';
 
 import { logServerRequestId } from '@/infrastructure/api/request-id-log';
-import { getAuthHeaders } from '@/services/auth/TokenService';
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 import { playerCombatSpellLabel } from '@/services/combat/player-combat-spell';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
 export interface StructuredCombatAction {
   actor_id: string;
@@ -221,7 +219,6 @@ export async function executeAuthoritativeCombatIntent(
   playerInput?: string,
 ): Promise<unknown> {
   try {
-    const headers = { 'Content-Type': 'application/json', ...getAuthHeaders() };
     let authoritativeIntent = intent;
     // DM-sourced intents skip the read: the server dispatch is the authoritative sequencer and
     // fills the version itself. Player-sourced ones must still say which version they read.
@@ -230,9 +227,13 @@ export async function executeAuthoritativeCombatIntent(
       requiresExpectedVersion(intent) &&
       intent.expectedVersion === undefined
     ) {
-      const statusResponse = await fetch(
-        `${API_BASE_URL}/v1/combat/${encodeURIComponent(encounterId)}/status`,
-        { headers, ...(signal ? { signal } : {}) },
+      const statusResponse = await fetchWithAuth(
+        `/v1/combat/${encodeURIComponent(encounterId)}/status`,
+        {
+          retryBudgetMs: 0,
+          headers: { 'Content-Type': 'application/json' },
+          ...(signal ? { signal } : {}),
+        },
       );
       logServerRequestId('/v1/combat', statusResponse);
       if (!statusResponse.ok)
@@ -242,22 +243,20 @@ export async function executeAuthoritativeCombatIntent(
         expectedVersion: Number((await statusResponse.json()).encounter?.version ?? 1),
       };
     }
-    const response = await fetch(
-      `${API_BASE_URL}/v1/combat/${encodeURIComponent(encounterId)}/intent`,
-      {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          intent: authoritativeIntent,
-          source,
-          dmStartedAt,
-          ...(origin ? { origin } : {}),
-          // Blank/whitespace is omitted so an inline option sends no wording (#749).
-          ...(playerInput && playerInput.trim() ? { playerInput } : {}),
-        }),
-        ...(signal ? { signal } : {}),
-      },
-    );
+    const response = await fetchWithAuth(`/v1/combat/${encodeURIComponent(encounterId)}/intent`, {
+      retryBudgetMs: 0,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        intent: authoritativeIntent,
+        source,
+        dmStartedAt,
+        ...(origin ? { origin } : {}),
+        // Blank/whitespace is omitted so an inline option sends no wording (#749).
+        ...(playerInput && playerInput.trim() ? { playerInput } : {}),
+      }),
+      ...(signal ? { signal } : {}),
+    });
     logServerRequestId('/v1/combat', response);
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {

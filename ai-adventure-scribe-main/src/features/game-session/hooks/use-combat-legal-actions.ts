@@ -4,8 +4,8 @@ import { v4 as uuidv4 } from 'uuid';
 import type { ChatMessage } from '@/types/game';
 
 import { useCombat } from '@/contexts/CombatContext';
+import { fetchWithAuth, SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
-import { getAuthHeaders } from '@/services/auth/TokenService';
 import { equipCharacterItem } from '@/services/character-equipment-api';
 import {
   combatBoundaryFromResult,
@@ -31,8 +31,6 @@ import { resolvePlayerCombatSpell } from '@/services/combat/player-combat-spell'
 import { actorMovementRemaining } from '@/services/combat/player-movement-remaining';
 import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
 import { getSpellById } from '@/utils/spell-lookup';
-
-const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
 export function fleeProvokerOf(label: string): string | null {
   return label.match(/\((.+?) attacks\)/)?.[1] ?? null;
@@ -107,6 +105,8 @@ export function useCombatLegalActions(input: {
   error: string | null;
   /** #1143: the last legal-action fetch failed (network or non-2xx); `retryLoad` asks again. */
   loadFailed: boolean;
+  /** The session ended while loading actions; do not show a generic retry. */
+  sessionEnded: boolean;
   retryLoad: () => Promise<void>;
   runAction: (action: LegalAction, options?: { exitConfirmed?: boolean }) => Promise<void>;
 } {
@@ -124,6 +124,7 @@ export function useCombatLegalActions(input: {
   // only during an actual refresh and clears a settled empty menu immediately.
   const [isRefreshingLegalActions, setIsRefreshingLegalActions] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [sessionEnded, setSessionEnded] = useState(false);
 
   const refreshLegalActions = useCallback(async () => {
     if (!showCombatMenu || !encounter?.id) {
@@ -132,11 +133,9 @@ export function useCombatLegalActions(input: {
     }
     setIsRefreshingLegalActions(true);
     try {
-      const response = await fetch(
-        `${apiBase}/v1/combat/${encodeURIComponent(encounter.id)}/legal-actions`,
-        {
-          headers: getAuthHeaders(),
-        },
+      const response = await fetchWithAuth(
+        `/v1/combat/${encodeURIComponent(encounter.id)}/legal-actions`,
+        { retryBudgetMs: 0 },
       );
       if (!response.ok) {
         setLoadFailed(true);
@@ -145,6 +144,7 @@ export function useCombatLegalActions(input: {
       }
       const payload = (await response.json()) as { actorId?: string; actions?: LegalAction[] };
       setLoadFailed(false);
+      setSessionEnded(false);
       // A dying player's only legal action is the death save, and the dying panel owns it: a
       // chip here would send the label as a typed action to a character who cannot act.
       setLegalState({
@@ -152,6 +152,12 @@ export function useCombatLegalActions(input: {
         actions: (payload.actions ?? []).filter((action) => action.type !== 'death_save'),
       });
     } catch (loadError) {
+      if (loadError instanceof SessionExpiredError) {
+        setSessionEnded(true);
+        setLoadFailed(false);
+        setLegalState((previous) => ({ actorId: previous.actorId, actions: [] }));
+        return;
+      }
       // #1143: a failed fetch used to leave the bar silently empty. Say so and offer a retry;
       // the chat box stays open either way.
       logger.warn('[CombatLegalActions] legal-action fetch failed', loadError);
@@ -608,6 +614,13 @@ export function useCombatLegalActions(input: {
           await input.onSendText(action.label);
         }
       } catch (failure) {
+        if (failure instanceof SessionExpiredError) {
+          setSessionEnded(true);
+          setLoadFailed(false);
+          setError(null);
+          setLegalState((previous) => ({ actorId: previous.actorId, actions: [] }));
+          return;
+        }
         setError(
           failure instanceof Error
             ? failure.message
@@ -626,6 +639,7 @@ export function useCombatLegalActions(input: {
     isPlayerTurn,
     isRefreshing: isRefreshingLegalActions,
     loadFailed,
+    sessionEnded,
     retryLoad: refreshLegalActions,
     error,
     runAction,

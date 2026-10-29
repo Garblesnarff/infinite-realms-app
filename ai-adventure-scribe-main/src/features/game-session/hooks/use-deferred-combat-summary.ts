@@ -3,7 +3,7 @@ import React from 'react';
 import type { CombatEncounter } from '@/types/combat-encounter';
 import type { ChatMessage } from '@/types/game';
 
-import { getAuthHeaders } from '@/services/auth/TokenService';
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 import { combatMessageEndedCombat } from '@/utils/combat-engine-blocks';
 
 /** Posts the summary anyway if this fight's terminal DM message never arrives. */
@@ -11,8 +11,6 @@ export const COMBAT_SUMMARY_FALLBACK_MS = 15_000;
 
 /** The server damage-summary fetch must not hold the summary hostage. */
 export const COMBAT_DAMAGE_SUMMARY_TIMEOUT_MS = 8_000;
-
-const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
 /**
  * The wire shape of `GET /v1/combat/:encounterId/damage-summary`, aggregated server-side
@@ -40,9 +38,9 @@ export async function fetchCombatDamageSummary(encounterId: string): Promise<Ser
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), COMBAT_DAMAGE_SUMMARY_TIMEOUT_MS);
   try {
-    const response = await fetch(
-      `${apiBase}/v1/combat/${encodeURIComponent(encounterId)}/damage-summary`,
-      { headers: getAuthHeaders(), signal: controller.signal },
+    const response = await fetchWithAuth(
+      `/v1/combat/${encodeURIComponent(encounterId)}/damage-summary`,
+      { signal: controller.signal },
     );
     if (!response.ok) throw new Error(`damage-summary ${response.status}`);
     const body = (await response.json()) as { summary?: ServerDamageSummary };

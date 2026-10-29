@@ -6,6 +6,7 @@ import {
   loadCachedSession,
   persistSession,
   refreshAccessTokenOnce,
+  TokenRefreshTransientError,
   TokenRefreshTransportError,
 } from '../TokenService';
 
@@ -72,6 +73,20 @@ describe('TokenService transport failures (#565)', () => {
     await vi.advanceTimersByTimeAsync(40);
     await assertion;
     // Not an auth verdict: the session is not ended and the stored pair is intact.
+    expect(isSessionEnded()).toBe(false);
+    expect(loadCachedSession()).toMatchObject({ access_token: 'old-access' });
+  });
+
+  it('keeps a 502 refresh transient instead of ending the session', async () => {
+    persistSession({ access_token: 'old-access', refresh_token: 'old-refresh' });
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      new Response(JSON.stringify({ error: 'upstream unavailable' }), { status: 502 }),
+    );
+
+    const attempt = refreshAccessTokenOnce('old-refresh');
+    const assertion = expect(attempt).rejects.toBeInstanceOf(TokenRefreshTransientError);
+    await vi.advanceTimersByTimeAsync(40);
+    await assertion;
     expect(isSessionEnded()).toBe(false);
     expect(loadCachedSession()).toMatchObject({ access_token: 'old-access' });
   });

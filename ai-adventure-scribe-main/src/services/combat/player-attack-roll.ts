@@ -1,5 +1,6 @@
 import type { StructuredCombatAction } from '@/services/combat/combat-action-executor';
 
+import { SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import { proposeAuthoritativeAttack } from '@/services/combat/combat-attack-proposal';
 import {
@@ -131,6 +132,7 @@ export async function askPlayerForAttackDie(params: PlayerAttackDieParams): Prom
     }
     return { d20: outcome.d20, d20Rolls: outcome.d20Rolls, autoRolled: false, movementOnly: false };
   } catch (error) {
+    if (error instanceof SessionExpiredError) throw error;
     // A failed proposal must not cost the player their turn. The engine rolls it as it always
     // did, which is exactly the behaviour on `main`, so this path can never be a regression.
     logger.warn('[PlayerRoll] proposal failed; the engine rolls this attack', error);

@@ -2,12 +2,15 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 
 import { useBlogRole, type BlogRole } from '@/hooks/auth/use-blog-role';
 import { useUserPlan, type UserPlan } from '@/hooks/auth/use-user-plan';
-import { fetchWithTimeout } from '@/infrastructure/api/fetch-with-timeout';
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 import { resetAuthGate, markAuthReady } from '@/lib/auth-gate';
 import logger from '@/lib/logger';
 import {
   clearSessionEnded,
+  getTokenExpiry,
+  isRefreshInFlight,
   isSessionEnded,
+  isRefreshLeaseHeld,
   isTokenExpiringSoon,
   loadCachedSession,
   persistSession,
@@ -15,15 +18,39 @@ import {
   SESSION_ENDED_EVENT,
   SESSION_ENDED_STORAGE_KEY,
   SESSION_STORAGE_KEY,
+  TokenRefreshTransientError,
   TokenRefreshTransportError,
   type WorkOSSession,
 } from '@/services/auth/TokenService';
+import { userDataApi } from '@/services/user-data-api';
 
 export type { BlogRole, UserPlan };
 
 /** Ceiling for the session-verification round trip so a hung backend cannot
  *  leave the app on "Loading..." forever (#565). */
 const AUTH_VERIFY_TIMEOUT_MS = 15_000;
+const TOKEN_REFRESH_MARGIN_MS = 2 * 60 * 1000;
+const TOKEN_REFRESH_RETRY_INITIAL_MS = 2 * 1000;
+const TOKEN_REFRESH_RETRY_MAX_MS = 60 * 1000;
+const TOKEN_REFRESH_RETRY_JITTER_MS = 500;
+const TOKEN_OPAQUE_REFRESH_CADENCE_MS = 4 * 60 * 1000;
+const REFRESH_SKIP_REPORT_INTERVAL_MS = 10 * 60 * 1000;
+
+type RefreshSkipReason = 'no_refresh_token' | 'no_expiry' | 'not_due' | 'lease_held';
+const lastRefreshSkipReportAt = new Map<RefreshSkipReason, number>();
+
+const reportRefreshSkip = (reason: RefreshSkipReason, accessToken?: string): void => {
+  if (!accessToken) return;
+  const now = Date.now();
+  const lastReportedAt = lastRefreshSkipReportAt.get(reason);
+  if (lastReportedAt !== undefined && now - lastReportedAt < REFRESH_SKIP_REPORT_INTERVAL_MS) {
+    return;
+  }
+  lastRefreshSkipReportAt.set(reason, now);
+  userDataApi.reportClientFailure('auth_refresh_check_skipped', undefined, undefined, {
+    message: `reason=${reason}`,
+  });
+};
 
 // WorkOS User type (compatible with existing code)
 interface WorkOSUser {
@@ -70,7 +97,9 @@ export const useAuth = (): AuthContextType => {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<WorkOSUser | null>(null);
-  const [session, setSession] = useState<WorkOSSession | null>(null);
+  // Hydrate before effects run so the persistence effect cannot clear a valid
+  // cached session while the first verification request is awaiting auth.
+  const [session, setSession] = useState<WorkOSSession | null>(() => loadCachedSession());
   const [sessionEnded, setSessionEnded] = useState(() => isSessionEnded());
   const [loading, setLoading] = useState(true);
   const [connectionError, setConnectionError] = useState(false);
@@ -79,7 +108,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Extract Blog Role and User Plan logic to specialized hooks
   const { blogRole, blogRoleLoading, isBlogAdmin, refreshBlogRole } = useBlogRole({ user });
-  const { userPlan, userPlanLoading, userPlanError, refreshUserPlan } = useUserPlan({ user, loading });
+  const { userPlan, userPlanLoading, userPlanError, refreshUserPlan } = useUserPlan({
+    user,
+    loading,
+  });
 
   const endSession = useCallback(() => {
     // TokenService clears the browser tokens when it enters the terminal
@@ -132,27 +164,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       // Verify token and get user data from backend
-      const apiUrl = import.meta.env?.VITE_API_URL || '';
-      const verifyToken = async (accessToken: string) => {
+      const verifyToken = async () => {
         // #565: bound the round trip — a blackholed connection must fail,
         // not leave the app on "Loading..." forever.
-        const res = await fetchWithTimeout(
-          `${apiUrl}/api/trpc/auth.me`,
-          {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-            },
-          },
-          AUTH_VERIFY_TIMEOUT_MS,
-        );
+        const res = await fetchWithAuth('/api/trpc/auth.me', {
+          headers: { 'Content-Type': 'application/json' },
+          timeoutMs: AUTH_VERIFY_TIMEOUT_MS,
+        });
         if (!res.ok) return { ok: false as const, status: res.status };
         const payload = await res.json();
         return { ok: true as const, userData: payload.result?.data };
       };
 
       let activeSession = cachedSession;
-      let result = await verifyToken(activeSession.access_token);
+      let result = await verifyToken();
+      // fetchWithAuth may have refreshed and persisted the pair while verifying
+      // auth.me; do not let the initial cached object overwrite that winner.
+      activeSession = loadCachedSession() ?? activeSession;
 
       // Access token may simply be expired (15 min TTL) — refresh with the
       // stored refresh token before wiping the session. Without this, any
@@ -178,7 +206,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     refresh_token: newTokens.refreshToken,
                   };
             persistSession(activeSession);
-            result = await verifyToken(activeSession.access_token);
+            result = await verifyToken();
           }
         } catch (error) {
           if (error instanceof TokenRefreshTransportError) {
@@ -310,69 +338,140 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [endSession, refreshAuth]);
 
-  // Auto-refresh token before it expires (WorkOS tokens expire every ~5 minutes)
+  // Auto-refresh token before it expires (WorkOS tokens expire every ~5 minutes).
+  // A recursive deadline timer is used instead of relying only on a fixed
+  // interval: when a background tab throttles timers, the first callback after
+  // visibility is restored still sees the absolute expiry and refreshes.
+  const hasAccessToken = Boolean(session?.access_token);
   const hasRefreshToken = Boolean(session?.refresh_token);
   useEffect(() => {
-    if (!hasRefreshToken || sessionEnded) return;
+    if (sessionEnded) return;
+    if (!hasAccessToken) return;
+    if (!hasRefreshToken) {
+      reportRefreshSkip('no_refresh_token', session?.access_token);
+      return;
+    }
 
-    const checkAndRefresh = async (): Promise<void> => {
+    const checkAndRefresh = async (trigger: 'initial' | 'scheduled' | 'event'): Promise<void> => {
       const activeSession = sessionRef.current;
-      if (!activeSession?.access_token || !activeSession.refresh_token || isSessionEnded()) return;
+      if (!activeSession?.access_token || isSessionEnded()) return;
+      if (!activeSession.refresh_token) {
+        reportRefreshSkip('no_refresh_token', activeSession.access_token);
+        return;
+      }
 
-      if (isTokenExpiringSoon(activeSession.access_token)) {
-        logger.info('Access token expiring soon, refreshing...');
-        let newTokens: Awaited<ReturnType<typeof refreshAccessTokenOnce>> = null;
-        try {
-          newTokens = await refreshAccessTokenOnce(
-            activeSession.refresh_token,
-            activeSession.access_token,
-          );
-        } catch (error) {
-          // #565: the refresh endpoint is unreachable (deploy swap) — not an
-          // auth verdict. Leave the session alone; the next tick retries.
-          if (!(error instanceof TokenRefreshTransportError)) {
-            logger.error('Unexpected token refresh rejection:', { error });
-          }
+      const expiry = getTokenExpiry(activeSession.access_token);
+      const hasOpaqueExpiry = expiry === null;
+      if (hasOpaqueExpiry) {
+        // There is no safe deadline to calculate for an opaque token. The
+        // scheduled cadence below refreshes it; startup and focus/visibility
+        // checks only record the reason they deliberately skip.
+        if (trigger !== 'scheduled') {
+          reportRefreshSkip('no_expiry', activeSession.access_token);
+          return;
         }
+      } else if (!isTokenExpiringSoon(activeSession.access_token)) {
+        reportRefreshSkip('not_due', activeSession.access_token);
+        return;
+      }
 
-        if (newTokens) {
-          logger.info('Token refreshed successfully');
-          const newSession = {
-            access_token: newTokens.accessToken,
-            refresh_token: newTokens.refreshToken,
-          };
-          if (!isSessionEnded()) {
-            sessionRef.current = newSession;
-            setSession(newSession);
-            persistSession(newSession);
-          }
-        } else if (isSessionEnded()) {
-          endSession();
+      if (isRefreshLeaseHeld() && !isRefreshInFlight()) {
+        reportRefreshSkip('lease_held', activeSession.access_token);
+        scheduleLeaseRetry();
+        return;
+      }
+
+      logger.info('Access token expiring soon, refreshing...');
+      let newTokens: Awaited<ReturnType<typeof refreshAccessTokenOnce>> = null;
+      try {
+        newTokens = await refreshAccessTokenOnce(
+          activeSession.refresh_token,
+          activeSession.access_token,
+        );
+      } catch (error) {
+        // #565: transport and temporary HTTP failures are not auth verdicts.
+        // Keep the session and back off so every tab does not hammer a
+        // recovering refresh endpoint once per second.
+        if (
+          error instanceof TokenRefreshTransportError ||
+          error instanceof TokenRefreshTransientError
+        ) {
+          scheduleTransientRetry();
+        } else {
+          logger.error('Unexpected token refresh rejection:', { error });
         }
+      }
+
+      if (newTokens) {
+        transientFailureCount = 0;
+        retryDelayMs = null;
+        logger.info('Token refreshed successfully');
+        const newSession = {
+          access_token: newTokens.accessToken,
+          refresh_token: newTokens.refreshToken,
+        };
+        if (!isSessionEnded()) {
+          sessionRef.current = newSession;
+          setSession(newSession);
+          persistSession(newSession);
+        }
+      } else if (isSessionEnded()) {
+        endSession();
       }
     };
 
-    // Check immediately
-    checkAndRefresh();
+    let refreshTimer: number | null = null;
+    let transientFailureCount = 0;
+    let retryDelayMs: number | null = null;
+    const scheduleTransientRetry = (): void => {
+      transientFailureCount += 1;
+      const exponentialDelay = Math.min(
+        TOKEN_REFRESH_RETRY_MAX_MS,
+        TOKEN_REFRESH_RETRY_INITIAL_MS * 2 ** (transientFailureCount - 1),
+      );
+      retryDelayMs = Math.min(
+        TOKEN_REFRESH_RETRY_MAX_MS,
+        exponentialDelay + Math.floor(Math.random() * TOKEN_REFRESH_RETRY_JITTER_MS),
+      );
+    };
+    const scheduleLeaseRetry = (): void => {
+      retryDelayMs = TOKEN_REFRESH_RETRY_INITIAL_MS;
+    };
+    const scheduleRefreshCheck = (): void => {
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+      const activeSession = sessionRef.current;
+      const expiry = activeSession ? getTokenExpiry(activeSession.access_token) : null;
+      const delay =
+        retryDelayMs ??
+        (expiry
+          ? Math.max(1_000, expiry - TOKEN_REFRESH_MARGIN_MS - Date.now())
+          : TOKEN_OPAQUE_REFRESH_CADENCE_MS);
+      retryDelayMs = null;
+      refreshTimer = window.setTimeout(() => {
+        void checkAndRefresh('scheduled').finally(scheduleRefreshCheck);
+      }, delay);
+    };
+
+    // Check immediately, then schedule against the token's absolute expiry.
+    void checkAndRefresh('initial').finally(scheduleRefreshCheck);
 
     const handleFocus = (): void => {
-      void checkAndRefresh();
+      void checkAndRefresh('event').finally(scheduleRefreshCheck);
     };
     const handleVisibilityChange = (): void => {
-      if (document.visibilityState === 'visible') void checkAndRefresh();
+      if (document.visibilityState === 'visible') {
+        void checkAndRefresh('event').finally(scheduleRefreshCheck);
+      }
     };
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // Then check every 30 seconds
-    const interval = setInterval(checkAndRefresh, 30 * 1000);
-
     return () => {
-      clearInterval(interval);
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer);
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [endSession, hasRefreshToken, sessionEnded]);
+  }, [endSession, hasAccessToken, hasRefreshToken, session?.access_token, sessionEnded]);
 
   // Persist session to localStorage
   useEffect(() => {

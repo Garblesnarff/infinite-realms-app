@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 
 import type { UserPlan } from '@/contexts/AuthContext';
 
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import { analytics } from '@/services/analytics';
 import { getAccessToken } from '@/services/auth/TokenService';
@@ -41,8 +42,6 @@ export const ACCOUNT_UPGRADE_PRICE = {
   label: '$15/month',
   priceId: 'price_1SjvhgAKOXZDug1mTxPZdKnK',
 } as const;
-
-const API_URL = import.meta.env?.VITE_API_URL || '';
 
 export interface UseAccountBillingReturn {
   subscription: SubscriptionStatus | null;
@@ -85,18 +84,12 @@ export function useAccountBilling(
   useEffect(() => {
     const fetchData = async (): Promise<void> => {
       try {
-        const token = getAccessToken();
-        if (!token) return;
-
+        if (!getAccessToken()) return;
         // ⚡ Bolt: Parallelize subscription and quota fetching to reduce loading latency
         // on the account page. This executes both requests concurrently.
         const [subRes, quotaRes] = await Promise.all([
-          fetch(`${API_URL}/v1/billing/subscription`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          fetch(`${API_URL}/v1/llm/quota`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
+          fetchWithAuth('/v1/billing/subscription'),
+          fetchWithAuth('/v1/llm/quota'),
         ]);
 
         if (subRes.ok) {
@@ -156,17 +149,14 @@ export function useAccountBilling(
       priceId: ACCOUNT_UPGRADE_PRICE.priceId,
     });
     try {
-      const token = getAccessToken();
-      if (!token) {
+      if (!getAccessToken()) {
         toast.error('Please sign in to upgrade');
         return;
       }
-
-      const response = await fetch(`${API_URL}/v1/billing/create-checkout-session`, {
+      const response = await fetchWithAuth('/v1/billing/create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           priceId: ACCOUNT_UPGRADE_PRICE.priceId,
@@ -196,17 +186,14 @@ export function useAccountBilling(
     setLoading(true);
     analytics.track('manage_subscription_clicked');
     try {
-      const token = getAccessToken();
-      if (!token) {
+      if (!getAccessToken()) {
         toast.error('Please sign in');
         return;
       }
-
-      const response = await fetch(`${API_URL}/v1/billing/portal-session`, {
+      const response = await fetchWithAuth('/v1/billing/portal-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
       });
 
