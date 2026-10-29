@@ -207,7 +207,12 @@ describe('game screen tap targets and text (#228)', () => {
           journalEntries={[]}
         />,
       );
-      for (const name of ['Sheet', 'Memory', 'Journal', 'Expand', 'Close Panel']) {
+      for (const name of ['Sheet', 'Memory', 'Journal']) {
+        const tab = screen.getByRole('tab', { name });
+        expect(tab.className).toContain('min-h-11');
+        expectSlop(tab);
+      }
+      for (const name of ['Expand', 'Close Panel']) {
         const button = screen.getByRole('button', { name });
         expect(button.className).toContain('h-8');
         expectSlop(button);

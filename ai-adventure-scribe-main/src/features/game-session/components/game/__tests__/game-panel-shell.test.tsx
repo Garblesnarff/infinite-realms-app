@@ -107,10 +107,10 @@ describe('game side panel shell (#1236 section A)', () => {
       setWidth(1280);
       renderPanel();
 
-      expect(screen.getByRole('button', { name: 'Sheet' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Memory' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Journal' })).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Combat' })).not.toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Sheet' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Memory' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Journal' })).toBeInTheDocument();
+      expect(screen.queryByRole('tab', { name: 'Combat' })).not.toBeInTheDocument();
     });
 
     it('adds Combat only while in combat', () => {
@@ -118,7 +118,7 @@ describe('game side panel shell (#1236 section A)', () => {
       (useCombat as any).mockReturnValue({ state: { isInCombat: true } });
       renderPanel({ combatMode: true });
 
-      expect(screen.getByRole('button', { name: 'Combat' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Combat' })).toBeInTheDocument();
     });
 
     it('renders no emoji or symbol headings in the panel header', () => {
@@ -129,14 +129,27 @@ describe('game side panel shell (#1236 section A)', () => {
       expect(container.textContent).not.toMatch(EMOJI_OR_SYMBOL);
     });
 
+    it('fits all tabs in a grid at the 280px minimum width with no horizontal scroll', () => {
+      setWidth(1280);
+      (useCombat as any).mockReturnValue({ state: { isInCombat: true } });
+      renderPanel({ combatMode: true });
+
+      const list = screen.getByRole('tablist');
+      expect(list).toHaveClass('grid', 'grid-cols-4');
+      expect(list.parentElement).not.toHaveClass('overflow-x-auto');
+      for (const tab of within(list).getAllByRole('tab')) {
+        expect(tab).toHaveClass('flex-col');
+      }
+    });
+
     it('gives each tab a 44px tap area through the existing hit-slop class', () => {
       setWidth(1280);
       renderPanel();
 
       for (const name of ['Sheet', 'Memory', 'Journal']) {
-        const button = screen.getByRole('button', { name });
-        expect(button).toHaveClass('ir-hit-slop');
-        expect(button).toHaveClass('h-8');
+        const tab = screen.getByRole('tab', { name });
+        expect(tab).toHaveClass('ir-hit-slop');
+        expect(tab).toHaveClass('min-h-11');
       }
     });
   });

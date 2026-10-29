@@ -13,7 +13,7 @@ import type { Memory } from '@/types/memory';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Z_INDEX } from '@/constants/z-index';
 
 export interface DesktopGameSidePanelProps {
@@ -92,103 +92,81 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
               : 'border-white/10 bg-gradient-to-b from-[#111726] to-[#0e1422]'
           }`}
         >
-          <div className="p-3 border-b border-white/10 flex items-center justify-between">
-            <div className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto">
-              <Button
-                variant={activeTab === 'character' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleTabChange('character')}
-                aria-pressed={activeTab === 'character'}
-                className="ir-hit-slop h-8 px-2 gap-1.5 flex-shrink-0"
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) =>
+              handleTabChange(value as 'character' | 'memory' | 'combat' | 'journal')
+            }
+            className="flex h-full min-h-0 flex-col"
+          >
+            <div className="flex items-stretch gap-1 border-b border-white/10 p-2">
+              <TabsList
+                className={`grid h-auto min-w-0 flex-1 gap-0.5 rounded-none bg-transparent p-0 ${isInCombat ? 'grid-cols-4' : 'grid-cols-3'}`}
               >
-                <User className="h-4 w-4" aria-hidden="true" />
-                Sheet
-              </Button>
-              <Button
-                variant={activeTab === 'memory' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleTabChange('memory')}
-                aria-pressed={activeTab === 'memory'}
-                className={`ir-hit-slop h-8 px-2 gap-1.5 flex-shrink-0 transition-all duration-200 ${
-                  activeTab === 'memory'
-                    ? 'bg-infinite-gold/15 text-infinite-gold shadow-glow-gold'
-                    : 'text-foreground/60 hover:bg-white/5 hover:text-infinite-gold'
-                }`}
-              >
-                <List className="h-4 w-4" aria-hidden="true" />
-                Memory
-              </Button>
-              {isInCombat && (
-                <Button
-                  variant={activeTab === 'combat' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => handleTabChange('combat')}
-                  aria-pressed={activeTab === 'combat'}
-                  className={`ir-hit-slop h-8 px-2 gap-1.5 flex-shrink-0 transition-all duration-200 ${
-                    activeTab === 'combat'
-                      ? 'bg-red-500 text-white shadow-lg animate-pulse'
-                      : 'hover:bg-red-500/20'
-                  }`}
+                <TabsTrigger
+                  value="character"
+                  className="ir-hit-slop flex h-auto min-h-11 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1 text-[11px] font-medium leading-tight text-foreground/60 hover:bg-white/5 hover:text-infinite-gold data-[state=active]:bg-infinite-gold/15 data-[state=active]:text-infinite-gold data-[state=active]:shadow-glow-gold"
                 >
-                  <Sword className="h-4 w-4" aria-hidden="true" />
-                  Combat
-                </Button>
-              )}
-              <Button
-                variant={activeTab === 'journal' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleTabChange('journal')}
-                aria-pressed={activeTab === 'journal'}
-                className={`ir-hit-slop h-8 px-2 gap-1.5 flex-shrink-0 transition-all duration-200 ${
-                  activeTab === 'journal'
-                    ? 'bg-amber-500/20 text-amber-100 shadow-lg'
-                    : 'text-foreground/60 hover:bg-white/5 hover:text-amber-100'
-                }`}
-              >
-                <BookOpen className="h-4 w-4" aria-hidden="true" />
-                Journal
-              </Button>
-            </div>
-            <div className="flex gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setIsExpanded(!isExpanded);
-                  if (isExpanded) onToggle();
-                }}
-                aria-label={isExpanded ? 'Minimize' : 'Expand'}
-                title={isExpanded ? 'Minimize' : 'Expand'}
-                className="ir-hit-slop h-8 w-8 p-0 rounded-full hover:bg-muted/20 transition-all duration-200 hover:scale-110"
-              >
-                {isExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronUp className="h-4 w-4" />
+                  <User className="h-4 w-4" aria-hidden="true" />
+                  Sheet
+                </TabsTrigger>
+                <TabsTrigger
+                  value="memory"
+                  className="ir-hit-slop flex h-auto min-h-11 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1 text-[11px] font-medium leading-tight text-foreground/60 hover:bg-white/5 hover:text-infinite-gold data-[state=active]:bg-infinite-gold/15 data-[state=active]:text-infinite-gold data-[state=active]:shadow-glow-gold"
+                >
+                  <List className="h-4 w-4" aria-hidden="true" />
+                  Memory
+                </TabsTrigger>
+                {isInCombat && (
+                  <TabsTrigger
+                    value="combat"
+                    className="ir-hit-slop flex h-auto min-h-11 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1 text-[11px] font-medium leading-tight text-foreground/60 hover:bg-white/5 hover:text-infinite-gold data-[state=active]:bg-infinite-gold/15 data-[state=active]:text-infinite-gold data-[state=active]:shadow-glow-gold hover:bg-red-500/20 data-[state=active]:bg-red-500 data-[state=active]:text-white data-[state=active]:shadow-lg"
+                  >
+                    <Sword className="h-4 w-4" aria-hidden="true" />
+                    Combat
+                  </TabsTrigger>
                 )}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onToggle()}
-                aria-label="Close Panel"
-                title="Close Panel"
-                className="ir-hit-slop h-8 w-8 p-0 rounded-full hover:bg-red-500/20 transition-all duration-200 hover:scale-110"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
+                <TabsTrigger
+                  value="journal"
+                  className="ir-hit-slop flex h-auto min-h-11 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1 text-[11px] font-medium leading-tight text-foreground/60 hover:bg-white/5 hover:text-infinite-gold data-[state=active]:bg-infinite-gold/15 data-[state=active]:text-infinite-gold data-[state=active]:shadow-glow-gold"
+                >
+                  <BookOpen className="h-4 w-4" aria-hidden="true" />
+                  Journal
+                </TabsTrigger>
+              </TabsList>
+              <div className="flex flex-col gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setIsExpanded(!isExpanded);
+                    if (isExpanded) onToggle();
+                  }}
+                  aria-label={isExpanded ? 'Minimize' : 'Expand'}
+                  title={isExpanded ? 'Minimize' : 'Expand'}
+                  className="ir-hit-slop h-8 w-8 p-0 rounded-full hover:bg-muted/20 transition-all duration-200 hover:scale-110"
+                >
+                  {isExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronUp className="h-4 w-4" />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onToggle()}
+                  aria-label="Close Panel"
+                  title="Close Panel"
+                  className="ir-hit-slop h-8 w-8 p-0 rounded-full hover:bg-red-500/20 transition-all duration-200 hover:scale-110"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
-          </div>
 
-          {isExpanded && (
-            <div className="flex-grow flex flex-col overflow-hidden">
-              <Tabs
-                value={activeTab}
-                onValueChange={(value) =>
-                  handleTabChange(value as 'character' | 'memory' | 'combat' | 'journal')
-                }
-                className="flex flex-col h-full"
-              >
+            {isExpanded && (
+              <div className="flex-grow flex flex-col overflow-hidden">
                 <TabsContent value="character" className="mt-0 flex-1 border-0 bg-transparent p-0">
                   <div style={{ maxHeight: '78vh', overflow: 'auto' }} className="p-1">
                     <RightSheetLive
@@ -263,9 +241,9 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
                     </div>
                   </ScrollArea>
                 </TabsContent>
-              </Tabs>
-            </div>
-          )}
+              </div>
+            )}
+          </Tabs>
         </Card>
       </div>
     );
