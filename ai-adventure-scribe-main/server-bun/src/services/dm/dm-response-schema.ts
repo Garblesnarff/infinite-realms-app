@@ -400,8 +400,8 @@ const mapActionUpdateCellVariantSchema = {
     action: { type: 'string', enum: ['update_cell'] },
     x: { type: 'number' },
     y: { type: 'number' },
-    // updateCell applies a Partial<Cell>; entity-only fields are ignored on
-    // this path and should not consume strict-schema optional budget.
+    // updateCell consumes a Partial<Cell>; the shadow permits only cell fields
+    // while the lenient live parser retains the historical bag.
     changes: {
       type: 'object',
       additionalProperties: false,
