@@ -833,7 +833,11 @@ export class CombatEncounterService {
    * @param encounterId - Combat encounter ID
    * @returns Complete combat state with participants and turn order
    */
-  static async getCombatState(encounterId: string, userId?: string): Promise<CombatState> {
+  static async getCombatState(
+    encounterId: string,
+    userId?: string,
+    options?: { includeCharacterClass?: boolean },
+  ): Promise<CombatState> {
     // 🛡️ Sentinel: Combined authorization and retrieval into a single relational query.
     // This ensures atomic verification and masks resource existence for unauthorized users.
     const encounterWithParticipants = await db.query.combatEncounters.findFirst({
@@ -864,7 +868,7 @@ export class CombatEncounterService {
         participants: {
           orderBy: (cp, { asc }) => [asc(cp.turnOrder)],
           with: {
-            character: { columns: { class: true } },
+            character: { columns: { class: true, level: true, classLevels: true } },
             npc: { columns: { stats: true } },
             status: true,
             conditions: { with: { condition: true } },
@@ -898,14 +902,13 @@ export class CombatEncounterService {
         // roll prompt) reads it instead of re-deriving it from raw columns (#2518).
         vitalState: vitalStateOf(participant as unknown as VitalsInput),
       };
-      // Keep this server-only gate out of the wire shape: clients and pinned fixtures rely on
-      // the participant keys remaining stable, while legal-action generation can still avoid
-      // querying the Paladin pool for non-paladins.
-      if (character?.class) {
-        Object.defineProperty(view, 'characterClass', {
-          value: character.class,
-          enumerable: false,
-          configurable: true,
+      // Legal-action generation may request the server-only class fields; ordinary combat-state
+      // reads keep the established participant wire shape unchanged.
+      if (options?.includeCharacterClass && character) {
+        Object.assign(view, {
+          characterClass: character.class,
+          characterLevel: character.level,
+          characterClassLevels: character.classLevels,
         });
       }
       return view;

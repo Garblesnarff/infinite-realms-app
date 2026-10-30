@@ -94,6 +94,7 @@ import { isPlayerCombatSpell, resolveCatalogSpell } from '../../data/spellData.j
 import { BusinessLogicError, NotFoundError, ValidationError } from '../../lib/errors.js';
 import { planApproach } from '../../tactical/approach.js';
 import { entitySlug, resolveEntityRef, slugify } from '../../tactical/identity.js';
+import { paladinLevelOf } from '../progression/paladin-features-service.js';
 
 import type { CombatAttackService as CombatAttackServiceType } from './combat-attack-service.js';
 import type { LegalActionType } from '../../../../shared/combat-legal-action-types';
@@ -2223,11 +2224,16 @@ export async function executeCombatIntent(
 }
 
 export async function getLegalCombatActions(encounterId: string, userId: string) {
-  const state = await CombatEncounterService.getCombatState(encounterId, userId);
+  const state = await CombatEncounterService.getCombatState(encounterId, userId, {
+    includeCharacterClass: true,
+  });
   const actor = state.currentParticipant as typeof state.currentParticipant & {
     actionUsed?: boolean;
     bonusActionUsed?: boolean;
     characterId?: string | null;
+    characterClass?: string | null;
+    characterLevel?: number | null;
+    characterClassLevels?: unknown;
     encounterId: string;
     maxHp?: number;
     status?: { currentHp?: number };
@@ -2430,7 +2436,12 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
     // Divine Sense belongs only to Paladins. Keep the pooled-feature lookup behind the
     // class gate so every non-paladin legal-actions request stays database-free in unit
     // and mocked-route tests (and cannot turn an unrelated action request into a pool query).
-    if ((actor as typeof actor & { characterClass?: string }).characterClass === 'Paladin') {
+    const paladinLevel = paladinLevelOf({
+      class: actor.characterClass ?? null,
+      level: actor.characterLevel ?? null,
+      classLevels: actor.characterClassLevels,
+    });
+    if (paladinLevel > 0) {
       const { divineSenseUses } = await import('../progression/paladin-features-service.js');
       const sense = await divineSenseUses(actor.characterId, userId);
       if (
