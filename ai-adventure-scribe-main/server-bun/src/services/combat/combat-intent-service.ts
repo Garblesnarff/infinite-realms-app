@@ -2427,15 +2427,20 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
     if ((uses.actionSurge ?? 0) > 0) {
       actions.push({ type: 'action_surge', label: 'Action Surge' });
     }
-    const { divineSenseUses } = await import('../progression/paladin-features-service.js');
-    const sense = await divineSenseUses(actor.characterId, userId);
-    if (
-      !actor.actionUsed &&
-      sense &&
-      sense.row.usesRemaining !== null &&
-      sense.row.usesRemaining > 0
-    ) {
-      actions.push({ type: 'divine_sense', label: 'Divine Sense' });
+    // Divine Sense belongs only to Paladins. Keep the pooled-feature lookup behind the
+    // class gate so every non-paladin legal-actions request stays database-free in unit
+    // and mocked-route tests (and cannot turn an unrelated action request into a pool query).
+    if ((actor as typeof actor & { characterClass?: string }).characterClass === 'Paladin') {
+      const { divineSenseUses } = await import('../progression/paladin-features-service.js');
+      const sense = await divineSenseUses(actor.characterId, userId);
+      if (
+        !actor.actionUsed &&
+        sense &&
+        sense.row.usesRemaining !== null &&
+        sense.row.usesRemaining > 0
+      ) {
+        actions.push({ type: 'divine_sense', label: 'Divine Sense' });
+      }
     }
   }
   // #2580: the way out of a fight the end guard would otherwise hold open. Offered outside the

@@ -864,6 +864,7 @@ export class CombatEncounterService {
         participants: {
           orderBy: (cp, { asc }) => [asc(cp.turnOrder)],
           with: {
+            character: { columns: { class: true } },
             npc: { columns: { stats: true } },
             status: true,
             conditions: { with: { condition: true } },
@@ -882,13 +883,14 @@ export class CombatEncounterService {
     const positions = new Map(
       map?.entities.map((entity) => [entity.id, { x: entity.x, y: entity.y, sceneId: map.id }]),
     );
-    const participants = participantRows.map(({ npc, ...participant }) => {
+    const participants = participantRows.map(({ npc, character, ...participant }) => {
       const disposition = authoredDisposition(npc?.stats);
       const position = positions.get(participant.id);
       const downedBehavior = authoredDownedBehavior(npc?.stats);
       const authored = authoredNumbers(npc?.stats);
       return {
         ...participant,
+        ...(character?.class ? { characterClass: character.class } : {}),
         ...(position ? { position } : {}),
         ...(disposition ? { disposition } : {}),
         ...authored,
