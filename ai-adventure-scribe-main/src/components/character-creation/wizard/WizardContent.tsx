@@ -58,6 +58,11 @@ const WizardContent: React.FC = () => {
   const { toast } = useToast();
   const { scrollToTop } = useAutoScroll();
   const [cancelDialogOpen, setCancelDialogOpen] = React.useState(false);
+  const [pendingNavigation, setPendingNavigation] = React.useState<string | null>(null);
+
+  const isWizardPath = React.useCallback((pathname: string) => {
+    return pathname === '/wizard' || /\/characters\/(?:create|new)$/.test(pathname);
+  }, []);
 
   // Filter steps based on character state
   const getFilteredSteps = React.useCallback(() => {
@@ -143,6 +148,36 @@ const WizardContent: React.FC = () => {
     return () => window.removeEventListener('beforeunload', handler);
   }, [state.character, isSaving]);
 
+  // React Router's BrowserRouter does not expose a navigation blocker. Capture
+  // in-app links while the wizard has data so the draft is not silently lost.
+  React.useEffect(() => {
+    if (!hasWizardDraftData(state.character) || isSaving) return;
+
+    const handleLinkClick = (event: MouseEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      )
+        return;
+      const target = event.target instanceof Element ? event.target.closest('a[href]') : null;
+      if (!(target instanceof HTMLAnchorElement) || target.target === '_blank' || target.download)
+        return;
+      const destination = new URL(target.href, window.location.href);
+      if (destination.origin !== window.location.origin || isWizardPath(destination.pathname))
+        return;
+      event.preventDefault();
+      event.stopPropagation();
+      setPendingNavigation(`${destination.pathname}${destination.search}${destination.hash}`);
+    };
+
+    document.addEventListener('click', handleLinkClick, true);
+    return () => document.removeEventListener('click', handleLinkClick, true);
+  }, [isSaving, isWizardPath, state.character]);
+
   // Scroll to top whenever the step changes
   React.useEffect(() => {
     scrollToTop();
@@ -160,6 +195,12 @@ const WizardContent: React.FC = () => {
     clearDraft();
     setCancelDialogOpen(false);
     navigate('/app/characters');
+  };
+
+  const confirmLeave = () => {
+    const destination = pendingNavigation;
+    setPendingNavigation(null);
+    if (destination) navigate(destination);
   };
 
   /**
@@ -395,6 +436,26 @@ const WizardContent: React.FC = () => {
           <AlertDialogFooter>
             <AlertDialogCancel>Keep editing</AlertDialogCancel>
             <AlertDialogAction onClick={confirmCancel}>Discard draft</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={pendingNavigation !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingNavigation(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leave character creation?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your unfinished character draft will be saved. Leave this page anyway?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmLeave}>Leave page</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
