@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import {
+  clearPendingLateWorkForTests,
   clearSessionEnded,
   getAccessToken,
   getAuthHeaders,
@@ -13,6 +14,7 @@ import {
   loadCachedSession,
   persistSession,
   SESSION_STORAGE_KEY,
+  TOKEN_REFRESH_BODY_TIMEOUT_MS,
   TOKEN_REFRESH_OVERALL_TIMEOUT_MS,
   TokenRefreshTransportError,
 } from '../TokenService';
@@ -56,6 +58,10 @@ describe('TokenService', () => {
     vi.stubGlobal('fetch', vi.fn());
     clearSessionEnded();
     persistSession(null);
+    // The late-work slot is module state: without this reset, a test that
+    // leaves an entry pending would be awaited (up to the 10 s cap) by the
+    // next test's terminal failure (#1275).
+    clearPendingLateWorkForTests();
   });
 
   afterEach(() => {
@@ -425,6 +431,143 @@ describe('TokenService', () => {
       expect(getAccessToken()).toBe('new-access');
       expect(isSessionEnded()).toBe(false);
       expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not let a never-settling body pin the next terminal failure for 10 s (#1275)', async () => {
+      persistSession({ access_token: 'old-access', refresh_token: 'old-refresh' });
+      (fetch as any)
+        .mockImplementationOnce(() =>
+          Promise.resolve({
+            ok: true,
+            json: () => new Promise(() => {}), // headers arrive, body never settles
+          }),
+        )
+        .mockImplementation(() =>
+          Promise.resolve({
+            ok: false,
+            status: 401,
+            json: async () => ({ error: 'invalid_grant' }),
+          }),
+        );
+
+      // First exchange: the deadline fires while the body is still unsettled.
+      const stalled = refreshAccessToken('old-refresh');
+      const stalledExpectation = expect(stalled).rejects.toBeInstanceOf(TokenRefreshTransportError);
+      await vi.advanceTimersByTimeAsync(40);
+      await vi.advanceTimersByTimeAsync(TOKEN_REFRESH_OVERALL_TIMEOUT_MS + 1);
+      await stalledExpectation;
+
+      // Past the body budget the slot clears on its own — no second
+      // deadline, no further refresh needed.
+      await vi.advanceTimersByTimeAsync(TOKEN_REFRESH_BODY_TIMEOUT_MS + 1);
+      await Promise.resolve();
+
+      // The terminal failure must end the session WITHOUT a 10 s wait: only
+      // the lease settle (40 ms) is advanced, never the late-work bound.
+      const failed = refreshAccessToken('old-refresh');
+      await vi.advanceTimersByTimeAsync(40);
+      await expect(failed).resolves.toBeNull();
+      expect(isSessionEnded()).toBe(true);
+      expect(fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('waits for every pending late entry, not just the newest (#1275)', async () => {
+      persistSession({ access_token: 'old-access', refresh_token: 'old-refresh' });
+      let resolveBodyA!: (value: unknown) => void;
+      let resolveBodyB!: (value: unknown) => void;
+      const bodyA = new Promise((resolve) => {
+        resolveBodyA = resolve;
+      });
+      const bodyB = new Promise((resolve) => {
+        resolveBodyB = resolve;
+      });
+      (fetch as any)
+        // First exchange: slow headers (12 s) so its body is still inside
+        // the 30 s budget when the second exchange's deadline fires.
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) =>
+              setTimeout(
+                () =>
+                  resolve({
+                    ok: true,
+                    json: () => bodyA,
+                  }),
+                12_000,
+              ),
+            ),
+        )
+        .mockImplementationOnce(() =>
+          Promise.resolve({
+            ok: true,
+            json: () => bodyB,
+          }),
+        )
+        .mockImplementation(() =>
+          Promise.resolve({
+            ok: false,
+            status: 401,
+            json: async () => ({ error: 'invalid_grant' }),
+          }),
+        );
+
+      // Two deadline-fired exchanges; both bodies still unsettled.
+      const stalledA = refreshAccessToken('old-refresh');
+      const stalledAExpectation = expect(stalledA).rejects.toBeInstanceOf(
+        TokenRefreshTransportError,
+      );
+      await vi.advanceTimersByTimeAsync(40);
+      await vi.advanceTimersByTimeAsync(TOKEN_REFRESH_OVERALL_TIMEOUT_MS + 1);
+      await stalledAExpectation;
+      const stalledB = refreshAccessToken('old-refresh');
+      const stalledBExpectation = expect(stalledB).rejects.toBeInstanceOf(
+        TokenRefreshTransportError,
+      );
+      await vi.advanceTimersByTimeAsync(40);
+      await vi.advanceTimersByTimeAsync(TOKEN_REFRESH_OVERALL_TIMEOUT_MS + 1);
+      await stalledBExpectation;
+      expect(fetch).toHaveBeenCalledTimes(2);
+
+      // Terminal failure starts waiting for both entries.
+      const failed = refreshAccessToken('old-refresh');
+      await vi.advanceTimersByTimeAsync(40);
+      let failedSettled = false;
+      void failed.then(
+        () => {
+          failedSettled = true;
+        },
+        () => {
+          failedSettled = true;
+        },
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // The newer entry settles first — the wait must NOT end while the
+      // older entry is still pending.
+      resolveBodyB({ accessToken: 'late-b-access', refreshToken: 'late-b-refresh' });
+      await vi.advanceTimersByTimeAsync(0);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(failedSettled).toBe(false);
+      expect(isSessionEnded()).toBe(false);
+
+      // The older entry settles: its pair must NOT overwrite the newer
+      // published pair (contender rule), and the wait ends with the newer
+      // pair adopted, session kept.
+      resolveBodyA({ accessToken: 'late-a-access', refreshToken: 'late-a-refresh' });
+      await vi.advanceTimersByTimeAsync(0);
+      await Promise.resolve();
+      await Promise.resolve();
+      await expect(failed).resolves.toEqual({
+        accessToken: 'late-b-access',
+        refreshToken: 'late-b-refresh',
+      });
+      expect(isSessionEnded()).toBe(false);
+      expect(loadCachedSession()).toEqual({
+        access_token: 'late-b-access',
+        refresh_token: 'late-b-refresh',
+      });
     });
 
     it('enters a terminal state on a refresh 401 and never retries', async () => {
