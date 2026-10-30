@@ -548,6 +548,151 @@ describe('useVoiceProcessing', () => {
     expect(VoiceDirector.generateAudio).toHaveBeenCalledTimes(2);
   });
 
+  it('a plain-text click aborts the run in progress, and that run writes no state', async () => {
+    let releaseA!: () => void;
+    const aGate = new Promise<void>((resolve) => {
+      releaseA = resolve;
+    });
+    const signals: Record<string, AbortSignal> = {};
+    (VoiceDirector.validateAISegments as any).mockImplementation((segs: any) => segs);
+    (VoiceDirector.processAISegments as any).mockImplementation((segs: any) =>
+      segs.map((s: any) => ({ character: 'DM', text: s.text })),
+    );
+    (VoiceDirector.generateAudio as any).mockImplementation(
+      async (segment: any, signal: AbortSignal) => {
+        signals[segment.text] = signal;
+        if (segment.text === 'A') {
+          await aGate;
+          return { ...segment, error: 'Generation failed' };
+        }
+        return { ...segment, audioUrl: `http://test.com/${segment.text}.mp3` };
+      },
+    );
+    let local: any = {
+      segments: [],
+      currentSegmentIndex: -1,
+      isPlaying: false,
+      isPaused: false,
+      isProcessing: false,
+      isStalled: false,
+    };
+    mockSetState.mockImplementation((update: any) => {
+      local = typeof update === 'function' ? update(local) : update;
+    });
+
+    const { result } = renderHook(() => useVoiceProcessing(defaultProps));
+
+    let runA!: Promise<void>;
+    act(() => {
+      runA = result.current.speakAISegments([{ type: 'dm', text: 'A' }] as any);
+    });
+    await act(async () => {
+      await result.current.speakPlainText('B');
+    });
+    expect(signals['A'].aborted).toBe(true);
+    const afterB = { ...local };
+
+    releaseA();
+    await act(async () => {
+      await runA;
+    });
+
+    expect(local).toEqual(afterB);
+    expect(local.error).toBeUndefined();
+  });
+
+  it('a stopped clip that finishes alone marks nothing as failed', async () => {
+    let releaseA!: () => void;
+    const aGate = new Promise<void>((resolve) => {
+      releaseA = resolve;
+    });
+    (VoiceDirector.validateAISegments as any).mockImplementation((segs: any) => segs);
+    (VoiceDirector.processAISegments as any).mockImplementation((segs: any) =>
+      segs.map((s: any) => ({ character: 'DM', text: s.text })),
+    );
+    (VoiceDirector.generateAudio as any).mockImplementation(async (segment: any) => {
+      await aGate;
+      return { ...segment, error: 'Generation failed' };
+    });
+    let local: any = {
+      segments: [],
+      currentSegmentIndex: -1,
+      isPlaying: false,
+      isPaused: false,
+      isProcessing: false,
+      isStalled: false,
+    };
+    mockSetState.mockImplementation((update: any) => {
+      local = typeof update === 'function' ? update(local) : update;
+    });
+
+    const { result } = renderHook(() => useVoiceProcessing(defaultProps));
+
+    let runA!: Promise<void>;
+    act(() => {
+      runA = result.current.speakAISegments([{ type: 'dm', text: 'A' }] as any);
+    });
+    act(() => {
+      result.current.abortController.current?.abort();
+    });
+
+    releaseA();
+    await act(async () => {
+      await runA;
+    });
+
+    expect(local.error).toBeUndefined();
+  });
+
+  it('a stopped clip does not mark the next clip failed', async () => {
+    let releaseA!: () => void;
+    const aGate = new Promise<void>((resolve) => {
+      releaseA = resolve;
+    });
+    (VoiceDirector.validateAISegments as any).mockImplementation((segs: any) => segs);
+    (VoiceDirector.processAISegments as any).mockImplementation((segs: any) =>
+      segs.map((s: any) => ({ character: 'DM', text: s.text })),
+    );
+    (VoiceDirector.generateAudio as any).mockImplementation(async (segment: any) => {
+      if (segment.text === 'A') {
+        await aGate;
+        return { ...segment, error: 'Generation failed' };
+      }
+      return { ...segment, audioUrl: `http://test.com/${segment.text}.mp3` };
+    });
+    let local: any = {
+      segments: [],
+      currentSegmentIndex: -1,
+      isPlaying: false,
+      isPaused: false,
+      isProcessing: false,
+      isStalled: false,
+    };
+    mockSetState.mockImplementation((update: any) => {
+      local = typeof update === 'function' ? update(local) : update;
+    });
+
+    const { result } = renderHook(() => useVoiceProcessing(defaultProps));
+
+    let runA!: Promise<void>;
+    act(() => {
+      runA = result.current.speakAISegments([{ type: 'dm', text: 'A' }] as any);
+    });
+    act(() => {
+      result.current.abortController.current?.abort();
+    });
+    await act(async () => {
+      await result.current.speakAISegments([{ type: 'dm', text: 'B' }] as any);
+    });
+
+    releaseA();
+    await act(async () => {
+      await runA;
+    });
+
+    expect(local.error).toBeUndefined();
+  });
+
   it('should abort previous processing when a new request comes in', async () => {
     const aiSegments1 = [{ type: 'dm', text: 'First Request' }];
     const aiSegments2 = [{ type: 'dm', text: 'Second Request' }];
