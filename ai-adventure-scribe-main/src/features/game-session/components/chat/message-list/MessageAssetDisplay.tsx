@@ -10,27 +10,13 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import React from 'react';
 
-import {
-  AssetCard,
-  GeneratedImageCard,
-  GenerateButtonCard,
-  getAssetIcon,
-  getAssetGradient,
-} from './MessageAssetCards';
+import { AssetCard, getAssetIcon, getAssetGradient } from './MessageAssetCards';
 
 import type { AssetTag } from '../../../utils/parse-asset-tags';
 import type { CampaignAsset } from '@/hooks/use-campaign-assets';
 
-import { Button } from '@/components/ui/button';
 import { Z_INDEX } from '@/constants/z-index';
 import { cn } from '@/lib/utils';
-
-interface GeneratedImageData {
-  url?: string;
-  isGenerating?: boolean;
-  error?: string;
-  onGenerate?: () => void;
-}
 
 interface MessageAssetDisplayProps {
   /** Asset tags parsed from the message */
@@ -39,8 +25,6 @@ interface MessageAssetDisplayProps {
   getAsset: (type: string, key: string) => CampaignAsset | null;
   /** Optional className */
   className?: string;
-  /** Optional generated image to display alongside campaign assets */
-  generatedImage?: GeneratedImageData;
 }
 
 /**
@@ -50,12 +34,8 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
   assetTags,
   getAsset,
   className,
-  generatedImage,
 }) => {
   const [expandedAsset, setExpandedAsset] = React.useState<CampaignAsset | null>(null);
-  const [expandedGenerated, setExpandedGenerated] = React.useState(false);
-  // The empty "Generate / Scene" card stays hidden until the player asks for scene art (#2256).
-  const [sceneArtRequested, setSceneArtRequested] = React.useState(false);
 
   // Resolve asset tags to actual assets (filter out those without images)
   const resolvedAssets = React.useMemo(() => {
@@ -71,18 +51,9 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
     return assets;
   }, [assetTags, getAsset]);
 
-  // Check if we have anything to show
+  // Nothing to show: no tagged asset has an image.
   const hasAssets = resolvedAssets.length > 0;
-  const hasGeneratedImage = Boolean(generatedImage?.url);
-  const hasGenerateButton = Boolean(generatedImage?.onGenerate);
-  // A run in flight or a failed run keeps the card on screen so its state stays visible.
-  const showGenerateCard =
-    !hasGeneratedImage &&
-    hasGenerateButton &&
-    (sceneArtRequested || Boolean(generatedImage?.isGenerating) || Boolean(generatedImage?.error));
-
-  // Don't render if nothing to show
-  if (!hasAssets && !hasGeneratedImage && !hasGenerateButton) {
+  if (!hasAssets) {
     return null;
   }
 
@@ -97,31 +68,6 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
             onClick={() => setExpandedAsset(asset)}
           />
         ))}
-        {/* Generated image card */}
-        {hasGeneratedImage && (
-          <GeneratedImageCard
-            url={generatedImage!.url!}
-            onClick={() => setExpandedGenerated(true)}
-          />
-        )}
-        {/* Generate button (when no image yet) */}
-        {showGenerateCard && (
-          <GenerateButtonCard
-            isGenerating={generatedImage?.isGenerating}
-            error={generatedImage?.error}
-            onGenerate={generatedImage!.onGenerate!}
-          />
-        )}
-        {!hasGeneratedImage && hasGenerateButton && !showGenerateCard && (
-          <Button
-            type="button"
-            variant="ghost"
-            className="h-auto px-2 py-1 text-xs text-white/60 hover:text-white"
-            onClick={() => setSceneArtRequested(true)}
-          >
-            Show scene art
-          </Button>
-        )}
       </div>
 
       {/* Expanded asset view modal - uses high z-index to appear above all game UI */}
@@ -185,55 +131,6 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
                   {expandedAsset.description && (
                     <p className="mt-2 text-sm text-white/60">{expandedAsset.description}</p>
                   )}
-                </div>
-              </div>
-            )}
-          </DialogPrimitive.Content>
-        </DialogPrimitive.Portal>
-      </DialogPrimitive.Root>
-
-      {/* Expanded generated image modal */}
-      <DialogPrimitive.Root open={expandedGenerated} onOpenChange={setExpandedGenerated}>
-        <DialogPrimitive.Portal>
-          <DialogPrimitive.Overlay
-            className="fixed inset-0 bg-black/90 backdrop-blur-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
-            style={{ zIndex: Z_INDEX.IMAGE_LIGHTBOX_BACKDROP }}
-          />
-          <DialogPrimitive.Content
-            className="fixed left-[50%] top-[50%] -translate-x-1/2 -translate-y-1/2 max-w-2xl w-[95vw] p-0 overflow-hidden bg-black/95 border border-white/10 rounded-lg shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-infinite-gold focus-visible:ring-offset-2 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
-            style={{ zIndex: Z_INDEX.IMAGE_LIGHTBOX }}
-          >
-            <DialogPrimitive.Title className="sr-only">
-              Generated scene preview
-            </DialogPrimitive.Title>
-            <DialogPrimitive.Description className="sr-only">
-              Enlarged view of the AI-generated scene.
-            </DialogPrimitive.Description>
-            {generatedImage?.url && (
-              <div className="relative">
-                <DialogPrimitive.Close
-                  className="ir-hit-slop absolute top-3 right-3 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-infinite-gold"
-                  style={{ zIndex: Z_INDEX.POPOVER }}
-                  aria-label="Close generated scene preview"
-                  title="Close generated scene preview"
-                >
-                  <X className="h-5 w-5" />
-                </DialogPrimitive.Close>
-                <div className="relative aspect-square md:aspect-[4/3] w-full">
-                  <img
-                    src={generatedImage.url}
-                    alt="Generated scene"
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-                <div className={cn('p-4 bg-gradient-to-t border-t', getAssetGradient('generated'))}>
-                  <h3 className="text-lg font-semibold text-white">Generated Scene</h3>
-                  <div className="flex items-center gap-2 mt-1">
-                    {getAssetIcon('generated')}
-                    <span className="text-sm text-white/70 uppercase tracking-wider">
-                      AI Generated
-                    </span>
-                  </div>
                 </div>
               </div>
             )}
