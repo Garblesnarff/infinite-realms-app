@@ -17,7 +17,9 @@ import {
 // Strategist HOLD on PR 1110, item 5: rollback must restore today's exact
 // schema. The fixture is main's dmResponseSchema bytes, captured from the
 // main tree's own module (schema unchanged by main through f04db2b2).
-import mainDmResponseSchema from './fixtures/main-dm-response-schema.json' with { type: 'json' };
+import mainDmResponseSchema from './fixtures/main-dm-response-schema.json' with {
+  type: 'json',
+};
 
 /**
  * #782 item 8 (Refs #782): per-phase DM reply schemas in shadow. The phase
@@ -359,9 +361,7 @@ describe('keyword split (strategist HOLD on PR 1110: item-5 tail moves to its ow
         map_actions: { items: { properties: { distance: Record<string, unknown> } } };
         items: { items: { properties: { quantity: Record<string, unknown> } } };
         conditions: { items: { properties: { duration_minutes: Record<string, unknown> } } };
-        damage: {
-          properties: { amount: Record<string, unknown>; source: Record<string, unknown> };
-        };
+        damage: { properties: { amount: Record<string, unknown>; source: Record<string, unknown> } };
       };
     };
     expect(live.properties.map_actions.items.properties.distance).toEqual({
@@ -405,17 +405,12 @@ describe('tactical kind-split map variants (Refs #782 item 8)', () => {
   test('move requires entity + coordinates and accepts the fixture changes:null', () => {
     // Literal values from cli/fixtures/combat-movement.json.
     expect(
-      validate(
-        tactical,
-        mapTurn({ action: 'move', entityId: 'void-maw', x: 3, y: 3, changes: null }),
-      ),
+      validate(tactical, mapTurn({ action: 'move', entityId: 'void-maw', x: 3, y: 3, changes: null })),
     ).toEqual([]);
     expect(
       validate(tactical, mapTurn({ action: 'move', entityId: 'void-maw', x: 3, y: 3 })).length,
     ).toBe(0);
-    expect(
-      validate(tactical, mapTurn({ action: 'move', entityId: 'void-maw', x: 3 })).length,
-    ).toBeGreaterThan(0);
+    expect(validate(tactical, mapTurn({ action: 'move', entityId: 'void-maw', x: 3 })).length).toBeGreaterThan(0);
   });
 
   test('place requires changes; remove requires only the entity', () => {
@@ -445,18 +440,15 @@ describe('tactical kind-split map variants (Refs #782 item 8)', () => {
 
   test('update_cell requires coordinates + changes; forced_move requires target + mode only', () => {
     expect(
-      validate(
-        tactical,
-        mapTurn({ action: 'update_cell', x: 1, y: 2, changes: { terrain: 'wall' } }),
-      ).length,
+      validate(tactical, mapTurn({ action: 'update_cell', x: 1, y: 2, changes: { terrain: 'wall' } }))
+        .length,
     ).toBe(0);
     expect(
       validate(tactical, mapTurn({ action: 'update_cell', x: 1, y: 2 })).length,
     ).toBeGreaterThan(0);
     // Mirrors the hand parser's own test: target/mode with no other pads parses.
     expect(
-      validate(tactical, mapTurn({ action: 'forced_move', target: 'goblin-1', mode: 'shove' }))
-        .length,
+      validate(tactical, mapTurn({ action: 'forced_move', target: 'goblin-1', mode: 'shove' })).length,
     ).toBe(0);
     expect(validate(tactical, mapTurn({ action: 'forced_move' })).length).toBeGreaterThan(0);
     expect(
@@ -474,9 +466,8 @@ describe('tactical kind-split map variants (Refs #782 item 8)', () => {
   });
 
   test('the variant set is exactly the five kinds', () => {
-    const variants = (
-      mapActions as { anyOf: Array<{ properties: { action: { enum: string[] } } }> }
-    ).anyOf;
+    const variants = (mapActions as { anyOf: Array<{ properties: { action: { enum: string[] } } }> })
+      .anyOf;
     expect(variants.map((variant) => variant.properties.action.enum[0]).sort()).toEqual(
       ['forced_move', 'move', 'place', 'remove', 'update_cell'].sort(),
     );
@@ -652,7 +643,7 @@ describe('phase picker (Refs #782 item 8)', () => {
     }
   });
 
-  test("LLM_DM_PHASE_PICKER=off yields main's exact schema bytes (HOLD item 5)", async () => {
+  test('LLM_DM_PHASE_PICKER=off yields main\'s exact schema bytes (HOLD item 5)', async () => {
     // Rollback must restore today's schema, not just today's shape: the
     // pinned schema serializes byte-identically to main's live schema
     // (fixture captured from the main tree's own module output).
@@ -681,7 +672,9 @@ describe('phase schema budgets (Refs #782 item 8)', () => {
       tactical: 5,
     };
     for (const phase of ['narrative', 'combat', 'tactical'] as const) {
-      expect(findKeywords(dmResponseSchemaForPhase(phase))).toHaveLength(expectedKeywords[phase]);
+      expect(findKeywords(dmResponseSchemaForPhase(phase))).toHaveLength(
+        expectedKeywords[phase],
+      );
     }
     // The budget test asserts the exact counts; here the shape guarantee:
     // phase schemas are strict subsets of the live schema's properties.

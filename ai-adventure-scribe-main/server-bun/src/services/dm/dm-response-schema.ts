@@ -21,13 +21,7 @@ export type ForcedMoveAction = {
 };
 
 export type DMMapAction =
-  | {
-      action: 'move';
-      entityId?: string | null;
-      x?: number | null;
-      y?: number | null;
-      changes?: null;
-    }
+  | { action: 'move'; entityId?: string | null; x?: number | null; y?: number | null; changes?: null }
   | {
       action: 'place';
       entityId?: string | null;
@@ -818,11 +812,11 @@ const storyDamageProperty = {
   // damage signal, so the writer never ran. Like #463's items description, this tells
   // the model when to populate the field inside the structured-output contract.
   description:
-    "#610 story damage: when the story hurts the player's character this turn (a failed " +
-    "check's consequence, a hazard, a trap — anything the engine did not already resolve), " +
+    '#610 story damage: when the story hurts the player\'s character this turn (a failed ' +
+    'check\'s consequence, a hazard, a trap — anything the engine did not already resolve), ' +
     'set this field to `{"amount": <whole number of hit points>, "source": "<short source, ' +
     'e.g. rope burn>"}` and narrate the hurt in `text`. The game subtracts the amount from ' +
-    "the character's hit points and posts a damage line in chat; do not narrate the " +
+    'the character\'s hit points and posts a damage line in chat; do not narrate the ' +
     'character being hurt or taking damage without setting this field (or requesting a ' +
     '`damage` roll when the amount should be rolled). Otherwise omit it.',
 };
@@ -844,14 +838,14 @@ const campaignEndingProperty = {
   },
   required: ['summary'],
   description:
-    "#1020 campaign ending: when the campaign's story is complete — its final beat has " +
+    '#1020 campaign ending: when the campaign\'s story is complete — its final beat has ' +
     'played, or a limit its rules define has been reached (a story Clock that fills, the ' +
     'final choice taken) — set this field to `{"summary": "<one or two sentences: how the ' +
     'story ended>"}` and narrate the ending in `text`. The game posts the ending, marks ' +
     'the session complete and ends the adventure; put the completion XP in `xp_award` in ' +
     'the same reply. Set it only for the ending itself: never while story beats remain, ' +
     'never for a scene or combat ending, and never for the end of a session when the ' +
-    "campaign's story continues in a later session. Otherwise omit it.",
+    'campaign\'s story continues in a later session. Otherwise omit it.',
 };
 
 /**
@@ -875,15 +869,15 @@ const trackerChangesProperty = {
     required: ['name'],
   },
   description:
-    "#1042 story clocks: when the story advances one of the campaign's clocks this turn " +
-    "(the tick events the campaign's rules and the <story_clock> state name: a node " +
+    '#1042 story clocks: when the story advances one of the campaign\'s clocks this turn ' +
+    '(the tick events the campaign\'s rules and the <story_clock> state name: a node ' +
     'finished, a rest taken, a creature escaped, time lingered), set this field to an ' +
     'array of `{"name": "<clock name>", "delta": <segments>}` — or `{"name": "<clock ' +
     'name>", "set": <segments>}` when a rule sets the clock to a value. The game stores ' +
     'the clock and enforces its limit; the values in <story_clock> are the stored truth, ' +
     'never your own count. The game UI shows the tracker line from them (#1062), so do ' +
     'NOT render a tracker line in your prose. If this reply asks ' +
-    "for a roll, the changes land on the roll's result turn — send them again there. " +
+    'for a roll, the changes land on the roll\'s result turn — send them again there. ' +
     'Otherwise omit it.',
 };
 
@@ -900,7 +894,7 @@ const trackerChangesProperty = {
 const finalBeatReachedProperty = {
   type: 'boolean',
   description:
-    "#1042 final beat: when this turn plays the campaign's final beat — the story " +
+    '#1042 final beat: when this turn plays the campaign\'s final beat — the story ' +
     'reaches the final location or last beat its rules describe — set this to true, ' +
     'even when no story clock has filled. The game then requires the ending on the ' +
     'next turn and ends the adventure if it is still not declared. Set it only for ' +
@@ -1298,7 +1292,10 @@ export function stripOptionsRepeatedInText(text: string, options: string[]): str
     }
     if (valid) flush();
     if (!valid || covered.size !== keys.size) continue;
-    const stripped = lines.slice(0, start).join('\n').trimEnd();
+    const stripped = lines
+      .slice(0, start)
+      .join('\n')
+      .trimEnd();
     return stripped.trim().length > 0 ? stripped : text;
   }
   return text;
