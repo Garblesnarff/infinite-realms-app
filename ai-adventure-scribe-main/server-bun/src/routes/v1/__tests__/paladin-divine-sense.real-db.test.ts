@@ -233,7 +233,10 @@ describeWithDb('paladin Divine Sense tracking (#712)', () => {
             'content-type': 'application/json',
           },
           body: JSON.stringify({
-            intent: { type: 'divine_sense', actorId: participantId },
+            // The real combat chip is DM-sourced, but this route fixture supplies the
+            // encounter token explicitly so the optimistic write exercises the seeded
+            // version rather than relying on a separately loaded state snapshot.
+            intent: { type: 'divine_sense', actorId: participantId, expectedVersion: 1 },
             source: 'dm',
             dmStartedAt: 1_700_000_000_000,
             origin: 'typed',
