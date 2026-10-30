@@ -39,11 +39,13 @@ if (hasRealDb) {
   process.env.PORT ??= '8888';
 }
 
+const paladinUserId = testId('712-user');
+
 mock.module('../../../lib/auth.js', () => ({
   authenticateRequest: async (request: Request) =>
     request.headers.get('authorization') === 'Bearer 712-test-token'
       ? {
-          user: { userId: testId('712-user'), email: 'test@example.test', plan: 'free' },
+          user: { userId: paladinUserId, email: 'test@example.test', plan: 'free' },
           error: null,
         }
       : { user: null, error: 'Unauthorized' },
@@ -76,7 +78,6 @@ if (!hasRealDb) {
 describeWithDb('paladin Divine Sense tracking (#712)', () => {
   // Fresh client per block: earlier blocks close the shared one in afterAll.
   let db: ReturnType<typeof realDb>;
-  const paladinUserId = testId('712-user');
 
   let campaignId: string;
   let sessionId: string;
