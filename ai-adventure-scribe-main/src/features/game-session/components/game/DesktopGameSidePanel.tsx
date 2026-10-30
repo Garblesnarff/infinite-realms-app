@@ -35,7 +35,9 @@ export interface DesktopGameSidePanelProps {
   selectedType: string | null;
   setSelectedType: (type: string | null) => void;
   memoriesLoading: boolean;
+  allMemories: Memory[];
   sortedMemories: Memory[];
+  campaignId?: string | null;
   journalLoading: boolean;
   journalEntries: JournalHandoutEntry[];
   spellCastHandlerRef?: SpellCastHandlerRef;
@@ -66,7 +68,9 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
     selectedType,
     setSelectedType,
     memoriesLoading,
+    allMemories,
     sortedMemories,
+    campaignId,
     journalLoading,
     journalEntries,
     spellCastHandlerRef,
@@ -189,6 +193,8 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
                     selectedType={selectedType}
                     setSelectedType={setSelectedType}
                     memoriesLoading={memoriesLoading}
+                    allMemories={allMemories}
+                    campaignId={campaignId}
                     sortedMemories={sortedMemories}
                   />
                 </TabsContent>
