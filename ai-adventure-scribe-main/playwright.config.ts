@@ -31,6 +31,16 @@ export default defineConfig({
         BLOG_ADMIN_DEV_OVERRIDE: '1',
       },
     },
+    {
+      command: 'bun x vite --host 127.0.0.1 --port 4173',
+      url: 'http://127.0.0.1:4173/e2e/game-panel-layout.html',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      env: {
+        VITE_SUPABASE_URL: 'https://example.supabase.co',
+        VITE_SUPABASE_ANON_KEY: 'playwright-layout-harness',
+      },
+    },
   ],
   use: {
     // Base URL is provided per-project

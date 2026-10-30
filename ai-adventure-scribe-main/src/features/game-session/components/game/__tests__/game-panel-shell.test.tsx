@@ -129,7 +129,7 @@ describe('game side panel shell (#1236 section A)', () => {
       expect(container.textContent).not.toMatch(EMOJI_OR_SYMBOL);
     });
 
-    it('fits all tabs in a grid at the 280px minimum width with no horizontal scroll', () => {
+    it('uses a four-column grid for combat tabs at desktop width', () => {
       setWidth(1280);
       (useCombat as any).mockReturnValue({ state: { isInCombat: true } });
       renderPanel({ combatMode: true });
