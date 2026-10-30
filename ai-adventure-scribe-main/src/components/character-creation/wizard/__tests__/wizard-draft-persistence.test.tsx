@@ -65,6 +65,9 @@ function renderWizard(initialEntries: string[] = ['/wizard']): ReturnType<typeof
   return render(
     <MemoryRouter initialEntries={initialEntries}>
       <LocationProbe />
+      <a href="/app/characters" data-testid="characters-link">
+        Characters
+      </a>
       <WizardContent />
     </MemoryRouter>,
   );
@@ -183,6 +186,23 @@ describe('wizard draft persistence (#208)', () => {
     expect(event.defaultPrevented).toBe(false);
   });
 
+  it('asks before an in-app link leaves a wizard with unsaved data', async () => {
+    mockState.character = { name: 'Half-typed Hero' } as Character;
+    renderWizard();
+
+    fireEvent.click(screen.getByTestId('characters-link'));
+
+    expect(await screen.findByText('Leave character creation?')).toBeTruthy();
+    expect(screen.getByTestId('location-search').textContent).toContain('/wizard');
+
+    fireEvent.click(screen.getByText('Leave page'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location-search').textContent).toContain('/app/characters');
+    });
+    expect(window.localStorage.getItem(DRAFT_KEY)).toBeNull();
+  });
+
   it('Cancel asks for confirmation, then clears the seeded draft and leaves', async () => {
     // Seed a draft first: without this the "cleared" assertion passes vacuously.
     writeWizardDraft(DRAFT_KEY, {
@@ -209,7 +229,7 @@ describe('wizard draft persistence (#208)', () => {
     expect(window.localStorage.getItem(DRAFT_KEY)).toBeNull();
   });
 
-  it('user B is never offered user A\'s draft', async () => {
+  it("user B is never offered user A's draft", async () => {
     // User A's draft sits in storage under A's key.
     writeWizardDraft(getWizardDraftKey('user-A'), {
       version: WIZARD_DRAFT_VERSION,
