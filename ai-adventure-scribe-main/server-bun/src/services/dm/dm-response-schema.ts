@@ -360,7 +360,7 @@ const mapActionPlaceVariantSchema = {
   additionalProperties: false,
   properties: {
     action: { type: 'string', enum: ['place'] },
-    // A placement is a complete MapEntity, not a cell patch.  Keep the shadow
+    // A placement is a complete MapEntity, not a cell patch. Keep the shadow
     // shape to the fields placeEntity actually consumes; the full/live schema
     // above remains unchanged for the provider and lenient parser.
     changes: {
@@ -959,7 +959,7 @@ export const dmResponseSchema = createDmResponseSchema(liveExtensionProperties);
  * declare the five #1258 keys required + nullable instead of optional, so the
  * tactical phase fits the 24-optional strict budget (serialized 36 -> 18;
  * unions 8 -> 16, still within the 16 cap) without narrowing what the shadow
- * accepts. The live schema sent to the provider is untouched — the wrappers and the
+ * live schema sent to the provider is untouched — the wrappers and the
  * scene_spec clone below exist only on the combat/tactical phase objects,
  * and the narrative phase keeps the round-1 shape (18 optionals, already
  * within budget). The shadow treats an absent required-nullable key as null
