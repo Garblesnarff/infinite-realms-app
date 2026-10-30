@@ -224,7 +224,7 @@ describeWithDb('paladin Divine Sense tracking (#712)', () => {
       restType: 'long',
       userId: paladinUserId,
     });
-    const post = async () =>
+    const post = async (expectedVersion: number) =>
       app!.handle(
         new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
           method: 'POST',
@@ -236,20 +236,20 @@ describeWithDb('paladin Divine Sense tracking (#712)', () => {
             // The real combat chip is DM-sourced, but this route fixture supplies the
             // encounter token explicitly so the optimistic write exercises the seeded
             // version rather than relying on a separately loaded state snapshot.
-            intent: { type: 'divine_sense', actorId: participantId, expectedVersion: 1 },
+            intent: { type: 'divine_sense', actorId: participantId, expectedVersion },
             source: 'dm',
             dmStartedAt: 1_700_000_000_000,
             origin: 'typed',
           }),
         }),
       );
-    const spent = await post();
+    const spent = await post(1);
     expect(spent.status).toBe(200);
     await db
       .update(combatParticipants)
       .set({ actionUsed: false })
       .where(eq(combatParticipants.id, participantId));
-    const refused = await post();
+    const refused = await post(2);
     expect(refused.status).toBe(422);
     expect(await refused.json()).toMatchObject({
       details: { reason: 'feature_uses_exhausted', featureName: 'Divine Sense' },
