@@ -194,7 +194,9 @@ describe('ClassFeaturesService', () => {
   });
 
   describe('Security: useFeature', () => {
-    it('treats a NULL uses_count as unlimited and does not write a count', async () => {
+    // #1225: this row has no class, no rest tag and no engine rule, so it takes the passive
+    // (not counted) path; the limited twin below asserts the refusal.
+    it('a feature with no rest tag and no engine rule is not counted, and writes no count', async () => {
       (db.query.characterFeatures.findFirst as any).mockResolvedValue({
         id: 'cf-123',
         characterId: mockCharacterId,
@@ -232,6 +234,52 @@ describe('ClassFeaturesService', () => {
       expect(result.success).toBe(true);
       expect(result.usesRemaining).toBe(-1);
       expect(db.update).not.toHaveBeenCalled();
+    });
+
+    it('a limited feature (rest-tagged) with a NULL uses_count and no engine count is refused (#1225)', async () => {
+      (db.query.characterFeatures.findFirst as any).mockResolvedValue({
+        id: 'cf-123',
+        characterId: mockCharacterId,
+        featureId: mockFeatureId,
+        usesRemaining: null,
+        feature: {
+          id: mockFeatureId,
+          featureName: 'Second Wind',
+          usageType: 'limited_use',
+          usesCount: null,
+          usesPerRest: 'short_rest',
+          description: 'Regain hit points.',
+        },
+      });
+      (db.update as any).mockClear();
+      (db.insert as any).mockClear();
+      (db.select as any).mockImplementation(() => {
+        const chain = {
+          from: () => chain,
+          where: () => chain,
+          limit: () => Promise.resolve([{ id: mockCharacterId }]),
+        };
+        return chain;
+      });
+      (db.insert as any).mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([{ id: 'log-123' }]),
+        }),
+      });
+
+      const result = await ClassFeaturesService.useFeature({
+        characterId: mockCharacterId,
+        featureId: mockFeatureId,
+        userId: mockUserId,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.usesRemaining).toBe(0);
+      expect(result.message).toBe(
+        'Second Wind is limited, and the engine cannot count its uses yet, so it was not spent.',
+      );
+      expect(db.update).not.toHaveBeenCalled();
+      expect(db.insert).not.toHaveBeenCalled();
     });
 
     it('should return failure if character feature not found (or not owned)', async () => {
