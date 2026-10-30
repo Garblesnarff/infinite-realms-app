@@ -98,7 +98,7 @@ describe('DMMessageVoiceControls plays a clip (#2676 step 3)', () => {
     );
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /play this message/i }));
+      fireEvent.click(screen.getByRole('button', { name: /listen to this message/i }));
     });
 
     await waitFor(() => expect(posted.length).toBeGreaterThan(0));

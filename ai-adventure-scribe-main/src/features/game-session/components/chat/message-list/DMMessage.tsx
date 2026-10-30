@@ -360,15 +360,13 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
 
         {/* Timestamp & voice controls */}
         <div className="mt-3 flex flex-col items-end gap-2 pr-1">
-          {isLastInGroup && (
-            <MessageVoicePlayer
-              messageId={messageId}
-              messageText={displayContent}
-              narrationSegments={resolveNarrationSegments(
-                message as unknown as Parameters<typeof resolveNarrationSegments>[0],
-              )}
-            />
-          )}
+          <MessageVoicePlayer
+            messageId={messageId}
+            messageText={displayContent}
+            narrationSegments={resolveNarrationSegments(
+              message as unknown as Parameters<typeof resolveNarrationSegments>[0],
+            )}
+          />
 
           {isLastInGroup && timestamp && (
             <div className="ir-text-min uppercase tracking-[0.35em] text-white/60">{timestamp}</div>

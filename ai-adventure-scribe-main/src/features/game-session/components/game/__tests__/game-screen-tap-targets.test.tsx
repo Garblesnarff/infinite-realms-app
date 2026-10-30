@@ -236,7 +236,7 @@ describe('game screen tap targets and text (#228)', () => {
   describe('TTS control', () => {
     it('is a gold control, not a timeline dot, with a 44px tap and the same icon', () => {
       inApp(<DMMessageVoiceControls messageId="msg-1" messageText="The gate opens." />);
-      const play = screen.getByRole('button', { name: /play this message/i });
+      const play = screen.getByRole('button', { name: /listen to this message/i });
       expect(play).toHaveClass('ir-tts');
       expect(play).not.toHaveClass('timeline-dot');
       expect(play.className).not.toContain('rounded-full');
