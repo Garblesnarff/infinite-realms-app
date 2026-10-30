@@ -60,10 +60,11 @@ const { ClassFeatureUsageService } = await importWithRealDb(
 const { createRequestPipelineApp } = await importWithRealDb(
   () => import('../../../http-pipeline.js'),
 );
+const { tacticalMapRoutes } = await importWithRealDb(() => import('../tactical-maps.js'));
 const { combatRoutes } = await importWithRealDb(() => import('../combat/index.js'));
 
 const app = hasRealDb
-  ? createRequestPipelineApp().use(combatRoutes)
+  ? createRequestPipelineApp().use(tacticalMapRoutes).use(combatRoutes)
   : null;
 
 if (!hasRealDb) {
