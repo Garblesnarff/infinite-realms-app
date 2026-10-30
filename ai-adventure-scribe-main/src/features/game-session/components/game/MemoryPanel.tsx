@@ -1,4 +1,4 @@
-import { ChevronDown, Menu, ChevronLeft } from 'lucide-react';
+import { ChevronDown, Menu } from 'lucide-react';
 import React, { useState, useEffect, useId, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -10,7 +10,7 @@ import type { SpellCastHandlerRef } from './spell-cast-handler';
 import type { ExtendedGameSession } from '@/hooks/use-game-session';
 
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { Z_INDEX } from '@/constants/z-index';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useCharacter } from '@/contexts/CharacterContext';
@@ -71,6 +71,13 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
       handleDrag,
       stopDrag,
     } = usePanelResize();
+
+    // Combat tab disappears when combat ends; fall back to the sheet so the panel is not blank.
+    useEffect(() => {
+      if (!isInCombat && activeTab === 'combat') {
+        setActiveTab('character');
+      }
+    }, [isInCombat, activeTab, setActiveTab]);
 
     // Local state
     const [selectedType, setSelectedType] = useState<string | null>(null);
@@ -159,7 +166,13 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
                   )}
                 </Button>
               </SheetTrigger>
-              <SheetContent side="right" className="w-[80vw] max-w-sm p-0">
+              <SheetContent side="bottom" className="flex h-[85vh] flex-col rounded-t-2xl p-0">
+                <SheetTitle className="sr-only">Game panel</SheetTitle>
+                <div
+                  aria-hidden="true"
+                  data-testid="game-panel-drag-handle"
+                  className="mx-auto mt-2 h-1.5 w-12 flex-shrink-0 rounded-full bg-muted-foreground/40"
+                />
                 <GameSidePanelContent
                   sessionId={sessionId}
                   sessionData={sessionData}
@@ -189,17 +202,6 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
                   journalEntries={journalEntries}
                   journalLoading={journalLoading}
                 />
-                <SheetClose asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="absolute left-4 top-4"
-                    aria-label="Close panel"
-                    title="Close panel"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                </SheetClose>
               </SheetContent>
             </Sheet>
           </div>
