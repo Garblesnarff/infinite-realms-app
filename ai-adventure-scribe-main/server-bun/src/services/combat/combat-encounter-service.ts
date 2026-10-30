@@ -888,9 +888,8 @@ export class CombatEncounterService {
       const position = positions.get(participant.id);
       const downedBehavior = authoredDownedBehavior(npc?.stats);
       const authored = authoredNumbers(npc?.stats);
-      return {
+      const view = {
         ...participant,
-        ...(character?.class ? { characterClass: character.class } : {}),
         ...(position ? { position } : {}),
         ...(disposition ? { disposition } : {}),
         ...authored,
@@ -899,6 +898,17 @@ export class CombatEncounterService {
         // roll prompt) reads it instead of re-deriving it from raw columns (#2518).
         vitalState: vitalStateOf(participant as unknown as VitalsInput),
       };
+      // Keep this server-only gate out of the wire shape: clients and pinned fixtures rely on
+      // the participant keys remaining stable, while legal-action generation can still avoid
+      // querying the Paladin pool for non-paladins.
+      if (character?.class) {
+        Object.defineProperty(view, 'characterClass', {
+          value: character.class,
+          enumerable: false,
+          configurable: true,
+        });
+      }
+      return view;
     });
 
     // Filter active participants and determine current turn in-memory
