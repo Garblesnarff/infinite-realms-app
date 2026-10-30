@@ -22,6 +22,7 @@ interface Dice3DSectionProps {
   isRolling: boolean;
   hasRolled: boolean;
   showAnimation: boolean;
+  soundOn: boolean;
 }
 
 export const Dice3DSection: React.FC<Dice3DSectionProps> = ({
@@ -29,6 +30,7 @@ export const Dice3DSection: React.FC<Dice3DSectionProps> = ({
   isRolling,
   hasRolled,
   showAnimation,
+  soundOn,
 }) => {
   const env = import.meta.env as Record<string, string | undefined>;
   const disabled = (env.VITE_DISABLE_DICE_3D ?? 'false').toLowerCase() === 'true';
@@ -57,6 +59,7 @@ export const Dice3DSection: React.FC<Dice3DSectionProps> = ({
           isRolling={isRolling}
           showAnimation={showAnimation}
           height={150}
+          soundOn={soundOn}
         />
       </motion.div>
     </AnimatePresence>

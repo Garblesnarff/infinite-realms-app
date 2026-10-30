@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { HexagonalBadge } from '@/components/ui/hexagonal-badge';
+import { useDiceSoundEnabled } from '@/features/settings/useDiceSoundEnabled';
 import logger from '@/lib/logger';
 import { DiceEngine, type DiceRollResult } from '@/services/dice/DiceEngine';
 import { fadeInUp, cardContainer, cardItem, diceRoll, pulseSuccess } from '@/utils/animations';
@@ -75,6 +76,8 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
   const [hasRolled, setHasRolled] = useState(false);
   const [rollError, setRollError] = useState<string | null>(null);
   const diceSound = useRef<Howl | null>(null);
+  // Reads the signed-in user's Table > Dice sound setting (default on).
+  const diceSoundOn = useDiceSoundEnabled();
 
   const handleRoll = useCallback(async () => {
     if (isRolling) return;
@@ -84,7 +87,7 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
     setRollError(null);
 
     // Play sound effect
-    if (diceSound.current) {
+    if (diceSound.current && diceSoundOn) {
       try {
         diceSound.current.play();
       } catch (_error) {
@@ -122,7 +125,7 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
       },
       showAnimation ? 1500 : 100,
     );
-  }, [expression, purpose, advantage, disadvantage, onRoll, isRolling, showAnimation]);
+  }, [expression, purpose, advantage, disadvantage, onRoll, isRolling, showAnimation, diceSoundOn]);
 
   useEffect(() => {
     diceSound.current = createDiceSound();
@@ -240,6 +243,7 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
           isRolling={isRolling}
           hasRolled={hasRolled}
           showAnimation={showAnimation}
+          soundOn={diceSoundOn}
         />
 
         {/* Results Display */}

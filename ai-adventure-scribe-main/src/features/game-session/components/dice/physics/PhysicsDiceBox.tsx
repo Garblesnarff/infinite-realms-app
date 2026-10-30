@@ -22,6 +22,8 @@ interface Props {
   isRolling: boolean;
   showAnimation: boolean;
   height?: number;
+  /** Table setting "Dice sound". When false the box stays silent and hides its mute button. */
+  soundOn?: boolean;
   /** Test seam for proving the text fallback when a tray never settles flat. */
   simulate?: (specs: RollSpec[]) => Promise<Simulation>;
 }
@@ -284,6 +286,7 @@ export const PhysicsDiceBox: React.FC<Props> = ({
   isRolling: _isRolling,
   showAnimation,
   height = 220,
+  soundOn = false,
   simulate,
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -295,7 +298,8 @@ export const PhysicsDiceBox: React.FC<Props> = ({
   const soundRef = useRef<Howl | null>(null);
   const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
   const [webglAvailable, setWebglAvailable] = useState(true);
-  const [muted, setMuted] = useState(true);
+  const [mutedByUser, setMutedByUser] = useState(false);
+  const muted = !soundOn || mutedByUser;
   const [announcement, setAnnouncement] = useState('');
   const [physicsFallback, setPhysicsFallback] = useState('');
   const reducedMotionRef = useRef(reducedMotion);
@@ -525,10 +529,10 @@ export const PhysicsDiceBox: React.FC<Props> = ({
   }
   return (
     <div ref={mountRef} style={{ width: '100%', height, position: 'relative' }}>
-      {webglAvailable && (
+      {webglAvailable && soundOn && (
         <button
           type="button"
-          onClick={() => setMuted((value) => !value)}
+          onClick={() => setMutedByUser((value) => !value)}
           aria-label={muted ? 'Unmute dice sounds' : 'Mute dice sounds'}
           style={{ position: 'absolute', right: 8, top: 8, minWidth: 44, minHeight: 44, zIndex: 2 }}
         >
