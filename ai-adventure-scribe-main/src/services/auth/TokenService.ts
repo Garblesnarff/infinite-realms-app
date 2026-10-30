@@ -24,15 +24,26 @@ const TOKEN_REFRESH_LEASE_MS = 10 * 1000;
 const TOKEN_REFRESH_LEASE_RENEW_MS = 3 * 1000;
 const TOKEN_REFRESH_LEASE_POLL_MS = 50;
 const TOKEN_REFRESH_LEASE_SETTLE_MS = 40;
-/** Overall ceiling for waiting on the refresh exchange: the deadline stops waiting (and aborts the fetch signal), but body parsing already underway may still complete, so a late success can settle (#1087, #1263). */
+/** Overall ceiling for waiting on the refresh exchange: the deadline stops waiting and aborts the fetch signal — which cancels the request only before headers arrive; a body already being read runs under its own 30 s budget, so a late success can still settle (#1087, #1263, #1275). */
 export const TOKEN_REFRESH_OVERALL_TIMEOUT_MS = 20_000;
 
 type RefreshResult = AccessTokenPair | null;
 type StoredRefreshLease = { owner: string; expiresAt: number };
 
 let refreshInFlight: Promise<RefreshResult> | null = null;
-/** Refresh work from a deadline-fired exchange that may still settle (#1263). */
-const pendingLateWork: { current: Promise<RefreshResult> | null } = { current: null };
+/**
+ * Deadline-fired exchanges that may still settle (#1263, #1275). A list, not
+ * a single slot: a second deadline before the first settles must not drop
+ * the first entry unawaited. Entries remove themselves when they settle, and
+ * the body budget (below) bounds every entry's lifetime, so the list cannot
+ * grow past the exchanges still inside their budgets.
+ */
+const pendingLateWork: Set<Promise<RefreshResult>> = new Set();
+
+/** Test-only: drop pending late-work entries so tests cannot leak slot state (#1275). */
+export const clearPendingLateWorkForTests = (): void => {
+  pendingLateWork.clear();
+};
 let sessionEnded = false;
 let headlessSession: WorkOSSession | null = null;
 
@@ -84,6 +95,15 @@ const isTransportFailure = (error: unknown): boolean => {
 
 /** Ceiling for the refresh POST so a hung endpoint cannot stall auth forever (#565). */
 const TOKEN_REFRESH_REQUEST_TIMEOUT_MS = 15_000;
+
+/**
+ * Ceiling for reading one refresh response body (#1275). The fetch timeout
+ * clears once headers arrive and the 20 s deadline only stops the waiter, so
+ * without this a body that never settles would leave the late-work slot set
+ * forever. 30 s preserves the pinned #1263 late adoption (bodies resolving
+ * within ~20 s of headers) while guaranteeing every entry settles.
+ */
+export const TOKEN_REFRESH_BODY_TIMEOUT_MS = 30_000;
 
 const withRefreshDeadline = async <T>(work: (signal: AbortSignal) => Promise<T>): Promise<T> => {
   const controller = new AbortController();
@@ -314,6 +334,31 @@ const readResponseJson = async (response: Response): Promise<unknown> => {
   }
 };
 
+/**
+ * Read a refresh response body with its own ceiling (#1275). A timed-out
+ * body rejects as AbortError so the caller treats it as a transport failure,
+ * never an auth verdict (#565).
+ */
+const readResponseJsonWithTimeout = async (
+  response: Response,
+  timeoutMs: number,
+): Promise<unknown> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      readResponseJson(response),
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new DOMException('The refresh response body timed out.', 'AbortError')),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+};
+
 /** Configure the browser API clients for a Bun/CLI host without a DOM. */
 export const configureHeadlessSession = (session: WorkOSSession | null): void => {
   headlessSession = session;
@@ -396,14 +441,22 @@ const requestTokenRefresh = async (
     );
 
     if (!response.ok) {
-      const payload = await readResponseJson(response);
+      // Headers already gave the status, so a stuck body must not mask the
+      // verdict: fall back to a null payload and let the status decide.
+      const payload = await readResponseJsonWithTimeout(
+        response,
+        TOKEN_REFRESH_BODY_TIMEOUT_MS,
+      ).catch(() => null);
       const error = getRefreshError(payload, response.status);
       logger.warn('Token refresh failed:', { status: response.status, error });
       if (isTerminalRefreshFailure(error)) throw error;
       throw new TokenRefreshTransientError(error.message, error.status, error.code);
     }
 
-    const data = (await readResponseJson(response)) as Record<string, unknown> | null;
+    const data = (await readResponseJsonWithTimeout(
+      response,
+      TOKEN_REFRESH_BODY_TIMEOUT_MS,
+    )) as Record<string, unknown> | null;
     const responseError = getRefreshError(data, response.status);
     if (isTerminalRefreshFailure(responseError)) {
       logger.warn('Token refresh failed:', { status: response.status, error: responseError });
@@ -439,30 +492,34 @@ const LATE_REFRESH_WAIT_MS = 10_000;
 /**
  * Remember a deadline-fired exchange's work so a later terminal failure can
  * wait for its late success instead of ending the session on a spent token.
- * Cleared when that exact work settles, so a newer registration is never
- * wiped by an older one's cleanup.
+ * Entries remove themselves when they settle; nothing here overwrites
+ * another entry, so a second deadline never drops the first unawaited.
+ * Adoption is still gated by the contender rule (the late handler checks
+ * the stored token === the sent token, and the post-wait re-check uses
+ * getSharedRefreshResult), so a stale pair from an older entry can never
+ * overwrite a newer published pair.
  */
 const registerPendingLateWork = (work: Promise<RefreshResult>): void => {
-  pendingLateWork.current = work;
+  pendingLateWork.add(work);
   const clear = (): void => {
-    if (pendingLateWork.current === work) pendingLateWork.current = null;
+    pendingLateWork.delete(work);
   };
   void work.then(clear, clear);
 };
 
-/** Wait for registered late work, bounded, without failing on its outcome. */
+/** Wait for ALL registered late work, bounded, without failing on its outcome. */
 const awaitPendingLateWork = async (): Promise<void> => {
-  const lateWork = pendingLateWork.current;
+  // Snapshot: refreshAccessToken single-flight serializes coordination, so
+  // no second exchange can register during this wait in-tab; the snapshot
+  // is the complete set this terminal path must await.
+  const lateWork = [...pendingLateWork];
   // Without shared storage the re-check can never succeed; do not delay a
   // terminal failure waiting for work that cannot be adopted (headless host).
-  if (!lateWork || typeof window === 'undefined') return;
+  if (lateWork.length === 0 || typeof window === 'undefined') return;
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([
-      lateWork.then(
-        () => undefined,
-        () => undefined,
-      ),
+      Promise.allSettled(lateWork).then(() => undefined),
       new Promise<void>((resolve) => {
         timeoutId = setTimeout(resolve, LATE_REFRESH_WAIT_MS);
       }),
