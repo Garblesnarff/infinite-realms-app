@@ -47,6 +47,15 @@ const oncePerSessionMark = (message: {
 const CACHED_TURN_RESPONSE_KEY = 'cachedTurnResponse';
 
 /**
+ * Sibling key binding a cached turn response to the player input it was
+ * generated for (#1270). A retry reuses the reply id with the identical
+ * input, so the binding matches; a reused id with a different input is a
+ * different turn and must 409, never replay the old body. Rows cached before
+ * this key existed carry no binding and still replay (legacy entries).
+ */
+const CACHED_TURN_RESPONSE_INPUT_KEY = 'cachedTurnResponseInput';
+
+/**
  * A completed turn body is replayable: a plain object carrying reply text,
  * not an error, and not a degraded placeholder. A degraded body ("try your
  * action again") must never be frozen as the canonical replay — the retry has
@@ -72,8 +81,9 @@ function asCachedTurnResponse(value: unknown): Record<string, unknown> | undefin
  * provisional persist replaces a provisional row's context wholesale (#2218),
  * so a persist that lands after the winner's write drops the cached entry
  * and the duplicate keeps its own body. The guaranteed case is the
- * sequential lost-response retry. The write runs under a 5 s lock bound: it
- * must never stall the response behind a contended row.
+ * sequential lost-response retry. The write runs under a 500 ms lock bound
+ * (#1270): it must never stall the response behind a contended row, and a
+ * contended write degrades to today's behavior (the retry regenerates).
  *
  * Returns the cached body when the row exists, or undefined when there is no
  * row to cache onto: turns the server does not persist (the dmReply skip
@@ -85,14 +95,15 @@ async function cacheTurnResponseAndReplay(
   sessionId: string,
   replyId: string,
   response: Record<string, unknown>,
+  playerInput: string | null,
 ): Promise<Record<string, unknown> | undefined> {
   try {
     const outcome = await db.transaction(async (tx) => {
-      await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+      await tx.execute(sql`SET LOCAL lock_timeout = '500ms'`);
       await tx
         .update(dialogueHistory)
         .set({
-          context: sql`coalesce(${dialogueHistory.context}, '{}'::jsonb) || ${JSON.stringify({ [CACHED_TURN_RESPONSE_KEY]: response })}::jsonb`,
+          context: sql`coalesce(${dialogueHistory.context}, '{}'::jsonb) || ${JSON.stringify({ [CACHED_TURN_RESPONSE_KEY]: response, [CACHED_TURN_RESPONSE_INPUT_KEY]: playerInput })}::jsonb`,
         })
         .where(
           and(
@@ -122,7 +133,7 @@ async function cacheTurnResponseAndReplay(
       };
     });
     if (!outcome.found)
-      logger.warn({
+      logger.info({
         msg: 'DM_TURN_RESPONSE_CACHE_ROW_MISSING',
         sessionId,
         messageId: replyId,
@@ -508,16 +519,29 @@ export class SessionMessageService {
             ),
           )
           .limit(1);
-        const cached = asCachedTurnResponse(
-          (dmRow?.context as Record<string, unknown> | null)?.[CACHED_TURN_RESPONSE_KEY],
-        );
-        if (cached) return { guarded: true as const, response: cached as T };
+        const rowContext = dmRow?.context as Record<string, unknown> | null;
+        const cached = asCachedTurnResponse(rowContext?.[CACHED_TURN_RESPONSE_KEY]);
+        if (cached) {
+          // #1270: the cache is bound to the input it was generated for. A
+          // reused reply id with a different input is a different turn: 409,
+          // never the old body. Rows cached before the binding key existed
+          // carry no binding and still replay.
+          if (
+            rowContext &&
+            CACHED_TURN_RESPONSE_INPUT_KEY in rowContext &&
+            rowContext[CACHED_TURN_RESPONSE_INPUT_KEY] !== (playerInput ?? null)
+          )
+            throw new ConflictError('This reply id was already used for a different turn.');
+          return { guarded: true as const, response: cached as T };
+        }
       }
       if (!rollId || (!suppliedRollId && playerInput !== answer?.message))
         return { guarded: false as const };
-      const cached = context?.rollTurnResult;
-      if (cached && typeof cached === 'object')
-        return { guarded: true as const, response: cached as T };
+      // #1270: a roll result replays only when it passes the same
+      // exclusion as a cached turn response — a degraded (or error) roll
+      // result frozen during a provider outage must regenerate, not replay.
+      const cached = asCachedTurnResponse(context?.rollTurnResult);
+      if (cached) return { guarded: true as const, response: cached as T };
       const replyId = requestedReplyId ?? crypto.randomUUID();
       return transactionContext.run({ database: tx, afterCommit }, async () => {
         const response = await generate(replyId);
@@ -525,11 +549,15 @@ export class SessionMessageService {
         // for roll turns, and the cached response carries the canonical reply id — a retry
         // replays it instead of generating twice. Unconditional (not gated on the response
         // carrying dmReplyPersisted) so turns from pre-fix clients, which send no dmReply,
-        // get the same dedupe as current clients.
-        await tx
-          .update(dialogueHistory)
-          .set({ context: { ...context, rollTurnResult: response } })
-          .where(eq(dialogueHistory.id, answer!.id));
+        // get the same dedupe as current clients. #1270: still never freeze a
+        // degraded or error result — the lookup above would skip it anyway,
+        // so a degraded roll turn is left uncached and its retry regenerates.
+        if (asCachedTurnResponse(response)) {
+          await tx
+            .update(dialogueHistory)
+            .set({ context: { ...context, rollTurnResult: response } })
+            .where(eq(dialogueHistory.id, answer!.id));
+        }
         return { guarded: true as const, response };
       });
     });
@@ -543,7 +571,12 @@ export class SessionMessageService {
     if (requestedReplyId) {
       const cacheable = asCachedTurnResponse(response);
       if (cacheable) {
-        const replay = await cacheTurnResponseAndReplay(sessionId, requestedReplyId, cacheable);
+        const replay = await cacheTurnResponseAndReplay(
+          sessionId,
+          requestedReplyId,
+          cacheable,
+          playerInput ?? null,
+        );
         if (replay) return replay as T;
       }
     }

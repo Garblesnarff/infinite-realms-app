@@ -27,6 +27,11 @@ process.env.CORS_ORIGIN ??= 'http://localhost:8891';
 process.env.WORKOS_API_KEY ??= 'test-workos-key';
 process.env.WORKOS_CLIENT_ID ??= 'test-workos-client';
 process.env.NODE_ENV ??= 'test';
+// The file drives 22 /v1/llm/generate calls through one harness IP within
+// seconds — over the default 20/min free IP bucket. The limiter is not under
+// test here, so the test process raises its ceiling (prod defaults untouched).
+process.env.RATE_LIMIT_LLM_IP_FREE ??= '100';
+process.env.RATE_LIMIT_LLM_USER_FREE ??= '100';
 const authModule = await importWithRealDb(() => import('../../lib/auth'));
 const { createRequestPipelineApp } = await importWithRealDb(() => import('../../http-pipeline'));
 const { sessionMessageRoutes } = await importWithRealDb(
@@ -563,12 +568,16 @@ describeWithDb('resolved narrative roll identity through real routes and Postgre
       });
       const model = spyOn(LLMProviderService, 'generate').mockImplementation(async () => {
         calls += 1;
-        if (calls === 1) started();
-        if (calls === 2) startedSecond();
+        const thisCall = calls;
+        if (thisCall === 1) started();
+        if (thisCall === 2) startedSecond();
         await held;
         return {
           text: JSON.stringify({
-            text: 'You find a hidden lever behind the tapestry.',
+            text:
+              thisCall === 1
+                ? 'The first body wins.'
+                : 'The second body loses.',
             options: [],
             roll_requests: [],
             combat_transition: 'none',
@@ -627,7 +636,11 @@ describeWithDb('resolved narrative roll identity through real routes and Postgre
         // persist can replace the row's context after the winner's cache write
         // (#2218 reconcile), so the canonical-body property is best-effort
         // under concurrency. What is guaranteed: one DM row, and a cached body
-        // on it.
+        // on it. #1270: the two mocks return DIFFERENT texts, so the final
+        // assertion below proves exactly one body survived instead of passing
+        // trivially. Which body wins is scheduling-dependent (both generate
+        // fully; persist/reconcile order decides), so it must not be pinned
+        // to first-submitted.
         expect(model).toHaveBeenCalledTimes(2);
         const rows = await database
           .select()
@@ -636,7 +649,8 @@ describeWithDb('resolved narrative roll identity through real routes and Postgre
         expect(rows).toHaveLength(1);
         const cached = (rows[0].context as Record<string, unknown> | null)
           ?.cachedTurnResponse as Record<string, unknown> | undefined;
-        expect(cached?.text).toBe(firstBody.text);
+        expect(cached?.text).toBeDefined();
+        expect([firstBody.text, secondBody.text]).toContain(cached?.text);
       } finally {
         finish();
         model.mockRestore();
@@ -645,4 +659,219 @@ describeWithDb('resolved narrative roll identity through real routes and Postgre
     },
     30_000,
   );
+  test('a reused reply id with a different input gets 409 instead of the old body (#1270)', async () => {
+    const auth = spyOn(authModule, 'authenticateRequest').mockResolvedValue({
+      user: { userId, email: 'roll@example.test', plan: 'free' },
+      error: null,
+    } as never);
+    const model = spyOn(LLMProviderService, 'generate').mockResolvedValue({
+      text: JSON.stringify({
+        text: 'You find a hidden lever behind the tapestry.',
+        options: [],
+        roll_requests: [],
+        combat_transition: 'none',
+        combatants: [],
+        combat_actions: [],
+      }),
+      provider: 'openrouter',
+      model: 't/m',
+    } as never);
+    try {
+      const app = createRequestPipelineApp().use(sessionMessageRoutes).use(llmRoutes);
+      const playerContext = {
+        location: null,
+        emotion: null,
+        intent: 'response',
+        handouts: null,
+        combat_transition: 'none',
+        scene_spec: false,
+        combat_engine_blocks: null,
+        combat_ended: false,
+        narration_segments: null,
+      };
+      const firstInput = 'I inspect the practice room.';
+      const saved = await app.handle(
+        post(`/v1/sessions/${sessionId}/messages`, {
+          id: crypto.randomUUID(),
+          timestamp: '2026-01-01T00:00:00.000Z',
+          message: firstInput,
+          speaker_type: 'player',
+          context: playerContext,
+        }),
+      );
+      expect(saved.status).toBe(200);
+      const replyId = crypto.randomUUID();
+      const request = (playerInput: string) => ({
+        prompt: 'Continue.',
+        sessionId,
+        player_input: playerInput,
+        dmReply: { messageId: replyId, inCombat: false, narrationGated: false },
+      });
+      const first = await app.handle(post('/v1/llm/generate', request(firstInput)));
+      expect(first.status).toBe(200);
+      const firstBody = await first.json();
+      expect(firstBody.dmReplyMessageId).toBe(replyId);
+      // A new player line reuses the old reply id: a different turn, not a retry.
+      const secondInput = 'I open the drawer.';
+      const saved2 = await app.handle(
+        post(`/v1/sessions/${sessionId}/messages`, {
+          id: crypto.randomUUID(),
+          timestamp: '2026-01-01T00:00:01.000Z',
+          message: secondInput,
+          speaker_type: 'player',
+          context: playerContext,
+        }),
+      );
+      expect(saved2.status).toBe(200);
+      const mismatch = await app.handle(post('/v1/llm/generate', request(secondInput)));
+      expect(mismatch.status).toBe(409);
+      expect(JSON.stringify(await mismatch.json())).toContain('already used for a different turn');
+      expect(model).toHaveBeenCalledTimes(1);
+      // The 409 poisons nothing: the original retry still replays.
+      const replay = await app.handle(post('/v1/llm/generate', request(firstInput)));
+      expect(replay.status).toBe(200);
+      expect(await replay.json()).toEqual(firstBody);
+      expect(model).toHaveBeenCalledTimes(1);
+    } finally {
+      model.mockRestore();
+      auth.mockRestore();
+    }
+  });
+
+  test('a client save cannot plant server-only cache keys on a DM row (#1270)', async () => {
+    const auth = spyOn(authModule, 'authenticateRequest').mockResolvedValue({
+      user: { userId, email: 'roll@example.test', plan: 'free' },
+      error: null,
+    } as never);
+    try {
+      const app = createRequestPipelineApp().use(sessionMessageRoutes);
+      const planted = {
+        cachedTurnResponse: { text: 'planted body' },
+        cachedTurnResponseInput: 'planted input',
+        rollTurnResult: { text: 'planted body' },
+        npcResult: { text: 'planted body' },
+      };
+      // Fresh insert path.
+      const freshId = crypto.randomUUID();
+      const fresh = await app.handle(
+        post(`/v1/sessions/${sessionId}/messages`, {
+          id: freshId,
+          message: 'Planted prose.',
+          speaker_type: 'dm',
+          context: { ...planted, location: 'library' },
+        }),
+      );
+      expect(fresh.status).toBe(200);
+      const [freshRow] = await database
+        .select()
+        .from(dialogueHistory)
+        .where(eq(dialogueHistory.id, freshId));
+      const freshCtx = freshRow.context as Record<string, unknown>;
+      expect(freshCtx.cachedTurnResponse).toBeUndefined();
+      expect(freshCtx.cachedTurnResponseInput).toBeUndefined();
+      expect(freshCtx.rollTurnResult).toBeUndefined();
+      expect(freshCtx.npcResult).toBeUndefined();
+      expect(freshCtx.location).toBe('library');
+      // Provisional-reconcile path: a client save replaces a provisional
+      // row's context wholesale, so a planted key would land without the strip.
+      const provId = crypto.randomUUID();
+      await database.insert(dialogueHistory).values({
+        id: provId,
+        sessionId,
+        speakerType: 'dm',
+        message: 'provisional',
+        context: { provisional: true },
+      });
+      const reconciled = await app.handle(
+        post(`/v1/sessions/${sessionId}/messages`, {
+          id: provId,
+          message: 'Final prose.',
+          speaker_type: 'dm',
+          context: { ...planted, location: 'library' },
+        }),
+      );
+      expect(reconciled.status).toBe(200);
+      const [provRow] = await database
+        .select()
+        .from(dialogueHistory)
+        .where(eq(dialogueHistory.id, provId));
+      const provCtx = provRow.context as Record<string, unknown>;
+      expect(provCtx.cachedTurnResponse).toBeUndefined();
+      expect(provCtx.cachedTurnResponseInput).toBeUndefined();
+      expect(provCtx.rollTurnResult).toBeUndefined();
+      expect(provCtx.npcResult).toBeUndefined();
+      expect(provCtx.location).toBe('library');
+      expect(provRow.message).toBe('Final prose.');
+    } finally {
+      auth.mockRestore();
+    }
+  });
+
+  test('a degraded roll result is never replayed (#1270)', async () => {
+    const auth = spyOn(authModule, 'authenticateRequest').mockResolvedValue({
+      user: { userId, email: 'roll@example.test', plan: 'free' },
+      error: null,
+    } as never);
+    const model = spyOn(LLMProviderService, 'generate').mockResolvedValue({
+      text: JSON.stringify({
+        text: 'Fresh steel rings as the blades meet.',
+        options: [],
+        roll_requests: [],
+        combat_transition: 'none',
+        combatants: [],
+        combat_actions: [],
+      }),
+      provider: 'openrouter',
+      model: 't/m',
+    } as never);
+    try {
+      const answer = await seed();
+      const app = createRequestPipelineApp().use(sessionMessageRoutes).use(llmRoutes);
+      await app.handle(post(`/v1/sessions/${sessionId}/messages`, answer));
+      // Plant a degraded roll result exactly as a pre-fix freeze during a
+      // provider outage would have left it.
+      const playerRows = await database
+        .select()
+        .from(dialogueHistory)
+        .where(
+          and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'player')),
+        );
+      const playerRow = playerRows.find(
+        (r) =>
+          (r.context as Record<string, unknown>)?.rollRequestId === answer.context.rollRequestId,
+      );
+      expect(playerRow).toBeDefined();
+      if (!playerRow) throw new Error('expected the seeded player row');
+      await database
+        .update(dialogueHistory)
+        .set({
+          context: {
+            ...(playerRow.context as Record<string, unknown>),
+            rollTurnResult: { text: 'stale degraded body', degraded: true },
+          },
+        })
+        .where(eq(dialogueHistory.id, playerRow.id));
+      const res = await app.handle(
+        post('/v1/llm/generate', {
+          prompt: 'Continue after the saving throw.',
+          sessionId,
+          player_input: answer.message,
+          dmReply: {
+            messageId: crypto.randomUUID(),
+            rollRequestId: answer.context.rollRequestId,
+            inCombat: false,
+            narrationGated: false,
+          },
+        }),
+      );
+      expect(res.status).toBe(200);
+      expect(model).toHaveBeenCalledTimes(1);
+      const body = await res.json();
+      expect(body.text).not.toContain('stale degraded body');
+      expect(body.text).toContain('Fresh steel rings as the blades meet.');
+    } finally {
+      model.mockRestore();
+      auth.mockRestore();
+    }
+  });
 });
