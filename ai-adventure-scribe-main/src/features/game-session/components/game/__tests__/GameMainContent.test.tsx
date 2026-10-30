@@ -820,7 +820,7 @@ describe('GameMainContent overhaul behavior contract', () => {
     expect(screen.queryByTestId('chat-input')).not.toBeInTheDocument();
   });
 
-  it('#2517: the killing turn’s rows survive the swap into the end state', () => {
+  it('#2517: the killing turn’s story survives the swap into the end state', () => {
     mockTerminalDeathState = {
       state: 'party_defeated',
       encounterId: 'encounter-789',
@@ -828,7 +828,7 @@ describe('GameMainContent overhaul behavior contract', () => {
     };
     // The killing turn as history holds it: the player's last action, the
     // engine rows, and the DM reply. MessageContext lives above the game
-    // column, so the swap to the end state must not lose any of them.
+    // column, so the swap retains the story while omitting the engine row.
     mockStoryMessages = [
       { id: 'm1', text: 'I stay in melee and attack again. I will not retreat.', sender: 'player' },
       {
@@ -846,7 +846,7 @@ describe('GameMainContent overhaul behavior contract', () => {
     expect(
       screen.getByText('I stay in melee and attack again. I will not retreat.'),
     ).toBeInTheDocument();
-    expect(screen.getByText(/The Scholar is dead/)).toBeInTheDocument();
+    expect(screen.queryByText(/The Scholar is dead/)).not.toBeInTheDocument();
     expect(screen.getByText('The spider’s fangs find the gap in your guard.')).toBeInTheDocument();
     // And the end state still owns the page: no composer comes back.
     expect(screen.queryByTestId('chat-input')).not.toBeInTheDocument();

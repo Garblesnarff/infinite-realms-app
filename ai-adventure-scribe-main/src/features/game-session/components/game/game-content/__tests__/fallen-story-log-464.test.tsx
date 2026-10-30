@@ -84,7 +84,24 @@ describe('FallenStoryLog (#464)', () => {
     expect(text).toContain('Mind the gap');
   });
 
-  it('prepares only DM text, so player and system text keep A./--- lines', () => {
+  it('renders the location and bold choice as clean prose', () => {
+    state.messages = [
+      {
+        id: 'd1',
+        sender: 'dm',
+        text: '[ASSET:location:base-camp-alpha] Base Camp Alpha\n\n**Question the Professor**',
+      },
+    ];
+    render(<FallenStoryLog />);
+    const log = screen.getByTestId('death-screen-story-log');
+    expect(log).toHaveTextContent('Base Camp Alpha');
+    expect(log).toHaveTextContent('Question the Professor');
+    expect(log).not.toHaveTextContent('[ASSET:');
+    expect(log).not.toHaveTextContent('**');
+    state.messages = [{ id: 'm1', sender: 'dm', text: DM_TEXT }];
+  });
+
+  it('keeps player text including A./--- lines and omits system messages', () => {
     const playerText = 'I pick one:\nA. Climb the stair\n---\nB. Wait here';
     const systemText = 'Session saved.\n---\nC. Checkpoint 3';
     state.messages = [
@@ -95,7 +112,7 @@ describe('FallenStoryLog (#464)', () => {
     const log = screen.getByTestId('death-screen-story-log');
     expect(log.textContent).toContain('A. Climb the stair');
     expect(log.textContent).toContain('B. Wait here');
-    expect(log.textContent).toContain('C. Checkpoint 3');
+    expect(log.textContent).not.toContain('C. Checkpoint 3');
     state.messages = [{ id: 'm1', sender: 'dm', text: DM_TEXT }];
   });
 
@@ -110,7 +127,38 @@ describe('FallenStoryLog (#464)', () => {
       { id: 'm3', sender: 'dm', text: '⚙️ Engine: The Storyteller rolled 9 vs DC 12 — FAIL.' },
     ];
     render(<FallenStoryLog />);
-    expect(screen.getAllByText('Dungeon Master')).toHaveLength(1);
+    expect(screen.getByTestId('death-screen-story-log').children).toHaveLength(1);
+    state.messages = [{ id: 'm1', sender: 'dm', text: DM_TEXT }];
+  });
+
+  it('shows story and actions without internal messages or role labels', () => {
+    state.messages = [
+      {
+        id: 'd1',
+        sender: 'dm',
+        text: 'The door opens.\n⚙️ Engine: A roll was made.\nThe chamber is dark.',
+      },
+      { id: 'p1', sender: 'player', text: 'I raise my lantern.' },
+      {
+        id: 's1',
+        sender: 'system',
+        text: 'Combat ended - the party was defeated (reason: party_defeated)',
+      },
+      {
+        id: 's2',
+        sender: 'system',
+        text: 'I encountered an issue processing your message. Let me try again, or you can rephrase your action if needed.',
+      },
+    ];
+    render(<FallenStoryLog />);
+    const log = screen.getByTestId('death-screen-story-log');
+    expect(log).toHaveTextContent('The door opens.');
+    expect(log).toHaveTextContent('The chamber is dark.');
+    expect(log).toHaveTextContent('I raise my lantern.');
+    expect(log).not.toHaveTextContent('Engine:');
+    expect(log).not.toHaveTextContent('party_defeated');
+    expect(log).not.toHaveTextContent('I encountered an issue');
+    expect(log).not.toHaveTextContent(/System|Dungeon Master|You/);
     state.messages = [{ id: 'm1', sender: 'dm', text: DM_TEXT }];
   });
 });
