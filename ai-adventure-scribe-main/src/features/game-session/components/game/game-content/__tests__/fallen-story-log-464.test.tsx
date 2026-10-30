@@ -84,6 +84,23 @@ describe('FallenStoryLog (#464)', () => {
     expect(text).toContain('Mind the gap');
   });
 
+  it('renders the location and bold choice as clean prose', () => {
+    state.messages = [
+      {
+        id: 'd1',
+        sender: 'dm',
+        text: '[ASSET:location:base-camp-alpha] Base Camp Alpha\n\n**Question the Professor**',
+      },
+    ];
+    render(<FallenStoryLog />);
+    const log = screen.getByTestId('death-screen-story-log');
+    expect(log).toHaveTextContent('Base Camp Alpha');
+    expect(log).toHaveTextContent('Question the Professor');
+    expect(log).not.toHaveTextContent('[ASSET:');
+    expect(log).not.toHaveTextContent('**');
+    state.messages = [{ id: 'm1', sender: 'dm', text: DM_TEXT }];
+  });
+
   it('keeps player text including A./--- lines and omits system messages', () => {
     const playerText = 'I pick one:\nA. Climb the stair\n---\nB. Wait here';
     const systemText = 'Session saved.\n---\nC. Checkpoint 3';
