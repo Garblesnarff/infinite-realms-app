@@ -3,7 +3,6 @@
  */
 import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
 import { and, eq } from 'drizzle-orm';
-import { Elysia } from 'elysia';
 
 import {
   campaigns,
@@ -61,7 +60,11 @@ const { ClassFeatureUsageService } = await importWithRealDb(
 const { createRequestPipelineApp } = await importWithRealDb(
   () => import('../../../http-pipeline.js'),
 );
-const { intentRoutes } = await importWithRealDb(() => import('../combat/intents.js'));
+const { combatRoutes } = await importWithRealDb(() => import('../combat/index.js'));
+
+const app = hasRealDb
+  ? createRequestPipelineApp().use(combatRoutes)
+  : null;
 
 if (!hasRealDb) {
   console.warn(
@@ -214,16 +217,13 @@ describeWithDb('paladin Divine Sense tracking (#712)', () => {
   });
 
   it('combat Divine Sense chip posts through the real intent route and refuses an empty pool', async () => {
-    const app = createRequestPipelineApp().use(
-      new Elysia({ prefix: '/v1/combat' }).use(intentRoutes),
-    );
     await ClassFeatureUsageService.restoreFeatures({
       characterId: paladinId,
       restType: 'long',
       userId: paladinUserId,
     });
     const post = async () =>
-      app.handle(
+      app!.handle(
         new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
           method: 'POST',
           headers: {
