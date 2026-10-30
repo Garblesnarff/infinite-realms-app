@@ -49,7 +49,8 @@ export interface StructuredCombatAction {
      * the character's sheet server-side.
      */
     | 'second_wind'
-    | 'action_surge';
+    | 'action_surge'
+    | 'divine_sense';
   target_ids: string[];
   weapon_id: string | null;
   spell_id: string | null;
@@ -109,7 +110,11 @@ export type ClientCombatIntent =
     }
   | { type: 'dash' | 'dodge' | 'disengage'; actorId: string; expectedVersion?: number }
   /** #975: the Fighter's short-rest features; the server spends the tracked use. */
-  | { type: 'second_wind' | 'action_surge'; actorId: string; expectedVersion?: number }
+  | {
+      type: 'second_wind' | 'action_surge' | 'divine_sense';
+      actorId: string;
+      expectedVersion?: number;
+    }
   /** #1147: drinking a healing consumable; the server heals, then spends the item. */
   | { type: 'use_item'; actorId: string; itemId: string; expectedVersion?: number }
   /** #2580: the player's own exits — the way out of a fight nothing else can end. */
@@ -151,6 +156,7 @@ const INTENT_TYPES_REQUIRING_VERSION = new Set([
   'yield',
   'second_wind',
   'action_surge',
+  'divine_sense',
   'use_item',
 ]);
 
@@ -415,14 +421,22 @@ export async function executeStructuredCombatActionWithBoundary(
       playerInput,
     );
   } else if (
-    ['dash', 'dodge', 'disengage', 'second_wind', 'action_surge'].includes(action.action_type)
+    ['dash', 'dodge', 'disengage', 'second_wind', 'action_surge', 'divine_sense'].includes(
+      action.action_type,
+    )
   ) {
     // #975: Second Wind / Action Surge dispatch here too — self-targeted intents whose
     // whole effect is server-side (the tracked use, the heal, the extra action).
     result = await executeAuthoritativeCombatIntent(
       encounterId,
       {
-        type: action.action_type as 'dash' | 'dodge' | 'disengage' | 'second_wind' | 'action_surge',
+        type: action.action_type as
+          | 'dash'
+          | 'dodge'
+          | 'disengage'
+          | 'second_wind'
+          | 'action_surge'
+          | 'divine_sense',
         actorId: action.actor_id,
       },
       'dm',

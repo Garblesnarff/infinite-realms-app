@@ -1,8 +1,9 @@
 /**
  * #712: Divine Sense usage tracking.
  */
-import { afterAll, beforeAll, expect, it } from 'bun:test';
+import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
 import { and, eq } from 'drizzle-orm';
+import { Elysia } from 'elysia';
 
 import {
   campaigns,
@@ -39,6 +40,16 @@ if (hasRealDb) {
   process.env.PORT ??= '8888';
 }
 
+mock.module('../../../lib/auth.js', () => ({
+  authenticateRequest: async (request: Request) =>
+    request.headers.get('authorization') === 'Bearer 712-test-token'
+      ? {
+          user: { userId: testId('712-user'), email: 'test@example.test', plan: 'free' },
+          error: null,
+        }
+      : { user: null, error: 'Unauthorized' },
+}));
+
 // #712: the paladin pool services, imported lazily so the no-database run that
 // degrades every describeWithDb block to skip never loads db/client.
 const { spendDivineSense } = await importWithRealDb(
@@ -47,6 +58,10 @@ const { spendDivineSense } = await importWithRealDb(
 const { ClassFeatureUsageService } = await importWithRealDb(
   () => import('../../../services/progression/class-feature-usage-service.js'),
 );
+const { createRequestPipelineApp } = await importWithRealDb(
+  () => import('../../../http-pipeline.js'),
+);
+const { intentRoutes } = await importWithRealDb(() => import('../combat/intents.js'));
 
 if (!hasRealDb) {
   console.warn(
@@ -196,5 +211,43 @@ describeWithDb('paladin Divine Sense tracking (#712)', () => {
     });
     expect(third.success).toBe(true);
     expect(third.usesRemaining).toBe(0);
+  });
+
+  it('combat Divine Sense chip posts through the real intent route and refuses an empty pool', async () => {
+    const app = createRequestPipelineApp().use(
+      new Elysia({ prefix: '/v1/combat' }).use(intentRoutes),
+    );
+    await ClassFeatureUsageService.restoreFeatures({
+      characterId: paladinId,
+      restType: 'long',
+      userId: paladinUserId,
+    });
+    const post = async () =>
+      app.handle(
+        new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+          method: 'POST',
+          headers: {
+            authorization: 'Bearer 712-test-token',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            intent: { type: 'divine_sense', actorId: participantId },
+            source: 'dm',
+            dmStartedAt: 1_700_000_000_000,
+            origin: 'typed',
+          }),
+        }),
+      );
+    const spent = await post();
+    expect(spent.status).toBe(200);
+    await db
+      .update(combatParticipants)
+      .set({ actionUsed: false })
+      .where(eq(combatParticipants.id, participantId));
+    const refused = await post();
+    expect(refused.status).toBe(422);
+    expect(await refused.json()).toMatchObject({
+      details: { reason: 'feature_uses_exhausted', featureName: 'Divine Sense' },
+    });
   });
 });

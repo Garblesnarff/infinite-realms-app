@@ -166,7 +166,11 @@ export type CombatIntent =
    * Action Surge costs no action itself and grants one additional action this turn. Both
    * spend the tracked use on the character's sheet.
    */
-  | { type: 'second_wind' | 'action_surge'; actorId: string; expectedVersion: number }
+  | {
+      type: 'second_wind' | 'action_surge' | 'divine_sense';
+      actorId: string;
+      expectedVersion: number;
+    }
   /**
    * Drinking a healing consumable (#1147). Costs the Action and spends the item; the
    * resolver heals first and decrements second, refusing at full health before spending.
@@ -208,6 +212,7 @@ const PLAYER_ORIGIN_GUARDED_TYPES = new Set([
   // declaration must not burn it without the player's input, like any other action.
   'second_wind',
   'action_surge',
+  'divine_sense',
   // #1147: an item spend is the player's own resource, same as a feature spend.
   'use_item',
 ]);
@@ -529,8 +534,8 @@ async function recordFeatureActionFact(
   sessionId: string,
   state: CombatState,
   actorId: string,
-  kind: 'second_wind' | 'action_surge',
-  result: SecondWindResult | ActionSurgeResult,
+  kind: 'second_wind' | 'action_surge' | 'divine_sense',
+  result: SecondWindResult | ActionSurgeResult | { message: string },
 ): Promise<void> {
   const participant = state.participants.find((p) => p.id === actorId);
   const label = facingName(participant?.name, actorId, rosterFrom(state.participants));
@@ -538,7 +543,9 @@ async function recordFeatureActionFact(
   const fact =
     kind === 'second_wind'
       ? `${label} used Second Wind and regained ${(result as SecondWindResult).healed} HP.`
-      : `${label} used Action Surge and has one additional action this turn.`;
+      : kind === 'action_surge'
+        ? `${label} used Action Surge and has one additional action this turn.`
+        : `${label} used Divine Sense. ${(result as { message: string }).message}`;
   await recordDmTacticalFact(sessionId, fact, {
     kind,
     actorSlug: engineSlugForParticipant(map, actorId, label),
@@ -1918,6 +1925,44 @@ export async function executeCombatIntent(
         'action_surge',
         result as ActionSurgeResult,
       );
+    } else if (intent.type === 'divine_sense') {
+      // #712: Divine Sense is an Action and spends the same authoritative pool as story turns.
+      const actorCharacterId = (actor as unknown as { characterId?: string | null }).characterId;
+      result = await claimTurnActionAndResolve(
+        intent.actorId,
+        encounterId,
+        intent.expectedVersion,
+        async () => {
+          if (!actorCharacterId) {
+            throw new BusinessLogicError("Divine Sense is not on this character's sheet", {
+              reason: 'feature_not_on_sheet',
+              featureName: 'Divine Sense',
+            });
+          }
+          const { spendDivineSense } = await import('../progression/paladin-features-service.js');
+          const spent = await spendDivineSense({
+            characterId: actorCharacterId,
+            userId,
+            sessionId: encounter.sessionId,
+            context: 'combat-turn',
+          });
+          if (!spent.success) {
+            throw new BusinessLogicError(spent.message, {
+              reason: 'feature_uses_exhausted',
+              featureName: 'Divine Sense',
+              usesRemaining: spent.usesRemaining,
+            });
+          }
+          return spent;
+        },
+      );
+      await recordFeatureActionFact(
+        encounter.sessionId,
+        state,
+        intent.actorId,
+        'divine_sense',
+        result as { message: string },
+      );
     } else if (intent.type === 'use_item') {
       // #1147: drinking a healing consumable costs the Action. The claim wraps the
       // resolution, so a refusal inside (not owned, not a consumable, no healing
@@ -2381,6 +2426,16 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
     }
     if ((uses.actionSurge ?? 0) > 0) {
       actions.push({ type: 'action_surge', label: 'Action Surge' });
+    }
+    const { divineSenseUses } = await import('../progression/paladin-features-service.js');
+    const sense = await divineSenseUses(actor.characterId, userId);
+    if (
+      !actor.actionUsed &&
+      sense &&
+      sense.row.usesRemaining !== null &&
+      sense.row.usesRemaining > 0
+    ) {
+      actions.push({ type: 'divine_sense', label: 'Divine Sense' });
     }
   }
   // #2580: the way out of a fight the end guard would otherwise hold open. Offered outside the

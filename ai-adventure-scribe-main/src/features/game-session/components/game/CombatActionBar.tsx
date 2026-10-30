@@ -75,6 +75,7 @@ export const LEGAL_ACTION_PLACEMENT = {
   disengage: 'more',
   second_wind: 'more',
   action_surge: 'more',
+  divine_sense: 'more',
   use_item: 'more',
   flee: 'more',
   yield: 'more',

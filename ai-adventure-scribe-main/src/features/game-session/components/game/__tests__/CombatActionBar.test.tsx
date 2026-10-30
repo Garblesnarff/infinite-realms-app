@@ -411,6 +411,7 @@ describe('CombatActionBar', () => {
         disengage: disengageAction,
         second_wind: secondWindAction,
         action_surge: actionSurgeAction,
+        divine_sense: { type: 'divine_sense', label: 'Divine Sense' },
         flee: fleeAction,
         yield: yieldAction,
         use_item: useItemAction,

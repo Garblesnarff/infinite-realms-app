@@ -170,22 +170,22 @@ describe('the player exit intents (flee / yield)', () => {
  * player dialect versions them like dash; a schema that rejected either body
  * would strand the declaration at "not supported yet" again.
  */
-describe('the fighter feature intents (second_wind / action_surge)', () => {
-  it.each(['second_wind', 'action_surge'] as const)(
+describe('the class feature intents (second_wind / action_surge / divine_sense)', () => {
+  it.each(['second_wind', 'action_surge', 'divine_sense'] as const)(
     'accepts the exact %s body the clicked option posts',
     (type) => {
       expect(combatIntentRequestValidator.Check(fighterFeatureChipIntentBody(type))).toBe(true);
     },
   );
 
-  it.each(['second_wind', 'action_surge'] as const)(
+  it.each(['second_wind', 'action_surge', 'divine_sense'] as const)(
     'accepts the player-dialect %s body with its version',
     (type) => {
       expect(combatIntentRequestValidator.Check(fighterFeaturePlayerIntentBody(type))).toBe(true);
     },
   );
 
-  it.each(['second_wind', 'action_surge'] as const)(
+  it.each(['second_wind', 'action_surge', 'divine_sense'] as const)(
     'refuses a player-dialect %s without expectedVersion, like every versioned player intent',
     (type) => {
       const { expectedVersion: _omitted, ...intent } = fighterFeaturePlayerIntentBody(type).intent;
