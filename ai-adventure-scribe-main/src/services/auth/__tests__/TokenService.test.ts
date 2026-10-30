@@ -244,6 +244,189 @@ describe('TokenService', () => {
       expect(fetch).toHaveBeenCalledTimes(2);
     });
 
+    it('persists a late refresh success that lands after the overall deadline (#1263)', async () => {
+      persistSession({ access_token: 'old-access', refresh_token: 'old-refresh' });
+      let resolveBody!: (value: unknown) => void;
+      const bodyPromise = new Promise((resolve) => {
+        resolveBody = resolve;
+      });
+      (fetch as any).mockImplementation(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => bodyPromise,
+        }),
+      );
+
+      const stalled = refreshAccessToken('old-refresh');
+      const stalledExpectation = expect(stalled).rejects.toBeInstanceOf(TokenRefreshTransportError);
+      await vi.advanceTimersByTimeAsync(40);
+      await vi.advanceTimersByTimeAsync(TOKEN_REFRESH_OVERALL_TIMEOUT_MS + 1);
+      await stalledExpectation;
+      expect(fetch).toHaveBeenCalledTimes(1);
+
+      // The server-side exchange completes after the deadline: WorkOS
+      // rotated the refresh token, and the late pair must be kept — the
+      // next refresh with the spent token would get invalid_grant.
+      resolveBody({ accessToken: 'late-access', refreshToken: 'late-refresh' });
+      await vi.advanceTimersByTimeAsync(0);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(getAccessToken()).toBe('late-access');
+      expect(loadCachedSession()).toEqual({
+        access_token: 'late-access',
+        refresh_token: 'late-refresh',
+      });
+      expect(isSessionEnded()).toBe(false);
+      expect(fetch).toHaveBeenCalledTimes(1);
+
+      // The next refresh uses the late pair, not the spent one.
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: async () => ({ accessToken: 'next-access', refreshToken: 'next-refresh' }),
+      });
+      const recovered = refreshAccessToken('late-refresh');
+      await vi.advanceTimersByTimeAsync(40);
+      await expect(recovered).resolves.toEqual({
+        accessToken: 'next-access',
+        refreshToken: 'next-refresh',
+      });
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/auth/refresh'),
+        expect.objectContaining({ body: JSON.stringify({ refreshToken: 'late-refresh' }) }),
+      );
+    });
+
+    it('keeps the session when a 401 refresh fails before the late pair lands (#1263)', async () => {
+      persistSession({ access_token: 'old-access', refresh_token: 'old-refresh' });
+      let resolveBody!: (value: unknown) => void;
+      const bodyPromise = new Promise((resolve) => {
+        resolveBody = resolve;
+      });
+      (fetch as any)
+        .mockImplementationOnce(() =>
+          Promise.resolve({
+            ok: true,
+            json: () => bodyPromise,
+          }),
+        )
+        .mockImplementation(() =>
+          Promise.resolve({
+            ok: false,
+            status: 401,
+            json: async () => ({ error: 'invalid_grant' }),
+          }),
+        );
+
+      // First exchange stalls past the deadline; its body is still unsettled.
+      const stalled = refreshAccessToken('old-refresh');
+      const stalledExpectation = expect(stalled).rejects.toBeInstanceOf(TokenRefreshTransportError);
+      await vi.advanceTimersByTimeAsync(40);
+      await vi.advanceTimersByTimeAsync(TOKEN_REFRESH_OVERALL_TIMEOUT_MS + 1);
+      await stalledExpectation;
+      expect(fetch).toHaveBeenCalledTimes(1);
+
+      // A 401-driven refresh sends the already-spent token and gets
+      // invalid_grant before the late body settles.
+      const failed = refreshAccessToken('old-refresh');
+      await vi.advanceTimersByTimeAsync(40);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(fetch).toHaveBeenLastCalledWith(
+        expect.stringContaining('/v1/auth/refresh'),
+        expect.objectContaining({ body: JSON.stringify({ refreshToken: 'old-refresh' }) }),
+      );
+
+      // The failed refresh must still be parked (not resolved, session not
+      // ended) before the late body resolves — otherwise this test could
+      // pass without exercising the wait path.
+      let failedSettled = false;
+      void failed.then(
+        () => {
+          failedSettled = true;
+        },
+        () => {
+          failedSettled = true;
+        },
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(failedSettled).toBe(false);
+      expect(isSessionEnded()).toBe(false);
+
+      // The late body resolves: the rotated pair must be adopted and the
+      // failed refresh must not have ended the session.
+      resolveBody({ accessToken: 'late-access', refreshToken: 'late-refresh' });
+      await vi.advanceTimersByTimeAsync(0);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      await expect(failed).resolves.toEqual({
+        accessToken: 'late-access',
+        refreshToken: 'late-refresh',
+      });
+      expect(isSessionEnded()).toBe(false);
+      expect(loadCachedSession()).toEqual({
+        access_token: 'late-access',
+        refresh_token: 'late-refresh',
+      });
+
+      // The next refresh uses the late pair, not the spent one.
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: async () => ({ accessToken: 'next-access', refreshToken: 'next-refresh' }),
+      });
+      const recovered = refreshAccessToken('late-refresh');
+      await vi.advanceTimersByTimeAsync(40);
+      await expect(recovered).resolves.toEqual({
+        accessToken: 'next-access',
+        refreshToken: 'next-refresh',
+      });
+      expect(fetch).toHaveBeenLastCalledWith(
+        expect.stringContaining('/v1/auth/refresh'),
+        expect.objectContaining({ body: JSON.stringify({ refreshToken: 'late-refresh' }) }),
+      );
+    });
+
+    it('keeps a newer stored pair when a late refresh success resolves (#1263)', async () => {
+      persistSession({ access_token: 'old-access', refresh_token: 'old-refresh' });
+      let resolveBody!: (value: unknown) => void;
+      const bodyPromise = new Promise((resolve) => {
+        resolveBody = resolve;
+      });
+      (fetch as any).mockImplementation(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => bodyPromise,
+        }),
+      );
+
+      const stalled = refreshAccessToken('old-refresh');
+      const stalledExpectation = expect(stalled).rejects.toBeInstanceOf(TokenRefreshTransportError);
+      await vi.advanceTimersByTimeAsync(40);
+      await vi.advanceTimersByTimeAsync(TOKEN_REFRESH_OVERALL_TIMEOUT_MS + 1);
+      await stalledExpectation;
+
+      // Another tab published a newer pair while the exchange was stalled.
+      persistSession({ access_token: 'new-access', refresh_token: 'new-refresh' });
+
+      resolveBody({ accessToken: 'late-access', refreshToken: 'late-refresh' });
+      await vi.advanceTimersByTimeAsync(10);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(loadCachedSession()).toEqual({
+        access_token: 'new-access',
+        refresh_token: 'new-refresh',
+      });
+      expect(getAccessToken()).toBe('new-access');
+      expect(isSessionEnded()).toBe(false);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
     it('enters a terminal state on a refresh 401 and never retries', async () => {
       (fetch as any).mockResolvedValue({
         ok: false,

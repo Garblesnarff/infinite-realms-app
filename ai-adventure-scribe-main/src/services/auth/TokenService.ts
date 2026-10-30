@@ -24,13 +24,15 @@ const TOKEN_REFRESH_LEASE_MS = 10 * 1000;
 const TOKEN_REFRESH_LEASE_RENEW_MS = 3 * 1000;
 const TOKEN_REFRESH_LEASE_POLL_MS = 50;
 const TOKEN_REFRESH_LEASE_SETTLE_MS = 40;
-/** Overall ceiling for the refresh exchange, including response-body parsing (#1087). */
+/** Overall ceiling for waiting on the refresh exchange: the deadline stops waiting (and aborts the fetch signal), but body parsing already underway may still complete, so a late success can settle (#1087, #1263). */
 export const TOKEN_REFRESH_OVERALL_TIMEOUT_MS = 20_000;
 
 type RefreshResult = AccessTokenPair | null;
 type StoredRefreshLease = { owner: string; expiresAt: number };
 
 let refreshInFlight: Promise<RefreshResult> | null = null;
+/** Refresh work from a deadline-fired exchange that may still settle (#1263). */
+const pendingLateWork: { current: Promise<RefreshResult> | null } = { current: null };
 let sessionEnded = false;
 let headlessSession: WorkOSSession | null = null;
 
@@ -431,6 +433,45 @@ const requestTokenRefresh = async (
   }
 };
 
+/** Bound for waiting on late refresh work before ending a session (#1263). */
+const LATE_REFRESH_WAIT_MS = 10_000;
+
+/**
+ * Remember a deadline-fired exchange's work so a later terminal failure can
+ * wait for its late success instead of ending the session on a spent token.
+ * Cleared when that exact work settles, so a newer registration is never
+ * wiped by an older one's cleanup.
+ */
+const registerPendingLateWork = (work: Promise<RefreshResult>): void => {
+  pendingLateWork.current = work;
+  const clear = (): void => {
+    if (pendingLateWork.current === work) pendingLateWork.current = null;
+  };
+  void work.then(clear, clear);
+};
+
+/** Wait for registered late work, bounded, without failing on its outcome. */
+const awaitPendingLateWork = async (): Promise<void> => {
+  const lateWork = pendingLateWork.current;
+  // Without shared storage the re-check can never succeed; do not delay a
+  // terminal failure waiting for work that cannot be adopted (headless host).
+  if (!lateWork || typeof window === 'undefined') return;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      lateWork.then(
+        () => undefined,
+        () => undefined,
+      ),
+      new Promise<void>((resolve) => {
+        timeoutId = setTimeout(resolve, LATE_REFRESH_WAIT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+};
+
 const refreshWithCoordination = async (
   refreshToken: string,
   currentAccessToken?: string,
@@ -450,10 +491,17 @@ const refreshWithCoordination = async (
       return sharedTokens;
     }
 
+    // The deadline race rejects while the exchange itself may still settle:
+    // a slow response body can complete after the 20 s ceiling, and the
+    // server rotates the refresh token on success. Keep the work promise in
+    // a holder (a closure-assigned local narrows to never here) so a late
+    // success can still be adopted below (#1263).
+    const pendingWork: { current: Promise<RefreshResult> | null } = { current: null };
     try {
-      const tokens = await withRefreshDeadline((signal) =>
-        requestTokenRefresh(refreshToken, signal),
-      );
+      const tokens = await withRefreshDeadline((signal) => {
+        pendingWork.current = requestTokenRefresh(refreshToken, signal);
+        return pendingWork.current;
+      });
       if (tokens) {
         // Publish before releasing the cross-tab lock so the next tab adopts
         // these tokens instead of making a second exchange.
@@ -461,6 +509,32 @@ const refreshWithCoordination = async (
       }
       return tokens;
     } catch (error) {
+      const lateWork = pendingWork.current;
+      if (error instanceof TokenRefreshTransportError && lateWork) {
+        // Register the work before adopting it: a later refresh that fails
+        // terminally on the spent token waits for this late success first.
+        registerPendingLateWork(lateWork);
+        // The deadline fired, but the exchange may still complete on the
+        // server and rotate the refresh token. If it succeeds late, persist
+        // its pair when the stored session still holds the token we sent —
+        // dropping it would make the next refresh fail with invalid_grant.
+        // A newer published pair (another tab won the race) is never
+        // overwritten, and a late failure is already surfaced as transient.
+        void lateWork
+          .then((lateTokens) => {
+            if (!lateTokens || isSessionEnded()) return;
+            const stored = readSharedSession();
+            if (stored?.refresh_token === refreshToken) {
+              persistSession({
+                access_token: lateTokens.accessToken,
+                refresh_token: lateTokens.refreshToken,
+              });
+            }
+          })
+          .catch(() => {
+            // Late failure: the caller already got the transient verdict.
+          });
+      }
       if (error instanceof TokenRefreshError && isTerminalRefreshFailure(error)) {
         // A contender may have spent the single-use refresh token just before
         // this tab. Adopt its newer pair instead of signing out the loser.
@@ -471,6 +545,18 @@ const refreshWithCoordination = async (
             refresh_token: sharedTokens.refreshToken,
           });
           return sharedTokens;
+        }
+        // A deadline-fired exchange from this tab may still be settling: its
+        // late success rotates the token this refresh just spent. Wait for it
+        // (bounded) and re-check storage before ending the session (#1263).
+        await awaitPendingLateWork();
+        const lateSharedTokens = getSharedRefreshResult(refreshToken, currentAccessToken);
+        if (lateSharedTokens) {
+          persistSession({
+            access_token: lateSharedTokens.accessToken,
+            refresh_token: lateSharedTokens.refreshToken,
+          });
+          return lateSharedTokens;
         }
       }
       throw error;
