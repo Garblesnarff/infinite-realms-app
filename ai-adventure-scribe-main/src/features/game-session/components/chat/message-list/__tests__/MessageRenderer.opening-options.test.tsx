@@ -1,14 +1,6 @@
 /**
- * #1023: the opening's option buttons render with the opening text. "Show scene
- * art" is a separate control and must not be what reveals them.
- *
- * Fixture follows the greeting producer (use-initial-greeting.ts): schema option
- * lines appended under the scene, shaped `A. **Bold**, description`
- * (context-builder-prompts.ts). The reloaded row stores `initial_greeting`
- * (use-message-queue.ts). A later narration keeps the 10s roleplay delay.
- *
- * Real: MessageRenderer, DMMessage, MessageAssetDisplay, DynamicOptionsSection,
- * ActionOptions. Stubbed: combat, campaign assets, scene background, voice.
+ * #1023: the opening's option buttons render with the opening text. "Illustrate this scene"
+ * is a separate control and must not be what reveals them.
  */
 import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -88,7 +80,7 @@ describe('MessageRenderer opening options (#1023)', () => {
     });
 
     expect(screen.getByText(SCENE)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Show scene art' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Illustrate this scene' })).toBeInTheDocument();
 
     await flushOpeningDelay();
 
@@ -109,7 +101,7 @@ describe('MessageRenderer opening options (#1023)', () => {
     await flushOpeningDelay();
 
     expect(screen.getByRole('button', { name: /Ask Ines what she saw/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Show scene art' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Illustrate this scene' })).toBeInTheDocument();
   });
 
   it('keeps a later narration on the roleplay delay', async () => {

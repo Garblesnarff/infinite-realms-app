@@ -4,6 +4,7 @@ import React, { useMemo, useEffect, useRef } from 'react';
 import { formatNarrative } from './formatNarrative';
 import { prepareChatDisplayText } from './prepare-chat-display-text';
 import { MessageAssetDisplay } from './MessageAssetDisplay';
+import { SceneImageBand } from './SceneImageBand';
 import { MessageVoicePlayer } from './MessageVoicePlayer';
 import { CombatRoundDivider } from './CombatRoundDivider';
 import { HandoutCard } from '../../handouts/HandoutCard';
@@ -44,6 +45,24 @@ interface DMMessageProps {
  * Renders DM-specific message bubbles with navy styling (#88)
  * Integrates voice controls, image generation, and action options
  */
+/**
+ * The scene art a DM message shows above its text: the first tagged place, then the first tagged
+ * scene that has an image. Null when the message names no image.
+ */
+function pickSceneArt(
+  assetTags: Array<{ type: string; key: string }>,
+  getAsset: (type: string, key: string) => { name: string; imageUrl: string | null } | null,
+): { url: string; caption: string } | null {
+  for (const type of ['location', 'scene']) {
+    for (const tag of assetTags) {
+      if (tag.type !== type) continue;
+      const asset = getAsset(tag.type, tag.key);
+      if (asset?.imageUrl) return { url: asset.imageUrl, caption: asset.name };
+    }
+  }
+  return null;
+}
+
 export const DMMessage: React.FC<DMMessageProps> = React.memo(
   ({
     message,
@@ -77,6 +96,8 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
     const { getAsset, assets } = useCampaignAssetsContext();
     const { setSceneBackground } = useSceneBackground();
     const hasSetBackgroundRef = useRef(false);
+    // The generated image URL that failed to load, so the Illustrate control comes back.
+    const [brokenImageUrl, setBrokenImageUrl] = React.useState<string | null>(null);
 
     /**
      * ⚡ Bolt: Consolidate content processing into a single memoized block.
@@ -108,6 +129,12 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
       engineLines,
       combatEngineBlocks,
     } = processed;
+
+    // Generated art on the last message of a group; otherwise the place or scene the DM tagged.
+    const sceneArt =
+      isLastInGroup && imageUrl
+        ? { url: imageUrl, caption: 'Scene' }
+        : pickSceneArt(assetTags, getAsset);
 
     // #1062: the server-attached tracker line, rendered from envelope
     // state — never from the DM's prose, which is where the bracket-line
@@ -272,6 +299,14 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
             Dungeon Master
           </div>
         )}
+        {sceneArt && (
+          <SceneImageBand
+            key={sceneArt.url}
+            url={sceneArt.url}
+            caption={sceneArt.caption}
+            onFailed={() => setBrokenImageUrl(sceneArt.url)}
+          />
+        )}
         <article
           aria-label="Dungeon Master message"
           className={cn(
@@ -311,21 +346,12 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
             </div>
           )}
 
-          {/* Display campaign assets and generated images */}
+          {/* Campaign asset tiles (the scene art is shown above the story text) */}
+          {/* Places and scenes are shown by the band above the text, so they are not repeated here. */}
           <MessageAssetDisplay
-            assetTags={assetTags}
+            assetTags={assetTags.filter((tag) => tag.type !== 'location' && tag.type !== 'scene')}
             getAsset={getAsset}
             className="mt-4"
-            generatedImage={
-              isLastInGroup
-                ? {
-                    url: imageUrl,
-                    isGenerating: isGeneratingImage,
-                    error: imageError,
-                    onGenerate: onGenerateImage,
-                  }
-                : undefined
-            }
           />
 
           {Array.isArray(message.context?.handouts) && message.context.handouts.length > 0 && (
@@ -367,6 +393,28 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
               message as unknown as Parameters<typeof resolveNarrationSegments>[0],
             )}
           />
+
+          {isLastInGroup && (!imageUrl || brokenImageUrl === imageUrl) && (
+            <div aria-live="polite">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="ir-hit-slop px-3 text-xs text-white/70 hover:text-white"
+                onClick={onGenerateImage}
+                disabled={isGeneratingImage}
+              >
+                {isGeneratingImage
+                  ? 'Illustrating…'
+                  : imageError
+                    ? 'Couldn’t illustrate · Retry'
+                    : 'Illustrate this scene'}
+              </Button>
+              {imageError && !isGeneratingImage && (
+                <p className="px-3 pt-1 text-xs text-white/60">{imageError}</p>
+              )}
+            </div>
+          )}
 
           {isLastInGroup && timestamp && (
             <div className="ir-text-min uppercase tracking-[0.35em] text-white/60">{timestamp}</div>

@@ -64,6 +64,14 @@ export const useImageGeneration = ({
   const handleGenerateScene = useCallback(
     async (message: ChatMessage & { id?: string; timestamp?: string }) => {
       const messageId = message.id || message.timestamp || `${Math.random()}`;
+      // The manual path obeys the same per-session cap as the automatic one.
+      if (sessionId && getImageGenerationCap(sessionId) >= IMAGE_MAX) {
+        setGenErrorByMessage((prev) => ({
+          ...prev,
+          [messageId]: 'This session has used all of its scene images.',
+        }));
+        return;
+      }
       try {
         setGenErrorByMessage((prev) => ({ ...prev, [messageId]: '' }));
         setGeneratingFor((prev) => new Set(prev).add(messageId));

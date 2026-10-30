@@ -1,13 +1,4 @@
-import {
-  User,
-  MapPin,
-  Sword,
-  Package,
-  Flag,
-  Image as ImageIcon,
-  Sparkles,
-  Loader2,
-} from 'lucide-react';
+import { User, MapPin, Sword, Package, Flag, Image as ImageIcon, Sparkles } from 'lucide-react';
 import React from 'react';
 
 import type { CampaignAsset } from '@/hooks/use-campaign-assets';
@@ -110,104 +101,6 @@ export const AssetCard: React.FC<{
       <div className="text-center max-w-[100px]">
         <div className="text-sm font-medium text-white/90 truncate">{asset.name}</div>
         <div className="ir-text-min text-white/50 uppercase tracking-wider">{asset.type}</div>
-      </div>
-    </button>
-  );
-};
-
-export const GeneratedImageCard: React.FC<{
-  url: string;
-  onClick?: () => void;
-}> = ({ url, onClick }) => {
-  const [imageLoaded, setImageLoaded] = React.useState(false);
-  const [imageError, setImageError] = React.useState(false);
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'group relative flex flex-col items-center gap-2 p-3 rounded-xl',
-        'bg-gradient-to-br border backdrop-blur-sm transition-all duration-200 hover:scale-105 hover:shadow-xl',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500/50 focus-visible:scale-105 focus-visible:shadow-xl',
-        'cursor-pointer',
-        getAssetGradient('generated'),
-      )}
-      title="Click to view generated scene"
-      aria-label="View generated scene"
-    >
-      <div className="relative w-24 h-24 rounded-lg overflow-hidden bg-black/30 shadow-inner">
-        {!imageError ? (
-          <>
-            {!imageLoaded && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="h-8 w-8 animate-pulse rounded-full bg-white/10" />
-              </div>
-            )}
-            <img
-              src={url}
-              alt="Generated scene"
-              className={cn(
-                'w-full h-full object-cover transition-opacity duration-300',
-                imageLoaded ? 'opacity-100' : 'opacity-0',
-              )}
-              onLoad={() => setImageLoaded(true)}
-              onError={() => setImageError(true)}
-            />
-            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-              <span className="text-white text-xs font-medium">View</span>
-            </div>
-          </>
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-white/40">
-            <Sparkles className="h-6 w-6" />
-          </div>
-        )}
-      </div>
-      <div className="text-center max-w-[100px]">
-        <div className="text-sm font-medium text-white/90 truncate">Scene</div>
-        <div className="ir-text-min text-white/50 uppercase tracking-wider">Generated</div>
-      </div>
-    </button>
-  );
-};
-
-export const GenerateButtonCard: React.FC<{
-  isGenerating?: boolean;
-  error?: string;
-  onGenerate: () => void;
-}> = ({ isGenerating, error, onGenerate }) => {
-  return (
-    <button
-      type="button"
-      onClick={onGenerate}
-      disabled={isGenerating}
-      className={cn(
-        'group relative flex flex-col items-center gap-2 p-3 rounded-xl',
-        'bg-gradient-to-br border backdrop-blur-sm transition-all duration-200',
-        isGenerating
-          ? 'opacity-70'
-          : 'hover:scale-105 hover:shadow-xl focus-visible:scale-105 focus-visible:shadow-xl',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500/50',
-        'cursor-pointer',
-        getAssetGradient('generated'),
-      )}
-      title={isGenerating ? 'Generating...' : 'Generate scene image'}
-      aria-label={isGenerating ? 'Generating scene image' : 'Generate scene image'}
-    >
-      <div className="relative w-24 h-24 rounded-lg overflow-hidden bg-black/30 shadow-inner flex items-center justify-center">
-        {isGenerating ? (
-          <Loader2 className="h-8 w-8 text-pink-400 animate-spin" />
-        ) : (
-          <Sparkles className="h-8 w-8 text-pink-400 group-hover:scale-110 group-focus-visible:scale-110 transition-transform" />
-        )}
-      </div>
-      <div className="text-center max-w-[100px]">
-        <div className="text-sm font-medium text-white/90 truncate">
-          {isGenerating ? 'Generating...' : 'Generate'}
-        </div>
-        <div className="ir-text-min text-white/50 uppercase tracking-wider">
-          {error ? <span className="text-red-400">{error}</span> : 'Scene'}
-        </div>
       </div>
     </button>
   );

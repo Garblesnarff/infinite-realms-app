@@ -1,57 +1,66 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
 
 import { MessageAssetDisplay } from '../MessageAssetDisplay';
 
-const renderDisplay = (
-  generatedImage?: React.ComponentProps<typeof MessageAssetDisplay>['generatedImage'],
-): ReturnType<typeof render> =>
+import type { CampaignAsset } from '@/hooks/use-campaign-assets';
+
+// The Generate / Scene card and its "Show scene art" reveal were removed by #1236 D. Each test
+// below replaces one test of the original #2256 suite, so the history of what the card did stays
+// checked. Mapping: the first test became "no Generate / Scene card for untagged messages";
+// the second became "no reveal step"; the third became "no card while generating or failed";
+// the fourth became "no View generated scene card"; the fifth became "renders nothing without an image".
+
+const tavern: CampaignAsset = {
+  type: 'location',
+  key: 'the-tavern',
+  name: 'The Tavern',
+  imageUrl: 'tavern.png',
+};
+
+const renderDisplay = (getAsset: (type: string, key: string) => CampaignAsset | null) =>
   render(
-    <MessageAssetDisplay assetTags={[]} getAsset={() => null} generatedImage={generatedImage} />,
+    <MessageAssetDisplay
+      assetTags={[
+        { type: 'location', key: 'the-tavern', fullMatch: '[ASSET:location:the-tavern]' },
+      ]}
+      getAsset={getAsset}
+    />,
   );
 
-describe('MessageAssetDisplay scene card (#2256)', () => {
-  it('shows no Generate / Scene card and no image when there is no scene art, only a text button', () => {
-    const { container } = renderDisplay({ onGenerate: vi.fn() });
+describe('MessageAssetDisplay after the scene card was removed (#1236 D; was #2256)', () => {
+  it('renders no Generate / Scene card and no Show scene art control for an untagged message', () => {
+    const { container } = renderDisplay(() => null);
 
-    expect(container.textContent).not.toMatch(/Generate/);
+    expect(container).toBeEmptyDOMElement();
     expect(screen.queryByRole('button', { name: /generate scene image/i })).toBeNull();
-    const reveal = screen.getByRole('button', { name: 'Show scene art' });
-    expect(reveal).toHaveClass('text-xs');
-  });
-
-  it('reveals the Generate card after the player taps "Show scene art"', () => {
-    const onGenerate = vi.fn();
-    renderDisplay({ onGenerate });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Show scene art' }));
-
     expect(screen.queryByRole('button', { name: 'Show scene art' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Generate scene image' }));
-    expect(onGenerate).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the card visible while an image is generating, and when generation failed', () => {
-    const { unmount } = renderDisplay({ onGenerate: vi.fn(), isGenerating: true });
-    expect(screen.getByRole('button', { name: 'Generating scene image' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Show scene art' })).toBeNull();
-    unmount();
+  it('has no reveal step: no Show scene art control and no generate card, even with a tagged asset', () => {
+    renderDisplay((type, key) => (type === 'location' && key === 'the-tavern' ? tavern : null));
 
-    renderDisplay({ onGenerate: vi.fn(), error: 'Image service is busy' });
-    expect(screen.getByText('Image service is busy')).toBeInTheDocument();
-  });
-
-  it('shows the scene image card and no button when a scene image exists', () => {
-    renderDisplay({ url: 'https://example.test/scene.png', onGenerate: vi.fn() });
-
-    expect(screen.getByRole('button', { name: 'View generated scene' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Show scene art' })).toBeNull();
     expect(screen.queryByRole('button', { name: /generate scene image/i })).toBeNull();
+    expect(screen.getByText('The Tavern')).toBeInTheDocument();
   });
 
-  it('renders nothing when there is no image and no way to generate one', () => {
-    const { container } = renderDisplay({});
+  it('shows no generating or failed card here; that state belongs to the footer control in DMMessage', () => {
+    renderDisplay((type, key) => (type === 'location' && key === 'the-tavern' ? tavern : null));
+
+    expect(screen.queryByRole('button', { name: 'Generating scene image' })).toBeNull();
+    expect(screen.queryByText(/generating|could not|failed/i)).toBeNull();
+  });
+
+  it('shows no View generated scene card; a scene image is the band above the text', () => {
+    renderDisplay((type, key) => (type === 'location' && key === 'the-tavern' ? tavern : null));
+
+    expect(screen.queryByRole('button', { name: 'View generated scene' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Show scene art' })).toBeNull();
+  });
+
+  it('renders nothing when no tagged asset has an image', () => {
+    const { container } = renderDisplay(() => ({ ...tavern, imageUrl: null }));
 
     expect(container).toBeEmptyDOMElement();
   });
