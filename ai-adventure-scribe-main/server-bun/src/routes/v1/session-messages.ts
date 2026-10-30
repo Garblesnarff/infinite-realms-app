@@ -23,6 +23,29 @@ const messageSchema = t.Object({
   timestamp: t.Optional(t.String()),
 });
 
+// #1270: the server owns the replay-cache keys in DM-row contexts
+// (cachedTurnResponse, cachedTurnResponseInput, rollTurnResult, npcResult).
+// A client save must never
+// plant them: strip them from every saved message context so a planted body
+// can never be replayed (engine lines included). The server re-caches on
+// completion, so legitimate turns lose nothing.
+const SERVER_ONLY_CONTEXT_KEYS = [
+  'cachedTurnResponse',
+  'cachedTurnResponseInput',
+  'rollTurnResult',
+  'npcResult',
+] as const;
+
+function stripServerOnlyContextKeys(
+  context: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!context) return context;
+  if (!SERVER_ONLY_CONTEXT_KEYS.some((key) => key in context)) return context;
+  const stripped = { ...context };
+  for (const key of SERVER_ONLY_CONTEXT_KEYS) delete stripped[key];
+  return stripped;
+}
+
 const mapMessage = (message: DialogueHistory) => ({
   id: message.id,
   session_id: message.sessionId,
@@ -123,7 +146,7 @@ export const sessionMessageRoutes = new Elysia({ prefix: '/v1/sessions' })
           speakerType: message.speaker_type,
           speakerId: message.speaker_id,
           message: message.message,
-          context: message.context,
+          context: stripServerOnlyContextKeys(message.context),
           images: message.images,
           timestamp: message.timestamp ? new Date(message.timestamp) : undefined,
         })),
