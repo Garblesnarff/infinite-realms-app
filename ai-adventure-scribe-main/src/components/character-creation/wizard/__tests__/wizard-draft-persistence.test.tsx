@@ -188,6 +188,13 @@ describe('wizard draft persistence (#208)', () => {
 
   it('asks before an in-app link leaves a wizard with unsaved data', async () => {
     mockState.character = { name: 'Half-typed Hero' } as Character;
+    writeWizardDraft(DRAFT_KEY, {
+      version: WIZARD_DRAFT_VERSION,
+      character: mockState.character,
+      step: 0,
+      campaignId: null,
+      updatedAt: new Date().toISOString(),
+    });
     renderWizard();
 
     fireEvent.click(screen.getByTestId('characters-link'));
@@ -200,7 +207,7 @@ describe('wizard draft persistence (#208)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('location-search').textContent).toContain('/app/characters');
     });
-    expect(window.localStorage.getItem(DRAFT_KEY)).toBeNull();
+    expect(window.localStorage.getItem(DRAFT_KEY)).not.toBeNull();
   });
 
   it('Cancel asks for confirmation, then clears the seeded draft and leaves', async () => {

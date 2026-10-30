@@ -199,7 +199,6 @@ const WizardContent: React.FC = () => {
 
   const confirmLeave = () => {
     const destination = pendingNavigation;
-    clearDraft();
     setPendingNavigation(null);
     if (destination) navigate(destination);
   };
