@@ -111,6 +111,7 @@ const KIND_LABEL: Record<ContractActionKind, string> = {
   death_save: 'death save',
   second_wind: 'second wind',
   action_surge: 'action surge',
+  divine_sense: 'Divine Sense',
   use_item: 'use item',
 };
 

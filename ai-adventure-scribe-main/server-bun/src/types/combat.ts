@@ -351,6 +351,7 @@ export interface CombatParticipant {
   id: string;
   encounterId: string;
   characterId: string | null;
+  characterClass?: string | null;
   npcId: string | null;
   name: string;
   initiative: number;

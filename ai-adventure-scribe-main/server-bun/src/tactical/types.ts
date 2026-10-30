@@ -119,6 +119,7 @@ export interface DmFactAction {
     | 'death_save'
     | 'second_wind'
     | 'action_surge'
+    | 'divine_sense'
     | 'use_item';
   /** Engine slug of the actor (the tactical digest id). */
   actorSlug: string;

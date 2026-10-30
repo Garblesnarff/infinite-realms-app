@@ -126,7 +126,7 @@ const checkFields = {
  * they are versioned like the other mutating intents.
  */
 const fighterFeatureFields = {
-  type: t.Union([t.Literal('second_wind'), t.Literal('action_surge')]),
+  type: t.Union([t.Literal('second_wind'), t.Literal('action_surge'), t.Literal('divine_sense')]),
   actorId: participantId,
   actionId,
 };

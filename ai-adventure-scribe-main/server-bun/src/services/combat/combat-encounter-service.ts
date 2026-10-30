@@ -864,6 +864,7 @@ export class CombatEncounterService {
         participants: {
           orderBy: (cp, { asc }) => [asc(cp.turnOrder)],
           with: {
+            character: { columns: { class: true } },
             npc: { columns: { stats: true } },
             status: true,
             conditions: { with: { condition: true } },
@@ -882,12 +883,12 @@ export class CombatEncounterService {
     const positions = new Map(
       map?.entities.map((entity) => [entity.id, { x: entity.x, y: entity.y, sceneId: map.id }]),
     );
-    const participants = participantRows.map(({ npc, ...participant }) => {
+    const participants = participantRows.map(({ npc, character, ...participant }) => {
       const disposition = authoredDisposition(npc?.stats);
       const position = positions.get(participant.id);
       const downedBehavior = authoredDownedBehavior(npc?.stats);
       const authored = authoredNumbers(npc?.stats);
-      return {
+      const view = {
         ...participant,
         ...(position ? { position } : {}),
         ...(disposition ? { disposition } : {}),
@@ -897,6 +898,17 @@ export class CombatEncounterService {
         // roll prompt) reads it instead of re-deriving it from raw columns (#2518).
         vitalState: vitalStateOf(participant as unknown as VitalsInput),
       };
+      // Keep this server-only gate out of the wire shape: clients and pinned fixtures rely on
+      // the participant keys remaining stable, while legal-action generation can still avoid
+      // querying the Paladin pool for non-paladins.
+      if (character?.class) {
+        Object.defineProperty(view, 'characterClass', {
+          value: character.class,
+          enumerable: false,
+          configurable: true,
+        });
+      }
+      return view;
     });
 
     // Filter active participants and determine current turn in-memory

@@ -25,14 +25,18 @@ export const FIGHTER_FEATURE_ENCOUNTER_ID = '3232069e-0000-4000-8000-00000000000
 export const FIGHTER_FEATURE_ACTOR_ID = 'e7e569df-0000-4000-8000-000000000001';
 export const FIGHTER_FEATURE_ENCOUNTER_VERSION = 3;
 
-export const fighterFeatureChipIntentBody = (type: 'second_wind' | 'action_surge') => ({
+export const fighterFeatureChipIntentBody = (
+  type: 'second_wind' | 'action_surge' | 'divine_sense',
+) => ({
   intent: { type, actorId: FIGHTER_FEATURE_ACTOR_ID },
   source: 'dm' as const,
   dmStartedAt: 1_700_000_000_000,
   origin: 'typed' as const,
 });
 
-export const fighterFeaturePlayerIntentBody = (type: 'second_wind' | 'action_surge') => ({
+export const fighterFeaturePlayerIntentBody = (
+  type: 'second_wind' | 'action_surge' | 'divine_sense',
+) => ({
   intent: {
     type,
     actorId: FIGHTER_FEATURE_ACTOR_ID,

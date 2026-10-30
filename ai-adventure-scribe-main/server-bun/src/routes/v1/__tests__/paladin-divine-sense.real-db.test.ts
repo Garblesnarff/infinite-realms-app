@@ -1,7 +1,7 @@
 /**
  * #712: Divine Sense usage tracking.
  */
-import { afterAll, beforeAll, expect, it } from 'bun:test';
+import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
 import { and, eq } from 'drizzle-orm';
 
 import {
@@ -39,6 +39,18 @@ if (hasRealDb) {
   process.env.PORT ??= '8888';
 }
 
+const paladinUserId = testId('712-user');
+
+mock.module('../../../lib/auth.js', () => ({
+  authenticateRequest: async (request: Request) =>
+    request.headers.get('authorization') === 'Bearer 712-test-token'
+      ? {
+          user: { userId: paladinUserId, email: 'test@example.test', plan: 'free' },
+          error: null,
+        }
+      : { user: null, error: 'Unauthorized' },
+}));
+
 // #712: the paladin pool services, imported lazily so the no-database run that
 // degrades every describeWithDb block to skip never loads db/client.
 const { spendDivineSense } = await importWithRealDb(
@@ -47,6 +59,15 @@ const { spendDivineSense } = await importWithRealDb(
 const { ClassFeatureUsageService } = await importWithRealDb(
   () => import('../../../services/progression/class-feature-usage-service.js'),
 );
+const { createRequestPipelineApp } = await importWithRealDb(
+  () => import('../../../http-pipeline.js'),
+);
+const { tacticalMapRoutes } = await importWithRealDb(() => import('../tactical-maps.js'));
+const { combatRoutes } = await importWithRealDb(() => import('../combat/index.js'));
+
+const app = hasRealDb
+  ? createRequestPipelineApp().use(tacticalMapRoutes).use(combatRoutes)
+  : null;
 
 if (!hasRealDb) {
   console.warn(
@@ -57,7 +78,6 @@ if (!hasRealDb) {
 describeWithDb('paladin Divine Sense tracking (#712)', () => {
   // Fresh client per block: earlier blocks close the shared one in afterAll.
   let db: ReturnType<typeof realDb>;
-  const paladinUserId = testId('712-user');
 
   let campaignId: string;
   let sessionId: string;
@@ -196,5 +216,43 @@ describeWithDb('paladin Divine Sense tracking (#712)', () => {
     });
     expect(third.success).toBe(true);
     expect(third.usesRemaining).toBe(0);
+  });
+
+  it('combat Divine Sense chip posts through the real intent route and refuses an empty pool', async () => {
+    await ClassFeatureUsageService.restoreFeatures({
+      characterId: paladinId,
+      restType: 'long',
+      userId: paladinUserId,
+    });
+    const post = async (expectedVersion: number) =>
+      app!.handle(
+        new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+          method: 'POST',
+          headers: {
+            authorization: 'Bearer 712-test-token',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            // The real combat chip is DM-sourced, but this route fixture supplies the
+            // encounter token explicitly so the optimistic write exercises the seeded
+            // version rather than relying on a separately loaded state snapshot.
+            intent: { type: 'divine_sense', actorId: participantId, expectedVersion },
+            source: 'dm',
+            dmStartedAt: 1_700_000_000_000,
+            origin: 'typed',
+          }),
+        }),
+      );
+    const spent = await post(1);
+    expect(spent.status).toBe(200);
+    await db
+      .update(combatParticipants)
+      .set({ actionUsed: false })
+      .where(eq(combatParticipants.id, participantId));
+    const refused = await post(2);
+    expect(refused.status).toBe(422);
+    expect(await refused.json()).toMatchObject({
+      details: { reason: 'feature_uses_exhausted', featureName: 'Divine Sense' },
+    });
   });
 });
