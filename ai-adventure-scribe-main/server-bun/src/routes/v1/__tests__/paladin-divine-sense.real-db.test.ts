@@ -224,6 +224,26 @@ describeWithDb('paladin Divine Sense tracking (#712)', () => {
       restType: 'long',
       userId: paladinUserId,
     });
+    const legal = await app!.handle(
+      new Request(`http://localhost/v1/combat/${encounterId}/legal-actions`, {
+        headers: { authorization: 'Bearer 712-test-token' },
+      }),
+    );
+    expect(legal.status).toBe(200);
+    expect(await legal.json()).toMatchObject({
+      actions: expect.arrayContaining([{ type: 'divine_sense', label: 'Divine Sense' }]),
+    });
+    const [offeredFeature] = await db
+      .select({ usesRemaining: characterFeatures.usesRemaining })
+      .from(characterFeatures)
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, divineSenseFeatureId),
+        ),
+      )
+      .limit(1);
+    expect(offeredFeature?.usesRemaining).toBe(1);
     const post = async (expectedVersion: number) =>
       app!.handle(
         new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
