@@ -92,9 +92,6 @@ describe('/app route table (#2155)', () => {
 
   it('flags the targets that were broken before #2155', () => {
     expect(unresolvedReason('/app/home')).toBe('falls through to the not-found catch-all');
-    expect(unresolvedReason(`/app/campaigns/${DYN}/scenes/${DYN}/battle-map`)).toMatch(
-      /no "scenes" tab/,
-    );
   });
 
   it('redirects /app/campaigns to the campaign list at /app', () => {

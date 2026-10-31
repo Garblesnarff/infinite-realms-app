@@ -125,6 +125,19 @@ async function handleMessage(ws: WSConnection, rawMessage: unknown) {
       return;
     }
 
+    // Unknown message types are dropped, but they are logged (type only, never
+    // the payload) so a client sending a mistyped or retired type is visible
+    // in prod logs instead of vanishing silently (#807).
+    logger.warn(
+      {
+        requestId,
+        sessionId: roomId,
+        userId: user.userId,
+        type: typeof msg.type === 'string' ? msg.type : 'unknown',
+      },
+      'ws.invalid_message',
+    );
+    return;
   } catch (e: any) {
     logger.error(
       {
