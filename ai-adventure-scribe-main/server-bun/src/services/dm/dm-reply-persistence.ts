@@ -212,7 +212,11 @@ function fallbackSkipReason(
  * turn's reserved id so the player gets the reply after a reload. Carries the
  * roll requests in context so a reload can restore the popup from the same
  * row. Scoped to the roll-request case: combat turns and gate-rejected prose
- * are log-only. Never throws: a failed write must not break the watchdog.
+ * are log-only. When generatedAt is given, a player row newer than it means
+ * the player already moved past this turn, so the row is not written (#800):
+ * persisting it would surface a roll popup for a passed turn, and answering
+ * it hits the superseded-roll 409. Never throws: a failed write must not
+ * break the watchdog.
  */
 export async function persistFallbackDmReply(params: {
   userId: string;
@@ -220,6 +224,12 @@ export async function persistFallbackDmReply(params: {
   messageId: string;
   reason: string;
   envelope: Record<string, unknown> | null;
+  /**
+   * Server clock at generation (#800). When given, a player row with a later
+   * server-clock createdAt means the player moved past this turn. Absent, the
+   * check is skipped (the watchdog always passes it).
+   */
+  generatedAt?: Date;
 }): Promise<{ persisted: boolean; skipped?: string }> {
   try {
     if (!params.envelope) return { persisted: false };
@@ -244,6 +254,48 @@ export async function persistFallbackDmReply(params: {
         ? `The DM asks for a roll: ${purposes.join('; ')}.`
         : '';
     if (!text) return { persisted: false };
+    // #800: the turn is stale when the player has written since generation.
+    // createdAt is the server clock (the guard's own ordering in withRollTurn
+    // loads the latest player row by createdAt), and generatedAt is the
+    // server clock at generation completion (captured after the provider call
+    // returns), so the comparison is clock-consistent. A
+    // player row written during generation (an overlapping submit) still
+    // reads as current here; the guard's 409 remains the backstop for it.
+    // When the check itself cannot run (no database: the unit tests mock the
+    // service layer and never import one), the fallback keeps today's
+    // behavior and persists: dropping the reply would be worse than risking
+    // a stale popup, and in production the watchdog's own row check has just
+    // proved the database reachable. Debug-logged, not warned: a DB-less
+    // caller is a normal case here, and the watchdog's DM_REPLY_UNPERSISTED
+    // line already records the outcome.
+    if (params.generatedAt) {
+      try {
+        const [{ db }, { dialogueHistory }, { and, eq, gt }] = await Promise.all([
+          import('../../../../db/client.js'),
+          import('../../../../db/schema/index.js'),
+          import('drizzle-orm'),
+        ]);
+        const [newer] = await db
+          .select({ id: dialogueHistory.id })
+          .from(dialogueHistory)
+          .where(
+            and(
+              eq(dialogueHistory.sessionId, params.sessionId),
+              eq(dialogueHistory.speakerType, 'player'),
+              gt(dialogueHistory.createdAt, params.generatedAt),
+            ),
+          )
+          .limit(1);
+        if (newer) return { persisted: false, skipped: 'superseded_turn' };
+      } catch (error) {
+        logger.debug({
+          msg: 'DM_REPLY_FALLBACK_SUPERSEDE_CHECK_FAILED',
+          sessionId: params.sessionId,
+          messageId: params.messageId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
     const { SessionMessageService } = await import('../session/session-message-service.js');
     await SessionMessageService.addMessage(
       {
@@ -319,6 +371,7 @@ export function scheduleDmReplyWatchdog(params: DmReplyWatchdogParams): Promise<
                 messageId: params.messageId,
                 reason: params.reason,
                 envelope: params.envelope,
+                generatedAt: params.generatedAt,
               })
             ).persisted;
           }

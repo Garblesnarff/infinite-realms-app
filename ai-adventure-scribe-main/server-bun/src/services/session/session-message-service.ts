@@ -384,12 +384,18 @@ export class SessionMessageService {
       // A blank save never replaces stored prose (#2280): the route's `minLength: 1` stops '' but
       // not whitespace, and #2250 tried to write a text-less row under the reply's own id. Such
       // a save falls through to the insert below, where the id conflict makes it a no-op.
+      // #800: the replace runs twice. A fallback insert that lands between the first replace
+      // and the insert below makes the insert hit ON CONFLICT DO NOTHING and drop the client's
+      // final text, so the second pass re-runs the same replace for ids the insert did not
+      // write: the fallback's row is provisional by then, and the client's save wins over it.
+      // The second pass is an UPDATE, so it never counts a turn the insert did not count.
       const dmMessages = batch.filter(
         (data): data is typeof data & { id: string } =>
           Boolean(data.id) && data.speakerType === 'dm' && data.message.trim().length > 0,
       );
-      const reconciled: DialogueHistory[] = [];
-      for (const data of dmMessages) {
+      const replaceProvisional = async (
+        data: (typeof dmMessages)[number],
+      ): Promise<DialogueHistory | undefined> => {
         const [row] = await tx
           .update(dialogueHistory)
           .set({
@@ -410,6 +416,11 @@ export class SessionMessageService {
             ),
           )
           .returning();
+        return row;
+      };
+      const reconciled: DialogueHistory[] = [];
+      for (const data of dmMessages) {
+        const row = await replaceProvisional(data);
         if (row) reconciled.push(row);
       }
       const reconciledIds = new Set(reconciled.map((row) => row.id));
@@ -432,6 +443,17 @@ export class SessionMessageService {
         )
         .onConflictDoNothing({ target: dialogueHistory.id })
         .returning();
+
+      // #800 second pass: ids the first replace missed and the insert did not write either
+      // lost to a concurrent provisional row or were never provisional. Re-running the same
+      // replace wins the first case and stays a no-op for the second (the predicate still
+      // requires a provisional row, and blank saves never reach dmMessages).
+      const insertedIds = new Set(inserted.map((row) => row.id));
+      for (const data of dmMessages) {
+        if (reconciledIds.has(data.id) || insertedIds.has(data.id)) continue;
+        const row = await replaceProvisional(data);
+        if (row) reconciled.push(row);
+      }
 
       if (inserted.length > 0) {
         await tx
