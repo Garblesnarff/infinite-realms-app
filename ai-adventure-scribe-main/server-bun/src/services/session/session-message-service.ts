@@ -71,13 +71,17 @@ function asCachedTurnResponse(value: unknown): Record<string, unknown> | undefin
 
 /**
  * Best-effort: store a completed turn response under its reply id, then read
- * back whatever the row now holds under that key (#51). Never throws: a failed
- * write degrades to today's behavior (the retry regenerates). The first
+ * back whatever the row now holds under that key (#51). A failed write
+ * degrades to today's behavior (the retry regenerates) — but a read-back
+ * mismatch does not degrade: when the row's stored input differs from the
+ * requested input, the cached body belongs to a different turn, so this
+ * throws ConflictError (409) instead of serving it (#1270). The first
  * completed response wins: the write is a no-op once the key exists, so a
  * concurrent duplicate cannot overwrite the canonical response — and the
  * read-back lets a duplicate that also generated return the winner's body
  * instead of its own, when the winner's write is still the row's context at
- * read-back time. It is not airtight under concurrency: the duplicate's own
+ * read-back time and the stored input matches the duplicate's input; on a
+ * mismatch the read-back 409s instead (#1270). It is not airtight under concurrency: the duplicate's own
  * provisional persist replaces a provisional row's context wholesale (#2218),
  * so a persist that lands after the winner's write drops the cached entry
  * and the duplicate keeps its own body. The guaranteed case is the
@@ -125,21 +129,39 @@ async function cacheTurnResponseAndReplay(
         )
         .limit(1);
       if (!row) return { found: false as const };
+      const rowContext = row.context as Record<string, unknown> | null;
       return {
         found: true as const,
-        cached: asCachedTurnResponse(
-          (row.context as Record<string, unknown> | null)?.[CACHED_TURN_RESPONSE_KEY],
-        ),
+        cached: asCachedTurnResponse(rowContext?.[CACHED_TURN_RESPONSE_KEY]),
+        storedInput: rowContext?.[CACHED_TURN_RESPONSE_INPUT_KEY],
+        hasStoredInput: !!rowContext && CACHED_TURN_RESPONSE_INPUT_KEY in rowContext,
       };
     });
-    if (!outcome.found)
+    if (!outcome.found) {
       logger.info({
         msg: 'DM_TURN_RESPONSE_CACHE_ROW_MISSING',
         sessionId,
         messageId: replyId,
       });
-    return outcome.found ? outcome.cached : undefined;
+      return undefined;
+    }
+    // #1270: the read-back after a lost write race must compare the stored
+    // input. The winner's write may have landed between this turn's lookup
+    // (which missed, so this turn generated) and its read-back; its write
+    // then loses (the UPDATE above is a no-op once the key exists) and the
+    // row holds the winner's body. A stored input different from the
+    // requested input means that body belongs to a different turn: 409,
+    // never the old body. The catch below rethrows ConflictError on purpose:
+    // it degrades write failures to a regenerate, and a mismatch must not
+    // degrade into serving the wrong body. Rows cached before the binding
+    // key existed carry no binding and still replay.
+    if (outcome.hasStoredInput && outcome.storedInput !== playerInput)
+      throw new ConflictError('This reply id was already used for a different turn.');
+    return outcome.cached;
   } catch (error) {
+    // The read-back mismatch above is a ConflictError, not a write failure:
+    // rethrow it so it surfaces as a 409 instead of degrading to a regenerate.
+    if (error instanceof ConflictError) throw error;
     logger.warn({
       msg: 'DM_TURN_RESPONSE_CACHE_WRITE_FAILED',
       sessionId,
