@@ -14,6 +14,7 @@ import {
   isTokenExpiringSoon,
   loadCachedSession,
   persistSession,
+  shouldAdoptSharedSession,
   refreshAccessTokenOnce,
   SESSION_ENDED_EVENT,
   SESSION_ENDED_STORAGE_KEY,
@@ -320,6 +321,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const nextSession = JSON.parse(event.newValue) as WorkOSSession;
         if (!nextSession.access_token) return;
+        // #1249: never adopt an access-only session over a pair that has a
+        // refresh token — the writing tab read partial state (fresh tab),
+        // and adopting it would spread the drop into this tab's state.
+        if (!shouldAdoptSharedSession(sessionRef.current, nextSession)) return;
         clearSessionEnded();
         if (nextSession.refresh_token) {
           window.sessionStorage.setItem('workos_refresh_token', nextSession.refresh_token);

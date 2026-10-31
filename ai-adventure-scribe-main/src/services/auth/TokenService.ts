@@ -665,9 +665,31 @@ export const loadCachedSession = (): WorkOSSession | null => {
     window.localStorage.getItem('workos_refresh_token');
 
   if (accessToken) {
+    // #1249: the shared session JSON is the cross-tab source of truth. A
+    // fresh tab has empty sessionStorage, so the split keys above yield no
+    // refresh token even when the shared JSON holds one — and a tab that
+    // missed a rotation (discarded/frozen, storage event never processed)
+    // still holds the previous pair's refresh token in its sessionStorage.
+    // Pairing that stale refresh token with the current access token would
+    // poison the shared pair on the next persist. So when the shared JSON's
+    // access token matches, its refresh token is authoritative — even when
+    // absent, because a genuinely access-only pair must not resurrect a
+    // stale refresh token. Only when the shared JSON is absent or belongs
+    // to a different sign-in do the split keys stand (e.g. a shared-JSON
+    // parse failure). A shared pair is never staler than the split keys:
+    // every sessionStorage write ships with a shared-JSON write in the
+    // same persistSession call, and shared JSON only changes via another
+    // tab's persistSession, which makes it newer.
+    const shared = readSharedSession();
+    if (shared && shared.access_token === accessToken) {
+      return {
+        access_token: accessToken,
+        refresh_token: shared.refresh_token,
+      };
+    }
     return {
       access_token: accessToken,
-      refresh_token: refreshToken || undefined,
+      refresh_token: refreshToken ?? undefined,
     };
   }
 
@@ -709,6 +731,33 @@ export const clearPendingInput = (): void => {
   }
 };
 
+/**
+ * Cross-tab adopt rule (#1249): never adopt an access-only session over a
+ * current session that has a refresh token WHEN THE ACCESS TOKEN MATCHES.
+ * A storage event carrying a same-access access-only pair means the writing
+ * tab read partial state (a fresh tab, whose sessionStorage is empty);
+ * adopting it would spread the drop into this tab's state and, through the
+ * persistence effect, back into shared storage. But a DIFFERENT access
+ * token is a genuinely new pair — a re-sign-in, including an access-only
+ * one (CallbackPage and finishSignIn persist refresh only when present) —
+ * and refusing it would strand this tab on the old session while its
+ * refresh timer keeps rotating the old pair over the new sign-in.
+ * Adoption re-arms that timer: the auto-refresh effect depends on
+ * session?.access_token, so adopting a new access token clears the old
+ * timer. A session with no access token is never adopted. Adoption of a
+ * full pair, or adoption when the current session has no refresh token,
+ * is unchanged.
+ */
+export const shouldAdoptSharedSession = (
+  current: WorkOSSession | null,
+  next: WorkOSSession,
+): boolean => {
+  if (!next.access_token) return false;
+  if (!next.refresh_token && current?.refresh_token && next.access_token === current.access_token)
+    return false;
+  return true;
+};
+
 export const persistSession = (session: WorkOSSession | null): void => {
   if (typeof window === 'undefined') {
     headlessSession = session;
@@ -717,16 +766,33 @@ export const persistSession = (session: WorkOSSession | null): void => {
   }
   if (session) {
     clearSessionEnded();
-    window.localStorage.setItem('workos_access_token', session.access_token);
-    if (session.refresh_token) {
+    // #1249: a tab must never overwrite a stored pair that has a refresh
+    // token with one that has none. A fresh tab's loadCachedSession()
+    // returns access-only (empty sessionStorage), and persisting it used
+    // to destroy the shared refresh token for every tab. Preserve the
+    // stored refresh token when the access token matches — the incoming
+    // pair carries no newer information about the refresh token in that
+    // case, and writing it into this tab's sessionStorage heals the tab.
+    // A different access token means a genuinely new pair, so a stale
+    // refresh token is never resurrected across pairs.
+    const stored = readSharedSession();
+    const refreshToken =
+      session.refresh_token ??
+      (stored && stored.access_token === session.access_token ? stored.refresh_token : undefined);
+    const merged: WorkOSSession = {
+      access_token: session.access_token,
+      ...(refreshToken ? { refresh_token: refreshToken } : {}),
+    };
+    window.localStorage.setItem('workos_access_token', merged.access_token);
+    if (merged.refresh_token) {
       // Keep refresh token scoped to browser session to reduce persistence risk.
-      window.sessionStorage.setItem('workos_refresh_token', session.refresh_token);
+      window.sessionStorage.setItem('workos_refresh_token', merged.refresh_token);
       window.localStorage.removeItem('workos_refresh_token');
     } else {
       window.sessionStorage.removeItem('workos_refresh_token');
       window.localStorage.removeItem('workos_refresh_token');
     }
-    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(merged));
   } else {
     window.localStorage.removeItem('workos_access_token');
     window.localStorage.removeItem('workos_refresh_token');
