@@ -130,8 +130,8 @@ export function useMessageDiceRolls({
 
   // The banner clears once the failed roll's row is saved AND the DM has replied after it (#1288).
   // The send can throw after the row saved, with the DM turn still to come. A resend is deduped
-  // against that row (use-message-queue), so Retry is the only way to re-drive the turn: the
-  // banner must stay until the reply actually lands, or the player is left with no recovery.
+  // against that row (use-message-queue.ts:287-296, use-message-handler-logic.ts:566-585), so Retry
+  // is the only way to re-drive the turn: the banner must stay until the reply lands.
   useEffect(() => {
     if (!rollFailure) return;
     const savedIndex = messages.findIndex(
@@ -555,12 +555,16 @@ export function useMessageDiceRolls({
     ],
   );
 
-  // A failure belongs to the roll it came from. While a different prompt (an initiative roll, say)
-  // is open, that prompt must not show Retry for an earlier roll (#1288).
-  const rollError =
-    rollFailure && (!currentRoll || currentRoll.id === rollFailure.rollId)
-      ? rollFailure.message
-      : null;
+  // A different prompt (an initiative roll, say) replaces the failed roll, so the failure goes with
+  // it. Engine-owned prompts can be dismissed without touching this hook, so the clear lives here
+  // rather than in the cancel handler, and an old Retry cannot come back after them (#1288).
+  useEffect(() => {
+    if (!rollFailure || !currentRoll || currentRoll.id === rollFailure.rollId) return;
+    failedSubmissionRef.current = null;
+    setRollFailure(null);
+  }, [currentRoll, rollFailure]);
+
+  const rollError = rollFailure?.message ?? null;
 
   return {
     currentRoll,
