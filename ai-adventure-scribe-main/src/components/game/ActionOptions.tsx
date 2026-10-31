@@ -16,6 +16,11 @@ interface ActionOptionsProps {
   disabled?: boolean;
   className?: string;
   /**
+   * Replaces the default "submit it immediately" line. Free-text options fill
+   * the composer and wait for Send (#760). Combat chips keep the default.
+   */
+  instructions?: string;
+  /**
    * Explicit loading signal from the caller (#118). While true, an empty options
    * array means a refresh is in flight (e.g. the legal-action re-fetch between
    * combat turns): the last options stay on screen but disabled. When false, an
@@ -112,6 +117,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
     resetSelectionAfterCompletion = false,
     className = '',
     isLoading = false,
+    instructions,
   }) => {
     const [visible, setVisible] = useState(false);
     const [selectedOption, setSelectedOption] = useState<string | null>(null);
@@ -214,7 +220,8 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
           {visible && (
             <div className="space-y-3 animate-in fade-in-0 duration-500">
               <div id={instructionsId} className="text-xs text-muted-foreground text-center mb-3">
-                What would you like to do? Select an option to submit it immediately.
+                {instructions ??
+                  'What would you like to do? Select an option to submit it immediately.'}
               </div>
 
               <div

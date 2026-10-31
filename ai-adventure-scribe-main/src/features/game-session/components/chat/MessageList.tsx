@@ -168,7 +168,10 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
       [clearFailedSend, onRetryTurn, onSendFullMessage, sendMessage],
     );
 
-    // Handle option selection
+    // Free-text choices are staged in DynamicOptionsSection before this runs.
+    // This callback sends. Combat text fallbacks (a chip the engine does not
+    // run) use it too, the same way the action bar calls handleSendMessage,
+    // so they must not stop in the composer (#760).
     const handleOptionSelect = React.useCallback(
       async (optionText: string) => {
         logger.info('[MessageList] Handling option selection:', optionText);

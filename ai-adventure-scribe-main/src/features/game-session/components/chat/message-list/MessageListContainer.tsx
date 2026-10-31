@@ -325,6 +325,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
                       onRetryFailed={onRetryFailed}
                       encounterActive={combatState.isInCombat}
                       isLatestMessage={isLastMessage}
+                      rollTrayOpen={Boolean(currentRoll && rollRequest)}
                       optionsSuperseded={supersededByCombatEnd.has(message)}
                       characterName={group.messages[0].characterName}
                       previousEngineKey={previousEngineKeys.get(message)}

@@ -9,6 +9,7 @@ import { currentQueueRoll, queueRollLabel } from './queue-roll-label';
 import { RollTraySlotProvider } from './roll-tray-slot';
 import { TargetNumbersToggle } from './TargetNumbersToggle';
 import { ChatInput } from '../../chat/ChatInput';
+import { ComposerDraftProvider } from '../../chat/composer-draft';
 import { MessageList } from '../../chat/MessageList';
 import { requestMapMoveMode } from '../../tactical/map-move-mode';
 import { TacticalMapBoard } from '../../tactical/TacticalMapBoard';
@@ -551,164 +552,166 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                 onResumeTurn,
               }) => (
                 <RollTraySlotProvider value={rollTraySlot}>
-                  {/* min-h-24: the newest story line keeps a place above the tray. contain:size keeps the
+                  <ComposerDraftProvider>
+                    {/* min-h-24: the newest story line keeps a place above the tray. contain:size keeps the
                       story's length out of this column's minimum height. */}
-                  <div
-                    ref={storyBoxRef}
-                    data-testid="story-box"
-                    className="relative flex min-h-24 flex-1 flex-col overflow-hidden [contain:size]"
-                  >
-                    <CombatTurnBarLive
-                      turnInFlight={isProcessing}
-                      onOpenMap={showMapButton ? () => setMapSheetOpen(true) : undefined}
-                    />
-                    <MessageList
-                      onSendFullMessage={handleSendMessage}
-                      onRetryTurn={onRetry}
-                      // A waiting roll owns the wait (the tray shows it), so the
-                      // writing row stays away exactly like the old composer
-                      // line did when rollPillLabel was set.
-                      isDmWriting={(dmWaiting || queueStatus === 'processing') && !rollPillLabel}
-                      retryInFlight={retryInFlight}
-                      sessionId={sessionId}
-                      containerRef={chatScrollRef}
-                      suppressEmptyState={isGeneratingGreeting}
-                    />
-                    <TimelineRail rootRef={chatScrollRef} />
-                  </div>
-
-                  {/* Enhanced loading indicator for initial greeting */}
-                  {isGeneratingGreeting && (
                     <div
-                      className="absolute inset-0 bg-background/80 backdrop-blur-md flex items-center justify-center animate-in fade-in duration-300"
-                      style={{ zIndex: Z_INDEX.CARD_HOVER }}
+                      ref={storyBoxRef}
+                      data-testid="story-box"
+                      className="relative flex min-h-24 flex-1 flex-col overflow-hidden [contain:size]"
                     >
-                      <div className="bg-card border border-border/60 rounded-xl p-8 shadow-2xl max-w-md mx-4 transform animate-in slide-in-from-bottom-4 duration-500">
-                        <div className="flex flex-col items-center text-center space-y-6">
-                          {/* #88: one opening state — title, body, dots. The second
-                              spinner is gone; the stalled branch below stays (#865). */}
-                          <div className="space-y-3">
-                            <h3 className="font-heading text-xl text-infinite-gold">
-                              Your story is starting
-                            </h3>
-                            <p className="text-sm text-muted-foreground leading-relaxed">
-                              The Dungeon Master is writing the opening scene for{' '}
-                              {greetingCharacterName ?? 'your character'} in{' '}
-                              {greetingCampaignName ?? 'this campaign'}. This takes about ten
-                              seconds.
-                            </p>
-                          </div>
-                          {greetingTimedOut ? (
-                            <div className="space-y-3" role="status">
-                              <p className="text-sm text-muted-foreground leading-relaxed">
-                                This is taking longer than usual — the opening scene may have
-                                stalled.
-                              </p>
-                              {onRetryGreeting && (
-                                <Button onClick={onRetryGreeting}>Try again</Button>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-center gap-1">
-                              <div className="w-2 h-2 bg-infinite-gold rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                              <div className="w-2 h-2 bg-infinite-teal rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                              <div className="w-2 h-2 bg-infinite-gold rounded-full animate-bounce"></div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                      <CombatTurnBarLive
+                        turnInFlight={isProcessing}
+                        onOpenMap={showMapButton ? () => setMapSheetOpen(true) : undefined}
+                      />
+                      <MessageList
+                        onSendFullMessage={handleSendMessage}
+                        onRetryTurn={onRetry}
+                        // A waiting roll owns the wait (the tray shows it), so the
+                        // writing row stays away exactly like the old composer
+                        // line did when rollPillLabel was set.
+                        isDmWriting={(dmWaiting || queueStatus === 'processing') && !rollPillLabel}
+                        retryInFlight={retryInFlight}
+                        sessionId={sessionId}
+                        containerRef={chatScrollRef}
+                        suppressEmptyState={isGeneratingGreeting}
+                      />
+                      <TimelineRail rootRef={chatScrollRef} />
                     </div>
-                  )}
 
-                  {/* The dock: roll tray, roll status and chat box, in flow at the bottom. */}
-                  <div ref={dockRef} className="shrink-0">
-                    {/* The roll tray: the dice prompt is portaled in here (see roll-tray-slot). */}
-                    <div
-                      ref={setRollTraySlot}
-                      data-testid="roll-tray-slot"
-                      className="empty:hidden"
-                    />
-
-                    {/* One line, in flow, from the same queue roll that fills the tray, so it
-                      exists only while the tray does (#2234). */}
-                    {rollPillLabel && (
+                    {/* Enhanced loading indicator for initial greeting */}
+                    {isGeneratingGreeting && (
                       <div
-                        className="hidden border-t border-infinite-gold/20 bg-infinite-dark/60 px-3 py-1.5 sm:block"
-                        role="status"
-                        aria-live="polite"
+                        className="absolute inset-0 bg-background/80 backdrop-blur-md flex items-center justify-center animate-in fade-in duration-300"
+                        style={{ zIndex: Z_INDEX.CARD_HOVER }}
                       >
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-infinite-gold">
-                          <Dice6 className="h-4 w-4 shrink-0" aria-hidden="true" />
-                          <span className="font-semibold">Your roll: {rollPillLabel}</span>
-                          <span className="text-muted-foreground">{completionBanner}</span>
+                        <div className="bg-card border border-border/60 rounded-xl p-8 shadow-2xl max-w-md mx-4 transform animate-in slide-in-from-bottom-4 duration-500">
+                          <div className="flex flex-col items-center text-center space-y-6">
+                            {/* #88: one opening state — title, body, dots. The second
+                              spinner is gone; the stalled branch below stays (#865). */}
+                            <div className="space-y-3">
+                              <h3 className="font-heading text-xl text-infinite-gold">
+                                Your story is starting
+                              </h3>
+                              <p className="text-sm text-muted-foreground leading-relaxed">
+                                The Dungeon Master is writing the opening scene for{' '}
+                                {greetingCharacterName ?? 'your character'} in{' '}
+                                {greetingCampaignName ?? 'this campaign'}. This takes about ten
+                                seconds.
+                              </p>
+                            </div>
+                            {greetingTimedOut ? (
+                              <div className="space-y-3" role="status">
+                                <p className="text-sm text-muted-foreground leading-relaxed">
+                                  This is taking longer than usual — the opening scene may have
+                                  stalled.
+                                </p>
+                                {onRetryGreeting && (
+                                  <Button onClick={onRetryGreeting}>Try again</Button>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-center gap-1">
+                                <div className="w-2 h-2 bg-infinite-gold rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                                <div className="w-2 h-2 bg-infinite-teal rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                                <div className="w-2 h-2 bg-infinite-gold rounded-full animate-bounce"></div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     )}
 
-                    {/* Input Area at bottom. In flow, not sticky: a sticky chat box sat on top of the
+                    {/* The dock: roll tray, roll status and chat box, in flow at the bottom. */}
+                    <div ref={dockRef} className="shrink-0">
+                      {/* The roll tray: the dice prompt is portaled in here (see roll-tray-slot). */}
+                      <div
+                        ref={setRollTraySlot}
+                        data-testid="roll-tray-slot"
+                        className="empty:hidden"
+                      />
+
+                      {/* One line, in flow, from the same queue roll that fills the tray, so it
+                      exists only while the tray does (#2234). */}
+                      {rollPillLabel && (
+                        <div
+                          className="hidden border-t border-infinite-gold/20 bg-infinite-dark/60 px-3 py-1.5 sm:block"
+                          role="status"
+                          aria-live="polite"
+                        >
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-infinite-gold">
+                            <Dice6 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            <span className="font-semibold">Your roll: {rollPillLabel}</span>
+                            <span className="text-muted-foreground">{completionBanner}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Input Area at bottom. In flow, not sticky: a sticky chat box sat on top of the
                       tray's buttons whenever the column ran out of room. #2517: when the character
                       has fallen this whole column is replaced by the end state above, so the
                       composer is never left live under a death screen. */}
-                    <div
-                      className="relative border-t border-border/60 bg-card/70 backdrop-blur-sm pb-4 md:pb-[env(safe-area-inset-bottom)]"
-                      style={{ zIndex: Z_INDEX.STICKY }}
-                    >
-                      <DyingComposerSlot
-                        onSendMessage={handleSendMessage}
-                        isProcessing={isProcessing}
-                        promptOpen={rollBlocksInput}
+                      <div
+                        className="relative border-t border-border/60 bg-card/70 backdrop-blur-sm pb-4 md:pb-[env(safe-area-inset-bottom)]"
+                        style={{ zIndex: Z_INDEX.STICKY }}
                       >
-                        {/* #90: the one place to act in combat. A pending roll owns the turn
-                            (the tray shows it), so the bar waits for it. */}
-                        {!rollBlocksInput && (
-                          <CombatActionBarLive
-                            turnInFlight={isProcessing}
-                            onSendMessage={sendMessage}
-                            onSendText={(text) => handleSendMessage(text)}
-                            onMove={openMapInMoveMode}
-                          />
-                        )}
-                        <TurnStatusLine
-                          rollPillLabel={rollPillLabel}
-                          isCombatDetected={isCombatDetected}
-                          preflight={combatTurnUiState.preflight}
-                          error={combatTurnUiState.error}
-                          dmWaiting={dmWaiting}
-                          queueProcessing={queueStatus === 'processing'}
-                          onResumeTurn={onResumeTurn}
-                        />
-                        <ChatInput
+                        <DyingComposerSlot
                           onSendMessage={handleSendMessage}
-                          isReconnecting={isReconnecting}
-                          isStillThinking={isStillThinking}
-                          attackWaitLabel={rollBlocksInput ? null : attackWaitLabel}
-                          sendError={sendError ?? undefined}
-                          onRetry={onRetry}
-                          retryInFlight={retryInFlight}
-                          placeholder={combatChatPlaceholder}
-                          disabledReason={
-                            isGeneratingGreeting
-                              ? 'You can type once the scene appears'
-                              : rollBlocksInput && !isProcessing
-                                ? 'Tap the Roll d20 above to continue'
-                                : undefined
-                          }
-                          isDisabled={
-                            isGeneratingGreeting ||
-                            isProcessing ||
-                            rollBlocksInput ||
-                            // 'running' is the turn lock, in and out of combat. 'unknown'/'failed'
-                            // are combat-turn recovery states: out of combat they must not wedge
-                            // the composer with no banner and no Resume button (#219).
-                            combatTurnUiState.preflight === 'running' ||
-                            (isCombatDetected &&
-                              (combatTurnUiState.preflight === 'unknown' ||
-                                combatTurnUiState.preflight === 'failed'))
-                          }
-                        />
-                      </DyingComposerSlot>
+                          isProcessing={isProcessing}
+                          promptOpen={rollBlocksInput}
+                        >
+                          {/* #90: the one place to act in combat. A pending roll owns the turn
+                            (the tray shows it), so the bar waits for it. */}
+                          {!rollBlocksInput && (
+                            <CombatActionBarLive
+                              turnInFlight={isProcessing}
+                              onSendMessage={sendMessage}
+                              onSendText={(text) => handleSendMessage(text)}
+                              onMove={openMapInMoveMode}
+                            />
+                          )}
+                          <TurnStatusLine
+                            rollPillLabel={rollPillLabel}
+                            isCombatDetected={isCombatDetected}
+                            preflight={combatTurnUiState.preflight}
+                            error={combatTurnUiState.error}
+                            dmWaiting={dmWaiting}
+                            queueProcessing={queueStatus === 'processing'}
+                            onResumeTurn={onResumeTurn}
+                          />
+                          <ChatInput
+                            onSendMessage={handleSendMessage}
+                            isReconnecting={isReconnecting}
+                            isStillThinking={isStillThinking}
+                            attackWaitLabel={rollBlocksInput ? null : attackWaitLabel}
+                            sendError={sendError ?? undefined}
+                            onRetry={onRetry}
+                            retryInFlight={retryInFlight}
+                            placeholder={combatChatPlaceholder}
+                            disabledReason={
+                              isGeneratingGreeting
+                                ? 'You can type once the scene appears'
+                                : rollBlocksInput && !isProcessing
+                                  ? 'Tap the Roll d20 above to continue'
+                                  : undefined
+                            }
+                            isDisabled={
+                              isGeneratingGreeting ||
+                              isProcessing ||
+                              rollBlocksInput ||
+                              // 'running' is the turn lock, in and out of combat. 'unknown'/'failed'
+                              // are combat-turn recovery states: out of combat they must not wedge
+                              // the composer with no banner and no Resume button (#219).
+                              combatTurnUiState.preflight === 'running' ||
+                              (isCombatDetected &&
+                                (combatTurnUiState.preflight === 'unknown' ||
+                                  combatTurnUiState.preflight === 'failed'))
+                            }
+                          />
+                        </DyingComposerSlot>
+                      </div>
                     </div>
-                  </div>
+                  </ComposerDraftProvider>
                 </RollTraySlotProvider>
               )}
             </MessageHandler>
