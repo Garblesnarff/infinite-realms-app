@@ -228,8 +228,6 @@ describeWithDb('DM reply: server provisional row + client save = one row (#2218)
       [{ id: playerId, sessionId, speakerType: 'player', message: 'I look down the stairwell.' }],
       userId,
     );
-    const _generatedAt = new Date(Date.now() - 1000);
-
     const result = await persistGeneratedDmReply({
       userId,
       sessionId,
