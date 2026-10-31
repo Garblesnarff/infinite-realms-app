@@ -874,4 +874,123 @@ describeWithDb('resolved narrative roll identity through real routes and Postgre
       auth.mockRestore();
     }
   });
+  test('a read-back after a lost write race 409s on input mismatch (#1270)', async () => {
+    const auth = spyOn(authModule, 'authenticateRequest').mockResolvedValue({
+      user: { userId, email: 'roll@example.test', plan: 'free' },
+      error: null,
+    } as never);
+    let calls = 0;
+    let started!: () => void;
+    const generating = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    let finish!: () => void;
+    const held = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const model = spyOn(LLMProviderService, 'generate').mockImplementation(async () => {
+      calls += 1;
+      const thisCall = calls;
+      if (thisCall === 1) {
+        started();
+        await held;
+      }
+      return {
+        text: JSON.stringify({
+          text:
+            thisCall === 1
+              ? 'The loser body must never serve.'
+              : 'The winner body stays canonical.',
+          options: [],
+          roll_requests: [],
+          combat_transition: 'none',
+          combatants: [],
+          combat_actions: [],
+        }),
+        provider: 'openrouter',
+        model: 't/m',
+      } as never;
+    });
+    try {
+      const app = createRequestPipelineApp().use(sessionMessageRoutes).use(llmRoutes);
+      const playerContext = {
+        location: null,
+        emotion: null,
+        intent: 'response',
+        handouts: null,
+        combat_transition: 'none',
+        scene_spec: false,
+        combat_engine_blocks: null,
+        combat_ended: false,
+        narration_segments: null,
+      };
+      const firstInput = 'I inspect the practice room.';
+      const saved = await app.handle(
+        post(`/v1/sessions/${sessionId}/messages`, {
+          id: crypto.randomUUID(),
+          timestamp: '2026-01-01T00:00:00.000Z',
+          message: firstInput,
+          speaker_type: 'player',
+          context: playerContext,
+        }),
+      );
+      expect(saved.status).toBe(200);
+      const replyId = crypto.randomUUID();
+      const request = (playerInput: string) => ({
+        prompt: 'Continue.',
+        sessionId,
+        player_input: playerInput,
+        dmReply: { messageId: replyId, inCombat: false, narrationGated: false },
+      });
+      // The loser starts first with a different input: its lookup misses (no
+      // entry yet) and its generate blocks, so the lookup 409 cannot fire.
+      // Plain turns hold no row lock during generate, so the winner can run
+      // while the loser is still generating. The loser is inCombat, so its
+      // provisional persist is skipped: had it persisted, the #2218
+      // reconcile would replace the provisional row wholesale and drop the
+      // winner's entry before the read-back (the documented best-effort
+      // case, not this gap). With the persist skipped, the loser's cache
+      // write genuinely loses and its read-back sees the winner's entry.
+      const secondInput = 'I open the drawer.';
+      const loser = app.handle(
+        post('/v1/llm/generate', {
+          prompt: 'Continue.',
+          sessionId,
+          player_input: secondInput,
+          dmReply: { messageId: replyId, inCombat: true, narrationGated: false },
+        }),
+      );
+      await generating;
+      // The winner completes while the loser is still generating: its write
+      // lands first, so the loser's write loses and its read-back sees the
+      // winner's entry.
+      const winner = await app.handle(post('/v1/llm/generate', request(firstInput)));
+      expect(winner.status).toBe(200);
+      const winnerBody = await winner.json();
+      expect(winnerBody.dmReplyMessageId).toBe(replyId);
+      finish();
+      const loserRes = await loser;
+      expect(loserRes.status).toBe(409);
+      expect(JSON.stringify(await loserRes.json())).toContain('already used for a different turn');
+      // Both generated, so the 409 came from the read-back, not the lookup.
+      expect(model).toHaveBeenCalledTimes(2);
+      // The 409 poisons nothing: the winner's body is still the cached body,
+      // and the winner's input still replays it.
+      const [dmRow] = await database
+        .select()
+        .from(dialogueHistory)
+        .where(eq(dialogueHistory.id, replyId));
+      const cached = (dmRow.context as Record<string, unknown> | null)?.cachedTurnResponse as
+        Record<string, unknown> | undefined;
+      expect(cached?.text).toBe(winnerBody.text);
+      const replay = await app.handle(post('/v1/llm/generate', request(firstInput)));
+      expect(replay.status).toBe(200);
+      expect(await replay.json()).toEqual(winnerBody);
+      expect(model).toHaveBeenCalledTimes(2);
+    } finally {
+      finish();
+      model.mockRestore();
+      auth.mockRestore();
+    }
+  }, 30_000);
 });
