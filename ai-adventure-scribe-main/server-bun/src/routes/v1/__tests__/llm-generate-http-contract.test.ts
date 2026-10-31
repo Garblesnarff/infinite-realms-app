@@ -803,3 +803,20 @@ describe('POST /v1/llm/generate HTTP contract', () => {
     });
   });
 });
+
+describe('player_input length cap (#1307)', () => {
+  it('refuses a player_input one character over the shared cap', async () => {
+    const response = await postLlm('generate', clientBody({ player_input: 'a'.repeat(20_001) }));
+
+    expect(response.status).toBe(422);
+  });
+
+  it('accepts a player_input exactly at the shared cap', async () => {
+    // 200 is the acceptance proof: the handler consumes player_input for
+    // persistence and prompt assembly rather than forwarding it as a provider
+    // input field, so there is no passthrough field to assert on.
+    const response = await postLlm('generate', clientBody({ player_input: 'a'.repeat(20_000) }));
+
+    expect(response.status).toBe(200);
+  });
+});

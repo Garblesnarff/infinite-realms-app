@@ -83,6 +83,15 @@ mock.module('../../../services/character-service.js', () => ({
   },
 }));
 
+// Mock CharacterVitalsService (#1307): the route dynamically imports it for the
+// terminal-state check on player messages, so an at-cap write needs a deterministic
+// answer here instead of a real vitals lookup. The handler only reads vitalState.
+mock.module('../../../services/character-vitals-service.js', () => ({
+  CharacterVitalsService: {
+    getVitals: async () => ({ vitalState: 'alive' }),
+  },
+}));
+
 const { sessionMessageRoutes } = await import('../session-messages.js');
 
 const app = new Elysia().use(sessionMessageRoutes);
@@ -131,6 +140,69 @@ describe('v1 session message routes API boundaries', () => {
           'content-type': 'application/json',
         },
         body: JSON.stringify({ speaker_type: 'npc', message: 'should be rejected' }),
+      }),
+    );
+
+    expect(response.status).toBe(422);
+  });
+
+  it('rejects a player message one character over the shared cap (#1307)', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/v1/sessions/valid-session-id/messages', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer valid-user-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ speaker_type: 'player', message: 'a'.repeat(20_001) }),
+      }),
+    );
+
+    expect(response.status).toBe(422);
+  });
+
+  it('accepts a player message exactly at the shared cap (#1307)', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/v1/sessions/valid-session-id/messages', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer valid-user-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ speaker_type: 'player', message: 'a'.repeat(20_000) }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  it('accepts a DM message above the player cap (#1307)', async () => {
+    // The player cap is player-turn text only: DM narration flows through
+    // this same route (message queue, headless client) and keeps the prior
+    // bound, so a long DM save must not 422.
+    const response = await app.handle(
+      new Request('http://localhost/v1/sessions/valid-session-id/messages', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer valid-user-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ speaker_type: 'dm', message: 'a'.repeat(50_000) }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  it('refuses a DM message over the prior bound (#1307)', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/v1/sessions/valid-session-id/messages', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer valid-user-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ speaker_type: 'dm', message: 'a'.repeat(100_001) }),
       }),
     );
 

@@ -19,6 +19,7 @@ import {
   describeDeathSave,
   describeDeathSaveRollLine,
 } from '../../../../shared/death-save-lines.js';
+import { PLAYER_INPUT_MAX_CHARS } from '../../../../shared/player-input-cap.js';
 import { authenticateRequest, type AuthUser } from '../../lib/auth.js';
 import { logger } from '../../lib/logger.js';
 import { isAdmin } from '../../middleware/admin.js';
@@ -2287,7 +2288,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // Optional — older clients never send it, and their facts simply live
         // out the delivery TTL instead of being confirmed.
         tacticalDeliveryToken: t.Optional(t.String({ maxLength: 255 })),
-        player_input: t.Optional(t.String({ maxLength: 20_000 })),
+        player_input: t.Optional(t.String({ maxLength: PLAYER_INPUT_MAX_CHARS })),
         // #2218: the id the client reserved for this turn's DM row. Present only on the main DM
         // turn; the server persists the reply under it when the turn is display-ready.
         dmReply: t.Optional(
