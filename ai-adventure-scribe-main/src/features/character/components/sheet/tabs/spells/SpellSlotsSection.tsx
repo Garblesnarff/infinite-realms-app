@@ -12,6 +12,8 @@ interface SpellSlotsSectionProps {
   resting: boolean;
   /** Long-rest failure message, shown inline so the tabs stay mounted. */
   restError: string | null;
+  /** #761: the single-class Warlock pact slot level, when the character has pact slots. */
+  pactSlotLevel?: number | null;
 }
 
 const SpellSlotsSection: React.FC<SpellSlotsSectionProps> = ({
@@ -19,6 +21,7 @@ const SpellSlotsSection: React.FC<SpellSlotsSectionProps> = ({
   longRest,
   resting,
   restError,
+  pactSlotLevel = null,
 }) => {
   return (
     <Card>
@@ -55,6 +58,11 @@ const SpellSlotsSection: React.FC<SpellSlotsSectionProps> = ({
             <div key={level} className="flex items-center gap-4">
               <div className="w-16 text-sm font-medium">Level {level}</div>
               <div className="flex-1">
+                {pactSlotLevel !== null && Number(level) === pactSlotLevel && (
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Pact Magic — recovers on a Short Rest
+                  </p>
+                )}
                 <div className="flex gap-1 mb-1">
                   {Array.from({ length: slots.total }).map((_, i) => {
                     const isUsed = i < slots.used;

@@ -1,6 +1,7 @@
 import { Wand2, Circle, Book, Loader2 } from 'lucide-react';
 import React from 'react';
 
+
 import SpellListItem from './components/SpellListItem';
 import SpellcastingOverview from './spells/SpellcastingOverview';
 import SpellSlotsSection from './spells/SpellSlotsSection';
@@ -13,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { getPactMagicProgression, hasPactMagic } from '@/data/spellcastingFeatures';
 
 interface SpellsTabProps {
   character: Character;
@@ -23,6 +25,11 @@ interface SpellsTabProps {
  * Spells tab with spell slot tracking and spell management
  */
 const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate }) => {
+  // #761: a single-class Warlock's slots are pact slots (the server's pact rows).
+  const pactSlotLevel =
+    hasPactMagic(character.class?.id ?? '') && (character.classLevels?.length ?? 0) <= 1
+      ? (getPactMagicProgression(character.level ?? 1)?.pactSlotLevel ?? null)
+      : null;
   const {
     loading,
     error,
@@ -171,6 +178,7 @@ const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate }) => {
                 longRest={longRest}
                 resting={resting}
                 restError={restError}
+                pactSlotLevel={pactSlotLevel}
               />
             </TabsContent>
           </div>
