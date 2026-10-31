@@ -20,6 +20,25 @@ const cantrip = {
   expectedVersion: 4,
 };
 
+describe('playerInput length (#749)', () => {
+  const endTurn = {
+    source: 'player' as const,
+    intent: { type: 'end_turn' as const, actorId: 'player-1' },
+  };
+
+  it('accepts 20000 characters', () => {
+    expect(
+      combatIntentRequestValidator.Check({ ...endTurn, playerInput: 'a'.repeat(20_000) }),
+    ).toBe(true);
+  });
+
+  it('rejects 20001 characters', () => {
+    expect(
+      combatIntentRequestValidator.Check({ ...endTurn, playerInput: 'a'.repeat(20_001) }),
+    ).toBe(false);
+  });
+});
+
 describe('combat spell intent schema', () => {
   it.each([
     ['explicit null', { slotLevel: null }],

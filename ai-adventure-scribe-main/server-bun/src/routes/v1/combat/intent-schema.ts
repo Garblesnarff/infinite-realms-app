@@ -190,9 +190,10 @@ const originField = t.Optional(t.Union(COMBAT_ACTION_ORIGINS.map((origin) => t.L
 /**
  * The player's own words for this turn (#749). Optional and additive: an inline action bar carries
  * none, and an older client that predates the field is unaffected. The server reads it to let a
- * DM-declared player exit stand only when the player's text asked for one.
+ * DM-declared player exit stand only when the player's text asked for one. The cap matches a typed
+ * turn (20_000), so a long move is not cut here.
  */
-const playerInputField = t.Optional(t.String({ maxLength: 4000 }));
+const playerInputField = t.Optional(t.String({ maxLength: 20_000 }));
 
 /** The contract. Which dialect applies is decided by `source`, and by nothing else. */
 const combatIntentRequestSchema = t.Union([
