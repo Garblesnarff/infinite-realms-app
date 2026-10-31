@@ -607,6 +607,43 @@ describeWithDb('limited class features are counted, never unlimited (#1225)', ()
     );
   });
 
+  test('two concurrent spends of one tracked use accept exactly one', async () => {
+    const [row] = await db
+      .insert(classFeaturesLibrary)
+      .values({
+        className: 'Barbarian',
+        featureName: testId('Concurrent Use'),
+        levelAcquired: 1,
+        description: 'Tracked test feature',
+        usageType: 'limited_use',
+        usesPerRest: 'short_rest',
+        usesCount: 1,
+      } as typeof classFeaturesLibrary.$inferInsert)
+      .returning({ id: classFeaturesLibrary.id });
+    insertedLibraryIds.push(row.id);
+    await db
+      .insert(characterFeatures)
+      .values({
+        characterId: barbarianId,
+        featureId: row.id,
+        usesRemaining: 1,
+        isActive: true,
+        acquiredAtLevel: 1,
+      });
+    const results = await Promise.all([use(barbarianId, row.id), use(barbarianId, row.id)]);
+    expect(results.map((result) => result.status).sort()).toEqual([200, 400]);
+    const [pool] = await db
+      .select({ usesRemaining: characterFeatures.usesRemaining })
+      .from(characterFeatures)
+      .where(
+        and(
+          eq(characterFeatures.characterId, barbarianId),
+          eq(characterFeatures.featureId, row.id),
+        ),
+      );
+    expect(pool.usesRemaining).toBe(0);
+  });
+
   test('Arcane Recovery comes back on a long rest even when its row is tagged short_rest', async () => {
     // The generated seed's row shape (20261009...sql:535): short_rest, count 1. In a database
     // where the legacy long_rest row won the dedupe, the real grant holds that one, so this test
