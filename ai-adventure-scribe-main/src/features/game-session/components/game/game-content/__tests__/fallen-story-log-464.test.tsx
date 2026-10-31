@@ -1,6 +1,11 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { buildNpcEngineMessage } from '../../../../../../../shared/npc-engine-message';
+import { FallenStoryLog } from '../DeathScreen';
+
+import type { ChatMessage } from '@/types/game';
+
 const { DM_TEXT, state } = vi.hoisted(() => {
   const DM_TEXT = [
     'The torchlight catches on [ASSET:npc:professor-vale] Professor Vale\'s spectacles. She says, "**Mind the gap** on the eastern stair." The cold air smells faintly of *ozone.',
@@ -15,14 +20,26 @@ const { DM_TEXT, state } = vi.hoisted(() => {
     '',
     '⚙️ Engine: The Storyteller rolled 15 + 2 = 17 vs DC 14 — SUCCESS.',
   ].join('\n');
-  const state: { messages: Array<{ id: string; sender: string; text: string }> } = {
+  const state: {
+    messages: ChatMessage[];
+    historyReady: boolean;
+    hasMore: boolean;
+    isLoading: boolean;
+    isFetchingMore: boolean;
+    loadMore: ReturnType<typeof vi.fn>;
+  } = {
     messages: [{ id: 'm1', sender: 'dm', text: DM_TEXT }],
+    historyReady: true,
+    hasMore: false,
+    isLoading: false,
+    isFetchingMore: false,
+    loadMore: vi.fn(),
   };
   return { DM_TEXT, state };
 });
 
 vi.mock('@/contexts/MessageContext', () => ({
-  useMessageContext: () => ({ messages: state.messages }),
+  useMessageContext: () => state,
 }));
 vi.mock('@/contexts/CampaignAssetsContext', () => ({
   useCampaignAssetsContext: () => ({ getAsset: vi.fn(), assets: [] }),
@@ -37,9 +54,8 @@ vi.mock('@/features/game-session/components/chat/message-list/MessageVoicePlayer
   MessageVoicePlayer: () => null,
 }));
 
-import { FallenStoryLog } from '../DeathScreen';
-
 import { DMMessage } from '@/features/game-session/components/chat/message-list/DMMessage';
+import { formatDiceRoll } from '@/features/game-session/components/chat/message-list/utils/dice-roll-formatter';
 
 const renderChatNarrative = (): string => {
   const { container } = render(
@@ -159,6 +175,92 @@ describe('FallenStoryLog (#464)', () => {
     expect(log).not.toHaveTextContent('party_defeated');
     expect(log).not.toHaveTextContent('I encountered an issue');
     expect(log).not.toHaveTextContent(/System|Dungeon Master|You/);
+    state.messages = [{ id: 'm1', sender: 'dm', text: DM_TEXT }];
+  });
+
+  it('omits dice results and includes combat rounds through the fatal result', () => {
+    const participants = [
+      { id: 'hero', name: 'The Apprentice', participantType: 'player', maxHp: 7 },
+      { id: 'spider', name: 'Spider', participantType: 'monster', maxHp: 10 },
+    ];
+    const attack = (round: number, hp: number, dead: boolean) =>
+      buildNpcEngineMessage(
+        participants,
+        round,
+        { type: 'attack', actorId: 'spider', targetId: 'hero' },
+        {
+          d20: 12,
+          attackBonus: 5,
+          totalAttackRoll: 17,
+          targetAC: 11,
+          hit: true,
+          finalDamage: 3,
+          damageType: 'piercing',
+          targetNewHp: hp,
+          targetIsConscious: false,
+          targetIsDead: dead,
+        },
+      );
+    const first = attack(1, 0, false);
+    const fatal = attack(3, 0, true);
+    state.messages = [
+      { id: 'd1', sender: 'dm', text: 'The spider emerges.' },
+      { id: 'p1', sender: 'player', text: 'I study the bisque.' },
+      {
+        id: 'r1',
+        sender: 'player',
+        text: formatDiceRoll({
+          id: 'r1',
+          requestType: 'skill_check',
+          description: 'Investigation check to study the bisque',
+          rollConfig: { dieType: 20, count: 1, modifier: 5 },
+          timestamp: new Date(0),
+          status: 'completed',
+          result: {
+            dieType: 20,
+            count: 1,
+            modifier: 5,
+            total: 17,
+            naturalRoll: 12,
+            results: [12],
+            keptResults: [12],
+          },
+          dc: 15,
+        }),
+        context: { intent: 'dice_roll' },
+      },
+      {
+        id: 'e1',
+        sender: 'system',
+        text: first.text,
+        context: { intent: 'combat_pending_intent', engineCards: first.context.engineCards },
+      },
+      { id: 'd2', sender: 'dm', text: 'Death saving throw.' },
+      { id: 'e2', sender: 'system', ...fatal },
+    ];
+    render(<FallenStoryLog />);
+    const log = screen.getByTestId('death-screen-story-log');
+    expect(log).toHaveTextContent('I study the bisque.');
+    expect(log).not.toHaveTextContent('nat 12+5');
+    expect(log).toHaveTextContent('Spider attacks The Apprentice');
+    expect(log).toHaveTextContent('The Apprentice is dead.');
+    expect(log).not.toHaveTextContent('Engine:');
+    state.messages = [{ id: 'm1', sender: 'dm', text: DM_TEXT }];
+  });
+
+  it('loads the remaining history pages while the story is open', () => {
+    state.loadMore.mockClear();
+    state.hasMore = true;
+    state.messages = [{ id: 'new', sender: 'dm', text: 'The final round.' }];
+    const { rerender } = render(<FallenStoryLog />);
+    expect(state.loadMore).toHaveBeenCalledTimes(1);
+    state.messages = [{ id: 'old', sender: 'dm', text: 'The beginning.' }, ...state.messages];
+    rerender(<FallenStoryLog />);
+    expect(state.loadMore).toHaveBeenCalledTimes(2);
+    state.hasMore = false;
+    rerender(<FallenStoryLog />);
+    expect(screen.getByTestId('death-screen-story-log')).toHaveTextContent('The beginning.');
+    expect(screen.getByTestId('death-screen-story-log')).toHaveTextContent('The final round.');
     state.messages = [{ id: 'm1', sender: 'dm', text: DM_TEXT }];
   });
 });

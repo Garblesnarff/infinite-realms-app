@@ -46,7 +46,9 @@ interface MessageContextType {
   messages: ChatMessage[];
   isLoading: boolean;
   messagesReady: boolean;
+  historyReady: boolean;
   isFetchingMore: boolean;
+  messagesError: Error | null;
   hasMore: boolean;
   loadMore: () => void;
   sendMessage: (message: ChatMessage) => Promise<void>;
@@ -74,8 +76,10 @@ export const MessageProvider: React.FC<{
   const {
     data: messages = [],
     messagesReady,
+    historyReady,
     isLoading,
     isFetching,
+    error: messagesError,
     hasMore,
     loadMore,
   } = useMessages(sessionId, {
@@ -112,7 +116,9 @@ export const MessageProvider: React.FC<{
       messages,
       isLoading,
       messagesReady,
+      historyReady,
       isFetchingMore: isFetching && !isLoading,
+      messagesError,
       hasMore,
       loadMore,
       sendMessage,
@@ -126,7 +132,9 @@ export const MessageProvider: React.FC<{
       messages,
       isLoading,
       messagesReady,
+      historyReady,
       isFetching,
+      messagesError,
       hasMore,
       loadMore,
       sendMessage,
