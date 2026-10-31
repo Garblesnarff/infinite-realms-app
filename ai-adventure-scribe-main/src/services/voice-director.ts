@@ -16,7 +16,7 @@
 import { VoiceAudioService } from './voice/voice-audio-service';
 import { getVoiceCategoryKey } from './voice/voice-classification';
 import { VoiceConsistencyRepository } from './voice/voice-consistency-repository';
-import { VoiceDialogueParser } from './voice/voice-dialogue-parser';
+import { type UnnamedSpeakerCount, VoiceDialogueParser } from './voice/voice-dialogue-parser';
 import { type VoicePool } from './voice/voice-pools';
 import { cleanSegmentText } from './voice/voice-utils';
 import {
@@ -36,6 +36,9 @@ import { stripEngineGeneratedLinesFromSegments } from '@/utils/engine-lines';
 export type { VoiceSegment, VoicePool, VoiceConfig, AISegment };
 
 export class VoiceDirector {
+  /** One unnamed-speaker count per session. Passed into the parser so numbering survives the next narration (#815). */
+  private static readonly unnamedSpeakersBySession = new Map<string, UnnamedSpeakerCount>();
+
   static async castAISegments(segments: AISegment[], sessionId: string): Promise<AISegment[]> {
     const cast = await VoiceConsistencyRepository.castSegments(sessionId, segments);
     return cast
@@ -112,8 +115,14 @@ export class VoiceDirector {
    * Enhanced: Process plain text by detecting dialogue and attributing voices
    * Parses quoted speech with attribution to assign character voices
    */
-  static processPlainText(text: string): VoiceSegment[] {
-    return VoiceDialogueParser.processPlainText(text);
+  static processPlainText(text: string, sessionId?: string): VoiceSegment[] {
+    if (!sessionId) return VoiceDialogueParser.processPlainText(text);
+    let count = VoiceDirector.unnamedSpeakersBySession.get(sessionId);
+    if (!count) {
+      count = { next: 0 };
+      VoiceDirector.unnamedSpeakersBySession.set(sessionId, count);
+    }
+    return VoiceDialogueParser.processPlainText(text, count);
   }
 
   /**

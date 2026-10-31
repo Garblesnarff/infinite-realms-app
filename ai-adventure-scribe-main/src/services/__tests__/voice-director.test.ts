@@ -219,6 +219,17 @@ describe('VoiceDirector', () => {
       const result = VoiceDirector.processPlainText(text);
       expect(result[0].character).toBe('orc');
     });
+
+    it('keeps one unnamed-speaker count for a session across calls', () => {
+      const sessionId = 'session-unnamed-815';
+      const first = VoiceDirector.processPlainText('"Where is the key?"', sessionId);
+      const second = VoiceDirector.processPlainText('"I have it."', sessionId);
+      const other = VoiceDirector.processPlainText('"Who goes there?"', 'session-other-815');
+
+      expect(first[0].character).toBe('Stranger 1');
+      expect(second[0].character).toBe('Stranger 2');
+      expect(other[0].character).toBe('Stranger 1');
+    });
   });
 
   describe('delegated methods', () => {
