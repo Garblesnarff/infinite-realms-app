@@ -87,14 +87,19 @@ export const LEGAL_ACTION_PLACEMENT = {
 /** Why a sheet spell is greyed in the Cast menu (#1171). */
 export const NARRATED_CAST_REASON =
   'Describe it to the DM: the engine resolves attack and damage spells';
+export const ENGINE_ONLY_ACTION_REASON = 'Reload to use this';
 
 const isMoreAction = (action: LegalAction): boolean => {
   const placement = (LEGAL_ACTION_PLACEMENT as Partial<Record<LegalAction['type'], string>>)[
     action.type
   ];
-  // Unknown types (not a key of LEGAL_ACTION_PLACEMENT) fall through to More by their label.
+  // Unknown types are retained in More so an old tab can explain how to recover without
+  // accidentally sending an engine-only action label as chat text.
   return placement === 'more' || placement === undefined;
 };
+
+const isEngineOnlyAction = (action: LegalAction): boolean =>
+  !Object.prototype.hasOwnProperty.call(LEGAL_ACTION_PLACEMENT, action.type);
 
 const buttonBase =
   'inline-flex min-h-11 items-center gap-2 rounded-lg border border-[color:var(--ir-control-border)] bg-white/[0.03] px-3.5 text-sm font-semibold max-[699px]:flex-1 max-[699px]:basis-[calc(33%-8px)] max-[699px]:justify-center';
@@ -257,7 +262,9 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
             {more.map((action, index) => (
               <DropdownMenuItem
                 key={`${action.type}-${index}`}
+                disabled={isEngineOnlyAction(action)}
                 onSelect={() => {
+                  if (isEngineOnlyAction(action)) return;
                   if (action.type === 'flee' && fleeProvokerOf(action.label)) {
                     setPendingFlee(action);
                   } else {
@@ -265,7 +272,7 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
                   }
                 }}
               >
-                {action.label}
+                {isEngineOnlyAction(action) ? ENGINE_ONLY_ACTION_REASON : action.label}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>

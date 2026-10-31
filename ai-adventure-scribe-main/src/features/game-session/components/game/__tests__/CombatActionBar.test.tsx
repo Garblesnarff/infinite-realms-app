@@ -361,7 +361,7 @@ describe('CombatActionBar', () => {
     );
   });
 
-  it('More menu: unknown action type renders by its label', async () => {
+  it('More menu: unknown engine action asks an old tab to reload without sending chat', async () => {
     const unknownAction = { type: 'teleport', label: 'Teleport' } as unknown as LegalAction;
     const onAction = vi.fn();
     render(
@@ -374,10 +374,11 @@ describe('CombatActionBar', () => {
     const toolbar = screen.getByRole('toolbar', { name: 'Your actions' });
     const user = userEvent.setup();
     await user.click(within(toolbar).getByRole('button', { name: /^More/ }));
-    const item = await screen.findByRole('menuitem', { name: 'Teleport' });
-    expect(item).toHaveTextContent('Teleport');
+    const item = await screen.findByRole('menuitem', { name: 'Reload to use this' });
+    expect(item).toHaveTextContent('Reload to use this');
+    expect(item).toHaveAttribute('aria-disabled', 'true');
     await user.click(item);
-    expect(onAction).toHaveBeenCalledWith(unknownAction);
+    expect(onAction).not.toHaveBeenCalled();
   });
 
   describe('legal-action coverage (#1143)', () => {

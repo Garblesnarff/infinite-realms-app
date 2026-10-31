@@ -13,6 +13,9 @@ const player = {
   bonusActionUsed: false,
   armorClass: 18,
   characterId: 'character-1',
+  characterClass: 'Paladin',
+  characterLevel: 6,
+  characterClassLevels: [{ className: 'Paladin', level: 6 }],
   encounterId: 'encounter-1',
   // `combat_participants.max_hp` is not null and every hydrated participant carries its status
   // row (`getCombatState` joins it); the dying-player branch of `getLegalCombatActions` reads
@@ -209,6 +212,7 @@ let featureUses: { secondWind: number | null; actionSurge: number | null } = {
   secondWind: null,
   actionSurge: null,
 };
+let divineSenseRemaining: number | null = 1;
 mock.module('../fighter-features-service.js', () => ({
   fighterFeatureUses: async () => featureUses,
   resolveSecondWind: async () => {
@@ -217,6 +221,24 @@ mock.module('../fighter-features-service.js', () => ({
   resolveActionSurge: async () => {
     throw new Error('resolveActionSurge is not under test in this suite');
   },
+}));
+mock.module('../../progression/paladin-features-service.js', () => ({
+  paladinLevelOf: (character: {
+    class: string | null;
+    level: number | null;
+    classLevels: unknown;
+  }) => {
+    const levels = Array.isArray(character.classLevels) ? character.classLevels : [];
+    return levels.reduce((total, entry) => {
+      if (!entry || typeof entry !== 'object') return total;
+      const item = entry as { className?: unknown; level?: unknown };
+      return typeof item.className === 'string' && item.className.toLowerCase() === 'paladin'
+        ? total + (typeof item.level === 'number' ? item.level : 0)
+        : total;
+    }, 0);
+  },
+  divineSenseUses: async () =>
+    divineSenseRemaining === null ? null : { row: { usesRemaining: divineSenseRemaining } },
 }));
 
 const { getLegalCombatActions } = await import('../combat-intent-service.js');
@@ -228,6 +250,10 @@ describe('getLegalCombatActions', () => {
     player.bonusActionUsed = false;
     player.status.currentHp = 20;
     featureUses = { secondWind: null, actionSurge: null };
+    divineSenseRemaining = 1;
+    player.characterClass = 'Paladin';
+    player.characterLevel = 6;
+    player.characterClassLevels = [{ className: 'Paladin', level: 6 }];
     slotRemaining = null;
     healingConsumables = [
       { id: 'potion-1', name: 'Potion of Healing', healingDice: '2d4+2' },
@@ -683,6 +709,37 @@ describe('getLegalCombatActions', () => {
     const spent = await getLegalCombatActions('encounter-1', 'user-1');
     expect(spent.actions.some((action) => action.type === 'second_wind')).toBe(false);
     expect(spent.actions.some((action) => action.type === 'action_surge')).toBe(false);
+  });
+
+  test('offers Divine Sense only to a paladin with uses and a free Action (#1276)', async () => {
+    const offered = await getLegalCombatActions('encounter-1', 'user-1');
+    expect(offered.actions).toContainEqual({ type: 'divine_sense', label: 'Divine Sense' });
+
+    player.characterClass = 'Fighter';
+    player.characterLevel = 6;
+    player.characterClassLevels = [{ className: 'Fighter', level: 6 }];
+    const nonPaladin = await getLegalCombatActions('encounter-1', 'user-1');
+    expect(nonPaladin.actions.some((action) => action.type === 'divine_sense')).toBe(false);
+
+    player.characterClass = 'Paladin';
+    player.characterClassLevels = [{ className: 'Paladin', level: 6 }];
+    divineSenseRemaining = 0;
+    const exhausted = await getLegalCombatActions('encounter-1', 'user-1');
+    expect(exhausted.actions.some((action) => action.type === 'divine_sense')).toBe(false);
+
+    divineSenseRemaining = 1;
+    player.actionUsed = true;
+    const actionSpent = await getLegalCombatActions('encounter-1', 'user-1');
+    expect(actionSpent.actions.some((action) => action.type === 'divine_sense')).toBe(false);
+
+    player.actionUsed = false;
+    player.characterClass = 'Fighter';
+    player.characterClassLevels = [
+      { className: 'Fighter', level: 5 },
+      { className: 'Paladin', level: 1 },
+    ];
+    const multiclass = await getLegalCombatActions('encounter-1', 'user-1');
+    expect(multiclass.actions).toContainEqual({ type: 'divine_sense', label: 'Divine Sense' });
   });
 
   // #1148: weapon targets already skipped the dead (#314 CB-074); attack-roll

@@ -9,6 +9,7 @@ import {
   characterStats,
   characters,
   classFeaturesLibrary,
+  characterFeatures,
   combatEncounters,
   combatParticipantStatus,
   combatParticipants,
@@ -65,9 +66,7 @@ const { createRequestPipelineApp } = await importWithRealDb(
 const { tacticalMapRoutes } = await importWithRealDb(() => import('../tactical-maps.js'));
 const { combatRoutes } = await importWithRealDb(() => import('../combat/index.js'));
 
-const app = hasRealDb
-  ? createRequestPipelineApp().use(tacticalMapRoutes).use(combatRoutes)
-  : null;
+const app = hasRealDb ? createRequestPipelineApp().use(tacticalMapRoutes).use(combatRoutes) : null;
 
 if (!hasRealDb) {
   console.warn(
@@ -84,6 +83,7 @@ describeWithDb('paladin Divine Sense tracking (#712)', () => {
   let encounterId: string;
   let paladinId: string;
   let participantId: string;
+  let divineSenseFeatureId: string;
 
   /** The SRD seed shape: limited_use features with a NULL uses_count (#224). */
   const ensureLibraryRow = async (featureName: string): Promise<string> => {
@@ -117,7 +117,7 @@ describeWithDb('paladin Divine Sense tracking (#712)', () => {
     if (!hasRealDb) return;
     db = realDb();
 
-    await ensureLibraryRow('Divine Sense');
+    divineSenseFeatureId = await ensureLibraryRow('Divine Sense');
 
     [{ id: campaignId }] = await db
       .insert(campaigns)
@@ -224,6 +224,26 @@ describeWithDb('paladin Divine Sense tracking (#712)', () => {
       restType: 'long',
       userId: paladinUserId,
     });
+    const legal = await app!.handle(
+      new Request(`http://localhost/v1/combat/${encounterId}/legal-actions`, {
+        headers: { authorization: 'Bearer 712-test-token' },
+      }),
+    );
+    expect(legal.status).toBe(200);
+    expect(await legal.json()).toMatchObject({
+      actions: expect.arrayContaining([{ type: 'divine_sense', label: 'Divine Sense' }]),
+    });
+    const [offeredFeature] = await db
+      .select({ usesRemaining: characterFeatures.usesRemaining })
+      .from(characterFeatures)
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, divineSenseFeatureId),
+        ),
+      )
+      .limit(1);
+    expect(offeredFeature?.usesRemaining).toBe(1);
     const post = async (expectedVersion: number) =>
       app!.handle(
         new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
@@ -245,6 +265,22 @@ describeWithDb('paladin Divine Sense tracking (#712)', () => {
       );
     const spent = await post(1);
     expect(spent.status).toBe(200);
+    const [spentParticipant] = await db
+      .select({ actionUsed: combatParticipants.actionUsed })
+      .from(combatParticipants)
+      .where(eq(combatParticipants.id, participantId));
+    expect(spentParticipant?.actionUsed).toBe(true);
+    const [spentFeature] = await db
+      .select({ usesRemaining: characterFeatures.usesRemaining })
+      .from(characterFeatures)
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, divineSenseFeatureId),
+        ),
+      )
+      .limit(1);
+    expect(spentFeature?.usesRemaining).toBe(0);
     await db
       .update(combatParticipants)
       .set({ actionUsed: false })

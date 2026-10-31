@@ -81,6 +81,27 @@ describe('useCombatLegalActions', () => {
 
     expect(fetchSpy).toHaveBeenCalled();
   });
+
+  it('refuses an unknown engine-only action instead of sending its label as chat (#1276)', async () => {
+    const onSendText = vi.fn(async () => {});
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        actorId: 'pc-1',
+        actions: [{ type: 'future_engine_action', label: 'Future engine action' }],
+      }),
+    } as Response);
+
+    const { result } = renderHook(() => useCombatLegalActions({ enabled: true, onSendText }));
+    await waitFor(() => expect(result.current.actions).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.runAction(result.current.actions[0]);
+    });
+
+    expect(result.current.error).toBe('Reload to use this');
+    expect(onSendText).not.toHaveBeenCalled();
+  });
 });
 
 describe('useCombatLegalActions use_item (#1147)', () => {

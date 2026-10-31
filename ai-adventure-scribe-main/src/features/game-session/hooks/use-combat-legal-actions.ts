@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
+import { LEGAL_ACTION_TYPES } from '../../../../shared/combat-legal-action-types';
 import { chooseSpellSlotLevel } from '../../../../shared/spell-slot-choice';
 
 import type { ChatMessage } from '@/types/game';
@@ -204,6 +205,12 @@ export function useCombatLegalActions(input: {
         return;
       // A greyed Cast row is a description, not an intent (#1171).
       if (action.narrated) return;
+      // An old tab can retain a newer engine-only action after the server adds it. Never turn
+      // that opaque label into chat text: reloading is the only safe way to obtain its handler.
+      if (!LEGAL_ACTION_TYPES.includes(action.type as (typeof LEGAL_ACTION_TYPES)[number])) {
+        setError('Reload to use this');
+        return;
+      }
       setError(null);
       // The refresh cycle starts with the dispatch: every path below re-fetches
       // legal actions in the finally, and the combat-state update in between can
