@@ -640,7 +640,9 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
   let enhancedResult: AIResponse = {
     ...result,
     options: structuredResponse?.options,
-    roll_requests: structuredResponse?.roll_requests || roll_requests,
+    roll_requests: definedRollRequests<{ type?: string; purpose?: string }>(
+      structuredResponse?.roll_requests || roll_requests,
+    ),
     dice_rolls,
     combat_transition: transition || 'none',
     scene_spec: structuredResponse?.scene_spec ?? null,

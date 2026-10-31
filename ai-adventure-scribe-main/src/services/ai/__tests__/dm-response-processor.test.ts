@@ -9,6 +9,9 @@ import { processDMResponse } from '../dm-response-processor';
 import { parseDmResponse } from '../dm-response-schema';
 import { parseXMLTagsFromResponse } from '../xml-parser';
 
+import type { RollRequest } from '@/types/roll-request';
+
+import { parseAndAugmentRollRequests } from '@/hooks/ai/roll-processor';
 import { normalizeAssetTagsInContent } from '@/utils/normalize-asset-tags';
 
 // Mock dependencies
@@ -758,6 +761,28 @@ describe('processDMResponse', () => {
           expect.objectContaining({ type: 'check', purpose: '1d20 listen' }),
         ]),
       );
+    });
+
+    it('#781 forward-fix: a null roll entry in the structured list does not crash the normal turn path', async () => {
+      const rawResponse = JSON.stringify({
+        text: 'You listen at the door and hear nothing moving beyond it.',
+        narration_segments: [],
+        roll_requests: [null, { type: 'check', formula: '1d20', purpose: '1d20+2 listen', dc: 10 }],
+      });
+
+      const result = await processDMResponse({ ...defaultParams, rawResponse });
+
+      // On main this throws `Cannot read properties of null (reading 'ac')`: the raw
+      // list reaches parseAndAugmentRollRequests with the null still in it.
+      const augmented = parseAndAugmentRollRequests(
+        result.text,
+        (result.roll_requests ?? []) as RollRequest[],
+      );
+      expect(augmented).toHaveLength(1);
+      expect(augmented[0]).toMatchObject({ type: 'check' });
+      expect(result.roll_requests).toEqual([
+        expect.objectContaining({ type: 'check', purpose: '1d20 listen' }),
+      ]);
     });
 
     it('should default roll_requests to an empty array when the structured response omits it', async () => {
