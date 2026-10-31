@@ -206,21 +206,6 @@ describe('#262 declared-defense directive on /v1/llm/generate', () => {
     expect(generatedPrompts[0]).not.toContain("combat_transition:'end'");
   });
 
-  it('does not map free-text movement to a flee while a fight is active (#749)', async () => {
-    mockActiveEncounter = { id: 'encounter-defense-1' };
-    generatedPrompts = [];
-
-    const response = await postGenerate(
-      dmTurnBody('I back away slowly, keeping my dagger hand up, edging back toward Kaelen.'),
-    );
-
-    expect(response.status).toBe(200);
-    expect(generatedPrompts).toHaveLength(1);
-    expect(generatedPrompts[0]).not.toContain('<declared_defense');
-    expect(generatedPrompts[0]).not.toContain("combat_action of type 'flee'");
-    expect(generatedPrompts[0]).not.toContain("combat_transition:'end'");
-  });
-
   it("directs 'I run from the fight' at a combat_action of type 'flee' (#1199)", async () => {
     mockActiveEncounter = { id: 'encounter-defense-1' };
     generatedPrompts = [];

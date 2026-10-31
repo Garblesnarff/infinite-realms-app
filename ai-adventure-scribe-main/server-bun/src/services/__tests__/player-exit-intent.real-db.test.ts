@@ -891,6 +891,41 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
     }
   });
 
+  test('a typed step back in round 1 leaves the fight open on the player (#749)', async () => {
+    // Hark P1016-028 typed this. The generate route does not resolve the turn, so this
+    // drives executeCombatIntent, the function the intent route calls, with no mock of
+    // the wording gate or the combat service. Round 1 of the fight: the hero still holds it.
+    const words = 'I back away slowly, keeping my dagger hand up, edging back toward Kaelen.';
+    const fled = await executeCombatIntent(
+      encounterId,
+      { type: 'flee', actorId: heroId, expectedVersion: 1 },
+      userId,
+      'player',
+      Date.now(),
+      'typed',
+      words,
+    );
+    // Read as Flee, the words are movement, so nothing is recorded and the turn is unspent.
+    expect(fled).toEqual({ skipped: 'exit_without_player_wording' });
+
+    // The other recorder of "fled from combat" is a move onto the outer ring. The same
+    // sentence, posted as that move, stays a move.
+    await executeCombatIntent(
+      encounterId,
+      { type: 'move', actorId: heroId, x: 0, y: 4 },
+      userId,
+      'player',
+      Date.now(),
+      'typed',
+      words,
+    );
+
+    expect(await heroRow()).toMatchObject({ isActive: true });
+    expect(await encounterRow()).toMatchObject({ status: 'active', endedReason: null });
+    expect(await currentParticipantId()).toBe(heroId);
+    expect(await consumeDmTacticalFacts(sessionId)).not.toContain('The Scholar flees the fight.');
+  });
+
   test('a DM-declared disengage over free-text movement is a no-op (#749)', async () => {
     const result = await declaredExit('disengage', 'I step back.');
 
