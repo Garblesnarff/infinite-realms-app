@@ -85,6 +85,7 @@ import type {
   DamageType,
   DamageResult,
 } from '../../types/combat.js';
+import type { UseSpellSlotResult } from '../../types/spell-slots.js';
 
 /**
  * An attack result that also carries Hex's rider damage (#754). Kept local rather than added to
@@ -1149,12 +1150,14 @@ export class CombatAttackService {
     const claimAndResolve = usesBonusAction
       ? claimTurnBonusActionAndResolve
       : claimTurnActionAndResolve;
+    // #1287: the slot this cast spent, kept so a cast that throws after the spend can give it back.
+    let spentSlot: UseSpellSlotResult | null = null;
     const resolution = await claimAndResolve(casterId, encounterId, expectedVersion, async () => {
       if (casterData.participant.characterId && spell.level > 0) {
         // Not a React hook: a static service method on a Bun server that happens to start with
         // "use". The rule matches on the name alone, and this file has no React in it at all.
 
-        await SpellSlotsService.useSpellSlot(
+        spentSlot = await SpellSlotsService.useSpellSlot(
           {
             characterId: casterData.participant.characterId,
             spellName: spell.name,
@@ -1705,6 +1708,11 @@ export class CombatAttackService {
       });
 
       return { results };
+    }).catch(async (error: unknown) => {
+      // #1287: the claim is released on throw (runOrReleaseClaim); the slot must come back too,
+      // or the spend has no resolved cast row and a retry spends a second slot.
+      if (spentSlot) await SpellSlotsService.refundSpellSlot(spentSlot);
+      throw error;
     });
     // #709: a successfully cast concentration spell starts concentration (2014).
     // #754: the target is stored too, so Hex's rider knows which participant it applies to.

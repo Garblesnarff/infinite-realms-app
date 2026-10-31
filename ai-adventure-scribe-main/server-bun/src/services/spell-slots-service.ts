@@ -11,7 +11,7 @@
  * @module server/services/spell-slots-service
  */
 
-import { and, eq, exists, gte, lt, or, inArray, sql } from 'drizzle-orm';
+import { and, eq, exists, gt, gte, lt, or, inArray, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import { characters, characterSpellSlots, characterSubclasses, spellSlotUsageLog } from '../../../db/schema/index';
@@ -239,6 +239,22 @@ export class SpellSlotsService {
       logEntry: log,
       wasUpcast,
     };
+  }
+
+  /**
+   * Undo one `useSpellSlot` spend whose cast never resolved (#1287): the slot goes back and its
+   * usage-log row is removed, so a spent slot always has exactly one resolved cast row.
+   */
+  static async refundSpellSlot(spent: UseSpellSlotResult): Promise<void> {
+    await db.transaction(async (tx) => {
+      const [restored] = await tx
+        .update(characterSpellSlots)
+        .set({ usedSlots: sql`${characterSpellSlots.usedSlots} - 1`, updatedAt: new Date() })
+        .where(and(eq(characterSpellSlots.id, spent.slot.id), gt(characterSpellSlots.usedSlots, 0)))
+        .returning({ id: characterSpellSlots.id });
+      // Only a slot that was actually given back takes its log row with it.
+      if (restored) await tx.delete(spellSlotUsageLog).where(eq(spellSlotUsageLog.id, spent.logEntry.id));
+    });
   }
 
   /**
