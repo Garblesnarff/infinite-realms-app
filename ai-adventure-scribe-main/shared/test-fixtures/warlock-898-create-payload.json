@@ -22,7 +22,9 @@
   "expertise_proficiencies": "",
   "tool_proficiencies": "",
   "saving_throw_proficiencies": "wisdom,charisma",
-  "languages": ["Common"],
+  "languages": [
+    "Common"
+  ],
   "cantrips": "",
   "known_spells": "",
   "prepared_spells": "",

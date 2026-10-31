@@ -22,7 +22,9 @@
   "expertise_proficiencies": "",
   "tool_proficiencies": "One type of gaming set",
   "saving_throw_proficiencies": "constitution,charisma",
-  "languages": ["Common"],
+  "languages": [
+    "Common"
+  ],
   "cantrips": "",
   "known_spells": "",
   "prepared_spells": "",
