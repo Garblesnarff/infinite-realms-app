@@ -291,4 +291,32 @@ describe('useSessionStorySocket', () => {
 
     expect(mockWsInstance.close).toHaveBeenCalledTimes(1);
   });
+
+  it('should refetch and dispatch dm-fallback-persisted when a fallback frame arrives (#800 item 3)', async () => {
+    const { useSessionStorySocket } = await import('../use-session-story-socket');
+    const onRemoteMessage = vi.fn();
+    renderHook(() => useSessionStorySocket(sessionId, onRemoteMessage));
+    await waitFor(() => expect(mockWsInstance.onmessage).toBeTruthy());
+
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    const payload = {
+      type: 'dm_fallback_persisted',
+      sessionId,
+      messageId: 'dm-1',
+      rollRequests: [{ type: 'check', purpose: 'Search the room' }],
+    };
+
+    act(() => {
+      mockWsInstance.onmessage({ data: JSON.stringify(payload) });
+    });
+
+    expect(onRemoteMessage).toHaveBeenCalledTimes(1);
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'dm-fallback-persisted',
+        detail: payload,
+      }),
+    );
+    dispatchSpy.mockRestore();
+  });
 });

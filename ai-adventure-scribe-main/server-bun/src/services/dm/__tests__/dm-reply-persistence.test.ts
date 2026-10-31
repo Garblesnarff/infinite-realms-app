@@ -9,6 +9,11 @@ let addMessageCalls: AddMessageCall[] = [];
 let addMessageImpl: () => Promise<unknown> = async () => ({ id: 'row' });
 let warnings: Record<string, unknown>[] = [];
 let errors: Record<string, unknown>[] = [];
+type PublishCall = { sessionId: string; messageId: string; rollRequests: unknown[] };
+let publishCalls: PublishCall[] = [];
+let publishImpl: (params: PublishCall) => void = (params) => {
+  publishCalls.push(params);
+};
 
 mock.module('../../session/session-message-service.js', () => ({
   SessionMessageService: {
@@ -32,6 +37,10 @@ mock.module('../../../lib/logger.js', () => ({
   progressionLogger: testLogger,
   errorLogSerializers: {},
   default: testLogger,
+}));
+
+mock.module('../dm-fallback-broadcast.js', () => ({
+  publishDmFallbackRow: (params: PublishCall) => publishImpl(params),
 }));
 
 const {
@@ -68,6 +77,10 @@ beforeEach(() => {
   addMessageImpl = async () => ({ id: MESSAGE_ID });
   warnings = [];
   errors = [];
+  publishCalls = [];
+  publishImpl = (params) => {
+    publishCalls.push(params);
+  };
 });
 
 describe('dmReplySkipReason — the same boundary as the client early render', () => {
@@ -560,6 +573,78 @@ describe('persistFallbackDmReply', () => {
     expect(errors).toEqual([
       expect.objectContaining({
         msg: 'DM_REPLY_FALLBACK_PERSIST_FAILED',
+        sessionId: 'session-1',
+      }),
+    ]);
+  });
+});
+
+describe('persistFallbackDmReply live push (#800 item 3)', () => {
+  const rollEnvelope = (): Record<string, unknown> =>
+    explorationEnvelope({
+      roll_requests: [{ type: 'check', formula: '1d20', purpose: 'Search the room' }],
+    });
+
+  test('a persisted fallback is pushed to live tabs with its requests', async () => {
+    const result = await persistFallbackDmReply({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      reason: 'roll_requests',
+      envelope: rollEnvelope(),
+    });
+    expect(result).toEqual({ persisted: true });
+    expect(publishCalls).toEqual([
+      {
+        sessionId: 'session-1',
+        messageId: MESSAGE_ID,
+        rollRequests: [{ type: 'check', formula: '1d20', purpose: 'Search the room' }],
+      },
+    ]);
+  });
+
+  test('a skipped fallback pushes nothing', async () => {
+    const result = await persistFallbackDmReply({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      reason: 'roll_requests',
+      envelope: explorationEnvelope(),
+    });
+    expect(result).toEqual({ persisted: false });
+    expect(publishCalls).toHaveLength(0);
+  });
+
+  test('a failed write pushes nothing', async () => {
+    addMessageImpl = async () => {
+      throw new Error('Session not found');
+    };
+    const result = await persistFallbackDmReply({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      reason: 'roll_requests',
+      envelope: rollEnvelope(),
+    });
+    expect(result).toEqual({ persisted: false });
+    expect(publishCalls).toHaveLength(0);
+  });
+
+  test('a failed push does not flip a persisted row, and is logged at warn', async () => {
+    publishImpl = () => {
+      throw new Error('socket closed');
+    };
+    const result = await persistFallbackDmReply({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      reason: 'roll_requests',
+      envelope: rollEnvelope(),
+    });
+    expect(result).toEqual({ persisted: true });
+    expect(warnings).toEqual([
+      expect.objectContaining({
+        msg: 'DM_REPLY_FALLBACK_PUSH_FAILED',
         sessionId: 'session-1',
       }),
     ]);

@@ -73,6 +73,15 @@ export function useSessionStorySocket(sessionId: string | null, onRemoteMessage:
                 new CustomEvent('character-state-updated', { detail: message }),
               );
             }
+            // #800 item 3: the server persisted a fallback row for a turn the
+            // client never saved. The callback refetches the dialogue rows
+            // through the normal path (MessageProvider invalidates the
+            // messages query on it), and the event lets the live push
+            // listener offer the rescued rolls to an empty dice queue.
+            if (message.type === 'dm_fallback_persisted') {
+              callbackRef.current();
+              window.dispatchEvent(new CustomEvent('dm-fallback-persisted', { detail: message }));
+            }
           } catch (error) {
             reportMalformedPeerFrame(malformedFrameStateRef.current, {
               channel: 'session-story',

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import { MessageRenderer } from './MessageRenderer';
 import { RollAutoCountdown } from './RollAutoCountdown';
+import { useLiveDmFallbackPush } from './use-live-dm-fallback-push';
 import { useMessageDiceRolls } from './use-message-dice-rolls';
 import { usePendingDmRollRecovery } from './use-pending-dm-roll-recovery';
 import { isPlayerChatBubble } from './utils/player-chat-bubble';
@@ -95,6 +96,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
   }) => {
     const { state: combatState, refreshCombatState } = useCombat();
     usePendingDmRollRecovery({ sessionId, messages, messagesReady });
+    useLiveDmFallbackPush({ sessionId, messages });
     const entryConfirmation = useCombatEntryConfirmationHost(sessionId);
     usePendingCombatEntryOffer(sessionId);
     const spellTargetSave = useSpellTargetSaveHost();
