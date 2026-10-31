@@ -48,6 +48,7 @@ import {
   type CombatEncounter,
   type CombatParticipant,
 } from '../../../../db/schema/index';
+import { resolveCharacterCombatSpeed } from '../../../../shared/srd-race-speed-data';
 import { isCompanionsEnabled } from '../../lib/companion-feature.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
@@ -590,7 +591,22 @@ export class CombatEncounterService {
             ),
           });
         }
-        const speed = Number(character?.stats?.speed ?? npcStats.speed ?? fallback.speed);
+        // #1251: the combat budget reads the character's speed. The sheet's SPD
+        // tile derives from race (getBaseSpeed), but character_stats.speed is only
+        // ever written by an explicit character edit or left at its 30 default —
+        // so a gnome's row holds 30 and seating showed Move 30 ft. A stored
+        // non-default speed is an explicit speed and wins; otherwise the race base
+        // (subrace, then race, then 30) wins, matching the sheet. NPCs and monsters
+        // keep the existing chain untouched.
+        const speed = Number(
+          input.characterId
+            ? resolveCharacterCombatSpeed(
+                character?.stats?.speed,
+                character?.character?.race,
+                character?.character?.subrace,
+              )
+            : (npcStats.speed ?? fallback.speed),
+        );
         // A player who explicitly rolled at the entry prompt owns this d20. Every other seat,
         // including companions appended above and all NPC/monster inputs, remains engine-rolled.
         const requestedRoll = input.initiativeRoll;
