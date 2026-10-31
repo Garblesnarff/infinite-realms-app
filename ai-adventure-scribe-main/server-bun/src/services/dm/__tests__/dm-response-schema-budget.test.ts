@@ -66,6 +66,17 @@ import mainDmResponseSchema from './fixtures/main-dm-response-schema.json' with 
  * (its own PR) still decides whether fight-turn story fields are stripped
  * pre-validation or carried in the enforced schema.
  *
+ * #777 re-measured the baselines +1 optional per phase: damage gains the
+ * optional fallHeightFeet integer (no `minimum` keyword — the server's
+ * validDamage enforces whole feet >= 0), so under this serialized walker
+ * narrative measures 19, combat 7, tactical 20, while createDmResponseSchema()
+ * still measures 32: the default schema takes no extensions, so it carries
+ * no damage property (measured 32 on main ae524c6d and on this branch with
+ * this file's walker; the 33 in the first #777 version was an unmeasured
+ * bump, reverted in Round 2). Unions and keywords are unchanged; tactical 20
+ * still sits inside the ≤24 strict target. A fall with no height carries no
+ * fallHeightFeet and flows through today's clamp path (see story-damage.ts).
+ *
  * Counting follows the Anthropic convention from
  * dm-response-schema-anthropic.test.ts: every `anyOf` / `oneOf` node and every
  * `type: [..., 'null']` array counts as one union; every object property not
@@ -73,7 +84,8 @@ import mainDmResponseSchema from './fixtures/main-dm-response-schema.json' with 
  * this walker clones through JSON.stringify/parse and does not deduplicate
  * shared object identities.
  *
- * Test-only: no model-facing text changes.
+ * Test-only: no model-facing text changes, except #777 (damage description
+ * + fallHeightFeet) — see the #777 paragraph below.
  */
 
 /**
@@ -121,9 +133,9 @@ const PHASE_BASELINES: Record<
   Exclude<DmResponsePhase, 'full'>,
   { unions: number; optionals: number; keywords: number }
 > = {
-  narrative: { unions: 5, optionals: 18, keywords: 6 },
-  combat: { unions: 15, optionals: 6, keywords: 4 },
-  tactical: { unions: 16, optionals: 19, keywords: 5 },
+  narrative: { unions: 5, optionals: 19, keywords: 6 },
+  combat: { unions: 15, optionals: 7, keywords: 4 },
+  tactical: { unions: 16, optionals: 20, keywords: 5 },
 };
 
 /** Baseline budget for createDmResponseSchema(): re-measured for #782 item 7.
@@ -399,7 +411,9 @@ describe('dmResponseSchema strict budget (Refs #782 item 1)', () => {
     expect(budget).toEqual({ unions: 0, optionals: 0, oneOfPaths: [], constraintPaths: [] });
   });
 
-  test('the shadow-only budget fix leaves live provider schema bytes unchanged', () => {
+  // #777 Round 2: the fixture was regenerated for #777, so this test pins
+  // the NEW live bytes — it does not prove bytes are unchanged vs old main.
+  test('the live provider schema bytes match the pinned fixture (re-pinned for #777)', () => {
     expect(JSON.stringify(dmResponseSchema)).toBe(JSON.stringify(mainDmResponseSchema));
   });
 });
