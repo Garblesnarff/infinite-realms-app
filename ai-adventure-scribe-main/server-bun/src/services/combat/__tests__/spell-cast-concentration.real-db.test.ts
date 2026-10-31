@@ -22,6 +22,7 @@ import { eq } from 'drizzle-orm';
 import {
   campaigns,
   characterConcentration,
+  dialogueHistory,
   characters,
   gameSessions,
 } from '../../../../../db/schema/index';
@@ -452,5 +453,70 @@ describeWithDb('maybeStartConcentrationFromSpellCast', () => {
     expect(result.dropped).toBe(true);
     expect(result.droppedSpell).toBe('Dancing Lights');
     expect(await getConcentration(characterId)).toBeNull();
+  });
+});
+
+// #772: one player message starts concentration once per spell. A Retry replays the message,
+// so its second start is refused; a second concentration spell in the same message still
+// replaces the first, because it is a different spell.
+describeWithDb('startConcentrationOnCast (#772)', () => {
+  // Fresh client per block: the blocks above close the shared one in their afterAll.
+  let db: ReturnType<typeof realDb>;
+  let characterId = '';
+  let sessionId = '';
+
+  beforeAll(async () => {
+    if (!hasRealDb) return;
+    db = realDb();
+    const [{ id: cid }] = await db
+      .insert(characters)
+      .values({ userId: testId('772-user'), name: testId('772-caster'), level: 3 })
+      .returning({ id: characters.id });
+    characterId = cid;
+    const [{ id: sid }] = await db
+      .insert(gameSessions)
+      .values({ characterId, sessionNumber: 9, status: 'active' })
+      .returning({ id: gameSessions.id });
+    sessionId = sid;
+  });
+
+  afterAll(async () => {
+    if (!hasRealDb) return;
+    await db
+      .delete(characterConcentration)
+      .where(eq(characterConcentration.characterId, characterId));
+    await db.delete(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId));
+    await db.delete(gameSessions).where(eq(gameSessions.id, sessionId));
+    await db.delete(characters).where(eq(characters.id, characterId));
+    await closeRealDb();
+  });
+
+  it('a replay of one message does not restart a spell it already started, and a second spell replaces the first', async () => {
+    if (!hasRealDb) return;
+    const { startConcentrationOnCast } = await import('../spell-cast-concentration.js');
+    const { getConcentration } = await import('../concentration-service.js');
+    await db
+      .insert(dialogueHistory)
+      .values({ sessionId, speakerType: 'player', message: 'I cast Bless and Dancing Lights.' });
+
+    expect(
+      await startConcentrationOnCast(sessionId, characterId, { name: 'Bless', id: 'bless' }),
+    ).toBe(true);
+    expect((await getConcentration(characterId))?.spellName).toBe('Bless');
+
+    // Same message again (a Retry): Bless is refused, concentration stays.
+    expect(
+      await startConcentrationOnCast(sessionId, characterId, { name: 'Bless', id: 'bless' }),
+    ).toBe(false);
+    expect((await getConcentration(characterId))?.spellName).toBe('Bless');
+
+    // A different concentration spell in the same message still replaces Bless.
+    expect(
+      await startConcentrationOnCast(sessionId, characterId, {
+        name: 'Dancing Lights',
+        id: 'dancing-lights',
+      }),
+    ).toBe(true);
+    expect((await getConcentration(characterId))?.spellName).toBe('Dancing Lights');
   });
 });

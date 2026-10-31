@@ -52,7 +52,7 @@ export async function maybeStartConcentrationFromSpellCast(
   // Lazy DB imports: only load db/client when we actually need it.
   const { db } = await import('../../../../db/client');
   const { characters, gameSessions } = await import('../../../../db/schema/index');
-  const { getConcentration, startConcentration } = await import('./concentration-service.js');
+  const { getConcentration } = await import('./concentration-service.js');
   const { castableSpells, spellKey } = await import('../dm/castable-spells.js');
 
   // One character per session; the session owns the concentration state.
@@ -86,7 +86,50 @@ export async function maybeStartConcentrationFromSpellCast(
   const current = await getConcentration(characterId);
   if (current && current.spellId === spell.id) return true;
 
-  await startConcentration(characterId, { name: spell.name, id: spell.id });
+  return startConcentrationOnCast(sessionId, characterId, { name: spell.name, id: spell.id });
+}
+
+/**
+ * Context key a player message carries: the spell keys whose cast already started
+ * concentration for it (#772).
+ */
+const CONCENTRATION_STARTED_KEY = 'concentrationStartedFor';
+
+/**
+ * Start concentration for a cast the player declared in `sessionId`'s newest player message,
+ * once per message and spell (#772). Retry re-sends that saved message, and a failed save drops
+ * the concentration row, so the row cannot tell a replay from a new cast. The message keeps the
+ * list of spells it started instead: a new cast is a new message, so it still starts, and a
+ * second concentration spell in the same message still replaces the first. Returns false on a
+ * replay.
+ */
+export async function startConcentrationOnCast(
+  sessionId: string,
+  characterId: string,
+  spell: { name: string; id?: string },
+): Promise<boolean> {
+  const { playerMessage } = await import('../dm/story-spell-slots.js');
+  const { db } = await import('../../../../db/client');
+  const { dialogueHistory } = await import('../../../../db/schema/index');
+  const { eq, sql } = await import('drizzle-orm');
+  const { startConcentration } = await import('./concentration-service.js');
+  const message = await playerMessage(sessionId);
+  const context = message?.context as Record<string, unknown> | null | undefined;
+  const spellKey = spell.id ?? spell.name;
+  const started = context?.[CONCENTRATION_STARTED_KEY];
+  if (Array.isArray(started) && started.includes(spellKey)) return false;
+  await startConcentration(characterId, spell);
+  if (message) {
+    // A context that is not a JSON object (null, an array, a scalar) is replaced by an
+    // object, so the merge below never builds an array out of it.
+    const object = sql`CASE WHEN jsonb_typeof(${dialogueHistory.context}) = 'object' THEN ${dialogueHistory.context} ELSE '{}'::jsonb END`;
+    await db
+      .update(dialogueHistory)
+      .set({
+        context: sql`${object} || jsonb_build_object(${CONCENTRATION_STARTED_KEY}::text, coalesce(${object} -> ${CONCENTRATION_STARTED_KEY}::text, '[]'::jsonb) || jsonb_build_array(${spellKey}::text))`,
+      })
+      .where(eq(dialogueHistory.id, message.id));
+  }
   return true;
 }
 

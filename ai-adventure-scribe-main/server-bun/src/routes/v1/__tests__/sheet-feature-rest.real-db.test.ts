@@ -5,12 +5,13 @@
  *
  * Requires TEST_DATABASE_URL or DATABASE_URL — see fixtures/real-db.ts.
  */
-import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, expect, it, mock } from 'bun:test';
 import { and, eq } from 'drizzle-orm';
 import { Elysia } from 'elysia';
 
 import {
   campaigns,
+  characterConcentration,
   characterConditions,
   characterEquipment,
   characterHitDice,
@@ -2166,5 +2167,154 @@ describeWithDb('a continuation session carries HP until the long rest (#1239)', 
     };
     expect(after.stats?.current_hit_points).toBe(10);
     expect(after.stats?.max_hit_points).toBe(10);
+  });
+});
+
+// #772: a Retry re-sends the same saved player message. A concentration cast that
+// already started concentration for that message must not start it again, even after
+// a failed save dropped the concentration row. A cantrip spends no slot, so the slot
+// spend's `already_spent` rule never covers it; the route is the real one.
+describeWithDb('a Retry does not restart concentration (#772)', () => {
+  // Fresh client per block: the blocks above close the shared one in their afterAll.
+  let db: ReturnType<typeof realDb>;
+  let campaignId = '';
+  let characterId = '';
+  let sessionId = '';
+
+  beforeAll(async () => {
+    if (!hasRealDb) return;
+    db = realDb();
+    userId = testId('772-retry-user');
+    [{ id: campaignId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('772-camp') })
+      .returning({ id: campaigns.id });
+    [{ id: characterId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId,
+        name: testId('772-caster'),
+        level: 3,
+        cantrips: 'Dancing Lights',
+        knownSpells: 'Bless',
+      })
+      .returning({ id: characters.id });
+    await db.insert(characterStats).values({
+      characterId,
+      maxHitPoints: 200,
+      currentHitPoints: 200,
+      temporaryHitPoints: 0,
+      constitution: 10,
+      isConscious: true,
+      vitalState: 'standing',
+    });
+    [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId, characterId })
+      .returning({ id: gameSessions.id });
+  });
+
+  afterAll(async () => {
+    if (!hasRealDb) return;
+    await db
+      .delete(characterConcentration)
+      .where(eq(characterConcentration.characterId, characterId));
+    await db.delete(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId));
+    await db.delete(gameSessions).where(eq(gameSessions.id, sessionId));
+    await db.delete(characterStats).where(eq(characterStats.characterId, characterId));
+    await db.delete(characters).where(eq(characters.id, characterId));
+    await db.delete(campaigns).where(eq(campaigns.id, campaignId));
+    await closeRealDb();
+  });
+
+  beforeEach(async () => {
+    if (!hasRealDb) return;
+    await db
+      .delete(characterConcentration)
+      .where(eq(characterConcentration.characterId, characterId));
+    await db
+      .update(characterStats)
+      .set({ currentHitPoints: 200 })
+      .where(eq(characterStats.characterId, characterId));
+  });
+
+  const request = (path: string, method: string, body?: unknown): Promise<Response> =>
+    pipeline.handle(
+      new Request(`http://localhost${path}`, {
+        method,
+        headers: authHeaders,
+        body: body === undefined ? undefined : JSON.stringify(body),
+      }),
+    );
+
+  const concentrationSpells = async () =>
+    (
+      await db
+        .select()
+        .from(characterConcentration)
+        .where(eq(characterConcentration.characterId, characterId))
+    ).map((row) => row.spellName);
+
+  // The client saves the player's message before the DM turn starts.
+  const saveCastMessage = (text: string) =>
+    db.insert(dialogueHistory).values({ sessionId, speakerType: 'player', message: text });
+
+  // The DM turn for the newest saved message. A Retry sends the same body again.
+  const generateTurn = (text: string, dmMessageId: string) =>
+    request('/v1/llm/generate', 'POST', {
+      prompt: text,
+      player_input: text,
+      sessionId,
+      dmReply: { messageId: dmMessageId, inCombat: false },
+      provider: 'openrouter',
+      requestType: 'user',
+      maxTokens: 8192,
+      temperature: 0.9,
+    });
+
+  // A 100-point hit leaves the caster conscious with a CON save DC of 50, which no d20 meets.
+  const failConcentrationSave = async () => {
+    const hit = await request(`/v1/characters/${characterId}/damage`, 'POST', { amount: 100 });
+    expect(hit.status).toBe(200);
+    const body = (await hit.json()) as { concentration?: { dropped?: boolean } };
+    expect(body.concentration?.dropped).toBe(true);
+  };
+
+  const castThenFailSaveThenRetry = async (castText: string, spellName: string) => {
+    generatedText = JSON.stringify({ text: 'The spell takes hold and the air shimmers.' });
+    const dmMessageId = crypto.randomUUID();
+    await saveCastMessage(castText);
+
+    const first = await generateTurn(castText, dmMessageId);
+    expect(first.status).toBe(200);
+    expect(await concentrationSpells()).toEqual([spellName]);
+
+    await failConcentrationSave();
+    expect(await concentrationSpells()).toEqual([]);
+
+    // Retry: the same saved message and the same DM turn.
+    const retry = await generateTurn(castText, dmMessageId);
+    expect(retry.status).toBe(200);
+    expect(await concentrationSpells()).toEqual([]);
+
+    // A new cast on a later turn is a new message, so it starts concentration again.
+    await saveCastMessage(castText);
+    const later = await generateTurn(castText, crypto.randomUUID());
+    expect(later.status).toBe(200);
+    expect(await concentrationSpells()).toEqual([spellName]);
+  };
+
+  it('a cantrip (Dancing Lights): Retry after a failed save does not restart concentration', async () => {
+    if (!hasRealDb) return;
+    await castThenFailSaveThenRetry(
+      'I cast Dancing Lights [spell_id=dancing-lights, spell_level=cantrip].',
+      'Dancing Lights',
+    );
+  });
+
+  it('a leveled spell (Bless): Retry after a failed save does not restart concentration', async () => {
+    if (!hasRealDb) return;
+    await castThenFailSaveThenRetry('I cast Bless [spell_id=bless, spell_level=1].', 'Bless');
   });
 });

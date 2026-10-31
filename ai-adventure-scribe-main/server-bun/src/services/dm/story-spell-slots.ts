@@ -185,12 +185,17 @@ export async function spendStorySpellSlots(input: {
   // reports `already_spent`), and `no_slot` means the ledger had nothing left
   // to spend. Re-firing on any of them would resurrect a concentration broken
   // since. A new concentration replaces any previous one: one spell at a time.
-  const { startConcentration } = await import('../combat/concentration-service.js');
+  // #772: a cantrip spends no slot, so it never reports `already_spent`; the
+  // once-per-message guard in startConcentrationOnCast stops its Retry too.
+  const { startConcentrationOnCast } = await import('../combat/spell-cast-concentration.js');
   for (const [spellName, outcome] of outcomes) {
     if (outcome === 'dice_roll' || outcome === 'already_spent' || outcome === 'no_slot') continue;
     const catalog = resolveCatalogSpell(spellName, spellName);
     if (catalog?.concentration) {
-      await startConcentration(casts.character.id, { name: catalog.name, id: catalog.id });
+      await startConcentrationOnCast(sessionId, casts.character.id, {
+        name: catalog.name,
+        id: catalog.id,
+      });
     }
   }
 }
