@@ -564,7 +564,12 @@ export function useMessageDiceRolls({
     setRollFailure(null);
   }, [currentRoll, rollFailure]);
 
-  const rollError = rollFailure?.message ?? null;
+  // Gated at render too: the effect above clears the failure only after the first render in which
+  // a different prompt is current, and that render must not hand the old error to its dialog.
+  const rollError =
+    rollFailure && (!currentRoll || currentRoll.id === rollFailure.rollId)
+      ? rollFailure.message
+      : null;
 
   return {
     currentRoll,
