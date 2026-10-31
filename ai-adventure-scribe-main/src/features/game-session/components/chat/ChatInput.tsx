@@ -1,6 +1,7 @@
 import { Send, Paperclip, Smile, Dice6, Loader2 } from 'lucide-react';
 import React, { useState, useRef, useEffect, useId } from 'react';
 
+import { useClearComposerDraft, useComposerDraft } from './composer-draft';
 import { ATTACK_WAIT_RESOLVING } from '../game/message/turn-wait-copy';
 
 import { Button } from '@/components/ui/button';
@@ -73,9 +74,27 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
   }, [sendError, retryInFlight]);
   const visibleSendError = sendError ?? (retryInFlight ? retryErrorRef.current : undefined);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const draft = useComposerDraft();
+  const clearDraft = useClearComposerDraft();
   const baseId = useId();
   const suggestionsHeaderId = `${baseId}-header`;
   const listboxId = `${baseId}-listbox`;
+
+  // An option click replaces the composer text and focuses it (#760). The player
+  // still sends with Send or Enter. A later edit is left alone.
+  useEffect(() => {
+    if (!draft) return;
+    setInput(draft.text);
+  }, [draft]);
+
+  useEffect(() => {
+    if (!draft || input !== draft.text) return;
+    const field = textareaRef.current;
+    if (!field) return;
+    field.focus();
+    const end = field.value.length;
+    field.setSelectionRange(end, end);
+  }, [draft, input]);
 
   /**
    * Auto-resize textarea based on content and handle dice command suggestions
@@ -121,6 +140,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
       await onSendMessage(submittedInput);
       if (isSessionEnded()) return;
       clearPendingInput();
+      clearDraft?.();
       setInput('');
     } catch {
       // Keep the pending input available for retry after a failed request.
@@ -135,6 +155,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
       await onRetry(input);
       if (isSessionEnded()) return;
       clearPendingInput();
+      clearDraft?.();
       setInput('');
     } catch {
       // Keep the pending input available for another explicit retry.

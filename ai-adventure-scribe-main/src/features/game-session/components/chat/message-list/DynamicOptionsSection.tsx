@@ -1,5 +1,7 @@
 import React, { useMemo } from 'react';
 
+import { useStageComposerDraft } from '../composer-draft';
+
 import type { ChatMessage } from '@/types/game';
 import type { ActionOption } from '@/utils/parseMessageOptions';
 
@@ -15,6 +17,11 @@ interface DynamicOptionsSectionProps {
   onSendMessage?: (message: ChatMessage) => Promise<void>;
   /** False for a past message: it keeps its own options and never turns into the combat menu. */
   isLatest?: boolean;
+  /**
+   * A roll tray is open (#760). Option clicks must not start another action,
+   * or the tray is set aside.
+   */
+  rollTrayOpen?: boolean;
   /**
    * GP-015 (#219): the DM's narration turn carried no action choices. Say why
    * instead of rendering nothing — but only on the latest message.
@@ -44,8 +51,10 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
     isLatest = true,
     showNoOptionsNotice = false,
     showImmediately = false,
+    rollTrayOpen = false,
   }) => {
     const { state: combatState } = useCombat();
+    const stageComposerDraft = useStageComposerDraft();
     const showCombatMenu = isLatest && combatState.isInCombat;
     const encounter = combatState.activeEncounter;
     const { actions, isPlayerTurn, isRefreshing, error, runAction } = useCombatLegalActions({
@@ -87,7 +96,9 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
       return null;
     }
 
-    const handleSelection = async (option: ActionOption) => {
+    const handleSelection = async (option: ActionOption): Promise<void> => {
+      // An open tray owns the turn. A click must not send, and must not run an engine action.
+      if (rollTrayOpen) return;
       if (!showCombatMenu || !encounter?.id) {
         await onOptionSelect(createPlayerMessageFromOption(option));
         return;
@@ -97,14 +108,24 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
       await runAction(action);
     };
 
+    // Free-text choices fill the composer (#760). A second click has to replace
+    // that text, so the first choice must not lock the row. Combat chips still
+    // run at once, and they already clear the lock after each action.
+    const stagesInComposer = !showCombatMenu && stageComposerDraft != null;
+
     return (
       <div className="w-full mt-3">
         {error && <p role="alert">{error}</p>}
         <ActionOptions
           options={renderedOptions}
-          disabled={!isLatest}
+          disabled={!isLatest || rollTrayOpen}
           onOptionSelect={handleSelection}
-          resetSelectionAfterCompletion={showCombatMenu}
+          resetSelectionAfterCompletion={showCombatMenu || stagesInComposer}
+          instructions={
+            stagesInComposer
+              ? 'Choose an option to put it in the message box. Send it when you are ready.'
+              : undefined
+          }
           delay={hasDynamicOverlay || showCombatMenu || showImmediately ? 0 : 10000}
           isLoading={isRefreshing}
         />

@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 
+import { useStageComposerDraft } from './composer-draft';
 import { MessageListContainer } from './message-list/MessageListContainer';
 import { useImageGeneration } from './message-list/useImageGeneration';
 import { useScrollBehavior } from './message-list/useScrollBehavior';
@@ -118,6 +119,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
     const { state: characterState } = useCharacter();
     const { state: campaignState } = useCampaign();
     const { state: combatState } = useCombat();
+    const stageComposerDraft = useStageComposerDraft();
     const { getAssetImageUrl } = useCampaignAssetsContext();
     const { id: routeCampaignId } = useParams<{ id: string }>();
 
@@ -168,10 +170,16 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
       [clearFailedSend, onRetryTurn, onSendFullMessage, sendMessage],
     );
 
-    // Handle option selection
+    // An ordinary option fills the composer (#760). Send and Enter submit it.
+    // Attack, end turn, and the way out of a fight do not come through here:
+    // those chips run the engine inside DynamicOptionsSection.
     const handleOptionSelect = React.useCallback(
       async (optionText: string) => {
         logger.info('[MessageList] Handling option selection:', optionText);
+        if (stageComposerDraft) {
+          stageComposerDraft(optionText);
+          return;
+        }
         try {
           if (onSendFullMessage) {
             await onSendFullMessage(optionText);
@@ -190,7 +198,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
           });
         }
       },
-      [onSendFullMessage, sendMessage],
+      [onSendFullMessage, sendMessage, stageComposerDraft],
     );
 
     return (

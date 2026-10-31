@@ -57,6 +57,8 @@ interface MessageRendererProps {
    * belong to the pre-fight world and no longer render.
    */
   optionsSuperseded?: boolean;
+  /** A roll tray is open, so option clicks must not start another action (#760). */
+  rollTrayOpen?: boolean;
 }
 
 /**
@@ -87,6 +89,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
     encounterActive = false,
     isLatestMessage = true,
     optionsSuperseded = false,
+    rollTrayOpen = false,
   }) => {
     // Parse for this message
     const inlineMessage = isDM ? parseMessageOptions(message.text) : null;
@@ -244,6 +247,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
               onSendMessage={onSendMessage}
               hasDynamicOverlay={false}
               isLatest={isLatestMessage}
+              rollTrayOpen={rollTrayOpen}
               showNoOptionsNotice={message.context?.noActionOptions === true}
               showImmediately={
                 message.context?.initialGreeting === true ||
@@ -277,7 +281,8 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
       !basicPropsMatch ||
       prev.encounterActive !== next.encounterActive ||
       prev.isLatestMessage !== next.isLatestMessage ||
-      prev.optionsSuperseded !== next.optionsSuperseded
+      prev.optionsSuperseded !== next.optionsSuperseded ||
+      prev.rollTrayOpen !== next.rollTrayOpen
     ) {
       return false;
     }
