@@ -115,7 +115,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
       pendingRollId,
       rollError,
       completedRoll,
-    } = useMessageDiceRolls({ onSendMessage, onSendFullMessage });
+    } = useMessageDiceRolls({ onSendMessage, onSendFullMessage, messages });
 
     // Combat asks the player for their own attack die through this popup. Registered here
     // because this is where the queue is already rendered; see use-player-roll-host.
