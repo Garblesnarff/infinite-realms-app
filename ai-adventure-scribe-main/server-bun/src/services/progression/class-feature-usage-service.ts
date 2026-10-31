@@ -10,7 +10,9 @@
 import { eq, and, desc, sql, exists, or } from 'drizzle-orm';
 
 import {
+  countedGrantPreview,
   engineRefilledRowIds,
+  grantCountedFeatureUses,
   refillCountedFeatures,
   spendCountedFeatureUse,
 } from './limited-feature-uses.js';
@@ -24,8 +26,20 @@ import {
   type CharacterFeature,
   type FeatureUsageLog,
 } from '../../../../db/schema/index';
-import { familyCountRule, limitedFeatureRule } from '../../../../shared/limited-feature-counts';
-import { NotFoundError } from '../../lib/errors.js';
+import {
+  divineSmiteDice,
+  divineSmiteLine,
+  familyCountRule,
+  limitedFeatureRule,
+  variableSpendRoute,
+  type VariableSpendRoute,
+} from '../../../../shared/limited-feature-counts';
+import {
+  BusinessLogicError,
+  InternalServerError,
+  NotFoundError,
+  ValidationError,
+} from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 
 import type {
@@ -187,11 +201,37 @@ export class ClassFeatureUsageService {
     // never by "the library has no count, so it is unlimited". A feature that spends another
     // resource is classified by that resource, not by its rest tag: it draws its cost from the
     // counted family (Turn Undead from Channel Divinity, Flurry of Blows from ki), or, when the
-    // cost cannot be routed (Metamagic, Divine Smite), is refused with that reason. A limited
-    // feature the engine cannot count is refused below (fail closed).
+    // cost cannot be routed, is refused with that reason. A limited feature the engine cannot
+    // count is refused below (fail closed). #1233: a route-less spend whose cost varies with
+    // the use (Divine Smite's slot level, a Metamagic option, a Flexible Casting direction)
+    // resolves from the request's slotLevel / option; a missing or invalid input refuses
+    // with the reason, and the bare refusal below stays for any other route-less spend.
     const rule = limitedFeatureRule(feature.className, feature.featureName);
     const limited = feature.usesPerRest === 'short_rest' || feature.usesPerRest === 'long_rest';
     if (rule?.kind === 'spends') {
+      if (!rule.route) {
+        // #1233: only a request carrying a variable input resolves the variable
+        // route. A bare use falls through to the generic refusal below, unchanged
+        // (an existing test asserts its exact message).
+        if (input.slotLevel !== undefined || input.option !== undefined) {
+          const variable = variableSpendRoute(feature.className, feature.featureName, {
+            slotLevel: input.slotLevel,
+            option: input.option,
+          });
+          if (variable) {
+            return this.spendVariableCost({
+              characterId,
+              featureId,
+              feature,
+              pool: rule.pool,
+              context,
+              sessionId,
+              userId,
+              variable,
+            });
+          }
+        }
+      }
       const poolRule = rule.route ? familyCountRule(rule.route.family) : null;
       if (!rule.route || !poolRule) {
         return {
@@ -334,6 +374,198 @@ export class ClassFeatureUsageService {
         unit === 'HP'
           ? `${feature.featureName} used. ${newUsesRemaining} HP remaining in the pool.`
           : `${feature.featureName} used. ${newUsesRemaining} uses remaining.`,
+    };
+  }
+
+  /**
+   * #1233: spend a variable-cost feature from the route the use request resolved to.
+   * Spend-first ordering: the cost lands before any grant, so a refusal (no slots, no
+   * points) has no side effects. The convert path previews the grant before spending
+   * the slot, so a refusal never follows an irreversible spend. A Smite posts its
+   * engine line only after the spend, best-effort: a session that cannot take the
+   * line must not lose the spend.
+   */
+  private static async spendVariableCost(input: {
+    characterId: string;
+    featureId: string;
+    feature: {
+      className: string;
+      featureName: string;
+      description: string;
+      mechanicalEffects: string | null;
+    };
+    pool: string;
+    context?: string;
+    sessionId?: string;
+    userId: string;
+    variable: VariableSpendRoute;
+  }): Promise<UseFeatureResult> {
+    const { characterId, featureId, feature, pool, context, sessionId, userId, variable } = input;
+    const refused = (message: string): UseFeatureResult => ({
+      success: false,
+      usesRemaining: 0,
+      effect: '',
+      message,
+    });
+    if (variable.kind === 'refuse') return refused(variable.reason);
+
+    const { SpellSlotsService } = await import('../spell-slots-service.js');
+    if (variable.kind === 'slot') {
+      // Divine Smite: spend the named slot through the slots service (the single source
+      // of slot state), and name its refusal instead of a generic one.
+      let spent;
+      try {
+        // eslint-disable-next-line react-hooks/rules-of-hooks -- server-side class method, not a React hook
+        spent = await SpellSlotsService.useSpellSlot(
+          {
+            characterId,
+            spellName: feature.featureName,
+            spellLevel: 1,
+            slotLevelUsed: variable.slotLevel,
+            sessionId,
+          },
+          userId,
+        );
+      } catch (error) {
+        if (error instanceof BusinessLogicError || error instanceof ValidationError) {
+          return refused(error.message);
+        }
+        throw error;
+      }
+      await this.logFeatureUsage(characterId, featureId, userId, context, sessionId);
+      const line = divineSmiteLine(variable.slotLevel);
+      if (sessionId) {
+        try {
+          // Dynamic import: the engine-chat line module is loaded only on the Smite path.
+          const { postEngineChatLine } = await import('../engine-chat-line.js');
+          await postEngineChatLine({
+            sessionId,
+            userId,
+            idSeed: `divine-smite:${sessionId}:${characterId}:${spent.logEntry.id}`,
+            text: line,
+            context: {
+              kind: 'divine_smite',
+              slotLevel: variable.slotLevel,
+              damageDice: `${divineSmiteDice(variable.slotLevel)}d8`,
+            },
+          });
+        } catch (lineError) {
+          logger.warn({
+            msg: 'DIVINE_SMITE_ENGINE_ROW_FAILED',
+            characterId,
+            featureId,
+            error: lineError,
+          });
+        }
+      }
+      return {
+        success: true,
+        usesRemaining: spent.slot.remainingSlots,
+        effect: line,
+        message: `${feature.featureName} used a level ${variable.slotLevel} spell slot. ${line}`,
+      };
+    }
+
+    if (variable.kind === 'convertSlot') {
+      // Flexible Casting, converting: establish that the grant can land BEFORE the
+      // irreversible slot spend, so a refusal never follows a spent slot. The grant
+      // re-checks when it writes; a failure there means the row vanished mid-flight,
+      // which is a 500, never a refusal after the spend.
+      const poolRule = familyCountRule('sorcerer-sorcery-points');
+      if (!poolRule)
+        return refused(`${feature.featureName} spends ${pool}, so it was not spent here.`);
+      const preview = await countedGrantPreview({
+        characterId,
+        userId,
+        className: feature.className,
+        featureName: 'Font of Magic',
+        rule: poolRule,
+        grantedBy: { featureName: feature.featureName, amount: variable.slotLevel },
+      });
+      if (!preview.ok) return refused(preview.reason);
+      try {
+        // eslint-disable-next-line react-hooks/rules-of-hooks -- server-side class method, not a React hook
+        await SpellSlotsService.useSpellSlot(
+          {
+            characterId,
+            spellName: feature.featureName,
+            spellLevel: 0,
+            slotLevelUsed: variable.slotLevel,
+            sessionId,
+          },
+          userId,
+        );
+      } catch (error) {
+        if (error instanceof BusinessLogicError || error instanceof ValidationError) {
+          return refused(error.message);
+        }
+        throw error;
+      }
+      const granted = await grantCountedFeatureUses({
+        characterId,
+        userId,
+        className: feature.className,
+        featureName: 'Font of Magic',
+        rule: poolRule,
+        grantedBy: { featureName: feature.featureName, amount: variable.slotLevel },
+      });
+      if (!granted.ok) {
+        logger.error({
+          msg: 'FLEXIBLE_CASTING_GRANT_FAILED_AFTER_SPEND',
+          characterId,
+          featureId,
+          reason: granted.reason,
+        });
+        throw new InternalServerError(
+          'Failed to grant sorcery points after converting a spell slot',
+        );
+      }
+      await this.logFeatureUsage(characterId, featureId, userId, context, sessionId);
+      return {
+        success: true,
+        usesRemaining: granted.usesRemaining,
+        effect: feature.mechanicalEffects || feature.description,
+        message: `${feature.featureName} used. Converted a level ${variable.slotLevel} spell slot into ${variable.slotLevel} sorcery point${variable.slotLevel === 1 ? '' : 's'}. ${granted.usesRemaining} sorcery points remaining.`,
+      };
+    }
+
+    // Metamagic ('points') and Flexible Casting creating a slot ('createSlot'): both draw
+    // sorcery points from the Font of Magic family; creating then grants the slot.
+    const poolRule = familyCountRule(variable.family);
+    if (!poolRule) {
+      return refused(
+        `${feature.featureName} has no uses of its own: it spends ${pool}, so it was not spent here.`,
+      );
+    }
+    const spent = await spendCountedFeatureUse({
+      characterId,
+      userId,
+      className: feature.className,
+      featureName: 'Font of Magic',
+      rule: poolRule,
+      spentBy: { featureName: feature.featureName, cost: variable.cost },
+    });
+    if (!spent.ok) return refused(spent.reason);
+    if (variable.kind === 'createSlot') {
+      const granted = await SpellSlotsService.grantSpellSlot(
+        characterId,
+        variable.slotLevel,
+        userId,
+      );
+      await this.logFeatureUsage(characterId, featureId, userId, context, sessionId);
+      return {
+        success: true,
+        usesRemaining: spent.usesRemaining,
+        effect: feature.mechanicalEffects || feature.description,
+        message: `${feature.featureName} used. A level ${variable.slotLevel} spell slot was created (${granted.totalSlots} total). ${spent.usesRemaining} sorcery points remaining.`,
+      };
+    }
+    await this.logFeatureUsage(characterId, featureId, userId, context, sessionId);
+    return {
+      success: true,
+      usesRemaining: spent.usesRemaining,
+      effect: feature.mechanicalEffects || feature.description,
+      message: `${feature.featureName} used (${variable.label}). ${spent.usesRemaining} ${pool} remaining.`,
     };
   }
 

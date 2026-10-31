@@ -15,9 +15,19 @@ import { and, eq, inArray } from 'drizzle-orm';
 import {
   campaigns,
   characterFeatures,
+  characterSpellSlots,
   characters,
   classFeaturesLibrary,
+  dialogueHistory,
+  featureUsageLog,
+  gameSessions,
 } from '../../../../../db/schema/index';
+import {
+  divineSmiteUseBody,
+  flexibleCastingConvertUseBody,
+  flexibleCastingCreateUseBody,
+  quickenedMetamagicUseBody,
+} from '../../../../../shared/test-fixtures/feature-use-bodies';
 import {
   closeRealDb,
   describeWithDb,
@@ -98,6 +108,17 @@ describeWithDb('limited class features are counted, never unlimited (#1225)', ()
   let wizardId = '';
   let sorcererId = '';
   let paladinId = '';
+  // #1233: fresh characters per variable-cost test, so no test reads another's spent state.
+  let paladin3Id = '';
+  let paladinDrainId = '';
+  let sorcererQuickId = '';
+  let sorcererConvertId = '';
+  let sorcererCreateId = '';
+  // #1233: a level-1 Sorcerer holds no Font of Magic row, so a convert cannot grant.
+  let sorcererNoPoolId = '';
+  // #1233 round 2: a fresh Sorcerer for the long-rest expiry test.
+  let sorcererRestId = '';
+  let sessionId = '';
 
   const api = async (path: string, method: string, payload?: unknown) => {
     const response: Response = await app.handle(
@@ -141,8 +162,28 @@ describeWithDb('limited class features are counted, never unlimited (#1225)', ()
 
   const use = (characterId: string, featureId: string) =>
     api(`/v1/class-features/characters/${characterId}/features/${featureId}/use`, 'POST', {});
+  /** The use route with the #1233 wire body (slotLevel / option). */
+  const postUse = (characterId: string, featureId: string, payload: Record<string, unknown>) =>
+    api(`/v1/class-features/characters/${characterId}/features/${featureId}/use`, 'POST', payload);
   const rest = (characterId: string, restType: 'short' | 'long') =>
     api(`/v1/class-features/characters/${characterId}/features/restore`, 'POST', { restType });
+  /** A long rest through the real rest route (sheet rest, no session). */
+  const longRest = (characterId: string) =>
+    api(`/v1/rest/characters/${characterId}/long`, 'POST', {});
+
+  /** The spell-slot row for a level, or null when no row has been derived yet. */
+  const slotRow = async (characterId: string, spellLevel: number) => {
+    const [row] = await db
+      .select()
+      .from(characterSpellSlots)
+      .where(
+        and(
+          eq(characterSpellSlots.characterId, characterId),
+          eq(characterSpellSlots.spellLevel, spellLevel),
+        ),
+      );
+    return row ?? null;
+  };
 
   /** A test-only library row granted to a character, for the fail-closed and passive cases. */
   const grantTestFeature = async (
@@ -179,12 +220,14 @@ describeWithDb('limited class features are counted, never unlimited (#1225)', ()
       const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
       const { charactersRoutes } = await import('../characters.js');
       const { classFeaturesRoutes } = await import('../class-features.js');
-      return { createRequestPipelineApp, charactersRoutes, classFeaturesRoutes };
+      const { restRoutes } = await import('../rest.js');
+      return { createRequestPipelineApp, charactersRoutes, classFeaturesRoutes, restRoutes };
     });
     app = pipeline
       .createRequestPipelineApp()
       .use(pipeline.charactersRoutes)
-      .use(pipeline.classFeaturesRoutes);
+      .use(pipeline.classFeaturesRoutes)
+      .use(pipeline.restRoutes);
     [{ id: campaignId }] = await db
       .insert(campaigns)
       .values({ userId, name: testId('1225-campaign') })
@@ -213,10 +256,41 @@ describeWithDb('limited class features are counted, never unlimited (#1225)', ()
     paladinId = await create(
       body(campaignId, { name: 'Sir Hale', className: 'Paladin', level: 2, stats: STATS }),
     );
+    // #1233: a level-3 Paladin can Smite (#1229's refusal left the one-shot premade unable
+    // to), and each variable-cost test gets a fresh Sorcerer / Paladin of its own.
+    paladin3Id = await create(
+      body(campaignId, { name: 'Dame Brigid', className: 'Paladin', level: 3, stats: STATS }),
+    );
+    paladinDrainId = await create(
+      body(campaignId, { name: 'Ser Odo', className: 'Paladin', level: 3, stats: STATS }),
+    );
+    sorcererQuickId = await create(
+      body(campaignId, { name: 'Fenn', className: 'Sorcerer', level: 3, stats: STATS }),
+    );
+    sorcererConvertId = await create(
+      body(campaignId, { name: 'Ilsa', className: 'Sorcerer', level: 3, stats: STATS }),
+    );
+    sorcererCreateId = await create(
+      body(campaignId, { name: 'Perrin', className: 'Sorcerer', level: 3, stats: STATS }),
+    );
+    sorcererNoPoolId = await create(
+      body(campaignId, { name: 'Wren', className: 'Sorcerer', level: 1, stats: STATS }),
+    );
+    sorcererRestId = await create(
+      body(campaignId, { name: 'Tamsin', className: 'Sorcerer', level: 3, stats: STATS }),
+    );
+    [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId, characterId: paladin3Id, sessionNumber: 1, status: 'active' })
+      .returning({ id: gameSessions.id });
   });
 
   afterAll(async () => {
     if (!hasRealDb) return;
+    await db
+      .delete(gameSessions)
+      .where(eq(gameSessions.id, sessionId))
+      .catch(() => {});
     if (createdCharacterIds.length > 0) {
       await db
         .delete(characterFeatures)
@@ -355,6 +429,181 @@ describeWithDb('limited class features are counted, never unlimited (#1225)', ()
     expect(refusedSmite.status).toBe(400);
     expect(refusedSmite.body.message).toBe(
       'Divine Smite has no uses of its own: it spends a spell slot, so it was not spent here.',
+    );
+  });
+
+  test('a level-3 Paladin smites with a 1st-level slot: the slot is spent and the engine row carries +2d8', async () => {
+    const smite = await granted(paladin3Id, 'Divine Smite');
+    const spent = await postUse(paladin3Id, smite.featureId, { ...divineSmiteUseBody, sessionId });
+    expect(spent.status).toBe(200);
+    expect(spent.body.effect).toBe(
+      'Divine Smite: +2d8 radiant damage (3d8 against undead or fiends).',
+    );
+    expect(spent.body.usesRemaining).toBe(2);
+    expect(await slotRow(paladin3Id, 1)).toMatchObject({ totalSlots: 3, usedSlots: 1 });
+    // The engine row is a persisted `system` line in the session's history.
+    const lines = await db
+      .select()
+      .from(dialogueHistory)
+      .where(
+        and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'system')),
+      );
+    expect(lines.some((line) => line.message.includes('+2d8 radiant damage'))).toBe(true);
+    // The spend is logged against the Smite row.
+    const logs = await db
+      .select()
+      .from(featureUsageLog)
+      .where(
+        and(
+          eq(featureUsageLog.characterId, paladin3Id),
+          eq(featureUsageLog.featureId, smite.featureId),
+        ),
+      );
+    expect(logs.length).toBe(1);
+  });
+
+  test('a Smite with no slots left is refused, naming the slot', async () => {
+    const smite = await granted(paladinDrainId, 'Divine Smite');
+    const first = await postUse(paladinDrainId, smite.featureId, divineSmiteUseBody);
+    expect(first.status).toBe(200);
+    // A level-3 Paladin holds 3 first-level slots; drain whatever the table grants.
+    const row = await slotRow(paladinDrainId, 1);
+    expect(row?.totalSlots).toBeGreaterThan(0);
+    const total = row?.totalSlots ?? 0;
+    for (let i = 1; i < total; i++) {
+      expect((await postUse(paladinDrainId, smite.featureId, divineSmiteUseBody)).status).toBe(200);
+    }
+    expect(await slotRow(paladinDrainId, 1)).toMatchObject({ totalSlots: total, usedSlots: total });
+    const refused = await postUse(paladinDrainId, smite.featureId, divineSmiteUseBody);
+    expect(refused.status).toBe(400);
+    expect(refused.body.message).toBe('No available level 1 spell slots');
+  });
+
+  test('a Sorcerer spends 2 sorcery points on Quickened Spell, and a second one is refused', async () => {
+    const metamagic = await granted(sorcererQuickId, 'Metamagic');
+    const spent = await postUse(sorcererQuickId, metamagic.featureId, quickenedMetamagicUseBody);
+    expect(spent.status).toBe(200);
+    expect(spent.body.message).toBe(
+      'Metamagic used (Quickened Spell). 1 sorcery points (Font of Magic) remaining.',
+    );
+    expect(spent.body.usesRemaining).toBe(1);
+    const refused = await postUse(sorcererQuickId, metamagic.featureId, quickenedMetamagicUseBody);
+    expect(refused.status).toBe(400);
+    expect(refused.body.message).toBe('Not enough Font of Magic left for Metamagic (it costs 2)');
+  });
+
+  test('Flexible Casting converts a 1st-level slot into a sorcery point, capped at the full count', async () => {
+    const converting = await granted(sorcererConvertId, 'Flexible Casting: Converting Spell Slot');
+    const metamagic = await granted(sorcererConvertId, 'Metamagic');
+    // Spend down to 1 point first, so the grant is visible.
+    expect(
+      (await postUse(sorcererConvertId, metamagic.featureId, quickenedMetamagicUseBody)).body
+        .usesRemaining,
+    ).toBe(1);
+    const converted = await postUse(
+      sorcererConvertId,
+      converting.featureId,
+      flexibleCastingConvertUseBody,
+    );
+    expect(converted.status).toBe(200);
+    expect(converted.body.usesRemaining).toBe(2);
+    expect(converted.body.message).toBe(
+      'Flexible Casting: Converting Spell Slot used. Converted a level 1 spell slot into 1 sorcery point. 2 sorcery points remaining.',
+    );
+    // The cap: a second conversion at 2 of 3 points would reach 4 without the
+    // LEAST(full, ...) cap in the grant. It lands at 3, the full count, while the
+    // slot is still spent.
+    const capped = await postUse(sorcererConvertId, converting.featureId, { option: '2' });
+    expect(capped.status).toBe(200);
+    expect(capped.body.usesRemaining).toBe(3);
+    expect(capped.body.message).toBe(
+      'Flexible Casting: Converting Spell Slot used. Converted a level 2 spell slot into 2 sorcery points. 3 sorcery points remaining.',
+    );
+    expect(await slotRow(sorcererConvertId, 1)).toMatchObject({ usedSlots: 1 });
+    expect(await slotRow(sorcererConvertId, 2)).toMatchObject({ usedSlots: 1 });
+  });
+
+  test('Flexible Casting creates a 2nd-level slot for 3 sorcery points, and refuses a 6th-level one', async () => {
+    const creating = await granted(sorcererCreateId, 'Flexible Casting: Creating Spell Slots');
+    // Slot rows derive lazily, so the grant is asserted relatively: exactly one total slot
+    // appears, and no used slot.
+    const before = await slotRow(sorcererCreateId, 2);
+    const created = await postUse(
+      sorcererCreateId,
+      creating.featureId,
+      flexibleCastingCreateUseBody,
+    );
+    expect(created.status).toBe(200);
+    expect(created.body.usesRemaining).toBe(0);
+    expect(await slotRow(sorcererCreateId, 2)).toMatchObject({
+      totalSlots: (before?.totalSlots ?? 0) + 1,
+      usedSlots: before?.usedSlots ?? 0,
+    });
+    const refused = await postUse(sorcererCreateId, creating.featureId, { option: '6' });
+    expect(refused.status).toBe(400);
+    expect(refused.body.message).toBe(
+      'Flexible Casting: Creating Spell Slots cannot create a slot above 5th level: send option "1" to "5".',
+    );
+  });
+
+  test('a slot created by Flexible Casting vanishes at the end of a long rest (PHB p.101)', async () => {
+    const creating = await granted(sorcererRestId, 'Flexible Casting: Creating Spell Slots');
+    const created = await postUse(sorcererRestId, creating.featureId, flexibleCastingCreateUseBody);
+    expect(created.status).toBe(200);
+    const before = await slotRow(sorcererRestId, 2);
+    expect(before).not.toBeNull();
+    const createdTotal = before?.totalSlots ?? 0;
+    expect(createdTotal).toBeGreaterThan(0);
+    const rested = await longRest(sorcererRestId);
+    expect(rested.status).toBe(200);
+    // Exactly the created slot is gone: totals re-sync to progression, used is 0.
+    expect(await slotRow(sorcererRestId, 2)).toMatchObject({
+      totalSlots: createdTotal - 1,
+      usedSlots: 0,
+    });
+  });
+
+  test('converting without a Font of Magic row refuses before spending the slot', async () => {
+    // Wren is level 1, so the level grant holds no Font of Magic row and the grant
+    // cannot land. Grant her the Converting row alone (the real library row).
+    const [library] = await db
+      .select({ id: classFeaturesLibrary.id })
+      .from(classFeaturesLibrary)
+      .where(
+        and(
+          eq(classFeaturesLibrary.className, 'Sorcerer'),
+          eq(classFeaturesLibrary.featureName, 'Flexible Casting: Converting Spell Slot'),
+        ),
+      );
+    expect(library).toBeDefined();
+    await db.insert(characterFeatures).values({
+      characterId: sorcererNoPoolId,
+      featureId: library.id,
+      usesRemaining: null,
+      isActive: true,
+      acquiredAtLevel: 2,
+    });
+    const refused = await postUse(sorcererNoPoolId, library.id, flexibleCastingConvertUseBody);
+    expect(refused.status).toBe(400);
+    expect(refused.body.message).toBe(
+      'Flexible Casting: Converting Spell Slot grants Font of Magic, which this character does not have',
+    );
+    // The refusal precedes the spend: no slot was used.
+    expect((await slotRow(sorcererNoPoolId, 1))?.usedSlots ?? 0).toBe(0);
+  });
+
+  test('a variable-cost use with a missing or unknown input refuses with what to send', async () => {
+    const metamagic = await granted(sorcererQuickId, 'Metamagic');
+    const unknown = await postUse(sorcererQuickId, metamagic.featureId, { option: 'silent' });
+    expect(unknown.status).toBe(400);
+    expect(unknown.body.message).toBe(
+      'Metamagic needs an option: careful, distant, empowered, extended, heightened, quickened, subtle, or twinned:<spell level>.',
+    );
+    const smite = await granted(paladinDrainId, 'Divine Smite');
+    const noSlot = await postUse(paladinDrainId, smite.featureId, { option: 'quickened' });
+    expect(noSlot.status).toBe(400);
+    expect(noSlot.body.message).toBe(
+      'Divine Smite spends a spell slot: send the slot level to spend (slotLevel 1-9).',
     );
   });
 

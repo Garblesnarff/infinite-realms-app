@@ -83,3 +83,49 @@ export async function updateCharacterClassFeatures(
     throw new Error(body?.error || `Class feature update failed with status ${response.status}`);
   }
 }
+
+/** The body `POST .../features/:featureId/use` takes (#1233: `slotLevel` / `option`). */
+export interface UseCharacterFeatureBody {
+  context?: string;
+  sessionId?: string;
+  slotLevel?: number;
+  option?: string;
+}
+
+/** Response of `POST .../features/:featureId/use`. */
+export interface UseCharacterFeatureResponse {
+  success: boolean;
+  usesRemaining: number;
+  effect: string;
+  message: string;
+}
+
+/**
+ * Spend a class feature through the use route. No UI calls this yet: the ActionBar and
+ * the sheet tracker spend client-locally, so Smite / Metamagic / Flexible Casting wiring
+ * is a follow-up. The sender exists so that wiring sends the exact wire body.
+ *
+ * Named `spend*`, not `use*`: a `use`-prefixed function reads as a React Hook to the
+ * linter, and this one is called from event handlers.
+ */
+export async function spendCharacterFeature(
+  characterId: string,
+  featureId: string,
+  body: UseCharacterFeatureBody,
+): Promise<UseCharacterFeatureResponse> {
+  const response = await fetchWithAuth(
+    `/v1/class-features/characters/${encodeURIComponent(characterId)}/features/${encodeURIComponent(featureId)}/use`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      retryBudgetMs: 0,
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Class feature use failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as UseCharacterFeatureResponse;
+}

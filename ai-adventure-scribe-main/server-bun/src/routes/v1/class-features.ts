@@ -57,6 +57,10 @@ const grantFeatureSchema = t.Object({
 const useFeatureSchema = t.Object({
   context: t.Optional(t.String({ maxLength: 10_000 })),
   sessionId: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
+  // #1233: the slot level to spend (Divine Smite) and the option to apply (Metamagic /
+  // Flexible Casting). Absent, the variable-cost features refuse as before.
+  slotLevel: t.Optional(t.Integer({ minimum: 1, maximum: 9 })),
+  option: t.Optional(t.String({ minLength: 1, maxLength: 200 })),
 });
 
 const restoreFeaturesSchema = t.Object({
@@ -218,7 +222,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
     '/characters/:id/features/:featureId/use',
     async ({ params, body, set, user }) => {
       try {
-        const { context, sessionId } = body;
+        const { context, sessionId, slotLevel, option } = body;
 
         if (sessionId) {
           const verification = await verifySessionOwnership(sessionId, user!.userId);
@@ -233,6 +237,8 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
           featureId: params.featureId,
           context,
           sessionId,
+          slotLevel,
+          option,
           userId: user!.userId,
         });
 

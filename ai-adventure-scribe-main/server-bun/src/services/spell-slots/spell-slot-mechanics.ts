@@ -256,6 +256,32 @@ export class SpellSlotMechanics {
   }
 
   /**
+   * #1233: sorcerer levels that grant Flexible Casting (sorcerer level 2+).
+   * Mirrors seedRowsForCharacter's branching exactly: multiclass characters
+   * (more than one classLevels entry) sum the Sorcerer entries; single-class
+   * characters use the character row's class and level. An out-of-range
+   * level grants nothing, as seedRowsForCharacter returns no rows for it.
+   * Only sorcerers can create slots, so only they can hold created slots
+   * past a long rest — this gates the long-rest expiry without a query.
+   */
+  static sorcererLevels(
+    className: string | null | undefined,
+    level: number,
+    classLevels: unknown,
+  ): number {
+    if (!Number.isInteger(level) || level < 1 || level > 20) {
+      return 0;
+    }
+    const parsedLevels = parseClassLevels(classLevels);
+    if (parsedLevels.length > 1) {
+      return parsedLevels
+        .filter((entry) => entry.className === 'Sorcerer')
+        .reduce((total, entry) => total + entry.level, 0);
+    }
+    return normalizeClassName(className) === 'Sorcerer' ? level : 0;
+  }
+
+  /**
    * Calculate spell slots for a single class (D&D 5E PHB tables)
    * @param className - D&D 5E class name
    * @param level - Character level (1-20)

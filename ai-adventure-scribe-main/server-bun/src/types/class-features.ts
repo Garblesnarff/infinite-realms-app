@@ -99,6 +99,10 @@ export interface UseFeatureInput {
   featureId: string;
   context?: string;
   sessionId?: string;
+  // #1233: the slot level to spend (Divine Smite) and the option to apply (Metamagic /
+  // Flexible Casting). Absent, the variable-cost features refuse as before.
+  slotLevel?: number;
+  option?: string;
   userId?: string;
 }
 

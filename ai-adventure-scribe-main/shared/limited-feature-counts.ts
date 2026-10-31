@@ -474,3 +474,162 @@ function tierCountFromName(featureName: string): number | null {
   const raw = match[1].toLowerCase();
   return words[raw] ?? Number(raw);
 }
+
+/**
+ * #1233: the features whose cost varies with the use. Their `limitedFeatureRule` stays
+ * `route: null` (a bare use, with no option or slot level, is refused, never free), and the
+ * use request resolves the spend here, from the `slotLevel` / `option` it carries. Pure
+ * functions only: this module is imported by the client-side seed generator.
+ */
+
+/** Sorcery-point cost of each Metamagic option (PHB p.102). Twinned costs the spell level. */
+export const METAMAGIC_COSTS: Record<string, number> = {
+  careful: 1,
+  distant: 1,
+  empowered: 1,
+  extended: 1,
+  heightened: 3,
+  quickened: 2,
+  subtle: 1,
+};
+
+/** Display name of each Metamagic option, for the spend message. */
+export const METAMAGIC_OPTION_LABELS: Record<string, string> = {
+  careful: 'Careful Spell',
+  distant: 'Distant Spell',
+  empowered: 'Empowered Spell',
+  extended: 'Extended Spell',
+  heightened: 'Heightened Spell',
+  quickened: 'Quickened Spell',
+  subtle: 'Subtle Spell',
+  twinned: 'Twinned Spell',
+};
+
+/** Sorcery-point cost of creating a spell slot of each level (PHB p.101); level 6+ is refused. */
+export const FLEXIBLE_CASTING_CREATE_COSTS: Record<number, number> = {
+  1: 2,
+  2: 3,
+  3: 5,
+  4: 6,
+  5: 7,
+};
+
+/** A variable-cost spend the use request resolves to, or a refusal naming what is missing. */
+export type VariableSpendRoute =
+  | { kind: 'slot'; slotLevel: number }
+  | { kind: 'points'; family: string; cost: number; label: string }
+  | { kind: 'createSlot'; family: string; slotLevel: number; cost: number }
+  | { kind: 'convertSlot'; slotLevel: number }
+  | { kind: 'refuse'; reason: string };
+
+/** The variable inputs a use request carries: the slot level to spend, and the option to apply. */
+export interface VariableSpendInput {
+  slotLevel?: number;
+  option?: string;
+}
+
+const SLOT_LEVEL_HINT = 'slotLevel 1-9';
+const METAMAGIC_OPTION_HINT =
+  'an option: careful, distant, empowered, extended, heightened, quickened, subtle, or twinned:<spell level>';
+
+function invalidSlotLevel(featureName: string): VariableSpendRoute {
+  return {
+    kind: 'refuse',
+    reason: `${featureName} spends a spell slot: send the slot level to spend (${SLOT_LEVEL_HINT}).`,
+  };
+}
+
+function invalidOption(featureName: string, hint: string): VariableSpendRoute {
+  return {
+    kind: 'refuse',
+    reason: `${featureName} needs ${hint}.`,
+  };
+}
+
+/** The slot level an option names ("3"), or null when it names no level 1-9. */
+function optionSlotLevel(option: string): number | null {
+  const match = /^([1-9])$/.exec(option.trim());
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * Resolves a variable-cost feature's spend from the use request's inputs, or null when the
+ * feature has no variable-cost rule (the caller falls back to its fixed route / refusal).
+ * A missing or invalid input refuses with the reason, never spends.
+ */
+export function variableSpendRoute(
+  className: string,
+  featureName: string,
+  input: VariableSpendInput,
+): VariableSpendRoute | null {
+  const key = `${className.toLowerCase()}|${featureName.toLowerCase()}`;
+  if (key === 'paladin|divine smite') {
+    const slotLevel = input.slotLevel;
+    if (
+      typeof slotLevel !== 'number' ||
+      !Number.isInteger(slotLevel) ||
+      slotLevel < 1 ||
+      slotLevel > 9
+    ) {
+      return invalidSlotLevel(featureName);
+    }
+    return { kind: 'slot', slotLevel };
+  }
+  if (key === 'sorcerer|metamagic') {
+    const option = input.option?.trim().toLowerCase();
+    if (!option) return invalidOption(featureName, METAMAGIC_OPTION_HINT);
+    const twinned = /^twinned:([1-9])$/.exec(option);
+    if (twinned) {
+      return {
+        kind: 'points',
+        family: 'sorcerer-sorcery-points',
+        cost: Number(twinned[1]),
+        label: 'Twinned Spell',
+      };
+    }
+    const cost = METAMAGIC_COSTS[option];
+    if (cost === undefined) return invalidOption(featureName, METAMAGIC_OPTION_HINT);
+    return {
+      kind: 'points',
+      family: 'sorcerer-sorcery-points',
+      cost,
+      label: METAMAGIC_OPTION_LABELS[option],
+    };
+  }
+  if (key === 'sorcerer|flexible casting: creating spell slots') {
+    const slotLevel = input.option ? optionSlotLevel(input.option) : null;
+    if (slotLevel === null) {
+      return invalidOption(featureName, 'the slot level to create, as option "1" to "5"');
+    }
+    const cost = FLEXIBLE_CASTING_CREATE_COSTS[slotLevel];
+    if (cost === undefined) {
+      return {
+        kind: 'refuse',
+        reason: `${featureName} cannot create a slot above 5th level: send option "1" to "5".`,
+      };
+    }
+    return { kind: 'createSlot', family: 'sorcerer-sorcery-points', slotLevel, cost };
+  }
+  if (key === 'sorcerer|flexible casting: converting spell slot') {
+    const slotLevel = input.option ? optionSlotLevel(input.option) : null;
+    if (slotLevel === null) {
+      return invalidOption(featureName, 'the slot level to convert, as option "1" to "9"');
+    }
+    return { kind: 'convertSlot', slotLevel };
+  }
+  return null;
+}
+
+/** Divine Smite damage in d8s: 2d8, +1d8 per slot level above 1st, capped at 5d8 (PHB p.85). */
+export function divineSmiteDice(slotLevel: number): number {
+  return Math.min(2 + Math.max(0, slotLevel - 1), 5);
+}
+
+/**
+ * The engine line for a Smite: the base dice, with the undead/fiend bonus stated
+ * conditionally — the use request carries no target, so the DM applies it.
+ */
+export function divineSmiteLine(slotLevel: number): string {
+  const dice = divineSmiteDice(slotLevel);
+  return `Divine Smite: +${dice}d8 radiant damage (${dice + 1}d8 against undead or fiends).`;
+}
