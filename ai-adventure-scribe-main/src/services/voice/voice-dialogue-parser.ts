@@ -18,12 +18,20 @@ import logger from '@/lib/logger';
 import { stripAssetTags } from '@/lib/utils';
 import { stripEngineGeneratedLines } from '@/utils/engine-lines';
 
+/**
+ * How many unnamed speakers this scene has already named. The caller keeps one
+ * of these per session and passes the same object on every narration, so the
+ * next quote does not start over at "Stranger 1" (#815).
+ */
+export type UnnamedSpeakerCount = { next: number };
+
 export class VoiceDialogueParser {
   /**
    * Process plain text by detecting dialogue and attributing voices
-   * Parses quoted speech with attribution to assign character voices
+   * Parses quoted speech with attribution to assign character voices.
+   * `unnamedSpeakers` is the session's count. Omit it only for a one-off parse.
    */
-  static processPlainText(text: string): VoiceSegment[] {
+  static processPlainText(text: string, unnamedSpeakers?: UnnamedSpeakerCount): VoiceSegment[] {
     logger.info('📝 VoiceDialogueParser: Processing plain text with dialogue detection');
 
     // Strip engine transcript lines before normalizing whitespace. The
@@ -36,8 +44,10 @@ export class VoiceDialogueParser {
       return [];
     }
 
-    // Parse text into dialogue and narration segments
-    const parsedSegments = VoiceDialogueParser.parseDialogueFromText(cleanText);
+    // Parse text into dialogue and narration segments. A fresh count is only
+    // for a caller that has no session; a passed count continues across texts.
+    const speakers = unnamedSpeakers ?? { next: 0 };
+    const parsedSegments = VoiceDialogueParser.parseDialogueFromText(cleanText, speakers);
 
     if (parsedSegments.length === 0) {
       // No dialogue found, return as single DM segment
@@ -78,7 +88,10 @@ export class VoiceDialogueParser {
    * Parse dialogue from plain text
    * Returns an array of segments with type 'dm' (narration) or 'character' (dialogue)
    */
-  private static parseDialogueFromText(text: string): AISegment[] {
+  private static parseDialogueFromText(
+    text: string,
+    unnamedSpeakers: UnnamedSpeakerCount,
+  ): AISegment[] {
     const segments: AISegment[] = [];
 
     // Regex to find quoted dialogue with optional attribution
@@ -88,6 +101,8 @@ export class VoiceDialogueParser {
 
     let lastIndex = 0;
     let match;
+    // Each unnamed quote is its own speaker. The count belongs to the caller
+    // so a later narration in the same session does not reuse "Stranger 1" (#815).
 
     while ((match = dialoguePattern.exec(text)) !== null) {
       // Add narration before this dialogue (if any)
@@ -112,7 +127,7 @@ export class VoiceDialogueParser {
         segments.push({
           type: 'character',
           text: dialogue.trim(),
-          character: characterName || 'Unknown NPC',
+          character: characterName || `Stranger ${++unnamedSpeakers.next}`,
           voice_category: voiceCategory,
         });
       }

@@ -112,14 +112,35 @@ describe('VoiceDialogueParser', () => {
       expect(result2[1].text).toBe('.');
     });
 
-    it('should fallback to Unknown NPC if no character can be identified', () => {
-      const text = '"Where is the key?"';
+    it('gives each unnamed speaker in one scene its own provisional name', () => {
+      const text = '"Where is the key?" "I have it."';
       const result = VoiceDialogueParser.processPlainText(text);
 
-      expect(result).toHaveLength(1);
+      expect(result).toHaveLength(2);
       expect(result[0].type).toBe('character');
-      expect(result[0].character).toBe('Unknown NPC');
+      expect(result[0].character).toBe('Stranger 1');
       expect(result[0].text).toBe('Where is the key?');
+      expect(result[1].type).toBe('character');
+      expect(result[1].character).toBe('Stranger 2');
+      expect(result[1].text).toBe('I have it.');
+      expect(result[0].voiceId).not.toBe(result[1].voiceId);
+    });
+
+    it('continues unnamed speaker numbers across calls for the same session', () => {
+      const session: { next: number } = { next: 0 };
+      const first = VoiceDialogueParser.processPlainText('"Where is the key?"', session);
+      const second = VoiceDialogueParser.processPlainText('"I have it."', session);
+
+      expect(first[0].character).toBe('Stranger 1');
+      expect(second[0].character).toBe('Stranger 2');
+      expect(first[0].voiceId).not.toBe(second[0].voiceId);
+    });
+
+    it('starts again at Stranger 1 when the caller does not pass a session count', () => {
+      const first = VoiceDialogueParser.processPlainText('"Hello."');
+      const second = VoiceDialogueParser.processPlainText('"Again."');
+      expect(first[0].character).toBe('Stranger 1');
+      expect(second[0].character).toBe('Stranger 1');
     });
 
     it('should extract surrounding narration before and after dialogue segments', () => {
@@ -148,7 +169,7 @@ describe('VoiceDialogueParser', () => {
       expect(result[0].type).toBe('dm');
       expect(result[0].text).toBe('The terrifying dragon roars,');
       expect(result[1].type).toBe('character');
-      expect(result[1].character).toBe('Unknown NPC');
+      expect(result[1].character).toBe('Stranger 1');
       expect(result[1].text).toBe('I will consume you!');
     });
 

@@ -99,45 +99,4 @@ export class VoiceConsistencyRepository {
       return [];
     }
   }
-
-  /**
-   * Save a new character voice mapping
-   */
-  static async saveCharacterVoiceMapping(
-    sessionId: string,
-    characterName: string,
-    voiceCategory: string,
-    voiceId: string,
-    initialCount: number = 1,
-  ): Promise<void> {
-    try {
-      await issue1784Api.upsertVoiceMapping(sessionId, {
-        character_name: characterName,
-        voice_category: voiceCategory,
-        voice_id: voiceId,
-        appearance_count: initialCount,
-      });
-
-      logger.info(
-        `💾 Saved voice mapping: ${characterName} -> ${voiceCategory} (count: ${initialCount})`,
-      );
-    } catch (error) {
-      logger.error('Error saving character voice mapping:', error);
-    }
-  }
-
-  /**
-   * Update character usage statistics
-   */
-  static async updateCharacterUsage(mappingId: string, newCount: number): Promise<void> {
-    try {
-      // ⚡ Bolt: Optimized to perform update in a single round-trip by using the pre-calculated count.
-      // This eliminates the redundant SELECT query previously performed here.
-      await issue1784Api.updateVoiceMapping(mappingId, { appearance_count: newCount });
-
-      logger.debug(`📊 Updated usage for mapping: ${mappingId} (count: ${newCount})`);
-    } catch (error) {
-      logger.error('Error updating character usage:', error);
-    }
-  }
 }
