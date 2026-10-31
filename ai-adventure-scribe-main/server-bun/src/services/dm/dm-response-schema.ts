@@ -369,6 +369,7 @@ const mapActionPlaceVariantSchema = {
         speedFeet: { type: 'number' },
         movementRemaining: { type: 'number' },
         name: { type: 'string' },
+        slug: { type: 'string' },
         isLiving: { type: 'boolean' },
       },
       required: ['id', 'x', 'y', 'size', 'type', 'speedFeet', 'movementRemaining'],
@@ -951,7 +952,7 @@ export const dmResponseSchema = createDmResponseSchema(liveExtensionProperties);
 /**
  * #1258 round 3 (strategist FIX at 774c634b), refined by #1265: the fight-phase shadow schemas
  * declare the five #1258 keys required + nullable instead of optional, so the
- * tactical phase fits the 24-optional strict budget (serialized 36 -> 18;
+ * tactical phase fits the 24-optional strict budget (serialized 36 -> 19;
  * unions 8 -> 16, still within the 16 cap) without narrowing what the shadow
  * accepts. The live schema sent to the provider is untouched — the wrappers and the
  * scene_spec clone below exist only on the combat/tactical phase objects,

@@ -429,6 +429,7 @@ describe('tactical kind-split map variants (Refs #782 item 8)', () => {
             type: 'object',
             speedFeet: 0,
             movementRemaining: 0,
+            slug: 'new-thing',
           },
         }),
       ).length,

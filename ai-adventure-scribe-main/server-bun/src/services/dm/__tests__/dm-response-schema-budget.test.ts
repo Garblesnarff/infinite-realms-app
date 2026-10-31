@@ -60,7 +60,7 @@ import mainDmResponseSchema from './fixtures/main-dm-response-schema.json' with 
  * the fight-phase schemas declare the five keys required + nullable instead
  * of optional (null when unused — the shadow pads an absent key with null,
  * matching the route, which skips absent story fields exactly as null ones),
- * so tactical measures 18 optionals / 16 unions and combat 6 / 15 after the
+ * so tactical measures 19 optionals / 16 unions and combat 6 / 15 after the
  * serialized-schema correction in #1265. The
  * narrative phase keeps the round-1 shape (18 / 5). The enforcement design
  * (its own PR) still decides whether fight-turn story fields are stripped
@@ -114,7 +114,7 @@ const BASELINE_ONE_OF = 0;
  *  +4: self, size, sceneDescription, enemyPlacement; rest +1, damage +1,
  *  final_beat_reached +1). Round 3 re-fits the fight phases inside the
  *  24-optional budget: the five keys are required + nullable there, so
- *  combat measures 6 optionals / 15 unions and tactical 18 / 16 (each
+ *  combat measures 6 optionals / 15 unions and tactical 19 / 16 (each
  *  required-nullable key trades one optional for one null-pad union; the
  *  scene_spec clone adds three nested pads). Narrative is untouched. */
 const PHASE_BASELINES: Record<
@@ -123,7 +123,7 @@ const PHASE_BASELINES: Record<
 > = {
   narrative: { unions: 5, optionals: 18, keywords: 6 },
   combat: { unions: 15, optionals: 6, keywords: 4 },
-  tactical: { unions: 16, optionals: 18, keywords: 5 },
+  tactical: { unions: 16, optionals: 19, keywords: 5 },
 };
 
 /** Baseline budget for createDmResponseSchema(): re-measured for #782 item 7.
