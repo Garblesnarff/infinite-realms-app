@@ -100,7 +100,16 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
       // An open tray owns the turn. A click must not send, and must not run an engine action.
       if (rollTrayOpen) return;
       if (!showCombatMenu || !encounter?.id) {
-        await onOptionSelect(createPlayerMessageFromOption(option));
+        const text = createPlayerMessageFromOption(option);
+        // Ordinary choices wait in the composer (#760). A combat chip never
+        // reaches this branch. The engine runs it, or onOptionSelect sends the
+        // label. That callback is MessageList's send, so a mounted composer
+        // must not swallow the chip.
+        if (stageComposerDraft) {
+          stageComposerDraft(text);
+          return;
+        }
+        await onOptionSelect(text);
         return;
       }
       const action = choosableActions[option.number - 1];

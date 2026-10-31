@@ -1,7 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 
-import { useStageComposerDraft } from './composer-draft';
 import { MessageListContainer } from './message-list/MessageListContainer';
 import { useImageGeneration } from './message-list/useImageGeneration';
 import { useScrollBehavior } from './message-list/useScrollBehavior';
@@ -119,7 +118,6 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
     const { state: characterState } = useCharacter();
     const { state: campaignState } = useCampaign();
     const { state: combatState } = useCombat();
-    const stageComposerDraft = useStageComposerDraft();
     const { getAssetImageUrl } = useCampaignAssetsContext();
     const { id: routeCampaignId } = useParams<{ id: string }>();
 
@@ -170,16 +168,13 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
       [clearFailedSend, onRetryTurn, onSendFullMessage, sendMessage],
     );
 
-    // An ordinary option fills the composer (#760). Send and Enter submit it.
-    // Attack, end turn, and the way out of a fight do not come through here:
-    // those chips run the engine inside DynamicOptionsSection.
+    // Free-text choices are staged in DynamicOptionsSection before this runs.
+    // This callback sends. Combat text fallbacks (a chip the engine does not
+    // run) use it too, the same way the action bar calls handleSendMessage,
+    // so they must not stop in the composer (#760).
     const handleOptionSelect = React.useCallback(
       async (optionText: string) => {
         logger.info('[MessageList] Handling option selection:', optionText);
-        if (stageComposerDraft) {
-          stageComposerDraft(optionText);
-          return;
-        }
         try {
           if (onSendFullMessage) {
             await onSendFullMessage(optionText);
@@ -198,7 +193,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
           });
         }
       },
-      [onSendFullMessage, sendMessage, stageComposerDraft],
+      [onSendFullMessage, sendMessage],
     );
 
     return (
