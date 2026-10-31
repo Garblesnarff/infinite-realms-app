@@ -1,11 +1,13 @@
 /**
- * #760: a combat chip the engine does not run still sends, even while the
- * composer provider is mounted. Staging is only for ordinary free-text options.
+ * #760: a combat chip is never staged into the composer; staging is only for
+ * ordinary free-text options. #1276 (merged as #1279): a chip whose type this
+ * bundle does not know is refused with "Reload to use this" and sends nothing,
+ * so its label never reaches the DM as chat text.
  *
  * Real: DynamicOptionsSection, useCombatLegalActions (the onSendText fallback),
  * ActionOptions, ComposerDraftProvider, ChatInput.
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -32,7 +34,7 @@ vi.mock('@/contexts/CombatContext', () => ({
   useCombat: () => ({ state: combat, refreshCombatState: vi.fn() }),
 }));
 
-describe('combat text fallback still sends (#760)', () => {
+describe('combat chip of an unknown engine type (#760, #1276)', () => {
   const user = userEvent.setup();
 
   beforeEach(() => {
@@ -47,7 +49,7 @@ describe('combat text fallback still sends (#760)', () => {
     } as Response);
   });
 
-  it('sends the chip label and leaves the composer empty', async () => {
+  it('is refused, sends nothing and leaves the composer empty', async () => {
     const onOptionSelect = vi.fn().mockResolvedValue(undefined);
     const onComposerSend = vi.fn().mockResolvedValue(undefined);
     render(
@@ -59,8 +61,8 @@ describe('combat text fallback still sends (#760)', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Option 1 - Help your ally' }));
 
-    await waitFor(() => expect(onOptionSelect).toHaveBeenCalledWith('Help your ally'));
-    expect(onOptionSelect).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Reload to use this');
+    expect(onOptionSelect).not.toHaveBeenCalled();
     expect(onComposerSend).not.toHaveBeenCalled();
     expect(
       screen.getByRole('textbox', { name: 'Describe what your character would like to do' }),
