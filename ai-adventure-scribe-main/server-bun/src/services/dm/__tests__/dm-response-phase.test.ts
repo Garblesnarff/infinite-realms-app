@@ -417,7 +417,21 @@ describe('tactical kind-split map variants (Refs #782 item 8)', () => {
     expect(
       validate(
         tactical,
-        mapTurn({ action: 'place', changes: { terrain: 'floor' } }),
+        mapTurn({
+          action: 'place',
+          // A place action carries the MapEntity fields consumed by
+          // placeEntity; cell terrain belongs to update_cell.
+          changes: {
+            id: 'new-thing',
+            x: 2,
+            y: 2,
+            size: 'medium',
+            type: 'object',
+            speedFeet: 0,
+            movementRemaining: 0,
+            slug: 'new-thing',
+          },
+        }),
       ).length,
     ).toBe(0);
     expect(validate(tactical, mapTurn({ action: 'place' })).length).toBeGreaterThan(0);

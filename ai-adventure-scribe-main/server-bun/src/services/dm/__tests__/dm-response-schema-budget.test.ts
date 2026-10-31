@@ -2,9 +2,11 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   createDmResponseSchema,
+  dmResponseSchema,
   dmResponseSchemaForPhase,
   type DmResponsePhase,
 } from '../dm-response-schema.js';
+import mainDmResponseSchema from './fixtures/main-dm-response-schema.json' with { type: 'json' };
 
 /**
  * Epic #782 item 1 — Measure. (Refs #782)
@@ -58,7 +60,8 @@ import {
  * the fight-phase schemas declare the five keys required + nullable instead
  * of optional (null when unused — the shadow pads an absent key with null,
  * matching the route, which skips absent story fields exactly as null ones),
- * so tactical measures 23 optionals / 16 unions and combat 6 / 15. The
+ * so tactical measures 19 optionals / 16 unions and combat 6 / 15 after the
+ * serialized-schema correction in #1265. The
  * narrative phase keeps the round-1 shape (18 / 5). The enforcement design
  * (its own PR) still decides whether fight-turn story fields are stripped
  * pre-validation or carried in the enforced schema.
@@ -66,8 +69,9 @@ import {
  * Counting follows the Anthropic convention from
  * dm-response-schema-anthropic.test.ts: every `anyOf` / `oneOf` node and every
  * `type: [..., 'null']` array counts as one union; every object property not
- * listed in `required` counts as one optional. Nodes are counted once by
- * identity, matching the existing lint.
+ * listed in `required` counts as one optional. The provider receives JSON, so
+ * this walker clones through JSON.stringify/parse and does not deduplicate
+ * shared object identities.
  *
  * Test-only: no model-facing text changes.
  */
@@ -110,7 +114,7 @@ const BASELINE_ONE_OF = 0;
  *  +4: self, size, sceneDescription, enemyPlacement; rest +1, damage +1,
  *  final_beat_reached +1). Round 3 re-fits the fight phases inside the
  *  24-optional budget: the five keys are required + nullable there, so
- *  combat measures 6 optionals / 15 unions and tactical 23 / 16 (each
+ *  combat measures 6 optionals / 15 unions and tactical 19 / 16 (each
  *  required-nullable key trades one optional for one null-pad union; the
  *  scene_spec clone adds three nested pads). Narrative is untouched. */
 const PHASE_BASELINES: Record<
@@ -119,7 +123,7 @@ const PHASE_BASELINES: Record<
 > = {
   narrative: { unions: 5, optionals: 18, keywords: 6 },
   combat: { unions: 15, optionals: 6, keywords: 4 },
-  tactical: { unions: 16, optionals: 23, keywords: 5 },
+  tactical: { unions: 16, optionals: 19, keywords: 5 },
 };
 
 /** Baseline budget for createDmResponseSchema(): re-measured for #782 item 7.
@@ -173,13 +177,11 @@ type Budget = {
   constraintPaths: string[];
 };
 
-function measureNode(node: unknown, path: string, budget: Budget, seen: Set<object>): void {
+function measureNode(node: unknown, path: string, budget: Budget): void {
   if (node === null || typeof node !== 'object') return;
-  if (seen.has(node)) return;
-  seen.add(node);
 
   if (Array.isArray(node)) {
-    node.forEach((item, index) => measureNode(item, `${path}[${index}]`, budget, seen));
+    node.forEach((item, index) => measureNode(item, `${path}[${index}]`, budget));
     return;
   }
 
@@ -213,7 +215,7 @@ function measureNode(node: unknown, path: string, budget: Budget, seen: Set<obje
       if (!required.includes(key)) {
         budget.optionals += 1;
       }
-      measureNode(properties[key], `${path}.${key}`, budget, seen);
+      measureNode(properties[key], `${path}.${key}`, budget);
     }
     // Sibling subtrees on the same node (oneOf/anyOf/items/$defs/…) must still
     // be walked, but the properties map itself is not a schema node: a property
@@ -221,19 +223,22 @@ function measureNode(node: unknown, path: string, budget: Budget, seen: Set<obje
     // (`type`/`required` are primitives and walking them is a no-op.)
     for (const [key, value] of Object.entries(record)) {
       if (key === 'properties' || key === 'required' || key === 'type') continue;
-      measureNode(value, `${path}.${key}`, budget, seen);
+      measureNode(value, `${path}.${key}`, budget);
     }
     return;
   }
 
   for (const [key, value] of Object.entries(record)) {
-    measureNode(value, `${path}.${key}`, budget, seen);
+    measureNode(value, `${path}.${key}`, budget);
   }
 }
 
 function measureSchemaBudget(schema: unknown, label: string): Budget {
   const budget: Budget = { unions: 0, optionals: 0, oneOfPaths: [], constraintPaths: [] };
-  measureNode(schema, label, budget, new Set());
+  // JSON is the provider boundary: shared in-memory objects are serialized at
+  // each occurrence, so identity deduplication would under-count the budget.
+  const serialized = JSON.parse(JSON.stringify(schema));
+  measureNode(serialized, label, budget);
   return budget;
 }
 
@@ -392,5 +397,9 @@ describe('dmResponseSchema strict budget (Refs #782 item 1)', () => {
     };
     const budget = measureSchemaBudget(good, 'good');
     expect(budget).toEqual({ unions: 0, optionals: 0, oneOfPaths: [], constraintPaths: [] });
+  });
+
+  test('the shadow-only budget fix leaves live provider schema bytes unchanged', () => {
+    expect(JSON.stringify(dmResponseSchema)).toBe(JSON.stringify(mainDmResponseSchema));
   });
 });

@@ -324,9 +324,9 @@ const mapActionSchema = {
  * #782 item 8, tactical kind-split: one variant per map action kind, each
  * carrying only its kind's fields, required where the engine needs them to
  * apply the action (tactical/dispatch.ts) — not merely where the lenient
- * isMapAction parser checks them. The `changes` patch bag stays as-is inside
- * update_cell (and place, which shares the same object, so the budget
- * walker's identity dedup counts the bag once); a patch is inherently sparse.
+ * isMapAction parser checks them. The update_cell `changes` patch bag remains
+ * sparse, while place carries a complete MapEntity shape. These phase-only
+ * shapes are narrower than the full/live schema, which stays unchanged.
  * Deliberate narrowings vs the single schema, all for fields dispatch
  * ignores on that kind (shadow week adjudicates): move with a Cell bag in
  * `changes`; remove with x/y/changes; update_cell with entityId; place with
@@ -354,7 +354,26 @@ const mapActionPlaceVariantSchema = {
   additionalProperties: false,
   properties: {
     action: { type: 'string', enum: ['place'] },
-    changes: changesSchema,
+    // A placement is a complete MapEntity, not a cell patch. Keep the shadow
+    // shape to the fields placeEntity actually consumes; the full/live schema
+    // above remains unchanged for the provider and lenient parser.
+    changes: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        id: { type: 'string' },
+        x: { type: 'number' },
+        y: { type: 'number' },
+        size: { type: 'string', enum: ['tiny', 'small', 'medium', 'large', 'huge', 'gargantuan'] },
+        type: { type: 'string', enum: ['pc', 'npc', 'monster', 'object'] },
+        speedFeet: { type: 'number' },
+        movementRemaining: { type: 'number' },
+        name: { type: 'string' },
+        slug: { type: 'string' },
+        isLiving: { type: 'boolean' },
+      },
+      required: ['id', 'x', 'y', 'size', 'type', 'speedFeet', 'movementRemaining'],
+    },
   },
   required: ['action', 'changes'],
 } as const;
@@ -376,7 +395,32 @@ const mapActionUpdateCellVariantSchema = {
     action: { type: 'string', enum: ['update_cell'] },
     x: { type: 'number' },
     y: { type: 'number' },
-    changes: changesSchema,
+    // updateCell consumes a Partial<Cell>; the shadow permits only cell fields
+    // while the lenient live parser retains the historical bag.
+    changes: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        terrain: {
+          type: 'string',
+          enum: [
+            'floor',
+            'wall',
+            'door_closed',
+            'door_open',
+            'difficult',
+            'water',
+            'pit',
+            'obscured',
+          ],
+        },
+        blocksMovement: { type: 'boolean' },
+        blocksSight: { type: 'boolean' },
+        cover: { type: 'number', enum: [0, 1, 2, 3] },
+        elevation: { type: 'number' },
+        decoration: { type: 'string' },
+      },
+    },
   },
   required: ['action', 'x', 'y', 'changes'],
 } as const;
@@ -906,11 +950,11 @@ const liveExtensionPhases: DmResponseExtensionPhases = {
 export const dmResponseSchema = createDmResponseSchema(liveExtensionProperties);
 
 /**
- * #1258 round 3 (strategist FIX at 774c634b): the fight-phase shadow schemas
+ * #1258 round 3 (strategist FIX at 774c634b), refined by #1265: the fight-phase shadow schemas
  * declare the five #1258 keys required + nullable instead of optional, so the
- * tactical phase fits the 24-optional strict budget (31 -> 23; unions 8 -> 16,
- * still within the 16 cap) without narrowing what the shadow accepts. The
- * live schema sent to the provider is untouched — the wrappers and the
+ * tactical phase fits the 24-optional strict budget (serialized 36 -> 19;
+ * unions 8 -> 16, still within the 16 cap) without narrowing what the shadow
+ * accepts. The live schema sent to the provider is untouched — the wrappers and the
  * scene_spec clone below exist only on the combat/tactical phase objects,
  * and the narrative phase keeps the round-1 shape (18 optionals, already
  * within budget). The shadow treats an absent required-nullable key as null
