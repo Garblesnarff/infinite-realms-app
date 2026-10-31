@@ -143,7 +143,7 @@ describe('names and enemy HP (#87 items 2-3)', () => {
       'Captain Sarah Reeves is wounded.',
     );
     expect(hideEnemyHp('Captain Sarah Reeves is now at 6 HP.', ROSTER)).toBe(
-      'Captain Sarah Reeves is bloodied.',
+      'Captain Sarah Reeves is badly wounded.',
     );
     expect(hideEnemyHp('Captain Sarah Reeves is now at 0 HP.', ROSTER)).toBe(
       'Captain Sarah Reeves is down.',
