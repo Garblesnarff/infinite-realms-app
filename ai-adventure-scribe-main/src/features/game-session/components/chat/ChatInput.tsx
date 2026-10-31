@@ -2,6 +2,7 @@ import { Send, Paperclip, Smile, Dice6, Loader2 } from 'lucide-react';
 import React, { useState, useRef, useEffect, useId } from 'react';
 
 import { useClearComposerDraft, useComposerDraft } from './composer-draft';
+import { PLAYER_INPUT_MAX_CHARS } from '../../../../../shared/player-input-cap';
 import { ATTACK_WAIT_RESOLVING } from '../game/message/turn-wait-copy';
 
 import { Button } from '@/components/ui/button';
@@ -122,11 +123,15 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
     }
   }, [input]);
 
+  // One shared player-turn cap (#1307): over it, the composer says so and
+  // refuses to send instead of letting the turn 422 at generate/intents.
+  const isOverCap = input.length > PLAYER_INPUT_MAX_CHARS;
+
   /**
    * Handles message submission and clears input
    */
   const handleSubmit = async (): Promise<void> => {
-    if (!input.trim() || isDisabled) return;
+    if (!input.trim() || isDisabled || isOverCap) return;
 
     const submittedInput = input.trim();
     // Keep the exact text in this tab until the request completes. If the
@@ -148,7 +153,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
   };
 
   const handleRetry = async (): Promise<void> => {
-    if (!onRetry || isRetrying || retryInFlight) return;
+    if (!onRetry || isRetrying || retryInFlight || isOverCap) return;
 
     setIsRetrying(true);
     try {
@@ -222,7 +227,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
     }
   };
 
-  const canSend = input.trim().length > 0 && !isDisabled;
+  const canSend = input.trim().length > 0 && !isDisabled && !isOverCap;
   const sendLabel = isReconnecting
     ? 'Reconnecting…'
     : isDisabled
@@ -418,6 +423,13 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
             )
           )}
 
+          {isOverCap && (
+            <div className="px-3 pb-2 text-sm text-destructive" role="alert">
+              Message too long — {input.length.toLocaleString()} of{' '}
+              {PLAYER_INPUT_MAX_CHARS.toLocaleString()} characters. Shorten it to send.
+            </div>
+          )}
+
           {visibleSendError && (
             <div
               className="flex items-center justify-between gap-3 px-3 pb-2 text-sm text-destructive"
@@ -430,7 +442,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
                   variant="outline"
                   size="sm"
                   onClick={handleRetry}
-                  disabled={isRetrying || retryInFlight}
+                  disabled={isRetrying || retryInFlight || isOverCap}
                 >
                   {isRetrying || retryInFlight ? 'Retrying…' : 'Retry'}
                 </Button>

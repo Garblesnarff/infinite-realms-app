@@ -1,6 +1,7 @@
 import { Elysia, t } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
+import { PLAYER_INPUT_MAX_CHARS } from '../../../../shared/player-input-cap.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { CharacterService } from '../../services/character-service.js';
 import { SessionMessageService } from '../../services/session/session-message-service.js';
@@ -8,20 +9,33 @@ import { SessionService } from '../../services/session-service.js';
 
 import type { DialogueHistory } from '../../../../db/schema/index';
 
-const messageSchema = t.Object({
+// Fields shared by both message schemas below; the speaker type and the
+// message cap differ per variant.
+const messageCommonFields = {
   id: t.Optional(t.String()),
-  speaker_type: t.Union([
-    t.Literal('player'),
-    t.Literal('dm'),
-    t.Literal('system'),
-    t.Literal('companion'),
-  ]),
   speaker_id: t.Optional(t.String()),
-  message: t.String({ minLength: 1, maxLength: 100_000 }),
   context: t.Optional(t.Record(t.String(), t.Unknown())),
   images: t.Optional(t.Array(t.Unknown(), { maxItems: 20 })),
   timestamp: t.Optional(t.String()),
+};
+
+// #1307: the shared player-turn cap applies to PLAYER messages only. DM,
+// system, and companion saves flow through this same route (message queue,
+// headless client) and DM narration can run long, so they keep the prior
+// 100_000 bound — capping them at the player value would 422 long DM saves.
+const playerMessageSchema = t.Object({
+  ...messageCommonFields,
+  speaker_type: t.Literal('player'),
+  message: t.String({ minLength: 1, maxLength: PLAYER_INPUT_MAX_CHARS }),
 });
+
+const nonPlayerMessageSchema = t.Object({
+  ...messageCommonFields,
+  speaker_type: t.Union([t.Literal('dm'), t.Literal('system'), t.Literal('companion')]),
+  message: t.String({ minLength: 1, maxLength: 100_000 }),
+});
+
+const messageSchema = t.Union([playerMessageSchema, nonPlayerMessageSchema]);
 
 // #1270: the server owns the replay-cache keys in DM-row contexts
 // (cachedTurnResponse, cachedTurnResponseInput, rollTurnResult, npcResult).

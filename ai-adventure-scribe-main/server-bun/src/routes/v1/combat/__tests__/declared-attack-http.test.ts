@@ -508,4 +508,22 @@ describe('declared-attack candidates on the Abyssal Descent roster', () => {
       }),
     ).toEqual(['"Iron" Jawn', 'Captain Sarah Reeves']);
   });
+
+  it('refuses a playerInput one character over the shared cap (#1307)', async () => {
+    const response = await post({
+      ...declaredAttackCheckBody,
+      playerInput: 'a'.repeat(20_001),
+    });
+
+    expect(response.status).toBe(422);
+  });
+
+  it('accepts a playerInput exactly at the shared cap (#1307)', async () => {
+    const response = await post({
+      ...declaredAttackCheckBody,
+      playerInput: 'a'.repeat(20_000),
+    });
+
+    expect(response.status).toBe(200);
+  });
 });
