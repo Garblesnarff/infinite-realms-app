@@ -42,7 +42,11 @@ import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
 import { standingHostiles } from '@/services/combat/sheet-cast-save-hold';
 import { buildCombatEntryPlayer } from '@/services/combat/structured-combat-payload';
 import { userDataApi } from '@/services/user-data-api';
-import { dropEngineOwnedRollRequests, loggableRollType } from '@/utils/roll-request/engine-channel';
+import {
+  definedRollRequests,
+  dropEngineOwnedRollRequests,
+  loggableRollType,
+} from '@/utils/roll-request/engine-channel';
 import { slugify } from '@/utils/slug';
 
 export interface HandleDmActionsParams {
@@ -255,7 +259,7 @@ export async function handleDmActionsAndTransitions(
    * that never reaches the player is always logged by type (#2530). Type only, never content.
    */
   const logClearedRollRequests = (reason: string): void => {
-    for (const request of (result.roll_requests ?? []) as Array<{ type?: string }>) {
+    for (const request of definedRollRequests(result.roll_requests)) {
       logger.warn('DM_ROLL_REQUEST_CLEARED', { reason, type: loggableRollType(request.type) });
     }
   };
@@ -329,7 +333,7 @@ export async function handleDmActionsAndTransitions(
               detail: pendingEntry.detail,
               sceneSpecSynthesized: pendingEntry.sceneSpecSynthesized,
             },
-            roll_requests: (result.roll_requests || []).filter((request: any) => {
+            roll_requests: definedRollRequests(result.roll_requests).filter((request) => {
               const engineOwned = request.type === 'attack' || request.type === 'initiative';
               if (engineOwned) {
                 logger.warn('DM_ROLL_REQUEST_CLEARED', {
@@ -426,7 +430,7 @@ export async function handleDmActionsAndTransitions(
             },
             // Combat roll requests belong to the engine resolution after seating, not to the
             // ordinary narrative dice queue. Checks are left for the in-combat drop below.
-            roll_requests: (result.roll_requests || []).filter((request: any) => {
+            roll_requests: definedRollRequests(result.roll_requests).filter((request) => {
               const engineOwned = request.type === 'attack' || request.type === 'initiative';
               if (engineOwned) {
                 logger.warn('DM_ROLL_REQUEST_CLEARED', {
@@ -538,7 +542,7 @@ export async function handleDmActionsAndTransitions(
     // Attack and initiative requests are the DM's declaration channel and are dropped every
     // combat turn; a skill check or save is a die the player would expect to throw, so say so.
     const droppedRolls = new Set<string>();
-    for (const request of result.roll_requests as Array<{ type?: string }>) {
+    for (const request of definedRollRequests(result.roll_requests)) {
       if (request.type === 'save') droppedRolls.add('saving throw');
       else if (request.type === 'check' || request.type === 'skill_check') {
         droppedRolls.add('skill check');

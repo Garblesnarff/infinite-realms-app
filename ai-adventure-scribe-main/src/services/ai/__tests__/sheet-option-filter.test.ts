@@ -12,6 +12,7 @@ import {
   extractSheetCombatNames,
   filterOptionsAgainstSheet,
   normalizeCombatName,
+  optionList,
   type SheetCombatNames,
 } from '../sheet-option-filter';
 
@@ -92,34 +93,30 @@ describe('filterOptionsAgainstSheet', () => {
   });
 
   it('is case- and whitespace-insensitive', () => {
-    expect(
-      filterOptionsAgainstSheet(['A. **  FIRE bolt **, hurl flame.'], SHEET),
-    ).toEqual(['A. **  FIRE bolt **, hurl flame.']);
+    expect(filterOptionsAgainstSheet(['A. **  FIRE bolt **, hurl flame.'], SHEET)).toEqual([
+      'A. **  FIRE bolt **, hurl flame.',
+    ]);
     expect(filterOptionsAgainstSheet(['A. **FireBall**, boom.'], SHEET)).toEqual([]);
   });
 
   it('normalizes the verb away but still drops an illegal core', () => {
     // "Attack with X" where X is on the sheet stays; where X is a real weapon the
     // character does not carry, the suggestion goes.
-    expect(
-      filterOptionsAgainstSheet(['A. **Attack with Longsword**, swing.'], SHEET),
-    ).toHaveLength(1);
-    expect(filterOptionsAgainstSheet(['A. **Attack with Maul**, swing.'], SHEET)).toEqual(
-      [],
+    expect(filterOptionsAgainstSheet(['A. **Attack with Longsword**, swing.'], SHEET)).toHaveLength(
+      1,
     );
+    expect(filterOptionsAgainstSheet(['A. **Attack with Maul**, swing.'], SHEET)).toEqual([]);
   });
 
   it('does not mistake a verb-led spell name for the verb', () => {
     // "Fire Shield" is a real spell; stripping "fire" as a verb would hide it.
-    expect(filterOptionsAgainstSheet(['A. **Fire Shield**, ward yourself.'], SHEET)).toEqual(
-      [],
-    );
+    expect(filterOptionsAgainstSheet(['A. **Fire Shield**, ward yourself.'], SHEET)).toEqual([]);
   });
 
   it('keeps a verb-led title whose core is not a spell or attack', () => {
-    expect(
-      filterOptionsAgainstSheet(['A. **Strike a bargain**, offer gold.'], SHEET),
-    ).toHaveLength(1);
+    expect(filterOptionsAgainstSheet(['A. **Strike a bargain**, offer gold.'], SHEET)).toHaveLength(
+      1,
+    );
   });
 
   it('keeps order and drops only the illegal entries', () => {
@@ -138,5 +135,15 @@ describe('filterOptionsAgainstSheet', () => {
 
   it('normalizeCombatName lowercases and collapses whitespace', () => {
     expect(normalizeCombatName('  Fire   Bolt ')).toBe('fire bolt');
+  });
+});
+
+describe('optionList (#781)', () => {
+  it('treats a string as no options instead of a list', () => {
+    expect(optionList('Look around')).toEqual([]);
+  });
+
+  it('keeps a real array', () => {
+    expect(optionList(['Look around'])).toEqual(['Look around']);
   });
 });

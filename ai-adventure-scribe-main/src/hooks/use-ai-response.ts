@@ -51,6 +51,7 @@ import logger from '@/lib/logger';
 import {
   extractSheetCombatNames,
   filterOptionsAgainstSheet,
+  optionList,
 } from '@/services/ai/sheet-option-filter';
 import { AIService, isRollOutcomeStale } from '@/services/ai-service';
 import { executeAuthoritativeCombatIntent } from '@/services/combat/combat-action-executor';
@@ -1009,8 +1010,9 @@ export const useAIResponse = (): {
                     !combatSequencePending &&
                     !earlyShouldStartCombat;
                   let earlyText = parsedResult.text;
-                  if (!suppressRender && parsedResult.options?.length) {
-                    earlyText = `${earlyText.trim()}\n\n${filterSheetOptions(parsedResult.options).join('\n')}`;
+                  const earlyOptions = optionList(parsedResult.options);
+                  if (!suppressRender && earlyOptions.length) {
+                    earlyText = `${earlyText.trim()}\n\n${filterSheetOptions(earlyOptions).join('\n')}`;
                   }
 
                   await onTextReady(
@@ -1436,7 +1438,8 @@ export const useAIResponse = (): {
           processedRolls.playerRollRequests.length === 0;
         // #400: sheet-illegal suggestions never reach the screen; the emptiness checks read
         // the filtered list so the UI can say why there are no choices.
-        const sheetOptions = result.options?.length ? filterSheetOptions(result.options) : [];
+        const listedOptions = optionList(result.options);
+        const sheetOptions = listedOptions.length ? filterSheetOptions(listedOptions) : [];
         if (isNarrationTurn) {
           if (sheetOptions.length) {
             finalResponseText = `${finalResponseText.trim()}\n\n${sheetOptions.join('\n')}`;
@@ -1464,14 +1467,8 @@ export const useAIResponse = (): {
         // like every other await in this pipeline — a hung GET must
         // not outlive the turn that asked for it.
         let storyTrackers = (result as AIResponse).story_trackers;
-        if (
-          (!Array.isArray(storyTrackers) || storyTrackers.length === 0) &&
-          sessionId
-        ) {
-          const fetched = await rejectWhenAborted(
-            fetchSessionTrackers(sessionId, signal),
-            signal,
-          );
+        if ((!Array.isArray(storyTrackers) || storyTrackers.length === 0) && sessionId) {
+          const fetched = await rejectWhenAborted(fetchSessionTrackers(sessionId, signal), signal);
           if (fetched && fetched.length > 0) storyTrackers = fetched;
         }
 
@@ -1539,9 +1536,7 @@ export const useAIResponse = (): {
             // the wrong turn's line. Absent on turns the server attached
             // nothing (non-DM or session-less turns, or a failed read);
             // the render keeps the line only on the message that carried it.
-            ...(Array.isArray(storyTrackers) && storyTrackers.length > 0
-              ? { storyTrackers }
-              : {}),
+            ...(Array.isArray(storyTrackers) && storyTrackers.length > 0 ? { storyTrackers } : {}),
             // GP-015 (#219): narration turn with no action choices — the UI
             // says why there are none instead of rendering nothing.
             noActionOptions: isNarrationTurn && !sheetOptions.length,

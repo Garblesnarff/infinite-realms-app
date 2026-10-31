@@ -24,9 +24,7 @@ export const normalizeCombatName = (value: string): string =>
 const nameSet = (entries: Array<{ name?: unknown }>): ReadonlySet<string> =>
   new Set(
     entries
-      .map((entry) =>
-        typeof entry.name === 'string' ? normalizeCombatName(entry.name) : '',
-      )
+      .map((entry) => (typeof entry.name === 'string' ? normalizeCombatName(entry.name) : ''))
       .filter(Boolean),
   );
 
@@ -37,9 +35,7 @@ const SRD_WEAPON_NAMES = nameSet(srdWeaponsJson as Array<{ name?: unknown }>);
 const UNARMED_STRIKE = 'unarmed strike';
 
 const stringList = (value: unknown): string[] =>
-  Array.isArray(value)
-    ? value.filter((entry): entry is string => typeof entry === 'string')
-    : [];
+  Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
 
 /**
  * The sheet's usable attacks and spells, from the owned character record (the full sheet, not
@@ -84,8 +80,7 @@ export function extractOptionTitle(option: string): string {
 const LEADING_VERB_PATTERN =
   /^(cast|attack|strike|hit|shoot|fire|swing|hurl|throw|launch|loose)\b\s*(with|at|using|from)?\s*/i;
 
-const stripLeadingVerb = (title: string): string =>
-  title.replace(LEADING_VERB_PATTERN, '').trim();
+const stripLeadingVerb = (title: string): string => title.replace(LEADING_VERB_PATTERN, '').trim();
 
 /**
  * Drop the options that name a spell or attack the character cannot use. An option is judged
@@ -95,14 +90,18 @@ const stripLeadingVerb = (title: string): string =>
  * does not name, or a non-string entry the schema allowed through — passes through untouched.
  * Returns the surviving options in order.
  */
-export function filterOptionsAgainstSheet(
-  options: unknown[],
-  sheet: SheetCombatNames,
-): unknown[] {
+/**
+ * Options are a list. A string is truthy and has a length, and passing it to
+ * the array filter throws (#781).
+ */
+export function optionList(options: unknown): unknown[] {
+  return Array.isArray(options) ? options : [];
+}
+
+export function filterOptionsAgainstSheet(options: unknown[], sheet: SheetCombatNames): unknown[] {
   const sheetAttacks = new Set(sheet.attacks.map(normalizeCombatName));
   const sheetSpells = new Set(sheet.spells.map(normalizeCombatName));
-  const isOnSheet = (name: string): boolean =>
-    sheetAttacks.has(name) || sheetSpells.has(name);
+  const isOnSheet = (name: string): boolean => sheetAttacks.has(name) || sheetSpells.has(name);
   const isIllegalName = (name: string): boolean =>
     !isOnSheet(name) && (SRD_SPELL_NAMES.has(name) || SRD_WEAPON_NAMES.has(name));
   return options.filter((option) => {
