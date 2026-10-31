@@ -88,6 +88,9 @@ export class VoiceDialogueParser {
 
     let lastIndex = 0;
     let match;
+    // Each unnamed quote in this text is its own speaker. One shared
+    // "Unknown NPC" made every one of them use the same voice (#815).
+    let unnamedSpeakers = 0;
 
     while ((match = dialoguePattern.exec(text)) !== null) {
       // Add narration before this dialogue (if any)
@@ -112,7 +115,7 @@ export class VoiceDialogueParser {
         segments.push({
           type: 'character',
           text: dialogue.trim(),
-          character: characterName || 'Unknown NPC',
+          character: characterName || `Stranger ${++unnamedSpeakers}`,
           voice_category: voiceCategory,
         });
       }

@@ -15,8 +15,6 @@ vi.mock('../voice/voice-consistency-repository', () => ({
   VoiceConsistencyRepository: {
     getSessionMappings: vi.fn(),
     castSegments: vi.fn(),
-    saveCharacterVoiceMapping: vi.fn(),
-    updateCharacterUsage: vi.fn(),
   },
 }));
 
@@ -142,8 +140,6 @@ describe('VoiceConsistencyService', () => {
       const result = await service.processVoiceAssignments(sessionId, segments);
       expect(result.map((a) => a.voiceConfig.id)).toEqual(['narrator', 'thomas', 'thomas', 'sam']);
       expect(VoiceConsistencyRepository.castSegments).toHaveBeenCalledWith(sessionId, segments);
-      expect(VoiceConsistencyRepository.saveCharacterVoiceMapping).not.toHaveBeenCalled();
-      expect(VoiceConsistencyRepository.updateCharacterUsage).not.toHaveBeenCalled();
     });
 
     it('should pass server category assignments into VoiceDirector playback', async () => {
@@ -181,7 +177,6 @@ describe('VoiceConsistencyService', () => {
       ]);
       expect(result[0].voiceConfig.id).toBe('thomas');
       expect(VoiceConsistencyRepository.getSessionMappings).not.toHaveBeenCalled();
-      expect(VoiceConsistencyRepository.updateCharacterUsage).not.toHaveBeenCalled();
     });
 
     it('should let the server infer a new character without a voice_category', async () => {
@@ -193,7 +188,6 @@ describe('VoiceConsistencyService', () => {
       expect(result[0].character).toBe('captain of the guard');
       expect(result[0].voiceConfig.id).toBe('thomas');
       expect(VoiceConsistencyRepository.castSegments).toHaveBeenCalledWith(sessionId, segments);
-      expect(VoiceConsistencyRepository.saveCharacterVoiceMapping).not.toHaveBeenCalled();
     });
 
     it('should leave free-text labels and unknown categories to the server', async () => {
@@ -227,7 +221,6 @@ describe('VoiceConsistencyService', () => {
       const result = await service.processVoiceAssignments(sessionId, segments);
       expect(result.map((a) => a.voiceConfig.id)).toEqual(['mouse', 'serena', 'sam', 'nathan']);
       expect(VoiceConsistencyRepository.castSegments).toHaveBeenCalledWith(sessionId, segments);
-      expect(VoiceConsistencyRepository.saveCharacterVoiceMapping).not.toHaveBeenCalled();
     });
 
     it('should keep an unknown speaker audible with its provisional NPC voice', async () => {
@@ -239,7 +232,6 @@ describe('VoiceConsistencyService', () => {
       ]);
       expect(result[0].voiceConfig.id).toBe('fena');
       expect(result[0].character).toBe('unknown npc');
-      expect(VoiceConsistencyRepository.saveCharacterVoiceMapping).not.toHaveBeenCalled();
     });
 
     it('omits player dialogue and ignores a response after cancellation', async () => {

@@ -4,17 +4,13 @@ import { VoiceConsistencyRepository } from '../voice-consistency-repository';
 
 import logger from '@/lib/logger';
 
-const { mockGetMappings, mockUpsertMapping, mockUpdateMapping } = vi.hoisted(() => ({
+const { mockGetMappings } = vi.hoisted(() => ({
   mockGetMappings: vi.fn(),
-  mockUpsertMapping: vi.fn(),
-  mockUpdateMapping: vi.fn(),
 }));
 
 vi.mock('@/services/issue-1784-api', () => ({
   issue1784Api: {
     getVoiceMappings: mockGetMappings,
-    upsertVoiceMapping: mockUpsertMapping,
-    updateVoiceMapping: mockUpdateMapping,
   },
 }));
 
@@ -249,79 +245,5 @@ describe('VoiceConsistencyRepository', () => {
         });
       },
     );
-  });
-
-  describe('saveCharacterVoiceMapping', () => {
-    it('should insert new character voice mapping successfully', async () => {
-      mockUpsertMapping.mockResolvedValueOnce({});
-
-      await VoiceConsistencyRepository.saveCharacterVoiceMapping(
-        'session-123',
-        'Bruenor',
-        'elder',
-        'voice-bruenor',
-        3,
-      );
-
-      expect(mockUpsertMapping).toHaveBeenCalledWith('session-123', {
-        character_name: 'Bruenor',
-        voice_category: 'elder',
-        voice_id: 'voice-bruenor',
-        appearance_count: 3,
-      });
-      expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('Bruenor -> elder'));
-    });
-
-    it('should default appearance_count to 1 when omitted', async () => {
-      mockUpsertMapping.mockResolvedValueOnce({});
-
-      await VoiceConsistencyRepository.saveCharacterVoiceMapping(
-        'session-123',
-        'Bruenor',
-        'elder',
-        'voice-bruenor',
-      );
-
-      expect(mockUpsertMapping).toHaveBeenCalledWith('session-123', {
-        character_name: 'Bruenor',
-        voice_category: 'elder',
-        voice_id: 'voice-bruenor',
-        appearance_count: 1,
-      });
-    });
-
-    it('should throw or log error on database insert failure', async () => {
-      const mockError = new Error('Unique constraint violation');
-      mockUpsertMapping.mockRejectedValueOnce(mockError);
-
-      await VoiceConsistencyRepository.saveCharacterVoiceMapping(
-        'session-123',
-        'Bruenor',
-        'elder',
-        'voice-bruenor',
-      );
-
-      expect(logger.error).toHaveBeenCalledWith('Error saving character voice mapping:', mockError);
-    });
-  });
-
-  describe('updateCharacterUsage', () => {
-    it('should update character usage successfully', async () => {
-      mockUpdateMapping.mockResolvedValueOnce({});
-
-      await VoiceConsistencyRepository.updateCharacterUsage('mapping-123', 8);
-
-      expect(mockUpdateMapping).toHaveBeenCalledWith('mapping-123', { appearance_count: 8 });
-      expect(logger.debug).toHaveBeenCalledWith(expect.stringContaining('mapping-123 (count: 8)'));
-    });
-
-    it('should log error on database update failure', async () => {
-      const mockError = new Error('Foreign key failure');
-      mockUpdateMapping.mockRejectedValueOnce(mockError);
-
-      await VoiceConsistencyRepository.updateCharacterUsage('mapping-123', 8);
-
-      expect(logger.error).toHaveBeenCalledWith('Error updating character usage:', mockError);
-    });
   });
 });
