@@ -457,6 +457,210 @@ describeWithDb('DM reply: server provisional row + client save = one row (#2218)
   });
 
   // ---------------------------------------------------------------------------------------------
+  // #800: the fallback must not resurrect a passed turn, and a client save that races the
+  // fallback insert must win over the provisional row.
+  // ---------------------------------------------------------------------------------------------
+
+  // The roll turn's own envelope shape, as the #2280 test builds it from the run-11 producer.
+  const rollFallbackEnvelope = {
+    text: 'The torchlight catches on wet stone. A voice from the dark asks for a roll.',
+    options: [],
+    roll_requests: RUN_11_INSIGHT.rollRequests,
+    combat_transition: 'none',
+  };
+
+  const createdAtOf = async (id: string): Promise<Date> => {
+    const found = await database
+      .select({ createdAt: dialogueHistory.createdAt })
+      .from(dialogueHistory)
+      .where(eq(dialogueHistory.id, id));
+    const createdAt = found[0]?.createdAt;
+    if (!createdAt) throw new Error('[#800] seeded row missing');
+    return createdAt;
+  };
+
+  test('#800 item 1: the fallback persists when the turn is still the latest', async () => {
+    const playerId = crypto.randomUUID();
+    await SessionMessageService.addMessages(
+      [{ id: playerId, sessionId, speakerType: 'player', message: 'I listen at the door.' }],
+      userId,
+    );
+    const promptCreatedAt = await createdAtOf(playerId);
+    const dmId = crypto.randomUUID();
+    const result = await dmReplyPersistence.persistFallbackDmReply({
+      userId,
+      sessionId,
+      messageId: dmId,
+      reason: 'roll_requests',
+      envelope: rollFallbackEnvelope,
+      generatedAt: new Date(promptCreatedAt.getTime() + 1000),
+    });
+    expect(result).toEqual({ persisted: true });
+    const rows = await rowsFor([dmId]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.context).toEqual(
+      expect.objectContaining({
+        provisional: true,
+        rollRequests: RUN_11_INSIGHT.rollRequests,
+      }),
+    );
+    // Without generatedAt the check is skipped: the old behavior is preserved.
+    const unguardedId = crypto.randomUUID();
+    expect(
+      await dmReplyPersistence.persistFallbackDmReply({
+        userId,
+        sessionId,
+        messageId: unguardedId,
+        reason: 'roll_requests',
+        envelope: rollFallbackEnvelope,
+      }),
+    ).toEqual({ persisted: true });
+    expect(await rowsFor([unguardedId])).toHaveLength(1);
+  });
+
+  test('#800 item 1: the fallback skips a turn the player already moved past', async () => {
+    const firstId = crypto.randomUUID();
+    await SessionMessageService.addMessages(
+      [{ id: firstId, sessionId, speakerType: 'player', message: 'I listen at the door.' }],
+      userId,
+    );
+    const nextId = crypto.randomUUID();
+    await SessionMessageService.addMessages(
+      [{ id: nextId, sessionId, speakerType: 'player', message: 'I walk on instead.' }],
+      userId,
+    );
+    const nextCreatedAt = await createdAtOf(nextId);
+    const dmId = crypto.randomUUID();
+    const result = await dmReplyPersistence.persistFallbackDmReply({
+      userId,
+      sessionId,
+      messageId: dmId,
+      reason: 'roll_requests',
+      envelope: rollFallbackEnvelope,
+      generatedAt: new Date(nextCreatedAt.getTime() - 1000),
+    });
+    expect(result).toEqual({ persisted: false, skipped: 'superseded_turn' });
+    expect(await rowsFor([dmId])).toHaveLength(0);
+  });
+
+  test('#800 item 1: the watchdog passes its generatedAt through to the fallback', async () => {
+    const nextId = crypto.randomUUID();
+    await SessionMessageService.addMessages(
+      [{ id: nextId, sessionId, speakerType: 'player', message: 'I walk on instead.' }],
+      userId,
+    );
+    const nextCreatedAt = await createdAtOf(nextId);
+    const staleId = crypto.randomUUID();
+    await dmReplyPersistence.scheduleDmReplyWatchdog({
+      sessionId,
+      messageId: staleId,
+      reason: 'roll_requests',
+      generatedAt: new Date(nextCreatedAt.getTime() - 1000),
+      envelope: rollFallbackEnvelope,
+      userId,
+      delayMs: 0,
+      hasDmRow: async () => false,
+    });
+    expect(await rowsFor([staleId])).toHaveLength(0);
+    const liveId = crypto.randomUUID();
+    await dmReplyPersistence.scheduleDmReplyWatchdog({
+      sessionId,
+      messageId: liveId,
+      reason: 'roll_requests',
+      generatedAt: new Date(),
+      envelope: rollFallbackEnvelope,
+      userId,
+      delayMs: 0,
+      hasDmRow: async () => false,
+    });
+    expect(await rowsFor([liveId])).toHaveLength(1);
+  });
+
+  test('#800 item 2: a client save that lands as the fallback inserts wins over the provisional row', async () => {
+    const dmId = crypto.randomUUID();
+    const clientText = 'The water stills. The voice is gone.';
+    const clientContext = { intent: 'response', emotion: 'neutral' };
+    const before = await turnCount();
+    // Stage the race's middle interleaving exactly: a provisional row inserted by a
+    // transaction that has not committed yet. The service's first replace cannot see it,
+    // and its insert parks behind the uncommitted row until this test commits. The service
+    // starts only after the staged insert completes: firing both at once lets the service
+    // win the setup race and insert first, which makes the staged insert itself conflict.
+    // Serial-only: the blocked-INSERT poll below matches any insert into dialogue_history,
+    // so a parallel file sharing this database could satisfy it early.
+    let release!: () => void;
+    const hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let stagedResolve!: () => void;
+    let stagedReject!: (error: unknown) => void;
+    const stagedReady = new Promise<void>((resolve, reject) => {
+      stagedResolve = resolve;
+      stagedReject = reject;
+    });
+    const staged = sql.begin(async (tx) => {
+      try {
+        await tx`INSERT INTO dialogue_history (id, session_id, speaker_type, message, context) VALUES (${dmId}, ${sessionId}, 'dm', 'Provisional fallback text.', ${sql.json({ provisional: true, rollRequests: [] })} )`;
+        stagedResolve();
+      } catch (error) {
+        stagedReject(error);
+        throw error;
+      }
+      await hold;
+    });
+    let saving: Promise<DialogueHistory[]> | undefined;
+    try {
+      await stagedReady;
+      saving = SessionMessageService.addMessages(
+        [
+          {
+            id: dmId,
+            sessionId,
+            speakerType: 'dm',
+            message: clientText,
+            context: clientContext,
+          },
+        ],
+        userId,
+      );
+      // The service's insert must park behind the staged row: while the staged transaction
+      // is open the service cannot finish, so a lock-waiting dialogue_history INSERT
+      // backend here is the service waiting on the uncommitted row, not a timing guess.
+      // The poll excludes its own backend (pg_backend_pid) and requires a Lock wait:
+      // without both, the poll's own active INSERT-into-dialogue_history statement
+      // would satisfy the match on the first iteration and the guard could never fire.
+      // Failing loudly if no parked insert ever appears keeps a slow run from silently
+      // testing the first replace instead.
+      const deadline = Date.now() + 10_000;
+      let blocked = false;
+      while (Date.now() < deadline) {
+        const waiting =
+          await sql`SELECT pid FROM pg_stat_activity WHERE state = 'active' AND pid <> pg_backend_pid() AND wait_event_type = 'Lock' AND query ILIKE '%INSERT%' AND query ILIKE '%dialogue_history%'`;
+        if (waiting.length > 0) {
+          blocked = true;
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      expect(blocked).toBe(true);
+      await new Promise((r) => setTimeout(r, 200));
+      release();
+      const saved = await saving;
+      expect(saved.map((row) => row.id)).toEqual([dmId]);
+      const rows = await rowsFor([dmId]);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.message).toBe(clientText);
+      expect(rows[0]?.context).toEqual(clientContext);
+      // Replacing the provisional row in place counts no new turn.
+      expect(await turnCount()).toBe(before);
+    } finally {
+      release();
+      await staged;
+      if (saving) await saving.catch(() => undefined);
+    }
+  });
+
+  // ---------------------------------------------------------------------------------------------
   // #2718: a DM reply that grants a feature or a spell the character does not have. Step a
   // recorded that nothing checked it; step b's server check (dm-feature-gate.ts) refuses it with
   // one standard line, and the turn has no side effect on the character either way.
