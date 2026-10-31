@@ -65,8 +65,11 @@ const { createRequestPipelineApp } = await importWithRealDb(
 );
 const { tacticalMapRoutes } = await importWithRealDb(() => import('../tactical-maps.js'));
 const { combatRoutes } = await importWithRealDb(() => import('../combat/index.js'));
+const { charactersRoutes } = await importWithRealDb(() => import('../characters.js'));
 
-const app = hasRealDb ? createRequestPipelineApp().use(tacticalMapRoutes).use(combatRoutes) : null;
+const app = hasRealDb
+  ? createRequestPipelineApp().use(tacticalMapRoutes).use(combatRoutes).use(charactersRoutes)
+  : null;
 
 if (!hasRealDb) {
   console.warn(
@@ -244,7 +247,7 @@ describeWithDb('paladin Divine Sense tracking (#712)', () => {
       )
       .limit(1);
     expect(offeredFeature?.usesRemaining).toBe(1);
-    const post = async (expectedVersion: number) =>
+    const post = async (expectedVersion?: number) =>
       app!.handle(
         new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
           method: 'POST',
@@ -253,17 +256,18 @@ describeWithDb('paladin Divine Sense tracking (#712)', () => {
             'content-type': 'application/json',
           },
           body: JSON.stringify({
-            // The real combat chip is DM-sourced, but this route fixture supplies the
-            // encounter token explicitly so the optimistic write exercises the seeded
-            // version rather than relying on a separately loaded state snapshot.
-            intent: { type: 'divine_sense', actorId: participantId, expectedVersion },
+            intent: {
+              type: 'divine_sense',
+              actorId: participantId,
+              ...(expectedVersion === undefined ? {} : { expectedVersion }),
+            },
             source: 'dm',
             dmStartedAt: 1_700_000_000_000,
             origin: 'typed',
           }),
         }),
       );
-    const spent = await post(1);
+    const spent = await post();
     expect(spent.status).toBe(200);
     const [spentParticipant] = await db
       .select({ actionUsed: combatParticipants.actionUsed })
@@ -289,6 +293,70 @@ describeWithDb('paladin Divine Sense tracking (#712)', () => {
     expect(refused.status).toBe(422);
     expect(await refused.json()).toMatchObject({
       details: { reason: 'feature_uses_exhausted', featureName: 'Divine Sense' },
+    });
+  });
+
+  it('the versionless DM intent for a single-class CHA 14 paladin does not return 500 (#1286)', async () => {
+    await db
+      .update(characters)
+      .set({ level: 3, class: 'Paladin' })
+      .where(eq(characters.id, paladinId));
+    await db
+      .update(characterStats)
+      .set({ charisma: 14 })
+      .where(eq(characterStats.characterId, paladinId));
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: 3 })
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, divineSenseFeatureId),
+        ),
+      );
+    await db
+      .update(combatParticipants)
+      .set({ actionUsed: false })
+      .where(eq(combatParticipants.id, participantId));
+    const sheet = await app!.handle(
+      new Request(`http://localhost/v1/characters/${paladinId}`, {
+        headers: { authorization: 'Bearer 712-test-token' },
+      }),
+    );
+    expect(sheet.status).toBe(200);
+    expect(await sheet.json()).toMatchObject({
+      class_features: { divine_sense: { maxUses: 3, currentUses: 3 } },
+    });
+    const response = await app!.handle(
+      new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+        method: 'POST',
+        headers: { authorization: 'Bearer 712-test-token', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          intent: { type: 'divine_sense', actorId: participantId },
+          source: 'dm',
+          dmStartedAt: 1_700_000_000_000,
+          origin: 'typed',
+        }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    const [pool] = await db
+      .select({ remaining: characterFeatures.usesRemaining })
+      .from(characterFeatures)
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, divineSenseFeatureId),
+        ),
+      );
+    expect(pool.remaining).toBe(2);
+    const updatedSheet = await app!.handle(
+      new Request(`http://localhost/v1/characters/${paladinId}`, {
+        headers: { authorization: 'Bearer 712-test-token' },
+      }),
+    );
+    expect(await updatedSheet.json()).toMatchObject({
+      class_features: { divine_sense: { maxUses: 3, currentUses: 2 } },
     });
   });
 });

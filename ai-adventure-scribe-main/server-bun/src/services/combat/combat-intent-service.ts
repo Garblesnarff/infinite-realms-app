@@ -273,7 +273,7 @@ export type EncounterAlreadyConcludedResult = {
   status: 'completed';
 };
 
-const VERSIONED_INTENT_TYPES = new Set([
+export const VERSIONED_INTENT_TYPES = new Set([
   'attack',
   'spell',
   'check',
@@ -284,6 +284,7 @@ const VERSIONED_INTENT_TYPES = new Set([
   'yield',
   'second_wind',
   'action_surge',
+  'divine_sense',
   'use_item',
 ]);
 

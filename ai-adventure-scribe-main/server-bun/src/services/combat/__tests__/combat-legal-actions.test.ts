@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 
+import { LEGAL_ACTION_TYPES } from '../../../../../shared/combat-legal-action-types';
+
 import type { WeaponRuleProfile } from '../combat-rules.js';
 
 process.env.DATABASE_URL ??= 'postgres://test.invalid/unused';
@@ -241,7 +243,15 @@ mock.module('../../progression/paladin-features-service.js', () => ({
     divineSenseRemaining === null ? null : { row: { usesRemaining: divineSenseRemaining } },
 }));
 
-const { getLegalCombatActions } = await import('../combat-intent-service.js');
+const { getLegalCombatActions, VERSIONED_INTENT_TYPES } =
+  await import('../combat-intent-service.js');
+
+test('all claim-based legal actions require a version', () => {
+  const nonClaimActions = new Set(['move', 'death_save', 'end_turn']);
+  for (const type of LEGAL_ACTION_TYPES.filter((type) => !nonClaimActions.has(type))) {
+    expect(VERSIONED_INTENT_TYPES.has(type)).toBe(true);
+  }
+});
 
 describe('getLegalCombatActions', () => {
   afterEach(() => {

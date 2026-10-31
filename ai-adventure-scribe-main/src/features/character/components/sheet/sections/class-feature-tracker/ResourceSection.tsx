@@ -64,10 +64,7 @@ export const ResourceSection: React.FC<ResourceSectionProps> = ({
             <div key={dieType} className="border-l-4 border-yellow-500 pl-4">
               <div className="flex items-center gap-2 mb-2">
                 <h4 className="font-semibold">Hit Dice ({dieType})</h4>
-                <Badge
-                  variant={dice.current === 0 ? 'destructive' : 'outline'}
-                  className="ml-auto"
-                >
+                <Badge variant={dice.current === 0 ? 'destructive' : 'outline'} className="ml-auto">
                   {dice.current} / {dice.max}
                 </Badge>
               </div>
@@ -150,13 +147,10 @@ export const ResourceSection: React.FC<ResourceSectionProps> = ({
             <div className="flex items-center gap-2 mb-2">
               <h4 className="font-semibold">Sorcery Points</h4>
               <Badge
-                variant={
-                  characterResources.sorceryPoints.current === 0 ? 'destructive' : 'outline'
-                }
+                variant={characterResources.sorceryPoints.current === 0 ? 'destructive' : 'outline'}
                 className="ml-auto"
               >
-                {characterResources.sorceryPoints.current} /{' '}
-                {characterResources.sorceryPoints.max}
+                {characterResources.sorceryPoints.current} / {characterResources.sorceryPoints.max}
               </Badge>
             </div>
             <div className="mt-2">
@@ -186,9 +180,7 @@ export const ResourceSection: React.FC<ResourceSectionProps> = ({
               <h4 className="font-semibold">Bardic Inspiration</h4>
               <Badge
                 variant={
-                  characterResources.bardic_inspiration.current === 0
-                    ? 'destructive'
-                    : 'outline'
+                  characterResources.bardic_inspiration.current === 0 ? 'destructive' : 'outline'
                 }
                 className="ml-auto"
               >
@@ -252,13 +244,27 @@ export const ResourceSection: React.FC<ResourceSectionProps> = ({
           </div>
         )}
 
+        {characterResources.divineSense !== undefined && (
+          <div className="border-l-4 border-orange-500 pl-4">
+            <h4 className="font-semibold">Divine Sense</h4>
+            <span>
+              {characterResources.divineSense.current} / {characterResources.divineSense.max}
+            </span>
+            <Progress
+              value={
+                (characterResources.divineSense.current / characterResources.divineSense.max) * 100
+              }
+              className="h-2"
+              aria-label="Divine Sense remaining"
+            />
+          </div>
+        )}
         {characterResources.layOnHands !== undefined && (
           <div className="border-l-4 border-orange-500 pl-4">
             <div className="flex items-center gap-2 mb-2">
               <h4 className="font-semibold">Lay on Hands</h4>
               <Badge variant="outline" className="ml-auto">
-                {characterResources.layOnHands.current} / {characterResources.layOnHands.max}{' '}
-                points
+                {characterResources.layOnHands.current} / {characterResources.layOnHands.max} points
               </Badge>
             </div>
             <div className="mt-2">
@@ -270,8 +276,7 @@ export const ResourceSection: React.FC<ResourceSectionProps> = ({
               </div>
               <Progress
                 value={
-                  (characterResources.layOnHands.current / characterResources.layOnHands.max) *
-                  100
+                  (characterResources.layOnHands.current / characterResources.layOnHands.max) * 100
                 }
                 className="h-2"
                 aria-label="Lay on Hands remaining"
@@ -285,9 +290,7 @@ export const ResourceSection: React.FC<ResourceSectionProps> = ({
             <div className="flex items-center gap-2 mb-2">
               <h4 className="font-semibold">Action Surge</h4>
               <Badge
-                variant={
-                  characterResources.actionSurge.current === 0 ? 'destructive' : 'outline'
-                }
+                variant={characterResources.actionSurge.current === 0 ? 'destructive' : 'outline'}
                 className="ml-auto"
               >
                 {characterResources.actionSurge.current} / {characterResources.actionSurge.max}
@@ -297,14 +300,12 @@ export const ResourceSection: React.FC<ResourceSectionProps> = ({
               <div className="flex justify-between text-xs mb-1">
                 <span>Remaining</span>
                 <span>
-                  {characterResources.actionSurge.current} /{' '}
-                  {characterResources.actionSurge.max}
+                  {characterResources.actionSurge.current} / {characterResources.actionSurge.max}
                 </span>
               </div>
               <Progress
                 value={
-                  (characterResources.actionSurge.current /
-                    characterResources.actionSurge.max) *
+                  (characterResources.actionSurge.current / characterResources.actionSurge.max) *
                   100
                 }
                 className="h-2"

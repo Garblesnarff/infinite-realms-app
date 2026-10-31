@@ -42,11 +42,7 @@ import { CharacterSpellService } from '../../services/character/character-spell-
 import { CharacterService } from '../../services/character-service.js';
 import { SpellSlotDataAccess } from '../../services/spell-slots/spell-slot-data-access.js';
 
-import type {
-  Character,
-  CharacterHitDice,
-  CharacterStats,
-} from '../../../../db/schema/index';
+import type { Character, CharacterHitDice, CharacterStats } from '../../../../db/schema/index';
 
 /**
  * Overlay the engine's spell-slot table onto the sheet-facing character
@@ -119,9 +115,7 @@ export async function overlayCharacterConcentration(
     const current = await getConcentration(characterId);
     return {
       ...mapped,
-      concentration: current
-        ? { spellName: current.spellName, spellId: current.spellId }
-        : null,
+      concentration: current ? { spellName: current.spellName, spellId: current.spellId } : null,
     };
   } catch (error) {
     // prettier-ignore
@@ -605,6 +599,18 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
     // Serve the engine's slot table so the sheet shows the same source the
     // engine spends from (#2459).
     const withSlots = await overlayEngineSpellSlots(mapped, resolved.id, user!.userId);
+    const { divineSenseUses, paladinLevelOf } =
+      await import('../../services/progression/paladin-features-service.js');
+    if (withSlots && paladinLevelOf(resolved) > 0) {
+      const sense = await divineSenseUses(resolved.id, user!.userId);
+      if (sense) {
+        const features = withSlots.class_features;
+        withSlots.class_features = {
+          ...(features && typeof features === 'object' && !Array.isArray(features) ? features : {}),
+          divine_sense: { maxUses: sense.max, currentUses: sense.remaining },
+        };
+      }
+    }
     // Serve the out-of-combat conditions so the sheet's Conditions panel reads the
     // same source the story writer writes (#218 step 4).
     const withConditions = await overlayCharacterConditions(withSlots, resolved.id);

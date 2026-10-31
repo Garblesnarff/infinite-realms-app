@@ -354,9 +354,9 @@ export function useCombatLegalActions(input: {
           const result = await executeAuthoritativeCombatIntent(
             encounter.id,
             { type: action.type, actorId },
-            'dm',
+            action.type === 'divine_sense' ? 'player' : 'dm',
             Date.now(),
-            'typed',
+            action.type === 'divine_sense' ? 'action_bar' : 'typed',
           );
           const parts = [
             ...formatCombatActionParts(
