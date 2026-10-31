@@ -5,6 +5,7 @@ import { formatNarrative } from '../../chat/message-list/formatNarrative';
 import { prepareChatDisplayText } from '../../chat/message-list/prepare-chat-display-text';
 
 import { useMessageContext } from '@/contexts/MessageContext';
+import { combatEngineBlocksFromContext } from '@/utils/combat-engine-blocks';
 
 export { displayFinalLine } from './CampaignEndState';
 
@@ -103,25 +104,71 @@ export const FallenEndState: React.FC<FallenEndStateProps> = ({
  * Renders the messages the MessageProvider already loaded for the session.
  */
 export const FallenStoryLog: React.FC = () => {
-  const { messages } = useMessageContext();
+  const { messages, historyReady, hasMore, loadMore, isLoading, isFetchingMore, messagesError } =
+    useMessageContext();
+  const requestedAtCount = React.useRef(-1);
+  React.useEffect(() => {
+    if (
+      historyReady &&
+      hasMore &&
+      !isLoading &&
+      !isFetchingMore &&
+      !messagesError &&
+      messages.length > requestedAtCount.current
+    ) {
+      requestedAtCount.current = messages.length;
+      loadMore();
+    }
+  }, [historyReady, hasMore, isLoading, isFetchingMore, messagesError, loadMore, messages.length]);
   // The chat display preparation removes engine lines and roll requests from DM prose.
   const visible = messages
-    .filter((message) => message.sender === 'dm' || message.sender === 'player')
-    .map((message) => ({
-      message,
-      text:
-        message.sender === 'dm'
-          ? prepareChatDisplayText(message.text ?? '').text
-          : (message.text ?? ''),
-    }))
+    .map((message) => {
+      let text = '';
+      if (message.sender === 'dm') {
+        text = prepareChatDisplayText(message.text ?? '').text;
+      } else if (
+        message.sender === 'player' &&
+        message.context?.intent !== 'dice_roll' &&
+        !message.context?.diceRoll
+      ) {
+        text = message.text ?? '';
+      } else if (message.sender === 'system') {
+        const blocks = combatEngineBlocksFromContext(message.context);
+        const cards = blocks.length
+          ? blocks.flatMap((block) => block.cards ?? [])
+          : (message.context?.engineCards ?? []);
+        text = cards
+          .flatMap((card) => {
+            if (card.kind === 'initiative' || card.kind === 'refused') return [];
+            if (card.kind === 'death_save') return card.detail ? [card.detail] : [];
+            const outcome = card.badge ? `: ${card.badge.word.toLowerCase()}` : '';
+            const status =
+              card.status && card.hp
+                ? `${card.hp.name} is ${card.status.toLowerCase()}`
+                : card.status;
+            return [[`${card.title}${outcome}.`, card.effect, status].filter(Boolean).join(' ')];
+          })
+          .join('\n\n');
+      }
+      return { message, text };
+    })
     .filter(({ text }) => text.trim());
-  if (visible.length === 0) {
+  if (visible.length === 0 && !hasMore) {
     return (
       <p className="text-sm text-muted-foreground">The story so far is still being written.</p>
     );
   }
   return (
     <div data-testid="death-screen-story-log" className="space-y-3">
+      {hasMore && (
+        <button type="button" onClick={loadMore} disabled={isLoading || isFetchingMore}>
+          {isLoading || isFetchingMore
+            ? 'Loading earlier story…'
+            : messagesError
+              ? 'Retry loading earlier story'
+              : 'Load earlier story'}
+        </button>
+      )}
       {visible.map(({ message, text }, index) => (
         <div key={message.id ?? index}>
           <div className="whitespace-pre-wrap text-sm leading-relaxed text-card-foreground">

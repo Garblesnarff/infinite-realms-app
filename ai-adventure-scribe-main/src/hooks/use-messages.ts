@@ -29,6 +29,7 @@ const compareMessages = (a: ChatMessage, b: ChatMessage): number => {
 export interface UseMessagesReturn {
   data: ChatMessage[];
   messagesReady: boolean;
+  historyReady: boolean;
   isLoading: boolean;
   isFetching: boolean;
   error: Error | null;
@@ -56,6 +57,7 @@ export const useMessages = (
   const [hasMore, setHasMore] = useState(true);
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([]);
   const [messagesSessionId, setMessagesSessionId] = useState<string | null>(null);
+  const [loadedPage, setLoadedPage] = useState<number | null>(null);
 
   const query = useQuery<{
     sessionId: string | null;
@@ -159,6 +161,7 @@ export const useMessages = (
     setPage(0);
     setHasMore(true);
     setMessagesSessionId(null);
+    setLoadedPage(null);
   }, []);
 
   useEffect(() => {
@@ -167,16 +170,50 @@ export const useMessages = (
 
   useEffect(() => {
     const receive = (event: Event) => {
-      const rows = (event as CustomEvent<Array<{ id: string; sessionId: string; sequence: number; text: string; timestamp: string; context: MessageContext }>>).detail;
-      const received: ChatMessage[] = (rows ?? []).filter((row) => row.sessionId === sessionId).map((row) => ({
-        id: row.id, text: row.text, timestamp: row.timestamp, sequenceNumber: row.sequence,
-        sender: 'system', context: row.context,
-      }));
+      const rows = (
+        event as CustomEvent<
+          Array<{
+            id: string;
+            sessionId: string;
+            sequence: number;
+            text: string;
+            timestamp: string;
+            context: MessageContext;
+          }>
+        >
+      ).detail;
+      const received: ChatMessage[] = (rows ?? [])
+        .filter((row) => row.sessionId === sessionId)
+        .map((row) => ({
+          id: row.id,
+          text: row.text,
+          timestamp: row.timestamp,
+          sequenceNumber: row.sequence,
+          sender: 'system',
+          context: row.context,
+        }));
       if (!received.length) return;
-      setAllMessages((previous) => [...previous.filter((message) => !received.some((row) => row.id === message.id)), ...received].sort(compareMessages));
-      queryClient.setQueryData<{ messages: ChatMessage[] }>(['messages', sessionId, 0], (previous) => previous ? {
-        ...previous, messages: [...previous.messages.filter((message) => !received.some((row) => row.id === message.id)), ...received].sort(compareMessages),
-      } : previous);
+      setAllMessages((previous) =>
+        [
+          ...previous.filter((message) => !received.some((row) => row.id === message.id)),
+          ...received,
+        ].sort(compareMessages),
+      );
+      queryClient.setQueryData<{ messages: ChatMessage[] }>(
+        ['messages', sessionId, 0],
+        (previous) =>
+          previous
+            ? {
+                ...previous,
+                messages: [
+                  ...previous.messages.filter(
+                    (message) => !received.some((row) => row.id === message.id),
+                  ),
+                  ...received,
+                ].sort(compareMessages),
+              }
+            : previous,
+      );
     };
     window.addEventListener('session-engine-rows', receive);
     return () => window.removeEventListener('session-engine-rows', receive);
@@ -203,17 +240,23 @@ export const useMessages = (
         return [...prev, ...newMessages].sort(compareMessages);
       });
       setMessagesSessionId(sessionId);
+      setLoadedPage(page);
       setHasMore(query.data.hasMore);
     }
   }, [query.data, page, sessionId]);
 
+  const { isFetching, error, refetch } = query;
   // Load more messages (next page)
   const loadMore = useCallback(() => {
-    if (hasMore && !query.isFetching) {
+    if (hasMore && !isFetching) {
+      if (error) {
+        void refetch();
+        return;
+      }
       logger.info('[useMessages] Loading more messages, current page:', page);
       setPage((prev) => prev + 1);
     }
-  }, [hasMore, query.isFetching, page]);
+  }, [hasMore, isFetching, error, refetch, page]);
 
   const messagesReady =
     !!sessionId &&
@@ -227,6 +270,7 @@ export const useMessages = (
     () => ({
       data: sessionId && messagesSessionId === sessionId ? allMessages : [],
       messagesReady,
+      historyReady: !!sessionId && messagesSessionId === sessionId && loadedPage === page,
       isLoading: query.isLoading,
       isFetching: query.isFetching,
       error: query.error,
@@ -239,6 +283,8 @@ export const useMessages = (
       messagesSessionId,
       sessionId,
       messagesReady,
+      loadedPage,
+      page,
       query.isLoading,
       query.isFetching,
       query.error,
