@@ -7,9 +7,12 @@
 import { describe, expect, it } from 'bun:test';
 
 import {
+  divineSmiteDice,
+  divineSmiteLine,
   familyCountRule,
   fixedFeatureUses,
   limitedFeatureRule,
+  variableSpendRoute,
   type LimitedFeatureContext,
 } from '../../../../../shared/limited-feature-counts';
 
@@ -134,5 +137,103 @@ describe('limited feature counts (#1225)', () => {
     expect(fixedFeatureUses('Cleric', 'Channel Divinity (3/rest)')).toBe(3);
     expect(fixedFeatureUses('Barbarian', 'Rage')).toBeNull();
     expect(fixedFeatureUses('Bard', 'Bardic Inspiration (d6)')).toBeNull();
+  });
+});
+
+describe('variable-cost features (#1233)', () => {
+  it('resolves Divine Smite from the slot level, and refuses without a valid one', () => {
+    expect(variableSpendRoute('Paladin', 'Divine Smite', { slotLevel: 1 })).toEqual({
+      kind: 'slot',
+      slotLevel: 1,
+    });
+    expect(variableSpendRoute('Paladin', 'Divine Smite', { slotLevel: 5 })).toEqual({
+      kind: 'slot',
+      slotLevel: 5,
+    });
+    expect(variableSpendRoute('Paladin', 'Divine Smite', {})).toEqual({
+      kind: 'refuse',
+      reason: 'Divine Smite spends a spell slot: send the slot level to spend (slotLevel 1-9).',
+    });
+    for (const slotLevel of [0, 10, 1.5, Number.NaN]) {
+      expect(variableSpendRoute('Paladin', 'Divine Smite', { slotLevel })).toMatchObject({
+        kind: 'refuse',
+      });
+    }
+  });
+
+  it('resolves each Metamagic option to its cost, Twinned to the spell level', () => {
+    expect(variableSpendRoute('Sorcerer', 'Metamagic', { option: 'quickened' })).toEqual({
+      kind: 'points',
+      family: 'sorcerer-sorcery-points',
+      cost: 2,
+      label: 'Quickened Spell',
+    });
+    expect(variableSpendRoute('Sorcerer', 'Metamagic', { option: 'heightened' })).toMatchObject({
+      cost: 3,
+    });
+    expect(variableSpendRoute('Sorcerer', 'Metamagic', { option: 'twinned:3' })).toEqual({
+      kind: 'points',
+      family: 'sorcerer-sorcery-points',
+      cost: 3,
+      label: 'Twinned Spell',
+    });
+    expect(variableSpendRoute('Sorcerer', 'Metamagic', { option: 'twinned' })).toMatchObject({
+      kind: 'refuse',
+    });
+    expect(variableSpendRoute('Sorcerer', 'Metamagic', { option: 'twinned:0' })).toMatchObject({
+      kind: 'refuse',
+    });
+    expect(variableSpendRoute('Sorcerer', 'Metamagic', { option: 'silent' })).toEqual({
+      kind: 'refuse',
+      reason:
+        'Metamagic needs an option: careful, distant, empowered, extended, heightened, quickened, subtle, or twinned:<spell level>.',
+    });
+    expect(variableSpendRoute('Sorcerer', 'Metamagic', {})).toMatchObject({ kind: 'refuse' });
+    // Option names are case- and space-insensitive.
+    expect(variableSpendRoute('Sorcerer', 'Metamagic', { option: ' Quickened ' })).toMatchObject({
+      cost: 2,
+    });
+  });
+
+  it('resolves Flexible Casting from the slot level the option names', () => {
+    expect(
+      variableSpendRoute('Sorcerer', 'Flexible Casting: Creating Spell Slots', { option: '2' }),
+    ).toEqual({
+      kind: 'createSlot',
+      family: 'sorcerer-sorcery-points',
+      slotLevel: 2,
+      cost: 3,
+    });
+    expect(
+      variableSpendRoute('Sorcerer', 'Flexible Casting: Creating Spell Slots', { option: '5' }),
+    ).toMatchObject({ cost: 7 });
+    expect(
+      variableSpendRoute('Sorcerer', 'Flexible Casting: Creating Spell Slots', { option: '6' }),
+    ).toMatchObject({ kind: 'refuse' });
+    expect(
+      variableSpendRoute('Sorcerer', 'Flexible Casting: Converting Spell Slot', { option: '1' }),
+    ).toEqual({ kind: 'convertSlot', slotLevel: 1 });
+    expect(
+      variableSpendRoute('Sorcerer', 'Flexible Casting: Converting Spell Slot', { option: '9' }),
+    ).toMatchObject({ slotLevel: 9 });
+    expect(
+      variableSpendRoute('Sorcerer', 'Flexible Casting: Converting Spell Slot', {}),
+    ).toMatchObject({ kind: 'refuse' });
+  });
+
+  it('returns null for a feature with no variable-cost rule', () => {
+    expect(variableSpendRoute('Monk', 'Flurry of Blows', { slotLevel: 1 })).toBeNull();
+    expect(variableSpendRoute('Sorcerer', 'Font of Magic', { option: 'quickened' })).toBeNull();
+  });
+
+  it('counts Divine Smite dice: 2d8, +1d8 per level above 1st, capped at 5d8', () => {
+    expect(divineSmiteDice(1)).toBe(2);
+    expect(divineSmiteDice(2)).toBe(3);
+    expect(divineSmiteDice(4)).toBe(5);
+    expect(divineSmiteDice(5)).toBe(5);
+    expect(divineSmiteDice(9)).toBe(5);
+    expect(divineSmiteLine(1)).toBe(
+      'Divine Smite: +2d8 radiant damage (3d8 against undead or fiends).',
+    );
   });
 });

@@ -521,6 +521,65 @@ export class SpellSlotsService {
   }
 
   /**
+   * Grant one spell slot of a level (#1233: Flexible Casting creating a spell slot). The
+   * grant does not depend on the class progression table: a sorcerer may create any slot
+   * up to 5th level, whether or not they hold slots of that level. Atomic upsert: the row
+   * is created with one total slot, or its total grows by one. The created slot is a
+   * total-slot grant, so it persists until a totals re-sync; it has no long-rest expiry.
+   */
+  static async grantSpellSlot(
+    characterId: string,
+    slotLevel: number,
+    userId: string,
+  ): Promise<SpellSlot> {
+    if (!Number.isInteger(slotLevel) || slotLevel < 1 || slotLevel > 9) {
+      throw new ValidationError('Spell level must be between 1 and 9');
+    }
+    const owned = await db
+      .select({ id: characters.id })
+      .from(characters)
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      )
+      .limit(1);
+    if (owned.length === 0) {
+      throw new NotFoundError('Character not found');
+    }
+    const [row] = await db
+      .insert(characterSpellSlots)
+      .values({
+        characterId,
+        spellLevel: slotLevel,
+        totalSlots: 1,
+        usedSlots: 0,
+      })
+      .onConflictDoUpdate({
+        target: [characterSpellSlots.characterId, characterSpellSlots.spellLevel],
+        set: {
+          totalSlots: sql`${characterSpellSlots.totalSlots} + 1`,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    if (!row) {
+      throw new InternalServerError('Failed to grant a spell slot');
+    }
+    return {
+      id: row.id,
+      characterId: row.characterId,
+      spellLevel: row.spellLevel,
+      totalSlots: row.totalSlots,
+      usedSlots: row.usedSlots,
+      remainingSlots: row.totalSlots - row.usedSlots,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  /**
    * Restore spell slots (long rest or specific restoration) with ownership verification
    * @param input - Restore spell slots input
    * @param userId - User ID for ownership check

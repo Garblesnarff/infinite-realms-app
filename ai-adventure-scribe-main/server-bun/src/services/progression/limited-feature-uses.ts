@@ -252,6 +252,132 @@ export async function spendCountedFeatureUse(input: {
 }
 
 /**
+ * Whether a counted-feature grant can land, without writing anything. #1233: the Flexible
+ * Casting convert path checks this before spending the slot, so a refusal never follows
+ * an irreversible spend. The grant below re-checks when it writes; keep the two in step.
+ */
+export async function countedGrantPreview(input: {
+  characterId: string;
+  userId: string;
+  className: string;
+  featureName: string;
+  rule: CountRule;
+  grantedBy?: { featureName: string; amount: number };
+}): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const { characterId, userId, className, featureName, rule, grantedBy } = input;
+  const ctx = await limitedFeatureContext(characterId, userId, className);
+  if (!ctx) return { ok: false, reason: 'Feature not found for this character' };
+  const canonical = canonicalRow(
+    await heldFamilyRows(characterId, className, rule.family),
+    ctx.classLevel,
+  );
+  if (!canonical) {
+    return {
+      ok: false,
+      reason: grantedBy
+        ? `${grantedBy.featureName} grants ${featureName}, which this character does not have`
+        : 'Feature not found for this character',
+    };
+  }
+  const full = rule.usesAt(ctx);
+  if (full === 'unlimited') return { ok: true };
+  if (full === null) {
+    return {
+      ok: false,
+      reason: `${featureName} is not granted: its uses depend on an ability score this character has none of`,
+    };
+  }
+  if (full <= 0) {
+    return { ok: false, reason: `${featureName} has no uses at this character's level` };
+  }
+  return { ok: true };
+}
+
+/**
+ * Grant uses of a counted feature, atomically, on its family's canonical row, capped at the
+ * full count. #1233: Flexible Casting converting a spell slot grants sorcery points, and a
+ * sorcerer never holds more points than the Font of Magic table allows, so the grant caps.
+ *
+ * `grantedBy` mirrors `spentBy` above: the feature whose conversion grants the uses.
+ */
+export async function grantCountedFeatureUses(input: {
+  characterId: string;
+  userId: string;
+  className: string;
+  featureName: string;
+  rule: CountRule;
+  grantedBy?: { featureName: string; amount: number };
+}): Promise<CountedSpendResult> {
+  const { characterId, userId, className, featureName, rule, grantedBy } = input;
+  const amount = grantedBy?.amount ?? 1;
+  const ctx = await limitedFeatureContext(characterId, userId, className);
+  if (!ctx) return { ok: false, reason: 'Feature not found for this character' };
+  const canonical = canonicalRow(
+    await heldFamilyRows(characterId, className, rule.family),
+    ctx.classLevel,
+  );
+  if (!canonical) {
+    return {
+      ok: false,
+      reason: grantedBy
+        ? `${grantedBy.featureName} grants ${featureName}, which this character does not have`
+        : 'Feature not found for this character',
+    };
+  }
+
+  const full = rule.usesAt(ctx);
+  if (full === 'unlimited') {
+    return {
+      ok: true,
+      featureId: canonical.featureId,
+      featureName: canonical.featureName,
+      usesRemaining: -1,
+    };
+  }
+  if (full === null) {
+    return {
+      ok: false,
+      reason: `${featureName} is not granted: its uses depend on an ability score this character has none of`,
+    };
+  }
+  if (full <= 0) {
+    return { ok: false, reason: `${featureName} has no uses at this character's level` };
+  }
+
+  const [updated] = await db
+    .update(characterFeatures)
+    .set({
+      usesRemaining: sql`LEAST(${full}, LEAST(COALESCE(${characterFeatures.usesRemaining}, ${full}), ${full}) + ${amount})`,
+    })
+    .where(
+      and(
+        eq(characterFeatures.id, canonical.characterFeatureId),
+        exists(
+          db
+            .select({ one: sql`1` })
+            .from(characters)
+            .where(
+              and(
+                eq(characters.id, characterId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+              ),
+            ),
+        ),
+      ),
+    )
+    .returning({ usesRemaining: characterFeatures.usesRemaining });
+  if (!updated) {
+    return { ok: false, reason: 'Feature not found for this character' };
+  }
+  return {
+    ok: true,
+    featureId: canonical.featureId,
+    featureName: canonical.featureName,
+    usesRemaining: updated.usesRemaining ?? full,
+  };
+}
+
+/**
  * The character_features rows the counted refill below owns: the generic library-count restore
  * skips them, so a row whose stored `uses_per_rest` is wrong (Arcane Recovery was seeded
  * `short_rest`) cannot be refilled by its tag. Fighter Second Wind / Action Surge keep the

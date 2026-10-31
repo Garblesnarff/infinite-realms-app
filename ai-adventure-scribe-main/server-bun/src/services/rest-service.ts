@@ -34,6 +34,7 @@ import {
 } from '../../../db/schema/index';
 import { BusinessLogicError, NotFoundError } from '../lib/errors.js';
 import { RestMechanics } from './rest/rest-mechanics.js';
+import { SpellSlotDataAccess } from './spell-slots/spell-slot-data-access.js';
 import { SpellSlotsService } from './spell-slots-service.js';
 import { StoryRestAlreadyRecorded } from './story-rest-already-recorded.js';
 
@@ -814,6 +815,24 @@ export class RestService {
       // a long rest resets it here. The legacy characters.spell_slots JSONB is
       // neither read nor written anymore (#2598).
       await SpellSlotsService.restoreSpellSlots({ characterId }, userId);
+      // #1233: slots created by Flexible Casting vanish at the end of a long rest
+      // (PHB p.101). The expiry clamps a sorcerer's totals back to the
+      // progression tables, which drops created slots; it never runs for a
+      // non-sorcerer and deletes or inserts no row, so a plain re-sync's
+      // pruning (which removed the #264 story-rest fixture's hand-seeded
+      // Fighter row) cannot happen here. The restore above already zeroed
+      // used, so no spent slot is lost. This runs unconditionally: the expiry
+      // no-ops for characters without sorcerer levels, but an unspent created
+      // slot must still expire for a sorcerer.
+      await SpellSlotDataAccess.expireFlexibleCastingSlots(
+        characterId,
+        userId,
+        SpellSlotMechanics.sorcererLevels(
+          character.class,
+          character.level ?? 1,
+          character.classLevels,
+        ),
+      );
       // Serve the restored table rows in the result, not the stale JSONB.
       const spellSlots = toRestSpellSlots(
         (await SpellSlotsService.getCharacterSpellSlots(characterId, userId)).slots,

@@ -337,4 +337,84 @@ export class SpellSlotDataAccess {
         ),
       );
   }
+
+  /**
+   * #1233: expire slots created by Flexible Casting at the end of a long rest
+   * (2014 PHB p.101: created slots vanish when the long rest ends). Only
+   * sorcerers with 2+ sorcerer levels can hold created slots, so anything
+   * below that returns before any query. For a sorcerer, every row whose
+   * total exceeds the progression tables is clamped back to the granted
+   * total — the only writer that pushes a total above progression is the
+   * Flexible Casting create path, so the excess is exactly the created
+   * slots. Rows are never deleted or inserted here, and the method never
+   * runs for a non-sorcerer, so a hand-seeded or legacy row on any other
+   * character is untouched. For a sorcerer, a row at an ungranted level
+   * clamps to 0 rather than vanishing, so the next re-sync still sees it.
+   * `used` is already 0 (the restore runs
+   * first) and is clamped defensively so the used ≤ total check holds.
+   */
+  static async expireFlexibleCastingSlots(
+    characterId: string,
+    userId: string,
+    sorcererLevels: number,
+  ): Promise<void> {
+    if (sorcererLevels < 2) {
+      return;
+    }
+
+    const [character] = await db
+      .select({
+        class: characters.class,
+        level: characters.level,
+        classLevels: characters.classLevels,
+      })
+      .from(characters)
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      )
+      .limit(1);
+
+    if (!character) {
+      throw new NotFoundError('Character', characterId);
+    }
+
+    // Subclass is null: the gate guarantees a sorcerer or a multiclass
+    // character with sorcerer levels, and seedRowsForCharacter consults the
+    // subclass only for single-class Fighter/Rogue third-casters.
+    const granted = new Map(
+      SpellSlotMechanics.seedRowsForCharacter(
+        character.class,
+        character.level ?? 1,
+        character.classLevels,
+        null,
+      ).map((row) => [row.spellLevel, row.totalSlots]),
+    );
+
+    const rows = await db
+      .select()
+      .from(characterSpellSlots)
+      .where(eq(characterSpellSlots.characterId, characterId));
+
+    for (const row of rows) {
+      const total = granted.get(row.spellLevel) ?? 0;
+      if (row.totalSlots > total) {
+        await db
+          .update(characterSpellSlots)
+          .set({
+            totalSlots: total,
+            usedSlots: Math.min(row.usedSlots, total),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(characterSpellSlots.characterId, characterId),
+              eq(characterSpellSlots.spellLevel, row.spellLevel),
+            ),
+          );
+      }
+    }
+  }
 }
