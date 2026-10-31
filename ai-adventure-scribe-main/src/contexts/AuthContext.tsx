@@ -142,8 +142,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Re-persist: the mount effect writes persistSession(null) while this
     // verification is in flight, so restore the cached pair here.
     const handleTransientFailure = (): void => {
-      persistSession(cachedSession);
-      setSession(cachedSession);
+      // Another tab may have rotated the pair while this tab's request was in
+      // flight. Re-read storage so a transient failure cannot write the pair
+      // captured at the start of this attempt back over the newer one.
+      const stored = loadCachedSession();
+      if (stored && cachedSession && stored.access_token !== cachedSession.access_token) {
+        setSession(stored);
+      } else {
+        persistSession(cachedSession);
+        setSession(cachedSession);
+      }
       setConnectionError(true);
       setLoading(false);
       markAuthReady(); // Unblock API calls — they fail fast on their own now
