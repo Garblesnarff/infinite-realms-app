@@ -14,6 +14,7 @@ import type { CombatDetectionResult } from '@/utils/combatDetection';
 import logger from '@/lib/logger';
 import { stripEngineGeneratedLinesFromSegments } from '@/utils/engine-lines';
 import { normalizeAssetTagsInContent } from '@/utils/normalize-asset-tags';
+import { definedRollRequests } from '@/utils/roll-request/engine-channel';
 
 interface ProcessDMResponseParams {
   rawResponse: string;
@@ -587,10 +588,11 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
 
   // Player check modifiers come from the sheet; model-authored d20 bonuses must not leak
   // into prose, voice, options or the roll purpose while the dialog uses the sheet value.
+  const rollsForModifierStrip = definedRollRequests<{ type?: string; purpose?: string }>(
+    structuredResponse?.roll_requests || roll_requests,
+  );
   if (
-    (structuredResponse?.roll_requests || roll_requests)?.some((roll: any) =>
-      ['check', 'save', 'initiative'].includes(roll.type),
-    )
+    rollsForModifierStrip.some((roll) => ['check', 'save', 'initiative'].includes(roll.type ?? ''))
   ) {
     const withoutModelModifier = (text: string): string =>
       text.replace(/\b(1?d20)\s*[+−-]\s*\d+\b/gi, '$1');
@@ -599,10 +601,10 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
       ...segment,
       text: segment.text ? withoutModelModifier(segment.text) : segment.text,
     }));
-    if (structuredResponse) {
-      structuredResponse.options = structuredResponse.options?.map(withoutModelModifier);
+    if (structuredResponse && Array.isArray(structuredResponse.options)) {
+      structuredResponse.options = structuredResponse.options.map(withoutModelModifier);
     }
-    for (const roll of (structuredResponse?.roll_requests || roll_requests) ?? []) {
+    for (const roll of rollsForModifierStrip) {
       if (typeof roll.purpose === 'string') roll.purpose = withoutModelModifier(roll.purpose);
     }
   }

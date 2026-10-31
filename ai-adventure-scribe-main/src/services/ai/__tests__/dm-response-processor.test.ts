@@ -743,6 +743,23 @@ describe('processDMResponse', () => {
       });
     });
 
+    it('#781: a null roll request does not throw when the list is read', async () => {
+      const rawResponse = JSON.stringify({
+        text: 'You listen at the door and hear nothing moving beyond it.',
+        narration_segments: [],
+        options: 'Look around',
+        roll_requests: [null, { type: 'check', formula: '1d20', purpose: '1d20+2 listen', dc: 10 }],
+      });
+
+      const result = await processDMResponse({ ...defaultParams, rawResponse });
+
+      expect(result.roll_requests).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ type: 'check', purpose: '1d20 listen' }),
+        ]),
+      );
+    });
+
     it('should default roll_requests to an empty array when the structured response omits it', async () => {
       const rawResponse = JSON.stringify({
         text: 'You walk down the empty corridor.',
@@ -1002,7 +1019,8 @@ describe('nested reply envelopes (#1008)', () => {
   });
 
   it('does not unwrap JSON quoted inside narration prose', async () => {
-    const prose = 'The terminal blinks: {"text":"ACCESS DENIED","options":0} — then the screen dies.';
+    const prose =
+      'The terminal blinks: {"text":"ACCESS DENIED","options":0} — then the screen dies.';
     const reply = { ...outerReply, text: prose, roll_requests: [] };
     const result = await processDMResponse({
       ...defaultParams,

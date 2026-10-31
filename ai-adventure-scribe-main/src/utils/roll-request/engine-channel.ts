@@ -37,6 +37,15 @@ const LOGGABLE_ROLL_TYPES: ReadonlySet<string> = new Set([
   'skill_check',
 ]);
 
+/**
+ * Drop null and non-object entries before any `.type` read. A model list can
+ * contain null, and reading `.type` on it throws (#781).
+ */
+export function definedRollRequests<T extends { type?: string }>(requests: unknown): T[] {
+  if (!Array.isArray(requests)) return [];
+  return requests.filter((request): request is T => request != null && typeof request === 'object');
+}
+
 /** A roll type safe to log: the model writes the field, so anything off the list is `other`. */
 export function loggableRollType(type: unknown): string {
   return typeof type === 'string' && LOGGABLE_ROLL_TYPES.has(type) ? type : 'other';
@@ -50,7 +59,7 @@ export function dropEngineOwnedRollRequests(
   rollRequests: RollRequest[],
   encounterId: unknown,
 ): RollRequest[] {
-  for (const request of rollRequests) {
+  for (const request of definedRollRequests<RollRequest>(rollRequests)) {
     logger.warn('DM_ROLL_REQUEST_DROPPED', {
       encounterId: encounterId ?? null,
       type: loggableRollType(request.type),

@@ -175,6 +175,31 @@ describe('useAIResponse', () => {
     expect(AIService.chatWithDM).toHaveBeenCalled();
   });
 
+  it('#781: a string options field is not filtered as a list', async () => {
+    const { AIService } = await import('@/services/ai-service');
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: mockSessionId,
+      campaign_id: 'camp-1',
+      character_id: 'char-1',
+      campaign: { id: 'camp-1', name: 'Camp' },
+      character: { id: 'char-1', name: 'Char' },
+    } as any);
+    (AIService.chatWithDM as any).mockResolvedValue({
+      text: 'Greetings traveler!',
+      options: 'NOT_AN_OPTION_LIST',
+      narrationSegments: [],
+      dice_rolls: [],
+      roll_requests: [],
+      combatDetection: { isCombat: false },
+    });
+
+    const { result } = renderHook(() => useAIResponse());
+    const response = await result.current.getAIResponse(mockMessages as any, mockSessionId);
+
+    expect(response.text).toContain('Greetings traveler!');
+    expect(response.text).not.toContain('NOT_AN_OPTION_LIST');
+  });
+
   it('#633 PR2: does not forward onStreamChunk while combat is active at request start', async () => {
     const { AIService } = await import('@/services/ai-service');
 
