@@ -170,4 +170,55 @@ describe('CallbackPage', () => {
     await screen.findByText('Authentication Error');
     expect(navigate).toHaveBeenCalledWith('/');
   });
+
+  it('shows a wait message when the provider says too_many_requests', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/auth/callback?error=too_many_requests&error_description=Too%20many%20requests',
+    );
+
+    render(<CallbackPage />);
+
+    expect(
+      await screen.findByText('Too many sign-ins at once. Wait a minute, then try again.'),
+    ).toBeTruthy();
+    expect(screen.queryByText('Authentication failed - no access token received')).toBeNull();
+    expect(screen.queryByText('Redirecting...')).toBeNull();
+    expect(global.fetch).not.toHaveBeenCalled();
+    screen.getByRole('button', { name: 'Try again' }).click();
+    expect(navigate).toHaveBeenCalledWith('/');
+  });
+
+  it('shows a wait message when the exchange body says too_many_requests', async () => {
+    window.history.replaceState(null, '', '/auth/callback?code=one-time-code');
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 429,
+      json: async () => ({
+        code: 'too_many_requests',
+        message: 'Too many requests. Please try again shortly.',
+      }),
+    });
+
+    render(<CallbackPage />);
+
+    expect(
+      await screen.findByText('Too many sign-ins at once. Wait a minute, then try again.'),
+    ).toBeTruthy();
+    expect(screen.queryByText('An error occurred during authentication')).toBeNull();
+    expect(screen.queryByText('Authentication failed - no access token received')).toBeNull();
+  });
+
+  it('keeps the generic message for other callback errors', async () => {
+    window.history.replaceState(null, '', '/auth/callback');
+
+    render(<CallbackPage />);
+
+    expect(
+      await screen.findByText('Authentication failed - no access token received'),
+    ).toBeTruthy();
+    expect(screen.getByText('Redirecting...')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  });
 });
