@@ -15,10 +15,11 @@
  */
 import { createHash } from 'node:crypto';
 
+import { fixedFeatureUses, limitedFeatureRule } from '../shared/limited-feature-counts';
 import { classSubclasses } from '../src/data/classes/subclasses';
 import progressions from '../src/data/srd/progressions.json';
 
-interface SeedRow {
+export interface SeedRow {
   className: string;
   subclassName: string | null;
   featureName: string;
@@ -82,6 +83,33 @@ export function classify(
   };
 }
 
+/**
+ * #1225: a description only yields a count through a "(N uses)" name suffix, so Second Wind,
+ * Channel Divinity, Divine Intervention... landed with NULL -- which the spend path read as
+ * unlimited. A limited feature whose PHB count is fixed takes it from the shared table the engine
+ * spends by (shared/limited-feature-counts.ts); counts keyed to level or an ability score stay
+ * NULL and come from that table at run time.
+ */
+function withFixedCount(row: SeedRow): SeedRow {
+  const counted = withEngineRest(row);
+  if (counted.usesCount !== null || counted.usesPerRest === null) return counted;
+  return { ...counted, usesCount: fixedFeatureUses(counted.className, counted.featureName) };
+}
+
+/**
+ * #1225: a feature the engine counts takes its rest from the same table, at the row's own level
+ * (Arcane Recovery's description says "when you finish a short rest", but the use comes back on a
+ * long rest; Bardic Inspiration moves to a short rest with Font of Inspiration at 5th).
+ */
+function withEngineRest(row: SeedRow): SeedRow {
+  const rule = limitedFeatureRule(row.className, row.featureName);
+  if (rule?.kind !== 'count') return row;
+  return {
+    ...row,
+    usesPerRest: rule.rechargeAt({ classLevel: row.level, abilityModifiers: null }),
+  };
+}
+
 export function seedRows(): SeedRow[] {
   const rows: SeedRow[] = [];
   for (const [classKey, features] of Object.entries(
@@ -93,27 +121,31 @@ export function seedRows(): SeedRow[] {
     for (const feature of features) {
       // "Martial Archetype feature" is a placeholder for the subclass row below.
       if (/ feature$/.test(feature.featureName)) continue;
-      rows.push({
-        className: titleCase(classKey),
-        subclassName: null,
-        featureName: plainName(feature.featureName),
-        level: feature.level,
-        description: feature.description,
-        ...classify(plainName(feature.featureName), feature.description),
-      });
+      rows.push(
+        withFixedCount({
+          className: titleCase(classKey),
+          subclassName: null,
+          featureName: plainName(feature.featureName),
+          level: feature.level,
+          description: feature.description,
+          ...classify(plainName(feature.featureName), feature.description),
+        }),
+      );
     }
   }
   for (const [classKey, subclasses] of Object.entries(classSubclasses)) {
     for (const subclass of subclasses) {
       for (const feature of subclass.features ?? []) {
-        rows.push({
-          className: titleCase(classKey),
-          subclassName: subclass.name,
-          featureName: plainName(feature.name),
-          level: feature.level,
-          description: feature.description,
-          ...classify(plainName(feature.name), feature.description),
-        });
+        rows.push(
+          withFixedCount({
+            className: titleCase(classKey),
+            subclassName: subclass.name,
+            featureName: plainName(feature.name),
+            level: feature.level,
+            description: feature.description,
+            ...classify(plainName(feature.name), feature.description),
+          }),
+        );
       }
     }
   }
@@ -128,7 +160,7 @@ const literal = (value: string | number | null): string =>
       : `'${value.replace(/'/g, "''")}'`;
 
 /** A stable id per (class, subclass, name, level), so a replay inserts nothing twice. */
-const rowId = (row: SeedRow): string => {
+export const rowId = (row: SeedRow): string => {
   const hex = createHash('md5')
     .update(
       ['srd-class-feature', row.className, row.subclassName ?? '', row.featureName, row.level].join(

@@ -9,6 +9,11 @@
 
 import { eq, and, desc, sql, exists, or } from 'drizzle-orm';
 
+import {
+  engineRefilledRowIds,
+  refillCountedFeatures,
+  spendCountedFeatureUse,
+} from './limited-feature-uses.js';
 import { db } from '../../../../db/client';
 import {
   characterFeatures,
@@ -19,6 +24,7 @@ import {
   type CharacterFeature,
   type FeatureUsageLog,
 } from '../../../../db/schema/index';
+import { familyCountRule, limitedFeatureRule } from '../../../../shared/limited-feature-counts';
 import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 
@@ -177,6 +183,69 @@ export class ClassFeatureUsageService {
 
     const usageContext = divineInterventionContext(feature.featureName, context);
 
+    // #1225: a limited feature is spent by the engine's count (shared/limited-feature-counts.ts),
+    // never by "the library has no count, so it is unlimited". A feature that spends another
+    // resource is classified by that resource, not by its rest tag: it draws its cost from the
+    // counted family (Turn Undead from Channel Divinity, Flurry of Blows from ki), or, when the
+    // cost cannot be routed (Metamagic, Divine Smite), is refused with that reason. A limited
+    // feature the engine cannot count is refused below (fail closed).
+    const rule = limitedFeatureRule(feature.className, feature.featureName);
+    const limited = feature.usesPerRest === 'short_rest' || feature.usesPerRest === 'long_rest';
+    if (rule?.kind === 'spends') {
+      const poolRule = rule.route ? familyCountRule(rule.route.family) : null;
+      if (!rule.route || !poolRule) {
+        return {
+          success: false,
+          usesRemaining: 0,
+          effect: '',
+          message: `${feature.featureName} has no uses of its own: it spends ${rule.pool}, so it was not spent here.`,
+        };
+      }
+      const spent = await spendCountedFeatureUse({
+        characterId,
+        userId,
+        className: feature.className,
+        featureName: rule.pool,
+        rule: poolRule,
+        spentBy: { featureName: feature.featureName, cost: rule.route.cost },
+      });
+      if (!spent.ok) {
+        return { success: false, usesRemaining: 0, effect: '', message: spent.reason };
+      }
+      await this.logFeatureUsage(characterId, featureId, userId, usageContext, sessionId);
+      return {
+        success: true,
+        usesRemaining: spent.usesRemaining,
+        effect: feature.mechanicalEffects || feature.description,
+        message:
+          spent.usesRemaining < 0
+            ? `${feature.featureName} activated`
+            : `${feature.featureName} used. ${spent.usesRemaining} ${rule.pool} remaining.`,
+      };
+    }
+    if (rule?.kind === 'count') {
+      const spent = await spendCountedFeatureUse({
+        characterId,
+        userId,
+        className: feature.className,
+        featureName: feature.featureName,
+        rule,
+      });
+      if (!spent.ok) {
+        return { success: false, usesRemaining: 0, effect: '', message: spent.reason };
+      }
+      await this.logFeatureUsage(characterId, spent.featureId, userId, usageContext, sessionId);
+      return {
+        success: true,
+        usesRemaining: spent.usesRemaining,
+        effect: feature.mechanicalEffects || feature.description,
+        message:
+          spent.usesRemaining < 0
+            ? `${feature.featureName} activated`
+            : `${feature.featureName} used. ${spent.usesRemaining} uses remaining.`,
+      };
+    }
+
     // A NULL uses_count with an explicitly tracked uses_remaining is a pool, not an
     // unlimited feature (#712: Divine Sense tracks 1 + CHA mod, Lay on Hands tracks
     // paladin level x 5 HP). Only a row with no remaining value at all is unlimited:
@@ -188,6 +257,22 @@ export class ClassFeatureUsageService {
       const ensured = await ensureTrackedPool(characterId, feature.id, userId);
       if (ensured) {
         characterFeature.usesRemaining = ensured.usesRemaining;
+      } else if (limited && rule?.kind !== 'not_counted') {
+        // #1225: limited by the PHB (the seed gives it a rest), but the engine has no count for
+        // it: refuse rather than mint unlimited uses.
+        logger.warn({
+          msg: 'CLASS_FEATURE_UNCOUNTED_LIMITED_REFUSED',
+          characterId,
+          featureId,
+          className: feature.className,
+          featureName: feature.featureName,
+        });
+        return {
+          success: false,
+          usesRemaining: 0,
+          effect: '',
+          message: `${feature.featureName} is limited, and the engine cannot count its uses yet, so it was not spent.`,
+        };
       } else {
         await this.logFeatureUsage(characterId, featureId, userId, usageContext, sessionId);
 
@@ -260,6 +345,23 @@ export class ClassFeatureUsageService {
   ): Promise<RestoreFeaturesResult> {
     const { characterId, restType, userId } = input;
 
+    // #1225: rows the engine counts are refilled by its table's rest rule below, not by their
+    // stored tag here. A failed lookup is logged and the restore goes on by the stored tags,
+    // never a failed rest (the same pattern as the refills below).
+    let engineRows: string[] = [];
+    try {
+      engineRows = await engineRefilledRowIds(characterId);
+    } catch (error) {
+      logger.warn({ msg: 'COUNTED_FEATURE_ROWS_LOOKUP_FAILED', characterId, error });
+    }
+    const skipEngineRows =
+      engineRows.length > 0
+        ? sql`AND cf.id NOT IN (${sql.join(
+            engineRows.map((id) => sql`${id}`),
+            sql`, `,
+          )})`
+        : sql``;
+
     // Get all character features with ownership check
     // ⚡ Bolt: Optimized N+1 update loop into a single atomic UPDATE ... FROM query.
     // This reduces database round-trips from O(N) (number of character features) to O(1).
@@ -271,6 +373,7 @@ export class ClassFeatureUsageService {
       WHERE cf.feature_id = cfl.id
         AND cf.character_id = ${characterId}
         AND cfl.uses_count IS NOT NULL
+        ${skipEngineRows}
         AND (
           (${restType} = 'short' AND cfl.uses_per_rest = 'short_rest')
           OR
@@ -324,6 +427,15 @@ export class ClassFeatureUsageService {
       featuresRestored.push(...(await refillSecondWindUses(characterId, userId)));
     } catch (error) {
       logger.warn({ msg: 'SECOND_WIND_REFILL_FAILED', characterId, error });
+    }
+
+    // #1225: features the engine counts by level or ability (Rage, Ki, Channel Divinity...)
+    // carry a NULL or per-tier library count; their canonical row is refilled to the engine's
+    // count here. A failed refill is logged, never a failed rest.
+    try {
+      featuresRestored.push(...(await refillCountedFeatures(characterId, userId, restType)));
+    } catch (error) {
+      logger.warn({ msg: 'COUNTED_FEATURE_REFILL_FAILED', characterId, error });
     }
 
     // #712: Divine Sense (1 + CHA mod) and Lay on Hands (paladin level x 5) are
