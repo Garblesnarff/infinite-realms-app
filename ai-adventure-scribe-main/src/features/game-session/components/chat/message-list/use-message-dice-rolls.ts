@@ -73,6 +73,17 @@ export type LastRollMeta = {
 interface UseMessageDiceRollsProps {
   onSendMessage: (message: ChatMessage) => Promise<void>;
   onSendFullMessage?: (message: string, context?: MessageSendContext) => Promise<void>;
+  /** The transcript, so a failed roll's banner clears once its own row is saved (#1288). */
+  messages?: readonly ChatMessage[];
+}
+
+const NO_MESSAGES: readonly ChatMessage[] = [];
+
+/** A failed submission, tied to the roll it came from so no other prompt inherits it (#1288). */
+interface RollFailure {
+  message: string;
+  rollId: string;
+  rollRequestId?: string;
 }
 
 function getRollErrorMessage(error: unknown): string {
@@ -87,6 +98,7 @@ function getRollErrorMessage(error: unknown): string {
 export function useMessageDiceRolls({
   onSendMessage,
   onSendFullMessage,
+  messages = NO_MESSAGES,
 }: UseMessageDiceRollsProps): {
   currentRoll: DiceRollRequest | null;
   batchProgress: { current: number; total: number } | null;
@@ -114,7 +126,27 @@ export function useMessageDiceRolls({
   const cancelledRollIdRef = useRef<string | null>(null);
   const [pendingRollId, setPendingRollId] = useState<string | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
-  const [rollError, setRollError] = useState<string | null>(null);
+  const [rollFailure, setRollFailure] = useState<RollFailure | null>(null);
+
+  // The banner clears once the failed roll's row is saved AND the DM has replied after it (#1288).
+  // The send can throw after the row saved, with the DM turn still to come. A resend is deduped
+  // against that row (use-message-queue.ts:287-296, use-message-handler-logic.ts:566-585), so Retry
+  // is the only way to re-drive the turn: the banner must stay until the reply lands.
+  useEffect(() => {
+    if (!rollFailure) return;
+    const savedIndex = messages.findIndex(
+      (message) =>
+        message.sender === 'player' &&
+        (message.id === rollFailure.rollId ||
+          (rollFailure.rollRequestId !== undefined &&
+            message.context?.rollRequestId === rollFailure.rollRequestId)),
+    );
+    if (savedIndex < 0) return;
+    const replied = messages.slice(savedIndex + 1).some((message) => message.sender === 'dm');
+    if (!replied) return;
+    failedSubmissionRef.current = null;
+    setRollFailure(null);
+  }, [messages, rollFailure]);
 
   /**
    * Format a single dice roll with enhanced context for both AI and human readability
@@ -287,7 +319,7 @@ export function useMessageDiceRolls({
       pendingRollIdRef.current = null;
       setPendingRollId(null);
     }
-    setRollError(null);
+    setRollFailure(null);
   }, [currentRoll, cancelDiceRoll, onSendMessage]);
 
   const handleRetryRoll = useCallback(async () => {
@@ -296,10 +328,10 @@ export function useMessageDiceRolls({
     setIsRetrying(true);
     try {
       await failedSubmissionRef.current();
-      setRollError(null);
+      setRollFailure(null);
       failedSubmissionRef.current = null;
     } catch (error) {
-      setRollError(getRollErrorMessage(error));
+      setRollFailure((failure) => failure && { ...failure, message: getRollErrorMessage(error) });
     } finally {
       retryingRef.current = false;
       setIsRetrying(false);
@@ -319,7 +351,7 @@ export function useMessageDiceRolls({
       handlingRollIdsRef.current.add(roll.id);
       pendingRollIdRef.current = roll.id;
       setPendingRollId(roll.id);
-      setRollError(null);
+      setRollFailure(null);
 
       let retrySubmission: (() => Promise<void>) | null = null;
       try {
@@ -492,7 +524,11 @@ export function useMessageDiceRolls({
         if (failedSubmissionRef.current === submit) failedSubmissionRef.current = null;
       } catch (error) {
         failedSubmissionRef.current = retrySubmission;
-        setRollError(getRollErrorMessage(error));
+        setRollFailure({
+          message: getRollErrorMessage(error),
+          rollId: roll.id,
+          rollRequestId: roll.rollRequestId,
+        });
         handleAsyncError(error, {
           userMessage: 'Failed to process dice result',
           context: { location: 'useMessageDiceRolls.handleManualResult' },
@@ -518,6 +554,22 @@ export function useMessageDiceRolls({
       state.diceRollQueue.pendingRolls,
     ],
   );
+
+  // A different prompt (an initiative roll, say) replaces the failed roll, so the failure goes with
+  // it. Engine-owned prompts can be dismissed without touching this hook, so the clear lives here
+  // rather than in the cancel handler, and an old Retry cannot come back after them (#1288).
+  useEffect(() => {
+    if (!rollFailure || !currentRoll || currentRoll.id === rollFailure.rollId) return;
+    failedSubmissionRef.current = null;
+    setRollFailure(null);
+  }, [currentRoll, rollFailure]);
+
+  // Gated at render too: the effect above clears the failure only after the first render in which
+  // a different prompt is current, and that render must not hand the old error to its dialog.
+  const rollError =
+    rollFailure && (!currentRoll || currentRoll.id === rollFailure.rollId)
+      ? rollFailure.message
+      : null;
 
   return {
     currentRoll,

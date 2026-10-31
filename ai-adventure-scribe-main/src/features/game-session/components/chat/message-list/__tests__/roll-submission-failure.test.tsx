@@ -11,6 +11,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { M5_PERCEPTION } from '../../../../../../../shared/test-fixtures/dm-roll-reply-saves';
 import { useMessageDiceRolls } from '../use-message-dice-rolls';
 
+import type { ChatMessage } from '@/types/game';
+
 import { DiceRollRequest } from '@/components/game/DiceRollRequest';
 
 const m5 = M5_PERCEPTION;
@@ -18,6 +20,7 @@ const m5 = M5_PERCEPTION;
 const { perceptionRoll, game } = vi.hoisted(() => {
   const roll = {
     id: 'm5-perception',
+    rollRequestId: 'req-m5-perception',
     requestType: 'skill_check',
     description: 'Perception check to notice anything unusual or dangerous in the corridor',
     status: 'pending' as const,
@@ -37,7 +40,10 @@ const { perceptionRoll, game } = vi.hoisted(() => {
         currentPhase: 'exploration',
         diceRollQueue: { currentRollId: roll.id, pendingRolls: [roll] },
       },
-      getCurrentDiceRoll: () => roll,
+      getCurrentDiceRoll: () =>
+        game.state.diceRollQueue.pendingRolls.find(
+          (r) => r.id === game.state.diceRollQueue.currentRollId,
+        ) ?? null,
       completeDiceRoll: vi.fn(),
       cancelDiceRoll: vi.fn(),
       clearBatch: vi.fn(),
@@ -71,8 +77,11 @@ vi.mock('@/lib/logger', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-const Prompt: React.FC<{ onSendFullMessage: () => Promise<void> }> = ({ onSendFullMessage }) => {
-  const dice = useMessageDiceRolls({ onSendMessage: vi.fn(), onSendFullMessage });
+const Prompt: React.FC<{
+  onSendFullMessage: () => Promise<void>;
+  messages?: readonly ChatMessage[];
+}> = ({ onSendFullMessage, messages = [] }) => {
+  const dice = useMessageDiceRolls({ onSendMessage: vi.fn(), onSendFullMessage, messages });
   if (!dice.currentRoll || !dice.rollRequest)
     return dice.rollError ? (
       <div role="alert">
@@ -171,5 +180,163 @@ describe('a failed roll submission leaves the prompt usable (#2280, run M5)', ()
     expect(screen.queryByRole('button', { name: /Dismiss roll request/ })).not.toBeInTheDocument();
     expect(game.cancelDiceRoll).not.toHaveBeenCalled();
     expect(game.completeDiceRoll).toHaveBeenCalledTimes(1);
+  });
+
+  // #1288: the send threw after the player row had already saved. Once the DM has replied to that
+  // row, the turn completed and the stale banner must clear.
+  it('#1288: a saved roll row followed by the DM reply clears the failure banner', async () => {
+    const onSendFullMessage = vi.fn(async () => {
+      throw new Error('Request failed (500)');
+    });
+    const { rerender } = render(<Prompt onSendFullMessage={onSendFullMessage} />);
+
+    fireEvent.click(rollButton());
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('dice-animation'));
+    });
+    await screen.findByRole('alert');
+
+    const savedRow = {
+      id: 'row-m5-perception',
+      sender: 'player',
+      text: 'Perception check: 7 (nat 6+1)',
+      timestamp: new Date().toISOString(),
+      context: { intent: 'dice_roll', rollRequestId: 'req-m5-perception' },
+    } as unknown as ChatMessage;
+    const reply = {
+      id: 'dm-reply',
+      sender: 'dm',
+      text: 'You notice the loose stone.',
+      timestamp: new Date().toISOString(),
+    } as unknown as ChatMessage;
+    rerender(<Prompt onSendFullMessage={onSendFullMessage} messages={[savedRow, reply]} />);
+
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+  });
+
+  // #1288 review: a saved row with no DM reply is a turn still owed. The banner and Retry must
+  // stay, because a resend is deduped against that row and is the only way to re-drive the turn.
+  it('a saved roll row with no DM reply keeps Retry available', async () => {
+    const onSendFullMessage = vi.fn(async () => {
+      throw new Error('Request failed (500)');
+    });
+    const { rerender } = render(<Prompt onSendFullMessage={onSendFullMessage} />);
+
+    fireEvent.click(rollButton());
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('dice-animation'));
+    });
+    await screen.findByRole('alert');
+
+    const savedRow = {
+      id: 'row-m5-perception',
+      sender: 'player',
+      text: 'Perception check: 7 (nat 6+1)',
+      timestamp: new Date().toISOString(),
+      context: { intent: 'dice_roll', rollRequestId: 'req-m5-perception' },
+    } as unknown as ChatMessage;
+    rerender(<Prompt onSendFullMessage={onSendFullMessage} messages={[savedRow]} />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Roll submission failed. Please try again.',
+    );
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled();
+  });
+
+  // #1288: an initiative prompt that opens after a failed narrative roll must show its own
+  // ROLL D20 controls, never a Retry-only state that belongs to the earlier roll.
+  it('#1288: a later initiative prompt does not inherit the earlier failure', async () => {
+    const onSendFullMessage = vi.fn(async () => {
+      throw new Error('Request failed (500)');
+    });
+    const { rerender } = render(<Prompt onSendFullMessage={onSendFullMessage} />);
+
+    fireEvent.click(rollButton());
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('dice-animation'));
+    });
+    await screen.findByRole('button', { name: 'Retry' });
+
+    const initiativeRoll = {
+      id: 'init-1288',
+      rollRequestId: 'req-init-1288',
+      requestType: 'initiative',
+      description: 'Roll initiative for the goblin ambush',
+      status: 'pending' as const,
+      rollConfig: { count: 1, dieType: 20, modifier: 1, advantage: false, disadvantage: false },
+    };
+    game.state.diceRollQueue = { currentRollId: initiativeRoll.id, pendingRolls: [initiativeRoll] };
+    rerender(<Prompt onSendFullMessage={onSendFullMessage} />);
+
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(rollButton()).toBeEnabled();
+    expect(onSendFullMessage).toHaveBeenCalledTimes(1);
+  });
+
+  // #1288 review: an engine-owned initiative prompt is dismissed by the engine, not through
+  // handleCancelRoll. Once it closes, the earlier failed roll must not bring its Retry back.
+  it('#1288: an engine-dismissed initiative prompt does not revive the earlier Retry', async () => {
+    const onSendFullMessage = vi.fn(async () => {
+      throw new Error('Request failed (500)');
+    });
+    const { rerender } = render(<Prompt onSendFullMessage={onSendFullMessage} />);
+
+    fireEvent.click(rollButton());
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('dice-animation'));
+    });
+    await screen.findByRole('button', { name: 'Retry' });
+
+    const initiativeRoll = {
+      id: 'init-engine-1288',
+      rollRequestId: 'req-init-engine-1288',
+      requestType: 'initiative',
+      description: 'Roll initiative for the goblin ambush',
+      status: 'pending' as const,
+      rollConfig: { count: 1, dieType: 20, modifier: 1, advantage: false, disadvantage: false },
+    };
+    game.state.diceRollQueue = { currentRollId: initiativeRoll.id, pendingRolls: [initiativeRoll] };
+    rerender(<Prompt onSendFullMessage={onSendFullMessage} />);
+
+    // The engine closes its own prompt: the queue empties without handleCancelRoll running.
+    game.state.diceRollQueue = { currentRollId: '', pendingRolls: [] };
+    rerender(<Prompt onSendFullMessage={onSendFullMessage} />);
+
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(onSendFullMessage).toHaveBeenCalledTimes(1);
+  });
+
+  // #1288 review: the row can match by its message id instead of rollRequestId.
+  it('#1288: a saved row matched by message id, then the DM reply, clears the banner', async () => {
+    const onSendFullMessage = vi.fn(async () => {
+      throw new Error('Request failed (500)');
+    });
+    const { rerender } = render(<Prompt onSendFullMessage={onSendFullMessage} />);
+
+    fireEvent.click(rollButton());
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('dice-animation'));
+    });
+    await screen.findByRole('alert');
+
+    const savedRow = {
+      id: 'm5-perception',
+      sender: 'player',
+      text: 'Perception check: 7 (nat 6+1)',
+      timestamp: new Date().toISOString(),
+    } as unknown as ChatMessage;
+    const reply = {
+      id: 'dm-reply-id',
+      sender: 'dm',
+      text: 'You notice the loose stone.',
+      timestamp: new Date().toISOString(),
+    } as unknown as ChatMessage;
+    rerender(<Prompt onSendFullMessage={onSendFullMessage} messages={[savedRow, reply]} />);
+
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
   });
 });
