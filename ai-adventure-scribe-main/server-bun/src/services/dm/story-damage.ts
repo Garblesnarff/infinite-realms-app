@@ -19,6 +19,15 @@
  * Module stays importable without DATABASE_URL (db/client throws at load without it), so
  * the pure validator tests run outside the real-DB suite: every DB-touching import is
  * lazy, inside the functions.
+ *
+ * #777: falls roll on the server. When the envelope's damage carries a fall height
+ * (fallHeightFeet), the server rolls 1d6 bludgeoning per 10 feet fallen, maximum
+ * 20d6 (2014 PHB p.183), and ignores the model's amount; the #768 cap still applies
+ * to the rolled total. A fall with no height carries no fallHeightFeet and flows
+ * through today's clamp path, because there is no height to roll from. A fall under
+ * 10 feet rolls 0 dice: it still claims the message's once-per-message slot with a
+ * 0-damage marker row (so a regenerated taller fall for the same message is blocked)
+ * and moves no HP.
  */
 
 import { logger } from '../../lib/logger.js';
@@ -34,10 +43,41 @@ export type StoryDamageOutcome =
 export interface StoryDamage {
   amount: number;
   source: string;
+  /**
+   * #777: when the damage is a fall, the height in feet (whole number, >= 0).
+   * The server rolls from it and ignores `amount`. Absent for non-fall damage
+   * (and for a fall whose height is unknown — that flows through today's path).
+   */
+  fallHeightFeet?: number;
 }
 
 /** One story beat never deals more than this; larger is a prompt bug, not narration. */
 export const MAX_STORY_DAMAGE = 999;
+
+/** 2014 PHB p.183 (#777): a fall deals at most this many d6. */
+export const MAX_FALL_DICE = 20;
+
+/** Whole 10-foot bands in a fall; a fall under 10 feet deals no damage. */
+export function fallDiceFromHeight(heightFeet: number): number {
+  return Math.min(MAX_FALL_DICE, Math.max(0, Math.floor(heightFeet / 10)));
+}
+
+/** Sum of `fallDiceFromHeight` d6 rolls; `random` returns a value in [0, 1). */
+export function rollFallDamage(heightFeet: number, random: () => number): number {
+  const dice = fallDiceFromHeight(heightFeet);
+  let total = 0;
+  for (let i = 0; i < dice; i++) total += 1 + Math.floor(random() * 6);
+  return total;
+}
+
+/**
+ * Test-only. Seeded RNG for the fall roll. The real-db tests drive the real
+ * /v1/llm/generate route, so the roll cannot take an injected parameter — the
+ * route's dynamic import resolves to this same module instance. Production
+ * leaves `random` unset (Math.random). Follows the storyDamageAfterClaimForTests
+ * precedent in this file.
+ */
+export const storyDamageRandomForTests: { random?: () => number } = {};
 
 /**
  * The strategist's bound (#768 FIX): story damage never kills outright. Above 1 HP the
@@ -60,15 +100,32 @@ export function capStoryDamage(
 export function validDamage(damage: unknown): damage is StoryDamage {
   if (!damage || typeof damage !== 'object') return false;
   const d = damage as Record<string, unknown>;
-  return (
-    typeof d.amount === 'number' &&
-    Number.isInteger(d.amount) &&
-    d.amount >= 1 &&
-    d.amount <= MAX_STORY_DAMAGE &&
-    typeof d.source === 'string' &&
-    d.source.trim().length >= 1 &&
-    d.source.trim().length <= 120
-  );
+  // #777: a fall height, when present, must be a whole number of feet >= 0.
+  // Anything else (null, a string, a negative, a fraction) is malformed and the
+  // whole claim fails closed — the strict schema cannot express null here, so a
+  // null reaching the server is not a "fall with unknown height" but bad input.
+  const heightValid =
+    d.fallHeightFeet === undefined ||
+    (typeof d.fallHeightFeet === 'number' &&
+      Number.isInteger(d.fallHeightFeet) &&
+      d.fallHeightFeet >= 0);
+  if (!heightValid) return false;
+  // #777 Round 2: when a valid height is present, the height — not the model
+  // amount — sets the damage, so the 1..999 amount range is skipped (an amount
+  // of 0 or 1000 with a height rolls from the height instead of dropping as
+  // invalid_damage). The amount must still be an integer number, and the
+  // source rules still apply; with no height the range still applies.
+  if (
+    typeof d.amount !== 'number' ||
+    !Number.isInteger(d.amount) ||
+    (d.fallHeightFeet === undefined && (d.amount < 1 || d.amount > MAX_STORY_DAMAGE)) ||
+    typeof d.source !== 'string' ||
+    d.source.trim().length < 1 ||
+    d.source.trim().length > 120
+  ) {
+    return false;
+  }
+  return true;
 }
 
 const damageIdSeed = (sessionId: string, characterId: string, since: Date): string =>
@@ -219,15 +276,69 @@ export async function applyStoryDamage(input: {
   else if (!message?.createdAt) outcome = 'no_player_message';
   else {
     const damage = input.damage as StoryDamage;
-    outcome = await applyStoryDamageOnce({
-      characterId: character.id,
-      userId,
-      sessionId,
-      characterName: character.name,
-      since: message.createdAt,
-      amount: damage.amount,
-      source: damage.source,
-    });
+    if (typeof damage.fallHeightFeet === 'number') {
+      // #777: the height, not the model amount, sets the damage. The #768 cap
+      // inside applyStoryDamageOnce still applies to the rolled total.
+      const random = storyDamageRandomForTests.random ?? Math.random;
+      const dice = fallDiceFromHeight(damage.fallHeightFeet);
+      const rolled = rollFallDamage(damage.fallHeightFeet, random);
+      logger.info({
+        msg: 'DM_STORY_FALL_ROLL',
+        sessionId,
+        characterId: character.id,
+        heightFeet: damage.fallHeightFeet,
+        dice,
+        rolled,
+        modelAmount: damage.amount,
+      });
+      if (rolled === 0) {
+        // A fall under 10 feet deals no damage, but it still consumes the
+        // message's once-per-message slot (#777 item 1): without a claim row,
+        // a regenerated taller fall for the same message would apply in full.
+        // The marker row deals 0 damage and moves no HP; a repeat apply for
+        // this message conflicts on it and returns 'already_applied'.
+        const { claimEngineChatLine } = await import('../engine-chat-line.js');
+        const idSeed = damageIdSeed(sessionId, character.id, message.createdAt);
+        const claimed = await claimEngineChatLine({
+          sessionId,
+          userId,
+          idSeed,
+          text: `⚙️ Engine: story damage — ${damage.source.trim()} deals 0 damage to ${character.name}.`,
+          context: { intent: 'story_damage', claim: true },
+        });
+        if (!claimed) {
+          outcome = 'already_applied';
+        } else {
+          logger.info({
+            msg: 'DM_STORY_FALL_NO_DAMAGE',
+            sessionId,
+            characterId: character.id,
+            heightFeet: damage.fallHeightFeet,
+          });
+          outcome = 'applied';
+        }
+      } else {
+        outcome = await applyStoryDamageOnce({
+          characterId: character.id,
+          userId,
+          sessionId,
+          characterName: character.name,
+          since: message.createdAt,
+          amount: rolled,
+          source: damage.source,
+        });
+      }
+    } else {
+      outcome = await applyStoryDamageOnce({
+        characterId: character.id,
+        userId,
+        sessionId,
+        characterName: character.name,
+        since: message.createdAt,
+        amount: damage.amount,
+        source: damage.source,
+      });
+    }
   }
   logger.info({
     msg: 'DM_STORY_DAMAGE',
