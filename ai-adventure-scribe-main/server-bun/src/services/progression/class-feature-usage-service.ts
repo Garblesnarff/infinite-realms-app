@@ -325,27 +325,15 @@ export class ClassFeatureUsageService {
       }
     }
 
-    // Check if feature has uses remaining
-    if (characterFeature.usesRemaining === null || characterFeature.usesRemaining <= 0) {
-      return {
-        success: false,
-        usesRemaining: 0,
-        effect: '',
-        message: `No uses remaining for ${feature.featureName}`,
-      };
-    }
-
-    // Decrement uses
-    const newUsesRemaining = characterFeature.usesRemaining - 1;
-    // 🛡️ Sentinel: Incorporate ownership check into the UPDATE query for defense-in-depth.
-    await db
+    const [spent] = await db
       .update(characterFeatures)
-      .set({ usesRemaining: newUsesRemaining })
+      .set({ usesRemaining: sql`${characterFeatures.usesRemaining} - 1` })
       .where(
         and(
           eq(characterFeatures.id, characterFeature.id),
           eq(characterFeatures.characterId, characterId),
           eq(characterFeatures.featureId, featureId),
+          sql`${characterFeatures.usesRemaining} >= 1`,
           exists(
             db
               .select()
@@ -358,7 +346,18 @@ export class ClassFeatureUsageService {
               ),
           ),
         ),
-      );
+      )
+      .returning({ usesRemaining: characterFeatures.usesRemaining });
+
+    if (!spent) {
+      return {
+        success: false,
+        usesRemaining: 0,
+        effect: '',
+        message: `No uses remaining for ${feature.featureName}`,
+      };
+    }
+    const newUsesRemaining = spent.usesRemaining!;
 
     // Log the usage
     await this.logFeatureUsage(characterId, featureId, userId, usageContext, sessionId);

@@ -307,7 +307,9 @@ describe('ClassFeaturesService', () => {
 
       (db.update as any).mockReturnValue({
         set: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue([{ id: 'cf-123' }]),
+        where: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([{ usesRemaining: 4 }]),
+        }),
       });
 
       // Mock calls to db.select
