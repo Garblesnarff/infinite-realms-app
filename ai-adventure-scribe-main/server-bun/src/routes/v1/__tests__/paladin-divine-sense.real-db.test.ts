@@ -314,10 +314,25 @@ describeWithDb('paladin Divine Sense tracking (#712)', () => {
           eq(characterFeatures.featureId, divineSenseFeatureId),
         ),
       );
+    const [{ id: freshEncounterId }] = await db
+      .insert(combatEncounters)
+      .values({ sessionId, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
+      .returning({ id: combatEncounters.id });
+    const [{ id: freshParticipantId }] = await db
+      .insert(combatParticipants)
+      .values({
+        encounterId: freshEncounterId,
+        characterId: paladinId,
+        name: 'Test Paladin',
+        participantType: 'player',
+        turnOrder: 0,
+        initiative: 10,
+        maxHp: 12,
+      })
+      .returning({ id: combatParticipants.id });
     await db
-      .update(combatParticipants)
-      .set({ actionUsed: false })
-      .where(eq(combatParticipants.id, participantId));
+      .insert(combatParticipantStatus)
+      .values({ participantId: freshParticipantId, currentHp: 7, maxHp: 12, isConscious: true });
     const sheet = await app!.handle(
       new Request(`http://localhost/v1/characters/${paladinId}`, {
         headers: { authorization: 'Bearer 712-test-token' },
@@ -328,11 +343,11 @@ describeWithDb('paladin Divine Sense tracking (#712)', () => {
       class_features: { divine_sense: { maxUses: 3, currentUses: 3 } },
     });
     const response = await app!.handle(
-      new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+      new Request(`http://localhost/v1/combat/${freshEncounterId}/intent`, {
         method: 'POST',
         headers: { authorization: 'Bearer 712-test-token', 'content-type': 'application/json' },
         body: JSON.stringify({
-          intent: { type: 'divine_sense', actorId: participantId },
+          intent: { type: 'divine_sense', actorId: freshParticipantId },
           source: 'dm',
           dmStartedAt: 1_700_000_000_000,
           origin: 'typed',
