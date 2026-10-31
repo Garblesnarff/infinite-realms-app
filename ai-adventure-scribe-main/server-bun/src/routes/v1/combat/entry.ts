@@ -1,5 +1,6 @@
 import { Elysia, t } from 'elysia';
 
+import { PLAYER_INPUT_MAX_CHARS } from '../../../../../shared/player-input-cap';
 import { isUnresolvedNpcName } from '../../../../../shared/unresolved-creature-name';
 import { authenticateRequest as defaultAuthenticateRequest } from '../../../lib/auth.js';
 import { AppError } from '../../../lib/errors.js';
@@ -46,7 +47,7 @@ const entryPlayerBody = t.Object({
 });
 
 const declaredAttackBody = t.Object({
-  playerInput: t.String({ minLength: 1, maxLength: 20_000 }),
+  playerInput: t.String({ minLength: 1, maxLength: PLAYER_INPUT_MAX_CHARS }),
   player: entryPlayerBody,
   /** The last DM message: which creatures "him" can mean when the spell names no target. */
   recentNarration: t.Optional(t.String({ maxLength: 6_000 })),

@@ -7,6 +7,8 @@
  */
 import { getSchemaValidator, t } from 'elysia';
 
+import { PLAYER_INPUT_MAX_CHARS } from '../../../../../shared/player-input-cap';
+
 const participantId = t.String({ minLength: 1, maxLength: 255 });
 const actionId = t.Optional(t.String({ minLength: 1, maxLength: 255 }));
 const expectedVersion = t.Number({ minimum: 0 });
@@ -190,10 +192,10 @@ const originField = t.Optional(t.Union(COMBAT_ACTION_ORIGINS.map((origin) => t.L
 /**
  * The player's own words for this turn (#749). Optional and additive: an inline action bar carries
  * none, and an older client that predates the field is unaffected. The server reads it to let a
- * DM-declared player exit stand only when the player's text asked for one. The cap matches a typed
- * turn (20_000), so a long move is not cut here.
+ * DM-declared player exit stand only when the player's text asked for one. The cap is the shared
+ * player-turn cap, so a long move is not cut here.
  */
-const playerInputField = t.Optional(t.String({ maxLength: 20_000 }));
+const playerInputField = t.Optional(t.String({ maxLength: PLAYER_INPUT_MAX_CHARS }));
 
 /** The contract. Which dialect applies is decided by `source`, and by nothing else. */
 const combatIntentRequestSchema = t.Union([
