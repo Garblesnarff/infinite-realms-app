@@ -230,8 +230,13 @@ export type DMResponse = {
    * from the sheet's hit points once per player message, through the same writer the
    * client damage route uses (`applyNonAttackDamage`); absent or null when the story
    * deals no damage.
+   *
+   * #777: when the damage is a fall, `fallHeightFeet` carries the height in feet
+   * and the server rolls 1d6 bludgeoning per 10 feet fallen, maximum 20d6 (2014
+   * PHB p.183), ignoring `amount`. Absent for non-fall damage; a fall without a
+   * height carries no `fallHeightFeet` and flows through today's clamp path.
    */
-  damage?: { amount: number; source: string } | null;
+  damage?: { amount: number; source: string; fallHeightFeet?: number } | null;
   /**
    * The campaign's ending, declared the turn its story completes (#1020): the
    * final beat has played, or a limit the campaign's rules define has been
@@ -807,6 +812,10 @@ const storyDamageProperty = {
   properties: {
     amount: { type: 'integer', minimum: 1, maximum: 999 },
     source: { type: 'string', minLength: 1, maxLength: 120 },
+    // #777: optional on purpose (no `minimum` keyword — the server's validDamage
+    // enforces whole feet >= 0, so this property costs the budget one optional
+    // and nothing else). The model sets it only for falls; the server rolls.
+    fallHeightFeet: { type: 'integer' },
   },
   required: ['amount', 'source'],
   // #610: the model narrated injury ("the rope burns", "dragged to the edge") with no
@@ -819,7 +828,11 @@ const storyDamageProperty = {
     'e.g. rope burn>"}` and narrate the hurt in `text`. The game subtracts the amount from ' +
     'the character\'s hit points and posts a damage line in chat; do not narrate the ' +
     'character being hurt or taking damage without setting this field (or requesting a ' +
-    '`damage` roll when the amount should be rolled). Otherwise omit it.',
+    '`damage` roll when the amount should be rolled). Otherwise omit it. ' +
+    '#777 falls: when the damage is a fall, also set `fallHeightFeet` to the height in ' +
+    'feet as a whole number; the game rolls 1d6 bludgeoning damage per 10 feet fallen, ' +
+    'to a maximum of 20d6, and ignores `amount`. Omit `fallHeightFeet` for damage that ' +
+    'is not a fall.',
 };
 
 /**
