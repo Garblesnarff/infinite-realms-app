@@ -18,6 +18,28 @@ describe('rewriteNarrationSegmentsFromEnvelope narration guard', () => {
   });
 });
 
+describe('rewriteNarrationSegmentsFromEnvelope narration guard non-string character (#781)', () => {
+  test('a non-string character returns the original text', () => {
+    // #633: segment derivation reads `character.trim()` (derivation lines
+    // ~80/~252), so a numeric character throws inside parseDmResponse and
+    // the wrapper's try/catch must keep the original text — the reply is
+    // already saved. The quoted line keeps the segment in the derivation
+    // hints so the throw actually fires.
+    const envelope = {
+      text: 'The gardener says "Follow me." and turns away.',
+      narration_segments: [
+        { type: 'character', text: '"Follow me."', character: 123, voice_category: null },
+      ],
+      map_actions: [],
+      handout_actions: [],
+      combat_actions: [],
+    };
+    const original = JSON.stringify(envelope);
+
+    expect(rewriteNarrationSegmentsFromEnvelope(envelope, original)).toBe(original);
+  });
+});
+
 describe('rewriteNarrationSegmentsFromEnvelope options fail-closed (#864)', () => {
   const OPT_A = 'A. **Take the map**, and read it by the fire.';
   const OPT_B = 'B. **Ask about the heir**, pressing gently.';
