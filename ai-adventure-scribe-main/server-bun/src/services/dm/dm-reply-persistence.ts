@@ -211,8 +211,9 @@ function fallbackSkipReason(
  * server already holds the envelope; write it as a provisional row under the
  * turn's reserved id so the player gets the reply after a reload. Carries the
  * roll requests in context so a reload can restore the popup from the same
- * row. Scoped to the roll-request case: combat turns and gate-rejected prose
- * are log-only. When generatedAt is given, a player row newer than it means
+ * row. After the write succeeds, the row is also pushed over the session
+ * socket so a live tab sees it without a reload (#800 item 3). Scoped to the
+ * roll-request case: combat turns and gate-rejected prose are log-only. When generatedAt is given, a player row newer than it means
  * the player already moved past this turn, so the row is not written (#800):
  * persisting it would surface a roll popup for a passed turn, and answering
  * it hits the superseded-roll 409. Never throws: a failed write must not
@@ -316,6 +317,25 @@ export async function persistFallbackDmReply(params: {
       },
       params.userId,
     );
+    // #800 item 3: the row is written; tell live tabs over the session socket
+    // so a tab that is already open sees it without a reload. A failed push
+    // must not flip the outcome — the row is persisted — so it is logged, not
+    // thrown. The frame carries ids + requests only, never the row prose.
+    try {
+      const { publishDmFallbackRow } = await import('./dm-fallback-broadcast.js');
+      publishDmFallbackRow({
+        sessionId: params.sessionId,
+        messageId: params.messageId,
+        rollRequests,
+      });
+    } catch (error) {
+      logger.warn({
+        msg: 'DM_REPLY_FALLBACK_PUSH_FAILED',
+        sessionId: params.sessionId,
+        messageId: params.messageId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
     return { persisted: true };
   } catch (error) {
     logger.error({

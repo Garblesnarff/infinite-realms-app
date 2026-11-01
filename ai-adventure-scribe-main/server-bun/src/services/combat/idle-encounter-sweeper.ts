@@ -79,7 +79,7 @@ let sweepInFlight = false;
  * browser (`session-message-service.ts` persists the client's value), so a machine with a wrong
  * clock would either pin a live fight open indefinitely or get a fight being played right now
  * closed out from under it. `created_at` is the server's own clock and is NOT NULL, which is
- * also why it cannot be defeated by a null row -- the same reasoning as `dmRowExistsSince`.
+ * also why it cannot be defeated by a null row.
  *
  * Dialogue alone is NOT enough to call a fight live (#2556 review). `startCombat` inserts the
  * encounter row and writes no dialogue, so a player who walks back into a quiet session and
