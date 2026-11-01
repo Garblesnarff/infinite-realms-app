@@ -492,20 +492,60 @@ describeWithDb('a seated enemy never takes the player character name (#2438)', (
       // The name matches nothing in the bible and nothing in the SRD catalog, so the
       // dire-wolf id alone must not seat that block: the seat fights at generic stats
       // (11 HP, unscaled — a generic seat is not party-scaled) and the line says
-      // 'generic', not 'dm'.
+      // 'generic', not 'dm'. The ignored id is not echoed as the template either
+      // (#1115 round 2): templateId is null, while dmMonsterId still records what
+      // the DM sent.
       const seats = seatedLogs.filter((payload) => payload.sessionId === id);
       expect(seats).toHaveLength(1);
       expect(seats[0]).toMatchObject({
         msg: 'COMBAT_PARTICIPANT_SEATED',
         encounterId: state.encounter.id,
         combatantName: 'Mossback Brute',
-        templateId: 'srd:dire-wolf',
+        templateId: null,
         templateSource: 'generic',
         statSource: 'generic',
         resolvedAs: null,
         dmMonsterId: 'srd:dire-wolf',
       });
       expect(state.participants.find((participant) => !participant.characterId)?.maxHp).toBe(11);
+      // The ignored id is recorded nowhere as the template: the stored row's
+      // monsterRef is null too, not just the log line's templateId (#1115 round 2).
+      expect(state.participants.find((participant) => !participant.characterId)?.monsterRef).toBe(
+        null,
+      );
+    });
+
+    test('an id-corroborated SRD seat reads templateSource lookup, party-scaled (#1115)', async () => {
+      const id = await newSession(12);
+      const participants = buildEntryParticipants(
+        player(),
+        [{ name: 'Goblin Archer', monsterId: 'srd:goblin', count: 1 }],
+        {
+          sceneDescription: 'A goblin archer draws its bow.',
+          source: 'combat_transition',
+        },
+      );
+      const state = await startAndRecord(id, participants as never);
+
+      // Required 3, id-matched branch: "Goblin Archer" corroborates srd:goblin, so the
+      // seat resolves to the SRD goblin and the line says 'lookup' (round 1 said 'dm'
+      // whenever a DM id was present). The stored row attributes the template, and the
+      // seat is party-scaled: a 1-player party scales the goblin's 7 HP by 1/4 to 2.
+      const seats = seatedLogs.filter((payload) => payload.sessionId === id);
+      expect(seats).toHaveLength(1);
+      expect(seats[0]).toMatchObject({
+        msg: 'COMBAT_PARTICIPANT_SEATED',
+        encounterId: state.encounter.id,
+        combatantName: 'Goblin Archer',
+        templateId: 'srd:goblin',
+        templateSource: 'lookup',
+        statSource: 'srd',
+        resolvedAs: 'Goblin',
+        dmMonsterId: 'srd:goblin',
+      });
+      const monster = state.participants.find((participant) => !participant.characterId);
+      expect(monster?.maxHp).toBe(2);
+      expect(monster?.monsterRef).toBe('srd:goblin');
     });
   });
 });

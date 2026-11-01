@@ -18,8 +18,9 @@ import {
   resolveMonsterAttackProfile,
   type MonsterAttackProfile,
 } from './monster-attack-profile.js';
-import { normalizeMonsterKey } from './monster-key.js';
+import { monsterKeyTokens, normalizeMonsterKey } from './monster-key.js';
 import {
+  findSrdMonster,
   GENERIC_NPC_STATS,
   resolveSrdMonsterStats,
   type ResolvedMonsterStats,
@@ -86,17 +87,29 @@ export function resolveCombatantStats(
   // with the campaign context attached. Its near-miss log is NOT suppressed: that one
   // records an inference, which is worth seeing wherever it happens.
   //
-  // #1115: the SRD entry is resolved by NAME match only, never from the DM's monster_id
-  // (an id can name any block for any creature, which is the incident this fixes). On a
-  // bible hit the lookup key is the bible entry's own name — the SRD counterpart of the
-  // creature the bible matched — so a mismatched id cannot fill the bible block's gaps
-  // with another creature's numbers; on a bible miss it is the seat's name. An
-  // unparseable bible chunk counts the same way: its entityName still keys the lookup,
-  // and a name that matches no SRD entry lands generic. A name-matched SRD block is never
-  // a wrong block in that sense — the name is the creature's identity.
-  const srd = resolveSrdMonsterStats(null, authored?.entityName ?? name, context, {
-    suppressFallbackWarn: true,
-  });
+  // #1115 round 2 (supersedes the round-1 name-only rule, which regressed real seats):
+  // the SRD entry resolves from the seat's name first, then — only when the DM's id is
+  // corroborated by that name — from the id. `buildEntryParticipants` numbers
+  // multi-count seats ("Goblin 2", "Goblin 3"), so the lookup key strips the duplicate
+  // suffix the way `findAuthoredMonster` does; the seat itself keeps its number. On a
+  // bible hit the key is the bible entry's own name, so the id leg can only fill a bible
+  // block's gaps with the SRD counterpart of the creature the bible matched.
+  // The id leg exists because the DM is told to send canonical SRD ids and free naming
+  // is documented ("Goblin Archer" + srd:goblin is normal), but an id never seats a
+  // block on its own: the entry's display name must match, whole-word and
+  // case-insensitive, inside the stripped name — "Aggressive Patron" + srd:bandit and
+  // "Prowler" + srd:wolf stay generic, which is the #1114 incident pattern. An
+  // unparseable bible chunk counts the same way: its entityName still keys the lookup.
+  const lookupName = (authored?.entityName ?? name)?.replace(DUPLICATE_SUFFIX, '') ?? null;
+  let srd = lookupName
+    ? resolveSrdMonsterStats(null, lookupName, context, { suppressFallbackWarn: true })
+    : null;
+  if (!srd && monsterId && lookupName) {
+    const idEntry = findSrdMonster(monsterId, null);
+    if (idEntry && srdNameMatchesName(idEntry.name, lookupName)) {
+      srd = resolveSrdMonsterStats(monsterId, null, context, { suppressFallbackWarn: true });
+    }
+  }
 
   if (authored) {
     const { parsed, coverage } = authored;
@@ -254,6 +267,24 @@ export function resolveCombatantStats(
 }
 
 const DUPLICATE_SUFFIX = /\s+\d+$/;
+
+/**
+ * Whether an SRD entry's display name matches, whole-word and case-insensitive,
+ * inside a (suffix-stripped) creature name (#1115 round 2).
+ *
+ * Token-contiguous: every token of the entry name must appear as consecutive whole
+ * words in the creature name. "Goblin Archer" contains "Goblin"; "Aggressive Patron"
+ * does not contain "Bandit" and "Prowler" does not contain "Wolf", so those ids are
+ * ignored and the seats land generic.
+ */
+const srdNameMatchesName = (entryName: string, creatureName: string): boolean => {
+  const entryTokens = monsterKeyTokens(entryName);
+  if (entryTokens.length === 0) return false;
+  const nameTokens = monsterKeyTokens(creatureName);
+  return nameTokens.some((_, start) =>
+    entryTokens.every((token, offset) => nameTokens[start + offset] === token),
+  );
+};
 
 /**
  * The name a seated combatant carries.

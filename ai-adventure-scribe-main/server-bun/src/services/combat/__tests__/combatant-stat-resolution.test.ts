@@ -20,6 +20,7 @@ mock.module('../../../lib/logger.js', () => ({
 const { parseAuthoredStatBlock, gradeCoverage } = await import('../authored-stat-block-parser.js');
 const { resolveCombatantStats } = await import('../combatant-stat-resolution.js');
 const { normalizeMonsterKey } = await import('../monster-key.js');
+const { buildEntryParticipants } = await import('../combat-entry-gate.js');
 
 import type { CampaignMonsterIndex } from '../campaign-monster-index.js';
 
@@ -326,6 +327,117 @@ describe('the run-15 SRD normalization fix still holds through the ladder', () =
       expect(resolveCombatantStats(EMPTY_INDEX, id, 'Stone Golem')).toMatchObject({
         maxHp: 178,
         armorClass: 17,
+      });
+    }
+  });
+});
+
+describe('the narrowed SRD id rule (#1115 round 2)', () => {
+  test('a count:3 group seats three SRD goblins, duplicate suffixes stripped (#1115)', () => {
+    // Required 1: buildEntryParticipants numbers the seats "Goblin 1/2/3" and carries
+    // the DM id through; the ladder strips the suffix for the lookup (the seats keep
+    // their numbers) so all three resolve to the SRD goblin instead of generic.
+    const participants = buildEntryParticipants(
+      { characterId: 'character-1', name: 'The Storyteller', initiativeModifier: 2 },
+      [{ name: 'Goblin', monsterId: 'srd:goblin', count: 3 }],
+    );
+    const seats = participants.slice(1);
+    expect(seats.map((seat) => seat.name)).toEqual(['Goblin 1', 'Goblin 2', 'Goblin 3']);
+    for (const seat of seats) {
+      expect(resolveCombatantStats(EMPTY_INDEX, seat.monsterId, seat.name)).toMatchObject({
+        source: 'srd',
+        monsterName: 'Goblin',
+        maxHp: 7,
+        armorClass: 15,
+      });
+    }
+  });
+
+  test('a free name containing the SRD entry name seats the id block (#1115)', () => {
+    // Required 2, yes case: "Goblin Archer" + srd:goblin is normal free naming, and the
+    // goblin's whole-word match inside the name corroborates the id.
+    expect(resolveCombatantStats(EMPTY_INDEX, 'srd:goblin', 'Goblin Archer')).toMatchObject({
+      source: 'srd',
+      monsterName: 'Goblin',
+      maxHp: 7,
+      armorClass: 15,
+    });
+  });
+
+  test('a bible boss with no AC takes AC from the id block its name corroborates (#1115)', () => {
+    // Required 2, bible case: the Goblin Boss authors HP 40 but no AC; "Goblin" matches
+    // whole-word inside "Goblin Boss", so the goblin's AC 15 fills the gap while the
+    // authored HP 40 stands. Party scaling for the SRD fill returns with the block:
+    // the seat resolves non-null, which is the encounter service's scaling gate.
+    const BOSS = indexOf('the-goblin-boss-test', {
+      'Goblin Boss': '**Goblin Boss**\n\n**HP:** 40 **Speed:** 30ft',
+    });
+    expect(resolveCombatantStats(BOSS, 'srd:goblin', 'Goblin Boss')).toMatchObject({
+      source: 'campaign',
+      monsterName: 'Goblin Boss',
+      maxHp: 40,
+      armorClass: 15,
+      filledFromFallback: expect.arrayContaining(['armorClass']),
+    });
+  });
+
+  test('a free name that does not contain the SRD entry name seats generic (#1115)', () => {
+    // Required 2, no case: "Aggressive Patron" carries no whole-word "bandit", so the
+    // bandit id is ignored and the seat fights at generic stats.
+    expect(resolveCombatantStats(EMPTY_INDEX, 'srd:bandit', 'Aggressive Patron')).toBeNull();
+  });
+
+  test('the #1114 incident name still seats generic under the narrowed rule (#1115)', () => {
+    // Required 2, no case: "Prowler" carries no whole-word "wolf", so the wolf id is
+    // ignored — the incident pattern — and the downgrade is logged, not silent.
+    expect(resolveCombatantStats(EMPTY_INDEX, 'srd:wolf', 'Prowler')).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  test('a multi-word entry name matches contiguously, and only contiguously (#1115)', () => {
+    // Self-review: every round-2 gate test was single-token, so the contiguous-token
+    // loop itself was unexercised. "Dire Wolf Alpha" contains "Dire Wolf" as consecutive
+    // whole words; "Dire Alpha Wolf" does not, so its id is ignored.
+    expect(resolveCombatantStats(EMPTY_INDEX, 'srd:dire-wolf', 'Dire Wolf Alpha')).toMatchObject({
+      source: 'srd',
+      monsterName: 'Dire Wolf',
+      maxHp: 37,
+      armorClass: 14,
+    });
+    expect(resolveCombatantStats(EMPTY_INDEX, 'srd:dire-wolf', 'Dire Alpha Wolf')).toBeNull();
+  });
+
+  test('the gate is case-insensitive (#1115)', () => {
+    // The FIX says whole-word, case-insensitive: a lowercase free name corroborates
+    // the id exactly like its title-case spelling.
+    expect(resolveCombatantStats(EMPTY_INDEX, 'srd:goblin', 'goblin archer')).toMatchObject({
+      source: 'srd',
+      monsterName: 'Goblin',
+      maxHp: 7,
+      armorClass: 15,
+    });
+  });
+
+  test('a multi-count free-named group seats SRD blocks through strip + id leg (#1115)', () => {
+    // Required 1 × Required 2 intersection: the count:3 test proves strip + name leg
+    // and the Archer test proves id leg unnumbered; this proves strip + id leg
+    // together, the production shape for a multi-count free-named group.
+    const participants = buildEntryParticipants(
+      { characterId: 'character-1', name: 'The Storyteller', initiativeModifier: 2 },
+      [{ name: 'Goblin Archer', monsterId: 'srd:goblin', count: 3 }],
+    );
+    const seats = participants.slice(1);
+    expect(seats.map((seat) => seat.name)).toEqual([
+      'Goblin Archer 1',
+      'Goblin Archer 2',
+      'Goblin Archer 3',
+    ]);
+    for (const seat of seats) {
+      expect(resolveCombatantStats(EMPTY_INDEX, seat.monsterId, seat.name)).toMatchObject({
+        source: 'srd',
+        monsterName: 'Goblin',
+        maxHp: 7,
+        armorClass: 15,
       });
     }
   });
