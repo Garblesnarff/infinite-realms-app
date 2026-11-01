@@ -160,7 +160,11 @@ export function describeResolvedSpell(
     );
   }
   if (outcome.saveAbility && outcome.saveRoll != null && outcome.saveDC != null) {
-    const result = outcome.saved ? 'PASS' : 'FAIL';
+    // A successful save deals damage only when the spell halves it, so damage on a pass means
+    // the reader has to be told the 5 is half, not full.
+    const passed =
+      Number(outcome.finalDamage ?? 0) > 0 ? 'PASS (half damage on a successful save)' : 'PASS';
+    const result = outcome.saved ? passed : 'FAIL';
     // The save's DC is a target number: on a campaign that hides them the DM is never
     // told it, or it will say it. The target's own roll stays either way.
     const versus = showTargetNumbers ? ` vs DC ${outcome.saveDC}` : '';
