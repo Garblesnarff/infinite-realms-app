@@ -10,16 +10,22 @@
  * Barbarian, Ketil Barrow) and asserts the confirm prompt is requested and
  * the turn timers are paused while it waits.
  */
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useAIResponse } from '../use-ai-response';
 
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
+import { usePendingCombatEntryOffer } from '@/hooks/combat/use-pending-combat-entry-offer';
 import { AIService } from '@/services/ai-service';
 import { requestCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
+import {
+  clearCombatEntryTurnConfirmed,
+  registerCombatEntryPlayerSource,
+} from '@/services/combat/combat-entry-delivery';
 import { requestPlayerInitiativeRoll } from '@/services/combat/player-roll-bridge';
+import { buildCombatEntryPlayer } from '@/services/combat/structured-combat-payload';
 import { userDataApi } from '@/services/user-data-api';
 
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: vi.fn(() => ({ userPlan: 'pro' })) }));
@@ -130,6 +136,11 @@ vi.mock('@/services/combat/combat-zero-action-guard', async (importOriginal) => 
   ...(await importOriginal<Record<string, unknown>>()),
   enforceCombatActionOnAttempt: vi.fn().mockResolvedValue(null),
 }));
+// The offer hook polls the authoritative combat read on mount; the socket-frame
+// tests drive the frame directly, so the poll must stay quiet, not offer.
+vi.mock('@/contexts/combat/use-authoritative-combat-sync', () => ({
+  readAuthoritativeCombat: vi.fn(async () => ({ state: 'unknown' })),
+}));
 
 /** The premade as the session context holds it: template shape, uppercase ability keys. */
 const KETIL = {
@@ -184,10 +195,10 @@ describe('useAIResponse: combat-start envelope reaches the confirm prompt (#1315
   let chooseInitiative: (roll: { d20: number | null }) => void;
   let onPlayerWaitChange: ReturnType<typeof vi.fn>;
 
-  const play = (character: unknown): Promise<any> => {
+  const play = (character: unknown, sessionId: string = SESSION_ID): Promise<any> => {
     vi.mocked(useCharacter).mockReturnValue({ state: { character } } as any);
     vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
-      id: SESSION_ID,
+      id: sessionId,
       campaign_id: 'camp-1',
       character_id: (character as { id?: string } | null)?.id ?? 'char-ketil',
       campaign: { id: 'camp-1' },
@@ -198,7 +209,7 @@ describe('useAIResponse: combat-start envelope reaches the confirm prompt (#1315
     (abort.signal as any).onPlayerWaitChange = onPlayerWaitChange;
     return result.current.getAIResponse(
       MESSAGES as any,
-      SESSION_ID,
+      sessionId,
       undefined,
       undefined,
       undefined,
@@ -257,5 +268,103 @@ describe('useAIResponse: combat-start envelope reaches the confirm prompt (#1315
     const [, body] = vi.mocked(userDataApi.enterCombat).mock.calls[0];
     expect((body as any).player.name).toBe('Ketil Barrow');
     expect((body as any).playerInitiativeRoll).toBe(12);
+  });
+
+  it('socket frame before the reply: timers pause through the joined delivery', async () => {
+    // Round 2, Required 1: the server broadcasts the pending entry over the
+    // socket BEFORE the HTTP reply returns (the S1-002 shape: the frame
+    // arrives before the generate call). The offer starts a delivery
+    // with no confirm closure and no pause; the generate handler then joins
+    // that in-flight promise. The timers must stay paused through the join
+    // and the confirm must be requested. On main (no outer wrap around the
+    // join) the join's pause never fires, so this test FAILS on main.
+    const sessionId = 'session-1315-frame-before';
+    const unregister = registerCombatEntryPlayerSource(() =>
+      buildCombatEntryPlayer(KETIL as Record<string, unknown>),
+    );
+    const { unmount: unmountOffer } = renderHook(() => usePendingCombatEntryOffer(sessionId));
+    try {
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent('combat-state-updated', {
+            detail: { type: 'combat_state_updated', combatEntryPending: PENDING_ENTRY },
+          }),
+        );
+      });
+      // The offer's delivery is in flight, waiting on the confirm bridge.
+      await vi.waitFor(() => expect(requestCombatEntryConfirmation).toHaveBeenCalledTimes(1));
+
+      const turn = play(KETIL, sessionId);
+      // The join itself must HOLD the pause while parked on the confirm
+      // bridge. The pre-handler waits (held save, held entry) in this turn
+      // balance to false, so a last call of true here can only come from the
+      // join's outer wrap — on main (no wrap) the last call stays false and
+      // this assertion fails.
+      await vi.waitFor(() => {
+        const calls = onPlayerWaitChange.mock.calls;
+        expect(calls[calls.length - 1]).toEqual([true]);
+      });
+
+      chooseConfirm(true);
+      await vi.waitFor(() => expect(requestPlayerInitiativeRoll).toHaveBeenCalledTimes(1));
+      chooseInitiative({ d20: 12 });
+      await turn;
+
+      expect(userDataApi.enterCombat).toHaveBeenCalledTimes(1);
+      const [, body] = vi.mocked(userDataApi.enterCombat).mock.calls[0];
+      expect((body as any).player.name).toBe('Ketil Barrow');
+      expect((body as any).playerInitiativeRoll).toBe(12);
+    } finally {
+      unmountOffer();
+      unregister();
+      clearCombatEntryTurnConfirmed(sessionId);
+    }
+  });
+
+  it('socket frame after the handler call: pause holds, offer joins silently', async () => {
+    // Round 2, Hark S1-003 note: cover the frame arriving AFTER the handler's
+    // call as well. The handler starts its own delivery (its confirm closure
+    // pauses the timers); the offer then joins that in-flight promise, which
+    // must not open a second card or drop the pause. This ordering passes on
+    // main too — the pause comes from the handler's own closure, not the
+    // outer wrap — which narrows S1-002's second condition away from frame
+    // ordering and toward the offer card never rendering.
+    const sessionId = 'session-1315-frame-after';
+    const unregister = registerCombatEntryPlayerSource(() =>
+      buildCombatEntryPlayer(KETIL as Record<string, unknown>),
+    );
+    const { unmount: unmountOffer } = renderHook(() => usePendingCombatEntryOffer(sessionId));
+    try {
+      const turn = play(KETIL, sessionId);
+      await vi.waitFor(() => expect(requestCombatEntryConfirmation).toHaveBeenCalledTimes(1));
+      await vi.waitFor(() => expect(onPlayerWaitChange).toHaveBeenCalledWith(true));
+
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent('combat-state-updated', {
+            detail: { type: 'combat_state_updated', combatEntryPending: PENDING_ENTRY },
+          }),
+        );
+      });
+      // Still paused, still exactly one confirm: the offer joined, not re-asked.
+      // The pause here is held by the handler's own wrapped confirm closure,
+      // so this holds on main too (see the test comment above).
+      await vi.waitFor(() => {
+        const calls = onPlayerWaitChange.mock.calls;
+        expect(calls[calls.length - 1]).toEqual([true]);
+      });
+      expect(requestCombatEntryConfirmation).toHaveBeenCalledTimes(1);
+
+      chooseConfirm(true);
+      await vi.waitFor(() => expect(requestPlayerInitiativeRoll).toHaveBeenCalledTimes(1));
+      chooseInitiative({ d20: 12 });
+      await turn;
+
+      expect(userDataApi.enterCombat).toHaveBeenCalledTimes(1);
+    } finally {
+      unmountOffer();
+      unregister();
+      clearCombatEntryTurnConfirmed(sessionId);
+    }
   });
 });

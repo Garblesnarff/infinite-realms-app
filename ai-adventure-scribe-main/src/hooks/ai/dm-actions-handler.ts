@@ -289,13 +289,16 @@ export async function handleDmActionsAndTransitions(
       try {
         // A held entry (#2341) was confirmed before the DM was called; asking again would open
         // the popup twice.
-        // #1315: the whole delivery wait pauses the turn timers, not just the confirm and
-        // initiative closures. The 5 s poll can offer the stored entry before generate
-        // returns, and this call then joins that delivery through its shared in-flight
+        // #1315 round 2: the whole delivery wait pauses the turn timers, not just the confirm
+        // and initiative closures. The server broadcasts the stored entry over the socket
+        // before the HTTP reply returns, and the offer starts that delivery with no confirm
+        // closure and no pause; this call then joins it through its shared in-flight
         // promise without ever calling the closures — the unpaused join let the 90 s turn
-        // timer fire mid-prompt, and the abort declined the entry. The inner resume that
-        // follows a confirm answer is synchronously followed by the initiative pause, so
-        // the boolean pause cannot let the timer fire between them.
+        // timer fire mid-prompt, and the abort declined the entry.
+        // Note the pause is boolean, not refcounted: it resumes after the confirm answer,
+        // so /enter runs unpaused after an initiative roll. That window is bounded by the
+        // 30 s fetch timeout and predates this change; the inner resume is immediately
+        // followed by the initiative pause, so the timer cannot fire between them.
         const delivered = await awaitPlayerInput(
           startCombatEntryDelivery({
             sessionId,
