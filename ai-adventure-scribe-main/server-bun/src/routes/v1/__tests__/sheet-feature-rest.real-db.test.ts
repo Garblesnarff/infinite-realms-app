@@ -1583,7 +1583,11 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
       prompt: 'The wizard casts a spell while exploring. What happens?',
       player_input: playerInput,
       sessionId,
-      dmReply: { messageId: '11111111-2222-4333-8444-555555555559', inCombat: false, holdProse: true },
+      dmReply: {
+        messageId: '11111111-2222-4333-8444-555555555559',
+        inCombat: false,
+        holdProse: true,
+      },
       combatEntry: {
         sessionId,
         player: {
@@ -1720,7 +1724,11 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
         prompt: 'The wizard casts a spell while exploring. What happens?',
         player_input: playerInput,
         sessionId,
-        dmReply: { messageId: '11111111-2222-4333-8444-555555555560', inCombat: false, holdProse: true },
+        dmReply: {
+          messageId: '11111111-2222-4333-8444-555555555560',
+          inCombat: false,
+          holdProse: true,
+        },
         combatEntry: {
           sessionId,
           player: {
@@ -2108,7 +2116,8 @@ describeWithDb('a continuation session carries HP until the long rest (#1239)', 
         campaignId,
         characterId,
         sessionNumber: 1,
-        status: 'completed',
+        status: 'active',
+        starterCampaignId: 'starter-1298',
         currentSceneDescription: 'The first session ended.',
       })
       .returning({ id: gameSessions.id });
@@ -2125,18 +2134,17 @@ describeWithDb('a continuation session carries HP until the long rest (#1239)', 
       }
     };
     await drop(() => db.delete(restEvents).where(eq(restEvents.characterId, characterId)));
-    await drop(() =>
-      db.delete(gameSessions).where(eq(gameSessions.characterId, characterId)),
-    );
-    await drop(() =>
-      db.delete(characterStats).where(eq(characterStats.characterId, characterId)),
-    );
+    await drop(() => db.delete(gameSessions).where(eq(gameSessions.characterId, characterId)));
+    await drop(() => db.delete(characterStats).where(eq(characterStats.characterId, characterId)));
     await drop(() => db.delete(characters).where(eq(characters.id, characterId)));
     await drop(() => db.delete(campaigns).where(eq(campaigns.id, campaignId)));
     await closeRealDb();
   });
 
   it('creating the continuation leaves HP alone; the long rest restores it', async () => {
+    const ended = await request(`/v1/sessions/${priorSessionId}/complete`, 'POST', {});
+    expect(ended.status).toBe(200);
+
     // The exact body the campaign-sessions Continue flow posts: a new
     // session must not heal — HP carries inside one adventure (#1071).
     const created = await request('/v1/sessions', 'POST', {
@@ -2147,6 +2155,7 @@ describeWithDb('a continuation session carries HP until the long rest (#1239)', 
       current_scene_description: 'Continuing your adventure...',
       session_notes: 'Continuing from Session 1',
       turn_count: 0,
+      starter_campaign_id: 'starter-1298',
     });
     expect(created.status).toBe(201);
     const session = (await created.json()) as { id: string; session_number: number };

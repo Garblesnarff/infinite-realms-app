@@ -1,6 +1,7 @@
 import React, { useLayoutEffect, useState, useCallback, memo } from 'react';
 import { createPortal } from 'react-dom';
 
+import { EndSessionButton } from './EndSessionButton';
 import { GameCombatSheet } from './GameCombatSheet';
 import { GameLeftPanel } from './GameLeftPanel';
 import { GameMainContent } from './GameMainContent';
@@ -192,9 +193,18 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
         )}
 
         <div
-          className="w-full h-[calc(100dvh-var(--top-offset,0px))] mobile-bottom-safe overflow-hidden relative"
+          className="w-full h-[calc(100dvh-var(--top-offset,0px))] mobile-bottom-safe overflow-hidden relative flex flex-col"
           style={{ zIndex: Z_INDEX.DROPDOWN }}
         >
+          {!isCombatDetected && !isFallen && (
+            <div className="flex justify-end px-2 py-1">
+              <EndSessionButton
+                sessionId={sessionId}
+                campaignId={campaignIdForHandler}
+                starterCampaignId={sessionData.starter_campaign_id ?? null}
+              />
+            </div>
+          )}
           <TacticalMapProvider
             key={sessionId}
             sessionId={sessionId}
@@ -202,7 +212,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
           >
             <div
               key={sessionId}
-              className={`grid transition-all duration-300 ease-in-out h-full gap-2 md:gap-3 items-stretch w-full ${
+              className={`grid transition-all duration-300 ease-in-out flex-1 min-h-0 gap-2 md:gap-3 items-stretch w-full ${
                 isFallen || overStory || (isLeftCollapsed && isRightCollapsed)
                   ? 'grid-cols-1'
                   : isLeftCollapsed

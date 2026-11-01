@@ -5,6 +5,10 @@ import { GameLayout } from '../game-content/GameLayout';
 
 import type { SpellCastHandlerRef } from '../../game/spell-cast-handler';
 
+vi.mock('../game-content/EndSessionButton', () => ({
+  EndSessionButton: () => <button>End session</button>,
+}));
+
 vi.mock('@/contexts/SceneBackgroundContext', () => ({
   useSceneBackground: () => ({ currentBackgroundUrl: null, isTransitioning: false }),
 }));
@@ -57,6 +61,13 @@ const layoutProps = {
 };
 
 describe('GameLayout campaign chapter', () => {
+  it('offers ending outside combat but hides it in combat', () => {
+    const { rerender } = render(<GameLayout {...layoutProps} />);
+    expect(screen.getByRole('button', { name: 'End session' })).toBeInTheDocument();
+    rerender(<GameLayout {...layoutProps} isCombatDetected />);
+    expect(screen.queryByRole('button', { name: 'End session' })).not.toBeInTheDocument();
+  });
+
   it('passes a frozen chapter label instead of interpolating turn_count', () => {
     render(<GameLayout {...layoutProps} />);
 

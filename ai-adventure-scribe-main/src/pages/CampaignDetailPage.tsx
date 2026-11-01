@@ -120,7 +120,7 @@ interface HeroCardProps {
   isStarting: boolean;
   startDisabled: boolean;
   signedIn: boolean;
-  onPlay: (template: StarterCharacterTemplate) => void;
+  onPlay: (template: StarterCharacterTemplate, fresh?: boolean) => void;
 }
 
 const HeroCard: React.FC<HeroCardProps> = ({
@@ -175,6 +175,16 @@ const HeroCard: React.FC<HeroCardProps> = ({
         >
           {signedIn ? `Play as ${template.name}` : `Sign in to play as ${template.name}`}
         </Button>
+        {signedIn && (
+          <Button
+            variant="ghost"
+            onClick={() => onPlay(template, true)}
+            disabled={startDisabled}
+            className="w-full"
+          >
+            Start a fresh playthrough
+          </Button>
+        )}
       </div>
     </article>
   );
@@ -224,7 +234,7 @@ const CampaignDetailPage: React.FC = () => {
    * starter campaign" route exists yet).
    */
   const playAs = React.useCallback(
-    async (template: StarterCharacterTemplate): Promise<void> => {
+    async (template: StarterCharacterTemplate, fresh = false): Promise<void> => {
       if (!user) {
         try {
           sessionStorage.setItem(
@@ -250,6 +260,24 @@ const CampaignDetailPage: React.FC = () => {
         const campaignId = await resolveOrCreateStarterCampaign(campaign, userDataApi, (message) =>
           logger.info(message),
         );
+        if (!fresh) {
+          const sessions = await userDataApi.listSessions({ campaignId, limit: 100 });
+          const previous = sessions.find((session) => {
+            const character = session.character as { name?: unknown } | null;
+            return (
+              session.starter_campaign_id === campaign.id &&
+              session.character_id &&
+              character?.name === template.name &&
+              (session.status === 'active' || session.status === 'completed')
+            );
+          });
+          if (previous) {
+            navigate(
+              `/app/game/${campaignId}?character=${previous.character_id}&starterCampaign=${campaign.id}`,
+            );
+            return;
+          }
+        }
         const character = await seedStarterCharacter(template, campaignId, (payload) =>
           userDataApi.createCharacter(payload),
         );
@@ -621,7 +649,7 @@ const CampaignDetailPage: React.FC = () => {
                     isStarting={startingTemplate?.id === template.id}
                     startDisabled={startingTemplate !== null}
                     signedIn={Boolean(user)}
-                    onPlay={(candidate) => void playAs(candidate)}
+                    onPlay={(candidate, fresh) => void playAs(candidate, fresh)}
                   />
                 ))}
               </div>
