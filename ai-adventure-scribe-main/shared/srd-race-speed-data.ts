@@ -11,8 +11,10 @@
  * with the race records, so a race-speed change in `src/data/races/*` fails there
  * until this table follows.
  *
- * Keys are display names, matched case-insensitively after trimming: the server
- * only has the characters row's race/subrace text, not the resolved records.
+ * Keys are display names, matched case-insensitively after trimming, and with
+ * every non-alphanumeric character dropped ("Wood-Elf" matches "Wood Elf"), the
+ * same rule the sheet's record lookup uses (src/utils/character/data-transformers.ts):
+ * the server only has the characters row's race/subrace text, not the resolved records.
  */
 
 export const RACE_WALK_SPEEDS: Record<string, number> = {
@@ -60,7 +62,10 @@ export const DEFAULT_WALK_SPEED = 30;
 export const DEFAULT_STORED_SPEED = 30;
 
 function normalizeName(name: string | null | undefined): string {
-  return (name ?? '').trim().toLowerCase();
+  return (name ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
 }
 
 function lookup(
@@ -70,7 +75,7 @@ function lookup(
   const key = normalizeName(name);
   if (!key) return undefined;
   for (const [label, speed] of Object.entries(table)) {
-    if (label.toLowerCase() === key) return speed;
+    if (normalizeName(label) === key) return speed;
   }
   return undefined;
 }

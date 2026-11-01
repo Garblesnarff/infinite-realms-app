@@ -53,6 +53,13 @@ describe('resolveRaceSpeed', () => {
     expect(resolveRaceSpeed(' GNOME ', undefined)).toBe(25);
     expect(resolveRaceSpeed('elf', ' wood elf ')).toBe(35);
   });
+
+  it('matches names with punctuation dropped, as the sheet record lookup does', () => {
+    expect(resolveRaceSpeed('Elf', 'Wood-Elf')).toBe(35);
+    expect(resolveRaceSpeed('Elf', 'WoodElf')).toBe(35);
+    expect(resolveRaceSpeed('Elf', 'wood_elf')).toBe(35);
+    expect(resolveRaceSpeed('Gnome', 'Rock-Gnome')).toBe(25);
+  });
 });
 
 describe('resolveCharacterCombatSpeed', () => {
