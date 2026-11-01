@@ -21,20 +21,18 @@ const AUTH_EXCHANGE_TIMEOUT_MS = 15_000;
 const RATE_LIMIT_MESSAGE = 'Too many sign-ins at once. Wait a minute, then try again.';
 const MISSING_TOKEN_MESSAGE = 'Authentication failed - no access token received';
 
-function saysTooManyRequests(value: unknown): boolean {
-  return typeof value === 'string' && value.toLowerCase().includes('too_many_requests');
-}
-
-function paramsSayTooManyRequests(params: URLSearchParams): boolean {
-  return ['error', 'error_description', 'code'].some((key) => saysTooManyRequests(params.get(key)));
-}
-
-async function exchangeSaysTooManyRequests(response: Response): Promise<boolean> {
+/** Our exchange limiter answers 429 with `{ error: { code: 'RATE_LIMIT_EXCEEDED' } }`
+ *  (`server-bun/src/middleware/rate-limit.ts`). A provider `too_many_requests` never
+ *  reaches this page: the callback redirect is `/?error=auth_failed` with no code. */
+async function exchangeIsRateLimited(response: Response): Promise<boolean> {
+  if (response.status === 429) return true;
   const body = await response.json().catch(() => null);
   if (!body || typeof body !== 'object') return false;
-  const record = body as Record<string, unknown>;
-  return [record.code, record.error, record.message, record.error_description].some(
-    saysTooManyRequests,
+  const error = (body as { error?: unknown }).error;
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: unknown }).code === 'RATE_LIMIT_EXCEEDED'
   );
 }
 
@@ -58,12 +56,6 @@ export default function CallbackPage() {
     const handleCallback = async () => {
       try {
         const callbackParams = new URLSearchParams(window.location.search);
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
-        if (paramsSayTooManyRequests(callbackParams) || paramsSayTooManyRequests(hashParams)) {
-          setError(RATE_LIMIT_MESSAGE);
-          return;
-        }
-
         const exchangeCode = callbackParams.get('code');
         const returnTo = safeReturnTo(callbackParams.get('returnTo'));
         let accessToken: string | null = null;
@@ -82,7 +74,7 @@ export default function CallbackPage() {
           );
 
           if (!response.ok) {
-            if (await exchangeSaysTooManyRequests(response)) {
+            if (await exchangeIsRateLimited(response)) {
               setError(RATE_LIMIT_MESSAGE);
               return;
             }
