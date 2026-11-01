@@ -587,7 +587,7 @@ describeWithDb('spell slot refund on a cast that never resolved (#1287)', () => 
     );
     expect(spent.slot.usedSlots).toBe(1);
 
-    await SpellSlotsService!.refundSpellSlot(spent);
+    await SpellSlotsService!.refundSpellSlot(spent, userId);
 
     const { slots } = await SpellSlotDataAccess!.getCharacterSpellSlots(wizardId, userId);
     expect(slots.find((slot) => slot.spellLevel === 1)?.usedSlots).toBe(0);
@@ -596,5 +596,17 @@ describeWithDb('spell slot refund on a cast that never resolved (#1287)', () => 
       .from(spellSlotUsageLog)
       .where(eq(spellSlotUsageLog.id, spent.logEntry.id));
     expect(logs).toHaveLength(0);
+  });
+
+  it('a refund by a user who does not own the character restores nothing', async () => {
+    const spent = await SpellSlotsService!.useSpellSlot(
+      { characterId: wizardId, spellName: 'Burning Hands', spellLevel: 1, slotLevelUsed: 1 },
+      userId,
+    );
+
+    await SpellSlotsService!.refundSpellSlot(spent, testId('stranger'));
+
+    const { slots } = await SpellSlotDataAccess!.getCharacterSpellSlots(wizardId, userId);
+    expect(slots.find((slot) => slot.spellLevel === 1)?.usedSlots).toBe(1);
   });
 });

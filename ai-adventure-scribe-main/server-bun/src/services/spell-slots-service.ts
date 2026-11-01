@@ -243,17 +243,44 @@ export class SpellSlotsService {
 
   /**
    * Undo one `useSpellSlot` spend whose cast never resolved (#1287): the slot goes back and its
-   * usage-log row is removed, so a spent slot always has exactly one resolved cast row.
+   * usage-log row is removed, so a spent slot always has exactly one resolved cast row. Owner
+   * checked the same way `useSpellSlot` checks it; the log row is removed only if the slot was
+   * actually restored.
    */
-  static async refundSpellSlot(spent: UseSpellSlotResult): Promise<void> {
+  static async refundSpellSlot(spent: UseSpellSlotResult, userId: string): Promise<void> {
+    const { characterId } = spent.slot;
     await db.transaction(async (tx) => {
       const [restored] = await tx
         .update(characterSpellSlots)
         .set({ usedSlots: sql`${characterSpellSlots.usedSlots} - 1`, updatedAt: new Date() })
-        .where(and(eq(characterSpellSlots.id, spent.slot.id), gt(characterSpellSlots.usedSlots, 0)))
+        .where(
+          and(
+            eq(characterSpellSlots.id, spent.slot.id),
+            eq(characterSpellSlots.characterId, characterId),
+            gt(characterSpellSlots.usedSlots, 0),
+            exists(
+              tx
+                .select()
+                .from(characters)
+                .where(
+                  and(
+                    eq(characters.id, characterId),
+                    or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                  ),
+                ),
+            ),
+          ),
+        )
         .returning({ id: characterSpellSlots.id });
-      // Only a slot that was actually given back takes its log row with it.
-      if (restored) await tx.delete(spellSlotUsageLog).where(eq(spellSlotUsageLog.id, spent.logEntry.id));
+      if (restored)
+        await tx
+          .delete(spellSlotUsageLog)
+          .where(
+            and(
+              eq(spellSlotUsageLog.id, spent.logEntry.id),
+              eq(spellSlotUsageLog.characterId, characterId),
+            ),
+          );
     });
   }
 
