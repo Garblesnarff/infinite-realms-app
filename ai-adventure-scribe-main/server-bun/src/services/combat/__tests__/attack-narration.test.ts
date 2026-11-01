@@ -98,6 +98,54 @@ describe('spell engine narration', () => {
     );
   });
 
+  it('says half damage when a successful save still deals damage (#1078)', () => {
+    expect(
+      describeResolvedSpell(
+        'Hark',
+        'Professor Umeboshi',
+        'Fireball',
+        {
+          saveAbility: 'dexterity',
+          saveRoll: 20,
+          saveDC: 13,
+          saved: true,
+          finalDamage: 5,
+          damageType: 'fire',
+          targetNewHp: 15,
+          targetIsConscious: true,
+          targetIsDead: false,
+        },
+        true,
+      ),
+    ).toBe(
+      'Hark cast Fireball at Professor Umeboshi — DEX save 20 vs DC 13 — PASS (half damage on a successful save). 5 fire damage. Professor Umeboshi is now at 15 HP. Narrate this outcome; it already happened.',
+    );
+  });
+
+  it('keeps the full-damage wording on a failed save (#1078)', () => {
+    expect(
+      describeResolvedSpell(
+        'Hark',
+        'Professor Umeboshi',
+        'Fireball',
+        {
+          saveAbility: 'dexterity',
+          saveRoll: 9,
+          saveDC: 13,
+          saved: false,
+          finalDamage: 10,
+          damageType: 'fire',
+          targetNewHp: 10,
+          targetIsConscious: true,
+          targetIsDead: false,
+        },
+        true,
+      ),
+    ).toBe(
+      'Hark cast Fireball at Professor Umeboshi — DEX save 9 vs DC 13 — FAIL. 10 fire damage. Professor Umeboshi is now at 10 HP. Narrate this outcome; it already happened.',
+    );
+  });
+
   it('reports Magic Missile as an auto-hit', () => {
     expect(
       describeResolvedSpell(
