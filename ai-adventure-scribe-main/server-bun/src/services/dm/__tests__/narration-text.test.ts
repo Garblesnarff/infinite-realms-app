@@ -299,11 +299,12 @@ describe('normalizeReplyNarration #1067 regression pins', () => {
     expect(text).toBe(input);
   });
 
-  test('text that is only the tracker line is kept (fail open, never empty)', () => {
+  test('text that is only the tracker line keeps non-HP state (never empty)', () => {
     const input = '[HP 18/?] [Clock 0/6]';
     const { text, kind } = normalizedText(input);
-    expect(kind).toBeNull();
-    expect(text).toBe(input);
+    expect(kind).toBe('stripped');
+    expect(text).toBe('[Clock 0/6]');
+    expect(text).not.toContain('[HP');
   });
 
   test('the structured options field is untouched by every strip', () => {
