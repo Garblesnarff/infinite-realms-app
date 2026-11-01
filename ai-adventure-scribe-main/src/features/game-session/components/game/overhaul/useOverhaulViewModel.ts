@@ -21,6 +21,7 @@ import type {
   SpellsVM,
 } from './types';
 import type { Character } from '@/types/character';
+import type { CharacterResources } from '@/types/combat';
 import type { CombatEncounter } from '@/types/combat-encounter';
 import type { ChatMessage } from '@/types/game';
 
@@ -35,7 +36,7 @@ import { resolvePlayerHitPoints } from '@/utils/character/player-hit-points';
 import { getWeaponAttackBonus } from '@/utils/character/weapon-attack-bonus';
 import { getWeaponDamageText } from '@/utils/character/weapon-damage-text';
 import { calculateAllCharacterStats } from '@/utils/character-calculations';
-import { getCharacterResources } from '@/utils/classFeatures';
+import { getCharacterResources, getClassFeatures } from '@/utils/classFeatures';
 import {
   getSessionCompanions,
   type SessionCompanion,
@@ -194,6 +195,46 @@ export function mergePartyMembers(
  */
 export type SheetVitalState = 'standing' | 'dying' | 'stabilized' | 'dead';
 
+function trackedUses(
+  classFeatures: Character['classFeatures'],
+  name: string,
+): { currentUses?: number; maxUses?: number } | undefined {
+  if (!classFeatures) return undefined;
+  const tracked =
+    classFeatures[name] ??
+    classFeatures[name.replace(/_/g, '-')] ??
+    classFeatures[name.replace(/_/g, ' ')];
+  if (!tracked || typeof tracked !== 'object') return undefined;
+  return tracked as { currentUses?: number; maxUses?: number };
+}
+
+/** Level-table pools, then the class_features overlay the standalone sheet reads. */
+function sheetClassResources(character: Character, level: number): CharacterResources | undefined {
+  if (!character.class?.name) return undefined;
+  const resources = getCharacterResources(character.class.name, level);
+  const lay = trackedUses(character.classFeatures, 'lay_on_hands');
+  if (lay?.currentUses !== undefined) {
+    resources.layOnHands = {
+      current: lay.currentUses,
+      max: lay.maxUses ?? resources.layOnHands?.max ?? 0,
+    };
+  }
+  const sense = trackedUses(character.classFeatures, 'divine_sense');
+  if (sense?.currentUses !== undefined && sense.maxUses !== undefined) {
+    resources.divineSense = { current: sense.currentUses, max: sense.maxUses };
+  }
+  const wind = trackedUses(character.classFeatures, 'second_wind');
+  const defined = getClassFeatures(character.class.name, level).find(
+    (feature) => feature.name === 'second_wind',
+  );
+  const current = wind?.currentUses ?? defined?.currentUses;
+  const max = wind?.maxUses ?? defined?.maxUses;
+  if (current !== undefined && max !== undefined) {
+    resources.secondWind = { current, max };
+  }
+  return resources;
+}
+
 function sheetClassIdentity(character: Character): Pick<CharacterSheetVM, 'subtitle' | 'features'> {
   const classLabel = formatClassWithSubclass(character.class?.name, character.subclassName);
   // #824: the fighting-style feature row is named just "Fighting Style". Name the style
@@ -252,9 +293,7 @@ export function buildCharacterSheet(
     };
   }
   const level = character.level ?? 1;
-  const resources = character.class?.name
-    ? getCharacterResources(character.class.name, level)
-    : undefined;
+  const resources = sheetClassResources(character, level);
   const xpCurrent = character.experience ?? getExperienceForLevel(level);
   const xpMax = getExperienceForLevel(Math.min(20, level + 1)) || xpCurrent;
   const { current: hpCurrent, maximum: hpMax } = encounter

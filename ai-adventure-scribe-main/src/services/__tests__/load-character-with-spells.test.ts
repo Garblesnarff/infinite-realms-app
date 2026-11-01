@@ -162,4 +162,30 @@ describe('loadCharacterWithSpells hit dice (#751 follow-up)', () => {
 
     expect(result?.hitDice).toBeUndefined();
   });
+
+  it('carries class_features so the session sheet can read the GET overlay (#1061)', async () => {
+    getCharacter.mockResolvedValue({
+      id: 'character-id',
+      name: 'Clarice',
+      race: 'Human',
+      class: 'Paladin',
+      level: 3,
+      cantrips: '',
+      known_spells: '',
+      prepared_spells: '',
+      ritual_spells: '',
+      character_stats: [{ constitution: 14 }],
+      class_features: {
+        divine_sense: { maxUses: 4, currentUses: 1 },
+        lay_on_hands: { maxUses: 15, currentUses: 3 },
+      },
+    });
+
+    const result = await loadCharacterWithSpells('character-id');
+
+    expect(result?.classFeatures).toEqual({
+      divine_sense: { maxUses: 4, currentUses: 1 },
+      lay_on_hands: { maxUses: 15, currentUses: 3 },
+    });
+  });
 });

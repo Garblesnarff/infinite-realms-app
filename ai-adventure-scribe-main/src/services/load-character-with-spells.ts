@@ -181,6 +181,16 @@ export async function loadCharacterWithSpells(
           .map((style) => style.toLowerCase().replace(/\s+/g, '_'))
       : [];
 
+    // Same class_features payload the standalone sheet reads. GET writes
+    // divine_sense { maxUses, currentUses } onto it (characters.ts).
+    const classFeaturesRaw = characterData.class_features;
+    const classFeatures =
+      typeof classFeaturesRaw === 'string'
+        ? parseJsonField<Character['classFeatures']>(classFeaturesRaw, undefined)
+        : classFeaturesRaw && typeof classFeaturesRaw === 'object'
+          ? (classFeaturesRaw as Character['classFeatures'])
+          : undefined;
+
     // Construct complete character object
     const loadedCharacter: Character = {
       id: characterData.id,
@@ -194,6 +204,7 @@ export async function loadCharacterWithSpells(
         ? { grantedFeatureNames: classIdentity.grantedFeatureNames }
         : {}),
       ...(fightingStyles.length > 0 ? { fightingStyles } : {}),
+      ...(classFeatures ? { classFeatures } : {}),
       level: characterData.level || 1,
       background: characterBackground as CharacterBackground | null,
       // The server stores and seats this AC value; do not recompute it from

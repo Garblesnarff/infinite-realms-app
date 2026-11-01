@@ -81,6 +81,8 @@ export interface CharacterResources {
   actionSurge?: { max: number; current: number };
   layOnHands?: { max: number; current: number };
   divineSense?: { max: number; current: number };
+  /** Fighter Second Wind uses. The standalone sheet shows these on the feature row. */
+  secondWind?: { max: number; current: number };
 }
 
 // ===========================
