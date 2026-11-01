@@ -417,7 +417,11 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
       { onPlayerWaitChange: (waiting: boolean) => waits.push(waiting) },
     );
 
-    expect(waits).toEqual([true, false, true, false]);
+    // #1315: the whole delivery wait pauses too (outer pair), so a poll-joined
+    // delivery pauses even though it never calls the confirm/initiative closures.
+    // The inner resume after confirm is synchronously followed by the initiative
+    // pause, so the timer cannot fire between them.
+    expect(waits).toEqual([true, true, false, true, false, false]);
   });
 
   it('keeps similarly named roster members in the other-combatants line', async () => {

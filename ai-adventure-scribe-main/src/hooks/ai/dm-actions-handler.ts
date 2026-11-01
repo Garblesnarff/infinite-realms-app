@@ -266,11 +266,20 @@ export async function handleDmActionsAndTransitions(
 
   // The server has detected combat but has not seated it. Confirm the player's intent before
   // asking for initiative: declining must not open a dice popup or roll a die.
+  // #1315: every exit of this branch logs one warn with its reason, so the next stall names
+  // itself in the console instead of timing out silently.
+  if (result.combat_entry_pending && (!sessionId || activeEncounter)) {
+    logger.warn(
+      `[CombatEntry] ${!sessionId ? 'entry_no_session' : 'entry_skipped_active_encounter'}: pending entry not delivered`,
+    );
+  }
   if (sessionId && !activeEncounter && result.combat_entry_pending) {
     const pendingEntry = result.combat_entry_pending;
     const player = buildCombatEntryPlayer(params.characterRecord);
     if (!player) {
-      logger.warn('[CombatEntry] pending entry has no usable player payload; leaving it unseated');
+      logger.warn(
+        '[CombatEntry] entry_no_player: pending entry has no usable player payload; leaving it unseated',
+      );
       responseText = '';
       narrationSegments = undefined;
       appendLocalNotice(COMBAT_ENTRY_NO_PLAYER_NOTICE);
@@ -280,22 +289,35 @@ export async function handleDmActionsAndTransitions(
       try {
         // A held entry (#2341) was confirmed before the DM was called; asking again would open
         // the popup twice.
-        const delivered = await startCombatEntryDelivery({
-          sessionId,
-          pending: pendingEntry,
-          player,
-          playerMessage,
-          entryConfirmed: params.entryConfirmed === true,
-          signal,
-          confirm: () => awaitPlayerInput(confirmCombatEntry(pendingEntry, player, playerMessage)),
-          rollInitiative: () =>
-            awaitPlayerInput(
-              requestPlayerInitiativeRoll({
-                actorLabel: player.name,
-                initiativeModifier: player.initiativeModifier,
-              }),
-            ),
-        });
+        // #1315 round 2: the whole delivery wait pauses the turn timers, not just the confirm
+        // and initiative closures. The server broadcasts the stored entry over the socket
+        // before the HTTP reply returns, and the offer starts that delivery with no confirm
+        // closure and no pause; this call then joins it through its shared in-flight
+        // promise without ever calling the closures — the unpaused join let the 90 s turn
+        // timer fire mid-prompt, and the abort declined the entry.
+        // Note the pause is boolean, not refcounted: it resumes after the confirm answer,
+        // so /enter runs unpaused after an initiative roll. That window is bounded by the
+        // 30 s fetch timeout and predates this change; the inner resume is immediately
+        // followed by the initiative pause, so the timer cannot fire between them.
+        const delivered = await awaitPlayerInput(
+          startCombatEntryDelivery({
+            sessionId,
+            pending: pendingEntry,
+            player,
+            playerMessage,
+            entryConfirmed: params.entryConfirmed === true,
+            signal,
+            confirm: () =>
+              awaitPlayerInput(confirmCombatEntry(pendingEntry, player, playerMessage)),
+            rollInitiative: () =>
+              awaitPlayerInput(
+                requestPlayerInitiativeRoll({
+                  actorLabel: player.name,
+                  initiativeModifier: player.initiativeModifier,
+                }),
+              ),
+          }),
+        );
         if (delivered.kind === 'declined') {
           // A decline is a real answer: do not call `/enter` and do not resolve the model's
           // attack batch. But the DM's telegraph is already on screen and the player's message
@@ -305,6 +327,7 @@ export async function handleDmActionsAndTransitions(
           // seated and the hostile is still in the scene.
           narrationSegments = undefined;
           appendLocalNotice('No encounter was seated; the hostile is still in the scene.');
+          logger.warn('[CombatEntry] entry_declined: player declined the pending entry');
           logClearedRollRequests('entry_declined');
           result = {
             ...result,
@@ -317,6 +340,7 @@ export async function handleDmActionsAndTransitions(
         } else if (delivered.kind === 'already-seated') {
           // The open tab already seated this proposal while generate was still
           // in flight. Refresh the board and do not roll the opening attack twice.
+          logger.warn('[CombatEntry] entry_already_seated: another tab seated this entry');
           // `responseText` was copied from the model before this branch, so
           // clearing `result.text` alone would still print the telegraph.
           responseText = '';
@@ -456,8 +480,12 @@ export async function handleDmActionsAndTransitions(
         ) {
           throw error;
         }
-        if (error instanceof Error && error.name === 'CombatEntryFailedError') throw error;
+        if (error instanceof Error && error.name === 'CombatEntryFailedError') {
+          logger.warn('[CombatEntry] entry_failed: server refused the explicit entry');
+          throw error;
+        }
         if (!isCombatEntryConfirmationNoHostError(error)) throw error;
+        logger.warn('[CombatEntry] entry_failed: no confirmation host mounted');
         responseText = '';
         narrationSegments = undefined;
         appendLocalNotice(

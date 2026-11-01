@@ -1026,6 +1026,9 @@ export const useAIResponse = (): {
                         intent: 'response',
                         combat_transition: parsedResult.combat_transition ?? 'none',
                         scene_spec: parsedResult.scene_spec != null,
+                        // #1315: the turn layer reads this to know a pending entry
+                        // arrived even when the turn later times out before seating.
+                        combat_entry_pending: parsedResult.combat_entry_pending != null,
                       },
                       narrationSegments: parsedResult.narrationSegments,
                       diceRolls: (parsedResult.dice_rolls || []) as DiceRoll[],

@@ -75,6 +75,8 @@ export type MessageSendContext =
 
 interface MessageListProps {
   retryInFlight?: boolean;
+  /** #1315: the last turn timed out after a pending combat entry arrived. */
+  timedOutWithPendingEntry?: boolean;
   onSendFullMessage?: (message: string, context?: MessageSendContext) => Promise<void>;
   /** #88: re-run a failed turn (the composer banner's retry action). */
   onRetryTurn?: (input: string) => void | Promise<void>;
@@ -103,6 +105,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
     containerRef,
     suppressEmptyState,
     retryInFlight,
+    timedOutWithPendingEntry = false,
   }) => {
     const {
       messages = [],
@@ -226,6 +229,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
             onRetryFailed={handleRetryFailed}
             isDmWriting={isDmWriting}
             retryInFlight={retryInFlight}
+            timedOutWithPendingEntry={timedOutWithPendingEntry}
             sessionId={sessionId}
             messagesReady={messagesReady && !isLoading}
             isFetchingMore={isFetchingMore}

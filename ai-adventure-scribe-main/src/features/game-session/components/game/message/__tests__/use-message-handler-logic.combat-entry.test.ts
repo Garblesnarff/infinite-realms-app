@@ -175,7 +175,10 @@ describe('useMessageHandlerLogic combat entry (#400)', () => {
     // composer stays blocked until the card — not the turn — releases it.
     let resolveTurn: (value: unknown) => void = () => {};
     getAIResponseMock.mockImplementation(
-      () => new Promise((resolve) => { resolveTurn = resolve; }),
+      () =>
+        new Promise((resolve) => {
+          resolveTurn = resolve;
+        }),
     );
     queueCtl.handleSendMessage = (input, context) =>
       queueCtl.actualSendMessageRef.current?.(input, context) ?? Promise.resolve();
@@ -201,5 +204,78 @@ describe('useMessageHandlerLogic combat entry (#400)', () => {
 
     resolveTurn({ text: 'done' });
     await sendPromise;
+  });
+});
+
+describe('useMessageHandlerLogic timeout flag (#1315 round 2)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sendMessageMock.mockResolvedValue(undefined);
+    queueCtl.isSending = false;
+    queueCtl.handleSendMessage = (input, context) =>
+      queueCtl.actualSendMessageRef.current?.(input, context) ?? Promise.resolve();
+    queueCtl.actualSendMessageRef.current = null;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /**
+   * Drive a turn whose DM reply never resolves, so the 90 s turn timer ends
+   * it. With pending=true the mocked reply first reports a pending combat
+   * entry through the early-response callback (the message-handler-logic
+   * :755 set); with pending=false it reports nothing. Returns the hook's
+   * timedOutWithPendingEntry flag after the failed turn settles.
+   */
+  const driveTimeout = async (withPending: boolean): Promise<boolean> => {
+    vi.useFakeTimers();
+    getAIResponseMock.mockImplementation(async (...args: unknown[]) => {
+      const onTextReady = args[4] as (early: unknown, options?: unknown) => Promise<void> | void;
+      if (withPending) {
+        await onTextReady(
+          {
+            id: 'dm-1',
+            text: 'The sailors turn hostile.',
+            context: { combat_entry_pending: true },
+          },
+          {},
+        );
+      }
+      // Never resolves: only the 90 s timer ends this turn.
+      return new Promise(() => {});
+    });
+    const { result } = renderHandler();
+    let sendPromise: Promise<void> | undefined;
+    let sendError: unknown;
+    await act(async () => {
+      sendPromise = result.current.handleSendMessage('Turn and Face the Gilded Sailors');
+      // The failure path rethrows after setting the chip, so attach the
+      // rejection handler NOW — otherwise the timeout's AbortError counts
+      // as unhandled before the test awaits it below.
+      sendPromise.catch((error: unknown) => {
+        sendError = error;
+      });
+      for (let i = 0; i < 50 && getAIResponseMock.mock.calls.length === 0; i++) {
+        await Promise.resolve();
+      }
+    });
+    expect(getAIResponseMock).toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(90_000);
+    });
+    await act(async () => {
+      await sendPromise?.catch(() => {});
+    });
+    expect((sendError as { name?: string } | undefined)?.name).toBe('AbortError');
+    return result.current.timedOutWithPendingEntry;
+  };
+
+  it('timeout after a pending entry sets the flag', async () => {
+    expect(await driveTimeout(true)).toBe(true);
+  });
+
+  it('plain timeout does not set the flag', async () => {
+    expect(await driveTimeout(false)).toBe(false);
   });
 });
