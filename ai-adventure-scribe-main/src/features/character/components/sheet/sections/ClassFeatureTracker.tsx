@@ -43,7 +43,9 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
   // #712: the Lay on Hands bar reads static level x 5 values. When the
   // server has mirrored the real pool into the sheet JSON (a spend or a
   // rest), show the real pool so the bar and the feature row agree.
-  const layOnHandsTracked = trackedClassFeatures.find((feature) => feature.name === 'lay_on_hands');
+  const layOnHandsTracked = trackedClassFeatures.find(
+    (feature) => feature.name === 'lay_on_hands',
+  );
   const layOnHandsResources =
     characterResources && layOnHandsTracked?.currentUses !== undefined
       ? {

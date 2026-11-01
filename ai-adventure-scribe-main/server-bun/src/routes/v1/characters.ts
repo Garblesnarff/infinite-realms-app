@@ -42,7 +42,11 @@ import { CharacterSpellService } from '../../services/character/character-spell-
 import { CharacterService } from '../../services/character-service.js';
 import { SpellSlotDataAccess } from '../../services/spell-slots/spell-slot-data-access.js';
 
-import type { Character, CharacterHitDice, CharacterStats } from '../../../../db/schema/index';
+import type {
+  Character,
+  CharacterHitDice,
+  CharacterStats,
+} from '../../../../db/schema/index';
 
 /**
  * Overlay the engine's spell-slot table onto the sheet-facing character
@@ -115,7 +119,9 @@ export async function overlayCharacterConcentration(
     const current = await getConcentration(characterId);
     return {
       ...mapped,
-      concentration: current ? { spellName: current.spellName, spellId: current.spellId } : null,
+      concentration: current
+        ? { spellName: current.spellName, spellId: current.spellId }
+        : null,
     };
   } catch (error) {
     // prettier-ignore
