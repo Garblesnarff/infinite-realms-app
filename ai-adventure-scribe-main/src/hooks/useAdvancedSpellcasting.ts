@@ -79,7 +79,13 @@ export function useAdvancedSpellcasting(): UseAdvancedSpellcastingReturn {
   const [preparedSpells, setPreparedSpells] = useState<string[]>([]);
   const [selectedMetamagic, setSelectedMetamagic] = useState<string[]>([]);
   const [ritualSpells] = useState<string[]>([]);
-  const [pactMagicSpells, setPactMagicSpells] = useState<string[]>([]);
+  // #763: a Warlock's pact spells are the spells picked on the earlier spell
+  // step (knownSpells), so start from those, capped at the pact limit.
+  const [pactMagicSpells, setPactMagicSpells] = useState<string[]>(() =>
+    hasPactMagic(characterClass?.id || '')
+      ? (character?.knownSpells ?? []).slice(0, getPactMagicProgression(level)?.spellsKnown ?? 0)
+      : [],
+  );
   const [allSpells, setAllSpells] = useState<Spell[]>([]);
   const [isLoadingSpells, setIsLoadingSpells] = useState(true);
 
