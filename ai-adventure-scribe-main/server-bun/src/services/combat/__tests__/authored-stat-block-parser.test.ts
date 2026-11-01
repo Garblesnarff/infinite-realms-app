@@ -30,6 +30,21 @@ unleashing devastating sugar-based attacks. **Voice:** A series of sweet, sticky
 crackles. **Goal:** To protect the Sugar Queen. **Secret:** It is slowly dissolving.`;
 
 describe('markup dialects', () => {
+  test('reads authored creature type lines without inferring from prose', () => {
+    expect(parseAuthoredStatBlock('**Type:** Construct\n**HP:** 20').creatureType).toBe(
+      'construct',
+    );
+    expect(parseAuthoredStatBlock('*Medium undead, lawful evil*\nHP: 13').creatureType).toBe(
+      'undead',
+    );
+    expect(parseAuthoredStatBlock('A construct guards the gate.').creatureType).toBeUndefined();
+    expect(
+      parseAuthoredStatBlock('Large construct guards the gate. HP: 20').creatureType,
+    ).toBeUndefined();
+    expect(
+      parseAuthoredStatBlock('Large beast tracks lead to the lair.').creatureType,
+    ).toBeUndefined();
+  });
   test('reads bold-label, space-separated blocks (the-eternal-feast)', () => {
     const parsed = parseAuthoredStatBlock(GLUTEN_GOLEM);
     expect(parsed).toMatchObject({ maxHp: 90, armorClass: 14, speed: 30 });

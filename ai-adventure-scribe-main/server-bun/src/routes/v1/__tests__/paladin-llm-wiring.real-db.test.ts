@@ -169,6 +169,9 @@ const pipeline = await importWithRealDb(async () => {
 const { layOnHandsPool } = await importWithRealDb(
   () => import('../../../services/progression/paladin-features-service.js'),
 );
+const { CombatEncounterService } = await importWithRealDb(
+  () => import('../../../services/combat/combat-encounter-service.js'),
+);
 
 if (!hasRealDb) {
   console.warn(
@@ -297,6 +300,99 @@ describeWithDb('paladin Lay on Hands llm.ts wiring (#712)', () => {
 
   afterAll(async () => {
     await closeRealDb();
+  });
+
+  it('seats SRD creature types and refuses skeleton healing without spending, but heals a goblin (#746)', async () => {
+    const [{ id: freshSession }] = await db
+      .insert(gameSessions)
+      .values({ campaignId, characterId: paladinId, sessionNumber: 9, status: 'active' })
+      .returning({ id: gameSessions.id });
+    const state = await CombatEncounterService.startCombat(
+      freshSession,
+      [
+        {
+          encounterId: '',
+          characterId: paladinId,
+          name: 'Test Paladin',
+          initiativeModifier: 0,
+          initiativeRoll: 20,
+        },
+        {
+          encounterId: '',
+          monsterId: 'srd:skeleton',
+          name: 'Skeleton',
+          initiativeModifier: 0,
+          initiativeRoll: 1,
+        },
+        {
+          encounterId: '',
+          monsterId: 'srd:goblin',
+          name: 'Goblin',
+          initiativeModifier: 0,
+          initiativeRoll: 1,
+        },
+        {
+          encounterId: '',
+          monsterId: 'srd:stone-golem',
+          name: 'Stone Golem',
+          initiativeModifier: 0,
+          initiativeRoll: 1,
+        },
+      ],
+      false,
+      userId,
+    );
+    const skeleton = state.participants.find((p) => p.name === 'Skeleton')!;
+    const goblin = state.participants.find((p) => p.name === 'Goblin')!;
+    const golem = state.participants.find((p) => p.name === 'Stone Golem')!;
+    expect(skeleton.creatureType).toBe('undead');
+    expect(goblin.creatureType).toBe('humanoid');
+    expect(golem.creatureType).toBe('construct');
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 1 })
+      .where(eq(combatParticipantStatus.participantId, goblin.id));
+    const poolBefore = (await layOnHandsPool(paladinId, userId))!.remaining;
+    const generate = async (target: string, messageId: string) => {
+      const input = `I use Lay on Hands on ${target} for 1`;
+      await db.insert(dialogueHistory).values({
+        sessionId: freshSession,
+        speakerType: 'player',
+        speakerId: paladinId,
+        message: input,
+      });
+      generatePrompts = [];
+      generatedText = JSON.stringify({ text: 'The scene continues.' });
+      const response = await request('/v1/llm/generate', 'POST', {
+        prompt: input,
+        player_input: input,
+        sessionId: freshSession,
+        dmReply: { messageId, inCombat: true },
+        provider: 'openrouter',
+        requestType: 'user',
+        maxTokens: 8192,
+        temperature: 0.9,
+      });
+      expect(response.status).toBe(200);
+      return generatePrompts.join('\n');
+    };
+    expect(await generate('Skeleton', '11111111-2222-4333-8444-555555555111')).toContain(
+      'no effect on undead or constructs',
+    );
+    expect((await layOnHandsPool(paladinId, userId))!.remaining).toBe(poolBefore);
+    expect(await generate('Stone Golem', '11111111-2222-4333-8444-555555555113')).toContain(
+      'no effect on undead or constructs',
+    );
+    expect((await layOnHandsPool(paladinId, userId))!.remaining).toBe(poolBefore);
+    expect(await generate('Goblin', '11111111-2222-4333-8444-555555555112')).toContain(
+      'restores 1 HP',
+    );
+    expect((await layOnHandsPool(paladinId, userId))!.remaining).toBe(poolBefore - 1);
+    const [goblinStatus] = await db
+      .select({ hp: combatParticipantStatus.currentHp })
+      .from(combatParticipantStatus)
+      .where(eq(combatParticipantStatus.participantId, goblin.id));
+    expect(goblinStatus.hp).toBe(2);
   });
 
   it('the llm.ts wiring spends on an ordinary story turn, not on a combat-opening turn (#712)', async () => {

@@ -20,6 +20,7 @@ import type { EntitySize } from '../../tactical/types.js';
 type CatalogEntry = {
   id: string;
   name: string;
+  type?: string;
   size?: string;
   armorClass?: number;
   hitPoints?: number;
@@ -34,6 +35,7 @@ type CatalogEntry = {
 };
 
 export interface ResolvedMonsterStats {
+  creatureType?: string;
   monsterId: string;
   monsterName: string;
   size: EntitySize;
@@ -273,6 +275,7 @@ export function resolveSrdMonsterStats(
   return {
     monsterId: entry.id,
     monsterName: entry.name,
+    creatureType: entry.type?.toLowerCase(),
     size: tacticalSize(entry.size),
     armorClass: Number(entry.armorClass ?? GENERIC_NPC_STATS.armorClass),
     maxHp: Math.max(1, Number(entry.hitPoints ?? GENERIC_NPC_STATS.maxHp)),

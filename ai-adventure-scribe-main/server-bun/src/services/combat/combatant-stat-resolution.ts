@@ -90,7 +90,7 @@ export function resolveCombatantStats(
   if (authored) {
     const { parsed, coverage } = authored;
 
-    if (coverage === 'none') {
+    if (coverage === 'none' && !parsed.creatureType) {
       // The chunk exists — an author wrote this creature — but nothing in it was readable.
       // That is a content bug with a name attached, which is the whole point of logging it.
       logger.warn({
@@ -138,6 +138,7 @@ export function resolveCombatantStats(
             ? monsterId.trim()
             : authored.entityName,
         monsterName: authored.entityName,
+        creatureType: parsed.creatureType ?? srd?.creatureType,
         maxHp,
         armorClass: fill(
           parsed.armorClass,

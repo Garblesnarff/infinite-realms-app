@@ -115,6 +115,7 @@ export const combatParticipants = pgTable(
     // Basic info
     name: text('name').notNull(),
     participantType: text('participant_type').notNull(), // 'player' | 'npc' | 'enemy' | 'monster'
+    creatureType: text('creature_type'),
 
     // Initiative and turn order
     initiative: integer('initiative').notNull().default(0),

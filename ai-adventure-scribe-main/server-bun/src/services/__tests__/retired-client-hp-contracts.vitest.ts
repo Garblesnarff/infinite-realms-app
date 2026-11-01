@@ -69,6 +69,7 @@ describe('retired client HP contracts on CombatHPService', () => {
     npcId: null,
     name: 'Test monster',
     participantType: 'monster',
+    creatureType: null,
     initiative: 10,
     initiativeModifier: 0,
     turnOrder: 0,

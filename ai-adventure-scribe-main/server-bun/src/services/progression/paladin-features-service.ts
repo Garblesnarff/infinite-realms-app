@@ -364,7 +364,7 @@ export type LayOnHandsResult =
     }
   | {
       ok: false;
-      reason: 'not_paladin' | 'empty_pool' | 'insufficient_pool';
+      reason: 'not_paladin' | 'empty_pool' | 'insufficient_pool' | 'invalid_target';
       message: string;
       poolRemaining: number;
       poolMax: number;
@@ -511,6 +511,21 @@ async function resolveLayOnHandsAgainstPool(
   }
   const paladinName = pool.character.name || 'The paladin';
   const targetId = targetCharacterId ?? characterId;
+
+  if (participantId && encounterId) {
+    const { CombatEncounterService } = await import('../combat/combat-encounter-service.js');
+    const state = await CombatEncounterService.getCombatState(encounterId, userId);
+    const target = state.participants.find((participant) => participant.id === participantId);
+    if (['undead', 'construct'].includes((target?.creatureType ?? '').toLowerCase())) {
+      return {
+        ok: false,
+        reason: 'invalid_target',
+        message: 'Lay on Hands has no effect on undead or constructs.',
+        poolRemaining: pool.remaining,
+        poolMax: pool.max,
+      };
+    }
+  }
 
   if (cure) {
     const cureRefusal = (remaining: number): LayOnHandsResult => ({

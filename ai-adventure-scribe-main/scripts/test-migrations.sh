@@ -211,6 +211,9 @@ build_replay_list() {
         # with no character_spells table in it yet (#1011). Pinned after the newest
         # migration overall, the way the other bare-numbered pins are placed.
         0029_character_spells_character_fk.sql) echo "20261022_000000	$f"; continue;;
+        # This numbered migration alters combat_participants, created in the dated
+        # 20251112 Supabase migration; replay it after the existing combat migrations.
+        0032_creature_type.sql) echo "20261030_000000	$f"; continue;;
         # Deliberate no-op snapshot re-baseline; safe anywhere, pinned last.
         0004_schema_baseline.sql) echo "99999999_999999	$f"; continue;;
       esac
