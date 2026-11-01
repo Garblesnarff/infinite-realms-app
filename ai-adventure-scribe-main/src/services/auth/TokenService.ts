@@ -293,6 +293,8 @@ export const markSessionEnded = (error: unknown): void => {
   if (isSessionEnded()) return;
 
   sessionEnded = true;
+  // #1113: a signed-out tab must not grant a grace retry on a later 401.
+  lastRefreshCompletedAt = null;
   persistSession(null);
 
   if (typeof window !== 'undefined') {
@@ -621,6 +623,14 @@ const refreshWithCoordination = async (
   });
 };
 
+/** Epoch ms of the last refresh that produced a token pair in this tab (#1113). */
+let lastRefreshCompletedAt: number | null = null;
+export const getLastRefreshCompletedAt = (): number | null => lastRefreshCompletedAt;
+/** Test seam: forget the last completed refresh so each test starts clean. */
+export const resetLastRefreshCompletedAtForTests = (): void => {
+  lastRefreshCompletedAt = null;
+};
+
 /** Serialize every refresh caller so rotating refresh tokens are never raced. */
 export const refreshAccessToken = (
   refreshToken: string,
@@ -629,8 +639,15 @@ export const refreshAccessToken = (
   if (isSessionEnded()) return Promise.resolve(null);
 
   if (!refreshInFlight) {
-    const coordinatedRefresh = refreshWithCoordination(refreshToken, currentAccessToken).catch(
-      (error: unknown) => {
+    const coordinatedRefresh = refreshWithCoordination(refreshToken, currentAccessToken)
+      .then((result) => {
+        // #1113: every refresh (timer, page load, 401 retry) passes through
+        // here, so this is the one place that records a completed refresh.
+        // Grace state is per tab: another tab's refresh does not open it here.
+        if (result) lastRefreshCompletedAt = Date.now();
+        return result;
+      })
+      .catch((error: unknown) => {
         // Transport failures propagate: they are not auth verdicts, so the
         // caller's stored session must stay intact (#565).
         if (error instanceof TokenRefreshTransportError) throw error;
@@ -641,8 +658,7 @@ export const refreshAccessToken = (
         }
         logger.error('Token refresh coordination failed:', { error });
         return null;
-      },
-    );
+      });
     refreshInFlight = coordinatedRefresh.finally(() => {
       refreshInFlight = null;
     });

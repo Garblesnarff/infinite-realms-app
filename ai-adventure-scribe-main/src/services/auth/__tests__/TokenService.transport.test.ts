@@ -2,10 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import {
   clearSessionEnded,
+  getLastRefreshCompletedAt,
   isSessionEnded,
   loadCachedSession,
+  markSessionEnded,
   persistSession,
   refreshAccessTokenOnce,
+  resetLastRefreshCompletedAtForTests,
   TokenRefreshTransientError,
   TokenRefreshTransportError,
 } from '../TokenService';
@@ -97,5 +100,50 @@ describe('TokenService transport failures (#565)', () => {
     const attempt = refreshAccessTokenOnce('old-refresh');
     await vi.advanceTimersByTimeAsync(40);
     await expect(attempt).resolves.toBeNull();
+  });
+
+  describe('refresh completion record (#1113)', () => {
+    beforeEach(() => {
+      resetLastRefreshCompletedAtForTests();
+    });
+
+    it('records when a refresh yields a token pair', async () => {
+      (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ok: true,
+        json: async () => ({ accessToken: 'new-access', refreshToken: 'new-refresh' }),
+      });
+      vi.setSystemTime(new Date('2026-11-01T12:00:00Z'));
+
+      const attempt = refreshAccessTokenOnce('old-refresh');
+      await vi.advanceTimersByTimeAsync(40);
+      await expect(attempt).resolves.toMatchObject({ accessToken: 'new-access' });
+
+      expect(getLastRefreshCompletedAt()).toBe(Date.parse('2026-11-01T12:00:00Z') + 40);
+    });
+
+    it('does not record a refresh that resolves null', async () => {
+      (fetch as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('boom'));
+
+      const attempt = refreshAccessTokenOnce('old-refresh');
+      await vi.advanceTimersByTimeAsync(40);
+      await expect(attempt).resolves.toBeNull();
+
+      expect(getLastRefreshCompletedAt()).toBeNull();
+    });
+
+    it('clears the completion record when the session ends', async () => {
+      (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ok: true,
+        json: async () => ({ accessToken: 'new-access', refreshToken: 'new-refresh' }),
+      });
+      const attempt = refreshAccessTokenOnce('old-refresh');
+      await vi.advanceTimersByTimeAsync(40);
+      await attempt;
+      expect(getLastRefreshCompletedAt()).not.toBeNull();
+
+      markSessionEnded(new Error('signed out'));
+
+      expect(getLastRefreshCompletedAt()).toBeNull();
+    });
   });
 });
