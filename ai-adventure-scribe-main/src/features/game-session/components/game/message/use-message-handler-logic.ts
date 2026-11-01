@@ -179,6 +179,8 @@ export const useMessageHandlerLogic = ({
   /** #2536: staged attack wait in the composer. Null once the prompt, engine line, or turn end replaces it. */
   attackWaitLabel: string | null;
   sendError: string | null;
+  /** #1315: the last turn timed out after a pending combat entry arrived. */
+  timedOutWithPendingEntry: boolean;
   retrySendMessage: (editedInput: string) => Promise<void>;
   retryInFlight: boolean;
   combatTurnUiState: CombatTurnUiState;
@@ -252,6 +254,9 @@ export const useMessageHandlerLogic = ({
     return () => window.removeEventListener('combat-entry-seated', onSeated);
   }, []);
   const [sendError, setSendError] = React.useState<string | null>(null);
+  // #1315: the last turn timed out after a pending combat entry arrived, so the
+  // previous DM message's options stay usable instead of staying disabled until Retry.
+  const [timedOutWithPendingEntry, setTimedOutWithPendingEntry] = React.useState(false);
   const retryInputRef = React.useRef<string | null>(null);
   const retryContextRef = React.useRef<MessageSendContext | undefined>(undefined);
   // #783: turn-failure beacon tracking. Records when the turn started and the
@@ -403,6 +408,7 @@ export const useMessageHandlerLogic = ({
     const abortController = new AbortController();
     const turnSignal = abortController.signal as TurnAbortSignal;
     let timedOut = false;
+    let pendingEntryReceivedThisTurn = false;
     // #783: record the turn start for the failure beacon.
     turnStartTimeRef.current = Date.now();
     lastSseEventRef.current = null;
@@ -499,6 +505,8 @@ export const useMessageHandlerLogic = ({
     scheduleTurnTimeout();
 
     setSendError(null);
+    // A new turn retires the previous timeout's option unlock.
+    setTimedOutWithPendingEntry(false);
     setIsStillThinking(false);
     setAttackPhase('deciding');
     const turnPhase = createTurnPhaseReporter();
@@ -741,6 +749,11 @@ export const useMessageHandlerLogic = ({
           async (earlyResponse, textReadyOptions) => {
             if (abortController.signal.aborted) return;
             if (earlyResponse.id) dmMessageId = earlyResponse.id;
+            // #1315: the parsed reply carried a pending entry, even if the turn
+            // later times out before seating it.
+            if (earlyResponse.context?.combat_entry_pending) {
+              pendingEntryReceivedThisTurn = true;
+            }
             const hasEarlyRollRequests = Boolean(earlyResponse.rollRequests?.length);
             const combatGatePending = Boolean(
               hasEarlyRollRequests ||
@@ -1178,6 +1191,10 @@ export const useMessageHandlerLogic = ({
                 ? recoveryMessage
                 : DM_PROCESSING_ERROR_MESSAGE;
       setSendError(displayErrorMessage);
+      // #1315: a timeout after a pending entry arrived leaves the player with
+      // no way forward but Retry on the same action. Unlock the previous DM
+      // message's options so another option can be picked instead.
+      if (timedOut && pendingEntryReceivedThisTurn) setTimedOutWithPendingEntry(true);
 
       // #783: send a beacon when the turn-failure chip shows, so the failed
       // turn can be correlated with the server log. One beacon per chip-show.
@@ -1302,6 +1319,7 @@ export const useMessageHandlerLogic = ({
     isStillThinking,
     attackWaitLabel,
     sendError,
+    timedOutWithPendingEntry,
     retrySendMessage,
     retryInFlight,
     combatTurnUiState,

@@ -49,6 +49,8 @@ interface MessageHandlerProps {
     isStillThinking: boolean;
     attackWaitLabel: string | null;
     sendError: string | null;
+    /** #1315: the last turn timed out after a pending combat entry arrived. */
+    timedOutWithPendingEntry: boolean;
     retryInFlight: boolean;
     onRetry: (input: string) => Promise<void>;
     combatTurnUiState: CombatTurnUiState;
@@ -71,6 +73,7 @@ export const MessageHandler: React.FC<MessageHandlerProps> = (props) => {
     isStillThinking,
     attackWaitLabel,
     sendError,
+    timedOutWithPendingEntry,
     retrySendMessage,
     retryInFlight,
     combatTurnUiState,
@@ -122,6 +125,7 @@ export const MessageHandler: React.FC<MessageHandlerProps> = (props) => {
     isStillThinking,
     attackWaitLabel,
     sendError,
+    timedOutWithPendingEntry,
     onRetry: retrySendMessage,
     retryInFlight,
     combatTurnUiState,

@@ -546,6 +546,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                 isStillThinking,
                 attackWaitLabel,
                 sendError,
+                timedOutWithPendingEntry,
                 onRetry,
                 retryInFlight,
                 combatTurnUiState,
@@ -572,6 +573,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                         // line did when rollPillLabel was set.
                         isDmWriting={(dmWaiting || queueStatus === 'processing') && !rollPillLabel}
                         retryInFlight={retryInFlight}
+                        timedOutWithPendingEntry={timedOutWithPendingEntry}
                         sessionId={sessionId}
                         containerRef={chatScrollRef}
                         suppressEmptyState={isGeneratingGreeting}

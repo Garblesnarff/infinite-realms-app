@@ -56,6 +56,8 @@ interface MessageListContainerProps {
   onRetryFailed?: (message: ChatMessage) => void | Promise<void>;
   /** #88: the DM is composing; show the writing row at the stream's bottom. */
   isDmWriting?: boolean;
+  /** #1315: the last turn timed out after a pending combat entry arrived. */
+  timedOutWithPendingEntry?: boolean;
   sessionId?: string;
   isFetchingMore?: boolean;
   hasMore?: boolean;
@@ -87,6 +89,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
     failedMessages = [],
     onRetryFailed,
     isDmWriting = false,
+    timedOutWithPendingEntry = false,
     retryInFlight = false,
     sessionId,
     isFetchingMore,
@@ -131,6 +134,15 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
       () => messagesSupersededByCombatEnd(messages),
       [messages],
     );
+
+    // #1315: after a timeout with a pending entry, the previous DM message's
+    // options come back so another option can be picked instead of Retry.
+    // isLatestMessage gates only the options section in MessageRenderer, so
+    // treating the latest DM message as latest re-enables exactly those buttons.
+    const latestDmMessage = useMemo(() => {
+      if (!timedOutWithPendingEntry) return null;
+      return [...messages].reverse().find((message) => message.sender === 'dm') ?? null;
+    }, [messages, timedOutWithPendingEntry]);
 
     // #88: whether the player sits away from the bottom, and the newest real
     // message's key — the pill fires only when a NEW newest message lands
@@ -326,7 +338,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
                       onSendMessage={onSendMessage}
                       onRetryFailed={onRetryFailed}
                       encounterActive={combatState.isInCombat}
-                      isLatestMessage={isLastMessage}
+                      isLatestMessage={isLastMessage || message === latestDmMessage}
                       rollTrayOpen={Boolean(currentRoll && rollRequest)}
                       optionsSuperseded={supersededByCombatEnd.has(message)}
                       characterName={group.messages[0].characterName}
