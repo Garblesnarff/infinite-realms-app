@@ -373,5 +373,57 @@ describeWithDb('paladin Divine Sense tracking (#712)', () => {
     expect(await updatedSheet.json()).toMatchObject({
       class_features: { divine_sense: { maxUses: 3, currentUses: 2 } },
     });
+    const [{ id: playerSessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId, characterId: paladinId, sessionNumber: 9, status: 'active' })
+      .returning({ id: gameSessions.id });
+    const [{ id: playerEncounterId }] = await db
+      .insert(combatEncounters)
+      .values({
+        sessionId: playerSessionId,
+        status: 'active',
+        currentRound: 1,
+        currentTurnOrder: 0,
+        version: 1,
+      })
+      .returning({ id: combatEncounters.id });
+    const [{ id: playerParticipantId }] = await db
+      .insert(combatParticipants)
+      .values({
+        encounterId: playerEncounterId,
+        characterId: paladinId,
+        name: 'Test Paladin',
+        participantType: 'player',
+        turnOrder: 0,
+        initiative: 10,
+        maxHp: 12,
+      })
+      .returning({ id: combatParticipants.id });
+    await db
+      .insert(combatParticipantStatus)
+      .values({ participantId: playerParticipantId, currentHp: 7, maxHp: 12, isConscious: true });
+    const playerResponse = await app!.handle(
+      new Request(`http://localhost/v1/combat/${playerEncounterId}/intent`, {
+        method: 'POST',
+        headers: { authorization: 'Bearer 712-test-token', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          intent: { type: 'divine_sense', actorId: playerParticipantId, expectedVersion: 1 },
+          source: 'player',
+          dmStartedAt: 1_700_000_000_000,
+          origin: 'action_bar',
+        }),
+      }),
+    );
+    expect(playerResponse.status).toBe(200);
+    const [afterPlayer] = await db
+      .select({ remaining: characterFeatures.usesRemaining })
+      .from(characterFeatures)
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, divineSenseFeatureId),
+        ),
+      );
+    expect(afterPlayer.remaining).toBe(1);
   });
 });
