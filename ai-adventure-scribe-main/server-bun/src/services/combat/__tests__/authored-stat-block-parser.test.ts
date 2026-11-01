@@ -38,6 +38,12 @@ describe('markup dialects', () => {
       'undead',
     );
     expect(parseAuthoredStatBlock('A construct guards the gate.').creatureType).toBeUndefined();
+    expect(
+      parseAuthoredStatBlock('Large construct guards the gate. HP: 20').creatureType,
+    ).toBeUndefined();
+    expect(
+      parseAuthoredStatBlock('Large beast tracks lead to the lair.').creatureType,
+    ).toBeUndefined();
   });
   test('reads bold-label, space-separated blocks (the-eternal-feast)', () => {
     const parsed = parseAuthoredStatBlock(GLUTEN_GOLEM);

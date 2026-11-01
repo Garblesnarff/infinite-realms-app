@@ -206,7 +206,7 @@ export function parseAuthoredStatBlock(rawContent: string): ParsedStatBlock {
     '(aberration|beast|celestial|construct|dragon|elemental|fey|fiend|giant|humanoid|monstrosity|ooze|plant|undead)\\b';
   const typeLabel = readLabelled(content, ['Creature Type', 'Type'], creatureTypes);
   const typeLine = content.match(
-    /(?:^|\n)\s*\*{0,2}(?:tiny|small|medium|large|huge|gargantuan)\s+(aberration|beast|celestial|construct|dragon|elemental|fey|fiend|giant|humanoid|monstrosity|ooze|plant|undead)\b/i,
+    /(?:^|\n)\s*\*{0,2}(?:tiny|small|medium|large|huge|gargantuan)\s+(aberration|beast|celestial|construct|dragon|elemental|fey|fiend|giant|humanoid|monstrosity|ooze|plant|undead)(?=\s*(?:[,(*]|$))/im,
   );
   const creatureType = typeLabel?.groups[0] ?? typeLine?.[1];
   if (creatureType) parsed.creatureType = creatureType.toLowerCase();
