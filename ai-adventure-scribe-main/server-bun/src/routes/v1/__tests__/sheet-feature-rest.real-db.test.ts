@@ -1583,11 +1583,7 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
       prompt: 'The wizard casts a spell while exploring. What happens?',
       player_input: playerInput,
       sessionId,
-      dmReply: {
-        messageId: '11111111-2222-4333-8444-555555555559',
-        inCombat: false,
-        holdProse: true,
-      },
+      dmReply: { messageId: '11111111-2222-4333-8444-555555555559', inCombat: false, holdProse: true },
       combatEntry: {
         sessionId,
         player: {
@@ -1724,11 +1720,7 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
         prompt: 'The wizard casts a spell while exploring. What happens?',
         player_input: playerInput,
         sessionId,
-        dmReply: {
-          messageId: '11111111-2222-4333-8444-555555555560',
-          inCombat: false,
-          holdProse: true,
-        },
+        dmReply: { messageId: '11111111-2222-4333-8444-555555555560', inCombat: false, holdProse: true },
         combatEntry: {
           sessionId,
           player: {
@@ -2134,8 +2126,12 @@ describeWithDb('a continuation session carries HP until the long rest (#1239)', 
       }
     };
     await drop(() => db.delete(restEvents).where(eq(restEvents.characterId, characterId)));
-    await drop(() => db.delete(gameSessions).where(eq(gameSessions.characterId, characterId)));
-    await drop(() => db.delete(characterStats).where(eq(characterStats.characterId, characterId)));
+    await drop(() =>
+      db.delete(gameSessions).where(eq(gameSessions.characterId, characterId)),
+    );
+    await drop(() =>
+      db.delete(characterStats).where(eq(characterStats.characterId, characterId)),
+    );
     await drop(() => db.delete(characters).where(eq(characters.id, characterId)));
     await drop(() => db.delete(campaigns).where(eq(campaigns.id, campaignId)));
     await closeRealDb();
