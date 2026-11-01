@@ -80,6 +80,7 @@ export interface CharacterResources {
   rages?: { max: number; current: number };
   actionSurge?: { max: number; current: number };
   layOnHands?: { max: number; current: number };
+  divineSense?: { max: number; current: number };
 }
 
 // ===========================

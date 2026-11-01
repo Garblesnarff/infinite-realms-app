@@ -46,7 +46,7 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
   const layOnHandsTracked = trackedClassFeatures.find(
     (feature) => feature.name === 'lay_on_hands',
   );
-  const displayResources =
+  const layOnHandsResources =
     characterResources && layOnHandsTracked?.currentUses !== undefined
       ? {
           ...characterResources,
@@ -56,6 +56,18 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
           },
         }
       : characterResources;
+  const divineSenseTracked = trackedClassFeatures.find(
+    (feature) => feature.name === 'divine_sense',
+  );
+  const displayResources =
+    layOnHandsResources &&
+    divineSenseTracked?.currentUses !== undefined &&
+    divineSenseTracked.maxUses !== undefined
+      ? {
+          ...layOnHandsResources,
+          divineSense: { current: divineSenseTracked.currentUses, max: divineSenseTracked.maxUses },
+        }
+      : layOnHandsResources;
 
   // #264: rests go through the shared SheetRestControls (hit-dice prompt on short
   // rest), the same path as the Main tab.

@@ -605,6 +605,18 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
     // Serve the engine's slot table so the sheet shows the same source the
     // engine spends from (#2459).
     const withSlots = await overlayEngineSpellSlots(mapped, resolved.id, user!.userId);
+    const { divineSenseUses, paladinLevelOf } =
+      await import('../../services/progression/paladin-features-service.js');
+    if (withSlots && paladinLevelOf(resolved) > 0) {
+      const sense = await divineSenseUses(resolved.id, user!.userId);
+      if (sense) {
+        const features = withSlots.class_features;
+        withSlots.class_features = {
+          ...(features && typeof features === 'object' && !Array.isArray(features) ? features : {}),
+          divine_sense: { maxUses: sense.max, currentUses: sense.remaining },
+        };
+      }
+    }
     // Serve the out-of-combat conditions so the sheet's Conditions panel reads the
     // same source the story writer writes (#218 step 4).
     const withConditions = await overlayCharacterConditions(withSlots, resolved.id);

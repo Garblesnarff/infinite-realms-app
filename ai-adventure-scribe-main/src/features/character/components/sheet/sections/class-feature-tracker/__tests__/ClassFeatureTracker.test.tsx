@@ -49,7 +49,8 @@ describe('ClassFeatureTracker paladin pools (#712)', () => {
     );
 
     expect(indicatorTransform('Divine Sense uses')).toBe('translateX(-100%)');
-    expect(screen.getAllByText('0 / 1')).toHaveLength(2);
+    expect(indicatorTransform('Divine Sense remaining')).toBe('translateX(-100%)');
+    expect(screen.getAllByText('0 / 1')).toHaveLength(3);
   });
 
   it('without sheet JSON the bar stays static and Divine Sense shows no uses', () => {

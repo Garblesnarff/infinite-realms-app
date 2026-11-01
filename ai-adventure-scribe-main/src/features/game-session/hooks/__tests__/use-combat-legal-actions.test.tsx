@@ -102,6 +102,37 @@ describe('useCombatLegalActions', () => {
     expect(result.current.error).toBe('Reload to use this');
     expect(onSendText).not.toHaveBeenCalled();
   });
+
+  it('sends Divine Sense as a player action with the current encounter version', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      const path = String(url);
+      if (path.includes('/legal-actions'))
+        return {
+          ok: true,
+          json: async () => ({
+            actorId: 'pc-1',
+            actions: [{ type: 'divine_sense', label: 'Divine Sense' }],
+          }),
+        } as Response;
+      if (path.includes('/status'))
+        return { ok: true, json: async () => ({ encounter: { version: 7 } }) } as Response;
+      if (path.includes('/intent')) return { ok: true, json: async () => ({}) } as Response;
+      throw new Error(`Unexpected request ${path} ${String(init?.method)}`);
+    });
+    const { result } = renderHook(() =>
+      useCombatLegalActions({ enabled: true, onSendText: vi.fn() }),
+    );
+    await waitFor(() => expect(result.current.actions).toHaveLength(1));
+    await act(async () => {
+      await result.current.runAction(result.current.actions[0]);
+    });
+    const call = fetchSpy.mock.calls.find(([url]) => String(url).includes('/intent'));
+    expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({
+      source: 'player',
+      origin: 'action_bar',
+      intent: { type: 'divine_sense', actorId: 'pc-1', expectedVersion: 7 },
+    });
+  });
 });
 
 describe('useCombatLegalActions use_item (#1147)', () => {

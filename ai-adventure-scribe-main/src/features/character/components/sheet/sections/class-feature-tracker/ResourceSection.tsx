@@ -252,6 +252,21 @@ export const ResourceSection: React.FC<ResourceSectionProps> = ({
           </div>
         )}
 
+        {characterResources.divineSense !== undefined && (
+          <div className="border-l-4 border-orange-500 pl-4">
+            <h4 className="font-semibold">Divine Sense</h4>
+            <span>
+              {characterResources.divineSense.current} / {characterResources.divineSense.max}
+            </span>
+            <Progress
+              value={
+                (characterResources.divineSense.current / characterResources.divineSense.max) * 100
+              }
+              className="h-2"
+              aria-label="Divine Sense remaining"
+            />
+          </div>
+        )}
         {characterResources.layOnHands !== undefined && (
           <div className="border-l-4 border-orange-500 pl-4">
             <div className="flex items-center gap-2 mb-2">
