@@ -3,7 +3,7 @@ import { archeryAttackBonus, duelingDamageBonus } from '../../../../shared/fight
 import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
 
 export type WeaponRuleProfile = {
-  missingAmmunition?: 'bolts' | 'arrows';
+  missingAmmunition?: 'bolts' | 'arrows' | 'bullets' | 'needles';
   id: string;
   name: string;
   damageDice: string;

@@ -13,6 +13,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { and, asc, desc, eq, exists, gt, inArray, or, isNotNull, sql } from 'drizzle-orm';
 
+import { ammunitionForWeapon, isAmmunition } from './ammunition.js';
 import { parseHealingDice } from './combat-healing-dice.js';
 import { isEquippedWeaponCandidate } from './combat-weapon-options.js';
 import {
@@ -346,19 +347,14 @@ export async function listCarriedWeaponProfiles(participant: any): Promise<Weapo
   return noteOtherWeapons(
     candidates.filter(isEquippedWeaponCandidate).map((candidate) => {
       const profile = candidateToProfile(candidate, character ?? undefined);
-      const ammunition = /crossbow/i.test(profile.name)
-        ? 'bolts'
-        : /(?:shortbow|longbow)/i.test(profile.name)
-          ? 'arrows'
-          : null;
+      const ammunition = ammunitionForWeapon(profile.name);
       if (!ammunition) return profile;
-      const ammoPattern = ammunition === 'bolts' ? /\bbolts?\b/i : /\barrows?\b/i;
       const available = [
         ...inventory
           .filter((item) => !isAlreadyOnSheet(sheetNames, item.name))
           .map((item) => ({ name: item.name, quantity: item.quantity })),
         ...legacy.map((item) => ({ name: item.itemName, quantity: item.quantity })),
-      ].some((item) => Number(item.quantity) > 0 && ammoPattern.test(item.name));
+      ].some((item) => Number(item.quantity) > 0 && isAmmunition(item.name, ammunition));
       return available ? profile : { ...profile, missingAmmunition: ammunition };
     }),
   );

@@ -2,6 +2,7 @@
    the dispatch would put the turn's authorization, resolution, and reporting in three files. */
 import { randomUUID } from 'node:crypto';
 
+import { ammunitionForWeapon, isAmmunition } from './ammunition.js';
 import { describeRefusedSpell, describeResolvedSpell } from './attack-narration.js';
 import { decideAttackApproach, describeResolvedAttack } from './combat-approach-service.js';
 import { executeCombatCheck } from './combat-check-service.js';
@@ -967,69 +968,69 @@ async function spendRangedAmmunition(
   sessionId: string,
 ): Promise<void> {
   if (!characterId) return;
-  const ammoType = /crossbow/i.test(weaponName)
-    ? 'bolts'
-    : /(?:shortbow|longbow)/i.test(weaponName)
-      ? 'arrows'
-      : null;
+  const ammoType = ammunitionForWeapon(weaponName);
   if (!ammoType) return;
   const { db } = await import('../../../../db/client');
-  const { and, eq, ilike, or } = await import('drizzle-orm');
+  const { and, eq, exists, gt, or, sql } = await import('drizzle-orm');
   const { characters, characterEquipment, inventoryItems } = await import('../../../../db/schema');
-  const [owner] = await db
-    .select({ id: characters.id })
-    .from(characters)
-    .where(
-      and(
-        eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+  const owned = exists(
+    db
+      .select({ id: characters.id })
+      .from(characters)
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
       ),
-    )
-    .limit(1);
-  if (!owner) return;
-  const pattern = `%${ammoType === 'bolts' ? 'bolt' : 'arrow'}%`;
+  );
   const sheetItem = (
     await db
-      .select({ id: characterEquipment.id, quantity: characterEquipment.quantity })
+      .select({ id: characterEquipment.id, name: characterEquipment.itemName })
       .from(characterEquipment)
       .where(
         and(
           eq(characterEquipment.characterId, characterId),
-          ilike(characterEquipment.itemName, pattern),
+          gt(characterEquipment.quantity, 0),
+          owned,
         ),
       )
       .orderBy(characterEquipment.createdAt)
-      .limit(1)
-  )[0];
-  if (sheetItem && (sheetItem.quantity ?? 0) > 0) {
-    if (sheetItem.quantity === 1) {
-      await db.delete(characterEquipment).where(eq(characterEquipment.id, sheetItem.id));
-    } else {
-      await db
-        .update(characterEquipment)
-        .set({ quantity: (sheetItem.quantity ?? 1) - 1, updatedAt: new Date() })
-        .where(eq(characterEquipment.id, sheetItem.id));
-    }
+  ).find((item) => isAmmunition(item.name, ammoType));
+  if (sheetItem) {
+    await db
+      .update(characterEquipment)
+      .set({ quantity: sql`${characterEquipment.quantity} - 1`, updatedAt: new Date() })
+      .where(
+        and(
+          eq(characterEquipment.id, sheetItem.id),
+          eq(characterEquipment.characterId, characterId),
+          gt(characterEquipment.quantity, 0),
+          owned,
+        ),
+      );
   } else {
     const item = (
       await db
-        .select({ id: inventoryItems.id, quantity: inventoryItems.quantity })
+        .select({ id: inventoryItems.id, name: inventoryItems.name })
         .from(inventoryItems)
         .where(
-          and(eq(inventoryItems.characterId, characterId), ilike(inventoryItems.name, pattern)),
+          and(eq(inventoryItems.characterId, characterId), gt(inventoryItems.quantity, 0), owned),
         )
         .orderBy(inventoryItems.createdAt)
-        .limit(1)
-    )[0];
-    if (item && item.quantity > 0) {
-      if (item.quantity === 1) {
-        await db.delete(inventoryItems).where(eq(inventoryItems.id, item.id));
-      } else {
-        await db
-          .update(inventoryItems)
-          .set({ quantity: item.quantity - 1, updatedAt: new Date() })
-          .where(eq(inventoryItems.id, item.id));
-      }
+    ).find((candidate) => isAmmunition(candidate.name, ammoType));
+    if (item) {
+      await db
+        .update(inventoryItems)
+        .set({ quantity: sql`${inventoryItems.quantity} - 1`, updatedAt: new Date() })
+        .where(
+          and(
+            eq(inventoryItems.id, item.id),
+            eq(inventoryItems.characterId, characterId),
+            gt(inventoryItems.quantity, 0),
+            owned,
+          ),
+        );
     }
   }
   logger.info({ msg: 'COMBAT_AMMUNITION_SPENT', sessionId, characterId, ammoType });
