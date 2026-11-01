@@ -85,6 +85,7 @@ import type {
   DamageType,
   DamageResult,
 } from '../../types/combat.js';
+import type { UseSpellSlotResult } from '../../types/spell-slots.js';
 
 /**
  * An attack result that also carries Hex's rider damage (#754). Kept local rather than added to
@@ -1149,12 +1150,17 @@ export class CombatAttackService {
     const claimAndResolve = usesBonusAction
       ? claimTurnBonusActionAndResolve
       : claimTurnActionAndResolve;
+    // #1287: the slot this cast spent, kept so a cast that throws after the spend can give it back.
+    let spentSlot: UseSpellSlotResult | null = null;
+    // #1287: set before any target is touched. Damage and state writes commit per target, so a
+    // throw after this point keeps the slot spent: refunding it would hand out a free cast.
+    let spellCommitted = false;
     const resolution = await claimAndResolve(casterId, encounterId, expectedVersion, async () => {
       if (casterData.participant.characterId && spell.level > 0) {
         // Not a React hook: a static service method on a Bun server that happens to start with
         // "use". The rule matches on the name alone, and this file has no React in it at all.
 
-        await SpellSlotsService.useSpellSlot(
+        spentSlot = await SpellSlotsService.useSpellSlot(
           {
             characterId: casterData.participant.characterId,
             spellName: spell.name,
@@ -1179,6 +1185,7 @@ export class CombatAttackService {
 
       const results: AttackResult[] = [];
 
+      spellCommitted = true;
       // Parallelize spell resolution for all targets using the pre-fetched data map.
       const resolutionPromises = targetIds.map(async (targetId) => {
         const targetData = allParticipantDataMap.get(targetId);
@@ -1705,6 +1712,22 @@ export class CombatAttackService {
       });
 
       return { results };
+    }).catch(async (error: unknown) => {
+      // #1287: the claim is released on throw (runOrReleaseClaim). Give the slot back only when
+      // nothing committed; the original error is what the caller sees, even if the refund fails.
+      if (spentSlot && !spellCommitted) {
+        try {
+          await SpellSlotsService.refundSpellSlot(spentSlot, userId);
+        } catch (refundError) {
+          logger.error({
+            msg: 'COMBAT_SPELL_SLOT_REFUND_FAILED',
+            casterId,
+            spell: spell.name,
+            refundError,
+          });
+        }
+      }
+      throw error;
     });
     // #709: a successfully cast concentration spell starts concentration (2014).
     // #754: the target is stored too, so Hex's rider knows which participant it applies to.

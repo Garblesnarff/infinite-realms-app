@@ -11,7 +11,7 @@
  * @module server/services/spell-slots-service
  */
 
-import { and, eq, exists, gte, lt, or, inArray, sql } from 'drizzle-orm';
+import { and, eq, exists, gt, gte, lt, or, inArray, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import { characters, characterSpellSlots, characterSubclasses, spellSlotUsageLog } from '../../../db/schema/index';
@@ -239,6 +239,49 @@ export class SpellSlotsService {
       logEntry: log,
       wasUpcast,
     };
+  }
+
+  /**
+   * Undo one `useSpellSlot` spend whose cast never resolved (#1287): the slot goes back and its
+   * usage-log row is removed, so a spent slot always has exactly one resolved cast row. Owner
+   * checked the same way `useSpellSlot` checks it; the log row is removed only if the slot was
+   * actually restored.
+   */
+  static async refundSpellSlot(spent: UseSpellSlotResult, userId: string): Promise<void> {
+    const { characterId } = spent.slot;
+    await db.transaction(async (tx) => {
+      const [restored] = await tx
+        .update(characterSpellSlots)
+        .set({ usedSlots: sql`${characterSpellSlots.usedSlots} - 1`, updatedAt: new Date() })
+        .where(
+          and(
+            eq(characterSpellSlots.id, spent.slot.id),
+            eq(characterSpellSlots.characterId, characterId),
+            gt(characterSpellSlots.usedSlots, 0),
+            exists(
+              tx
+                .select()
+                .from(characters)
+                .where(
+                  and(
+                    eq(characters.id, characterId),
+                    or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                  ),
+                ),
+            ),
+          ),
+        )
+        .returning({ id: characterSpellSlots.id });
+      if (restored)
+        await tx
+          .delete(spellSlotUsageLog)
+          .where(
+            and(
+              eq(spellSlotUsageLog.id, spent.logEntry.id),
+              eq(spellSlotUsageLog.characterId, characterId),
+            ),
+          );
+    });
   }
 
   /**

@@ -18,7 +18,13 @@ import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
 import { eq } from 'drizzle-orm';
 
 import { closeRealDb, describeWithDb, hasRealDb, importWithRealDb, realDb, testId } from './fixtures/real-db.js';
-import { campaigns, characters, characterSpellSlots, characterSubclasses } from '../../../../db/schema/index';
+import {
+  campaigns,
+  characters,
+  characterSpellSlots,
+  characterSubclasses,
+  spellSlotUsageLog,
+} from '../../../../db/schema/index';
 import { premadeWizardSpellSlotsWireValue } from '../../../../shared/test-fixtures/premade-wizard-spell-slots';
 
 import type { CharacterSpellSlot } from '../../../../db/schema/index';
@@ -538,5 +544,69 @@ describeWithDb('creation seeds slot rows from the single slot source (#270)', ()
     // Wizard 2 → 3× L1 from the progression table; the spent slot survives
     // the level-up instead of resetting.
     expect(await totals(id)).toEqual([[1, 3, 1]]);
+  });
+});
+
+// #1287: a cast whose resolution throws after the slot was spent gives the slot back, so the
+// ledger never holds a spent slot with no resolved cast row. Real rows, real service.
+describeWithDb('spell slot refund on a cast that never resolved (#1287)', () => {
+  // Re-acquired in beforeAll for the same reason as the creation block above: the earlier
+  // blocks close the shared fixture client in their afterAll.
+  let db: ReturnType<typeof realDb>;
+  const userId = testId('refund-user');
+
+  let wizardId: string;
+
+  beforeAll(async () => {
+    db = realDb();
+    const [{ id: campaignId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('refund-camp') })
+      .returning({ id: campaigns.id });
+    [{ id: wizardId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId,
+        name: testId('refund-wizard'),
+        class: 'Wizard',
+        level: 1,
+        spellSlots: premadeWizardSpellSlotsWireValue,
+      })
+      .returning({ id: characters.id });
+  });
+
+  afterAll(async () => {
+    await closeRealDb();
+  });
+
+  it('a refunded spend restores the slot and removes its usage-log row', async () => {
+    const spent = await SpellSlotsService!.useSpellSlot(
+      { characterId: wizardId, spellName: 'Burning Hands', spellLevel: 1, slotLevelUsed: 1 },
+      userId,
+    );
+    expect(spent.slot.usedSlots).toBe(1);
+
+    await SpellSlotsService!.refundSpellSlot(spent, userId);
+
+    const { slots } = await SpellSlotDataAccess!.getCharacterSpellSlots(wizardId, userId);
+    expect(slots.find((slot) => slot.spellLevel === 1)?.usedSlots).toBe(0);
+    const logs = await db
+      .select({ id: spellSlotUsageLog.id })
+      .from(spellSlotUsageLog)
+      .where(eq(spellSlotUsageLog.id, spent.logEntry.id));
+    expect(logs).toHaveLength(0);
+  });
+
+  it('a refund by a user who does not own the character restores nothing', async () => {
+    const spent = await SpellSlotsService!.useSpellSlot(
+      { characterId: wizardId, spellName: 'Burning Hands', spellLevel: 1, slotLevelUsed: 1 },
+      userId,
+    );
+
+    await SpellSlotsService!.refundSpellSlot(spent, testId('stranger'));
+
+    const { slots } = await SpellSlotDataAccess!.getCharacterSpellSlots(wizardId, userId);
+    expect(slots.find((slot) => slot.spellLevel === 1)?.usedSlots).toBe(1);
   });
 });
