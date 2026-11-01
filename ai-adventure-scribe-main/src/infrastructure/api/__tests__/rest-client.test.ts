@@ -31,7 +31,6 @@ vi.mock('@/services/auth/TokenService', () => ({
 import {
   fetchWithAuth,
   isNetworkError,
-  resetRefreshGraceForTests,
   SessionExpiredError,
   subscribeToNetworkRetry,
 } from '../rest-client';
@@ -47,7 +46,6 @@ const response = (status: number, body: Record<string, unknown> = {}) =>
 describe('fetchWithAuth', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    resetRefreshGraceForTests();
     vi.stubGlobal('fetch', fetchMock);
     accessToken.value = 'old-access';
     loadCachedSessionMock.mockReturnValue({

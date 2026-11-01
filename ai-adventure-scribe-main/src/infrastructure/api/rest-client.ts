@@ -80,21 +80,13 @@ const TOKEN_REFRESH_MARGIN_MS = 2 * 60 * 1000;
  * rotate the refresh token again and race the first one.
  */
 export const REFRESH_RETRY_GRACE_MS = 10 * 1000;
-let lastRefreshCompletedAt: number | null = null;
-
-function markRefreshCompleted(): void {
-  lastRefreshCompletedAt = Date.now();
-}
+const getLastRefreshCompletedAt = getTokenServiceExport<
+  typeof TokenService.getLastRefreshCompletedAt | undefined
+>('getLastRefreshCompletedAt', undefined);
 
 function isWithinRefreshGrace(): boolean {
-  return (
-    lastRefreshCompletedAt !== null && Date.now() - lastRefreshCompletedAt <= REFRESH_RETRY_GRACE_MS
-  );
-}
-
-/** Test seam: forget the last completed refresh so each test starts clean. */
-export function resetRefreshGraceForTests(): void {
-  lastRefreshCompletedAt = null;
+  const completedAt = getLastRefreshCompletedAt?.() ?? null;
+  return completedAt !== null && Date.now() - completedAt <= REFRESH_RETRY_GRACE_MS;
 }
 
 export type FetchWithAuthOptions = RequestInit & {
@@ -391,7 +383,6 @@ async function refreshExpiringSession(): Promise<string | undefined> {
   }
 
   persistSession({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken });
-  markRefreshCompleted();
   return tokens.accessToken;
 }
 
@@ -464,7 +455,17 @@ export async function fetchWithAuth(
     if (response.status !== 401 || !isV1Route(path)) return response;
 
     const session = safeLoadCachedSession();
-    if (isWithinRefreshGrace() && session?.access_token) {
+    // #1113: take the grace path only when the failed request carried an older
+    // token than the stored one, i.e. it was already in flight when a refresh
+    // finished. If it carried the current token (or we cannot tell which token
+    // it sent), the 401 is a real auth failure and falls through to refresh.
+    const sentAccessToken = refreshedAccessToken ?? preflightSession?.access_token;
+    if (
+      isWithinRefreshGrace() &&
+      session?.access_token &&
+      sentAccessToken &&
+      session.access_token !== sentAccessToken
+    ) {
       // #1113: a refresh just finished. Retry once with the stored token and
       // do not refresh again.
       logger.info('AUTH_RETRY_AFTER_401', { route: path, outcome: 'grace_retry' });
@@ -511,7 +512,6 @@ export async function fetchWithAuth(
         ? storedSession.refresh_token || tokens.refreshToken
         : tokens.refreshToken;
     persistSession({ access_token: retryAccessToken, refresh_token: retryRefreshToken });
-    markRefreshCompleted();
     const retryResponse = await request(retryAccessToken);
     if (retryResponse.status === 401) {
       logger.warn('AUTH_RETRY_AFTER_401', { route: path, outcome: 'session_expired' });

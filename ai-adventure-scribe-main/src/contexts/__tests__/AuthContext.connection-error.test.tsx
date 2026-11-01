@@ -1,7 +1,6 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { resetRefreshGraceForTests } from '../../infrastructure/api/rest-client';
 import { AuthProvider, useAuth } from '../AuthContext';
 
 import {
@@ -65,7 +64,6 @@ const tokenWithExpiry = (secondsFromNow: number): string =>
 describe('AuthContext connection failures (#565)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    resetRefreshGraceForTests();
     authTelemetryMocks.reportClientFailure.mockClear();
     clearSessionEnded();
     window.localStorage.clear();
