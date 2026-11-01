@@ -43,6 +43,7 @@ export type AuthoredStatField =
   | 'bossMoves';
 
 export interface ParsedStatBlock {
+  creatureType?: string;
   maxHp?: number;
   armorClass?: number;
   speed?: number;
@@ -201,6 +202,14 @@ export function parseAuthoredStatBlock(rawContent: string): ParsedStatBlock {
   if (!rawContent || typeof rawContent !== 'string') return parsed;
 
   const content = stripEmbeddedTables(rawContent);
+  const creatureTypes =
+    '(aberration|beast|celestial|construct|dragon|elemental|fey|fiend|giant|humanoid|monstrosity|ooze|plant|undead)\\b';
+  const typeLabel = readLabelled(content, ['Creature Type', 'Type'], creatureTypes);
+  const typeLine = content.match(
+    /(?:^|\n)\s*\*{0,2}(?:tiny|small|medium|large|huge|gargantuan)\s+(aberration|beast|celestial|construct|dragon|elemental|fey|fiend|giant|humanoid|monstrosity|ooze|plant|undead)\b/i,
+  );
+  const creatureType = typeLabel?.groups[0] ?? typeLine?.[1];
+  if (creatureType) parsed.creatureType = creatureType.toLowerCase();
 
   const record = <K extends AuthoredStatField>(field: K, value: ParsedStatBlock[K]): void => {
     parsed[field] = value;

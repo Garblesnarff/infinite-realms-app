@@ -636,6 +636,10 @@ export class CombatEncounterService {
           // the monsterId branch collapsed into the helper's fallback, which
           // returns the same 'monster'. See participant-type.ts.
           participantType: resolveParticipantType(input),
+          creatureType: input.characterId
+            ? 'humanoid'
+            : (monster?.creatureType ??
+              (typeof npcStats.type === 'string' ? npcStats.type.toLowerCase() : null)),
           // Stored, not re-derived at attack time. A participant carries no monster id, so
           // an attack-time lookup would have to work from the display name -- and combat
           // numbers duplicates ("Shadow Roach 2"), which normalizes to a key no catalog

@@ -363,6 +363,7 @@ export interface CombatParticipant {
   createdAt: Date;
   updatedAt: Date;
   participantType: string;
+  creatureType?: string | null;
   /** NULL means unset. 10 is a legal unarmored AC, not a sentinel. */
   armorClass: number | null;
   maxHp: number;

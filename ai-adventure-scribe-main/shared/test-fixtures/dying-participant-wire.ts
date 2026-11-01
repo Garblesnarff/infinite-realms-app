@@ -36,6 +36,7 @@ export const DYING_SCHOLAR_PARTICIPANT = {
   npcId: null,
   name: 'The Scholar',
   participantType: 'player',
+  creatureType: null,
   initiative: 15,
   initiativeModifier: 0,
   turnOrder: 0,

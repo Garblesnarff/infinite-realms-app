@@ -1,0 +1,1 @@
+ALTER TABLE "combat_participants" ADD COLUMN "creature_type" text;

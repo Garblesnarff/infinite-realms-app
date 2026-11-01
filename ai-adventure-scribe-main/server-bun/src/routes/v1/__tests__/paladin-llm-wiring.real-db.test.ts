@@ -169,6 +169,9 @@ const pipeline = await importWithRealDb(async () => {
 const { layOnHandsPool } = await importWithRealDb(
   () => import('../../../services/progression/paladin-features-service.js'),
 );
+const { CombatEncounterService } = await importWithRealDb(
+  () => import('../../../services/combat/combat-encounter-service.js'),
+);
 
 if (!hasRealDb) {
   console.warn(
@@ -297,6 +300,96 @@ describeWithDb('paladin Lay on Hands llm.ts wiring (#712)', () => {
 
   afterAll(async () => {
     await closeRealDb();
+  });
+
+  it('seats SRD creature types and refuses skeleton healing without spending, but heals a goblin (#746)', async () => {
+    const [{ id: freshSession }] = await db
+      .insert(gameSessions)
+      .values({ campaignId, characterId: paladinId, sessionNumber: 9, status: 'active' })
+      .returning({ id: gameSessions.id });
+    const state = await CombatEncounterService.startCombat(
+      freshSession,
+      [
+        {
+          encounterId: '',
+          characterId: paladinId,
+          name: 'Test Paladin',
+          initiativeModifier: 0,
+          initiativeRoll: 20,
+        },
+        {
+          encounterId: '',
+          monsterId: 'srd:skeleton',
+          name: 'Skeleton',
+          initiativeModifier: 0,
+          initiativeRoll: 1,
+        },
+        {
+          encounterId: '',
+          monsterId: 'srd:goblin',
+          name: 'Goblin',
+          initiativeModifier: 0,
+          initiativeRoll: 1,
+        },
+        {
+          encounterId: '',
+          monsterId: 'srd:stone-golem',
+          name: 'Stone Golem',
+          initiativeModifier: 0,
+          initiativeRoll: 1,
+        },
+      ],
+      false,
+      userId,
+    );
+    const skeleton = state.participants.find((p) => p.name === 'Skeleton')!;
+    const goblin = state.participants.find((p) => p.name === 'Goblin')!;
+    const golem = state.participants.find((p) => p.name === 'Stone Golem')!;
+    expect(skeleton.creatureType).toBe('undead');
+    expect(goblin.creatureType).toBe('humanoid');
+    expect(golem.creatureType).toBe('construct');
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 1 })
+      .where(eq(combatParticipantStatus.participantId, goblin.id));
+    const poolBefore = (await layOnHandsPool(paladinId, userId))!.remaining;
+    const generate = async (target: string, messageId: string) => {
+      const input = `I use Lay on Hands on ${target} for 2`;
+      await db
+        .insert(dialogueHistory)
+        .values({
+          sessionId: freshSession,
+          speakerType: 'player',
+          speakerId: paladinId,
+          message: input,
+        });
+      generatePrompts = [];
+      generatedText = JSON.stringify({ text: 'The scene continues.' });
+      const response = await request('/v1/llm/generate', 'POST', {
+        prompt: input,
+        player_input: input,
+        sessionId: freshSession,
+        dmReply: { messageId, inCombat: true },
+        provider: 'openrouter',
+        requestType: 'user',
+        maxTokens: 8192,
+        temperature: 0.9,
+      });
+      expect(response.status).toBe(200);
+      return generatePrompts.join('\n');
+    };
+    expect(await generate('Skeleton', '11111111-2222-4333-8444-555555555111')).toContain(
+      'no effect on undead or constructs',
+    );
+    expect((await layOnHandsPool(paladinId, userId))!.remaining).toBe(poolBefore);
+    expect(await generate('Stone Golem', '11111111-2222-4333-8444-555555555113')).toContain(
+      'no effect on undead or constructs',
+    );
+    expect((await layOnHandsPool(paladinId, userId))!.remaining).toBe(poolBefore);
+    expect(await generate('Goblin', '11111111-2222-4333-8444-555555555112')).toContain(
+      'restores 2 HP',
+    );
+    expect((await layOnHandsPool(paladinId, userId))!.remaining).toBe(poolBefore - 2);
   });
 
   it('the llm.ts wiring spends on an ordinary story turn, not on a combat-opening turn (#712)', async () => {
@@ -730,10 +823,7 @@ describeWithDb('typed long rest through the DM route posts its engine line (#751
         .select({ message: dialogueHistory.message })
         .from(dialogueHistory)
         .where(
-          and(
-            eq(dialogueHistory.sessionId, sessionId),
-            eq(dialogueHistory.speakerType, 'system'),
-          ),
+          and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'system')),
         )
     )
       .map((row) => row.message)
@@ -827,20 +917,24 @@ describeWithDb('typed long rest through the DM route posts its engine line (#751
     });
     await typeMessage(world, 'we take a long rest');
 
-    const res = await generateTurn(world, 'we take a long rest', '75175175-1111-4222-8333-444444444444');
+    const res = await generateTurn(
+      world,
+      'we take a long rest',
+      '75175175-1111-4222-8333-444444444444',
+    );
     expect(res.status).toBe(200);
 
     const lines = await engineLines(world.sessionId);
-    expect(lines).toEqual(['⚙️ Engine: Long rest — HP and spell slots restored (nothing to restore)']);
+    expect(lines).toEqual([
+      '⚙️ Engine: Long rest — HP and spell slots restored (nothing to restore)',
+    ]);
     // The rest really applied: one long-rest event is on the ledger, and it
     // is the finished row (the claim stamps hpRestored 0 too, so the proof
     // is the finish-written resource list replacing the claim's '[]').
     const events = await db
       .select({ id: restEvents.id, resourcesRestored: restEvents.resourcesRestored })
       .from(restEvents)
-      .where(
-        and(eq(restEvents.characterId, world.characterId), eq(restEvents.restType, 'long')),
-      );
+      .where(and(eq(restEvents.characterId, world.characterId), eq(restEvents.restType, 'long')));
     expect(events).toHaveLength(1);
     expect(events[0]?.resourcesRestored).not.toBe('[]');
     expect(await hpOf(world.characterId)).toBe(12);
@@ -856,7 +950,11 @@ describeWithDb('typed long rest through the DM route posts its engine line (#751
     });
     await typeMessage(world, 'I take a long rest');
 
-    const res = await generateTurn(world, 'I take a long rest', '75175175-2222-4333-8444-555555555555');
+    const res = await generateTurn(
+      world,
+      'I take a long rest',
+      '75175175-2222-4333-8444-555555555555',
+    );
     expect(res.status).toBe(200);
 
     // Exact line: 15 HP (5 -> 20), slots were spent and restored, and the
@@ -883,18 +981,24 @@ describeWithDb('typed long rest through the DM route posts its engine line (#751
     });
     await typeMessage(world, 'we take a long rest');
 
-    const first = await generateTurn(world, 'we take a long rest', '75175175-3333-4444-8555-666666666666');
+    const first = await generateTurn(
+      world,
+      'we take a long rest',
+      '75175175-3333-4444-8555-666666666666',
+    );
     expect(first.status).toBe(200);
-    const second = await generateTurn(world, 'we take a long rest', '75175175-3333-4444-8555-666666666666');
+    const second = await generateTurn(
+      world,
+      'we take a long rest',
+      '75175175-3333-4444-8555-666666666666',
+    );
     expect(second.status).toBe(200);
 
     expect(await engineLines(world.sessionId)).toHaveLength(1);
     const events = await db
       .select({ id: restEvents.id })
       .from(restEvents)
-      .where(
-        and(eq(restEvents.characterId, world.characterId), eq(restEvents.restType, 'long')),
-      );
+      .where(and(eq(restEvents.characterId, world.characterId), eq(restEvents.restType, 'long')));
     expect(events).toHaveLength(1);
     expect(await hpOf(world.characterId)).toBe(12);
   });
@@ -1405,7 +1509,11 @@ describeWithDb('typed equip through the DM generate route (#1059)', () => {
     expect(await shortbowEquipped(world)).toBe(false);
 
     generatePrompts = [];
-    const res = await generateEquipTurn(world, 'I draw my shortbow', '10591059-1111-4222-8333-444444444444');
+    const res = await generateEquipTurn(
+      world,
+      'I draw my shortbow',
+      '10591059-1111-4222-8333-444444444444',
+    );
     expect(res.status).toBe(200);
 
     // The equip landed on the sheet rows the combat readers read.
@@ -1433,7 +1541,11 @@ describeWithDb('typed equip through the DM generate route (#1059)', () => {
 
   it('a retried turn equips nothing twice and posts no second line', async () => {
     const world = await seedEquipWorld('1059-retry');
-    const first = await generateEquipTurn(world, 'I draw my shortbow', '10591059-2222-4333-8444-555555555555');
+    const first = await generateEquipTurn(
+      world,
+      'I draw my shortbow',
+      '10591059-2222-4333-8444-555555555555',
+    );
     expect(first.status).toBe(200);
     expect(await shortbowEquipped(world)).toBe(true);
     expect(await equipLines(world)).toHaveLength(1);
@@ -1441,7 +1553,11 @@ describeWithDb('typed equip through the DM generate route (#1059)', () => {
     // Retry replays the same saved player message with no new save: the
     // resolver sees the weapon already in hand and resolves nothing again.
     generatePrompts = [];
-    const second = await generateEquipTurn(world, 'I draw my shortbow', '10591059-2222-4333-8444-555555555555');
+    const second = await generateEquipTurn(
+      world,
+      'I draw my shortbow',
+      '10591059-2222-4333-8444-555555555555',
+    );
     expect(second.status).toBe(200);
     expect(await equipLines(world)).toHaveLength(1);
     expect(generatePrompts.join('\n')).toContain('already equipped');
@@ -1450,7 +1566,11 @@ describeWithDb('typed equip through the DM generate route (#1059)', () => {
   it('naming a weapon the character does not carry hands the DM the refusal, and nothing changes', async () => {
     const world = await seedEquipWorld('1059-refusal');
     generatePrompts = [];
-    const res = await generateEquipTurn(world, 'I equip the longbow', '10591059-3333-4444-8555-666666666666');
+    const res = await generateEquipTurn(
+      world,
+      'I equip the longbow',
+      '10591059-3333-4444-8555-666666666666',
+    );
     expect(res.status).toBe(200);
     expect(generatePrompts.join('\n')).toContain('not carrying');
     expect(await shortbowEquipped(world)).toBe(false);
