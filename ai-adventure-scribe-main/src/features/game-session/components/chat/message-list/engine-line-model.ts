@@ -124,8 +124,9 @@ const isThePlayer = (name: string, roster: readonly EngineRosterRow[] = []): boo
 
 /**
  * "{target} is now at {n} HP" for anyone but the player becomes a tier (#87 item 3): "is down" at
- * 0 HP or below, otherwise "is bloodied" at or under half of the roster's max HP and "is wounded"
- * above it (the tier words of combat-rules-prompts.ts). Without a max HP the tier is "wounded".
+ * 0 HP or below, otherwise "is badly wounded" at or under half of the roster's max HP and
+ * "is wounded" above it. "badly wounded" is plain player wording, not the DM prompt's tier words
+ * (combat-rules-prompts.ts). Without a max HP the tier is "wounded".
  */
 export function hideEnemyHp(text: string, roster: readonly EngineRosterRow[] = []): string {
   return text.replace(
@@ -136,7 +137,7 @@ export function hideEnemyHp(text: string, roster: readonly EngineRosterRow[] = [
       if (hp <= 0) return `${target} is down`;
       const max = rosterRowFor(target, roster)?.maxHitPoints;
       if (max && Number.isFinite(max) && hp > max / 2) return `${target} is wounded`;
-      return max && Number.isFinite(max) ? `${target} is bloodied` : `${target} is wounded`;
+      return max && Number.isFinite(max) ? `${target} is badly wounded` : `${target} is wounded`;
     },
   );
 }

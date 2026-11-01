@@ -20,15 +20,23 @@ export function deduplicateNarrativeParagraphs(rawParagraphs: string[]): string[
   }
 
   const result: string[] = [];
-  const seenStarts: string[] = [];
+  const seenNorms: string[] = [];
 
   for (let i = 0; i < rawParagraphs.length; i++) {
     const currentNorm = normalizeNarrativeText(rawParagraphs[i]);
-    const currentStart = currentNorm.slice(0, 60);
     let isDuplicate = false;
 
-    // Check 1: This paragraph starts the same as a previous one (simple dup)
-    if (seenStarts.some((s) => s === currentStart)) {
+    // Check 1: This paragraph is an earlier one verbatim, or a cut-off copy of it that ends at a
+    // word boundary. A longer paragraph that merely shares an earlier one's opening is kept.
+    if (
+      seenNorms.some(
+        (s) =>
+          s === currentNorm ||
+          (currentNorm !== '' &&
+            s.startsWith(currentNorm) &&
+            /^[\s\p{P}]/u.test(s.slice(currentNorm.length))),
+      )
+    ) {
       isDuplicate = true;
     }
 
@@ -85,7 +93,7 @@ export function deduplicateNarrativeParagraphs(rawParagraphs: string[]): string[
     }
 
     if (!isDuplicate) {
-      seenStarts.push(currentStart);
+      seenNorms.push(currentNorm);
       result.push(rawParagraphs[i]);
     }
   }
