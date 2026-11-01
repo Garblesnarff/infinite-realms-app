@@ -6,6 +6,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resolveRaceSpeed } from '../../../../../../../shared/srd-race-speed-data';
 import { buildCharacterSheet } from '../useOverhaulViewModel';
 
 import type { Character } from '@/types/character';
@@ -81,5 +82,35 @@ describe('#757 Halfling and Dwarf speed in the in-game panel', () => {
     expect(getBaseSpeed(character)).toBe(25);
     expect(calculateAllCharacterStats(character).speed).toBe(25);
     expect(buildCharacterSheet(character).speed).toBe(25);
+  });
+});
+
+describe('#1317 the overhaul SPD tile reads the engine race speed', () => {
+  beforeEach(() => {
+    getCharacterEquipment.mockResolvedValue([]);
+    getCharacterSpells.mockResolvedValue({ cantrips: [], spells: [] });
+  });
+
+  it('a gnome shows 25 ft on the overhaul tile', async () => {
+    const character = await loadDriven('Gnome', '');
+
+    expect(buildCharacterSheet(character).speed).toBe(25);
+  });
+
+  it('"Wood-Elf" resolves to 35 ft on the overhaul tile', async () => {
+    const character = await loadDriven('Elf', 'Wood-Elf');
+
+    expect(buildCharacterSheet(character).speed).toBe(35);
+  });
+
+  it.each([
+    ['Gnome', ''],
+    ['Elf', 'Wood-Elf'],
+    ['Elf', 'Wood Elf'],
+    ['Halfling', 'Lightfoot Halfling'],
+  ])('the tile for %s / %s shows the speed the engine seats', async (race, subrace) => {
+    const character = await loadDriven(race, subrace);
+
+    expect(buildCharacterSheet(character).speed).toBe(resolveRaceSpeed(race, subrace));
   });
 });
