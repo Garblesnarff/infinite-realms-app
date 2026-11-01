@@ -354,15 +354,13 @@ describeWithDb('paladin Lay on Hands llm.ts wiring (#712)', () => {
       .where(eq(combatParticipantStatus.participantId, goblin.id));
     const poolBefore = (await layOnHandsPool(paladinId, userId))!.remaining;
     const generate = async (target: string, messageId: string) => {
-      const input = `I use Lay on Hands on ${target} for 2`;
-      await db
-        .insert(dialogueHistory)
-        .values({
-          sessionId: freshSession,
-          speakerType: 'player',
-          speakerId: paladinId,
-          message: input,
-        });
+      const input = `I use Lay on Hands on ${target} for 1`;
+      await db.insert(dialogueHistory).values({
+        sessionId: freshSession,
+        speakerType: 'player',
+        speakerId: paladinId,
+        message: input,
+      });
       generatePrompts = [];
       generatedText = JSON.stringify({ text: 'The scene continues.' });
       const response = await request('/v1/llm/generate', 'POST', {
@@ -387,9 +385,14 @@ describeWithDb('paladin Lay on Hands llm.ts wiring (#712)', () => {
     );
     expect((await layOnHandsPool(paladinId, userId))!.remaining).toBe(poolBefore);
     expect(await generate('Goblin', '11111111-2222-4333-8444-555555555112')).toContain(
-      'restores 2 HP',
+      'restores 1 HP',
     );
-    expect((await layOnHandsPool(paladinId, userId))!.remaining).toBe(poolBefore - 2);
+    expect((await layOnHandsPool(paladinId, userId))!.remaining).toBe(poolBefore - 1);
+    const [goblinStatus] = await db
+      .select({ hp: combatParticipantStatus.currentHp })
+      .from(combatParticipantStatus)
+      .where(eq(combatParticipantStatus.participantId, goblin.id));
+    expect(goblinStatus.hp).toBe(2);
   });
 
   it('the llm.ts wiring spends on an ordinary story turn, not on a combat-opening turn (#712)', async () => {
