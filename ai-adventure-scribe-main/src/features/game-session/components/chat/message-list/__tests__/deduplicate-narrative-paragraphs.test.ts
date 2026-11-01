@@ -7,10 +7,18 @@ const FIRST =
 
 describe('deduplicateNarrativeParagraphs (#750)', () => {
   it('drops a later paragraph that is an earlier one cut short', () => {
-    const cutShort =
-      'The torchlight gutters as the goblin captain lunges across the broken bridge, and the rope groans.';
+    // A true word-boundary prefix of FIRST, cut mid-sentence. Shorter than Check 2's
+    // 80-character window, so only Check 1 (the prefix rule) can drop it.
+    const cutAt = FIRST.indexOf(' lunges') + ' lunges'.length;
+    const cutShort = FIRST.slice(0, cutAt);
 
+    expect(FIRST[cutAt]).toBe(' ');
+    expect(cutShort.length).toBeLessThan(80);
     expect(deduplicateNarrativeParagraphs([FIRST, cutShort])).toEqual([FIRST]);
+  });
+
+  it('drops a verbatim repeat of an earlier paragraph', () => {
+    expect(deduplicateNarrativeParagraphs([FIRST, FIRST])).toEqual([FIRST]);
   });
 
   it('keeps a paragraph that only matches an earlier one mid-word', () => {
