@@ -979,6 +979,8 @@ describeWithDb('package gear reaches the session (#1007)', () => {
       const { charactersRoutes } = await import('../characters.ts');
       const { issue1784DataRoutes } = await import('../issue-1784-data.ts');
       const { inventoryRoutes } = await import('../inventory.ts');
+      const { tacticalMapRoutes } = await import('../tactical-maps.ts');
+      const { combatRoutes } = await import('../combat/index.ts');
       const intentService = await import('../../../services/combat/combat-intent-service.ts');
       const dataAccess = await import('../../../services/combat/data-access.ts');
       return {
@@ -986,6 +988,8 @@ describeWithDb('package gear reaches the session (#1007)', () => {
         charactersRoutes,
         issue1784DataRoutes,
         inventoryRoutes,
+        tacticalMapRoutes,
+        combatRoutes,
         intentService,
         dataAccess,
       };
@@ -994,6 +998,8 @@ describeWithDb('package gear reaches the session (#1007)', () => {
       .createRequestPipelineApp()
       .use(pipeline.charactersRoutes)
       .use(pipeline.inventoryRoutes)
+      .use(pipeline.tacticalMapRoutes)
+      .use(pipeline.combatRoutes)
       .use(pipeline.issue1784DataRoutes);
     executeCombatIntent = pipeline.intentService.executeCombatIntent as typeof executeCombatIntent;
     getLegalCombatActions = pipeline.intentService
@@ -1358,6 +1364,80 @@ describeWithDb('package gear reaches the session (#1007)', () => {
       expect(outcome.weaponResolution?.substituted).toBe(false);
       expect(await arrowQuantity()).toEqual([expected]);
     }
+  });
+
+  it('two light-crossbow attacks through the real route spend two bolts (#1060)', async () => {
+    const clientModule = (path: string) => import(`../../../../../src/${path}`);
+    const { buildStarterCharacterSeed } = await clientModule(
+      'services/character/starter-character-seeding',
+    );
+    const { prepareCharacterPayload } = await clientModule('services/user-data-payload-helpers');
+    const [{ id: campaignId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('bolts-1060') })
+      .returning({ id: campaigns.id });
+    cleanup.push(async () => db.delete(campaigns).where(eq(campaigns.id, campaignId)));
+    const seed = buildStarterCharacterSeed(
+      {
+        name: 'Bolt Probe',
+        race: 'Human',
+        class: 'Fighter',
+        level: 1,
+        background: 'Outlander',
+        ability_scores: {
+          strength: 10,
+          dexterity: 16,
+          constitution: 14,
+          intelligence: 10,
+          wisdom: 14,
+          charisma: 8,
+        },
+        equipment: ['Leather Armor', 'Crossbow, light', 'case with 20 crossbow bolts'],
+        skills: [],
+        languages: [],
+      },
+      campaignId,
+    );
+    const id = await create({
+      ...prepareCharacterPayload(seed as unknown as Record<string, unknown>),
+      name: testId('bolts-1060'),
+    });
+    const bolts = async () =>
+      (await equipmentRows(id)).find((row) => row.item_name === 'Crossbow Bolts (20)')?.quantity;
+    expect(await bolts()).toBe(20);
+    const { encounterId, heroId, foeId } = await seat(id);
+    for (const expected of [19, 18]) {
+      await resetTurn(encounterId);
+      const [{ version }] = await db
+        .select({ version: combatEncounters.version })
+        .from(combatEncounters)
+        .where(eq(combatEncounters.id, encounterId));
+      const response = await app.handle(
+        new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            intent: {
+              type: 'attack',
+              actorId: heroId,
+              targetId: foeId,
+              weaponId: 'Crossbow, light',
+              expectedVersion: version,
+              d20: 5,
+            },
+            source: 'player',
+            origin: 'action_bar',
+          }),
+        }),
+      );
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(await response.json()).toMatchObject({
+        accepted: true,
+        result: { weaponResolution: { resolved: 'Crossbow, light', substituted: false } },
+      });
+      expect(await bolts()).toBe(expected);
+    }
+    expect((await equipmentRows(id)).find((row) => /case/i.test(row.item_name))?.quantity).toBe(1);
   });
 
   it('premade rogue without arrows: the equipped shortbow is refused for ammunition, never swapped to Unarmed (#1013)', async () => {
