@@ -426,4 +426,67 @@ describeWithDb('paladin Divine Sense tracking (#712)', () => {
       );
     expect(afterPlayer.remaining).toBe(1);
   });
+  it('versionless DM Divine Sense resolves through the real route (#1286 baseline)', async () => {
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: 1 })
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, divineSenseFeatureId),
+        ),
+      );
+    const [{ id: testSession }] = await db
+      .insert(gameSessions)
+      .values({ campaignId, characterId: paladinId, sessionNumber: 10, status: 'active' })
+      .returning({ id: gameSessions.id });
+    const [{ id: testEncounter }] = await db
+      .insert(combatEncounters)
+      .values({
+        sessionId: testSession,
+        status: 'active',
+        currentRound: 1,
+        currentTurnOrder: 0,
+        version: 1,
+      })
+      .returning({ id: combatEncounters.id });
+    const [{ id: testParticipant }] = await db
+      .insert(combatParticipants)
+      .values({
+        encounterId: testEncounter,
+        characterId: paladinId,
+        name: 'Test Paladin',
+        participantType: 'player',
+        turnOrder: 0,
+        initiative: 10,
+        maxHp: 12,
+      })
+      .returning({ id: combatParticipants.id });
+    await db
+      .insert(combatParticipantStatus)
+      .values({ participantId: testParticipant, currentHp: 7, maxHp: 12, isConscious: true });
+    const response = await app!.handle(
+      new Request(`http://localhost/v1/combat/${testEncounter}/intent`, {
+        method: 'POST',
+        headers: { authorization: 'Bearer 712-test-token', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          intent: { type: 'divine_sense', actorId: testParticipant },
+          source: 'dm',
+          dmStartedAt: 1_700_000_000_000,
+          origin: 'typed',
+        }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    const [pool] = await db
+      .select({ remaining: characterFeatures.usesRemaining })
+      .from(characterFeatures)
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, divineSenseFeatureId),
+        ),
+      );
+    expect(pool.remaining).toBe(0);
+  });
 });
