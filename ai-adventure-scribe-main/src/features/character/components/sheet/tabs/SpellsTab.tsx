@@ -1,7 +1,6 @@
 import { Wand2, Circle, Book, Loader2 } from 'lucide-react';
 import React from 'react';
 
-
 import SpellListItem from './components/SpellListItem';
 import SpellcastingOverview from './spells/SpellcastingOverview';
 import SpellSlotsSection from './spells/SpellSlotsSection';
