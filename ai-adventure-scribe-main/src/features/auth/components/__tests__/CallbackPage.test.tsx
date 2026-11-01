@@ -170,4 +170,70 @@ describe('CallbackPage', () => {
     await screen.findByText('Authentication Error');
     expect(navigate).toHaveBeenCalledWith('/');
   });
+
+  it('shows a wait message when the exchange returns the rate-limit body (#753)', async () => {
+    // The body createSimpleRateLimit returns: server-bun/src/middleware/rate-limit.ts:472-485.
+    window.history.replaceState(null, '', '/auth/callback?code=one-time-code');
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 429,
+      json: async () => ({
+        error: {
+          name: 'RateLimitError',
+          message: 'Too many requests, please try again later',
+          code: 'RATE_LIMIT_EXCEEDED',
+          statusCode: 429,
+          details: { scope: 'ip', limit: 10, window: 60, retryAfter: 30 },
+        },
+      }),
+    });
+
+    render(<CallbackPage />);
+
+    expect(
+      await screen.findByText('Too many sign-ins at once. Wait a minute, then try again.'),
+    ).toBeTruthy();
+    expect(screen.queryByText('An error occurred during authentication')).toBeNull();
+    expect(screen.queryByText('Authentication failed - no access token received')).toBeNull();
+    expect(screen.queryByText('Redirecting...')).toBeNull();
+    await act(async () => {
+      screen.getByRole('button', { name: 'Try again' }).click();
+    });
+    expect(navigate).toHaveBeenCalledWith('/');
+  });
+
+  it('keeps the generic message when the exchange fails for another reason', async () => {
+    vi.useFakeTimers();
+    window.history.replaceState(null, '', '/auth/callback?code=one-time-code');
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({ error: 'invalid_code' }),
+    });
+
+    render(<CallbackPage />);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000);
+    });
+    vi.useRealTimers();
+    expect(screen.getByText('An error occurred during authentication')).toBeTruthy();
+    expect(screen.getByText('Redirecting...')).toBeTruthy();
+    expect(
+      screen.queryByText('Too many sign-ins at once. Wait a minute, then try again.'),
+    ).toBeNull();
+    expect(navigate).toHaveBeenCalledWith('/');
+  });
+
+  it('keeps the generic message for other callback errors', async () => {
+    window.history.replaceState(null, '', '/auth/callback');
+
+    render(<CallbackPage />);
+
+    expect(
+      await screen.findByText('Authentication failed - no access token received'),
+    ).toBeTruthy();
+    expect(screen.getByText('Redirecting...')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  });
 });

@@ -18,6 +18,23 @@ import logger from '@/lib/logger';
 /** Ceiling for the one-time code exchange so a hung backend cannot leave the
  *  page on "Completing sign in..." forever (#565). */
 const AUTH_EXCHANGE_TIMEOUT_MS = 15_000;
+const RATE_LIMIT_MESSAGE = 'Too many sign-ins at once. Wait a minute, then try again.';
+const MISSING_TOKEN_MESSAGE = 'Authentication failed - no access token received';
+
+/** Our exchange limiter answers 429 with `{ error: { code: 'RATE_LIMIT_EXCEEDED' } }`
+ *  (`server-bun/src/middleware/rate-limit.ts`). A provider `too_many_requests` never
+ *  reaches this page: the callback redirect is `/?error=auth_failed` with no code. */
+async function exchangeIsRateLimited(response: Response): Promise<boolean> {
+  if (response.status === 429) return true;
+  const body = await response.json().catch(() => null);
+  if (!body || typeof body !== 'object') return false;
+  const error = (body as { error?: unknown }).error;
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: unknown }).code === 'RATE_LIMIT_EXCEEDED'
+  );
+}
 
 function safeReturnTo(value: string | null): string | null {
   if (!value || !value.startsWith('/') || value.startsWith('//')) return null;
@@ -57,6 +74,10 @@ export default function CallbackPage() {
           );
 
           if (!response.ok) {
+            if (await exchangeIsRateLimited(response)) {
+              setError(RATE_LIMIT_MESSAGE);
+              return;
+            }
             throw new Error(`Token exchange failed (${response.status})`);
           }
 
@@ -73,7 +94,7 @@ export default function CallbackPage() {
 
         if (!accessToken) {
           logger.error('No auth token received from callback');
-          setError('Authentication failed - no access token received');
+          setError(MISSING_TOKEN_MESSAGE);
           setTimeout(() => navigate('/'), 3000);
           return;
         }
@@ -118,7 +139,17 @@ export default function CallbackPage() {
           <>
             <h1 className="text-2xl font-bold text-destructive mb-4">Authentication Error</h1>
             <p className="text-muted-foreground">{error}</p>
-            <p className="text-sm text-muted-foreground mt-4">Redirecting...</p>
+            {error === RATE_LIMIT_MESSAGE ? (
+              <button
+                type="button"
+                className="mt-4 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+                onClick={() => navigate('/')}
+              >
+                Try again
+              </button>
+            ) : (
+              <p className="text-sm text-muted-foreground mt-4">Redirecting...</p>
+            )}
           </>
         ) : (
           <>
