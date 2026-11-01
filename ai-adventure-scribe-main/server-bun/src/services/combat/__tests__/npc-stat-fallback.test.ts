@@ -300,9 +300,12 @@ describe('bestiary display name', () => {
   });
 
   test('a creature that resolved on the SRD rung keeps its declared name', () => {
-    const monster = resolveCombatantStats(ACADEMY, 'srd:goblin', 'Doorkeeper');
+    // #1115: the SRD rung is reached by name match only, so the fixture names the
+    // SRD creature; the old Doorkeeper-over-a-goblin-id fixture is the incident
+    // pattern and now lands generic instead of reaching this branch.
+    const monster = resolveCombatantStats(ACADEMY, 'srd:goblin', 'Goblin');
     expect(monster?.source).toBe('srd');
-    expect(bestiaryDisplayName('Doorkeeper', monster)).toBe('Doorkeeper');
+    expect(bestiaryDisplayName('Goblin', monster)).toBe('Goblin');
   });
 
   test('a combatant that is not a campaign creature keeps its name', () => {

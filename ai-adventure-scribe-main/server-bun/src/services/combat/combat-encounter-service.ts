@@ -552,9 +552,10 @@ export class CombatEncounterService {
           // Glass Prowler incident was undiagnosable because neither the stored reply nor
           // the log said whether `srd:glass-hide-ape` came from the DM's reply or the
           // server's name-to-monster lookup: `templateSource` is `campaign` when the
-          // campaign block won, `dm` when the DM supplied the id, and `lookup` when the
-          // server resolved by name. Fires for generic seats too, so a seat with no
-          // template at all still leaves a line saying so.
+          // campaign block won, `dm` when the DM supplied the id, `lookup` when the
+          // server resolved by name, and `generic` when no rung supplied a template.
+          // Fires for generic seats too, so a seat with no template at all still leaves
+          // a line saying so.
           logger.info({
             msg: 'COMBAT_PARTICIPANT_SEATED',
             sessionId,
@@ -562,7 +563,13 @@ export class CombatEncounterService {
             combatantName: participantName,
             templateId: monster?.monsterId ?? input.monsterId ?? null,
             templateSource:
-              monster?.source === 'campaign' ? 'campaign' : input.monsterId ? 'dm' : 'lookup',
+              monster === null
+                ? 'generic'
+                : monster.source === 'campaign'
+                  ? 'campaign'
+                  : input.monsterId
+                    ? 'dm'
+                    : 'lookup',
             statSource: monster?.source ?? 'generic',
             resolvedAs: monster?.monsterName ?? null,
             dmMonsterId: input.monsterId ?? null,

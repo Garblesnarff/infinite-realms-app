@@ -188,6 +188,31 @@ describe('partial and unreadable authored blocks', () => {
     expect(info.mock.calls[0]![0]).toMatchObject({ filledFromFallback: ['armorClass'] });
   });
 
+  test('a mismatched DM id does not fill a bible block’s gaps from its own SRD block (#1115)', () => {
+    // The Half Stat Fiend authors HP 60 and Speed 40 but no AC. The DM id names the
+    // stone golem (AC 17); the gaps must come from the generic rung, not the id's block.
+    const stats = resolveCombatantStats(ETERNAL_FEAST, 'srd:stone_golem', 'Half Stat Fiend');
+    expect(stats).toMatchObject({
+      source: 'campaign',
+      maxHp: 60,
+      speed: 40,
+      armorClass: 12, // generic, not the golem's 17
+      filledFromFallback: expect.arrayContaining(['armorClass']),
+    });
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(info.mock.calls[0]![0]).toMatchObject({ filledFrom: 'generic' });
+  });
+
+  test('an unreadable chunk with a mismatched SRD id still lands generic (#1115)', () => {
+    // The chunk exists but nothing parsed, so the SRD lookup keys on the entity name,
+    // not the DM id: 'Unreadable Horror' matches no SRD entry, so the seat is generic
+    // rather than the golem the id names.
+    const stats = resolveCombatantStats(ETERNAL_FEAST, 'srd:stone_golem', 'Unreadable Horror');
+
+    expect(stats).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(2);
+  });
+
   test('an unreadable chunk logs the parse failure and falls through rather than guessing', () => {
     const stats = resolveCombatantStats(ETERNAL_FEAST, 'unreadable_horror', 'Unreadable Horror');
 
@@ -202,10 +227,29 @@ describe('partial and unreadable authored blocks', () => {
 });
 
 describe('falling through the ladder', () => {
-  test('a campaign miss with a real SRD id lands on the SRD rung', () => {
-    const stats = resolveCombatantStats(ETERNAL_FEAST, 'srd:stone_golem', 'Doorkeeper');
-    expect(stats).toMatchObject({ source: 'srd', maxHp: 178, armorClass: 17 });
-    expect(warn).not.toHaveBeenCalled();
+  test("a campaign miss with an unmatched DM id lands on generic, not the id's SRD block (#1115)", () => {
+    // The Doorkeeper is not in the bible; the DM id names a stone golem, but the id
+    // alone must not seat that block — a 178 HP stone golem for a doorkeeper is the
+    // incident pattern. The seat fights at generic stats and the downgrade is logged.
+    expect(resolveCombatantStats(ETERNAL_FEAST, 'srd:stone_golem', 'Doorkeeper')).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]![0]).toMatchObject({
+      monsterId: 'srd:stone_golem',
+      combatantName: 'Doorkeeper',
+      armorClass: 12,
+      maxHp: 11,
+    });
+  });
+
+  test('a name-matched SRD block wins over a DM id naming another creature (#1115)', () => {
+    // The name is the creature's identity: a Goblin seated over a stone-golem id
+    // fights as a goblin (7 HP), not as a golem and not as a generic placeholder.
+    expect(resolveCombatantStats(EMPTY_INDEX, 'srd:stone-golem', 'Goblin')).toMatchObject({
+      source: 'srd',
+      monsterName: 'Goblin',
+      maxHp: 7,
+      armorClass: 15,
+    });
   });
 
   test('a campaign miss is recorded when the campaign does have authored creatures', () => {
@@ -236,8 +280,17 @@ describe('falling through the ladder', () => {
     expect(String(payload.consequence)).toContain('11 HP');
   });
 
-  test('a campaign with no bible at all resolves SRD creatures normally', () => {
-    expect(resolveCombatantStats(EMPTY_INDEX, 'srd:stone_golem')).toMatchObject({
+  test('an id with no name lands on generic when there is no bible entry to corroborate it (#1115)', () => {
+    // No creature name means no name match is possible, and the id alone is the
+    // uncorroborated signal #1115 removes. Production DM combatants carry names;
+    // a nameless seat is already flagged UNKNOWN_CREATURE at seating.
+    expect(resolveCombatantStats(EMPTY_INDEX, 'srd:stone_golem')).toBeNull();
+  });
+
+  test('a bible-less campaign still seats an SRD creature by name (#1115)', () => {
+    // The SRD rung survives for bible-less campaigns through the name path: a Stone
+    // Golem named outright fights as one even with no bible behind it.
+    expect(resolveCombatantStats(EMPTY_INDEX, 'srd:stone_golem', 'Stone Golem')).toMatchObject({
       source: 'srd',
       maxHp: 178,
       armorClass: 17,
@@ -260,9 +313,20 @@ describe('falling through the ladder', () => {
 });
 
 describe('the run-15 SRD normalization fix still holds through the ladder', () => {
-  test('srd:stone_golem, srd:stone-golem and "Stone Golem" all reach 178 HP / AC 17', () => {
-    for (const id of ['srd:stone_golem', 'srd:stone-golem', 'stone_golem', 'Stone Golem']) {
-      expect(resolveCombatantStats(EMPTY_INDEX, id)).toMatchObject({ maxHp: 178, armorClass: 17 });
+  test('stone-golem name spellings all reach 178 HP / AC 17 through the name path (#1115)', () => {
+    // #1115: the id alone no longer seats a block, so the normalization proof runs
+    // through the name argument (and agreeing ids), not through id-only inputs.
+    for (const name of ['Stone Golem', 'stone_golem', 'STONE GOLEM', 'stone-golem']) {
+      expect(resolveCombatantStats(EMPTY_INDEX, null, name)).toMatchObject({
+        maxHp: 178,
+        armorClass: 17,
+      });
+    }
+    for (const id of ['srd:stone_golem', 'srd:stone-golem']) {
+      expect(resolveCombatantStats(EMPTY_INDEX, id, 'Stone Golem')).toMatchObject({
+        maxHp: 178,
+        armorClass: 17,
+      });
     }
   });
 });

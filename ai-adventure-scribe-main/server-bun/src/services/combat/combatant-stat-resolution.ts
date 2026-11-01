@@ -85,7 +85,18 @@ export function resolveCombatantStats(
   // still have supplied real numbers, and the true bottom-of-ladder warn is issued below
   // with the campaign context attached. Its near-miss log is NOT suppressed: that one
   // records an inference, which is worth seeing wherever it happens.
-  const srd = resolveSrdMonsterStats(monsterId, name, context, { suppressFallbackWarn: true });
+  //
+  // #1115: the SRD entry is resolved by NAME match only, never from the DM's monster_id
+  // (an id can name any block for any creature, which is the incident this fixes). On a
+  // bible hit the lookup key is the bible entry's own name — the SRD counterpart of the
+  // creature the bible matched — so a mismatched id cannot fill the bible block's gaps
+  // with another creature's numbers; on a bible miss it is the seat's name. An
+  // unparseable bible chunk counts the same way: its entityName still keys the lookup,
+  // and a name that matches no SRD entry lands generic. A name-matched SRD block is never
+  // a wrong block in that sense — the name is the creature's identity.
+  const srd = resolveSrdMonsterStats(null, authored?.entityName ?? name, context, {
+    suppressFallbackWarn: true,
+  });
 
   if (authored) {
     const { parsed, coverage } = authored;

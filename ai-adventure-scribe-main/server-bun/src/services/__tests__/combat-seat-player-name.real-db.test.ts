@@ -461,8 +461,8 @@ describeWithDb('a seated enemy never takes the player character name (#2438)', (
       const state = await startAndRecord(id, participants as never);
 
       // No bible entry, no SRD entry, no DM id: the seat fights at generic stats, and
-      // the line says so (templateSource 'lookup' is the route attempted, statSource
-      // 'generic' is what supplied the stats). The player seat emits nothing.
+      // the line says so (templateSource 'generic' — no rung supplied a template;
+      // statSource 'generic' is what supplied the stats). The player seat emits nothing.
       const seats = seatedLogs.filter((payload) => payload.sessionId === id);
       expect(seats).toHaveLength(1);
       expect(seats[0]).toMatchObject({
@@ -470,11 +470,42 @@ describeWithDb('a seated enemy never takes the player character name (#2438)', (
         encounterId: state.encounter.id,
         combatantName: 'Mossback Brute',
         templateId: null,
-        templateSource: 'lookup',
+        templateSource: 'generic',
         statSource: 'generic',
         resolvedAs: null,
         dmMonsterId: null,
       });
+    });
+
+    test('a DM id naming an SRD block the name does not match still seats generic (#1115)', async () => {
+      const id = await newSession(11, true);
+      const participants = buildEntryParticipants(
+        player(),
+        [{ name: 'Mossback Brute', monsterId: 'srd:dire-wolf', count: 1 }],
+        {
+          sceneDescription: 'A mossback brute lumbers forward.',
+          source: 'combat_transition',
+        },
+      );
+      const state = await startAndRecord(id, participants as never);
+
+      // The name matches nothing in the bible and nothing in the SRD catalog, so the
+      // dire-wolf id alone must not seat that block: the seat fights at generic stats
+      // (11 HP, unscaled — a generic seat is not party-scaled) and the line says
+      // 'generic', not 'dm'.
+      const seats = seatedLogs.filter((payload) => payload.sessionId === id);
+      expect(seats).toHaveLength(1);
+      expect(seats[0]).toMatchObject({
+        msg: 'COMBAT_PARTICIPANT_SEATED',
+        encounterId: state.encounter.id,
+        combatantName: 'Mossback Brute',
+        templateId: 'srd:dire-wolf',
+        templateSource: 'generic',
+        statSource: 'generic',
+        resolvedAs: null,
+        dmMonsterId: 'srd:dire-wolf',
+      });
+      expect(state.participants.find((participant) => !participant.characterId)?.maxHp).toBe(11);
     });
   });
 });
