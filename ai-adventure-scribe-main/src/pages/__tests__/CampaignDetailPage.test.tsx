@@ -21,6 +21,7 @@ const state = vi.hoisted(() => ({
   retry: vi.fn(),
   resolveOrCreate: vi.fn(),
   seed: vi.fn(),
+  listSessions: vi.fn(),
 }));
 
 vi.mock('@/hooks/use-starter-campaigns', () => ({
@@ -42,7 +43,7 @@ vi.mock('@/services/character/starter-character-seeding', async (importOriginal)
   const actual = await importOriginal<typeof StarterCharacterSeeding>();
   return { ...actual, seedStarterCharacter: state.seed };
 });
-vi.mock('@/services/user-data-api', () => ({ userDataApi: {} }));
+vi.mock('@/services/user-data-api', () => ({ userDataApi: { listSessions: state.listSessions } }));
 
 function campaign(overrides: Partial<StarterCampaign>): StarterCampaign {
   return {
@@ -161,6 +162,8 @@ beforeEach(() => {
   state.retry.mockClear();
   state.resolveOrCreate.mockReset();
   state.seed.mockReset();
+  state.listSessions.mockReset();
+  state.listSessions.mockResolvedValue([]);
   state.resolveOrCreate.mockResolvedValue('camp9');
   state.seed.mockResolvedValue({ id: 'char9' });
   window.sessionStorage.clear();
@@ -335,6 +338,68 @@ describe('CampaignDetailPage heroes (#89)', () => {
     expect(navTarget.pathname).toBe('/app/game/camp9');
     expect(navTarget.search).toContain('character=char9');
     expect(navTarget.search).toContain('starterCampaign=c1');
+    expect(navTarget.search).toContain('new=true');
+  });
+
+  it('continues the saved hero and offers a separate fresh playthrough', async () => {
+    state.campaign = campaign({});
+    state.user = { id: 'u1' };
+    state.templates = [template()];
+    state.listSessions.mockResolvedValue([
+      {
+        starter_campaign_id: 'c1',
+        character_id: 'old-hero',
+        character: { name: 'Bram' },
+        status: 'completed',
+      },
+    ]);
+    renderPage();
+    expect(screen.getByRole('button', { name: 'Start a fresh playthrough' })).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Play as Bram'));
+    expect(await screen.findByText('game page')).toBeInTheDocument();
+    expect(state.seed).not.toHaveBeenCalled();
+    expect(navTarget.search).toContain('character=old-hero');
+    expect(navTarget.search).not.toContain('new=true');
+  });
+
+  it('asks which saved playthrough when the same hero name has multiple copies', async () => {
+    state.campaign = campaign({});
+    state.user = { id: 'u1' };
+    state.templates = [template()];
+    state.listSessions.mockResolvedValue([
+      {
+        starter_campaign_id: 'c1',
+        character_id: 'hero-a',
+        character: { name: 'Bram' },
+        status: 'completed',
+        session_number: 3,
+      },
+      {
+        starter_campaign_id: 'c1',
+        character_id: 'hero-b',
+        character: { name: 'Bram' },
+        status: 'completed',
+        session_number: 1,
+      },
+    ]);
+    renderPage();
+    fireEvent.click(screen.getByText('Play as Bram'));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(state.seed).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Saved hero 2 · Session 1' }));
+    expect(await screen.findByText('game page')).toBeInTheDocument();
+    expect(navTarget.search).toContain('character=hero-b');
+  });
+
+  it('starts a fresh playthrough only on the explicit choice', async () => {
+    state.campaign = campaign({});
+    state.user = { id: 'u1' };
+    state.templates = [template()];
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Start a fresh playthrough' }));
+    expect(await screen.findByText('game page')).toBeInTheDocument();
+    expect(state.listSessions).not.toHaveBeenCalled();
+    expect(state.seed).toHaveBeenCalledTimes(1);
     expect(navTarget.search).toContain('new=true');
   });
 

@@ -18,6 +18,10 @@ import { useGameRails } from '../game-content/use-game-rails';
 
 const viewport = vi.hoisted(() => ({ width: 1440 }));
 
+vi.mock('../game-content/EndSessionButton', () => ({
+  EndSessionButton: () => <button>End session</button>,
+}));
+
 vi.mock('@/contexts/SceneBackgroundContext', () => ({
   useSceneBackground: () => ({ currentBackgroundUrl: null, isTransitioning: false }),
 }));

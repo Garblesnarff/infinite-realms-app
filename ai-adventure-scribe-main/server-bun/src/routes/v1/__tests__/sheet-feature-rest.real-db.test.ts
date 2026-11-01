@@ -2108,7 +2108,8 @@ describeWithDb('a continuation session carries HP until the long rest (#1239)', 
         campaignId,
         characterId,
         sessionNumber: 1,
-        status: 'completed',
+        status: 'active',
+        starterCampaignId: 'starter-1298',
         currentSceneDescription: 'The first session ended.',
       })
       .returning({ id: gameSessions.id });
@@ -2137,6 +2138,9 @@ describeWithDb('a continuation session carries HP until the long rest (#1239)', 
   });
 
   it('creating the continuation leaves HP alone; the long rest restores it', async () => {
+    const ended = await request(`/v1/sessions/${priorSessionId}/complete`, 'POST', {});
+    expect(ended.status).toBe(200);
+
     // The exact body the campaign-sessions Continue flow posts: a new
     // session must not heal — HP carries inside one adventure (#1071).
     const created = await request('/v1/sessions', 'POST', {
@@ -2147,6 +2151,7 @@ describeWithDb('a continuation session carries HP until the long rest (#1239)', 
       current_scene_description: 'Continuing your adventure...',
       session_notes: 'Continuing from Session 1',
       turn_count: 0,
+      starter_campaign_id: 'starter-1298',
     });
     expect(created.status).toBe(201);
     const session = (await created.json()) as { id: string; session_number: number };

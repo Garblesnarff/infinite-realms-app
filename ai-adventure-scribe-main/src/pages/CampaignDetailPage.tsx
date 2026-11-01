@@ -24,6 +24,13 @@ import type { StarterCharacterTemplate } from '@/hooks/use-starter-character-tem
 import { CAMPAIGN_ARTWORK_PLACEHOLDER } from '@/components/campaigns/campaign-artwork';
 import { StarterCharacterPortrait } from '@/components/campaigns/StarterCharacterPortrait';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { useStarterCampaign } from '@/hooks/use-starter-campaigns';
 import { useStarterCharacterTemplates } from '@/hooks/use-starter-character-templates';
@@ -120,7 +127,7 @@ interface HeroCardProps {
   isStarting: boolean;
   startDisabled: boolean;
   signedIn: boolean;
-  onPlay: (template: StarterCharacterTemplate) => void;
+  onPlay: (template: StarterCharacterTemplate, fresh?: boolean) => void;
 }
 
 const HeroCard: React.FC<HeroCardProps> = ({
@@ -175,6 +182,16 @@ const HeroCard: React.FC<HeroCardProps> = ({
         >
           {signedIn ? `Play as ${template.name}` : `Sign in to play as ${template.name}`}
         </Button>
+        {signedIn && (
+          <Button
+            variant="ghost"
+            onClick={() => onPlay(template, true)}
+            disabled={startDisabled}
+            className="w-full"
+          >
+            Start a fresh playthrough
+          </Button>
+        )}
       </div>
     </article>
   );
@@ -196,6 +213,11 @@ const CampaignDetailPage: React.FC = () => {
   );
   const [failedTemplate, setFailedTemplate] = React.useState<StarterCharacterTemplate | null>(null);
   const [sessionExpired, setSessionExpired] = React.useState(false);
+  const [choices, setChoices] = React.useState<Array<{
+    characterId: string;
+    sessionNumber: number | null;
+    campaignId: string;
+  }> | null>(null);
   // #209: synchronous in-flight guard — the disabled button lags a render
   // behind, so a double-click would otherwise seed two characters.
   const startingRef = React.useRef(false);
@@ -224,7 +246,7 @@ const CampaignDetailPage: React.FC = () => {
    * starter campaign" route exists yet).
    */
   const playAs = React.useCallback(
-    async (template: StarterCharacterTemplate): Promise<void> => {
+    async (template: StarterCharacterTemplate, fresh = false): Promise<void> => {
       if (!user) {
         try {
           sessionStorage.setItem(
@@ -250,6 +272,48 @@ const CampaignDetailPage: React.FC = () => {
         const campaignId = await resolveOrCreateStarterCampaign(campaign, userDataApi, (message) =>
           logger.info(message),
         );
+        if (!fresh) {
+          const matches = new Map<
+            string,
+            { characterId: string; sessionNumber: number | null; campaignId: string }
+          >();
+          const pageSize = 100;
+          for (let offset = 0; ; offset += pageSize) {
+            const sessions = await userDataApi.listSessions({
+              campaignId,
+              limit: pageSize,
+              offset,
+            });
+            for (const session of sessions) {
+              const character = session.character as { name?: unknown } | null;
+              if (
+                session.starter_campaign_id === campaign.id &&
+                session.character_id &&
+                character?.name === template.name &&
+                (session.status === 'active' || session.status === 'completed') &&
+                !matches.has(session.character_id)
+              ) {
+                matches.set(session.character_id, {
+                  characterId: session.character_id,
+                  sessionNumber: session.session_number,
+                  campaignId,
+                });
+              }
+            }
+            if (sessions.length < pageSize) break;
+          }
+          const previous = [...matches.values()];
+          if (previous.length > 1) {
+            setChoices(previous);
+            return;
+          }
+          if (previous.length === 1) {
+            navigate(
+              `/app/game/${campaignId}?character=${previous[0].characterId}&starterCampaign=${campaign.id}`,
+            );
+            return;
+          }
+        }
         const character = await seedStarterCharacter(template, campaignId, (payload) =>
           userDataApi.createCharacter(payload),
         );
@@ -621,7 +685,7 @@ const CampaignDetailPage: React.FC = () => {
                     isStarting={startingTemplate?.id === template.id}
                     startDisabled={startingTemplate !== null}
                     signedIn={Boolean(user)}
-                    onPlay={(candidate) => void playAs(candidate)}
+                    onPlay={(candidate, fresh) => void playAs(candidate, fresh)}
                   />
                 ))}
               </div>
@@ -641,6 +705,36 @@ const CampaignDetailPage: React.FC = () => {
           </p>
         </div>
       </div>
+
+      <Dialog
+        open={choices !== null}
+        onOpenChange={(open) => {
+          if (!open) setChoices(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Choose a saved playthrough</DialogTitle>
+            <DialogDescription>
+              More than one saved hero has this name. Choose the adventure to continue.
+            </DialogDescription>
+          </DialogHeader>
+          {choices?.map((choice, index) => (
+            <Button
+              key={choice.characterId}
+              variant="outline"
+              onClick={() => {
+                setChoices(null);
+                navigate(
+                  `/app/game/${choice.campaignId}?character=${choice.characterId}&starterCampaign=${campaign.id}`,
+                );
+              }}
+            >
+              Saved hero {index + 1} · Session {choice.sessionNumber ?? 1}
+            </Button>
+          ))}
+        </DialogContent>
+      </Dialog>
 
       {/* Starting overlay */}
       {startingTemplate && (
