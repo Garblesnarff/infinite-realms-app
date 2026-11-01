@@ -826,7 +826,10 @@ describeWithDb('typed long rest through the DM route posts its engine line (#751
         .select({ message: dialogueHistory.message })
         .from(dialogueHistory)
         .where(
-          and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'system')),
+          and(
+            eq(dialogueHistory.sessionId, sessionId),
+            eq(dialogueHistory.speakerType, 'system'),
+          ),
         )
     )
       .map((row) => row.message)
@@ -920,24 +923,20 @@ describeWithDb('typed long rest through the DM route posts its engine line (#751
     });
     await typeMessage(world, 'we take a long rest');
 
-    const res = await generateTurn(
-      world,
-      'we take a long rest',
-      '75175175-1111-4222-8333-444444444444',
-    );
+    const res = await generateTurn(world, 'we take a long rest', '75175175-1111-4222-8333-444444444444');
     expect(res.status).toBe(200);
 
     const lines = await engineLines(world.sessionId);
-    expect(lines).toEqual([
-      '⚙️ Engine: Long rest — HP and spell slots restored (nothing to restore)',
-    ]);
+    expect(lines).toEqual(['⚙️ Engine: Long rest — HP and spell slots restored (nothing to restore)']);
     // The rest really applied: one long-rest event is on the ledger, and it
     // is the finished row (the claim stamps hpRestored 0 too, so the proof
     // is the finish-written resource list replacing the claim's '[]').
     const events = await db
       .select({ id: restEvents.id, resourcesRestored: restEvents.resourcesRestored })
       .from(restEvents)
-      .where(and(eq(restEvents.characterId, world.characterId), eq(restEvents.restType, 'long')));
+      .where(
+        and(eq(restEvents.characterId, world.characterId), eq(restEvents.restType, 'long')),
+      );
     expect(events).toHaveLength(1);
     expect(events[0]?.resourcesRestored).not.toBe('[]');
     expect(await hpOf(world.characterId)).toBe(12);
@@ -953,11 +952,7 @@ describeWithDb('typed long rest through the DM route posts its engine line (#751
     });
     await typeMessage(world, 'I take a long rest');
 
-    const res = await generateTurn(
-      world,
-      'I take a long rest',
-      '75175175-2222-4333-8444-555555555555',
-    );
+    const res = await generateTurn(world, 'I take a long rest', '75175175-2222-4333-8444-555555555555');
     expect(res.status).toBe(200);
 
     // Exact line: 15 HP (5 -> 20), slots were spent and restored, and the
@@ -984,24 +979,18 @@ describeWithDb('typed long rest through the DM route posts its engine line (#751
     });
     await typeMessage(world, 'we take a long rest');
 
-    const first = await generateTurn(
-      world,
-      'we take a long rest',
-      '75175175-3333-4444-8555-666666666666',
-    );
+    const first = await generateTurn(world, 'we take a long rest', '75175175-3333-4444-8555-666666666666');
     expect(first.status).toBe(200);
-    const second = await generateTurn(
-      world,
-      'we take a long rest',
-      '75175175-3333-4444-8555-666666666666',
-    );
+    const second = await generateTurn(world, 'we take a long rest', '75175175-3333-4444-8555-666666666666');
     expect(second.status).toBe(200);
 
     expect(await engineLines(world.sessionId)).toHaveLength(1);
     const events = await db
       .select({ id: restEvents.id })
       .from(restEvents)
-      .where(and(eq(restEvents.characterId, world.characterId), eq(restEvents.restType, 'long')));
+      .where(
+        and(eq(restEvents.characterId, world.characterId), eq(restEvents.restType, 'long')),
+      );
     expect(events).toHaveLength(1);
     expect(await hpOf(world.characterId)).toBe(12);
   });
@@ -1512,11 +1501,7 @@ describeWithDb('typed equip through the DM generate route (#1059)', () => {
     expect(await shortbowEquipped(world)).toBe(false);
 
     generatePrompts = [];
-    const res = await generateEquipTurn(
-      world,
-      'I draw my shortbow',
-      '10591059-1111-4222-8333-444444444444',
-    );
+    const res = await generateEquipTurn(world, 'I draw my shortbow', '10591059-1111-4222-8333-444444444444');
     expect(res.status).toBe(200);
 
     // The equip landed on the sheet rows the combat readers read.
@@ -1544,11 +1529,7 @@ describeWithDb('typed equip through the DM generate route (#1059)', () => {
 
   it('a retried turn equips nothing twice and posts no second line', async () => {
     const world = await seedEquipWorld('1059-retry');
-    const first = await generateEquipTurn(
-      world,
-      'I draw my shortbow',
-      '10591059-2222-4333-8444-555555555555',
-    );
+    const first = await generateEquipTurn(world, 'I draw my shortbow', '10591059-2222-4333-8444-555555555555');
     expect(first.status).toBe(200);
     expect(await shortbowEquipped(world)).toBe(true);
     expect(await equipLines(world)).toHaveLength(1);
@@ -1556,11 +1537,7 @@ describeWithDb('typed equip through the DM generate route (#1059)', () => {
     // Retry replays the same saved player message with no new save: the
     // resolver sees the weapon already in hand and resolves nothing again.
     generatePrompts = [];
-    const second = await generateEquipTurn(
-      world,
-      'I draw my shortbow',
-      '10591059-2222-4333-8444-555555555555',
-    );
+    const second = await generateEquipTurn(world, 'I draw my shortbow', '10591059-2222-4333-8444-555555555555');
     expect(second.status).toBe(200);
     expect(await equipLines(world)).toHaveLength(1);
     expect(generatePrompts.join('\n')).toContain('already equipped');
@@ -1569,11 +1546,7 @@ describeWithDb('typed equip through the DM generate route (#1059)', () => {
   it('naming a weapon the character does not carry hands the DM the refusal, and nothing changes', async () => {
     const world = await seedEquipWorld('1059-refusal');
     generatePrompts = [];
-    const res = await generateEquipTurn(
-      world,
-      'I equip the longbow',
-      '10591059-3333-4444-8555-666666666666',
-    );
+    const res = await generateEquipTurn(world, 'I equip the longbow', '10591059-3333-4444-8555-666666666666');
     expect(res.status).toBe(200);
     expect(generatePrompts.join('\n')).toContain('not carrying');
     expect(await shortbowEquipped(world)).toBe(false);

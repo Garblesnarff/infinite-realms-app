@@ -61,7 +61,7 @@ export function paladinLevelOf(character: {
       entry &&
       typeof entry === 'object' &&
       typeof (entry as { className?: unknown }).className === 'string' &&
-      (entry as { className: string }).className.toLowerCase() === 'paladin'
+      ((entry as { className: string }).className.toLowerCase() === 'paladin')
     ) {
       const entryLevel = (entry as { level?: unknown }).level;
       multiclass += typeof entryLevel === 'number' && entryLevel > 0 ? Math.trunc(entryLevel) : 0;
@@ -188,9 +188,7 @@ export interface PoolState {
 export async function layOnHandsPool(
   characterId: string,
   userId: string,
-): Promise<
-  (PoolState & { row: CharacterFeature; featureId: string; character: CharacterRow }) | null
-> {
+): Promise<(PoolState & { row: CharacterFeature; featureId: string; character: CharacterRow }) | null> {
   const character = await ownedCharacter(characterId, userId);
   if (!character) return null;
   const max = paladinLevelOf(character) * 5;
@@ -216,12 +214,7 @@ export async function divineSenseUses(
   const max = Math.max(1, 1 + (await charismaModifier(characterId)));
   const ensured = await ensurePoolRow(characterId, userId, DIVINE_SENSE_NAME, max);
   if (!ensured) return null;
-  return {
-    max,
-    remaining: ensured.row.usesRemaining ?? max,
-    row: ensured.row,
-    featureId: ensured.featureId,
-  };
+  return { max, remaining: ensured.row.usesRemaining ?? max, row: ensured.row, featureId: ensured.featureId };
 }
 
 /**
@@ -649,13 +642,7 @@ async function resolveLayOnHandsAgainstPool(
   const healAmount = Math.min(draw, missing);
   try {
     if (participantId && encounterId) {
-      await CombatHPService.healDamage(
-        participantId,
-        encounterId,
-        healAmount,
-        'Lay on Hands',
-        userId,
-      );
+      await CombatHPService.healDamage(participantId, encounterId, healAmount, 'Lay on Hands', userId);
     } else {
       await CharacterVitalsService.heal(targetId, userId, healAmount);
     }
@@ -693,7 +680,9 @@ async function resolveLayOnHandsAgainstPool(
  * of the inner resolver carries poolRemaining/poolMax, so one mirror site
  * covers heals, cures, and refusals alike.
  */
-export async function resolveLayOnHands(input: ResolveLayOnHandsInput): Promise<LayOnHandsResult> {
+export async function resolveLayOnHands(
+  input: ResolveLayOnHandsInput,
+): Promise<LayOnHandsResult> {
   const result = await resolveLayOnHandsAgainstPool(input);
   if (result.poolMax > 0) {
     await syncSheetPool({
