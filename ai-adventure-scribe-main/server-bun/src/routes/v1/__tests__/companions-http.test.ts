@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it, mock, beforeEach } from 'bun:test';
-import { Elysia } from 'elysia';
 
 const noopLogger = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
 
@@ -95,7 +94,9 @@ const mapCompanion = (companion: any) => ({
 process.env.COMPANIONS_ENABLED = 'true';
 const { requireAuth } = await import('../../../middleware/auth.js');
 const { createCompanionRoutes } = await import('../companion-routes.js');
-const app = new Elysia().use(
+const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
+const { PLAYER_INPUT_MAX_CHARS } = await import('../../../../../shared/player-input-cap.js');
+const app = createRequestPipelineApp().use(
   createCompanionRoutes({
     auth: requireAuth,
     verifyOwnership: async (sessionId: string | undefined, userId: string) =>
@@ -152,6 +153,20 @@ describe('WebMCP companion route guards', () => {
     );
     // Desired: 401. TypeBox body schema currently runs before requireAuth (#2120).
     expect(response.status).toBe(422);
+  });
+
+  it('say accepts text at the shared player-input cap and refuses one character more', async () => {
+    const say = (text: string) =>
+      app.handle(
+        new Request('http://localhost/v1/sessions/session-1/companions/companion-1/say', {
+          method: 'POST',
+          headers: { ...auth, 'content-type': 'application/json' },
+          body: JSON.stringify({ text }),
+        }),
+      );
+
+    expect((await say('a'.repeat(PLAYER_INPUT_MAX_CHARS))).status).toBe(200);
+    expect((await say('a'.repeat(PLAYER_INPUT_MAX_CHARS + 1))).status).toBe(422);
   });
 
   it('returns active companions in the left-rail roster shape', async () => {

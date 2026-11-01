@@ -107,4 +107,27 @@ describe('ChatInput length cap (#1307)', () => {
 
     expect(screen.getByRole('button', { name: 'Retry' })).not.toBeDisabled();
   });
+
+  it('sends a trimmed turn that fits the cap, even with longer whitespace around it', async () => {
+    // The cap is on the text that is sent (the trimmed text), so padding that trims away
+    // must not block a turn that fits.
+    render(<ChatInput onSendMessage={mockOnSendMessage} isDisabled={false} />);
+
+    fireEvent.change(composer(), { target: { value: `  ${'a'.repeat(20_000)}   ` } });
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(sendButton()).not.toBeDisabled();
+    fireEvent.click(sendButton());
+
+    await waitFor(() => expect(mockOnSendMessage).toHaveBeenCalledWith('a'.repeat(20_000)));
+  });
+
+  it('refuses a turn whose trimmed text is over the cap, and counts the trimmed length', () => {
+    render(<ChatInput onSendMessage={mockOnSendMessage} isDisabled={false} />);
+
+    fireEvent.change(composer(), { target: { value: `${'a'.repeat(20_001)}   ` } });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('20,001 of 20,000');
+    expect(sendButton()).toBeDisabled();
+  });
 });

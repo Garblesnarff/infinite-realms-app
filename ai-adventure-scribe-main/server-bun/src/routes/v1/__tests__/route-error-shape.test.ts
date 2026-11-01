@@ -1,5 +1,4 @@
 import { describe, expect, it, mock } from 'bun:test';
-import { Elysia } from 'elysia';
 
 const quiet = () => {};
 const user = { userId: 'u1', email: 'a@b.c', plan: 'free' };
@@ -35,7 +34,8 @@ const { requireAuth } = await import('../../../middleware/auth.js');
 const { createCompanionRoutes } = await import('../companion-routes.js');
 const headers = { authorization: 'Bearer ok', 'content-type': 'application/json' };
 const join = () => fail(422, 'nope', { limit: 2 });
-const app = new Elysia()
+const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
+const app = createRequestPipelineApp()
   .use(classFeaturesRoutes)
   .use(inventoryRoutes)
   .use(progressionRoutes)

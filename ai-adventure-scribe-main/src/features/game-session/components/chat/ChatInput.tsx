@@ -125,7 +125,8 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
 
   // One shared player-turn cap (#1307): over it, the composer says so and
   // refuses to send instead of letting the turn 422 at generate/intents.
-  const isOverCap = input.length > PLAYER_INPUT_MAX_CHARS;
+  // The cap is on the text that is sent, which is the trimmed text (see handleSubmit).
+  const isOverCap = input.trim().length > PLAYER_INPUT_MAX_CHARS;
 
   /**
    * Handles message submission and clears input
@@ -425,7 +426,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
 
           {isOverCap && (
             <div className="px-3 pb-2 text-sm text-destructive" role="alert">
-              Message too long — {input.length.toLocaleString()} of{' '}
+              Message too long — {input.trim().length.toLocaleString()} of{' '}
               {PLAYER_INPUT_MAX_CHARS.toLocaleString()} characters. Shorten it to send.
             </div>
           )}

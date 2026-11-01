@@ -1,5 +1,6 @@
 import { Elysia, t } from 'elysia';
 
+import { PLAYER_INPUT_MAX_CHARS } from '../../../../shared/player-input-cap.js';
 import { isCompanionsEnabled } from '../../lib/companion-feature.js';
 import { mapAppRouteError } from '../../lib/errors.js';
 
@@ -126,7 +127,7 @@ export function createCompanionRoutes({
       },
       {
         params: companionParams,
-        body: t.Object({ text: t.String({ minLength: 1, maxLength: 20_000 }) }),
+        body: t.Object({ text: t.String({ minLength: 1, maxLength: PLAYER_INPUT_MAX_CHARS }) }),
       },
     )
     .post(
