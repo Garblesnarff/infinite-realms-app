@@ -362,6 +362,35 @@ describe('CampaignDetailPage heroes (#89)', () => {
     expect(navTarget.search).not.toContain('new=true');
   });
 
+  it('asks which saved playthrough when the same hero name has multiple copies', async () => {
+    state.campaign = campaign({});
+    state.user = { id: 'u1' };
+    state.templates = [template()];
+    state.listSessions.mockResolvedValue([
+      {
+        starter_campaign_id: 'c1',
+        character_id: 'hero-a',
+        character: { name: 'Bram' },
+        status: 'completed',
+        session_number: 3,
+      },
+      {
+        starter_campaign_id: 'c1',
+        character_id: 'hero-b',
+        character: { name: 'Bram' },
+        status: 'completed',
+        session_number: 1,
+      },
+    ]);
+    renderPage();
+    fireEvent.click(screen.getByText('Play as Bram'));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(state.seed).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Saved hero 2 · Session 1' }));
+    expect(await screen.findByText('game page')).toBeInTheDocument();
+    expect(navTarget.search).toContain('character=hero-b');
+  });
+
   it('starts a fresh playthrough only on the explicit choice', async () => {
     state.campaign = campaign({});
     state.user = { id: 'u1' };
