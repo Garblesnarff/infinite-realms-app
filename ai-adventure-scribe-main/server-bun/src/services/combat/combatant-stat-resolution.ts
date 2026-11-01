@@ -100,6 +100,9 @@ export function resolveCombatantStats(
   // case-insensitive, inside the stripped name — "Aggressive Patron" + srd:bandit and
   // "Prowler" + srd:wolf stay generic, which is the #1114 incident pattern. An
   // unparseable bible chunk counts the same way: its entityName still keys the lookup.
+  // Round 3 adds plural tolerance: both sides are compared in singular form (a
+  // trailing `s`/`es` stripped per word), so "Goblins" corroborates srd:goblin as on
+  // main; irregular plurals ("Wolves" → "wolv", not "wolf") do not and stay generic.
   const lookupName = (authored?.entityName ?? name)?.replace(DUPLICATE_SUFFIX, '') ?? null;
   let srd = lookupName
     ? resolveSrdMonsterStats(null, lookupName, context, { suppressFallbackWarn: true })
@@ -269,18 +272,36 @@ export function resolveCombatantStats(
 const DUPLICATE_SUFFIX = /\s+\d+$/;
 
 /**
- * Whether an SRD entry's display name matches, whole-word and case-insensitive,
- * inside a (suffix-stripped) creature name (#1115 round 2).
+ * Singular form of one token, for the plural-tolerant gate (#1115 round 3).
  *
- * Token-contiguous: every token of the entry name must appear as consecutive whole
- * words in the creature name. "Goblin Archer" contains "Goblin"; "Aggressive Patron"
- * does not contain "Bandit" and "Prowler" does not contain "Wolf", so those ids are
- * ignored and the seats land generic.
+ * Exactly the prescribed rule: strip a trailing `es`, else a trailing `s`, from
+ * words longer than two letters (so "as"/"us" survive untouched). Regular plurals
+ * singularize back to their entry word ("Goblins" → "goblin"); irregular plurals do
+ * not ("Wolves" → "wolv", not "wolf") and e-drop plurals do not either ("Apes" →
+ * "ap", not "ape") — those stay generic by design, pinned by test.
+ */
+const singularToken = (token: string): string => {
+  if (token.length <= 2) return token;
+  if (token.endsWith('es')) return token.slice(0, -2);
+  if (token.endsWith('s')) return token.slice(0, -1);
+  return token;
+};
+
+/**
+ * Whether an SRD entry's display name matches, whole-word and case-insensitive,
+ * inside a (suffix-stripped) creature name (#1115 round 2, plural tolerance round 3).
+ *
+ * Token-contiguous, compared in singular form on both sides: every singularized
+ * token of the entry name must appear as consecutive whole words in the
+ * singularized creature name. "Goblin Archer" contains "Goblin", and "Goblins"
+ * contains "Goblin" once singularized; "Aggressive Patron" does not contain
+ * "Bandit" and "Prowler" does not contain "Wolf", so those ids are ignored and
+ * the seats land generic.
  */
 const srdNameMatchesName = (entryName: string, creatureName: string): boolean => {
-  const entryTokens = monsterKeyTokens(entryName);
+  const entryTokens = monsterKeyTokens(entryName).map(singularToken);
   if (entryTokens.length === 0) return false;
-  const nameTokens = monsterKeyTokens(creatureName);
+  const nameTokens = monsterKeyTokens(creatureName).map(singularToken);
   return nameTokens.some((_, start) =>
     entryTokens.every((token, offset) => nameTokens[start + offset] === token),
   );

@@ -441,4 +441,46 @@ describe('the narrowed SRD id rule (#1115 round 2)', () => {
       });
     }
   });
+
+  test('a plural group name corroborates its id in singular form (#1115)', () => {
+    // Required 1 (round 3): DM text names groups in the plural often; on main the id
+    // seated the SRD goblin, and round 2 regressed "Goblins" to generic. Singular-form
+    // comparison restores it.
+    expect(resolveCombatantStats(EMPTY_INDEX, 'srd:goblin', 'Goblins')).toMatchObject({
+      source: 'srd',
+      monsterName: 'Goblin',
+      maxHp: 7,
+      armorClass: 15,
+    });
+  });
+
+  test('an irregular plural does not corroborate its id, by design (#1115)', () => {
+    // Required 1 (round 3), documented limit: the prescribed s/es strip turns
+    // "Wolves" into "wolv", not "wolf", so the wolf id stays uncorroborated and the
+    // seat lands generic. The e-drop limit pins the same way: "Apes" strips to "ap",
+    // not "ape", so the ape id stays uncorroborated too. A plural that does not
+    // corroborate must not seat a block on a partial match either: "Goblins" +
+    // srd:wolf stays generic too.
+    expect(resolveCombatantStats(EMPTY_INDEX, 'srd:wolf', 'Wolves')).toBeNull();
+    expect(resolveCombatantStats(EMPTY_INDEX, 'srd:ape', 'Apes')).toBeNull();
+    expect(resolveCombatantStats(EMPTY_INDEX, 'srd:wolf', 'Goblins')).toBeNull();
+  });
+
+  test('id spellings all seat the stone golem through the id leg (#1115)', () => {
+    // Required 2 (round 3, test-only): the run-15 spellings had a test, but the
+    // stone-golem name-spellings test now runs through the name path. "Stone Golem
+    // Guardian" matches no SRD entry by name
+    // (the no-id control lands generic), so each spelling below resolves only through
+    // the corroborated id leg — the entry name "Stone Golem" matches whole-word
+    // inside the guardian's name.
+    expect(resolveCombatantStats(EMPTY_INDEX, null, 'Stone Golem Guardian')).toBeNull();
+    for (const id of ['srd:stone_golem', 'srd:stone-golem', 'stone_golem']) {
+      expect(resolveCombatantStats(EMPTY_INDEX, id, 'Stone Golem Guardian')).toMatchObject({
+        source: 'srd',
+        monsterName: 'Stone Golem',
+        maxHp: 178,
+        armorClass: 17,
+      });
+    }
+  });
 });
