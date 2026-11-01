@@ -73,6 +73,29 @@ export const BACKGROUND_LLM_RETRY_BUDGET_MS = 5_000;
 const NETWORK_RETRY_INITIAL_DELAY_MS = 1_000;
 const NETWORK_RETRY_MAX_DELAY_MS = 8_000;
 const TOKEN_REFRESH_MARGIN_MS = 2 * 60 * 1000;
+/**
+ * #1113: a 401 that lands shortly after a refresh finished is most likely a
+ * request that was already in flight with the pre-rotation token. Retry once
+ * with the stored (new) token instead of starting a second refresh, which would
+ * rotate the refresh token again and race the first one.
+ */
+export const REFRESH_RETRY_GRACE_MS = 10 * 1000;
+let lastRefreshCompletedAt: number | null = null;
+
+function markRefreshCompleted(): void {
+  lastRefreshCompletedAt = Date.now();
+}
+
+function isWithinRefreshGrace(): boolean {
+  return (
+    lastRefreshCompletedAt !== null && Date.now() - lastRefreshCompletedAt <= REFRESH_RETRY_GRACE_MS
+  );
+}
+
+/** Test seam: forget the last completed refresh so each test starts clean. */
+export function resetRefreshGraceForTests(): void {
+  lastRefreshCompletedAt = null;
+}
 
 export type FetchWithAuthOptions = RequestInit & {
   retryBudgetMs?: number;
@@ -368,6 +391,7 @@ async function refreshExpiringSession(): Promise<string | undefined> {
   }
 
   persistSession({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken });
+  markRefreshCompleted();
   return tokens.accessToken;
 }
 
@@ -440,6 +464,18 @@ export async function fetchWithAuth(
     if (response.status !== 401 || !isV1Route(path)) return response;
 
     const session = safeLoadCachedSession();
+    if (isWithinRefreshGrace() && session?.access_token) {
+      // #1113: a refresh just finished. Retry once with the stored token and
+      // do not refresh again.
+      logger.info('AUTH_RETRY_AFTER_401', { route: path, outcome: 'grace_retry' });
+      const graceResponse = await request(session.access_token);
+      if (graceResponse.status === 401) {
+        logger.warn('AUTH_RETRY_AFTER_401', { route: path, outcome: 'session_expired' });
+        markSessionEnded(new SessionExpiredError());
+        throw new SessionExpiredError();
+      }
+      return graceResponse;
+    }
     if (!session?.refresh_token) {
       logger.warn('AUTH_RETRY_AFTER_401', { route: path, outcome: 'refresh_unavailable' });
       markSessionEnded(new SessionExpiredError());
@@ -475,6 +511,7 @@ export async function fetchWithAuth(
         ? storedSession.refresh_token || tokens.refreshToken
         : tokens.refreshToken;
     persistSession({ access_token: retryAccessToken, refresh_token: retryRefreshToken });
+    markRefreshCompleted();
     const retryResponse = await request(retryAccessToken);
     if (retryResponse.status === 401) {
       logger.warn('AUTH_RETRY_AFTER_401', { route: path, outcome: 'session_expired' });
