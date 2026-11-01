@@ -1,6 +1,7 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resetRefreshGraceForTests } from '../../infrastructure/api/rest-client';
 import { AuthProvider, useAuth } from '../AuthContext';
 
 import {
@@ -64,6 +65,7 @@ const tokenWithExpiry = (secondsFromNow: number): string =>
 describe('AuthContext connection failures (#565)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetRefreshGraceForTests();
     authTelemetryMocks.reportClientFailure.mockClear();
     clearSessionEnded();
     window.localStorage.clear();
@@ -689,9 +691,9 @@ describe('AuthContext connection failures (#565)', () => {
     expect(window.localStorage.getItem('workos_access_token')).toBe('old-access');
     expect(window.sessionStorage.getItem('workos_refresh_token')).toBe('old-refresh');
     expect(isSessionEnded()).toBe(false);
-    expect(
-      fetchMock.mock.calls.some(([url]) => String(url).includes('/v1/auth/refresh')),
-    ).toBe(true);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/v1/auth/refresh'))).toBe(
+      true,
+    );
 
     // The outage ends: the next attempt succeeds and clears the error.
     fetchMock.mockImplementation((url: string) => {
@@ -738,9 +740,9 @@ describe('AuthContext connection failures (#565)', () => {
     expect(window.localStorage.getItem('workos_access_token')).toBe('old-access');
     expect(window.sessionStorage.getItem('workos_refresh_token')).toBe('old-refresh');
     expect(isSessionEnded()).toBe(false);
-    expect(
-      fetchMock.mock.calls.some(([url]) => String(url).includes('/v1/auth/refresh')),
-    ).toBe(true);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/v1/auth/refresh'))).toBe(
+      true,
+    );
 
     // The outage ends: the next attempt succeeds and clears the error.
     fetchMock.mockImplementation((url: string) => {
