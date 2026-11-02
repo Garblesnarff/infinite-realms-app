@@ -74,4 +74,22 @@ describe('DM footer HP matches the engine or is absent (#1289)', () => {
     const input = 'The sign reads [HP 32/32] above the door.';
     expect(shown(input)).toBe(input);
   });
+
+  test('a sentence period after a lone HP bracket stays', () => {
+    const input = 'The sign reads [HP 32/32].';
+    expect(shown(input)).toBe(input);
+    expect(normalizePartialNarration(input)).toBe(input);
+  });
+
+  test('a punctuated bracket run with no HP group stays', () => {
+    const lines = [
+      'She turns. [The door creaks] [Scene: cellar].',
+      'You swing. [1d20] [Clock 0/6].',
+      'You swing. [1d20+5].',
+    ];
+    for (const input of lines) {
+      expect(shown(input)).toBe(input);
+      expect(normalizePartialNarration(input)).toBe(input);
+    }
+  });
 });

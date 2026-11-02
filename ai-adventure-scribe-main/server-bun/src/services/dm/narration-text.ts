@@ -58,20 +58,21 @@ export function stripProseOptionsList(text: string): string {
  * the shape and survive. #1062 removes this line for good via server-state
  * rendering; this strip is the safety net until then.
  */
-const TRAILER = '(?:\\.{3}|[.!?…]+)?';
-const TRAILING_BRACKET_RUN = new RegExp(`((?:\\[[^[\\]\\n]{1,96}\\]\\s*){2,})${TRAILER}\\s*$`);
-// #1289: a lone trailing [HP n/n] is still a footer. A run needs two groups,
-// so this one was surviving and showing a number the engine does not hold.
-const LONE_FOOTER_HP = new RegExp(
-  `\\[HP\\s*:?\\s*\\d+(?:\\s*\\/\\s*(?:\\d+|\\?))?\\s*\\]${TRAILER}\\s*$`,
-  'i',
-);
+const BRACKET_RUN = '(?:\\[[^[\\]\\n]{1,96}\\]\\s*){2,}';
+// A tracker run must end the string. A sentence period after a non-HP run
+// stays, the same as main (#1289 round 2).
+const TRAILING_BRACKET_RUN = new RegExp(`(${BRACKET_RUN})\\s*$`);
+// A period or ellipsis may close the run only when the run contains an HP
+// group, so "[HP 32/32] [Clock 0/6]…" still drops and
+// "[The door creaks] [Scene: cellar]." does not.
+const TRAILING_HP_RUN_WITH_PUNCT = new RegExp(`(${BRACKET_RUN})(?:\\.{3}|[.!?…]+)\\s*$`);
+// A lone trailing [HP n/n] with nothing after it. A sentence period is not
+// part of this footer: "The sign reads [HP 32/32]." stays.
+const LONE_FOOTER_HP = /\[HP\s*:?\s*\d+(?:\s*\/\s*(?:\d+|\?))?\s*\]\s*$/i;
 // HP groups sitting in a trailing tracker (other brackets may follow). Used
 // when stripping the whole run would empty the reply: drop the HP, keep the rest.
-const TRAILING_HP_GROUPS = new RegExp(
-  `(?:\\[HP\\s*:?\\s*\\d+(?:\\s*\\/\\s*(?:\\d+|\\?))?\\s*\\]\\s*)+(?=(?:\\[[^[\\]\\n]{1,96}\\]\\s*)*${TRAILER}\\s*$)`,
-  'gi',
-);
+const TRAILING_HP_GROUPS =
+  /(?:\[HP\s*:?\s*\d+(?:\s*\/\s*(?:\d+|\?))?\s*\]\s*)+(?=(?:\[[^[\]\n]{1,96}\]\s*)*(?:\.{3}|[.!?…]+)?\s*$)/gi;
 const TRACKER_GROUP =
   /^[A-Za-z0-9][A-Za-z0-9'’\- ]{0,30}(?:: [^[\].]{1,80}| \d+(?:\/\?|\/\d+)?| \d+)?$/;
 const TRACKER_ANCHOR = /^(HP|Clock|Scene)\b|: /;
@@ -83,19 +84,30 @@ function withoutTrailingHp(text: string): string {
   return stripped === text ? text : stripped.replace(/[ \t]{2,}/g, ' ').trimEnd();
 }
 
+function matchingTrackerRun(
+  text: string,
+  pattern: RegExp,
+): { index: number; inners: string[] } | null {
+  const match = pattern.exec(text);
+  if (!match) return null;
+  const groups = match[1].match(/\[[^[\]\n]{1,96}\]/g);
+  if (!groups || groups.length < 2) return null;
+  const inners = groups.map((group) => group.slice(1, -1));
+  if (
+    !inners.every((inner) => TRACKER_GROUP.test(inner)) ||
+    !inners.some((inner) => TRACKER_ANCHOR.test(inner))
+  ) {
+    return null;
+  }
+  return { index: match.index, inners };
+}
+
 export function stripTrackerLine(text: string): string {
-  const match = TRAILING_BRACKET_RUN.exec(text);
-  if (match) {
-    const groups = match[1].match(/\[[^[\]\n]{1,96}\]/g);
-    if (groups && groups.length >= 2) {
-      const inners = groups.map((group) => group.slice(1, -1));
-      if (
-        inners.every((inner) => TRACKER_GROUP.test(inner)) &&
-        inners.some((inner) => TRACKER_ANCHOR.test(inner))
-      ) {
-        return text.slice(0, match.index).trimEnd();
-      }
-    }
+  const strict = matchingTrackerRun(text, TRAILING_BRACKET_RUN);
+  if (strict) return text.slice(0, strict.index).trimEnd();
+  const punctuated = matchingTrackerRun(text, TRAILING_HP_RUN_WITH_PUNCT);
+  if (punctuated && punctuated.inners.some((inner) => /^HP\b/i.test(inner))) {
+    return text.slice(0, punctuated.index).trimEnd();
   }
   // #1067 follow-up: a trailing UNTERMINATED bracket group whose inner text
   // starts with a tracker anchor (HP/Clock/Scene) is a cut-off tracker line
