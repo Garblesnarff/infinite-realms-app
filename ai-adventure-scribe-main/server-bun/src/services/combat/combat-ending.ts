@@ -97,7 +97,7 @@ export function describeCombatEnd(reason: CombatEndReason): string {
       );
     case 'player_surrendered':
       return (
-        "THE FIGHT IS OVER: the party has surrendered. The fighting stops on the player's " +
+        'THE FIGHT IS OVER: the party has surrendered. The fighting stops on the player\'s ' +
         'terms — narrate the surrender itself, what the other side does with a party that ' +
         'yielded, and what becomes of everyone still standing. Do not narrate a defeat that ' +
         'did not happen, and do not start a new encounter in the same breath.'

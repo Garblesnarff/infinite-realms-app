@@ -104,7 +104,7 @@ describe('v1 combat action routes API boundaries', () => {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({}),
-      }),
+      })
     );
     expect(r1.status).toBe(401);
 
@@ -113,12 +113,12 @@ describe('v1 combat action routes API boundaries', () => {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({}),
-      }),
+      })
     );
     expect(r2.status).toBe(401);
 
     const r3 = await app.handle(
-      new Request('http://localhost/characters/valid-character-id/attacks'),
+      new Request('http://localhost/characters/valid-character-id/attacks')
     );
     expect(r3.status).toBe(401);
 
@@ -127,7 +127,7 @@ describe('v1 combat action routes API boundaries', () => {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({}),
-      }),
+      })
     );
     expect(r4.status).toBe(401);
   });
@@ -138,14 +138,14 @@ describe('v1 combat action routes API boundaries', () => {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          authorization: 'Bearer valid-user-token',
+          'authorization': 'Bearer valid-user-token',
         },
         body: JSON.stringify({
           attackerId: 'pc-1',
           targetId: 'npc-1',
           expectedVersion: 1,
         }),
-      }),
+      })
     );
     expect(r1.status).toBe(404);
 
@@ -154,7 +154,7 @@ describe('v1 combat action routes API boundaries', () => {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          authorization: 'Bearer valid-user-token',
+          'authorization': 'Bearer valid-user-token',
         },
         body: JSON.stringify({
           casterId: 'pc-1',
@@ -162,7 +162,7 @@ describe('v1 combat action routes API boundaries', () => {
           spellName: 'Fireball',
           expectedVersion: 1,
         }),
-      }),
+      })
     );
     expect(r2.status).toBe(404);
   });
@@ -171,9 +171,9 @@ describe('v1 combat action routes API boundaries', () => {
     const r1 = await app.handle(
       new Request('http://localhost/characters/invalid-character-id/attacks', {
         headers: {
-          authorization: 'Bearer valid-user-token',
+          'authorization': 'Bearer valid-user-token',
         },
-      }),
+      })
     );
     expect(r1.status).toBe(404);
 
@@ -182,7 +182,7 @@ describe('v1 combat action routes API boundaries', () => {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          authorization: 'Bearer valid-user-token',
+          'authorization': 'Bearer valid-user-token',
         },
         body: JSON.stringify({
           name: 'Shortbow',
@@ -190,7 +190,7 @@ describe('v1 combat action routes API boundaries', () => {
           damageType: 'piercing',
           attackBonus: 4,
         }),
-      }),
+      })
     );
     expect(r2.status).toBe(404);
   });
@@ -201,14 +201,14 @@ describe('v1 combat action routes API boundaries', () => {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          authorization: 'Bearer valid-user-token',
+          'authorization': 'Bearer valid-user-token',
         },
         body: JSON.stringify({
           attackerId: 'pc-1',
           targetId: 'npc-1',
           expectedVersion: 1,
         }),
-      }),
+      })
     );
 
     expect(response.status).toBe(404);
@@ -221,7 +221,7 @@ describe('v1 combat action routes API boundaries', () => {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          authorization: 'Bearer valid-user-token',
+          'authorization': 'Bearer valid-user-token',
         },
         body: JSON.stringify({
           casterId: 'pc-1',
@@ -229,7 +229,7 @@ describe('v1 combat action routes API boundaries', () => {
           spellName: 'Fireball',
           expectedVersion: 1,
         }),
-      }),
+      })
     );
 
     expect(response.status).toBe(200);
@@ -243,9 +243,9 @@ describe('v1 combat action routes API boundaries', () => {
     const response = await app.handle(
       new Request('http://localhost/characters/valid-character-id/attacks', {
         headers: {
-          authorization: 'Bearer valid-user-token',
+          'authorization': 'Bearer valid-user-token',
         },
-      }),
+      })
     );
 
     expect(response.status).toBe(200);
@@ -260,7 +260,7 @@ describe('v1 combat action routes API boundaries', () => {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          authorization: 'Bearer valid-user-token',
+          'authorization': 'Bearer valid-user-token',
         },
         body: JSON.stringify({
           name: 'Shortbow',
@@ -268,7 +268,7 @@ describe('v1 combat action routes API boundaries', () => {
           damageType: 'piercing',
           attackBonus: 4,
         }),
-      }),
+      })
     );
 
     expect(response.status).toBe(201);

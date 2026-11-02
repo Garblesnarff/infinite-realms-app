@@ -127,7 +127,10 @@ async function sessionCharacterFeatureNames(
   if (!library.some((feature) => feature.className.toLowerCase() === className)) return null;
   const names = new Set<string>();
   for (const feature of library) {
-    if (feature.className.toLowerCase() === className && feature.levelAcquired <= character.level) {
+    if (
+      feature.className.toLowerCase() === className &&
+      feature.levelAcquired <= character.level
+    ) {
       names.add(feature.featureName);
     }
   }
@@ -157,12 +160,7 @@ async function sessionCharacterSpellLists(character: {
   knownSpells: string | null;
   preparedSpells: string | null;
   ritualSpells: string | null;
-}): Promise<{
-  cantrips: string;
-  knownSpells: string;
-  preparedSpells: string;
-  ritualSpells: string;
-}> {
+}): Promise<{ cantrips: string; knownSpells: string; preparedSpells: string; ritualSpells: string }> {
   const listed = (value: string | null): string[] =>
     (value ?? '')
       .split(',')
