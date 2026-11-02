@@ -94,7 +94,12 @@ export interface EncumbranceSummary {
 }
 
 // Re-export basic calculations for backward compatibility
-export { SKILLS_MAP, calculateProficiencyBonus, calculateHitPoints, calculateCarryingCapacity };
+export {
+  SKILLS_MAP,
+  calculateProficiencyBonus,
+  calculateHitPoints,
+  calculateCarryingCapacity,
+};
 
 // Re-export proficiency calculations for backward compatibility
 export {
