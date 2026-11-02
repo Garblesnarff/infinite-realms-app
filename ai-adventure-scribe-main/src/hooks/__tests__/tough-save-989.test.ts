@@ -10,6 +10,22 @@ import { transformCharacterForStorage, type Character } from '@/types/character'
 import { transformAbilityScoresForStorage } from '@/utils/characterTransformations';
 
 describe('#989 Tough save body', () => {
+  it('persists the chosen Mobile feat in the actual writer body (#1317)', () => {
+    const character = {
+      name: 'Mobile hero',
+      race: human,
+      class: fighter,
+      level: 1,
+      feats: ['mobile'],
+    } as unknown as Character;
+    const body = prepareCharacterPayload({ ...transformCharacterForStorage(character) });
+    const file = resolve(process.cwd(), 'shared/test-fixtures/mobile-1317-create.json');
+    if (process.env.UPDATE_FIXTURES === '1')
+      writeFileSync(file, JSON.stringify(body, null, 2) + '\n');
+    expect(body).toEqual(JSON.parse(readFileSync(file, 'utf8')));
+    expect(body.class_features).toMatchObject({ 'feat:mobile': { name: 'Mobile' } });
+  });
+
   it('pins the actual writer body with Tough stored in feature JSON', () => {
     const abilityScores = Object.fromEntries(
       Object.entries({

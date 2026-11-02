@@ -20,6 +20,7 @@ import {
   campaigns,
   characters,
   characterStats,
+  characterEquipment,
   combatEncounters,
   combatParticipants,
   gameSessions,
@@ -163,6 +164,100 @@ describeWithDb('startCombat seats the character speed (#1251)', () => {
 
   test('an explicitly stored speed wins over the race base', async () => {
     expect(seatedSpeeds.stored).toBe(40);
+  });
+
+  test('the combat seat applies class, feat and armor modifiers (#1317)', async () => {
+    const modifiers = [
+      { name: 'barbarian', className: 'Barbarian', level: 5, expected: 40 },
+      { name: 'monk', className: 'Monk', level: 10, expected: 50 },
+      { name: 'monk-shield', className: 'Monk', level: 10, armor: 'Shield', expected: 30 },
+      {
+        name: 'barbarian-plate',
+        className: 'Barbarian',
+        level: 5,
+        armor: 'Plate Armor',
+        expected: 20,
+      },
+      {
+        name: 'mobile-plate',
+        className: 'Fighter',
+        level: 1,
+        armor: 'Chain Mail',
+        mobile: true,
+        expected: 30,
+      },
+      {
+        name: 'dwarf',
+        race: 'Dwarf',
+        className: 'Fighter',
+        level: 1,
+        armor: 'Chain Mail',
+        expected: 25,
+      },
+      {
+        name: 'multiclass',
+        className: 'Fighter',
+        level: 9,
+        levels: [
+          { className: 'Barbarian', level: 5 },
+          { className: 'Monk', level: 4 },
+        ],
+        mobile: true,
+        expected: 60,
+      },
+    ];
+    for (const row of modifiers) {
+      const [{ id: characterId }] = await db
+        .insert(characters)
+        .values({
+          userId,
+          campaignId,
+          name: testId(row.name),
+          race: row.race ?? 'Human',
+          class: row.className,
+          level: row.level,
+          classLevels: row.levels ?? null,
+          classFeatures: row.mobile ? { 'feat:mobile': { name: 'Mobile' } } : null,
+        })
+        .returning({ id: characters.id });
+      characterIds[row.name] = characterId;
+      await db
+        .insert(characterStats)
+        .values({
+          characterId,
+          strength: 10,
+          dexterity: 14,
+          maxHitPoints: 20,
+          currentHitPoints: 20,
+        });
+      if (row.armor)
+        await db
+          .insert(characterEquipment)
+          .values({ characterId, itemName: row.armor, itemType: 'armor', equipped: true });
+      const [{ id: sessionId }] = await db
+        .insert(gameSessions)
+        .values({ campaignId, characterId, sessionNumber: 1, status: 'active' })
+        .returning({ id: gameSessions.id });
+      sessionIds[row.name] = sessionId;
+      const combat = await CombatEncounterService.startCombat(
+        sessionId,
+        [
+          {
+            encounterId: testId('1317'),
+            characterId,
+            name: row.name,
+            initiativeModifier: 0,
+            initiativeRoll: 10,
+          },
+        ],
+        false,
+        userId,
+      );
+      encounterIds.push(combat.encounter.id);
+      expect(combat.participants.find((p) => p.characterId === characterId)?.speed).toBe(
+        row.expected,
+      );
+    }
   });
 
   test('the gnome seat persists 25 ft on the participant row', async () => {

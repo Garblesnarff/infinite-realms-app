@@ -12,6 +12,10 @@ import {
 import { ENCUMBRANCE_THRESHOLDS } from '../../shared/carrying-capacity';
 import { FULL_CASTER_SLOTS } from '../../shared/spell-slot-tables';
 import { findSrdClass } from '../../shared/srd-class-data';
+import {
+  applyMovementSpeedModifiers,
+  resolveCharacterCombatSpeed,
+} from '../../shared/srd-race-speed-data';
 
 import type { AbilityScores, Character, CharacterClass } from '@/types/character';
 
@@ -262,8 +266,31 @@ export const calculatePassivePerception = (
   return 10 + (mods['Perception']?.modifier || 0);
 };
 
-export const getBaseSpeed = (character: Character): number =>
-  character.subrace?.speed || character.race?.speed || 30;
+export const getBaseSpeed = (character: Character): number => {
+  const stats = Array.isArray(character.character_stats)
+    ? character.character_stats[0]
+    : character.character_stats;
+  const raceBase = character.subrace?.speed || character.race?.speed || 30;
+  const stored = stats?.speed;
+  const base =
+    stored && stored !== 30
+      ? resolveCharacterCombatSpeed(stored, character.race?.name, character.subrace?.name)
+      : raceBase;
+  return applyMovementSpeedModifiers(base, {
+    className: character.class?.name,
+    level: character.level,
+    classLevels: character.classLevels,
+    classFeatures: character.classFeatures,
+    feats: character.feats,
+    strength: character.abilityScores?.strength?.score,
+    race: character.race?.name,
+    equipment: character.inventory?.map((item) => ({
+      item_name: item.itemName || item.itemId,
+      item_type: item.itemType,
+      equipped: item.equipped,
+    })),
+  });
+};
 
 export const calculateInventoryWeight = (character: Character): number =>
   character.inventory?.reduce((total, item) => {
