@@ -58,25 +58,56 @@ export function stripProseOptionsList(text: string): string {
  * the shape and survive. #1062 removes this line for good via server-state
  * rendering; this strip is the safety net until then.
  */
-const TRAILING_BRACKET_RUN = /((?:\[[^[\]\n]{1,96}\]\s*){2,})\s*$/;
+const BRACKET_RUN = '(?:\\[[^[\\]\\n]{1,96}\\]\\s*){2,}';
+// A tracker run must end the string. A sentence period after a non-HP run
+// stays, the same as main (#1289 round 2).
+const TRAILING_BRACKET_RUN = new RegExp(`(${BRACKET_RUN})\\s*$`);
+// A period or ellipsis may close the run only when the run contains an HP
+// group, so "[HP 32/32] [Clock 0/6]…" still drops and
+// "[The door creaks] [Scene: cellar]." does not.
+const TRAILING_HP_RUN_WITH_PUNCT = new RegExp(`(${BRACKET_RUN})(?:\\.{3}|[.!?…]+)\\s*$`);
+// A lone trailing [HP n/n] with nothing after it. A sentence period is not
+// part of this footer: "The sign reads [HP 32/32]." stays.
+const LONE_FOOTER_HP = /\[HP\s*:?\s*\d+(?:\s*\/\s*(?:\d+|\?))?\s*\]\s*$/i;
+// HP groups sitting in a trailing tracker (other brackets may follow). Used
+// when stripping the whole run would empty the reply: drop the HP, keep the rest.
+const TRAILING_HP_GROUPS =
+  /(?:\[HP\s*:?\s*\d+(?:\s*\/\s*(?:\d+|\?))?\s*\]\s*)+(?=(?:\[[^[\]\n]{1,96}\]\s*)*(?:\.{3}|[.!?…]+)?\s*$)/gi;
 const TRACKER_GROUP =
   /^[A-Za-z0-9][A-Za-z0-9'’\- ]{0,30}(?:: [^[\].]{1,80}| \d+(?:\/\?|\/\d+)?| \d+)?$/;
 const TRACKER_ANCHOR = /^(HP|Clock|Scene)\b|: /;
 const TRACKER_ANCHOR_KEY = /^(HP|Clock|Scene)\b/;
 
+function withoutTrailingHp(text: string): string {
+  TRAILING_HP_GROUPS.lastIndex = 0;
+  const stripped = text.replace(TRAILING_HP_GROUPS, '');
+  return stripped === text ? text : stripped.replace(/[ \t]{2,}/g, ' ').trimEnd();
+}
+
+function matchingTrackerRun(
+  text: string,
+  pattern: RegExp,
+): { index: number; inners: string[] } | null {
+  const match = pattern.exec(text);
+  if (!match) return null;
+  const groups = match[1].match(/\[[^[\]\n]{1,96}\]/g);
+  if (!groups || groups.length < 2) return null;
+  const inners = groups.map((group) => group.slice(1, -1));
+  if (
+    !inners.every((inner) => TRACKER_GROUP.test(inner)) ||
+    !inners.some((inner) => TRACKER_ANCHOR.test(inner))
+  ) {
+    return null;
+  }
+  return { index: match.index, inners };
+}
+
 export function stripTrackerLine(text: string): string {
-  const match = TRAILING_BRACKET_RUN.exec(text);
-  if (match) {
-    const groups = match[1].match(/\[[^[\]\n]{1,96}\]/g);
-    if (groups && groups.length >= 2) {
-      const inners = groups.map((group) => group.slice(1, -1));
-      if (
-        inners.every((inner) => TRACKER_GROUP.test(inner)) &&
-        inners.some((inner) => TRACKER_ANCHOR.test(inner))
-      ) {
-        return text.slice(0, match.index).trimEnd();
-      }
-    }
+  const strict = matchingTrackerRun(text, TRAILING_BRACKET_RUN);
+  if (strict) return text.slice(0, strict.index).trimEnd();
+  const punctuated = matchingTrackerRun(text, TRAILING_HP_RUN_WITH_PUNCT);
+  if (punctuated && punctuated.inners.some((inner) => /^HP\b/i.test(inner))) {
+    return text.slice(0, punctuated.index).trimEnd();
   }
   // #1067 follow-up: a trailing UNTERMINATED bracket group whose inner text
   // starts with a tracker anchor (HP/Clock/Scene) is a cut-off tracker line
@@ -104,6 +135,8 @@ export function stripTrackerLine(text: string): string {
       return text.slice(0, cutAt).trimEnd();
     }
   }
+  const loneHp = LONE_FOOTER_HP.exec(text);
+  if (loneHp) return text.slice(0, loneHp.index).trimEnd();
   return text;
 }
 
@@ -494,6 +527,11 @@ export function normalizePartialNarration(text: string): string {
       cutAt(lastBracket);
     }
   }
+  // #1289: holding the open group above can leave a closed [HP n/n] at the
+  // end of the preview. Do not emit it — the final strip drops it too.
+  const trailingHp =
+    /\[HP\s*:?\s*\d+(?:\s*\/\s*(?:\d+|\?))?\s*\](?:\s*\[[^\]\n]{0,96}\])*\s*$/i.exec(out);
+  if (trailingHp) cutAt(trailingHp.index);
   // Unterminated <parameter tag — including a tag cut mid-word
   // ('<paramete'), which a literal '<parameter' match would miss and
   // which would otherwise be emitted and stall the stream.
@@ -618,14 +656,20 @@ export function normalizeReplyNarration(
     inner = nestedReplyEnvelope(text);
   }
 
+  const narration = text;
   const strippedText = stripArtifacts(text);
   const stripped = strippedText !== text;
   text = strippedText;
 
   // Fail open: an ugly reply beats an empty one (a dead-end by the playtest
   // criteria) — and a reply whose narration vanished must not keep rescued
-  // options or mechanics either.
-  if (text.trim() === '' && originalText.trim() !== '') return null;
+  // options or mechanics either. #1289: restoring a tracker-only reply put
+  // the model's [HP n/n] back on screen. Drop those HP groups instead.
+  if (text.trim() === '' && originalText.trim() !== '') {
+    const kept = withoutTrailingHp(narration).trim();
+    if (kept === narration.trim()) return null;
+    text = kept || '…';
+  }
   if (!unwrapped && !stripped) return null;
 
   staged.text = text;
