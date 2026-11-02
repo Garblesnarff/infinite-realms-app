@@ -20,23 +20,23 @@ vi.mock('../../../../db/client', () => ({
     select: vi.fn(() => ({
       from: vi.fn(() => ({
         where: vi.fn(() => ({
-          limit: vi.fn(),
-          innerJoin: vi.fn(() => ({
-            where: vi.fn(),
-          })),
+            limit: vi.fn(),
+            innerJoin: vi.fn(() => ({
+                where: vi.fn()
+            }))
         })),
         leftJoin: vi.fn(() => ({
-          leftJoin: vi.fn(() => ({
-            where: vi.fn(),
-          })),
+            leftJoin: vi.fn(() => ({
+                where: vi.fn()
+            }))
         })),
         innerJoin: vi.fn(() => ({
-          leftJoin: vi.fn(() => ({
             leftJoin: vi.fn(() => ({
-              where: vi.fn(),
-            })),
-          })),
-        })),
+                leftJoin: vi.fn(() => ({
+                    where: vi.fn()
+                }))
+            }))
+        }))
       })),
     })),
     insert: vi.fn(() => ({
@@ -62,14 +62,14 @@ vi.mock('../../../../db/client', () => ({
 vi.mock('drizzle-orm', async () => {
   const actual = await vi.importActual('drizzle-orm');
   return {
-    ...(actual as any),
+    ...actual as any,
     and: vi.fn((...args) => ({ type: 'and', args })),
     or: vi.fn((...args) => ({ type: 'or', args })),
     eq: vi.fn((a, b) => ({ type: 'eq', a, b })),
     inArray: vi.fn((a, b) => ({ type: 'inArray', a, b })),
     sql: Object.assign(
       vi.fn((strings, ...values) => ({ strings, values, type: 'sql' })),
-      { join: vi.fn((args) => args) },
+      { join: vi.fn((args) => args) }
     ),
     exists: vi.fn((subquery) => ({ type: 'exists', subquery })),
   };
@@ -98,7 +98,9 @@ describe('CombatEncounterService', () => {
   describe('startCombat', () => {
     it('should use verifyCharactersAccessBatch for multiple characters', async () => {
       // 1. Mock batch character access check.
-      (db.select as any).mockReturnValueOnce(mockSelectChain([{ id: 'char-1' }, { id: 'char-2' }]));
+      (db.select as any).mockReturnValueOnce(
+        mockSelectChain([{ id: 'char-1' }, { id: 'char-2' }]),
+      );
 
       // 2. Mock session ownership lookup introduced by the explicit-write migration.
       (db.select as any).mockReturnValueOnce(
@@ -119,46 +121,26 @@ describe('CombatEncounterService', () => {
       // Mock encounter creation with an explicit INSERT ... VALUES
       (db.insert as any).mockReturnValueOnce({
         values: vi.fn().mockReturnThis(),
-        returning: vi
-          .fn()
-          .mockResolvedValue([
-            { id: 'enc-123', status: 'active', currentRound: 1, currentTurnOrder: 0 },
-          ]),
+        returning: vi.fn().mockResolvedValue([{ id: 'enc-123', status: 'active', currentRound: 1, currentTurnOrder: 0 }])
       });
 
       // Mock participants insertion
       (db.insert as any).mockReturnValueOnce({
         values: vi.fn().mockReturnThis(),
         returning: vi.fn().mockResolvedValue([
-          {
-            id: 'p1',
-            name: 'Player 1',
-            characterId: 'char-1',
-            initiative: 15,
-            initiativeModifier: 2,
-            turnOrder: 0,
-            isActive: true,
-          },
-          {
-            id: 'p2',
-            name: 'Player 2',
-            characterId: 'char-2',
-            initiative: 10,
-            initiativeModifier: 1,
-            turnOrder: 1,
-            isActive: true,
-          },
-        ]),
+          { id: 'p1', name: 'Player 1', characterId: 'char-1', initiative: 15, initiativeModifier: 2, turnOrder: 0, isActive: true },
+          { id: 'p2', name: 'Player 2', characterId: 'char-2', initiative: 10, initiativeModifier: 1, turnOrder: 1, isActive: true }
+        ])
       });
 
       await CombatEncounterService.startCombat(
         mockSessionId,
         [
           { name: 'Player 1', characterId: 'char-1', initiativeModifier: 2, encounterId: '' },
-          { name: 'Player 2', characterId: 'char-2', initiativeModifier: 1, encounterId: '' },
+          { name: 'Player 2', characterId: 'char-2', initiativeModifier: 1, encounterId: '' }
         ],
         false,
-        mockUserId,
+        mockUserId
       );
 
       // Verify that db.select was called for characters
@@ -169,20 +151,18 @@ describe('CombatEncounterService', () => {
       // Mock batch character access check - only one character found
       (db.select as any).mockReturnValueOnce({
         from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue([{ id: 'char-1' }]),
+        where: vi.fn().mockResolvedValue([{ id: 'char-1' }])
       });
 
-      await expect(
-        CombatEncounterService.startCombat(
-          mockSessionId,
-          [
-            { name: 'Player 1', characterId: 'char-1', initiativeModifier: 2, encounterId: '' },
-            { name: 'Player 2', characterId: 'char-2', initiativeModifier: 1, encounterId: '' },
-          ],
-          false,
-          mockUserId,
-        ),
-      ).rejects.toThrow(NotFoundError);
+      await expect(CombatEncounterService.startCombat(
+        mockSessionId,
+        [
+          { name: 'Player 1', characterId: 'char-1', initiativeModifier: 2, encounterId: '' },
+          { name: 'Player 2', characterId: 'char-2', initiativeModifier: 1, encounterId: '' }
+        ],
+        false,
+        mockUserId
+      )).rejects.toThrow(NotFoundError);
     });
   });
 });
