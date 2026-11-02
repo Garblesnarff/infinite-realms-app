@@ -1245,7 +1245,7 @@ describe('declined re-offer lift (#1328)', () => {
     expect(
       dmResponseTargetsDeclinedActor(
         response({
-          combatants: [{ name: 'Gilded Husk', count: 1 }],
+          combatants: [{ monster_id: '', name: 'Gilded Husk', count: 1 }],
           map_actions: [
             {
               action: 'forced_move',
