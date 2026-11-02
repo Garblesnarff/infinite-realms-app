@@ -176,14 +176,24 @@ export class ClassFeatureUsageService {
     // feature as unlimited.
     const gatedAbility = abilityScoreForFeature(feature.featureName);
     if (gatedAbility) {
-      const [stats] = await db
-        .select({
-          charisma: characterStats.charisma,
-          wisdom: characterStats.wisdom,
-        })
-        .from(characterStats)
-        .where(eq(characterStats.characterId, characterId))
-        .limit(1);
+      const readStats = () =>
+        db
+          .select({
+            charisma: characterStats.charisma,
+            wisdom: characterStats.wisdom,
+          })
+          .from(characterStats)
+          .where(eq(characterStats.characterId, characterId))
+          .limit(1);
+      let [stats] = await readStats();
+      if (!stats) {
+        // A character written before its stats row was (legacy and premade rows, #2459) gets the
+        // schema-default scores, the same ones an import that omits stats gets. Ownership was
+        // proven by the feature lookup above.
+        logger.warn({ msg: 'CHARACTER_STATS_ROW_CREATED_FOR_ABILITY_FEATURE', characterId });
+        await db.insert(characterStats).values({ characterId });
+        [stats] = await readStats();
+      }
       const score = stats?.[gatedAbility];
       if (typeof score !== 'number') {
         return {
