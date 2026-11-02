@@ -1694,6 +1694,61 @@ describeWithDb('package gear reaches the session (#1007)', () => {
       );
     expect(quantities.find((row) => row.id === firstStack.id)?.quantity).toBe(1);
     expect(quantities.find((row) => row.id === secondStack.id)?.quantity).toBe(15);
+
+    // Deleting the emptied stack must not prevent combat from ending.
+    await db.delete(characterEquipment).where(eq(characterEquipment.id, firstStack.id));
+    await db
+      .update(characterEquipment)
+      .set({ quantity: 2 })
+      .where(eq(characterEquipment.id, secondStack.id));
+    const missingFight = await seat(id);
+    for (let shot = 0; shot < 2; shot++) {
+      await resetTurn(missingFight.encounterId);
+      const [{ version }] = await db
+        .select({ version: combatEncounters.version })
+        .from(combatEncounters)
+        .where(eq(combatEncounters.id, missingFight.encounterId));
+      const response = await app.handle(
+        new Request(`http://localhost/v1/combat/${missingFight.encounterId}/intent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            intent: {
+              type: 'attack',
+              actorId: missingFight.heroId,
+              targetId: missingFight.foeId,
+              weaponId: 'Crossbow, light',
+              expectedVersion: version,
+              d20: 5,
+            },
+            source: 'player',
+            origin: 'action_bar',
+          }),
+        }),
+      );
+      expect(response.status).toBe(200);
+    }
+    const [empty] = await db
+      .select({ quantity: characterEquipment.quantity })
+      .from(characterEquipment)
+      .where(eq(characterEquipment.id, secondStack.id));
+    expect(empty.quantity).toBe(0);
+    await db.delete(characterEquipment).where(eq(characterEquipment.id, secondStack.id));
+    const missingEnd = await app.handle(
+      new Request(`http://localhost/v1/combat/${missingFight.encounterId}/end`, { method: 'POST' }),
+    );
+    expect(missingEnd.status, await missingEnd.clone().text()).toBe(200);
+    const [closed] = await db
+      .select({ status: combatEncounters.status })
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, missingFight.encounterId));
+    expect(closed.status).toBe('completed');
+    expect((await equipmentRows(id)).filter((row) => /bolts/i.test(row.item_name))).toHaveLength(0);
+    const messages = await db
+      .select({ message: dialogueHistory.message })
+      .from(dialogueHistory)
+      .where(eq(dialogueHistory.sessionId, missingFight.sessionId));
+    expect(messages.some((row) => row.message === 'Nothing to recover the bolts into.')).toBe(true);
   });
 
   it('the legacy attack route cannot fire a crossbow without bolts (#1327)', async () => {
