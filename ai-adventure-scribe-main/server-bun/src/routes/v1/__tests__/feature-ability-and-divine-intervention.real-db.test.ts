@@ -1,9 +1,8 @@
 /* eslint-disable max-lines */
 /**
- * #1232: Bardic Inspiration and War Priest spend for a character whose
- * characterStats row is missing (the row is written with the schema-default
- * scores), and a successful Divine Intervention is not refilled by a long rest
- * for 7 days. A logged failure is refilled.
+ * #1232: Bardic Inspiration and War Priest are refused when the character has
+ * no characterStats row, and a successful Divine Intervention is not refilled
+ * by a long rest for 7 days. A logged failure is refilled.
  *
  * Posts through POST /v1/characters and the class-features use and restore
  * routes. Auth is stubbed. CharacterService and ClassFeatureUsageService are not.
@@ -151,7 +150,16 @@ describeWithDb('ability-gated features and Divine Intervention (#1232)', () => {
     await closeRealDb();
   });
 
-  it('spends Bardic Inspiration and War Priest when the stats row is gone, writing the row', async () => {
+  // A refused spend must not write a stats row: the lazy row would carry schema-default HP and AC.
+  const statsRowCount = async (characterId: string): Promise<number> =>
+    (
+      await db
+        .select({ id: characterStats.id })
+        .from(characterStats)
+        .where(eq(characterStats.characterId, characterId))
+    ).length;
+
+  it('refuses Bardic Inspiration and War Priest when the stats row is gone', async () => {
     const bardId = await create(`Bard ${testId('1232')}`, 'Bard', 1);
     await db.delete(characterStats).where(eq(characterStats.characterId, bardId));
     const bardic = named(await held(bardId), 'Bardic Inspiration (d6)');
@@ -161,12 +169,9 @@ describeWithDb('ability-gated features and Divine Intervention (#1232)', () => {
       'POST',
       {},
     );
-    expect(bardicUse.status, bardicUse.text.slice(0, 300)).toBe(200);
-    const [bardStats] = await db
-      .select({ charisma: characterStats.charisma })
-      .from(characterStats)
-      .where(eq(characterStats.characterId, bardId));
-    expect(bardStats?.charisma).toBe(10);
+    expect(bardicUse.status).toBe(400);
+    expect((bardicUse.json as { message?: string }).message).toContain('ability score');
+    expect(await statsRowCount(bardId)).toBe(0);
 
     const clericId = await create(`Cleric ${testId('1232')}`, 'Cleric', 1);
     await db.delete(characterStats).where(eq(characterStats.characterId, clericId));
@@ -192,12 +197,9 @@ describeWithDb('ability-gated features and Divine Intervention (#1232)', () => {
       'POST',
       {},
     );
-    expect(warPriestUse.status, warPriestUse.text.slice(0, 300)).toBe(200);
-    const [clericStats] = await db
-      .select({ wisdom: characterStats.wisdom })
-      .from(characterStats)
-      .where(eq(characterStats.characterId, clericId));
-    expect(clericStats?.wisdom).toBe(10);
+    expect(warPriestUse.status).toBe(400);
+    expect((warPriestUse.json as { message?: string }).message).toContain('ability score');
+    expect(await statsRowCount(clericId)).toBe(0);
   });
 
   it('does not refill Divine Intervention for 7 days after a success', async () => {

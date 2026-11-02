@@ -176,31 +176,29 @@ export class ClassFeatureUsageService {
     // feature as unlimited.
     const gatedAbility = abilityScoreForFeature(feature.featureName);
     if (gatedAbility) {
-      const readStats = () =>
-        db
-          .select({
-            charisma: characterStats.charisma,
-            wisdom: characterStats.wisdom,
-          })
-          .from(characterStats)
-          .where(eq(characterStats.characterId, characterId))
-          .limit(1);
-      let [stats] = await readStats();
-      if (!stats) {
-        // A character written before its stats row was (legacy and premade rows, #2459) gets the
-        // schema-default scores, the same ones an import that omits stats gets. Ownership was
-        // proven by the feature lookup above.
-        logger.warn({ msg: 'CHARACTER_STATS_ROW_CREATED_FOR_ABILITY_FEATURE', characterId });
-        await db.insert(characterStats).values({ characterId });
-        [stats] = await readStats();
-      }
+      const [stats] = await db
+        .select({
+          charisma: characterStats.charisma,
+          wisdom: characterStats.wisdom,
+        })
+        .from(characterStats)
+        .where(eq(characterStats.characterId, characterId))
+        .limit(1);
       const score = stats?.[gatedAbility];
       if (typeof score !== 'number') {
+        // Refused, and no stats row is written: a row written here would carry the schema
+        // defaults for HP and AC too (#1232). Rows that are missing are legacy data; the
+        // backfill that writes them is a separate, approved change.
+        logger.warn({
+          msg: 'ABILITY_FEATURE_STATS_ROW_MISSING',
+          characterId,
+          feature: feature.featureName,
+        });
         return {
           success: false,
           usesRemaining: 0,
           effect: '',
-          message: `${feature.featureName} is not spent: its uses depend on an ability score this character has none of`,
+          message: `${feature.featureName} is not spent: its uses depend on an ability score this character has none of. Set the character's ability scores to spend it.`,
         };
       }
     }
