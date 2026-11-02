@@ -34,6 +34,7 @@ export interface CharacterStatsRow {
   wisdom: number;
   charisma: number;
   armor_class?: number | null;
+  speed?: number | null;
   max_hit_points?: number | null;
   current_hit_points?: number | null;
   /** #2517: the single truth for "dead", read by the sheet's end state. */
@@ -447,7 +448,7 @@ const parsePactSlots = (raw: unknown): Character['pactSlots'] => {
  * classId, hitDie and features; a server-written entry ({ className, level }) takes its hit
  * die from the class data, since the multiclass cards print it (ClassDetailCard "d{hitDie}").
  */
-const parseClassLevels = (raw: unknown): Character['classLevels'] => {
+export const parseClassLevels = (raw: unknown): Character['classLevels'] => {
   const value = jsonColumn(raw);
   if (!Array.isArray(value)) return undefined;
   const entries = value.flatMap((entry) => {
@@ -534,6 +535,7 @@ export const transformCharacterData = (
           wisdom: statsData.wisdom,
           charisma: statsData.charisma,
           armor_class: statsData.armor_class as number | undefined,
+          speed: statsData.speed as number | undefined,
           max_hit_points: statsData.max_hit_points as number | undefined,
           current_hit_points: statsData.current_hit_points as number | undefined,
           // #2517: carried through so the sheet can show the end state.

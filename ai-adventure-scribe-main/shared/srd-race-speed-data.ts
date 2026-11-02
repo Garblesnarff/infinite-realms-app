@@ -1,3 +1,5 @@
+import { describeArmorClass, type ArmorClassEquipmentItem } from './armor-class';
+
 /**
  * SRD race/subrace walking speeds in feet (#1251).
  *
@@ -110,4 +112,75 @@ export function resolveCharacterCombatSpeed(
   const stored = Number(storedSpeed);
   if (Number.isFinite(stored) && stored > 0 && stored !== DEFAULT_STORED_SPEED) return stored;
   return resolveRaceSpeed(race, subrace);
+}
+
+export interface MovementSpeedModifiers {
+  className?: string | null;
+  level?: number | null;
+  classLevels?: unknown;
+  classFeatures?: unknown;
+  feats?: readonly string[];
+  strength?: number | null;
+  race?: string | null;
+  equipment?: ArmorClassEquipmentItem[];
+}
+
+function parseStoredJson(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+export function hasMobileFeat(
+  feats: readonly string[] | undefined,
+  classFeatures: unknown,
+): boolean {
+  if (feats?.some((feat) => feat.trim().toLowerCase() === 'mobile')) return true;
+  const features = parseStoredJson(classFeatures);
+  if (!features || typeof features !== 'object') return false;
+  return (features as Record<string, { name?: unknown }>)['feat:mobile']?.name === 'Mobile';
+}
+
+/** 2014 walking-speed modifiers, applied after the race or explicit base speed. */
+export function applyMovementSpeedModifiers(
+  baseSpeed: number,
+  input: MovementSpeedModifiers,
+): number {
+  const storedLevels = parseStoredJson(input.classLevels);
+  const levels =
+    Array.isArray(storedLevels) && storedLevels.length
+      ? (storedLevels as Array<{ className?: unknown; level?: unknown }>)
+      : [{ className: input.className, level: input.level }];
+  const classLevel = (name: string): number =>
+    levels.reduce(
+      (total, entry) =>
+        typeof entry?.className === 'string' &&
+        entry.className.trim().toLowerCase() === name &&
+        typeof entry.level === 'number' &&
+        Number.isFinite(entry.level)
+          ? total + entry.level
+          : total,
+      0,
+    );
+  const worn = describeArmorClass(input.equipment, 0, { warn: () => {} });
+  const armored = Boolean(worn.armor || worn.unrecognizedArmorNames.length);
+  const heavy = worn.armor?.category === 'heavy';
+  let speed = baseSpeed;
+  if (classLevel('barbarian') >= 5 && !heavy) speed += 10;
+  const monk = classLevel('monk');
+  if (monk >= 2 && !armored && worn.shieldBonus === 0) {
+    speed += monk >= 18 ? 30 : monk >= 14 ? 25 : monk >= 10 ? 20 : monk >= 6 ? 15 : 10;
+  }
+  if (hasMobileFeat(input.feats, input.classFeatures)) speed += 10;
+  if (
+    heavy &&
+    worn.armor?.strengthRequirement &&
+    (input.strength ?? 10) < worn.armor.strengthRequirement &&
+    normalizeName(input.race) !== 'dwarf'
+  )
+    speed -= 10;
+  return Math.max(0, speed);
 }
