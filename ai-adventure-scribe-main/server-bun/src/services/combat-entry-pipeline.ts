@@ -17,11 +17,18 @@ import {
 } from './combat/combat-entry-campaign-index.js';
 import {
   detectCombatEntry,
+  dmResponseTargetsDeclinedActor,
+  isPlayerAttackOnDeclinedActor,
   mapActionTarget,
   synthesizeSceneSpec,
 } from './combat/combat-entry-gate.js';
 import { nameUnresolvedCombatants } from './combat/combat-entry-unnamed-hostile.js';
 import { expandDerivedCombatants } from './combat/encounter-sizing.js';
+import {
+  actorKeyOf,
+  liftCombatEntryDecline,
+  readDeclinedCombatEntryActorKeys,
+} from './combat/pending-combat-entry.js';
 import { sanitizeSceneSpec as defaultSanitizeSceneSpec } from './combat/scene-spec-sanitizer.js';
 import { isUnresolvedNpcName } from '../../../shared/unresolved-creature-name';
 import { logger } from '../lib/logger.js';
@@ -482,6 +489,44 @@ export async function applyCombatEntryGate(params: {
         sessionId: combatEntry.sessionId,
         error,
       });
+    }
+  }
+
+  // #1328: a declined offer is not re-offered for the same actors until
+  // the DM narrates a new hostile act by that hostile or the player
+  // attacks it. Checked before holdPending so a suppressed offer is never
+  // stored or broadcast. A bare `combat_transition: 'start'` does not lift:
+  // the queue's lift is a hostile act or the player's attack, not a
+  // re-declaration. The first offer is never suppressed: no decline exists
+  // for it yet, and a different hostile has a different actor key.
+  if (pending) {
+    const declinedKeys = await readDeclinedCombatEntryActorKeys(combatEntry.sessionId);
+    const actorKey = actorKeyOf(pending);
+    if (actorKey && declinedKeys.includes(actorKey)) {
+      const lifted =
+        isPlayerAttackOnDeclinedActor(declaredAttack, actorKey) ||
+        dmResponseTargetsDeclinedActor(
+          envelope as unknown as CombatEntryResponse,
+          actorKey,
+          combatEntry.player.name,
+        );
+      if (lifted) {
+        await liftCombatEntryDecline(combatEntry.sessionId, actorKey);
+      } else {
+        logger.info({
+          msg: 'COMBAT_ENTRY_DECLINED_SUPPRESSED',
+          sessionId: combatEntry.sessionId,
+          trigger: pending.trigger,
+          detail: pending.detail,
+          actorKey,
+        });
+        const rest = { ...envelope } as Record<string, unknown>;
+        delete rest.combat_entry_pending;
+        return {
+          ...sanitizedResult,
+          text: JSON.stringify({ ...rest, combat_transition: 'none' }),
+        };
+      }
     }
   }
 

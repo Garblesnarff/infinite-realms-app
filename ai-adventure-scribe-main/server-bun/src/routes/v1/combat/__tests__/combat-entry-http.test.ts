@@ -5,6 +5,13 @@ import {
   HEADLESS_ENTRY_CHARACTER_ID,
   headlessEntryEnterBody,
 } from '../../../../../../shared/test-fixtures/combat-entry-headless';
+import {
+  holdOrDropPending,
+  readDeclinedCombatEntryActorKeys,
+  recordCombatEntryDecline,
+  resetPendingCombatEntries,
+  setPendingEntryClockForTests,
+} from '../../../../services/combat/pending-combat-entry.js';
 
 process.env.DATABASE_URL ??= 'postgres://test.invalid/unused';
 process.env.PORT ??= '8892';
@@ -151,6 +158,23 @@ describe('POST /v1/combat/sessions/:sessionId/enter', () => {
     });
   });
 
+  it('a successful seat from a stored pending lifts that pending decline (#1328)', async () => {
+    await holdOrDropPending(SESSION_ID, 'user-owner', {
+      trigger: 'combat_transition',
+      detail: 'combat_transition="start"',
+      combatants: [{ name: 'Geometrist', count: 1 }],
+      sceneSpec: { sessionId: SESSION_ID, environment: 'cave', size: 'medium' },
+      sceneSpecSynthesized: true,
+    });
+    await recordCombatEntryDecline(SESSION_ID, 'geometrist');
+    expect(await readDeclinedCombatEntryActorKeys(SESSION_ID)).toEqual(['geometrist']);
+
+    // The confirm dialog's accept path seats from the stored pending.
+    const response = await request({ ...validBody(), fromPending: true });
+    expect(response.status).toBe(201);
+    expect(await readDeclinedCombatEntryActorKeys(SESSION_ID)).toEqual([]);
+  });
+
   it('forwards the server-detected player declaration to first-action derivation', async () => {
     const declaredAttack = {
       verb: 'punch',
@@ -291,5 +315,89 @@ describe('POST /v1/combat/sessions/:sessionId/enter', () => {
     const response = await request({ ...validBody(), playerInitiativeRoll: roll });
     expect(response.status).toBe(422);
     expect(seatCalls).toHaveLength(0);
+  });
+});
+
+describe('DELETE /v1/combat/sessions/:sessionId/pending (#1328)', () => {
+  const DELETE_SESSION = '44444444-5555-4666-8777-888888888888';
+
+  beforeEach(async () => {
+    authenticated = true;
+    sessionOwned = true;
+    // The DELETE handler skips recording when a fight is live, so a
+    // leftover seated encounter from the POST block must not leak in.
+    encounterActive = false;
+    await resetPendingCombatEntries();
+  });
+
+  it('declining records the pending entry actor key for the next turn gate', async () => {
+    await holdOrDropPending(DELETE_SESSION, 'user-owner', {
+      trigger: 'combat_transition',
+      detail: 'combat_transition="start"',
+      combatants: [{ name: 'Gilded Husk', count: 1 }],
+      sceneSpec: { sessionId: DELETE_SESSION, environment: 'cave', size: 'medium' },
+      sceneSpecSynthesized: true,
+    });
+    const response = await app.handle(
+      new Request(`http://localhost/sessions/${DELETE_SESSION}/pending`, {
+        method: 'DELETE',
+      }),
+    );
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(response.status).toBe(200);
+    expect(body).toEqual({ cleared: true });
+    expect(await readDeclinedCombatEntryActorKeys(DELETE_SESSION)).toEqual(['gilded husk']);
+  });
+
+  it('DELETE with nothing pending records nothing', async () => {
+    const response = await app.handle(
+      new Request(`http://localhost/sessions/${DELETE_SESSION}/pending`, {
+        method: 'DELETE',
+      }),
+    );
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(response.status).toBe(200);
+    expect(body).toEqual({ cleared: true });
+    expect(await readDeclinedCombatEntryActorKeys(DELETE_SESSION)).toEqual([]);
+  });
+
+  it('DELETE of an expired pending records nothing (expiry is not a decline)', async () => {
+    await holdOrDropPending(DELETE_SESSION, 'user-owner', {
+      trigger: 'combat_transition',
+      detail: 'combat_transition="start"',
+      combatants: [{ name: 'Gilded Husk', count: 1 }],
+      sceneSpec: { sessionId: DELETE_SESSION, environment: 'cave', size: 'medium' },
+      sceneSpecSynthesized: true,
+    });
+    try {
+      setPendingEntryClockForTests(() => Date.now() + 91_000);
+      const response = await app.handle(
+        new Request(`http://localhost/sessions/${DELETE_SESSION}/pending`, {
+          method: 'DELETE',
+        }),
+      );
+      expect(response.status).toBe(200);
+    } finally {
+      setPendingEntryClockForTests(() => Date.now());
+    }
+    expect(await readDeclinedCombatEntryActorKeys(DELETE_SESSION)).toEqual([]);
+  });
+
+  it('DELETE while a fight is live records nothing (409-cleanup path)', async () => {
+    await holdOrDropPending(DELETE_SESSION, 'user-owner', {
+      trigger: 'combat_transition',
+      detail: 'combat_transition="start"',
+      combatants: [{ name: 'Gilded Husk', count: 1 }],
+      sceneSpec: { sessionId: DELETE_SESSION, environment: 'cave', size: 'medium' },
+      sceneSpecSynthesized: true,
+    });
+    encounterActive = true;
+    const response = await app.handle(
+      new Request(`http://localhost/sessions/${DELETE_SESSION}/pending`, {
+        method: 'DELETE',
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(await readDeclinedCombatEntryActorKeys(DELETE_SESSION)).toEqual([]);
   });
 });

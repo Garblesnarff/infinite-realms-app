@@ -153,6 +153,99 @@ const titleize = (slug: string): string =>
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ') || 'Hostile Creature';
 
+/**
+ * #1328: the actor names a decline record holds, from its stored key
+ * (sorted lowercase names joined by `|`, as `actorKeyOf` builds it).
+ */
+export function declinedActorNames(actorKey: string): string[] {
+  return actorKey
+    .split('|')
+    .map((name) => name.trim())
+    .filter(Boolean);
+}
+
+/**
+ * #1328: whether this turn's DM response narrates a new hostile act that
+ * lifts a decline. The gate reads structured signals, so a hostile act
+ * narrated in prose alone, with no structured action, does not lift.
+ *
+ * In the DM contract (`dm-response-schema.ts`) a combat action's
+ * `actor_id` is the attacker and `target_ids` are the victims — so the
+ * canonical hostile attack is `actor_id: <hostile>, target_ids: [<player>]`,
+ * and matching targets alone would miss it. A hostile act is an `attack`
+ * or `cast_spell` (which covers AoE spells, whose action carries no
+ * `target_ids` at all); `dash`, `hide`, `dodge`, `disengage`, `help`,
+ * `ready`, `yield`, `flee`, `second_wind`, `action_surge`, `use_object`
+ * never lift. A hostile act targeting the declined hostile also lifts
+ * (DM-narrated violence involving it).
+ *
+ * Map actions: a plain `move`/`place`/`remove`/`update_cell` names its
+ * entity but is repositioning, not a hostile act, so it never lifts. A
+ * `forced_move` names only its victim (mode `shove`/`pull` — the
+ * structured grab/shove shapes) and carries no actor, so the shover is
+ * unattributable: a shove/pull lifts only when its victim is the
+ * declined hostile itself or the player (the two defensible cases —
+ * the hostile shoving the player, or the player shoving the hostile).
+ * A shove of a third party in the same turn does not lift, even when
+ * the turn's authored combatants name the declined hostile.
+ * `teleport` is repositioning and does not lift. Unattributed signals
+ * lift only when the victim is the player or the declined hostile;
+ * `roll_requests` carry no victim field, so an attack delivered only
+ * as a roll request does not lift.
+ */
+export function dmResponseTargetsDeclinedActor(
+  response: CombatEntryResponse,
+  actorKey: string,
+  playerName?: string | null,
+): boolean {
+  const declined = declinedActorNames(actorKey).map((name) => slugify(name));
+  if (!declined.length) return false;
+  for (const action of asArray(response.combat_actions)) {
+    const actionType = (action as { action_type?: string }).action_type;
+    if (actionType !== 'attack' && actionType !== 'cast_spell') continue;
+    const actor = slugify((action as { actor_id?: string }).actor_id ?? '');
+    if (actor && declined.includes(actor)) return true;
+    for (const target of asArray((action as { target_ids?: string[] }).target_ids)) {
+      if (typeof target === 'string' && target.trim() && declined.includes(slugify(target))) {
+        return true;
+      }
+    }
+  }
+  for (const action of asArray(response.map_actions)) {
+    if (action.action !== 'forced_move') continue;
+    const mode = (action as { mode?: string }).mode;
+    if (mode !== 'shove' && mode !== 'pull') continue;
+    const target = (action as { target?: string }).target ?? '';
+    if (declined.includes(slugify(target))) return true;
+    // The player victim arrives as a slug in real envelopes
+    // ('the-storyteller'), which isPlayerCharacterName alone does not
+    // equate with 'The Storyteller' (its article strip handles the
+    // space form only), so check the slug form too.
+    if (
+      playerName &&
+      (isPlayerCharacterName(target, [playerName]) || slugify(target) === slugify(playerName))
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * #1328: whether the player's own attack targets a declined hostile.
+ * The declared target's name or slug must match a declined actor name.
+ */
+export function isPlayerAttackOnDeclinedActor(
+  declaredAttack: DeclaredAttack | null | undefined,
+  actorKey: string,
+): boolean {
+  if (!declaredAttack) return false;
+  const declined = declinedActorNames(actorKey).map((name) => slugify(name));
+  return [slugify(declaredAttack.actorName), slugify(declaredAttack.actorSlug ?? '')]
+    .filter(Boolean)
+    .some((candidate) => declined.includes(candidate));
+}
+
 export interface DerivedCombatant {
   name: string;
   monsterId?: string;

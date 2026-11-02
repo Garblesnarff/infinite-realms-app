@@ -30,6 +30,18 @@ import type {
 
 export const COMBAT_ENTRY_PENDING_KEY = 'combatEntryPending';
 
+/**
+ * #1328: hostiles the player declined to fight, by actor key.
+ *
+ * A decline must survive the next turn or the gate re-offers the same fight
+ * the player just refused. The record lives beside the pending entry so two
+ * server processes (SO_REUSEPORT) share it, and it lifts only on a new
+ * hostile act by that hostile or the player's own attack (see
+ * combat-entry-gate.ts). It is session-scoped: a decline in one session
+ * never suppresses an offer in another.
+ */
+export const COMBAT_ENTRY_DECLINED_KEY = 'combatEntryDeclined';
+
 /** How long a proposal waits for Strike or an initiative result. */
 export const PENDING_ENTRY_TTL_MS = 90_000;
 
@@ -44,6 +56,13 @@ export interface StoredCombatEntry {
 
 const memory = new Map<string, StoredCombatEntry>();
 const touchedSessions = new Set<string>();
+
+/** #1328: declined actor keys per session (process-local mirror of the row). */
+const declinedMemory = new Map<string, Set<string>>();
+
+interface StoredDeclined {
+  actorKeys: string[];
+}
 
 let nowMs = (): number => Date.now();
 
@@ -141,6 +160,74 @@ async function deleteStored(sessionId: string): Promise<void> {
 
 function expired(stored: StoredCombatEntry): boolean {
   return nowMs() - stored.proposedAt > PENDING_ENTRY_TTL_MS;
+}
+
+function parseDeclined(state: unknown): string[] | null {
+  if (!state || typeof state !== 'object') return null;
+  const raw = (state as Record<string, unknown>)[COMBAT_ENTRY_DECLINED_KEY];
+  if (!raw || typeof raw !== 'object') return null;
+  const keys = (raw as Partial<StoredDeclined>).actorKeys;
+  if (!Array.isArray(keys) || keys.some((key) => typeof key !== 'string')) return null;
+  return [...keys];
+}
+
+async function readDeclined(sessionId: string): Promise<string[]> {
+  if (!databaseReachable()) return [...(declinedMemory.get(sessionId) ?? [])];
+  try {
+    const db = await liveDb();
+    const [row] = await db
+      .select({ state: gameSessions.sessionState })
+      .from(gameSessions)
+      .where(eq(gameSessions.id, sessionId))
+      .limit(1);
+    // A reachable database that has no key wins over process memory, so a
+    // lifted decline cannot be resurrected by a stale map entry.
+    return parseDeclined(row?.state) ?? [];
+  } catch (error) {
+    logger.warn({ msg: 'COMBAT_ENTRY_DECLINED_READ_FAILED', sessionId, error });
+    return [...(declinedMemory.get(sessionId) ?? [])];
+  }
+}
+
+async function writeDeclined(sessionId: string, actorKeys: string[]): Promise<void> {
+  declinedMemory.set(sessionId, new Set(actorKeys));
+  touchedSessions.add(sessionId);
+  if (!databaseReachable()) return;
+  try {
+    const db = await liveDb();
+    await db
+      .update(gameSessions)
+      .set({
+        sessionState: sql`jsonb_set(COALESCE(${gameSessions.sessionState}, '{}'::jsonb), '{combatEntryDeclined}', ${JSON.stringify({ actorKeys } satisfies StoredDeclined)}::jsonb, true)`,
+        updatedAt: new Date(),
+      })
+      .where(eq(gameSessions.id, sessionId));
+  } catch (error) {
+    logger.warn({ msg: 'COMBAT_ENTRY_DECLINED_WRITE_FAILED', sessionId, error });
+  }
+}
+
+/**
+ * #1328: remember that the player declined the fight with these actors.
+ * An empty key declines nothing: there is nothing to match.
+ */
+export async function recordCombatEntryDecline(sessionId: string, actorKey: string): Promise<void> {
+  const key = actorKey.trim();
+  if (!key) return;
+  const keys = await readDeclined(sessionId);
+  if (!keys.includes(key)) keys.push(key);
+  await writeDeclined(sessionId, keys);
+}
+
+/** #1328: the declined actor keys for this session, in record order. */
+export async function readDeclinedCombatEntryActorKeys(sessionId: string): Promise<string[]> {
+  return readDeclined(sessionId);
+}
+
+/** #1328: lift the suppression for one actor key (new hostile act, player attack). */
+export async function liftCombatEntryDecline(sessionId: string, actorKey: string): Promise<void> {
+  const keys = (await readDeclined(sessionId)).filter((key) => key !== actorKey);
+  await writeDeclined(sessionId, keys);
 }
 
 async function broadcastPending(sessionId: string, pending: CombatEntryPending): Promise<void> {
@@ -331,10 +418,11 @@ export async function seatStoredPendingEntry(params: {
   return outcome;
 }
 
-/** Drop every in-process proposal and the rows this process wrote. Route tests share a session id. */
+/** Drop every in-process proposal and decline, and the rows this process wrote. Route tests share a session id. */
 export async function resetPendingCombatEntries(): Promise<void> {
   const sessions = [...touchedSessions];
   memory.clear();
+  declinedMemory.clear();
   touchedSessions.clear();
   if (!databaseReachable()) return;
   const db = await liveDb();
@@ -343,7 +431,7 @@ export async function resetPendingCombatEntries(): Promise<void> {
       await db
         .update(gameSessions)
         .set({
-          sessionState: sql`COALESCE(${gameSessions.sessionState}, '{}'::jsonb) - ${COMBAT_ENTRY_PENDING_KEY}`,
+          sessionState: sql`COALESCE(${gameSessions.sessionState}, '{}'::jsonb) - ${COMBAT_ENTRY_PENDING_KEY} - ${COMBAT_ENTRY_DECLINED_KEY}`,
           updatedAt: new Date(),
         })
         .where(eq(gameSessions.id, sessionId));
@@ -354,16 +442,23 @@ export async function resetPendingCombatEntries(): Promise<void> {
 }
 
 /**
- * Client `session_state` writes replace the blob. The pending combat entry is
- * engine-owned, so the live row's value wins. `merged` is the Action Surge
- * preservation expression; this wraps it and does not rewrite that SQL.
+ * Client `session_state` writes replace the blob. The pending combat entry
+ * and the #1328 decline record are engine-owned, so the live row's values
+ * win. `merged` is the Action Surge preservation expression; this wraps it
+ * and does not rewrite that SQL.
  */
 export function enginePreservingSessionState(merged: SQL): SQL {
   const stored = sql`${gameSessions.sessionState} -> ${COMBAT_ENTRY_PENDING_KEY}`;
   const validStored = sql`jsonb_typeof(${stored}) = 'object'
     AND jsonb_typeof(${stored} -> 'actorKey') = 'string'
     AND jsonb_typeof(${stored} -> 'proposedAt') = 'number'`;
-  return sql`CASE WHEN ${validStored}
+  const pendingPreserved = sql`CASE WHEN ${validStored}
     THEN (${merged} - ${COMBAT_ENTRY_PENDING_KEY}) || jsonb_build_object(${COMBAT_ENTRY_PENDING_KEY}::text, ${stored})
     ELSE ${merged} - ${COMBAT_ENTRY_PENDING_KEY} END`;
+  const declinedStored = sql`${gameSessions.sessionState} -> ${COMBAT_ENTRY_DECLINED_KEY}`;
+  const validDeclined = sql`jsonb_typeof(${declinedStored}) = 'object'
+    AND jsonb_typeof(${declinedStored} -> 'actorKeys') = 'array'`;
+  return sql`CASE WHEN ${validDeclined}
+    THEN (${pendingPreserved} - ${COMBAT_ENTRY_DECLINED_KEY}) || jsonb_build_object(${COMBAT_ENTRY_DECLINED_KEY}::text, ${declinedStored})
+    ELSE ${pendingPreserved} - ${COMBAT_ENTRY_DECLINED_KEY} END`;
 }
