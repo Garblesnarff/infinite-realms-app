@@ -138,6 +138,11 @@ const carriedByActor: Record<string, Array<(typeof SEEKER_WEAPONS)[number] | typ
   'the-void-maw': [CLAWS],
 };
 
+// This wire-contract suite replaces database-bound leaves; the real ammunition
+// claim and rollback are covered through the real route in the real-DB suite.
+mock.module('../../../../services/combat/ammunition-spend.js', () => ({
+  spendRangedAmmunition: async () => {},
+}));
 mock.module('../../../../services/combat/npc-engine-row.js', () => ({
   writeNpcEngineRow: async () => [],
   readNpcEngineResult: async () => undefined,

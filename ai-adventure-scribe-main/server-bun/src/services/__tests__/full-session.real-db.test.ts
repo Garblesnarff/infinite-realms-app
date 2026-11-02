@@ -281,11 +281,14 @@ describeWithDb('full 30-turn session (#660 item 5)', () => {
           .select({ version: combatEncounters.version })
           .from(combatEncounters)
           .where(eq(combatEncounters.id, encounterId));
-        const attackRes = await call('POST', `/v1/combat/${encounterId}/attack`, {
-          attackerId: heroParticipantId,
-          targetId: goblinParticipantId,
-          expectedVersion: enc.version,
-          attackType: 'melee',
+        const attackRes = await call('POST', `/v1/combat/${encounterId}/intent`, {
+          intent: {
+            type: 'attack',
+            actorId: heroParticipantId,
+            targetId: goblinParticipantId,
+            expectedVersion: enc.version,
+          },
+          source: 'player',
         });
         expect(attackRes.status).toBe(200);
         const [statusRow] = await database

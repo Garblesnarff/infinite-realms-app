@@ -364,7 +364,8 @@ describeWithDb('the server runs NPC turns on End turn (#2658 step 3)', () => {
       .from(dialogueHistory)
       .where(
         and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'system')),
-      );
+      )
+      .orderBy(dialogueHistory.sequenceNumber, dialogueHistory.id);
   /** A player and two creatures that hit for 3 (the step-2 fixture), or two creatures alone. */
   const seedFight = async ({ playerHp = 500, withPlayer = true, currentTurnOrder = 0 } = {}) => {
     const [{ id: campaignId }] = await database
