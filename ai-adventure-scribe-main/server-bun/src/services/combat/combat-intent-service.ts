@@ -968,9 +968,12 @@ async function spendRangedAmmunition(
   sessionId: string,
   encounterId: string,
 ): Promise<void> {
-  if (!characterId) return;
   const ammoType = ammunitionForWeapon(weaponName);
   if (!ammoType) return;
+  if (!characterId)
+    throw new BusinessLogicError('Cannot spend ammunition without an owned character', {
+      reason: 'no_ammunition',
+    });
   const { db } = await import('../../../../db/client');
   const { and, eq, exists, gt, or, sql } = await import('drizzle-orm');
   const { characters, characterEquipment, inventoryItems, gameSessions, combatEncounters } =
@@ -982,7 +985,8 @@ async function spendRangedAmmunition(
       .from(combatEncounters)
       .where(and(eq(combatEncounters.id, encounterId), eq(combatEncounters.sessionId, sessionId)))
       .for('update');
-    if (!encounter || encounter.status !== 'active') return;
+    if (!encounter || encounter.status !== 'active')
+      throw new BusinessLogicError('Combat has ended', { reason: 'encounter_ended' });
     const owned = exists(
       tx
         .select({ id: characters.id })
@@ -1048,7 +1052,11 @@ async function spendRangedAmmunition(
         if (updated) spent = { ...item, source: 'inventory' };
       }
     }
-    if (!spent) return;
+    if (!spent)
+      throw new BusinessLogicError(`Cannot use ${weaponName}: no ${ammoType} available`, {
+        reason: 'no_ammunition',
+        ammunition: ammoType,
+      });
     await tx
       .update(gameSessions)
       .set({
@@ -1059,7 +1067,10 @@ async function spendRangedAmmunition(
       })
       .where(eq(gameSessions.id, sessionId));
   });
-  logger.info({ msg: 'COMBAT_AMMUNITION_SPENT', sessionId, characterId, ammoType });
+  const { deferUntilCommit } = await import('../../../../db/transaction-context');
+  const logSpend = () =>
+    logger.info({ msg: 'COMBAT_AMMUNITION_SPENT', sessionId, characterId, ammoType });
+  if (!deferUntilCommit(logSpend)) logSpend();
 }
 
 export async function proposeCombatAttack(
@@ -1563,9 +1574,18 @@ export async function executeCombatIntent(
       if (approach.movementOnly) {
         result = exposeAttackVisibility(approach.result, visibility);
       } else {
-        const attackService = await createCombatAttackService();
-        result = exposeAttackVisibility(
-          await attackService.resolveAttack(
+        const resolveAttack = async () => {
+          if (actorIsPlayer) {
+            await spendRangedAmmunition(
+              (actor as { characterId?: string }).characterId,
+              userId,
+              weapon.name,
+              encounter.sessionId,
+              encounterId,
+            );
+          }
+          const attackService = await createCombatAttackService();
+          return await attackService.resolveAttack(
             encounterId,
             {
               attackerId: intent.actorId,
@@ -1581,18 +1601,16 @@ export async function executeCombatIntent(
               providedD20Rolls: intent.d20Rolls,
             } satisfies AttackRollInput,
             userId,
-          ),
-          { ...visibility, normalizeAutoRolled: true },
-        );
-        if (actorIsPlayer) {
-          await spendRangedAmmunition(
-            (actor as { characterId?: string }).characterId,
-            userId,
-            weapon.name,
-            encounter.sessionId,
-            encounterId,
           );
-        }
+        };
+        // The stack claim and damage must commit together, including for unkeyed player attacks.
+        const attack =
+          actorIsPlayer && ammunitionForWeapon(weapon.name) && !inNpcTransaction
+            ? await (
+                await import('../../../../db/client')
+              ).withNpcActionTransaction(encounterId, resolveAttack)
+            : await resolveAttack();
+        result = exposeAttackVisibility(attack, { ...visibility, normalizeAutoRolled: true });
         // Every resolution is reported, not just the ones that failed to reach. A hit the DM is
         // never told about is a hit it cannot narrate, and a DM with nothing to narrate repeats
         // the paragraph it wrote last turn.

@@ -17,7 +17,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import {
   campaigns,
@@ -1415,6 +1415,108 @@ describeWithDb('package gear reaches the session (#1007)', () => {
       (await equipmentRows(id)).find((row) => row.item_name === 'Crossbow Bolts (20)')?.quantity;
     expect(await bolts()).toBe(20);
     const { encounterId, heroId, foeId, sessionId } = await seat(id);
+    // Simulate a competing spend between availability and the conditional decrement:
+    // the database refuses this row's UPDATE, just as a lost quantity race returns no row.
+    const [ammoRow] = await db
+      .select({ id: characterEquipment.id })
+      .from(characterEquipment)
+      .where(
+        and(
+          eq(characterEquipment.characterId, id),
+          eq(characterEquipment.itemName, 'Crossbow Bolts (20)'),
+        ),
+      );
+    const trigger = `ir_ammo_race_${process.pid}`;
+    const fn = `ir_ammo_race_fn_${process.pid}`;
+    await db.execute(
+      sql.raw(
+        `CREATE FUNCTION ${fn}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$`,
+      ),
+    );
+    await db.execute(
+      sql.raw(
+        `CREATE TRIGGER ${trigger} BEFORE UPDATE ON character_equipment FOR EACH ROW WHEN (OLD.id = '${ammoRow.id}'::uuid) EXECUTE FUNCTION ${fn}()`,
+      ),
+    );
+    try {
+      const race = await app.handle(
+        new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            intent: {
+              type: 'attack',
+              actorId: heroId,
+              targetId: foeId,
+              weaponId: 'Crossbow, light',
+              expectedVersion: 1,
+              d20: 20,
+            },
+            source: 'player',
+            origin: 'action_bar',
+          }),
+        }),
+      );
+      expect(race.status).toBe(422);
+      const [foe] = await db
+        .select({ hp: combatParticipantStatus.currentHp })
+        .from(combatParticipantStatus)
+        .where(eq(combatParticipantStatus.participantId, foeId));
+      const [hero] = await db
+        .select({ actionUsed: combatParticipants.actionUsed })
+        .from(combatParticipants)
+        .where(eq(combatParticipants.id, heroId));
+      expect(foe.hp).toBe(30);
+      expect(hero.actionUsed).toBe(false);
+      expect(await bolts()).toBe(20);
+    } finally {
+      await db.execute(sql.raw(`DROP TRIGGER IF EXISTS ${trigger} ON character_equipment`));
+      await db.execute(sql.raw(`DROP FUNCTION IF EXISTS ${fn}()`));
+    }
+    const rollbackTrigger = `ir_ammo_rollback_${process.pid}`;
+    const rollbackFn = `ir_ammo_rollback_fn_${process.pid}`;
+    await db.execute(
+      sql.raw(
+        `CREATE FUNCTION ${rollbackFn}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected attack failure'; END $$`,
+      ),
+    );
+    await db.execute(
+      sql.raw(
+        `CREATE TRIGGER ${rollbackTrigger} BEFORE UPDATE ON combat_participant_status FOR EACH ROW WHEN (OLD.participant_id = '${foeId}'::uuid) EXECUTE FUNCTION ${rollbackFn}()`,
+      ),
+    );
+    try {
+      const failure = await app.handle(
+        new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            intent: {
+              type: 'attack',
+              actorId: heroId,
+              targetId: foeId,
+              weaponId: 'Crossbow, light',
+              expectedVersion: 1,
+              d20: 20,
+            },
+            source: 'player',
+            origin: 'action_bar',
+          }),
+        }),
+      );
+      expect(failure.status).toBe(500);
+      expect(await bolts()).toBe(20);
+      const [hero] = await db
+        .select({ actionUsed: combatParticipants.actionUsed })
+        .from(combatParticipants)
+        .where(eq(combatParticipants.id, heroId));
+      expect(hero.actionUsed).toBe(false);
+    } finally {
+      await db.execute(
+        sql.raw(`DROP TRIGGER IF EXISTS ${rollbackTrigger} ON combat_participant_status`),
+      );
+      await db.execute(sql.raw(`DROP FUNCTION IF EXISTS ${rollbackFn}()`));
+    }
     for (const expected of [19, 18]) {
       await resetTurn(encounterId);
       const [{ version }] = await db
