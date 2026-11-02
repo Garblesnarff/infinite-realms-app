@@ -110,8 +110,7 @@ describeWithDb('server NPC engine rows through the real routes (#2658 step 2)', 
       .from(dialogueHistory)
       .where(
         and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'system')),
-      )
-      .orderBy(dialogueHistory.sequenceNumber, dialogueHistory.id);
+      );
   beforeAll(async () => {
     [{ id: campaignId }] = await database
       .insert(campaigns)
@@ -365,7 +364,8 @@ describeWithDb('the server runs NPC turns on End turn (#2658 step 3)', () => {
       .from(dialogueHistory)
       .where(
         and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'system')),
-      );
+      )
+      .orderBy(dialogueHistory.sequenceNumber, dialogueHistory.id);
   /** A player and two creatures that hit for 3 (the step-2 fixture), or two creatures alone. */
   const seedFight = async ({ playerHp = 500, withPlayer = true, currentTurnOrder = 0 } = {}) => {
     const [{ id: campaignId }] = await database
@@ -1602,332 +1602,329 @@ describeWithDb('a keyed player attack roll resolves exactly once (#974)', () => 
   });
 });
 
-describeWithDb(
-  'a prepared leveled attack spell is offered and resolves through the real routes (#1185)',
-  () => {
-    const app = hasRealDb ? new Elysia({ prefix: '/v1/combat' }).use(intentRoutes) : null;
-    const duels: Array<{ campaignId: string; characterId: string; sessionId: string }> = [];
-    const postTo = async (targetEncounterId: string, body: unknown) => {
-      const response = await app!.handle(
-        new Request(`http://localhost/v1/combat/${targetEncounterId}/intent`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(body),
-        }),
-      );
-      return { status: response.status, body: (await response.json()) as Record<string, any> };
-    };
-    /** A fresh L3 Wizard-vs-Rubble Sentinel duel: Acid Arrow prepared, Fire Bolt a cantrip. */
-    const seedWizardDuel = async (preparedSpells = 'Acid Arrow') => {
-      const database = realDb();
-      const [{ id: duelCampaignId }] = await database
-        .insert(campaigns)
-        .values({ userId, name: testId('camp') })
-        .returning();
-      const [{ id: duelCharacterId }] = await database
-        .insert(characters)
-        .values({
-          userId,
-          campaignId: duelCampaignId,
-          name: 'Adda',
-          class: 'Wizard',
-          level: 3,
-          cantrips: 'Fire Bolt',
-          preparedSpells,
-        })
-        .returning();
-      await database.insert(characterStats).values({
-        characterId: duelCharacterId,
-        intelligence: 16,
-        currentHitPoints: 30,
-        maxHitPoints: 30,
-        armorClass: 12,
-      });
-      // The slot rows the sheet writes (dm-reply-reconcile's slot-wizard shape).
-      await database.insert(characterSpellSlots).values([
-        { characterId: duelCharacterId, spellLevel: 1, totalSlots: 4, usedSlots: 0 },
-        { characterId: duelCharacterId, spellLevel: 2, totalSlots: 2, usedSlots: 0 },
-      ]);
-      const [{ id: duelSessionId }] = await database
-        .insert(gameSessions)
-        .values({
-          campaignId: duelCampaignId,
-          characterId: duelCharacterId,
-          sessionNumber: 1,
-          status: 'active',
-        })
-        .returning();
-      const [{ id: duelEncounterId }] = await database
-        .insert(combatEncounters)
-        .values({
-          sessionId: duelSessionId,
-          status: 'active',
-          currentRound: 1,
-          currentTurnOrder: 0,
-          version: 1,
-        })
-        .returning();
-      const monsterAttack = resolveMonsterAttackProfile({
-        authored: {
-          attackName: 'Slam',
-          attackBonus: 5,
-          damageDice: '1d6 + 2',
-          damageType: 'bludgeoning',
-        },
-      });
-      const participants = await database
-        .insert(combatParticipants)
-        .values([
-          {
-            encounterId: duelEncounterId,
-            characterId: duelCharacterId,
-            name: 'Adda',
-            participantType: 'player',
-            turnOrder: 0,
-            initiative: 20,
-            armorClass: 12,
-            maxHp: 30,
-            speed: 30,
-          },
-          {
-            encounterId: duelEncounterId,
-            name: 'Rubble Sentinel',
-            participantType: 'monster',
-            turnOrder: 1,
-            initiative: 10,
-            armorClass: 11,
-            maxHp: 30,
-            speed: 30,
-            monsterAttack,
-          },
-        ])
-        .returning();
-      await database.insert(combatParticipantStatus).values(
-        participants.map((participant) => ({
-          participantId: participant.id,
-          currentHp: participant.maxHp,
-          maxHp: participant.maxHp,
-          isConscious: true,
-        })),
-      );
-      duels.push({
+describeWithDb('a prepared leveled attack spell is offered and resolves through the real routes (#1185)', () => {
+  const app = hasRealDb ? new Elysia({ prefix: '/v1/combat' }).use(intentRoutes) : null;
+  const duels: Array<{ campaignId: string; characterId: string; sessionId: string }> = [];
+  const postTo = async (targetEncounterId: string, body: unknown) => {
+    const response = await app!.handle(
+      new Request(`http://localhost/v1/combat/${targetEncounterId}/intent`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    );
+    return { status: response.status, body: (await response.json()) as Record<string, any> };
+  };
+  /** A fresh L3 Wizard-vs-Rubble Sentinel duel: Acid Arrow prepared, Fire Bolt a cantrip. */
+  const seedWizardDuel = async (preparedSpells = 'Acid Arrow') => {
+    const database = realDb();
+    const [{ id: duelCampaignId }] = await database
+      .insert(campaigns)
+      .values({ userId, name: testId('camp') })
+      .returning();
+    const [{ id: duelCharacterId }] = await database
+      .insert(characters)
+      .values({
+        userId,
+        campaignId: duelCampaignId,
+        name: 'Adda',
+        class: 'Wizard',
+        level: 3,
+        cantrips: 'Fire Bolt',
+        preparedSpells,
+      })
+      .returning();
+    await database.insert(characterStats).values({
+      characterId: duelCharacterId,
+      intelligence: 16,
+      currentHitPoints: 30,
+      maxHitPoints: 30,
+      armorClass: 12,
+    });
+    // The slot rows the sheet writes (dm-reply-reconcile's slot-wizard shape).
+    await database.insert(characterSpellSlots).values([
+      { characterId: duelCharacterId, spellLevel: 1, totalSlots: 4, usedSlots: 0 },
+      { characterId: duelCharacterId, spellLevel: 2, totalSlots: 2, usedSlots: 0 },
+    ]);
+    const [{ id: duelSessionId }] = await database
+      .insert(gameSessions)
+      .values({
         campaignId: duelCampaignId,
         characterId: duelCharacterId,
+        sessionNumber: 1,
+        status: 'active',
+      })
+      .returning();
+    const [{ id: duelEncounterId }] = await database
+      .insert(combatEncounters)
+      .values({
         sessionId: duelSessionId,
-      });
-      return {
-        characterId: duelCharacterId,
-        sessionId: duelSessionId,
-        encounterId: duelEncounterId,
-        wizardId: participants[0].id,
-        sentinelId: participants[1].id,
-      };
-    };
-    const usedSlotsOf = async (characterId: string, spellLevel: number) => {
-      const [row] = await realDb()
-        .select()
-        .from(characterSpellSlots)
-        .where(
-          and(
-            eq(characterSpellSlots.characterId, characterId),
-            eq(characterSpellSlots.spellLevel, spellLevel),
-          ),
-        );
-      return row.usedSlots;
-    };
-    afterAll(async () => {
-      const database = realDb();
-      for (const duel of duels) {
-        await database.delete(gameSessions).where(eq(gameSessions.id, duel.sessionId));
-        await database.delete(characters).where(eq(characters.id, duel.characterId));
-        await database.delete(campaigns).where(eq(campaigns.id, duel.campaignId));
-      }
+        status: 'active',
+        currentRound: 1,
+        currentTurnOrder: 0,
+        version: 1,
+      })
+      .returning();
+    const monsterAttack = resolveMonsterAttackProfile({
+      authored: {
+        attackName: 'Slam',
+        attackBonus: 5,
+        damageDice: '1d6 + 2',
+        damageType: 'bludgeoning',
+      },
     });
-
-    test('the Cast menu offers Acid Arrow while a 2nd-level slot remains, and withholds it when none does', async () => {
-      const { characterId, encounterId, sentinelId } = await seedWizardDuel();
-
-      const offered = await getLegalCombatActions(encounterId, userId);
-      expect(offered.actions).toContainEqual({
-        type: 'spell',
-        label: 'Cast Acid Arrow',
-        spellId: 'acid-arrow',
-        targetIds: [sentinelId],
-        // #1206: the chip names the slot it spends.
-        slotLevel: 2,
-      });
-
-      await realDb()
-        .update(characterSpellSlots)
-        .set({ usedSlots: 2 })
-        .where(
-          and(
-            eq(characterSpellSlots.characterId, characterId),
-            eq(characterSpellSlots.spellLevel, 2),
-          ),
-        );
-      const exhausted = await getLegalCombatActions(encounterId, userId);
-      expect(
-        exhausted.actions.some(
-          (action) => action.type === 'spell' && action.spellId === 'acid-arrow',
+    const participants = await database
+      .insert(combatParticipants)
+      .values([
+        {
+          encounterId: duelEncounterId,
+          characterId: duelCharacterId,
+          name: 'Adda',
+          participantType: 'player',
+          turnOrder: 0,
+          initiative: 20,
+          armorClass: 12,
+          maxHp: 30,
+          speed: 30,
+        },
+        {
+          encounterId: duelEncounterId,
+          name: 'Rubble Sentinel',
+          participantType: 'monster',
+          turnOrder: 1,
+          initiative: 10,
+          armorClass: 11,
+          maxHp: 30,
+          speed: 30,
+          monsterAttack,
+        },
+      ])
+      .returning();
+    await database.insert(combatParticipantStatus).values(
+      participants.map((participant) => ({
+        participantId: participant.id,
+        currentHp: participant.maxHp,
+        maxHp: participant.maxHp,
+        isConscious: true,
+      })),
+    );
+    duels.push({
+      campaignId: duelCampaignId,
+      characterId: duelCharacterId,
+      sessionId: duelSessionId,
+    });
+    return {
+      characterId: duelCharacterId,
+      sessionId: duelSessionId,
+      encounterId: duelEncounterId,
+      wizardId: participants[0].id,
+      sentinelId: participants[1].id,
+    };
+  };
+  const usedSlotsOf = async (characterId: string, spellLevel: number) => {
+    const [row] = await realDb()
+      .select()
+      .from(characterSpellSlots)
+      .where(
+        and(
+          eq(characterSpellSlots.characterId, characterId),
+          eq(characterSpellSlots.spellLevel, spellLevel),
         ),
-      ).toBe(false);
-      // The cantrip is never slot-gated.
-      expect(exhausted.actions).toContainEqual({
+      );
+    return row.usedSlots;
+  };
+  afterAll(async () => {
+    const database = realDb();
+    for (const duel of duels) {
+      await database.delete(gameSessions).where(eq(gameSessions.id, duel.sessionId));
+      await database.delete(characters).where(eq(characters.id, duel.characterId));
+      await database.delete(campaigns).where(eq(campaigns.id, duel.campaignId));
+    }
+  });
+
+  test('the Cast menu offers Acid Arrow while a 2nd-level slot remains, and withholds it when none does', async () => {
+    const { characterId, encounterId, sentinelId } = await seedWizardDuel();
+
+    const offered = await getLegalCombatActions(encounterId, userId);
+    expect(offered.actions).toContainEqual({
+      type: 'spell',
+      label: 'Cast Acid Arrow',
+      spellId: 'acid-arrow',
+      targetIds: [sentinelId],
+      // #1206: the chip names the slot it spends.
+      slotLevel: 2,
+    });
+
+    await realDb()
+      .update(characterSpellSlots)
+      .set({ usedSlots: 2 })
+      .where(
+        and(
+          eq(characterSpellSlots.characterId, characterId),
+          eq(characterSpellSlots.spellLevel, 2),
+        ),
+      );
+    const exhausted = await getLegalCombatActions(encounterId, userId);
+    expect(
+      exhausted.actions.some(
+        (action) => action.type === 'spell' && action.spellId === 'acid-arrow',
+      ),
+    ).toBe(false);
+    // The cantrip is never slot-gated.
+    expect(exhausted.actions).toContainEqual({
+      type: 'spell',
+      label: 'Cast Fire Bolt',
+      spellId: 'fire-bolt',
+      targetIds: [sentinelId],
+    });
+  });
+
+  test('the exact ActionBar wire body casts Acid Arrow: damage lands, one 2nd-level slot is spent, the turn stays open', async () => {
+    const { characterId, encounterId, wizardId, sentinelId } = await seedWizardDuel();
+
+    // The wire body executeStructuredCombatActionWithBoundary sends for the ActionBar
+    // cast: the spell's own level rides as slotLevel — the engine refuses a leveled
+    // spell with no slot level (missing_spell_slot_level), so the bar names it. The
+    // player's own die rides as d20.
+    const cast = await postTo(encounterId, {
+      source: 'dm',
+      intent: {
         type: 'spell',
-        label: 'Cast Fire Bolt',
-        spellId: 'fire-bolt',
+        actorId: wizardId,
         targetIds: [sentinelId],
-      });
-    });
-
-    test('the exact ActionBar wire body casts Acid Arrow: damage lands, one 2nd-level slot is spent, the turn stays open', async () => {
-      const { characterId, encounterId, wizardId, sentinelId } = await seedWizardDuel();
-
-      // The wire body executeStructuredCombatActionWithBoundary sends for the ActionBar
-      // cast: the spell's own level rides as slotLevel — the engine refuses a leveled
-      // spell with no slot level (missing_spell_slot_level), so the bar names it. The
-      // player's own die rides as d20.
-      const cast = await postTo(encounterId, {
-        source: 'dm',
-        intent: {
-          type: 'spell',
-          actorId: wizardId,
-          targetIds: [sentinelId],
-          spellId: 'acid-arrow',
-          spellName: 'Acid Arrow',
-          slotLevel: 2,
-          d20: 15,
-        },
-        dmStartedAt: 1730000000000,
-        origin: 'action_bar',
-      });
-      expect(cast.status).toBe(200);
-      const results = cast.body.result.results as Array<{
-        finalDamage: number;
-        targetNewHp: number;
-      }>;
-      expect(results).toHaveLength(1);
-      // Melf's Acid Arrow deals 4d4 acid damage on a hit.
-      expect(results[0].finalDamage).toBeGreaterThanOrEqual(4);
-      expect(results[0].finalDamage).toBeLessThanOrEqual(16);
-      const [damageRow] = await realDb()
-        .select()
-        .from(combatDamageLog)
-        .where(
-          and(
-            eq(combatDamageLog.encounterId, encounterId),
-            eq(combatDamageLog.participantId, sentinelId),
-          ),
-        );
-      expect(damageRow.damageAmount).toBe(results[0].finalDamage);
-      expect(results[0].targetNewHp).toBe(30 - results[0].finalDamage);
-      expect(await usedSlotsOf(characterId, 2)).toBe(1);
-      expect(await usedSlotsOf(characterId, 1)).toBe(0);
-      // The cast claims the Action but does not advance the turn: the wizard still holds it.
-      const state = await CombatEncounterService.getCombatState(encounterId, userId);
-      expect(state.currentParticipant?.id).toBe(wizardId);
-    });
-
-    // #1206: L1 0/4, L2 2/2. Burning Hands is offered and names the 2nd-level slot; cast with
-    // that slot through the real intent route, it spends a 2nd-level slot and leaves L1 alone.
-    test('with no 1st-level slot left, Burning Hands is offered with a 2nd-level slot and the cast spends it', async () => {
-      const { characterId, encounterId, wizardId, sentinelId } =
-        await seedWizardDuel('Burning Hands');
-      await realDb()
-        .update(characterSpellSlots)
-        .set({ usedSlots: 4 })
-        .where(
-          and(
-            eq(characterSpellSlots.characterId, characterId),
-            eq(characterSpellSlots.spellLevel, 1),
-          ),
-        );
-
-      const offered = await getLegalCombatActions(encounterId, userId);
-      expect(offered.actions).toContainEqual({
-        type: 'spell',
-        label: 'Cast Burning Hands (2nd-level slot)',
-        spellId: 'burning-hands',
-        slotLevel: 2,
-        // #1227: an area chip carries the creatures it can be aimed at.
-        targetIds: [sentinelId],
-      });
-
-      // Pin the upcast dice: the save roll is already deterministic —
-      // this file mocks rollD20 to 14, and 14 + the sentinel's +0 DEX save meets DC 13,
-      // so the save succeeds and the damage is halved. Seeding the damage roller makes
-      // the 4d6 roll exact: seed 42 draws 4, 3, 6, 5 = 18, halved to 9. A 3d6 pick would
-      // draw 4, 3, 6 = 13, halved to 6 — so 9 proves the 2nd-level dice expression.
-      setRngSeed(42);
-      const cast = await postTo(encounterId, {
-        source: 'dm',
-        intent: {
-          type: 'spell',
-          actorId: wizardId,
-          targetIds: [sentinelId],
-          spellId: 'burning-hands',
-          spellName: 'Burning Hands',
-          slotLevel: 2,
-        },
-        dmStartedAt: 1730000000000,
-        origin: 'typed',
-      }).finally(() => setRngSeed(undefined));
-      expect(cast.status, JSON.stringify(cast.body)).toBe(200);
-      expect(await usedSlotsOf(characterId, 2)).toBe(1);
-      expect(await usedSlotsOf(characterId, 1)).toBe(4);
-      const results = cast.body.result.results as Array<{ finalDamage: number }>;
-      expect(results).toHaveLength(1);
-      expect(results[0].finalDamage).toBe(9);
-    });
-
-    // #1206: the exact ActionBar commit for an upcast attack chip (shared fixture, asserted on the
-    // client in use-combat-legal-actions.test.tsx): Acid Arrow from a 3rd-level slot spends that
-    // slot and rolls 5d4.
-    test('the exact ActionBar wire body for an upcast Acid Arrow spends a 3rd-level slot', async () => {
-      const { characterId, encounterId, wizardId, sentinelId } = await seedWizardDuel();
-      await realDb()
-        .update(characterSpellSlots)
-        .set({ usedSlots: 2 })
-        .where(
-          and(
-            eq(characterSpellSlots.characterId, characterId),
-            eq(characterSpellSlots.spellLevel, 2),
-          ),
-        );
-      await realDb()
-        .insert(characterSpellSlots)
-        .values({ characterId, spellLevel: 3, totalSlots: 2, usedSlots: 0 });
-
-      const offered = await getLegalCombatActions(encounterId, userId);
-      expect(offered.actions).toContainEqual({
-        type: 'spell',
-        label: 'Cast Acid Arrow (3rd-level slot)',
         spellId: 'acid-arrow',
-        targetIds: [sentinelId],
-        slotLevel: 3,
-      });
-
-      // Pin the upcast dice: the d20 is player-supplied (15), and no
-      // Bless/Hex is live, so those riders return 0 without drawing — the damage dice
-      // are the only rolls. Seeding the roller makes the 5d4 roll exact:
-      // seed 42 draws 3, 2, 4, 3, 1 = 13. A 4d4 pick would draw 3, 2, 4, 3 = 12 —
-      // so 13 proves the 3rd-level dice expression.
-      setRngSeed(42);
-      const cast = await postTo(encounterId, {
-        source: 'dm',
-        intent: upcastAcidArrowIntent(wizardId, sentinelId, 15),
-        dmStartedAt: 1730000000000,
-        origin: 'action_bar',
-      }).finally(() => setRngSeed(undefined));
-      expect(cast.status, JSON.stringify(cast.body)).toBe(200);
-      expect(await usedSlotsOf(characterId, 3)).toBe(1);
-      expect(await usedSlotsOf(characterId, 2)).toBe(2);
-      const results = cast.body.result.results as Array<{ hit: boolean; finalDamage: number }>;
-      expect(results).toHaveLength(1);
-      // d20 15 + the wizard's spell attack bonus beats AC 11, so it hits: 5d4 from a 3rd-level slot.
-      expect(results[0].hit).toBe(true);
-      expect(results[0].finalDamage).toBe(13);
+        spellName: 'Acid Arrow',
+        slotLevel: 2,
+        d20: 15,
+      },
+      dmStartedAt: 1730000000000,
+      origin: 'action_bar',
     });
-  },
-);
+    expect(cast.status).toBe(200);
+    const results = cast.body.result.results as Array<{
+      finalDamage: number;
+      targetNewHp: number;
+    }>;
+    expect(results).toHaveLength(1);
+    // Melf's Acid Arrow deals 4d4 acid damage on a hit.
+    expect(results[0].finalDamage).toBeGreaterThanOrEqual(4);
+    expect(results[0].finalDamage).toBeLessThanOrEqual(16);
+    const [damageRow] = await realDb()
+      .select()
+      .from(combatDamageLog)
+      .where(
+        and(
+          eq(combatDamageLog.encounterId, encounterId),
+          eq(combatDamageLog.participantId, sentinelId),
+        ),
+      );
+    expect(damageRow.damageAmount).toBe(results[0].finalDamage);
+    expect(results[0].targetNewHp).toBe(30 - results[0].finalDamage);
+    expect(await usedSlotsOf(characterId, 2)).toBe(1);
+    expect(await usedSlotsOf(characterId, 1)).toBe(0);
+    // The cast claims the Action but does not advance the turn: the wizard still holds it.
+    const state = await CombatEncounterService.getCombatState(encounterId, userId);
+    expect(state.currentParticipant?.id).toBe(wizardId);
+  });
+
+  // #1206: L1 0/4, L2 2/2. Burning Hands is offered and names the 2nd-level slot; cast with
+  // that slot through the real intent route, it spends a 2nd-level slot and leaves L1 alone.
+  test('with no 1st-level slot left, Burning Hands is offered with a 2nd-level slot and the cast spends it', async () => {
+    const { characterId, encounterId, wizardId, sentinelId } =
+      await seedWizardDuel('Burning Hands');
+    await realDb()
+      .update(characterSpellSlots)
+      .set({ usedSlots: 4 })
+      .where(
+        and(
+          eq(characterSpellSlots.characterId, characterId),
+          eq(characterSpellSlots.spellLevel, 1),
+        ),
+      );
+
+    const offered = await getLegalCombatActions(encounterId, userId);
+    expect(offered.actions).toContainEqual({
+      type: 'spell',
+      label: 'Cast Burning Hands (2nd-level slot)',
+      spellId: 'burning-hands',
+      slotLevel: 2,
+      // #1227: an area chip carries the creatures it can be aimed at.
+      targetIds: [sentinelId],
+    });
+
+    // Pin the upcast dice: the save roll is already deterministic —
+    // this file mocks rollD20 to 14, and 14 + the sentinel's +0 DEX save meets DC 13,
+    // so the save succeeds and the damage is halved. Seeding the damage roller makes
+    // the 4d6 roll exact: seed 42 draws 4, 3, 6, 5 = 18, halved to 9. A 3d6 pick would
+    // draw 4, 3, 6 = 13, halved to 6 — so 9 proves the 2nd-level dice expression.
+    setRngSeed(42);
+    const cast = await postTo(encounterId, {
+      source: 'dm',
+      intent: {
+        type: 'spell',
+        actorId: wizardId,
+        targetIds: [sentinelId],
+        spellId: 'burning-hands',
+        spellName: 'Burning Hands',
+        slotLevel: 2,
+      },
+      dmStartedAt: 1730000000000,
+      origin: 'typed',
+    }).finally(() => setRngSeed(undefined));
+    expect(cast.status, JSON.stringify(cast.body)).toBe(200);
+    expect(await usedSlotsOf(characterId, 2)).toBe(1);
+    expect(await usedSlotsOf(characterId, 1)).toBe(4);
+    const results = cast.body.result.results as Array<{ finalDamage: number }>;
+    expect(results).toHaveLength(1);
+    expect(results[0].finalDamage).toBe(9);
+  });
+
+  // #1206: the exact ActionBar commit for an upcast attack chip (shared fixture, asserted on the
+  // client in use-combat-legal-actions.test.tsx): Acid Arrow from a 3rd-level slot spends that
+  // slot and rolls 5d4.
+  test('the exact ActionBar wire body for an upcast Acid Arrow spends a 3rd-level slot', async () => {
+    const { characterId, encounterId, wizardId, sentinelId } = await seedWizardDuel();
+    await realDb()
+      .update(characterSpellSlots)
+      .set({ usedSlots: 2 })
+      .where(
+        and(
+          eq(characterSpellSlots.characterId, characterId),
+          eq(characterSpellSlots.spellLevel, 2),
+        ),
+      );
+    await realDb()
+      .insert(characterSpellSlots)
+      .values({ characterId, spellLevel: 3, totalSlots: 2, usedSlots: 0 });
+
+    const offered = await getLegalCombatActions(encounterId, userId);
+    expect(offered.actions).toContainEqual({
+      type: 'spell',
+      label: 'Cast Acid Arrow (3rd-level slot)',
+      spellId: 'acid-arrow',
+      targetIds: [sentinelId],
+      slotLevel: 3,
+    });
+
+    // Pin the upcast dice: the d20 is player-supplied (15), and no
+    // Bless/Hex is live, so those riders return 0 without drawing — the damage dice
+    // are the only rolls. Seeding the roller makes the 5d4 roll exact:
+    // seed 42 draws 3, 2, 4, 3, 1 = 13. A 4d4 pick would draw 3, 2, 4, 3 = 12 —
+    // so 13 proves the 3rd-level dice expression.
+    setRngSeed(42);
+    const cast = await postTo(encounterId, {
+      source: 'dm',
+      intent: upcastAcidArrowIntent(wizardId, sentinelId, 15),
+      dmStartedAt: 1730000000000,
+      origin: 'action_bar',
+    }).finally(() => setRngSeed(undefined));
+    expect(cast.status, JSON.stringify(cast.body)).toBe(200);
+    expect(await usedSlotsOf(characterId, 3)).toBe(1);
+    expect(await usedSlotsOf(characterId, 2)).toBe(2);
+    const results = cast.body.result.results as Array<{ hit: boolean; finalDamage: number }>;
+    expect(results).toHaveLength(1);
+    // d20 15 + the wizard's spell attack bonus beats AC 11, so it hits: 5d4 from a 3rd-level slot.
+    expect(results[0].hit).toBe(true);
+    expect(results[0].finalDamage).toBe(13);
+  });
+});
