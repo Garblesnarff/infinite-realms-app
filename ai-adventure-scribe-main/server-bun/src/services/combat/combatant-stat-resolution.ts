@@ -18,8 +18,9 @@ import {
   resolveMonsterAttackProfile,
   type MonsterAttackProfile,
 } from './monster-attack-profile.js';
-import { normalizeMonsterKey } from './monster-key.js';
+import { monsterKeyTokens, normalizeMonsterKey } from './monster-key.js';
 import {
+  findSrdMonster,
   GENERIC_NPC_STATS,
   resolveSrdMonsterStats,
   type ResolvedMonsterStats,
@@ -85,7 +86,33 @@ export function resolveCombatantStats(
   // still have supplied real numbers, and the true bottom-of-ladder warn is issued below
   // with the campaign context attached. Its near-miss log is NOT suppressed: that one
   // records an inference, which is worth seeing wherever it happens.
-  const srd = resolveSrdMonsterStats(monsterId, name, context, { suppressFallbackWarn: true });
+  //
+  // #1115 round 2 (supersedes the round-1 name-only rule, which regressed real seats):
+  // the SRD entry resolves from the seat's name first, then — only when the DM's id is
+  // corroborated by that name — from the id. `buildEntryParticipants` numbers
+  // multi-count seats ("Goblin 2", "Goblin 3"), so the lookup key strips the duplicate
+  // suffix the way `findAuthoredMonster` does; the seat itself keeps its number. On a
+  // bible hit the key is the bible entry's own name, so the id leg can only fill a bible
+  // block's gaps with the SRD counterpart of the creature the bible matched.
+  // The id leg exists because the DM is told to send canonical SRD ids and free naming
+  // is documented ("Goblin Archer" + srd:goblin is normal), but an id never seats a
+  // block on its own: the entry's display name must match, whole-word and
+  // case-insensitive, inside the stripped name — "Aggressive Patron" + srd:bandit and
+  // "Prowler" + srd:wolf stay generic, which is the #1114 incident pattern. An
+  // unparseable bible chunk counts the same way: its entityName still keys the lookup.
+  // Round 3 adds plural tolerance: both sides are compared in singular form (a
+  // trailing `s`/`es` stripped per word), so "Goblins" corroborates srd:goblin as on
+  // main; irregular plurals ("Wolves" → "wolv", not "wolf") do not and stay generic.
+  const lookupName = (authored?.entityName ?? name)?.replace(DUPLICATE_SUFFIX, '') ?? null;
+  let srd = lookupName
+    ? resolveSrdMonsterStats(null, lookupName, context, { suppressFallbackWarn: true })
+    : null;
+  if (!srd && monsterId && lookupName) {
+    const idEntry = findSrdMonster(monsterId, null);
+    if (idEntry && srdNameMatchesName(idEntry.name, lookupName)) {
+      srd = resolveSrdMonsterStats(monsterId, null, context, { suppressFallbackWarn: true });
+    }
+  }
 
   if (authored) {
     const { parsed, coverage } = authored;
@@ -243,6 +270,42 @@ export function resolveCombatantStats(
 }
 
 const DUPLICATE_SUFFIX = /\s+\d+$/;
+
+/**
+ * Singular form of one token, for the plural-tolerant gate (#1115 round 3).
+ *
+ * Exactly the prescribed rule: strip a trailing `es`, else a trailing `s`, from
+ * words longer than two letters (so "as"/"us" survive untouched). Regular plurals
+ * singularize back to their entry word ("Goblins" → "goblin"); irregular plurals do
+ * not ("Wolves" → "wolv", not "wolf") and e-drop plurals do not either ("Apes" →
+ * "ap", not "ape") — those stay generic by design, pinned by test.
+ */
+const singularToken = (token: string): string => {
+  if (token.length <= 2) return token;
+  if (token.endsWith('es')) return token.slice(0, -2);
+  if (token.endsWith('s')) return token.slice(0, -1);
+  return token;
+};
+
+/**
+ * Whether an SRD entry's display name matches, whole-word and case-insensitive,
+ * inside a (suffix-stripped) creature name (#1115 round 2, plural tolerance round 3).
+ *
+ * Token-contiguous, compared in singular form on both sides: every singularized
+ * token of the entry name must appear as consecutive whole words in the
+ * singularized creature name. "Goblin Archer" contains "Goblin", and "Goblins"
+ * contains "Goblin" once singularized; "Aggressive Patron" does not contain
+ * "Bandit" and "Prowler" does not contain "Wolf", so those ids are ignored and
+ * the seats land generic.
+ */
+const srdNameMatchesName = (entryName: string, creatureName: string): boolean => {
+  const entryTokens = monsterKeyTokens(entryName).map(singularToken);
+  if (entryTokens.length === 0) return false;
+  const nameTokens = monsterKeyTokens(creatureName).map(singularToken);
+  return nameTokens.some((_, start) =>
+    entryTokens.every((token, offset) => nameTokens[start + offset] === token),
+  );
+};
 
 /**
  * The name a seated combatant carries.

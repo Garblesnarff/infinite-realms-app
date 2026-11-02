@@ -552,17 +552,20 @@ export class CombatEncounterService {
           // Glass Prowler incident was undiagnosable because neither the stored reply nor
           // the log said whether `srd:glass-hide-ape` came from the DM's reply or the
           // server's name-to-monster lookup: `templateSource` is `campaign` when the
-          // campaign block won, `dm` when the DM supplied the id, and `lookup` when the
-          // server resolved by name. Fires for generic seats too, so a seat with no
+          // campaign block won, `lookup` when the server resolved an SRD block by name
+          // or by a DM id the name corroborated (#1115 round 2), and `generic` when no
+          // rung supplied a template. An ignored DM id is never echoed as the template:
+          // on a generic seat `templateId` is null, while `dmMonsterId` below still
+          // records what the DM sent. Fires for generic seats too, so a seat with no
           // template at all still leaves a line saying so.
           logger.info({
             msg: 'COMBAT_PARTICIPANT_SEATED',
             sessionId,
             encounterId: encounter.id,
             combatantName: participantName,
-            templateId: monster?.monsterId ?? input.monsterId ?? null,
+            templateId: monster?.monsterId ?? null,
             templateSource:
-              monster?.source === 'campaign' ? 'campaign' : input.monsterId ? 'dm' : 'lookup',
+              monster === null ? 'generic' : monster.source === 'campaign' ? 'campaign' : 'lookup',
             statSource: monster?.source ?? 'generic',
             resolvedAs: monster?.monsterName ?? null,
             dmMonsterId: input.monsterId ?? null,
@@ -657,8 +660,10 @@ export class CombatEncounterService {
           isMook: monster?.mook === true,
           bossMoves: monster?.bossMoves ?? null,
           // Which rung of the resolution ladder the XP came from (SRD catalog id or bible
-          // key), for auditing.
-          monsterRef: monster?.monsterId ?? input.monsterId ?? null,
+          // key), for auditing. Null when no rung supplied a template: an ignored DM id
+          // is never recorded as the template here either (#1115 round 2, same reason
+          // as templateId above).
+          monsterRef: monster?.monsterId ?? null,
           bestiaryName: monster?.source === 'campaign' ? bestiaryName : null,
           tacticalSize: monster?.size ?? GENERIC_NPC_STATS.size,
         };
