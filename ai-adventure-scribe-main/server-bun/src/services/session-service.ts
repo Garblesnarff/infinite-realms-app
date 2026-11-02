@@ -9,6 +9,7 @@
 import { eq, and, desc, sql, or, type SQL } from 'drizzle-orm';
 
 import { ClassFeaturesService } from './class-features-service.js';
+import { ammunitionPreservingSessionState } from './combat/ammunition.js';
 import { actionSurgePreservingState } from './combat/combat-turn-resources.js';
 import { enginePreservingSessionState } from './combat/pending-combat-entry.js';
 import { trackerPreservingState } from './dm/story-tracker.js';
@@ -126,10 +127,7 @@ async function sessionCharacterFeatureNames(
   if (!library.some((feature) => feature.className.toLowerCase() === className)) return null;
   const names = new Set<string>();
   for (const feature of library) {
-    if (
-      feature.className.toLowerCase() === className &&
-      feature.levelAcquired <= character.level
-    ) {
+    if (feature.className.toLowerCase() === className && feature.levelAcquired <= character.level) {
       names.add(feature.featureName);
     }
   }
@@ -159,7 +157,12 @@ async function sessionCharacterSpellLists(character: {
   knownSpells: string | null;
   preparedSpells: string | null;
   ritualSpells: string | null;
-}): Promise<{ cantrips: string; knownSpells: string; preparedSpells: string; ritualSpells: string }> {
+}): Promise<{
+  cantrips: string;
+  knownSpells: string;
+  preparedSpells: string;
+  ritualSpells: string;
+}> {
   const listed = (value: string | null): string[] =>
     (value ?? '')
       .split(',')
@@ -549,7 +552,9 @@ export class SessionService {
           ? {
               sessionState: pendingEndingXpPreservingState(
                 trackerPreservingState(
-                  enginePreservingSessionState(actionSurgePreservingState(updates.sessionState)),
+                  ammunitionPreservingSessionState(
+                    enginePreservingSessionState(actionSurgePreservingState(updates.sessionState)),
+                  ),
                 ),
               ),
             }

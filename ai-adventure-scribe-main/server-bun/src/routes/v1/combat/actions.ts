@@ -9,11 +9,7 @@ import { trackCombatEvent } from '../../../services/combat/combat-events.js';
 import { publishCombatState } from '../../../services/combat/combat-sync-service.js';
 import { CombatAttackService } from '../../../services/combat-attack-service.js';
 
-import type {
-  AttackRollInput,
-  SpellAttackInput,
-  CreateWeaponAttackInput,
-} from '../../../types/combat.js';
+import type { SpellAttackInput, CreateWeaponAttackInput } from '../../../types/combat.js';
 
 function mapActionError(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -58,49 +54,10 @@ export const actionRoutes = new Elysia()
     }
   })
 
-  /**
-   * POST /v1/combat/:encounterId/attack
-   * Resolve a weapon/melee attack
-   */
-  .post('/:encounterId/attack', async ({ params, body, set, user }) => {
-    try {
-      const attackInput = body as AttackRollInput;
-
-      if (
-        !attackInput.attackerId ||
-        !attackInput.targetId ||
-        !Number.isInteger(attackInput.expectedVersion)
-      ) {
-        set.status = 400;
-        return { error: 'attackerId, targetId, and expectedVersion are required' };
-      }
-
-      const attackService = new CombatAttackService();
-      const result = await attackService.resolveAttack(
-        params.encounterId,
-        attackInput,
-        user!.userId,
-      );
-
-      trackCombatEvent('action_accepted', {
-        encounterId: params.encounterId,
-        actorId: attackInput.attackerId,
-        action: 'attack',
-        source: 'legacy_route',
-      });
-      if (result.finalDamage > 0)
-        trackCombatEvent('damage_applied', {
-          encounterId: params.encounterId,
-          actorId: attackInput.attackerId,
-          damage: result.finalDamage,
-        });
-      await publishCombatState(params.encounterId, user!.userId, 'attack');
-
-      return result;
-    } catch (e) {
-      logger.error({ msg: 'Resolve attack error', error: e });
-      return mapActionError(set, e, 'Failed to resolve attack', 'Combat target not found');
-    }
+  // Retired: all weapon attacks must pass through the intent gateway.
+  .post('/:encounterId/attack', ({ set }) => {
+    set.status = 404;
+    return { error: 'Not found' };
   })
 
   /**

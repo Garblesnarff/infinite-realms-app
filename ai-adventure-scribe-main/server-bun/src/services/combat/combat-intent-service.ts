@@ -966,73 +966,99 @@ async function spendRangedAmmunition(
   userId: string,
   weaponName: string,
   sessionId: string,
+  encounterId: string,
 ): Promise<void> {
   if (!characterId) return;
   const ammoType = ammunitionForWeapon(weaponName);
   if (!ammoType) return;
   const { db } = await import('../../../../db/client');
   const { and, eq, exists, gt, or, sql } = await import('drizzle-orm');
-  const { characters, characterEquipment, inventoryItems } = await import('../../../../db/schema');
-  const owned = exists(
-    db
-      .select({ id: characters.id })
-      .from(characters)
-      .where(
-        and(
-          eq(characters.id, characterId),
-          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-        ),
-      ),
-  );
-  const sheetItem = (
-    await db
-      .select({ id: characterEquipment.id, name: characterEquipment.itemName })
-      .from(characterEquipment)
-      .where(
-        and(
-          eq(characterEquipment.characterId, characterId),
-          gt(characterEquipment.quantity, 0),
-          owned,
-        ),
-      )
-      .orderBy(characterEquipment.createdAt)
-  ).find((item) => isAmmunition(item.name, ammoType));
-  if (sheetItem) {
-    await db
-      .update(characterEquipment)
-      .set({ quantity: sql`${characterEquipment.quantity} - 1`, updatedAt: new Date() })
-      .where(
-        and(
-          eq(characterEquipment.id, sheetItem.id),
-          eq(characterEquipment.characterId, characterId),
-          gt(characterEquipment.quantity, 0),
-          owned,
-        ),
-      );
-  } else {
-    const item = (
-      await db
-        .select({ id: inventoryItems.id, name: inventoryItems.name })
-        .from(inventoryItems)
-        .where(
-          and(eq(inventoryItems.characterId, characterId), gt(inventoryItems.quantity, 0), owned),
-        )
-        .orderBy(inventoryItems.createdAt)
-    ).find((candidate) => isAmmunition(candidate.name, ammoType));
-    if (item) {
-      await db
-        .update(inventoryItems)
-        .set({ quantity: sql`${inventoryItems.quantity} - 1`, updatedAt: new Date() })
+  const { characters, characterEquipment, inventoryItems, gameSessions, combatEncounters } =
+    await import('../../../../db/schema');
+  await db.transaction(async (tx) => {
+    // Serialize the spend against the terminal claim in concludeEncounter.
+    const [encounter] = await tx
+      .select({ status: combatEncounters.status })
+      .from(combatEncounters)
+      .where(and(eq(combatEncounters.id, encounterId), eq(combatEncounters.sessionId, sessionId)))
+      .for('update');
+    if (!encounter || encounter.status !== 'active') return;
+    const owned = exists(
+      tx
+        .select({ id: characters.id })
+        .from(characters)
         .where(
           and(
-            eq(inventoryItems.id, item.id),
-            eq(inventoryItems.characterId, characterId),
-            gt(inventoryItems.quantity, 0),
+            eq(characters.id, characterId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+          ),
+        ),
+    );
+    const sheet = (
+      await tx
+        .select({ id: characterEquipment.id, name: characterEquipment.itemName })
+        .from(characterEquipment)
+        .where(
+          and(
+            eq(characterEquipment.characterId, characterId),
+            gt(characterEquipment.quantity, 0),
             owned,
           ),
-        );
+        )
+        .orderBy(characterEquipment.createdAt, characterEquipment.id)
+    ).find((item) => isAmmunition(item.name, ammoType));
+    let spent: { id: string; name: string; source: 'equipment' | 'inventory' } | undefined;
+    if (sheet) {
+      const [updated] = await tx
+        .update(characterEquipment)
+        .set({ quantity: sql`${characterEquipment.quantity} - 1`, updatedAt: new Date() })
+        .where(
+          and(
+            eq(characterEquipment.id, sheet.id),
+            eq(characterEquipment.characterId, characterId),
+            gt(characterEquipment.quantity, 0),
+            owned,
+          ),
+        )
+        .returning({ id: characterEquipment.id });
+      if (updated) spent = { ...sheet, source: 'equipment' };
+    } else {
+      const item = (
+        await tx
+          .select({ id: inventoryItems.id, name: inventoryItems.name })
+          .from(inventoryItems)
+          .where(
+            and(eq(inventoryItems.characterId, characterId), gt(inventoryItems.quantity, 0), owned),
+          )
+          .orderBy(inventoryItems.createdAt, inventoryItems.id)
+      ).find((candidate) => isAmmunition(candidate.name, ammoType));
+      if (item) {
+        const [updated] = await tx
+          .update(inventoryItems)
+          .set({ quantity: sql`${inventoryItems.quantity} - 1`, updatedAt: new Date() })
+          .where(
+            and(
+              eq(inventoryItems.id, item.id),
+              eq(inventoryItems.characterId, characterId),
+              gt(inventoryItems.quantity, 0),
+              owned,
+            ),
+          )
+          .returning({ id: inventoryItems.id });
+        if (updated) spent = { ...item, source: 'inventory' };
+      }
     }
-  }
+    if (!spent) return;
+    await tx
+      .update(gameSessions)
+      .set({
+        sessionState: sql`jsonb_set(coalesce(${gameSessions.sessionState}, '{}'::jsonb), '{ammunition_spent}',
+        coalesce(${gameSessions.sessionState}->'ammunition_spent', '[]'::jsonb) ||
+        jsonb_build_array(jsonb_build_object('encounterId', ${encounterId}::text, 'characterId', ${characterId}::text,
+          'itemId', ${spent.id}::text, 'itemName', ${spent.name}::text, 'source', ${spent.source}::text, 'kind', ${ammoType}::text)), true)`,
+      })
+      .where(eq(gameSessions.id, sessionId));
+  });
   logger.info({ msg: 'COMBAT_AMMUNITION_SPENT', sessionId, characterId, ammoType });
 }
 
@@ -1564,6 +1590,7 @@ export async function executeCombatIntent(
             userId,
             weapon.name,
             encounter.sessionId,
+            encounterId,
           );
         }
         // Every resolution is reported, not just the ones that failed to reach. A hit the DM is

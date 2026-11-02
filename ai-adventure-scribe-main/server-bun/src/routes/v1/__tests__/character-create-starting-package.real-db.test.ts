@@ -25,6 +25,7 @@ import {
   characterEquipment,
   characterStats,
   combatEncounters,
+  dialogueHistory,
   combatParticipantStatus,
   combatParticipants,
   gameSessions,
@@ -981,6 +982,7 @@ describeWithDb('package gear reaches the session (#1007)', () => {
       const { inventoryRoutes } = await import('../inventory.ts');
       const { tacticalMapRoutes } = await import('../tactical-maps.ts');
       const { combatRoutes } = await import('../combat/index.ts');
+      const { sessionsRoutes } = await import('../sessions.ts');
       const intentService = await import('../../../services/combat/combat-intent-service.ts');
       const dataAccess = await import('../../../services/combat/data-access.ts');
       return {
@@ -990,6 +992,7 @@ describeWithDb('package gear reaches the session (#1007)', () => {
         inventoryRoutes,
         tacticalMapRoutes,
         combatRoutes,
+        sessionsRoutes,
         intentService,
         dataAccess,
       };
@@ -1000,6 +1003,7 @@ describeWithDb('package gear reaches the session (#1007)', () => {
       .use(pipeline.inventoryRoutes)
       .use(pipeline.tacticalMapRoutes)
       .use(pipeline.combatRoutes)
+      .use(pipeline.sessionsRoutes)
       .use(pipeline.issue1784DataRoutes);
     executeCombatIntent = pipeline.intentService.executeCombatIntent as typeof executeCombatIntent;
     getLegalCombatActions = pipeline.intentService
@@ -1056,7 +1060,7 @@ describeWithDb('package gear reaches the session (#1007)', () => {
    * encounter-lifecycle uses) and return the ids the intent service needs. */
   async function seat(
     characterId: string,
-  ): Promise<{ encounterId: string; heroId: string; foeId: string }> {
+  ): Promise<{ encounterId: string; heroId: string; foeId: string; sessionId: string }> {
     const [{ id: campaignId }] = await db
       .insert(campaigns)
       .values({ userId, name: testId('camp-1007') })
@@ -1109,7 +1113,7 @@ describeWithDb('package gear reaches the session (#1007)', () => {
     cleanup.push(async () =>
       db.delete(combatParticipants).where(eq(combatParticipants.encounterId, encounterId)),
     );
-    return { encounterId, heroId, foeId };
+    return { encounterId, heroId, foeId, sessionId };
   }
 
   async function resetTurn(encounterId: string): Promise<void> {
@@ -1364,6 +1368,11 @@ describeWithDb('package gear reaches the session (#1007)', () => {
       expect(outcome.weaponResolution?.substituted).toBe(false);
       expect(await arrowQuantity()).toEqual([expected]);
     }
+    const end = await app.handle(
+      new Request(`http://localhost/v1/combat/${encounterId}/end`, { method: 'POST' }),
+    );
+    expect(end.status).toBe(200);
+    expect(await arrowQuantity()).toEqual([18]); // Three spent: recover half, rounded down.
   });
 
   it('two light-crossbow attacks through the real route spend two bolts (#1060)', async () => {
@@ -1405,7 +1414,7 @@ describeWithDb('package gear reaches the session (#1007)', () => {
     const bolts = async () =>
       (await equipmentRows(id)).find((row) => row.item_name === 'Crossbow Bolts (20)')?.quantity;
     expect(await bolts()).toBe(20);
-    const { encounterId, heroId, foeId } = await seat(id);
+    const { encounterId, heroId, foeId, sessionId } = await seat(id);
     for (const expected of [19, 18]) {
       await resetTurn(encounterId);
       const [{ version }] = await db
@@ -1436,8 +1445,209 @@ describeWithDb('package gear reaches the session (#1007)', () => {
         result: { weaponResolution: { resolved: 'Crossbow, light', substituted: false } },
       });
       expect(await bolts()).toBe(expected);
+      if (expected === 19) {
+        const save = await app.handle(
+          new Request(`http://localhost/v1/sessions/${sessionId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              session_state: {
+                ammunition_spent: [
+                  {
+                    encounterId,
+                    characterId: id,
+                    itemId: 'forged',
+                    source: 'equipment',
+                    kind: 'bolts',
+                  },
+                ],
+              },
+            }),
+          }),
+        );
+        expect(save.status).toBe(200);
+      }
     }
     expect((await equipmentRows(id)).find((row) => /case/i.test(row.item_name))?.quantity).toBe(1);
+    const owner = userId;
+    try {
+      userId = testId('other-user');
+      const foreign = await app.handle(
+        new Request(`http://localhost/v1/combat/${encounterId}/end`, { method: 'POST' }),
+      );
+      expect(foreign.status).toBe(404);
+    } finally {
+      userId = owner;
+    }
+    expect(await bolts()).toBe(18);
+    const ending = await app.handle(
+      new Request(`http://localhost/v1/combat/${encounterId}/end`, { method: 'POST' }),
+    );
+    expect(ending.status, await ending.clone().text()).toBe(200);
+    expect(await bolts()).toBe(19);
+    const repeated = await app.handle(
+      new Request(`http://localhost/v1/combat/${encounterId}/end`, { method: 'POST' }),
+    );
+    expect(repeated.status).toBe(200);
+    expect(await bolts()).toBe(19);
+    const lines = await db
+      .select({ message: dialogueHistory.message, context: dialogueHistory.context })
+      .from(dialogueHistory)
+      .where(eq(dialogueHistory.sessionId, sessionId));
+    const recovery = lines.filter(
+      (line) => (line.context as { intent?: string } | null)?.intent === 'ammunition_recovery',
+    );
+    expect(recovery).toHaveLength(1);
+    expect(recovery[0].message).toBe('Recovered 1 bolt after combat.');
+
+    // A killing shot is spent before the automatic terminal transition; one spent rounds down to zero recovered.
+    const finalFight = await seat(id);
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 1 })
+      .where(eq(combatParticipantStatus.participantId, finalFight.foeId));
+    const finalShot = await app.handle(
+      new Request(`http://localhost/v1/combat/${finalFight.encounterId}/intent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          intent: {
+            type: 'attack',
+            actorId: finalFight.heroId,
+            targetId: finalFight.foeId,
+            weaponId: 'Crossbow, light',
+            expectedVersion: 1,
+            d20: 20,
+          },
+          source: 'player',
+          origin: 'action_bar',
+        }),
+      }),
+    );
+    expect(finalShot.status, await finalShot.clone().text()).toBe(200);
+    const [finished] = await db
+      .select({ status: combatEncounters.status })
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, finalFight.encounterId));
+    expect(finished.status).toBe('completed');
+    expect(await bolts()).toBe(18);
+
+    // Four shots across two stacks recover two, without restoring more than was spent from either stack.
+    const [firstStack] = await db
+      .select({ id: characterEquipment.id })
+      .from(characterEquipment)
+      .where(
+        and(
+          eq(characterEquipment.characterId, id),
+          eq(characterEquipment.itemName, 'Crossbow Bolts (20)'),
+        ),
+      );
+    await db
+      .update(characterEquipment)
+      .set({ quantity: 1 })
+      .where(eq(characterEquipment.id, firstStack.id));
+    const [secondStack] = await db
+      .insert(characterEquipment)
+      .values({ characterId: id, itemName: 'Crossbow Bolts (20)', quantity: 17 })
+      .returning({ id: characterEquipment.id });
+    const splitFight = await seat(id);
+    for (let shot = 0; shot < 4; shot++) {
+      await resetTurn(splitFight.encounterId);
+      const [{ version }] = await db
+        .select({ version: combatEncounters.version })
+        .from(combatEncounters)
+        .where(eq(combatEncounters.id, splitFight.encounterId));
+      const response = await app.handle(
+        new Request(`http://localhost/v1/combat/${splitFight.encounterId}/intent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            intent: {
+              type: 'attack',
+              actorId: splitFight.heroId,
+              targetId: splitFight.foeId,
+              weaponId: 'Crossbow, light',
+              expectedVersion: version,
+              d20: 5,
+            },
+            source: 'player',
+            origin: 'action_bar',
+          }),
+        }),
+      );
+      expect(response.status).toBe(200);
+    }
+    const splitEnd = await app.handle(
+      new Request(`http://localhost/v1/combat/${splitFight.encounterId}/end`, { method: 'POST' }),
+    );
+    expect(splitEnd.status).toBe(200);
+    const quantities = await db
+      .select({ id: characterEquipment.id, quantity: characterEquipment.quantity })
+      .from(characterEquipment)
+      .where(
+        and(
+          eq(characterEquipment.characterId, id),
+          eq(characterEquipment.itemName, 'Crossbow Bolts (20)'),
+        ),
+      );
+    expect(quantities.find((row) => row.id === firstStack.id)?.quantity).toBe(1);
+    expect(quantities.find((row) => row.id === secondStack.id)?.quantity).toBe(15);
+  });
+
+  it('the legacy attack route cannot fire a crossbow without bolts (#1327)', async () => {
+    const clientModule = (path: string) => import(`../../../../../src/${path}`);
+    const { buildStarterCharacterSeed } = await clientModule(
+      'services/character/starter-character-seeding',
+    );
+    const { prepareCharacterPayload } = await clientModule('services/user-data-payload-helpers');
+    const [{ id: campaignId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('legacy-no-bolts') })
+      .returning({ id: campaigns.id });
+    cleanup.push(async () => db.delete(campaigns).where(eq(campaigns.id, campaignId)));
+    const seed = buildStarterCharacterSeed(
+      {
+        name: 'Boltless',
+        race: 'Human',
+        class: 'Fighter',
+        level: 1,
+        background: 'Outlander',
+        ability_scores: {
+          strength: 10,
+          dexterity: 16,
+          constitution: 14,
+          intelligence: 10,
+          wisdom: 14,
+          charisma: 8,
+        },
+        equipment: ['Leather Armor', 'Crossbow, light'],
+        skills: [],
+        languages: [],
+      },
+      campaignId,
+    );
+    const id = await create({
+      ...prepareCharacterPayload(seed as unknown as Record<string, unknown>),
+      name: testId('boltless'),
+    });
+    const { encounterId, heroId, foeId } = await seat(id);
+    const [{ version }] = await db
+      .select({ version: combatEncounters.version })
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, encounterId));
+    const response = await app.handle(
+      new Request(`http://localhost/v1/combat/${encounterId}/attack`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          attackerId: heroId,
+          targetId: foeId,
+          weaponId: 'Crossbow, light',
+          expectedVersion: version,
+        }),
+      }),
+    );
+    expect(response.status).toBe(404);
   });
 
   it('premade rogue without arrows: the equipped shortbow is refused for ammunition, never swapped to Unarmed (#1013)', async () => {
