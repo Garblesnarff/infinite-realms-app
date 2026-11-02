@@ -1694,7 +1694,6 @@ describeWithDb('package gear reaches the session (#1007)', () => {
       );
     expect(quantities.find((row) => row.id === firstStack.id)?.quantity).toBe(1);
     expect(quantities.find((row) => row.id === secondStack.id)?.quantity).toBe(15);
-
     // Deleting the emptied stack must not prevent combat from ending.
     await db.delete(characterEquipment).where(eq(characterEquipment.id, firstStack.id));
     await db
