@@ -29,7 +29,9 @@ import { buildInitiativeOrder as defaultBuildInitiativeOrder } from '../../../se
 import { runNpcTurnsIfNpcHolds as defaultRunNpcTurns } from '../../../services/combat/npc-turn-drain.js';
 import {
   clearPendingCombatEntry,
+  liftCombatEntryDecline,
   readPendingCombatEntry,
+  recordCombatEntryDecline,
 } from '../../../services/combat/pending-combat-entry.js';
 import { sanitizeSceneSpec as defaultSanitizeSceneSpec } from '../../../services/combat/scene-spec-sanitizer.js';
 import { applyCombatEntryGate } from '../../../services/combat-entry-pipeline.js';
@@ -345,6 +347,15 @@ export function createCombatEntryRoutes({
             return { error: 'Combat entry is no longer available' };
           }
           await clearPendingCombatEntry(params.sessionId);
+          // #1328: a decline must not outlive the fight it declined. If
+          // this seat came from a stored pending, its decline (if any)
+          // clears so a post-fight re-offer is not suppressed by stale
+          // state. (Posted combatants without a stored pending keep any
+          // decline — that corner needs the seated key, not just the
+          // stored one; the pipeline lift covers the common path.)
+          if (stored?.actorKey) {
+            await liftCombatEntryDecline(params.sessionId, stored.actorKey);
+          }
 
           // Creatures that won initiative act now, before the player's first action (#2658).
           const npcTurns = await runNpcTurns(outcome.combatState.encounter.id, user.userId);
@@ -379,7 +390,34 @@ export function createCombatEntryRoutes({
           set.status = 404;
           return { error: 'Session not found' };
         }
+        // #1328: declining is not forgetting. Read the pending entry's
+        // actor key before clearing, so the next turn does not re-offer
+        // the same fight until a new hostile act or the player's attack.
+        // (No userId: an expired proposal clears silently here; expiry is
+        // not a decline and records nothing.)
+        const stored = await readPendingCombatEntry(params.sessionId);
         await clearPendingCombatEntry(params.sessionId);
+        if (stored?.actorKey) {
+          // The 409-cleanup DELETE fires after /enter seated the fight;
+          // do not record a decline for a hostile the player is now
+          // fighting. Record only when the read positively says no
+          // encounter is live: on timeout/error the state is unknown,
+          // and a missed record only risks one re-offer (the pre-fix
+          // behavior, and the player can decline again), while a false
+          // decline would suppress a legitimate post-fight offer.
+          const encounter = await Promise.race([
+            combatEntryGateDeps
+              .getActiveEncounter(params.sessionId, user.userId)
+              .then((active) => ({ known: true as const, active }))
+              .catch(() => ({ known: false as const, active: null })),
+            new Promise<{ known: false; active: null }>((resolve) =>
+              setTimeout(() => resolve({ known: false, active: null }), 250),
+            ),
+          ]);
+          if (encounter.known && !encounter.active) {
+            await recordCombatEntryDecline(params.sessionId, stored.actorKey);
+          }
+        }
         return { cleared: true };
       },
       { params: sessionIdParams },

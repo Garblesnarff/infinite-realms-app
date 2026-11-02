@@ -6,10 +6,15 @@
  * generate call returns, without writing an encounter. The envelope carries a pending handoff;
  * the explicit `/enter` call owns seating and the player's initiative die.
  */
-import { afterAll, describe, expect, it, spyOn } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, it, spyOn } from 'bun:test';
 
 import { logger } from '../../lib/logger.js';
 import { emptyCampaignMonsterIndex } from '../combat/campaign-monster-index.js';
+import {
+  readDeclinedCombatEntryActorKeys,
+  recordCombatEntryDecline,
+  resetPendingCombatEntries,
+} from '../combat/pending-combat-entry.js';
 import { applyCombatEntryGate } from '../combat-entry-pipeline.js';
 
 import type { CombatEntryGateDeps } from '../combat/combat-entry-gate.js';
@@ -381,5 +386,149 @@ describe('applyCombatEntryGate', () => {
     } finally {
       info.mockRestore();
     }
+  });
+});
+
+/**
+ * #1328: after a decline, no re-offer for that hostile until a new hostile
+ * act or the player's own attack. Fixtures follow the real producers: the
+ * decline record is the pending-entry store's own actor key (sorted
+ * lowercase combatant names, as `actorKeyOf` builds it), and the DM
+ * envelopes are the gate's `CombatEntryResponse` shape.
+ */
+describe('applyCombatEntryGate — declined re-offer suppression (#1328)', () => {
+  const DECLINED_SESSION = '22222222-3333-4444-8555-666666666666';
+  const OTHER_SESSION = '33333333-4444-4555-8666-777777777777';
+  const GILDED_HUSK_KEY = 'gilded husk';
+
+  beforeEach(async () => {
+    await resetPendingCombatEntries();
+  });
+
+  const declinedEntry = (sessionId: string) => ({
+    sessionId,
+    player: { characterId: 'character-1', name: 'The Storyteller', initiativeModifier: 2 },
+  });
+
+  it('decline -> quiet turn: no offer for the same hostile', async () => {
+    await recordCombatEntryDecline(DECLINED_SESSION, GILDED_HUSK_KEY);
+    const { deps } = stubDeps();
+    const returned = await applyCombatEntryGate({
+      result: {
+        text: dmEnvelope({
+          text: 'The Gilded Husk looms in the doorway.',
+          combat_transition: 'start',
+          combatants: [{ name: 'Gilded Husk', count: 1 }],
+        }),
+      } as never,
+      userId: USER_ID,
+      combatEntry: declinedEntry(DECLINED_SESSION),
+      deps,
+    });
+
+    const envelope = JSON.parse(returned.text) as Record<string, unknown>;
+    expect(envelope.combat_entry_pending).toBeUndefined();
+    expect(envelope.combat_transition).toBe('none');
+    // The decline stands: a quiet turn neither lifts it nor re-offers.
+    expect(await readDeclinedCombatEntryActorKeys(DECLINED_SESSION)).toEqual([GILDED_HUSK_KEY]);
+  });
+
+  it('decline -> hostile attacks: the offer returns and the decline lifts', async () => {
+    await recordCombatEntryDecline(DECLINED_SESSION, GILDED_HUSK_KEY);
+    const { deps } = stubDeps();
+    const returned = await applyCombatEntryGate({
+      result: {
+        text: dmEnvelope({
+          text: 'The Gilded Husk lunges at you.',
+          combatants: [{ name: 'Gilded Husk', count: 1 }],
+          combat_actions: [
+            {
+              // Real shape: the hostile attacks the player (actor_id is the
+              // attacker, target_ids the victims) — never itself.
+              actor_id: 'gilded-husk',
+              action_type: 'attack',
+              target_ids: ['the-storyteller'],
+              weapon_id: null,
+              spell_id: null,
+              slot_level: null,
+            },
+          ],
+        }),
+      } as never,
+      userId: USER_ID,
+      combatEntry: declinedEntry(DECLINED_SESSION),
+      deps,
+    });
+
+    const envelope = JSON.parse(returned.text) as Record<string, unknown>;
+    expect(envelope.combat_entry_pending).toMatchObject({
+      trigger: 'tactical_action',
+      combatants: [{ name: 'Gilded Husk', count: 1 }],
+    });
+    expect(await readDeclinedCombatEntryActorKeys(DECLINED_SESSION)).toEqual([]);
+  });
+
+  it('decline -> player attacks: the offer returns and the decline lifts', async () => {
+    await recordCombatEntryDecline(DECLINED_SESSION, GILDED_HUSK_KEY);
+    const { deps } = stubDeps();
+    const returned = await applyCombatEntryGate({
+      result: {
+        text: dmEnvelope({ text: 'You swing at the Gilded Husk.' }),
+      } as never,
+      userId: USER_ID,
+      combatEntry: declinedEntry(DECLINED_SESSION),
+      declaredAttack: { verb: 'attack', actorName: 'Gilded Husk' },
+      deps,
+    });
+
+    const envelope = JSON.parse(returned.text) as Record<string, unknown>;
+    expect(envelope.combat_entry_pending).toMatchObject({
+      trigger: 'player_intent',
+      combatants: [{ name: 'Gilded Husk', count: 1 }],
+    });
+    expect(await readDeclinedCombatEntryActorKeys(DECLINED_SESSION)).toEqual([]);
+  });
+
+  it('no decline recorded: the first offer for the hostile is never suppressed', async () => {
+    const { deps } = stubDeps();
+    const returned = await applyCombatEntryGate({
+      result: {
+        text: dmEnvelope({
+          text: 'The Gilded Husk looms in the doorway.',
+          combat_transition: 'start',
+          combatants: [{ name: 'Gilded Husk', count: 1 }],
+        }),
+      } as never,
+      userId: USER_ID,
+      combatEntry: declinedEntry(DECLINED_SESSION),
+      deps,
+    });
+
+    const envelope = JSON.parse(returned.text) as Record<string, unknown>;
+    expect(envelope.combat_entry_pending).toMatchObject({
+      combatants: [{ name: 'Gilded Husk', count: 1 }],
+    });
+  });
+
+  it('a decline never suppresses an offer for a different hostile', async () => {
+    await recordCombatEntryDecline(OTHER_SESSION, GILDED_HUSK_KEY);
+    const { deps } = stubDeps();
+    const returned = await applyCombatEntryGate({
+      result: {
+        text: dmEnvelope({
+          text: 'A Brass Gull Guard blocks the ramp.',
+          combat_transition: 'start',
+          combatants: [{ name: 'Brass Gull Guard', count: 1 }],
+        }),
+      } as never,
+      userId: USER_ID,
+      combatEntry: declinedEntry(OTHER_SESSION),
+      deps,
+    });
+
+    const envelope = JSON.parse(returned.text) as Record<string, unknown>;
+    expect(envelope.combat_entry_pending).toMatchObject({
+      combatants: [{ name: 'Brass Gull Guard', count: 1 }],
+    });
   });
 });

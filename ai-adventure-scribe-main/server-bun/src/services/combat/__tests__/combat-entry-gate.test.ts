@@ -14,6 +14,8 @@ import {
   deriveEntryCombatants,
   detectCombatEntry,
   detectCombatEntryTrigger,
+  dmResponseTargetsDeclinedActor,
+  isPlayerAttackOnDeclinedActor,
   seatCombatEntry,
   synthesizeSceneSpec,
   type CombatEntryGateDeps,
@@ -22,6 +24,8 @@ import {
   type CombatEntryStartResult,
 } from '../combat-entry-gate.js';
 import { resolveCombatIntentRefsWithRetry } from '../combat-intent-refs.js';
+
+import type { DMTargetedCombatAction } from '../../dm/dm-response-schema.js';
 
 const SESSION_ID = '11111111-2222-4333-8444-555555555555';
 const USER_ID = 'user_01KAT5E3WFD7NGE3C0TDHX2T5G';
@@ -1141,5 +1145,170 @@ describe('seatCombatEntry', () => {
     // Initiative is part of the same seating, not a later turn.
     expect(events.map((entry) => entry.event)).toEqual(['combat_started', 'initiative_completed']);
     expect(events[1].properties.participants).toBe(2);
+  });
+});
+
+describe('declined re-offer lift (#1328)', () => {
+  const KEY = 'gilded husk';
+  const hostileAttack = (
+    overrides: Partial<DMTargetedCombatAction> = {},
+  ): DMTargetedCombatAction => ({
+    actor_id: 'gilded-husk',
+    action_type: 'attack',
+    target_ids: ['the-storyteller'],
+    weapon_id: null,
+    spell_id: null,
+    slot_level: null,
+    movement_feet: 0,
+    ...overrides,
+  });
+  it('a combat action by the declined hostile attacking the player lifts', () => {
+    expect(
+      dmResponseTargetsDeclinedActor(response({ combat_actions: [hostileAttack()] }), KEY),
+    ).toBe(true);
+  });
+  it('a hostile AoE cast_spell with no target_ids lifts via actor_id', () => {
+    expect(
+      dmResponseTargetsDeclinedActor(
+        response({
+          combat_actions: [
+            {
+              actor_id: 'gilded-husk',
+              action_type: 'cast_spell',
+              spell_id: 'fireball',
+              origin: { x: 0, y: 0 },
+              direction: null,
+            },
+          ],
+        }),
+        KEY,
+      ),
+    ).toBe(true);
+  });
+  it('a non-hostile action_type by the declined hostile does not lift', () => {
+    expect(
+      dmResponseTargetsDeclinedActor(
+        response({
+          combat_actions: [hostileAttack({ action_type: 'hide', target_ids: [] })],
+        }),
+        KEY,
+      ),
+    ).toBe(false);
+    expect(
+      dmResponseTargetsDeclinedActor(
+        response({
+          combat_actions: [hostileAttack({ action_type: 'dash', target_ids: [] })],
+        }),
+        KEY,
+      ),
+    ).toBe(false);
+  });
+  it('a forced_move shove of the player lifts; a teleport does not', () => {
+    expect(
+      dmResponseTargetsDeclinedActor(
+        response({
+          map_actions: [
+            {
+              action: 'forced_move',
+              target: 'the-storyteller',
+              mode: 'shove',
+              origin: null,
+              distance: 5,
+              destination: { x: 5, y: 5 },
+            },
+          ],
+        }),
+        KEY,
+        'The Storyteller',
+      ),
+    ).toBe(true);
+    expect(
+      dmResponseTargetsDeclinedActor(
+        response({
+          map_actions: [
+            {
+              action: 'forced_move',
+              target: 'the-storyteller',
+              mode: 'teleport',
+              origin: null,
+              distance: null,
+              destination: { x: 5, y: 5 },
+            },
+          ],
+        }),
+        KEY,
+        'The Storyteller',
+      ),
+    ).toBe(false);
+  });
+  it('a forced_move shove of a third party does not lift, even in a turn about the declined hostile', () => {
+    expect(
+      dmResponseTargetsDeclinedActor(
+        response({
+          combatants: [{ name: 'Gilded Husk', count: 1 }],
+          map_actions: [
+            {
+              action: 'forced_move',
+              target: 'brass-gull-guard',
+              mode: 'shove',
+              origin: null,
+              distance: 5,
+              destination: { x: 5, y: 5 },
+            },
+          ],
+        }),
+        KEY,
+        'The Storyteller',
+      ),
+    ).toBe(false);
+  });
+  it('a forced_move shove of the declined hostile itself lifts', () => {
+    expect(
+      dmResponseTargetsDeclinedActor(
+        response({
+          map_actions: [
+            {
+              action: 'forced_move',
+              target: 'gilded-husk',
+              mode: 'pull',
+              origin: null,
+              distance: 5,
+              destination: { x: 5, y: 5 },
+            },
+          ],
+        }),
+        KEY,
+        'The Storyteller',
+      ),
+    ).toBe(true);
+  });
+  it('a plain move of a different hostile does not lift (repositioning is not a hostile act)', () => {
+    expect(
+      dmResponseTargetsDeclinedActor(
+        response({
+          map_actions: [
+            { action: 'move', entityId: 'brass-gull-guard', x: 1, y: 1, changes: null },
+          ],
+        }),
+        KEY,
+      ),
+    ).toBe(false);
+  });
+  it('a bare combat_transition start does not lift', () => {
+    expect(dmResponseTargetsDeclinedActor(response({ combat_transition: 'start' }), KEY)).toBe(
+      false,
+    );
+  });
+  it('the player attacking the declined hostile lifts; attacking another does not', () => {
+    expect(isPlayerAttackOnDeclinedActor({ verb: 'attack', actorName: 'Gilded Husk' }, KEY)).toBe(
+      true,
+    );
+    expect(
+      isPlayerAttackOnDeclinedActor({ verb: 'attack', actorName: 'Brass Gull Guard' }, KEY),
+    ).toBe(false);
+    expect(isPlayerAttackOnDeclinedActor(null, KEY)).toBe(false);
+    expect(isPlayerAttackOnDeclinedActor({ verb: 'attack', actorName: 'Gilded Husk' }, '')).toBe(
+      false,
+    );
   });
 });
