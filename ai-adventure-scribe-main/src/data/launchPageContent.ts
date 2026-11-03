@@ -123,7 +123,8 @@ This isn't about replacing human Dungeon Masters. It's about giving every advent
         name: 'Legend',
         price: ACCOUNT_UPGRADE_PRICE.label,
         cadence: '',
-        description: 'More turns, more art, and premium voices for regular players.',
+        description:
+          'Legend adds custom hero creation, lets you keep a hero across adventures, higher limits, and premium voices.',
         features: [
           'Up to 40 DM messages a day',
           'Up to 2 AI images a day',
@@ -192,7 +193,7 @@ This isn't about replacing human Dungeon Masters. It's about giving every advent
       {
         title: 'The real game, today',
         description:
-          'The Free plan has the same story memory, 5E rules and combat tracker as Legend. Legend adds higher daily limits and premium voices.',
+          'The Free plan has the same story memory, 5E rules and combat tracker as Legend. Legend adds custom hero creation, lets you keep a hero across adventures, higher limits, and premium voices.',
         icon: 'Zap',
       },
     ] as EarlyAccessPerk[],
