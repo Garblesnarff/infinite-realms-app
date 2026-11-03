@@ -2,7 +2,8 @@
    the dispatch would put the turn's authorization, resolution, and reporting in three files. */
 import { randomUUID } from 'node:crypto';
 
-import { ammunitionForWeapon, isAmmunition } from './ammunition.js';
+import { spendRangedAmmunition } from './ammunition-spend.js';
+import { ammunitionForWeapon } from './ammunition.js';
 import { describeRefusedSpell, describeResolvedSpell } from './attack-narration.js';
 import { decideAttackApproach, describeResolvedAttack } from './combat-approach-service.js';
 import { executeCombatCheck } from './combat-check-service.js';
@@ -13,7 +14,6 @@ import { trackCombatEvent } from './combat-events.js';
 import { resolveCombatIntentRefsWithRetry } from './combat-intent-refs.js';
 import { assertActorTurn } from './combat-intent-turn.js';
 import { resolveUseItem, type ResolveUseItemResult } from './combat-item-service.js';
-import { buildCombatWeaponOptions, type WeaponTargetResolution } from './combat-weapon-options.js';
 import {
   getParticipantAbilityProfile,
   getActiveConditionNames,
@@ -57,6 +57,7 @@ import {
   claimTurnVersion,
   setDefensiveAction,
 } from './combat-turn-resources.js';
+import { buildCombatWeaponOptions, type WeaponTargetResolution } from './combat-weapon-options.js';
 import {
   fighterFeatureUses,
   resolveActionSurge,
@@ -960,82 +961,6 @@ function refuseMissingAmmunition(
   }
 }
 
-/** Spend one round after the engine has accepted a player's ranged attack. */
-async function spendRangedAmmunition(
-  characterId: string | null | undefined,
-  userId: string,
-  weaponName: string,
-  sessionId: string,
-): Promise<void> {
-  if (!characterId) return;
-  const ammoType = ammunitionForWeapon(weaponName);
-  if (!ammoType) return;
-  const { db } = await import('../../../../db/client');
-  const { and, eq, exists, gt, or, sql } = await import('drizzle-orm');
-  const { characters, characterEquipment, inventoryItems } = await import('../../../../db/schema');
-  const owned = exists(
-    db
-      .select({ id: characters.id })
-      .from(characters)
-      .where(
-        and(
-          eq(characters.id, characterId),
-          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-        ),
-      ),
-  );
-  const sheetItem = (
-    await db
-      .select({ id: characterEquipment.id, name: characterEquipment.itemName })
-      .from(characterEquipment)
-      .where(
-        and(
-          eq(characterEquipment.characterId, characterId),
-          gt(characterEquipment.quantity, 0),
-          owned,
-        ),
-      )
-      .orderBy(characterEquipment.createdAt)
-  ).find((item) => isAmmunition(item.name, ammoType));
-  if (sheetItem) {
-    await db
-      .update(characterEquipment)
-      .set({ quantity: sql`${characterEquipment.quantity} - 1`, updatedAt: new Date() })
-      .where(
-        and(
-          eq(characterEquipment.id, sheetItem.id),
-          eq(characterEquipment.characterId, characterId),
-          gt(characterEquipment.quantity, 0),
-          owned,
-        ),
-      );
-  } else {
-    const item = (
-      await db
-        .select({ id: inventoryItems.id, name: inventoryItems.name })
-        .from(inventoryItems)
-        .where(
-          and(eq(inventoryItems.characterId, characterId), gt(inventoryItems.quantity, 0), owned),
-        )
-        .orderBy(inventoryItems.createdAt)
-    ).find((candidate) => isAmmunition(candidate.name, ammoType));
-    if (item) {
-      await db
-        .update(inventoryItems)
-        .set({ quantity: sql`${inventoryItems.quantity} - 1`, updatedAt: new Date() })
-        .where(
-          and(
-            eq(inventoryItems.id, item.id),
-            eq(inventoryItems.characterId, characterId),
-            gt(inventoryItems.quantity, 0),
-            owned,
-          ),
-        );
-    }
-  }
-  logger.info({ msg: 'COMBAT_AMMUNITION_SPENT', sessionId, characterId, ammoType });
-}
-
 export async function proposeCombatAttack(
   encounterId: string,
   submitted: SubmittedCombatIntent,
@@ -1537,9 +1462,18 @@ export async function executeCombatIntent(
       if (approach.movementOnly) {
         result = exposeAttackVisibility(approach.result, visibility);
       } else {
-        const attackService = await createCombatAttackService();
-        result = exposeAttackVisibility(
-          await attackService.resolveAttack(
+        const resolveAttack = async () => {
+          if (actorIsPlayer) {
+            await spendRangedAmmunition(
+              (actor as { characterId?: string }).characterId,
+              userId,
+              weapon.name,
+              encounter.sessionId,
+              encounterId,
+            );
+          }
+          const attackService = await createCombatAttackService();
+          return await attackService.resolveAttack(
             encounterId,
             {
               attackerId: intent.actorId,
@@ -1555,17 +1489,16 @@ export async function executeCombatIntent(
               providedD20Rolls: intent.d20Rolls,
             } satisfies AttackRollInput,
             userId,
-          ),
-          { ...visibility, normalizeAutoRolled: true },
-        );
-        if (actorIsPlayer) {
-          await spendRangedAmmunition(
-            (actor as { characterId?: string }).characterId,
-            userId,
-            weapon.name,
-            encounter.sessionId,
           );
-        }
+        };
+        // The stack claim and damage must commit together, including for unkeyed player attacks.
+        const attack =
+          actorIsPlayer && ammunitionForWeapon(weapon.name) && !inNpcTransaction
+            ? await (
+                await import('../../../../db/client')
+              ).withNpcActionTransaction(encounterId, resolveAttack)
+            : await resolveAttack();
+        result = exposeAttackVisibility(attack, { ...visibility, normalizeAutoRolled: true });
         // Every resolution is reported, not just the ones that failed to reach. A hit the DM is
         // never told about is a hit it cannot narrate, and a DM with nothing to narrate repeats
         // the paragraph it wrote last turn.

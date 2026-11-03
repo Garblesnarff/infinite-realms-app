@@ -23,6 +23,7 @@
  */
 import { and, eq } from 'drizzle-orm';
 
+import { recoverAmmunition } from './ammunition-recovery.js';
 import { CombatEncounterService } from './combat-encounter-service.js';
 import {
   combatExitsOf,
@@ -44,6 +45,7 @@ import { characterStats, gameSessions } from '../../../../db/schema/index';
 import { alert } from '../../lib/alerting.js';
 import { logger } from '../../lib/logger.js';
 import { slugify, entitySlug, resolveEntityRef } from '../../tactical/identity.js';
+import { broadcastToRoom } from '../collaboration/room-manager.js';
 import { NarrativeLedgerService } from '../narrative/narrative-ledger-service.js';
 
 import type { CombatEndReason } from '../../types/combat.js';
@@ -374,8 +376,10 @@ export async function concludeEncounter(
   // A party defeat can also mean a stabilised party (nobody standing or dying); that
   // hero's run continues in this session. The completion, the load gate and the message
   // refusal all read the same single truth: `vital_state === 'dead'`.
+  let ammunitionRows: Awaited<ReturnType<typeof recoverAmmunition>> = [];
   const concluded = await db.transaction(async (tx) => {
     const claimed = await CombatEncounterService.endCombat(encounterId, userId, reason, tx);
+    if (claimed) ammunitionRows = await recoverAmmunition(tx, encounterId, sessionId, userId);
     if (claimed && reason === 'party_defeated') {
       const [session] = await tx
         .select({ characterId: gameSessions.characterId })
@@ -405,6 +409,22 @@ export async function concludeEncounter(
       reason,
     });
     return true;
+  }
+
+  if (ammunitionRows.length) {
+    broadcastToRoom(sessionId, null as never, {
+      type: 'chat',
+      sessionId,
+      engineRows: ammunitionRows.map((row) => ({
+        id: row.id,
+        sequence: row.sequenceNumber,
+        text: row.message,
+        kind: 'system',
+        sessionId,
+        timestamp: (row.timestamp ?? new Date()).toISOString(),
+        context: row.context,
+      })),
+    });
   }
 
   if (exitDecision?.allowed && exitState) {

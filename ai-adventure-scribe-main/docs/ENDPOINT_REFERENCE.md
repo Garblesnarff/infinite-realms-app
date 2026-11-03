@@ -29,7 +29,7 @@ Authorization: Bearer <token>
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/v1/combat/{encounterId}/attack` | Resolve attack against target ✅ |
+| POST | `/v1/combat/{encounterId}/intent` | Submit combat intents, including attacks |
 | POST | `/v1/combat/{encounterId}/spell-attack` | Resolve spell attack |
 | GET | `/v1/combat/characters/{characterId}/attacks` | Get character weapons |
 | POST | `/v1/combat/characters/{characterId}/attacks` | Create weapon attack |

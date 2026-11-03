@@ -195,7 +195,7 @@ describe('v1 combat action routes API boundaries', () => {
     expect(r2.status).toBe(404);
   });
 
-  it('allows resolveAttack when authenticated and authorized', async () => {
+  it('does not expose the retired attack route when authenticated and authorized', async () => {
     const response = await app.handle(
       new Request('http://localhost/valid-encounter-id/attack', {
         method: 'POST',
@@ -211,12 +211,8 @@ describe('v1 combat action routes API boundaries', () => {
       })
     );
 
-    expect(response.status).toBe(200);
-    const body: any = await response.json();
-    expect(body.finalDamage).toBe(10);
-    expect(lastResolveAttackArgs).not.toBeNull();
-    expect(lastResolveAttackArgs[0]).toBe('valid-encounter-id');
-    expect(lastResolveAttackArgs[1].attackerId).toBe('pc-1');
+    expect(response.status).toBe(404);
+    expect(lastResolveAttackArgs).toBeNull();
   });
 
   it('allows resolveSpellAttack when authenticated and authorized', async () => {

@@ -225,6 +225,8 @@ async function rollInitiative(
 
 ### Making an Attack
 
+**Historical example:** the `/attack` endpoint below is retired and returns 404. Send attacks through `/v1/combat/{encounterId}/intent`; see the intent route for its current request schema. The `makeAttack` examples later in this document are historical too.
+
 **Endpoint:** `POST /v1/combat/{encounterId}/attack`
 
 ```typescript

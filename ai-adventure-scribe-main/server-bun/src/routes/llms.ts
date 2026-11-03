@@ -83,7 +83,6 @@ Base URL: ${siteUrl}
 ### Combat
 - POST /v1/combat/sessions/:sessionId/enter - Enter encounter after the server-side combat gate
 - POST /v1/combat/:encounterId/roll-initiative - Roll initiative
-- POST /v1/combat/:encounterId/attack - Make attack roll
 - POST /v1/combat/:encounterId/intent - Submit combat intent (damage/healing applied server-side)
 - GET /v1/combat/:encounterId/status - Encounter status
 

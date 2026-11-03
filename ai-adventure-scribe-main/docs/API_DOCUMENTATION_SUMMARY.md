@@ -62,7 +62,7 @@ Comprehensive API documentation has been implemented for **64+ D&D 5E mechanics 
 |----------|--------|-------------|--------|
 | `/v1/combat/sessions/{sessionId}/enter` | POST | Enter a pending combat encounter | ✅ Fully Documented |
 | `/v1/combat/{encounterId}/status` | GET | Get combat state | ✅ Fully Documented |
-| `/v1/combat/{encounterId}/attack` | POST | Resolve attack | ✅ Fully Documented |
+| `/v1/combat/{encounterId}/intent` | POST | Submit a combat intent | Current attack gateway |
 | `/v1/combat/{encounterId}/roll-initiative` | POST | Roll initiative | ⚠️ Partially |
 | `/v1/combat/{encounterId}/next-turn` | POST | Advance turn | ⚠️ Partially |
 | `/v1/combat/{encounterId}/damage` | POST | Apply damage | ⚠️ Partially |
