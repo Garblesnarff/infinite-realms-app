@@ -169,6 +169,7 @@ describeWithDb('startCombat seats the character speed (#1251)', () => {
   test('the combat seat applies class, feat and armor modifiers (#1317)', async () => {
     const modifiers = [
       { name: 'barbarian', className: 'Barbarian', level: 5, expected: 40 },
+      { name: 'barbarian-stored', className: 'Barbarian', level: 5, speed: 40, expected: 40 },
       { name: 'monk', className: 'Monk', level: 10, expected: 50 },
       { name: 'monk-shield', className: 'Monk', level: 10, armor: 'Shield', expected: 30 },
       {
@@ -221,15 +222,14 @@ describeWithDb('startCombat seats the character speed (#1251)', () => {
         })
         .returning({ id: characters.id });
       characterIds[row.name] = characterId;
-      await db
-        .insert(characterStats)
-        .values({
-          characterId,
-          strength: 10,
-          dexterity: 14,
-          maxHitPoints: 20,
-          currentHitPoints: 20,
-        });
+      await db.insert(characterStats).values({
+        characterId,
+        strength: 10,
+        dexterity: 14,
+        maxHitPoints: 20,
+        currentHitPoints: 20,
+        ...(row.speed !== undefined ? { speed: row.speed } : {}),
+      });
       if (row.armor)
         await db
           .insert(characterEquipment)

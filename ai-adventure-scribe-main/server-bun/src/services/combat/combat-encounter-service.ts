@@ -51,6 +51,7 @@ import {
 } from '../../../../db/schema/index';
 import {
   applyMovementSpeedModifiers,
+  isExplicitStoredSpeed,
   resolveCharacterCombatSpeed,
 } from '../../../../shared/srd-race-speed-data';
 import { isCompanionsEnabled } from '../../lib/companion-feature.js';
@@ -630,28 +631,30 @@ export class CombatEncounterService {
         // keep the existing chain untouched.
         const speed = Number(
           input.characterId
-            ? applyMovementSpeedModifiers(
-                resolveCharacterCombatSpeed(
-                  character?.stats?.speed,
-                  character?.character?.race,
-                  character?.character?.subrace,
-                ),
-                {
-                  className: character?.character?.class,
-                  level: character?.character?.level,
-                  classLevels: character?.character?.classLevels,
-                  classFeatures: character?.character?.classFeatures,
-                  strength: character?.stats?.strength,
-                  race: character?.character?.race,
-                  equipment: equipmentRows
-                    .filter((item) => item.characterId === input.characterId)
-                    .map((item) => ({
-                      item_name: item.itemName,
-                      item_type: item.itemType,
-                      equipped: item.equipped,
-                    })),
-                },
-              )
+            ? isExplicitStoredSpeed(character?.stats?.speed)
+              ? Number(character?.stats?.speed)
+              : applyMovementSpeedModifiers(
+                  resolveCharacterCombatSpeed(
+                    character?.stats?.speed,
+                    character?.character?.race,
+                    character?.character?.subrace,
+                  ),
+                  {
+                    className: character?.character?.class,
+                    level: character?.character?.level,
+                    classLevels: character?.character?.classLevels,
+                    classFeatures: character?.character?.classFeatures,
+                    strength: character?.stats?.strength,
+                    race: character?.character?.race,
+                    equipment: equipmentRows
+                      .filter((item) => item.characterId === input.characterId)
+                      .map((item) => ({
+                        item_name: item.itemName,
+                        item_type: item.itemType,
+                        equipped: item.equipped,
+                      })),
+                  },
+                )
             : (npcStats.speed ?? fallback.speed),
         );
         // A player who explicitly rolled at the entry prompt owns this d20. Every other seat,

@@ -120,6 +120,29 @@ describe('speed modifiers through the game loader (#1317)', () => {
     getCharacterEquipment.mockResolvedValue([]);
     getCharacterSpells.mockResolvedValue({ cantrips: [], spells: [] });
   });
+  it.each([
+    ['Human', 20],
+    ['Dwarf', 25],
+  ])('does not apply chain mail twice for %s', async (race, expected) => {
+    getCharacterEquipment.mockResolvedValue([
+      { item_name: 'Chain Mail', item_type: 'armor', quantity: 1, equipped: true },
+    ]);
+    const character = await loadDriven(race, '');
+    character.equippedArmor = 'chain-mail';
+    expect(buildCharacterSheet(character).speed).toBe(expected);
+  });
+  it('keeps an explicitly stored Barbarian speed final', async () => {
+    getCharacter.mockResolvedValue(
+      storedRow({
+        race: 'Human',
+        class: 'Barbarian',
+        level: 5,
+        character_stats: [{ ...abilityScores, speed: 40 }],
+      }),
+    );
+    const character = await loadCharacterWithSpells('character-id');
+    expect(buildCharacterSheet(character!).speed).toBe(40);
+  });
   it('hydrates multiclass levels and Mobile before building the actual sheet', async () => {
     getCharacter.mockResolvedValue(
       storedRow({

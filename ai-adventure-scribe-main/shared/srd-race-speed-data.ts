@@ -110,8 +110,13 @@ export function resolveCharacterCombatSpeed(
   subrace: string | null | undefined,
 ): number {
   const stored = Number(storedSpeed);
-  if (Number.isFinite(stored) && stored > 0 && stored !== DEFAULT_STORED_SPEED) return stored;
+  if (isExplicitStoredSpeed(storedSpeed)) return stored;
   return resolveRaceSpeed(race, subrace);
+}
+
+export function isExplicitStoredSpeed(value: unknown): boolean {
+  const stored = Number(value);
+  return Number.isFinite(stored) && stored > 0 && stored !== DEFAULT_STORED_SPEED;
 }
 
 export interface MovementSpeedModifiers {
@@ -144,7 +149,7 @@ export function hasMobileFeat(
   return (features as Record<string, { name?: unknown }>)['feat:mobile']?.name === 'Mobile';
 }
 
-/** 2014 walking-speed modifiers, applied after the race or explicit base speed. */
+/** 2014 walking-speed modifiers, applied after the race base speed. */
 export function applyMovementSpeedModifiers(
   baseSpeed: number,
   input: MovementSpeedModifiers,
