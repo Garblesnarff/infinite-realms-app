@@ -14,6 +14,7 @@ import { actionSurgePreservingState } from './combat/combat-turn-resources.js';
 import { enginePreservingSessionState } from './combat/pending-combat-entry.js';
 import { trackerPreservingState } from './dm/story-tracker.js';
 import { pendingEndingXpPreservingState } from './dm/story-xp.js';
+import { RestService } from './rest-service.js';
 import { getOwnershipCondition } from './session/session-authorization.js';
 import { SessionMessageService, type MessagePage } from './session/session-message-service.js';
 import { db } from '../../../db/client';
@@ -30,7 +31,7 @@ import {
 } from '../../../db/schema/index';
 import { mapSessionListApiRow } from '../../../shared/session-list-contract.js';
 import { resolveCatalogSpell } from '../data/spellData.js';
-import { NotFoundError } from '../lib/errors.js';
+import { BusinessLogicError, NotFoundError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 
 type ActiveSession = Omit<
@@ -441,6 +442,83 @@ export class SessionService {
         'Campaign or Character',
         data.campaignId || data.characterId || 'unknown',
       );
+    }
+
+    // #1239 item 2: a hero joins a NEW campaign rested. The first session ever
+    // created for this (character, campaign) pair applies a long rest once —
+    // full HP, slots, features per #1229's table, via the real long-rest
+    // producer. The check is pair history, not the incoming session number:
+    // continuations always arrive with a higher number, but a fresh
+    // session_number 1 for a pair with history is a restart, not a new join —
+    // resting there would let a player full-rest mid-adventure by starting
+    // fresh, breaking "HP carries inside an adventure". A replay of the same
+    // campaign therefore arrives unrested; that is the conservative reading,
+    // flagged for the strategist to overrule.
+    //
+    // The check runs AFTER the insert, not before: two concurrent first
+    // creates can both read zero priors, but only the row that lands alone
+    // rests — the common supersede interleaving (A completes, then B creates)
+    // rests exactly once, because B's post-insert count sees A's row. The
+    // residual window is two inserts committing before either re-check runs,
+    // in which case neither rests; that hero recovers via the item-1
+    // "Rest first?" gate on the next session. A non-active first row also
+    // consumes first-join status: a completed session is still a played
+    // session for the pair, so the next active create does not rest.
+    // takeLongRest is character-global (it also heals active combat
+    // participants), so joining a new campaign while another campaign's
+    // encounter is active heals that encounter's participants too — the
+    // producer's standing behaviour, flagged for the strategist, not
+    // re-scoped here. The returned session row is pre-rest; clients reload
+    // session context to see the rested sheet.
+    let isFirstSessionForPair = false;
+    if (data.campaignId && data.characterId) {
+      const rows = await db
+        .select({ one: sql`1` })
+        .from(gameSessions)
+        .where(
+          and(
+            eq(gameSessions.campaignId, data.campaignId),
+            eq(gameSessions.characterId, data.characterId),
+            getOwnershipCondition(userId),
+          ),
+        )
+        .limit(2);
+      // The only row is the one just inserted: this is the pair's first session.
+      isFirstSessionForPair = rows.length === 1;
+    }
+
+    if (
+      isFirstSessionForPair &&
+      (data.status || 'active') === 'active' &&
+      data.campaignId &&
+      data.characterId
+    ) {
+      // Expected refusals only are swallowed: a dying, dead, or below-1-HP
+      // hero cannot long rest (#180), and a missing character fails the
+      // ownership lookup — either way the hero simply arrives as they are
+      // and recovers in fiction. Anything else is a genuine mid-rest failure
+      // (earlier writes may already persist with no rest event recorded), so
+      // it propagates instead of looking identical to a refusal in the logs.
+      try {
+        await RestService.takeLongRest(
+          data.characterId,
+          userId,
+          session.id,
+          'New campaign join rest (#1239 item 2)',
+        );
+      } catch (error) {
+        if (error instanceof BusinessLogicError || error instanceof NotFoundError) {
+          logger.warn({
+            msg: 'NEW_CAMPAIGN_JOIN_REST_SKIPPED',
+            characterId: data.characterId,
+            campaignId: data.campaignId,
+            sessionId: session.id,
+            err: error instanceof Error ? error.message : String(error),
+          });
+        } else {
+          throw error;
+        }
+      }
     }
 
     return session;
