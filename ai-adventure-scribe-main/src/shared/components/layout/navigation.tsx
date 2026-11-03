@@ -87,51 +87,54 @@ const Navigation: React.FC = () => {
               )}
             </div>
 
-            {/* User Plan Badge and Upgrade Button */}
-            <div className="flex items-center space-x-2 border-l border-white/10 pl-4">
-              {userPlan === 'free' ? (
-                <Link
-                  to="/app/account"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-gray-900 font-bold text-sm hover:from-amber-600 hover:to-amber-700 transition-all shadow-md hover:shadow-lg"
-                >
-                  <Crown className="h-4 w-4" />
-                  <span>Upgrade</span>
-                </Link>
-              ) : isPaidPlan ? (
-                <span className="flex items-center gap-1.5 px-3 py-1.5 text-amber-400 text-sm font-medium">
-                  <Crown className="h-4 w-4" />
-                  <span>{userPlan === 'tester' ? 'Tester' : 'Legend'}</span>
-                </span>
-              ) : null}
-            </div>
+            {/* Account, plan, and sign out only when someone is signed in (#568). */}
+            {user ? (
+              <>
+                <div className="flex items-center space-x-2 border-l border-white/10 pl-4">
+                  {userPlan === 'free' ? (
+                    <Link
+                      to="/app/account"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-gray-900 font-bold text-sm hover:from-amber-600 hover:to-amber-700 transition-all shadow-md hover:shadow-lg"
+                    >
+                      <Crown className="h-4 w-4" />
+                      <span>Upgrade</span>
+                    </Link>
+                  ) : isPaidPlan ? (
+                    <span className="flex items-center gap-1.5 px-3 py-1.5 text-amber-400 text-sm font-medium">
+                      <Crown className="h-4 w-4" />
+                      <span>{userPlan === 'tester' ? 'Tester' : 'Legend'}</span>
+                    </span>
+                  ) : null}
+                </div>
 
-            {/* User Info and Sign Out */}
-            <div className="flex items-center space-x-2 border-l border-white/10 pl-4">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Link
-                    to="/app/account"
-                    aria-label="Account"
-                    className="flex items-center space-x-1 text-sm text-muted-foreground hover:text-infinite-gold transition-colors"
+                <div className="flex items-center space-x-2 border-l border-white/10 pl-4">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Link
+                        to="/app/account"
+                        aria-label="Account"
+                        className="flex items-center space-x-1 text-sm text-muted-foreground hover:text-infinite-gold transition-colors"
+                      >
+                        <Settings className="h-4 w-4" aria-hidden="true" />
+                        {user.email && (
+                          <span className="hidden lg:inline">Signed in as {user.email}</span>
+                        )}
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent>Account</TooltipContent>
+                  </Tooltip>
+                  <Button
+                    onClick={handleSignOut}
+                    variant="ghost"
+                    size="sm"
+                    className="flex items-center space-x-1"
                   >
-                    <Settings className="h-4 w-4" aria-hidden="true" />
-                    {user?.email && (
-                      <span className="hidden lg:inline">Signed in as {user.email}</span>
-                    )}
-                  </Link>
-                </TooltipTrigger>
-                <TooltipContent>Account</TooltipContent>
-              </Tooltip>
-              <Button
-                onClick={handleSignOut}
-                variant="ghost"
-                size="sm"
-                className="flex items-center space-x-1"
-              >
-                <LogOut className="h-4 w-4" />
-                <span>Sign Out</span>
-              </Button>
-            </div>
+                    <LogOut className="h-4 w-4" />
+                    <span>Sign Out</span>
+                  </Button>
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
       </div>

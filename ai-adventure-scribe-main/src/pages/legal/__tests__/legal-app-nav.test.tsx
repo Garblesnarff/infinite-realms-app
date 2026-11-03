@@ -3,7 +3,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Only the auth state is stubbed; Navigation, LaunchHeader and TermsPage are real.
+// Only the auth state is stubbed. Navigation, TermsPage, and PrivacyPage are real.
 const auth = vi.hoisted(() => ({
   user: null as null | { id: string; email: string },
   userPlan: 'free' as string | null,
@@ -20,16 +20,17 @@ vi.mock('@/contexts/AuthContext', () => ({
   }),
 }));
 
+import PrivacyPage from '../PrivacyPage';
 import TermsPage from '../TermsPage';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 
-const renderTerms = (): ReturnType<typeof render> =>
+const renderPage = (path: '/terms' | '/privacy'): ReturnType<typeof render> =>
   render(
     <HelmetProvider>
       <TooltipProvider>
-        <MemoryRouter initialEntries={['/terms']}>
-          <TermsPage />
+        <MemoryRouter initialEntries={[path]}>
+          {path === '/terms' ? <TermsPage /> : <PrivacyPage />}
         </MemoryRouter>
       </TooltipProvider>
     </HelmetProvider>,
@@ -42,36 +43,39 @@ describe('legal pages top bar (#568)', () => {
     auth.loading = false;
   });
 
-  it('signed-in players get the app navigation so they can leave the page', () => {
-    auth.user = { id: 'player-1', email: 'player@example.test' };
-    renderTerms();
+  it.each(['/terms', '/privacy'] as const)(
+    '%s shows the app top bar when signed in, including Account',
+    (path) => {
+      auth.user = { id: 'player-1', email: 'player@example.test' };
+      renderPage(path);
 
-    const appNav = document.getElementById('app-nav');
-    expect(appNav).not.toBeNull();
-    const nav = within(appNav as HTMLElement);
-    expect(nav.getByRole('link', { name: /home/i })).toHaveAttribute('href', '/app');
-    expect(nav.getByRole('link', { name: /characters/i })).toHaveAttribute(
-      'href',
-      '/app/characters',
-    );
-    expect(nav.getByRole('link', { name: 'Account' })).toHaveAttribute('href', '/app/account');
-    expect(nav.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /sign in/i })).not.toBeInTheDocument();
-  });
+      const nav = within(document.getElementById('app-nav') as HTMLElement);
+      expect(nav.getByRole('link', { name: /home/i })).toHaveAttribute('href', '/app');
+      expect(nav.getByRole('link', { name: /characters/i })).toHaveAttribute(
+        'href',
+        '/app/characters',
+      );
+      expect(nav.getByRole('link', { name: 'Account' })).toHaveAttribute('href', '/app/account');
+      expect(screen.getByTestId('legal-draft-banner')).toHaveTextContent('Draft — under review');
+      expect(screen.queryByRole('link', { name: /sign in/i })).not.toBeInTheDocument();
+    },
+  );
 
-  it('signed-out visitors keep the launch header with Sign in and no app navigation', () => {
-    renderTerms();
+  it.each(['/terms', '/privacy'] as const)(
+    '%s shows the app top bar when signed out, without Account',
+    (path) => {
+      renderPage(path);
 
-    expect(document.getElementById('app-nav')).toBeNull();
-    expect(screen.getByRole('link', { name: 'Infinite Realms home' })).toHaveAttribute('href', '/');
-    expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/app');
-  });
-
-  it('shows neither header while auth is loading, so a signed-in visitor never sees Sign in first', () => {
-    auth.loading = true;
-    renderTerms();
-
-    expect(document.getElementById('app-nav')).toBeNull();
-    expect(screen.queryByRole('link', { name: /sign in/i })).not.toBeInTheDocument();
-  });
+      const nav = within(document.getElementById('app-nav') as HTMLElement);
+      expect(nav.getByRole('link', { name: /home/i })).toHaveAttribute('href', '/app');
+      expect(nav.getByRole('link', { name: /characters/i })).toHaveAttribute(
+        'href',
+        '/app/characters',
+      );
+      expect(nav.queryByRole('link', { name: 'Account' })).not.toBeInTheDocument();
+      expect(nav.queryByRole('button', { name: /sign out/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /sign in/i })).not.toBeInTheDocument();
+      expect(screen.getByTestId('legal-draft-banner')).toHaveTextContent('Draft — under review');
+    },
+  );
 });

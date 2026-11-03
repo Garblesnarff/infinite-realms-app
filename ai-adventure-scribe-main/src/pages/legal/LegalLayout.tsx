@@ -1,9 +1,7 @@
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
 
-import { LaunchHeader } from '@/components/launch/LaunchHeader';
 import { SHOW_LEGAL_DRAFT_BANNER } from '@/config/legal';
-import { useAuth } from '@/contexts/AuthContext';
 import Navigation from '@/shared/components/layout/navigation';
 
 interface LegalLayoutProps {
@@ -14,8 +12,8 @@ interface LegalLayoutProps {
 }
 
 export const LegalLayout: React.FC<LegalLayoutProps> = ({ title, path, lastUpdated, children }) => {
-  // #568: signed-in players get the app nav so they can leave the page; signed-out visitors keep the launch header.
-  const { user, loading } = useAuth();
+  // #568: the same app top bar as /app, signed in or out. Account stays inside
+  // Navigation, which only shows it for a signed-in user.
   return (
     <div className="ir-app min-h-screen">
       <Helmet>
@@ -43,8 +41,7 @@ export const LegalLayout: React.FC<LegalLayoutProps> = ({ title, path, lastUpdat
         <meta name="twitter:image" content="https://infiniterealms.app/og-image.png" />
         <link rel="canonical" href={`https://infiniterealms.app${path}`} />
       </Helmet>
-      {/* #210 QA-002: same wordmark and top nav as the launch page. */}
-      {user ? <Navigation /> : loading ? null : <LaunchHeader />}
+      <Navigation />
       <main id="main-content" tabIndex={-1} className="mx-auto max-w-3xl px-6 py-12">
         {SHOW_LEGAL_DRAFT_BANNER && (
           <div
