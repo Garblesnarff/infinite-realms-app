@@ -13,6 +13,8 @@ import React from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 
+import { buildSavedPlaythroughs, loadPlaythroughCharacters } from './saved-playthroughs';
+import { SavedPlaythroughList } from './SavedPlaythroughList';
 import {
   computeServerArmorClass,
   withStartingPackageEquipped,
@@ -213,11 +215,9 @@ const CampaignDetailPage: React.FC = () => {
   );
   const [failedTemplate, setFailedTemplate] = React.useState<StarterCharacterTemplate | null>(null);
   const [sessionExpired, setSessionExpired] = React.useState(false);
-  const [choices, setChoices] = React.useState<Array<{
-    characterId: string;
-    sessionNumber: number | null;
-    campaignId: string;
-  }> | null>(null);
+  const [choices, setChoices] = React.useState<ReturnType<typeof buildSavedPlaythroughs> | null>(
+    null,
+  );
   // #209: synchronous in-flight guard — the disabled button lags a render
   // behind, so a double-click would otherwise seed two characters.
   const startingRef = React.useRef(false);
@@ -273,37 +273,29 @@ const CampaignDetailPage: React.FC = () => {
           logger.info(message),
         );
         if (!fresh) {
-          const matches = new Map<
-            string,
-            { characterId: string; sessionNumber: number | null; campaignId: string }
-          >();
+          const sessions: unknown[] = [];
           const pageSize = 100;
           for (let offset = 0; ; offset += pageSize) {
-            const sessions = await userDataApi.listSessions({
+            const page = await userDataApi.listSessions({
               campaignId,
               limit: pageSize,
               offset,
             });
-            for (const session of sessions) {
-              const character = session.character as { name?: unknown } | null;
-              if (
-                session.starter_campaign_id === campaign.id &&
-                session.character_id &&
-                character?.name === template.name &&
-                (session.status === 'active' || session.status === 'completed') &&
-                !matches.has(session.character_id)
-              ) {
-                matches.set(session.character_id, {
-                  characterId: session.character_id,
-                  sessionNumber: session.session_number,
-                  campaignId,
-                });
-              }
-            }
-            if (sessions.length < pageSize) break;
+            sessions.push(...page);
+            if (page.length < pageSize) break;
           }
-          const previous = [...matches.values()];
+          const listed = {
+            sessions,
+            starterCampaignId: campaign.id,
+            heroName: template.name,
+            campaignId,
+          };
+          let previous = buildSavedPlaythroughs({ ...listed, characters: [] });
           if (previous.length > 1) {
+            previous = buildSavedPlaythroughs({
+              ...listed,
+              characters: await loadPlaythroughCharacters(campaignId),
+            });
             setChoices(previous);
             return;
           }
@@ -719,20 +711,17 @@ const CampaignDetailPage: React.FC = () => {
               More than one saved hero has this name. Choose the adventure to continue.
             </DialogDescription>
           </DialogHeader>
-          {choices?.map((choice, index) => (
-            <Button
-              key={choice.characterId}
-              variant="outline"
-              onClick={() => {
+          {choices ? (
+            <SavedPlaythroughList
+              rows={choices}
+              onChoose={(choice) => {
                 setChoices(null);
                 navigate(
                   `/app/game/${choice.campaignId}?character=${choice.characterId}&starterCampaign=${campaign.id}`,
                 );
               }}
-            >
-              Saved hero {index + 1} · Session {choice.sessionNumber ?? 1}
-            </Button>
-          ))}
+            />
+          ) : null}
         </DialogContent>
       </Dialog>
 
