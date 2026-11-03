@@ -13,7 +13,7 @@
  * natural 20. Each case retries a bounded number of times until the roll it needs comes up.
  */
 import { afterAll, beforeAll, beforeEach, expect, it } from 'bun:test';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { closeRealDb, describeWithDb, hasRealDb, realDb, testId } from './fixtures/real-db.js';
 import {
@@ -180,11 +180,18 @@ describeWithDb('Divine Smite on a melee hit (#1362)', () => {
     return encounter.version;
   };
 
+  // Level 1 only. The check derives the paladin's other slot levels from class progression, so
+  // a row read without a level filter can return a level 2 row.
   const usedSlots = async (): Promise<number> => {
     const [row] = await db
       .select({ usedSlots: characterSpellSlots.usedSlots })
       .from(characterSpellSlots)
-      .where(eq(characterSpellSlots.characterId, characterId));
+      .where(
+        and(
+          eq(characterSpellSlots.characterId, characterId),
+          eq(characterSpellSlots.spellLevel, 1),
+        ),
+      );
     return row?.usedSlots ?? 0;
   };
 

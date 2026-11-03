@@ -462,8 +462,17 @@ export class CombatAttackService {
         input.userId,
       );
     } catch (error) {
-      if (error instanceof BusinessLogicError)
+      // Only the "no slot left" race is a Smite that cannot apply. Any other failure is real and
+      // throws, so the attack's claim is released by the caller instead of hiding the error.
+      if (error instanceof BusinessLogicError && error.message.startsWith('No available level')) {
+        logger.warn({
+          msg: 'DIVINE_SMITE_NOT_APPLIED',
+          characterId: input.characterId,
+          slotLevel: input.slotLevel,
+          error,
+        });
         return { applied: false, slotLevel: input.slotLevel };
+      }
       throw error;
     }
     const diceCount = divineSmiteDieCount(input.slotLevel, input.creatureType, input.isCritical);
