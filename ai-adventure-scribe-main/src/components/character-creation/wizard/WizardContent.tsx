@@ -293,6 +293,9 @@ const WizardContent: React.FC = () => {
           if (!state.character.race) criticalMissing.push('race');
           if (!state.character.class) criticalMissing.push('class');
           if (!state.character.background) criticalMissing.push('background');
+          if (!validateStep('Background', state.character).isValid) {
+            criticalMissing.push('background gaming set');
+          }
           if (!validateStep('Ability Scores', state.character).isValid) {
             criticalMissing.push('ability scores');
           }

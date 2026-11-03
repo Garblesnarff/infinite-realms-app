@@ -80,3 +80,27 @@ describe('#893 concrete background gaming choice', () => {
     }
   });
 });
+
+describe('#944 switching backgrounds clears the gaming choice', () => {
+  it('drops a chosen gaming set when another background is selected, and restores the placeholder on return', () => {
+    function Harness() {
+      return (
+        <CharacterProvider>
+          <Probe />
+          <BackgroundSelection />
+        </CharacterProvider>
+      );
+    }
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select Criminal background' }));
+    fireEvent.change(screen.getByLabelText('Background gaming set'), {
+      target: { value: 'Gaming set (cards)' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Select Acolyte background' }));
+    expect(screen.queryByLabelText('Background gaming set')).toBeNull();
+    expect(character.toolProficiencies).not.toContain('Gaming set (cards)');
+    fireEvent.click(screen.getByRole('button', { name: 'Select Criminal background' }));
+    expect(screen.getByLabelText('Background gaming set')).toHaveValue('');
+    expect(character.background?.toolProficiencies).toContain('One type of gaming set');
+  });
+});

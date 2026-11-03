@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { validateStep } from '../wizard-validators';
+import { validateCharacterForSave, validateStep } from '../wizard-validators';
 
 import type { Character } from '@/types/character';
 
@@ -240,4 +240,57 @@ it('#899 partial choices do not let a Rogue leave before choosing Expertise', ()
       expertiseProficiencies: ['Insight', 'Stealth'],
     }).isValid,
   ).toBe(true);
+});
+
+describe('#944 background gaming-set choice gate', () => {
+  const noble = backgrounds.find((background) => background.id === 'noble')!;
+  const acolyte = backgrounds.find((background) => background.id === 'acolyte')!;
+
+  it('blocks advancement while the gaming set is still the generic placeholder', () => {
+    const result = validateStep('Background', { background: noble } as Character);
+
+    expect(result).toEqual({
+      isValid: false,
+      message: 'Please choose a gaming set for your background',
+    });
+  });
+
+  it('allows advancement once a concrete gaming set is chosen', () => {
+    const chosen = {
+      ...noble,
+      toolProficiencies: ['Gaming set (dice)'],
+    };
+
+    expect(validateStep('Background', { background: chosen } as Character)).toEqual({
+      isValid: true,
+      message: '',
+    });
+  });
+
+  it('does not require a choice from a background that grants no gaming set', () => {
+    expect(validateStep('Background', { background: acolyte } as Character).isValid).toBe(true);
+  });
+
+  it('does not allow the save to complete with the generic placeholder', () => {
+    const base = {
+      name: 'Rob',
+      race: { ...human, subraces: [] },
+      class: { ...fighter, classFeatures: [] },
+      abilityScores: Object.fromEntries(
+        ABILITIES.map((ability) => [ability, { score: 10, modifier: 0, savingThrow: false }]),
+      ),
+      skillProficiencies: [],
+      languages: ['Common'],
+    };
+
+    expect(validateCharacterForSave({ ...base, background: noble } as unknown as Character)).toBe(
+      false,
+    );
+    expect(
+      validateCharacterForSave({
+        ...base,
+        background: { ...noble, toolProficiencies: ['Gaming set (cards)'] },
+      } as unknown as Character),
+    ).toBe(true);
+  });
 });
