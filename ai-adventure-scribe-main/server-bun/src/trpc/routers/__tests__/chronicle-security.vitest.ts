@@ -340,7 +340,7 @@ describe('Chronicles Security', () => {
       expect(updateQB.set).toHaveBeenCalledWith(
         expect.objectContaining({
           status: 'failed',
-          errorMessage: 'plan lookup db unavailable (test injection)',
+          errorMessage: 'plan_lookup_failed',
         }),
       );
       // The failed-marking update is user-scoped, like the IIFE catch's update.
