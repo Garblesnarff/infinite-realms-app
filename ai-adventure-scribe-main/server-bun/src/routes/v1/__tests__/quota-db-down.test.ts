@@ -150,7 +150,7 @@ describe('quota when the DB is down (#2673 step 3b)', () => {
     const response = await app.handle(generateRequest('free-user-db-down'));
 
     expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({ error: 'AI quota unavailable' });
+    expect(await response.json()).toEqual({ error: 'Plan lookup unavailable' });
     expect(providerCalls).toBe(0);
   });
 
@@ -194,7 +194,7 @@ describe('quota when the DB is down (#2673 step 3b)', () => {
     );
 
     expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({ error: 'AI quota unavailable' });
+    expect(await response.json()).toEqual({ error: 'Plan lookup unavailable' });
     expect(voiceProviderCalls).toBe(0);
   });
 
@@ -260,7 +260,7 @@ describe('quota when the DB is down (#2673 step 3b)', () => {
     );
 
     expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({ error: 'AI quota unavailable' });
+    expect(await response.json()).toEqual({ error: 'Plan lookup unavailable' });
     expect(providerCalls).toBe(0);
   });
 

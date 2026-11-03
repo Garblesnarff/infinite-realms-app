@@ -78,6 +78,17 @@ vi.mock('drizzle-orm', async () => {
   };
 });
 
+// #1344: the generate procedure re-resolves the plan strictly (ctx.user.plan is
+// lenient). The holder lets each test pick the strict lookup's outcome.
+const planState = vi.hoisted(() => ({ plan: 'free', throw: false }));
+vi.mock('../../../lib/user-plan.js', () => ({
+  resolveUserPlanStrict: async () => {
+    if (planState.throw) throw new Error('plan lookup db unavailable (test injection)');
+    return planState.plan;
+  },
+  resolveUserPlan: async () => planState.plan,
+}));
+
 describe('Chronicles Security', () => {
   const mockUserId = 'user-123';
   const mockSessionId = '123e4567-e89b-12d3-a456-426614174000';
@@ -119,6 +130,9 @@ describe('Chronicles Security', () => {
       user: { userId: mockUserId, plan: 'free' },
       db: mockDB,
     };
+    // Keep the strict plan lookup in sync with the ctx plan unless a test overrides it.
+    planState.plan = mockCtx.user.plan;
+    planState.throw = false;
   });
 
   describe('verifySessionOwnership', () => {
@@ -267,6 +281,7 @@ describe('Chronicles Security', () => {
       ['free', 'generateFreeChronicle'],
     ] as const)('generate gives a %s account the %s tier (#2474)', async (plan, generator) => {
       mockCtx.user.plan = plan;
+      planState.plan = plan;
       const proSpy = vi
         .spyOn(chronicleGenerator, 'generateProChronicle')
         .mockRejectedValue(new Error('stop after the tier is chosen'));
@@ -293,6 +308,51 @@ describe('Chronicles Security', () => {
       const other = generator === 'generateProChronicle' ? freeSpy : proSpy;
       await vi.waitFor(() => expect(chosen).toHaveBeenCalledTimes(1));
       expect(other).not.toHaveBeenCalled();
+    });
+
+    it('generate marks the row failed and throws when the plan lookup throws (#1344)', async () => {
+      planState.throw = true;
+      const caller = chroniclesRouter.createCaller(mockCtx);
+
+      const qb = mockCtx.db.select();
+      mockCtx.db.select.mockReturnValue(qb);
+      let queryCount = 0;
+      qb.then = vi.fn(function (this: any, resolve: any) {
+        queryCount++;
+        const rows = queryCount === 1 ? [{ sessionId: mockSessionId }] : [];
+        return Promise.resolve(rows).then(resolve);
+      });
+      const insertQB = mockCtx.db.insert();
+      mockCtx.db.insert.mockReturnValue(insertQB);
+      insertQB._results = [{ id: 'new-chronicle' }];
+      const updateQB = mockCtx.db.update();
+      mockCtx.db.update.mockReturnValue(updateQB);
+
+      let caught: any;
+      try {
+        await caller.generate({ sessionId: mockSessionId });
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeDefined();
+      expect(caught.code).toBe('INTERNAL_SERVER_ERROR');
+      expect(caught.message).toBe('Plan lookup unavailable');
+      expect(updateQB.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'failed',
+          errorMessage: 'plan lookup db unavailable (test injection)',
+        }),
+      );
+      // The failed-marking update is user-scoped, like the IIFE catch's update.
+      expect(updateQB.where).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'and',
+          args: expect.arrayContaining([
+            expect.objectContaining({ type: 'eq', a: expect.anything(), b: 'new-chronicle' }),
+            expect.objectContaining({ type: 'eq', a: expect.anything(), b: mockUserId }),
+          ]),
+        }),
+      );
     });
 
     it('getStatus should filter by userId', async () => {

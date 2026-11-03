@@ -17,6 +17,7 @@ import { eq } from 'drizzle-orm';
 
 import { planHasPaidFeatures } from '../../../../shared/plan-features.js';
 import { logger } from '../../lib/logger.js';
+import { resolveUserPlanStrict } from '../../lib/user-plan.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
@@ -325,9 +326,44 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
         );
 
         // Auto-generate chronicle for Pro/Enterprise users (fire-and-forget, never blocks response)
-        const userPlan = (user as { userId: string; plan?: string }).plan;
-        if (planHasPaidFeatures(userPlan)) {
-          const sessionUserId = (user as { userId: string }).userId;
+        // #1344: the plan on the request is lenient (authenticateRequest fails open to
+        // 'free'), so re-resolve strictly: a DB blip must never silently skip a Pro
+        // chronicle. A lookup error cannot 503 this response (the session IS completed
+        // by now), so the failure is recorded as a failed chronicle row — retryable
+        // via the chronicle endpoint — and logged loudly instead.
+        const sessionUserId = (user as { userId: string }).userId;
+        let userPlan: string | undefined;
+        try {
+          userPlan = await resolveUserPlanStrict(sessionUserId);
+        } catch (planErr) {
+          logger.error({
+            msg: '[Sessions] Chronicle plan lookup failed',
+            sessionId: id,
+            error: planErr,
+          });
+          try {
+            const [failedRow] = await db.transaction(async (tx) => {
+              const [row] = await tx
+                .insert(sessionChronicles)
+                .values({
+                  sessionId: id,
+                  userId: sessionUserId,
+                  status: 'generating',
+                })
+                .returning({ id: sessionChronicles.id });
+              if (!row) throw new Error('Failed to create chronicle row');
+              return [row];
+            });
+            if (failedRow) await persistChronicleFailure(db, failedRow.id, planErr);
+          } catch (rowErr) {
+            logger.error({
+              msg: '[Sessions] Chronicle failure row insert failed',
+              sessionId: id,
+              error: rowErr,
+            });
+          }
+        }
+        if (userPlan && planHasPaidFeatures(userPlan)) {
           const sessionIdForChronicle = id;
           (async () => {
             let chronicleId: string | undefined;

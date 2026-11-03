@@ -838,7 +838,19 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         const requestType = rawRequestType === 'system' && isAdminUser ? 'system' : 'user';
 
         const userId = user.userId;
-        const plan = user.plan;
+        // #1344: the plan on the request is lenient (authenticateRequest fails
+        // open to 'free'), so re-resolve strictly before the quota check: a DB
+        // blip is a 503, never a 402 against the free limit for a paying
+        // player — and never an ai_usage row under plan='free'. The strict
+        // plan also feeds the refund and usage recording below.
+        let plan: string;
+        try {
+          plan = await resolveUserPlanStrict(userId);
+        } catch (err) {
+          logger.error({ msg: 'LLM_GENERATE_PLAN_LOOKUP_ERROR', error: err });
+          set.status = 503;
+          return { error: 'Plan lookup unavailable' };
+        }
 
         // #2456: a message sent after the party was defeated must not run
         // ordinary generation. The encounter is concluded, so it no longer

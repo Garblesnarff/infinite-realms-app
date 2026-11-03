@@ -1,6 +1,7 @@
 import { Elysia, t } from 'elysia';
 
 import { logger } from '../../lib/logger.js';
+import { resolveUserPlanStrict } from '../../lib/user-plan.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import {
@@ -65,10 +66,22 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
           const modelId = process.env.ELEVENLABS_MODEL?.trim() || DEFAULT_ELEVENLABS_MODEL;
           // Check before the provider call. The charge happens after a usable clip (#2676).
           const units = voiceQuotaUnits(characters);
+          // #1344: the plan on the request is lenient (authenticateRequest fails open
+          // to 'free'). Resolve strictly once, before any quota check or charge: a DB
+          // blip is a 503, never a 429/402 against the free limit for a paying player,
+          // and never a usage row under plan='free'.
+          let plan: string;
+          try {
+            plan = await resolveUserPlanStrict(user.userId);
+          } catch (err) {
+            logger.error({ msg: 'TTS_PLAN_LOOKUP_ERROR', error: err });
+            set.status = 503;
+            return { error: 'Plan lookup unavailable' };
+          }
           await usageService.assertUsageStoreAvailable();
           const quota = await usageService.getQuotaStatus({
             userId: user.userId,
-            plan: user.plan || 'free',
+            plan,
             type: 'voice',
           });
           if (quota.remaining < units) {
@@ -111,7 +124,7 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
           // and still reach the provider; if its charge is refused, that clip is not billed.
           await usageService.checkQuotaAndConsume({
             userId: user.userId,
-            plan: user.plan || 'free',
+            plan,
             type: 'voice',
             units,
           });
@@ -121,7 +134,7 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
           try {
             await usageService.recordProviderUsage({
               userId: user.userId,
-              plan: user.plan || 'free',
+              plan,
               type: 'voice',
               provider: 'elevenlabs',
               model: modelId,

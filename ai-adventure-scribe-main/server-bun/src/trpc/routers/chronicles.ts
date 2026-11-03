@@ -22,6 +22,7 @@ import {
   characters,
 } from '../../../../db/schema/index';
 import { planHasPaidFeatures } from '../../../../shared/plan-features.js';
+import { resolveUserPlanStrict } from '../../lib/user-plan.js';
 import { chronicleGenerator } from '../../services/chronicle-generator.js';
 import { protectedProcedure, publicProcedure, router } from '../trpc.js';
 
@@ -205,8 +206,32 @@ export const chroniclesRouter = router({
         chronicleId = inserted.id;
       }
 
+      // #1344: ctx.user.plan is lenient (trpc/context resolves via resolveUserPlan,
+      // which fails open to 'free') — the shared context is deliberately NOT changed
+      // (other callers depend on it). Re-resolve strictly for this gate: on a lookup
+      // error the row goes to 'failed' (retryable via this same upsert) and the
+      // caller gets an error instead of a silently downgraded free chronicle.
+      // tRPC has no 503 code; INTERNAL_SERVER_ERROR is the equivalent.
+      let userPlan: string;
+      try {
+        userPlan = await resolveUserPlanStrict(ctx.user.userId);
+      } catch (planErr) {
+        await ctx.db
+          .update(sessionChronicles)
+          .set({
+            status: 'failed',
+            errorMessage: planErr instanceof Error ? planErr.message : String(planErr),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(sessionChronicles.id, chronicleId),
+              eq(sessionChronicles.userId, ctx.user.userId),
+            ),
+          );
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Plan lookup unavailable' });
+      }
       // Capture values needed in the background IIFE before ctx may GC
-      const userPlan = ctx.user.plan;
       const capturedChronicleId = chronicleId;
       const capturedSessionId = sessionId;
       const capturedUserId = ctx.user.userId;
