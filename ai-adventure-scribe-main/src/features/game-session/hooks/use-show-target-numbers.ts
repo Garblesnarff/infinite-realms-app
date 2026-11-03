@@ -53,13 +53,12 @@ export function useShowTargetNumbers(): {
         // Storage is blocked: the setting stays as it was.
       }
       listeners.forEach((listener) => listener());
-      const id = campaign?.id;
-      if (!id) return;
+      if (campaign == null || !campaign.id) return;
       const rules = { ...(campaign.rules_config ?? {}), show_target_numbers: show };
       if (typeof campaignState?.dispatch === 'function') {
         campaignState.dispatch({ type: 'UPDATE_CAMPAIGN', payload: { rules_config: rules } });
       }
-      void userDataApi.updateCampaign(id, { rules_config: rules }).catch(() => undefined);
+      void userDataApi.updateCampaign(campaign.id, { rules_config: rules }).catch(() => undefined);
     },
     [campaign, campaignState],
   );
