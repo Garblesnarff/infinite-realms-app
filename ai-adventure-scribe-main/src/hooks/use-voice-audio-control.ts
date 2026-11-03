@@ -11,6 +11,8 @@ import { logger } from '../lib/logger';
 
 import type { VoiceSegment } from '@/services/voice-routing';
 
+import { readVoiceRate } from '@/features/settings/voice-preferences';
+
 export interface AudioControlProps {
   onSegmentStart?: (index: number) => void;
   onSegmentEnd?: (index: number, audioUrl: string) => void;
@@ -68,6 +70,7 @@ export const useVoiceAudioControl = (props: AudioControlProps = {}) => {
         const onLoadedData = () => {
           logger.info(`📦 Audio loaded for segment ${index + 1}`);
           audio.volume = isMuted ? 0 : volume;
+          audio.playbackRate = readVoiceRate();
           currentAudio.current = audio;
 
           audio
@@ -216,27 +219,30 @@ export const useVoiceAudioControl = (props: AudioControlProps = {}) => {
     }
   }, [isMuted, volume, setIsMuted]);
 
-  return React.useMemo(() => ({
-    volume,
-    isMuted,
-    currentAudio,
-    initializeAudioContext,
-    playAudioSegment,
-    pausePlayback,
-    resumePlayback,
-    stopPlayback,
-    handleSetVolume,
-    toggleMute,
-  }), [
-    volume,
-    isMuted,
-    currentAudio,
-    initializeAudioContext,
-    playAudioSegment,
-    pausePlayback,
-    resumePlayback,
-    stopPlayback,
-    handleSetVolume,
-    toggleMute,
-  ]);
+  return React.useMemo(
+    () => ({
+      volume,
+      isMuted,
+      currentAudio,
+      initializeAudioContext,
+      playAudioSegment,
+      pausePlayback,
+      resumePlayback,
+      stopPlayback,
+      handleSetVolume,
+      toggleMute,
+    }),
+    [
+      volume,
+      isMuted,
+      currentAudio,
+      initializeAudioContext,
+      playAudioSegment,
+      pausePlayback,
+      resumePlayback,
+      stopPlayback,
+      handleSetVolume,
+      toggleMute,
+    ],
+  );
 };

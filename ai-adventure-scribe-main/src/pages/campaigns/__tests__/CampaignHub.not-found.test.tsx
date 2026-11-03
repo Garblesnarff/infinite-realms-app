@@ -8,6 +8,7 @@ import CampaignHub from '@/pages/campaigns/CampaignHub';
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1' } }),
+  useOptionalAuth: () => ({ user: { id: 'user-1' } }),
 }));
 
 vi.mock('@/services/user-data-api', () => ({

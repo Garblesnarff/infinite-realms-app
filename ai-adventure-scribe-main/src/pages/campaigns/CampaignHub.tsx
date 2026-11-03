@@ -18,6 +18,7 @@ import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { CharacterSelectionModal } from '@/features/campaign/components';
+import { useApplyReduceMotion } from '@/features/settings/useApplyReduceMotion';
 import { userDataApi } from '@/services/user-data-api';
 
 const CampaignHub: React.FC = () => {
@@ -26,6 +27,7 @@ const CampaignHub: React.FC = () => {
   const location = useLocation();
   const { dispatch } = useCampaign();
   const { user } = useAuth();
+  useApplyReduceMotion();
 
   const { data: campaign, isLoading } = useQuery({
     queryKey: ['campaign', campaignId, user?.id],

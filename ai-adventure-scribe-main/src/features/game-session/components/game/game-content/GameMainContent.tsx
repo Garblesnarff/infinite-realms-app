@@ -5,6 +5,7 @@ import { BuildSessionStatus } from './BuildSessionStatus';
 import { CampaignCompleteEndState } from './CompletionScreen';
 import { buildChooseHeroHref, FallenEndState, FallenStoryLog } from './DeathScreen';
 import { GamePanelControls } from './GamePanelControls';
+import { GameSettingsButton } from './GameSettingsButton';
 import { currentQueueRoll, queueRollLabel } from './queue-roll-label';
 import { RollTraySlotProvider } from './roll-tray-slot';
 import { TargetNumbersToggle } from './TargetNumbersToggle';
@@ -36,6 +37,7 @@ import { useCampaign, useOptionalCampaign } from '@/contexts/CampaignContext';
 import { useCharacter, useOptionalCharacter } from '@/contexts/CharacterContext';
 import { useGame } from '@/contexts/GameContext';
 import { useMessageContext } from '@/contexts/MessageContext';
+import { useApplyReduceMotion } from '@/features/settings/useApplyReduceMotion';
 import { useStarterCampaigns } from '@/hooks/use-starter-campaigns';
 import { stripAssetTags } from '@/lib/utils';
 import { useDmWaiting } from '@/services/ai/dm-wait';
@@ -310,6 +312,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     showSafetyInfo,
     onFallenChange,
   }) => {
+    useApplyReduceMotion();
     const chatScrollRef = React.useRef<HTMLDivElement>(null);
     // The roll tray's element: in flow between the stream and the chat box (#2252).
     const [rollTraySlot, setRollTraySlot] = React.useState<HTMLDivElement | null>(null);
@@ -478,6 +481,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                   onSceneBlurbToggle={onSceneBlurbToggle}
                 />
                 <TargetNumbersToggle />
+                <GameSettingsButton />
                 {showMapButton && (
                   <Button
                     type="button"
