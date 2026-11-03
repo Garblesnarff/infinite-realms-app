@@ -1737,6 +1737,18 @@
   }
 }
 
+/* Player override: Reduce, even when the device is not asking for it (#1347). */
+html[data-reduce-motion='on'],
+html[data-reduce-motion='on'] *,
+html[data-reduce-motion='on'] *::before,
+html[data-reduce-motion='on'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+  scroll-snap-type: none !important;
+}
+
 /* Accessibility: Respect reduced motion across global, app, and component styles */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -1763,5 +1775,19 @@
   .glow-pulse,
   .fantasy-progress-fill::after {
     animation: none !important;
+  }
+
+  /* Player override: Allow, even when the device asks to reduce motion (#1347). */
+  html[data-reduce-motion='off'],
+  html[data-reduce-motion='off'] *,
+  html[data-reduce-motion='off'] *::before,
+  html[data-reduce-motion='off'] *::after {
+    animation-duration: unset !important;
+    animation-iteration-count: unset !important;
+    transition-duration: unset !important;
+    scroll-behavior: unset !important;
+    scroll-snap-type: unset !important;
+    animation: unset !important;
+    transition: unset !important;
   }
 }

@@ -4,17 +4,27 @@
  */
 export type ReduceMotion = 'system' | 'on' | 'off';
 
+/** Playback rates the narration Speed control offers. 1 is the normal rate. */
+export const NARRATION_SPEEDS = [0.75, 1, 1.25, 1.5] as const;
+
 export interface TableSettings {
   showTargetNumbers: boolean;
   narrationAutoPlay: boolean;
+  /** 0 to 1. The narration player also reads `progressive-voice-volume`. */
+  narrationVolume: number;
+  /** One of NARRATION_SPEEDS. The audio element reads `progressive-voice-rate`. */
+  narrationSpeed: number;
   diceSound: boolean;
   reduceMotion: ReduceMotion;
+  /** Kept so older saved JSON still parses. No screen reads it. */
   showNPCRolls: boolean;
 }
 
 export const DEFAULT_TABLE_SETTINGS: TableSettings = {
   showTargetNumbers: true,
   narrationAutoPlay: false,
+  narrationVolume: 1,
+  narrationSpeed: 1,
   diceSound: true,
   reduceMotion: 'system',
   showNPCRolls: true,
@@ -23,6 +33,12 @@ export const DEFAULT_TABLE_SETTINGS: TableSettings = {
 export const tableSettingsKey = (userId: string): string => `ir:table-settings:${userId}`;
 
 const REDUCE_MOTION_VALUES: readonly ReduceMotion[] = ['system', 'on', 'off'];
+
+const isVolume = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
+
+const isSpeed = (value: unknown): value is number =>
+  typeof value === 'number' && (NARRATION_SPEEDS as readonly number[]).includes(value);
 
 /** Reads settings for one user. Missing or unreadable values fall back to the defaults. */
 export const readTableSettings = (userId: string): TableSettings => {
@@ -41,6 +57,12 @@ export const readTableSettings = (userId: string): TableSettings => {
         typeof values.narrationAutoPlay === 'boolean'
           ? values.narrationAutoPlay
           : DEFAULT_TABLE_SETTINGS.narrationAutoPlay,
+      narrationVolume: isVolume(values.narrationVolume)
+        ? values.narrationVolume
+        : DEFAULT_TABLE_SETTINGS.narrationVolume,
+      narrationSpeed: isSpeed(values.narrationSpeed)
+        ? values.narrationSpeed
+        : DEFAULT_TABLE_SETTINGS.narrationSpeed,
       diceSound:
         typeof values.diceSound === 'boolean' ? values.diceSound : DEFAULT_TABLE_SETTINGS.diceSound,
       reduceMotion:
@@ -62,6 +84,7 @@ export const readTableSettings = (userId: string): TableSettings => {
 export const writeTableSettings = (userId: string, settings: TableSettings): boolean => {
   try {
     window.localStorage.setItem(tableSettingsKey(userId), JSON.stringify(settings));
+    window.dispatchEvent(new Event('ir-table-settings'));
     return true;
   } catch {
     return false;

@@ -8,6 +8,7 @@ import { tableSettingsKey } from '@/features/settings/table-settings';
 const mockUser = { id: 'user-a' as string | null };
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: mockUser.id ? { id: mockUser.id } : null }),
+  useOptionalAuth: () => ({ user: mockUser.id ? { id: mockUser.id } : null }),
 }));
 
 const updateCampaign = vi.fn(async (..._args: unknown[]) => ({}));
@@ -23,7 +24,7 @@ const readStored = (userId: string): Record<string, unknown> | null => {
   return raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
 };
 
-describe('CampaignSettings shows only settings with a reader (#1236 section F)', () => {
+describe('CampaignSettings shares PlayerSettings and keeps Level Advancement (#1347)', () => {
   beforeEach(() => {
     window.localStorage.clear();
     mockUser.id = 'user-a';
@@ -36,12 +37,17 @@ describe('CampaignSettings shows only settings with a reader (#1236 section F)',
     expect(screen.getByLabelText('Level Advancement')).toBeInTheDocument();
   });
 
-  it('hides the four settings that have no reader yet', () => {
+  it('shows the shared table and narration controls and hides Show NPC Rolls', () => {
     renderPage();
-    for (const name of ['Show target numbers', 'Narration auto-play', 'Show NPC Rolls']) {
-      expect(screen.queryByRole('switch', { name })).not.toBeInTheDocument();
-    }
-    expect(screen.queryByLabelText('Motion')).not.toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Show target numbers' })).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Auto-play' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+    expect(screen.getByLabelText('Reduce motion')).toBeInTheDocument();
+    expect(screen.getByLabelText('Volume')).toBeInTheDocument();
+    expect(screen.getByLabelText('Speed')).toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: 'Show NPC Rolls' })).not.toBeInTheDocument();
     expect(screen.queryByText(/Coming Soon/i)).not.toBeInTheDocument();
   });
 

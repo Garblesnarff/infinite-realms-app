@@ -3,6 +3,7 @@ import { useCallback, useSyncExternalStore } from 'react';
 import { showTargetNumbersByDefault } from '../../../../shared/show-target-numbers';
 
 import { useOptionalCampaign } from '@/contexts/CampaignContext';
+import { userDataApi } from '@/services/user-data-api';
 
 /** `on` or `off`. Absent means the player never chose, so the campaign's difficulty decides. */
 const STORAGE_KEY = 'ui:showTargetNumbers:v1';
@@ -28,27 +29,43 @@ function subscribe(listener: () => void): () => void {
 }
 
 /**
- * The player's "Show target numbers" setting. The player's own choice wins; until they make one,
- * the campaign's difficulty sets it via `showTargetNumbersByDefault` (in shared, where the
- * server narration reads the same rule). The choice is shared by every card and the toggle on
- * screen.
+ * The player's "Show target numbers" setting. The player's own choice wins. Until they make one,
+ * `rules_config.show_target_numbers` wins when the open campaign has it, and otherwise the
+ * campaign's difficulty sets it via `showTargetNumbersByDefault`. The header button and the
+ * settings sheet share this setter. A choice also patches the open campaign's rules.
  */
 export function useShowTargetNumbers(): {
   showTargetNumbers: boolean;
   setShowTargetNumbers: (show: boolean) => void;
 } {
   const choice = useSyncExternalStore(subscribe, readChoice, () => null);
-  const difficulty = useOptionalCampaign()?.state.campaign?.difficulty_level;
-  const setShowTargetNumbers = useCallback((show: boolean) => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, show ? 'on' : 'off');
-    } catch {
-      // Storage is blocked: the setting stays as it was.
-    }
-    listeners.forEach((listener) => listener());
-  }, []);
+  const campaignState = useOptionalCampaign();
+  const campaign = campaignState?.state.campaign;
+  const difficulty = campaign?.difficulty_level;
+  const rulesFlag = campaign?.rules_config?.show_target_numbers;
+  const fromRules = typeof rulesFlag === 'boolean' ? rulesFlag : null;
+
+  const setShowTargetNumbers = useCallback(
+    (show: boolean) => {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, show ? 'on' : 'off');
+      } catch {
+        // Storage is blocked: the setting stays as it was.
+      }
+      listeners.forEach((listener) => listener());
+      const id = campaign?.id;
+      if (!id) return;
+      const rules = { ...(campaign.rules_config ?? {}), show_target_numbers: show };
+      if (typeof campaignState?.dispatch === 'function') {
+        campaignState.dispatch({ type: 'UPDATE_CAMPAIGN', payload: { rules_config: rules } });
+      }
+      void userDataApi.updateCampaign(id, { rules_config: rules }).catch(() => undefined);
+    },
+    [campaign, campaignState],
+  );
+
   return {
-    showTargetNumbers: choice ?? showTargetNumbersByDefault(difficulty),
+    showTargetNumbers: choice ?? fromRules ?? showTargetNumbersByDefault(difficulty),
     setShowTargetNumbers,
   };
 }
