@@ -42,7 +42,7 @@ export const transformEquipmentForStorage = (character: Character, characterId: 
     // rather than writing a row UUID into item_name.
     item_name: item.itemName ?? item.itemId,
     item_type: item.itemType || 'equipment',
-    quantity: item.quantity || 1,
+    quantity: item.quantity ?? 1,
     equipped: item.equipped || false,
     // Magic item properties
     is_magic: item.isMagic || false,

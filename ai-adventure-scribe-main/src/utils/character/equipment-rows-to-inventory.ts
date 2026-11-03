@@ -15,7 +15,7 @@ export function equipmentRowsToInventory(
   return rows.map((row) => ({
     itemId: row.item_name,
     itemType: row.item_type || undefined,
-    quantity: row.quantity || 1,
+    quantity: row.quantity ?? 1,
     // The rows carry no weight. Unset, the encumbrance rule counts 1 lb per unit and would take
     // speed off the sheet; the game character had no inventory (weight 0) before this.
     weight: 0,

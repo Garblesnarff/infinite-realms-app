@@ -88,3 +88,38 @@ describe('EquipmentSection (#205)', () => {
     expect(container.textContent).not.toContain(corruptedUuid);
   });
 });
+
+describe('EquipmentSection zero-quantity row (#1327 item 3)', () => {
+  it('renders "Qty: 0" for a spent-to-zero row loaded through transformCharacterData', () => {
+    // The spend leaves a quantity-0 row; the sheet must show the zero, not
+    // the quantity-1 fallback — a bare "Qty: 1" would read as one left.
+    const character = transformCharacterData(characterRow, null, [
+      {
+        id: ROW_UUID_1,
+        item_name: 'Longsword',
+        item_type: 'weapon',
+        quantity: 0,
+        equipped: false,
+        is_magic: false,
+      },
+    ]);
+    renderSection(character);
+
+    expect(screen.getByText('Qty: 0')).toBeInTheDocument();
+  });
+
+  it('still renders "Qty: 1" when the row carries no quantity', () => {
+    const character = transformCharacterData(characterRow, null, [
+      {
+        id: ROW_UUID_1,
+        item_name: 'Longsword',
+        item_type: 'weapon',
+        equipped: false,
+        is_magic: false,
+      },
+    ]);
+    renderSection(character);
+
+    expect(screen.getByText('Qty: 1')).toBeInTheDocument();
+  });
+});

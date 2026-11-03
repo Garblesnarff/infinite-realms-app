@@ -590,7 +590,7 @@ export const transformCharacterData = (
       itemName: resolveStoredItemName(item.item_name),
       itemType: item.item_type,
       description: item.description || undefined,
-      quantity: item.quantity || 1,
+      quantity: item.quantity ?? 1,
       equipped: item.equipped || false,
       // Magic item properties
       isMagic: item.is_magic || false,

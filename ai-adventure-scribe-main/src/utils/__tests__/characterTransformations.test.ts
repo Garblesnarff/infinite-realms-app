@@ -14,7 +14,6 @@ import {
 
 import type { AbilityScores, Character } from '@/types/character';
 
-
 describe('characterTransformations', () => {
   describe('transformAbilityScoresForStorage', () => {
     it('should transform ability scores without computing HP or AC (#620)', () => {
@@ -155,6 +154,21 @@ describe('characterTransformations', () => {
       const result = transformEquipmentForStorage(character as Character, 'char-123');
       expect(result).toHaveLength(1);
       expect(result[0].item_name).toBe('Unknown item');
+    });
+
+    it('should preserve a spent-to-zero quantity on save (#1327 item 3)', () => {
+      // A quantity-0 row saved back as 1 would resurrect spent ammunition;
+      // only a missing quantity falls back to 1.
+      const character: Partial<Character> = {
+        inventory: [
+          { itemId: 'Arrows', quantity: 0, equipped: false },
+          { itemId: 'Bread', equipped: false },
+        ],
+      };
+      const result = transformEquipmentForStorage(character as Character, 'id');
+      expect(result).toHaveLength(2);
+      expect(result[0].quantity).toBe(0);
+      expect(result[1].quantity).toBe(1);
     });
 
     it('should use default values for missing equipment properties', () => {
