@@ -2,13 +2,24 @@
  * Usage and billing idempotency schema.
  */
 
-import { date, index, integer, numeric, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import {
+  date,
+  index,
+  integer,
+  numeric,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+} from 'drizzle-orm/pg-core';
 
 import type { InferInsertModel, InferSelectModel } from 'drizzle-orm';
 
 export const aiUsage = pgTable(
   'ai_usage',
   {
+    // #350: the row id the deploy smoke deletes by. Migration 0020_ai_usage_id_pk defines it as serial PRIMARY KEY.
+    id: serial('id').primaryKey(),
     orgId: text('org_id'),
     userId: text('user_id'),
     plan: text('plan'),
