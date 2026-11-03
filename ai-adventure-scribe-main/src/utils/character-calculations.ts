@@ -298,7 +298,7 @@ export const getBaseSpeed = (character: Character): number => {
 
 export const calculateInventoryWeight = (character: Character): number =>
   character.inventory?.reduce((total, item) => {
-    const quantity = item.quantity || 1;
+    const quantity = item.quantity ?? 1;
     const itemWeight = item.weight ?? 1;
     return total + itemWeight * quantity;
   }, 0) || 0;
