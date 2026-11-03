@@ -155,8 +155,7 @@ const CLEAN_REPLY =
   'The entity withdraws into the flooded dark, and the water goes still around the ferry.';
 const NEUTRAL_CLICK_REPLY =
   'You shout your greeting across the water, and from the shrine a single bell answers.';
-const REPEAT_HARM_REPLY =
-  'The blow leaves you wounded. The ferry rocks gently against the mud.';
+const REPEAT_HARM_REPLY = 'The blow leaves you wounded. The ferry rocks gently against the mud.';
 const NEXT_OPTIONS = [
   'A. **Enter the nave**, wade into the flooded dark.',
   'B. **Take the bell**, ring it once and wait.',
@@ -313,10 +312,7 @@ describe('a listed-option turn: only the no-effect replacement is skipped (#1048
       .mockResolvedValue(dmReply(REPEAT_HARM_REPLY));
 
     const { result } = renderHook(() => useAIResponse());
-    const turn = result.current.getAIResponse(
-      clickTurn(DM_OFFERING_ATTACK) as any,
-      'session-1048',
-    );
+    const turn = result.current.getAIResponse(clickTurn(DM_OFFERING_ATTACK) as any, 'session-1048');
     await vi.waitFor(() => expect(requestCombatEntryConfirmation).toHaveBeenCalledTimes(1));
     answerCard(false);
     const response = await turn;
@@ -373,5 +369,56 @@ describe('a listed-option turn: only the no-effect replacement is skipped (#1048
     // spliced retry instead and this assertion would fail.)
     expect(response.text).toBe(NEUTRAL_NO_EFFECT_LINE);
     expect((response as any).context?.actionOptions).toBeUndefined();
+  });
+
+  it('picks the newest DM row a combat end did not supersede (#1050 B2)', async () => {
+    // A pre-fight menu, then the fight's terminal row, then two live menus.
+    // The click matches only the newest. An oldest-first find, or a find that
+    // still reads the superseded offer, would miss the click and replace the
+    // reply with the no-effect line.
+    const PREFIGHT_OFFER = [
+      'The shrine guard steps from the flooded trees, spear levelled at the ferry.',
+      '',
+      'A. **Attack the guard**, rush him before he can brace.',
+      'B. **Back away**, hands raised and open.',
+    ].join('\n');
+    const OLDER_LIVE = [
+      'The ferry sits quiet on the mud after the fight.',
+      '',
+      'A. **Look at the bell**, study the shrine bell from the rail.',
+      'B. **Wait**, let the water settle.',
+    ].join('\n');
+    const NEWEST = [
+      'A figure moves in the flooded nave.',
+      '',
+      'A. **Search the shrine**, wade in and look for the bell rope.',
+      'B. **Stay on the ferry**, keep the rail between you and the dark.',
+    ].join('\n');
+    const clicked = parseMessageOptions(NEWEST).options[0];
+    vi.mocked(AIService.chatWithDM)
+      .mockResolvedValueOnce(dmReply(HARM_REPLY))
+      .mockResolvedValue(dmReply(REPEAT_HARM_REPLY));
+
+    const response = await runTurn([
+      { text: PREFIGHT_OFFER, sender: 'dm' },
+      {
+        text: 'The guard falls beneath the water. Combat ended.',
+        sender: 'system',
+        context: { intent: 'combat_npc_result', combatEnded: true },
+      },
+      { text: OLDER_LIVE, sender: 'dm' },
+      { text: NEWEST, sender: 'dm' },
+      {
+        text: createPlayerMessageFromOption(clicked),
+        sender: 'player',
+        context: { intent: 'query' },
+      },
+    ]);
+
+    expect(AIService.chatWithDM).toHaveBeenCalledTimes(2);
+    expect(response.text).toContain('rocks gently against the mud');
+    expect(response.text).not.toContain('wounded');
+    expect(response.text).not.toContain('Nothing comes of that');
+    expect((response as any).context?.actionOptions).toEqual(NEXT_OPTIONS);
   });
 });
