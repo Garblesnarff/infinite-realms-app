@@ -111,6 +111,32 @@ export async function applyStoryItemsOnce(input: {
         )
         .limit(1);
       if (marked) continue;
+      const { claimStoryEffect } = await import('../story-effect-claim.js');
+      const claimSeed = JSON.stringify([
+        'story-item',
+        sessionId,
+        characterId,
+        playerMessageAt.getTime(),
+        canonicalName.toLowerCase(),
+        item.change,
+      ]);
+      const claim = await claimStoryEffect(claimSeed, (id) =>
+        tx
+          .insert(storyItemEvents)
+          .values({
+            id,
+            characterId,
+            sessionId,
+            ...(dialogueId ? { dialogueId } : {}),
+            playerMessageAt,
+            itemName: canonicalName,
+            change: item.change,
+            quantity: item.quantity,
+          })
+          .onConflictDoNothing({ target: storyItemEvents.id })
+          .returning({ id: storyItemEvents.id }),
+      );
+      if (!claim) continue;
       if (item.change === 'gain') {
         // FIX round 3: a row with the same item already on the character absorbs
         // the find — three finds of Torch are one row of quantity 3, not three rows.
@@ -239,15 +265,6 @@ export async function applyStoryItemsOnce(input: {
           }
         }
       }
-      await tx.insert(storyItemEvents).values({
-        characterId,
-        sessionId,
-        ...(dialogueId ? { dialogueId } : {}),
-        playerMessageAt,
-        itemName: canonicalName,
-        change: item.change,
-        quantity: item.quantity,
-      });
       anyApplied = true;
     }
     return anyApplied ? 'applied' : 'already_applied';

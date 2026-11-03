@@ -1,5 +1,5 @@
 import { afterAll, expect, spyOn, test } from 'bun:test';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 import {
   closeRealDb,
@@ -33,8 +33,11 @@ describeWithDb('#777 parallel generates for one player message', () => {
   let campaignId = '';
   let characterId = '';
   let sessionId = '';
+  const trigger = `test_xp_claim_${process.pid}`;
   afterAll(async () => {
     if (!hasRealDb) return;
+    await db.execute(sql.raw(`DROP TRIGGER IF EXISTS ${trigger} ON characters`));
+    await db.execute(sql.raw(`DROP FUNCTION IF EXISTS ${trigger}()`));
     if (sessionId) {
       await db.delete(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId));
       await db.delete(experienceEvents).where(eq(experienceEvents.sessionId, sessionId));
@@ -60,24 +63,34 @@ describeWithDb('#777 parallel generates for one player message', () => {
         experiencePoints: 1050,
       })
       .returning({ id: characters.id });
-    await db
-      .insert(characterStats)
-      .values({
-        characterId,
-        armorClass: 14,
-        maxHitPoints: 24,
-        currentHitPoints: 24,
-        strength: 12,
-        dexterity: 16,
-        constitution: 14,
-        intelligence: 10,
-        wisdom: 15,
-        charisma: 8,
-      });
+    await db.insert(characterStats).values({
+      characterId,
+      armorClass: 14,
+      maxHitPoints: 24,
+      currentHitPoints: 24,
+      strength: 12,
+      dexterity: 16,
+      constitution: 14,
+      intelligence: 10,
+      wisdom: 15,
+      charisma: 8,
+    });
     [{ id: sessionId }] = await db
       .insert(gameSessions)
       .values({ campaignId, characterId, sessionNumber: 1, status: 'active' })
       .returning({ id: gameSessions.id });
+    await db.execute(
+      sql.raw(`CREATE FUNCTION ${trigger}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+      IF NEW.experience_points IS DISTINCT FROM OLD.experience_points AND NOT EXISTS (
+        SELECT 1 FROM experience_events WHERE character_id = NEW.id AND session_id = '${sessionId}'::uuid AND source = 'other'
+      ) THEN RAISE EXCEPTION 'XP must be claimed before the character update'; END IF;
+      RETURN NEW; END $$`),
+    );
+    await db.execute(
+      sql.raw(
+        `CREATE TRIGGER ${trigger} BEFORE UPDATE ON characters FOR EACH ROW WHEN (OLD.id = '${characterId}'::uuid) EXECUTE FUNCTION ${trigger}()`,
+      ),
+    );
     const playerInput = 'I reach the Root Stair.';
     await SessionMessageService.addMessages(
       [{ id: crypto.randomUUID(), sessionId, speakerType: 'player', message: playerInput }],

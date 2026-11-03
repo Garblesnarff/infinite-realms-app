@@ -95,10 +95,7 @@ const DEFEAT_VERBS = [
  * deed ("Solved the logbook") matches neither and pays. Prefix match, so inflections
  * ("Defeating", "killed", "Remy's") count.
  */
-export function reasonReferencesDefeat(
-  reason: string,
-  victoryDescription: string | null,
-): boolean {
+export function reasonReferencesDefeat(reason: string, victoryDescription: string | null): boolean {
   if (!reason) return false;
   const text = reason.toLowerCase();
   const hasWord = (word: string) => new RegExp(`\\b${word}`).test(text);
@@ -252,7 +249,11 @@ export async function clearPendingEndingXp(sessionId: string): Promise<void> {
     .where(eq(gameSessions.id, sessionId));
 }
 
-export type DeferEndingXpOutcome = 'deferred' | 'already_pending' | 'not_one_shot' | 'already_ended';
+export type DeferEndingXpOutcome =
+  | 'deferred'
+  | 'already_pending'
+  | 'not_one_shot'
+  | 'already_ended';
 
 /**
  * #1139: defers an ending-named award to the ending turn. Only a one-shot
@@ -278,9 +279,8 @@ export async function deferEndingXp(input: {
   const { sessionId, characterId, amount, reason } = input;
   const { db } = await import('../../../../db/client');
   const { eq } = await import('drizzle-orm');
-  const { campaigns, characters, dialogueHistory, gameSessions } = await import(
-    '../../../../db/schema/index'
-  );
+  const { campaigns, characters, dialogueHistory, gameSessions } =
+    await import('../../../../db/schema/index');
   return db.transaction(async (tx) => {
     const [lockedCharacter] = await tx
       .select({ id: characters.id })
@@ -369,11 +369,9 @@ export async function awardStoryXpOnce(input: {
 }): Promise<StoryXpGrant> {
   const { db } = await import('../../../../db/client');
   const { and, desc, eq, gte, like, lt, sql } = await import('drizzle-orm');
-  const { characters, dialogueHistory, experienceEvents, gameSessions } = await import(
-    '../../../../db/schema/index'
-  );
-  const { characterId, sessionId, since, amount, reason, forPendingPayment, isEndingAward } =
-    input;
+  const { characters, dialogueHistory, experienceEvents, gameSessions } =
+    await import('../../../../db/schema/index');
+  const { characterId, sessionId, since, amount, reason, forPendingPayment, isEndingAward } = input;
   // #130: captured (not returned directly) so the invalidation broadcast below
   // runs after the transaction commits.
   const grant = await db.transaction(async (tx): Promise<StoryXpGrant> => {
@@ -394,7 +392,9 @@ export async function awardStoryXpOnce(input: {
     const pending = validPendingEndingXp(
       (lockedSession?.sessionState as Record<string, unknown> | null)?.[PENDING_ENDING_XP_KEY],
     )
-      ? ((lockedSession?.sessionState as Record<string, unknown>)[PENDING_ENDING_XP_KEY] as PendingEndingXp)
+      ? ((lockedSession?.sessionState as Record<string, unknown>)[
+          PENDING_ENDING_XP_KEY
+        ] as PendingEndingXp)
       : null;
     const reserved =
       forPendingPayment || isEndingAward ? 0 : pending ? pendingEndingXpTotal(pending) : 0;
@@ -510,6 +510,24 @@ export async function awardStoryXpOnce(input: {
       });
     }
     if (granted <= 0) return { outcome: 'capped', granted: 0 };
+    const { claimStoryEffect } = await import('../story-effect-claim.js');
+    const claimed = await claimStoryEffect(
+      `story-xp:${sessionId}:${characterId}:${since.getTime()}`,
+      (id) =>
+        tx
+          .insert(experienceEvents)
+          .values({
+            id,
+            characterId,
+            sessionId,
+            xpGained: granted,
+            source: 'other',
+            description: reason.slice(0, 500) || null,
+          })
+          .onConflictDoNothing({ target: experienceEvents.id })
+          .returning({ id: experienceEvents.id }),
+    );
+    if (!claimed) return { outcome: 'already_awarded', granted: 0 };
     await tx
       .update(characters)
       .set({
@@ -517,13 +535,6 @@ export async function awardStoryXpOnce(input: {
         updatedAt: new Date(),
       })
       .where(eq(characters.id, characterId));
-    await tx.insert(experienceEvents).values({
-      characterId,
-      sessionId,
-      xpGained: granted,
-      source: 'other',
-      description: reason.slice(0, 500) || null,
-    });
     return { outcome: granted < amount ? 'capped' : 'awarded', granted };
   });
   // #130: broadcast after the transaction commits, so the sheet's refetch
@@ -538,8 +549,7 @@ export async function awardStoryXpOnce(input: {
         msg: 'DM_STORY_XP_BROADCAST_FAILED',
         sessionId,
         characterId,
-        error:
-          broadcastError instanceof Error ? broadcastError.message : String(broadcastError),
+        error: broadcastError instanceof Error ? broadcastError.message : String(broadcastError),
       });
     }
   }
@@ -713,8 +723,9 @@ export async function awardStoryXp(
     // it pays at once. Only the deferral itself is decided here; story-ending.ts
     // pays it when the ending applies. A multi-session campaign or an already
     // applied ending falls through to the normal path below.
-    const deferral = reasonNamesEnding(reason) && !input.endingDeclared
-      ? await deferEndingXp({
+    const deferral =
+      reasonNamesEnding(reason) && !input.endingDeclared
+        ? await deferEndingXp({
             sessionId,
             characterId: character.id,
             amount: award.amount,

@@ -133,23 +133,30 @@ export class RestService {
       // started_at is the re-check key, compared to dialogue_history.created_at.
       // Both must be the database clock. new Date() can fall before that row,
       // and the waiter would insert a second event.
-      const [restEvent] = await tx
-        .insert(restEvents)
-        .values({
-          characterId,
-          sessionId,
-          restType,
-          startedAt: sql`now()`,
-          completedAt: sql`now()`,
-          hpRestored: 0,
-          hitDiceSpent: 0,
-          resourcesRestored: '[]',
-          interrupted: false,
-          notes: notes || null,
-        })
-        .returning();
-      if (!restEvent) throw new NotFoundError('Character', characterId);
-      return restEvent.id;
+      const { claimStoryEffect } = await import('./story-effect-claim.js');
+      const claimId = await claimStoryEffect(
+        `story-rest:${sessionId}:${characterId}:${since.getTime()}`,
+        (id) =>
+          tx
+            .insert(restEvents)
+            .values({
+              id,
+              characterId,
+              sessionId,
+              restType,
+              startedAt: sql`now()`,
+              completedAt: sql`now()`,
+              hpRestored: 0,
+              hitDiceSpent: 0,
+              resourcesRestored: '[]',
+              interrupted: false,
+              notes: notes || null,
+            })
+            .onConflictDoNothing({ target: restEvents.id })
+            .returning({ id: restEvents.id }),
+      );
+      if (!claimId) throw new StoryRestAlreadyRecorded();
+      return claimId;
     });
   }
 

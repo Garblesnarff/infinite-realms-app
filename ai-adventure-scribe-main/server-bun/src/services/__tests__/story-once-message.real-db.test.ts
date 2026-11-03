@@ -16,7 +16,7 @@
  * Requires TEST_DATABASE_URL or DATABASE_URL — see fixtures/real-db.ts.
  */
 import { expect, it, mock } from 'bun:test';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import { describeWithDb, hasRealDb, importWithRealDb, realDb, testId } from './fixtures/real-db.js';
 import {
@@ -69,14 +69,12 @@ if (hasRealDb && !process.env.DATABASE_URL && process.env.TEST_DATABASE_URL) {
 
 const { applyStoryDamage } = await importWithRealDb(() => import('../dm/story-damage.js'));
 const { applyStoryRest } = await importWithRealDb(() => import('../dm/story-rest.js'));
-const { applyStoryItems } = await importWithRealDb(() => import('../dm/story-items.js'));
+const { applyStoryItems, applyStoryItemsOnce } = await importWithRealDb(
+  () => import('../dm/story-items.js'),
+);
 const { awardStoryXp } = await importWithRealDb(() => import('../dm/story-xp.js'));
-const { applyStoryConditions } = await importWithRealDb(
-  () => import('../dm/story-conditions.js'),
-);
-const { spendStorySpellSlots } = await importWithRealDb(
-  () => import('../dm/story-spell-slots.js'),
-);
+const { applyStoryConditions } = await importWithRealDb(() => import('../dm/story-conditions.js'));
+const { spendStorySpellSlots } = await importWithRealDb(() => import('../dm/story-spell-slots.js'));
 const { spendStoryFeatureUses } = await importWithRealDb(
   () => import('../dm/story-feature-uses.js'),
 );
@@ -145,6 +143,47 @@ describeWithDb('#777 two parallel story applies for one message', () => {
     await db.delete(characters).where(eq(characters.id, characterId));
     await db.delete(campaigns).where(eq(campaigns.id, campaignId));
   }
+
+  it('claims the item event before the inventory write', async () => {
+    const { characterId, sessionId, campaignId } = await world('777-item-claim', 12, 12);
+    const trigger = `test_item_claim_${process.pid}`;
+    try {
+      const [message] = await db
+        .select({ createdAt: dialogueHistory.createdAt })
+        .from(dialogueHistory)
+        .where(eq(dialogueHistory.sessionId, sessionId));
+      if (!message?.createdAt) throw new Error('Player message has no server timestamp');
+      await db.execute(
+        sql.raw(`CREATE FUNCTION ${trigger}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM story_item_events WHERE character_id = NEW.character_id AND session_id = '${sessionId}'::uuid AND lower(item_name) = lower(NEW.name))
+        THEN RAISE EXCEPTION 'item must be claimed before the inventory write'; END IF;
+        RETURN NEW; END $$`),
+      );
+      await db.execute(
+        sql.raw(
+          `CREATE TRIGGER ${trigger} BEFORE INSERT ON inventory_items FOR EACH ROW WHEN (NEW.character_id = '${characterId}'::uuid) EXECUTE FUNCTION ${trigger}()`,
+        ),
+      );
+      expect(
+        await applyStoryItemsOnce({
+          characterId,
+          sessionId,
+          playerMessageAt: message.createdAt,
+          items: [{ name: 'Torch', quantity: 1, change: 'gain' }],
+        }),
+      ).toBe('applied');
+      expect(
+        await db.select().from(storyItemEvents).where(eq(storyItemEvents.characterId, characterId)),
+      ).toHaveLength(1);
+      expect(
+        await db.select().from(inventoryItems).where(eq(inventoryItems.characterId, characterId)),
+      ).toHaveLength(1);
+    } finally {
+      await db.execute(sql.raw(`DROP TRIGGER IF EXISTS ${trigger} ON inventory_items`));
+      await db.execute(sql.raw(`DROP FUNCTION IF EXISTS ${trigger}()`));
+      await cleanup(characterId, sessionId, campaignId);
+    }
+  });
 
   /**
    * #130: joins the session room with a capturing socket (standing in for the
@@ -296,7 +335,10 @@ describeWithDb('#777 two parallel story applies for one message', () => {
           .select()
           .from(dialogueHistory)
           .where(
-            and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'system')),
+            and(
+              eq(dialogueHistory.sessionId, sessionId),
+              eq(dialogueHistory.speakerType, 'system'),
+            ),
           );
       const lines = await systemRows();
       expect(lines).toHaveLength(1);
@@ -487,9 +529,7 @@ describeWithDb('#777 two parallel story applies for one message', () => {
       expect(updates).toHaveLength(1);
       expect(updates[0]?.reason).toBe('story_conditions');
     } finally {
-      await db
-        .delete(characterConditions)
-        .where(eq(characterConditions.characterId, characterId));
+      await db.delete(characterConditions).where(eq(characterConditions.characterId, characterId));
       await cleanup(characterId, sessionId, campaignId);
     }
   });
@@ -506,10 +546,7 @@ describeWithDb('#777 two parallel story applies for one message', () => {
         totalSlots: 2,
         usedSlots: 0,
       });
-      const [character] = await db
-        .select()
-        .from(characters)
-        .where(eq(characters.id, characterId));
+      const [character] = await db.select().from(characters).where(eq(characters.id, characterId));
       // The real production entry llm.ts calls for the gate-allowed casts.
       const updates = await characterUpdatesInSessionRoom(sessionId, () =>
         spendStorySpellSlots({
@@ -527,12 +564,8 @@ describeWithDb('#777 two parallel story applies for one message', () => {
       expect(updates).toHaveLength(1);
       expect(updates[0]?.reason).toBe('story_slots');
     } finally {
-      await db
-        .delete(spellSlotUsageLog)
-        .where(eq(spellSlotUsageLog.characterId, characterId));
-      await db
-        .delete(characterSpellSlots)
-        .where(eq(characterSpellSlots.characterId, characterId));
+      await db.delete(spellSlotUsageLog).where(eq(spellSlotUsageLog.characterId, characterId));
+      await db.delete(characterSpellSlots).where(eq(characterSpellSlots.characterId, characterId));
       await cleanup(characterId, sessionId, campaignId);
     }
   });
@@ -559,10 +592,7 @@ describeWithDb('#777 two parallel story applies for one message', () => {
       'Paladin',
     );
     try {
-      const [character] = await db
-        .select()
-        .from(characters)
-        .where(eq(characters.id, characterId));
+      const [character] = await db.select().from(characters).where(eq(characters.id, characterId));
       // The real production entry llm.ts calls for the gate-allowed features.
       // Divine Sense's pool is ensured from the paladin's level, so no class
       // seeding is needed beyond the Paladin world character.
