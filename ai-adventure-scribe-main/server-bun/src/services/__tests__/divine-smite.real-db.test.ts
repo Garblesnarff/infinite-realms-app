@@ -229,6 +229,8 @@ describeWithDb('Divine Smite on a melee hit (#1362)', () => {
   });
 
   it('adds 1d8 per slot level above 1st and 1d8 against undead', async () => {
+    // No level 2 row is seeded: the paladin's level-2 slots come from class progression, the
+    // same derivation the spend path uses for a character created before its rows existed.
     await db
       .update(combatParticipants)
       .set({ creatureType: 'undead' })
