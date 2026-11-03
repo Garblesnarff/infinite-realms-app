@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.37.1](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.37.0...v0.37.1) (2026-11-03)
+
+
+### Bug Fixes
+
+* **quota:** strict plan resolution for remaining callers ([#1344](https://github.com/Garblesnarff/infinite-realms-app/issues/1344)) ([74421f8](https://github.com/Garblesnarff/infinite-realms-app/commit/74421f8efdd894cfcb3bd18d8c801a340ebddc04))
+* **story:** claim once-per-message effects atomically ([#777](https://github.com/Garblesnarff/infinite-realms-app/issues/777)) ([3c1c7e0](https://github.com/Garblesnarff/infinite-realms-app/commit/3c1c7e029f975b37459d43c57a478eaaa126c6e0))
+
 ## [0.37.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.36.0...v0.37.0) (2026-11-03)
 
 
