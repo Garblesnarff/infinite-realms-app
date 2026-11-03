@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.37.2](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.37.1...v0.37.2) (2026-11-03)
+
+
+### Bug Fixes
+
+* **character:** custom hero 'Play as' continues the saved playthrough ([#1355](https://github.com/Garblesnarff/infinite-realms-app/issues/1355)) ([b522406](https://github.com/Garblesnarff/infinite-realms-app/commit/b522406b2f3e1eed2b22037ed8eca65f6ddfd9b7))
+
 ## [0.37.1](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.37.0...v0.37.1) (2026-11-03)
 
 
