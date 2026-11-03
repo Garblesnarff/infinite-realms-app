@@ -120,9 +120,12 @@ const { combatEntryGateDeps } = await importWithRealDb(
   () => import('../../../services/combat/combat-entry-gate-deps.js'),
 );
 const { Elysia } = await import('elysia');
-const { resetPendingCombatEntries } = await importWithRealDb(
-  () => import('../../../services/combat/pending-combat-entry.js'),
-);
+const {
+  liftCombatEntryDecline,
+  readDeclinedCombatEntryActorKeys,
+  recordCombatEntryDecline,
+  resetPendingCombatEntries,
+} = await importWithRealDb(() => import('../../../services/combat/pending-combat-entry.js'));
 
 const dmText = (): string =>
   JSON.stringify({
@@ -308,5 +311,52 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
     const encounterId = payload.encounter?.id;
     if (typeof encounterId !== 'string') throw new Error('encounter id missing');
     expect(rows[0]?.id).toBe(encounterId);
+  });
+
+  test('a recorded decline persists in the session_state row and lifts (#1328)', async () => {
+    // The row path, not the process-memory mirror: with a reachable
+    // database the read selects game_sessions.session_state, so this
+    // survives across SO_REUSEPORT processes. The direct row select
+    // below proves the write landed in the row itself.
+    await recordCombatEntryDecline(sessionId, 'gilded husk');
+    const [row] = await database
+      .select({ state: gameSessions.sessionState })
+      .from(gameSessions)
+      .where(eq(gameSessions.id, sessionId))
+      .limit(1);
+    const declined = (row?.state as Record<string, unknown> | null)?.['combatEntryDeclined'];
+    expect(declined).toMatchObject({ actorKeys: ['gilded husk'] });
+    expect(await readDeclinedCombatEntryActorKeys(sessionId)).toEqual(['gilded husk']);
+
+    await liftCombatEntryDecline(sessionId, 'gilded husk');
+    expect(await readDeclinedCombatEntryActorKeys(sessionId)).toEqual([]);
+    const [cleared] = await database
+      .select({ state: gameSessions.sessionState })
+      .from(gameSessions)
+      .where(eq(gameSessions.id, sessionId))
+      .limit(1);
+    const clearedDeclined = (cleared?.state as Record<string, unknown> | null)?.[
+      'combatEntryDeclined'
+    ];
+    expect(clearedDeclined).toMatchObject({ actorKeys: [] });
+  });
+
+  test('a decline in one session never leaks into another (#1328)', async () => {
+    const otherSessionId = '22222222-3333-4444-8555-666666666913';
+    try {
+      await database.insert(gameSessions).values({
+        id: otherSessionId,
+        campaignId,
+        characterId,
+        sessionNumber: 2,
+        status: 'active',
+        summary: 'Pending combat entry decline-isolation session.',
+      });
+      await recordCombatEntryDecline(sessionId, 'gilded husk');
+      expect(await readDeclinedCombatEntryActorKeys(sessionId)).toEqual(['gilded husk']);
+      expect(await readDeclinedCombatEntryActorKeys(otherSessionId)).toEqual([]);
+    } finally {
+      await database.delete(gameSessions).where(eq(gameSessions.id, otherSessionId));
+    }
   });
 });
