@@ -247,7 +247,7 @@ describeWithDb('Divine Smite on a melee hit (#1362)', () => {
     expect(outcome!.transcriptLines?.join('\n')).toContain('Divine Smite: 4d8 radiant');
   });
 
-  it('refuses a Smite with no slot of that level, and nothing is spent or damaged', async () => {
+  it('refuses a Smite with no slot of that level before any roll, claim or spend', async () => {
     await db.delete(characterSpellSlots).where(eq(characterSpellSlots.characterId, characterId));
     await db.insert(characterSpellSlots).values({
       characterId,
@@ -255,22 +255,58 @@ describeWithDb('Divine Smite on a melee hit (#1362)', () => {
       totalSlots: 0,
       usedSlots: 0,
     });
+    const version = await giveTurnToPaladin();
 
-    let refusal: Error | null = null;
-    for (let i = 0; i < MAX_ATTEMPTS && !refusal; i++) {
-      const version = await giveTurnToPaladin();
-      try {
-        // A hit is the only path that spends a slot, so a resolved attack here is a miss.
-        await attack(version, 1);
-      } catch (error) {
-        refusal = error as Error;
-      }
+    // Math.random is the only source of the d20 and of the dice: a refusal that rolled would
+    // have drawn from it.
+    const realRandom = Math.random;
+    let draws = 0;
+    Math.random = () => {
+      draws += 1;
+      return realRandom();
+    };
+    try {
+      await expect(attack(version, 1)).rejects.toThrow(
+        'Divine Smite refused: no level 1 spell slot left',
+      );
+    } finally {
+      Math.random = realRandom;
     }
 
-    expect(refusal).not.toBeNull();
-    expect(refusal!.message).toContain('Divine Smite refused');
+    expect(draws).toBe(0);
     expect(await usedSlots()).toBe(0);
     expect(await orcHp()).toBe(ORC_START_HP);
+    // The claim was never taken, so the Paladin still has the action.
+    const [paladin] = await db
+      .select({ actionUsed: combatParticipants.actionUsed })
+      .from(combatParticipants)
+      .where(eq(combatParticipants.id, paladinId));
+    expect(paladin.actionUsed).toBe(false);
+  });
+
+  it('a spend that fails on a hit lands the weapon damage without the Smite', async () => {
+    const { SpellSlotsService } = await import('../spell-slots-service.js');
+    const realUse = SpellSlotsService.useSpellSlot;
+    // The slot passes the up-front check, then another spend takes it before this hit.
+    SpellSlotsService.useSpellSlot = async () => {
+      const { BusinessLogicError } = await import('../../lib/errors.js');
+      throw new BusinessLogicError('No available level 1 spell slots', {});
+    };
+    try {
+      let outcome: Awaited<ReturnType<typeof attack>> | null = null;
+      for (let i = 0; i < MAX_ATTEMPTS && !outcome; i++) {
+        const version = await giveTurnToPaladin();
+        const attempt = await attack(version, 1);
+        if (attempt.hit) outcome = attempt;
+      }
+      expect(outcome).not.toBeNull();
+      expect((outcome as { divineSmiteDamage?: number }).divineSmiteDamage).toBeUndefined();
+      expect(outcome!.transcriptLines).toContain('Divine Smite not applied: no level 1 slot.');
+      expect(await orcHp()).toBeLessThan(ORC_START_HP);
+    } finally {
+      SpellSlotsService.useSpellSlot = realUse;
+    }
+    expect(await usedSlots()).toBe(0);
   });
 
   it('a miss spends no slot and applies no Smite', async () => {

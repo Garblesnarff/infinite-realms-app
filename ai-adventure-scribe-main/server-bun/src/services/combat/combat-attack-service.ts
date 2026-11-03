@@ -39,6 +39,12 @@ import {
   monsterAttackSource,
   countStandingMooks,
 } from './data-access.js';
+import {
+  divineSmiteDieCount,
+  divineSmiteNotAppliedLine,
+  divineSmiteRefusal,
+  divineSmiteRefusalText,
+} from './divine-smite-rider.js';
 import { healthConditionForCombat } from './health-condition.js';
 import { appliesHexRider, hexRiderDice } from './hex-rider.js';
 import { autoCritReason, checkHit, checkAutoCrit } from './hit-check.js';
@@ -51,7 +57,6 @@ import {
   greatWeaponFightingApplies,
   rerollGreatWeaponFace,
 } from '../../../../shared/fighting-style';
-import { divineSmiteDice } from '../../../../shared/limited-feature-counts';
 import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
 import {
   assessPlayerCombatSpell,
@@ -425,11 +430,11 @@ export class CombatAttackService {
   }
 
   /**
-   * Divine Smite on a hit (#1362, 2014 PHB p.85): spend the declared slot, then roll 2d8 radiant
-   * (+1d8 per slot level above 1st, to 5d8), plus 1d8 against undead or fiends. A critical hit
-   * doubles every die. The slot is spent through SpellSlotsService, the single slot store, and
-   * a Paladin with no slot of that level is refused here. Radiant resistance applies to the
-   * Smite on its own, the way the Hex rider's necrotic damage does.
+   * Divine Smite on a hit (#1362, 2014 PHB p.85): spend the declared slot, then roll the Smite
+   * dice (see divine-smite-rider.ts) radiant, resisted on its own the way the Hex rider's
+   * necrotic damage is. The slot was checked up front, so a spend that still fails here is a
+   * race with another spend: the attack is not refused. It lands its weapon damage and reports
+   * `applied: false`, and the caller says so in the transcript.
    */
   private async divineSmiteOnHit(input: {
     characterId: string;
@@ -439,7 +444,10 @@ export class CombatAttackService {
     isCritical: boolean;
     creatureType?: string | null;
     defenses: ReturnType<typeof aggregateResistances>;
-  }): Promise<{ spent: UseSpellSlotResult; damage: number; diceCount: number }> {
+  }): Promise<
+    | { applied: true; spent: UseSpellSlotResult; damage: number; diceCount: number }
+    | { applied: false; slotLevel: number }
+  > {
     let spent: UseSpellSlotResult;
     try {
       // eslint-disable-next-line react-hooks/rules-of-hooks -- server-side service method, not a React hook
@@ -454,17 +462,11 @@ export class CombatAttackService {
         input.userId,
       );
     } catch (error) {
-      if (error instanceof BusinessLogicError) {
-        throw new BusinessLogicError(`Divine Smite refused: ${error.message}`, {
-          reason: 'smite_no_slot',
-          slotLevel: input.slotLevel,
-        });
-      }
+      if (error instanceof BusinessLogicError)
+        return { applied: false, slotLevel: input.slotLevel };
       throw error;
     }
-    const undeadOrFiend = /undead|fiend/i.test(input.creatureType ?? '');
-    const baseDice = divineSmiteDice(input.slotLevel) + (undeadOrFiend ? 1 : 0);
-    const diceCount = input.isCritical ? baseDice * 2 : baseDice;
+    const diceCount = divineSmiteDieCount(input.slotLevel, input.creatureType, input.isCritical);
     const damage = calculateDamage({
       damageDice: `${diceCount}d8`,
       damageBonus: 0,
@@ -474,7 +476,7 @@ export class CombatAttackService {
       vulnerabilities: input.defenses.vulnerabilities,
       immunities: input.defenses.immunities,
     }).finalDamage;
-    return { spent, damage, diceCount };
+    return { applied: true, spent, damage, diceCount };
   }
 
   /**
@@ -677,18 +679,29 @@ export class CombatAttackService {
       throw new BusinessLogicError(`Attack refused: ${rules.refusal}`, { refusal: rules.refusal });
     }
 
-    // #1362: Divine Smite is a Paladin's melee weapon feature. A Smite that cannot apply is
-    // refused here, before anything is claimed or rolled.
+    // #1362: a Smite that cannot apply is refused here, before the claim and before any d20 is
+    // rolled. Only the spend waits for a hit, so a refused attack costs the actor nothing.
     if (input.divineSmiteSlotLevel !== undefined) {
-      if (!attackerClassName?.toLowerCase().includes('paladin')) {
-        throw new BusinessLogicError('Divine Smite refused: only a Paladin can smite', {
-          reason: 'smite_not_paladin',
-        });
-      }
-      if (input.attackType !== 'melee' || weapon.ranged) {
-        throw new BusinessLogicError('Divine Smite refused: it needs a melee weapon attack', {
-          reason: 'smite_not_melee',
-        });
+      const slotLevel = input.divineSmiteSlotLevel;
+      const slotsRemaining = attackerData.participant.characterId
+        ? ((
+            await SpellSlotsService.getCharacterSpellSlots(
+              attackerData.participant.characterId,
+              userId,
+            )
+          ).slots.find((slot) => slot.spellLevel === slotLevel)?.remainingSlots ?? 0)
+        : 0;
+      const refusal = divineSmiteRefusal({
+        attackerIsPaladin: !!attackerClassName?.toLowerCase().includes('paladin'),
+        isMeleeWeaponAttack: input.attackType === 'melee' && !weapon.ranged,
+        slotLevel,
+        slotsRemaining,
+      });
+      if (refusal) {
+        throw new BusinessLogicError(
+          `Divine Smite refused: ${divineSmiteRefusalText(refusal, slotLevel)}`,
+          { reason: refusal, slotLevel },
+        );
       }
     }
 
@@ -875,7 +888,8 @@ export class CombatAttackService {
               creatureType: targetParticipant.creatureType,
               defenses,
             });
-      const totalDamage = damageCalc.finalDamage + hexDamage + (smite?.damage ?? 0);
+      const smiteApplied = smite?.applied ? smite : null;
+      const totalDamage = damageCalc.finalDamage + hexDamage + (smiteApplied?.damage ?? 0);
 
       // Apply damage to target HP
       try {
@@ -933,10 +947,12 @@ export class CombatAttackService {
           },
         );
         transcriptLines.push(...concentrationLines);
-        if (smite) {
+        if (smiteApplied) {
           transcriptLines.push(
-            `Divine Smite: ${smite.diceCount}d8 radiant, ${smite.damage} damage (level ${input.divineSmiteSlotLevel} slot).`,
+            `Divine Smite: ${smiteApplied.diceCount}d8 radiant, ${smiteApplied.damage} damage (level ${input.divineSmiteSlotLevel} slot).`,
           );
+        } else if (smite && !smite.applied) {
+          transcriptLines.push(divineSmiteNotAppliedLine(smite.slotLevel));
         }
 
         const attackResult: HexAttackResult = {
@@ -957,7 +973,7 @@ export class CombatAttackService {
           effectiveImmunity: damageCalc.effectiveImmunity,
           finalDamage: appliedDamage,
           ...(hexDamage > 0 ? { hexDamage } : {}),
-          ...(smite ? { divineSmiteDamage: smite.damage } : {}),
+          ...(smiteApplied ? { divineSmiteDamage: smiteApplied.damage } : {}),
           ...(blessDie > 0 ? { blessDie } : {}),
           targetNewHp: hpResult.newCurrentHp,
           targetIsConscious: hpResult.isConscious,
@@ -983,8 +999,8 @@ export class CombatAttackService {
       } catch (error) {
         logger.error({ msg: 'Failed to apply damage to HP', error });
         // #1362: the Smite's slot goes back when its damage never reached the target's HP.
-        if (smite) {
-          await SpellSlotsService.refundSpellSlot(smite.spent, userId).catch((refundError) =>
+        if (smiteApplied) {
+          await SpellSlotsService.refundSpellSlot(smiteApplied.spent, userId).catch((refundError) =>
             logger.error({ msg: 'COMBAT_SMITE_SLOT_REFUND_FAILED', refundError }),
           );
         }

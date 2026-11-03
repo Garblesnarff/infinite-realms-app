@@ -117,4 +117,43 @@ describe('Divine Smite action bar wire body (#1362)', () => {
     expect(intentCall).toBeDefined();
     expect(JSON.parse(String(intentCall?.[1]?.body))).toEqual(divineSmiteAttackBody(7));
   });
+  it('posts the shared level 2 Smite body when the picker chose 2nd level', async () => {
+    const encounter: any = {
+      id: 'enc-1',
+      participants: [
+        {
+          id: DIVINE_SMITE_ACTOR_ID,
+          name: 'Paladin',
+          participantType: 'player',
+          characterClass: 'paladin',
+        },
+        { id: DIVINE_SMITE_TARGET_ID, name: 'Orc', participantType: 'npc' },
+      ],
+    };
+    const { result } = renderHook(() =>
+      useCombatMechanics({
+        activeEncounter: encounter,
+        handleCombatAction: vi.fn(),
+        takeAction: vi.fn(),
+        updateParticipant: vi.fn(),
+        selectedEnemy: DIVINE_SMITE_TARGET_ID,
+      } as any),
+    );
+
+    await act(async () => {
+      await result.current.handleEnhancedAttack(
+        DIVINE_SMITE_ACTOR_ID,
+        DIVINE_SMITE_TARGET_ID,
+        'divine_smite',
+        false,
+        false,
+        2,
+      );
+    });
+
+    const intentCall = fetchWithAuth.mock.calls.find(([url]) =>
+      String(url).endsWith('/v1/combat/enc-1/intent'),
+    );
+    expect(JSON.parse(String(intentCall?.[1]?.body))).toEqual(divineSmiteAttackBody(7, 2));
+  });
 });

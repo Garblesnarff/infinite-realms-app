@@ -20,10 +20,13 @@ export const DIVINE_SMITE_ATTACK_INTENT = {
   divineSmiteSlotLevel: 1,
 };
 
-/** The wire body the executor posts for the Smite attack, given the encounter version it read. */
-export function divineSmiteAttackBody(expectedVersion: number) {
+/**
+ * The wire body the executor posts for the Smite attack, given the encounter version it read and
+ * the slot level the player picked (1st by default; the picker offers each level with a slot left).
+ */
+export function divineSmiteAttackBody(expectedVersion: number, divineSmiteSlotLevel = 1) {
   return {
-    intent: { ...DIVINE_SMITE_ATTACK_INTENT, expectedVersion },
+    intent: { ...DIVINE_SMITE_ATTACK_INTENT, divineSmiteSlotLevel, expectedVersion },
     source: 'player' as const,
   };
 }

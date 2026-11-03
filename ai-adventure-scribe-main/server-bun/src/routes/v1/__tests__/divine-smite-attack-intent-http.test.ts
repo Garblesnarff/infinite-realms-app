@@ -99,6 +99,18 @@ describe('POST /v1/combat/:encounterId/intent — Divine Smite attack (#1362)', 
     ]);
   });
 
+  test('accepts a level 2 Smite body the picker sends and passes the level through', async () => {
+    const res = await post(divineSmiteAttackBody(7, 2));
+
+    expect(res.status).toBe(200);
+    expect(executed).toEqual([
+      {
+        intent: expect.objectContaining({ divineSmiteSlotLevel: 2, expectedVersion: 7 }),
+        source: 'player',
+      },
+    ]);
+  });
+
   test('422s a Smite slot level outside 1-9 before anything runs', async () => {
     for (const divineSmiteSlotLevel of [0, 10]) {
       const res = await post({
