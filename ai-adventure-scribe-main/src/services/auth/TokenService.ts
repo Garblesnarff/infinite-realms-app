@@ -642,8 +642,9 @@ export const refreshAccessToken = (
     const coordinatedRefresh = refreshWithCoordination(refreshToken, currentAccessToken)
       .then((result) => {
         // #1113: every refresh (timer, page load, 401 retry) passes through
-        // here, so this is the one place that records a completed refresh.
-        // Grace state is per tab: another tab's refresh does not open it here.
+        // here, so this is the one place that records a completed refresh. A
+        // pair adopted from another tab counts too: this tab's stored pair
+        // just changed, so an in-flight 401 here can be retried with it.
         if (result) lastRefreshCompletedAt = Date.now();
         return result;
       })

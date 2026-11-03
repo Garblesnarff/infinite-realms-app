@@ -15,7 +15,11 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 vi.mock('@/services/auth/TokenService', () => ({
-  getAuthHeaders: vi.fn(() => ({})),
+  // Like the real getAuthHeaders: every attempt reads the stored token at send time.
+  getAuthHeaders: vi.fn(() => {
+    const stored = loadCachedSessionMock();
+    return stored?.access_token ? { Authorization: `Bearer ${stored.access_token}` } : {};
+  }),
   markSessionEnded: vi.fn(),
   SESSION_ENDED_MESSAGE: 'Your sign-in expired — sign in again; your game is saved',
   loadCachedSession: loadCachedSessionMock,
@@ -37,6 +41,7 @@ vi.mock('@/services/auth/TokenService', () => ({
 
 import { fetchWithAuth, REFRESH_RETRY_GRACE_MS, SessionExpiredError } from '../rest-client';
 
+import logger from '@/lib/logger';
 import { refreshAccessTokenOnce } from '@/services/auth/TokenService';
 
 const ROUTE = '/v1/llm/extract';
@@ -152,6 +157,30 @@ describe('fetchWithAuth refresh grace window (#1113)', () => {
 
     await expect(pending).resolves.toMatchObject({ status: 200 });
     expect(refreshMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not grace-retry a 401 from a retry attempt that carried the fresh token (#1113 review)', async () => {
+    // Attempt 1 (old token) fails with a network error. While the retry waits,
+    // a refresh completes. Attempt 2 goes out with the fresh token and gets 401.
+    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    const pending = fetchWithAuth(ROUTE);
+    await vi.advanceTimersByTimeAsync(0);
+    await refreshCompletesElsewhere();
+
+    fetchMock.mockResolvedValueOnce(response(401));
+    fetchMock.mockResolvedValueOnce(response(200));
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    await expect(pending).resolves.toMatchObject({ status: 200 });
+    expect(authOf(1)).toBe('Bearer new-access');
+    // One refresh elsewhere (the fixture's completed refresh) and one from the
+    // 401 path. No grace retry.
+    expect(refreshMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(logger.info).not.toHaveBeenCalledWith(
+      'AUTH_RETRY_AFTER_401',
+      expect.objectContaining({ outcome: 'grace_retry' }),
+    );
   });
 
   it('does not take grace when the failed request already carried the current token', async () => {

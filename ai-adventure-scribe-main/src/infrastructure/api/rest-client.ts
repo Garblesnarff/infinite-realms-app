@@ -334,6 +334,11 @@ function isV1Route(path: string): boolean {
   return path.startsWith('/v1/') || path.startsWith('/api/trpc/');
 }
 
+function bearerTokenOf(init: RequestInit): string | undefined {
+  const authorization = (init.headers as Record<string, string> | undefined)?.Authorization;
+  return authorization?.startsWith('Bearer ') ? authorization.slice('Bearer '.length) : undefined;
+}
+
 function buildRequestInit(options: RequestInit, accessToken?: string): RequestInit {
   return {
     ...options,
@@ -425,12 +430,20 @@ export async function fetchWithAuth(
         });
       })()
     : null;
+  // #1113: the bearer token each fetch attempt actually sent, in attempt order.
+  // The last entry belongs to the attempt whose response is returned.
+  const sentAccessTokens: Array<string | undefined> = [];
+  const attemptFetch = (accessToken?: string): Promise<Response> => {
+    const init = buildRequestInit(effectiveInit, accessToken);
+    sentAccessTokens.push(bearerTokenOf(init));
+    return fetch(`${API_BASE_URL}${path}`, init);
+  };
   const request = (accessToken?: string): Promise<Response> =>
     (timeoutPromise
       ? Promise.race([
           requestWithNetworkRetry(
             path,
-            () => fetch(`${API_BASE_URL}${path}`, buildRequestInit(effectiveInit, accessToken)),
+            () => attemptFetch(accessToken),
             timeoutSignal,
             retryBudgetMs,
           ),
@@ -438,7 +451,7 @@ export async function fetchWithAuth(
         ])
       : requestWithNetworkRetry(
           path,
-          () => fetch(`${API_BASE_URL}${path}`, buildRequestInit(effectiveInit, accessToken)),
+          () => attemptFetch(accessToken),
           timeoutSignal,
           retryBudgetMs,
         )) as Promise<Response>;
@@ -455,11 +468,11 @@ export async function fetchWithAuth(
     if (response.status !== 401 || !isV1Route(path)) return response;
 
     const session = safeLoadCachedSession();
-    // #1113: take the grace path only when the failed request carried an older
-    // token than the stored one, i.e. it was already in flight when a refresh
-    // finished. If it carried the current token (or we cannot tell which token
-    // it sent), the 401 is a real auth failure and falls through to refresh.
-    const sentAccessToken = refreshedAccessToken ?? preflightSession?.access_token;
+    // #1113: take the grace path only when the attempt that got this 401 carried
+    // an older token than the stored one, i.e. it was already in flight when a
+    // refresh finished. If it carried the current token (or we cannot tell which
+    // token it sent), the 401 is a real auth failure and falls through to refresh.
+    const sentAccessToken = sentAccessTokens[sentAccessTokens.length - 1];
     if (
       isWithinRefreshGrace() &&
       session?.access_token &&
