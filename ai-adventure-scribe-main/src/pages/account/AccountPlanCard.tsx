@@ -52,7 +52,7 @@ export const AccountPlanCard: React.FC<AccountPlanCardProps> = ({
               ? 'Playtest account with raised daily limits'
               : isPro
                 ? 'You have full access to all features'
-                : 'Upgrade for higher daily limits and premium voices'}
+                : 'Legend adds custom hero creation, lets you keep a hero across adventures, higher limits, and premium voices.'}
           </CardDescription>
         </div>
         {isPro && !isTester && subscription?.status && (
