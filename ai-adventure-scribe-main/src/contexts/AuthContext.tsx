@@ -321,6 +321,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
+      // Sign-out in another tab removes the session key, so the removal
+      // event (newValue null) is the cross-tab sign-out signal (#1302
+      // item 2). Clear this tab through the same local state transition
+      // signOut uses — persistSession(null) also drops this tab's
+      // sessionStorage refresh token. It writes nothing back: the key is
+      // already gone, and removals of absent keys fire no storage event,
+      // so this cannot loop or resurrect the session.
+      if (event.key === SESSION_STORAGE_KEY && event.newValue === null) {
+        persistSession(null);
+        sessionRef.current = null;
+        setSession(null);
+        setUser(null);
+        return;
+      }
+
       // A refresh in another tab publishes the new pair before releasing its
       // lock. Adopt it locally so this tab does not continue using a stale
       // access token between timer ticks.
