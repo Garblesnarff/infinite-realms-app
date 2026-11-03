@@ -308,3 +308,33 @@ describe('RightSheet inventory equip control (#1059)', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Unable to equip Shortbow.');
   });
 });
+
+describe('RightSheet zero-quantity row (#1327 item 3)', () => {
+  // Decision: SHOW — a spent-to-zero row stays visible with an explicit zero
+  // marker, rather than hiding (the row must persist anyway: #1333 recovery
+  // tops it up by id, and hiding would make the quiver vanish on empty and
+  // reappear on recovery). A bare name would read as quantity 1, so the zero
+  // is marked with the existing count badge.
+  const zeroSheet: CharacterSheetVM = {
+    ...sheet,
+    inventory: [
+      { id: 'Arrows', name: 'Arrows', quantity: 0 },
+      { id: 'Rope', name: 'Rope (50 ft)', quantity: 1 },
+      { id: 'Torch', name: 'Torch', quantity: 3 },
+    ],
+  };
+
+  it('shows an explicit zero marker on a quantity-0 row and keeps the row', () => {
+    render(<RightSheet c={zeroSheet} />);
+
+    expect(screen.getByText('Arrows')).toBeInTheDocument();
+    expect(screen.getByText('x0')).toBeInTheDocument();
+  });
+
+  it('shows no badge on a quantity-1 row and the count on quantity 3', () => {
+    render(<RightSheet c={zeroSheet} />);
+
+    expect(screen.getByText('x3')).toBeInTheDocument();
+    expect(screen.queryByText('x1')).not.toBeInTheDocument();
+  });
+});

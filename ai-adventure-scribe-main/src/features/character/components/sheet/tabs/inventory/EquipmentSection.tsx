@@ -92,7 +92,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({
                         )}
                       </div>
 
-                      <div className="text-sm text-muted-foreground">Qty: {item.quantity || 1}</div>
+                      <div className="text-sm text-muted-foreground">Qty: {item.quantity ?? 1}</div>
 
                       {item.isMagic && (
                         <div className="mt-2 text-xs">

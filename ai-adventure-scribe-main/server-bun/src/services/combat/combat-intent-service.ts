@@ -923,7 +923,7 @@ export function refuseUngroundedPlayerWeapon(
   if (!grounding.requested || grounding.grounded) return;
   const carriedAmmoWeapon =
     grounding.notEquipped &&
-    /crossbow|shortbow|longbow/i.test(findCatalogWeapon(grounding.requested)?.name ?? '');
+    ammunitionForWeapon(findCatalogWeapon(grounding.requested)?.name ?? '') !== null;
   if (source !== 'player' && !carriedAmmoWeapon) return;
   if (grounding.notEquipped) {
     throw new BusinessLogicError(

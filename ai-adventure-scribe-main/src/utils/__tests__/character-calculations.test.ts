@@ -12,6 +12,7 @@ import {
   calculateSkillModifiers,
   calculateSavingThrowModifiers,
   calculateCarryingCapacity,
+  calculateInventoryWeight,
   calculatePassivePerception,
   calculateAllCharacterStats,
   calculateEncumbrance,
@@ -455,6 +456,37 @@ describe('character-calculations', () => {
       expect(calculateCarryingCapacity(strongCharacter as any)).toBe(300);
 
       expect(calculateCarryingCapacity({} as any)).toBe(150); // Default score 10
+    });
+  });
+
+  describe('calculateInventoryWeight', () => {
+    it('should weigh a spent-to-zero row as 0, not as one unit (#1327)', () => {
+      const character: Partial<Character> = {
+        inventory: [
+          { itemId: 'arrows', quantity: 0, weight: 0.5, equipped: false },
+          { itemId: 'longsword', quantity: 1, weight: 3, equipped: true },
+        ],
+      };
+      expect(calculateInventoryWeight(character as Character)).toBe(3);
+    });
+
+    it('should keep the quantity-1 fallback when quantity is missing', () => {
+      const character: Partial<Character> = {
+        inventory: [{ itemId: 'rope', weight: 2, equipped: false } as any],
+      };
+      expect(calculateInventoryWeight(character as Character)).toBe(2);
+    });
+
+    it('should multiply quantity by weight for stacked rows', () => {
+      const character: Partial<Character> = {
+        inventory: [{ itemId: 'arrows', quantity: 20, weight: 2, equipped: false }],
+      };
+      expect(calculateInventoryWeight(character as Character)).toBe(40);
+    });
+
+    it('should weigh an empty inventory as 0', () => {
+      expect(calculateInventoryWeight({ inventory: [] } as Character)).toBe(0);
+      expect(calculateInventoryWeight({} as Character)).toBe(0);
     });
   });
 });

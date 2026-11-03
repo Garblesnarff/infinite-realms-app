@@ -115,20 +115,20 @@ describe('refuseUngroundedPlayerWeapon (#260 / RG-014)', () => {
 
   test.each([
     ['Sun Blade', 'magic-item name resolving through findMagicBaseWeapon'],
-    ['123e4567-e89b-12d3-a456-426614174000', 'dangling inventory row id (uuid, matches nothing owned)'],
-  ])(
-    'a real weapon named by %s is still refused with weapon_not_on_sheet',
-    (phrase) => {
-      const grounding = groundRequestedWeapon(phrase, [GREATAXE, HANDAXE], [GREATAXE, HANDAXE]);
-      // Sanity: ungrounded, so the gate — not the grounding — decides.
-      expect(grounding.grounded).toBe(false);
-      expect(grounding.notEquipped).toBe(false);
+    [
+      '123e4567-e89b-12d3-a456-426614174000',
+      'dangling inventory row id (uuid, matches nothing owned)',
+    ],
+  ])('a real weapon named by %s is still refused with weapon_not_on_sheet', (phrase) => {
+    const grounding = groundRequestedWeapon(phrase, [GREATAXE, HANDAXE], [GREATAXE, HANDAXE]);
+    // Sanity: ungrounded, so the gate — not the grounding — decides.
+    expect(grounding.grounded).toBe(false);
+    expect(grounding.notEquipped).toBe(false);
 
-      const err = expectRefusal(() => refuseUngroundedPlayerWeapon(grounding, 'player'));
-      expect(err.details).toMatchObject({ reason: 'weapon_not_on_sheet' });
-      expect(err.message.split('Weapon not on character sheet').length - 1).toBe(1);
-    },
-  );
+    const err = expectRefusal(() => refuseUngroundedPlayerWeapon(grounding, 'player'));
+    expect(err.details).toMatchObject({ reason: 'weapon_not_on_sheet' });
+    expect(err.message.split('Weapon not on character sheet').length - 1).toBe(1);
+  });
 
   test('a grounded claim and an empty claim never refuse, for either source', () => {
     const grounded = groundRequestedWeapon('greataxe', [GREATAXE, HANDAXE], [GREATAXE, HANDAXE]);
@@ -172,5 +172,40 @@ describe('suffix-first sheet names (#260)', () => {
     );
     expect(grounding.grounded).toBe(true);
     expect(() => refuseUngroundedPlayerWeapon(grounding, 'player')).not.toThrow();
+  });
+});
+
+describe('ammunitionForWeapon carried refusal (#1327 item 4)', () => {
+  // The carried-ammo gate used to hard-code crossbow/shortbow/longbow; it now
+  // uses ammunitionForWeapon, so sling (bullets) and blowgun (needles) get the
+  // same carried-but-unequipped refusal. The DM cases below are the
+  // discriminating ones: a player naming any carried weapon is refused either
+  // way, but a DM naming one is refused only when it takes ammunition.
+  const SLING_ROW = weapon({ id: 'inv-sling', name: 'Sling', ranged: true, damageDice: '1d4' });
+  const BLOWGUN_ROW = weapon({ id: 'inv-blowgun', name: 'Blowgun', ranged: true, damageDice: '1' });
+
+  test.each([
+    ['sling', SLING_ROW],
+    ['blowgun', BLOWGUN_ROW],
+  ])(
+    'a DM-sourced intent naming a carried %s is refused with weapon_not_equipped',
+    (claim, row) => {
+      const grounding = groundRequestedWeapon(claim, [HANDAXE], [HANDAXE, row]);
+      expect(grounding.grounded).toBe(false);
+      expect(grounding.notEquipped).toBe(true);
+
+      const err = expectRefusal(() => refuseUngroundedPlayerWeapon(grounding, 'dm'));
+      expect(err.details).toMatchObject({
+        reason: 'weapon_not_equipped',
+        requestedWeaponId: claim,
+      });
+    },
+  );
+
+  test('a DM-sourced intent naming a carried non-ammo weapon still substitutes', () => {
+    const grounding = groundRequestedWeapon('handaxe', [GREATAXE], [GREATAXE, HANDAXE]);
+    expect(grounding.grounded).toBe(false);
+    expect(grounding.notEquipped).toBe(true);
+    expect(() => refuseUngroundedPlayerWeapon(grounding, 'dm')).not.toThrow();
   });
 });

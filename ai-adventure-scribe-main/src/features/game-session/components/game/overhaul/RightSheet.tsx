@@ -500,7 +500,7 @@ export const RightSheet: React.FC<{
               <div key={it.id} className="flex items-center gap-2">
                 <IRThumb size={26} />
                 <span className="flex-1 truncate ir-text-min text-foreground/90">{it.name}</span>
-                {it.quantity != null && it.quantity > 1 && (
+                {it.quantity != null && it.quantity !== 1 && (
                   <span className="ir-text-min text-muted-foreground">x{it.quantity}</span>
                 )}
                 {it.equippable && onEquipItem && (
