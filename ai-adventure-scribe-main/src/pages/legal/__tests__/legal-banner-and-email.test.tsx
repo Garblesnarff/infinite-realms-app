@@ -47,10 +47,13 @@ describe('legal draft banner flag and support email (#2258)', () => {
     );
   });
 
-  it('#210 QA-002: uses the shared launch wordmark and top nav', () => {
+  it('#568: uses the app top bar instead of the launch wordmark and Sign in', () => {
     renderContact();
-    expect(screen.getByRole('link', { name: 'Infinite Realms home' })).toHaveAttribute('href', '/');
-    expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/app');
+    const nav = document.getElementById('app-nav');
+    expect(nav).not.toBeNull();
+    expect(screen.getByRole('link', { name: /^home$/i })).toHaveAttribute('href', '/app');
+    expect(screen.queryByRole('link', { name: 'Infinite Realms home' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /sign in/i })).not.toBeInTheDocument();
   });
 
   it('says so when VITE_SUPPORT_EMAIL is unset', () => {
