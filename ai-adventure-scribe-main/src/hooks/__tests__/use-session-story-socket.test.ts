@@ -446,7 +446,60 @@ describe('useSessionStorySocket reconnect (#1357)', () => {
     expect(FakeSocket.instances).toHaveLength(1);
   });
 
-  it('dispatches session-socket-reconnected once per reconnect, not on the first open', async () => {
+  it('stops at the cap when every open is followed by a 4000 close, and warns once', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { useSessionStorySocket } = await import('../use-session-story-socket');
+    renderHook(() => useSessionStorySocket(sessionId, () => {}));
+    await flush();
+
+    // Each socket is accepted, then closed 4000 before it counts as stable.
+    for (let i = 0; i < 11; i++) {
+      FakeSocket.instances[i].open();
+      await advance(1000);
+      FakeSocket.instances[i].drop(4000);
+      await advance(30_000);
+      await flush();
+    }
+    await advance(120_000);
+    await flush();
+
+    expect(FakeSocket.instances).toHaveLength(11);
+    expect(mocks.mintWsTicket).toHaveBeenCalledTimes(11);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toContain('last close code 4000');
+    warn.mockRestore();
+  });
+
+  it('a stable open resets the failure count', async () => {
+    const { useSessionStorySocket } = await import('../use-session-story-socket');
+    renderHook(() => useSessionStorySocket(sessionId, () => {}));
+    await flush();
+
+    // Three failed attempts without an open: waits of 1 s, 2 s, 4 s.
+    FakeSocket.instances[0].drop(1006);
+    await advance(1000);
+    await flush();
+    FakeSocket.instances[1].drop(1006);
+    await advance(2000);
+    await flush();
+    FakeSocket.instances[2].drop(1006);
+    await advance(4000);
+    await flush();
+    expect(FakeSocket.instances).toHaveLength(4);
+
+    FakeSocket.instances[3].open();
+    await advance(5000);
+    FakeSocket.instances[3].drop(1006);
+
+    // The count was reset, so the next wait is 1 s again, not 8 s.
+    await advance(999);
+    expect(FakeSocket.instances).toHaveLength(4);
+    await advance(1);
+    await flush();
+    expect(FakeSocket.instances).toHaveLength(5);
+  });
+
+  it('dispatches session-socket-reconnected once after a stable drop, not for short-lived opens', async () => {
     const { useSessionStorySocket } = await import('../use-session-story-socket');
     renderHook(() => useSessionStorySocket(sessionId, () => {}));
     await flush();
@@ -456,13 +509,27 @@ describe('useSessionStorySocket reconnect (#1357)', () => {
         ([event]) => (event as Event).type === 'session-socket-reconnected',
       ).length;
 
+    // Two short-lived opens, each dropped before it is stable.
     FakeSocket.instances[0].open();
-    expect(reconnectEvents()).toBe(0);
-
+    await advance(1000);
     FakeSocket.instances[0].drop(1006);
     await advance(1000);
     await flush();
     FakeSocket.instances[1].open();
+    await advance(1000);
+    FakeSocket.instances[1].drop(1006);
+    await advance(2000);
+    await flush();
+    FakeSocket.instances[2].open();
+    await advance(5000);
+    expect(reconnectEvents()).toBe(0);
+
+    // A stable connection is lost, then reopens and becomes stable: one event.
+    FakeSocket.instances[2].drop(1006);
+    await advance(1000);
+    await flush();
+    FakeSocket.instances[3].open();
+    await advance(5000);
 
     expect(reconnectEvents()).toBe(1);
     dispatchSpy.mockRestore();

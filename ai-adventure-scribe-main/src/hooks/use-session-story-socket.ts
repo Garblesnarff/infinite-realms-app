@@ -11,6 +11,9 @@ const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_MAX_MS = 30_000;
 // Consecutive failed attempts (no open) before the hook gives up until remount.
 const RECONNECT_MAX_FAILURES = 10;
+// An open socket counts as stable, and resets the failure count, only after it stays open this long.
+// The server accepts the upgrade and then closes 4000 for a rejected ticket, so an open alone proves nothing.
+const STABLE_OPEN_MS = 5_000;
 
 /**
  * Dispatched after the socket reopens (not on the first open). Listeners pull the state the socket
@@ -31,11 +34,18 @@ export function useSessionStorySocket(sessionId: string | null, onRemoteMessage:
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let failures = 0;
-    let hasConnected = false;
+    let hadStableConnection = false;
+    let stableTimer: ReturnType<typeof setTimeout> | undefined;
 
-    const scheduleRetry = (): void => {
+    const scheduleRetry = (closeCode?: number): void => {
       failures += 1;
-      if (cancelled || failures > RECONNECT_MAX_FAILURES) return;
+      if (cancelled) return;
+      if (failures > RECONNECT_MAX_FAILURES) {
+        console.warn(
+          `[session-story-socket] giving up after ${RECONNECT_MAX_FAILURES} failed attempts; last close code ${closeCode ?? 'none'}`,
+        );
+        return;
+      }
       const delay = Math.min(RECONNECT_BASE_MS * 2 ** (failures - 1), RECONNECT_MAX_MS);
       retryTimer = setTimeout(() => void connect(), delay);
     };
@@ -48,15 +58,20 @@ export function useSessionStorySocket(sessionId: string | null, onRemoteMessage:
         socket = new WebSocket(buildSessionStoryWsUrl(ticket, sessionId));
       } catch {
         // Ticket mint failed; retry with backoff.
-        scheduleRetry();
+        scheduleRetry(undefined);
         return;
       }
       socketRef.current = socket;
       socket.onopen = () => {
         if (cancelled) return;
-        failures = 0;
-        if (hasConnected) window.dispatchEvent(new CustomEvent(SESSION_SOCKET_RECONNECTED_EVENT));
-        hasConnected = true;
+        // Only a socket that stays open is stable. Reset the count and announce the reopen then,
+        // so a ticket rejected right after the upgrade cannot loop as if it had recovered.
+        stableTimer = setTimeout(() => {
+          failures = 0;
+          if (hadStableConnection)
+            window.dispatchEvent(new CustomEvent(SESSION_SOCKET_RECONNECTED_EVENT));
+          hadStableConnection = true;
+        }, STABLE_OPEN_MS);
       };
       socket.onmessage = (event) => {
         try {
@@ -122,10 +137,11 @@ export function useSessionStorySocket(sessionId: string | null, onRemoteMessage:
           });
         }
       };
-      socket.onclose = () => {
+      socket.onclose = (event) => {
+        clearTimeout(stableTimer);
         if (socketRef.current === socket) socketRef.current = null;
         // The cleanup close lands here too; cancelled stops it from reconnecting.
-        if (!cancelled) scheduleRetry();
+        if (!cancelled) scheduleRetry(event.code);
       };
     };
 
@@ -134,6 +150,7 @@ export function useSessionStorySocket(sessionId: string | null, onRemoteMessage:
     return () => {
       cancelled = true;
       clearTimeout(retryTimer);
+      clearTimeout(stableTimer);
       socketRef.current?.close();
       socketRef.current = null;
     };
