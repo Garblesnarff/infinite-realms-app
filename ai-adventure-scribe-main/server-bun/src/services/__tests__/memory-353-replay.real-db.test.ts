@@ -83,7 +83,15 @@ const { sessionMessageRoutes } = await importWithRealDb(() => import('../../rout
 const { memoryRoutes } = await importWithRealDb(() => import('../../routes/v1/memories.js'));
 const { memoryExtractionRoutes } = await importWithRealDb(() => import('../../routes/v1/memory-extraction.js'));
 const schema = await importWithRealDb(() => import('../../../../db/schema/index.js'));
-const { campaigns, characters, characterStats, gameSessions, memories, memoryExtractionJobs } = schema;
+const {
+  campaigns,
+  characters,
+  characterStats,
+  gameSessions,
+  memories,
+  memoryExtractionJobs,
+  users,
+} = schema;
 
 // ---------------------------------------------------------------------------
 // Deterministic lexical embedder (the disclosed stub for gemini-embedding-001)
@@ -686,6 +694,13 @@ describeWithDb('memory replay: planted-fact recall over 30 turns (#353)', () => 
     if (!hasRealDb) return;
     originalFetch = globalThis.fetch;
     installFetchStub();
+    // #1344: the generate handler re-resolves the plan strictly from the DB,
+    // so the auth stub's 'tester' plan needs a matching users row — otherwise
+    // the strict read returns 'free' and the replay turns 402.
+    await database
+      .insert(users)
+      .values({ id: USER_ID, email: 'memory-353@example.test', plan: 'tester' })
+      .onConflictDoUpdate({ target: users.id, set: { plan: 'tester' } });
     const [campaign] = await database
       .insert(campaigns)
       .values({ userId: USER_ID, name: testId('m353-campaign') })
@@ -721,6 +736,10 @@ describeWithDb('memory replay: planted-fact recall over 30 turns (#353)', () => 
           await database.delete(characters).where(eq(characters.id, characterId)).catch(() => {});
         }
         if (campaignId) await database.delete(campaigns).where(eq(campaigns.id, campaignId)).catch(() => {});
+        await database
+          .delete(users)
+          .where(eq(users.id, USER_ID))
+          .catch(() => {});
       }
     } finally {
       if (originalFetch) globalThis.fetch = originalFetch;

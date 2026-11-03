@@ -195,6 +195,10 @@ export async function persistChronicleFailure(
   database: Pick<typeof db, 'transaction'>,
   chronicleId: string,
   error: unknown,
+  // Fixed reason stored instead of the raw message, when the caller names one
+  // (e.g. a plan-lookup blip must not persist DB error text in the row).
+  // Callers that omit it keep the previous behavior (message, capped).
+  reason?: string,
 ): Promise<void> {
   await database.transaction(async (tx) => {
     await tx
@@ -202,7 +206,8 @@ export async function persistChronicleFailure(
       .set({
         status: 'failed',
         errorMessage:
-          error instanceof Error ? error.message.slice(0, 500) : 'Chronicle generation failed',
+          reason ??
+          (error instanceof Error ? error.message.slice(0, 500) : 'Chronicle generation failed'),
         updatedAt: new Date(),
       })
       .where(eq(sessionChronicles.id, chronicleId));

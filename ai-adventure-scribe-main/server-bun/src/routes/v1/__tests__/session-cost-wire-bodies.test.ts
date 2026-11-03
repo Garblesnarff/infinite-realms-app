@@ -95,6 +95,11 @@ mock.module('../../../lib/auth.js', () => ({
 }));
 
 const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
+// #1344: the handlers re-resolve the plan strictly; the auth stub's
+// plan is what the strict lookup must return here.
+mock.module('../../../lib/user-plan.js', () => ({
+  resolveUserPlanStrict: async () => 'enterprise',
+}));
 const { imageRoutes } = await import('../images.js');
 const { createTtsRoutes } = await import('../tts.js');
 

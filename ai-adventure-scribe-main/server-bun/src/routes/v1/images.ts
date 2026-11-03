@@ -13,6 +13,7 @@ import { Elysia, t } from 'elysia';
 
 import { sql } from '../../lib/db.js';
 import { logger } from '../../lib/logger.js';
+import { resolveUserPlanStrict } from '../../lib/user-plan.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { requireUserAuth, resolveUser } from '../../middleware/require-user-auth.js';
 import { AIUsageService } from '../../services/ai-usage-service.js';
@@ -178,7 +179,17 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
       }
 
       const userId = user.userId;
-      const plan = user.plan;
+      // #1344: the plan on the request is lenient (authenticateRequest fails open
+      // to 'free'), so re-resolve strictly before the quota check: a DB blip is a
+      // 503, never a 402 against the free limit for a paying player.
+      let plan: string;
+      try {
+        plan = await resolveUserPlanStrict(userId);
+      } catch (err) {
+        logger.error({ msg: 'IMAGES_PLAN_LOOKUP_ERROR', error: err });
+        set.status = 503;
+        return { error: 'Plan lookup unavailable' };
+      }
 
       // Quota check before the provider call. The charge happens after a usable image (#2676).
       await AIUsageService.assertUsageStoreAvailable();

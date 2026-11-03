@@ -70,6 +70,7 @@ const {
   dialogueHistory,
   gameSessions,
   restEvents,
+  users,
 } = await importWithRealDb(() => import('../../../../db/schema/index.js'));
 
 if (!hasRealDb) {
@@ -127,6 +128,13 @@ describeWithDb('full 30-turn session (#660 item 5)', () => {
 
   beforeAll(async () => {
     if (!hasRealDb) return;
+    // #1344: the generate handler re-resolves the plan strictly from the DB,
+    // so the auth stub's 'tester' plan needs a matching users row — otherwise
+    // the strict read returns 'free' and the 30 scripted turns 402.
+    await database
+      .insert(users)
+      .values({ id: userId, email: 'full-session@example.test', plan: 'tester' })
+      .onConflictDoUpdate({ target: users.id, set: { plan: 'tester' } });
     originalFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       const url =
@@ -201,6 +209,10 @@ describeWithDb('full 30-turn session (#660 item 5)', () => {
             .delete(campaigns)
             .where(eq(campaigns.id, campaignId))
             .catch(() => {});
+        await database
+          .delete(users)
+          .where(eq(users.id, userId))
+          .catch(() => {});
       }
     } finally {
       if (originalFetch) globalThis.fetch = originalFetch;

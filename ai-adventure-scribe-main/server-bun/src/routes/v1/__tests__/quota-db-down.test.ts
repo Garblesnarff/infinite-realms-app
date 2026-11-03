@@ -21,14 +21,16 @@ Object.assign(process.env, {
 });
 
 // Injection point for the DB client. `down` makes every query and transaction reject.
+// `planDown` fails only the users/plan query; `usageDown` fails only the usage store.
 // When up, `insertAllowed` and `usedUnits` describe what the database says about today's usage.
-const db = { down: false, insertAllowed: true, usedUnits: 0 };
+const db = { down: false, planDown: false, usageDown: false, insertAllowed: true, usedUnits: 0 };
 
 const dbDownError = (): Error => new Error('db unavailable (test injection)');
 
 const sqlTag = async (strings: TemplateStringsArray, ..._values: unknown[]): Promise<unknown[]> => {
-  if (db.down) throw dbDownError();
   const text = strings.join('?');
+  const isPlanQuery = text.includes('FROM users');
+  if (db.down || (isPlanQuery ? db.planDown : db.usageDown)) throw dbDownError();
   if (text.includes('CREATE TABLE') || text.includes('ALTER TABLE')) return [];
   if (text.includes('pg_advisory_xact_lock')) return [];
   if (text.includes('INSERT INTO ai_usage')) {
@@ -37,6 +39,9 @@ const sqlTag = async (strings: TemplateStringsArray, ..._values: unknown[]): Pro
   return [{ total: db.usedUnits, cost_usd: 0 }];
 };
 const fakeSql = Object.assign(sqlTag, {
+  // begin intentionally routes only db.down: the plan lookup never uses a
+  // transaction, and every query inside work goes back through sqlTag, which
+  // applies the planDown/usageDown split per query.
   begin: async (work: (tx: typeof sqlTag) => Promise<unknown>): Promise<unknown> => {
     if (db.down) throw dbDownError();
     return work(sqlTag);
@@ -76,6 +81,7 @@ const { imageRoutes } = await import('../images.js');
 const { createTtsRoutes } = await import('../tts.js');
 const { Elysia } = await import('elysia');
 const { llmRoutes } = await import('../llm.js');
+const { UserPlanCache } = await import('../../../lib/user-plan-cache.js');
 const { AIUsageService, QuotaUnavailableError } =
   await import('../../../services/ai-usage-service.js');
 
@@ -111,10 +117,16 @@ let providerCalls = 0;
 
 beforeEach(() => {
   db.down = false;
+  db.planDown = false;
+  db.usageDown = false;
   db.insertAllowed = true;
   db.usedUnits = 0;
   providerCalls = 0;
   voiceProviderCalls = 0;
+  // The strict plan lookup caches per user id; a cached 'free' would mask a
+  // plan-down case that reuses an id (the voice auth plugin always derives
+  // 'free-user-voice'), so every case starts cold.
+  UserPlanCache.clear();
   resetCircuitBreakersForTests();
   globalThis.fetch = (async () => {
     providerCalls += 1;
@@ -144,13 +156,23 @@ describe('quota when the DB is down (#2673 step 3b)', () => {
     expect(providerCalls).toBe(0);
   });
 
-  it('refuses with 503 when the DB is down, and never calls the provider (route)', async () => {
-    db.down = true;
+  it('refuses with 503 when the usage store is down, and never calls the provider (route)', async () => {
+    db.usageDown = true;
 
     const response = await app.handle(generateRequest('free-user-db-down'));
 
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ error: 'AI quota unavailable' });
+    expect(providerCalls).toBe(0);
+  });
+
+  it('refuses with 503 when only the plan lookup fails, and never calls the provider (route)', async () => {
+    db.planDown = true;
+
+    const response = await app.handle(generateRequest('free-user-plan-down-image'));
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: 'Plan lookup unavailable' });
     expect(providerCalls).toBe(0);
   });
 
@@ -182,8 +204,8 @@ describe('quota when the DB is down (#2673 step 3b)', () => {
     await expect(freshWorker.checkQuotaAndConsume(request)).rejects.toThrow('AI quota unavailable');
   });
 
-  it('refuses with 503 on voice while the DB is down, and never calls ElevenLabs (route)', async () => {
-    db.down = true;
+  it('refuses with 503 on voice while the usage store is down, and never calls ElevenLabs (route)', async () => {
+    db.usageDown = true;
 
     const response = await (voiceApp as unknown as Handler).handle(
       new Request('http://localhost/v1/ai-proxy/voice/voice-quota-test', {
@@ -195,6 +217,22 @@ describe('quota when the DB is down (#2673 step 3b)', () => {
 
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ error: 'AI quota unavailable' });
+    expect(voiceProviderCalls).toBe(0);
+  });
+
+  it('refuses with 503 on voice when only the plan lookup fails, and never calls ElevenLabs (route)', async () => {
+    db.planDown = true;
+
+    const response = await (voiceApp as unknown as Handler).handle(
+      new Request('http://localhost/v1/ai-proxy/voice/voice-quota-test', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer free-user-voice' },
+        body: JSON.stringify({ text: 'Hello there.' }),
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: 'Plan lookup unavailable' });
     expect(voiceProviderCalls).toBe(0);
   });
 
@@ -245,8 +283,8 @@ describe('quota when the DB is down (#2673 step 3b)', () => {
     expect(providerCalls).toBe(1);
   });
 
-  it('refuses with 503 on LLM generate while the DB is down, and never calls the provider (route)', async () => {
-    db.down = true;
+  it('refuses with 503 on LLM generate while the usage store is down, and never calls the provider (route)', async () => {
+    db.usageDown = true;
 
     const response = await (llmApp as unknown as Handler).handle(
       new Request('http://localhost/v1/llm/generate', {
@@ -261,6 +299,25 @@ describe('quota when the DB is down (#2673 step 3b)', () => {
 
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ error: 'AI quota unavailable' });
+    expect(providerCalls).toBe(0);
+  });
+
+  it('refuses with 503 on LLM generate when only the plan lookup fails, and never calls the provider (route)', async () => {
+    db.planDown = true;
+
+    const response = await (llmApp as unknown as Handler).handle(
+      new Request('http://localhost/v1/llm/generate', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer free-user-plan-down-llm',
+        },
+        body: JSON.stringify({ prompt: 'Hello there.' }),
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: 'Plan lookup unavailable' });
     expect(providerCalls).toBe(0);
   });
 

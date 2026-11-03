@@ -130,6 +130,11 @@ mock.module('../../../services/session/session-message-service.js', () => ({
 }));
 
 const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
+// #1344: the generate handler re-resolves the plan strictly; the auth stub's
+// plan is what the strict lookup must return here.
+mock.module('../../../lib/user-plan.js', () => ({
+  resolveUserPlanStrict: async () => 'free',
+}));
 const { llmRoutes } = await import('../llm.js');
 const { createCombatEntryRoutes } = await import('../combat/entry.js');
 const { seatCombatEntry } = await import('../../../services/combat/combat-entry-gate.js');

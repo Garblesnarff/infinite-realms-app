@@ -60,6 +60,11 @@ mock.module('../../../services/ai-usage-service.js', () => ({
   },
 }));
 
+// #1344: the handlers re-resolve the plan strictly; the auth stub's
+// plan is what the strict lookup must return here.
+mock.module('../../../lib/user-plan.js', () => ({
+  resolveUserPlanStrict: async () => 'pro',
+}));
 const { imageRoutes } = await import('../images.js');
 
 const app = new Elysia().use(imageRoutes);
