@@ -354,7 +354,8 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
               if (!row) throw new Error('Failed to create chronicle row');
               return [row];
             });
-            if (failedRow) await persistChronicleFailure(db, failedRow.id, planErr);
+            if (failedRow)
+              await persistChronicleFailure(db, failedRow.id, planErr, 'plan_lookup_failed');
           } catch (rowErr) {
             logger.error({
               msg: '[Sessions] Chronicle failure row insert failed',

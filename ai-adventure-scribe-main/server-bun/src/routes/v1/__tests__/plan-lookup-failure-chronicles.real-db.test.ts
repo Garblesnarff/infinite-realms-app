@@ -156,7 +156,7 @@ describeWithDb(
         .where(eq(sessionChronicles.sessionId, sessionId));
       expect(failedRows).toHaveLength(1);
       expect(failedRows[0].status).toBe('failed');
-      expect(failedRows[0].errorMessage).toContain('plan lookup db unavailable');
+      expect(failedRows[0].errorMessage).toBe('plan_lookup_failed');
       const failedRowId = failedRows[0].id;
 
       // Phase 2: the retry. The same upsert revives the SAME row id — it does not

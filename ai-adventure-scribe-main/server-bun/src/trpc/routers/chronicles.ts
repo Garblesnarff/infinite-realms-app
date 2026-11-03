@@ -22,6 +22,7 @@ import {
   characters,
 } from '../../../../db/schema/index';
 import { planHasPaidFeatures } from '../../../../shared/plan-features.js';
+import { logger } from '../../lib/logger.js';
 import { resolveUserPlanStrict } from '../../lib/user-plan.js';
 import { chronicleGenerator } from '../../services/chronicle-generator.js';
 import { protectedProcedure, publicProcedure, router } from '../trpc.js';
@@ -216,11 +217,18 @@ export const chroniclesRouter = router({
       try {
         userPlan = await resolveUserPlanStrict(ctx.user.userId);
       } catch (planErr) {
+        // Raw error goes to the server log only; the row stores a fixed reason,
+        // never raw error text (a plan-lookup blip must not leak DB internals
+        // into a user-visible row, and the reason must stay greppable).
+        logger.error({
+          msg: '[Chronicles] Plan lookup failed',
+          error: planErr,
+        });
         await ctx.db
           .update(sessionChronicles)
           .set({
             status: 'failed',
-            errorMessage: planErr instanceof Error ? planErr.message : String(planErr),
+            errorMessage: 'plan_lookup_failed',
             updatedAt: new Date(),
           })
           .where(

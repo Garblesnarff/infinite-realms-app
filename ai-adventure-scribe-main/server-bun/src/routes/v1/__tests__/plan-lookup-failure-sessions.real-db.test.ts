@@ -165,7 +165,7 @@ describeWithDb(
           .where(eq(sessionChronicles.sessionId, sessionId));
         expect(rows).toHaveLength(1);
         expect(rows[0].status).toBe('failed');
-        expect(rows[0].errorMessage).toContain('plan lookup db unavailable');
+        expect(rows[0].errorMessage).toBe('plan_lookup_failed');
       } finally {
         planThrow.enabled = false;
       }
