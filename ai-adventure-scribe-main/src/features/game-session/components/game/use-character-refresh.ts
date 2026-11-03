@@ -62,10 +62,13 @@ export function useCharacterRefreshOnCombatUpdate(
     // publishes character_state_updated for those writes and the session
     // socket forwards it as this event.
     window.addEventListener('character-state-updated', refreshCharacter);
+    // #1357: the session socket reopened after a drop; events sent while it was closed are lost.
+    window.addEventListener('session-socket-reconnected', refreshCharacter);
     return () => {
       cancelled = true;
       window.removeEventListener('combat-state-updated', refreshCharacter);
       window.removeEventListener('character-state-updated', refreshCharacter);
+      window.removeEventListener('session-socket-reconnected', refreshCharacter);
     };
   }, [characterId, characterDispatch, userId]);
 }
