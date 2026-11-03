@@ -22,6 +22,7 @@ import {
 import { PLAYER_INPUT_MAX_CHARS } from '../../../../shared/player-input-cap.js';
 import { authenticateRequest, type AuthUser } from '../../lib/auth.js';
 import { logger } from '../../lib/logger.js';
+import { resolveUserPlanStrict } from '../../lib/user-plan.js';
 import { isAdmin } from '../../middleware/admin.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { AIUsageService, type UsageType } from '../../services/ai-usage-service.js';
@@ -553,17 +554,29 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       return { error: error || 'Unauthorized' };
     }
 
+    // The plan lookup inside authenticateRequest fails open to 'free' (#1344):
+    // re-resolve strictly so a DB blip is a 503, never a Free gate for a paying
+    // player. Healthy lookups hit the plan cache populated above, not the DB.
+    let plan: string;
+    try {
+      plan = await resolveUserPlanStrict(user.userId);
+    } catch (err) {
+      logger.error({ msg: 'LLM_QUOTA_PLAN_LOOKUP_ERROR', error: err });
+      set.status = 503;
+      return { error: 'Plan lookup unavailable' };
+    }
+
     try {
       const quotaStatus = await AIUsageService.getQuotaStatus({
         userId: user.userId,
-        plan: user.plan,
+        plan,
         type: 'llm',
       });
       // Account page display: every quota (messages, images, voice in
       // characters) from the same quota config, in one response (#2510).
       const all = await AIUsageService.getAllQuotaStatuses({
         userId: user.userId,
-        plan: user.plan,
+        plan,
       });
       return { ...quotaStatus, quotas: all.quotas };
     } catch (err) {
