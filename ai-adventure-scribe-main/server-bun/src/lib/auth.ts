@@ -8,11 +8,10 @@
  * propagation issues.
  */
 
-import { sql } from './db.js';
 import { getBearerToken } from './jwt.js';
 import { logger } from './logger.js';
 import { verifyTestAccessToken } from './test-auth.js';
-import { UserPlanCache } from './user-plan-cache.js';
+import { resolveUserPlan } from './user-plan.js';
 import { verifyWorkOSToken } from '../services/workos.js';
 
 export interface AuthUser {
@@ -27,26 +26,13 @@ export interface AuthResult {
 }
 
 /**
- * Resolve user's subscription plan from database
+ * Plan resolution lives in ./user-plan.js (split out so routes needing a
+ * fail-closed lookup don't import a new name from this wholesale-mocked module).
+ * resolveUserPlan is re-exported here so existing import paths keep working;
+ * resolveUserPlanStrict is deliberately NOT re-exported — import it from
+ * ./user-plan.js, so no new name from this mocked module is ever imported.
  */
-export async function resolveUserPlan(userId: string): Promise<string> {
-  // ⚡ Bolt: Check in-memory cache first to avoid redundant O(1) query per request
-  const cachedPlan = UserPlanCache.get(userId);
-  if (cachedPlan) return cachedPlan;
-
-  try {
-    const rows = await sql`SELECT plan FROM users WHERE id = ${userId} LIMIT 1`;
-    if (rows?.[0]?.plan) {
-      const plan = String(rows[0].plan).toLowerCase();
-      // ⚡ Bolt: Cache the result for 5 minutes
-      UserPlanCache.set(userId, plan);
-      return plan;
-    }
-  } catch (e) {
-    logger.warn({ error: e }, 'Failed to resolve user plan from database:');
-  }
-  return 'free';
-}
+export { resolveUserPlan } from './user-plan.js';
 
 /**
  * Authenticate request and return user.
