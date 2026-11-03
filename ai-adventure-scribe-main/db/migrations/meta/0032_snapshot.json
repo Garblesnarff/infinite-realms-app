@@ -5249,6 +5249,12 @@
       "name": "ai_usage",
       "schema": "",
       "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
         "org_id": {
           "name": "org_id",
           "type": "text",
