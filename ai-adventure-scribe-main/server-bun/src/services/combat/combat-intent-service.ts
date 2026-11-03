@@ -128,6 +128,8 @@ export type CombatIntent =
       d20?: number;
       /** Both popup dice `[kept, dropped]` when it rolled two for advantage/disadvantage (#263). */
       d20Rolls?: [number, number];
+      /** #1362: the slot a Paladin spends on Divine Smite if this melee attack hits. */
+      divineSmiteSlotLevel?: number;
     }
   | {
       type: 'spell';
@@ -1487,6 +1489,7 @@ export async function executeCombatIntent(
               disadvantage: intent.disadvantage,
               providedD20: intent.d20,
               providedD20Rolls: intent.d20Rolls,
+              divineSmiteSlotLevel: intent.divineSmiteSlotLevel,
             } satisfies AttackRollInput,
             userId,
           );

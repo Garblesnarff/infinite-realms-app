@@ -55,6 +55,9 @@ const attackFields = {
   // The popup's dropped die, so the log can name both dice (#263 CB-028). Absent for a
   // hand-entered die, which has no dropped face, and for engine rolls.
   d20Rolls: d20Pair,
+  // #1362: Divine Smite's slot level, spent only if the attack hits. Bounded to the spell slot
+  // levels a character can hold.
+  divineSmiteSlotLevel: t.Optional(t.Number({ minimum: 1, maximum: 9 })),
 };
 
 const spellFields = {

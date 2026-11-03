@@ -596,6 +596,12 @@ export interface AttackRollInput {
    * only difference from an ordinary attack the rules make.
    */
   isReaction?: boolean;
+  /**
+   * #1362: the spell slot level a Paladin spends on Divine Smite if this melee attack hits.
+   * The slot is spent only on a hit, after the hit is known; a miss spends nothing. Absent
+   * means no Smite.
+   */
+  divineSmiteSlotLevel?: number;
 }
 
 /**
