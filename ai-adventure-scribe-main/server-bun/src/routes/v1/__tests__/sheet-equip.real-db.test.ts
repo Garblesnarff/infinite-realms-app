@@ -86,9 +86,13 @@ describeWithDb('sheet Equip PUT (#711)', () => {
     const pipeline = await importWithRealDb(async () => {
       const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');
       const { charactersRoutes } = await import('../characters.ts');
-      return { createRequestPipelineApp, charactersRoutes };
+      const { issue1784DataRoutes } = await import('../issue-1784-data.ts');
+      return { createRequestPipelineApp, charactersRoutes, issue1784DataRoutes };
     });
-    app = pipeline.createRequestPipelineApp().use(pipeline.charactersRoutes);
+    app = pipeline
+      .createRequestPipelineApp()
+      .use(pipeline.charactersRoutes)
+      .use(pipeline.issue1784DataRoutes);
   });
 
   afterAll(async () => {
@@ -109,6 +113,14 @@ describeWithDb('sheet Equip PUT (#711)', () => {
         body: body !== undefined ? JSON.stringify(body) : undefined,
       }),
     );
+  }
+
+  type EquipmentRow = { item_name: string; quantity: number };
+
+  async function equipmentRows(id: string): Promise<EquipmentRow[]> {
+    const res = await app.handle(new Request(`http://localhost/v1/characters/${id}/equipment`));
+    expect(res.status).toBe(200);
+    return (await res.json()) as EquipmentRow[];
   }
 
   it('wears the shield at AC 14, then Chain Mail, shield and Defense at AC 19', async () => {
@@ -163,5 +175,68 @@ describeWithDb('sheet Equip PUT (#711)', () => {
     expect(rowsAfterArmor.find((row) => row.itemName === 'Chain Mail')?.equipped).toBe(true);
     expect(rowsAfterArmor.find((row) => row.itemName === 'Shield')?.equipped).toBe(true);
     expect(rowsAfterArmor.find((row) => row.itemName === 'Longsword')?.equipped).toBe(false);
+  });
+
+  it('keeps a spent-to-zero equipment row at 0 across save and reload (#1327 item 3)', async () => {
+    // The spend leaves a quantity-0 row; the sheet PUT (save) must not
+    // resurrect it to 1, and the equipment GET (reload) must not either.
+    // The server update path preserves 0 (character-service.ts: only
+    // null/undefined fall back to 1) and the read path does the same
+    // (issue-1784-data-service.ts:295), so this pins the server half of
+    // the round-trip; the client half is pinned by the unit tests.
+    const created = await send('/v1/characters', 'POST', {
+      ...fighterPayload,
+      name: `Zero-row sheet ${testId('1327')}`,
+      equipment: sheetEquipWireBody('00000000-0000-0000-0000-000000000000', []),
+    });
+    const createdText = await created.text();
+    expect(created.status, createdText.slice(0, 400)).toBe(201);
+    const { id } = JSON.parse(createdText) as { id: string };
+    createdIds.push(id);
+
+    const zeroRow = {
+      character_id: id,
+      item_name: 'Arrows',
+      item_type: 'equipment',
+      quantity: 0,
+      equipped: false,
+      is_magic: false,
+      magic_bonus: 0,
+      magic_properties: null,
+      requires_attunement: false,
+      is_attuned: false,
+      attunement_requirements: null,
+      magic_item_type: null,
+      magic_item_rarity: 'common',
+      magic_effects: null,
+    };
+    const save = async (): Promise<void> => {
+      const res = await send(`/v1/characters/${id}`, 'PUT', {
+        equipment: [...sheetEquipWireBody(id, []), zeroRow],
+      });
+      const text = await res.text();
+      expect(res.status, text.slice(0, 400)).toBe(200);
+    };
+    const dbQuantityOf = async (name: string): Promise<number | null | undefined> => {
+      const rows = await db
+        .select()
+        .from(characterEquipment)
+        .where(eq(characterEquipment.characterId, id));
+      return rows.find((row) => row.itemName === name)?.quantity;
+    };
+
+    // First save inserts the zero row; reload through the real GET route.
+    await save();
+    expect(await dbQuantityOf('Arrows')).toBe(0);
+    const reloaded = await equipmentRows(id);
+    expect(reloaded.find((row) => row.item_name === 'Arrows')?.quantity).toBe(0);
+    // The untouched rows keep quantity 1.
+    expect(reloaded.find((row) => row.item_name === 'Chain Mail')?.quantity).toBe(1);
+
+    // A second save updates (rather than inserts) the row — still 0.
+    await save();
+    expect(await dbQuantityOf('Arrows')).toBe(0);
+    const reloadedAgain = await equipmentRows(id);
+    expect(reloadedAgain.find((row) => row.item_name === 'Arrows')?.quantity).toBe(0);
   });
 });
