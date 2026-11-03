@@ -88,6 +88,7 @@ const {
   gameSessions,
   sessionTrackers,
   starterCampaigns,
+  users,
 } = await importWithRealDb(() => import('../../../../db/schema/index.js'));
 
 if (!hasRealDb) {
@@ -223,6 +224,13 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
 
   beforeAll(async () => {
     if (!hasRealDb) return;
+    // #1344: the generate handler re-resolves the plan strictly from the DB,
+    // so the auth stub's 'tester' plan needs a matching users row — otherwise
+    // the strict read returns 'free' and the ending turns 402.
+    await database
+      .insert(users)
+      .values({ id: userId, email: 'story-ending@example.test', plan: 'tester' })
+      .onConflictDoUpdate({ target: users.id, set: { plan: 'tester' } });
     const starterId = testId('the-gardeners-heir');
     await database.insert(starterCampaigns).values({
       id: starterId,
@@ -267,6 +275,10 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
       await database
         .delete(campaigns)
         .where(eq(campaigns.userId, userId))
+        .catch(() => {});
+      await database
+        .delete(users)
+        .where(eq(users.id, userId))
         .catch(() => {});
       const starterId = testId('the-gardeners-heir');
       await database
@@ -1214,6 +1226,12 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
   beforeAll(async () => {
     if (!hasRealDb) return;
     database = realDb();
+    // #1344: same strict-plan seeding as block 1 — the auth stub reports
+    // 'tester', so the users row must carry 'tester' or generate 402s.
+    await database
+      .insert(users)
+      .values({ id: userId, email: 'story-tracker@example.test', plan: 'tester' })
+      .onConflictDoUpdate({ target: users.id, set: { plan: 'tester' } });
     for (const [key, starter, name, atLimit] of [
       ['breath', 'the-breath-clock', 'Breath', 'climax'],
       ['score', 'the-score-clock', 'Score', 'ending'],
@@ -1284,6 +1302,10 @@ describeWithDb('#1042 story trackers: the engine stores the clock and enforces i
       await database
         .delete(campaigns)
         .where(eq(campaigns.userId, userId))
+        .catch(() => {});
+      await database
+        .delete(users)
+        .where(eq(users.id, userId))
         .catch(() => {});
       for (const starterId of [
         starterIds.breath,

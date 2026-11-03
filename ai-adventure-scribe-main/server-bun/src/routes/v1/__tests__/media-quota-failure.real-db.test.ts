@@ -52,15 +52,35 @@ const USER_PREFIX = 'media-quota-user';
 mock.module('../../../lib/auth.js', () => ({
   authenticateRequest: async (request: Request) => {
     const token = request.headers.get('authorization')?.replace(/^Bearer /, '') ?? '';
-    return token.startsWith(USER_PREFIX)
-      ? { user: { userId: token, email: 'quota@example.test', plan: planOf(token) }, error: null }
-      : { user: null, error: 'Unauthorized' };
+    if (!token.startsWith(USER_PREFIX)) {
+      return { user: null, error: 'Unauthorized' };
+    }
+    await seedUserRow(token, planOf(token));
+    return {
+      user: { userId: token, email: 'quota@example.test', plan: planOf(token) },
+      error: null,
+    };
   },
 }));
 
 /** Token format: `media-quota-user-<plan>-<id>`. */
 function planOf(token: string): string {
   return token.startsWith(`${USER_PREFIX}-pro-`) ? 'pro' : 'free';
+}
+
+/**
+ * #1344: the image/llm/voice handlers re-resolve the plan strictly from the DB,
+ * so a test token with no users row would resolve to 'free' regardless of the
+ * auth stub's plan. Seed the row here, in the auth path itself, so the row
+ * exists before any handler's strict resolve runs — for every route, with the
+ * exact plan the stub reports. Idempotent: repeated requests upsert the same plan.
+ */
+async function seedUserRow(userId: string, plan: string): Promise<void> {
+  if (!hasRealDb) return;
+  await realDb().execute(
+    sql`INSERT INTO users (id, email, plan) VALUES (${userId}, 'quota@example.test', ${plan})
+        ON CONFLICT (id) DO UPDATE SET plan = EXCLUDED.plan`,
+  );
 }
 
 const { createRequestPipelineApp } = await importWithRealDb(
@@ -79,8 +99,9 @@ const { resetProviderKeyLimitForTests } = await importWithRealDb(
 /** Stands in for requireAuth (which verifies a WorkOS JWT) so the voice route sees a user. */
 const voiceAuth = new Elysia({ name: 'media-quota-stub-voice-auth' }).derive(
   { as: 'scoped' },
-  ({ request }) => {
+  async ({ request }) => {
     const token = request.headers.get('authorization')?.replace(/^Bearer /, '') ?? '';
+    await seedUserRow(token, planOf(token));
     return { user: { userId: token, email: 'quota@example.test', plan: planOf(token) } };
   },
 );
@@ -230,6 +251,7 @@ describeWithDb('fix #2676: media calls and quota today (real routes, real ai_usa
     const database = realDb();
     for (const id of createdUserIds) {
       await database.execute(sql`DELETE FROM ai_usage WHERE user_id = ${id}`);
+      await database.execute(sql`DELETE FROM users WHERE id = ${id}`);
     }
     await closeRealDb();
   });
