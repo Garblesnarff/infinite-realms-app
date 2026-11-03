@@ -1,8 +1,26 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { buildSavedPlaythroughs } from '../saved-playthroughs';
+import { buildSavedPlaythroughs, loadPlaythroughCharacters } from '../saved-playthroughs';
 import { SavedPlaythroughList } from '../SavedPlaythroughList';
+
+const listCharacters = vi.hoisted(() =>
+  vi.fn(async function (this: { listCharacters?: unknown }, campaignId: string) {
+    if (campaignId !== 'camp-9' || typeof this.listCharacters !== 'function') {
+      throw new Error('listCharacters was called without its client');
+    }
+    return [
+      {
+        id: 'hero-1',
+        stats: { current_hit_points: 12, max_hit_points: 20, vital_state: 'alive' },
+      },
+    ];
+  }),
+);
+
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: { listCharacters },
+}));
 
 const NOW = Date.parse('2026-11-03T12:00:00.000Z');
 const hoursAgo = (hours: number): string => new Date(NOW - hours * 60 * 60 * 1000).toISOString();
@@ -86,5 +104,31 @@ describe('Choose a saved playthrough (#1349)', () => {
     expect(buttons[2]).toHaveTextContent('last played 10 days ago');
     expect(buttons[2]).not.toHaveTextContent('Finished');
     expect(buttons[2]).not.toHaveTextContent('Fallen');
+  });
+
+  it('puts HP from listCharacters onto the row', async () => {
+    const characters = await loadPlaythroughCharacters('camp-9');
+    const rows = buildSavedPlaythroughs({
+      starterCampaignId: 'c1',
+      heroName: 'Bram',
+      campaignId: 'camp-9',
+      sessions: [
+        {
+          starter_campaign_id: 'c1',
+          character_id: 'hero-1',
+          character: { name: 'Bram' },
+          status: 'active',
+          session_number: 1,
+          updated_at: hoursAgo(1),
+        },
+      ],
+      characters,
+    });
+
+    expect(listCharacters).toHaveBeenCalledWith('camp-9');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ hpCurrent: 12, hpMax: 20, fallen: false });
+    render(<SavedPlaythroughList rows={rows} now={NOW} onChoose={vi.fn()} />);
+    expect(screen.getByRole('button', { name: /HP 12\/20/ })).toBeInTheDocument();
   });
 });

@@ -131,8 +131,16 @@ export const buildSavedPlaythroughs = (input: {
   }
 
   rows.sort((a, b) => {
-    const aTime = a.lastPlayedAt ? Date.parse(a.lastPlayedAt) : Number.NEGATIVE_INFINITY;
-    const bTime = b.lastPlayedAt ? Date.parse(b.lastPlayedAt) : Number.NEGATIVE_INFINITY;
+    const playedAt = (iso: string | null): number | null => {
+      if (!iso) return null;
+      const ms = Date.parse(iso);
+      return Number.isNaN(ms) ? null : ms;
+    };
+    const aTime = playedAt(a.lastPlayedAt);
+    const bTime = playedAt(b.lastPlayedAt);
+    if (aTime === null && bTime === null) return 0;
+    if (aTime === null) return 1;
+    if (bTime === null) return -1;
     return bTime - aTime;
   });
   return rows;
@@ -170,10 +178,9 @@ export const playthroughLabel = (row: SavedPlaythrough, now: number): string => 
 
 /** Character list for HP and fallen. Missing client or a failed request leaves HP blank. */
 export const loadPlaythroughCharacters = async (campaignId: string): Promise<unknown[]> => {
-  const list = userDataApi.listCharacters;
-  if (typeof list !== 'function') return [];
+  if (typeof userDataApi.listCharacters !== 'function') return [];
   try {
-    const rows: unknown = await list(campaignId);
+    const rows: unknown = await userDataApi.listCharacters(campaignId);
     return Array.isArray(rows) ? rows : [];
   } catch {
     return [];
