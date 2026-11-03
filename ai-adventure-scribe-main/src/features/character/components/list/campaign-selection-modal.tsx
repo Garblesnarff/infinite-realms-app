@@ -55,10 +55,74 @@ const CampaignSelectionModal: React.FC<CampaignSelectionModalProps> = ({
   } = useCampaignsList({ enabled: isOpen, select: selectActiveCampaigns });
 
   /**
-   * Handles starting a new game session
-   * Creates session and navigates to campaign view
+   * Handles starting a game session.
+   *
+   * #1355: Play must continue the pair's existing playthrough, not always
+   * start a fresh one. A create with no session_number lands as session 1
+   * (buildSessionInsertValues defaults it), so the game route never offers
+   * the saved playthrough and the "Rest first?" gate (session_number > 1)
+   * never fires. Before creating, page the pair's sessions:
+   * - an active session resumes exactly (creating would retire it
+   *   server-side);
+   * - a completed session continues through the game route, which creates
+   *   the N+1 continuation itself — the same path premade Play-as uses —
+   *   so "Rest first?" fires below max HP. The chain's starter link rides
+   *   along when the latest completed row carries one.
+   * - no sessions at all keeps the old create + hub navigation.
+   * A failed session read fails closed with a toast and no create: creating
+   * blind would strand the unread playthrough behind a fresh session 1.
    */
-  const handleStartSession = async (campaignId: string) => {
+  const handleStartSession = async (campaignId: string): Promise<void> => {
+    try {
+      const sessions: unknown[] = [];
+      const pageSize = 100;
+      for (let offset = 0; ; offset += pageSize) {
+        const page = await userDataApi.listSessions({
+          campaignId,
+          characterId,
+          limit: pageSize,
+          offset,
+        });
+        sessions.push(...page);
+        if (page.length < pageSize) break;
+      }
+      const asRecord = (value: unknown): Record<string, unknown> | null =>
+        typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null;
+      const rows = sessions
+        .map(asRecord)
+        .filter((row): row is Record<string, unknown> => row !== null)
+        // Highest session number first: the chain's latest row carries the
+        // starter link, whatever order the list endpoint returns.
+        .sort(
+          (a, b) =>
+            (typeof b.session_number === 'number' ? b.session_number : 0) -
+            (typeof a.session_number === 'number' ? a.session_number : 0),
+        );
+      const active = rows.find((row) => row.status === 'active');
+      if (active && typeof active.id === 'string') {
+        navigate(`/app/game/${campaignId}?character=${characterId}&session=${active.id}`);
+        return;
+      }
+      const completed = rows.find((row) => row.status === 'completed');
+      if (completed) {
+        const starter =
+          typeof completed.starter_campaign_id === 'string' &&
+          completed.starter_campaign_id.length > 0
+            ? `&starterCampaign=${encodeURIComponent(completed.starter_campaign_id)}`
+            : '';
+        navigate(`/app/game/${campaignId}?character=${characterId}${starter}`);
+        return;
+      }
+    } catch (error) {
+      logger.error('Error finding existing sessions:', error);
+      toast({
+        title: 'Error',
+        description: 'Could not find your saved playthrough. Try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       logger.info('Starting session with character:', characterId);
 
