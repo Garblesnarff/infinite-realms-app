@@ -57,6 +57,13 @@ vi.mock('@/services/auth/TokenService', () => ({
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: vi.fn(() => ({ userPlan: 'pro' })),
+  // #1239: the end screen reads the plan through useOptionalAuth. This file
+  // mocks the module, so the export has to exist or the completion screen throws.
+  useOptionalAuth: vi.fn(() => ({
+    userPlan: 'pro',
+    userPlanLoading: false,
+    userPlanError: false,
+  })),
 }));
 
 vi.mock('@/contexts/CombatContext', () => ({
@@ -186,10 +193,7 @@ describe('one-shot ending on the streamed path reaches the end-state screen (#10
     const summary = result.current.campaignCompletedState!.summary;
     const { rerender } = render(
       <MemoryRouter>
-        <CampaignCompleteEndState
-          summary={summary}
-          chooseHeroHref="/app/characters"
-        />
+        <CampaignCompleteEndState summary={summary} chooseHeroHref="/app/characters" />
       </MemoryRouter>,
     );
     expect(screen.getByRole('heading', { name: /adventure complete/i })).toBeInTheDocument();
@@ -201,10 +205,7 @@ describe('one-shot ending on the streamed path reaches the end-state screen (#10
     sheetHolder.current = { experience: RUN_XP };
     rerender(
       <MemoryRouter>
-        <CampaignCompleteEndState
-          summary={summary}
-          chooseHeroHref="/app/characters"
-        />
+        <CampaignCompleteEndState summary={summary} chooseHeroHref="/app/characters" />
       </MemoryRouter>,
     );
     expect(screen.getByTestId('completion-screen-experience')).toHaveTextContent(

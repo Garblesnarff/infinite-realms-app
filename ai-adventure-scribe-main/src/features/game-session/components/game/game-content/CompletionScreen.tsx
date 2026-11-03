@@ -21,6 +21,10 @@ interface CampaignCompleteEndStateProps {
   chooseHeroPending?: boolean;
   /** Read-only session log rendered inside the end state. */
   storyContent?: React.ReactNode;
+  /** #1239: see CampaignEndState. Omitted means the hero is not a premade. */
+  characterId?: string | null;
+  premade?: boolean;
+  premadeKept?: boolean;
 }
 
 export const CampaignCompleteEndState: React.FC<CampaignCompleteEndStateProps> = ({
@@ -33,6 +37,9 @@ export const CampaignCompleteEndState: React.FC<CampaignCompleteEndStateProps> =
   chooseHeroHref,
   chooseHeroPending,
   storyContent,
+  characterId,
+  premade,
+  premadeKept,
 }) => {
   // #1084: the live end state passes no experience; read the run's XP from the loaded sheet.
   // #1161: the live screen mounts before the ending turn's sheet refresh lands
@@ -50,9 +57,9 @@ export const CampaignCompleteEndState: React.FC<CampaignCompleteEndStateProps> =
   const [mountCharacter] = React.useState(contextCharacter);
   const sheetRefreshed = experience !== undefined || contextCharacter !== mountCharacter;
   const displayExperience = sheetRefreshed
-    ? (experience !== undefined
+    ? experience !== undefined
       ? experience
-      : (contextCharacter?.experience ?? null))
+      : (contextCharacter?.experience ?? null)
     : null;
   return (
     <CampaignEndState
@@ -66,6 +73,9 @@ export const CampaignCompleteEndState: React.FC<CampaignCompleteEndStateProps> =
       chooseHeroHref={chooseHeroHref}
       chooseHeroPending={chooseHeroPending}
       storyContent={storyContent}
+      characterId={characterId}
+      premade={premade}
+      premadeKept={premadeKept}
     />
   );
 };

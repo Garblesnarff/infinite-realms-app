@@ -150,6 +150,11 @@ function FallenEndStateWithCharacter({
       })}
       chooseHeroPending={Boolean(sessionData.starter_campaign_id) && starterCampaignsLoading}
       storyContent={<FallenStoryLog />}
+      characterId={characterState.character?.id ?? null}
+      // #1239: "chose to keep" means a copy on the roster. This character is
+      // that copy, including a starter run, so the offer shows.
+      premade={false}
+      premadeKept={false}
     />
   );
 }
@@ -185,6 +190,11 @@ function CampaignCompleteEndStateWithCharacter({
       })}
       chooseHeroPending={Boolean(sessionData.starter_campaign_id) && starterCampaignsLoading}
       storyContent={<FallenStoryLog />}
+      characterId={characterState.character?.id ?? null}
+      // #1239: "chose to keep" means a copy on the roster. This character is
+      // that copy, including a starter run, so the offer shows.
+      premade={false}
+      premadeKept={false}
     />
   );
 }
