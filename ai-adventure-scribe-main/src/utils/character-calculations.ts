@@ -14,6 +14,7 @@ import { FULL_CASTER_SLOTS } from '../../shared/spell-slot-tables';
 import { findSrdClass } from '../../shared/srd-class-data';
 import {
   applyMovementSpeedModifiers,
+  armorMovementPenalty,
   isExplicitStoredSpeed,
   resolveCharacterCombatSpeed,
 } from '../../shared/srd-race-speed-data';
@@ -262,6 +263,19 @@ export const calculatePassivePerception = (
   return 10 + (mods['Perception']?.modifier || 0);
 };
 
+const movementEquipment = (character: Character) => {
+  const items =
+    character.inventory?.map((item) => ({
+      item_name: item.itemName || item.itemId,
+      item_type: item.itemType,
+      equipped: item.equipped,
+    })) ?? [];
+  const legacyArmor = character.equippedArmor && EQUIPMENT_LOOKUP.get(character.equippedArmor);
+  if (legacyArmor && !items.some((item) => item.equipped && item.item_type === 'armor'))
+    items.push({ item_name: legacyArmor.name, item_type: 'armor', equipped: true });
+  return items;
+};
+
 export const getBaseSpeed = (character: Character): number => {
   const stats = Array.isArray(character.character_stats)
     ? character.character_stats[0]
@@ -278,11 +292,7 @@ export const getBaseSpeed = (character: Character): number => {
     feats: character.feats,
     strength: character.abilityScores?.strength?.score,
     race: character.race?.name,
-    equipment: character.inventory?.map((item) => ({
-      item_name: item.itemName || item.itemId,
-      item_type: item.itemType,
-      equipped: item.equipped,
-    })),
+    equipment: movementEquipment(character),
   });
 };
 
@@ -369,6 +379,17 @@ export const calculateAllCharacterStats = (character: Character): CharacterStats
     ? EQUIPMENT_LOOKUP.get(character.equippedArmor)
     : undefined;
 
+  const stats = Array.isArray(character.character_stats)
+    ? character.character_stats[0]
+    : character.character_stats;
+  const armorSpeedPenalty = isExplicitStoredSpeed(stats?.speed)
+    ? 0
+    : armorMovementPenalty({
+        equipment: movementEquipment(character),
+        strength: character.abilityScores?.strength?.score,
+        race: character.race?.name,
+      });
+
   return {
     proficiencyBonus: pb,
     // Existing-character displays must honor server-authoritative character_stats;
@@ -390,8 +411,8 @@ export const calculateAllCharacterStats = (character: Character): CharacterStats
     carryingCapacity: calculateCarryingCapacity(character),
     baseSpeed: encumbrance.baseSpeed,
     encumbranceLevel: encumbrance.encumbranceLevel,
-    speedPenalty: encumbrance.speedPenalty,
-    armorSpeedPenalty: 0,
+    speedPenalty: encumbrance.speedPenalty + armorSpeedPenalty,
+    armorSpeedPenalty,
     stealthDisadvantage: equippedArmor?.stealthDisadvantage === true,
     totalCarriedWeight: encumbrance.totalWeight,
     passivePerception: calculatePassivePerception(character, skillMods),

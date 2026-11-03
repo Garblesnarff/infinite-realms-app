@@ -149,6 +149,16 @@ export function hasMobileFeat(
   return (features as Record<string, { name?: unknown }>)['feat:mobile']?.name === 'Mobile';
 }
 
+export function armorMovementPenalty(input: MovementSpeedModifiers): number {
+  const worn = describeArmorClass(input.equipment, 0, { warn: () => {} });
+  return worn.armor?.category === 'heavy' &&
+    worn.armor.strengthRequirement &&
+    (input.strength ?? 10) < worn.armor.strengthRequirement &&
+    normalizeName(input.race) !== 'dwarf'
+    ? 10
+    : 0;
+}
+
 /** 2014 walking-speed modifiers, applied after the race base speed. */
 export function applyMovementSpeedModifiers(
   baseSpeed: number,
@@ -180,12 +190,6 @@ export function applyMovementSpeedModifiers(
     speed += monk >= 18 ? 30 : monk >= 14 ? 25 : monk >= 10 ? 20 : monk >= 6 ? 15 : 10;
   }
   if (hasMobileFeat(input.feats, input.classFeatures)) speed += 10;
-  if (
-    heavy &&
-    worn.armor?.strengthRequirement &&
-    (input.strength ?? 10) < worn.armor.strengthRequirement &&
-    normalizeName(input.race) !== 'dwarf'
-  )
-    speed -= 10;
+  speed -= armorMovementPenalty(input);
   return Math.max(0, speed);
 }
