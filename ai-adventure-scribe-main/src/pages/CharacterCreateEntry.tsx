@@ -2,12 +2,15 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import React from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
+import { planHasPaidFeatures } from '../../shared/plan-features';
+
 import CharacterWizard from '@/components/character-creation/character-wizard';
 import { ErrorBoundary } from '@/components/error';
 import { CharacterCreationErrorFallback } from '@/components/error/CharacterCreationErrorFallback';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { isCampaignCharacterFlowEnabled } from '@/config/featureFlags';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { userDataApi } from '@/services/user-data-api';
 
@@ -25,6 +28,7 @@ type CampaignTemplate = {
 const CharacterCreateEntry: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { userPlan, userPlanError, refreshUserPlan } = useAuth();
   const featureOn = isCampaignCharacterFlowEnabled();
   const preselectedCampaign = searchParams.get('campaign');
 
@@ -48,7 +52,10 @@ const CharacterCreateEntry: React.FC = () => {
     queryFn: async () => {
       return userDataApi.listPublicCampaignTemplates() as Promise<CampaignTemplate[]>;
     },
-    enabled: featureOn, // Only run query if feature is enabled
+    // Only run query if feature is enabled AND the plan is paid: the gate
+    // below returns before the picker for free players, so fetching public
+    // templates for them is wasted work.
+    enabled: featureOn && planHasPaidFeatures(userPlan),
   });
 
   const cloneMutation = useMutation<string, Error, string>({
@@ -90,6 +97,72 @@ const CharacterCreateEntry: React.FC = () => {
     },
     [cloneMutation],
   );
+
+  // #1239 item 4: custom hero creation is a Legend feature. The gate shows
+  // here, on the creation entry, before the wizard opens — a free player
+  // never reaches the wizard and loses no work. The plan state machine
+  // follows AccountPage (#351): a known plan always decides, even while a
+  // background refetch is loading or has errored — the last-known plan
+  // stays rendered. Only a null plan splits: an error means unavailable
+  // with a retry, anything else means still loading. Showing the wizard on
+  // an unknown plan would admit a free player; showing the gate would
+  // mislabel a paid player.
+  if (userPlan === null) {
+    if (userPlanError) {
+      return (
+        <div className="container mx-auto px-4 py-8">
+          <Card className="p-6">
+            <h1 className="text-2xl font-semibold mb-2">Plan unavailable</h1>
+            <p className="text-muted-foreground mb-4">
+              We could not load your plan, so character creation is unavailable right now.
+            </p>
+            <Button onClick={() => void refreshUserPlan()}>Retry</Button>
+          </Card>
+        </div>
+      );
+    }
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <p className="text-muted-foreground" role="status">
+          Loading…
+        </p>
+      </div>
+    );
+  }
+
+  if (!planHasPaidFeatures(userPlan)) {
+    // A free player arriving from a campaign goes back to that campaign,
+    // not to the roster — otherwise the campaign context is lost. The
+    // premade path is real, not just copy: /explore is where premade
+    // campaigns and their heroes live, so the gate links there instead of
+    // stranding a new free player between this gate and an empty roster.
+    const backTarget = hasPreselectedCampaign
+      ? `/app/campaigns/${preselectedCampaign}`
+      : '/app/characters';
+    const backLabel = hasPreselectedCampaign ? 'Back to campaign' : 'Back to characters';
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Card className="p-6">
+          <h1 className="text-2xl font-semibold mb-2">
+            Creating your own hero is a Legend feature
+          </h1>
+          <p className="text-muted-foreground mb-4">
+            Legend lets you create custom heroes and keep them across adventures. Premade heroes are
+            free — pick one to start playing right away.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={() => navigate('/app/account')}>Upgrade to Legend</Button>
+            <Button variant="outline" onClick={() => navigate('/explore')}>
+              Browse premade heroes
+            </Button>
+            <Button variant="outline" onClick={() => navigate(backTarget)}>
+              {backLabel}
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   // Render wizard directly if:
   // 1. Feature flag is off (legacy behavior)
