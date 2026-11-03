@@ -180,16 +180,16 @@ describeWithDb('Divine Smite on a melee hit (#1362)', () => {
     return encounter.version;
   };
 
-  // Level 1 only. The check derives the paladin's other slot levels from class progression, so
-  // a row read without a level filter can return a level 2 row.
-  const usedSlots = async (): Promise<number> => {
+  // Reads one slot level. The check derives the paladin's other slot levels from class
+  // progression, so a read without a level filter can return a level 2 row.
+  const usedSlots = async (spellLevel = 1): Promise<number> => {
     const [row] = await db
       .select({ usedSlots: characterSpellSlots.usedSlots })
       .from(characterSpellSlots)
       .where(
         and(
           eq(characterSpellSlots.characterId, characterId),
-          eq(characterSpellSlots.spellLevel, 1),
+          eq(characterSpellSlots.spellLevel, spellLevel),
         ),
       );
     return row?.usedSlots ?? 0;
@@ -254,6 +254,7 @@ describeWithDb('Divine Smite on a melee hit (#1362)', () => {
     expect(outcome!.divineSmiteDamage!).toBeGreaterThanOrEqual(4);
     expect(outcome!.divineSmiteDamage!).toBeLessThanOrEqual(32);
     expect(outcome!.transcriptLines?.join('\n')).toContain('Divine Smite: 4d8 radiant');
+    expect(await usedSlots(2)).toBe(1);
   });
 
   it('refuses a Smite with no slot of that level before any roll, claim or spend', async () => {

@@ -692,10 +692,13 @@ export class CombatAttackService {
     // rolled. Only the spend waits for a hit, so a refused attack costs the actor nothing.
     if (input.divineSmiteSlotLevel !== undefined) {
       const slotLevel = input.divineSmiteSlotLevel;
-      // The same row the spend reads, derived from class progression when missing (#2459), so
-      // the check and useSpellSlot never disagree on where a slot lives.
+      const attackerIsPaladin = !!attackerClassName?.toLowerCase().includes('paladin');
+      const isMeleeWeaponAttack = input.attackType === 'melee' && !weapon.ranged;
+      // The slot row is read only once the Paladin and melee checks pass, so a refused attack
+      // writes no row. It is the row the spend reads, derived from class progression when
+      // missing (#2459), so the check and useSpellSlot never disagree on where a slot lives.
       let slotsRemaining = 0;
-      if (attackerData.participant.characterId) {
+      if (attackerIsPaladin && isMeleeWeaponAttack && attackerData.participant.characterId) {
         try {
           const row = await SpellSlotsService.ensureSpellSlotRow(
             attackerData.participant.characterId,
@@ -708,8 +711,8 @@ export class CombatAttackService {
         }
       }
       const refusal = divineSmiteRefusal({
-        attackerIsPaladin: !!attackerClassName?.toLowerCase().includes('paladin'),
-        isMeleeWeaponAttack: input.attackType === 'melee' && !weapon.ranged,
+        attackerIsPaladin,
+        isMeleeWeaponAttack,
         slotLevel,
         slotsRemaining,
       });
