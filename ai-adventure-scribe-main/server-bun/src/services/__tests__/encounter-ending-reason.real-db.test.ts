@@ -57,14 +57,14 @@ import type { EngineChatLineWriter } from '../engine-chat-line.js';
 const { concludeEncounter, describeCombatEnd, describeDeadCombatants } = await importWithRealDb(
   () => import('../combat/combat-ending.js'),
 );
-const { awardCombatVictoryXp } = await importWithRealDb(() => import('../combat/combat-xp.js'));
+const { awardCombatVictoryXp } = await importWithRealDb(
+  () => import('../combat/combat-xp.js'),
+);
 const { consumeDmTacticalFacts, recordDmTacticalFact } = await importWithRealDb(
   () => import('../combat/tactical-action-service.js'),
 );
 const { saveTacticalMap } = await importWithRealDb(() => import('../combat/tactical-map-store.js'));
-const { awardStoryXp, awardStoryXpOnce } = await importWithRealDb(
-  () => import('../dm/story-xp.js'),
-);
+const { awardStoryXp, awardStoryXpOnce } = await importWithRealDb(() => import('../dm/story-xp.js'));
 const { executeCombatIntent } = await importWithRealDb(
   () => import('../combat/combat-intent-service.js'),
 );
@@ -283,8 +283,7 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
       .where(and(eq(dialogueHistory.sessionId, sid), eq(dialogueHistory.speakerType, 'player')))
       .orderBy(desc(dialogueHistory.createdAt))
       .limit(1);
-    if (!row?.createdAt)
-      throw new Error('[encounter-ending-reason] the player row has no created_at');
+    if (!row?.createdAt) throw new Error('[encounter-ending-reason] the player row has no created_at');
     return row.createdAt;
   };
 
@@ -411,13 +410,15 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
   });
 
   test('the dead are named in the singular and the plural (#919)', () => {
-    expect(describeDeadCombatants(['Monotony Cultist'])).toContain('Monotony Cultist is DEAD');
+    expect(describeDeadCombatants(['Monotony Cultist'])).toContain(
+      'Monotony Cultist is DEAD',
+    );
     const plural = describeDeadCombatants(['Goblin', 'Goblin Chief']);
     expect(plural).toContain('Goblin, Goblin Chief are dead');
     expect(plural).toContain('Do not narrate any of them as alive');
   });
 
-  test("a victory names the dead creature for the DM's next turn (#919)", async () => {
+  test('a victory names the dead creature for the DM\'s next turn (#919)', async () => {
     // Hark D2-006: the fight-over sentence says a hostile fell but never who, and the
     // DM — still holding its pre-kill picture of a wounded creature — narrated the
     // corpse as "barely clinging to its feet" and offered another attack on it. Put
@@ -435,7 +436,9 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
     expect(deadFact).toContain('Do not narrate it as alive');
     expect(deadFact).toContain('do not offer attacks');
     // The hero is standing: never named among the dead.
-    expect(facts.some((fact) => fact.includes('DEAD') && fact.includes('Ending Hero'))).toBe(false);
+    expect(facts.some((fact) => fact.includes('DEAD') && fact.includes('Ending Hero'))).toBe(
+      false,
+    );
   });
 
   test('a creature still standing at the ending is not named dead (#919)', async () => {
@@ -538,8 +541,7 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
     // Filter by source instead of taking the last row: the combat award is the event that
     // was absent before this conclusion and carries the combat source.
     const newCombatEvents = events.filter(
-      (event) =>
-        event.source === 'combat' && !eventsBefore.some((before) => before.id === event.id),
+      (event) => event.source === 'combat' && !eventsBefore.some((before) => before.id === event.id),
     );
     expect(newCombatEvents).toHaveLength(1);
     expect(newCombatEvents[0].xpGained).toBe(150);
@@ -584,7 +586,12 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
     // holds the turn here (initiative 20 over the golem's 10), so this is the player's
     // own end_turn on a live fight. The golem is standing at 2/11 HP with no seated XP,
     // so a misfire would pay the level-3 medium threshold band: 150.
-    await executeCombatIntent(encounterId, { type: 'end_turn', actorId: heroId }, userId, 'player');
+    await executeCombatIntent(
+      encounterId,
+      { type: 'end_turn', actorId: heroId },
+      userId,
+      'player',
+    );
 
     // The fight is untouched: still active, no award, no notice.
     const row = await encounterRow();
@@ -1379,16 +1386,14 @@ describeWithDb('combat victory XP uses the XP seated on each monster (#374)', ()
       .insert(combatParticipants)
       .values(values as never)
       .returning({ id: combatParticipants.id, turnOrder: combatParticipants.turnOrder });
-    await getDb()
-      .insert(combatParticipantStatus)
-      .values(
-        parts.map((part) => ({
-          participantId: part.id,
-          currentHp: 40,
-          maxHp: 40,
-          isConscious: true,
-        })),
-      );
+    await getDb().insert(combatParticipantStatus).values(
+      parts.map((part) => ({
+        participantId: part.id,
+        currentHp: 40,
+        maxHp: 40,
+        isConscious: true,
+      })),
+    );
 
     await concludeEncounter(encounterId, sessionId, userId, 'last_hostile_defeated');
     return { sessionId, encounterId, characterIds };
@@ -1404,23 +1409,19 @@ describeWithDb('combat victory XP uses the XP seated on each monster (#374)', ()
       .from(combatParticipants)
       .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
       .where(inArray(combatEncounters.sessionId, createdSessionIds));
-    await getDb()
-      .delete(combatParticipantStatus)
-      .where(
-        inArray(
-          combatParticipantStatus.participantId,
-          rows.map((row) => row.id),
-        ),
-      );
+    await getDb().delete(combatParticipantStatus).where(
+      inArray(
+        combatParticipantStatus.participantId,
+        rows.map((row) => row.id),
+      ),
+    );
     for (const row of await getDb()
       .select({ id: combatEncounters.id })
       .from(combatEncounters)
       .where(inArray(combatEncounters.sessionId, createdSessionIds))) {
       await getDb().delete(combatParticipants).where(eq(combatParticipants.encounterId, row.id));
     }
-    await getDb()
-      .delete(combatEncounters)
-      .where(inArray(combatEncounters.sessionId, createdSessionIds));
+    await getDb().delete(combatEncounters).where(inArray(combatEncounters.sessionId, createdSessionIds));
     await getDb().delete(gameSessions).where(inArray(gameSessions.id, createdSessionIds));
     await getDb().delete(characters).where(inArray(characters.id, createdCharacterIds));
     await getDb().delete(campaigns).where(eq(campaigns.id, campaignId));
@@ -1455,11 +1456,7 @@ describeWithDb('combat victory XP uses the XP seated on each monster (#374)', ()
   });
 
   test('seated NPC allies do not force the fallback or pollute the award', async () => {
-    const { characterIds } = await seatAndWin({
-      playerCount: 1,
-      monsterXp: [50, 100],
-      npcAllies: 2,
-    });
+    const { characterIds } = await seatAndWin({ playerCount: 1, monsterXp: [50, 100], npcAllies: 2 });
 
     // 50 + 100 = 150 to the one hero. The two 'npc' allies carry NULL xp_value; if the
     // award counted non-player seats as hostiles it would have fallen back to the
@@ -1536,17 +1533,11 @@ describeWithDb('a won fight reads blow first, Victory second (#570)', () => {
       return id;
     };
     const heroCharId = await mkCharacter(testId('victory-hero'));
-    const companionCharId =
-      killer === 'companion' ? await mkCharacter(testId('victory-companion')) : null;
+    const companionCharId = killer === 'companion' ? await mkCharacter(testId('victory-companion')) : null;
 
     const [{ id: sessionId }] = await getDb()
       .insert(gameSessions)
-      .values({
-        campaignId: created.campaignId,
-        characterId: heroCharId,
-        sessionNumber: 1,
-        status: 'active',
-      })
+      .values({ campaignId: created.campaignId, characterId: heroCharId, sessionNumber: 1, status: 'active' })
       .returning({ id: gameSessions.id });
     created.sessionIds.push(sessionId);
 
@@ -1602,15 +1593,13 @@ describeWithDb('a won fight reads blow first, Victory second (#570)', () => {
     const byOrder = new Map(parts.map((part) => [part.turnOrder, part.id]));
     const killerId = byOrder.get(0)!;
     const golemId = byOrder.get(companionCharId ? 2 : 1)!;
-    await getDb()
-      .insert(combatParticipantStatus)
-      .values([
-        { participantId: killerId, currentHp: 40, maxHp: 40, isConscious: true },
-        ...(companionCharId
-          ? [{ participantId: byOrder.get(1)!, currentHp: 40, maxHp: 40, isConscious: true }]
-          : []),
-        { participantId: golemId, currentHp: 1, maxHp: 11, isConscious: true },
-      ]);
+    await getDb().insert(combatParticipantStatus).values([
+      { participantId: killerId, currentHp: 40, maxHp: 40, isConscious: true },
+      ...(companionCharId
+        ? [{ participantId: byOrder.get(1)!, currentHp: 40, maxHp: 40, isConscious: true }]
+        : []),
+      { participantId: golemId, currentHp: 1, maxHp: 11, isConscious: true },
+    ]);
     return { sessionId, encounterId, killerId, golemId };
   };
 
@@ -1659,39 +1648,28 @@ describeWithDb('a won fight reads blow first, Victory second (#570)', () => {
       .from(combatParticipants)
       .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
       .where(inArray(combatEncounters.sessionId, created.sessionIds));
-    await getDb()
-      .delete(combatParticipantStatus)
-      .where(
-        inArray(
-          combatParticipantStatus.participantId,
-          rows.map((row) => row.id),
-        ),
-      );
+    await getDb().delete(combatParticipantStatus).where(
+      inArray(
+        combatParticipantStatus.participantId,
+        rows.map((row) => row.id),
+      ),
+    );
     for (const row of await getDb()
       .select({ id: combatEncounters.id })
       .from(combatEncounters)
       .where(inArray(combatEncounters.sessionId, created.sessionIds))) {
       await getDb().delete(combatParticipants).where(eq(combatParticipants.encounterId, row.id));
     }
-    await getDb()
-      .delete(combatEncounters)
-      .where(inArray(combatEncounters.sessionId, created.sessionIds));
+    await getDb().delete(combatEncounters).where(inArray(combatEncounters.sessionId, created.sessionIds));
     await getDb().delete(gameSessions).where(inArray(gameSessions.id, created.sessionIds));
-    await getDb()
-      .delete(experienceEvents)
-      .where(inArray(experienceEvents.characterId, created.characterIds));
-    await getDb()
-      .delete(inventoryItems)
-      .where(inArray(inventoryItems.characterId, created.characterIds));
-    await getDb()
-      .delete(characterStats)
-      .where(inArray(characterStats.characterId, created.characterIds));
+    await getDb().delete(experienceEvents).where(inArray(experienceEvents.characterId, created.characterIds));
+    await getDb().delete(inventoryItems).where(inArray(inventoryItems.characterId, created.characterIds));
+    await getDb().delete(characterStats).where(inArray(characterStats.characterId, created.characterIds));
     await getDb().delete(characters).where(inArray(characters.id, created.characterIds));
-    if (created.campaignId)
-      await getDb().delete(campaigns).where(eq(campaigns.id, created.campaignId));
+    if (created.campaignId) await getDb().delete(campaigns).where(eq(campaigns.id, created.campaignId));
   });
 
-  test("the killing blow's engine row is inserted before the Victory notice (player kill)", async () => {
+  test('the killing blow\'s engine row is inserted before the Victory notice (player kill)', async () => {
     const fight = await seedFight('hero');
     const result = await killingBlow(fight);
 
@@ -1723,7 +1701,7 @@ describeWithDb('a won fight reads blow first, Victory second (#570)', () => {
     expect(hero?.damageDealt).toBe(summary.totalDamage);
   });
 
-  test("the killing blow's engine row is inserted before the Victory notice (companion kill)", async () => {
+  test('the killing blow\'s engine row is inserted before the Victory notice (companion kill)', async () => {
     const fight = await seedFight('companion');
     const result = await killingBlow(fight);
 
