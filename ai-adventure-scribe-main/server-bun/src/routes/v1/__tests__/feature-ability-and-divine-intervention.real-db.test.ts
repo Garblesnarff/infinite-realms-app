@@ -150,6 +150,15 @@ describeWithDb('ability-gated features and Divine Intervention (#1232)', () => {
     await closeRealDb();
   });
 
+  // A refused spend must not write a stats row: the lazy row would carry schema-default HP and AC.
+  const statsRowCount = async (characterId: string): Promise<number> =>
+    (
+      await db
+        .select({ id: characterStats.id })
+        .from(characterStats)
+        .where(eq(characterStats.characterId, characterId))
+    ).length;
+
   it('refuses Bardic Inspiration and War Priest when the stats row is gone', async () => {
     const bardId = await create(`Bard ${testId('1232')}`, 'Bard', 1);
     await db.delete(characterStats).where(eq(characterStats.characterId, bardId));
@@ -162,6 +171,7 @@ describeWithDb('ability-gated features and Divine Intervention (#1232)', () => {
     );
     expect(bardicUse.status).toBe(400);
     expect((bardicUse.json as { message?: string }).message).toContain('ability score');
+    expect(await statsRowCount(bardId)).toBe(0);
 
     const clericId = await create(`Cleric ${testId('1232')}`, 'Cleric', 1);
     await db.delete(characterStats).where(eq(characterStats.characterId, clericId));
@@ -189,6 +199,7 @@ describeWithDb('ability-gated features and Divine Intervention (#1232)', () => {
     );
     expect(warPriestUse.status).toBe(400);
     expect((warPriestUse.json as { message?: string }).message).toContain('ability score');
+    expect(await statsRowCount(clericId)).toBe(0);
   });
 
   it('does not refill Divine Intervention for 7 days after a success', async () => {

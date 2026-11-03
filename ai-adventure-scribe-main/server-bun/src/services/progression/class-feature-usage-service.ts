@@ -186,11 +186,19 @@ export class ClassFeatureUsageService {
         .limit(1);
       const score = stats?.[gatedAbility];
       if (typeof score !== 'number') {
+        // Refused, and no stats row is written: a row written here would carry the schema
+        // defaults for HP and AC too (#1232). Rows that are missing are legacy data; the
+        // backfill that writes them is a separate, approved change.
+        logger.warn({
+          msg: 'ABILITY_FEATURE_STATS_ROW_MISSING',
+          characterId,
+          feature: feature.featureName,
+        });
         return {
           success: false,
           usesRemaining: 0,
           effect: '',
-          message: `${feature.featureName} is not spent: its uses depend on an ability score this character has none of`,
+          message: `${feature.featureName} is not spent: its uses depend on an ability score this character has none of. Set the character's ability scores to spend it.`,
         };
       }
     }
