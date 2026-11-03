@@ -12,6 +12,12 @@ import {
 import { ENCUMBRANCE_THRESHOLDS } from '../../shared/carrying-capacity';
 import { FULL_CASTER_SLOTS } from '../../shared/spell-slot-tables';
 import { findSrdClass } from '../../shared/srd-class-data';
+import {
+  applyMovementSpeedModifiers,
+  armorMovementPenalty,
+  isExplicitStoredSpeed,
+  resolveCharacterCombatSpeed,
+} from '../../shared/srd-race-speed-data';
 
 import type { AbilityScores, Character, CharacterClass } from '@/types/character';
 
@@ -90,12 +96,7 @@ export interface EncumbranceSummary {
 }
 
 // Re-export basic calculations for backward compatibility
-export {
-  SKILLS_MAP,
-  calculateProficiencyBonus,
-  calculateHitPoints,
-  calculateCarryingCapacity,
-};
+export { SKILLS_MAP, calculateProficiencyBonus, calculateHitPoints, calculateCarryingCapacity };
 
 // Re-export proficiency calculations for backward compatibility
 export {
@@ -262,8 +263,38 @@ export const calculatePassivePerception = (
   return 10 + (mods['Perception']?.modifier || 0);
 };
 
-export const getBaseSpeed = (character: Character): number =>
-  character.subrace?.speed || character.race?.speed || 30;
+const movementEquipment = (character: Character) => {
+  const items =
+    character.inventory?.map((item) => ({
+      item_name: item.itemName || item.itemId,
+      item_type: item.itemType,
+      equipped: item.equipped,
+    })) ?? [];
+  const legacyArmor = character.equippedArmor && EQUIPMENT_LOOKUP.get(character.equippedArmor);
+  if (legacyArmor && !items.some((item) => item.equipped && item.item_type === 'armor'))
+    items.push({ item_name: legacyArmor.name, item_type: 'armor', equipped: true });
+  return items;
+};
+
+export const getBaseSpeed = (character: Character): number => {
+  const stats = Array.isArray(character.character_stats)
+    ? character.character_stats[0]
+    : character.character_stats;
+  const raceBase = character.subrace?.speed || character.race?.speed || 30;
+  const stored = stats?.speed;
+  if (isExplicitStoredSpeed(stored))
+    return resolveCharacterCombatSpeed(stored, character.race?.name, character.subrace?.name);
+  return applyMovementSpeedModifiers(raceBase, {
+    className: character.class?.name,
+    level: character.level,
+    classLevels: character.classLevels,
+    classFeatures: character.classFeatures,
+    feats: character.feats,
+    strength: character.abilityScores?.strength?.score,
+    race: character.race?.name,
+    equipment: movementEquipment(character),
+  });
+};
 
 export const calculateInventoryWeight = (character: Character): number =>
   character.inventory?.reduce((total, item) => {
@@ -347,11 +378,17 @@ export const calculateAllCharacterStats = (character: Character): CharacterStats
   const equippedArmor = character.equippedArmor
     ? EQUIPMENT_LOOKUP.get(character.equippedArmor)
     : undefined;
-  const strengthScore = character.abilityScores?.strength?.score ?? 10;
-  const armorSpeedPenalty =
-    equippedArmor?.strengthRequirement && strengthScore < equippedArmor.strengthRequirement
-      ? 10
-      : 0;
+
+  const stats = Array.isArray(character.character_stats)
+    ? character.character_stats[0]
+    : character.character_stats;
+  const armorSpeedPenalty = isExplicitStoredSpeed(stats?.speed)
+    ? 0
+    : armorMovementPenalty({
+        equipment: movementEquipment(character),
+        strength: character.abilityScores?.strength?.score,
+        race: character.race?.name,
+      });
 
   return {
     proficiencyBonus: pb,
@@ -361,7 +398,7 @@ export const calculateAllCharacterStats = (character: Character): CharacterStats
     hitDie: `1d${character.class?.hitDie || 8}`,
     armorClass: getCharacterSheetArmorClass(character),
     initiative: character.abilityScores?.dexterity?.modifier || 0,
-    speed: Math.max(0, encumbrance.effectiveSpeed - armorSpeedPenalty),
+    speed: encumbrance.effectiveSpeed,
 
     spellSaveDC: calculateSpellSaveDC(character, pb, spellcastingAbility),
     spellAttackBonus: calculateSpellAttackBonus(character, pb, spellcastingAbility),

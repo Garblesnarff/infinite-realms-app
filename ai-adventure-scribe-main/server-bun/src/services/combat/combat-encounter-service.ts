@@ -41,6 +41,7 @@ import {
   campaigns,
   characters,
   characterStats,
+  characterEquipment,
   npcs,
   sessionCompanions,
   combatParticipantStatus,
@@ -48,7 +49,11 @@ import {
   type CombatEncounter,
   type CombatParticipant,
 } from '../../../../db/schema/index';
-import { resolveCharacterCombatSpeed } from '../../../../shared/srd-race-speed-data';
+import {
+  applyMovementSpeedModifiers,
+  isExplicitStoredSpeed,
+  resolveCharacterCombatSpeed,
+} from '../../../../shared/srd-race-speed-data';
 import { isCompanionsEnabled } from '../../lib/companion-feature.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
@@ -214,7 +219,7 @@ export class CombatEncounterService {
         input.characterId ? [input.characterId] : [],
       );
       const npcIds = participantsToSeat.flatMap((input) => (input.npcId ? [input.npcId] : []));
-      const [characterRows, npcRows] = await Promise.all([
+      const [characterRows, npcRows, equipmentRows] = await Promise.all([
         characterIds.length
           ? db
               .select({ character: characters, stats: characterStats })
@@ -223,6 +228,29 @@ export class CombatEncounterService {
               .where(inArray(characters.id, characterIds))
           : [],
         npcIds.length ? db.select().from(npcs).where(inArray(npcs.id, npcIds)) : [],
+        characterIds.length
+          ? db
+              .select()
+              .from(characterEquipment)
+              .where(
+                and(
+                  inArray(characterEquipment.characterId, characterIds),
+                  userId
+                    ? exists(
+                        db
+                          .select({ id: characters.id })
+                          .from(characters)
+                          .where(
+                            and(
+                              eq(characters.id, characterEquipment.characterId),
+                              or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                            ),
+                          ),
+                      )
+                    : undefined,
+                ),
+              )
+          : [],
       ]);
       const charactersById = new Map(characterRows.map((row) => [row.character.id, row]));
       const npcsById = new Map(npcRows.map((row) => [row.id, row]));
@@ -603,11 +631,30 @@ export class CombatEncounterService {
         // keep the existing chain untouched.
         const speed = Number(
           input.characterId
-            ? resolveCharacterCombatSpeed(
-                character?.stats?.speed,
-                character?.character?.race,
-                character?.character?.subrace,
-              )
+            ? isExplicitStoredSpeed(character?.stats?.speed)
+              ? Number(character?.stats?.speed)
+              : applyMovementSpeedModifiers(
+                  resolveCharacterCombatSpeed(
+                    character?.stats?.speed,
+                    character?.character?.race,
+                    character?.character?.subrace,
+                  ),
+                  {
+                    className: character?.character?.class,
+                    level: character?.character?.level,
+                    classLevels: character?.character?.classLevels,
+                    classFeatures: character?.character?.classFeatures,
+                    strength: character?.stats?.strength,
+                    race: character?.character?.race,
+                    equipment: equipmentRows
+                      .filter((item) => item.characterId === input.characterId)
+                      .map((item) => ({
+                        item_name: item.itemName,
+                        item_type: item.itemType,
+                        equipped: item.equipped,
+                      })),
+                  },
+                )
             : (npcStats.speed ?? fallback.speed),
         );
         // A player who explicitly rolled at the entry prompt owns this d20. Every other seat,

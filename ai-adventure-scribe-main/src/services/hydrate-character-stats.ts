@@ -8,6 +8,7 @@ type StatsRow = {
   wisdom?: number;
   charisma?: number;
   armor_class?: number | null;
+  speed?: number | null;
   max_hit_points?: number | null;
   current_hit_points?: number | null;
 };
@@ -25,6 +26,7 @@ export function hydrateCharacterStats(
     wisdom: stats.wisdom,
     charisma: stats.charisma,
     armor_class: stats.armor_class ?? undefined,
+    speed: stats.speed ?? undefined,
     max_hit_points: stats.max_hit_points ?? undefined,
     current_hit_points: stats.current_hit_points ?? undefined,
   };

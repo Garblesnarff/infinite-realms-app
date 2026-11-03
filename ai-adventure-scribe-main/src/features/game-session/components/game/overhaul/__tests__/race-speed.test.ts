@@ -114,3 +114,66 @@ describe('#1317 the overhaul SPD tile reads the engine race speed', () => {
     expect(buildCharacterSheet(character).speed).toBe(resolveRaceSpeed(race, subrace));
   });
 });
+
+describe('speed modifiers through the game loader (#1317)', () => {
+  beforeEach(() => {
+    getCharacterEquipment.mockResolvedValue([]);
+    getCharacterSpells.mockResolvedValue({ cantrips: [], spells: [] });
+  });
+  it.each([
+    ['Human', 20],
+    ['Dwarf', 25],
+  ])('does not apply chain mail twice for %s', async (race, expected) => {
+    getCharacterEquipment.mockResolvedValue([
+      { item_name: 'Chain Mail', item_type: 'armor', quantity: 1, equipped: true },
+    ]);
+    const character = await loadDriven(race, '');
+    character.equippedArmor = 'chain-mail';
+    expect(buildCharacterSheet(character).speed).toBe(expected);
+  });
+  it('keeps an explicitly stored Barbarian speed final', async () => {
+    getCharacter.mockResolvedValue(
+      storedRow({
+        race: 'Human',
+        class: 'Barbarian',
+        level: 5,
+        character_stats: [{ ...abilityScores, speed: 40 }],
+      }),
+    );
+    const character = await loadCharacterWithSpells('character-id');
+    expect(buildCharacterSheet(character!).speed).toBe(40);
+  });
+  it('hydrates multiclass levels and Mobile before building the actual sheet', async () => {
+    getCharacter.mockResolvedValue(
+      storedRow({
+        race: 'Human',
+        class: 'Fighter',
+        level: 9,
+        class_levels: [
+          { className: 'Barbarian', level: 5 },
+          { className: 'Monk', level: 4 },
+        ],
+        class_features: { 'feat:mobile': { name: 'Mobile' } },
+      }),
+    );
+    const character = await loadCharacterWithSpells('character-id');
+    expect(character).not.toBeNull();
+    expect(buildCharacterSheet(character!).speed).toBe(60);
+  });
+  it('reads equipped heavy armor and the strength penalty from the real inventory mapper', async () => {
+    getCharacter.mockResolvedValue(
+      storedRow({
+        race: 'Human',
+        class: 'Barbarian',
+        level: 5,
+        class_features: { 'feat:mobile': { name: 'Mobile' } },
+      }),
+    );
+    getCharacterEquipment.mockResolvedValue([
+      { item_name: 'Chain Mail', item_type: 'armor', quantity: 1, equipped: true },
+    ]);
+    const character = await loadCharacterWithSpells('character-id');
+    expect(character).not.toBeNull();
+    expect(buildCharacterSheet(character!).speed).toBe(30);
+  });
+});

@@ -38,6 +38,7 @@ export interface SrdArmorEntry {
   name: string;
   category: SrdArmorCategory;
   base: number;
+  strengthRequirement?: number;
 }
 
 /**
@@ -84,9 +85,9 @@ export const SRD_ARMOR: SrdArmorEntry[] = [
   { name: 'Breastplate', category: 'medium', base: 14 },
   { name: 'Half Plate', category: 'medium', base: 15 },
   { name: 'Ring Mail', category: 'heavy', base: 14 },
-  { name: 'Chain Mail', category: 'heavy', base: 16 },
-  { name: 'Splint Armor', category: 'heavy', base: 17 },
-  { name: 'Plate Armor', category: 'heavy', base: 18 },
+  { name: 'Chain Mail', category: 'heavy', base: 16, strengthRequirement: 13 },
+  { name: 'Splint Armor', category: 'heavy', base: 17, strengthRequirement: 15 },
+  { name: 'Plate Armor', category: 'heavy', base: 18, strengthRequirement: 15 },
 ];
 
 /**

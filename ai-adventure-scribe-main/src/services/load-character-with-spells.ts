@@ -13,7 +13,12 @@ import type { Character, CharacterClass, CharacterBackground } from '@/types/cha
 import logger from '@/lib/logger';
 import { issue1784Api } from '@/services/issue-1784-api';
 import { userDataApi } from '@/services/user-data-api';
-import { parseJsonField, resolveRace, resolveSubrace } from '@/utils/character/data-transformers';
+import {
+  parseClassLevels,
+  parseJsonField,
+  resolveRace,
+  resolveSubrace,
+} from '@/utils/character/data-transformers';
 import { equipmentRowsToInventory } from '@/utils/character/equipment-rows-to-inventory';
 import {
   parseOptionalProficiencyList,
@@ -206,6 +211,7 @@ export async function loadCharacterWithSpells(
       ...(fightingStyles.length > 0 ? { fightingStyles } : {}),
       ...(classFeatures ? { classFeatures } : {}),
       level: characterData.level || 1,
+      classLevels: parseClassLevels(characterData.class_levels),
       background: characterBackground as CharacterBackground | null,
       // The server stores and seats this AC value; do not recompute it from
       // ability scores after the character API has already supplied it.

@@ -115,6 +115,9 @@ describe('CombatEncounterService', () => {
         ]),
       );
 
+      // Equipment rows are queried for the seated characters.
+      (db.select as any).mockReturnValueOnce(mockSelectChain([]));
+
       // Mock encounter creation with an explicit INSERT ... VALUES
       (db.insert as any).mockReturnValueOnce({
         values: vi.fn().mockReturnThis(),

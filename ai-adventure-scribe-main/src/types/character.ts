@@ -1,4 +1,5 @@
 import { hasToughFeat } from '../../shared/level-1-hit-points';
+import { hasMobileFeat } from '../../shared/srd-race-speed-data';
 
 import type { OptionSelection } from './enhancement-options';
 import type { Condition, DamageType, VisionInfo, ObscurementLevel } from '@/types/combat';
@@ -446,6 +447,7 @@ export interface Character {
         max_hit_points?: number;
         current_hit_points?: number;
         armor_class?: number;
+        speed?: number;
         /** #2517: the single truth for "dead". */
         vital_state?: string;
         died_at?: string | null;
@@ -460,6 +462,7 @@ export interface Character {
         max_hit_points?: number;
         current_hit_points?: number;
         armor_class?: number;
+        speed?: number;
         /** #2517: the single truth for "dead". */
         vital_state?: string;
         died_at?: string | null;
@@ -516,6 +519,10 @@ export function transformCharacterForStorage(character: Character) {
       ...character.classFeatures,
       ...(hasToughFeat(character.feats, character.classFeatures)
         ? { 'feat:tough': { name: 'Tough', description: '+2 hit points per level' } }
+        : {}),
+      ...(hasMobileFeat(character.feats, character.classFeatures) &&
+      !hasMobileFeat(undefined, character.classFeatures)
+        ? { 'feat:mobile': { name: 'Mobile', description: '+10 feet walking speed' } }
         : {}),
     }),
     // #204: wizard step-12 quirk picks; the loader reads them back into

@@ -311,6 +311,26 @@ describeWithDb('character create every class (#388)', () => {
     await closeRealDb();
   });
 
+  it('persists the actual Mobile writer body through create and reload (#1317)', async () => {
+    const body = JSON.parse(
+      readFileSync(
+        resolve(
+          dirname(fileURLToPath(import.meta.url)),
+          '../../../../../shared/test-fixtures/mobile-1317-create.json',
+        ),
+        'utf8',
+      ),
+    );
+    const created = await request('/v1/characters', 'POST', body);
+    expect(created.status, await created.clone().text()).toBe(201);
+    const { id } = (await created.json()) as { id: string };
+    createdIds.push(id);
+    const loaded = await request(`/v1/characters/${id}`, 'GET');
+    expect(loaded.status).toBe(200);
+    const json = (await loaded.json()) as { class_features: unknown };
+    expect(json.class_features).toMatchObject({ 'feat:mobile': { name: 'Mobile' } });
+  });
+
   it('posts the real Hill Dwarf Fighter payload: 201, 14 HP, one merged Handaxe row', async () => {
     const res = await request('/v1/characters', 'POST', {
       ...fighterPayload,
