@@ -2,7 +2,11 @@ import { ArrowLeft } from 'lucide-react';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { planHasPaidFeatures } from '../../../../../../shared/plan-features';
+
 import { Button } from '@/components/ui/button';
+import { useOptionalAuth } from '@/contexts/AuthContext';
+import CampaignSelectionModal from '@/features/character/components/list/campaign-selection-modal';
 
 export type CampaignEndMode = 'fallen' | 'complete';
 
@@ -31,10 +35,90 @@ export interface CampaignEndStateProps {
   runSummary?: CampaignRunSummary | null;
   identity?: string | null;
   experience?: number | null;
+  /**
+   * #1239: character the "take into a new adventure" offer carries. Legend
+   * opens the campaign picker only when this is set.
+   */
+  characterId?: string | null;
+  /**
+   * #1239: a premade hero. The offer is hidden unless premadeKept. Kept means
+   * a copy on the player's roster. There is no keep column; live end screens
+   * pass premade false because the character on screen is already that copy.
+   */
+  premade?: boolean;
+  premadeKept?: boolean;
 }
 
 export const displayFinalLine = (line: string): string =>
   line.replace(/^⚙\uFE0F?\s*Engine:\s*/, '');
+
+/** #1239: the offer is for a hero the player owns, or a premade they chose to keep. */
+function offerTakeHero(premade: boolean | undefined, premadeKept: boolean | undefined): boolean {
+  return premade !== true || premadeKept === true;
+}
+
+const LEGEND_GATE_SENTENCE = 'Your hero and their story are kept. Legend lets you play them again.';
+
+function TakeHeroOffer({
+  name,
+  characterId,
+  testIdPrefix,
+}: {
+  name: string;
+  characterId?: string | null;
+  testIdPrefix: 'death' | 'completion';
+}): React.ReactElement {
+  const auth = useOptionalAuth();
+  const [pickerOpen, setPickerOpen] = React.useState(false);
+  const [gateOpen, setGateOpen] = React.useState(false);
+  const paid = planHasPaidFeatures(auth?.userPlan);
+  const planLoading = auth?.userPlanLoading === true;
+  const planFailed = auth?.userPlanError === true;
+  const onTake = (): void => {
+    if (paid && characterId) {
+      setGateOpen(false);
+      setPickerOpen(true);
+      return;
+    }
+    setPickerOpen(false);
+    // No provider (the end state can render outside auth in tests) and a
+    // known free plan show the gate. A plan that is still loading, or a
+    // failed plan fetch, must not be painted as Free (#351) and must not
+    // open the picker.
+    if (auth == null || (!planLoading && !planFailed && !paid)) {
+      setGateOpen(true);
+    }
+  };
+  return (
+    <div className="space-y-2">
+      <Button
+        type="button"
+        data-testid={`${testIdPrefix}-screen-take-hero`}
+        variant="outline"
+        className="min-h-11 w-full border-white/20 bg-transparent text-foreground hover:border-infinite-gold/60 hover:bg-infinite-gold/10 hover:text-infinite-gold-light"
+        onClick={onTake}
+      >
+        Take {name} into a new adventure
+      </Button>
+      {gateOpen ? (
+        <p
+          role="status"
+          data-testid="take-hero-legend-gate"
+          className="text-center text-sm leading-relaxed text-white/75"
+        >
+          {LEGEND_GATE_SENTENCE}
+        </p>
+      ) : null}
+      {pickerOpen && characterId ? (
+        <CampaignSelectionModal
+          isOpen
+          onClose={() => setPickerOpen(false)}
+          characterId={characterId}
+        />
+      ) : null}
+    </div>
+  );
+}
 
 function isKnownRunSummary(
   summary: CampaignRunSummary | null | undefined,
@@ -242,6 +326,13 @@ export const CampaignEndState: React.FC<CampaignEndStateProps> = (props) => {
           )}
 
           <div className="space-y-3 text-left">
+            {offerTakeHero(props.premade, props.premadeKept) && (
+              <TakeHeroOffer
+                name={name}
+                characterId={props.characterId}
+                testIdPrefix={isFallen ? 'death' : 'completion'}
+              />
+            )}
             {props.storyContent && (
               <Button
                 data-testid={`${isFallen ? 'death' : 'completion'}-screen-read-story`}

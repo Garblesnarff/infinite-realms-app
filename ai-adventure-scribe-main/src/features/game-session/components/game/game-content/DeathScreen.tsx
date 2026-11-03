@@ -67,6 +67,10 @@ interface FallenEndStateProps {
    * live game (#2520 §4).
    */
   storyContent?: React.ReactNode;
+  /** #1239: see CampaignEndState. Omitted means the hero is not a premade. */
+  characterId?: string | null;
+  premade?: boolean;
+  premadeKept?: boolean;
 }
 
 /**
@@ -85,6 +89,9 @@ export const FallenEndState: React.FC<FallenEndStateProps> = ({
   chooseHeroHref,
   chooseHeroPending,
   storyContent,
+  characterId,
+  premade,
+  premadeKept,
 }) => (
   <CampaignEndState
     mode="fallen"
@@ -96,6 +103,9 @@ export const FallenEndState: React.FC<FallenEndStateProps> = ({
     chooseHeroHref={chooseHeroHref}
     chooseHeroPending={chooseHeroPending}
     storyContent={storyContent}
+    characterId={characterId}
+    premade={premade}
+    premadeKept={premadeKept}
   />
 );
 

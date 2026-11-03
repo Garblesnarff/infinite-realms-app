@@ -102,6 +102,11 @@ describe('CharacterSheet fallen (#2517)', () => {
     expect(navigate).toHaveBeenCalledWith(
       '/explore/abyssal-descent/choose-character?campaignId=camp-1',
     );
+    // #1239: the roster already holds this copy, so the take-hero offer
+    // stays even though the dead run was a starter premade.
+    expect(
+      screen.getByRole('button', { name: 'Take The Scholar into a new adventure' }),
+    ).toBeInTheDocument();
   });
 
   it('#1215: hides the hero pick (never a disabled offer) when the session lookup keeps failing', async () => {

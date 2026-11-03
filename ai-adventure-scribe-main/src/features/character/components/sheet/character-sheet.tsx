@@ -110,6 +110,11 @@ function FallenSheetEndState({ character }: { character: Character }): React.JSX
       chooseHeroPending={
         lookup.status === 'pending' || Boolean(resolved?.starterCampaignId && startersLoading)
       }
+      characterId={character.id}
+      // #1239: a roster copy is a premade the player chose to keep. The
+      // offer shows even when the dead run was a starter.
+      premade={false}
+      premadeKept={false}
     />
   );
 }
