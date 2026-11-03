@@ -386,7 +386,7 @@ describe('CampaignDetailPage heroes (#89)', () => {
     fireEvent.click(screen.getByText('Play as Bram'));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     expect(state.seed).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Saved hero 2 · Session 1' }));
+    fireEvent.click(screen.getByRole('button', { name: /Session 1/ }));
     expect(await screen.findByText('game page')).toBeInTheDocument();
     expect(navTarget.search).toContain('character=hero-b');
   });
