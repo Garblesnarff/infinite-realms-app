@@ -43,7 +43,7 @@ const CharacterList: React.FC = () => {
       (a, b) =>
         (a.created_at ?? '').localeCompare(b.created_at ?? '') || a.id!.localeCompare(b.id!),
     );
-    group.forEach((character, index) => copyLabels.set(character.id!, `Copy ${index + 1}`));
+    group.forEach((character, index) => copyLabels.set(character.id!, `#${index + 1}`));
   }
 
   /**
