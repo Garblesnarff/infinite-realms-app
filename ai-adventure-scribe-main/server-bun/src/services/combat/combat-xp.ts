@@ -83,9 +83,7 @@ export async function awardCombatVictoryXp(
     // when all of them carry one, the award is the sum split evenly among the player
     // characters — no encounter multiplier for awards (2014). Any NULL falls back to
     // the difficulty-threshold method below, with a log naming the gap.
-    const defeatedHostiles = state.participants.filter(
-      (p) => p.participantType === 'monster',
-    );
+    const defeatedHostiles = state.participants.filter((p) => p.participantType === 'monster');
     const seatedXp = defeatedHostiles.map((p) => p.xpValue ?? null);
     const missingXpCount = seatedXp.filter((v) => v == null).length;
     const exactTotal =
@@ -131,6 +129,24 @@ export async function awardCombatVictoryXp(
             ? Math.floor(exactTotal / playerIds.length)
             : combatVictoryXp(row.level ?? 1, locked.difficulty);
         if (xp <= 0) continue;
+        const { claimStoryEffect } = await import('../story-effect-claim.js');
+        const claim = await claimStoryEffect(
+          `combat-xp:${sessionId}:${encounterId}:${row.id}`,
+          (id) =>
+            tx
+              .insert(experienceEvents)
+              .values({
+                id,
+                characterId: row.id,
+                sessionId,
+                xpGained: xp,
+                source: 'combat',
+                description: `Victory XP [${encounterId}]: ${defeatedNames.slice(0, 5).join(', ') || 'the encounter'}`,
+              })
+              .onConflictDoNothing({ target: experienceEvents.id })
+              .returning({ id: experienceEvents.id }),
+        );
+        if (!claim) continue;
         await tx
           .update(characters)
           .set({
@@ -138,15 +154,6 @@ export async function awardCombatVictoryXp(
             updatedAt: new Date(),
           })
           .where(eq(characters.id, row.id));
-        await tx.insert(experienceEvents).values({
-          characterId: row.id,
-          sessionId,
-          xpGained: xp,
-          source: 'combat',
-          // Encounter-scoped so a notice retry can re-read THIS victory's award
-          // (`readStoredVictoryAward`) without re-awarding to repair the message.
-          description: `Victory XP [${encounterId}]: ${defeatedNames.slice(0, 5).join(', ') || 'the encounter'}`,
-        });
         awards.push({ characterId: row.id, name: row.name ?? 'the party', xp });
       }
       const total = awards.reduce((sum, a) => sum + a.xp, 0);

@@ -27,7 +27,7 @@
  * Requires TEST_DATABASE_URL or DATABASE_URL — see fixtures/real-db.ts.
  */
 import { afterAll, beforeEach, expect, test } from 'bun:test';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 
 import {
   closeRealDb,
@@ -608,6 +608,40 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
       .where(eq(experienceEvents.characterId, characterId));
     expect(eventsAfter).toHaveLength(eventsBefore.length);
     expect(await victoryNotices(sessionId)).toHaveLength(0);
+  });
+
+  test('#777: victory XP event is claimed before the character XP changes', async () => {
+    const trigger = `test_victory_claim_${process.pid}`;
+    try {
+      await db.execute(
+        sql.raw(`CREATE FUNCTION ${trigger}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+        IF NEW.experience_points IS DISTINCT FROM OLD.experience_points AND NOT EXISTS (
+          SELECT 1 FROM experience_events WHERE character_id = NEW.id AND session_id = '${sessionId}'::uuid AND source = 'combat'
+        ) THEN RAISE EXCEPTION 'victory XP must be claimed first'; END IF;
+        RETURN NEW; END $$`),
+      );
+      await db.execute(
+        sql.raw(
+          `CREATE TRIGGER ${trigger} BEFORE UPDATE ON characters FOR EACH ROW WHEN (OLD.id = '${characterId}'::uuid) EXECUTE FUNCTION ${trigger}()`,
+        ),
+      );
+      const result = await awardCombatVictoryXp({ encounterId, sessionId, userId });
+      expect(result.awarded).toHaveLength(1);
+      expect(
+        await db
+          .select()
+          .from(experienceEvents)
+          .where(
+            and(
+              eq(experienceEvents.characterId, characterId),
+              eq(experienceEvents.sessionId, sessionId),
+            ),
+          ),
+      ).toHaveLength(1);
+    } finally {
+      await db.execute(sql.raw(`DROP TRIGGER IF EXISTS ${trigger} ON characters`));
+      await db.execute(sql.raw(`DROP FUNCTION IF EXISTS ${trigger}()`));
+    }
   });
 
   test('a failed victory notice write is recovered on retry without re-awarding (#310)', async () => {
