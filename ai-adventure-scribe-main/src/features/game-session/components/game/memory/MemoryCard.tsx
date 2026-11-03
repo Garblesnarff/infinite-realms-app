@@ -13,6 +13,20 @@ interface MemoryCardProps {
   sessionNumber?: number | null;
 }
 
+/** String, number, and boolean render as text. Anything else is JSON, or skipped. */
+function metadataValueText(value: unknown): string | null {
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  if (value == null) return null;
+  try {
+    const text = JSON.stringify(value);
+    return typeof text === 'string' ? text : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * MemoryCard Component
  * One remembered fact: icon, content (two lines, expandable), metadata, when, importance.
@@ -42,11 +56,15 @@ export const MemoryCard: React.FC<MemoryCardProps> = React.memo(({ memory, sessi
           </button>
           {metadataEntries.length > 0 && (
             <div className="mt-1 text-xs text-muted-foreground">
-              {metadataEntries.map(([key, value]) => (
-                <span key={key} className="mr-2">
-                  {key}: {value as React.ReactNode}
-                </span>
-              ))}
+              {metadataEntries.map(([key, value]) => {
+                const text = metadataValueText(value);
+                if (text == null) return null;
+                return (
+                  <span key={key} className="mr-2">
+                    {key}: {text}
+                  </span>
+                );
+              })}
             </div>
           )}
           <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">

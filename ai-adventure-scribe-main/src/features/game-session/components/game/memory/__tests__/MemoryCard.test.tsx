@@ -24,6 +24,16 @@ describe('MemoryCard (#1236 section B)', () => {
     expect(screen.getByText('3 days ago')).toBeInTheDocument();
   });
 
+  it('renders an object metadata value as JSON instead of crashing (#1262)', () => {
+    render(<MemoryCard memory={base({ metadata: { place: { room: 'cellar' } } })} />);
+    expect(screen.getByText(/place:/)).toHaveTextContent('place: {"room":"cellar"}');
+  });
+
+  it('renders an array metadata value as JSON instead of crashing (#1262)', () => {
+    render(<MemoryCard memory={base({ metadata: { exits: ['north', 'south'] } })} />);
+    expect(screen.getByText(/exits:/)).toHaveTextContent('exits: ["north","south"]');
+  });
+
   it('shows the session number before the when line when the session is known', () => {
     render(<MemoryCard memory={base({})} sessionNumber={2} />);
     expect(screen.getByText('Session 2 · 3 days ago')).toBeInTheDocument();
