@@ -118,6 +118,11 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
           characterId={character.id}
           rows={classFeatures?.features ?? []}
           spellSlots={character.spellSlots}
+          // A save with no changed fields skips the write and runs the sheet's silent
+          // reload, so the slot counts come from the server after the spend.
+          onSpent={() => {
+            void onUpdate(character);
+          }}
         />
       )}
 

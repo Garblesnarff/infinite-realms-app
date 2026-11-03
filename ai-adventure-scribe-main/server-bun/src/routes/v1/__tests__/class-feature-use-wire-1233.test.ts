@@ -21,12 +21,18 @@ mock.module('../../../services/character-service.js', () => ({
   CharacterService: { getById: async () => ({ id: 'c1' }) },
 }));
 
+// The route verifies a session id when the body carries one (in-session Smite).
+mock.module('../combat/helpers.js', () => ({
+  verifySessionOwnership: async () => ({ success: true }),
+}));
+
+let nextResult: unknown = null;
 const received: unknown[] = [];
 mock.module('../../../services/class-features-service.js', () => ({
   ClassFeaturesService: {
     useFeature: async (input: unknown) => {
       received.push(input);
-      return { success: true, usesRemaining: 1, effect: '', message: 'spent' };
+      return nextResult ?? { success: true, usesRemaining: 1, effect: '', message: 'spent' };
     },
   },
 }));
@@ -34,6 +40,7 @@ mock.module('../../../services/class-features-service.js', () => ({
 const { classFeaturesRoutes } = await import('../class-features.js');
 const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
 const {
+  divineSmiteInSessionUseBody,
   divineSmiteUseBody,
   flexibleCastingConvertUseBody,
   flexibleCastingCreateUseBody,
@@ -53,6 +60,11 @@ const post = (body: unknown) =>
 describe('class-feature use route accepts the picker wire bodies (#1233)', () => {
   it.each([
     ['Divine Smite slot level', divineSmiteUseBody, { slotLevel: 1 }],
+    [
+      'Divine Smite slot level in a session',
+      divineSmiteInSessionUseBody,
+      { slotLevel: 1, sessionId: 'session-1' },
+    ],
     ['Metamagic option', quickenedMetamagicUseBody, { option: 'quickened' }],
     ['Flexible Casting convert', flexibleCastingConvertUseBody, { option: '1' }],
     ['Flexible Casting create', flexibleCastingCreateUseBody, { option: '2' }],
@@ -69,5 +81,21 @@ describe('class-feature use route accepts the picker wire bodies (#1233)', () =>
     const response = await post({ slotLevel: 0 });
     expect(response.status).toBe(422);
     expect(received).toHaveLength(0);
+  });
+
+  it('answers a refusal with 400 and the refusal message', async () => {
+    received.length = 0;
+    nextResult = {
+      success: false,
+      usesRemaining: 0,
+      effect: '',
+      message: 'Paladin has no level 1 spell slot left.',
+    };
+    const response = await post(divineSmiteUseBody);
+    nextResult = null;
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      message: 'Paladin has no level 1 spell slot left.',
+    });
   });
 });

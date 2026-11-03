@@ -30,6 +30,10 @@ interface VariableSpendPanelProps {
   characterId: string;
   rows: CharacterFeatureRow[];
   spellSlots?: Character['spellSlots'];
+  /** The game session the sheet runs in, when it does; the route then posts the engine row. */
+  sessionId?: string;
+  /** Called after a spend lands, so the sheet reloads the slot counts it shows. */
+  onSpent?: () => void;
 }
 
 /** One choice the player can pick, with the exact body the use route takes for it (#1233). */
@@ -108,6 +112,8 @@ export const VariableSpendPanel: React.FC<VariableSpendPanelProps> = ({
   characterId,
   rows,
   spellSlots,
+  sessionId,
+  onSpent,
 }) => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -125,8 +131,10 @@ export const VariableSpendPanel: React.FC<VariableSpendPanelProps> = ({
     if (!picked) return;
     setPending(row.featureId);
     try {
-      const result = await spendCharacterFeature(characterId, row.featureId, picked.body);
+      const body = sessionId ? { ...picked.body, sessionId } : picked.body;
+      const result = await spendCharacterFeature(characterId, row.featureId, body);
       await queryClient.invalidateQueries({ queryKey: ['class-features', characterId] });
+      if (result.success) onSpent?.();
       toast({ title: result.success ? 'Feature used' : 'Not spent', description: result.message });
     } catch (error) {
       logger.error('Failed to spend class feature', error);

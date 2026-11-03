@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  divineSmiteInSessionUseBody,
   divineSmiteUseBody,
   flexibleCastingConvertUseBody,
   flexibleCastingCreateUseBody,
@@ -19,6 +20,9 @@ import { spendCharacterFeature } from '@/services/class-features-api';
 vi.mock('@/services/class-features-api', () => ({
   spendCharacterFeature: vi.fn(),
 }));
+
+const toast = vi.fn();
+vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast }) }));
 
 /**
  * #1233: the sheet's variable-cost picker sends exactly the shared fixture's wire body
@@ -48,11 +52,15 @@ const row = (featureId: string, className: string, featureName: string): Charact
   },
 });
 
-const renderPanel = (rows: CharacterFeatureRow[], spellSlots?: Character['spellSlots']) => {
+const renderPanel = (
+  rows: CharacterFeatureRow[],
+  spellSlots?: Character['spellSlots'],
+  extra: { sessionId?: string; onSpent?: () => void } = {},
+) => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <VariableSpendPanel characterId="char-1" rows={rows} spellSlots={spellSlots} />
+      <VariableSpendPanel characterId="char-1" rows={rows} spellSlots={spellSlots} {...extra} />
     </QueryClientProvider>,
   );
 };
@@ -156,5 +164,73 @@ describe('VariableSpendPanel wire bodies (#1233)', () => {
         flexibleCastingCreateUseBody,
       ),
     );
+  });
+  it('sends the session id when the sheet runs inside a game session', async () => {
+    const user = userEvent.setup();
+    renderPanel(
+      [row('smite-1', 'Paladin', 'Divine Smite')],
+      { 1: { max: 4, current: 1 } },
+      {
+        sessionId: 'session-1',
+      },
+    );
+
+    await pick(user, 'Divine Smite choice', '1st-level slot');
+    await user.click(screen.getByRole('button', { name: 'Spend' }));
+
+    await waitFor(() =>
+      expect(spendCharacterFeature).toHaveBeenCalledWith(
+        'char-1',
+        'smite-1',
+        divineSmiteInSessionUseBody,
+      ),
+    );
+  });
+
+  it('shows the server refusal message in the toast', async () => {
+    const user = userEvent.setup();
+    vi.mocked(spendCharacterFeature).mockRejectedValue(
+      new Error('Paladin has no level 1 spell slot left.'),
+    );
+    renderPanel([row('smite-1', 'Paladin', 'Divine Smite')], { 1: { max: 4, current: 1 } });
+
+    await pick(user, 'Divine Smite choice', '1st-level slot');
+    await user.click(screen.getByRole('button', { name: 'Spend' }));
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Spend failed',
+          description: 'Paladin has no level 1 spell slot left.',
+          variant: 'destructive',
+        }),
+      ),
+    );
+  });
+
+  it('triggers the sheet refresh after a spend lands, and not after a refusal', async () => {
+    const user = userEvent.setup();
+    const onSpent = vi.fn();
+    renderPanel(
+      [row('smite-1', 'Paladin', 'Divine Smite')],
+      { 1: { max: 4, current: 1 } },
+      {
+        onSpent,
+      },
+    );
+
+    await pick(user, 'Divine Smite choice', '1st-level slot');
+    await user.click(screen.getByRole('button', { name: 'Spend' }));
+    await waitFor(() => expect(onSpent).toHaveBeenCalledTimes(1));
+
+    vi.mocked(spendCharacterFeature).mockResolvedValue({
+      success: false,
+      usesRemaining: 0,
+      effect: '',
+      message: 'refused',
+    });
+    await user.click(screen.getByRole('button', { name: 'Spend' }));
+    await waitFor(() => expect(spendCharacterFeature).toHaveBeenCalledTimes(2));
+    expect(onSpent).toHaveBeenCalledTimes(1);
   });
 });
