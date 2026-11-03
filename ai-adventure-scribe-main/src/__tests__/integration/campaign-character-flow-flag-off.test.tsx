@@ -10,6 +10,19 @@ vi.mock('@/config/featureFlags', () => ({
   isCampaignCharacterFlowEnabled: () => false,
 }));
 
+// Mock auth as a paid plan: the entry gates custom creation on Legend
+// (#1239 item 4), so this wizard test runs as a paid user.
+const paidAuth = {
+  userPlan: 'pro',
+  userPlanLoading: false,
+  userPlanError: false,
+  refreshUserPlan: vi.fn(),
+};
+vi.mock('@/contexts/AuthContext', () => ({
+  useAuth: () => paidAuth,
+  useOptionalAuth: () => paidAuth,
+}));
+
 const queryClient = new QueryClient();
 
 describe('CharacterCreateEntry with feature flag OFF', () => {
