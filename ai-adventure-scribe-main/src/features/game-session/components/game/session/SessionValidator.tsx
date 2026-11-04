@@ -1,5 +1,9 @@
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
+import {
+  TokenRefreshTransientError,
+  TokenRefreshTransportError,
+} from '@/services/auth/TokenService';
 import { userDataApi } from '@/services/user-data-api';
 
 interface SessionValidatorProps {
@@ -42,7 +46,18 @@ export const useSessionValidator = ({
     } catch (error) {
       logger.error('Session validation failed:', { error });
       const status = (error as { status?: unknown } | null)?.status;
-      if (status === 404 || status === 403) {
+      // #1113: the refresh endpoint failed without an auth verdict, so the
+      // stored session is intact and the player can simply try again.
+      if (
+        error instanceof TokenRefreshTransientError ||
+        error instanceof TokenRefreshTransportError
+      ) {
+        toast({
+          title: 'Session Error',
+          description: 'Connection problem — try again',
+          variant: 'destructive',
+        });
+      } else if (status === 404 || status === 403) {
         toast({
           title: 'Session Error',
           description: 'Invalid game session. Please try starting a new game.',

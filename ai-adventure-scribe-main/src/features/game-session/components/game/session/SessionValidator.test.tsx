@@ -7,6 +7,10 @@ import type * as UserDataApiModule from '@/services/user-data-api';
 
 import { SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
+import {
+  TokenRefreshTransientError,
+  TokenRefreshTransportError,
+} from '@/services/auth/TokenService';
 import { UserDataApiRequestError, userDataApi } from '@/services/user-data-api';
 
 const toast = vi.fn();
@@ -93,6 +97,82 @@ describe('useSessionValidator', () => {
     });
 
     expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: 'Invalid game session. Please try starting a new game.',
+      }),
+    );
+  });
+
+  it('shows a connection message when the refresh endpoint fails transiently (#1113)', async () => {
+    vi.mocked(userDataApi.getSession).mockRejectedValueOnce(
+      new TokenRefreshTransientError('Token refresh failed with status 503', 503),
+    );
+
+    const { result } = renderHook(() =>
+      useSessionValidator({
+        sessionId: 'session-1',
+        campaignId: 'campaign-1',
+        characterId: 'character-1',
+      }),
+    );
+
+    let isValid = true;
+    await act(async () => {
+      isValid = await result.current();
+    });
+
+    expect(isValid).toBe(false);
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({ description: 'Connection problem — try again' }),
+    );
+  });
+
+  it('shows a connection message when the refresh endpoint is unreachable (#1113)', async () => {
+    vi.mocked(userDataApi.getSession).mockRejectedValueOnce(new TokenRefreshTransportError());
+
+    const { result } = renderHook(() =>
+      useSessionValidator({
+        sessionId: 'session-1',
+        campaignId: 'campaign-1',
+        characterId: 'character-1',
+      }),
+    );
+
+    await act(async () => {
+      await result.current();
+    });
+
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({ description: 'Connection problem — try again' }),
+    );
+  });
+
+  it('keeps the retry message when the session belongs to another campaign or character (#1113)', async () => {
+    vi.mocked(userDataApi.getSession).mockResolvedValueOnce({
+      campaign_id: 'campaign-2',
+      character_id: 'character-1',
+    });
+
+    const { result } = renderHook(() =>
+      useSessionValidator({
+        sessionId: 'session-1',
+        campaignId: 'campaign-1',
+        characterId: 'character-1',
+      }),
+    );
+
+    let isValid = true;
+    await act(async () => {
+      isValid = await result.current();
+    });
+
+    expect(isValid).toBe(false);
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: 'Unable to verify this game session. Please try again.',
+      }),
+    );
+    expect(toast).not.toHaveBeenCalledWith(
       expect.objectContaining({
         description: 'Invalid game session. Please try starting a new game.',
       }),

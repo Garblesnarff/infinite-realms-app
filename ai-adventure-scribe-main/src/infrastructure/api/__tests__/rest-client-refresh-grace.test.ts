@@ -42,7 +42,7 @@ vi.mock('@/services/auth/TokenService', () => ({
 import { fetchWithAuth, REFRESH_RETRY_GRACE_MS, SessionExpiredError } from '../rest-client';
 
 import logger from '@/lib/logger';
-import { refreshAccessTokenOnce } from '@/services/auth/TokenService';
+import { markSessionEnded, refreshAccessTokenOnce } from '@/services/auth/TokenService';
 
 const ROUTE = '/v1/llm/extract';
 
@@ -205,5 +205,55 @@ describe('fetchWithAuth refresh grace window (#1113)', () => {
 
     expect(refreshMock).toHaveBeenCalledTimes(1);
     expect(refreshMock).toHaveBeenCalledWith('refresh-token', 'old-access');
+  });
+});
+
+describe('fetchWithAuth 401 retry with a non-terminal refresh failure (#1113)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    completion.at = null;
+    vi.stubGlobal('fetch', fetchMock);
+    loadCachedSessionMock.mockReturnValue({
+      access_token: 'old-access',
+      refresh_token: 'refresh-token',
+    });
+    refreshMock.mockResolvedValue({ accessToken: 'new-access', refreshToken: 'new-refresh' });
+  });
+
+  it('replays a POST body with the refreshed token after a 401', async () => {
+    const body = JSON.stringify({ message: 'I swing my sword' });
+    fetchMock.mockResolvedValueOnce(response(401));
+    fetchMock.mockResolvedValueOnce(response(200));
+
+    await expect(
+      fetchWithAuth(ROUTE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      }),
+    ).resolves.toMatchObject({ status: 200 });
+
+    expect(refreshMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init.method).toBe('POST');
+      expect(init.body).toBe(body);
+    }
+    expect(authOf(0)).toBe('Bearer old-access');
+    expect(authOf(1)).toBe('Bearer new-access');
+  });
+
+  it('surfaces a transient refresh failure as-is, without ending the session', async () => {
+    const transient = Object.assign(new Error('Token refresh failed with status 503'), {
+      name: 'TokenRefreshTransientError',
+      status: 503,
+    });
+    refreshMock.mockRejectedValueOnce(transient);
+    fetchMock.mockResolvedValueOnce(response(401));
+
+    await expect(fetchWithAuth(ROUTE)).rejects.toBe(transient);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(markSessionEnded).not.toHaveBeenCalled();
   });
 });
