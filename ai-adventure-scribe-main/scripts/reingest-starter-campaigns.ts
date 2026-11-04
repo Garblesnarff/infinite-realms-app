@@ -9,8 +9,8 @@
  * existing metadata.image_url values.
  *
  * Example:
- *   bun scripts/reingest-starter-campaigns.ts --repo-path /var/www/infiniterealms/infinite-realms-clean
- *   bun scripts/reingest-starter-campaigns.ts --repo-path /var/www/infiniterealms/infinite-realms-clean --apply
+ *   bun scripts/reingest-starter-campaigns.ts --repo-path ../infinite-realms
+ *   bun scripts/reingest-starter-campaigns.ts --repo-path ../infinite-realms --apply
  */
 
 import { join, resolve } from 'node:path';
@@ -136,7 +136,7 @@ function parseOptions(argv: string[]): Options {
 
 async function main(options: Options): Promise<void> {
   if (!options.repoPath) {
-    throw new Error('Pass --repo-path pointing at the external infinite-realms-clean repository');
+    throw new Error('Pass --repo-path pointing at the infinite-realms content submodule');
   }
 
   const repoPath = resolve(options.repoPath);

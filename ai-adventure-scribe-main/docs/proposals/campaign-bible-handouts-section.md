@@ -1,6 +1,6 @@
 # Proposed `campaign_bible.md` handouts section
 
-This is the matching format for the sibling `infinite-realms-clean` repository. It is intentionally documented here only; that repository is not modified by this change.
+This is the matching format for the content submodule at `../infinite-realms`. It is intentionally documented here only; that content is not modified by this change.
 
 ```md
 ## Handouts

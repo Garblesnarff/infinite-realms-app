@@ -18,7 +18,7 @@
  * Each flag is declared on exactly one command — see buildProgram() and #1805.
  */
 
-import { existsSync } from 'fs';
+import { existsSync, statSync } from 'fs';
 import { join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -73,7 +73,9 @@ config({ path: join(process.cwd(), '../../server-bun/.env') });
 config({ path: join(process.cwd(), '../../.env') }); // Try parent directories
 config({ path: join(process.cwd(), '../../../.env') });
 
-export const DEFAULT_CAMPAIGN_REPO_PATH = '../../../infinite-realms-clean';
+export const DEFAULT_CAMPAIGN_REPO_PATH = '../../../infinite-realms';
+
+class MissingCompletedCampaignsError extends Error {}
 
 /**
  * Every env var name the Gemini credential is known to live under, in precedence order.
@@ -366,7 +368,7 @@ async function reingestCommand(options: ReingestCommandOptions): Promise<void> {
     await runReingestCommand(options);
   } catch (error) {
     console.error(`❌ ${error instanceof Error ? error.message : error}`);
-    process.exitCode = 1;
+    process.exitCode = error instanceof MissingCompletedCampaignsError ? 2 : 1;
   }
 }
 
@@ -440,6 +442,14 @@ function loadReingestCampaign(repoPath: string, campaignDirectory: string): Rein
 }
 
 async function runReingestCommand(options: ReingestCommandOptions): Promise<void> {
+  const completedPath = join(
+    resolve(process.cwd(), options.repoPath),
+    'campaign-ideas',
+    'Completed',
+  );
+  if (!existsSync(completedPath) || !statSync(completedPath).isDirectory()) {
+    throw new MissingCompletedCampaignsError('no campaign-ideas/Completed in --repo-path');
+  }
   const repoPath = resolveCampaignRepoPath(options.repoPath);
 
   const directories = resolveReingestCampaignDirectories(repoPath, options.campaign);

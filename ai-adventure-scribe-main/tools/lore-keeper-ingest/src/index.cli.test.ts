@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { afterEach, test } from 'bun:test';
 
@@ -21,6 +22,7 @@ const createdRepos: string[] = [];
 function createCampaignRepo(campaignDirectories: string[]): string {
   const repoPath = mkdtempSync(join(tmpdir(), 'lore-keeper-cli-'));
   createdRepos.push(repoPath);
+  mkdirSync(join(repoPath, 'campaign-ideas', 'Completed'), { recursive: true });
 
   for (const directory of campaignDirectories) {
     const campaignPath = join(repoPath, 'campaign-ideas', directory);
@@ -97,6 +99,7 @@ test('reingest falls back to its own default repo path when none is passed', asy
   const captured = readCaptured();
   assert.ok(captured, 'expected the reingest action to run');
   assert.equal(captured.repoPath, DEFAULT_CAMPAIGN_REPO_PATH);
+  assert.equal(captured.repoPath, '../../../infinite-realms');
   assert.equal(captured.campaign, undefined);
 });
 
@@ -132,7 +135,7 @@ test('an unknown campaign slug errors instead of falling through to every campai
 test('reingest exits loudly when the repo has no campaign directories', async () => {
   const repoPath = mkdtempSync(join(tmpdir(), 'lore-keeper-empty-repo-'));
   createdRepos.push(repoPath);
-  mkdirSync(join(repoPath, 'campaign-ideas'), { recursive: true });
+  mkdirSync(join(repoPath, 'campaign-ideas', 'Completed'), { recursive: true });
 
   const program = buildProgram();
   const errors: string[] = [];
@@ -151,6 +154,46 @@ test('reingest exits loudly when the repo has no campaign directories', async ()
   assert.match(reported, /campaign-ideas\/ with at least one campaign directory/);
   assert.match(reported, /--repo-path/);
 });
+
+for (const parentExists of [false, true]) {
+  test(`reingest exits 2 without Completed when campaign-ideas ${parentExists ? 'exists' : 'is absent'}`, async () => {
+    const repoPath = mkdtempSync(join(tmpdir(), 'lore-keeper-missing-completed-'));
+    createdRepos.push(repoPath);
+    if (parentExists) {
+      const other = join(repoPath, 'campaign-ideas', 'Draft', 'other-campaign');
+      mkdirSync(other, { recursive: true });
+      writeFileSync(join(other, 'overview.md'), '# Draft campaign\n');
+    }
+    const errors: string[] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => void errors.push(args.join(' '));
+    try {
+      await buildProgram().parseAsync(['reingest', '--repo-path', repoPath, '--apply'], {
+        from: 'user',
+      });
+    } finally {
+      console.error = originalError;
+    }
+    assert.equal(process.exitCode, 2);
+    assert.match(errors.join('\n'), /no campaign-ideas\/Completed in --repo-path/);
+    const cli = Bun.spawn(
+      [
+        process.execPath,
+        fileURLToPath(new URL('./index.ts', import.meta.url)),
+        'reingest',
+        '--repo-path',
+        repoPath,
+        '--apply',
+      ],
+      { cwd: repoPath, stdout: 'pipe', stderr: 'pipe' },
+    );
+    assert.equal(await cli.exited, 2);
+    assert.match(
+      await new Response(cli.stderr).text(),
+      /no campaign-ideas\/Completed in --repo-path/,
+    );
+  });
+}
 
 test('the legacy option-only invocation still routes to the default ingest command', async () => {
   const program = buildProgram();

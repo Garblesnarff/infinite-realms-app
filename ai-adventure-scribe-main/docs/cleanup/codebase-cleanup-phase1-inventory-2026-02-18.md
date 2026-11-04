@@ -2,6 +2,8 @@
 
 This document defines a safe boundary for cleanup work before any deletions.
 
+**Current path note (#952):** This is a historical inventory. Use the `infinite-realms` content submodule for ingestion; the separate `infinite-realms-clean` directory was later found empty. The old default and classifications below describe the inventory date, not the current ingest path.
+
 ## Scope
 
 - Host root inspected: `/var/www/infiniterealms`
@@ -20,9 +22,9 @@ This document defines a safe boundary for cleanup work before any deletions.
 - path: `infinite-realms`
 - url: `https://github.com/Garblesnarff/infinite-realms-clean.git`
 
-4. One local tool currently depends on `infinite-realms-clean` by default:
+4. At the inventory date, one local tool depended on `infinite-realms-clean` by default:
 - `tools/lore-keeper-ingest/src/index.ts:56`
-- default `--repo-path` is `../../../infinite-realms-clean`
+- current default `--repo-path` is `../../../infinite-realms` (from the tool directory)
 
 ## Directory Classification
 
@@ -30,7 +32,7 @@ This document defines a safe boundary for cleanup work before any deletions.
 |---|---:|---|---|---|
 | `/var/www/infiniterealms/ai-adventure-scribe-main` | 1.3G | 2026-02-17 | Active | Runtime app + server |
 | `/var/www/infiniterealms/infinite-realms` | 967M | 2026-01-08 | Blocked (submodule path) | Declared submodule in root `.gitmodules` |
-| `/var/www/infiniterealms/infinite-realms-clean` | 157M | 2026-01-05 | Blocked (tool dependency) | Default source for lore ingest tool |
+| `/var/www/infiniterealms/infinite-realms-clean` | 157M | 2026-01-05 | Historical classification | Former tool default; later found empty, not the content path |
 | `/var/www/infiniterealms/infinite-realms-production-backup` | 715M | 2025-11-22 | Archive candidate | Research/campaign backup tree |
 | `/var/www/infiniterealms/infiniterealms-character-image-hotreload` | 862M | 2025-12-05 | Archive candidate | Old snapshot fork; no active runtime references found |
 | `/var/www/infiniterealms/backups` | SQL dumps | 2026-02-18 | Keep | Operational DB backups |
@@ -47,7 +49,7 @@ Safe to target in Phase 2+:
 Do not touch yet:
 
 - `/var/www/infiniterealms/infinite-realms` (submodule mapping risk)
-- `/var/www/infiniterealms/infinite-realms-clean` (tool default dependency risk)
+- The former separate checkout was listed here historically; verify it independently before any deletion.
 - `/var/www/infiniterealms/backups` (operational restore path)
 
 ## Required Preconditions Before Any Directory Deletion
