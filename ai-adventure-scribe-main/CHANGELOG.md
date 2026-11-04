@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.38.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.37.2...v0.38.0) (2026-11-04)
+
+
+### Features
+
+* **uploader:** support handout images at the handout card key ([#1253](https://github.com/Garblesnarff/infinite-realms-app/issues/1253)) ([00cf1f8](https://github.com/Garblesnarff/infinite-realms-app/commit/00cf1f8fb8119f17658fde5a16086cce520733d2))
+
+
+### Bug Fixes
+
+* **auth:** show connection message on transient refresh failure ([#1113](https://github.com/Garblesnarff/infinite-realms-app/issues/1113)) ([99a1af4](https://github.com/Garblesnarff/infinite-realms-app/commit/99a1af470846b7a724e74a279f058eccb6ade52e))
+* **character-creation:** require a concrete background gaming set ([#944](https://github.com/Garblesnarff/infinite-realms-app/issues/944)) ([7a55dda](https://github.com/Garblesnarff/infinite-realms-app/commit/7a55dda4179a85566717996e100c097a3cc37e9d))
+* **combat:** Divine Smite on a melee hit from the combat action bar ([#1362](https://github.com/Garblesnarff/infinite-realms-app/issues/1362)) ([bceff5b](https://github.com/Garblesnarff/infinite-realms-app/commit/bceff5bee665bd8f6d03444f566b934f15257875))
+* **combat:** pin miss-spends-ammunition with a real-route test ([#1372](https://github.com/Garblesnarff/infinite-realms-app/issues/1372)) ([683c876](https://github.com/Garblesnarff/infinite-realms-app/commit/683c87626fa0c25a2ef7f03e219db55d574875b0))
+* **roster:** neutral #N label for same-name characters ([#946](https://github.com/Garblesnarff/infinite-realms-app/issues/946)) ([19eb1ad](https://github.com/Garblesnarff/infinite-realms-app/commit/19eb1ad6805d6f36d5140d21af221adb5be67c53))
+* **session-story-socket:** reconnect with backoff and pull state after reopen ([#1357](https://github.com/Garblesnarff/infinite-realms-app/issues/1357)) ([46c99e1](https://github.com/Garblesnarff/infinite-realms-app/commit/46c99e1dece474eb70ca3bdc6daca233efbc3dc1))
+* **session:** share the [#1359](https://github.com/Garblesnarff/infinite-realms-app/issues/1359) session-start decision across all entry points ([#1380](https://github.com/Garblesnarff/infinite-realms-app/issues/1380)) ([ab5d9de](https://github.com/Garblesnarff/infinite-realms-app/commit/ab5d9de0d4f3ed47feaa274b143ed8f9ba345b79))
+* **session:** write generated scene image server-side before showing it ([#1371](https://github.com/Garblesnarff/infinite-realms-app/issues/1371)) ([b10a0de](https://github.com/Garblesnarff/infinite-realms-app/commit/b10a0dedd3705c2306b0732ffabd051f364d3648))
+* **sheet:** refresh feature resources after combat use ([#1376](https://github.com/Garblesnarff/infinite-realms-app/issues/1376)) ([e0c4fed](https://github.com/Garblesnarff/infinite-realms-app/commit/e0c4fedb214a81c2c6993c1d57c00ad073be9ef7))
+* **sheet:** send slot level and option from the Features tab ([#1233](https://github.com/Garblesnarff/infinite-realms-app/issues/1233)) ([749a6f7](https://github.com/Garblesnarff/infinite-realms-app/commit/749a6f7317380f272e81ea016dc197040442e644))
+* **voice:** keep envelope npc id through casting ([#815](https://github.com/Garblesnarff/infinite-realms-app/issues/815)) ([306b4bc](https://github.com/Garblesnarff/infinite-realms-app/commit/306b4bc731e6d72c4db6bfd2d38db5472b4eeec1))
+* **xp:** preserve deferred ending awards ([#1364](https://github.com/Garblesnarff/infinite-realms-app/issues/1364)) ([6bcf3b3](https://github.com/Garblesnarff/infinite-realms-app/commit/6bcf3b339a9e42f501b72942f520dd54c4007b62))
+
+
+### Tests
+
+* **creation:** pin wizard save fixtures ([#1368](https://github.com/Garblesnarff/infinite-realms-app/issues/1368)) ([ee4602b](https://github.com/Garblesnarff/infinite-realms-app/commit/ee4602b00e5e2feeb15867a99bfa393389bede43))
+
 ## [0.37.2](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.37.1...v0.37.2) (2026-11-03)
 
 
