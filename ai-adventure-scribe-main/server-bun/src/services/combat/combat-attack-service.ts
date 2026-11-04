@@ -39,6 +39,12 @@ import {
   monsterAttackSource,
   countStandingMooks,
 } from './data-access.js';
+import {
+  divineSmiteDieCount,
+  divineSmiteNotAppliedLine,
+  divineSmiteRefusal,
+  divineSmiteRefusalText,
+} from './divine-smite-rider.js';
 import { healthConditionForCombat } from './health-condition.js';
 import { appliesHexRider, hexRiderDice } from './hex-rider.js';
 import { autoCritReason, checkHit, checkAutoCrit } from './hit-check.js';
@@ -92,7 +98,7 @@ import type { UseSpellSlotResult } from '../../types/spell-slots.js';
  * the shared AttackResult so this change does not overlap the open boss-moves PR touching
  * types/combat.ts; `hexDamage` is optional and the narration reads it from the result object.
  */
-type HexAttackResult = AttackResult & { hexDamage?: number };
+type HexAttackResult = AttackResult & { hexDamage?: number; divineSmiteDamage?: number };
 
 /**
  * Whether the caller supplied a real d20 face. Guards the whole player-rolled path against a
@@ -424,6 +430,65 @@ export class CombatAttackService {
   }
 
   /**
+   * Divine Smite on a hit (#1362, 2014 PHB p.85): spend the declared slot, then roll the Smite
+   * dice (see divine-smite-rider.ts) radiant, resisted on its own the way the Hex rider's
+   * necrotic damage is. The slot was checked up front, so a spend that still fails here is a
+   * race with another spend: the attack is not refused. It lands its weapon damage and reports
+   * `applied: false`, and the caller says so in the transcript.
+   */
+  private async divineSmiteOnHit(input: {
+    characterId: string;
+    sessionId?: string;
+    userId: string;
+    slotLevel: number;
+    isCritical: boolean;
+    creatureType?: string | null;
+    defenses: ReturnType<typeof aggregateResistances>;
+  }): Promise<
+    | { applied: true; spent: UseSpellSlotResult; damage: number; diceCount: number }
+    | { applied: false; slotLevel: number }
+  > {
+    let spent: UseSpellSlotResult;
+    try {
+      // eslint-disable-next-line react-hooks/rules-of-hooks -- server-side service method, not a React hook
+      spent = await SpellSlotsService.useSpellSlot(
+        {
+          characterId: input.characterId,
+          spellName: 'Divine Smite',
+          spellLevel: 1,
+          slotLevelUsed: input.slotLevel,
+          sessionId: input.sessionId,
+        },
+        input.userId,
+      );
+    } catch (error) {
+      // Only the "no slot left" race is a Smite that cannot apply. Any other failure is real and
+      // throws, so the attack's claim is released by the caller instead of hiding the error.
+      if (error instanceof BusinessLogicError && error.message.startsWith('No available level')) {
+        logger.warn({
+          msg: 'DIVINE_SMITE_NOT_APPLIED',
+          characterId: input.characterId,
+          slotLevel: input.slotLevel,
+          error,
+        });
+        return { applied: false, slotLevel: input.slotLevel };
+      }
+      throw error;
+    }
+    const diceCount = divineSmiteDieCount(input.slotLevel, input.creatureType, input.isCritical);
+    const damage = calculateDamage({
+      damageDice: `${diceCount}d8`,
+      damageBonus: 0,
+      damageType: 'radiant',
+      isCritical: false,
+      resistances: input.defenses.resistances,
+      vulnerabilities: input.defenses.vulnerabilities,
+      immunities: input.defenses.immunities,
+    }).finalDamage;
+    return { applied: true, spent, damage, diceCount };
+  }
+
+  /**
    * The 1d4 Bless adds to a roll this participant is about to make (#902), or 0 when no live
    * Bless covers them. Two rows can bless one participant: their own concentration (Bless
    * cast on themself, or stored with no single target) and another caster's Bless naming
@@ -537,6 +602,7 @@ export class CombatAttackService {
 
     return {
       attackerData,
+      attackerClassName: attackerProfile.className ?? null,
       targetParticipant,
       targetStats,
       weapon,
@@ -605,6 +671,7 @@ export class CombatAttackService {
 
     const {
       attackerData,
+      attackerClassName,
       targetParticipant,
       targetStats,
       weapon,
@@ -619,6 +686,42 @@ export class CombatAttackService {
 
     if (!rules.legal) {
       throw new BusinessLogicError(`Attack refused: ${rules.refusal}`, { refusal: rules.refusal });
+    }
+
+    // #1362: a Smite that cannot apply is refused here, before the claim and before any d20 is
+    // rolled. Only the spend waits for a hit, so a refused attack costs the actor nothing.
+    if (input.divineSmiteSlotLevel !== undefined) {
+      const slotLevel = input.divineSmiteSlotLevel;
+      const attackerIsPaladin = !!attackerClassName?.toLowerCase().includes('paladin');
+      const isMeleeWeaponAttack = input.attackType === 'melee' && !weapon.ranged;
+      // The slot row is read only once the Paladin and melee checks pass, so a refused attack
+      // writes no row. It is the row the spend reads, derived from class progression when
+      // missing (#2459), so the check and useSpellSlot never disagree on where a slot lives.
+      let slotsRemaining = 0;
+      if (attackerIsPaladin && isMeleeWeaponAttack && attackerData.participant.characterId) {
+        try {
+          const row = await SpellSlotsService.ensureSpellSlotRow(
+            attackerData.participant.characterId,
+            userId,
+            slotLevel,
+          );
+          slotsRemaining = row.totalSlots - row.usedSlots;
+        } catch (error) {
+          if (!(error instanceof BusinessLogicError)) throw error;
+        }
+      }
+      const refusal = divineSmiteRefusal({
+        attackerIsPaladin,
+        isMeleeWeaponAttack,
+        slotLevel,
+        slotsRemaining,
+      });
+      if (refusal) {
+        throw new BusinessLogicError(
+          `Divine Smite refused: ${divineSmiteRefusalText(refusal, slotLevel)}`,
+          { reason: refusal, slotLevel },
+        );
+      }
     }
 
     // Version and action claims happen only after all legal-action checks pass.
@@ -790,7 +893,22 @@ export class CombatAttackService {
         defenses,
         isCrit,
       );
-      const totalDamage = damageCalc.finalDamage + hexDamage;
+      // #1362: Divine Smite on this hit. The slot is spent before any HP write, so a refusal
+      // (no slot of that level) throws here with nothing applied.
+      const smite =
+        input.divineSmiteSlotLevel === undefined
+          ? null
+          : await this.divineSmiteOnHit({
+              characterId: attackerData.participant.characterId,
+              sessionId: attackerData.participant.encounter?.sessionId,
+              userId,
+              slotLevel: input.divineSmiteSlotLevel,
+              isCritical: isCrit,
+              creatureType: targetParticipant.creatureType,
+              defenses,
+            });
+      const smiteApplied = smite?.applied ? smite : null;
+      const totalDamage = damageCalc.finalDamage + hexDamage + (smiteApplied?.damage ?? 0);
 
       // Apply damage to target HP
       try {
@@ -848,6 +966,13 @@ export class CombatAttackService {
           },
         );
         transcriptLines.push(...concentrationLines);
+        if (smiteApplied) {
+          transcriptLines.push(
+            `Divine Smite: ${smiteApplied.diceCount}d8 radiant, ${smiteApplied.damage} damage (level ${input.divineSmiteSlotLevel} slot).`,
+          );
+        } else if (smite && !smite.applied) {
+          transcriptLines.push(divineSmiteNotAppliedLine(smite.slotLevel));
+        }
 
         const attackResult: HexAttackResult = {
           hit: true,
@@ -867,6 +992,7 @@ export class CombatAttackService {
           effectiveImmunity: damageCalc.effectiveImmunity,
           finalDamage: appliedDamage,
           ...(hexDamage > 0 ? { hexDamage } : {}),
+          ...(smiteApplied ? { divineSmiteDamage: smiteApplied.damage } : {}),
           ...(blessDie > 0 ? { blessDie } : {}),
           targetNewHp: hpResult.newCurrentHp,
           targetIsConscious: hpResult.isConscious,
@@ -891,6 +1017,12 @@ export class CombatAttackService {
         return attackResult;
       } catch (error) {
         logger.error({ msg: 'Failed to apply damage to HP', error });
+        // #1362: the Smite's slot goes back when its damage never reached the target's HP.
+        if (smiteApplied) {
+          await SpellSlotsService.refundSpellSlot(smiteApplied.spent, userId).catch((refundError) =>
+            logger.error({ msg: 'COMBAT_SMITE_SLOT_REFUND_FAILED', refundError }),
+          );
+        }
         throw new InternalServerError('Attack succeeded but damage application failed', { error });
       }
     };

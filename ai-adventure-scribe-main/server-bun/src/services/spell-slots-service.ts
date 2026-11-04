@@ -14,7 +14,12 @@
 import { and, eq, exists, gt, gte, lt, or, inArray, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
-import { characters, characterSpellSlots, characterSubclasses, spellSlotUsageLog } from '../../../db/schema/index';
+import {
+  characters,
+  characterSpellSlots,
+  characterSubclasses,
+  spellSlotUsageLog,
+} from '../../../db/schema/index';
 import {
   NotFoundError,
   ValidationError,
@@ -409,7 +414,7 @@ export class SpellSlotsService {
    * grants no slots at that level, throws a BusinessLogicError naming the
    * cause instead of the generic "not found" refusal (#2459).
    */
-  private static async ensureSpellSlotRow(
+  static async ensureSpellSlotRow(
     characterId: string,
     userId: string,
     slotLevelUsed: number,
@@ -472,11 +477,9 @@ export class SpellSlotsService {
     let grantedSlots: Record<number, number> = calculation.slots;
     if (!multiclass && className === 'Warlock') {
       grantedSlots = Object.fromEntries(
-        SpellSlotMechanics.seedRowsForCharacter(
-          character.class,
-          level,
-          character.classLevels,
-        ).map((row) => [row.spellLevel, row.totalSlots]),
+        SpellSlotMechanics.seedRowsForCharacter(character.class, level, character.classLevels).map(
+          (row) => [row.spellLevel, row.totalSlots],
+        ),
       );
     } else if (!multiclass && (className === 'Fighter' || className === 'Rogue')) {
       // #420: third-caster status lives in character_subclasses, not on the
@@ -504,9 +507,7 @@ export class SpellSlotsService {
         subclassRows[0]?.subclassName ?? null,
       );
       if (seeded.length > 0) {
-        grantedSlots = Object.fromEntries(
-          seeded.map((row) => [row.spellLevel, row.totalSlots]),
-        );
+        grantedSlots = Object.fromEntries(seeded.map((row) => [row.spellLevel, row.totalSlots]));
       }
     }
     const granted = grantedSlots[slotLevelUsed] ?? 0;

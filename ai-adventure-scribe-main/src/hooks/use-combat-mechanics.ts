@@ -62,17 +62,19 @@ export const useCombatMechanics = ({
       _actionType: ActionType = 'attack',
       hasAdvantage: boolean = false,
       hasDisadvantage: boolean = false,
-      _divineSmiteSlotLevel?: number, // Server support is required before this modifier can be accepted.
+      divineSmiteSlotLevel?: number,
     ) => {
       if (!activeEncounter) return;
 
       if (!targetId) return;
+      // #1362: the server spends the slot and rolls the Smite only if this attack hits.
       await executeAuthoritativeCombatIntent(activeEncounter.id, {
         type: 'attack',
         actorId: participantId,
         targetId,
         advantage: hasAdvantage,
         disadvantage: hasDisadvantage,
+        ...(divineSmiteSlotLevel !== undefined ? { divineSmiteSlotLevel } : {}),
       });
     },
     [activeEncounter],

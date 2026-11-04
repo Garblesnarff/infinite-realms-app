@@ -94,6 +94,8 @@ export type ClientCombatIntent =
       d20?: number;
       /** Both popup dice `[kept, dropped]` when it rolled two for advantage/disadvantage (#263). */
       d20Rolls?: [number, number];
+      /** #1362: the slot a Paladin spends on Divine Smite if this melee attack hits. */
+      divineSmiteSlotLevel?: number;
     }
   | {
       type: 'spell';
