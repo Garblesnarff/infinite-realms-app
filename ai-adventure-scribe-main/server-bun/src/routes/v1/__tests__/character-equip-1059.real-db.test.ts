@@ -22,6 +22,7 @@
  *
  * Requires TEST_DATABASE_URL or DATABASE_URL — see fixtures/real-db.ts.
  */
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -475,6 +476,120 @@ describeWithDb('in-session weapon equip (#1059)', () => {
     expect(labels).toContain('Attack with Crossbow, light');
     expect(labels).not.toContain('Equip and attack with Light Crossbow');
     expect(labels).not.toContain('Equip and attack with Crossbow, light');
+  });
+
+  it('#1372: a missed ranged attack spends one ammunition, same as a hit', async () => {
+    // Hark T3-008: Corbin Tavish (Shortbow, Arrow x20). Shot 1 HIT: 20 → 19.
+    // Shot 2 MISS (rolled 2 at disadvantage): the count stayed x19 through
+    // Rounds 3 and 4. 2014 5e (PHB p.146): each ranged attack expends one
+    // piece of ammunition, hit or miss. This drives the real gateway
+    // (executeCombatIntent) against the scratch database, so the spend
+    // transaction — not a mock of it — is what the quantity asserts on.
+    // It lives in this file because this file already drives Shortbow
+    // attacks through the gateway in its own bun test process, so no new
+    // real-db file (and no ci.yml change) is needed: the server-real-db
+    // job discovers suites by glob.
+    const id = await create({ ...criminalRoguePayload, name: testId('ammo-1372') });
+    // Stack the sheet arrows the way Hark's game had them: x20, not the
+    // payload's single "Arrows (20)" row.
+    await realDb()
+      .update(characterEquipment)
+      .set({ quantity: 20 })
+      .where(
+        and(eq(characterEquipment.characterId, id), eq(characterEquipment.itemName, 'Arrows (20)')),
+      );
+    const equipRes = await equip(id, 'Shortbow');
+    expect(equipRes.status, await equipRes.clone().text()).toBe(200);
+    const { encounterId, heroId, foeId } = await seat(id);
+    const arrowQty = async (): Promise<number | undefined> => {
+      const [row] = await realDb()
+        .select({ quantity: characterEquipment.quantity })
+        .from(characterEquipment)
+        .where(
+          and(
+            eq(characterEquipment.characterId, id),
+            eq(characterEquipment.itemName, 'Arrows (20)'),
+          ),
+        );
+      return row?.quantity ?? undefined;
+    };
+    expect(await arrowQty()).toBe(20);
+
+    // Miss, unkeyed, at disadvantage with a natural 1: T3-008's shape.
+    const miss = (await executeCombatIntent(
+      encounterId,
+      {
+        type: 'attack',
+        actorId: heroId,
+        targetId: foeId,
+        weaponId: 'Shortbow',
+        disadvantage: true,
+        d20: 1,
+        d20Rolls: [1, 12],
+      },
+      userId,
+      'dm',
+    )) as unknown as { hit?: boolean };
+    expect(miss.hit).toBe(false);
+    expect(await arrowQty()).toBe(19);
+    await resetTurn(encounterId);
+
+    // Miss, keyed (a tray roll carrying an actionId): the keyed path, which
+    // wraps execution in the outer action transaction (and so skips the
+    // inner ammo wrapper).
+    const missKeyed = (await executeCombatIntent(
+      encounterId,
+      {
+        type: 'attack',
+        actorId: heroId,
+        targetId: foeId,
+        weaponId: 'Shortbow',
+        disadvantage: true,
+        d20: 1,
+        d20Rolls: [1, 12],
+        actionId: randomUUID(),
+      },
+      userId,
+      'dm',
+    )) as unknown as { hit?: boolean };
+    expect(missKeyed.hit).toBe(false);
+    expect(await arrowQty()).toBe(18);
+    await resetTurn(encounterId);
+
+    // Hit, natural 20: the control case.
+    const hit = (await executeCombatIntent(
+      encounterId,
+      { type: 'attack', actorId: heroId, targetId: foeId, weaponId: 'Shortbow', d20: 20 },
+      userId,
+      'dm',
+    )) as unknown as { hit?: boolean };
+    expect(hit.hit).toBe(true);
+    expect(await arrowQty()).toBe(17);
+    await resetTurn(encounterId);
+
+    // Miss, player-sourced intent: expectedVersion is
+    // required for player intents, so it is read from the encounter first.
+    const [encounter] = await realDb()
+      .select({ version: combatEncounters.version })
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, encounterId));
+    const playerMiss = (await executeCombatIntent(
+      encounterId,
+      {
+        type: 'attack',
+        actorId: heroId,
+        targetId: foeId,
+        weaponId: 'Shortbow',
+        disadvantage: true,
+        d20: 1,
+        d20Rolls: [1, 12],
+        expectedVersion: encounter?.version ?? 1,
+      },
+      userId,
+      'player',
+    )) as unknown as { hit?: boolean };
+    expect(playerMiss.hit).toBe(false);
+    expect(await arrowQty()).toBe(16);
   });
 
   it('picker: a ranged weapon with no ammunition is not offered as equip-and-attack', async () => {
