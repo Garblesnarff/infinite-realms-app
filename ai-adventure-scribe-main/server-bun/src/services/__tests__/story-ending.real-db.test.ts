@@ -757,15 +757,13 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
       .update(characters)
       .set({ experiencePoints: 1150 })
       .where(eq(characters.id, characterId));
-    await database
-      .insert(experienceEvents)
-      .values({
-        characterId,
-        sessionId,
-        xpGained: 100,
-        source: 'combat',
-        description: 'Victory XP [test]: Ending Golem',
-      });
+    await database.insert(experienceEvents).values({
+      characterId,
+      sessionId,
+      xpGained: 100,
+      source: 'combat',
+      description: 'Victory XP [test]: Ending Golem',
+    });
     await dmTurn({
       sessionId,
       characterId,
@@ -794,6 +792,61 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
       .from(experienceEvents)
       .where(eq(experienceEvents.sessionId, sessionId));
     expect(events.map((event) => event.xpGained)).toEqual([100]);
+  });
+
+  test('#1383: legacy pending award without an id pays and notifies once across a retry', async () => {
+    const { characterId, sessionId } = await seedWorld('legacy-pending');
+    const legacyPending = {
+      characterId,
+      awards: [{ amount: 150, reason: 'Completed the Root Stair' }],
+    };
+    await database
+      .update(gameSessions)
+      .set({ sessionState: { pendingEndingXp: legacyPending } })
+      .where(eq(gameSessions.id, sessionId));
+    const ending = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'I take the final landing.',
+      reply: { ...endingReply, xp_award: null },
+    });
+    expect(ending.status).toBe(200);
+    expect((await sessionRow(sessionId))?.status).toBe('completed');
+    const payments = () =>
+      database
+        .select()
+        .from(experienceEvents)
+        .where(
+          and(
+            eq(experienceEvents.sessionId, sessionId),
+            eq(experienceEvents.characterId, characterId),
+          ),
+        );
+    const notices = async () =>
+      (
+        await database
+          .select()
+          .from(dialogueHistory)
+          .where(eq(dialogueHistory.sessionId, sessionId))
+      ).filter((row) => (row.context as { intent?: string } | null)?.intent === 'story_xp');
+    expect((await payments()).map((event) => event.xpGained)).toEqual([150]);
+    expect(await notices()).toHaveLength(1);
+    // Restore the exact old record to exercise the deterministic claim on a replay, not merely
+    // the empty-pending shortcut after a successful payment.
+    await database
+      .update(gameSessions)
+      .set({ sessionState: { pendingEndingXp: legacyPending } })
+      .where(eq(gameSessions.id, sessionId));
+    const { payPendingEndingXp } = await importWithRealDb(() => import('../dm/story-xp.js'));
+    const retry = await payPendingEndingXp({ sessionId, userId, since: new Date(0) });
+    expect(retry.granted).toBe(0);
+    expect((await payments()).map((event) => event.xpGained)).toEqual([150]);
+    expect(await notices()).toHaveLength(1);
+    const [character] = await database
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect(character.xp).toBe(1200);
   });
 
   test('#1383: separate deferred payments in the same session each pay once', async () => {
