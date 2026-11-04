@@ -143,7 +143,8 @@ const db: any = {
   }),
   transaction: async (callback: (tx: any) => Promise<unknown>) => callback(db),
 };
-mock.module('../../../../../db/client', () => ({ db }));
+const withNpcActionTransaction = mock(async (_id: string, work: () => Promise<unknown>) => work());
+mock.module('../../../../../db/client', () => ({ db, withNpcActionTransaction }));
 
 async function readState() {
   const [storedEncounter] = await db.select().from(combatEncounters);
@@ -273,6 +274,7 @@ function seed(sessionRow: Row, campaignRows: Row[], starterRows: Row[] = []): vo
 }
 
 async function castFireBolt(): Promise<string[]> {
+  withNpcActionTransaction.mockClear();
   await executeCombatIntent(
     encounter.id,
     {
@@ -287,6 +289,8 @@ async function castFireBolt(): Promise<string[]> {
     undefined,
     'typed',
   );
+  expect(withNpcActionTransaction).toHaveBeenCalledTimes(1);
+  expect(withNpcActionTransaction.mock.calls[0]?.[0]).toBe(encounter.id);
   return consumeDmTacticalFacts(encounter.sessionId);
 }
 
