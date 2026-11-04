@@ -15,13 +15,14 @@
  * `headlessEntryEnterBody.player` shape (`buildCombatEntryPlayer`).
  */
 import { afterAll, beforeAll, beforeEach, expect, mock, test } from 'bun:test';
-import { eq, like } from 'drizzle-orm';
+import { asc, eq, like, sql } from 'drizzle-orm';
 
 import {
   campaigns,
   characterStats,
   characters,
   combatEncounters,
+  dialogueHistory,
   gameSessions,
 } from '../../../../../db/schema/index';
 import {
@@ -118,6 +119,9 @@ const { createCombatEntryRoutes } = await importWithRealDb(() => import('../comb
 const { intentRoutes } = await importWithRealDb(() => import('../combat/intents.js'));
 const { combatEntryGateDeps } = await importWithRealDb(
   () => import('../../../services/combat/combat-entry-gate-deps.js'),
+);
+const { persistFallbackDmReply } = await importWithRealDb(
+  () => import('../../../services/dm/dm-reply-persistence.js'),
 );
 const { Elysia } = await import('elysia');
 const {
@@ -218,6 +222,84 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
     return (await response.json()) as Record<string, unknown>;
   };
 
+  // #1390: the same generate, but with the client's reserved dmReply id, so
+  // the persistence block runs and the reply is held as `roll_requests`.
+  const generateWithDmReply = async (messageId: string): Promise<Record<string, unknown>> => {
+    generatedResult = { text: dmText(), provider: 'openrouter', model: 'test/model' };
+    const response = await app!.handle(
+      new Request('http://localhost/v1/llm/generate', {
+        method: 'POST',
+        headers: { authorization: 'Bearer test', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          prompt: 'Continue the scene.',
+          player_input: 'Continue the scene.',
+          sessionId,
+          combatEntry: { sessionId, player },
+          dmReply: { messageId, inCombat: false },
+        }),
+      }),
+    );
+    const body = (await response.json()) as {
+      text?: string;
+      error?: string;
+      dmReplyPersisted?: boolean;
+    };
+    if (response.status !== 200 || typeof body.text !== 'string') {
+      throw new Error(`generate failed ${response.status} ${JSON.stringify(body)}`);
+    }
+    return {
+      ...(JSON.parse(body.text) as Record<string, unknown>),
+      dmReplyPersisted: body.dmReplyPersisted,
+    };
+  };
+
+  const enter = async (): Promise<{ status: number; payload: Record<string, unknown> }> => {
+    const response = await app!.handle(
+      new Request(`http://localhost/v1/combat/sessions/${sessionId}/enter`, {
+        method: 'POST',
+        headers: { authorization: 'Bearer test', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          fromPending: true,
+          player,
+          playerInitiativeRoll: 14,
+        }),
+      }),
+    );
+    const payload = (await response.json()) as Record<string, unknown>;
+    return { status: response.status, payload };
+  };
+
+  const historyRows = async (): Promise<
+    Array<{
+      id: string;
+      speakerType: string | null;
+      message: string | null;
+      context: unknown;
+      createdAtText: string;
+    }>
+  > => {
+    const rows = await database
+      .select({
+        id: dialogueHistory.id,
+        speakerType: dialogueHistory.speakerType,
+        message: dialogueHistory.message,
+        context: dialogueHistory.context,
+        // Microsecond text, not the millisecond Date: two sequential writes
+        // in one seating must order deterministically.
+        createdAtText: sql<string>`${dialogueHistory.createdAt}::text`,
+      })
+      .from(dialogueHistory)
+      .where(eq(dialogueHistory.sessionId, sessionId))
+      .orderBy(asc(dialogueHistory.createdAt));
+    return rows as Array<{
+      id: string;
+      speakerType: string | null;
+      message: string | null;
+      context: unknown;
+      createdAtText: string;
+    }>;
+  };
+
   beforeEach(async () => {
     await resetPendingCombatEntries();
     await database.delete(combatEncounters).where(eq(combatEncounters.sessionId, sessionId));
@@ -311,6 +393,102 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
     const encounterId = payload.encounter?.id;
     if (typeof encounterId !== 'string') throw new Error('encounter id missing');
     expect(rows[0]?.id).toBe(encounterId);
+  });
+
+  test('a held fight-opening reply is written once, before the combat rows, on confirm (#1390)', async () => {
+    // This test's own seating row only: earlier tests in this file seat too.
+    await database.delete(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId));
+    const heldMessageId = '11111111-2222-4333-8444-555555555139';
+    const generated = await generateWithDmReply(heldMessageId);
+    expect(generated.dmReplyPersisted).toBe(false);
+    expect(generated.combat_entry_pending).toMatchObject({
+      combatants: [{ name: 'Head Chef Balthazar', count: 1 }],
+    });
+    // The held precondition: the server wrote no DM row for the reserved id.
+    expect((await historyRows()).filter((row) => row.id === heldMessageId)).toHaveLength(0);
+
+    const { status } = await enter();
+    expect(status).toBe(201);
+
+    const rows = await historyRows();
+    const heldRows = rows.filter((row) => row.id === heldMessageId);
+    expect(heldRows).toHaveLength(1);
+    expect(heldRows[0]?.speakerType).toBe('dm');
+    expect(heldRows[0]?.message).toContain('Balthazar raises his cleaver');
+    const seatingRows = rows.filter(
+      (row) =>
+        row.speakerType === 'system' &&
+        typeof row.message === 'string' &&
+        row.message.startsWith('⚙️ Engine:'),
+    );
+    expect(seatingRows).toHaveLength(1);
+    // In order, before the first combat row: the held narration's server
+    // clock precedes the seating transcript's.
+    expect(heldRows[0]?.createdAtText < seatingRows[0]?.createdAtText).toBe(true);
+  });
+
+  test('the watchdog fallback writes a held fight-opening narration once the fight is live (#1390)', async () => {
+    await database.delete(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId));
+    const heldEnvelope = {
+      text: 'Balthazar raises his cleaver as you lunge.',
+      roll_requests: [{ type: 'initiative', formula: '1d20+2', purpose: 'Initiative' }],
+      combat_transition: 'none',
+      combat_entry_pending: { combatants: [{ name: 'Head Chef Balthazar', count: 1 }] },
+    };
+    const fallbackMessageId = '22222222-3333-4444-8555-666666666139';
+    // The turn's generation time: the seated encounter must postdate it
+    // for the bypass to fire, and must predate a later generation time
+    // for the bypass to refuse.
+    const generatedAt = new Date();
+    // No encounter yet (beforeEach wipes them): the fallback still skips,
+    // so a declined or never-entered fight never resurrects its prose.
+    const skipped = await persistFallbackDmReply({
+      userId,
+      sessionId,
+      messageId: fallbackMessageId,
+      reason: 'roll_requests',
+      envelope: heldEnvelope,
+      generatedAt,
+    });
+    expect(skipped).toEqual({ persisted: false, skipped: 'combat_entry_pending' });
+
+    // Seat the fight, then the same fallback writes the narration.
+    await generateWithDmReply('33333333-4444-4555-8666-777777777139');
+    const { status } = await enter();
+    expect(status).toBe(201);
+    const written = await persistFallbackDmReply({
+      userId,
+      sessionId,
+      messageId: fallbackMessageId,
+      reason: 'roll_requests',
+      envelope: heldEnvelope,
+      generatedAt,
+    });
+    expect(written).toEqual({ persisted: true });
+    const rows = (await historyRows()).filter((row) => row.id === fallbackMessageId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.speakerType).toBe('dm');
+    expect(rows[0]?.message).toContain('Balthazar raises his cleaver');
+    const context =
+      typeof rows[0]?.context === 'string'
+        ? (JSON.parse(rows[0].context) as Record<string, unknown>)
+        : (rows[0]?.context as Record<string, unknown>);
+    expect(context['combat_transition']).toBe('none');
+    expect('rollRequests' in context).toBe(false);
+
+    // An older live fight does not bless a newer turn: the encounter
+    // predates this generation time, so the bypass refuses.
+    const staleMessageId = '44444444-5555-4666-8777-888888888139';
+    const stale = await persistFallbackDmReply({
+      userId,
+      sessionId,
+      messageId: staleMessageId,
+      reason: 'roll_requests',
+      envelope: heldEnvelope,
+      generatedAt: new Date(),
+    });
+    expect(stale).toEqual({ persisted: false, skipped: 'combat_entry_pending' });
+    expect((await historyRows()).filter((row) => row.id === staleMessageId)).toHaveLength(0);
   });
 
   test('a recorded decline persists in the session_state row and lifts (#1328)', async () => {

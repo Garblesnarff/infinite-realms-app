@@ -574,6 +574,19 @@ export interface CombatEntryGateDeps {
     message: string;
   }) => Promise<unknown>;
   publishCombatState: (encounterId: string, userId: string, reason: string) => Promise<unknown>;
+  /**
+   * #1390: persist the fight-opening narration the player confirmed from.
+   * Optional so unit-test wirings seat without a database; production wiring
+   * writes it under its reserved id via `SessionMessageService.addMessage`,
+   * which replaces a provisional row in place and inserts exactly once.
+   * No `rollRequests` in context: combat initiative superseded the roll.
+   */
+  persistHeldDmReply?: (reply: {
+    sessionId: string;
+    userId: string;
+    messageId: string;
+    text: string;
+  }) => Promise<unknown>;
   deriveFirstAction?: (params: {
     sessionId: string;
     combatState: CombatEntryStartResult;
@@ -607,6 +620,12 @@ export interface CombatEntrySeatParams {
   playerInitiativeRoll?: number;
   declaredAttack?: DeclaredAttack;
   seatingHint?: CombatEntrySeatingHint;
+  /**
+   * #1390: the fight-opening DM narration, held as `roll_requests` at
+   * generation and carried on the stored pending entry. Persisted once,
+   * before the seating transcript, when seating succeeds.
+   */
+  heldReply?: { messageId: string; text: string };
 }
 
 /**
@@ -693,6 +712,7 @@ export async function seatCombatEntry(
     playerInitiativeRoll,
     declaredAttack,
     seatingHint,
+    heldReply,
   } = params;
   validatePlayerInitiativeRoll(playerInitiativeRoll);
 
@@ -739,6 +759,39 @@ export async function seatCombatEntry(
       participants[0] = { ...participants[0], initiativeRoll: playerInitiativeRoll };
     }
     const combatState = await deps.startCombat(sessionId, participants, false, userId);
+
+    // #1390: the fight-opening narration, held as `roll_requests` at
+    // generation and never saved by the client once the player took the
+    // combat path, is written here — immediately after the encounter
+    // exists, before the tactical map or the first combat row — so a later
+    // failure (map, first action) cannot strand it: a retry hits the
+    // active-encounter early return and would never reach a later write.
+    // A failed write must not fail seating; the watchdog backstops it.
+    if (heldReply) {
+      if (deps.persistHeldDmReply) {
+        try {
+          await deps.persistHeldDmReply({
+            sessionId,
+            userId,
+            messageId: heldReply.messageId,
+            text: heldReply.text,
+          });
+        } catch (error) {
+          deps.logger.warn({
+            msg: 'COMBAT_ENTRY_HELD_REPLY_PERSIST_FAILED',
+            sessionId,
+            messageId: heldReply.messageId,
+            error,
+          });
+        }
+      } else {
+        deps.logger.warn({
+          msg: 'COMBAT_ENTRY_HELD_REPLY_NO_PERSIST_DEP',
+          sessionId,
+          messageId: heldReply.messageId,
+        });
+      }
+    }
 
     const playerParticipant = combatState.participants.find(
       (participant) =>

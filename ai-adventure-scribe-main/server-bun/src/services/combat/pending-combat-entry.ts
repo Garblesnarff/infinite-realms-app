@@ -52,6 +52,13 @@ export interface StoredCombatEntry {
   pending: CombatEntryPending;
   actorKey: string;
   proposedAt: number;
+  /**
+   * #1390: the fight-opening DM narration, held server-side as `roll_requests`
+   * and never saved by the client once the player takes the combat path.
+   * Seating persists it before the first combat row; the watchdog backstops
+   * it. Never sent to the client: the client already holds this turn.
+   */
+  heldReply?: { messageId: string; text: string };
 }
 
 const memory = new Map<string, StoredCombatEntry>();
@@ -357,6 +364,29 @@ export async function rememberDeliveredCombatEntry(
 }
 
 /**
+ * #1390: carry the held fight-opening narration on the stored entry, so
+ * seating can persist it before the first combat row. The pending object
+ * comes from a parsed envelope (model output), so a malformed one attaches
+ * nothing. Attaches only to the entry for the same actors: a concurrent turn
+ * for different actors must not inherit this turn's narration. Returns
+ * false when nothing was waiting for these actors.
+ */
+export async function attachHeldReplyToPendingEntry(
+  sessionId: string,
+  pending: CombatEntryPending,
+  heldReply: { messageId: string; text: string },
+): Promise<boolean> {
+  if (!pending || !Array.isArray(pending.combatants)) return false;
+  // readStored, not readPendingCombatEntry: an expired entry attaches nothing,
+  // and this must not fire the expired line in the middle of a generate turn.
+  const stored = await readStored(sessionId);
+  if (!stored || expired(stored)) return false;
+  if (stored.actorKey !== actorKeyOf(pending)) return false;
+  await writeStored(sessionId, { ...stored, heldReply });
+  return true;
+}
+
+/**
  * The d20 in an initiative result the player sent as their turn.
  * "Initiative: 16 (nat 14+2)" yields 14. A sentence that merely contains the
  * word does not seat a fight.
@@ -411,6 +441,8 @@ export async function seatStoredPendingEntry(params: {
       playerInitiativeRoll: params.playerInitiativeRoll,
       declaredAttack: stored.pending.declaredAttack,
       seatingHint: stored.pending.seatingHint,
+      // #1390: the held fight-opening narration rides the stored entry.
+      ...(stored.heldReply ? { heldReply: stored.heldReply } : {}),
     },
     combatEntryGateDeps,
   );
