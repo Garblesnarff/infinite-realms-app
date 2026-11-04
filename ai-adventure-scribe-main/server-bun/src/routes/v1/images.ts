@@ -128,6 +128,26 @@ const extractFromMessage = (msg: any): string | null => {
   return null;
 };
 
+/**
+ * Normalize a dialogue_history.images value to an array. The PATCH's raw-sql
+ * UPDATE...RETURNING hands back jsonb as a string under postgres.js 3.4.9
+ * (verified: the SELECT read parses, the RETURNING read does not), while
+ * drizzle selects parse it. Without this, the PATCH response returns a string
+ * where callers expect the images array (#1371).
+ */
+function parseImageArray(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 export const imageRoutes = new Elysia({ prefix: '/v1/images' })
   .use(resolveUser)
   .use(planRateLimit('images'))
@@ -436,7 +456,7 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         logger.info({ msg: 'IMAGE_PATCH_ACCESS_VERIFIED', sessionId: message.session_id });
 
         // Prepare updated images array (max 5)
-        const currentImages = Array.isArray(message.images) ? message.images : [];
+        const currentImages = parseImageArray(message.images);
         const updated = [...currentImages, image].slice(-5);
 
         // Update the message
@@ -467,7 +487,7 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         }
 
         logger.info({ msg: 'IMAGE_PATCH_SUCCESS' });
-        return { images: result[0]?.images || [] };
+        return { images: parseImageArray(result[0]?.images) };
       } catch (e) {
         logger.error({ msg: 'IMAGE_PATCH_ERROR', error: e });
         set.status = 500;
