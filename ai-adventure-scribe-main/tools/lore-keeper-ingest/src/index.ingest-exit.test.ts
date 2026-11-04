@@ -99,6 +99,7 @@ afterEach(() => {
 function createRepoWithRules(ruleCount: number): string {
   const repoPath = mkdtempSync(join(tmpdir(), 'lore-keeper-exit-'));
   createdRepos.push(repoPath);
+  mkdirSync(join(repoPath, 'campaign-ideas', 'Completed'), { recursive: true });
   const campaignPath = join(repoPath, 'campaign-ideas', 'ruleful-campaign');
   mkdirSync(campaignPath, { recursive: true });
 

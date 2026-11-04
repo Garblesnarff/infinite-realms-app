@@ -112,6 +112,7 @@ afterEach(() => {
 function createRepo(): string {
   const repoPath = mkdtempSync(join(tmpdir(), 'lore-keeper-stale-'));
   createdRepos.push(repoPath);
+  mkdirSync(join(repoPath, 'campaign-ideas', 'Completed'), { recursive: true });
   const campaignPath = join(repoPath, 'campaign-ideas', CAMPAIGN);
   mkdirSync(campaignPath, { recursive: true });
   writeFileSync(join(campaignPath, 'overview.md'), '# Stale Campaign\n\nA test campaign.\n');
