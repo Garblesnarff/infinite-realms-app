@@ -183,6 +183,7 @@ export async function recordDmTacticalFact(
   sessionId: string,
   fact: string,
   action?: Omit<DmFactAction, 'timestamp'>,
+  resolvedPlayerSpell?: NonNullable<TacticalMap['resolvedPlayerSpells']>[number],
 ): Promise<void> {
   // A concluded fight has no active board to receive a new engine fact. This mirrors
   // `destroyTacticalCombatMap`: post-conclusion retries must not append another victory
@@ -191,6 +192,16 @@ export async function recordDmTacticalFact(
   const row = await loadLatestTacticalMapRow(sessionId);
   if (!row) return;
   row.state.pendingDmFacts = [...(row.state.pendingDmFacts ?? []), fact];
+  if (resolvedPlayerSpell) {
+    row.state.resolvedPlayerSpells = [
+      ...(row.state.resolvedPlayerSpells ?? []).filter(
+        (entry) =>
+          entry.round === resolvedPlayerSpell.round &&
+          entry.turnOrder === resolvedPlayerSpell.turnOrder,
+      ),
+      resolvedPlayerSpell,
+    ];
+  }
   if (action) {
     row.state.pendingDmFactActions = [
       ...(row.state.pendingDmFactActions ?? []),

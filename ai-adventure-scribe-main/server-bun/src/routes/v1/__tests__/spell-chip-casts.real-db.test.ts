@@ -31,6 +31,7 @@ import {
   burningHandsChipAoECast,
   magicMissileChipIntent,
 } from '../../../../../shared/test-fixtures/spell-chip-casts';
+import { setRngSeed } from '../../../lib/rng.js';
 import {
   closeRealDb,
   describeWithDb,
@@ -313,5 +314,135 @@ describeWithDb('save, auto-hit and area spell chips through the real routes (#12
     expect(outcome.finalDamage).toBeLessThanOrEqual(15);
     const rows = await damageRowsFor(encounterId, sentinelId);
     expect(rows.map((row) => row.damageAmount)).toEqual([outcome.finalDamage]);
+  });
+
+  test('a typed Burning Hands retry in the same turn spends one slot and adds no duplicate engine fact', async () => {
+    const { characterId, sessionId, encounterId, wizardId, sentinelId } = await seedWizardFight();
+    const body = {
+      ...burningHandsChipAoECast(wizardId, { x: 5, y: 3 }),
+      slotLevel: 1,
+      actionOrigin: 'typed',
+    };
+    setRngSeed(1287);
+    try {
+      const first = await call('POST', `/v1/sessions/${sessionId}/tactical-map/aoe-cast`, body);
+      expect(first.status, JSON.stringify(first.json)).toBe(200);
+      expect(await usedSlotsOf(characterId, 1)).toBe(1);
+      expect(await damageRowsFor(encounterId, sentinelId)).toHaveLength(1);
+      const [before] = await realDb()
+        .select()
+        .from(tacticalMaps)
+        .where(eq(tacticalMaps.sessionId, sessionId));
+      expect(
+        ((before.state as TacticalMap).pendingDmFacts ?? []).filter((fact) =>
+          fact.includes('cast Burning Hands'),
+        ),
+      ).toHaveLength(1);
+      const retry = await call('POST', `/v1/sessions/${sessionId}/tactical-map/aoe-cast`, body);
+      expect(retry.status).not.toBe(200);
+      expect(JSON.stringify(retry.json)).toContain('Action already used');
+      expect(await usedSlotsOf(characterId, 1)).toBe(1);
+      expect(await damageRowsFor(encounterId, sentinelId)).toHaveLength(1);
+      const [after] = await realDb()
+        .select()
+        .from(tacticalMaps)
+        .where(eq(tacticalMaps.sessionId, sessionId));
+      expect((after.state as TacticalMap).pendingDmFacts).toEqual(
+        (before.state as TacticalMap).pendingDmFacts,
+      );
+      const other = await call('POST', `/v1/combat/${encounterId}/intent`, {
+        source: 'dm',
+        intent: magicMissileChipIntent(wizardId, sentinelId),
+        origin: 'typed',
+      });
+      expect(other.status).not.toBe(200);
+      const [afterOther] = await realDb()
+        .select()
+        .from(tacticalMaps)
+        .where(eq(tacticalMaps.sessionId, sessionId));
+      expect(
+        ((afterOther.state as TacticalMap).pendingDmFacts ?? []).some(
+          (fact) => fact.includes('Magic Missile') && fact.includes('refused'),
+        ),
+      ).toBe(true);
+      expect(await usedSlotsOf(characterId, 1)).toBe(1);
+    } finally {
+      setRngSeed(undefined);
+    }
+  });
+
+  test('parallel typed Burning Hands submissions resolve once without a refusal fact', async () => {
+    const { characterId, sessionId, encounterId, wizardId, sentinelId } = await seedWizardFight();
+    const body = {
+      ...burningHandsChipAoECast(wizardId, { x: 5, y: 3 }),
+      slotLevel: 1,
+      actionOrigin: 'typed',
+    };
+    setRngSeed(1288);
+    try {
+      const results = await Promise.all([
+        call('POST', `/v1/sessions/${sessionId}/tactical-map/aoe-cast`, body),
+        call('POST', `/v1/sessions/${sessionId}/tactical-map/aoe-cast`, body),
+      ]);
+      expect(results.map((result) => result.status).sort()).toEqual([200, 422]);
+      expect(await usedSlotsOf(characterId, 1)).toBe(1);
+      expect(await damageRowsFor(encounterId, sentinelId)).toHaveLength(1);
+      const [row] = await realDb()
+        .select()
+        .from(tacticalMaps)
+        .where(eq(tacticalMaps.sessionId, sessionId));
+      const facts = (row.state as TacticalMap).pendingDmFacts ?? [];
+      expect(facts.filter((fact) => fact.includes('cast Burning Hands'))).toHaveLength(1);
+      expect(
+        facts.filter((fact) => fact.includes('Burning Hands') && fact.includes('refused')),
+      ).toHaveLength(0);
+    } finally {
+      setRngSeed(undefined);
+    }
+  });
+
+  test('an extra action retains the first resolved cast marker for the same turn', async () => {
+    const { characterId, sessionId, encounterId, wizardId, sentinelId } = await seedWizardFight();
+    const body = {
+      ...burningHandsChipAoECast(wizardId, { x: 5, y: 3 }),
+      slotLevel: 1,
+      actionOrigin: 'typed',
+    };
+    setRngSeed(1289);
+    try {
+      expect(
+        (await call('POST', `/v1/sessions/${sessionId}/tactical-map/aoe-cast`, body)).status,
+      ).toBe(200);
+      // Model the extra-action resource being made available; this test concerns the marker,
+      // not the independently tested Action Surge feature.
+      await realDb()
+        .update(combatParticipants)
+        .set({ actionUsed: false })
+        .where(eq(combatParticipants.id, wizardId));
+      const second = await call('POST', `/v1/combat/${encounterId}/intent`, {
+        source: 'dm',
+        intent: magicMissileChipIntent(wizardId, sentinelId),
+        origin: 'typed',
+      });
+      expect(second.status, JSON.stringify(second.json)).toBe(200);
+      const [before] = await realDb()
+        .select()
+        .from(tacticalMaps)
+        .where(eq(tacticalMaps.sessionId, sessionId));
+      expect((before.state as TacticalMap).resolvedPlayerSpells).toHaveLength(2);
+      expect(
+        (await call('POST', `/v1/sessions/${sessionId}/tactical-map/aoe-cast`, body)).status,
+      ).toBe(422);
+      const [after] = await realDb()
+        .select()
+        .from(tacticalMaps)
+        .where(eq(tacticalMaps.sessionId, sessionId));
+      expect((after.state as TacticalMap).pendingDmFacts).toEqual(
+        (before.state as TacticalMap).pendingDmFacts,
+      );
+      expect(await usedSlotsOf(characterId, 1)).toBe(2);
+    } finally {
+      setRngSeed(undefined);
+    }
   });
 });
