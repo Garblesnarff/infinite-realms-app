@@ -76,6 +76,17 @@ export const useImageGeneration = ({
         setGenErrorByMessage((prev) => ({ ...prev, [messageId]: '' }));
         setGeneratingFor((prev) => new Set(prev).add(messageId));
 
+        // #1371: a scene image must have a saved message row to attach to.
+        // Without one there is nothing the reload read can return, so refuse
+        // before spending a paid generation on an image that cannot persist.
+        if (!message.id) {
+          setGenErrorByMessage((prev) => ({
+            ...prev,
+            [messageId]: 'This message is not saved yet.',
+          }));
+          return;
+        }
+
         const parsed = parseMessageOptions(message.text || '');
         const baseText = parsed?.content || message.text || '';
         let sceneText = removeRollRequestsFromMessage(baseText);
@@ -110,40 +121,47 @@ export const useImageGeneration = ({
           }),
         );
 
+        // #1371: write server-side BEFORE showing. The reload read returns
+        // message.images, so an image shown from ephemeral state alone
+        // vanishes on reload when this write fails. On failure the button
+        // offers Retry instead of a phantom image.
+        try {
+          logger.info(
+            { messageId: message.id, imageUrl: res.url },
+            '[useImageGeneration] Attempting to attach image',
+          );
+
+          await llmApiClient.appendMessageImage({
+            messageId: message.id,
+            image: { url: res.url, prompt: res.prompt, model: res.model },
+          });
+
+          logger.info(
+            { messageId: message.id },
+            '[useImageGeneration] ✅ Image attached successfully',
+          );
+        } catch (persistErr) {
+          logger.error(
+            { error: persistErr, messageId: message.id },
+            '[useImageGeneration] ❌ Image attachment FAILED',
+          );
+          handleAsyncError(persistErr, {
+            userMessage: 'Failed to save generated image',
+            logLevel: 'warn',
+            showToast: false,
+            context: { location: 'useImageGeneration.persist', messageId: message.id },
+          });
+          setGenErrorByMessage((prev) => ({
+            ...prev,
+            [messageId]: 'Failed to save generated image',
+          }));
+          return;
+        }
+
         setImageByMessage((prev) => ({
           ...prev,
           [messageId]: { url: res.url, prompt: res.prompt },
         }));
-
-        if (message.id) {
-          try {
-            logger.info(
-              { messageId: message.id, imageUrl: res.url },
-              '[useImageGeneration] Attempting to attach image',
-            );
-
-            await llmApiClient.appendMessageImage({
-              messageId: message.id,
-              image: { url: res.url, prompt: res.prompt, model: res.model },
-            });
-
-            logger.info(
-              { messageId: message.id },
-              '[useImageGeneration] ✅ Image attached successfully',
-            );
-          } catch (persistErr) {
-            logger.error(
-              { error: persistErr, messageId: message.id },
-              '[useImageGeneration] ❌ Image attachment FAILED',
-            );
-            handleAsyncError(persistErr, {
-              userMessage: 'Failed to save generated image',
-              logLevel: 'warn',
-              showToast: false,
-              context: { location: 'useImageGeneration.persist', messageId: message.id },
-            });
-          }
-        }
 
         setGenErrorByMessage((prev) => {
           const updated = { ...prev };

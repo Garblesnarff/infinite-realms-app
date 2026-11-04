@@ -226,3 +226,79 @@ describeWithDb('#1095 storyTrackers round trip through the real route and databa
     expect(saved.message).toBe('The clock ticks again.');
   });
 });
+
+describeWithDb('#1371 a PATCHed scene image survives the reload read', () => {
+  let campaignId = '';
+  let sessionId = '';
+  let messageId = '';
+  let app: any;
+  beforeAll(async () => {
+    userId = testId('scene-image-1371-owner');
+    [{ id: campaignId }] = await realDb()
+      .insert(campaigns)
+      .values({ userId, name: testId('scene-image-1371-campaign') })
+      .returning({ id: campaigns.id });
+    [{ id: sessionId }] = await realDb()
+      .insert(gameSessions)
+      .values({ campaignId, sessionNumber: 1, status: 'active' })
+      .returning({ id: gameSessions.id });
+    // Seeded with one pre-existing image so the test distinguishes append
+    // from replace: a replace implementation would return only the new image.
+    [{ id: messageId }] = await realDb()
+      .insert(dialogueHistory)
+      .values({
+        sessionId,
+        speakerType: 'dm',
+        message: 'The bell rings over the square.',
+        images: [{ url: 'https://example.test/earlier.png', prompt: 'old', model: 'm' }],
+      })
+      .returning({ id: dialogueHistory.id });
+    const { createRequestPipelineApp, imageRoutes, sessionMessageRoutes } =
+      await importWithRealDb(async () => ({
+        ...(await import('../../../http-pipeline')),
+        ...(await import('../images')),
+        ...(await import('../session-messages')),
+      }));
+    app = createRequestPipelineApp().use(imageRoutes).use(sessionMessageRoutes);
+  });
+  afterAll(async () => {
+    await realDb().delete(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId));
+    await realDb().delete(gameSessions).where(eq(gameSessions.id, sessionId));
+    await realDb().delete(campaigns).where(eq(campaigns.id, campaignId));
+    await closeRealDb();
+  });
+  it('PATCHes an image onto a DM message, then the session GET reload returns it on that message', async () => {
+    // The exact write the client persist path sends after the #1371 fix:
+    // the generated scene image appended to the message row.
+    const patched = await app.handle(
+      new Request(`http://localhost/v1/images/message/${messageId}/images`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: 'https://example.test/scene.png',
+          prompt: 'p',
+          model: 'm',
+        }),
+      }),
+    );
+    expect(patched.status).toBe(200);
+    const patchedBody = await patched.json();
+    expect(patchedBody.images).toHaveLength(2);
+    expect(patchedBody.images.map((image: { url: string }) => image.url)).toEqual([
+      'https://example.test/earlier.png',
+      'https://example.test/scene.png',
+    ]);
+    // The reload read: the same GET the client issues when re-entering the session.
+    const reloaded = await app.handle(
+      new Request(`http://localhost/v1/sessions/${sessionId}/messages`),
+    );
+    expect(reloaded.status).toBe(200);
+    const reloadedBody = await reloaded.json();
+    const saved = reloadedBody.messages.find((message: { id: string }) => message.id === messageId);
+    expect(saved.images).toHaveLength(2);
+    expect(saved.images.map((image: { url: string }) => image.url)).toEqual([
+      'https://example.test/earlier.png',
+      'https://example.test/scene.png',
+    ]);
+  });
+});
