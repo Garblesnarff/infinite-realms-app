@@ -23,6 +23,8 @@
  * once-per-message dedupe instead (never paid twice).
  */
 
+import { randomUUID } from 'node:crypto';
+
 import { sql, type SQL } from 'drizzle-orm';
 
 import { ownedSessionCharacter } from './dm-feature-gate.js';
@@ -36,6 +38,8 @@ import {
   type EngineChatLineWriter,
 } from '../engine-chat-line.js';
 import { XP_THRESHOLDS } from '../progression/progression-mechanics.js';
+
+import type { db as Database } from '../../../../db/client';
 
 export type StoryXpOutcome =
   | 'awarded'
@@ -150,6 +154,7 @@ export interface PendingEndingXpAward {
  * forbids paying them as separate events with the same `since`).
  */
 export interface PendingEndingXp {
+  id?: string;
   characterId: string;
   awards: PendingEndingXpAward[];
 }
@@ -253,6 +258,7 @@ export type DeferEndingXpOutcome =
   | 'deferred'
   | 'already_pending'
   | 'not_one_shot'
+  | 'victory_already_paid'
   | 'already_ended';
 
 /**
@@ -270,13 +276,92 @@ export type DeferEndingXpOutcome =
  * session or character falls through to the normal immediate path, as
  * before.
  */
+type StoryXpTransaction = Parameters<Parameters<typeof Database.transaction>[0]>[0];
+
+async function victoryAlreadyPaid(
+  tx: StoryXpTransaction,
+  input: { characterId: string; sessionId: string; since: Date; reason: string },
+): Promise<boolean> {
+  const { characterId, sessionId, since, reason } = input;
+  const { and, desc, eq, gte, like, lt } = await import('drizzle-orm');
+  const { dialogueHistory, experienceEvents } = await import('../../../../db/schema/index');
+  // #615: the kill already paid. A combat-victory award — the `Victory XP [...]`
+  // description `awardCombatVictoryXp` writes — at or after the player message means
+  // the deterministic victory XP covered this turn's kill; the DM's `xp_award` for it
+  // is the duplicate the issue reports, so nothing is written and no notice follows
+  // (`ensureStoryXpNotice` finds no story event). Only victory awards block: a
+  // combat-source event from elsewhere (ProgressionService.awardXP's generic shape)
+  // still does not swallow one (#218). Checked inside the same transaction as the
+  // story-event check above: in production the victory always lands before the
+  // DM's reply is processed, so the award it wrote is visible to this check.
+  const [victoryPaid] = await tx
+    .select({ id: experienceEvents.id })
+    .from(experienceEvents)
+    .where(
+      and(
+        eq(experienceEvents.characterId, characterId),
+        eq(experienceEvents.sessionId, sessionId),
+        eq(experienceEvents.source, 'combat'),
+        like(experienceEvents.description, 'Victory XP [%'),
+        gte(experienceEvents.timestamp, since),
+      ),
+    )
+    .limit(1);
+  if (victoryPaid) return true;
+  // #615, the next-turn echo: the check above only sees a victory at or after THIS
+  // message, but the duplicate Hark reported (N3-104) arrives one turn later. The
+  // conclusion plants a tactical fact in the next turn's context naming the award
+  // ("COMBAT XP: the game awarded … Do not set xp_award for this victory"), and the
+  // model still emits `xp_award` for the same defeat on that turn — keyed to a new
+  // player message saved after the victory event, so the check above is blind to
+  // it. A victory that landed during the immediately previous turn (at or after the
+  // previous player message, before this one) therefore also blocks — but only
+  // when this award's reason is for that defeat (`reasonReferencesDefeat`): a new
+  // deed on the same turn pays in full. One turn is the bound: the tactical fact
+  // is consumed on the next turn, which is where the echo pressure lives.
+  const [prevMessage] = await tx
+    .select({ createdAt: dialogueHistory.createdAt })
+    .from(dialogueHistory)
+    .where(
+      and(
+        eq(dialogueHistory.sessionId, sessionId),
+        eq(dialogueHistory.speakerType, 'player'),
+        lt(dialogueHistory.createdAt, since),
+      ),
+    )
+    .orderBy(desc(dialogueHistory.createdAt), desc(dialogueHistory.sequenceNumber))
+    .limit(1);
+  if (prevMessage?.createdAt) {
+    const recentVictories = await tx
+      .select({ description: experienceEvents.description })
+      .from(experienceEvents)
+      .where(
+        and(
+          eq(experienceEvents.characterId, characterId),
+          eq(experienceEvents.sessionId, sessionId),
+          eq(experienceEvents.source, 'combat'),
+          like(experienceEvents.description, 'Victory XP [%'),
+          gte(experienceEvents.timestamp, prevMessage.createdAt),
+          lt(experienceEvents.timestamp, since),
+        ),
+      )
+      .orderBy(desc(experienceEvents.timestamp))
+      .limit(5);
+    if (recentVictories.some((row) => reasonReferencesDefeat(reason, row.description))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export async function deferEndingXp(input: {
   sessionId: string;
   characterId: string;
   amount: number;
   reason: string;
+  since?: Date;
 }): Promise<DeferEndingXpOutcome> {
-  const { sessionId, characterId, amount, reason } = input;
+  const { sessionId, characterId, amount, reason, since } = input;
   const { db } = await import('../../../../db/client');
   const { eq } = await import('drizzle-orm');
   const { campaigns, characters, dialogueHistory, gameSessions } =
@@ -299,6 +384,8 @@ export async function deferEndingXp(input: {
       .from(campaigns)
       .where(eq(campaigns.id, locked.campaignId));
     if (!campaign || campaign.campaignLength !== 'one-shot') return 'not_one_shot';
+    if (since && (await victoryAlreadyPaid(tx, { characterId, sessionId, since, reason })))
+      return 'victory_already_paid';
     const [endingRow] = await tx
       .select({ id: dialogueHistory.id })
       .from(dialogueHistory)
@@ -315,13 +402,18 @@ export async function deferEndingXp(input: {
         return 'already_pending';
       }
       state[PENDING_ENDING_XP_KEY] = {
+        ...existing,
         characterId,
         awards: [...existing.awards, { amount, reason }],
       };
     } else {
       // Nothing valid stored (absent, or malformed by a direct database
       // write — it would read as absent anyway): start a fresh list.
-      state[PENDING_ENDING_XP_KEY] = { characterId, awards: [{ amount, reason }] };
+      state[PENDING_ENDING_XP_KEY] = {
+        id: randomUUID(),
+        characterId,
+        awards: [{ amount, reason }],
+      };
     }
     await tx
       .update(gameSessions)
@@ -359,6 +451,7 @@ export async function awardStoryXpOnce(input: {
    * not reserve against itself.
    */
   forPendingPayment?: boolean;
+  pendingId?: string;
   /**
    * #1139: true when this award itself names the ending — i.e. the ending
    * turn's own award. It is the ending XP, not a competing deed, so it pays
@@ -367,8 +460,8 @@ export async function awardStoryXpOnce(input: {
   isEndingAward?: boolean;
 }): Promise<StoryXpGrant> {
   const { db } = await import('../../../../db/client');
-  const { and, desc, eq, gte, like, lt, sql } = await import('drizzle-orm');
-  const { characters, dialogueHistory, experienceEvents, gameSessions } =
+  const { and, eq, gte, sql } = await import('drizzle-orm');
+  const { characters, experienceEvents, gameSessions } =
     await import('../../../../db/schema/index');
   const { characterId, sessionId, since, amount, reason, forPendingPayment, isEndingAward } = input;
   // #130: captured (not returned directly) so the invalidation broadcast below
@@ -410,72 +503,11 @@ export async function awardStoryXpOnce(input: {
       )
       .limit(1);
     if (awarded && !forPendingPayment) return { outcome: 'already_awarded', granted: 0 };
-    // #615: the kill already paid. A combat-victory award — the `Victory XP [...]`
-    // description `awardCombatVictoryXp` writes — at or after the player message means
-    // the deterministic victory XP covered this turn's kill; the DM's `xp_award` for it
-    // is the duplicate the issue reports, so nothing is written and no notice follows
-    // (`ensureStoryXpNotice` finds no story event). Only victory awards block: a
-    // combat-source event from elsewhere (ProgressionService.awardXP's generic shape)
-    // still does not swallow one (#218). Checked inside the same transaction as the
-    // story-event check above: in production the victory always lands before the
-    // DM's reply is processed, so the award it wrote is visible to this check.
-    const [victoryPaid] = await tx
-      .select({ id: experienceEvents.id })
-      .from(experienceEvents)
-      .where(
-        and(
-          eq(experienceEvents.characterId, characterId),
-          eq(experienceEvents.sessionId, sessionId),
-          eq(experienceEvents.source, 'combat'),
-          like(experienceEvents.description, 'Victory XP [%'),
-          gte(experienceEvents.timestamp, since),
-        ),
-      )
-      .limit(1);
-    if (victoryPaid && !forPendingPayment) return { outcome: 'victory_already_paid', granted: 0 };
-    // #615, the next-turn echo: the check above only sees a victory at or after THIS
-    // message, but the duplicate Hark reported (N3-104) arrives one turn later. The
-    // conclusion plants a tactical fact in the next turn's context naming the award
-    // ("COMBAT XP: the game awarded … Do not set xp_award for this victory"), and the
-    // model still emits `xp_award` for the same defeat on that turn — keyed to a new
-    // player message saved after the victory event, so the check above is blind to
-    // it. A victory that landed during the immediately previous turn (at or after the
-    // previous player message, before this one) therefore also blocks — but only
-    // when this award's reason is for that defeat (`reasonReferencesDefeat`): a new
-    // deed on the same turn pays in full. One turn is the bound: the tactical fact
-    // is consumed on the next turn, which is where the echo pressure lives.
-    const [prevMessage] = await tx
-      .select({ createdAt: dialogueHistory.createdAt })
-      .from(dialogueHistory)
-      .where(
-        and(
-          eq(dialogueHistory.sessionId, sessionId),
-          eq(dialogueHistory.speakerType, 'player'),
-          lt(dialogueHistory.createdAt, since),
-        ),
-      )
-      .orderBy(desc(dialogueHistory.createdAt), desc(dialogueHistory.sequenceNumber))
-      .limit(1);
-    if (prevMessage?.createdAt && !forPendingPayment) {
-      const recentVictories = await tx
-        .select({ description: experienceEvents.description })
-        .from(experienceEvents)
-        .where(
-          and(
-            eq(experienceEvents.characterId, characterId),
-            eq(experienceEvents.sessionId, sessionId),
-            eq(experienceEvents.source, 'combat'),
-            like(experienceEvents.description, 'Victory XP [%'),
-            gte(experienceEvents.timestamp, prevMessage.createdAt),
-            lt(experienceEvents.timestamp, since),
-          ),
-        )
-        .orderBy(desc(experienceEvents.timestamp))
-        .limit(5);
-      if (recentVictories.some((row) => reasonReferencesDefeat(reason, row.description))) {
-        return { outcome: 'victory_already_paid', granted: 0 };
-      }
-    }
+    if (
+      !forPendingPayment &&
+      (await victoryAlreadyPaid(tx, { characterId, sessionId, since, reason }))
+    )
+      return { outcome: 'victory_already_paid', granted: 0 };
     // #273: one quarter of the level's milestone band per session, clamped and logged.
     // Only story awards (source 'other') count toward the session total, as above.
     const [sumRow] = await tx
@@ -512,7 +544,7 @@ export async function awardStoryXpOnce(input: {
     const { claimStoryEffect } = await import('../story-effect-claim.js');
     const claimed = await claimStoryEffect(
       forPendingPayment
-        ? `story-xp-pending:${sessionId}:${characterId}`
+        ? `story-xp-pending:${sessionId}:${characterId}:${input.pendingId}`
         : `story-xp:${sessionId}:${characterId}:${since.getTime()}`,
       (id) =>
         tx
@@ -574,12 +606,13 @@ export async function ensureStoryXpNotice(
     since: Date;
     reason: string;
     forPendingPayment?: boolean;
+    pendingId?: string;
   },
   writer: EngineChatLineWriter = postEngineChatLine,
 ): Promise<void> {
   const { sessionId, userId, characterId, since, reason } = input;
   const idSeed = input.forPendingPayment
-    ? `story-xp-pending:${sessionId}:${characterId}`
+    ? `story-xp-pending:${sessionId}:${characterId}:${input.pendingId}`
     : `story-xp:${sessionId}:${characterId}:${since.getTime()}`;
   const { db } = await import('../../../../db/client');
   const { and, eq, gte } = await import('drizzle-orm');
@@ -656,6 +689,9 @@ export async function payPendingEndingXp(input: {
     // attributed; the session cap still clamps the total at pay time.
     const amount = pendingEndingXpTotal(pending);
     const reason = pending.awards.map((award) => award.reason).join('; ');
+    const pendingId =
+      pending.id ??
+      engineLineUuid(JSON.stringify([sessionId, pending.characterId, pending.awards]));
     const grant = await awardStoryXpOnce({
       characterId: pending.characterId,
       sessionId,
@@ -663,6 +699,7 @@ export async function payPendingEndingXp(input: {
       amount,
       reason,
       forPendingPayment: true,
+      pendingId,
     });
     if (grant.granted > 0) {
       await ensureStoryXpNotice({
@@ -672,6 +709,7 @@ export async function payPendingEndingXp(input: {
         since,
         reason,
         forPendingPayment: true,
+        pendingId,
       });
     } else {
       const { db } = await import('../../../../db/client');
@@ -759,8 +797,10 @@ export async function awardStoryXp(
             characterId: character.id,
             amount: award.amount,
             reason,
+            since: message.createdAt,
           })
         : null;
+    if (deferral === 'victory_already_paid') return 'victory_already_paid';
     if (deferral === 'deferred' || deferral === 'already_pending') {
       outcome = 'deferred';
       logger.info({
