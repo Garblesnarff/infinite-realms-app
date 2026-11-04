@@ -196,6 +196,21 @@ export async function loadCharacterWithSpells(
           ? (classFeaturesRaw as Character['classFeatures'])
           : undefined;
 
+    const trackedFeatures = { ...classFeatures };
+    for (const feature of classIdentity.featureUses ?? []) {
+      const key = feature.name
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+      const prior = trackedFeatures[key];
+      trackedFeatures[key] = {
+        ...(prior && typeof prior === 'object' ? prior : {}),
+        currentUses: feature.remaining,
+        ...(feature.max !== undefined ? { maxUses: feature.max } : {}),
+      };
+    }
+
     // Construct complete character object
     const loadedCharacter: Character = {
       id: characterData.id,
@@ -209,7 +224,7 @@ export async function loadCharacterWithSpells(
         ? { grantedFeatureNames: classIdentity.grantedFeatureNames }
         : {}),
       ...(fightingStyles.length > 0 ? { fightingStyles } : {}),
-      ...(classFeatures ? { classFeatures } : {}),
+      ...(Object.keys(trackedFeatures).length ? { classFeatures: trackedFeatures } : {}),
       level: characterData.level || 1,
       classLevels: parseClassLevels(characterData.class_levels),
       background: characterBackground as CharacterBackground | null,

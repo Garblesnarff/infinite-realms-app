@@ -358,6 +358,7 @@ export function useCombatLegalActions(input: {
             Date.now(),
             action.type === 'divine_sense' ? 'action_bar' : 'typed',
           );
+          window.dispatchEvent(new CustomEvent('character-state-updated'));
           const parts = [
             ...formatCombatActionParts(
               { actor_id: actorId, action_type: action.type },

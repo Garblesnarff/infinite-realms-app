@@ -11,11 +11,16 @@ import { getCharacterClassFeatures, getCharacterSubclass } from '@/services/clas
 export interface GrantedClassIdentity {
   subclassName?: string;
   grantedFeatureNames?: string[];
+  featureUses?: Array<{ name: string; remaining: number; max?: number }>;
 }
 
 async function readFeatureNames(
   characterId: string,
-): Promise<{ names?: string[]; subclassFromFeature?: string }> {
+): Promise<{
+  names?: string[];
+  subclassFromFeature?: string;
+  featureUses?: GrantedClassIdentity['featureUses'];
+}> {
   try {
     const features = await getCharacterClassFeatures(characterId);
     const names = features.features.flatMap((row) => {
@@ -26,7 +31,25 @@ async function readFeatureNames(
     const subclassFromFeature = features.features
       .find((row) => row.isActive !== false && row.feature?.subclassName?.trim())
       ?.feature?.subclassName?.trim();
-    return { names, ...(subclassFromFeature ? { subclassFromFeature } : {}) };
+    const featureUses = features.features.flatMap((row) => {
+      const name = row.feature?.featureName?.trim();
+      if (
+        row.isActive === false ||
+        !name ||
+        typeof row.usesRemaining !== 'number' ||
+        row.usesRemaining < 0
+      )
+        return [];
+      const max = row.feature?.usesCount;
+      return [
+        {
+          name,
+          remaining: row.usesRemaining,
+          ...(typeof max === 'number' && max > 0 ? { max } : {}),
+        },
+      ];
+    });
+    return { names, featureUses, ...(subclassFromFeature ? { subclassFromFeature } : {}) };
   } catch (error) {
     logger.warn('[CharacterLoader] Feature rows request failed', { characterId, error });
     return {};
@@ -59,5 +82,6 @@ export async function loadGrantedClassIdentity(
   return {
     ...(resolvedSubclass ? { subclassName: resolvedSubclass } : {}),
     ...(features.names ? { grantedFeatureNames: features.names } : {}),
+    ...(features.featureUses ? { featureUses: features.featureUses } : {}),
   };
 }
