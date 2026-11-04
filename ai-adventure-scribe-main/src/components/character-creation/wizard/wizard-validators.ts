@@ -121,9 +121,15 @@ function validateAbilityScores(character: Character): ValidationResult {
   return VALID;
 }
 
+// Generic background tool that the gaming-set picker replaces with a concrete set.
+const GENERIC_GAMING_SET = 'One type of gaming set';
+
 function validateBackground(character: Character): ValidationResult {
   if (!character.background) {
     return invalid('Please select a background for your character');
+  }
+  if (character.background.toolProficiencies?.includes(GENERIC_GAMING_SET)) {
+    return invalid('Please choose a gaming set for your background');
   }
   return VALID;
 }
@@ -221,6 +227,7 @@ export function validateCharacterForSave(character: Character): boolean {
   } = character;
   const nameError = getCharacterNameError(name || '');
   const abilityScoresValidation = validateAbilityScores(character);
+  const backgroundValidation = validateBackground(character);
 
   const hasBasicFields = !!(
     !nameError &&
@@ -229,6 +236,7 @@ export function validateCharacterForSave(character: Character): boolean {
     abilityScores &&
     abilityScoresValidation.isValid &&
     background &&
+    backgroundValidation.isValid &&
     skillProficiencies !== undefined &&
     languages !== undefined
   );
