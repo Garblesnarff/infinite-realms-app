@@ -43,12 +43,12 @@ describe('#311 same-time roster copies', () => {
         <CharacterList />
       </MemoryRouter>,
     );
-    expect(screen.getByText('Copy 1')).toBeInTheDocument();
-    expect(screen.getByText('Copy 2')).toBeInTheDocument();
+    expect(screen.getByText('#1')).toBeInTheDocument();
+    expect(screen.getByText('#2')).toBeInTheDocument();
     const buttons = screen.getAllByTestId('character-card-delete');
     expect(buttons[0].getAttribute('aria-label')).not.toBe(buttons[1].getAttribute('aria-label'));
     fireEvent.click(buttons[0]);
-    expect(screen.getByRole('alertdialog')).toHaveTextContent('Copy 2');
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('#2');
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     data.filteredCharacters = [data.characters[0]];
     rerender(
@@ -56,8 +56,35 @@ describe('#311 same-time roster copies', () => {
         <CharacterList />
       </MemoryRouter>,
     );
-    expect(screen.getByText('Copy 2')).toBeInTheDocument();
-    expect(screen.queryByText('Copy 1')).not.toBeInTheDocument();
+    expect(screen.getByText('#2')).toBeInTheDocument();
+    expect(screen.queryByText('#1')).not.toBeInTheDocument();
     data.filteredCharacters = data.characters;
+  });
+
+  it('labels two independently created same-name characters by order without implying a copy', () => {
+    const original = data.characters;
+    const independent = [
+      { id: 'later', name: 'Mira', level: 1, created_at: '2026-10-20T09:00:00.000Z' },
+      { id: 'earlier', name: 'Mira', level: 3, created_at: '2026-10-01T09:00:00.000Z' },
+    ];
+    data.characters = independent;
+    data.filteredCharacters = independent;
+    try {
+      render(
+        <MemoryRouter>
+          <CharacterList />
+        </MemoryRouter>,
+      );
+      expect(screen.queryByText(/Copy/)).not.toBeInTheDocument();
+      expect(screen.getByText('#1')).toBeInTheDocument();
+      expect(screen.getByText('#2')).toBeInTheDocument();
+      const buttons = screen.getAllByTestId('character-card-delete');
+      expect(buttons[0].getAttribute('aria-label')).toContain('Mira (#2)');
+      expect(buttons[1].getAttribute('aria-label')).toContain('Mira (#1)');
+      expect(buttons[0].getAttribute('aria-label')).not.toBe(buttons[1].getAttribute('aria-label'));
+    } finally {
+      data.characters = original;
+      data.filteredCharacters = original;
+    }
   });
 });
