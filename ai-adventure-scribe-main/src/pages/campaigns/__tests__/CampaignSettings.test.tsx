@@ -37,7 +37,7 @@ describe('CampaignSettings shares PlayerSettings and keeps Level Advancement (#1
     expect(screen.getByLabelText('Level Advancement')).toBeInTheDocument();
   });
 
-  it('shows the shared table and narration controls and hides Show NPC Rolls', () => {
+  it('shows the shared table and narration controls including Show NPC Rolls', () => {
     renderPage();
     expect(screen.getByRole('switch', { name: 'Show target numbers' })).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Auto-play' })).toHaveAttribute(
@@ -47,7 +47,10 @@ describe('CampaignSettings shares PlayerSettings and keeps Level Advancement (#1
     expect(screen.getByLabelText('Reduce motion')).toBeInTheDocument();
     expect(screen.getByLabelText('Volume')).toBeInTheDocument();
     expect(screen.getByLabelText('Speed')).toBeInTheDocument();
-    expect(screen.queryByRole('switch', { name: 'Show NPC Rolls' })).not.toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Show NPC Rolls' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
     expect(screen.queryByText(/Coming Soon/i)).not.toBeInTheDocument();
   });
 

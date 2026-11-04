@@ -108,9 +108,13 @@ describe('PlayerSettings (#1347)', () => {
     expect(window.localStorage.getItem(VOICE_RATE_KEY)).toBe('1.5');
   });
 
-  it('does not offer Show NPC Rolls', () => {
+  it('starts Show NPC Rolls on by default and turns it off', () => {
     render(<PlayerSettings />);
-    expect(screen.queryByRole('switch', { name: 'Show NPC Rolls' })).not.toBeInTheDocument();
+    const toggle = screen.getByRole('switch', { name: 'Show NPC Rolls' });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(readStored()).toMatchObject({ showNPCRolls: false });
   });
 
   it('keeps each control after the settings are mounted again', () => {
@@ -121,6 +125,7 @@ describe('PlayerSettings (#1347)', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Auto-play' }));
     fireEvent.change(screen.getByLabelText('Volume'), { target: { value: '40' } });
     fireEvent.change(screen.getByLabelText('Speed'), { target: { value: '0.75' } });
+    fireEvent.click(screen.getByRole('switch', { name: 'Show NPC Rolls' }));
     first.unmount();
 
     render(<PlayerSettings />);
@@ -136,6 +141,10 @@ describe('PlayerSettings (#1347)', () => {
     expect(screen.getByRole('switch', { name: 'Auto-play' })).toHaveAttribute(
       'aria-checked',
       'true',
+    );
+    expect(screen.getByRole('switch', { name: 'Show NPC Rolls' })).toHaveAttribute(
+      'aria-checked',
+      'false',
     );
     expect(screen.getByLabelText('Volume')).toHaveValue('40');
     expect(screen.getByLabelText('Speed')).toHaveValue('0.75');

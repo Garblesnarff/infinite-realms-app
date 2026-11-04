@@ -15,7 +15,8 @@ interface CampaignSettingsProps {
 /**
  * Campaign Hub Settings tab. Table and narration come from PlayerSettings, the same
  * component the in-game gear sheet renders. Level Advancement stays here: it is
- * this campaign's rule, not a player preference. Show NPC Rolls stays off the page.
+ * this campaign's rule, not a player preference. Show NPC Rolls is a Table switch
+ * in PlayerSettings.
  */
 const CampaignSettings: React.FC<CampaignSettingsProps> = ({ campaignId, rulesConfig }) => {
   const [levelingMode, setLevelingMode] = useLocalStorage<'xp' | 'milestone'>(

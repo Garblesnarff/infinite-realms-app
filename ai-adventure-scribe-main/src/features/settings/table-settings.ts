@@ -16,7 +16,7 @@ export interface TableSettings {
   narrationSpeed: number;
   diceSound: boolean;
   reduceMotion: ReduceMotion;
-  /** Kept so older saved JSON still parses. No screen reads it. */
+  /** Read by the chat reader (NpcRollSummary): when on, the Behind the Screen summary renders under its DM message. */
   showNPCRolls: boolean;
 }
 
