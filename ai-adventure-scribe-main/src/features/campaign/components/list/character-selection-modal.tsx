@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useCharacterSelection } from '@/features/campaign/hooks/use-character-selection';
+import { SavedPlaythroughList } from '@/pages/SavedPlaythroughList';
 
 interface CharacterSelectionModalProps {
   isOpen: boolean;
@@ -52,6 +53,11 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
     startGameWithCharacter,
     handleCreateCharacter,
     getModifier,
+    // Defaults cover older hook mocks (accessibility test) that do not
+    // return the #1380 picker fields; the real hook always provides them.
+    playthroughChoices = null,
+    choosePlaythrough = () => undefined,
+    clearPlaythroughChoices = () => undefined,
   } = useCharacterSelection({
     isOpen,
     onClose,
@@ -67,137 +73,163 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
     isStarterCampaign && templates && templates.length > 0 ? templates : undefined;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Choose Your Character</DialogTitle>
-          <DialogDescription>
-            {starterTemplates
-              ? `Select a pre-built character for "${campaignName}", or bring one of your own`
-              : isStarterCampaign
-                ? `Select a pre-built character for "${campaignName}"`
-                : `Select a character to play in "${campaignName}"`}
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Choose Your Character</DialogTitle>
+            <DialogDescription>
+              {starterTemplates
+                ? `Select a pre-built character for "${campaignName}", or bring one of your own`
+                : isStarterCampaign
+                  ? `Select a pre-built character for "${campaignName}"`
+                  : `Select a character to play in "${campaignName}"`}
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="mt-4">
-          {isLoading ? (
-            <CharacterSelectionSkeleton />
-          ) : loadError ? (
-            <div className="text-center py-8" role="alert">
-              <p className="text-muted-foreground mb-4">
-                Unable to load characters. Please try again.
-              </p>
-              <Button onClick={retryLoad}>Retry</Button>
-            </div>
-          ) : starterTemplates ? (
-            // Show starter templates, then the account roster below them
-            // (#321): a saved custom character can start a session here too.
-            // The roster is only an addition to loaded templates — when the
-            // template load fails the modal still shows the failure alone
-            // (#2193), never the roster.
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {starterTemplates.map((template) => (
-                  <StarterTemplateCard
-                    key={template.id}
-                    template={template}
-                    isCreating={isCreating}
-                    onSelect={handleSelectTemplate}
-                    getModifier={getModifier}
-                  />
-                ))}
+          <div className="mt-4">
+            {isLoading ? (
+              <CharacterSelectionSkeleton />
+            ) : loadError ? (
+              <div className="text-center py-8" role="alert">
+                <p className="text-muted-foreground mb-4">
+                  Unable to load characters. Please try again.
+                </p>
+                <Button onClick={retryLoad}>Retry</Button>
               </div>
-              {accountCharacters && accountCharacters.length > 0 && (
-                <div className="mt-8">
-                  <p className="text-lg font-semibold text-foreground">Your characters</p>
-                  <p className="text-sm text-muted-foreground mt-1 mb-4">
-                    Or bring one of your own characters into &ldquo;{campaignName}&rdquo;.
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {accountCharacters.map((character) => (
-                      <PlayableCharacterCard
-                        key={character.id}
-                        character={character}
-                        onSelect={startGameWithCharacter}
-                        getModifier={getModifier}
-                        actionLabel="Use here"
-                      />
-                    ))}
+            ) : starterTemplates ? (
+              // Show starter templates, then the account roster below them
+              // (#321): a saved custom character can start a session here too.
+              // The roster is only an addition to loaded templates — when the
+              // template load fails the modal still shows the failure alone
+              // (#2193), never the roster.
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {starterTemplates.map((template) => (
+                    <StarterTemplateCard
+                      key={template.id}
+                      template={template}
+                      isCreating={isCreating}
+                      onSelect={handleSelectTemplate}
+                      getModifier={getModifier}
+                    />
+                  ))}
+                </div>
+                {accountCharacters && accountCharacters.length > 0 && (
+                  <div className="mt-8">
+                    <p className="text-lg font-semibold text-foreground">Your characters</p>
+                    <p className="text-sm text-muted-foreground mt-1 mb-4">
+                      Or bring one of your own characters into &ldquo;{campaignName}&rdquo;.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {accountCharacters.map((character) => (
+                        <PlayableCharacterCard
+                          key={character.id}
+                          character={character}
+                          onSelect={startGameWithCharacter}
+                          getModifier={getModifier}
+                          actionLabel="Use here"
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-              {rosterError && !(accountCharacters && accountCharacters.length > 0) && (
-                <div className="mt-8" role="alert">
-                  <p className="text-sm text-muted-foreground">
-                    Couldn&apos;t load your characters.{' '}
-                    <Button variant="link" className="h-auto p-0 text-sm" onClick={retryLoad}>
-                      Retry
-                    </Button>
-                  </p>
-                </div>
-              )}
-            </>
-          ) : !isStarterCampaign && characters && characters.length > 0 ? (
-            // Show user's characters
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {characters.map((character) => (
-                <PlayableCharacterCard
-                  key={character.id}
-                  character={character}
-                  onSelect={startGameWithCharacter}
-                  getModifier={getModifier}
-                />
-              ))}
-            </div>
-          ) : !isStarterCampaign && accountCharacters && accountCharacters.length > 0 ? (
-            // Nothing is bound to this campaign yet: offer the account roster (#2142).
-            // Gated on !isStarterCampaign: for a pre-built, empty templates means the
-            // template load failed, and hiding that behind "Use here" is wrong.
-            <div>
-              <p className="text-muted-foreground mb-4">
-                No characters are linked to this campaign yet. Use one of your characters here, or
-                create a new one.
-              </p>
+                )}
+                {rosterError && !(accountCharacters && accountCharacters.length > 0) && (
+                  <div className="mt-8" role="alert">
+                    <p className="text-sm text-muted-foreground">
+                      Couldn&apos;t load your characters.{' '}
+                      <Button variant="link" className="h-auto p-0 text-sm" onClick={retryLoad}>
+                        Retry
+                      </Button>
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : !isStarterCampaign && characters && characters.length > 0 ? (
+              // Show user's characters
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {accountCharacters.map((character) => (
+                {characters.map((character) => (
                   <PlayableCharacterCard
                     key={character.id}
                     character={character}
                     onSelect={startGameWithCharacter}
                     getModifier={getModifier}
-                    actionLabel="Use here"
                   />
                 ))}
               </div>
-              <div className="text-center mt-6">
-                <Button variant="outline" onClick={handleCreateCharacter}>
+            ) : !isStarterCampaign && accountCharacters && accountCharacters.length > 0 ? (
+              // Nothing is bound to this campaign yet: offer the account roster (#2142).
+              // Gated on !isStarterCampaign: for a pre-built, empty templates means the
+              // template load failed, and hiding that behind "Use here" is wrong.
+              <div>
+                <p className="text-muted-foreground mb-4">
+                  No characters are linked to this campaign yet. Use one of your characters here, or
+                  create a new one.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {accountCharacters.map((character) => (
+                    <PlayableCharacterCard
+                      key={character.id}
+                      character={character}
+                      onSelect={startGameWithCharacter}
+                      getModifier={getModifier}
+                      actionLabel="Use here"
+                    />
+                  ))}
+                </div>
+                <div className="text-center mt-6">
+                  <Button variant="outline" onClick={handleCreateCharacter}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create a New Character
+                  </Button>
+                </div>
+              </div>
+            ) : isStarterCampaign ? (
+              // Starter with no templates: the template load failed. Say so plainly,
+              // with no roster fallback and no Create button (pre-#2142 behavior).
+              <div className="text-center py-8">
+                <p className="text-muted-foreground mb-4">
+                  No character templates available for this campaign.
+                </p>
+              </div>
+            ) : (
+              // The account has no characters at all: create-only state
+              <div className="text-center py-8">
+                <p className="text-muted-foreground mb-4">You don't have any characters yet.</p>
+                <Button onClick={handleCreateCharacter}>
                   <Plus className="h-4 w-4 mr-2" />
-                  Create a New Character
+                  Create Your First Character
                 </Button>
               </div>
-            </div>
-          ) : isStarterCampaign ? (
-            // Starter with no templates: the template load failed. Say so plainly,
-            // with no roster fallback and no Create button (pre-#2142 behavior).
-            <div className="text-center py-8">
-              <p className="text-muted-foreground mb-4">
-                No character templates available for this campaign.
-              </p>
-            </div>
-          ) : (
-            // The account has no characters at all: create-only state
-            <div className="text-center py-8">
-              <p className="text-muted-foreground mb-4">You don't have any characters yet.</p>
-              <Button onClick={handleCreateCharacter}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create Your First Character
-              </Button>
-            </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/*
+      #1380: more than one saved playthrough shares the picked template's
+      hero name. Same dialog copy as the explore page's picker; choosing
+      one continues that character, closing without choosing seeds nothing.
+    */}
+      <Dialog
+        open={playthroughChoices !== null}
+        onOpenChange={(open) => {
+          if (!open) clearPlaythroughChoices();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Choose a saved playthrough</DialogTitle>
+            <DialogDescription>
+              More than one saved hero has this name. Choose the adventure to continue.
+            </DialogDescription>
+          </DialogHeader>
+          {playthroughChoices ? (
+            <SavedPlaythroughList rows={playthroughChoices} onChoose={choosePlaythrough} />
+          ) : null}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 

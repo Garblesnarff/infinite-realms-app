@@ -1,15 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, type RenderHookResult } from '@testing-library/react';
 import { useNavigate } from 'react-router-dom';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
-import { useCharacterSelection } from '../use-character-selection';
+import {
+  useCharacterSelection,
+  type UseCharacterSelectionReturn,
+} from '../use-character-selection';
 
 import type { Mock } from 'vitest';
 
-
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { userDataApi } from '@/services/user-data-api';
 
 // Mocks
 vi.mock('@/contexts/AuthContext', () => ({
@@ -50,6 +53,7 @@ vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     createCharacter: vi.fn(),
     listCharacters: vi.fn(),
+    listSessions: vi.fn(),
   },
 }));
 
@@ -73,15 +77,18 @@ describe('useCharacterSelection', () => {
       if (queryKey.includes('characters')) return { data: [], isLoading: false };
       return { data: null, isLoading: false };
     });
+    (userDataApi.listSessions as Mock).mockResolvedValue([]);
   });
 
   it('initializes correctly', () => {
-    const { result } = renderHook(() => useCharacterSelection({
-      campaignId: 'camp-1',
-      campaignName: 'Campaign 1',
-      onClose: mockOnClose,
-      isOpen: true,
-    }));
+    const { result } = renderHook(() =>
+      useCharacterSelection({
+        campaignId: 'camp-1',
+        campaignName: 'Campaign 1',
+        onClose: mockOnClose,
+        isOpen: true,
+      }),
+    );
 
     expect(result.current.isCreating).toBe(false);
     expect(result.current.isLoading).toBe(false);
@@ -128,12 +135,14 @@ describe('useCharacterSelection', () => {
   });
 
   it('handles handleCreateCharacter', () => {
-    const { result } = renderHook(() => useCharacterSelection({
-      campaignId: 'camp-1',
-      campaignName: 'Campaign 1',
-      onClose: mockOnClose,
-      isOpen: true,
-    }));
+    const { result } = renderHook(() =>
+      useCharacterSelection({
+        campaignId: 'camp-1',
+        campaignName: 'Campaign 1',
+        onClose: mockOnClose,
+        isOpen: true,
+      }),
+    );
 
     act(() => {
       result.current.handleCreateCharacter();
@@ -143,13 +152,15 @@ describe('useCharacterSelection', () => {
     expect(mockOnClose).toHaveBeenCalled();
   });
 
-  it('handles startGameWithCharacter', () => {
-    const { result } = renderHook(() => useCharacterSelection({
-      campaignId: 'camp-1',
-      campaignName: 'Campaign 1',
-      onClose: mockOnClose,
-      isOpen: true,
-    }));
+  it('handles startGameWithCharacter', async () => {
+    const { result } = renderHook(() =>
+      useCharacterSelection({
+        campaignId: 'camp-1',
+        campaignName: 'Campaign 1',
+        onClose: mockOnClose,
+        isOpen: true,
+      }),
+    );
 
     const mockCharacter = {
       id: 'char-1',
@@ -159,16 +170,110 @@ describe('useCharacterSelection', () => {
       level: 1,
     };
 
-    act(() => {
-      result.current.startGameWithCharacter(mockCharacter);
+    const { userDataApi } = await import('@/services/user-data-api');
+    (userDataApi.listSessions as Mock).mockResolvedValue([]);
+
+    await act(async () => {
+      await result.current.startGameWithCharacter(mockCharacter);
     });
 
     expect(mockOnClose).toHaveBeenCalled();
-    // Since navigate is in a setTimeout(0)
-    act(() => {
-      vi.advanceTimersByTime(0);
-    });
     expect(mockNavigate).toHaveBeenCalledWith('/app/game/camp-1?character=char-1&new=true');
+  });
+
+  it('#1380: startGameWithCharacter resumes an active session instead of forcing new', async () => {
+    const { result } = renderHook(() =>
+      useCharacterSelection({
+        campaignId: 'camp-1',
+        campaignName: 'Campaign 1',
+        onClose: mockOnClose,
+        isOpen: true,
+      }),
+    );
+
+    const { userDataApi } = await import('@/services/user-data-api');
+    (userDataApi.listSessions as Mock).mockResolvedValue([
+      { id: 'sess-live', session_number: 2, status: 'active' },
+      { id: 'sess-1', session_number: 1, status: 'completed' },
+    ]);
+
+    await act(async () => {
+      await result.current.startGameWithCharacter({
+        id: 'char-1',
+        name: 'Grog',
+        race: 'Half-Orc',
+        class: 'Barbarian',
+        level: 1,
+      });
+    });
+
+    expect(mockNavigate).toHaveBeenCalledWith(
+      '/app/game/camp-1?character=char-1&session=sess-live',
+    );
+  });
+
+  it('#1380: startGameWithCharacter continues a completed playthrough through the game route', async () => {
+    const { result } = renderHook(() =>
+      useCharacterSelection({
+        campaignId: 'camp-1',
+        campaignName: 'Campaign 1',
+        onClose: mockOnClose,
+        isOpen: true,
+      }),
+    );
+
+    const { userDataApi } = await import('@/services/user-data-api');
+    (userDataApi.listSessions as Mock).mockResolvedValue([
+      {
+        id: 'sess-2',
+        session_number: 2,
+        status: 'completed',
+        starter_campaign_id: 'starter-last-bout',
+      },
+    ]);
+
+    await act(async () => {
+      await result.current.startGameWithCharacter({
+        id: 'char-1',
+        name: 'Grog',
+        race: 'Half-Orc',
+        class: 'Barbarian',
+        level: 1,
+      });
+    });
+
+    expect(mockNavigate).toHaveBeenCalledWith(
+      '/app/game/camp-1?character=char-1&starterCampaign=starter-last-bout',
+    );
+  });
+
+  it('#1380: startGameWithCharacter fails closed on a session-list error', async () => {
+    const { result } = renderHook(() =>
+      useCharacterSelection({
+        campaignId: 'camp-1',
+        campaignName: 'Campaign 1',
+        onClose: mockOnClose,
+        isOpen: true,
+      }),
+    );
+
+    const { userDataApi } = await import('@/services/user-data-api');
+    (userDataApi.listSessions as Mock).mockRejectedValue(new Error('list down'));
+
+    await act(async () => {
+      await result.current.startGameWithCharacter({
+        id: 'char-1',
+        name: 'Grog',
+        race: 'Half-Orc',
+        class: 'Barbarian',
+        level: 1,
+      });
+    });
+
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Error', variant: 'destructive' }),
+    );
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   it('#209: two fast picks of the same template create only one character', async () => {
@@ -207,5 +312,200 @@ describe('useCharacterSelection', () => {
 
     expect(seedStarterCharacter).toHaveBeenCalledTimes(1);
     expect(userDataApi.createCharacter).toHaveBeenCalledTimes(1);
+  });
+
+  describe('#1380 template picks', () => {
+    const mockStarterLink = (starterCampaignId: string | null): void => {
+      (useQuery as Mock).mockImplementation(({ queryKey }) => {
+        if (queryKey.includes('starterLink')) {
+          return { data: starterCampaignId, isLoading: false, error: null, refetch: vi.fn() };
+        }
+        if (queryKey.includes('starterTemplates')) {
+          return { data: [], isLoading: false, error: null, refetch: vi.fn() };
+        }
+        if (queryKey.includes('characters')) {
+          return { data: [], isLoading: false, error: null, refetch: vi.fn() };
+        }
+        return { data: null, isLoading: false, error: null, refetch: vi.fn() };
+      });
+    };
+
+    const scholarSession = (over: Record<string, unknown>): Record<string, unknown> => ({
+      starter_campaign_id: 'starter-1',
+      status: 'completed',
+      session_number: 1,
+      updated_at: '2026-11-01T10:00:00Z',
+      character: { name: 'The Scholar' },
+      ...over,
+    });
+
+    const renderSelection = (): RenderHookResult<UseCharacterSelectionReturn, unknown> =>
+      renderHook(() =>
+        useCharacterSelection({
+          campaignId: 'camp-1',
+          campaignName: 'Campaign 1',
+          onClose: mockOnClose,
+          isOpen: true,
+        }),
+      );
+
+    const template = { id: 'tpl-scholar', name: 'The Scholar' } as never;
+
+    it('two saved playthroughs for the hero name open the picker and seed nothing', async () => {
+      mockStarterLink('starter-1');
+      (userDataApi.listSessions as Mock).mockResolvedValue([
+        scholarSession({
+          id: 's-a2',
+          session_number: 2,
+          status: 'active',
+          character_id: 'char-esme-a',
+          updated_at: '2026-11-03T10:00:00Z',
+        }),
+        scholarSession({
+          id: 's-a1',
+          character_id: 'char-esme-a',
+          updated_at: '2026-11-02T10:00:00Z',
+        }),
+        scholarSession({ id: 's-b1', character_id: 'char-esme-b' }),
+      ]);
+      const { seedStarterCharacter } =
+        await import('@/services/character/starter-character-seeding');
+
+      const { result } = renderSelection();
+
+      await act(async () => {
+        await result.current.handleSelectTemplate(template);
+      });
+
+      expect(result.current.playthroughChoices).toHaveLength(2);
+      expect(seedStarterCharacter).not.toHaveBeenCalled();
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
+
+    it('one saved playthrough continues that character without seeding', async () => {
+      mockStarterLink('starter-1');
+      (userDataApi.listSessions as Mock).mockResolvedValue([
+        scholarSession({ id: 's-a1', character_id: 'char-esme-a' }),
+      ]);
+      const { seedStarterCharacter } =
+        await import('@/services/character/starter-character-seeding');
+
+      const { result } = renderSelection();
+
+      await act(async () => {
+        await result.current.handleSelectTemplate(template);
+      });
+
+      expect(seedStarterCharacter).not.toHaveBeenCalled();
+      expect(mockNavigate).toHaveBeenCalledWith(
+        '/app/game/camp-1?character=char-esme-a&starterCampaign=starter-1',
+      );
+    });
+
+    it('choosing a picker row continues that character and clears the picker', async () => {
+      mockStarterLink('starter-1');
+      (userDataApi.listSessions as Mock).mockResolvedValue([
+        scholarSession({
+          id: 's-a2',
+          session_number: 2,
+          status: 'active',
+          character_id: 'char-esme-a',
+          updated_at: '2026-11-03T10:00:00Z',
+        }),
+        scholarSession({ id: 's-b1', character_id: 'char-esme-b' }),
+      ]);
+
+      const { result } = renderSelection();
+
+      await act(async () => {
+        await result.current.handleSelectTemplate(template);
+      });
+      const choices = result.current.playthroughChoices;
+      expect(choices).toHaveLength(2);
+      if (!choices) throw new Error('expected playthrough choices');
+
+      act(() => {
+        result.current.choosePlaythrough(choices[0]);
+      });
+
+      expect(mockNavigate).toHaveBeenCalledWith(
+        '/app/game/camp-1?character=char-esme-a&starterCampaign=starter-1',
+      );
+      expect(result.current.playthroughChoices).toBeNull();
+    });
+
+    it('a session-list failure seeds nothing and toasts', async () => {
+      mockStarterLink('starter-1');
+      (userDataApi.listSessions as Mock).mockRejectedValue(new Error('list down'));
+      const { seedStarterCharacter } =
+        await import('@/services/character/starter-character-seeding');
+
+      const { result } = renderSelection();
+
+      await act(async () => {
+        await result.current.handleSelectTemplate(template);
+      });
+
+      expect(seedStarterCharacter).not.toHaveBeenCalled();
+      expect(mockNavigate).not.toHaveBeenCalled();
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Error', variant: 'destructive' }),
+      );
+    });
+
+    it('one saved ACTIVE playthrough continues that character without seeding', async () => {
+      mockStarterLink('starter-1');
+      (userDataApi.listSessions as Mock).mockResolvedValue([
+        scholarSession({
+          id: 's-a2',
+          session_number: 2,
+          status: 'active',
+          character_id: 'char-esme-a',
+          updated_at: '2026-11-03T10:00:00Z',
+        }),
+      ]);
+      const { seedStarterCharacter } =
+        await import('@/services/character/starter-character-seeding');
+
+      const { result } = renderSelection();
+
+      await act(async () => {
+        await result.current.handleSelectTemplate(template);
+      });
+
+      expect(seedStarterCharacter).not.toHaveBeenCalled();
+      expect(mockNavigate).toHaveBeenCalledWith(
+        '/app/game/camp-1?character=char-esme-a&starterCampaign=starter-1',
+      );
+    });
+
+    it('no saved playthrough seeds and starts fresh with new=true', async () => {
+      mockStarterLink('starter-1');
+      (userDataApi.listSessions as Mock).mockResolvedValue([]);
+      const { seedStarterCharacter } =
+        await import('@/services/character/starter-character-seeding');
+      (seedStarterCharacter as Mock).mockImplementation(
+        async (
+          _template: unknown,
+          _campaignId: string,
+          create: (payload: unknown) => Promise<unknown>,
+        ) => create({ name: 'The Scholar' }),
+      );
+      (userDataApi.createCharacter as Mock).mockResolvedValue({ id: 'char-new-1' });
+
+      const { result } = renderSelection();
+
+      await act(async () => {
+        await result.current.handleSelectTemplate(template);
+      });
+      act(() => {
+        vi.advanceTimersByTime(0);
+      });
+
+      expect(seedStarterCharacter).toHaveBeenCalledTimes(1);
+      expect(mockNavigate).toHaveBeenCalledWith(
+        '/app/game/camp-1?character=char-new-1&starterCampaign=starter-1&new=true',
+      );
+    });
   });
 });
