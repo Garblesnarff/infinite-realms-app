@@ -25,7 +25,7 @@
  *           strings back into the right modifiers (this file),
  * while the server real-DB suite (character-create-starting-package) pins
  * hops 2–3 (stored columns and the GET response) against the fixtures this
- * file writes to shared/test-fixtures/*-898-create-payload.json.
+ * file pins in shared/test-fixtures/*-898-create-payload.json.
  *
  * Wizard Characters are built with ProficienciesSelection's own formula
  * over the real data records: fixedSkills = background + race skill
@@ -38,9 +38,10 @@
  * what this pin asserts. The payload chain is the exact one
  * useCharacterSave.saveCharacter runs (same as the #971 pin).
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 
 import { describe, expect, it } from 'vitest';
 
@@ -60,7 +61,10 @@ import { human } from '@/data/races/human';
 import { prepareCharacterPayload } from '@/services/user-data-payload-helpers';
 import { transformCharacterForStorage } from '@/types/character';
 import { transformCharacterData } from '@/utils/character/data-transformers';
-import { calculateSavingThrowModifiers, calculateSkillModifiers } from '@/utils/character-proficiency-calculations';
+import {
+  calculateSavingThrowModifiers,
+  calculateSkillModifiers,
+} from '@/utils/character-proficiency-calculations';
 import {
   transformAbilityScoresForStorage,
   transformEquipmentForStorage,
@@ -70,7 +74,10 @@ import { applyRacialBonusesToAbilityScores } from '@/utils/racialAbilityBonuses'
 
 const TEMP_ID = '00000000-0000-0000-0000-000000000000';
 
-type Scores = Record<'strength' | 'dexterity' | 'constitution' | 'intelligence' | 'wisdom' | 'charisma', number>;
+type Scores = Record<
+  'strength' | 'dexterity' | 'constitution' | 'intelligence' | 'wisdom' | 'charisma',
+  number
+>;
 
 function abilityScores(base: Scores): Character['abilityScores'] {
   const entry = (score: number): { score: number; modifier: number; savingThrow: boolean } => ({
@@ -115,7 +122,14 @@ const CASES: CaseSpec[] = [
     subraceName: 'Standard Human',
     charClass: rogue,
     backgroundId: 'criminal',
-    base: { strength: 8, dexterity: 15, constitution: 13, intelligence: 12, wisdom: 10, charisma: 14 },
+    base: {
+      strength: 8,
+      dexterity: 15,
+      constitution: 13,
+      intelligence: 12,
+      wisdom: 10,
+      charisma: 14,
+    },
     chosenSkills: ['Acrobatics', 'Insight', 'Perception', 'Stealth'],
     expertise: ['Insight', 'Stealth'],
     expectedSkills: ['Acrobatics', 'Deception', 'Insight', 'Perception', 'Stealth'],
@@ -146,7 +160,14 @@ const CASES: CaseSpec[] = [
     race: halfOrc,
     charClass: fighter,
     backgroundId: 'acolyte',
-    base: { strength: 15, dexterity: 12, constitution: 14, intelligence: 10, wisdom: 13, charisma: 8 },
+    base: {
+      strength: 15,
+      dexterity: 12,
+      constitution: 14,
+      intelligence: 10,
+      wisdom: 13,
+      charisma: 8,
+    },
     chosenSkills: ['Athletics', 'Perception'],
     expertise: [],
     expectedSkills: ['Athletics', 'Insight', 'Intimidation', 'Perception', 'Religion'],
@@ -177,7 +198,14 @@ const CASES: CaseSpec[] = [
     subraceName: 'Standard Human',
     charClass: warlock,
     backgroundId: 'acolyte',
-    base: { strength: 8, dexterity: 13, constitution: 14, intelligence: 12, wisdom: 10, charisma: 15 },
+    base: {
+      strength: 8,
+      dexterity: 13,
+      constitution: 14,
+      intelligence: 12,
+      wisdom: 10,
+      charisma: 15,
+    },
     chosenSkills: ['Arcana', 'Deception'],
     expertise: [],
     expectedSkills: ['Arcana', 'Deception', 'Insight', 'Religion'],
@@ -207,7 +235,14 @@ const CASES: CaseSpec[] = [
     subraceName: 'Standard Human',
     charClass: sorcerer,
     backgroundId: 'noble',
-    base: { strength: 8, dexterity: 13, constitution: 14, intelligence: 10, wisdom: 12, charisma: 15 },
+    base: {
+      strength: 8,
+      dexterity: 13,
+      constitution: 14,
+      intelligence: 10,
+      wisdom: 12,
+      charisma: 15,
+    },
     chosenSkills: ['Arcana', 'Deception'],
     expertise: [],
     expectedSkills: ['Arcana', 'Deception', 'History', 'Persuasion'],
@@ -238,7 +273,14 @@ const CASES: CaseSpec[] = [
     subraceName: 'Standard Human',
     charClass: wizard,
     backgroundId: 'acolyte',
-    base: { strength: 8, dexterity: 13, constitution: 12, intelligence: 15, wisdom: 14, charisma: 10 },
+    base: {
+      strength: 8,
+      dexterity: 13,
+      constitution: 12,
+      intelligence: 15,
+      wisdom: 14,
+      charisma: 10,
+    },
     chosenSkills: ['Arcana', 'Investigation'],
     expertise: [],
     expectedSkills: ['Arcana', 'Insight', 'Investigation', 'Religion'],
@@ -277,9 +319,14 @@ function buildWizardCharacter(spec: CaseSpec): Character {
   ];
   const allSkills = [...new Set([...fixedSkills, ...spec.chosenSkills])];
   const fixedTools = [
-    ...new Set([...(spec.charClass.toolProficiencies || []), ...(background.toolProficiencies || [])]),
+    ...new Set([
+      ...(spec.charClass.toolProficiencies || []),
+      ...(background.toolProficiencies || []),
+    ]),
   ];
-  const fixedLanguages = [...new Set([...(spec.race.languages || []), ...(spec.charClass.languages || [])])];
+  const fixedLanguages = [
+    ...new Set([...(spec.race.languages || []), ...(spec.charClass.languages || [])]),
+  ];
   const packageNames = getStartingEquipment(spec.charClass.name).map((eq) => eq.name);
   const subrace = spec.subraceName
     ? spec.race.subraces?.find((s) => s.name === spec.subraceName)
@@ -303,7 +350,13 @@ function buildWizardCharacter(spec: CaseSpec): Character {
     toolProficiencies: fixedTools,
     savingThrowProficiencies: [...(spec.charClass.savingThrowProficiencies || [])],
     classLevels: [
-      { classId: spec.charClass.id, className: spec.charClass.name, level: 1, hitDie: spec.charClass.hitDie, features: [] },
+      {
+        classId: spec.charClass.id,
+        className: spec.charClass.name,
+        level: 1,
+        hitDie: spec.charClass.hitDie,
+        features: [],
+      },
     ],
   } as Character;
 }
@@ -348,7 +401,7 @@ const sorted = (v: unknown): string[] =>
 
 describe('wizard create payload — skills, saves, expertise (#898)', () => {
   for (const spec of CASES) {
-    it(`${spec.key}: payload carries the chosen skills, class saves and expertise`, () => {
+    it(`${spec.key}: payload carries the chosen skills, class saves and expertise`, async () => {
       const payload = buildCreatePayload(buildWizardCharacter(spec));
       expect(sorted(payload.skill_proficiencies), 'skill_proficiencies').toEqual(
         [...spec.expectedSkills].sort(),
@@ -367,8 +420,17 @@ describe('wizard create payload — skills, saves, expertise (#898)', () => {
         dirname(fileURLToPath(import.meta.url)),
         `../../../shared/test-fixtures/${spec.key}-898-create-payload.json`,
       );
-      mkdirSync(dirname(fixturePath), { recursive: true });
-      writeFileSync(fixturePath, `${JSON.stringify(payload, null, 2)}\n`);
+      const existing = JSON.parse(readFileSync(fixturePath, 'utf8'));
+      if (process.env.UPDATE_898_FIXTURES === '1' && !isDeepStrictEqual(payload, existing)) {
+        const prettier = await import('prettier');
+        const config = await prettier.resolveConfig(fixturePath);
+        mkdirSync(dirname(fixturePath), { recursive: true });
+        writeFileSync(
+          fixturePath,
+          await prettier.format(JSON.stringify(payload, null, 2), { ...config, parser: 'json' }),
+        );
+      }
+      expect(payload).toEqual(JSON.parse(readFileSync(fixturePath, 'utf8')));
     });
 
     it(`${spec.key}: sheet load transform + proficiency math reproduce every modifier`, () => {
@@ -427,7 +489,9 @@ describe('wizard create payload — skills, saves, expertise (#898)', () => {
       );
 
       const skillMods = calculateSkillModifiers(loaded);
-      for (const [skill, [modifier, proficient, expertise]] of Object.entries(spec.expectedSkillMods)) {
+      for (const [skill, [modifier, proficient, expertise]] of Object.entries(
+        spec.expectedSkillMods,
+      )) {
         expect(skillMods[skill], `skill ${skill}`).toEqual({ modifier, proficient, expertise });
       }
       const saveMods = calculateSavingThrowModifiers(loaded);
