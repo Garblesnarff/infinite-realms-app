@@ -70,6 +70,26 @@ export interface CastSegment extends CastingSegment {
 export function normalizeSpeaker(name: string): string {
   return name.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
 }
+
+/**
+ * A known id wins. An id that matches no row is ignored, and the name is used
+ * the same way as a missing id. Two rows with that name are ambiguous, so the
+ * line keeps its category voice.
+ */
+export function npcForCastSegment<T extends { id: string; name: string }>(
+  segment: { character?: string | null; npc_id?: string | null },
+  npcs: T[],
+): { npc?: T; ambiguous: boolean } {
+  const npcId = segment.npc_id?.trim();
+  if (npcId) {
+    const npc = npcs.find((row) => row.id === npcId);
+    if (npc) return { npc, ambiguous: false };
+  }
+  const name = segment.character?.trim() || 'Unknown NPC';
+  const matches = npcs.filter((row) => normalizeSpeaker(row.name) === normalizeSpeaker(name));
+  if (matches.length > 1) return { ambiguous: true };
+  return { npc: matches[0], ambiguous: false };
+}
 function hash(value: string): number {
   let result = 2166136261;
   for (const char of value) result = Math.imul(result ^ char.charCodeAt(0), 16777619);

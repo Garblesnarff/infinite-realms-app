@@ -30,6 +30,7 @@ export type NarrationSegment = {
   text: string;
   character?: string;
   voice_category?: string;
+  npc_id?: string;
 };
 
 /**

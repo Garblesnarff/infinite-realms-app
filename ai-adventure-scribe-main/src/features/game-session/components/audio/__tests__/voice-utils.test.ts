@@ -19,6 +19,7 @@ describe('convertNarrationToAISegments', () => {
         text: 'Halt.',
         character: 'Sergeant Vance',
         voice_category: 'gruff',
+        npc_id: '22222222-2222-4222-8222-222222222222',
       },
     ];
     const result = convertNarrationToAISegments(segments);
@@ -36,6 +37,7 @@ describe('convertNarrationToAISegments', () => {
         text: 'Halt.',
         character: 'Sergeant Vance',
         voice_category: 'gruff',
+        npc_id: '22222222-2222-4222-8222-222222222222',
       },
     ]);
   });

@@ -381,7 +381,10 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
     const foreignNpc = await call('POST', `/v1/sessions/${firstSession}/voice-cast`, {
       segments: [{ type: 'character', text: 'Hi', character: 'Mara', npc_id: crypto.randomUUID() }],
     });
-    expect(foreignNpc.status).toBe(404);
+    expect(foreignNpc.status).toBe(200);
+    const foreignLine = (foreignNpc.json as unknown as CastSegment[])[0];
+    expect(foreignLine.npc_id).toBe(speakers[0].npc_id);
+    expect(foreignLine.voice_id).toBe(speakers[0].voice_id);
     const beforeOverflow =
       await sql`SELECT count(*)::int AS count FROM npcs WHERE campaign_id = ${campaignId}`;
     const overflow = await call('POST', `/v1/sessions/${firstSession}/voice-cast`, {
