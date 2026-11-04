@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.38.1](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.38.0...v0.38.1) (2026-11-04)
+
+
+### Bug Fixes
+
+* **combat:** suppress duplicate typed cast facts ([#1287](https://github.com/Garblesnarff/infinite-realms-app/issues/1287)) ([4608348](https://github.com/Garblesnarff/infinite-realms-app/commit/4608348db70f74e2f0f213335f2259f0ee9dce80))
+* **ingest:** reject missing completed campaigns ([#952](https://github.com/Garblesnarff/infinite-realms-app/issues/952)) ([36326db](https://github.com/Garblesnarff/infinite-realms-app/commit/36326db4b30d3be466b1177f722344d765c13dd4))
+* **settings:** render Behind the Screen NPC roll summary behind the Show NPC Rolls switch ([#1347](https://github.com/Garblesnarff/infinite-realms-app/issues/1347)) ([749a432](https://github.com/Garblesnarff/infinite-realms-app/commit/749a432c9d587105ae1a72b1935eb1582ce893fa))
+* **voice:** fall back to Standard on premium 5xx or network failure ([#1348](https://github.com/Garblesnarff/infinite-realms-app/issues/1348)) ([957a10a](https://github.com/Garblesnarff/infinite-realms-app/commit/957a10adae73a5551a5dd9ee80d7a19e55e73e7f))
+* **xp:** guard deferred awards and key pending claims ([#1383](https://github.com/Garblesnarff/infinite-realms-app/issues/1383)) ([58d0dff](https://github.com/Garblesnarff/infinite-realms-app/commit/58d0dffaca6a6c67f9de6acf4cf299fc4571a6eb))
+
 ## [0.38.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.37.2...v0.38.0) (2026-11-04)
 
 
