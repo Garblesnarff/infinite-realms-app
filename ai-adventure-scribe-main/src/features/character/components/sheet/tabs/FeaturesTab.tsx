@@ -4,6 +4,7 @@ import React from 'react';
 
 import { FeatureCategoryCard } from './FeatureCategoryCard';
 import { FeaturesProficienciesCard } from './FeaturesProficienciesCard';
+import { VariableSpendPanel } from './VariableSpendPanel';
 import ClassFeatureTracker from '../sections/ClassFeatureTracker';
 import FightingStylesDisplay from '../sections/FightingStylesDisplay';
 
@@ -110,6 +111,20 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
     <div className="space-y-6">
       {/* Class Feature Tracker */}
       <ClassFeatureTracker character={character} onUpdate={onUpdate} />
+
+      {/* #1233: Divine Smite, Metamagic and Flexible Casting spend through the use route */}
+      {character.id && (
+        <VariableSpendPanel
+          characterId={character.id}
+          rows={classFeatures?.features ?? []}
+          spellSlots={character.spellSlots}
+          // A save with no changed fields skips the write and runs the sheet's silent
+          // reload, so the slot counts come from the server after the spend.
+          onSpent={() => {
+            void onUpdate(character);
+          }}
+        />
+      )}
 
       {/* Fighting Styles */}
       <FightingStylesDisplay character={character} />

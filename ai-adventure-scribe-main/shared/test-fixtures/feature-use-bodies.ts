@@ -21,3 +21,10 @@ export const flexibleCastingConvertUseBody = { option: '1' };
 
 /** A Sorcerer creates a 2nd-level slot: 3 sorcery points. */
 export const flexibleCastingCreateUseBody = { option: '2' };
+
+/**
+ * #1233: the Divine Smite body the picker sends when the sheet runs inside a game session.
+ * The session id makes the route verify the session and the engine post its Smite row
+ * (class-feature-usage-service.ts). Outside a session the body is `divineSmiteUseBody`.
+ */
+export const divineSmiteInSessionUseBody = { slotLevel: 1, sessionId: 'session-1' };

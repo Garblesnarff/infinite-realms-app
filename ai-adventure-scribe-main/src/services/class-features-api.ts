@@ -101,9 +101,9 @@ export interface UseCharacterFeatureResponse {
 }
 
 /**
- * Spend a class feature through the use route. No UI calls this yet: the ActionBar and
- * the sheet tracker spend client-locally, so Smite / Metamagic / Flexible Casting wiring
- * is a follow-up. The sender exists so that wiring sends the exact wire body.
+ * Spend a class feature through the use route. The variable-cost picker
+ * (VariableSpendPanel, Features tab) sends the slot level or option through this
+ * sender (#1233). The fixed-cost sheet and ActionBar paths do not call it yet.
  *
  * Named `spend*`, not `use*`: a `use`-prefixed function reads as a React Hook to the
  * linter, and this one is called from event handlers.
@@ -124,7 +124,18 @@ export async function spendCharacterFeature(
   );
 
   if (!response.ok) {
-    throw new Error(`Class feature use failed with status ${response.status}`);
+    // #1233: the route answers a refusal with a message (no slot left, a missing
+    // slot level). Show that message; fall back to the status when there is none.
+    let message: string | undefined;
+    try {
+      const refusal = (await response.json()) as { message?: unknown };
+      if (typeof refusal.message === 'string' && refusal.message.trim()) {
+        message = refusal.message.trim();
+      }
+    } catch {
+      message = undefined;
+    }
+    throw new Error(message ?? `Class feature use failed with status ${response.status}`);
   }
 
   return (await response.json()) as UseCharacterFeatureResponse;

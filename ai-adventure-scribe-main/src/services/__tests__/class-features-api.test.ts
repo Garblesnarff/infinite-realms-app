@@ -7,6 +7,7 @@ vi.mock('@/services/auth/TokenService', () => ({
 }));
 
 import {
+  divineSmiteInSessionUseBody,
   divineSmiteUseBody,
   flexibleCastingConvertUseBody,
   flexibleCastingCreateUseBody,
@@ -62,6 +63,10 @@ describe('spendCharacterFeature wire bodies (#1233)', () => {
     await expectPosted('character-1', 'feature-1', divineSmiteUseBody);
   });
 
+  it('posts the Divine Smite slot level with the session id inside a session', async () => {
+    await expectPosted('character-1', 'feature-1', divineSmiteInSessionUseBody);
+  });
+
   it('posts the Metamagic option', async () => {
     await expectPosted('character-1', 'feature-2', quickenedMetamagicUseBody);
   });
@@ -69,6 +74,17 @@ describe('spendCharacterFeature wire bodies (#1233)', () => {
   it('posts the Flexible Casting slot level for both directions', async () => {
     await expectPosted('character-1', 'feature-3', flexibleCastingConvertUseBody);
     await expectPosted('character-1', 'feature-4', flexibleCastingCreateUseBody);
+  });
+
+  it('throws the server refusal message on a 400', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: vi.fn().mockResolvedValue({ success: false, message: 'No level 1 spell slot left.' }),
+    } as unknown as Response);
+    await expect(
+      spendCharacterFeature('character-1', 'feature-1', divineSmiteUseBody),
+    ).rejects.toThrow('No level 1 spell slot left.');
   });
 
   it('throws on a non-OK response', async () => {
