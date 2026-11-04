@@ -156,10 +156,13 @@ export function useAuthoritativeCombatSync(
     };
     window.addEventListener('combat-state-updated', listener);
     window.addEventListener('combat-entry-seated', onSeated);
+    // #1357: the session socket reopened after a drop. Re-read the board the same way a reload does.
+    window.addEventListener('session-socket-reconnected', onSeated);
     return () => {
       cancelled = true;
       window.removeEventListener('combat-state-updated', listener);
       window.removeEventListener('combat-entry-seated', onSeated);
+      window.removeEventListener('session-socket-reconnected', onSeated);
     };
   }, [dispatch, getEncounter, sessionId]);
 
