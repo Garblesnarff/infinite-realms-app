@@ -110,13 +110,32 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
                 body: JSON.stringify({ ...providerBody, model_id: modelId }),
               },
             );
-          } catch {
+          } catch (error) {
+            // #1348: the proxy never logged provider failures, so a run of
+            // 502s could not be told apart from a quota or a bad voice.
+            logger.error({
+              msg: 'TTS_UPSTREAM_FETCH_ERROR',
+              error: error instanceof Error ? error.message : error,
+              userId: user.userId,
+              voiceId: params.voiceId,
+            });
             set.status = 503;
             return { error: 'Voice service unavailable' };
           }
 
           if (!upstream.ok) {
-            set.status = upstream.status >= 500 ? 503 : 502;
+            // Upstream 5xx maps to 503, anything else below 500 to 502; log
+            // the upstream status either way so the next run of failures
+            // says whether it was quota (402), auth (401) or a voice (422).
+            const status = upstream.status >= 500 ? 503 : 502;
+            logger.error({
+              msg: 'TTS_UPSTREAM_ERROR',
+              upstreamStatus: upstream.status,
+              status,
+              userId: user.userId,
+              voiceId: params.voiceId,
+            });
+            set.status = status;
             return { error: 'Voice request failed' };
           }
 

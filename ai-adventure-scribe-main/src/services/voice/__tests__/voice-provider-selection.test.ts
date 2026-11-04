@@ -136,12 +136,12 @@ describe('VoiceAudioService provider selection', () => {
     expect(getVoiceModeStatus().fallbackReason).toBe('unavailable');
   });
 
-  it('does not fall back on other premium errors', async () => {
-    premiumResponds(500, 'Internal Server Error');
+  it('still fails the segment on a premium 4xx, without falling back', async () => {
+    premiumResponds(400, 'Bad Request');
 
     const result = await VoiceAudioService.generateAudio(segment);
 
-    expect(result.error).toBe('ElevenLabs API error: 500 Internal Server Error');
+    expect(result.error).toBe('ElevenLabs API error: 400 Bad Request');
     expect(result.audioUrl).toBeUndefined();
     expect(KokoroProvider.generateAudio).not.toHaveBeenCalled();
     expect(getVoiceModeStatus().fallbackReason).toBeNull();

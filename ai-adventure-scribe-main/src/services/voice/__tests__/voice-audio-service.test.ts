@@ -122,17 +122,17 @@ describe('VoiceAudioService', () => {
       expect(requestedUrls[1]).toContain('/v1/ai-proxy/voice/guard-id');
     });
 
-    it('should handle API errors gracefully', async () => {
+    it('should surface a premium 4xx as a segment error without falling back', async () => {
       const mockResponse = {
         ok: false,
-        status: 500,
-        statusText: 'Internal Server Error',
+        status: 400,
+        statusText: 'Bad Request',
       };
       (global.fetch as any).mockResolvedValue(mockResponse);
 
       const result = await VoiceAudioService.generateAudio(mockSegment);
 
-      expect(result.error).toContain('ElevenLabs API error: 500');
+      expect(result.error).toContain('ElevenLabs API error: 400');
       expect(result.isGenerating).toBe(false);
       expect(logger.error).toHaveBeenCalled();
     });
