@@ -14,7 +14,8 @@ import { useShowTargetNumbers } from '@/features/game-session/hooks/use-show-tar
 /**
  * Table and narration settings (#1347, #106 section E). The Campaign Hub Settings
  * tab and the in-game gear sheet both render this. Level Advancement stays on the
- * hub, because it belongs to one campaign. Show NPC Rolls is not here: nothing reads it.
+ * hub, because it belongs to one campaign. Show NPC Rolls renders the Behind the
+ * Screen summary under the DM message that carried the rolls.
  */
 export const PlayerSettings: React.FC = () => {
   const { settings, updateSettings } = useTableSettings();
@@ -49,6 +50,13 @@ export const PlayerSettings: React.FC = () => {
             description="Show armor class and save difficulty on engine cards. Your choice here is the one the header button uses."
             checked={showTargetNumbers}
             onChange={setShowTargetNumbers}
+          />
+          <SettingSwitch
+            id="setting-npc-rolls"
+            label="Show NPC Rolls"
+            description="Show the Behind the Screen summary of NPC rolls under the DM message that carried them."
+            checked={settings.showNPCRolls}
+            onChange={(checked) => updateSettings({ showNPCRolls: checked })}
           />
           <SettingSwitch
             id="setting-dice-sound"

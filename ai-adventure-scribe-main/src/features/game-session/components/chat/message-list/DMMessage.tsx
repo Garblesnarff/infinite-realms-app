@@ -4,6 +4,7 @@ import React, { useMemo, useEffect, useRef } from 'react';
 import { formatNarrative } from './formatNarrative';
 import { prepareChatDisplayText } from './prepare-chat-display-text';
 import { MessageAssetDisplay } from './MessageAssetDisplay';
+import { NpcRollSummary } from './NpcRollSummary';
 import { SceneImageBand } from './SceneImageBand';
 import { MessageVoicePlayer } from './MessageVoicePlayer';
 import { CombatRoundDivider } from './CombatRoundDivider';
@@ -12,6 +13,7 @@ import { EngineLine } from './EngineLine';
 import { parseEngineLine, type EngineRosterRow } from './engine-line-model';
 import { EngineResultCardView } from '../../game/EngineResultCardView';
 import { useShowTargetNumbers } from '../../../hooks/use-show-target-numbers';
+import { useShowNPCRolls } from '@/features/settings/useShowNPCRolls';
 import type { ChatMessage } from '@/types/game';
 
 import { Button } from '@/components/ui/button';
@@ -79,6 +81,7 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
     previousEngineKey,
   }) => {
     const { showTargetNumbers } = useShowTargetNumbers();
+    const showNPCRolls = useShowNPCRolls();
     // The live encounter roster names slugs and says which side an actor is on (#87).
     const participants = useOptionalCombat()?.state?.activeEncounter?.participants;
     const roster = useMemo<EngineRosterRow[]>(
@@ -320,6 +323,8 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
             </div>
           )}
           {content ? <div className={narrativeClass}>{content}</div> : null}
+
+          {showNPCRolls && <NpcRollSummary rolls={message.context?.npcRollResults} />}
 
           {storyTrackers.length > 0 && (
             <div
