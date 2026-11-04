@@ -257,9 +257,7 @@ export async function applyStoryEnding(input: {
   }
 
   // #1139: pay a deferred ending award now, while the session is still
-  // active — its event lands on the ending turn. The ending turn's own award
-  // (applied by story-xp.ts just before this applier in /generate) wins the
-  // once-per-message dedupe, so a deferred award alongside it pays nothing.
+  // active — its event lands on the ending turn with a separate once-only claim.
   // The helper never throws, so a payment failure cannot block the ending:
   // the pending award is left in place and the ending still applies.
   const { payPendingEndingXp } = await import('./story-xp.js');
