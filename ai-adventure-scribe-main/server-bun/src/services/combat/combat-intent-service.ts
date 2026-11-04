@@ -1321,7 +1321,11 @@ export async function executeCombatIntent(
       (submitted.actionId !== undefined &&
         (resolved.type === 'end_turn' || resolved.type === 'attack' || resolved.type === 'spell'));
     // After the turn gate, not before: an absorbed advance that then refuses must stand (#2666).
-    if (!inNpcTransaction && writesEngineRow) {
+    if (
+      !inNpcTransaction &&
+      (writesEngineRow ||
+        (actor.participantType === 'player' && resolved.type === 'spell' && origin === 'typed'))
+    ) {
       const { withNpcActionTransaction } = await import('../../../../db/client');
       return await withNpcActionTransaction(encounterId, () =>
         executeCombatIntent(
@@ -1659,6 +1663,15 @@ export async function executeCombatIntent(
                     ? true
                     : undefined),
           },
+          spellActorIsPlayer && origin === 'typed'
+            ? {
+                actorId: intent.actorId,
+                spellId: (intent.spellId ?? intent.spellName).toLowerCase(),
+                targetIds: [...intent.targetIds].sort(),
+                round: encounter.currentRound,
+                turnOrder: encounter.currentTurnOrder,
+              }
+            : undefined,
         );
         const targetIsPlayer =
           state.participants.find((participant) => participant.id === targetId)?.participantType ===
@@ -2129,12 +2142,31 @@ export async function executeCombatIntent(
       const sessionId = stateForUnresolved?.encounter.sessionId;
       if (sessionId) {
         try {
-          await recordDmTacticalFact(
-            sessionId,
-            submitted.type === 'spell'
-              ? describeRefusedSpell(actorLabel, spellName!, reason)
-              : `Engine: ${actorLabel}'s attack was refused (${reason}). No roll, no damage, no wound.`,
-          );
+          // Only a matching cast in this turn is a duplicate; a different refused spell still
+          // needs its own fact so the DM cannot narrate an action the engine declined.
+          const prior = (await loadActiveTacticalMap(sessionId))?.resolvedPlayerSpells ?? [];
+          const encounter = stateForUnresolved?.encounter;
+          const repeatedTypedCast =
+            submitted.type === 'spell' &&
+            origin === 'typed' &&
+            (reason === 'Action already used this turn' ||
+              reason === 'Combat state changed; refresh and retry') &&
+            encounter &&
+            prior.some(
+              (entry) =>
+                entry.actorId === submitted.actorId &&
+                entry.spellId === (submitted.spellId ?? submitted.spellName).toLowerCase() &&
+                entry.round === encounter.currentRound &&
+                entry.turnOrder === encounter.currentTurnOrder &&
+                JSON.stringify(entry.targetIds) === JSON.stringify([...submitted.targetIds].sort()),
+            );
+          if (!repeatedTypedCast)
+            await recordDmTacticalFact(
+              sessionId,
+              submitted.type === 'spell'
+                ? describeRefusedSpell(actorLabel, spellName!, reason)
+                : `Engine: ${actorLabel}'s attack was refused (${reason}). No roll, no damage, no wound.`,
+            );
         } catch (factError) {
           logger.warn({
             msg: 'PLAYER_ACTION_UNRESOLVED_FACT_FAILED',

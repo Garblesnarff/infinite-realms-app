@@ -56,6 +56,14 @@ export interface TacticalMap {
    * that walked but could not reach, most of all. Consumed by the next context request.
    */
   pendingDmFacts?: string[];
+  /** Resolved player spells in the most recently recorded combat turn. */
+  resolvedPlayerSpells?: Array<{
+    actorId: string;
+    spellId: string;
+    targetIds: string[];
+    round: number;
+    turnOrder: number;
+  }>;
   /**
    * Creatures whose action a won parley holds, and the round it holds it for (#2420). The NPC
    * runner reads it on the creature's turn; a hold from an earlier round no longer matches.
