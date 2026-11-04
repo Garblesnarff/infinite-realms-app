@@ -745,7 +745,105 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
     expect(pendingAfterSecond).toBeUndefined();
   });
 
-  test('#1139: an ending turn with its own award pays once, not twice', async () => {
+  test('#1364: the ending pays its own and the earlier deferred award once', async () => {
+    const { characterId, sessionId } = await seedWorld('pending-and-ending');
+    const first = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We press on toward the Heartwood.',
+      reply: {
+        ...ordinaryReply,
+        xp_award: { amount: 150, reason: "Completed the Gardener's Heir one-shot" },
+      },
+    });
+    expect(first.status).toBe(200);
+    const second = await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'I take the Sunken Temple landing.',
+      reply: { ...endingReply, xp_award: { amount: 100, reason: 'Reached the final landing' } },
+    });
+    expect(second.status).toBe(200);
+    expect((await sessionRow(sessionId))?.status).toBe('completed');
+    const [character] = await database
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect(character.xp).toBe(1300);
+    const events = await database
+      .select()
+      .from(experienceEvents)
+      .where(
+        and(
+          eq(experienceEvents.sessionId, sessionId),
+          eq(experienceEvents.characterId, characterId),
+        ),
+      );
+    expect(events.map((event) => event.xpGained).sort((a, b) => a - b)).toEqual([100, 150]);
+    const lines = await database
+      .select()
+      .from(dialogueHistory)
+      .where(eq(dialogueHistory.sessionId, sessionId));
+    const xpLines = lines.filter(
+      (row) => (row.context as { intent?: string } | null)?.intent === 'story_xp',
+    );
+    expect(xpLines).toHaveLength(2);
+    expect(xpLines.some((row) => row.message.includes('+100 XP'))).toBe(true);
+    expect(xpLines.some((row) => row.message.includes('+150 XP'))).toBe(true);
+    const { payPendingEndingXp } = await importWithRealDb(() => import('../dm/story-xp.js'));
+    expect((await payPendingEndingXp({ sessionId, userId, since: new Date(0) })).outcome).toBe(
+      'none',
+    );
+    const [afterRetry] = await database
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect(afterRetry.xp).toBe(1300);
+  });
+
+  test('#1364: a cap-dropped pending payment logs both amounts', async () => {
+    const { characterId, sessionId } = await seedWorld('pending-cap-warning');
+    await dmTurn({
+      sessionId,
+      characterId,
+      playerInput: 'We press on.',
+      reply: {
+        ...ordinaryReply,
+        xp_award: { amount: 150, reason: "Completed the Gardener's Heir one-shot" },
+      },
+    });
+    const { logger } = await importWithRealDb(() => import('../../lib/logger.js'));
+    const warn = spyOn(logger, 'warn');
+    try {
+      const ending = await dmTurn({
+        sessionId,
+        characterId,
+        playerInput: 'I take the landing.',
+        reply: {
+          ...endingReply,
+          xp_award: { amount: 450, reason: "Completed the Gardener's Heir one-shot" },
+        },
+      });
+      expect(ending.status).toBe(200);
+      expect(
+        warn.mock.calls.some(
+          ([entry]) =>
+            typeof entry === 'object' &&
+            entry !== null &&
+            'msg' in entry &&
+            entry.msg === 'DM_STORY_PENDING_XP_DROPPED' &&
+            'pendingAmount' in entry &&
+            entry.pendingAmount === 150 &&
+            'endingAwardAmount' in entry &&
+            entry.endingAwardAmount === 450,
+        ),
+      ).toBe(true);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test('#1139: an ending turn and deferred award share the session cap', async () => {
     const { characterId, sessionId } = await seedWorld('deferred-twice');
     await dmTurn({
       sessionId,
@@ -759,7 +857,7 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
     expect((await sessionRow(sessionId))?.status).toBe('active');
 
     // The ending turn carries its own 300 award: it pays at once (it IS the
-    // ending turn), and the deferred 450 is dropped rather than added to it.
+    // ending turn), and the deferred 450 is capped to the remaining 150.
     const second = await dmTurn({
       sessionId,
       characterId,
@@ -772,7 +870,7 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
       .select({ xp: characters.experiencePoints })
       .from(characters)
       .where(eq(characters.id, characterId));
-    expect(character?.xp).toBe(1350);
+    expect(character?.xp).toBe(1500);
     const events = await database
       .select()
       .from(experienceEvents)
@@ -782,8 +880,7 @@ describeWithDb('#1020 one-shot ending: the engine fires the ending at Clock 6/6'
           eq(experienceEvents.characterId, characterId),
         ),
       );
-    expect(events).toHaveLength(1);
-    expect(events[0]?.xpGained).toBe(300);
+    expect(events.map((event) => event.xpGained).sort((a, b) => a - b)).toEqual([150, 300]);
     const pendingAfter = (
       (await sessionRow(sessionId))?.sessionState as Record<string, unknown> | null
     )?.pendingEndingXp;

@@ -362,8 +362,7 @@ export async function awardStoryXpOnce(input: {
   /**
    * #1139: true when this award itself names the ending — i.e. the ending
    * turn's own award. It is the ending XP, not a competing deed, so it pays
-   * ahead of the reservation and the pending payment then drops to the
-   * once-per-message dedupe.
+   * ahead of the reservation; the pending payment has its own once-only claim.
    */
   isEndingAward?: boolean;
 }): Promise<StoryXpGrant> {
@@ -410,7 +409,7 @@ export async function awardStoryXpOnce(input: {
         ),
       )
       .limit(1);
-    if (awarded) return { outcome: 'already_awarded', granted: 0 };
+    if (awarded && !forPendingPayment) return { outcome: 'already_awarded', granted: 0 };
     // #615: the kill already paid. A combat-victory award — the `Victory XP [...]`
     // description `awardCombatVictoryXp` writes — at or after the player message means
     // the deterministic victory XP covered this turn's kill; the DM's `xp_award` for it
@@ -433,7 +432,7 @@ export async function awardStoryXpOnce(input: {
         ),
       )
       .limit(1);
-    if (victoryPaid) return { outcome: 'victory_already_paid', granted: 0 };
+    if (victoryPaid && !forPendingPayment) return { outcome: 'victory_already_paid', granted: 0 };
     // #615, the next-turn echo: the check above only sees a victory at or after THIS
     // message, but the duplicate Hark reported (N3-104) arrives one turn later. The
     // conclusion plants a tactical fact in the next turn's context naming the award
@@ -457,7 +456,7 @@ export async function awardStoryXpOnce(input: {
       )
       .orderBy(desc(dialogueHistory.createdAt), desc(dialogueHistory.sequenceNumber))
       .limit(1);
-    if (prevMessage?.createdAt) {
+    if (prevMessage?.createdAt && !forPendingPayment) {
       const recentVictories = await tx
         .select({ description: experienceEvents.description })
         .from(experienceEvents)
@@ -512,7 +511,9 @@ export async function awardStoryXpOnce(input: {
     if (granted <= 0) return { outcome: 'capped', granted: 0 };
     const { claimStoryEffect } = await import('../story-effect-claim.js');
     const claimed = await claimStoryEffect(
-      `story-xp:${sessionId}:${characterId}:${since.getTime()}`,
+      forPendingPayment
+        ? `story-xp-pending:${sessionId}:${characterId}`
+        : `story-xp:${sessionId}:${characterId}:${since.getTime()}`,
       (id) =>
         tx
           .insert(experienceEvents)
@@ -572,16 +573,20 @@ export async function ensureStoryXpNotice(
     characterId: string;
     since: Date;
     reason: string;
+    forPendingPayment?: boolean;
   },
   writer: EngineChatLineWriter = postEngineChatLine,
 ): Promise<void> {
   const { sessionId, userId, characterId, since, reason } = input;
-  const idSeed = `story-xp:${sessionId}:${characterId}:${since.getTime()}`;
+  const idSeed = input.forPendingPayment
+    ? `story-xp-pending:${sessionId}:${characterId}`
+    : `story-xp:${sessionId}:${characterId}:${since.getTime()}`;
   const { db } = await import('../../../../db/client');
   const { and, eq, gte } = await import('drizzle-orm');
   const { experienceEvents } = await import('../../../../db/schema/index');
   try {
     if (await engineChatLineExists(idSeed)) return;
+    const { engineLineUuid } = await import('../engine-chat-line.js');
     const [event] = await db
       .select({ xp: experienceEvents.xpGained, why: experienceEvents.description })
       .from(experienceEvents)
@@ -590,7 +595,9 @@ export async function ensureStoryXpNotice(
           eq(experienceEvents.characterId, characterId),
           eq(experienceEvents.sessionId, sessionId),
           eq(experienceEvents.source, 'other'),
-          gte(experienceEvents.timestamp, since),
+          input.forPendingPayment
+            ? eq(experienceEvents.id, engineLineUuid(idSeed))
+            : gte(experienceEvents.timestamp, since),
         ),
       )
       .limit(1);
@@ -622,11 +629,8 @@ export type PayPendingEndingXpOutcome = 'paid' | 'dropped' | 'none' | 'failed';
  * #1139: pays deferred ending awards, if any are outstanding. Shared by the
  * ending turn (`applyStoryEnding`), the already-applied retry path, and the
  * manual-end route — every path that can resolve a session. The list pays
- * as one summed event (the once-per-message dedupe forbids separate events
- * with the same `since`), through `awardStoryXpOnce` with
- * `forPendingPayment`, so the session cap reservation does not count the
- * awards against themselves, and the once-per-turn dedupe still blocks a
- * double pay against the ending turn's own award. The pending key is
+ * as one summed event through `awardStoryXpOnce` with `forPendingPayment`.
+ * Its claim is separate from the ending turn's own award and remains once-only. The pending key is
  * cleared whenever the payment attempt resolves (paid, capped out, or
  * deduped) — never on a failure, where the awards are left in place for a
  * later path to recover. Never throws: a payment failure must not block
@@ -667,6 +671,31 @@ export async function payPendingEndingXp(input: {
         characterId: pending.characterId,
         since,
         reason,
+        forPendingPayment: true,
+      });
+    } else {
+      const { db } = await import('../../../../db/client');
+      const { and, eq, gte } = await import('drizzle-orm');
+      const { experienceEvents } = await import('../../../../db/schema/index');
+      const [ending] = await db
+        .select({ amount: experienceEvents.xpGained })
+        .from(experienceEvents)
+        .where(
+          and(
+            eq(experienceEvents.sessionId, sessionId),
+            eq(experienceEvents.characterId, pending.characterId),
+            eq(experienceEvents.source, 'other'),
+            gte(experienceEvents.timestamp, since),
+          ),
+        )
+        .limit(1);
+      logger.warn({
+        msg: 'DM_STORY_PENDING_XP_DROPPED',
+        sessionId,
+        characterId,
+        pendingAmount: amount,
+        endingAwardAmount: ending?.amount ?? 0,
+        grantedAmount: grant.granted,
       });
     }
     await clearPendingEndingXp(sessionId);
@@ -744,9 +773,8 @@ export async function awardStoryXp(
       return outcome;
     }
     // #1139: an ending-named award that reaches here IS the ending turn's own
-    // award (endingDeclared) — it is the ending XP, not an ordinary deed, so
-    // it does not reserve against the pending award: it pays first, and the
-    // pending payment then drops to the once-per-message dedupe. Ordinary
+    // award (endingDeclared) — it pays first, and the pending payment
+    // uses its own once-only claim against the remaining session cap. Ordinary
     // awards reserve, so they cannot eat the deferred award's share.
     const grant = await awardStoryXpOnce({
       characterId: character.id,
