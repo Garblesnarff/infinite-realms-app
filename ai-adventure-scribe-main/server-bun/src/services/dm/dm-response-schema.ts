@@ -163,6 +163,7 @@ export type DMResponse = {
     text: string;
     character?: string | null;
     voice_category?: VoiceCategory | null;
+    npc_id?: string | null;
   }>;
   roll_requests: Array<{
     type: 'check' | 'save' | 'attack' | 'damage' | 'initiative';

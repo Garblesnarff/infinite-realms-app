@@ -14,6 +14,7 @@ export const convertNarrationToAISegments = (
       text: segment.text,
       character: isNarration ? undefined : segment.character,
       voice_category: segment.voice_category,
+      ...(segment.npc_id ? { npc_id: segment.npc_id } : {}),
     };
   });
 };

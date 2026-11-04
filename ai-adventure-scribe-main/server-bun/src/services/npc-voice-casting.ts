@@ -3,6 +3,7 @@ import {
   IR_VOICES,
   canonicalIrVoice,
   normalizeSpeaker,
+  npcForCastSegment,
   pickNpcVoice,
   type CastingSegment,
   type CastSegment,
@@ -73,21 +74,16 @@ export async function castNpcVoices(
         muted.add(index);
         continue;
       }
-      let npc: Npc | undefined;
-      if (segment.npc_id) {
-        npc = npcs.find((row) => row.id === segment.npc_id);
-        if (!npc) throw new NotFoundError('NPC', segment.npc_id);
-      } else {
-        const matches = npcs.filter((row) => normalizeSpeaker(row.name) === normalized);
-        if (matches.length > 1) {
-          // Without an NPC id the line cannot be attributed; it keeps its category voice.
-          logger.warn({ msg: 'NPC_VOICE_AMBIGUOUS_SPEAKER', session_id: sessionId, index });
-          resolved.push(null);
-          ambiguous.add(index);
-          continue;
-        }
-        npc = matches[0];
+      const picked = npcForCastSegment(segment, npcs);
+      if (picked.unknownId) throw new NotFoundError('NPC', segment.npc_id ?? '');
+      if (picked.ambiguous) {
+        // Without an NPC id the line cannot be attributed; it keeps its category voice.
+        logger.warn({ msg: 'NPC_VOICE_AMBIGUOUS_SPEAKER', session_id: sessionId, index });
+        resolved.push(null);
+        ambiguous.add(index);
+        continue;
       }
+      let npc: Npc | undefined = picked.npc;
       if (!npc) {
         const [created] = await tx<Npc[]>`
           INSERT INTO npcs (campaign_id, name, description)

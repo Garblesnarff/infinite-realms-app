@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { npcForCastSegment } from '../../../../../shared/npc-voices.js';
 import { parseDmResponse } from '../dm-response-schema.js';
 import {
   deriveNarrationSegments,
@@ -175,5 +176,37 @@ describe('deriveNarrationSegments', () => {
     } finally {
       console.warn = warn;
     }
+  });
+
+  test('an envelope NPC id selects that voice when two NPCs share a name', () => {
+    const maraA = '11111111-1111-4111-8111-111111111111';
+    const maraB = '22222222-2222-4222-8222-222222222222';
+    const text = 'The square is busy. "Welcome."';
+    const parsed = parseDmResponse(
+      envelope(text, [
+        {
+          type: 'character',
+          text: 'Welcome.',
+          character: 'Mara',
+          npc_id: maraB,
+          voice_category: 'guard',
+        },
+      ]),
+    );
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const spoken = parsed.data.narration_segments.find((segment) => segment.type === 'character');
+    expect(spoken?.npc_id).toBe(maraB);
+    const rows = [
+      { id: maraA, name: 'Mara', voice_id: 'nathan' },
+      { id: maraB, name: 'Mara', voice_id: 'serena' },
+    ];
+    const byId = npcForCastSegment(spoken ?? {}, rows);
+    expect(byId.ambiguous).toBe(false);
+    expect(byId.unknownId).toBe(false);
+    expect(byId.npc?.voice_id).toBe('serena');
+    const byName = npcForCastSegment({ character: 'Mara' }, rows);
+    expect(byName.ambiguous).toBe(true);
+    expect(byName.npc).toBeUndefined();
   });
 });

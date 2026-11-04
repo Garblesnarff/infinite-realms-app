@@ -6,6 +6,7 @@ export type ModelNarrationHint = {
   text?: string | null;
   character?: string | null;
   voice_category?: string | null;
+  npc_id?: string | null;
 };
 
 export type DerivedNarrationSegment = {
@@ -13,6 +14,7 @@ export type DerivedNarrationSegment = {
   text: string;
   character: string | null;
   voice_category: VoiceCategory | null;
+  npc_id?: string | null;
 };
 
 /** A model hint whose voice_category has been canonicalized (or dropped). */
@@ -186,12 +188,18 @@ export function withCoverageFallback(
     : [];
 }
 
+const knownNpcId = (hint: { npc_id?: string | null } | undefined): string | null => {
+  const id = typeof hint?.npc_id === 'string' ? hint.npc_id.trim() : '';
+  return id || null;
+};
+
 const pushSegment = (
   segments: DerivedNarrationSegment[],
   type: 'dm' | 'character',
   text: string,
   character: string | null,
   voiceCategory: VoiceCategory | null,
+  npcId: string | null = null,
 ): void => {
   if (!text) return;
   segments.push({
@@ -199,6 +207,7 @@ const pushSegment = (
     text,
     character,
     voice_category: voiceCategory,
+    ...(npcId ? { npc_id: npcId } : {}),
   });
 };
 
@@ -252,7 +261,7 @@ export function deriveNarrationSegments(
     const speakerName = hint?.character?.trim() || lastNpc?.name || null;
     const voiceCategory = hint?.voice_category || lastNpc?.voiceCategory || null;
     if (speakerName) {
-      pushSegment(segments, 'character', quoted, speakerName, voiceCategory);
+      pushSegment(segments, 'character', quoted, speakerName, voiceCategory, knownNpcId(hint));
     } else {
       pushSegment(segments, 'dm', quoted, null, 'narrator');
     }
@@ -281,7 +290,8 @@ const speakerIdentity = (segment: DerivedNarrationSegment): string => {
   if (segment.type === 'dm' || segment.type === 'transition' || !segment.character) {
     return 'narrator';
   }
-  return segment.character.trim().toLowerCase();
+  const id = segment.npc_id?.trim() || '';
+  return `${segment.character.trim().toLowerCase()}|${id}`;
 };
 
 const mergeAdjacentSpeakers = (segments: DerivedNarrationSegment[]): DerivedNarrationSegment[] => {

@@ -87,6 +87,7 @@ export interface NarrationSegment {
   text: string;
   character?: string;
   voice_category?: string;
+  npc_id?: string;
 }
 
 export interface DiceRoll {
