@@ -75,7 +75,6 @@ export async function castNpcVoices(
         continue;
       }
       const picked = npcForCastSegment(segment, npcs);
-      if (picked.unknownId) throw new NotFoundError('NPC', segment.npc_id ?? '');
       if (picked.ambiguous) {
         // Without an NPC id the line cannot be attributed; it keeps its category voice.
         logger.warn({ msg: 'NPC_VOICE_AMBIGUOUS_SPEAKER', session_id: sessionId, index });

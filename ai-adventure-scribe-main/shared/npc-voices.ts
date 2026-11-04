@@ -72,24 +72,23 @@ export function normalizeSpeaker(name: string): string {
 }
 
 /**
- * Id wins. A missing id falls back to the name, and two rows with that name
- * are ambiguous so the line keeps its category voice.
+ * A known id wins. An id that matches no row is ignored, and the name is used
+ * the same way as a missing id. Two rows with that name are ambiguous, so the
+ * line keeps its category voice.
  */
 export function npcForCastSegment<T extends { id: string; name: string }>(
   segment: { character?: string | null; npc_id?: string | null },
   npcs: T[],
-): { npc?: T; ambiguous: boolean; unknownId: boolean } {
+): { npc?: T; ambiguous: boolean } {
   const npcId = segment.npc_id?.trim();
   if (npcId) {
     const npc = npcs.find((row) => row.id === npcId);
-    return npc
-      ? { npc, ambiguous: false, unknownId: false }
-      : { ambiguous: false, unknownId: true };
+    if (npc) return { npc, ambiguous: false };
   }
   const name = segment.character?.trim() || 'Unknown NPC';
   const matches = npcs.filter((row) => normalizeSpeaker(row.name) === normalizeSpeaker(name));
-  if (matches.length > 1) return { ambiguous: true, unknownId: false };
-  return { npc: matches[0], ambiguous: false, unknownId: false };
+  if (matches.length > 1) return { ambiguous: true };
+  return { npc: matches[0], ambiguous: false };
 }
 function hash(value: string): number {
   let result = 2166136261;

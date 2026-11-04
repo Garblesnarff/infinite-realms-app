@@ -203,10 +203,36 @@ describe('deriveNarrationSegments', () => {
     ];
     const byId = npcForCastSegment(spoken ?? {}, rows);
     expect(byId.ambiguous).toBe(false);
-    expect(byId.unknownId).toBe(false);
     expect(byId.npc?.voice_id).toBe('serena');
     const byName = npcForCastSegment({ character: 'Mara' }, rows);
     expect(byName.ambiguous).toBe(true);
     expect(byName.npc).toBeUndefined();
+  });
+
+  test('an envelope npc id with no matching row uses the name voice', () => {
+    const mara = '11111111-1111-4111-8111-111111111111';
+    const missing = '33333333-3333-4333-8333-333333333333';
+    const text = 'The square is busy. "Welcome."';
+    const parsed = parseDmResponse(
+      envelope(text, [
+        {
+          type: 'character',
+          text: 'Welcome.',
+          character: 'Mara',
+          npc_id: missing,
+          voice_category: 'guard',
+        },
+      ]),
+    );
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const spoken = parsed.data.narration_segments.find((segment) => segment.type === 'character');
+    expect(spoken?.npc_id).toBe(missing);
+    const picked = npcForCastSegment(spoken ?? {}, [
+      { id: mara, name: 'Mara', voice_id: 'serena' },
+    ]);
+    expect(picked.ambiguous).toBe(false);
+    expect(picked.npc?.id).toBe(mara);
+    expect(picked.npc?.voice_id).toBe('serena');
   });
 });
