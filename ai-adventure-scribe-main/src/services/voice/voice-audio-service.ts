@@ -6,10 +6,12 @@ import { activatePremiumFallback, isStandardVoiceActive } from './voice-mode-sto
 import {
   type VoiceProvider,
   type VoiceRef,
+  VoiceProviderError,
   VoiceQuotaError,
   VoiceUnavailableError,
 } from './voice-provider';
 
+import { isNetworkError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 
 /**
@@ -75,7 +77,12 @@ export class VoiceAudioService {
    *
    * Provider order: the player's mode (Premium / Standard). A premium 429
    * (quota) or 503 (outage) switches the session to Standard and retries this
-   * segment there; any other status is returned as the segment's error.
+   * segment there. A premium 5xx other than 503, or a network failure, retries
+   * this segment on Standard once without switching the session (#1348: the
+   * proxy's 502s are transient upstream failures, not a reason to abandon
+   * premium for the session). A Standard failure after a fallback ends the
+   * segment; it never loops back to premium. Any other status is returned as
+   * the segment's error.
    */
   static async generateAudio(
     segment: VoiceSegment,
@@ -100,11 +107,22 @@ export class VoiceAudioService {
           sessionId,
         );
       } catch (error) {
-        if (!(error instanceof VoiceQuotaError || error instanceof VoiceUnavailableError)) {
-          throw error;
+        if (error instanceof VoiceQuotaError) {
+          activatePremiumFallback('quota');
+          return await VoiceAudioService.generateStandard(segment, voice, signal);
         }
-        activatePremiumFallback(error instanceof VoiceQuotaError ? 'quota' : 'unavailable');
-        return await VoiceAudioService.generateStandard(segment, voice, signal);
+        if (error instanceof VoiceUnavailableError) {
+          activatePremiumFallback('unavailable');
+          return await VoiceAudioService.generateStandard(segment, voice, signal);
+        }
+        if (VoiceAudioService.isPremiumServerFailure(error)) {
+          // #1348: one Standard retry for this segment only. The failure is
+          // logged so a run of fallbacks is visible even though the session
+          // does not toggle (no banner) on this path.
+          logger.warn(`Premium voice failed for a segment; using Standard voice once:`, error);
+          return await VoiceAudioService.generateStandard(segment, voice, signal);
+        }
+        throw error;
       }
     } catch (error) {
       logger.error(`❌ Failed to generate audio for ${segment.character}:`, error);
@@ -114,6 +132,23 @@ export class VoiceAudioService {
         isGenerating: false,
       };
     }
+  }
+
+  /**
+   * A premium failure worth one Standard retry for this segment only: a 5xx
+   * from the proxy or a network failure reaching the proxy. 503 is excluded
+   * here on purpose even though it is >= 500: it is handled above, by the
+   * session switch, and must never take this path. Anything else (4xx, auth,
+   * abort) is not one.
+   */
+  private static isPremiumServerFailure(error: unknown): boolean {
+    return (
+      (error instanceof VoiceProviderError &&
+        error.status !== undefined &&
+        error.status >= 500 &&
+        error.status !== 503) ||
+      isNetworkError(error)
+    );
   }
 
   private static async generateStandard(
