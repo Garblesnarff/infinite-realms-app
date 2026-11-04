@@ -15,7 +15,9 @@ import {
   parseManifestCsv,
   runCheckLinks,
   runUpload,
+  type ManifestAsset,
 } from '../scripts/upload-campaign-assets';
+import { handoutAssetPath } from '../shared/handout-asset-path';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -699,5 +701,147 @@ describe('upload-campaign-assets --check-links', () => {
     expect(hints).toHaveLength(3);
     expect(nearestRealSlugs([], 'empyrea-light')).toEqual([]);
     expect(nearestRealSlugs(['a', 'a', 'a'], 'b')).toEqual(['a']);
+  });
+});
+
+describe('upload-campaign-assets handout type', () => {
+  const handoutRow =
+    'handouts/handout-toll-receipt.png,the-last-toll,handout,handout-toll-receipt,png';
+
+  it('maps a handout CSV row to the exact key the handout card reads', () => {
+    const [asset] = parseManifestCsv(
+      ['file path,campaign slug,type,entity slug,real image format', handoutRow].join('\n'),
+    );
+    expect(asset.type).toBe('handout');
+    expect(asset.entitySlug).toBe('handout-toll-receipt');
+
+    const built = buildCampaignAsset(
+      asset,
+      '/source',
+      'https://test.supabase.co',
+      'starter-uuid-1',
+    );
+    expect(built.storagePath).toBe(handoutAssetPath('starter-uuid-1', 'handout-toll-receipt'));
+    expect(built.storagePath).toBe('campaigns/starter-uuid-1/handouts/handout-toll-receipt.png');
+  });
+
+  it('keeps a handout key verbatim and rejects keys that would change the stored path', () => {
+    const parse = (entity: string): ManifestAsset[] =>
+      parseManifestCsv(
+        [
+          'file path,campaign slug,type,entity slug,real image format',
+          `handouts/x.png,the-last-toll,handout,${entity},png`,
+        ].join('\n'),
+      );
+    expect(parse('Toll_Receipt.2')[0].entitySlug).toBe('Toll_Receipt.2');
+    expect(() => parse('../escape')).toThrow(/Handout key must be/);
+    expect(() => parse('has space')).toThrow(/Handout key must be/);
+  });
+
+  it('dry run prints the target key and writes no database row', async () => {
+    const sourceDir = await mkdtemp(join(tmpdir(), 'campaign-asset-handout-dry-'));
+    await mkdir(join(sourceDir, '_manifest'));
+    await mkdir(join(sourceDir, 'handouts'));
+    await writeFile(join(sourceDir, 'handouts', 'handout-toll-receipt.png'), 'fake image');
+    await writeFile(
+      join(sourceDir, '_manifest', 'asset-upload-manifest.csv'),
+      ['file path,campaign slug,type,entity slug,real image format', handoutRow].join('\n'),
+    );
+    const { client, update, upload } = makeReadOnlyMockClient({
+      campaigns: [{ id: 'starter-uuid-1', slug: 'the-last-toll' }],
+      chunks: [],
+      templates: [],
+    });
+    const capture = captureConsole();
+    try {
+      const summary = await runUpload({ sourceDir, dryRun: true, force: false, client });
+      expect(summary).toMatchObject({ total: 1, planned: 1, failed: 0 });
+      expect(capture.logLines).toContain(
+        `Would upload ${join(sourceDir, 'handouts', 'handout-toll-receipt.png')} -> campaigns/starter-uuid-1/handouts/handout-toll-receipt.png`,
+      );
+    } finally {
+      capture.restore();
+    }
+    expect(update).not.toHaveBeenCalled();
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it('apply uploads with image/png and upsert to the handout key and writes no database row', async () => {
+    const sourceDir = await mkdtemp(join(tmpdir(), 'campaign-asset-handout-apply-'));
+    await mkdir(join(sourceDir, '_manifest'));
+    await mkdir(join(sourceDir, 'handouts'));
+    await writeFile(join(sourceDir, 'handouts', 'handout-toll-receipt.png'), 'fake image');
+    await writeFile(
+      join(sourceDir, '_manifest', 'asset-upload-manifest.csv'),
+      ['file path,campaign slug,type,entity slug,real image format', handoutRow].join('\n'),
+    );
+    const upload = vi.fn().mockResolvedValue({ error: null });
+    const storage = {
+      list: vi.fn().mockResolvedValue({ data: [], error: null }),
+      upload,
+    };
+    const client = {
+      storage: { from: vi.fn(() => storage) },
+      from: vi.fn((table: string) => {
+        if (table !== 'starter_campaigns')
+          throw new Error(`DB access during handout apply: ${table}`);
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: 'starter-uuid-1', slug: 'the-last-toll' },
+            error: null,
+          }),
+        };
+      }),
+    } as unknown as SupabaseClient;
+
+    const summary = await runUpload({
+      sourceDir,
+      dryRun: false,
+      force: false,
+      supabaseUrl: 'https://test.supabase.co',
+      client,
+    });
+
+    expect(summary).toMatchObject({ total: 1, uploaded: 1, linked: 0, failed: 0 });
+    expect(upload).toHaveBeenCalledWith(
+      'campaigns/starter-uuid-1/handouts/handout-toll-receipt.png',
+      expect.anything(),
+      expect.objectContaining({ contentType: 'image/png', upsert: true }),
+    );
+  });
+
+  it('check-links HEADs the handout object and reports its key without writing', async () => {
+    const sourceDir = await mkdtemp(join(tmpdir(), 'campaign-asset-handout-links-'));
+    await writeLinksManifest(sourceDir, [handoutRow]);
+    const { client, update, upload } = makeReadOnlyMockClient({
+      campaigns: [{ id: 'starter-uuid-1', slug: 'the-last-toll' }],
+      chunks: [],
+      templates: [],
+    });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false });
+    vi.stubGlobal('fetch', fetchMock);
+    const capture = captureConsole();
+    try {
+      const summary = await runCheckLinks({
+        sourceDir,
+        client,
+        supabaseUrl: 'https://test.supabase.co',
+      });
+      expect(summary).toMatchObject({ total: 1, linked: 1, noMatch: 0, failed: 0 });
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://test.supabase.co/storage/v1/object/public/campaign-images/campaigns/starter-uuid-1/handouts/handout-toll-receipt.png',
+        { method: 'HEAD' },
+      );
+      expect(capture.logLines.join('\n')).toContain(
+        'campaigns/starter-uuid-1/handouts/handout-toll-receipt.png (object missing; no DB row)',
+      );
+    } finally {
+      capture.restore();
+      vi.unstubAllGlobals();
+    }
+    expect(update).not.toHaveBeenCalled();
+    expect(upload).not.toHaveBeenCalled();
   });
 });
