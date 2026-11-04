@@ -32,6 +32,7 @@ import { fileURLToPath } from 'node:url';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
 
+import { handoutAssetPath } from '../shared/handout-asset-path';
 import { slugForLookup } from '../shared/slug-for-lookup';
 
 config();
@@ -52,7 +53,8 @@ export type CampaignAssetType =
   | 'card'
   | 'banner'
   | 'portrait'
-  | 'character_card';
+  | 'character_card'
+  | 'handout';
 
 export interface ManifestAsset {
   filePath: string;
@@ -144,6 +146,7 @@ const TYPE_ALIASES: Record<string, CampaignAssetType> = {
   character: 'portrait',
   character_card: 'character_card',
   'character-card': 'character_card',
+  handout: 'handout',
 };
 
 const FORMAT_ALIASES: Record<string, string> = {
@@ -278,10 +281,21 @@ export function normalizeAssetType(value: string): CampaignAssetType {
   const type = TYPE_ALIASES[normalized];
   if (!type) {
     throw new Error(
-      `Unsupported asset type "${value}"; expected npc, monster, location, item, faction, scene, card, banner, portrait, or character_card`,
+      `Unsupported asset type "${value}"; expected npc, monster, location, item, faction, scene, card, banner, portrait, character_card, or handout`,
     );
   }
   return type;
+}
+
+const HANDOUT_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+/** Handout keys are the bible Key verbatim (the server stores it unchanged), so they are not slugified. */
+function normalizeHandoutKey(value: string): string {
+  const key = value.trim();
+  if (!HANDOUT_KEY_PATTERN.test(key)) {
+    throw new Error(`Handout key must be letters, digits, dot, dash, or underscore: "${value}"`);
+  }
+  return key;
 }
 
 export function normalizeImageExtension(value: string): string {
@@ -358,13 +372,24 @@ export function parseManifestCsv(
         throw new Error(`Manifest row ${manifestLine} has an empty required field`);
       }
 
+      const assetType = normalizeAssetType(type);
+      const normalizedFormat = normalizeImageExtension(realImageFormat);
+      if (assetType === 'handout' && normalizedFormat !== 'png') {
+        throw new Error(
+          `Handout row ${manifestLine} must be png: handout keys are stored as <key>.png`,
+        );
+      }
+
       return [
         {
           filePath,
           campaignSlug: normalizeManifestSlug(campaignSlug, 'campaign slug'),
-          type: normalizeAssetType(type),
-          entitySlug: normalizeManifestSlug(entitySlug, 'entity slug'),
-          realImageFormat: normalizeImageExtension(realImageFormat),
+          type: assetType,
+          entitySlug:
+            assetType === 'handout'
+              ? normalizeHandoutKey(entitySlug)
+              : normalizeManifestSlug(entitySlug, 'entity slug'),
+          realImageFormat: normalizedFormat,
         },
       ];
     } catch (error) {
@@ -409,14 +434,25 @@ export function buildCampaignAsset(
   manifestAsset: ManifestAsset,
   sourceDir: string,
   supabaseUrl = 'https://example.supabase.co',
+  starterCampaignId?: string,
 ): CampaignAsset {
   const localPath = assertPathWithinSource(sourceDir, manifestAsset.filePath);
-  const storagePath = [
-    'starter',
-    manifestAsset.campaignSlug,
-    manifestAsset.type,
-    `${manifestAsset.entitySlug}.${manifestAsset.realImageFormat}`,
-  ].join('/');
+  let storagePath: string;
+  if (manifestAsset.type === 'handout') {
+    if (!starterCampaignId) {
+      throw new Error(
+        'Handout keys are stored under the starter campaign id; resolve the campaign first',
+      );
+    }
+    storagePath = handoutAssetPath(starterCampaignId, manifestAsset.entitySlug);
+  } else {
+    storagePath = [
+      'starter',
+      manifestAsset.campaignSlug,
+      manifestAsset.type,
+      `${manifestAsset.entitySlug}.${manifestAsset.realImageFormat}`,
+    ].join('/');
+  }
 
   return {
     ...manifestAsset,
@@ -531,7 +567,13 @@ async function findCharacterTemplates(
 }
 
 function chunkMatchesAssetType(chunk: ChunkRow, type: CampaignAssetType): boolean {
-  if (type === 'card' || type === 'banner' || type === 'portrait' || type === 'character_card') {
+  if (
+    type === 'card' ||
+    type === 'banner' ||
+    type === 'portrait' ||
+    type === 'character_card' ||
+    type === 'handout'
+  ) {
     return false;
   }
   return CHUNK_TYPES_BY_ASSET_TYPE[type].includes(chunk.chunk_type);
@@ -552,7 +594,8 @@ export type LinkTarget =
   | { kind: 'template'; row: CharacterTemplateRow };
 
 /** Which preloaded DB rows the matcher needs for an asset type. */
-function linkDataKind(type: CampaignAssetType): 'chunks' | 'templates' | 'campaign' {
+function linkDataKind(type: CampaignAssetType): 'chunks' | 'templates' | 'campaign' | 'none' {
+  if (type === 'handout') return 'none';
   if (type === 'card' || type === 'banner') return 'campaign';
   if (type === 'portrait' || type === 'character_card') return 'templates';
   return 'chunks';
@@ -736,6 +779,12 @@ function candidateSlugsForHints(
   return [];
 }
 
+/** HEAD the public object URL; true when the object exists. */
+async function publicObjectExists(supabaseUrl: string, storagePath: string): Promise<boolean> {
+  const response = await fetch(publicStorageUrl(supabaseUrl, storagePath), { method: 'HEAD' });
+  return response.ok;
+}
+
 export function isCampaignMissingError(error: unknown): boolean {
   return errorMessage(error).startsWith('No starter_campaigns row exists');
 }
@@ -745,6 +794,8 @@ export interface CheckLinksOptions {
   campaignFilter?: string;
   /** Authenticated client; --check-links never calls update() or storage.upload(). */
   client: SupabaseClient;
+  /** Used to HEAD handout objects; without it their existence is reported as unknown. */
+  supabaseUrl?: string;
 }
 
 export interface CheckLinksSummary {
@@ -797,6 +848,22 @@ export async function runCheckLinks(options: CheckLinksOptions): Promise<CheckLi
         campaignCache.get(manifestAsset.campaignSlug) ||
         (await findCampaign(client, manifestAsset.campaignSlug));
       campaignCache.set(manifestAsset.campaignSlug, campaign);
+
+      if (manifestAsset.type === 'handout') {
+        const storagePath = handoutAssetPath(campaign.id, manifestAsset.entitySlug);
+        const exists = options.supabaseUrl
+          ? await publicObjectExists(options.supabaseUrl, storagePath)
+          : null;
+        summary.linked += 1;
+        const state =
+          exists === null
+            ? 'existence unknown: no SUPABASE_URL'
+            : exists
+              ? 'object exists'
+              : 'object missing';
+        console.log(`LINK ${label} → ${storagePath} (${state}; no DB row)`);
+        continue;
+      }
 
       const linkData = linkDataKind(manifestAsset.type);
       if (linkData === 'chunks' && !chunkCache.has(campaign.id)) {
@@ -877,15 +944,38 @@ export async function runUpload(options: RunOptions): Promise<UploadSummary> {
 
   for (const manifestAsset of manifest) {
     try {
-      const asset = buildCampaignAsset(manifestAsset, sourceDir, options.supabaseUrl);
+      let starterCampaignId: string | undefined;
+      if (manifestAsset.type === 'handout') {
+        if (!options.client) {
+          throw new Error(
+            'Handout keys are stored under the starter campaign id; Supabase credentials are required to resolve it',
+          );
+        }
+        const handoutCampaign =
+          campaignCache.get(manifestAsset.campaignSlug) ||
+          (await findCampaign(options.client, manifestAsset.campaignSlug));
+        campaignCache.set(manifestAsset.campaignSlug, handoutCampaign);
+        starterCampaignId = handoutCampaign.id;
+      }
+
+      const asset = buildCampaignAsset(
+        manifestAsset,
+        sourceDir,
+        options.supabaseUrl,
+        starterCampaignId,
+      );
       const fileStats = await stat(asset.localPath);
       if (!fileStats.isFile())
         throw new Error(`Manifest path is not a file: ${manifestAsset.filePath}`);
 
-      const target = getDatabaseTarget(asset.type);
       if (options.dryRun) {
         console.log(`Would upload ${asset.localPath} -> ${asset.storagePath}`);
-        console.log(`  Would set ${target.table}.${target.column} -> ${asset.publicUrl}`);
+        if (asset.type === 'handout') {
+          console.log('  Handout: no database row is written');
+        } else {
+          const target = getDatabaseTarget(asset.type);
+          console.log(`  Would set ${target.table}.${target.column} -> ${asset.publicUrl}`);
+        }
         summary.planned += 1;
         continue;
       }
@@ -909,6 +999,11 @@ export async function runUpload(options: RunOptions): Promise<UploadSummary> {
         await uploadObject(storage, asset);
         console.log(`Uploaded: ${asset.storagePath}`);
         summary.uploaded += 1;
+      }
+
+      if (asset.type === 'handout') {
+        console.log(`  Handout: no database row written (${asset.storagePath})`);
+        continue;
       }
 
       const linkData = linkDataKind(asset.type);
@@ -937,6 +1032,14 @@ export async function runUpload(options: RunOptions): Promise<UploadSummary> {
   }
 
   return summary;
+}
+
+function tryGetSupabaseConfig(): SupabaseConfig | undefined {
+  try {
+    return getSupabaseConfig();
+  } catch {
+    return undefined;
+  }
 }
 
 function printSummary(summary: UploadSummary, dryRun: boolean): void {
@@ -984,6 +1087,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         sourceDir: options.sourceDir,
         campaignFilter: options.campaignFilter,
         client: createClient(supabaseConfig.url, supabaseConfig.serviceRoleKey),
+        supabaseUrl: supabaseConfig.url,
       });
       printCheckLinksSummary(summary);
       if (summary.noMatch > 0 || summary.campaignNotFound > 0 || summary.failed > 0) {
@@ -997,7 +1101,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   }
 
   try {
-    const supabaseConfig = options.dryRun ? undefined : getSupabaseConfig();
+    // A dry run only reads: credentials, when present, let it print handout keys.
+    const supabaseConfig = options.dryRun ? tryGetSupabaseConfig() : getSupabaseConfig();
     const summary = await runUpload({
       sourceDir: options.sourceDir,
       dryRun: options.dryRun,

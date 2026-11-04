@@ -1,3 +1,5 @@
+import { handoutAssetPath } from '../../../../shared/handout-asset-path.js';
+
 import type { DMHandoutAction } from './dm-response-schema.js';
 import type { AssertFactInput } from '../narrative/narrative-ledger-core.js';
 
@@ -73,9 +75,6 @@ export type CorrectiveHandoutReprompt = (
 const isValidImprovised = (action: DMHandoutAction): boolean =>
   action.mode === 'improvised' && action.key === null && typeof action.body === 'string';
 
-const toAssetPath = (campaignId: string, key: string): string =>
-  `campaigns/${campaignId}/handouts/${key}.png`;
-
 /**
  * Apply one authoritative, campaign-instance journal delivery per handout intent.
  * A malformed or missing canon key gets exactly one model correction; a second
@@ -127,7 +126,7 @@ export async function applyDmHandoutActions(
       title: action.title || authored.title,
       body: authored.body,
       giver: action.giver || authored.giver,
-      assetPath: toAssetPath(dependencies.assetCampaignId, authored.key),
+      assetPath: handoutAssetPath(dependencies.assetCampaignId, authored.key),
     });
   };
 
