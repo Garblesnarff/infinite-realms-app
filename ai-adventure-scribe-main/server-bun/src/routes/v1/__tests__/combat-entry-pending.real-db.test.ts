@@ -162,6 +162,7 @@ const dmText = (): string =>
 describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () => {
   const database = hasRealDb ? realDb() : (null as never);
   const sessionId = '11111111-2222-4333-8444-555555555913';
+  const heldSessionId = crypto.randomUUID();
   const characterId = '99999999-8888-4777-8666-555555555913';
   let campaignId = '';
 
@@ -224,7 +225,10 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
 
   // #1390: the same generate, but with the client's reserved dmReply id, so
   // the persistence block runs and the reply is held as `roll_requests`.
-  const generateWithDmReply = async (messageId: string): Promise<Record<string, unknown>> => {
+  const generateWithDmReply = async (
+    messageId: string,
+    targetSessionId = sessionId,
+  ): Promise<Record<string, unknown>> => {
     generatedResult = { text: dmText(), provider: 'openrouter', model: 'test/model' };
     const response = await app!.handle(
       new Request('http://localhost/v1/llm/generate', {
@@ -233,8 +237,8 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
         body: JSON.stringify({
           prompt: 'Continue the scene.',
           player_input: 'Continue the scene.',
-          sessionId,
-          combatEntry: { sessionId, player },
+          sessionId: targetSessionId,
+          combatEntry: { sessionId: targetSessionId, player },
           dmReply: { messageId, inCombat: false },
         }),
       }),
@@ -253,9 +257,11 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
     };
   };
 
-  const enter = async (): Promise<{ status: number; payload: Record<string, unknown> }> => {
+  const enter = async (
+    targetSessionId = sessionId,
+  ): Promise<{ status: number; payload: Record<string, unknown> }> => {
     const response = await app!.handle(
-      new Request(`http://localhost/v1/combat/sessions/${sessionId}/enter`, {
+      new Request(`http://localhost/v1/combat/sessions/${targetSessionId}/enter`, {
         method: 'POST',
         headers: { authorization: 'Bearer test', 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -269,7 +275,9 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
     return { status: response.status, payload };
   };
 
-  const historyRows = async (): Promise<
+  const historyRows = async (
+    targetSessionId = sessionId,
+  ): Promise<
     Array<{
       id: string;
       speakerType: string | null;
@@ -289,7 +297,7 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
         createdAtText: sql<string>`${dialogueHistory.createdAt}::text`,
       })
       .from(dialogueHistory)
-      .where(eq(dialogueHistory.sessionId, sessionId))
+      .where(eq(dialogueHistory.sessionId, targetSessionId))
       .orderBy(asc(dialogueHistory.createdAt));
     return rows as Array<{
       id: string;
@@ -339,11 +347,20 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
       status: 'active',
       summary: 'Pending combat entry test session.',
     });
+    await database.insert(gameSessions).values({
+      id: heldSessionId,
+      campaignId,
+      characterId,
+      sessionNumber: 2,
+      status: 'active',
+      summary: 'Isolated held combat entry test session.',
+    });
   });
 
   afterAll(async () => {
     if (!hasRealDb) return;
     try {
+      await database.delete(gameSessions).where(eq(gameSessions.id, heldSessionId));
       await database.delete(gameSessions).where(eq(gameSessions.id, sessionId));
       await database.delete(characters).where(eq(characters.id, characterId));
       if (campaignId) await database.delete(campaigns).where(eq(campaigns.id, campaignId));
@@ -396,21 +413,28 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
   });
 
   test('a held fight-opening reply is written once, before the combat rows, on confirm (#1390)', async () => {
-    // This test's own seating row only: earlier tests in this file seat too.
-    await database.delete(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId));
+    // This session is never used by the preceding seat test, so a late write from it cannot
+    // appear in this test's history after cleanup.
     const heldMessageId = '11111111-2222-4333-8444-555555555139';
-    const generated = await generateWithDmReply(heldMessageId);
+    const generated = await generateWithDmReply(heldMessageId, heldSessionId);
     expect(generated.dmReplyPersisted).toBe(false);
     expect(generated.combat_entry_pending).toMatchObject({
       combatants: [{ name: 'Head Chef Balthazar', count: 1 }],
     });
     // The held precondition: the server wrote no DM row for the reserved id.
-    expect((await historyRows()).filter((row) => row.id === heldMessageId)).toHaveLength(0);
+    expect(
+      (await historyRows(heldSessionId)).filter((row) => row.id === heldMessageId),
+    ).toHaveLength(0);
 
-    const { status } = await enter();
+    // Model the preceding session's late seating write after this test has begun.
+    await database
+      .insert(dialogueHistory)
+      .values({ sessionId, speakerType: 'system', message: '⚙️ Engine: prior session seating' });
+
+    const { status } = await enter(heldSessionId);
     expect(status).toBe(201);
 
-    const rows = await historyRows();
+    const rows = await historyRows(heldSessionId);
     const heldRows = rows.filter((row) => row.id === heldMessageId);
     expect(heldRows).toHaveLength(1);
     expect(heldRows[0]?.speakerType).toBe('dm');
