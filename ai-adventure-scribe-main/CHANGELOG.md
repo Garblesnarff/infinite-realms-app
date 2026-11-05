@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.38.3](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.38.2...v0.38.3) (2026-11-05)
+
+
+### Bug Fixes
+
+* **combat:** broadcast character state when a flee ends the fight ([#1356](https://github.com/Garblesnarff/infinite-realms-app/issues/1356)) ([e7bf1d6](https://github.com/Garblesnarff/infinite-realms-app/commit/e7bf1d6d2e839d49c98e293f1c7503d729af427d))
+* **creation:** require an equipment choice in the wizard ([#1354](https://github.com/Garblesnarff/infinite-realms-app/issues/1354)) ([3d9870a](https://github.com/Garblesnarff/infinite-realms-app/commit/3d9870a2a544d4c3cb5c383a0f6faf1fee7780ba))
+* **sheet:** refresh Action Surge uses after combat use ([#1376](https://github.com/Garblesnarff/infinite-realms-app/issues/1376)) ([97ea447](https://github.com/Garblesnarff/infinite-realms-app/commit/97ea447ad1a916bd7d79f7f29312929b2c29c2f7))
+
+
+### Documentation
+
+* **legal:** final launch terms, privacy vendors and banner off ([#1103](https://github.com/Garblesnarff/infinite-realms-app/issues/1103)) ([2024ae0](https://github.com/Garblesnarff/infinite-realms-app/commit/2024ae0dcf3e7b8b1fe43e476fee2c74cc217cce))
+
 ## [0.38.2](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.38.1...v0.38.2) (2026-11-05)
 
 
