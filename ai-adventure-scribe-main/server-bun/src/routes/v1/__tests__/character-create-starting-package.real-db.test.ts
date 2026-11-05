@@ -1850,3 +1850,130 @@ describeWithDb('package gear reaches the session (#1007)', () => {
     expect(refusal).toContain('no arrows');
   });
 });
+
+describeWithDb('package-click wizard body reaches the session (#1354)', () => {
+  let app: { handle: (request: Request) => Promise<Response> };
+  let db: ReturnType<typeof realDb>;
+  const createdIds: string[] = [];
+
+  beforeAll(async () => {
+    userId = testId('user-1354');
+    db = realDb();
+    const pipeline = await importWithRealDb(async () => {
+      const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');
+      const { charactersRoutes } = await import('../characters.ts');
+      const { issue1784DataRoutes } = await import('../issue-1784-data.ts');
+      return { createRequestPipelineApp, charactersRoutes, issue1784DataRoutes };
+    });
+    app = pipeline
+      .createRequestPipelineApp()
+      .use(pipeline.charactersRoutes)
+      .use(pipeline.issue1784DataRoutes);
+  });
+
+  afterAll(async () => {
+    for (const id of createdIds) {
+      await db
+        .delete(characters)
+        .where(eq(characters.id, id))
+        .catch(() => {});
+    }
+    await closeRealDb();
+  });
+
+  async function create(body: unknown): Promise<string> {
+    const res = await app.handle(
+      new Request('http://localhost/v1/characters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    );
+    const text = await res.text();
+    expect(res.status, text.slice(0, 400)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+    return id;
+  }
+
+  // #1354: the save body a package click produces — the package card's
+  // payload (background kit + displayed startingEquipment names) through
+  // mapWizardEquipmentToInventory + transformEquipmentForStorage, copied
+  // full output per AGENTS §4 (the wizard's displayed Fighter default,
+  // shield mode, longsword first, with the Outlander background kit). The
+  // background's '10 gp' coin string lands in the purse server-side, never
+  // as a row (#971).
+  const DEFAULT_PACKAGE_NAMES = [
+    'Staff',
+    'Hunting trap',
+    "Traveler's clothes",
+    'Belt pouch',
+    '10 gp',
+    'Chain Mail',
+    'Handaxe',
+    'Handaxe',
+    'Crossbow, light',
+    'Crossbow Bolts (20)',
+    'Longsword',
+    'Shield',
+  ];
+
+  it('#1354 a Fighter saved after a package click stores its rows and the session load returns them', async () => {
+    const equipment = DEFAULT_PACKAGE_NAMES.map((item_name) => ({
+      character_id: '00000000-0000-0000-0000-000000000000',
+      item_name,
+      item_type: 'equipment',
+      quantity: 1,
+      equipped: false,
+      is_magic: false,
+      magic_bonus: 0,
+      magic_properties: null,
+      requires_attunement: false,
+      is_attuned: false,
+      attunement_requirements: null,
+      magic_item_type: null,
+      magic_item_rarity: 'common',
+      magic_effects: null,
+    }));
+    const id = await create({
+      ...fighterPayload,
+      name: testId('default-package-fighter'),
+      // The pinned Hill Dwarf payload carries Defense (+1 AC); pin Great
+      // Weapon Fighting instead so the shield-mode expectation stays 18
+      // (chain 16 + shield 2), matching the #921 shield case.
+      fighting_styles: ['Great Weapon Fighting'],
+      equipment,
+    });
+    const rows = await db
+      .select()
+      .from(characterEquipment)
+      .where(eq(characterEquipment.characterId, id));
+    const storedNames = DEFAULT_PACKAGE_NAMES.filter((name) => !/^\s*\d+\s*gp\s*$/i.test(name));
+    expect(rows.flatMap((row) => Array(row.quantity ?? 1).fill(row.itemName)).sort()).toEqual(
+      storedNames.sort(),
+    );
+    const [charRow] = await db.select().from(characters).where(eq(characters.id, id));
+    expect(charRow?.goldPieces).toBe(10);
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, id));
+    expect(stats?.armorClass).toBe(18);
+    // The session load path (loadCharacterWithSpells -> GET
+    // /v1/characters/:id/equipment) reads these same rows.
+    const res = await app.handle(new Request(`http://localhost/v1/characters/${id}/equipment`));
+    expect(res.status).toBe(200);
+    const loaded = (await res.json()) as Array<{
+      item_name: string;
+      equipped: boolean;
+      quantity: number;
+    }>;
+    const loadedNames = loaded.flatMap((row) => Array(row.quantity ?? 1).fill(row.item_name));
+    expect(loadedNames.sort()).toEqual(storedNames.sort());
+    expect(loaded.find((row) => row.item_name === 'Chain Mail')?.equipped).toBe(true);
+    expect(loaded.find((row) => row.item_name === 'Shield')?.equipped).toBe(true);
+    expect(loaded.find((row) => row.item_name === 'Longsword')).toBeTruthy();
+    expect(loaded.find((row) => row.item_name === 'Crossbow Bolts (20)')?.equipped).toBe(false);
+    expect(loaded.some((row) => row.equipped === true)).toBe(true);
+  });
+});

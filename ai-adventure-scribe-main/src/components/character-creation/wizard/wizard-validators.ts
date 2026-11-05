@@ -188,6 +188,17 @@ function validateProficiencies(character: Character): ValidationResult {
   return VALID;
 }
 
+// #1354: the Equipment step was optional (no validator), so Next passed with
+// no card clicked and the hero saved with no equipment rows and 0 gold. An
+// explicit option choice — package card or gold card — is required.
+function validateEquipment(character: Character): ValidationResult {
+  const chosen = character.selectedEquipmentOptionIndex;
+  if (chosen === undefined || chosen === null) {
+    return invalid('Please choose your starting equipment');
+  }
+  return VALID;
+}
+
 // ---------- Dispatcher ----------
 
 const stepValidators: Record<string, (character: Character) => ValidationResult> = {
@@ -201,6 +212,7 @@ const stepValidators: Record<string, (character: Character) => ValidationResult>
   'Proficiencies & Languages': validateProficiencies,
   Spells: validateSpells,
   'Advanced Spellcasting': validateAdvancedSpellcasting,
+  Equipment: validateEquipment,
 };
 
 /**
