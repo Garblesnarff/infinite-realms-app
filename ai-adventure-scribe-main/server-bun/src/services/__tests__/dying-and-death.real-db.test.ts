@@ -112,6 +112,9 @@ const { saveTacticalMap, loadActiveTacticalMap } = await importWithRealDb(
 const { consumeDmTacticalFacts } = await importWithRealDb(
   () => import('../combat/tactical-action-service.js'),
 );
+const { joinRoom, leaveRoom } = await importWithRealDb(
+  () => import('../collaboration/room-manager.js'),
+);
 const { getActiveConditionNames } = await importWithRealDb(
   () => import('../combat/data-access.js'),
 );
@@ -2130,6 +2133,65 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
         .where(eq(combatParticipants.id, scene.heroId));
       expect(heroRows[0].isActive).toBe(false);
     } finally {
+      route.restore();
+    }
+  });
+
+  // The dice are pinned to 0.7 so the parting attack hits, and broadcasts are
+  // captured by a fake socket joined to the real room-manager.
+  test('a flee whose parting attack hits broadcasts character_state_updated with the post-hit HP (#1356)', async () => {
+    const route = await fleeRoute(0.7);
+    let ws: any;
+    try {
+      const scene = await seedScene({ heroHp: 7 });
+      const beforeHp = (await sheetOf(scene.characterId)).currentHitPoints;
+      const sent: any[] = [];
+      ws = {
+        readyState: 1,
+        send: (payload: string) => sent.push(JSON.parse(payload)),
+        close: () => {},
+        data: {
+          user: { userId, email: 'gate@example.test' },
+          roomId: scene.sessionId,
+          requestId: 'test',
+        },
+      } as any;
+      joinRoom(scene.sessionId, ws);
+      const { createRequestPipelineApp } = await import('../../http-pipeline.js');
+      const app = createRequestPipelineApp().use(
+        new Elysia({ prefix: '/v1/combat' }).use(intentRoutes),
+      );
+      const response = await app.handle(
+        new Request(`http://localhost/v1/combat/${scene.encounterId}/intent`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${userId}` },
+          body: JSON.stringify(actionBarFleeIntentBody(scene.heroId, Date.now())),
+        }),
+      );
+      expect(response.status).toBe(200);
+      const result = (await response.json()) as Record<string, any>;
+      expect(result.result.opportunityAttack.hit).toBe(true);
+      expect(result.result.combatEnded).toBe(true);
+
+      const sheet = await sheetOf(scene.characterId);
+      const finalDamage = result.result.opportunityAttack.finalDamage;
+      expect(finalDamage).toBeGreaterThan(0);
+      expect(sheet.currentHitPoints).toBe(beforeHp - finalDamage);
+
+      const updates = sent.filter(
+        (message) =>
+          message.type === 'character_state_updated' && message.reason === 'combat_ended',
+      );
+      expect(updates).toHaveLength(1);
+      expect(updates[0].currentHp).toBe(sheet.currentHitPoints);
+
+      const combatIdx = sent.findIndex((message) => message.type === 'combat_state_updated');
+      if (combatIdx !== -1) {
+        const updateIdx = sent.indexOf(updates[0]);
+        expect(updateIdx).toBeGreaterThan(combatIdx);
+      }
+    } finally {
+      if (ws) leaveRoom(ws.data.roomId, ws);
       route.restore();
     }
   });
