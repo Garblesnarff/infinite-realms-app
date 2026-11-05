@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.38.2](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.38.1...v0.38.2) (2026-11-05)
+
+
+### Bug Fixes
+
+* **dm:** persist the held fight-opening reply on combat entry ([#1390](https://github.com/Garblesnarff/infinite-realms-app/issues/1390)) ([f5d84ed](https://github.com/Garblesnarff/infinite-realms-app/commit/f5d84edd9bd28942b317277c4dc8c9d17fbb46ab))
+
+
+### Tests
+
+* **combat:** account for critical smite dice ([#1395](https://github.com/Garblesnarff/infinite-realms-app/issues/1395)) ([e61c55a](https://github.com/Garblesnarff/infinite-realms-app/commit/e61c55ac6c0c46217cc0f76ef2567779abd49c3d))
+* **combat:** isolate the held-reply seating test ([#1398](https://github.com/Garblesnarff/infinite-realms-app/issues/1398)) ([fef8dea](https://github.com/Garblesnarff/infinite-realms-app/commit/fef8deade61a8715fa41fd595a2a6cc197f1e3b8))
+
 ## [0.38.1](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.38.0...v0.38.1) (2026-11-04)
 
 
