@@ -36,11 +36,11 @@ const renderAt = (path: string) =>
 
 describe('legal routes (#2258)', () => {
   it.each(Object.entries(HEADINGS))(
-    '%s renders its heading and the draft banner',
+    '%s renders its heading and no draft banner',
     async (path, heading) => {
       renderAt(path);
       expect(await screen.findByRole('heading', { level: 1, name: heading })).toBeInTheDocument();
-      expect(screen.getByTestId('legal-draft-banner')).toHaveTextContent('Draft — under review');
+      expect(screen.queryByTestId('legal-draft-banner')).toBeNull();
     },
   );
 

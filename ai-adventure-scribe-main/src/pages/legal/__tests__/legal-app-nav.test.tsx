@@ -56,7 +56,7 @@ describe('legal pages top bar (#568)', () => {
         '/app/characters',
       );
       expect(nav.getByRole('link', { name: 'Account' })).toHaveAttribute('href', '/app/account');
-      expect(screen.getByTestId('legal-draft-banner')).toHaveTextContent('Draft — under review');
+      expect(screen.queryByTestId('legal-draft-banner')).toBeNull();
       expect(screen.queryByRole('link', { name: /sign in/i })).not.toBeInTheDocument();
     },
   );
@@ -75,7 +75,7 @@ describe('legal pages top bar (#568)', () => {
       expect(nav.queryByRole('link', { name: 'Account' })).not.toBeInTheDocument();
       expect(nav.queryByRole('button', { name: /sign out/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('link', { name: /sign in/i })).not.toBeInTheDocument();
-      expect(screen.getByTestId('legal-draft-banner')).toHaveTextContent('Draft — under review');
+      expect(screen.queryByTestId('legal-draft-banner')).toBeNull();
     },
   );
 });
