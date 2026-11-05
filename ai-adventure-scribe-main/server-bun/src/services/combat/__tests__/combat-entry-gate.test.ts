@@ -1146,6 +1146,125 @@ describe('seatCombatEntry', () => {
     expect(events.map((entry) => entry.event)).toEqual(['combat_started', 'initiative_completed']);
     expect(events[1].properties.participants).toBe(2);
   });
+
+  it('persists a held fight-opening narration before the seating transcript (#1390)', async () => {
+    const order: string[] = [];
+    const held: unknown[] = [];
+    const { deps } = stubDeps({
+      persistHeldDmReply: async (reply) => {
+        held.push(reply);
+        order.push('held');
+      },
+      persistSessionMessage: async () => {
+        order.push('seating');
+      },
+    });
+    const outcome = await seatCombatEntry(
+      {
+        sessionId: SESSION_ID,
+        userId: USER_ID,
+        player: PLAYER,
+        combatants: [{ name: 'Professor Emil Darkwater', count: 1 }],
+        sceneSpec: synthesizeSceneSpec(SESSION_ID),
+        heldReply: {
+          messageId: '5d0f2c1e-8a4b-4c3d-9e2f-1a2b3c4d5e6f',
+          text: 'Professor Emil Darkwater says, "Come closer."',
+        },
+      },
+      deps,
+    );
+
+    expect(outcome?.entered).toBe(true);
+    expect(held).toEqual([
+      {
+        sessionId: SESSION_ID,
+        userId: USER_ID,
+        messageId: '5d0f2c1e-8a4b-4c3d-9e2f-1a2b3c4d5e6f',
+        text: 'Professor Emil Darkwater says, "Come closer."',
+      },
+    ]);
+    // The order array is the assertion: the held narration is written
+    // before the seating transcript, so it sorts before the combat rows.
+    expect(order).toEqual(['held', 'seating']);
+  });
+
+  it('a failed held-reply write does not fail seating (#1390)', async () => {
+    const { deps, seatingMessages } = stubDeps({
+      persistHeldDmReply: async () => {
+        throw new Error('Session not found');
+      },
+    });
+    const outcome = await seatCombatEntry(
+      {
+        sessionId: SESSION_ID,
+        userId: USER_ID,
+        player: PLAYER,
+        combatants: [{ name: 'Professor Emil Darkwater', count: 1 }],
+        sceneSpec: synthesizeSceneSpec(SESSION_ID),
+        heldReply: {
+          messageId: '5d0f2c1e-8a4b-4c3d-9e2f-1a2b3c4d5e6f',
+          text: 'Professor Emil Darkwater says, "Come closer."',
+        },
+      },
+      deps,
+    );
+
+    expect(outcome?.entered).toBe(true);
+    expect(seatingMessages).toHaveLength(1);
+  });
+
+  it('writes the held narration even when the tactical map fails (#1390)', async () => {
+    // The write sits right after startCombat: a later failure must not
+    // strand the narration, since a retry hits the active-encounter early
+    // return and would never reach a later write.
+    const held: unknown[] = [];
+    const { deps } = stubDeps({
+      persistHeldDmReply: async (reply) => {
+        held.push(reply);
+      },
+      createTacticalCombatMap: async () => {
+        throw new Error('map failed');
+      },
+    });
+    await expect(
+      seatCombatEntry(
+        {
+          sessionId: SESSION_ID,
+          userId: USER_ID,
+          player: PLAYER,
+          combatants: [{ name: 'Professor Emil Darkwater', count: 1 }],
+          sceneSpec: synthesizeSceneSpec(SESSION_ID),
+          heldReply: {
+            messageId: '5d0f2c1e-8a4b-4c3d-9e2f-1a2b3c4d5e6f',
+            text: 'Professor Emil Darkwater says, "Come closer."',
+          },
+        },
+        deps,
+      ),
+    ).rejects.toThrow('map failed');
+    expect(held).toHaveLength(1);
+  });
+
+  it('a held reply with no persist dep still seats (#1390)', async () => {
+    const { deps, seatingMessages } = stubDeps();
+    const outcome = await seatCombatEntry(
+      {
+        sessionId: SESSION_ID,
+        userId: USER_ID,
+        player: PLAYER,
+        combatants: [{ name: 'Professor Emil Darkwater', count: 1 }],
+        sceneSpec: synthesizeSceneSpec(SESSION_ID),
+        heldReply: {
+          messageId: '5d0f2c1e-8a4b-4c3d-9e2f-1a2b3c4d5e6f',
+          text: 'Professor Emil Darkwater says, "Come closer."',
+        },
+      },
+      deps,
+    );
+
+    expect(outcome?.entered).toBe(true);
+    expect(seatingMessages).toHaveLength(1);
+  });
 });
 
 describe('declined re-offer lift (#1328)', () => {

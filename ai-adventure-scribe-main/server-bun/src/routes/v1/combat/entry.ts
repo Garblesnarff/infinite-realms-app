@@ -326,6 +326,9 @@ export function createCombatEntryRoutes({
                     trigger: stored.pending.trigger,
                     detail: stored.pending.detail,
                     sceneSpecSynthesized: stored.pending.sceneSpecSynthesized,
+                    // #1390: the held fight-opening narration rides the stored
+                    // entry; seating persists it before the first combat row.
+                    ...(stored.heldReply ? { heldReply: stored.heldReply } : {}),
                   }
                 : {}),
             },

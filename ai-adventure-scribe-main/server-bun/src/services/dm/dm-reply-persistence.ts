@@ -164,6 +164,75 @@ export interface DmReplyWatchdogParams {
   delayMs?: number;
   /** Test seam: whether this turn's DM row was written (by id). */
   hasDmRow?: (messageId: string) => Promise<boolean>;
+  /** #1390: test seam for whether the fight this reply opened is live. */
+  hasActiveEncounter?: (sessionId: string, userId: string, generatedAt?: Date) => Promise<boolean>;
+  /** #1390: test seam for the session's declined actor keys. */
+  declinedActorKeys?: (sessionId: string) => Promise<string[]>;
+}
+
+/**
+ * #1390: whether the fight this reply opened is live — an active encounter
+ * that began after this turn was generated. An already-live fight from
+ * before the turn is not the fight this reply opened, and without a
+ * generation time there is nothing to compare against, so both read as no
+ * fight. A lookup failure also reads as no fight, so the fallback keeps
+ * today's skip rather than resurrecting prose for a fight nobody confirmed.
+ */
+async function defaultHasActiveEncounter(
+  sessionId: string,
+  userId: string,
+  generatedAt?: Date,
+): Promise<boolean> {
+  try {
+    if (!generatedAt) return false;
+    const { CombatEncounterService } = await import('../combat/combat-encounter-service.js');
+    const encounter = await CombatEncounterService.getActiveEncounter(sessionId, userId);
+    if (!encounter) return false;
+    return encounter.startedAt.getTime() > generatedAt.getTime();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * #1390: the session's declined actor keys, for the bypass's decline guard.
+ * No catch here by design: a failed read propagates to the bypass branch,
+ * which keeps the skip — uncertainty must not resurrect a refused fight.
+ */
+async function defaultDeclinedActorKeys(sessionId: string): Promise<string[]> {
+  const { readDeclinedCombatEntryActorKeys } = await import('../combat/pending-combat-entry.js');
+  return await readDeclinedCombatEntryActorKeys(sessionId);
+}
+
+/**
+ * #1390: normalized combatant names from a held envelope, for the decline
+ * guard. The pending entry's combatants win; a combat_start envelope has
+ * only its own combatants. Broader than the actor key on purpose: a name
+ * shared with a declined fight blocks the bypass (safe direction — the
+ * narration stays missing, as today, rather than contradicting a refusal).
+ */
+function combatantNames(envelope: Record<string, unknown>): string[] {
+  const pending = envelope.combat_entry_pending;
+  const fromPending =
+    pending && typeof pending === 'object'
+      ? (pending as Record<string, unknown>).combatants
+      : undefined;
+  const raw = Array.isArray(fromPending)
+    ? fromPending
+    : Array.isArray(envelope.combatants)
+      ? envelope.combatants
+      : [];
+  const names = new Set<string>();
+  for (const combatant of raw) {
+    if (combatant && typeof combatant === 'object') {
+      const name = (combatant as Record<string, unknown>).name;
+      if (typeof name === 'string') {
+        const normalized = name.trim().toLocaleLowerCase();
+        if (normalized) names.add(normalized);
+      }
+    }
+  }
+  return [...names];
 }
 
 /** Reasons the server may not fallback-persist a reply the client never saved. */
@@ -213,7 +282,16 @@ function fallbackSkipReason(
  * roll requests in context so a reload can restore the popup from the same
  * row. After the write succeeds, the row is also pushed over the session
  * socket so a live tab sees it without a reload (#800 item 3). Scoped to the
- * roll-request case: combat turns and gate-rejected prose are log-only. When generatedAt is given, a player row newer than it means
+ * roll-request case: combat turns and gate-rejected prose are log-only, with
+ * one exception (#1390): a held `roll_requests` reply whose fight is live
+ * is written — and otherwise the fight-opening narration is lost. The
+ * bypass is tied to this fight, not any fight: the encounter must have
+ * begun after this turn was generated, the prose must not assert an
+ * undecided outcome (#2139 — confirming a fight does not validate the dice
+ * outcomes inside its prose), and the fight must not be one the player
+ * declined. That write omits the roll requests (combat initiative
+ * superseded them) and forces `combat_transition: 'none'`, so no reload
+ * re-opens the fight. When generatedAt is given, a player row newer than it means
  * the player already moved past this turn, so the row is not written (#800):
  * persisting it would surface a roll popup for a passed turn, and answering
  * it hits the superseded-roll 409. Never throws: a failed write must not
@@ -231,14 +309,55 @@ export async function persistFallbackDmReply(params: {
    * check is skipped (the watchdog always passes it).
    */
   generatedAt?: Date;
+  /**
+   * #1390: whether the fight this reply opened is live. Defaults to the
+   * encounter service; a lookup failure reads as no fight.
+   */
+  hasActiveEncounter?: (sessionId: string, userId: string, generatedAt?: Date) => Promise<boolean>;
+  /**
+   * #1390: the session's declined actor keys, for the bypass's decline
+   * guard. Defaults to the pending-entry record; a failed read keeps the
+   * skip (uncertainty must not resurrect a refused fight).
+   */
+  declinedActorKeys?: (sessionId: string) => Promise<string[]>;
 }): Promise<{ persisted: boolean; skipped?: string }> {
   try {
     if (!params.envelope) return { persisted: false };
-    const skipped = fallbackSkipReason(params.envelope, params.reason);
-    if (skipped) return { persisted: false, skipped };
     const rollRequests = Array.isArray(params.envelope.roll_requests)
       ? params.envelope.roll_requests
       : [];
+    const skipped = fallbackSkipReason(params.envelope, params.reason);
+    // #1390: a held `roll_requests` reply that opened a fight is not dropped
+    // when that fight is live. Three guards, all required: the encounter
+    // began after this turn (not an older live fight), the prose asserts no
+    // undecided outcome, and the fight was not declined. A declined,
+    // never-entered, or fabricated fight still skips.
+    let bypassedCombatSkip = false;
+    if (
+      (skipped === 'combat_entry_pending' || skipped === 'combat_start') &&
+      rollRequests.length > 0
+    ) {
+      const checkEncounter = params.hasActiveEncounter ?? defaultHasActiveEncounter;
+      const checkDeclined = params.declinedActorKeys ?? defaultDeclinedActorKeys;
+      try {
+        const live = await checkEncounter(params.sessionId, params.userId, params.generatedAt);
+        const fabricated = suspectsFabricatedOutcome(String(params.envelope.text ?? ''), {
+          playerMayHaveActed: true,
+        });
+        let declined = false;
+        if (live && !fabricated) {
+          const names = combatantNames(params.envelope);
+          if (names.length > 0) {
+            const keys = await checkDeclined(params.sessionId);
+            declined = keys.some((key) => names.some((name) => key.split('|').includes(name)));
+          }
+        }
+        bypassedCombatSkip = live && !fabricated && !declined;
+      } catch {
+        bypassedCombatSkip = false;
+      }
+    }
+    if (skipped && !bypassedCombatSkip) return { persisted: false, skipped };
     // Roll-request turns are the only ones that reach the fallback.
     if (rollRequests.length === 0) return { persisted: false };
     const purposes = rollRequests
@@ -255,6 +374,9 @@ export async function persistFallbackDmReply(params: {
         ? `The DM asks for a roll: ${purposes.join('; ')}.`
         : '';
     if (!text) return { persisted: false };
+    // #1390: a bypass with no narration to save writes nothing — the
+    // purposes line would narrate a roll ask with no popup attached.
+    if (bypassedCombatSkip && !prose && skipped) return { persisted: false, skipped };
     // #800: the turn is stale when the player has written since generation.
     // createdAt is the server clock (the guard's own ordering in withRollTurn
     // loads the latest player row by createdAt), and generatedAt is the
@@ -307,12 +429,15 @@ export async function persistFallbackDmReply(params: {
         context: {
           emotion: 'neutral',
           intent: 'response',
-          combat_transition:
-            typeof params.envelope.combat_transition === 'string'
+          // #1390: a bypassed write is narration, not a transition trigger.
+          combat_transition: bypassedCombatSkip
+            ? 'none'
+            : typeof params.envelope.combat_transition === 'string'
               ? params.envelope.combat_transition
               : 'none',
           [PROVISIONAL_DM_CONTEXT_KEY]: true,
-          rollRequests,
+          // #1390: combat initiative superseded the roll; no popup restores.
+          ...(bypassedCombatSkip ? {} : { rollRequests }),
         },
       },
       params.userId,
@@ -321,20 +446,24 @@ export async function persistFallbackDmReply(params: {
     // so a tab that is already open sees it without a reload. A failed push
     // must not flip the outcome — the row is persisted — so it is logged, not
     // thrown. The frame carries ids + requests only, never the row prose.
-    try {
-      const { publishDmFallbackRow } = await import('./dm-fallback-broadcast.js');
-      publishDmFallbackRow({
-        sessionId: params.sessionId,
-        messageId: params.messageId,
-        rollRequests,
-      });
-    } catch (error) {
-      logger.warn({
-        msg: 'DM_REPLY_FALLBACK_PUSH_FAILED',
-        sessionId: params.sessionId,
-        messageId: params.messageId,
-        error: error instanceof Error ? error.message : String(error),
-      });
+    // #1390: no push on a bypassed write — a live tab mid-fight must not
+    // gain the opening narration out of order; the row is there on reload.
+    if (!bypassedCombatSkip) {
+      try {
+        const { publishDmFallbackRow } = await import('./dm-fallback-broadcast.js');
+        publishDmFallbackRow({
+          sessionId: params.sessionId,
+          messageId: params.messageId,
+          rollRequests,
+        });
+      } catch (error) {
+        logger.warn({
+          msg: 'DM_REPLY_FALLBACK_PUSH_FAILED',
+          sessionId: params.sessionId,
+          messageId: params.messageId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
     return { persisted: true };
   } catch (error) {
@@ -383,17 +512,20 @@ export function scheduleDmReplyWatchdog(params: DmReplyWatchdogParams): Promise<
           // so persist the fallback row before reporting — the player gets
           // the reply (and its roll popup) after a reload instead of nothing.
           let fallbackPersisted = false;
+          let fallbackSkipped: string | undefined;
           if (params.envelope && params.userId) {
-            fallbackPersisted = (
-              await persistFallbackDmReply({
-                userId: params.userId,
-                sessionId: params.sessionId,
-                messageId: params.messageId,
-                reason: params.reason,
-                envelope: params.envelope,
-                generatedAt: params.generatedAt,
-              })
-            ).persisted;
+            const fallback = await persistFallbackDmReply({
+              userId: params.userId,
+              sessionId: params.sessionId,
+              messageId: params.messageId,
+              reason: params.reason,
+              envelope: params.envelope,
+              generatedAt: params.generatedAt,
+              hasActiveEncounter: params.hasActiveEncounter,
+              declinedActorKeys: params.declinedActorKeys,
+            });
+            fallbackPersisted = fallback.persisted;
+            fallbackSkipped = fallback.skipped;
           }
           logger.warn({
             msg: 'DM_REPLY_UNPERSISTED',
@@ -402,6 +534,9 @@ export function scheduleDmReplyWatchdog(params: DmReplyWatchdogParams): Promise<
             reason: params.reason,
             waitedMs: delayMs,
             fallbackPersisted,
+            // #1390: the combat_entry_pending vs superseded distinction stays
+            // diagnosable on the line Hetzner reads for a lost reply.
+            ...(fallbackSkipped ? { fallbackSkipped } : {}),
           });
         })
         .catch((error) => {

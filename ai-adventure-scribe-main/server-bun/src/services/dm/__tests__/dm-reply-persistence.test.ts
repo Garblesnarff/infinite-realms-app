@@ -577,6 +577,148 @@ describe('persistFallbackDmReply', () => {
       }),
     ]);
   });
+
+  test('writes the narration without the superseded roll requests when the fight is live (#1390)', async () => {
+    // The gate-rewritten envelope: combat_transition 'none' plus the pending
+    // entry, carrying the initiative roll request the fight superseded.
+    const result = await persistFallbackDmReply({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      reason: 'roll_requests',
+      envelope: explorationEnvelope({
+        combat_transition: 'none',
+        combat_entry_pending: { combatants: [{ name: 'Head Chef Balthazar', count: 1 }] },
+        roll_requests: [{ type: 'initiative', formula: '1d20+2', purpose: 'Initiative' }],
+      }),
+      hasActiveEncounter: async () => true,
+      declinedActorKeys: async () => [],
+    });
+    expect(result).toEqual({ persisted: true });
+    expect(addMessageCalls).toHaveLength(1);
+    const data = addMessageCalls[0]?.data as Record<string, unknown>;
+    expect(data['message']).toContain('Cold air rises from the stair');
+    const context = data['context'] as Record<string, unknown>;
+    expect(context['combat_transition']).toBe('none');
+    expect(context['provisional']).toBe(true);
+    expect('rollRequests' in context).toBe(false);
+    expect(publishCalls).toHaveLength(0);
+  });
+
+  test('still skips the combat envelope when no fight is live (#1390)', async () => {
+    const result = await persistFallbackDmReply({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      reason: 'roll_requests',
+      envelope: explorationEnvelope({
+        combat_transition: 'none',
+        combat_entry_pending: { combatants: [{ name: 'Head Chef Balthazar', count: 1 }] },
+        roll_requests: [{ type: 'initiative', formula: '1d20+2', purpose: 'Initiative' }],
+      }),
+      hasActiveEncounter: async () => false,
+    });
+    expect(result).toEqual({ persisted: false, skipped: 'combat_entry_pending' });
+    expect(addMessageCalls).toHaveLength(0);
+  });
+
+  test('a combat_start envelope with a live fight is written as narration, not a transition (#1390)', async () => {
+    const result = await persistFallbackDmReply({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      reason: 'roll_requests',
+      envelope: explorationEnvelope({
+        combat_transition: 'start',
+        roll_requests: [{ type: 'initiative', formula: '1d20+2', purpose: 'Initiative' }],
+      }),
+      hasActiveEncounter: async () => true,
+      declinedActorKeys: async () => [],
+    });
+    expect(result).toEqual({ persisted: true });
+    const context = (addMessageCalls[0]?.data as Record<string, unknown>)['context'] as Record<
+      string,
+      unknown
+    >;
+    expect(context['combat_transition']).toBe('none');
+    expect('rollRequests' in context).toBe(false);
+  });
+
+  test('a bypass with no narration writes nothing (#1390)', async () => {
+    const result = await persistFallbackDmReply({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      reason: 'roll_requests',
+      envelope: explorationEnvelope({
+        text: '   ',
+        combat_transition: 'none',
+        combat_entry_pending: { combatants: [{ name: 'Head Chef Balthazar', count: 1 }] },
+        roll_requests: [{ type: 'initiative', formula: '1d20+2', purpose: 'Initiative' }],
+      }),
+      hasActiveEncounter: async () => true,
+      declinedActorKeys: async () => [],
+    });
+    expect(result).toEqual({ persisted: false, skipped: 'combat_entry_pending' });
+    expect(addMessageCalls).toHaveLength(0);
+  });
+
+  test('a live fight does not bypass prose asserting an undecided outcome (#1390)', async () => {
+    // #2139: confirming the fight does not validate the dice outcomes its
+    // prose asserts, so the fabricated-outcome guard still holds the row.
+    const result = await persistFallbackDmReply({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      reason: 'roll_requests',
+      envelope: explorationEnvelope({
+        text: 'The blow leaves you wounded and bleeding.',
+        combat_transition: 'none',
+        combat_entry_pending: { combatants: [{ name: 'Head Chef Balthazar', count: 1 }] },
+        roll_requests: [{ type: 'initiative', formula: '1d20+2', purpose: 'Initiative' }],
+      }),
+      hasActiveEncounter: async () => true,
+      declinedActorKeys: async () => [],
+    });
+    expect(result).toEqual({ persisted: false, skipped: 'combat_entry_pending' });
+    expect(addMessageCalls).toHaveLength(0);
+  });
+
+  test('a live fight does not bypass a fight the player declined (#1390)', async () => {
+    const result = await persistFallbackDmReply({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      reason: 'roll_requests',
+      envelope: explorationEnvelope({
+        combat_transition: 'none',
+        combat_entry_pending: { combatants: [{ name: 'Head Chef Balthazar', count: 1 }] },
+        roll_requests: [{ type: 'initiative', formula: '1d20+2', purpose: 'Initiative' }],
+      }),
+      hasActiveEncounter: async () => true,
+      declinedActorKeys: async () => ['head chef balthazar'],
+    });
+    expect(result).toEqual({ persisted: false, skipped: 'combat_entry_pending' });
+    expect(addMessageCalls).toHaveLength(0);
+  });
+
+  test('an unrelated decline does not block the bypass (#1390)', async () => {
+    const result = await persistFallbackDmReply({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      reason: 'roll_requests',
+      envelope: explorationEnvelope({
+        combat_transition: 'none',
+        combat_entry_pending: { combatants: [{ name: 'Head Chef Balthazar', count: 1 }] },
+        roll_requests: [{ type: 'initiative', formula: '1d20+2', purpose: 'Initiative' }],
+      }),
+      hasActiveEncounter: async () => true,
+      declinedActorKeys: async () => ['gilded husk'],
+    });
+    expect(result).toEqual({ persisted: true });
+    expect(addMessageCalls).toHaveLength(1);
+  });
 });
 
 describe('persistFallbackDmReply live push (#800 item 3)', () => {

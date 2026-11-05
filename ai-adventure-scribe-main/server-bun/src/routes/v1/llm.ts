@@ -57,6 +57,7 @@ import {
 } from '../../services/dm/dm-feature-gate.js';
 import {
   persistGeneratedDmReply,
+  provisionalDmText,
   scheduleDmReplyWatchdog,
 } from '../../services/dm/dm-reply-persistence.js';
 import {
@@ -74,6 +75,8 @@ import {
 } from '../../services/llm-model-config.js';
 import { LLMProviderService, type LLMResponse } from '../../services/llm-provider-service.js';
 import { countPromptSections } from '../../services/prompt-section-counter.js';
+
+import type { CombatEntryPending } from '../../services/combat/combat-entry-gate.js';
 
 /**
  * Log the SHAPE of the model envelope on /v1/llm/generate — never its content.
@@ -2109,6 +2112,39 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
               void scheduleDmReplyWatchdog(watchdog);
             };
             if (!deferUntilCommit(schedule)) schedule();
+          }
+          // #1390: the fight-opening narration is held as `roll_requests`
+          // and the client never saves it once the player takes the combat
+          // path, so carry it on the stored pending entry. Seating persists
+          // it before the first combat row; the watchdog backstops it. The
+          // stored entry is already written by now (remember at the gate),
+          // and the attach only matches the same actors.
+          if (
+            !persistence.persisted &&
+            persistence.reason === 'roll_requests' &&
+            envelope?.combat_entry_pending &&
+            typeof envelope.combat_entry_pending === 'object' &&
+            typeof dmReply.messageId === 'string'
+          ) {
+            try {
+              const { attachHeldReplyToPendingEntry } =
+                await import('../../services/combat/pending-combat-entry.js');
+              const text = provisionalDmText(envelope);
+              if (text) {
+                await attachHeldReplyToPendingEntry(
+                  dmSessionId,
+                  envelope.combat_entry_pending as CombatEntryPending,
+                  { messageId: dmReply.messageId, text },
+                );
+              }
+            } catch (error) {
+              logger.warn({
+                msg: 'DM_REPLY_HELD_ATTACH_FAILED',
+                sessionId: dmSessionId,
+                messageId: dmReply.messageId,
+                error,
+              });
+            }
           }
         }
 
