@@ -294,3 +294,38 @@ describe('#944 background gaming-set choice gate', () => {
     ).toBe(true);
   });
 });
+
+describe('#1354 equipment choice gate', () => {
+  it('blocks advancement while no equipment option is chosen', () => {
+    expect(validateStep('Equipment', {} as Character)).toEqual({
+      isValid: false,
+      message: 'Please choose your starting equipment',
+    });
+    expect(
+      validateStep('Equipment', { selectedEquipmentOptionIndex: undefined } as Character),
+    ).toEqual({
+      isValid: false,
+      message: 'Please choose your starting equipment',
+    });
+    expect(
+      validateStep('Equipment', { selectedEquipmentOptionIndex: null } as unknown as Character),
+    ).toEqual({
+      isValid: false,
+      message: 'Please choose your starting equipment',
+    });
+  });
+
+  it('allows advancement once the package card is chosen', () => {
+    expect(validateStep('Equipment', { selectedEquipmentOptionIndex: 0 } as Character)).toEqual({
+      isValid: true,
+      message: '',
+    });
+  });
+
+  it('allows advancement once the gold card is chosen', () => {
+    expect(validateStep('Equipment', { selectedEquipmentOptionIndex: 1 } as Character)).toEqual({
+      isValid: true,
+      message: '',
+    });
+  });
+});
