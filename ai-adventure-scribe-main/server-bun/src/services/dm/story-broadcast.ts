@@ -23,7 +23,8 @@ export type StoryCharacterUpdateReason =
   | 'story_rest'
   | 'story_conditions'
   | 'story_slots'
-  | 'story_features';
+  | 'story_features'
+  | 'combat_ended';
 
 /** The socket message type the client maps to the `character-state-updated` window event. */
 export const STORY_CHARACTER_UPDATED_MESSAGE = 'character_state_updated';
@@ -31,10 +32,12 @@ export const STORY_CHARACTER_UPDATED_MESSAGE = 'character_state_updated';
 export function publishStoryCharacterUpdate(
   sessionId: string,
   reason: StoryCharacterUpdateReason,
+  extra?: { currentHp?: number; maxHp?: number },
 ): void {
   broadcastToRoom(sessionId, null as never, {
     type: STORY_CHARACTER_UPDATED_MESSAGE,
     reason,
+    ...extra,
     timestamp: Date.now(),
   });
 }

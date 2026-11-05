@@ -46,6 +46,7 @@ import { alert } from '../../lib/alerting.js';
 import { logger } from '../../lib/logger.js';
 import { slugify, entitySlug, resolveEntityRef } from '../../tactical/identity.js';
 import { broadcastToRoom } from '../collaboration/room-manager.js';
+import { publishStoryCharacterUpdate } from '../dm/story-broadcast.js';
 import { NarrativeLedgerService } from '../narrative/narrative-ledger-service.js';
 
 import type { CombatEndReason } from '../../types/combat.js';
@@ -522,5 +523,38 @@ export async function concludeEncounter(
     trackCombatEvent('abandonment', { encounterId, sessionId, reason });
   }
   await publishCombatState(encounterId, userId, 'combat_ended');
+  // #1356: a flee ending a fight hits the hero with the parting opportunity attack, but
+  // publishCombatState only emits combat_state_updated, so the in-session header/sheet keeps
+  // pre-flee HP. Re-emit the character update with the post-hit HP; never fail conclusion.
+  try {
+    const [session] = await db
+      .select({ characterId: gameSessions.characterId })
+      .from(gameSessions)
+      .where(eq(gameSessions.id, sessionId));
+    const [stats] = session?.characterId
+      ? await db
+          .select({
+            currentHitPoints: characterStats.currentHitPoints,
+            maxHitPoints: characterStats.maxHitPoints,
+          })
+          .from(characterStats)
+          .where(eq(characterStats.characterId, session.characterId))
+      : [];
+    if (stats) {
+      publishStoryCharacterUpdate(sessionId, 'combat_ended', {
+        currentHp: stats.currentHitPoints,
+        maxHp: stats.maxHitPoints,
+      });
+    } else {
+      publishStoryCharacterUpdate(sessionId, 'combat_ended');
+    }
+  } catch (error) {
+    logger.warn({
+      msg: 'COMBAT_END_CHARACTER_BROADCAST_FAILED',
+      encounterId,
+      sessionId,
+      error: error instanceof Error ? error.message : error,
+    });
+  }
   return true;
 }
