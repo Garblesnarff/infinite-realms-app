@@ -6,6 +6,7 @@ import { buildAbilityScores } from './build-ability-scores';
 import { characterSpellService } from './characterSpellApi';
 import { hydrateCharacterStats } from './hydrate-character-stats';
 import { loadGrantedClassIdentity } from './load-granted-class-identity';
+import { limitedFeatureRule } from '../../shared/limited-feature-counts';
 
 import type { CharacterSpellData } from './characterSpellApi';
 import type { Character, CharacterClass, CharacterBackground } from '@/types/character';
@@ -26,6 +27,37 @@ import {
 } from '@/utils/character/parse-proficiency-list';
 import { parseSpellSlots } from '@/utils/character/spell-slots';
 import { convertSpellIdsToFrontend } from '@/utils/spell-id-mapping';
+
+type HeldFeatureUse = {
+  name: string;
+  remaining: number;
+  max?: number;
+  levelAcquired: number;
+};
+
+/** "Action Surge (1 use)" and "Action Surge" are one pool. The count table owns the aliases. */
+function trackedResourceKey(className: string | null, featureName: string): string {
+  const rule = limitedFeatureRule(className, featureName);
+  if (rule?.kind === 'count' && rule.family === 'fighter-action-surge') return 'action_surge';
+  return featureName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+/** Highest library level at or below the character; a same-level tie keeps the earlier name. */
+function heldUseWins(next: HeldFeatureUse, prior: HeldFeatureUse, level: number): boolean {
+  const nextHeld = next.levelAcquired <= level;
+  const priorHeld = prior.levelAcquired <= level;
+  if (nextHeld !== priorHeld) return nextHeld;
+  if (next.levelAcquired !== prior.levelAcquired) {
+    return nextHeld
+      ? next.levelAcquired > prior.levelAcquired
+      : next.levelAcquired < prior.levelAcquired;
+  }
+  return next.name < prior.name;
+}
 
 /**
  * Load a complete character with all spell data populated
@@ -197,12 +229,21 @@ export async function loadCharacterWithSpells(
           : undefined;
 
     const trackedFeatures = { ...classFeatures };
+    const className = typeof characterData.class === 'string' ? characterData.class : null;
+    const characterLevel = typeof characterData.level === 'number' ? characterData.level : 0;
+    const heldUses = new Map<string, HeldFeatureUse>();
     for (const feature of classIdentity.featureUses ?? []) {
-      const key = feature.name
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '_')
-        .replace(/^_+|_+$/g, '');
+      const key = trackedResourceKey(className, feature.name);
+      const candidate: HeldFeatureUse = {
+        name: feature.name,
+        remaining: feature.remaining,
+        levelAcquired: feature.levelAcquired ?? 0,
+        ...(feature.max !== undefined ? { max: feature.max } : {}),
+      };
+      const prior = heldUses.get(key);
+      if (!prior || heldUseWins(candidate, prior, characterLevel)) heldUses.set(key, candidate);
+    }
+    for (const [key, feature] of heldUses) {
       const prior = trackedFeatures[key];
       trackedFeatures[key] = {
         ...(prior && typeof prior === 'object' ? prior : {}),

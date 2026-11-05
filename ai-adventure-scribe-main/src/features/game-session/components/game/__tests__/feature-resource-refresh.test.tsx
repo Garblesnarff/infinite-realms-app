@@ -14,6 +14,7 @@ import { loadCharacterWithSpells } from '@/services/load-character-with-spells';
 
 const api = vi.hoisted(() => ({
   remaining: 1,
+  chip: 'second_wind' as 'second_wind' | 'action_surge',
   getCharacter: vi.fn(),
   equipment: vi.fn(),
   spells: vi.fn(),
@@ -78,7 +79,7 @@ function Harness() {
   return (
     <>
       {character && <RightSheet c={buildCharacterSheet(character)} />}
-      <button onClick={() => void combat.runAction(combat.actions[0])}>Use Second Wind</button>
+      <button onClick={() => void combat.runAction(combat.actions[0])}>Use feature</button>
     </>
   );
 }
@@ -86,6 +87,7 @@ function Harness() {
 describe('#1376 in-session feature resource refresh', () => {
   beforeEach(() => {
     api.remaining = 1;
+    api.chip = 'second_wind';
     api.getCharacter.mockResolvedValue({
       id: 'character-id',
       user_id: 'user-1',
@@ -130,7 +132,12 @@ describe('#1376 in-session feature resource refresh', () => {
           ok: true,
           json: async () => ({
             actorId: 'pc-1',
-            actions: [{ type: 'second_wind', label: 'Second Wind' }],
+            actions: [
+              {
+                type: api.chip,
+                label: api.chip === 'action_surge' ? 'Action Surge' : 'Second Wind',
+              },
+            ],
           }),
         } as Response;
       if (String(url).includes('/intent')) {
@@ -146,9 +153,55 @@ describe('#1376 in-session feature resource refresh', () => {
     const resource = screen.getByRole('heading', { name: 'Second Wind' }).parentElement!;
     expect(within(resource).getByText('1 / 1')).toBeTruthy();
     await act(async () => {
-      screen.getByText('Use Second Wind').click();
+      screen.getByText('Use feature').click();
     });
     await waitFor(() => expect(within(resource).getByText('0 / 1')).toBeTruthy());
     expect(api.features).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows a spent Action Surge as 0/1 on load and after the combat use', async () => {
+    api.chip = 'action_surge';
+    const rows = (
+      names: Array<[string, number]>,
+    ): {
+      features: Array<{
+        featureId: string;
+        isActive: boolean;
+        usesRemaining: number;
+        feature: { featureName: string; usesCount: number; levelAcquired: number };
+      }>;
+      usesRemaining: Record<string, number>;
+    } => ({
+      features: names.map(([featureName, usesRemaining]) => ({
+        featureId: featureName,
+        isActive: true,
+        usesRemaining,
+        feature: { featureName, usesCount: 1, levelAcquired: 2 },
+      })),
+      usesRemaining: {},
+    });
+    api.features.mockImplementation(async () => rows([['Action Surge (1 use)', api.remaining]]));
+    const { unmount } = render(<Harness />);
+    const shown = async (count: string): Promise<void> => {
+      const heading = await screen.findByRole('heading', { name: 'Action Surge' });
+      const resource = heading.parentElement?.parentElement;
+      if (!resource) throw new Error('Action Surge resource row is missing');
+      expect(within(resource).getAllByText(count).length).toBeGreaterThan(0);
+    };
+    await shown('1 / 1');
+    await act(async () => {
+      screen.getByText('Use feature').click();
+    });
+    await waitFor(() => shown('0 / 1'));
+    unmount();
+    // The unspent suffix row is last. The sheet must keep the name the spend picks.
+    api.features.mockImplementation(async () =>
+      rows([
+        ['Action Surge', 0],
+        ['Action Surge (1 use)', 1],
+      ]),
+    );
+    render(<Harness />);
+    await shown('0 / 1');
   });
 });
