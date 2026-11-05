@@ -15,9 +15,9 @@ const TermsPage: React.FC = () => (
 
     <LegalSection title="Your account">
       <p>
-        Sign-in is handled by WorkOS. You must give accurate details, keep your sign-in secure and
-        be old enough to agree to these terms where you live. You are responsible for activity on
-        your account.
+        Sign-in is handled by WorkOS. You must give accurate details and keep your sign-in secure.
+        You must be 18 or older to use Infinite Realms. You are responsible for activity on your
+        account.
       </p>
     </LegalSection>
 
@@ -28,8 +28,10 @@ const TermsPage: React.FC = () => (
         until the end of the period you already paid for.
       </p>
       <p>
-        Refunds are handled case by case. Email <SupportEmail /> and tell us what went wrong. We may
-        change prices or plan features with notice before your next billing date.
+        If you cancel within 7 days of your first charge, email us and we refund that charge in
+        full. After that there are no refunds; you can cancel any time and keep access until the end
+        of the period you already paid for. We may change prices or plan features with notice before
+        your next billing date.
       </p>
     </LegalSection>
 
@@ -78,7 +80,8 @@ const TermsPage: React.FC = () => (
         The service is in beta and is provided "as is". It may change, be interrupted or lose data.
         To the extent the law allows, we are not liable for indirect or consequential loss, and our
         total liability for any claim is limited to what you paid us in the 12 months before it.
-        Nothing here limits rights that the law does not allow us to limit.
+        Nothing here limits rights that the law does not allow us to limit. These terms are governed
+        by the laws of the State of Wisconsin, USA.
       </p>
     </LegalSection>
 

@@ -51,7 +51,10 @@ const PrivacyPage: React.FC = () => (
         <li>WorkOS: sign-in and identity.</li>
         <li>Stripe: subscription payments.</li>
         <li>Google: GA4 analytics, and Gemini, which can generate AI story text and images.</li>
-        <li>OpenRouter: routes some AI text requests to the model providers behind it.</li>
+        <li>
+          OpenRouter: routes AI text requests to model providers, currently Anthropic (Claude) and
+          Google (Gemini).
+        </li>
         <li>ElevenLabs: AI voice narration, where you use it.</li>
         <li>Hetzner: server hosting.</li>
       </ul>
