@@ -11,12 +11,15 @@ import { getCharacterClassFeatures, getCharacterSubclass } from '@/services/clas
 export interface GrantedClassIdentity {
   subclassName?: string;
   grantedFeatureNames?: string[];
-  featureUses?: Array<{ name: string; remaining: number; max?: number }>;
+  featureUses?: Array<{
+    name: string;
+    remaining: number;
+    max?: number;
+    levelAcquired?: number;
+  }>;
 }
 
-async function readFeatureNames(
-  characterId: string,
-): Promise<{
+async function readFeatureNames(characterId: string): Promise<{
   names?: string[];
   subclassFromFeature?: string;
   featureUses?: GrantedClassIdentity['featureUses'];
@@ -41,11 +44,13 @@ async function readFeatureNames(
       )
         return [];
       const max = row.feature?.usesCount;
+      const levelAcquired = row.feature?.levelAcquired;
       return [
         {
           name,
           remaining: row.usesRemaining,
           ...(typeof max === 'number' && max > 0 ? { max } : {}),
+          ...(typeof levelAcquired === 'number' ? { levelAcquired } : {}),
         },
       ];
     });

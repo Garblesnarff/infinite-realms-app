@@ -232,6 +232,13 @@ function sheetClassResources(character: Character, level: number): CharacterReso
   if (current !== undefined && max !== undefined) {
     resources.secondWind = { current, max };
   }
+  const surge = trackedUses(character.classFeatures, 'action_surge');
+  if (surge?.currentUses !== undefined && resources.actionSurge) {
+    resources.actionSurge = {
+      current: surge.currentUses,
+      max: resources.actionSurge.max,
+    };
+  }
   return resources;
 }
 
