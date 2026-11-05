@@ -8,11 +8,10 @@
  * claim. A mocked `db` cannot show the slot row or the HP row, so this suite runs against the
  * scratch database. Requires TEST_DATABASE_URL or DATABASE_URL -- see fixtures/real-db.ts.
  *
- * The d20 comes from Math.random, so the target's AC is moved instead of the die (same trick as
- * hex.real-db.test.ts): AC 1 is hit except on a natural 1, and AC 99 is missed except on a
- * natural 20. Each case retries a bounded number of times until the roll it needs comes up.
+ * The target's AC selects the intended hit/miss path, with bounded retries. The damage-bound
+ * cases seed the engine's dice to exercise both normal and critical hits deterministically.
  */
-import { afterAll, beforeAll, beforeEach, expect, it } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from 'bun:test';
 import { and, eq } from 'drizzle-orm';
 
 import { closeRealDb, describeWithDb, hasRealDb, realDb, testId } from './fixtures/real-db.js';
@@ -27,6 +26,7 @@ import {
   gameSessions,
   inventoryItems,
 } from '../../../../db/schema/index';
+import { setRngSeed } from '../../lib/rng.js';
 
 const combatAttackService = hasRealDb
   ? (await import('../combat/combat-attack-service.js')).combatAttackService
@@ -44,6 +44,7 @@ const ORC_START_HP = 500;
 describeWithDb('Divine Smite on a melee hit (#1362)', () => {
   const db = hasRealDb ? realDb() : (null as never);
   const userId = testId('smite-user');
+  afterEach(() => setRngSeed(undefined));
 
   let campaignId: string;
   let characterId: string;
@@ -216,7 +217,11 @@ describeWithDb('Divine Smite on a melee hit (#1362)', () => {
       userId,
     );
 
-  it('spends a level 1 slot on a hit and applies 2d8 radiant to the target', async () => {
+  it.each([
+    [1, false],
+    [36, true],
+  ])('spends a level 1 slot on a hit (seed %i)', async (seed, critical) => {
+    setRngSeed(seed);
     let outcome: Awaited<ReturnType<typeof attack>> | null = null;
     for (let i = 0; i < MAX_ATTEMPTS && !outcome; i++) {
       const version = await giveTurnToPaladin();
@@ -225,37 +230,49 @@ describeWithDb('Divine Smite on a melee hit (#1362)', () => {
     }
     expect(outcome).not.toBeNull();
     expect(await usedSlots()).toBe(1);
+    expect(outcome!.isCritical).toBe(critical);
 
     const smite = (outcome as { divineSmiteDamage?: number }).divineSmiteDamage!;
-    expect(smite).toBeGreaterThanOrEqual(2);
-    expect(smite).toBeLessThanOrEqual(16);
-    expect(outcome!.transcriptLines?.join('\n')).toContain('Divine Smite: 2d8 radiant');
+    const dice = outcome!.isCritical ? 4 : 2;
+    expect(smite).toBeGreaterThanOrEqual(dice);
+    expect(smite).toBeLessThanOrEqual(dice * 8);
+    expect(outcome!.transcriptLines?.join('\n')).toContain(`Divine Smite: ${dice}d8 radiant`);
 
     // The Smite lands on the orc's HP along with the weapon damage.
     expect(await orcHp()).toBeLessThanOrEqual(ORC_START_HP - smite);
   });
 
-  it('adds 1d8 per slot level above 1st and 1d8 against undead', async () => {
-    // No level 2 row is seeded: the paladin's level-2 slots come from class progression, the
-    // same derivation the spend path uses for a character created before its rows existed.
-    await db
-      .update(combatParticipants)
-      .set({ creatureType: 'undead' })
-      .where(eq(combatParticipants.id, orcId));
+  it.each([
+    [1, false],
+    [36, true],
+  ])(
+    'adds 1d8 per slot level above 1st and 1d8 against undead (seed %i)',
+    async (seed, critical) => {
+      setRngSeed(seed);
+      // No level 2 row is seeded: the paladin's level-2 slots come from class progression, the
+      // same derivation the spend path uses for a character created before its rows existed.
+      await db
+        .update(combatParticipants)
+        .set({ creatureType: 'undead' })
+        .where(eq(combatParticipants.id, orcId));
 
-    let outcome: { divineSmiteDamage?: number; transcriptLines?: string[] } | null = null;
-    for (let i = 0; i < MAX_ATTEMPTS && !outcome; i++) {
-      const version = await giveTurnToPaladin();
-      const attempt = await attack(version, 2);
-      if (attempt.hit) outcome = attempt;
-    }
-    expect(outcome).not.toBeNull();
-    // Level 2 slot: 3d8, plus 1d8 against undead, so 4d8 in all.
-    expect(outcome!.divineSmiteDamage!).toBeGreaterThanOrEqual(4);
-    expect(outcome!.divineSmiteDamage!).toBeLessThanOrEqual(32);
-    expect(outcome!.transcriptLines?.join('\n')).toContain('Divine Smite: 4d8 radiant');
-    expect(await usedSlots(2)).toBe(1);
-  });
+      let outcome: Awaited<ReturnType<typeof attack>> | null = null;
+      for (let i = 0; i < MAX_ATTEMPTS && !outcome; i++) {
+        const version = await giveTurnToPaladin();
+        const attempt = await attack(version, 2);
+        if (attempt.hit) outcome = attempt;
+      }
+      expect(outcome).not.toBeNull();
+      expect(outcome!.isCritical).toBe(critical);
+      // Level 2 slot: 3d8 plus 1d8 against undead, doubled on a critical hit.
+      const dice = outcome!.isCritical ? 8 : 4;
+      const smite = (outcome as { divineSmiteDamage?: number }).divineSmiteDamage!;
+      expect(smite).toBeGreaterThanOrEqual(dice);
+      expect(smite).toBeLessThanOrEqual(dice * 8);
+      expect(outcome!.transcriptLines?.join('\n')).toContain(`Divine Smite: ${dice}d8 radiant`);
+      expect(await usedSlots(2)).toBe(1);
+    },
+  );
 
   it('refuses a Smite with no slot of that level before any roll, claim or spend', async () => {
     await db.delete(characterSpellSlots).where(eq(characterSpellSlots.characterId, characterId));
@@ -295,6 +312,7 @@ describeWithDb('Divine Smite on a melee hit (#1362)', () => {
   });
 
   it('a spend that fails on a hit lands the weapon damage without the Smite', async () => {
+    setRngSeed(1);
     const { SpellSlotsService } = await import('../spell-slots-service.js');
     const realUse = SpellSlotsService.useSpellSlot;
     // The slot passes the up-front check, then another spend takes it before this hit.
@@ -320,6 +338,7 @@ describeWithDb('Divine Smite on a melee hit (#1362)', () => {
   });
 
   it('a miss spends no slot and applies no Smite', async () => {
+    setRngSeed(1);
     await db
       .update(combatParticipants)
       .set({ armorClass: UNHITTABLE_AC })
