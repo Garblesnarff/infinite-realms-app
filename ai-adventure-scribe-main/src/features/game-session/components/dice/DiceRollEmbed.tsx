@@ -75,7 +75,26 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
   const [isRolling, setIsRolling] = useState(false);
   const [hasRolled, setHasRolled] = useState(false);
   const [settled, setSettled] = useState(false);
+  const [animationTimedOut, setAnimationTimedOut] = useState(false);
   const settledResult = useRef<DiceRollResult | null>(null);
+  const resultRef = useRef<DiceRollResult | null>(null);
+  const deliveredRef = useRef(false);
+  const mountedRef = useRef(true);
+  const onRollRef = useRef(onRoll);
+  onRollRef.current = onRoll;
+  const deliverResult = useCallback((value: DiceRollResult) => {
+    if (deliveredRef.current) return;
+    deliveredRef.current = true;
+    onRollRef.current?.(value);
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (resultRef.current) deliverResult(resultRef.current);
+    };
+  }, [deliverResult]);
   const [rollError, setRollError] = useState<string | null>(null);
   const diceSound = useRef<Howl | null>(null);
   // Reads the signed-in user's Table > Dice sound setting (default on).
@@ -85,6 +104,9 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
     if (isRolling) return;
 
     setSettled(false);
+    setAnimationTimedOut(false);
+    resultRef.current = null;
+    deliveredRef.current = false;
     setIsRolling(true);
     setHasRolled(true);
     setRollError(null);
@@ -108,6 +130,11 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
             advantage,
             disadvantage,
           });
+          resultRef.current = rollResult;
+          if (!mountedRef.current) {
+            deliverResult(rollResult);
+            return;
+          }
           setResult(rollResult);
           setIsRolling(false);
         } catch (err) {
@@ -121,14 +148,33 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
       },
       showAnimation ? 1500 : 100,
     );
-  }, [expression, purpose, advantage, disadvantage, onRoll, isRolling, showAnimation, diceSoundOn]);
+  }, [
+    expression,
+    purpose,
+    advantage,
+    disadvantage,
+    onRoll,
+    isRolling,
+    showAnimation,
+    diceSoundOn,
+    deliverResult,
+  ]);
 
   const handleSettled = useCallback(() => {
     if (!result || settledResult.current === result) return;
     settledResult.current = result;
     setSettled(true);
-    window.setTimeout(() => onRoll?.(result), 2000);
-  }, [result, onRoll]);
+    window.setTimeout(() => deliverResult(result), 2000);
+  }, [result, deliverResult]);
+
+  useEffect(() => {
+    if (!result || settledResult.current === result) return;
+    const fallback = window.setTimeout(() => {
+      setAnimationTimedOut(true);
+      handleSettled();
+    }, 10_000);
+    return () => window.clearTimeout(fallback);
+  }, [result, handleSettled]);
 
   useEffect(() => {
     if (result && !showAnimation) handleSettled();
@@ -245,14 +291,16 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
         )}
 
         {/* 3D Dice Animation Section */}
-        <Dice3DSection
-          result={result}
-          isRolling={isRolling}
-          hasRolled={hasRolled}
-          showAnimation={showAnimation}
-          soundOn={diceSoundOn}
-          onSettled={handleSettled}
-        />
+        {!animationTimedOut && (
+          <Dice3DSection
+            result={result}
+            isRolling={isRolling}
+            hasRolled={hasRolled}
+            showAnimation={showAnimation}
+            soundOn={diceSoundOn}
+            onSettled={handleSettled}
+          />
+        )}
 
         {/* Results Display */}
         <AnimatePresence>

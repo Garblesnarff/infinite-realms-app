@@ -37,4 +37,42 @@ describe('dice result timing', () => {
     act(() => vi.advanceTimersByTime(2000));
     expect(onRoll).toHaveBeenCalledOnce();
   });
+  it('delivers the engine result once when unmounted during a tumble', () => {
+    const onRoll = vi.fn();
+    const view = render(<DiceRollEmbed expression="1d20+4" autoRoll onRoll={onRoll} />);
+    act(() => vi.advanceTimersByTime(1500));
+    view.unmount();
+    expect(onRoll).toHaveBeenCalledOnce();
+    expect(onRoll).toHaveBeenCalledWith(expect.objectContaining({ naturalRoll: 7, total: 11 }));
+    act(() => vi.advanceTimersByTime(20_000));
+    expect(onRoll).toHaveBeenCalledOnce();
+  });
+  it('delivers a roll even if unmounted before the dice result is generated', () => {
+    const onRoll = vi.fn();
+    const view = render(<DiceRollEmbed expression="1d20+4" autoRoll onRoll={onRoll} />);
+    view.unmount();
+    act(() => vi.advanceTimersByTime(1500));
+    expect(onRoll).toHaveBeenCalledOnce();
+    expect(onRoll).toHaveBeenCalledWith(expect.objectContaining({ naturalRoll: 7 }));
+  });
+  it('delivers once when the simulation never reports settling', () => {
+    const onRoll = vi.fn();
+    render(<DiceRollEmbed expression="1d20+4" autoRoll onRoll={onRoll} />);
+    act(() => vi.advanceTimersByTime(1500));
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(screen.queryByRole('button', { name: 'Dice stopped' })).not.toBeInTheDocument();
+    expect(screen.getByText('Total 11')).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(2000));
+    expect(onRoll).toHaveBeenCalledOnce();
+  });
+  it('does not deliver twice when unmounted during the post-settle delay', () => {
+    const onRoll = vi.fn();
+    const view = render(<DiceRollEmbed expression="1d20+4" autoRoll onRoll={onRoll} />);
+    act(() => vi.advanceTimersByTime(1500));
+    fireEvent.click(screen.getByRole('button', { name: 'Dice stopped' }));
+    view.unmount();
+    expect(onRoll).toHaveBeenCalledOnce();
+    act(() => vi.advanceTimersByTime(2000));
+    expect(onRoll).toHaveBeenCalledOnce();
+  });
 });
