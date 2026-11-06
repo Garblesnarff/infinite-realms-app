@@ -38,6 +38,7 @@ export interface RacialTrait {
 }
 
 export type ClassFeatureName =
+  | 'expertise'
   | 'rage'
   | 'sneak_attack'
   | 'action_surge'

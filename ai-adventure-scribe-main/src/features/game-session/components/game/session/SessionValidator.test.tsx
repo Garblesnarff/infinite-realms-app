@@ -28,7 +28,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 vi.mock('@/services/user-data-api', async (importOriginal) => {
-  const actual = await importOriginal<UserDataApiModule>();
+  const actual = await importOriginal<typeof UserDataApiModule>();
   return {
     ...actual,
     userDataApi: {

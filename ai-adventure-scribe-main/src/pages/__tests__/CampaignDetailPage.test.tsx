@@ -466,7 +466,10 @@ describe('CampaignDetailPage heroes (#89)', () => {
     const originalLocation = window.location;
     delete (window as unknown as { location?: Location }).location;
     try {
-      window.location = { ...originalLocation, href: '' } as Location;
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: { ...originalLocation, href: '' },
+      });
 
       fireEvent.click(screen.getByText('Sign in to play as Bram'));
 
@@ -475,7 +478,7 @@ describe('CampaignDetailPage heroes (#89)', () => {
       );
       expect(state.seed).not.toHaveBeenCalled();
     } finally {
-      window.location = originalLocation;
+      Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
     }
   });
 

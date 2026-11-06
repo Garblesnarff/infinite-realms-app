@@ -162,7 +162,7 @@ describe('characterTransformations', () => {
       const character: Partial<Character> = {
         inventory: [
           { itemId: 'Arrows', quantity: 0, equipped: false },
-          { itemId: 'Bread', equipped: false },
+          { itemId: 'Bread', equipped: false } as NonNullable<Character['inventory']>[number],
         ],
       };
       const result = transformEquipmentForStorage(character as Character, 'id');
