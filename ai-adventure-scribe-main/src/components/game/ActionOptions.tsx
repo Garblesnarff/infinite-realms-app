@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 
 interface ActionOptionsProps {
   options: ActionOption[];
+  ideaCards?: boolean;
   onOptionSelect: (option: ActionOption) => void | Promise<void>;
   resetSelectionAfterCompletion?: boolean;
   delay?: number; // Delay in milliseconds before showing options
@@ -111,6 +112,7 @@ function areOptionsEqual(a: ActionOption[], b: ActionOption[]): boolean {
 export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
   ({
     options: incomingOptions,
+    ideaCards = false,
     onOptionSelect,
     delay = 10000, // 10 seconds default
     disabled = false,
@@ -256,7 +258,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
                                 : `Option ${displayNumber} - ${option.text}`
                             }
                             className={`
-                            flex items-start gap-3 p-4 h-full w-full text-left justify-start whitespace-normal
+                            ${ideaCards ? 'ir-idea-card [body.ir-table-look_&_*]:text-[#1f3a6b]' : ''} flex items-start gap-3 p-4 h-full w-full text-left justify-start whitespace-normal
                             transition-all duration-200 border rounded-xl
                             bg-white/[0.02] border-white/10 text-foreground/90
                             hover:bg-infinite-gold/[0.07] hover:border-infinite-gold/40

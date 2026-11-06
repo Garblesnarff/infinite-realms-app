@@ -13,7 +13,18 @@ describe('reduced-motion dice playback', () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => null);
   });
 
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    delete document.documentElement.dataset.reduceMotion;
+    vi.restoreAllMocks();
+  });
+
+  it('honors the player override as well as the device setting', () => {
+    vi.spyOn(window, 'matchMedia').mockReturnValue({ matches: false } as MediaQueryList);
+    document.documentElement.dataset.reduceMotion = 'on';
+    expect(prefersReducedMotion()).toBe(true);
+    document.documentElement.dataset.reduceMotion = 'off';
+    expect(prefersReducedMotion()).toBe(false);
+  });
 
   it('reads the reduce preference and settles directly on the last frame', () => {
     vi.spyOn(window, 'matchMedia').mockReturnValue({ matches: true } as MediaQueryList);

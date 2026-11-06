@@ -92,7 +92,12 @@ export const EngineLine: React.FC<EngineLineProps> = ({ model, showLabel = true 
         <span
           data-testid="engine-line-pill"
           className={cn(
-            'text-xs font-bold uppercase tracking-[.08em] px-2 py-1 rounded-md',
+            'ir-wax-seal text-xs font-bold uppercase tracking-[.08em] px-2 py-1 rounded-md',
+            ['hit', 'enemy-hit', 'fail', 'refused'].includes(model.outcome)
+              ? 'ir-wax-seal--red'
+              : ['critical', 'pass'].includes(model.outcome)
+                ? 'ir-wax-seal--gold'
+                : 'ir-wax-seal--slate',
             PILL_CLASS[model.outcome],
           )}
         >

@@ -23,6 +23,7 @@ interface Dice3DSectionProps {
   hasRolled: boolean;
   showAnimation: boolean;
   soundOn: boolean;
+  onSettled: () => void;
 }
 
 export const Dice3DSection: React.FC<Dice3DSectionProps> = ({
@@ -31,9 +32,14 @@ export const Dice3DSection: React.FC<Dice3DSectionProps> = ({
   hasRolled,
   showAnimation,
   soundOn,
+  onSettled,
 }) => {
   const env = import.meta.env as Record<string, string | undefined>;
   const disabled = (env.VITE_DISABLE_DICE_3D ?? 'false').toLowerCase() === 'true';
+
+  React.useEffect(() => {
+    if (result && (!showAnimation || disabled)) onSettled();
+  }, [result, showAnimation, disabled, onSettled]);
 
   if (!showAnimation || !hasRolled) return null;
 
@@ -52,7 +58,7 @@ export const Dice3DSection: React.FC<Dice3DSectionProps> = ({
         initial="hidden"
         animate="visible"
         exit="hidden"
-        className="mb-3 rounded-lg overflow-hidden border border-[rgba(213,176,112,0.25)]"
+        className="mb-3 rounded-lg overflow-hidden border border-[rgba(213,176,112,0.25)] [body.ir-table-look_&]:bg-[radial-gradient(#5e1a20,#2a0a0d)]"
       >
         <PhysicsDiceBox
           result={result}
@@ -60,6 +66,7 @@ export const Dice3DSection: React.FC<Dice3DSectionProps> = ({
           showAnimation={showAnimation}
           height={150}
           soundOn={soundOn}
+          onSettled={onSettled}
         />
       </motion.div>
     </AnimatePresence>

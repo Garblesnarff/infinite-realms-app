@@ -445,6 +445,13 @@ describe('DiceRollRequest', () => {
       render(<DiceRollRequest request={request} onResult={mockOnManualResult} />);
 
       expect(screen.queryByText(/DC 15/i)).not.toBeInTheDocument();
+      expect(screen.getByText('DC hidden · the DM knows the number')).toBeInTheDocument();
+      expect(screen.getByRole('switch', { name: /show target numbers/i })).toHaveAttribute(
+        'aria-checked',
+        'false',
+      );
+      fireEvent.click(screen.getByRole('switch', { name: /show target numbers/i }));
+      expect(screen.getByText(/DC 15/i)).toBeInTheDocument();
     } finally {
       window.localStorage.removeItem('ui:showTargetNumbers:v1');
     }

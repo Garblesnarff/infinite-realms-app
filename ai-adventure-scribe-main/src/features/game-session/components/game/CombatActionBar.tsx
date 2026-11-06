@@ -102,7 +102,7 @@ const isEngineOnlyAction = (action: LegalAction): boolean =>
   !Object.prototype.hasOwnProperty.call(LEGAL_ACTION_PLACEMENT, action.type);
 
 const buttonBase =
-  'inline-flex min-h-11 items-center gap-2 rounded-lg border border-[color:var(--ir-control-border)] bg-white/[0.03] px-3.5 text-sm font-semibold max-[699px]:flex-1 max-[699px]:basis-[calc(33%-8px)] max-[699px]:justify-center';
+  'ir-action-card inline-flex min-h-11 items-center gap-2 rounded-lg border border-[color:var(--ir-control-border)] bg-white/[0.03] px-3.5 text-sm font-semibold max-[699px]:flex-1 max-[699px]:basis-[calc(33%-8px)] max-[699px]:justify-center';
 const primary = 'border-infinite-gold text-infinite-gold bg-infinite-gold/10';
 const disabledClass = 'opacity-45';
 const subClass = 'text-xs text-muted-foreground max-[699px]:hidden';
@@ -175,7 +175,7 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
       role="toolbar"
       aria-label="Your actions"
       data-testid="combat-action-bar"
-      className="flex flex-wrap items-center gap-2 px-3 pt-2"
+      className="flex flex-wrap items-center gap-2 px-3 pt-2 [body.ir-table-look_&]:flex-nowrap [body.ir-table-look_&]:overflow-x-auto"
     >
       <BarButton
         isPrimary

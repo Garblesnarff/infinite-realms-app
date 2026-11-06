@@ -25,7 +25,7 @@ exports[`GameMainContent overhaul behavior contract > keeps the live message, di
           Safety
         </div>
         <div
-          class="flex flex-wrap items-center justify-end gap-2"
+          class="flex max-w-full min-w-0 flex-wrap items-center justify-end gap-2"
         >
           <button
             aria-label="Copy build and session id: build dev · session session-"
@@ -162,7 +162,7 @@ exports[`GameMainContent overhaul behavior contract > keeps the live message, di
         class="shrink-0"
       >
         <div
-          class="empty:hidden"
+          class="empty:hidden [body.ir-table-look_&:empty]:block [body.ir-table-look_&:empty]:h-3 [body.ir-table-look_&:empty]:rounded [body.ir-table-look_&:empty]:border [body.ir-table-look_&:empty]:border-[#a9823f] [body.ir-table-look_&:empty]:bg-[#3b2616]"
           data-testid="roll-tray-slot"
         />
         <div

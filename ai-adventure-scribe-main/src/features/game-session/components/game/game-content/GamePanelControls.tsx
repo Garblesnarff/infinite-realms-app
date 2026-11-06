@@ -31,14 +31,14 @@ export const GamePanelControls: React.FC<GamePanelControlsProps> = memo(
     onSceneBlurbToggle,
   }) => {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex max-w-full min-w-0 items-center gap-2 overflow-x-auto">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="ir-hit"
+              className="ir-hit shrink-0"
               onClick={onLeftToggle}
               aria-pressed={!isLeftCollapsed}
             >
@@ -56,7 +56,7 @@ export const GamePanelControls: React.FC<GamePanelControlsProps> = memo(
               type="button"
               variant="outline"
               size="sm"
-              className="ir-hit"
+              className="ir-hit shrink-0"
               onClick={onRightToggle}
               aria-pressed={!isRightCollapsed}
             >
@@ -74,7 +74,7 @@ export const GamePanelControls: React.FC<GamePanelControlsProps> = memo(
               type="button"
               variant="outline"
               size="sm"
-              className="ir-hit"
+              className="ir-hit shrink-0"
               onClick={onSceneBlurbToggle}
               aria-pressed={showSceneBlurb}
             >

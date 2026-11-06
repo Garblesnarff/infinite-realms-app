@@ -239,9 +239,9 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
     <TooltipProvider>
       <div className="px-4 pb-4">
         <div className="chat-composer transition-all duration-300 focus-within:ring-2 focus-within:ring-infinite-purple/30 focus-within:ring-offset-2 focus-within:ring-offset-background rounded-2xl bg-card/90 border border-border/60 hover:border-border hover:shadow-lg">
-          <div className="flex items-end gap-3 p-3">
+          <div className="flex items-end gap-3 p-3 max-[699px]:flex-wrap max-[699px]:gap-1">
             {/* Enhanced Quick action buttons with better touch targets */}
-            <div className="flex items-center gap-1 pb-1">
+            <div className="flex items-center gap-1 pb-1 max-[699px]:order-2 max-[699px]:flex-1">
               <Tooltip delayDuration={300}>
                 <TooltipTrigger asChild>
                   <Button
@@ -296,7 +296,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
             </div>
 
             {/* Input area */}
-            <div className="flex-1 relative">
+            <div className="flex-1 relative max-[699px]:order-1 max-[699px]:basis-full">
               <Textarea
                 ref={textareaRef}
                 value={input}
@@ -374,7 +374,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
                 <Button
                   onClick={handleSubmit}
                   disabled={!canSend}
-                  className={`h-12 w-12 p-0 rounded-xl transition-all duration-200 min-h-[48px] min-w-[48px] touch-manipulation ${
+                  className={`h-12 w-12 p-0 rounded-xl transition-all duration-200 min-h-[48px] min-w-[48px] touch-manipulation max-[699px]:order-3 ${
                     canSend
                       ? 'bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 active:scale-95'
                       : 'bg-gray-100 text-gray-400 cursor-not-allowed'
@@ -452,7 +452,12 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
           )}
 
           {/* Helper text */}
-          <div className="flex justify-between items-center mt-3 text-xs text-gray-400">
+          <div
+            className={cn(
+              'flex justify-between items-center mt-3 text-xs text-gray-400',
+              !isReconnecting && 'max-[699px]:hidden',
+            )}
+          >
             <span role={isReconnecting ? 'status' : undefined} aria-live="polite">
               {isReconnecting ? (
                 'Reconnecting…'

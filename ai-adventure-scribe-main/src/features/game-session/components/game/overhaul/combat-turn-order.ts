@@ -14,7 +14,7 @@ export interface TurnActor {
   id: string;
   name: string;
   initials: string;
-  initiative: number;
+  initiative: number | null;
   isPlayer: boolean;
   isEnemy: boolean;
   /** A player on the floor with death saves owed: their turn is the save, nothing else (#2518). */
@@ -81,7 +81,7 @@ export function summarizeCombatTurn(
       id: participant.id,
       name,
       initials: initialsOf(name),
-      initiative: participant.initiative ?? 0,
+      initiative: participant.initiative ?? null,
       isPlayer: participant.participantType === 'player',
       isEnemy: isHostileParticipantType(participant.participantType),
       isDying: participantVital(participant) === 'dying',

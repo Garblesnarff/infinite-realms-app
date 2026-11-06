@@ -74,6 +74,8 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
   const [result, setResult] = useState<DiceRollResult | null>(null);
   const [isRolling, setIsRolling] = useState(false);
   const [hasRolled, setHasRolled] = useState(false);
+  const [settled, setSettled] = useState(false);
+  const settledResult = useRef<DiceRollResult | null>(null);
   const [rollError, setRollError] = useState<string | null>(null);
   const diceSound = useRef<Howl | null>(null);
   // Reads the signed-in user's Table > Dice sound setting (default on).
@@ -82,6 +84,7 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
   const handleRoll = useCallback(async () => {
     if (isRolling) return;
 
+    setSettled(false);
     setIsRolling(true);
     setHasRolled(true);
     setRollError(null);
@@ -107,13 +110,6 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
           });
           setResult(rollResult);
           setIsRolling(false);
-
-          // Show result for 2 seconds before calling callback
-          setTimeout(() => {
-            if (onRoll) {
-              onRoll(rollResult);
-            }
-          }, 2000);
         } catch (err) {
           logger.error('DiceRollEmbed: failed to roll expression:', expression, err);
           setIsRolling(false);
@@ -126,6 +122,17 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
       showAnimation ? 1500 : 100,
     );
   }, [expression, purpose, advantage, disadvantage, onRoll, isRolling, showAnimation, diceSoundOn]);
+
+  const handleSettled = useCallback(() => {
+    if (!result || settledResult.current === result) return;
+    settledResult.current = result;
+    setSettled(true);
+    window.setTimeout(() => onRoll?.(result), 2000);
+  }, [result, onRoll]);
+
+  useEffect(() => {
+    if (result && !showAnimation) handleSettled();
+  }, [result, showAnimation, handleSettled]);
 
   useEffect(() => {
     diceSound.current = createDiceSound();
@@ -244,11 +251,12 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
           hasRolled={hasRolled}
           showAnimation={showAnimation}
           soundOn={diceSoundOn}
+          onSettled={handleSettled}
         />
 
         {/* Results Display */}
         <AnimatePresence>
-          {result && !isRolling && (
+          {result && !isRolling && settled && (
             <motion.div
               variants={cardContainer}
               initial="hidden"

@@ -59,6 +59,13 @@ export const PlayerSettings: React.FC = () => {
             onChange={(checked) => updateSettings({ showNPCRolls: checked })}
           />
           <SettingSwitch
+            id="setting-table-look"
+            label="Table look"
+            description="Show the tabletop materials and cards. Turn off for the plain screen."
+            checked={settings.tableLook}
+            onChange={(checked) => updateSettings({ tableLook: checked })}
+          />
+          <SettingSwitch
             id="setting-dice-sound"
             label="Dice sound"
             description="Play a sound when dice are rolled."

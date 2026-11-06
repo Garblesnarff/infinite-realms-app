@@ -23,7 +23,7 @@ interface MessageVoicePlayerProps {
 export const MessageVoicePlayer: React.FC<MessageVoicePlayerProps> = React.memo(
   ({ messageId, messageText, narrationSegments }) => {
     return (
-      <div className="flex justify-end">
+      <div className="flex justify-end [body.ir-table-look_&_*]:!text-[#2a1a0c]">
         <DMMessageVoiceControls
           messageId={messageId}
           messageText={messageText}

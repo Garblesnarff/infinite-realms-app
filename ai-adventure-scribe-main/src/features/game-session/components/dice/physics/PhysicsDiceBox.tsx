@@ -26,6 +26,7 @@ interface Props {
   soundOn?: boolean;
   /** Test seam for proving the text fallback when a tray never settles flat. */
   simulate?: (specs: RollSpec[]) => Promise<Simulation>;
+  onSettled?: () => void;
 }
 
 const SIDES_TO_TYPE: Record<number, DieType> = {
@@ -73,9 +74,11 @@ interface Track {
 }
 
 export function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
+  if (typeof window === 'undefined') return false;
+  const override = document.documentElement.dataset.reduceMotion;
+  if (override === 'on') return true;
+  if (override === 'off') return false;
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
 interface SimWorld {
@@ -288,7 +291,10 @@ export const PhysicsDiceBox: React.FC<Props> = ({
   height = 220,
   soundOn = false,
   simulate,
+  onSettled,
 }) => {
+  const onSettledRef = useRef(onSettled);
+  onSettledRef.current = onSettled;
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const tracksRef = useRef<Track[]>([]);
@@ -309,10 +315,18 @@ export const PhysicsDiceBox: React.FC<Props> = ({
 
   useEffect(() => {
     const query = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const update = () => setReducedMotion(query.matches);
+    const update = () => setReducedMotion(prefersReducedMotion());
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-reduce-motion'],
+    });
     update();
     query.addEventListener?.('change', update);
-    return () => query.removeEventListener?.('change', update);
+    return () => {
+      query.removeEventListener?.('change', update);
+      observer.disconnect();
+    };
   }, []);
 
   useEffect(() => {
@@ -406,11 +420,16 @@ export const PhysicsDiceBox: React.FC<Props> = ({
     tracksRef.current.forEach(settleTrack);
   }, [reducedMotion]);
 
+  useEffect(() => {
+    if (!webglAvailable && result && showAnimation) onSettledRef.current?.();
+  }, [webglAvailable, result, showAnimation]);
+
   // Without animation there is no tumble to wait for, but the live region
   // must still announce the result.
   useEffect(() => {
     if (showAnimation || !result) return;
     setAnnouncement(diceResultAnnouncement(result));
+    onSettledRef.current?.();
   }, [result, showAnimation]);
 
   useEffect(() => {
@@ -424,6 +443,7 @@ export const PhysicsDiceBox: React.FC<Props> = ({
     if (specs.length === 0) {
       // No dice to animate; the result is final as soon as it arrives.
       setAnnouncement(announcementText);
+      onSettledRef.current?.();
       return;
     }
     pendingResult.current = result;
@@ -433,85 +453,101 @@ export const PhysicsDiceBox: React.FC<Props> = ({
     let cancelled = false;
     let watcher: number | undefined;
 
-    void (simulate ?? simulateTrayAsync)(specs).then((simulation) => {
-      if (cancelled) return;
-      pendingResult.current = null;
-      lastResult.current = result;
-      if (!simulation.flat) {
-        setAnnouncement(announcementText);
-        setPhysicsFallback(
-          `Physics preview unavailable; the rules-engine result is ${result.total}.`,
-        );
-        return;
-      }
-      const finalFrames = simulation.frames[simulation.frames.length - 1] ?? [];
-      let tracks: Track[];
-      try {
-        tracks = specs.map((spec, index) => {
-          const physicsQuaternion = new THREE.Quaternion(...finalFrames[index].q);
-          const observedIndex = topIndex(spec.die, physicsQuaternion).idx;
-          const targetIndex = spec.die.faceIndexForValue(spec.target);
-          const rotation = symmetry(spec.die, targetIndex, observedIndex);
-          return {
-            die: spec.die,
-            frames: simulation.frames.map((frame) => frame[index]),
-            rotation,
-            itemIndex: spec.itemIndex,
-            useInTotal: spec.useInTotal,
-            t: 0,
-            done: false,
-          };
-        });
-      } catch (error) {
-        // A symmetry failure must never blank the tray: show the same text
-        // result the non-flat fallback uses, and log the failure.
-        logger.warn('[dice] symmetry failed, showing text result', error);
-        setAnnouncement(announcementText);
-        setPhysicsFallback(
-          `Physics preview unavailable; the rules-engine result is ${result.total}.`,
-        );
-        return;
-      }
-      // Add meshes only after every track built: a throw above must not
-      // leave earlier dice visible under the text fallback.
-      tracks.forEach((track) => scene.add(track.die.mesh));
-      tracksRef.current = tracks;
+    void (simulate ?? simulateTrayAsync)(specs)
+      .then((simulation) => {
+        if (cancelled) return;
+        pendingResult.current = null;
+        lastResult.current = result;
+        if (!simulation.flat) {
+          setAnnouncement(announcementText);
+          onSettledRef.current?.();
+          setPhysicsFallback(
+            `Physics preview unavailable; the rules-engine result is ${result.total}.`,
+          );
+          return;
+        }
+        const finalFrames = simulation.frames[simulation.frames.length - 1] ?? [];
+        let tracks: Track[];
+        try {
+          tracks = specs.map((spec, index) => {
+            const physicsQuaternion = new THREE.Quaternion(...finalFrames[index].q);
+            const observedIndex = topIndex(spec.die, physicsQuaternion).idx;
+            const targetIndex = spec.die.faceIndexForValue(spec.target);
+            const rotation = symmetry(spec.die, targetIndex, observedIndex);
+            return {
+              die: spec.die,
+              frames: simulation.frames.map((frame) => frame[index]),
+              rotation,
+              itemIndex: spec.itemIndex,
+              useInTotal: spec.useInTotal,
+              t: 0,
+              done: false,
+            };
+          });
+        } catch (error) {
+          // A symmetry failure must never blank the tray: show the same text
+          // result the non-flat fallback uses, and log the failure.
+          logger.warn('[dice] symmetry failed, showing text result', error);
+          setAnnouncement(announcementText);
+          onSettledRef.current?.();
+          setPhysicsFallback(
+            `Physics preview unavailable; the rules-engine result is ${result.total}.`,
+          );
+          return;
+        }
+        // Add meshes only after every track built: a throw above must not
+        // leave earlier dice visible under the text fallback.
+        tracks.forEach((track) => scene.add(track.die.mesh));
+        tracksRef.current = tracks;
 
-      const finish = () => {
-        tracks.forEach((track) => {
-          if (track.useInTotal) return;
-          track.die.mesh.traverse((object) => {
-            const mesh = object as THREE.Mesh;
-            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-            materials.forEach((material) => {
-              material.transparent = true;
-              material.opacity = 0.38;
-              material.needsUpdate = true;
+        const finish = () => {
+          tracks.forEach((track) => {
+            if (track.useInTotal) return;
+            track.die.mesh.traverse((object) => {
+              const mesh = object as THREE.Mesh;
+              const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+              materials.forEach((material) => {
+                material.transparent = true;
+                material.opacity = 0.38;
+                material.needsUpdate = true;
+              });
             });
           });
-        });
-      };
-      if (reducedMotionRef.current) {
-        tracks.forEach(settleTrack);
-        finish();
-        setAnnouncement(announcementText);
-        return;
-      }
-      if (!mutedRef.current) {
-        try {
-          soundRef.current?.play();
-        } catch {
-          // Sound is optional and must never block the result.
-        }
-      }
-      watcher = window.setInterval(() => {
-        if (tracks.every((track) => track.done)) {
-          if (watcher !== undefined) window.clearInterval(watcher);
+        };
+        if (reducedMotionRef.current) {
+          tracks.forEach(settleTrack);
           finish();
           setAnnouncement(announcementText);
+          onSettledRef.current?.();
+          return;
         }
-      }, 50);
-    });
+        if (!mutedRef.current) {
+          try {
+            soundRef.current?.play();
+          } catch {
+            // Sound is optional and must never block the result.
+          }
+        }
+        watcher = window.setInterval(() => {
+          if (tracks.every((track) => track.done)) {
+            if (watcher !== undefined) window.clearInterval(watcher);
+            finish();
+            setAnnouncement(announcementText);
+            onSettledRef.current?.();
+          }
+        }, 50);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        pendingResult.current = null;
+        lastResult.current = result;
+        logger.warn('[dice] simulation failed, showing text result', error);
+        setAnnouncement(announcementText);
+        setPhysicsFallback(
+          `Physics preview unavailable; the rules-engine result is ${result.total}.`,
+        );
+        onSettledRef.current?.();
+      });
 
     return () => {
       cancelled = true;

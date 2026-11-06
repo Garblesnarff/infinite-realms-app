@@ -49,13 +49,13 @@ export const PlayerMessage: React.FC<PlayerMessageProps> = React.memo(
         {/* #88: label above the bubble, first in group only. */}
         {/* Same 12px floor as the DM label (strategist queue 03:15Z), not the ticket's 11px. */}
         {isFirstInGroup && (
-          <div className="mb-1 text-xs font-semibold uppercase tracking-[.1em] text-ir-steel-text">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-[.1em] text-ir-steel-text [body.ir-table-look_&]:text-[#2a1a0c]">
             {characterName ? `You · ${characterName}` : 'You'}
           </div>
         )}
         <div
           className={
-            `relative px-3.5 py-2.5 rounded-2xl rounded-tr-[4px] transition-all duration-300 message-bubble backdrop-blur-sm ` +
+            `ir-index-card relative px-3.5 py-2.5 rounded-2xl rounded-tr-[4px] transition-all duration-300 message-bubble backdrop-blur-sm ` +
             (isFailedSend
               ? // NOTE: the ticket's `border-[color:var(--ir-hp-bad)]/60` does NOT
                 // generate under Tailwind 3.4 (the /NN modifier on an arbitrary

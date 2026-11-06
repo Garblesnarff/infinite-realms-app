@@ -111,6 +111,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
         {error && <p role="alert">{error}</p>}
         <ActionOptions
           options={renderedOptions}
+          ideaCards={!showCombatMenu}
           disabled={!isLatest || rollTrayOpen}
           onOptionSelect={handleSelection}
           resetSelectionAfterCompletion={showCombatMenu}

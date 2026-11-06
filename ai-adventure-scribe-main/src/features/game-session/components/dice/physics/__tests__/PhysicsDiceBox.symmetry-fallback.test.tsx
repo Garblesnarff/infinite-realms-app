@@ -43,7 +43,6 @@ vi.mock('../diceShapes', async () => {
   };
 });
 
-
 import { expandRolls, PhysicsDiceBox, simulateTrayAsync } from '../PhysicsDiceBox';
 
 import type * as DiceShapes from '../diceShapes';
@@ -75,6 +74,38 @@ describe('PhysicsDiceBox symmetry failure', () => {
   afterEach(() => {
     rendererState.scene = null;
     vi.restoreAllMocks();
+  });
+
+  it('delivers the result when simulation rejects', async () => {
+    const settled = vi.fn();
+    vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const result = {
+      expression: '1d20',
+      total: 13,
+      rolls: [{ dice: 20, value: 13, sign: 1, critical: false }],
+      modifiers: 0,
+      advantage: false,
+      disadvantage: false,
+      critical: false,
+      naturalRoll: 13,
+      timestamp: 5,
+    } as DiceRollResult;
+    render(
+      <PhysicsDiceBox
+        result={result}
+        isRolling={false}
+        showAnimation
+        height={150}
+        simulate={async () => {
+          throw new Error('simulation failed');
+        }}
+        onSettled={settled}
+      />,
+    );
+    expect(
+      await screen.findByText('Physics preview unavailable; the rules-engine result is 13.'),
+    ).toBeInTheDocument();
+    expect(settled).toHaveBeenCalledOnce();
   });
 
   it('shows the text result and logs when symmetry throws', async () => {
