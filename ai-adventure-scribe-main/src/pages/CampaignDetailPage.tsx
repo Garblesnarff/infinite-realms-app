@@ -34,6 +34,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
+import { HeroFan } from '@/features/campaigns/table/HeroFan';
+import { tableImageUrl } from '@/features/campaigns/table/image-url';
+import { useTableLookActive } from '@/features/campaigns/table/useTableLookActive';
 import { useStarterCampaign } from '@/hooks/use-starter-campaigns';
 import { useStarterCharacterTemplates } from '@/hooks/use-starter-character-templates';
 import logger from '@/lib/logger';
@@ -203,6 +206,7 @@ const CampaignDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const tableLook = useTableLookActive();
   const { campaign, isLoading: campaignLoading, error: campaignError } = useStarterCampaign(slug);
   const {
     templates,
@@ -221,7 +225,10 @@ const CampaignDetailPage: React.FC = () => {
   // #209: synchronous in-flight guard — the disabled button lags a render
   // behind, so a double-click would otherwise seed two characters.
   const startingRef = React.useRef(false);
-  const campaignBannerImage = campaign?.bannerImageUrl || campaign?.coverImageUrl || null;
+  const originalBannerImage = campaign?.bannerImageUrl || campaign?.coverImageUrl || null;
+  const campaignBannerImage = tableLook
+    ? tableImageUrl(originalBannerImage, 1280, 520)
+    : originalBannerImage;
   const [bannerImage, setBannerImage] = React.useState(
     campaignBannerImage || CAMPAIGN_ARTWORK_PLACEHOLDER,
   );
@@ -669,18 +676,28 @@ const CampaignDetailPage: React.FC = () => {
                   </Button>
                 </div>
               )}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                {templates.map((template) => (
-                  <HeroCard
-                    key={template.id}
-                    template={template}
-                    isStarting={startingTemplate?.id === template.id}
-                    startDisabled={startingTemplate !== null}
-                    signedIn={Boolean(user)}
-                    onPlay={(candidate, fresh) => void playAs(candidate, fresh)}
-                  />
-                ))}
-              </div>
+              {tableLook ? (
+                <HeroFan
+                  vitals={templateVitals}
+                  templates={templates}
+                  disabled={startingTemplate !== null}
+                  signedIn={Boolean(user)}
+                  onPlay={(candidate, fresh) => void playAs(candidate, fresh)}
+                />
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  {templates.map((template) => (
+                    <HeroCard
+                      key={template.id}
+                      template={template}
+                      isStarting={startingTemplate?.id === template.id}
+                      startDisabled={startingTemplate !== null}
+                      signedIn={Boolean(user)}
+                      onPlay={(candidate, fresh) => void playAs(candidate, fresh)}
+                    />
+                  ))}
+                </div>
+              )}
             </>
           )}
         </section>
