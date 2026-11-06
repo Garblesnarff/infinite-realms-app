@@ -28,6 +28,18 @@ vi.mock('@/features/game-session/components', () => ({
       <button onClick={() => onRoll(null)} data-testid="mock-roll-invalid-button">
         Mock Roll Invalid
       </button>
+      <button
+        onClick={() => onRoll({ total: 25, naturalRoll: 20, rolls: [{ value: 20 }] })}
+        data-testid="mock-roll-natural-20-button"
+      >
+        Mock Roll Natural 20
+      </button>
+      <button
+        onClick={() => onRoll({ total: 6, naturalRoll: 1, rolls: [{ value: 1 }] })}
+        data-testid="mock-roll-natural-1-button"
+      >
+        Mock Roll Natural 1
+      </button>
     </div>
   ),
 }));
@@ -300,6 +312,42 @@ describe('DiceRollRequest', () => {
     fireEvent.click(screen.getByRole('button', { name: /Roll 1d20\+2 for Test purpose/i }));
     fireEvent.click(screen.getByTestId('mock-roll-number-button'));
     expect(mockOnManualResult).toHaveBeenCalledWith(20);
+  });
+
+  it('fills the tray with gold light on a natural 20 and passes the natural face on', () => {
+    render(<DiceRollRequest request={defaultRequest} onResult={mockOnManualResult} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Roll 1d20\+2 for Test purpose/i }));
+    fireEvent.click(screen.getByTestId('mock-roll-natural-20-button'));
+
+    expect(screen.getByTestId('dice-roll-request').getAttribute('data-natural')).toBe('20');
+    expect(screen.getByTestId('roll-tray-ribbon').textContent).toBe('NATURAL 20');
+    expect(mockOnManualResult).toHaveBeenCalledWith(
+      25,
+      expect.objectContaining({ naturalRoll: 20 }),
+    );
+  });
+
+  it('gives a natural 1 a dark ribbon and no gold light', () => {
+    render(<DiceRollRequest request={defaultRequest} onResult={mockOnManualResult} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Roll 1d20\+2 for Test purpose/i }));
+    fireEvent.click(screen.getByTestId('mock-roll-natural-1-button'));
+
+    const tray = screen.getByTestId('dice-roll-request');
+    expect(tray.getAttribute('data-natural')).toBe('1');
+    expect(tray.style.backgroundImage).toBe('');
+    expect(screen.getByTestId('roll-tray-ribbon').textContent).toBe('NATURAL 1');
+  });
+
+  it('shows no ribbon for a roll that is not natural', () => {
+    render(<DiceRollRequest request={defaultRequest} onResult={mockOnManualResult} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Roll 1d20\+2 for Test purpose/i }));
+    fireEvent.click(screen.getByTestId('mock-roll-button'));
+
+    expect(screen.getByTestId('dice-roll-request').hasAttribute('data-natural')).toBe(false);
+    expect(screen.queryByTestId('roll-tray-ribbon')).toBeNull();
   });
 
   it('handles auto-roll with invalid result', () => {

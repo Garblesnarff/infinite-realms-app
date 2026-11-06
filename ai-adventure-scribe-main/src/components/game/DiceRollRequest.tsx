@@ -6,7 +6,7 @@
  */
 
 import { Info } from 'lucide-react';
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import { DEFAULT_TYPE_CONFIG, ROLL_TYPE_CONFIG } from './dice-roll-type-config';
 import { DiceRollActionButtons } from './DiceRollActionButtons';
@@ -31,6 +31,34 @@ export type { RollRequest } from '@/types/roll-request';
 const ROLL_TRAY_EYEBROW: Record<string, string> = {
   initiative: 'Initiative',
   death_save: 'Death saving throw',
+};
+
+/** The tray's ribbon for a natural 20 or 1 (design: Critical board). The flavour line is for attacks only. */
+const NATURAL_RIBBON: Record<
+  20 | 1,
+  { big: string; small: string; bg: string; ink: string; tail: string }
+> = {
+  20: {
+    big: 'NATURAL 20',
+    small: 'the table erupts',
+    bg: 'linear-gradient(180deg, #c2323a, #8b1a20)',
+    ink: '#ffe9d6',
+    tail: '#7a1016',
+  },
+  1: {
+    big: 'NATURAL 1',
+    small: 'the blade goes wide',
+    bg: 'linear-gradient(180deg, #2a2f3d, #11141c)',
+    ink: '#ef6b6b',
+    tail: '#0b0d13',
+  },
+};
+
+/** A natural 20 fills the tray with gold light. */
+const GOLD_LIGHT_STYLE: React.CSSProperties = {
+  backgroundImage:
+    'radial-gradient(ellipse at 50% 0%, rgba(243,222,176,.38), rgba(243,222,176,.1) 60%, transparent 85%)',
+  boxShadow: '0 0 60px rgba(243,222,176,.35)',
 };
 
 interface DiceRollRequestProps {
@@ -68,6 +96,15 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
     className,
   }) => {
     const promptRef = useRef<HTMLDivElement>(null);
+    // The kept d20 face of the roll the player just made, for the tray's natural 20 / 1 treatment.
+    const [trayNatural, setTrayNatural] = useState<number | null>(null);
+    const recordResult = useCallback<RollResultHandler>(
+      (total, details) => {
+        setTrayNatural(details?.naturalRoll ?? null);
+        return details === undefined ? onResult(total) : onResult(total, details);
+      },
+      [onResult],
+    );
     const {
       manualMode,
       manualResult,
@@ -89,14 +126,16 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
       resetAfterFailedSubmit,
       toggleAdvantage,
       toggleDisadvantage,
-    } = useDiceRollRequest({ request, onResult, onRollCommit });
+    } = useDiceRollRequest({ request, onResult: recordResult, onRollCommit });
     const { showTargetNumbers, setShowTargetNumbers } = useShowTargetNumbers();
 
     const config = ROLL_TYPE_CONFIG[request.type] || DEFAULT_TYPE_CONFIG;
     const isRollPending = Boolean(requestId && pendingRollId === requestId);
     const isRollInFlight = isRolling || isSubmitting || isRollPending;
+    const natural = trayNatural === 20 || trayNatural === 1 ? trayNatural : null;
 
     useEffect(() => {
+      setTrayNatural(null);
       promptRef.current?.focus();
       logger.info('ROLL_PROMPT_SHOWN', {
         requestId: requestId ?? 'unknown',
@@ -131,11 +170,35 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
         aria-modal="false"
         aria-label={`${request.purpose} roll request`}
         data-testid="dice-roll-request"
+        data-natural={natural ?? undefined}
+        style={natural === 20 ? GOLD_LIGHT_STYLE : undefined}
         className={cn(
           'ir-parchment w-full rounded-none border-0 border-t border-infinite-gold/50 bg-infinite-dark/95 text-foreground shadow-none outline-none',
+          natural === 20 && 'shadow-[0_0_60px_rgba(243,222,176,.35)]',
           className,
         )}
       >
+        {natural !== null && (
+          // The ribbon repeats the engine-facing "Natural 20/1" badge the embed already announces, so it is hidden from assistive technology.
+          <div
+            aria-hidden="true"
+            data-testid="roll-tray-ribbon"
+            className="flex items-center justify-center gap-3 px-4 py-2 font-display text-sm font-bold tracking-[.14em]"
+            style={{
+              background: NATURAL_RIBBON[natural].bg,
+              color: NATURAL_RIBBON[natural].ink,
+              boxShadow: `inset 0 1px 0 rgba(255,255,255,.3), 0 6px 14px rgba(0,0,0,.45)`,
+              borderBottom: `3px solid ${NATURAL_RIBBON[natural].tail}`,
+            }}
+          >
+            <span>{NATURAL_RIBBON[natural].big}</span>
+            {request.type === 'attack' && (
+              <span className="font-sans text-sm font-normal italic tracking-normal opacity-90">
+                {NATURAL_RIBBON[natural].small}
+              </span>
+            )}
+          </div>
+        )}
         <div className="mx-auto max-w-3xl space-y-2 px-3 py-2.5 sm:px-4 sm:py-3">
           {/* Header */}
           <div className="flex items-center gap-2 text-infinite-gold [body.ir-table-look_&]:!text-[#2a1a0c]">
