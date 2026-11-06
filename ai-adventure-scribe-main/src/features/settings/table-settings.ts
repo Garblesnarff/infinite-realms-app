@@ -27,6 +27,7 @@ export const DEFAULT_TABLE_SETTINGS: TableSettings = {
   narrationVolume: 1,
   narrationSpeed: 1,
   diceSound: true,
+  // #1413 records Rob's decision that Table look defaults on for everyone.
   tableLook: true,
   reduceMotion: 'system',
   showNPCRolls: true,
