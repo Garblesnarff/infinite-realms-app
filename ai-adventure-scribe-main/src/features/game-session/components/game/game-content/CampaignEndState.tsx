@@ -356,7 +356,9 @@ export const CampaignEndState: React.FC<CampaignEndStateProps> = (props) => {
                   {isFallen ? 'Choose a new hero' : 'Begin again with a new hero'}
                 </Button>
                 <p className="text-center text-xs leading-relaxed text-white/60">
-                  Begin {campaignName} again with a new hero. {name}&rsquo;s story is kept.
+                  {isFallen
+                    ? `${campaignName} goes on. ${name}’s story is kept.`
+                    : `Begin ${campaignName} again with a new hero. ${name}’s story is kept.`}
                 </p>
               </div>
             )}

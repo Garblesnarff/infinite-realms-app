@@ -804,7 +804,7 @@ describe('GameMainContent overhaul behavior contract', () => {
 
     const chooseHero = screen.getByTestId('death-screen-new-character');
     expect(chooseHero).toBeEnabled();
-    expect(screen.getByText(/Begin Abyssal Descent again with a new hero/)).toBeInTheDocument();
+    expect(screen.getByText(/Abyssal Descent goes on/)).toBeInTheDocument();
     fireEvent.click(chooseHero);
     expect(routerMock.navigate).toHaveBeenCalledWith('/app/characters/create?campaign=campaign-1');
   });

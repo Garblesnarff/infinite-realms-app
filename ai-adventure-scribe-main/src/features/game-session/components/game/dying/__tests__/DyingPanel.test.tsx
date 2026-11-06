@@ -95,10 +95,9 @@ describe('DyingPanel', () => {
       <DyingPanel name="The Scholar" state="stable" successes={3} failures={0} isOwnTurn={false} />,
     );
 
-    expect(screen.getByTestId('dying-panel-title').textContent).toBe(
-      'The Scholar is stable. Unconscious.',
-    );
+    expect(screen.getByTestId('dying-panel-title').textContent).toBe('The Scholar is stable');
     expect(screen.queryByTestId('dying-panel-failures')).toBeNull();
     expect(screen.queryByTestId('dying-panel-roll')).toBeNull();
+    expect(screen.getByText(/You wake with 1 HP after 1d4 hours/)).toBeInTheDocument();
   });
 });

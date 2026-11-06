@@ -56,7 +56,7 @@ describe('FallenEndState (#2456, #2517)', () => {
 
     expect(screen.getByTestId('death-screen-new-character')).toHaveTextContent('Choose a new hero');
     expect(
-      screen.getByText('Begin Abyssal Descent again with a new hero. The Scholar’s story is kept.'),
+      screen.getByText('Abyssal Descent goes on. The Scholar’s story is kept.'),
     ).toBeInTheDocument();
     expect(screen.getByTestId('death-screen-explore')).toHaveTextContent('Explore other campaigns');
     expect(screen.getByTestId('death-screen-read-story')).toHaveTextContent(

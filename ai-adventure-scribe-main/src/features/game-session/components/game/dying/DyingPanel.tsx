@@ -53,13 +53,23 @@ export const DyingPanel: React.FC<DyingPanelProps> = ({
       data-testid="dying-panel"
       role="status"
       aria-live="polite"
-      className="mx-3 my-3 rounded-lg border border-white/10 border-l-[5px] border-l-[#ef8a8a] bg-black/35 px-4 py-3 text-[#eaeefa]"
+      className={`mx-3 my-3 rounded-lg border border-white/10 border-l-[5px] ${
+        stable ? 'border-l-[#8a93ad]' : 'border-l-[#ef8a8a]'
+      } bg-black/35 px-4 py-3 text-[#eaeefa]`}
     >
       <div className="flex items-center gap-2">
-        <Heart className="h-4 w-4 shrink-0 text-[#ef8a8a]" aria-hidden="true" />
+        <Heart
+          className={`h-4 w-4 shrink-0 ${stable ? 'text-[#aab3cc]' : 'text-[#ef8a8a]'}`}
+          aria-hidden="true"
+        />
         <h2 className="font-display text-lg leading-tight" data-testid="dying-panel-title">
-          {stable ? `${name} is stable. Unconscious.` : `${name} is dying`}
+          {stable ? `${name} is stable` : `${name} is dying`}
         </h2>
+        {stable && (
+          <span className="ml-auto text-xs font-semibold uppercase tracking-[1.5px] text-[#aab3cc]">
+            Stable
+          </span>
+        )}
       </div>
       {!stable && (
         <>
@@ -99,7 +109,7 @@ export const DyingPanel: React.FC<DyingPanelProps> = ({
       )}
       {stable && (
         <p className="mt-2 text-sm text-[#aab3cc]">
-          No more saves. The fight cannot go on without you; the story does.
+          Unconscious. No roll. You wake with 1 HP after 1d4 hours, or when someone heals you.
         </p>
       )}
     </div>
