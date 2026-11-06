@@ -250,7 +250,7 @@ const GameContent: React.FC = () => {
               campaignId: fallen.campaignId,
             })}
             chooseHeroPending={Boolean(fallen.starterCampaignId) && starterCampaignsLoading}
-            storyContent={<FallenStoryLog />}
+            storyContent={<FallenStoryLog sessionId={sessionId} />}
             characterId={characterState.character?.id ?? characterIdFromParams}
             premade={false}
             premadeKept={false}

@@ -4,7 +4,10 @@ import { CampaignEndState } from './CampaignEndState';
 import { formatNarrative } from '../../chat/message-list/formatNarrative';
 import { prepareChatDisplayText } from '../../chat/message-list/prepare-chat-display-text';
 
+import { chronicleRefetchInterval } from '@/components/chronicles/ChronicleViewer';
+import { Button } from '@/components/ui/button';
 import { useMessageContext } from '@/contexts/MessageContext';
+import { trpc } from '@/infrastructure/api';
 import { combatEngineBlocksFromContext } from '@/utils/combat-engine-blocks';
 
 export { displayFinalLine } from './CampaignEndState';
@@ -110,10 +113,123 @@ export const FallenEndState: React.FC<FallenEndStateProps> = ({
 );
 
 /**
+ * The chronicle tab of the story view. Reads the session's chronicle and writes one on request;
+ * the write is the same `chronicles.generate` the chronicle dialog uses.
+ */
+const FallenChronicle: React.FC<{ sessionId: string }> = ({ sessionId }) => {
+  const utils = trpc.useUtils();
+  const { data: chronicle, isLoading } = trpc.chronicles.getBySessionId.useQuery(
+    { sessionId },
+    { refetchInterval: chronicleRefetchInterval },
+  );
+  const generate = trpc.chronicles.generate.useMutation({
+    onSuccess: () => utils.chronicles.getBySessionId.invalidate({ sessionId }),
+  });
+  const write = (): void => {
+    generate.mutate({ sessionId });
+  };
+  const status = chronicle?.status ?? null;
+  if (isLoading) {
+    return <p className="py-5 text-sm text-muted-foreground">Loading the chronicle…</p>;
+  }
+  if (generate.isPending || status === 'generating') {
+    return (
+      <div role="status" className="space-y-3 py-5">
+        <p className="text-base text-white/85">Writing the chronicle…</p>
+        <div aria-hidden="true" className="h-1.5 w-full animate-pulse rounded-full bg-white/10" />
+      </div>
+    );
+  }
+  if (generate.isError || status === 'failed') {
+    return (
+      <div role="alert" className="space-y-2 py-5">
+        <p className="text-base font-semibold text-white/90">The chronicle could not be written.</p>
+        <p className="text-sm text-white/65">Your story is safe. Try again in a moment.</p>
+        <Button type="button" variant="outline" className="min-h-11" onClick={write}>
+          Try again
+        </Button>
+      </div>
+    );
+  }
+  if (status === 'ready') {
+    return (
+      <article className="space-y-3 py-5">
+        <p className="ir-display text-xs font-semibold uppercase tracking-[1.5px] text-infinite-gold">
+          Chronicle
+        </p>
+        {chronicle?.chapterTitle && (
+          <h2 className="ir-display text-2xl text-infinite-gold-light">{chronicle.chapterTitle}</h2>
+        )}
+        {chronicle?.chronicleText && (
+          <p className="ir-narr whitespace-pre-wrap text-base leading-relaxed text-white/90">
+            {chronicle.chronicleText}
+          </p>
+        )}
+      </article>
+    );
+  }
+  return (
+    <div className="space-y-3 py-5">
+      <p className="ir-display text-lg text-infinite-gold-light">No chronicle yet</p>
+      <p className="text-base leading-relaxed text-white/75">
+        A chronicle turns the log into a short tale. It takes about half a minute.
+      </p>
+      <Button type="button" className="ir-gold-button min-h-11" onClick={write}>
+        Write the chronicle
+      </Button>
+    </div>
+  );
+};
+
+/**
  * The saved session log, read-only: no composer, no roll tray, no sheet.
  * Renders the messages the MessageProvider already loaded for the session.
+ * With a `sessionId` the view also carries a Chronicle tab (#2520 §4).
  */
-export const FallenStoryLog: React.FC = () => {
+export const FallenStoryLog: React.FC<{ sessionId?: string | null }> = ({ sessionId }) => {
+  const [tab, setTab] = React.useState<'log' | 'chronicle'>('log');
+  const log = <FallenStoryEntries />;
+  if (!sessionId) return log;
+  const tabClass = (selected: boolean): string =>
+    `min-h-11 border-b-2 px-3 text-sm font-semibold ${
+      selected
+        ? 'border-infinite-gold text-infinite-gold-light'
+        : 'border-transparent text-white/65 hover:text-infinite-gold-light'
+    }`;
+  return (
+    <div className="space-y-2">
+      <div role="tablist" aria-label="Story" className="flex gap-1 border-b border-white/10">
+        <button
+          type="button"
+          role="tab"
+          id="story-tab-log"
+          aria-selected={tab === 'log'}
+          aria-controls="story-tabpanel"
+          className={tabClass(tab === 'log')}
+          onClick={() => setTab('log')}
+        >
+          Log
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id="story-tab-chronicle"
+          aria-selected={tab === 'chronicle'}
+          aria-controls="story-tabpanel"
+          className={tabClass(tab === 'chronicle')}
+          onClick={() => setTab('chronicle')}
+        >
+          Chronicle
+        </button>
+      </div>
+      <div role="tabpanel" id="story-tabpanel" aria-labelledby={`story-tab-${tab}`}>
+        {tab === 'log' ? log : <FallenChronicle sessionId={sessionId} />}
+      </div>
+    </div>
+  );
+};
+
+const FallenStoryEntries: React.FC = () => {
   const { messages, historyReady, hasMore, loadMore, isLoading, isFetchingMore, messagesError } =
     useMessageContext();
   const requestedAtCount = React.useRef(-1);

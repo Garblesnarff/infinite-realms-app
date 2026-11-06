@@ -152,7 +152,7 @@ function FallenEndStateWithCharacter({
         campaignId: sessionData.campaign_id ?? campaignIdForHandler,
       })}
       chooseHeroPending={Boolean(sessionData.starter_campaign_id) && starterCampaignsLoading}
-      storyContent={<FallenStoryLog />}
+      storyContent={<FallenStoryLog sessionId={sessionData.id} />}
       characterId={characterState.character?.id ?? null}
       // #1239: "chose to keep" means a copy on the roster. This character is
       // that copy, including a starter run, so the offer shows.
