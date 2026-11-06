@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.39.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.38.3...v0.39.0) (2026-11-06)
+
+
+### Features
+
+* **table:** add campaign boxes and hero fan ([#1412](https://github.com/Garblesnarff/infinite-realms-app/issues/1412)) ([c3aa9cf](https://github.com/Garblesnarff/infinite-realms-app/commit/c3aa9cf087195ad3b3a9cfae484d505ca1521804))
+* **table:** materials stylesheet and fonts ([#1408](https://github.com/Garblesnarff/infinite-realms-app/issues/1408)) ([0f54133](https://github.com/Garblesnarff/infinite-realms-app/commit/0f54133cb021fe2809ed6884c3b0662aa69cbc6d))
+* **table:** present the game screen ([#1409](https://github.com/Garblesnarff/infinite-realms-app/issues/1409)) ([a8395de](https://github.com/Garblesnarff/infinite-realms-app/commit/a8395de0db79c4398f9ce672a305f017c6cab6fe))
+
 ## [0.38.3](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.38.2...v0.38.3) (2026-11-05)
 
 
