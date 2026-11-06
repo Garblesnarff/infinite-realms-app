@@ -225,33 +225,17 @@ describe('GameMainContent option clicks (#760)', () => {
     sessionStorage.removeItem(PENDING_INPUT_STORAGE_KEY);
   });
 
-  it('fills the dock composer from the real provider, then sends option 2 once', async () => {
+  it('sends an option through the dock message handler at once', async () => {
     render(<GameMainContent {...baseProps} />);
-
     const first = parsedOptions[0];
-    const second = parsedOptions[1];
     const composer = screen.getByRole('textbox', {
       name: 'Describe what your character would like to do',
     });
-
     await user.click(await screen.findByRole('button', { name: `Option 1 - ${first.text}` }));
-
-    expect(harness.handleSendMessage).not.toHaveBeenCalled();
+    await waitFor(() => expect(harness.handleSendMessage).toHaveBeenCalledTimes(1));
+    expect(harness.handleSendMessage).toHaveBeenCalledWith(createPlayerMessageFromOption(first));
     expect(harness.contextSend).not.toHaveBeenCalled();
-    await waitFor(() => expect(composer).toHaveValue(createPlayerMessageFromOption(first)));
-
-    const secondButton = await screen.findByRole('button', { name: `Option 2 - ${second.text}` });
-    await waitFor(() => expect(secondButton).toBeEnabled());
-    await user.click(secondButton);
-
-    expect(harness.handleSendMessage).not.toHaveBeenCalled();
-    await waitFor(() => expect(composer).toHaveValue(createPlayerMessageFromOption(second)));
-
-    await user.click(screen.getByRole('button', { name: 'Send message' }));
-
-    expect(harness.handleSendMessage).toHaveBeenCalledTimes(1);
-    expect(harness.handleSendMessage).toHaveBeenCalledWith(createPlayerMessageFromOption(second));
-    expect(harness.contextSend).not.toHaveBeenCalled();
+    expect(composer).toHaveValue('');
   });
 
   it('keeps the open roll tray when an option is clicked', async () => {

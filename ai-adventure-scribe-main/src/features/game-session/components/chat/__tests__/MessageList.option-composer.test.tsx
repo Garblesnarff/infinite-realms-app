@@ -1,5 +1,5 @@
 /**
- * #760: an ordinary option click fills the composer. It does not send.
+ * #1407: an ordinary option click sends through the normal message path.
  * A second click replaces that text. Send submits it once.
  * An open roll tray disables the options so the click cannot void the tray.
  *
@@ -128,7 +128,7 @@ function renderStory(onSendFullMessage: ReturnType<typeof vi.fn>): ReturnType<ty
   return render(<Story onSendFullMessage={onSendFullMessage} composerMounted />);
 }
 
-describe('option clicks fill the composer (#760)', () => {
+describe('option clicks send immediately while preserving the roll guard (#1407)', () => {
   const user = userEvent.setup();
 
   beforeEach(() => {
@@ -147,38 +147,14 @@ describe('option clicks fill the composer (#760)', () => {
     sessionStorage.removeItem(PENDING_INPUT_STORAGE_KEY);
   });
 
-  it('fills the composer on click, replaces it on a second click, and sends once', async () => {
+  it('sends the selected option through the same callback as typed text', async () => {
     const onSendFullMessage = vi.fn().mockResolvedValue(undefined);
-    const view = renderStory(onSendFullMessage);
-
+    renderStory(onSendFullMessage);
     const first = parsedOptions[0];
-    const second = parsedOptions[1];
-    const composer = screen.getByRole('textbox', {
-      name: 'Describe what your character would like to do',
-    });
-
     await user.click(await screen.findByRole('button', { name: `Option 1 - ${first.text}` }));
-
-    expect(onSendFullMessage).not.toHaveBeenCalled();
+    await waitFor(() => expect(onSendFullMessage).toHaveBeenCalledTimes(1));
+    expect(onSendFullMessage).toHaveBeenCalledWith(createPlayerMessageFromOption(first));
     expect(harness.sendMessage).not.toHaveBeenCalled();
-    await waitFor(() => expect(composer).toHaveValue(createPlayerMessageFromOption(first)));
-    expect(composer).toHaveFocus();
-
-    const secondButton = await screen.findByRole('button', { name: `Option 2 - ${second.text}` });
-    await waitFor(() => expect(secondButton).toBeEnabled());
-    await user.click(secondButton);
-
-    expect(onSendFullMessage).not.toHaveBeenCalled();
-    await waitFor(() => expect(composer).toHaveValue(createPlayerMessageFromOption(second)));
-
-    await user.click(screen.getByRole('button', { name: 'Send message' }));
-
-    expect(onSendFullMessage).toHaveBeenCalledTimes(1);
-    expect(onSendFullMessage).toHaveBeenCalledWith(createPlayerMessageFromOption(second));
-    await waitFor(() => expect(composer).toHaveValue(''));
-
-    view.rerender(<Story onSendFullMessage={onSendFullMessage} composerMounted={false} />);
-    view.rerender(<Story onSendFullMessage={onSendFullMessage} composerMounted />);
     expect(
       screen.getByRole('textbox', { name: 'Describe what your character would like to do' }),
     ).toHaveValue('');

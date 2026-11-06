@@ -1,7 +1,5 @@
 import React, { useMemo } from 'react';
 
-import { useStageComposerDraft } from '../composer-draft';
-
 import type { ChatMessage } from '@/types/game';
 import type { ActionOption } from '@/utils/parseMessageOptions';
 
@@ -54,7 +52,6 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
     rollTrayOpen = false,
   }) => {
     const { state: combatState } = useCombat();
-    const stageComposerDraft = useStageComposerDraft();
     const showCombatMenu = isLatest && combatState.isInCombat;
     const encounter = combatState.activeEncounter;
     const { actions, isPlayerTurn, isRefreshing, error, runAction } = useCombatLegalActions({
@@ -101,14 +98,6 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
       if (rollTrayOpen) return;
       if (!showCombatMenu || !encounter?.id) {
         const text = createPlayerMessageFromOption(option);
-        // Ordinary choices wait in the composer (#760). A combat chip never
-        // reaches this branch. The engine runs it, or onOptionSelect sends the
-        // label. That callback is MessageList's send, so a mounted composer
-        // must not swallow the chip.
-        if (stageComposerDraft) {
-          stageComposerDraft(text);
-          return;
-        }
         await onOptionSelect(text);
         return;
       }
@@ -117,11 +106,6 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
       await runAction(action);
     };
 
-    // Free-text choices fill the composer (#760). A second click has to replace
-    // that text, so the first choice must not lock the row. Combat chips still
-    // run at once, and they already clear the lock after each action.
-    const stagesInComposer = !showCombatMenu && stageComposerDraft != null;
-
     return (
       <div className="w-full mt-3">
         {error && <p role="alert">{error}</p>}
@@ -129,12 +113,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
           options={renderedOptions}
           disabled={!isLatest || rollTrayOpen}
           onOptionSelect={handleSelection}
-          resetSelectionAfterCompletion={showCombatMenu || stagesInComposer}
-          instructions={
-            stagesInComposer
-              ? 'Choose an option to put it in the message box. Send it when you are ready.'
-              : undefined
-          }
+          resetSelectionAfterCompletion={showCombatMenu}
           delay={hasDynamicOverlay || showCombatMenu || showImmediately ? 0 : 10000}
           isLoading={isRefreshing}
         />
