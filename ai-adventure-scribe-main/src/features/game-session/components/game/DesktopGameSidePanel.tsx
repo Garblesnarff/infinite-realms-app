@@ -4,6 +4,7 @@ import React from 'react';
 import { CombatSummary } from './CombatSummary';
 import { DesktopMemoryTab } from './memory/DesktopMemoryTab';
 import { RightSheetLive } from './overhaul/RightSheetLive';
+import { StorySoFarLink } from './StorySoFarLink';
 import { HandoutCard } from '../handouts/HandoutCard';
 
 import type { SpellCastHandlerRef } from './spell-cast-handler';
@@ -244,6 +245,7 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
                           ))}
                         </section>
                       ))}
+                      {sessionId && <StorySoFarLink sessionId={sessionId} />}
                     </div>
                   </ScrollArea>
                 </TabsContent>

@@ -123,6 +123,27 @@ describe('MemoryList (#1236 section B)', () => {
     expect(setSelectedType).toHaveBeenCalledWith('npc');
   });
 
+  it('filters memories by the search text, without changing the header count', () => {
+    const all = [mem('1', 'npc', 'The guard is Mara.'), mem('2', 'location', 'A wet ledge.')];
+    render(<MemoryList {...baseProps} allMemories={all} sortedMemories={all} />);
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search memories' }), {
+      target: { value: '  WET ' },
+    });
+    expect(screen.getByText('A wet ledge.')).toBeInTheDocument();
+    expect(screen.queryByText('The guard is Mara.')).not.toBeInTheDocument();
+    expect(screen.getByText(/remembers 2 things about/)).toBeInTheDocument();
+  });
+
+  it('says no memories match when the search finds nothing', () => {
+    const all = [mem('1', 'npc', 'The guard is Mara.')];
+    render(<MemoryList {...baseProps} allMemories={all} sortedMemories={all} />);
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search memories' }), {
+      target: { value: 'dragon' },
+    });
+    expect(screen.getByText('No memories match. Try another word.')).toBeInTheDocument();
+    expect(screen.queryByText(/has not written anything/)).not.toBeInTheDocument();
+  });
+
   it('has no pin, lock or edit controls yet', () => {
     const all = [mem('1', 'npc'), mem('2', 'location')];
     render(<MemoryList {...baseProps} allMemories={all} sortedMemories={all} />);
