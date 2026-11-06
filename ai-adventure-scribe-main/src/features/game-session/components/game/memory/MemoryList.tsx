@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 import { groupMemoriesByCategory } from './memory-format';
 import { MemoryCard } from './MemoryCard';
@@ -6,6 +6,8 @@ import { MemoryFilter } from './MemoryFilter';
 import { useCampaignSessionNumbers } from './useCampaignSessionNumbers';
 
 import type { Memory } from './types';
+
+import { Input } from '@/components/ui/input';
 
 export interface MemoryListProps {
   /** Every memory for the session (drives the header count and the chips). */
@@ -26,7 +28,12 @@ export interface MemoryListProps {
  */
 export const MemoryList: React.FC<MemoryListProps> = React.memo(
   ({ allMemories, sortedMemories, selectedType, setSelectedType, memoriesLoading, campaignId }) => {
-    const groups = groupMemoriesByCategory(sortedMemories);
+    const [query, setQuery] = useState('');
+    const needle = query.trim().toLowerCase();
+    const visibleMemories = needle
+      ? sortedMemories.filter((memory) => memory.content.toLowerCase().includes(needle))
+      : sortedMemories;
+    const groups = groupMemoriesByCategory(visibleMemories);
     const sessionNumbers = useCampaignSessionNumbers(campaignId);
     const total = allMemories.length;
 
@@ -37,6 +44,14 @@ export const MemoryList: React.FC<MemoryListProps> = React.memo(
             The DM remembers {total} {total === 1 ? 'thing' : 'things'} about this story.
           </p>
         )}
+        <Input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search memories"
+          aria-label="Search memories"
+          className="h-11"
+        />
         <MemoryFilter
           selectedType={selectedType}
           onTypeSelect={setSelectedType}
@@ -47,6 +62,9 @@ export const MemoryList: React.FC<MemoryListProps> = React.memo(
           <p className="text-xs text-muted-foreground">
             The DM has not written anything down yet. Play a scene and come back.
           </p>
+        )}
+        {!memoriesLoading && sortedMemories.length > 0 && visibleMemories.length === 0 && (
+          <p className="text-xs text-muted-foreground">No memories match. Try another word.</p>
         )}
         {groups.map((group) => (
           <section
