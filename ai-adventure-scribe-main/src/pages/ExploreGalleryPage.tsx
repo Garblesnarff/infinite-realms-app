@@ -13,10 +13,13 @@ import { Link } from 'react-router-dom';
 import { StarterCampaignCard } from '@/components/campaigns/StarterCampaignCard';
 import { Button } from '@/components/ui/button';
 import { Z_INDEX } from '@/constants/z-index';
+import { BoxedCampaign } from '@/features/campaigns/table/BoxedCampaign';
+import { useTableLookActive } from '@/features/campaigns/table/useTableLookActive';
 import { useStarterCampaigns } from '@/hooks/use-starter-campaigns';
 
 export const ExploreGalleryPage: React.FC = () => {
   const { campaigns, isLoading, error } = useStarterCampaigns();
+  const tableLook = useTableLookActive();
 
   return (
     <>
@@ -26,10 +29,7 @@ export const ExploreGalleryPage: React.FC = () => {
           name="description"
           content="Browse our collection of professionally crafted D&D campaigns. Pick a character and start your adventure immediately."
         />
-        <meta
-          property="og:title"
-          content="Explore Adventures | InfiniteRealms"
-        />
+        <meta property="og:title" content="Explore Adventures | InfiniteRealms" />
         <meta
           property="og:description"
           content="Browse our collection of professionally crafted D&D campaigns. Pick a character and start your adventure immediately."
@@ -51,7 +51,7 @@ export const ExploreGalleryPage: React.FC = () => {
         <link rel="canonical" href="https://infiniterealms.app/explore" />
       </Helmet>
 
-      <div className="ir-app min-h-screen max-w-full overflow-x-hidden bg-background text-foreground">
+      <div className="ir-table-walnut ir-app min-h-screen max-w-full overflow-x-hidden bg-background text-foreground">
         {/* Header: top nav */}
         <header
           className="sticky top-0 border-b border-white/10 bg-infinite-dark/90 backdrop-blur-lg"
@@ -166,9 +166,17 @@ export const ExploreGalleryPage: React.FC = () => {
           {/* Campaigns Grid */}
           {!isLoading && !error && campaigns.length > 0 && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-[18px]">
-              {campaigns.map((campaign, index) => (
-                <StarterCampaignCard key={campaign.id} campaign={campaign} isFirst={index === 0} />
-              ))}
+              {campaigns.map((campaign, index) =>
+                tableLook ? (
+                  <BoxedCampaign key={campaign.id} campaign={campaign} isFirst={index === 0} />
+                ) : (
+                  <StarterCampaignCard
+                    key={campaign.id}
+                    campaign={campaign}
+                    isFirst={index === 0}
+                  />
+                ),
+              )}
             </div>
           )}
         </main>

@@ -154,6 +154,7 @@ function renderPage(
 }
 
 beforeEach(() => {
+  document.body.classList.remove('ir-table-look');
   state.campaign = null;
   state.user = null;
   state.templates = [];
@@ -291,6 +292,18 @@ describe('CampaignDetailPage level and length labels (#829)', () => {
 });
 
 describe('CampaignDetailPage heroes (#89)', () => {
+  it('starts the chosen Table hero through the existing play flow', async () => {
+    document.body.classList.add('ir-table-look');
+    state.campaign = campaign({});
+    state.user = { id: 'u1' };
+    state.templates = [template()];
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Play as Bram' }));
+    expect(await screen.findByText('game page')).toBeInTheDocument();
+    expect(state.seed).toHaveBeenCalledTimes(1);
+    document.body.classList.remove('ir-table-look');
+  });
+
   it('shows the header, step hint, and back link', () => {
     state.campaign = campaign({
       tagline: 'A feast that never ends.',
