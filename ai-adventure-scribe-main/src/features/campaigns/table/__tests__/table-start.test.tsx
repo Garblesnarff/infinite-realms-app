@@ -100,7 +100,7 @@ describe('Table start screens', () => {
       'aria-pressed',
       'true',
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Play as Two' }));
+    fireEvent.click(screen.getByRole('button', { name: 'PLAY AS TWO' }));
     expect(onPlay).toHaveBeenCalledTimes(1);
     expect(onPlay).toHaveBeenCalledWith(second);
   });

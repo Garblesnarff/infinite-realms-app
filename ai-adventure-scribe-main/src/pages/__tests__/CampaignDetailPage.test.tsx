@@ -298,7 +298,7 @@ describe('CampaignDetailPage heroes (#89)', () => {
     state.user = { id: 'u1' };
     state.templates = [template()];
     renderPage();
-    fireEvent.click(screen.getByRole('button', { name: 'Play as Bram' }));
+    fireEvent.click(screen.getByRole('button', { name: 'PLAY AS BRAM' }));
     expect(await screen.findByText('game page')).toBeInTheDocument();
     expect(state.seed).toHaveBeenCalledTimes(1);
     document.body.classList.remove('ir-table-look');

@@ -86,19 +86,25 @@ export const HeroFan: React.FC<{
         })}
       </div>
       <div className="ir-parchment rounded p-4">
+        <p className="text-xs font-semibold tracking-wider">YOUR HERO</p>
         <h3 className="text-xl font-bold">{selected.name}</h3>
         <p>
           {selected.race} {selected.class} · Level {selected.level}
         </p>
-        {selected.tagline && <p>{selected.tagline}</p>}
+        {selected.tagline && <p>“{selected.tagline}”</p>}
         <button
           type="button"
           className="ir-brass-btn mt-3 rounded px-4"
           disabled={disabled}
           onClick={() => onPlay(selected)}
         >
-          {signedIn ? `Play as ${selected.name}` : `Sign in to play as ${selected.name}`}
+          {signedIn
+            ? `PLAY AS ${selected.name.toUpperCase()}`
+            : `Sign in to play as ${selected.name}`}
         </button>
+        <p className="mt-2 text-center text-sm italic">
+          You can read the full sheet after you start.
+        </p>
         {signedIn && (
           <button
             type="button"
@@ -110,6 +116,10 @@ export const HeroFan: React.FC<{
           </button>
         )}
       </div>
+      <p className="text-center text-sm italic">
+        {templates.length} ready-made {templates.length === 1 ? 'hero' : 'heroes'}. Tap a card to
+        look at it.
+      </p>
     </div>
   );
 };

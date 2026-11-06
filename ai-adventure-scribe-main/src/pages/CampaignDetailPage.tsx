@@ -596,9 +596,11 @@ const CampaignDetailPage: React.FC = () => {
         {/* Heroes */}
         <section id="heroes" className="mb-12">
           <h2 className="font-heading text-xl text-infinite-gold mb-1">Choose your hero</h2>
-          <p className="text-[13px] text-muted-foreground mb-4">
-            You can read the full sheet after you start.
-          </p>
+          {!tableLook && (
+            <p className="text-[13px] text-muted-foreground mb-4">
+              You can read the full sheet after you start.
+            </p>
+          )}
 
           {templatesLoading ? (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4" aria-busy="true">

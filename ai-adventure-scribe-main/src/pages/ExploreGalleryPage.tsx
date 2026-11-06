@@ -99,7 +99,7 @@ export const ExploreGalleryPage: React.FC = () => {
               <span className="text-infinite-gold">1 Campaign</span> › 2 Hero › 3 Play
             </p>
             <h1 className="font-heading text-2xl min-[700px]:text-3xl font-bold mb-2">
-              Pick a campaign
+              {tableLook ? 'Choose your adventure' : 'Pick a campaign'}
             </h1>
             <p className="text-[15px] text-muted-foreground max-w-[60ch]">
               Every campaign starts at level 1 with ready-made heroes. No setup. You can start

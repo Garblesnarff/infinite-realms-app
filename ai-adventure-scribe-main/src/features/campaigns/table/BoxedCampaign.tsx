@@ -13,6 +13,10 @@ export const BoxedCampaign: React.FC<{ campaign: StarterCampaign; isFirst?: bool
 }) => {
   const cover = tableImageUrl(campaign.coverImageUrl, 640, 800);
   const shown = showTargetNumbersByDefault(campaign.difficulty);
+  const level = campaign.difficulty || 'Medium';
+  const targetsLine = shown
+    ? `${level} campaign: target numbers (DC and AC) start shown. You can hide them in Settings → Table.`
+    : `${level} campaign: target numbers (DC and AC) start hidden. You can show them in Settings → Table.`;
   return (
     <article className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[color:var(--infinite-surface)] [body.ir-table-look_&]:border-[#a9823f] [body.ir-table-look_&]:shadow-xl">
       <Link
@@ -46,12 +50,9 @@ export const BoxedCampaign: React.FC<{ campaign: StarterCampaign; isFirst?: bool
           <h3 className="font-heading text-xl font-bold">{campaign.title}</h3>
           <p className="text-sm text-muted-foreground">{campaign.premise}</p>
           <span className="ir-brass-btn mt-auto flex min-h-11 items-center justify-center rounded px-4 font-semibold">
-            Open the box
+            SEE THE HEROES OF {campaign.title.toUpperCase()}
           </span>
-          <p className="text-xs text-muted-foreground">
-            {campaign.difficulty || 'Medium'} campaign: target numbers (DC and AC) start{' '}
-            {shown ? 'shown' : 'hidden'}. You can change them in Settings → Table.
-          </p>
+          <p className="text-xs text-muted-foreground">{targetsLine}</p>
         </div>
       </Link>
     </article>

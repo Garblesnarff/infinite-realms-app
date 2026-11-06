@@ -79,7 +79,8 @@ for (const width of [1280, 390]) {
       );
       await page.goto(new URL(path, layoutUrl).toString());
       await expect(page.getByText('The Chasm').first()).toBeVisible();
-      if (path === '/explore') await expect(page.getByText('Open the box')).toBeVisible();
+      if (path === '/explore')
+        await expect(page.getByText('SEE THE HEROES OF THE CHASM')).toBeVisible();
       else await expect(page.getByRole('button', { name: 'Choose One' })).toBeVisible();
       const geometry = await page.evaluate(() => ({
         viewport: document.documentElement.clientWidth,
