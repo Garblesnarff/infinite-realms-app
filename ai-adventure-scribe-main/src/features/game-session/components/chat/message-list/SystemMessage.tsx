@@ -100,7 +100,7 @@ export const SystemMessage: React.FC<SystemMessageProps> = React.memo(
               />
             </div>
           ) : (
-            <div className="whitespace-pre-wrap break-words leading-relaxed text-sm text-muted-foreground">
+            <div className="whitespace-pre-wrap break-words leading-relaxed text-sm text-muted-foreground [body.ir-table-look_&]:!text-[#2a1a0c]">
               {rest}
             </div>
           ))}

@@ -419,8 +419,10 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
                 <div className="w-2 h-2 bg-infinite-purple rounded-full animate-bounce [animation-delay:-0.15s]"></div>
                 <div className="w-2 h-2 bg-infinite-purple rounded-full animate-bounce"></div>
               </div>
-              <h3 className="text-lg font-medium text-card-foreground">Your adventure awaits...</h3>
-              <p className="text-muted-foreground max-w-sm text-sm">
+              <h3 className="text-lg font-medium text-card-foreground [body.ir-table-look_&]:!text-[#2a1a0c]">
+                Your adventure awaits...
+              </h3>
+              <p className="text-muted-foreground max-w-sm text-sm [body.ir-table-look_&]:!text-[#2a1a0c]">
                 The Dungeon Master is crafting your opening scene and preparing your world.
               </p>
             </div>
@@ -435,7 +437,9 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
               <span className="h-1.5 w-1.5 rounded-full bg-infinite-teal animate-pulse [animation-delay:-0.15s]"></span>
               <span className="h-1.5 w-1.5 rounded-full bg-infinite-gold animate-pulse [animation-delay:-0.3s]"></span>
             </span>
-            <span className="text-[13px] text-muted-foreground">Dungeon Master is writing…</span>
+            <span className="text-[13px] text-muted-foreground [body.ir-table-look_&]:!text-[#2a1a0c]">
+              Dungeon Master is writing…
+            </span>
           </div>
         )}
 

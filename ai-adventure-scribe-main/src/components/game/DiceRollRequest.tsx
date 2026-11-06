@@ -90,7 +90,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
       toggleAdvantage,
       toggleDisadvantage,
     } = useDiceRollRequest({ request, onResult, onRollCommit });
-    const { showTargetNumbers } = useShowTargetNumbers();
+    const { showTargetNumbers, setShowTargetNumbers } = useShowTargetNumbers();
 
     const config = ROLL_TYPE_CONFIG[request.type] || DEFAULT_TYPE_CONFIG;
     const isRollPending = Boolean(requestId && pendingRollId === requestId);
@@ -132,13 +132,13 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
         aria-label={`${request.purpose} roll request`}
         data-testid="dice-roll-request"
         className={cn(
-          'w-full rounded-none border-0 border-t border-infinite-gold/50 bg-infinite-dark/95 text-foreground shadow-none outline-none',
+          'ir-parchment w-full rounded-none border-0 border-t border-infinite-gold/50 bg-infinite-dark/95 text-foreground shadow-none outline-none',
           className,
         )}
       >
         <div className="mx-auto max-w-3xl space-y-2 px-3 py-2.5 sm:px-4 sm:py-3">
           {/* Header */}
-          <div className="flex items-center gap-2 text-infinite-gold">
+          <div className="flex items-center gap-2 text-infinite-gold [body.ir-table-look_&]:!text-[#2a1a0c]">
             {config.icon}
             <span className="ir-text-min font-semibold uppercase tracking-[.12em]">
               {ROLL_TRAY_EYEBROW[request.type] ?? 'Your roll'}
@@ -148,14 +148,17 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
           {/* Roll details: purpose, formula, breakdown, advantage */}
           <div data-testid="roll-details" className="space-y-2">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <p className="min-w-0 flex-1 text-sm font-semibold leading-snug text-foreground">
+              <p className="min-w-0 flex-1 text-sm font-semibold leading-snug text-foreground [body.ir-table-look_&]:!text-[#2a1a0c]">
                 {request.type === 'initiative' ? 'Roll initiative' : request.purpose}
               </p>
-              <span className="font-mono text-lg font-bold tabular-nums text-foreground">
+              <span className="font-mono text-lg font-bold tabular-nums text-foreground [body.ir-table-look_&]:!text-[#2a1a0c]">
                 {rollCalculation.formula}
               </span>
               {showTargetNumbers && (request.dc || request.ac) && (
-                <Badge variant="outline" className="text-xs text-muted-foreground">
+                <Badge
+                  variant="outline"
+                  className="text-xs text-muted-foreground [body.ir-table-look_&]:!text-[#2a1a0c]"
+                >
                   {request.dc
                     ? `DC ${request.dc}`
                     : targetAcLabel(request.ac ?? 0, request.coverBonus)}
@@ -163,11 +166,56 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
               )}
             </div>
 
+            {(request.dc != null || request.ac != null) && (
+              <div className="flex flex-wrap items-center gap-2 text-sm [body.ir-table-look_&]:!text-[#2a1a0c]">
+                {!showTargetNumbers && (
+                  <span>
+                    {request.dc != null
+                      ? 'DC hidden · the DM knows the number'
+                      : 'AC hidden · the DM knows the number'}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showTargetNumbers}
+                  className="min-h-11 min-w-11 rounded border px-3"
+                  onClick={() => setShowTargetNumbers(!showTargetNumbers)}
+                >
+                  Show target numbers: {showTargetNumbers ? 'On' : 'Off'}
+                </button>
+                {request.type !== 'damage' && request.type !== 'damage_taken' && (
+                  <span
+                    className="text-sm [body.ir-table-look_&]:!text-[#2a1a0c]"
+                    aria-disabled="true"
+                  >
+                    Inspiration: coming soon
+                  </span>
+                )}
+              </div>
+            )}
+            {request.dc == null &&
+              request.ac == null &&
+              request.type !== 'damage' &&
+              request.type !== 'damage_taken' && (
+                <p className="text-sm [body.ir-table-look_&]:!text-[#2a1a0c]" aria-disabled="true">
+                  Inspiration: coming soon
+                </p>
+              )}
+
             {/* Modifier Breakdown */}
             {rollCalculation.breakdown.length > 1 && (
-              <div className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex">
+              <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground [body.ir-table-look_&]:!text-[#2a1a0c]">
                 <Info className="h-3 w-3" aria-hidden="true" />
-                <span>{rollCalculation.breakdown.join(' + ')}</span>
+                {rollCalculation.breakdown.map((part, index) => (
+                  <span
+                    key={`${part}-${index}`}
+                    className="rounded border border-current px-2 py-1"
+                  >
+                    {index > 0 ? '+ ' : ''}
+                    {part}
+                  </span>
+                ))}
                 {rollCalculation.isProficient && (
                   <Badge variant="secondary" className="px-1 py-0 text-xs">
                     Proficient
@@ -196,7 +244,10 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
             <div className="space-y-2">
               {rollCalculation.modifierUnknown ? (
                 <div className="space-y-2">
-                  <p role="status" className="py-2 text-center text-sm text-muted-foreground">
+                  <p
+                    role="status"
+                    className="py-2 text-center text-sm text-muted-foreground [body.ir-table-look_&]:!text-[#2a1a0c]"
+                  >
                     modifier unknown
                   </p>
                   {onCancel && (
@@ -258,14 +309,17 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
           )}
 
           {rollError && (
-            <p role="alert" className="text-center text-sm font-medium text-red-300">
+            <p
+              role="alert"
+              className="text-center text-sm font-medium text-red-300 [body.ir-table-look_&]:!text-[#7a1016]"
+            >
               {rollError}
             </p>
           )}
 
           {/* Hint Text: the buttons say it at phone width, where every line costs story. */}
           {!rollCalculation.modifierUnknown && (
-            <p className="hidden text-center text-xs text-muted-foreground sm:block">
+            <p className="hidden text-center text-xs text-muted-foreground sm:block [body.ir-table-look_&]:!text-[#2a1a0c]">
               {effectiveManualMode
                 ? 'Enter the total result of your dice roll'
                 : "Roll here, or 'Enter my own roll' if you roll physical dice"}

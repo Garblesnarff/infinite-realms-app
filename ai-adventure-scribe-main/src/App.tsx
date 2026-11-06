@@ -6,6 +6,8 @@ import { Toaster } from 'sonner';
 import { AuthProvider } from './contexts/AuthContext';
 import { CampaignProvider } from './contexts/CampaignContext';
 import { CharacterProvider } from './contexts/CharacterContext';
+import { useApplyReduceMotion } from './features/settings/useApplyReduceMotion';
+import { useTableLook } from './features/settings/useTableLook';
 import { useTelemetry } from './hooks/use-telemetry';
 import { LEGAL_ROUTES } from './pages/legal/legal-routes';
 import AppNotFound from './routes/AppNotFound';
@@ -33,6 +35,8 @@ const PricingPage = lazy(() => import('./pages/PricingPage'));
 
 /** Public route table. Exported so tests can render it under MemoryRouter. */
 export function AppRoutes() {
+  useTableLook();
+  useApplyReduceMotion();
   return (
     <Routes>
       {/* Public preview of the navy+gold game UI overhaul (mock data) */}

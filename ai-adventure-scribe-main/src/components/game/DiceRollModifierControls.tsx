@@ -26,7 +26,7 @@ export const DiceRollModifierControls: React.FC<DiceRollModifierControlsProps> =
               aria-pressed={hasAdvantage}
               aria-label={hasAdvantage ? 'Disable Advantage' : 'Enable Advantage'}
               className={cn(
-                'text-xs',
+                'min-h-11 min-w-11 text-xs [body.ir-table-look_&]:!bg-[#fbf7ea] [body.ir-table-look_&]:!text-[#2a1a0c]',
                 hasAdvantage
                   ? 'bg-green-600 text-white'
                   : 'text-green-600 border-green-600 hover:bg-green-50',
@@ -51,7 +51,7 @@ export const DiceRollModifierControls: React.FC<DiceRollModifierControlsProps> =
               aria-pressed={hasDisadvantage}
               aria-label={hasDisadvantage ? 'Disable Disadvantage' : 'Enable Disadvantage'}
               className={cn(
-                'text-xs',
+                'min-h-11 min-w-11 text-xs [body.ir-table-look_&]:!bg-[#fbf7ea] [body.ir-table-look_&]:!text-[#2a1a0c]',
                 hasDisadvantage
                   ? 'bg-red-600 text-white'
                   : 'text-red-600 border-red-600 hover:bg-red-50',

@@ -156,7 +156,10 @@ describe('attack roll commit (#2200)', () => {
     // The animation finishes (1.5s roll + 2s result) and the player's own die reaches the engine —
     // not the `{ d20: null }` the timeout would have produced.
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(4_000);
+      await vi.advanceTimersByTimeAsync(1_500);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500);
     });
 
     // The player's own natural 13 settled the attack — before #2200 this resolved `{ d20: null }`
@@ -186,7 +189,10 @@ describe('attack roll commit (#2200)', () => {
       screen.getByLabelText(/^Roll 1d20\+5 for/).click();
     });
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(4_000);
+      await vi.advanceTimersByTimeAsync(1_500);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500);
     });
 
     // DiceEngine rolled 1d20+5 = 18 on a natural 13. 18 here would become 18 + 5 = 23.
@@ -218,7 +224,10 @@ describe('attack roll commit (#2200)', () => {
       screen.getByLabelText(/^Roll 1d20\+4 for/).click();
     });
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(4_000);
+      await vi.advanceTimersByTimeAsync(1_500);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500);
     });
 
     // A total of 23 used to fail the 1–20 face guard and be discarded silently, leaving the

@@ -17,6 +17,7 @@ import { TacticalMapBoard } from '../../tactical/TacticalMapBoard';
 import { useTacticalMapContext } from '../../tactical/TacticalMapProvider';
 import { CombatActionBarLive, useCombatChatPlaceholder } from '../CombatActionBar';
 import { DyingComposerSlot } from '../dying/DyingComposerSlot';
+import { InspirationCoin } from '../InspirationCoin';
 import { MessageHandler } from '../message/MessageHandler';
 import { resolveCampaignChapterLabel } from '../overhaul/campaign-chapter';
 import { CombatTurnBarLive } from '../overhaul/CombatTurnBar';
@@ -447,6 +448,11 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
           <div className="relative min-h-0 overflow-y-auto border-b border-white/10 bg-[linear-gradient(180deg,#0e1626_0%,#0b1120_100%)]">
             <SceneHeader
               title={overhaul.scene.title}
+              tableExtra={<InspirationCoin />}
+              chapter={overhaul.campaign.chapter}
+              location={overhaul.campaign.regionLabel}
+              party={overhaul.party}
+              combat={overhaul.combat}
               blurb={
                 showSceneBlurb
                   ? overhaul.scene.blurb ||
@@ -468,7 +474,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                 showSafetyInfo={showSafetyInfo}
               />
 
-              <div className="flex flex-wrap items-center justify-end gap-2">
+              <div className="flex max-w-full min-w-0 flex-wrap items-center justify-end gap-2">
                 {/* Build + session id a player can quote (#2583). In this header row, so it adds
                     no height to the story column and can never reach the composer dock below. */}
                 <BuildSessionStatus sessionId={sessionId} />
@@ -644,7 +650,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                       <div
                         ref={setRollTraySlot}
                         data-testid="roll-tray-slot"
-                        className="empty:hidden"
+                        className="empty:hidden [body.ir-table-look_&:empty]:block [body.ir-table-look_&:empty]:h-3 [body.ir-table-look_&:empty]:rounded [body.ir-table-look_&:empty]:border [body.ir-table-look_&:empty]:border-[#a9823f] [body.ir-table-look_&:empty]:bg-[#3b2616]"
                       />
 
                       {/* One line, in flow, from the same queue roll that fills the tray, so it

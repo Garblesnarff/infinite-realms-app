@@ -171,10 +171,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
       [clearFailedSend, onRetryTurn, onSendFullMessage, sendMessage],
     );
 
-    // Free-text choices are staged in DynamicOptionsSection before this runs.
-    // This callback sends. Combat text fallbacks (a chip the engine does not
-    // run) use it too, the same way the action bar calls handleSendMessage,
-    // so they must not stop in the composer (#760).
+    // Options and combat text fallbacks use the same send path as typed text.
     const handleOptionSelect = React.useCallback(
       async (optionText: string) => {
         logger.info('[MessageList] Handling option selection:', optionText);
@@ -204,7 +201,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
       // tray and the chat box stay on screen and the newest line stays visible (#2252).
       <div className="flex min-h-0 flex-1 flex-col">
         <div
-          className="chat-scroll parchment-panel flex-1 min-h-0 min-w-0 max-w-full space-y-6 overflow-x-hidden overflow-y-auto bg-gradient-to-b from-background/50 to-background/30 px-4 py-4 md:px-6 md:py-6"
+          className="ir-parchment ir-parchment-edge chat-scroll parchment-panel flex-1 min-h-0 min-w-0 max-w-full space-y-6 overflow-x-hidden overflow-y-auto bg-gradient-to-b from-background/50 to-background/30 px-4 py-4 md:px-6 md:py-6"
           role="log"
           aria-live="polite"
           ref={messagesRef}

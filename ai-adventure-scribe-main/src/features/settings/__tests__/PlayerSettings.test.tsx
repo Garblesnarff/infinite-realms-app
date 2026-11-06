@@ -65,6 +65,15 @@ describe('PlayerSettings (#1347)', () => {
     });
   });
 
+  it('defaults the Table look on and saves the off choice', () => {
+    render(<PlayerSettings />);
+    const toggle = screen.getByRole('switch', { name: 'Table look' });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(readStored()).toMatchObject({ tableLook: false });
+  });
+
   it('turns Dice sound off', () => {
     render(<PlayerSettings />);
     fireEvent.click(screen.getByRole('switch', { name: 'Dice sound' }));

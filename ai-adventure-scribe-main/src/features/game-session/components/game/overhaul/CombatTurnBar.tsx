@@ -24,6 +24,12 @@ import { cn } from '@/lib/utils';
 import { isHostileParticipantType } from '@/services/combat/engine-result-card';
 import { resolvePlayerHitPoints } from '@/utils/character/player-hit-points';
 
+const subscribeTableLook = (notify: () => void): (() => void) => {
+  const observer = new MutationObserver(notify);
+  observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  return () => observer.disconnect();
+};
+
 /** The HP block's input: nulls mean the value is not known yet, so it skeletonizes. */
 export interface TurnBarHitPoints {
   current: number | null;
@@ -147,6 +153,11 @@ export const CombatTurnBar: React.FC<CombatTurnBarProps> = ({
   playerDown = false,
   onOpenMap,
 }) => {
+  const tableLook = React.useSyncExternalStore(
+    subscribeTableLook,
+    () => document.body.classList.contains('ir-table-look'),
+    () => false,
+  );
   const title = turnBarTitle(summary, busy, playerDown);
   const sub = turnBarSub(summary, enemyDistance ?? null, playerDown);
   const down = summary.active.isPlayer && (summary.active.isDying || playerDown);
@@ -166,7 +177,7 @@ export const CombatTurnBar: React.FC<CombatTurnBarProps> = ({
     >
       <div
         aria-hidden="true"
-        className="order-2 flex flex-wrap items-center gap-1.5 max-[699px]:order-3"
+        className="order-2 flex flex-wrap items-center gap-1.5 max-[699px]:order-3 [body.ir-table-look_&]:max-w-full [body.ir-table-look_&]:flex-nowrap [body.ir-table-look_&]:overflow-x-auto"
       >
         {summary.actors.map((actor) => (
           <span
@@ -174,7 +185,9 @@ export const CombatTurnBar: React.FC<CombatTurnBarProps> = ({
             data-testid="combat-turn-pip"
             data-state={actor.state}
             className={cn(
-              'inline-flex h-[30px] w-[30px] min-w-[30px] shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold',
+              'ir-tent-card inline-flex h-[30px] w-[30px] min-w-[30px] shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold [body.ir-table-look_&]:h-auto [body.ir-table-look_&]:w-auto [body.ir-table-look_&]:min-w-20 [body.ir-table-look_&]:flex-col [body.ir-table-look_&]:rounded [body.ir-table-look_&]:px-2 [body.ir-table-look_&]:py-1',
+              actor.isPlayer ? 'ir-tent-card--player' : 'ir-tent-card--foe',
+              actor.state === 'now' && 'ir-tent-card--current',
               actor.isPlayer ? 'border-infinite-gold' : 'border-infinite-teal',
               actor.state === 'acted' && 'bg-white/25 text-white/70',
               actor.state === 'now' &&
@@ -183,7 +196,17 @@ export const CombatTurnBar: React.FC<CombatTurnBarProps> = ({
               actor.state === 'down' && 'bg-red-950/60 text-red-300/80 line-through',
             )}
           >
-            {actor.initials}
+            {tableLook ? (
+              <>
+                <span>
+                  {actor.initiative != null ? `${actor.initiative} · ` : ''}
+                  {actor.name}
+                </span>
+                {actor.state === 'now' && actor.isPlayer && <span>Your turn</span>}
+              </>
+            ) : (
+              actor.initials
+            )}
           </span>
         ))}
       </div>

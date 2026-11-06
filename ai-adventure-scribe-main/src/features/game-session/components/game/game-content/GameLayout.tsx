@@ -172,9 +172,11 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
 
     return (
       <div
-        className="relative max-w-full overflow-x-hidden bg-background"
+        className="ir-table-walnut relative max-w-full overflow-x-hidden bg-background"
         style={{ ['--top-offset' as string]: `${topOffset}px` }}
       >
+        <div className="ir-table-felt pointer-events-none absolute inset-2" aria-hidden="true" />
+        <div className="ir-candle pointer-events-none absolute left-4 top-8" aria-hidden="true" />
         {/* Scene background layer */}
         {currentBackgroundUrl && (
           <div

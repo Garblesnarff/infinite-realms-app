@@ -227,7 +227,7 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
     // (Inter) rule, so EB Garamond still governs in the app.
     // The bubble caps width at 72ch, so the old lg:78ch narrative cap is dead.
     const narrativeClass = cn(
-      'dm-narrative ir-narr text-[16px] md:text-[17px] leading-[1.65] text-foreground hyphens-auto',
+      'dm-narrative ir-narr ir-ink-reveal [body.ir-table-look_&]:!text-[#2a1a0c] text-[16px] md:text-[17px] leading-[1.65] text-foreground hyphens-auto',
       'selection:bg-infinite-purple/20 selection:text-white break-words',
       shouldClamp && 'max-h-[22rem] overflow-hidden clamp-fade',
     );
@@ -298,7 +298,7 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
         {/* #88 label at the #228 12px floor (text-xs), not the ticket's 11px:
             the guard forbids sub-12px classes on the game screen. */}
         {isFirstInGroup && (
-          <div className="mb-1 text-xs font-semibold uppercase tracking-[.1em] text-infinite-gold">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-[.1em] text-infinite-gold [body.ir-table-look_&]:!text-[#2a1a0c]">
             Dungeon Master
           </div>
         )}
@@ -313,12 +313,12 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
         <article
           aria-label="Dungeon Master message"
           className={cn(
-            'message-bubble dm-bubble relative overflow-hidden rounded-2xl rounded-tl-[4px] border border-white/10 bg-infinite-dark-lighter',
+            'ir-parchment message-bubble dm-bubble relative overflow-hidden rounded-2xl rounded-tl-[4px] border border-white/10 bg-infinite-dark-lighter',
             'px-[18px] py-3.5 max-w-[72ch] transition-all duration-300',
           )}
         >
           {message.context?.previouslyOn && (
-            <div className="text-xs text-amber-500/70 font-semibold uppercase tracking-widest mb-2 pb-2 border-b border-amber-500/20">
+            <div className="text-xs text-amber-500/70 [body.ir-table-look_&]:!text-[#2a1a0c] font-semibold uppercase tracking-widest mb-2 pb-2 border-b border-amber-500/20">
               ◆ Previously on your adventure...
             </div>
           )}
@@ -329,7 +329,7 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
           {storyTrackers.length > 0 && (
             <div
               data-testid="story-tracker-line"
-              className="mt-3 text-sm text-white/70"
+              className="mt-3 text-sm text-white/70 [body.ir-table-look_&]:!text-[#2a1a0c]"
               aria-label="Story clock"
             >
               {storyTrackers
@@ -343,7 +343,7 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
               <Button
                 size="sm"
                 variant="ghost"
-                className="text-xs font-semibold uppercase tracking-wider text-white/70 hover:text-white"
+                className="text-xs font-semibold uppercase tracking-wider text-white/70 hover:text-white [body.ir-table-look_&]:!text-[#2a1a0c]"
                 onClick={onToggleExpanded}
               >
                 {isExpanded ? 'Show less' : 'Read more'}
@@ -368,7 +368,7 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
           )}
 
           {isFirstInGroup && hasContextMetadata && (
-            <div className="mt-5 border-t border-white/10 pt-4 text-sm text-white/70 space-y-2">
+            <div className="mt-5 border-t border-white/10 pt-4 text-sm text-white/70 space-y-2 [body.ir-table-look_&]:!text-[#2a1a0c]">
               {emotionLabel && (
                 <div className="flex items-center gap-2">
                   <span role="img" aria-label="mood" className="text-lg leading-none">
@@ -405,7 +405,7 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="ir-hit-slop px-3 text-xs text-white/70 hover:text-white"
+                className="ir-hit-slop px-3 text-xs text-white/70 hover:text-white [body.ir-table-look_&]:!text-[#2a1a0c]"
                 onClick={onGenerateImage}
                 disabled={isGeneratingImage}
               >
@@ -416,13 +416,17 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
                     : 'Illustrate this scene'}
               </Button>
               {imageError && !isGeneratingImage && (
-                <p className="px-3 pt-1 text-xs text-white/60">{imageError}</p>
+                <p className="px-3 pt-1 text-xs text-white/60 [body.ir-table-look_&]:!text-[#2a1a0c]">
+                  {imageError}
+                </p>
               )}
             </div>
           )}
 
           {isLastInGroup && timestamp && (
-            <div className="ir-text-min uppercase tracking-[0.35em] text-white/60">{timestamp}</div>
+            <div className="ir-text-min uppercase tracking-[0.35em] text-white/60 [body.ir-table-look_&]:!text-[#2a1a0c]">
+              {timestamp}
+            </div>
           )}
         </div>
       </div>

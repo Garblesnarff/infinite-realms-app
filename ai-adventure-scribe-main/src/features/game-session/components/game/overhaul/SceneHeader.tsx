@@ -1,28 +1,93 @@
 import React from 'react';
 
-/**
- * Centered scene header used at the top of the game center column.
- * Reused by both the live game page and the /ui-preview harness.
- */
+import type { CombatantVM, PartyMemberVM } from './types';
+
+/** Scene header and the Table-look plaque use the same live view model. */
 export const SceneHeader: React.FC<{
   title: string;
   blurb?: string;
   onSceneInfo?: () => void;
   right?: React.ReactNode;
-}> = ({ title, blurb, onSceneInfo, right }) => (
-  <div className="relative flex items-start justify-between gap-3 px-4 py-3">
-    <button
-      onClick={onSceneInfo}
-      className="ir-hit ir-text-min shrink-0 rounded-md border border-white/10 bg-white/[0.03] px-3 py-1.5 font-medium text-foreground/70 transition-colors hover:border-infinite-gold/40 hover:text-infinite-gold"
-    >
-      Scene Info
-    </button>
-    <div className="min-w-0 flex-1 text-center">
-      <h1 className="ir-display truncate text-xl font-bold tracking-wide text-foreground">{title}</h1>
-      {blurb && <p className="ir-narr mt-0.5 truncate text-sm text-foreground/70">{blurb}</p>}
+  tableExtra?: React.ReactNode;
+  chapter?: string;
+  location?: string;
+  party?: PartyMemberVM[];
+  combat?: { active: boolean; round: number; combatants: CombatantVM[] };
+}> = ({ title, blurb, onSceneInfo, right, tableExtra, chapter, location, party = [], combat }) => (
+  <>
+    <div className="relative flex items-start justify-between gap-3 px-4 py-3 [body.ir-table-look_&]:hidden">
+      <button
+        onClick={onSceneInfo}
+        className="ir-hit ir-text-min shrink-0 rounded-md border border-white/10 bg-white/[0.03] px-3 py-1.5 font-medium text-foreground/70 transition-colors hover:border-infinite-gold/40 hover:text-infinite-gold"
+      >
+        Scene Info
+      </button>
+      <div className="min-w-0 flex-1 text-center">
+        <h1 className="ir-display truncate text-xl font-bold tracking-wide text-foreground">
+          {title}
+        </h1>
+        {blurb && <p className="ir-narr mt-0.5 truncate text-sm text-foreground/70">{blurb}</p>}
+      </div>
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.03]">
+        {right}
+      </div>
     </div>
-    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.03]">
-      {right}
+    <div className="hidden min-w-0 gap-1 p-2 max-[699px]:gap-0 max-[699px]:p-1 [body.ir-table-look_&]:grid [body.ir-table-look_&]:grid-cols-1 sm:[body.ir-table-look_&]:grid-cols-3">
+      <section className="min-w-0 border border-[#d5b070] bg-[#0e1a36] p-3 text-center text-[#f6e3b8] max-[699px]:flex max-[699px]:items-center max-[699px]:justify-between max-[699px]:gap-2 max-[699px]:px-2 max-[699px]:py-0">
+        <h1 className="ir-display break-words text-lg font-bold max-[699px]:text-sm">{title}</h1>
+        {chapter && <p className="text-sm">{chapter}</p>}
+        <button
+          type="button"
+          onClick={onSceneInfo}
+          aria-label="Show scene details"
+          className="min-h-11 min-w-11 underline"
+        >
+          Scene Info
+        </button>
+      </section>
+      <section className="min-w-0 border border-[#d5b070] bg-[#0e1a36] p-3 text-center text-[#f6e3b8] max-[699px]:flex max-[699px]:items-center max-[699px]:justify-between max-[699px]:gap-2 max-[699px]:px-2 max-[699px]:py-0">
+        <p className="ir-display text-sm">
+          {combat?.active ? `Round ${combat.round}` : 'Exploring'}
+        </p>
+        <p className="ir-display break-words text-lg font-bold max-[699px]:text-sm">
+          {combat?.active
+            ? (combat.combatants.find((actor) => actor.isActive)?.name ?? 'Combat')
+            : location || title}
+        </p>
+        {blurb && <p className="break-words text-sm max-[699px]:hidden">{blurb}</p>}
+      </section>
+      <section className="min-w-0 border border-[#d5b070] bg-[#0e1a36] p-3 text-[#f6e3b8] max-[699px]:flex max-[699px]:items-center max-[699px]:justify-between max-[699px]:gap-2 max-[699px]:px-2 max-[699px]:py-1">
+        <p className="ir-display text-sm">The Table</p>
+        {tableExtra}
+        {party.map((member) => (
+          <div key={member.id} className="min-w-0 flex-1">
+            <p className="flex justify-between gap-2 text-sm">
+              <span className="break-words">{member.name}</span>
+              <span className="shrink-0">
+                {member.currentHp != null && member.maxHp != null
+                  ? `${member.currentHp} / ${member.maxHp}`
+                  : 'HP unavailable'}
+              </span>
+            </p>
+            {member.currentHp != null && member.maxHp != null && member.maxHp > 0 && (
+              <progress
+                className="block h-1.5 w-full"
+                value={member.currentHp}
+                max={member.maxHp}
+                aria-label={`${member.name} hit points`}
+              />
+            )}
+          </div>
+        ))}
+        {combat?.active &&
+          combat.combatants
+            .filter((actor) => actor.isEnemy)
+            .map((foe) => (
+              <p key={foe.id} className="text-sm">
+                {foe.name} · condition unavailable
+              </p>
+            ))}
+      </section>
     </div>
-  </div>
+  </>
 );

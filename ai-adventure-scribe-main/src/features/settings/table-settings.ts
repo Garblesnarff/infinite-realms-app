@@ -15,6 +15,7 @@ export interface TableSettings {
   /** One of NARRATION_SPEEDS. The audio element reads `progressive-voice-rate`. */
   narrationSpeed: number;
   diceSound: boolean;
+  tableLook: boolean;
   reduceMotion: ReduceMotion;
   /** Read by the chat reader (NpcRollSummary): when on, the Behind the Screen summary renders under its DM message. */
   showNPCRolls: boolean;
@@ -26,6 +27,8 @@ export const DEFAULT_TABLE_SETTINGS: TableSettings = {
   narrationVolume: 1,
   narrationSpeed: 1,
   diceSound: true,
+  // #1413 records Rob's decision that Table look defaults on for everyone.
+  tableLook: true,
   reduceMotion: 'system',
   showNPCRolls: true,
 };
@@ -65,6 +68,8 @@ export const readTableSettings = (userId: string): TableSettings => {
         : DEFAULT_TABLE_SETTINGS.narrationSpeed,
       diceSound:
         typeof values.diceSound === 'boolean' ? values.diceSound : DEFAULT_TABLE_SETTINGS.diceSound,
+      tableLook:
+        typeof values.tableLook === 'boolean' ? values.tableLook : DEFAULT_TABLE_SETTINGS.tableLook,
       reduceMotion:
         typeof values.reduceMotion === 'string' &&
         REDUCE_MOTION_VALUES.includes(values.reduceMotion as ReduceMotion)

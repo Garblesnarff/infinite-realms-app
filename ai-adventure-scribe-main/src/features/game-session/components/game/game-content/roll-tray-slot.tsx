@@ -19,7 +19,10 @@ export const RollTraySlotProvider = RollTraySlotContext.Provider;
 export function RollTray({ children }: { children: ReactNode }): ReactElement {
   const slot = useContext(RollTraySlotContext);
   const tray = (
-    <div data-testid="roll-tray" className="w-full">
+    <div
+      data-testid="roll-tray"
+      className="ir-table-walnut w-full [body.ir-table-look_&]:rounded-lg [body.ir-table-look_&]:border-4 [body.ir-table-look_&]:border-[#3b2616] [body.ir-table-look_&]:p-1"
+    >
       {children}
     </div>
   );

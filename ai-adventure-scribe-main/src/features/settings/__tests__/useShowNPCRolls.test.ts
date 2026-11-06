@@ -45,6 +45,7 @@ describe('useShowNPCRolls (#1347)', () => {
         narrationVolume: 1,
         narrationSpeed: 1,
         diceSound: true,
+        tableLook: true,
         reduceMotion: 'system',
         showNPCRolls: false,
       });
