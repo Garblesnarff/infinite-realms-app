@@ -9,6 +9,7 @@
  * Route: /explore/:slug
  */
 
+import { Info } from 'lucide-react';
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -591,6 +592,17 @@ const CampaignDetailPage: React.FC = () => {
               {overviewStory && <p className="whitespace-pre-line">{overviewStory}</p>}
             </div>
           </details>
+        )}
+
+        {/* Hard campaigns start with target numbers hidden (shared/show-target-numbers.ts). */}
+        {campaign.difficulty.trim().toLowerCase().includes('hard') && (
+          <div className="mb-12 flex items-start gap-3 rounded-[13px] border border-white/10 bg-[color:var(--infinite-surface)] p-4">
+            <Info className="mt-0.5 h-5 w-5 flex-none text-infinite-gold" aria-hidden="true" />
+            <p className="text-sm text-muted-foreground">
+              Hard campaign: target numbers (DC and AC) start hidden. You can show them in Settings
+              → Table.
+            </p>
+          </div>
         )}
 
         {/* Heroes */}
