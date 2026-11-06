@@ -6,6 +6,7 @@
 
 /* UI Overhaul — navy+gold theme, scoped to .ir-app (authenticated app only) */
 @import url('./styles/ir-overhaul.css');
+@import url('./styles/ir-table.css');
 
 @tailwind base;
 @tailwind components;
