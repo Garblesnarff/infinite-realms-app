@@ -11,7 +11,7 @@
  * @module server/services/spell-slots-service
  */
 
-import { and, eq, exists, gt, gte, lt, or, inArray, sql } from 'drizzle-orm';
+import { and, eq, exists, gt, lt, or, inArray, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import {
@@ -44,6 +44,11 @@ import type {
   SpellSlotUsageQuery,
   ClassName,
 } from '../types/spell-slots.js';
+
+/** Compare the usage timestamp to an instant even on legacy timestamp-without-time-zone schemas. */
+export function slotUsageAtOrAfter(since: Date): ReturnType<typeof sql> {
+  return sql`${spellSlotUsageLog.timestamp} >= ${since.toISOString()}::timestamptz`;
+}
 
 /**
  * Spell Slots Service
@@ -341,7 +346,7 @@ export class SpellSlotsService {
             and(
               eq(spellSlotUsageLog.characterId, characterId),
               eq(spellSlotUsageLog.sessionId, sessionId),
-              gte(spellSlotUsageLog.timestamp, since),
+              slotUsageAtOrAfter(since),
             ),
           )
           .limit(1);
