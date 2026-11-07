@@ -28,8 +28,7 @@ describe('DyingPanel', () => {
     );
 
     expect(screen.getByTestId('dying-panel-title').textContent).toBe('The Scholar is dying');
-    expect(screen.getByTestId('dying-panel-failures').textContent).toContain('✕✕○');
-    expect(screen.getByTestId('dying-panel-successes').textContent).toContain('○○○');
+    expect(screen.getByRole('img', { name: '0 of 3 successes, 2 of 3 failures' })).toBeTruthy();
     // A screen reader hears the count, not symbols.
     expect(screen.getByText('0 successes and 2 failures of 3')).toBeTruthy();
   });
@@ -49,8 +48,9 @@ describe('DyingPanel', () => {
     expect(screen.getByTestId('dying-panel-hint').textContent).toBe(
       'You cannot act. Wait for your turn.',
     );
-    expect(screen.getByTestId('dying-panel-successes').textContent).toContain('●○○');
+    expect(screen.getByRole('img', { name: '1 of 3 successes, 0 of 3 failures' })).toBeTruthy();
     expect(screen.queryByTestId('dying-panel-roll')).toBeNull();
+    expect(screen.queryByTestId('dying-panel-waiting')).toBeNull();
   });
 
   it('on the player’s own turn it says the save has no modifiers, and the button rolls it', () => {
@@ -67,8 +67,9 @@ describe('DyingPanel', () => {
     );
 
     expect(screen.getByTestId('dying-panel-hint').textContent).toBe(
-      'No modifiers. 10 or higher saves.',
+      'Death saving throw — roll a d20',
     );
+    expect(screen.getByText('No modifiers. 10 or higher saves.')).toBeTruthy();
     fireEvent.click(screen.getByTestId('dying-panel-roll'));
     expect(onRoll).toHaveBeenCalledTimes(1);
   });
@@ -87,7 +88,7 @@ describe('DyingPanel', () => {
     );
 
     expect(screen.queryByTestId('dying-panel-roll')).toBeNull();
-    expect(screen.getByTestId('dying-panel-hint').textContent).toContain('Roll the d20 above');
+    expect(screen.getByText(/Roll the d20 above/)).toBeTruthy();
   });
 
   it('a stable character gets the grey stable panel: no pips, no roll', () => {
@@ -99,5 +100,65 @@ describe('DyingPanel', () => {
     expect(screen.queryByTestId('dying-panel-failures')).toBeNull();
     expect(screen.queryByTestId('dying-panel-roll')).toBeNull();
     expect(screen.getByText(/You wake with 1 HP after 1d4 hours/)).toBeInTheDocument();
+    expect(screen.getByText('STABLE')).toBeInTheDocument();
+  });
+
+  it('names the creature who is acting, and shows each failure the engine counted', () => {
+    render(
+      <DyingPanel
+        name="The Scholar"
+        state="dying"
+        successes={1}
+        failures={2}
+        isOwnTurn={false}
+        waitingOn="Captain Sarah Reeves"
+      />,
+    );
+
+    expect(screen.getByTestId('dying-panel-waiting')).toHaveTextContent(
+      'Captain Sarah Reeves is acting',
+    );
+    expect(screen.getByRole('img', { name: '1 of 3 successes, 2 of 3 failures' })).toBeTruthy();
+  });
+
+  it('shows the bridge countdown and a bar, and announces only the start and 10 s', () => {
+    const view = render(
+      <DyingPanel
+        name="The Scholar"
+        state="dying"
+        successes={0}
+        failures={0}
+        isOwnTurn
+        autoRollSecondsLeft={38}
+      />,
+    );
+
+    expect(screen.getByTestId('dying-panel-countdown')).toHaveTextContent('Auto-roll in 38 s');
+    expect(screen.getByTestId('dying-panel-countdown-live')).toHaveTextContent('Auto-roll in 38 s');
+
+    view.rerender(
+      <DyingPanel
+        name="The Scholar"
+        state="dying"
+        successes={0}
+        failures={0}
+        isOwnTurn
+        autoRollSecondsLeft={37}
+      />,
+    );
+    expect(screen.getByTestId('dying-panel-countdown')).toHaveTextContent('Auto-roll in 37 s');
+    expect(screen.getByTestId('dying-panel-countdown-live')).toHaveTextContent('Auto-roll in 38 s');
+
+    view.rerender(
+      <DyingPanel
+        name="The Scholar"
+        state="dying"
+        successes={0}
+        failures={0}
+        isOwnTurn
+        autoRollSecondsLeft={10}
+      />,
+    );
+    expect(screen.getByTestId('dying-panel-countdown-live')).toHaveTextContent('Auto-roll in 10 s');
   });
 });

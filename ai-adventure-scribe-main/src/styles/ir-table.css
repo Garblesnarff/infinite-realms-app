@@ -161,3 +161,161 @@ html[data-reduce-motion='on'] body.ir-table-look :is(.ir-tent-card--current, .ir
 html[data-reduce-motion='on'] body.ir-table-look .ir-candle::before {
   animation: none;
 }
+
+/* End of story and the dying panel (Table 11). Inert until body.ir-table-look. */
+body.ir-table-look .ir-end-screen {
+  background: #070b14;
+  color: #eaeefa;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+body.ir-table-look .ir-end-glow {
+  background: radial-gradient(
+    ellipse 80% 36% at 50% 0%,
+    rgba(213, 176, 112, 0.11),
+    transparent 70%
+  );
+}
+body.ir-table-look .ir-end-kicker {
+  color: #d5b070;
+  letter-spacing: 0.2em;
+}
+body.ir-table-look .ir-end-title {
+  color: #f3deb0;
+}
+body.ir-table-look .ir-end-muted {
+  color: #aab3cc;
+}
+body.ir-table-look .ir-end-body {
+  color: #d4dbef;
+}
+body.ir-table-look .ir-end-rule {
+  height: 1px;
+  background: rgba(213, 176, 112, 0.3);
+}
+body.ir-table-look .ir-end-gbtn {
+  min-height: 48px;
+  border-radius: 10px;
+  border: 1px solid rgba(213, 176, 112, 0.45);
+  background: #0c1220;
+  color: #eaeefa;
+  font-size: 15px;
+  font-weight: 700;
+}
+body.ir-table-look .ir-end-gbtn:hover {
+  border-color: #f3deb0;
+}
+body.ir-table-look .ir-end-brass {
+  min-height: 52px;
+  border-radius: 12px;
+  border: 1px solid #f3deb0;
+  /* Board stops at #6e5226, which is 2.6:1 with the ink. End on #c4a05a so the face stays 7:1. */
+  background: linear-gradient(160deg, #f6e3b8 0%, #d5b070 45%, #c4a05a 100%);
+  color: #1a1206;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.25),
+    0 6px 14px rgba(0, 0, 0, 0.45);
+  font-family: Cinzel, Georgia, serif;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+body.ir-table-look .ir-end-link {
+  color: #d5b070;
+}
+body.ir-table-look .ir-end-card {
+  background: #0c1220;
+  box-shadow:
+    0 0 0 1px rgba(213, 176, 112, 0.22),
+    0 8px 18px rgba(0, 0, 0, 0.4);
+}
+body.ir-table-look .ir-end-portrait {
+  box-shadow:
+    0 0 0 2px rgba(213, 176, 112, 0.45),
+    0 0 0 8px rgba(213, 176, 112, 0.07),
+    0 14px 34px rgba(0, 0, 0, 0.65);
+}
+body.ir-table-look .ir-dying-shell {
+  background: #0c1220;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 -10px 26px rgba(0, 0, 0, 0.5);
+}
+body.ir-table-look .ir-end-pip-empty {
+  box-shadow: inset 0 0 0 2px rgba(170, 179, 204, 0.55);
+}
+body.ir-table-look .ir-end-pip-saved {
+  background: linear-gradient(160deg, #f6e3b8, #d5b070 60%, #c4a05a);
+  box-shadow: 0 0 0 1px #f3deb0;
+  color: #1a1206;
+}
+body.ir-table-look .ir-end-pip-failed {
+  background: #b3261e;
+  box-shadow: 0 0 0 1px #ef8a8a;
+  color: #ffe9d6;
+}
+body.ir-table-look .ir-end-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: #1c2742;
+  overflow: hidden;
+}
+body.ir-table-look .ir-end-bar > i {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: #d5b070;
+}
+@keyframes ir-end-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+.ir-end-pulse {
+  animation: ir-end-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-reduce-motion='off']) .ir-end-pulse {
+    animation: none;
+  }
+}
+html[data-reduce-motion='on'] .ir-end-pulse {
+  animation: none;
+}
+
+@keyframes ir-end-dots {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+body.ir-table-look .ir-end-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 5px;
+  border-radius: 50%;
+  background: #d5b070;
+  animation: ir-end-dots 1.2s infinite;
+}
+body.ir-table-look .ir-end-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+body.ir-table-look .ir-end-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@media (prefers-reduced-motion: reduce) {
+  body.ir-table-look .ir-end-dot,
+  body.ir-table-look .ir-end-rise {
+    animation: none;
+  }
+}
+html[data-reduce-motion='on'] body.ir-table-look .ir-end-dot,
+html[data-reduce-motion='on'] body.ir-table-look .ir-end-rise {
+  animation: none;
+}

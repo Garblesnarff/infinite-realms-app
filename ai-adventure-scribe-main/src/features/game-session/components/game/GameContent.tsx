@@ -214,8 +214,20 @@ const GameContent: React.FC = () => {
     // the composer, sheet and tracker must never render first (run D2's
     // reload showed a live game over a dead character).
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-lg text-muted-foreground">{characterState.character?.name ?? ''}</p>
+      <div
+        role="status"
+        className="ir-end-screen flex min-h-screen flex-col items-center justify-center gap-[18px] bg-background"
+      >
+        <p className="ir-display ir-end-title text-[22px] text-infinite-gold-light">
+          {characterState.character?.name ?? ''}
+        </p>
+        <div
+          aria-hidden="true"
+          className="ir-end-bar h-1.5 w-[140px] overflow-hidden rounded-sm bg-white/10"
+        >
+          <i className="ir-end-pulse block h-1.5 w-2/5 rounded-sm bg-infinite-gold" />
+        </div>
+        <span className="sr-only">Loading your story</span>
       </div>
     );
   }

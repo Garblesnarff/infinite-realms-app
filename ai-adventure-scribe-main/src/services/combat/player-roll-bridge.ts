@@ -243,6 +243,15 @@ export function pendingPlayerRollDeadline(rollId: string): number | null {
 }
 
 /**
+ * When the waiting death-save prompt will auto-roll, or null when none is waiting.
+ * The dying panel reads this so its bar is the bridge timer (#2504), not a second clock.
+ */
+export function pendingDeathSaveDeadline(): number | null {
+  if (!pending?.deathSave || pending.timeoutId === undefined) return null;
+  return pending.deadline ?? null;
+}
+
+/**
  * Commits a player-initiated initiative roll while its animation is still running.
  *
  * The popup takes 3.5 seconds to produce its result. The timeout must therefore stop when the

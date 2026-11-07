@@ -136,7 +136,7 @@ const FallenChronicle: React.FC<{ sessionId: string }> = ({ sessionId }) => {
     return (
       <div role="status" className="space-y-3 py-5">
         <p className="text-base text-white/85">Writing the chronicle…</p>
-        <div aria-hidden="true" className="h-1.5 w-full animate-pulse rounded-full bg-white/10" />
+        <div aria-hidden="true" className="ir-end-pulse h-1.5 w-full rounded-full bg-white/10" />
       </div>
     );
   }
