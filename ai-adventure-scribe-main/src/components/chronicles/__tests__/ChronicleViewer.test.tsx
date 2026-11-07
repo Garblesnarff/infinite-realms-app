@@ -258,9 +258,7 @@ describe('ChronicleViewer', () => {
 
     expect(screen.getByText('Chapter I: Dragon Battle')).toBeInTheDocument();
     expect(
-      screen.getByText(
-        'The brave heroes fought valiantly against the dragon in the deep cavern.',
-      ),
+      screen.getByText('The brave heroes fought valiantly against the dragon in the deep cavern.'),
     ).toBeInTheDocument();
 
     const img = screen.getByRole('img');
