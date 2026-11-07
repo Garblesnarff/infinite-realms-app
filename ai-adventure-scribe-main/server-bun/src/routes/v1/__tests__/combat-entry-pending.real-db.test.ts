@@ -439,16 +439,24 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
     expect(heldRows).toHaveLength(1);
     expect(heldRows[0]?.speakerType).toBe('dm');
     expect(heldRows[0]?.message).toContain('Balthazar raises his cleaver');
-    const seatingRows = rows.filter(
-      (row) =>
-        row.speakerType === 'system' &&
-        typeof row.message === 'string' &&
-        row.message.startsWith('⚙️ Engine:'),
+    // Confirm also runs NPC turns when an NPC wins initiative; their attack is a
+    // separate Engine row, not a second seating transcript.
+    const engineRows = rows.filter(
+      (row) => row.speakerType === 'system' && row.message?.startsWith('⚙️ Engine:'),
     );
-    expect(seatingRows).toHaveLength(1);
-    // In order, before the first combat row: the held narration's server
-    // clock precedes the seating transcript's.
-    expect(heldRows[0]?.createdAtText < seatingRows[0]?.createdAtText).toBe(true);
+    const seatingRows = engineRows.filter((row) =>
+      row.message?.startsWith('⚙️ Engine: Initiative'),
+    );
+    expect(
+      seatingRows,
+      JSON.stringify(engineRows.map(({ message, createdAtText }) => ({ message, createdAtText }))),
+    ).toHaveLength(1);
+    // The held narration must precede every combat row, including an NPC's first action.
+    const heldRow = heldRows[0];
+    if (!heldRow) throw new Error('held reply missing');
+    for (const row of engineRows) {
+      expect(heldRow.createdAtText < row.createdAtText).toBe(true);
+    }
   });
 
   test('the watchdog fallback writes a held fight-opening narration once the fight is live (#1390)', async () => {
