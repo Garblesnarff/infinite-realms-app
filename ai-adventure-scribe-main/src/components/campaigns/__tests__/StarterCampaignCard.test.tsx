@@ -94,7 +94,7 @@ describe('StarterCampaignCard artwork fallback', () => {
     expect(screen.getAllByText('Academy of Arcane Gastronomy')).toHaveLength(1);
     // The italic tagline line is gone, so a tagline never repeats the title.
     expect(screen.queryByText('A culinary mystery')).not.toBeInTheDocument();
-    expect(screen.getByText(/See the heroes/)).toBeInTheDocument();
+    expect(screen.getByText(/Begin your journey/)).toBeInTheDocument();
   });
 
   it('shows the starting level when the stored span is the glued 7-10-11 range', () => {

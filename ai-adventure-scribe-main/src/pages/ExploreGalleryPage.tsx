@@ -93,17 +93,14 @@ export const ExploreGalleryPage: React.FC = () => {
 
         {/* Main Content */}
         <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-          {/* Page Title */}
-          <div className="mb-6 sm:mb-8">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[.1em] text-muted-foreground">
-              <span className="text-infinite-gold">1 Campaign</span> › 2 Hero › 3 Play
-            </p>
-            <h1 className="font-heading text-2xl min-[700px]:text-3xl font-bold mb-2">
-              Pick a campaign
+          {/* Page Title (Table 12, PublicExplore board) */}
+          <div className="mb-6 text-center sm:mb-10">
+            <h1 className="font-heading text-[2rem] min-[700px]:text-[54px] font-bold leading-tight text-[#f3deb0] mb-3">
+              Explore adventures
             </h1>
-            <p className="text-[15px] text-muted-foreground max-w-[60ch]">
-              Every campaign starts at level 1 with ready-made heroes. No setup. You can start
-              another one later.
+            <p className="mx-auto max-w-[640px] text-[17px] leading-relaxed text-[#aab3cc]">
+              Ready-made campaigns for one player and an AI Dungeon Master. Pick one and play
+              tonight.
             </p>
           </div>
 
@@ -165,7 +162,7 @@ export const ExploreGalleryPage: React.FC = () => {
 
           {/* Campaigns Grid */}
           {!isLoading && !error && campaigns.length > 0 && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-[18px]">
+            <div className="grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-3 lg:gap-10">
               {campaigns.map((campaign, index) =>
                 tableLook ? (
                   <BoxedCampaign key={campaign.id} campaign={campaign} isFirst={index === 0} />
@@ -178,6 +175,12 @@ export const ExploreGalleryPage: React.FC = () => {
                 ),
               )}
             </div>
+          )}
+
+          {!isLoading && !error && campaigns.length > 0 && (
+            <p className="mt-10 text-center text-base text-muted-foreground">
+              More adventures are on the way.
+            </p>
           )}
         </main>
 
