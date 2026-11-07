@@ -30,6 +30,7 @@ const ChronicleDialog: React.FC<ChronicleDialogProps> = ({ sessionId, open, onCl
   const navigate = useNavigate();
   const [shareStatus, setShareStatus] = useState('');
   const [sharing, setSharing] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
 
   const {
     data: chronicle,
@@ -39,16 +40,31 @@ const ChronicleDialog: React.FC<ChronicleDialogProps> = ({ sessionId, open, onCl
     { sessionId: sessionId ?? '' },
     {
       enabled: open && !!sessionId,
-      refetchInterval: chronicleRefetchInterval,
+      refetchInterval: (query) => {
+        const data = query.state.data as
+          | { chapterTitle?: string | null; status?: string | null }
+          | null
+          | undefined;
+        if (upgrading && !data?.chapterTitle) return 3000;
+        return chronicleRefetchInterval(query);
+      },
     },
   );
 
   const generateMutation = trpc.chronicles.generate.useMutation();
+  const utils = trpc.useUtils();
 
   useEffect(() => {
     setShareStatus('');
     setSharing(false);
+    setUpgrading(false);
   }, [sessionId, open]);
+
+  useEffect(() => {
+    if (upgrading && chronicle?.chapterTitle) {
+      setUpgrading(false);
+    }
+  }, [upgrading, chronicle?.chapterTitle]);
 
   const isPro = planHasPaidFeatures(userPlan);
   const title = chronicle?.chapterTitle ?? null;
@@ -82,12 +98,18 @@ const ChronicleDialog: React.FC<ChronicleDialogProps> = ({ sessionId, open, onCl
     }
   };
 
-  const handleWriteFull = (): void => {
+  const handleWriteFull = async (): Promise<void> => {
     const targetSessionId = sessionId ?? chronicle?.sessionId;
     if (!targetSessionId) return;
-    setShareStatus('');
-    generateMutation.mutate({ sessionId: targetSessionId });
-    void refetch();
+    setShareStatus('Writing the full chronicle…');
+    setUpgrading(true);
+    try {
+      await generateMutation.mutateAsync({ sessionId: targetSessionId });
+      await utils.chronicles.getBySessionId.invalidate({ sessionId: targetSessionId });
+    } catch {
+      setShareStatus('Could not write the full chronicle. Try again.');
+      setUpgrading(false);
+    }
   };
 
   const renderContent = (): React.ReactNode => {

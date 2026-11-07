@@ -20,6 +20,7 @@ interface GamePanelControlsProps {
   onLeftToggle: () => void;
   onRightToggle: () => void;
   onSceneBlurbToggle: () => void;
+  sessionId?: string | null;
 }
 
 export const GamePanelControls: React.FC<GamePanelControlsProps> = memo(
@@ -30,6 +31,7 @@ export const GamePanelControls: React.FC<GamePanelControlsProps> = memo(
     onLeftToggle,
     onRightToggle,
     onSceneBlurbToggle,
+    sessionId,
   }) => {
     return (
       <div className="flex max-w-full min-w-0 items-center gap-2 overflow-x-auto">
@@ -87,7 +89,7 @@ export const GamePanelControls: React.FC<GamePanelControlsProps> = memo(
           </TooltipContent>
         </Tooltip>
 
-        <GameChronicleButton />
+        <GameChronicleButton sessionId={sessionId} />
         <GameFeedbackButton />
       </div>
     );

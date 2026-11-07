@@ -5,9 +5,15 @@ import ChronicleDialog from './ChronicleDialog';
 
 import { Button } from '@/components/ui/button';
 
-export const GameChronicleButton: React.FC = () => {
+interface GameChronicleButtonProps {
+  sessionId?: string | null;
+}
+
+export const GameChronicleButton: React.FC<GameChronicleButtonProps> = ({
+  sessionId: sessionIdProp,
+}) => {
   const [searchParams] = useSearchParams();
-  const sessionId = searchParams.get('session');
+  const sessionId = sessionIdProp !== undefined ? sessionIdProp : searchParams.get('session');
   const [open, setOpen] = useState(false);
 
   if (!sessionId) {

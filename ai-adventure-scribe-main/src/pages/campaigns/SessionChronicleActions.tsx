@@ -33,8 +33,14 @@ export const SessionChronicleActions: React.FC<SessionChronicleActionsProps> = (
     setIsMutating(true);
     try {
       const token = await shareChronicle(chronicle.id);
-      await navigator.clipboard.writeText(`${window.location.origin}/chronicle/${token}`);
-      setShareStatus('Link copied!');
+      setRevoked(false);
+      const url = `${window.location.origin}/chronicle/${token}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        setShareStatus('Link copied!');
+      } catch {
+        setShareStatus(`Copy this link: ${url}`);
+      }
     } catch (error) {
       if ((error as { status?: number } | undefined)?.status === 409) {
         setShareStatus('Write the full chronicle before sharing.');

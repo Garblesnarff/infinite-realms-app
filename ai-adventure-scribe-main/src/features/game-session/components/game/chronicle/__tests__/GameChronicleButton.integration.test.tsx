@@ -36,6 +36,13 @@ vi.mock('@/infrastructure/api', () => ({
         useMutation: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
       },
     },
+    useUtils: vi.fn(() => ({
+      chronicles: {
+        getBySessionId: {
+          invalidate: vi.fn().mockResolvedValue(undefined),
+        },
+      },
+    })),
   },
 }));
 
@@ -45,6 +52,7 @@ vi.mock('@/infrastructure/api/rest-client', () => ({
 }));
 
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { sessionStartGameTarget } from '@/features/session-start/session-start-decision';
 import { trpc } from '@/infrastructure/api';
 
 type GetBySessionIdOutput = inferRouterOutputs<AppRouter>['chronicles']['getBySessionId'];
@@ -196,6 +204,55 @@ describe('GameChronicleButton integration', () => {
     expect(screen.queryByRole('button', { name: 'Share this chronicle' })).not.toBeInTheDocument();
     expect(vi.mocked(trpc.chronicles.getBySessionId.useQuery)).toHaveBeenCalledWith(
       { sessionId: SESSION_ID },
+      expect.anything(),
+    );
+  });
+
+  it('uses the resolved sessionId prop when the continue URL has no session param', async () => {
+    const RESOLVED_SESSION_ID = '22222222-2222-2222-2222-222222222222';
+    const url = sessionStartGameTarget({
+      campaignId: 'c1',
+      characterId: 'char-1',
+      decision: { kind: 'continue', starterCampaignId: null },
+    });
+    expect(url).not.toBeNull();
+    expect(new URL(url ?? '', 'http://localhost').searchParams.get('session')).toBeNull();
+    expect(url).not.toContain('session=');
+
+    mockUseAuth.mockReturnValue({ userPlan: 'pro' });
+    vi.mocked(trpc.chronicles.getBySessionId.useQuery).mockReturnValue(
+      mockSuccessResult(mockProChronicle),
+    );
+
+    render(
+      <MemoryRouter initialEntries={[url ?? '/app/game/c1?character=char-1']}>
+        <Routes>
+          <Route
+            path="/app/game/:id"
+            element={
+              <TooltipProvider>
+                <GamePanelControls
+                  isLeftCollapsed={false}
+                  isRightCollapsed={false}
+                  showSceneBlurb={false}
+                  onLeftToggle={vi.fn()}
+                  onRightToggle={vi.fn()}
+                  onSceneBlurbToggle={vi.fn()}
+                  sessionId={RESOLVED_SESSION_ID}
+                />
+              </TooltipProvider>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Chronicle' }));
+
+    expect(await screen.findByText('Chapter I: Dragon Battle')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Share this chronicle' })).toBeInTheDocument();
+    expect(vi.mocked(trpc.chronicles.getBySessionId.useQuery)).toHaveBeenCalledWith(
+      { sessionId: RESOLVED_SESSION_ID },
       expect.anything(),
     );
   });

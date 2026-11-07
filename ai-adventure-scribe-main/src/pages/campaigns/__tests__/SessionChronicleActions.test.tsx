@@ -179,4 +179,63 @@ describe('SessionChronicleActions', () => {
 
     expect(await screen.findByText('Write the full chronicle before sharing.')).toBeInTheDocument();
   });
+
+  it('share after revoke clears the hidden Turn link off even when the clipboard write fails', async () => {
+    mockFetchWithAuth
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ shareToken: 'token-1' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ shareEnabled: false }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ shareToken: 'token-2' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ shareEnabled: false }),
+      });
+
+    render(<SessionChronicleActions session={sessionWithChronicle} userPlan="pro" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Share link' }));
+    expect(await screen.findByText('Link copied!')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn link off' }));
+    expect(await screen.findByText('Link turned off')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Turn link off' })).not.toBeInTheDocument();
+
+    writeTextMock.mockRejectedValueOnce(new Error('denied'));
+    fireEvent.click(screen.getByRole('button', { name: 'Share link' }));
+    expect(
+      await screen.findByText(`Copy this link: ${window.location.origin}/chronicle/token-2`),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Turn link off' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn link off' }));
+    expect(await screen.findByText('Link turned off')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Turn link off' })).not.toBeInTheDocument();
+
+    expect(mockFetchWithAuth).toHaveBeenCalledTimes(4);
+    const unshareCalls = mockFetchWithAuth.mock.calls.filter(
+      ([url, options]) =>
+        (url as string).endsWith(CHRONICLE_UNSHARE_REQUEST.path('chron-1')) &&
+        (options as Record<string, unknown>).method === CHRONICLE_UNSHARE_REQUEST.method,
+    );
+    expect(unshareCalls).toHaveLength(2);
+    const [secondUnshareUrl, secondUnshareOptions] = unshareCalls[1] as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(secondUnshareUrl.endsWith(CHRONICLE_UNSHARE_REQUEST.path('chron-1'))).toBe(true);
+    expect(secondUnshareOptions.method).toBe(CHRONICLE_UNSHARE_REQUEST.method);
+    expect(secondUnshareOptions.body).toBeUndefined();
+  });
 });
