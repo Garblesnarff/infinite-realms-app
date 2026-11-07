@@ -11,7 +11,7 @@
  * @module server/services/spell-slots-service
  */
 
-import { and, eq, exists, gt, gte, lt, or, inArray, sql } from 'drizzle-orm';
+import { and, eq, exists, gt, lt, or, inArray, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import {
@@ -26,6 +26,7 @@ import {
   BusinessLogicError,
   InternalServerError,
 } from '../lib/errors.js';
+import { slotUsageAtOrAfter } from './spell-slots/slot-usage-time.js';
 import { SpellSlotDataAccess } from './spell-slots/spell-slot-data-access.js';
 import { CLASS_SPELLCASTING, SpellSlotMechanics } from './spell-slots/spell-slot-mechanics.js';
 
@@ -341,7 +342,7 @@ export class SpellSlotsService {
             and(
               eq(spellSlotUsageLog.characterId, characterId),
               eq(spellSlotUsageLog.sessionId, sessionId),
-              gte(spellSlotUsageLog.timestamp, since),
+              slotUsageAtOrAfter(since),
             ),
           )
           .limit(1);
