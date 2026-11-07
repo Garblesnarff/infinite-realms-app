@@ -197,6 +197,8 @@ describe('Chronicles Security', () => {
           ]),
         }),
       );
+      const selectArg = mockCtx.db.select.mock.calls.at(-1)?.[0];
+      expect(selectArg).toHaveProperty('sessionNumber');
     });
 
     it('generate should filter by userId when checking existing chronicles', async () => {

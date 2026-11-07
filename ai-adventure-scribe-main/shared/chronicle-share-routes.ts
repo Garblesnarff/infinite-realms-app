@@ -4,12 +4,12 @@
  * them through the real route.
  */
 export const CHRONICLE_SHARE_REQUEST = {
-  method: 'POST',
+  method: 'POST' as const,
   path: (id: string) => `/v1/chronicles/${id}/share`,
 };
 
 export const CHRONICLE_UNSHARE_REQUEST = {
-  method: 'DELETE',
+  method: 'DELETE' as const,
   path: (id: string) => `/v1/chronicles/${id}/share`,
 };
 

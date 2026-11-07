@@ -11,7 +11,7 @@
  */
 
 import { TRPCError } from '@trpc/server';
-import { and, eq, isNull, or } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, or } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '../../../../db/client';
@@ -107,6 +107,7 @@ export const chroniclesRouter = router({
           illustrationUrl: sessionChronicles.illustrationUrl,
           shareToken: sessionChronicles.shareToken,
           shareEnabled: sessionChronicles.shareEnabled,
+          sessionNumber: gameSessions.sessionNumber,
           generatedAt: sessionChronicles.generatedAt,
           errorMessage: sessionChronicles.errorMessage,
           createdAt: sessionChronicles.createdAt,
@@ -161,6 +162,7 @@ export const chroniclesRouter = router({
         .select({
           id: sessionChronicles.id,
           status: sessionChronicles.status,
+          chapterTitle: sessionChronicles.chapterTitle,
         })
         .from(sessionChronicles)
         .where(
@@ -174,7 +176,23 @@ export const chroniclesRouter = router({
       const existingRow = existing[0];
 
       if (existingRow?.status === 'ready') {
-        return { chronicleId: existingRow.id, alreadyExists: true };
+        if (existingRow.chapterTitle != null) {
+          return { chronicleId: existingRow.id, alreadyExists: true };
+        }
+        // Summary-only row from the free producer: a paid owner upgrades it
+        // to a full Pro chronicle instead of keeping the summary.
+        let upgradePlan: string;
+        try {
+          upgradePlan = await resolveUserPlanStrict(ctx.user.userId);
+        } catch {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Plan lookup unavailable',
+          });
+        }
+        if (!planHasPaidFeatures(upgradePlan)) {
+          return { chronicleId: existingRow.id, alreadyExists: true };
+        }
       }
 
       if (existingRow?.status === 'generating') {
@@ -439,6 +457,7 @@ export const chroniclesRouter = router({
             eq(sessionChronicles.shareToken, input.token),
             eq(sessionChronicles.shareEnabled, true),
             eq(sessionChronicles.status, 'ready'),
+            isNotNull(sessionChronicles.chapterTitle),
           ),
         )
         .limit(1);
