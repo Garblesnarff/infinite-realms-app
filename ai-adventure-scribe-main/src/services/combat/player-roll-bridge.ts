@@ -97,6 +97,8 @@ export type PlayerRollSpec =
  */
 export type PlayerRollOutcome = {
   d20: number | null;
+  /** Identifies the visible player roll when its later engine result arrives. */
+  rollId?: string;
   d20Rolls?: [number, number];
   cancelled?: boolean;
   timedOut?: boolean;

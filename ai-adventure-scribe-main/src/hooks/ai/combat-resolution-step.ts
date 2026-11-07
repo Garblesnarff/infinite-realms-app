@@ -78,6 +78,7 @@ import {
 import { actorMovementRemaining } from '@/services/combat/player-movement-remaining';
 import { trackPlayerRollDismissal } from '@/services/combat/player-roll-bridge';
 import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
+import { publishEngineRollOutcome } from '@/services/combat/roll-outcome-display';
 import {
   beginSheetCastCommit,
   reopenSheetCast,
@@ -791,6 +792,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
               playerDie?.d20Rolls,
               ...(origin ? [origin] : []),
             );
+    publishEngineRollOutcome(playerDie?.rollId, execution.result);
     if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError');
     // The server refused a DM-declared player exit the player's own words did not support.
     // Nothing was applied, so the turn stays open and the rest of the batch — a move, say —

@@ -13,6 +13,7 @@ import {
   executeAuthoritativeCombatIntent,
 } from './combat-action-executor';
 import { requestPlayerCheckRoll } from './player-roll-bridge';
+import { publishEngineRollOutcome } from './roll-outcome-display';
 import { standingHostiles } from './sheet-cast-save-hold';
 import { detectCombatCheck } from '../../../shared/combat-check-intent';
 import { combatCheckModifierFor } from '../../../shared/combat-check-modifier';
@@ -292,6 +293,7 @@ export async function runDeclaredCombatCheck(
       undefined,
       context.origin,
     );
+    publishEngineRollOutcome(outcome.rollId, result);
     return { declared: true, result };
   } catch (error) {
     // A refusal (a target too large to shove, nothing to escape) cost the player nothing; the

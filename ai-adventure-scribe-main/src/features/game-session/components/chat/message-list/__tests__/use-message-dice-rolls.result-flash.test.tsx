@@ -5,6 +5,7 @@ import { useMessageDiceRolls, ROLL_RESULT_FLASH_MS } from '../use-message-dice-r
 
 import { gameReducer, initialGameState } from '@/contexts/game/game-reducer';
 import { useGame } from '@/contexts/GameContext';
+import { publishEngineRollOutcome } from '@/services/combat/roll-outcome-display';
 
 vi.mock('@/contexts/GameContext', () => ({ useGame: vi.fn() }));
 vi.mock('@/hooks/combat/use-player-roll-host', () => ({
@@ -56,11 +57,13 @@ describe('roll result flash (#84)', () => {
   }
 
   beforeEach(() => {
+    document.body.classList.remove('ir-table-look');
     vi.clearAllMocks();
     vi.useFakeTimers();
   });
 
   afterEach(() => {
+    document.body.classList.remove('ir-table-look');
     vi.useRealTimers();
   });
 
@@ -191,5 +194,89 @@ describe('roll result flash (#84)', () => {
     rerender();
 
     expect(result.current.completedRoll).toBeNull();
+  });
+  it('waits for the matching server attack result without using a different roll', () => {
+    document.body.classList.add('ir-table-look');
+    const attack = { ...baseRoll, id: 'engine-roll-test', combatAttackRoll: true };
+    mockQueue(attack.id, [attack]);
+    const { result, rerender } = renderHook(() => useMessageDiceRolls({ onSendMessage: vi.fn() }));
+    mockQueue(undefined, [
+      { ...attack, status: 'completed', result: { total: 18, naturalRoll: 13 } },
+    ]);
+    rerender();
+    expect(result.current.completedRoll?.engineOutcome).toBeUndefined();
+    act(() =>
+      publishEngineRollOutcome('other-roll', {
+        d20: 20,
+        attackBonus: 5,
+        totalAttackRoll: 25,
+        hit: true,
+        isCritical: true,
+      }),
+    );
+    expect(result.current.completedRoll?.engineOutcome).toBeUndefined();
+    act(() =>
+      publishEngineRollOutcome(attack.id, {
+        d20: 1,
+        attackBonus: 5,
+        totalAttackRoll: 6,
+        hit: false,
+        isCritical: false,
+      }),
+    );
+    expect(result.current.completedRoll?.engineOutcome).toEqual({
+      rollId: attack.id,
+      kind: 'attack',
+      d20: 1,
+      bonus: 5,
+      total: 6,
+      hit: false,
+      isCritical: false,
+    });
+    act(() => vi.advanceTimersByTime(ROLL_RESULT_FLASH_MS));
+    expect(result.current.completedRoll).toBeNull();
+  });
+  it('bounds a missing engine result', () => {
+    document.body.classList.add('ir-table-look');
+    const attack = { ...baseRoll, id: 'missing-engine-roll', combatAttackRoll: true };
+    mockQueue(attack.id, [attack]);
+    const { result, rerender } = renderHook(() => useMessageDiceRolls({ onSendMessage: vi.fn() }));
+    mockQueue(undefined, [
+      { ...attack, status: 'completed', result: { total: 18, naturalRoll: 13 } },
+    ]);
+    rerender();
+    act(() => vi.advanceTimersByTime(14999));
+    expect(result.current.completedRoll).not.toBeNull();
+    act(() => vi.advanceTimersByTime(1));
+    expect(result.current.completedRoll).toBeNull();
+  });
+
+  it('keeps the ordinary 1.5 s flash in plain mode', () => {
+    const attack = { ...baseRoll, id: 'plain-engine-roll', combatAttackRoll: true };
+    mockQueue(attack.id, [attack]);
+    const { result, rerender } = renderHook(() => useMessageDiceRolls({ onSendMessage: vi.fn() }));
+    mockQueue(undefined, [
+      { ...attack, status: 'completed', result: { total: 18, naturalRoll: 13 } },
+    ]);
+    rerender();
+    act(() => vi.advanceTimersByTime(ROLL_RESULT_FLASH_MS));
+    expect(result.current.completedRoll).toBeNull();
+  });
+  it.each([
+    [12, true],
+    [11, false],
+  ])('stores the same narrative check verdict sent to the turn', async (total, success) => {
+    const check = { ...baseRoll, id: `check-${total}`, requestType: 'skill_check', dc: 12 };
+    mockQueue(check.id, [check]);
+    const { result } = renderHook(() =>
+      useMessageDiceRolls({ onSendMessage: vi.fn().mockResolvedValue(undefined) }),
+    );
+    await act(async () => {
+      await result.current.handleManualResult(total, { naturalRoll: total - 2 });
+    });
+    expect(useGame().completeDiceRoll).toHaveBeenCalledWith(
+      check.id,
+      expect.objectContaining({ total, checkSuccess: success }),
+    );
   });
 });

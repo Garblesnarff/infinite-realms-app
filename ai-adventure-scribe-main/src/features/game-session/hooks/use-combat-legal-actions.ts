@@ -37,6 +37,7 @@ import {
   participantBoardCell,
 } from '@/services/combat/player-movement-remaining';
 import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
+import { publishEngineRollOutcome } from '@/services/combat/roll-outcome-display';
 import { getSpellById } from '@/utils/spell-lookup';
 
 export function fleeProvokerOf(label: string): string | null {
@@ -474,6 +475,7 @@ export function useCombatLegalActions(input: {
             die.d20Rolls,
             'action_bar',
           );
+          publishEngineRollOutcome(die.rollId, execution.result);
           const playerParts = [
             ...formatCombatActionParts(structuredAction, execution.result, roster),
             ...formatDeathSaveParts(execution.result, roster),
@@ -547,6 +549,7 @@ export function useCombatLegalActions(input: {
               movement_feet: 0,
             };
             let committedAction = structuredAction;
+            let castRollId: string | undefined;
             let execution: Awaited<ReturnType<typeof executeStructuredCombatActionWithBoundary>>;
             if (spell.areaOfEffect) {
               // The chip's target is the aim: the area goes to the target's cell, the same
@@ -582,6 +585,7 @@ export function useCombatLegalActions(input: {
                 actorLabel: actor?.name ?? 'You',
                 participants: encounter.participants,
               });
+              castRollId = cast.rollId;
               // A save spell's "target saves" card can be cancelled; nothing is spent.
               if (cast.cancelled) {
                 setError('The cast was cancelled. Nothing was spent.');
@@ -618,6 +622,7 @@ export function useCombatLegalActions(input: {
                 'action_bar',
               );
             }
+            publishEngineRollOutcome(castRollId, execution.result);
             // The cast's engine result persists like a weapon attack's (#2622): one row.
             const playerParts = [
               ...formatCombatActionParts(committedAction, execution.result, roster),
