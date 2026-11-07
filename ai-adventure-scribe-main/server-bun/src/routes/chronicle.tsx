@@ -5,7 +5,7 @@
  * No authentication required — access is controlled by the share token.
  */
 
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { Elysia } from 'elysia';
 
 import { db } from '../../../db/client';
@@ -16,12 +16,12 @@ import { ChronicleSharePage } from '../views/chronicle/share.js';
 
 /**
  * Cache headers for the public chronicle share page.
- * Chronicles are immutable once generated — cache aggressively.
+ * Revocation must take effect at once, so nothing is cached.
  */
 const CHRONICLE_CACHE_HEADERS = {
-  'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
-  'CDN-Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
-  'Surrogate-Control': 'public, max-age=3600, stale-while-revalidate=86400',
+  'Cache-Control': 'no-store',
+  'CDN-Cache-Control': 'no-store',
+  'Surrogate-Control': 'no-store',
   Vary: 'Accept-Encoding, Accept-Language',
 } as const;
 
@@ -54,7 +54,9 @@ export const chronicleRoutes = new Elysia({ prefix: '/chronicle' })
         .from(sessionChronicles)
         .leftJoin(gameSessions, eq(sessionChronicles.sessionId, gameSessions.id))
         .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-        .where(eq(sessionChronicles.shareToken, token))
+        .where(
+          and(eq(sessionChronicles.shareToken, token), eq(sessionChronicles.shareEnabled, true)),
+        )
         .limit(1);
 
       const row = rows[0];

@@ -36,6 +36,7 @@ import { encountersRoutes } from './routes/v1/encounters';
 import { campaignsRoutes } from './routes/v1/campaigns';
 import { publicCampaignTemplateRoutes } from './routes/v1/public-campaign-templates';
 import { sessionsRoutes } from './routes/v1/sessions';
+import { chroniclesV1Routes } from './routes/v1/chronicles';
 import { sessionMessageRoutes } from './routes/v1/session-messages';
 import { companionRoutes } from './routes/v1/companions';
 import { memoryRoutes } from './routes/v1/memories';
@@ -285,6 +286,7 @@ export function createApp() {
 
   // Sessions routes (game session management)
   app.use(sessionsRoutes);
+  app.use(chroniclesV1Routes);
   app.use(securedGameDataRoutes);
   app.use(worldBuilderRoutes);
   app.use(sessionMessageRoutes);

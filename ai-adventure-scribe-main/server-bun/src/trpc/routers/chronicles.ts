@@ -106,6 +106,7 @@ export const chroniclesRouter = router({
           previouslyOn: sessionChronicles.previouslyOn,
           illustrationUrl: sessionChronicles.illustrationUrl,
           shareToken: sessionChronicles.shareToken,
+          shareEnabled: sessionChronicles.shareEnabled,
           generatedAt: sessionChronicles.generatedAt,
           errorMessage: sessionChronicles.errorMessage,
           createdAt: sessionChronicles.createdAt,
@@ -427,8 +428,6 @@ export const chroniclesRouter = router({
           chronicleText: sessionChronicles.chronicleText,
           illustrationUrl: sessionChronicles.illustrationUrl,
           generatedAt: sessionChronicles.generatedAt,
-          sessionId: sessionChronicles.sessionId,
-          previouslyOn: sessionChronicles.previouslyOn,
           sessionNumber: gameSessions.sessionNumber,
           campaignName: campaigns.name,
         })
@@ -436,7 +435,11 @@ export const chroniclesRouter = router({
         .leftJoin(gameSessions, eq(sessionChronicles.sessionId, gameSessions.id))
         .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
         .where(
-          and(eq(sessionChronicles.shareToken, input.token), eq(sessionChronicles.status, 'ready')),
+          and(
+            eq(sessionChronicles.shareToken, input.token),
+            eq(sessionChronicles.shareEnabled, true),
+            eq(sessionChronicles.status, 'ready'),
+          ),
         )
         .limit(1);
 
@@ -451,7 +454,6 @@ export const chroniclesRouter = router({
         chronicleText: chronicle.chronicleText,
         illustrationUrl: chronicle.illustrationUrl,
         generatedAt: chronicle.generatedAt,
-        previouslyOn: chronicle.previouslyOn,
         sessionNumber: chronicle.sessionNumber ?? null,
         campaignName: chronicle.campaignName ?? null,
       };
