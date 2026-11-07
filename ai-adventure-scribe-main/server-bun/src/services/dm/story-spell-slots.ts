@@ -11,7 +11,8 @@
 
 import { resolveCatalogSpell } from '../../data/spellData.js';
 import { logger } from '../../lib/logger.js';
-import { SpellSlotsService, slotUsageAtOrAfter } from '../spell-slots-service.js';
+import { slotUsageAtOrAfter } from '../spell-slots/slot-usage-time.js';
+import { SpellSlotsService } from '../spell-slots-service.js';
 
 import type { AllowedCasts } from './dm-feature-gate.js';
 

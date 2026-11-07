@@ -26,6 +26,7 @@ import {
   BusinessLogicError,
   InternalServerError,
 } from '../lib/errors.js';
+import { slotUsageAtOrAfter } from './spell-slots/slot-usage-time.js';
 import { SpellSlotDataAccess } from './spell-slots/spell-slot-data-access.js';
 import { CLASS_SPELLCASTING, SpellSlotMechanics } from './spell-slots/spell-slot-mechanics.js';
 
@@ -44,11 +45,6 @@ import type {
   SpellSlotUsageQuery,
   ClassName,
 } from '../types/spell-slots.js';
-
-/** Compare the usage timestamp to an instant even on legacy timestamp-without-time-zone schemas. */
-export function slotUsageAtOrAfter(since: Date): ReturnType<typeof sql> {
-  return sql`${spellSlotUsageLog.timestamp} >= ${since.toISOString()}::timestamptz`;
-}
 
 /**
  * Spell Slots Service
