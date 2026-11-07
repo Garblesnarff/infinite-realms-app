@@ -8,9 +8,9 @@ import { planHasPaidFeatures } from '../../../shared/plan-features';
 
 import type { SessionListItem } from './SessionCard';
 
-import ChronicleViewer from '@/components/chronicles/ChronicleViewer';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
+import ChronicleDialog from '@/features/game-session/components/game/chronicle/ChronicleDialog';
 import { useToast } from '@/hooks/use-toast';
 import { trpc } from '@/infrastructure/api';
 import logger from '@/lib/logger';
@@ -125,7 +125,7 @@ const CampaignSessions: React.FC = () => {
 
   return (
     <div className="mt-4 space-y-4">
-      <ChronicleViewer
+      <ChronicleDialog
         sessionId={chronicleSessionId}
         open={!!chronicleSessionId}
         onClose={() => setChronicleSessionId(null)}

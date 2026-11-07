@@ -4,6 +4,10 @@ import { type SessionListItem } from './SessionCard';
 import { planHasPaidFeatures } from '../../../shared/plan-features';
 
 import { Button } from '@/components/ui/button';
+import {
+  shareChronicle,
+  unshareChronicle,
+} from '@/features/game-session/components/game/chronicle/chronicleShareApi';
 
 interface SessionChronicleActionsProps {
   session: SessionListItem;
@@ -20,6 +24,28 @@ export const SessionChronicleActions: React.FC<SessionChronicleActionsProps> = (
 }) => {
   const chronicle = session.session_chronicles?.[0];
   const isPro = planHasPaidFeatures(userPlan);
+  const [shareStatus, setShareStatus] = React.useState('');
+
+  const handleShareLink = async (): Promise<void> => {
+    if (!chronicle) return;
+    try {
+      const token = await shareChronicle(chronicle.id);
+      await navigator.clipboard.writeText(`${window.location.origin}/chronicle/${token}`);
+      setShareStatus('Link copied!');
+    } catch {
+      setShareStatus('Could not share. Try again.');
+    }
+  };
+
+  const handleTurnLinkOff = async (): Promise<void> => {
+    if (!chronicle) return;
+    try {
+      await unshareChronicle(chronicle.id);
+      setShareStatus('Link turned off');
+    } catch {
+      setShareStatus('Could not turn the link off. Try again.');
+    }
+  };
 
   return (
     <div className="mt-3 pt-3 border-t border-border">
@@ -33,19 +59,30 @@ export const SessionChronicleActions: React.FC<SessionChronicleActionsProps> = (
           >
             📖 Read Chronicle
           </Button>
-          {chronicle.share_token && isPro && (
+          {isPro && (
             <Button
               size="sm"
               variant="ghost"
-              className="text-muted-foreground h-7 px-2 text-xs"
-              onClick={() => {
-                navigator.clipboard.writeText(
-                  `${window.location.origin}/chronicle/${chronicle.share_token}`,
-                );
-              }}
+              className="text-muted-foreground h-11 px-2 text-xs"
+              onClick={handleShareLink}
             >
-              Share ↗
+              Share link
             </Button>
+          )}
+          {isPro && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-muted-foreground h-11 px-2 text-xs"
+              onClick={handleTurnLinkOff}
+            >
+              Turn link off
+            </Button>
+          )}
+          {isPro && (
+            <span role="status" aria-live="polite" className="text-xs text-muted-foreground">
+              {shareStatus}
+            </span>
           )}
         </div>
       ) : chronicle?.status === 'generating' ? (
