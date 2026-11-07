@@ -9,6 +9,7 @@ import type { MutableRefObject } from 'react';
 
 import { isEngineTaggedRoll } from '@/contexts/game/dice-queue-visibility';
 import { useGame } from '@/contexts/GameContext';
+import { useTableLookActive } from '@/features/campaigns/table/useTableLookActive';
 import {
   formatDiceRoll as formatDiceRollUtil,
   getDiceRollOutcome,
@@ -24,6 +25,11 @@ import {
   hasPendingPlayerRoll,
   markDeathSavePromptDismissed,
 } from '@/services/combat/player-roll-bridge';
+import {
+  engineRollOutcome,
+  subscribeEngineRollOutcome,
+  type EngineRollOutcome,
+} from '@/services/combat/roll-outcome-display';
 import { declinedRollMessage } from '@/utils/dm-roll-recovery';
 import { handleAsyncError } from '@/utils/error-handler';
 import { isEngineChannelRollType } from '@/utils/roll-request/engine-channel';
@@ -35,6 +41,9 @@ export interface CompletedRollFlash {
   die: number;
   modifier: number;
   total: number;
+  rollId?: string;
+  engineOutcome?: EngineRollOutcome;
+  checkSuccess?: boolean;
 }
 
 /** How long the result flash stays in the tray after the roll settles (#84). */
@@ -114,6 +123,7 @@ export function useMessageDiceRolls({
   completedRoll: CompletedRollFlash | null;
 } {
   const { state, getCurrentDiceRoll, completeDiceRoll, cancelDiceRoll, clearBatch } = useGame();
+  const tableLook = useTableLookActive();
 
   const failedSubmissionRef = useRef<(() => Promise<void>) | null>(null);
   const retryingRef = useRef(false);
@@ -212,15 +222,14 @@ export function useMessageDiceRolls({
   useEffect(() => {
     const prevId = prevCurrentRollIdRef.current;
     prevCurrentRollIdRef.current = currentRoll?.id ?? null;
+    // Queue cleanup may run after the flash has started. It must not erase a
+    // still-pending server verdict merely because the completed row was pruned.
+    if (!currentRoll && !prevId) return;
     if (completedRollTimerRef.current) {
       clearTimeout(completedRollTimerRef.current);
       completedRollTimerRef.current = null;
     }
     if (currentRoll) {
-      setCompletedRoll(null);
-      return;
-    }
-    if (!prevId) {
       setCompletedRoll(null);
       return;
     }
@@ -233,13 +242,48 @@ export function useMessageDiceRolls({
     }
     const modifier = done.rollConfig.modifier;
     const total = done.result.total;
+    const rollId =
+      tableLook && (done.combatAttackRoll || done.combatCheckRoll) ? done.id : undefined;
+    const engineOutcome = rollId ? engineRollOutcome(rollId) : undefined;
     setCompletedRoll({
       die: done.result.naturalRoll ?? total - modifier,
       modifier,
       total,
+      ...(rollId ? { rollId } : {}),
+      ...(engineOutcome ? { engineOutcome } : {}),
+      ...(tableLook && typeof done.result.checkSuccess === 'boolean'
+        ? { checkSuccess: done.result.checkSuccess }
+        : {}),
     });
+    // The server's combat verdict can arrive after the die settles. A bounded wait
+    // keeps the result slot available without leaving it mounted forever on failure.
+    const wait = rollId && !engineOutcome ? 15_000 : ROLL_RESULT_FLASH_MS;
+    completedRollTimerRef.current = setTimeout(() => setCompletedRoll(null), wait);
+  }, [currentRoll, state.diceRollQueue.pendingRolls, tableLook]);
+  useEffect(() => {
+    if (tableLook || !completedRoll?.rollId) return;
+    if (completedRollTimerRef.current) clearTimeout(completedRollTimerRef.current);
+    setCompletedRoll((current) =>
+      current ? { die: current.die, modifier: current.modifier, total: current.total } : null,
+    );
     completedRollTimerRef.current = setTimeout(() => setCompletedRoll(null), ROLL_RESULT_FLASH_MS);
-  }, [currentRoll, state.diceRollQueue.pendingRolls]);
+  }, [tableLook, completedRoll?.rollId]);
+  useEffect(
+    () =>
+      subscribeEngineRollOutcome((outcome) => {
+        setCompletedRoll((current) => {
+          if (!current || current.rollId !== outcome.rollId || current.engineOutcome)
+            return current;
+          return { ...current, engineOutcome: outcome };
+        });
+      }),
+    [],
+  );
+  useEffect(() => {
+    if (!completedRoll?.engineOutcome) return;
+    if (completedRollTimerRef.current) clearTimeout(completedRollTimerRef.current);
+    completedRollTimerRef.current = setTimeout(() => setCompletedRoll(null), ROLL_RESULT_FLASH_MS);
+  }, [completedRoll?.engineOutcome]);
   useEffect(
     () => () => {
       if (completedRollTimerRef.current) clearTimeout(completedRollTimerRef.current);
@@ -412,6 +456,11 @@ export function useMessageDiceRolls({
         };
         const formattedRoll = formatDiceRoll(completedRoll);
         const outcome = getDiceRollOutcome(completedRoll);
+        // Combat outcomes arrive from the server; the narrative check uses the
+        // dice engine verdict already sent with this turn.
+        if (!isEngineTaggedRoll(roll) && outcome?.targetType === 'dc') {
+          settledResult.checkSuccess = outcome.success;
+        }
         const signedModifier = `${recordedModifier >= 0 ? '+' : ''}${recordedModifier}`;
         const formula =
           recordedModifier === queuedModifier && roll.rollConfig.abilityModifier

@@ -94,7 +94,8 @@ export function usePlayerRollHost(): string | null {
         setPendingRollId(rollId);
         registerSettler(rollId, (outcome) => {
           setPendingRollId(null);
-          settle(outcome);
+          const attack = !isDeathSaveSpec(spec) && !isInitiativeSpec(spec);
+          settle(attack && outcome.d20 !== null ? { ...outcome, rollId } : outcome);
         });
         return {
           rollId,

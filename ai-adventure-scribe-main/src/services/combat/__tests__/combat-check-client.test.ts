@@ -8,6 +8,7 @@ import {
   executeAuthoritativeCombatIntent,
 } from '@/services/combat/combat-action-executor';
 import { requestPlayerCheckRoll } from '@/services/combat/player-roll-bridge';
+import { engineRollOutcome } from '@/services/combat/roll-outcome-display';
 
 /**
  * The target of "grapple it" / "talk it down" is the one hostile on the board. The roster the
@@ -122,6 +123,29 @@ describe('which creature a check sentence names (#2420)', () => {
       declared: true,
       reason: 'refused',
       message: 'The Apprentice (medium) cannot shove Ogre (huge).',
+    });
+  });
+
+  it('publishes the returned engine check result to the matching roll', async () => {
+    vi.mocked(requestPlayerCheckRoll).mockResolvedValue({
+      d20: 12,
+      rollId: 'engine-check-integration',
+    });
+    vi.mocked(executeAuthoritativeCombatIntent).mockResolvedValue({
+      kind: 'shove',
+      success: false,
+      actorRoll: { d20: 12, modifier: 3, total: 15 },
+      opposedBy: 16,
+    });
+    await run('shove the goblin', [PLAYER, GOBLIN]);
+    expect(engineRollOutcome('engine-check-integration')).toEqual({
+      rollId: 'engine-check-integration',
+      kind: 'check',
+      d20: 12,
+      bonus: 3,
+      total: 15,
+      success: false,
+      isCritical: false,
     });
   });
 

@@ -486,7 +486,10 @@ describe('useMessageDiceRolls', () => {
         await result.current.handleManualResult(18);
       });
 
-      expect(mockUseGame.completeDiceRoll).toHaveBeenCalledWith('roll-1', { total: 18 });
+      expect(mockUseGame.completeDiceRoll).toHaveBeenCalledWith('roll-1', {
+        total: 18,
+        checkSuccess: true,
+      });
       expect(mockOnSendFullMessage).toHaveBeenCalledWith(
         expect.stringContaining('Stealth Check: 18'),
         expect.objectContaining({
@@ -628,6 +631,7 @@ describe('useMessageDiceRolls', () => {
       expect(mockUseGame.completeDiceRoll).toHaveBeenCalledWith('roll-1', {
         total: 22,
         naturalRoll: 20,
+        checkSuccess: true,
       });
       expect(mockOnSendFullMessage).toHaveBeenCalledWith(
         expect.stringContaining('Stealth Check: 22 (nat 20+2)'),

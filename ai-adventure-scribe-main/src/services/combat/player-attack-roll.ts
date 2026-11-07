@@ -72,6 +72,7 @@ export interface PlayerAttackDieParams {
  */
 export async function askPlayerForAttackDie(params: PlayerAttackDieParams): Promise<{
   d20?: number;
+  rollId?: string;
   d20Rolls?: [number, number];
   autoRolled: boolean;
   movementOnly: boolean;
@@ -130,7 +131,13 @@ export async function askPlayerForAttackDie(params: PlayerAttackDieParams): Prom
         ...(outcome.timedOut === true ? { timedOut: true } : {}),
       };
     }
-    return { d20: outcome.d20, d20Rolls: outcome.d20Rolls, autoRolled: false, movementOnly: false };
+    return {
+      d20: outcome.d20,
+      d20Rolls: outcome.d20Rolls,
+      autoRolled: false,
+      movementOnly: false,
+      ...(outcome.rollId ? { rollId: outcome.rollId } : {}),
+    };
   } catch (error) {
     if (error instanceof SessionExpiredError) throw error;
     // A failed proposal must not cost the player their turn. The engine rolls it as it always
