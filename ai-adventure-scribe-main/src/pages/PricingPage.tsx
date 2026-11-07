@@ -7,6 +7,7 @@ import React from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Link } from 'react-router-dom';
 
+import { FAQSection } from '@/components/launch/FAQSection';
 import { PricingSection } from '@/components/launch/PricingSection';
 import { launchPageContent } from '@/data/launchPageContent';
 
@@ -35,6 +36,9 @@ const PricingPage: React.FC = () => (
     </header>
     <main id="main-content" tabIndex={-1}>
       <PricingSection />
+      <div id="faq">
+        <FAQSection />
+      </div>
     </main>
   </div>
 );
