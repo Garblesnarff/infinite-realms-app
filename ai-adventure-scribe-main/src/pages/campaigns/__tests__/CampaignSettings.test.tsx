@@ -40,13 +40,13 @@ describe('CampaignSettings shares PlayerSettings and keeps Level Advancement (#1
   it('shows the shared table and narration controls including Show NPC Rolls', () => {
     renderPage();
     expect(screen.getByRole('switch', { name: 'Show target numbers' })).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: 'Auto-play' })).toHaveAttribute(
+    expect(screen.getByRole('switch', { name: 'Read new DM messages aloud' })).toHaveAttribute(
       'aria-checked',
       'false',
     );
-    expect(screen.getByLabelText('Reduce motion')).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Reduce motion' })).toBeInTheDocument();
     expect(screen.getByLabelText('Volume')).toBeInTheDocument();
-    expect(screen.getByLabelText('Speed')).toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: 'Speed' })).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Show NPC Rolls' })).toHaveAttribute(
       'aria-checked',
       'true',

@@ -240,7 +240,9 @@ describe('game screen tap targets and text (#228)', () => {
       const play = screen.getByRole('button', { name: /listen to this message/i });
       expect(play).toHaveClass('ir-tts');
       expect(play).not.toHaveClass('timeline-dot');
-      expect(play.className).not.toContain('rounded-full');
+      // The board pill is rounded-full by spec (#1429); it is a wide pill with text,
+      // not a timeline bead, so the shape alone is not the dot guard.
+      expect(play).toHaveTextContent('Listen');
       expectSlop(play);
       // Button's [&_svg]:size-4 wins over the h-3 class on the icon. The icon is not enlarged.
       expect(play.querySelector('svg')?.getAttribute('class')).toMatch(/\bh-4\b/);

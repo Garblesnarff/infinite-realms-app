@@ -1,8 +1,8 @@
 import React, { useId, useCallback } from 'react';
 
 import { CombatSummary } from './CombatSummary';
+import { JournalTabContent } from './JournalTabContent';
 import { MemoryList } from './memory/MemoryList';
-import { HandoutCard } from '../handouts/HandoutCard';
 import { RightSheetLive } from './overhaul/RightSheetLive';
 
 import type { SpellCastHandlerRef } from './spell-cast-handler';
@@ -11,11 +11,8 @@ import type { ExtendedGameSession } from '@/hooks/use-game-session';
 import type { JournalHandoutEntry } from '@/services/user-data-api';
 import type { Memory } from '@/types/memory';
 
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Textarea } from '@/components/ui/textarea';
 
 export interface GameSidePanelContentProps {
   sessionId?: string;
@@ -127,27 +124,6 @@ export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = React.m
 
           {activeTab === 'memory' && (
             <div className="flex flex-col h-full">
-              {/* Session Notes */}
-              <div className="p-4 border-b bg-muted/30">
-                <Label
-                  htmlFor={sessionNotesId}
-                  className="font-display font-semibold mb-2 text-foreground text-sm block"
-                >
-                  📝 Session Notes
-                </Label>
-                <Textarea
-                  id={sessionNotesId}
-                  value={localSessionNotes}
-                  onChange={(e) => setLocalSessionNotes(e.target.value)}
-                  placeholder="Session notes..."
-                  rows={3}
-                  className="mb-3 text-sm bg-background"
-                />
-                <Button onClick={handleSaveNotes} size="sm" className="w-full">
-                  Save Notes
-                </Button>
-              </div>
-
               {/* Memory list: same header, chips and cards as desktop */}
               <ScrollArea className="flex-1">
                 <div className="p-4">
@@ -174,33 +150,16 @@ export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = React.m
 
           {activeTab === 'journal' && (
             <ScrollArea className="h-full">
-              <div className="space-y-5 p-4">
-                {journalLoading && (
-                  <p className="text-xs text-muted-foreground">Loading journal...</p>
-                )}
-                {!journalLoading && journalEntries.length === 0 && (
-                  <p className="text-xs text-muted-foreground">No handouts delivered yet.</p>
-                )}
-                {Object.entries(
-                  journalEntries.reduce<Record<string, JournalHandoutEntry[]>>((groups, entry) => {
-                    const label =
-                      entry.sessionNumber == null
-                        ? 'This campaign'
-                        : `Session ${entry.sessionNumber}`;
-                    (groups[label] ||= []).push(entry);
-                    return groups;
-                  }, {}),
-                ).map(([session, entries]) => (
-                  <section key={session} className="space-y-2">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {session}
-                    </h3>
-                    {entries.map((entry) => (
-                      <HandoutCard key={entry.id} entry={entry} />
-                    ))}
-                  </section>
-                ))}
-              </div>
+              <JournalTabContent
+                sessionId={sessionId}
+                sessionNotesId={sessionNotesId}
+                localSessionNotes={localSessionNotes}
+                setLocalSessionNotes={setLocalSessionNotes}
+                handleSaveNotes={handleSaveNotes}
+                notesPlaceholder="Session notes..."
+                journalEntries={journalEntries}
+                journalLoading={journalLoading}
+              />
             </ScrollArea>
           )}
         </div>
