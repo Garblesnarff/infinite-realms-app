@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Round wrap demo</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&amp;family=DM+Sans:wght@400;500;700&amp;family=EB+Garamond:ital,wght@0,400;0,500;1,400&amp;display=swap">
+<style>
+body{margin:0;background:#070b14}
+a{color:#d5b070}a:hover{color:#f3deb0}
+[hidden]{display:none!important}
+.tx-cinzel{font-family:'Cinzel',Georgia,serif}
+.tx-gar{font-family:'EB Garamond',Georgia,serif}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid #f3deb0;outline-offset:2px}
+button{font-family:'DM Sans',system-ui,sans-serif}
+.brass{background:linear-gradient(160deg,#f6e3b8 0%,#d5b070 38%,#a9823f 70%,#6e5226 100%);color:#1a1206;border:1px solid #f3deb0;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -2px 0 rgba(0,0,0,.25),0 6px 14px rgba(0,0,0,.45);cursor:pointer}
+.brass:hover{filter:brightness(1.07)}
+.gbtn{cursor:pointer;min-height:44px;padding:0 14px;border-radius:10px;border:1px solid rgba(213,176,112,.45);background:#0c1220;color:#eaeefa;font-size:15px;font-weight:700}
+.gbtn:hover{border-color:#f3deb0}
+.cast{cursor:pointer;min-width:84px;min-height:44px;padding:0 14px;border-radius:10px;border:1px solid #d5b070;background:#121b30;color:#f3deb0;font-size:15px;font-weight:700}
+.cast:hover{background:#1c2742}
+.cast[aria-disabled="true"]{cursor:not-allowed;opacity:.5}
+.scroll{overflow-y:auto;scrollbar-color:#3a4566 transparent}
+@keyframes dots{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
+.dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#d5b070;margin-left:5px;animation:dots 1.2s infinite}
+.dot:nth-child(2){animation-delay:.2s}.dot:nth-child(3){animation-delay:.4s}
+@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
+.bar{position:relative;height:6px;border-radius:3px;background:#1c2742;overflow:hidden}
+.bar i{position:absolute;left:0;top:0;height:6px;width:40%;border-radius:3px;background:#d5b070;animation:slide 1.6s ease-in-out infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{animation:spin 1s linear infinite}
+@keyframes rise{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+.rise{animation:rise .35s ease-out both}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.bar i{width:40%}}
+
+</style>
+</helmet>
+<div style="width: 1440px; height: 720px; overflow: hidden; background: #070b14; color: #eaeefa; font-family: 'DM Sans', system-ui, sans-serif; padding: 40px 80px; box-sizing: border-box">
+<div class="tx-cinzel" style="font-size: 12px; letter-spacing: .14em; color: #4fb6c4">ROUND AND TURN</div>
+<h1 class="tx-cinzel" style="margin: 8px 0 6px; font-size: 32px; color: #f3deb0">One round = everyone acts once</h1>
+<p style="margin: 0; max-width: 900px; font-size: 17px; line-height: 1.5; color: #d4dbef">Press Next turn. Left: what run 16 showed (the round goes up after every actor). Right: the fix (#2393). The round goes up only when the first actor in the initiative order acts again.</p>
+<div style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center">
+<sc-for list="{{scns}}" as="s" hint-placeholder-count="3"><button type="button" class="gbtn" aria-pressed="{{s.on}}" onClick="{{s.pick}}" style="border-color: {{s.bd}}; background: {{s.bg}}; color: {{s.fg}}">{{s.label}}</button></sc-for>
+<span style="flex: 1"></span>
+<button type="button" class="gbtn" onClick="{{restart}}">Restart</button>
+<button type="button" class="brass" onClick="{{next}}" style="min-height: 44px; padding: 0 22px; border-radius: 10px; font-family: 'Cinzel', Georgia, serif; font-size: 15px; font-weight: 700; letter-spacing: .06em">Next turn</button>
+</div>
+<div style="margin-top: 20px; display: flex; gap: 32px">
+<section style="flex: 1; min-width: 0" aria-label="Today">
+<div style="display: flex; align-items: baseline; gap: 10px"><span class="tx-cinzel" style="font-size: 15px; font-weight: 700; color: #ef8a8a; letter-spacing: .08em">TODAY</span><span style="font-size: 14px; color: #aab3cc">chat block header, run 16</span></div>
+<div style="margin-top: 10px; padding: 14px 16px; border-radius: 12px; background: #0c1220; box-shadow: 0 0 0 1px rgba(239,138,138,.35)"><div class="tx-cinzel" style="font-size: 22px; color: #eaeefa">{{todayNow}}</div><div style="margin-top: 4px; font-size: 14px; color: #aab3cc">{{todayNote}}</div></div>
+<ol style="list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px">
+<sc-for list="{{todayRows}}" as="r" hint-placeholder-count="4"><li style="display: flex; gap: 12px; align-items: center; padding: 8px 12px; border-radius: 8px; background: #0a0f1c; font-size: 15px"><span class="tx-cinzel" style="width: 96px; font-weight: 700; color: {{r.c}}">{{r.round}}</span><span style="flex: 1">{{r.actor}}</span><span style="font-size: 13px; font-weight: 700; color: {{r.c}}">{{r.flag}}</span></li></sc-for>
+</ol>
+</section>
+<section style="flex: 1; min-width: 0" aria-label="Should be">
+<div style="display: flex; align-items: baseline; gap: 10px"><span class="tx-cinzel" style="font-size: 15px; font-weight: 700; color: #f3deb0; letter-spacing: .08em">SHOULD BE</span><span style="font-size: 14px; color: #aab3cc">turn bar, one label for the whole round</span></div>
+<div style="margin-top: 10px; padding: 14px 16px; border-radius: 12px; background: #0c1220; box-shadow: 0 0 0 1px rgba(213,176,112,.45)">
+<div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap"><span class="tx-cinzel" style="font-size: 22px; color: #f3deb0">{{goodNow}}</span><span style="font-size: 15px; font-weight: 700; color: {{goodWho}}">{{goodTurn}}</span></div>
+<div style="margin-top: 8px; display: flex; gap: 6px" aria-label="{{pipAria}}">
+<sc-for list="{{pips}}" as="p" hint-placeholder-count="3"><span style="flex: 1; height: 8px; border-radius: 4px; background: {{p.bg}}"></span></sc-for>
+</div>
+<div style="margin-top: 8px; font-size: 14px; color: #aab3cc">{{goodNote}}</div></div>
+<ol style="list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px">
+<sc-for list="{{goodRows}}" as="r" hint-placeholder-count="4"><li style="{{r.style}}"><span class="tx-cinzel" style="{{r.lblStyle}}">{{r.round}}</span><span style="flex: 1">{{r.actor}}</span><span style="font-size: 13px; font-weight: 700; color: #4fb6c4">{{r.flag}}</span></li></sc-for>
+</ol>
+</section>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":720}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { sc: 0, step: 0 }; }
+  renderVals() {
+    var self = this, st = this.state;
+    var SC = [
+      { label: 'You go first · 2 actors', a: [['The Scholar', 1], ['Captain Sarah Reeves', 0]] },
+      { label: 'Enemy goes first · 2 actors', a: [['Captain Sarah Reeves', 0], ['The Scholar', 1]] },
+      { label: 'You go first · 3 actors', a: [['The Scholar', 1], ['Captain Sarah Reeves', 0], ['Warden Ilsa', 0]] }
+    ];
+    var cur = SC[st.sc], n = cur.a.length, MAX = 6;
+    var scns = SC.map(function (s, i) {
+      var on = i === st.sc;
+      return { label: s.label, on: on ? 'true' : 'false', bd: on ? '#f3deb0' : 'rgba(213,176,112,.45)', bg: on ? '#1c2742' : '#0c1220', fg: on ? '#f3deb0' : '#eaeefa', pick: function () { self.setState({ sc: i, step: 0 }); } };
+    });
+    function turn(i) { var a = cur.a[i % n]; return { round: Math.floor(i / n) + 1, name: a[0], you: a[1] === 1, first: i % n === 0 }; }
+    var todayRows = [], goodRows = [];
+    for (var i = 0; i <= st.step; i++) {
+      var t = turn(i);
+      var tr = t.you ? t.round : t.round + 1;
+      var bad = tr !== t.round;
+      todayRows.push({ round: 'Round ' + tr, actor: t.name + (t.you ? ' (you)' : ''), c: bad ? '#ef8a8a' : '#d4dbef', flag: bad ? 'wrong: it is round ' + t.round : '' });
+      if (t.first) {
+        goodRows.push({ round: 'Round ' + t.round + ' begins', actor: '', flag: '', style: 'display: flex; gap: 12px; align-items: center; padding: 6px 12px; border-top: 1px solid rgba(213,176,112,.45); font-size: 15px', lblStyle: 'font-weight: 700; color: #f3deb0; letter-spacing: .06em; font-size: 13px; text-transform: uppercase' });
+      }
+      goodRows.push({ round: 'Turn ' + ((i % n) + 1), actor: t.name + (t.you ? ' (you)' : ''), flag: t.you ? 'You' : 'Enemy', style: 'display: flex; gap: 12px; align-items: center; padding: 8px 12px; border-radius: 8px; background: #0a0f1c; font-size: 15px', lblStyle: 'width: 96px; font-weight: 700; color: #d4dbef' });
+    }
+    var c = turn(st.step), last = st.step % n === n - 1;
+    var ct = c.you ? c.round : c.round + 1;
+    var pips = cur.a.map(function (a, j) {
+      var k = st.step % n;
+      return { bg: j < k ? '#4a5678' : (j === k ? '#d5b070' : '#1c2742') };
+    });
+    var nextName = cur.a[(st.step + 1) % n][0];
+    return {
+      scns: scns,
+      todayRows: todayRows.slice(-6), goodRows: goodRows.slice(-8),
+      todayNow: 'Round ' + ct + ' · ' + (c.you ? 'Player turn' : 'NPC turn'),
+      todayNote: c.you ? 'Correct here, by luck.' : 'Wrong: the round is really ' + c.round + '.',
+      goodNow: 'Round ' + c.round,
+      goodTurn: 'Turn ' + ((st.step % n) + 1) + ' of ' + n + ' · ' + (c.you ? 'Your turn' : c.name),
+      goodWho: c.you ? '#f3deb0' : '#ef8a8a',
+      goodNote: last ? 'Next: ' + nextName + ' starts round ' + (c.round + 1) + '.' : 'Next: ' + nextName + '.',
+      pips: pips,
+      pipAria: 'Turn ' + ((st.step % n) + 1) + ' of ' + n,
+      next: function () { if (self.state.step < MAX - 1) self.setState({ step: self.state.step + 1 }); },
+      restart: function () { self.setState({ step: 0 }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Landing page</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&amp;family=DM+Sans:wght@400;500;700&amp;family=EB+Garamond:ital,wght@0,400;0,500;1,400&amp;display=swap">
+<style>
+body{margin:0;background:#070b14}
+a{color:#d5b070}a:hover{color:#f3deb0}
+.tx-cinzel{font-family:'Cinzel',Georgia,serif}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #f3deb0;outline-offset:3px}
+[hidden]{display:none!important}
+.brass{background:linear-gradient(160deg,#f6e3b8 0%,#d5b070 38%,#a9823f 70%,#6e5226 100%);color:#1a1206;border:1px solid #f3deb0;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -2px 0 rgba(0,0,0,.25),0 6px 14px rgba(0,0,0,.45);cursor:pointer;text-decoration:none}
+.brass:hover{filter:brightness(1.07);color:#1a1206}
+.pcard{transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s}
+.pcard:hover,.pcard:focus-visible{transform:translateY(-4px);box-shadow:0 0 0 2px #d5b070,0 22px 40px rgba(0,0,0,.55)!important}
+.clamp3{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.bar{transform-origin:50% 100%;transform:scaleY(.5)}
+.playing .bar{animation:wave .9s ease-in-out infinite}
+@keyframes wave{0%,100%{transform:scaleY(.3)}50%{transform:scaleY(1)}}
+.field{width:100%;height:56px;box-sizing:border-box;padding:0 18px;border-radius:10px;border:1px solid rgba(213,176,112,.55);background:#0c1220;color:#eaeefa;font-family:'DM Sans',system-ui,sans-serif;font-size:18px}
+.field::placeholder{color:#8f9ab8}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="position: relative; width: 1440px; height: 3100px; overflow: hidden; background: #070b14; font-family: 'DM Sans', system-ui, sans-serif; color: #eaeefa">
+
+<div style="position: absolute; left: 0; top: 0; width: 1440px; height: 980px; overflow: hidden">
+<img src="/_blob/0082a22301a2497c67af37e00a58b96b" alt="" style="position: absolute; left: 0; top: -120px; width: 1440px; height: 1100px; object-fit: cover; opacity: .38; filter: saturate(.6)">
+<div style="position: absolute; inset: 0; background: linear-gradient(180deg, rgba(7,11,20,.55) 0%, rgba(7,11,20,.78) 55%, #070b14 100%)"></div>
+</div>
+
+<header style="position: absolute; left: 0; top: 0; width: 1440px; height: 72px; display: flex; align-items: center; justify-content: space-between; padding: 0 112px; box-sizing: border-box; border-bottom: 1px solid rgba(213,176,112,.18); background: rgba(7,11,20,.7)">
+<a href="Landing.dc.html" aria-label="Infinite Realms, home" style="display: inline-flex; align-items: center; gap: 12px; text-decoration: none">
+<svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="16.5" fill="#0c1220" stroke="#4fb6c4" stroke-width="1.5"></circle><path d="M18 8 L20.2 15.8 L28 18 L20.2 20.2 L18 28 L15.8 20.2 L8 18 L15.8 15.8 Z" fill="#4fb6c4"></path></svg>
+<span class="tx-cinzel" style="font-size: 21px; letter-spacing: .22em; color: #eaeefa">INFINITE <span style="color: #d5b070">REALMS</span></span></a>
+<button type="button" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 20px; border-radius: 10px; border: 1px solid rgba(213,176,112,.6); background: transparent; color: #f3deb0; cursor: pointer; font-family: 'DM Sans', system-ui, sans-serif; font-size: 16px; font-weight: 700">Sign in<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="#f3deb0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+</header>
+
+<div style="position: absolute; left: 0; top: 150px; width: 1440px; display: flex; flex-direction: column; align-items: center; text-align: center">
+<span style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 16px; border-radius: 999px; border: 1px solid rgba(213,176,112,.45); background: rgba(7,11,20,.7); font-size: 15px; color: #f3deb0">Closed beta · coming soon</span>
+<h1 class="tx-cinzel" style="margin: 26px 0 0; font-size: 76px; font-weight: 900; line-height: 1.06; letter-spacing: .01em; color: #eaeefa; text-wrap: balance">THE <span style="color: #f3deb0">5E CAMPAIGN</span><br>THAT NEVER CANCELS</h1>
+<p style="margin: 26px 0 0; max-width: 780px; font-size: 22px; line-height: 1.55; color: #d4dbef">The tabletop adventures you’ve been wanting, now possible. An AI Game Master with <b>perfect memory</b>, <b>professional voice acting</b>, and <b>infinite patience</b>. No scheduling. No cancellations. Just play.</p>
+<div style="margin-top: 34px; display: flex; gap: 16px; align-items: center">
+<button type="button" class="brass" style="position: relative; display: inline-flex; align-items: center; justify-content: center; min-height: 58px; padding: 0 34px; border-radius: 12px; font-family: 'Cinzel', Georgia, serif; font-size: 18px; font-weight: 700; letter-spacing: .06em">Roll for Initiative (join the beta)</button>
+<a href="PublicExplore.dc.html" style="display: inline-flex; align-items: center; justify-content: center; min-height: 58px; padding: 0 28px; border-radius: 12px; border: 1px solid rgba(234,238,250,.4); color: #eaeefa; text-decoration: none; font-size: 18px; font-weight: 500">See the adventures</a>
+</div>
+<div style="margin-top: 16px; font-size: 15px; color: #aab3cc">Limited spots for the Founder’s Alpha.</div>
+</div>
+
+<figure style="position: absolute; left: 260px; top: 690px; width: 920px; margin: 0">
+<div style="padding: 10px; border-radius: 16px; background: linear-gradient(160deg, #f6e3b8 0%, #d5b070 38%, #a9823f 70%, #6e5226 100%); box-shadow: 0 34px 70px rgba(0,0,0,.65), 0 0 0 1px rgba(255,255,255,.2) inset">
+<img src="/_blob/b785992faf4e15061f72a60d09c93ce3" alt="The game screen: story on the left, action bar and roll tray at the bottom, turn order, map and character sheet at the sides." style="display: block; width: 900px; height: 561px; border-radius: 8px; object-fit: cover">
+</div>
+<figcaption style="margin-top: 16px; text-align: center; font-size: 16px; color: #aab3cc">Story, roll tray, sheet and map in one view.</figcaption>
+</figure>
+
+<section aria-labelledby="camps" style="position: absolute; left: 0; top: 1400px; width: 1440px">
+<div style="text-align: center">
+<h2 id="camps" class="tx-cinzel" style="margin: 0; font-size: 44px; font-weight: 700; color: #f3deb0">Start a story tonight</h2>
+<p style="margin: 12px auto 0; max-width: 620px; font-size: 18px; line-height: 1.55; color: #aab3cc">Every campaign has ready-made heroes. No setup.</p>
+</div>
+<div style="margin: 44px 0 0 80px; width: 1280px; display: flex; gap: 40px">
+<sc-for list="{{camps}}" as="c" hint-placeholder-count="3">
+<a href="PublicCampaign.dc.html" class="pcard" aria-label="{{c.aria}}" style="position: relative; display: block; width: 400px; height: 400px; border-radius: 16px; overflow: hidden; background: #0c1220; box-shadow: 0 0 0 1px rgba(213,176,112,.28), 0 14px 30px rgba(0,0,0,.45); text-decoration: none; color: #eaeefa">
+<img src="{{c.img}}" alt="" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: {{c.pos}}">
+<div style="position: absolute; inset: 0; background: linear-gradient(180deg, rgba(7,11,20,.05) 0%, rgba(7,11,20,.5) 42%, #070b14 100%)"></div>
+<span style="position: absolute; right: 16px; top: 16px; padding: 4px 10px; border-radius: 999px; background: #070b14; border: 1px solid {{c.diffColor}}; color: {{c.diffColor}}; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase">{{c.diff}}</span>
+<div style="position: absolute; left: 22px; right: 22px; bottom: 20px; display: flex; flex-direction: column; gap: 8px">
+<div class="tx-cinzel" style="font-size: 26px; font-weight: 700; line-height: 1.12; color: #f3deb0; text-shadow: 0 2px 8px #000">{{c.title}}</div>
+<div style="font-size: 14px; color: #aab3cc">{{c.genre}}</div>
+<span style="display: inline-flex; align-items: center; gap: 6px; min-height: 28px; font-size: 16px; font-weight: 700; color: #d5b070">Begin your journey →</span>
+</div>
+</a>
+</sc-for>
+</div>
+<div style="margin-top: 30px; text-align: center"><a href="PublicExplore.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 17px; font-weight: 700">See all adventures →</a></div>
+</section>
+
+<section aria-labelledby="mem" style="position: absolute; left: 112px; top: 1990px; width: 1216px; height: 420px; display: flex; gap: 72px; align-items: center">
+<div style="width: 600px">
+<div style="font-size: 14px; font-weight: 700; letter-spacing: .16em; color: #4fb6c4">MEMORY</div>
+<h2 id="mem" class="tx-cinzel" style="margin: 12px 0 0; font-size: 44px; font-weight: 700; line-height: 1.12; color: #eaeefa; text-wrap: balance">A WORLD THAT REMEMBERS YOU</h2>
+<p style="margin: 20px 0 0; font-size: 20px; line-height: 1.6; color: #d4dbef">Every place, person and promise goes into the DM’s notebook. Open it any time and see what the DM knows.</p>
+</div>
+<div style="width: 340px; border-radius: 14px; background: #0c1220; box-shadow: 0 0 0 1px rgba(213,176,112,.3), 0 24px 50px rgba(0,0,0,.55); padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="font-size: 15px; font-weight: 700; color: #f3deb0">The DM remembers 9 things about this story.</div>
+<sc-for list="{{mems}}" as="m" hint-placeholder-count="3">
+<div style="display: flex; gap: 10px; padding: 10px 12px; border-radius: 10px; background: #121b30; border: 1px solid rgba(213,176,112,.18)">
+<span style="flex: none; width: 28px; height: 28px; border-radius: 50%; background: rgba(79,182,196,.16); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #4fb6c4" aria-hidden="true">{{m.mark}}</span>
+<div style="min-width: 0"><div style="font-family: 'EB Garamond', Georgia, serif; font-size: 17px; line-height: 1.35; color: #eaeefa">{{m.text}}</div><div style="margin-top: 4px; font-size: 13px; color: #aab3cc">{{m.when}}</div></div>
+</div>
+</sc-for>
+</div>
+</section>
+
+<section aria-labelledby="voice" style="position: absolute; left: 112px; top: 2470px; width: 1216px; height: 330px; display: flex; gap: 72px; align-items: center">
+<div style="width: 600px; padding: 26px 28px; box-sizing: border-box; border-radius: 16px; background: #0c1220; box-shadow: 0 0 0 1px rgba(213,176,112,.3), 0 20px 44px rgba(0,0,0,.5)">
+<div style="display: flex; align-items: center; gap: 18px">
+<button type="button" class="brass" onClick="{{toggle}}" aria-pressed="{{pressed}}" aria-label="{{playLabel}}" style="flex: none; width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center">
+<sc-if value="{{notPlaying}}" hint-placeholder-val="{{ true }}"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="#1a1206"></path></svg></sc-if>
+<sc-if value="{{playing}}" hint-placeholder-val="{{ false }}"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z" fill="#1a1206"></path></svg></sc-if>
+</button>
+<div class="{{waveCls}}" style="flex: 1; height: 44px; display: flex; align-items: flex-end; gap: 3px" aria-hidden="true">
+<sc-for list="{{bars}}" as="b" hint-placeholder-count="36"><span class="bar" style="flex: 1; height: {{b.h}}px; border-radius: 2px; background: #4fb6c4; animation-delay: {{b.d}}s"></span></sc-for>
+</div>
+<div style="flex: none; width: 96px; text-align: right; font-size: 15px; color: #aab3cc">{{timeText}}</div>
+</div>
+<p style="margin: 18px 0 0; font-family: 'EB Garamond', Georgia, serif; font-style: italic; font-size: 20px; line-height: 1.5; color: #eaeefa">“The rope is slick with cold water. The next ledge is thirty feet down, and the wall is too smooth for your boots.”</p>
+<div style="margin-top: 8px; font-size: 14px; color: #aab3cc">{{statusText}}</div>
+</div>
+<div style="width: 544px">
+<div style="font-size: 14px; font-weight: 700; letter-spacing: .16em; color: #4fb6c4">VOICE</div>
+<h2 id="voice" class="tx-cinzel" style="margin: 12px 0 0; font-size: 44px; font-weight: 700; line-height: 1.12; color: #eaeefa; text-wrap: balance">HEAR THE STORY, NOT JUST READ IT</h2>
+<p style="margin: 20px 0 0; font-size: 20px; line-height: 1.6; color: #d4dbef">Press Listen on any message and the DM reads it aloud.</p>
+</div>
+</section>
+
+<section aria-labelledby="joinh" style="position: absolute; left: 0; top: 2860px; width: 1440px; display: flex; flex-direction: column; align-items: center">
+<h2 id="joinh" class="tx-cinzel" style="margin: 0; font-size: 40px; font-weight: 700; color: #f3deb0">Be a founding adventurer</h2>
+<form style="margin-top: 22px; display: flex; gap: 14px; align-items: flex-end" onSubmit="{{noop}}">
+<div style="width: 300px"><label for="jn" style="display: block; margin-bottom: 6px; font-size: 15px; color: #d4dbef">Your name (optional)</label><input id="jn" class="field" type="text" placeholder="Alex"></div>
+<div style="width: 380px"><label for="je" style="display: block; margin-bottom: 6px; font-size: 15px; color: #d4dbef">Email</label><input id="je" class="field" type="email" placeholder="you@example.com"></div>
+<button type="button" class="brass" style="min-height: 56px; padding: 0 30px; border-radius: 12px; font-family: 'Cinzel', Georgia, serif; font-size: 17px; font-weight: 700; letter-spacing: .06em">Join the beta</button>
+</form>
+</section>
+
+<footer style="position: absolute; left: 0; top: 3036px; width: 1440px; height: 64px; display: flex; align-items: center; justify-content: center; border-top: 1px solid rgba(213,176,112,.18); font-size: 14px; color: #8f9ab8">© 2026 InfiniteRealms. All rights reserved.</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":3100}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { playing: false, sec: 0 }; this.timer = null; }
+  componentWillUnmount() { clearInterval(this.timer); }
+  renderVals() {
+    var self = this, s = this.state;
+    var C = [
+      { title: 'Abyssal Descent', img: '/_blob/157200b9099918a34801b5fec34f74dd', pos: '50% 35%', genre: 'Horror · Survival', diff: 'Hard', diffColor: '#ef8a8a' },
+      { title: 'Academy of Arcane Gastronomy', img: '/_blob/187452b7fe34f3f89a710ce5fba6c0c0', pos: '82% 40%', genre: 'Fantasy', diff: 'Medium', diffColor: '#f3deb0' },
+      { title: 'The Eternal Feast', img: '/_blob/0082a22301a2497c67af37e00a58b96b', pos: '50% 40%', genre: 'Fantasy', diff: 'Medium', diffColor: '#f3deb0' }
+    ];
+    var bars = [];
+    for (var i = 0; i < 36; i++) bars.push({ h: 10 + Math.round(Math.abs(Math.sin(i * 1.3)) * 26) + ((i * 7) % 5), d: ((i * 13) % 10) / 10 });
+    var mm = Math.floor(s.sec / 60), ss = s.sec % 60;
+    return {
+      camps: C.map(function (c) { return { title: c.title, img: c.img, pos: c.pos, genre: c.genre, diff: c.diff, diffColor: c.diffColor, aria: c.title + ', ' + c.diff + ' difficulty' }; }),
+      mems: [
+        { mark: 'P', text: 'The iron piton is new, hammered in by the last expedition.', when: 'Session 1 · just now' },
+        { mark: 'C', text: 'The Vitruvian Spider is stitched from the dead of the last expedition.', when: 'Session 1 · just now' },
+        { mark: 'I', text: 'A torn page: “Day 9. The ropes were cut from below.”', when: 'Session 1 · 2 minutes ago' }
+      ],
+      bars: bars, waveCls: s.playing ? 'playing' : '',
+      playing: s.playing, notPlaying: !s.playing, pressed: s.playing ? 'true' : 'false',
+      playLabel: s.playing ? 'Pause the voice sample' : 'Play the voice sample',
+      timeText: '0:' + (s.sec < 10 ? '0' : '') + s.sec + ' / 0:10',
+      statusText: s.playing ? 'Playing…' : (s.sec >= 10 ? 'Finished. Press Play to hear it again.' : 'Voice sample · press Play'),
+      noop: function (e) { if (e && e.preventDefault) e.preventDefault(); },
+      toggle: function () {
+        if (self.state.playing) { clearInterval(self.timer); self.setState({ playing: false }); return; }
+        var start = self.state.sec >= 10 ? 0 : self.state.sec;
+        self.setState({ playing: true, sec: start });
+        clearInterval(self.timer);
+        self.timer = setInterval(function () {
+          var n = self.state.sec + 1;
+          if (n >= 10) { clearInterval(self.timer); self.setState({ playing: false, sec: 10 }); } else self.setState({ sec: n });
+        }, 1000);
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

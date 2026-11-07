@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Materials kit</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&amp;family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&amp;family=Caveat:wght@500;700&amp;family=Inter:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#0d0906}
+.tx-cinzel{font-family:'Cinzel',Georgia,serif}
+.tx-hand{font-family:'Caveat','Segoe Print',cursive}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;line-height:1.5;color:#c9cfe0}
+.tile{position:relative;width:252px;height:392px;border-radius:12px;background:#10141f;border:1px solid rgba(213,176,112,.22);overflow:hidden;display:flex;flex-direction:column}
+.swatch{position:relative;height:140px;flex:0 0 140px;overflow:hidden;border-bottom:1px solid rgba(213,176,112,.22)}
+.info{padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.name{font-family:'Cinzel',serif;font-weight:700;font-size:15px;color:#f3deb0;letter-spacing:.04em}
+.use{font-family:'Inter',sans-serif;font-size:12.5px;line-height:1.45;color:#eaeefa}
+@keyframes flicker{0%,100%{opacity:.9;transform:scale(1)}18%{opacity:.72;transform:scale(.97)}37%{opacity:1;transform:scale(1.04)}55%{opacity:.8}78%{opacity:.95;transform:scale(1.02)}}
+@keyframes flame{0%,100%{transform:scaleY(1) skewX(0)}25%{transform:scaleY(1.12) skewX(3deg)}50%{transform:scaleY(.94) skewX(-2deg)}75%{transform:scaleY(1.06) skewX(1deg)}}
+@keyframes sheen{0%{transform:translateX(-120%) skewX(-18deg)}100%{transform:translateX(260%) skewX(-18deg)}}
+@keyframes stampLoop{0%,12%{transform:scale(2.4) rotate(-16deg);opacity:0}24%{transform:scale(.9) rotate(-9deg);opacity:1}30%,100%{transform:scale(1) rotate(-9deg);opacity:1}}
+@keyframes inkLoop{0%{clip-path:inset(0 100% 0 0)}60%,100%{clip-path:inset(0 0 0 0)}}
+@keyframes spinDie{0%{transform:rotate(-6deg)}20%{transform:rotate(354deg)}100%{transform:rotate(354deg)}}
+@keyframes pulseGold{0%,100%{box-shadow:0 0 0 1px rgba(243,222,176,.55),0 0 12px rgba(213,176,112,.35)}50%{box-shadow:0 0 0 1px rgba(243,222,176,.9),0 0 24px rgba(213,176,112,.7)}}
+@keyframes lift{0%,30%{transform:translateY(0) rotate(3deg)}45%,85%{transform:translateY(-12px) rotate(0)}100%{transform:translateY(0) rotate(3deg)}}
+.flicker{animation:flicker 3.2s ease-in-out infinite}
+.flame{transform-origin:50% 100%;animation:flame 1.4s ease-in-out infinite}
+.sheen{position:absolute;inset:0;overflow:hidden;border-radius:inherit;pointer-events:none}
+.sheen::after{content:"";position:absolute;top:0;bottom:0;width:40%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.5),transparent);animation:sheen 3.6s ease-in-out infinite}
+.stampLoop{animation:stampLoop 3s cubic-bezier(.2,.9,.25,1.2) infinite}
+.inkLoop{animation:inkLoop 4s steps(40,end) infinite}
+.spinDie{animation:spinDie 3.4s cubic-bezier(.18,.72,.22,1) infinite}
+.now{animation:pulseGold 2.4s ease-in-out infinite}
+.lift{animation:lift 3.2s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+
+<div style="position: relative; width: 1440px; height: 1000px; overflow: hidden; background: radial-gradient(ellipse at 50% 0%, #1a1420 0%, #0d0906 70%); font-family: 'EB Garamond', Georgia, serif; color: #eaeefa">
+
+<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+<defs>
+<filter id="mwood" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.006 0.16" numOctaves="4" seed="7"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.10  0 0 0 0 0.055  0 0 0 0 0.025  1.35 0 0 0 -0.42"></feColorMatrix></filter>
+<filter id="mnoise" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"></feTurbulence><feColorMatrix type="saturate" values="0"></feColorMatrix></filter>
+<filter id="mstain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="5" seed="4"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.42  0 0 0 0 0.27  0 0 0 0 0.10  0.95 0 0 0 -0.43"></feColorMatrix></filter>
+<filter id="mdeckle" x="-4%" y="-4%" width="108%" height="108%"><feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="3" seed="11"></feTurbulence><feDisplacementMap in="SourceGraphic" scale="8" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap></filter>
+<linearGradient id="mDark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b08a45"></stop><stop offset="1" stop-color="#5a4020"></stop></linearGradient>
+<radialGradient id="mTop" cx=".45" cy=".35" r=".8"><stop offset="0" stop-color="#fff6de"></stop><stop offset="1" stop-color="#e2c486"></stop></radialGradient>
+</defs>
+</svg>
+
+<div style="position: absolute; left: 48px; top: 30px; right: 48px; display: flex; align-items: flex-end; justify-content: space-between">
+<div>
+<div class="tx-cinzel" style="font-size: 12px; letter-spacing: .22em; color: #d5b070">THE TABLE · BUILD KIT</div>
+<div class="tx-cinzel" style="font-size: 34px; font-weight: 700; color: #f3deb0; line-height: 1.15">Ten materials make the table</div>
+</div>
+<div style="font-family: 'Inter', sans-serif; font-size: 13px; line-height: 1.5; color: rgba(234,238,250,.8); max-width: 520px; text-align: right">CSS + inline SVG, plus the campaign’s own art (portraits, monster, covers, hero cards). The 3D dice use three.js and cannon.js (MIT). No paid assets. Each tile gives the recipe a builder copies. Every loop stops under <b>prefers-reduced-motion</b>.</div>
+</div>
+
+<div style="position: absolute; left: 48px; top: 112px; display: grid; grid-template-columns: repeat(5, 252px); gap: 20px">
+
+<div class="tile">
+<div class="swatch" style="background: linear-gradient(180deg, #3b2616, #1b1008)"><svg style="position: absolute; inset: 0; width: 100%; height: 100%" preserveAspectRatio="none" aria-hidden="true"><rect width="100%" height="100%" filter="url(#mwood)"></rect></svg><div style="position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 50%, transparent 30%, rgba(0,0,0,.5) 100%)"></div></div>
+<div class="info"><div class="name">1 · Walnut table</div><div class="use">The page background. Everything sits on it.</div><div class="mono">base: linear #3b2616 → #1b1008<br>grain: feTurbulence fractalNoise<br>  baseFrequency 0.0022 0.085, 4 oct<br>  → feColorMatrix to brown α<br>vignette: radial transparent 40% → rgba(0,0,0,.55)</div></div>
+</div>
+
+<div class="tile">
+<div class="swatch" style="background: radial-gradient(ellipse at 50% 38%, #172a52 0%, #0e1a36 55%, #070d1e 100%)"><svg style="position: absolute; inset: 0; width: 100%; height: 100%; opacity: .22; mix-blend-mode: overlay" preserveAspectRatio="none" aria-hidden="true"><rect width="100%" height="100%" filter="url(#mnoise)"></rect></svg><div style="position: absolute; inset: 12px; border-radius: 10px; border: 1.5px dashed rgba(213,176,112,.35)"></div></div>
+<div class="info"><div class="name">2 · Navy felt mat</div><div class="use">The play area. Keeps the brand navy (--ir-bg family).</div><div class="mono">radial #172a52 → #0e1a36 → #070d1e<br>nap: noise overlay 22%, blend overlay<br>stitch: 1.5px dashed<br>  rgba(213,176,112,.28), inset 12px<br>inset shadow 0 0 90px rgba(0,0,0,.55)</div></div>
+</div>
+
+<div class="tile">
+<div class="swatch" style="background: #1b1008; display: flex; align-items: center; justify-content: center"><div style="position: relative; width: 200px; height: 112px; transform: rotate(-1.5deg); filter: drop-shadow(0 10px 12px rgba(0,0,0,.5))"><div style="position: absolute; inset: 0; background: linear-gradient(175deg, #f2e7cd, #dcc79c); filter: url(#mdeckle)"></div><svg style="position: absolute; inset: 0; width: 200px; height: 112px; mix-blend-mode: multiply" viewBox="0 0 200 112" preserveAspectRatio="none" aria-hidden="true"><rect width="200" height="112" filter="url(#mstain)"></rect></svg><div style="position: relative; padding: 14px 16px; color: #2a1a0c; font-size: 15px; line-height: 1.4"><span class="tx-cinzel" style="float: left; font-size: 34px; line-height: .9; margin: 2px 6px 0 0; color: #8b5a1f; font-weight: 700">T</span>he pale thing unfolds from the rock wall.</div></div></div>
+<div class="info"><div class="name">3 · Parchment</div><div class="use">Story page, character sheet, input. Ink #2a1a0c ≈ 12:1.</div><div class="mono">linear 175° #f2e7cd → #dcc79c<br>edge: feDisplacementMap scale 9<br>age: stain noise, blend multiply<br>burn: inset 0 0 50px rgba(120,80,30,.35)<br>drop cap: Cinzel 54px #8b5a1f</div></div>
+</div>
+
+<div class="tile">
+<div class="swatch" style="background: #0c1220; display: flex; align-items: center; justify-content: center"><div class="tx-cinzel" style="position: relative; padding: 14px 26px; border-radius: 8px; background: linear-gradient(160deg, #f6e3b8 0%, #d5b070 38%, #a9823f 70%, #6e5226 100%); color: #1a1206; border: 1px solid #f3deb0; box-shadow: inset 0 1px 0 rgba(255,255,255,.55), inset 0 -2px 0 rgba(0,0,0,.25), 0 6px 14px rgba(0,0,0,.45); font-weight: 700; letter-spacing: .08em">ROLL THE D20<span class="sheen"></span></div></div>
+<div class="info"><div class="name">4 · Brass</div><div class="use">Primary buttons, round plaque, send. One brass button per view.</div><div class="mono">linear 160° #f6e3b8 0 / #d5b070 38%<br>  / #a9823f 70% / #6e5226 100%<br>ink #1a1206 on brass ≥ 7:1<br>bevel: inset 0 1px rgba(255,255,255,.55)<br>sheen: 40% white band, 3.6s loop</div></div>
+</div>
+
+<div class="tile">
+<div class="swatch" style="background: linear-gradient(175deg, #f2e7cd, #dcc79c); display: flex; align-items: center; justify-content: center; gap: 18px"><div class="stampLoop" style="width: 70px; height: 70px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #c2323a, #7a1016 70%); box-shadow: inset 0 0 0 3px rgba(255,210,200,.25), 0 4px 8px rgba(80,10,10,.5); display: flex; align-items: center; justify-content: center; color: #ffe9d6; font-family: 'Cinzel', serif; font-weight: 900; font-size: 17px">HIT</div><div class="stampLoop" style="animation-delay: .4s; width: 70px; height: 70px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #f6e3b8, #d5b070 45%, #8a6a30 80%); box-shadow: inset 0 0 0 3px rgba(255,248,230,.6), 0 4px 8px rgba(80,50,10,.5); display: flex; flex-direction: column; align-items: center; justify-content: center; color: #3a2508; font-family: 'Cinzel', serif; font-weight: 900; line-height: 1"><span style="font-size: 22px">20</span><span style="font-size: 10px">CRIT</span></div></div>
+<div class="info"><div class="name">5 · Wax seal</div><div class="use">Engine outcome stamp. Red = hit/miss word, gold = critical.</div><div class="mono">red: radial #c2323a → #7a1016 70%<br>gold: radial #f6e3b8 → #d5b070 → #8a6a30<br>slam: scale 2.6 → .9 → 1, rotate −9°<br>  .55s cubic-bezier(.2,.9,.25,1.2)<br>always a word too — never color only</div></div>
+</div>
+
+<div class="tile">
+<div class="swatch" style="background: linear-gradient(180deg, #2b1a0e, #1b1008)"><div class="flicker" style="position: absolute; left: 50%; top: 50%; width: 240px; height: 240px; margin: -120px 0 0 -120px; border-radius: 50%; background: radial-gradient(circle, rgba(255,186,96,.38) 0%, rgba(255,160,70,.14) 35%, transparent 68%)"></div><svg style="position: absolute; left: 104px; top: 22px; width: 44px; height: 110px" viewBox="0 0 44 110" aria-hidden="true"><rect x="10" y="44" width="24" height="60" rx="3" fill="#efe4c9"></rect><line x1="22" y1="44" x2="22" y2="36" stroke="#2a1a0c" stroke-width="1.5"></line><g class="flame"><path d="M22 6 C 30 18 30 28 22 36 C 14 28 14 18 22 6 Z" fill="#ffcf73"></path><path d="M22 16 C 26 23 26 29 22 34 C 18 29 18 23 22 16 Z" fill="#fff4cf"></path></g></svg></div>
+<div class="info"><div class="name">6 · Candle light</div><div class="use">The only warm light. Top-left, in a brass holder.</div><div class="mono">wax: 5-stop cylinder gradient + drips<br>flame: outer radial + white core<br>  + blue base, 0.8px blur, 1.7s sway<br>halo: radial blur, 2.9s; room glow 3.2s<br>pointer-events: none</div></div>
+</div>
+
+<div class="tile">
+<div class="swatch" style="background: linear-gradient(175deg, #f2e7cd, #dcc79c); padding: 18px 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px"><div class="inkLoop" style="font-size: 16px; line-height: 1.4; color: #2a1a0c">Your blade bites through a seam of grey flesh.</div><div style="align-self: flex-end; background: #fbf7ea; padding: 4px 10px; transform: rotate(-1.5deg); box-shadow: 0 4px 8px rgba(60,40,15,.25)"><span class="tx-hand" style="font-size: 21px; color: #1f3a6b">I swing my longsword.</span></div></div>
+<div class="info"><div class="name">7 · Ink + index card</div><div class="use">DM text writes itself in; player lines are pinned cards.</div><div class="mono">ink: clip-path inset(0 100% 0 0) → 0<br>  2.2s steps(40) — once per message<br>player: Caveat 25px #1f3a6b on #fbf7ea<br>  ruled 28px, rotate −1.2°, red pin<br>DM: EB Garamond 19/1.6 #2a1a0c</div></div>
+</div>
+
+<div class="tile">
+<div class="swatch" style="background: radial-gradient(ellipse at 50% 45%, #5e1a20 0%, #3e0f14 60%, #2a0a0d 100%); display: flex; align-items: center; justify-content: center"><svg class="spinDie" width="96" height="106" viewBox="0 0 100 110" aria-hidden="true" style="filter: drop-shadow(0 0 10px rgba(243,222,176,.4))"><polygon points="50,4 94,29 94,81 50,106 6,81 6,29" fill="url(#mDark)" stroke="#3a2a12" stroke-width="1.5"></polygon><polygon points="50,4 94,29 50,26" fill="#e6c986"></polygon><polygon points="50,4 50,26 6,29" fill="#caa55f"></polygon><polygon points="94,29 94,81 78,72" fill="#a9823f"></polygon><polygon points="94,29 78,72 50,26" fill="#d9b874"></polygon><polygon points="6,29 50,26 22,72" fill="#c49b54"></polygon><polygon points="6,29 22,72 6,81" fill="#8f6c32"></polygon><polygon points="6,81 22,72 50,106" fill="#7a5a2a"></polygon><polygon points="22,72 78,72 50,106" fill="#94703a"></polygon><polygon points="94,81 50,106 78,72" fill="#6e5226"></polygon><polygon points="50,26 78,72 22,72" fill="url(#mTop)" stroke="#fff3d4" stroke-width=".8"></polygon><text x="50" y="63" text-anchor="middle" font-family="Cinzel" font-weight="900" font-size="22" fill="#2a1a0c">19</text></svg></div>
+<div class="info"><div class="name">8 · Dice in a felt tray</div><div class="use">Real 3D dice (the boards use them). The engine picks the face; one physics throw, then a symmetry turn shows it.</div><div class="mono">three.js r159 + cannon.js 0.6.2 (MIT)<br>transparent canvas over the CSS felt<br>ShadowMaterial floor, PMREM studio light<br>one CanvasTexture per face, cached<br>tray: oxblood felt #5e1a20 → #2a0a0d</div></div>
+</div>
+
+<div class="tile">
+<div class="swatch" style="background: radial-gradient(ellipse at 50% 38%, #172a52, #070d1e); display: flex; align-items: center; justify-content: center; gap: 16px"><div class="now" style="width: 92px; padding: 6px 0 8px; border-radius: 6px 6px 2px 2px; background: linear-gradient(180deg, #f3deb0, #d5b070); color: #1a1206; text-align: center; transform: rotate(-2deg)"><div class="tx-cinzel" style="font-size: 20px; font-weight: 900; line-height: 1">9</div><div style="font-size: 13px; font-weight: 600">The Veteran</div></div><div style="width: 92px; padding: 6px 0 8px; border-radius: 6px 6px 2px 2px; background: linear-gradient(180deg, #bdebf0, #4fb6c4); color: #06181b; text-align: center; transform: rotate(2.5deg); box-shadow: 0 6px 10px rgba(0,0,0,.4)"><div class="tx-cinzel" style="font-size: 20px; font-weight: 900; line-height: 1">18</div><div style="font-size: 13px; font-weight: 600">Spider</div></div></div>
+<div class="info"><div class="name">9 · Initiative tent cards</div><div class="use">Turn order hangs on the DM screen. Gold = player, teal = foe.</div><div class="mono">player: linear #f3deb0 → #d5b070<br>foe: linear #bdebf0 → #4fb6c4<br>current: pulseGold 2.4s + "Your turn"<br>  text (not glow alone)<br>tilt ±2–3°, radius 6 6 2 2</div></div>
+</div>
+
+<div class="tile">
+<div class="swatch" style="background: linear-gradient(180deg, #2b1a0e, #1b1008); display: flex; align-items: flex-end; justify-content: center; gap: 10px; padding-bottom: 26px; box-sizing: border-box"><div style="width: 90px; height: 64px; border-radius: 8px; border: 1.5px solid rgba(213,176,112,.55); background: linear-gradient(170deg, #1d2e55, #0b1328); color: #f3deb0; display: flex; flex-direction: column; align-items: center; justify-content: center; transform: rotate(-3deg); box-shadow: 0 8px 14px rgba(0,0,0,.5)"><span class="tx-cinzel" style="font-size: 13px; font-weight: 700">Move</span><span style="font-size: 12px; font-style: italic; color: rgba(234,238,250,.7)">30 ft</span></div><div class="lift" style="width: 90px; height: 64px; border-radius: 8px; border: 1.5px solid #f3deb0; background: linear-gradient(170deg, #1d2e55, #0b1328); color: #f3deb0; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 12px 20px rgba(0,0,0,.55), 0 0 18px rgba(213,176,112,.45)"><span class="tx-cinzel" style="font-size: 13px; font-weight: 700">Attack</span><span style="font-size: 12px; font-style: italic; color: rgba(234,238,250,.7)">Longsword +5</span></div></div>
+<div class="info"><div class="name">10 · Action cards</div><div class="use">The hand you play. Fan on desktop, swipe row on phone.</div><div class="mono">navy card, 1.5px gold border .55<br>fan: rotate −4°…+4°<br>selected: lift −12px, border #f3deb0,<br>  glow 22px, aria-pressed="true"<br>size ≥ 104 × 72 (touch ≥ 44)</div></div>
+</div>
+
+</div>
+
+<div style="position: absolute; left: 48px; right: 48px; bottom: 26px; display: flex; gap: 28px; font-family: 'Inter', sans-serif; font-size: 12.5px; line-height: 1.5; color: rgba(234,238,250,.78)">
+<div style="flex: 1"><b style="color: #f3deb0">Speed.</b> SVG noise filters are costly on large areas. For production, render walnut, felt and parchment once to small WebP tiles (we make them; no paid packs) and keep the SVG only for the deckle edge.</div>
+<div style="flex: 1"><b style="color: #f3deb0">Truth.</b> The die, the stamp and the tier words only show what the rules engine returns. Animation never picks a number.</div>
+<div style="flex: 1"><b style="color: #f3deb0">Calm by default.</b> One loop at a time near the eye line (the current tent card). Candle and motes stay at the edge. Reduce Motion stops all of it.</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

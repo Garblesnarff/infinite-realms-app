@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Choose your adventure</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&amp;family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&amp;family=Caveat:wght@500;700&amp;display=swap">
+<style>
+body{margin:0;background:#120a05}
+a{color:#d5b070}a:hover{color:#f3deb0}
+.tx-cinzel{font-family:'Cinzel',Georgia,serif}
+.tx-hand{font-family:'Caveat','Segoe Print',cursive}
+button:focus-visible,a:focus-visible{outline:2px solid #f3deb0;outline-offset:3px}
+@keyframes flicker{0%,100%{opacity:.9;transform:scale(1)}18%{opacity:.72;transform:scale(.97)}37%{opacity:1;transform:scale(1.04)}55%{opacity:.8;transform:scale(.99)}78%{opacity:.95;transform:scale(1.02)}}
+@keyframes flame2{0%,100%{transform:scale(1,1) skewX(0)}18%{transform:scale(.95,1.09) skewX(2.6deg)}42%{transform:scale(1.04,.94) skewX(-2.2deg)}66%{transform:scale(.98,1.05) skewX(1.4deg)}84%{transform:scale(1.02,.98) skewX(-.8deg)}}
+@keyframes core2{0%,100%{opacity:.95;transform:scale(1)}33%{opacity:.8;transform:scale(.94,1.04)}66%{opacity:1;transform:scale(1.03,.97)}}
+@keyframes halo{0%,100%{opacity:.85;transform:scale(1)}30%{opacity:.68;transform:scale(.95)}60%{opacity:1;transform:scale(1.05)}}
+@keyframes sheen{0%{transform:translateX(-120%) skewX(-18deg)}100%{transform:translateX(220%) skewX(-18deg)}}
+@keyframes rise{from{transform:translateY(12px);opacity:0}to{transform:none;opacity:1}}
+.flicker{animation:flicker 3.2s ease-in-out infinite}
+.flameG{transform-origin:50px 54px;animation:flame2 1.7s ease-in-out infinite}
+.coreG{transform-origin:50px 50px;animation:core2 .9s ease-in-out infinite}
+.haloG{transform-origin:50px 38px;animation:halo 2.9s ease-in-out infinite}
+.rise{animation:rise .45s ease-out both}
+.brass{background:linear-gradient(160deg,#f6e3b8 0%,#d5b070 38%,#a9823f 70%,#6e5226 100%);color:#1a1206;border:1px solid #f3deb0;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -2px 0 rgba(0,0,0,.25),0 6px 14px rgba(0,0,0,.45)}
+.brass:hover{filter:brightness(1.07);color:#1a1206}
+.sheen{position:absolute;inset:0;overflow:hidden;border-radius:inherit;pointer-events:none}
+.sheen::after{content:"";position:absolute;top:0;bottom:0;width:40%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.45),transparent);animation:sheen 3.6s ease-in-out infinite}
+@keyframes nudge{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+.box{cursor:pointer;transition:transform .3s cubic-bezier(.2,.8,.2,1),box-shadow .3s;border:0;padding:0;background:none;text-align:left;font:inherit;color:inherit}
+.box:hover{transform:translateY(-8px) rotate(0deg)!important}
+.box.is-on{transform:translateY(-16px) rotate(0deg) scale(1.02)!important}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="position: relative; width: 1440px; height: 900px; overflow: hidden; background: linear-gradient(180deg, #3b2616 0%, #2b1a0e 52%, #1b1008 100%); font-family: 'EB Garamond', Georgia, serif; color: #eaeefa">
+<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+<defs>
+<filter id="woodgrain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.0022 0.085" numOctaves="4" seed="7"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.10  0 0 0 0 0.055  0 0 0 0 0.025  1.35 0 0 0 -0.42"></feColorMatrix></filter>
+<filter id="noise" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"></feTurbulence><feColorMatrix type="saturate" values="0"></feColorMatrix></filter>
+<filter id="stain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="5" seed="4"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.42  0 0 0 0 0.27  0 0 0 0 0.10  0.95 0 0 0 -0.43"></feColorMatrix></filter>
+<filter id="deckle" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="3" seed="11" result="t"></feTurbulence><feDisplacementMap in="SourceGraphic" in2="t" scale="9" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap></filter>
+<linearGradient id="cWax" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#a28a62"></stop><stop offset=".22" stop-color="#e6d8b6"></stop><stop offset=".45" stop-color="#fff7e3"></stop><stop offset=".64" stop-color="#efe1c0"></stop><stop offset="1" stop-color="#937d56"></stop></linearGradient>
+<linearGradient id="cWaxLit" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffbe5a" stop-opacity=".55"></stop><stop offset=".45" stop-color="#ffbe5a" stop-opacity="0"></stop></linearGradient>
+<radialGradient id="cPool" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fff2cf"></stop><stop offset=".7" stop-color="#f3dfae"></stop><stop offset="1" stop-color="#cdb487"></stop></radialGradient>
+<linearGradient id="cBrass" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4a3418"></stop><stop offset=".28" stop-color="#b08a45"></stop><stop offset=".47" stop-color="#f6e3b8"></stop><stop offset=".62" stop-color="#c9a25e"></stop><stop offset="1" stop-color="#3f2c14"></stop></linearGradient>
+<radialGradient id="cDish" cx=".42" cy=".3" r=".75"><stop offset="0" stop-color="#f6e3b8"></stop><stop offset=".5" stop-color="#b08a45"></stop><stop offset="1" stop-color="#3f2c14"></stop></radialGradient>
+<radialGradient id="cHalo" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffd68c" stop-opacity=".8"></stop><stop offset=".35" stop-color="#ffaa50" stop-opacity=".3"></stop><stop offset="1" stop-color="#ff8c32" stop-opacity="0"></stop></radialGradient>
+<radialGradient id="cFlame" cx=".5" cy=".8" r=".78"><stop offset="0" stop-color="#fffdf2"></stop><stop offset=".25" stop-color="#fff0b8"></stop><stop offset=".55" stop-color="#ffc05a"></stop><stop offset=".85" stop-color="#ff7a1f" stop-opacity=".7"></stop><stop offset="1" stop-color="#ff5a0a" stop-opacity="0"></stop></radialGradient>
+<radialGradient id="cCore" cx=".5" cy=".72" r=".6"><stop offset="0" stop-color="#ffffff"></stop><stop offset=".6" stop-color="#fff6d8" stop-opacity=".9"></stop><stop offset="1" stop-color="#fff0b8" stop-opacity="0"></stop></radialGradient>
+<radialGradient id="cBlue" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#6c8cff" stop-opacity=".9"></stop><stop offset="1" stop-color="#3a5bff" stop-opacity="0"></stop></radialGradient>
+<filter id="cSoft" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="1.1"></feGaussianBlur></filter>
+<filter id="cBlur" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="3"></feGaussianBlur></filter>
+<linearGradient id="clipMetal" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6f747d"></stop><stop offset=".3" stop-color="#eef1f5"></stop><stop offset=".52" stop-color="#aeb3bc"></stop><stop offset=".78" stop-color="#f7f9fb"></stop><stop offset="1" stop-color="#7e838c"></stop></linearGradient>
+</defs>
+</svg>
+<svg style="position: absolute; left: 0; top: 0; width: 1440px; height: 900px" viewBox="0 0 1440 900" preserveAspectRatio="none" aria-hidden="true"><rect width="1440" height="900" filter="url(#woodgrain)"></rect></svg>
+<div style="position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 55%, transparent 40%, rgba(0,0,0,.55) 100%)"></div>
+<div class="flicker" style="position: absolute; left: -256px; top: -318px; width: 700px; height: 700px; border-radius: 50%; background: radial-gradient(circle, rgba(255,186,96,.32) 0%, rgba(255,160,70,.13) 35%, transparent 68%); pointer-events: none"></div>
+<svg style="position: absolute; left: 44px; top: -8px; width: 100px; height: 172px; overflow: visible" viewBox="0 0 100 172" aria-hidden="true">
+<ellipse cx="58" cy="161" rx="48" ry="8" fill="rgba(0,0,0,.55)" filter="url(#cBlur)"></ellipse>
+<path d="M86 150 c13 -1 16 -17 4 -20 c-7 -1.5 -10 3 -8 7.5" fill="none" stroke="url(#cBrass)" stroke-width="3.4" stroke-linecap="round"></path>
+<ellipse cx="50" cy="152" rx="42" ry="10" fill="url(#cDish)"></ellipse>
+<ellipse cx="50" cy="149" rx="38" ry="7.4" fill="#5a4020"></ellipse>
+<ellipse cx="50" cy="148.4" rx="36" ry="6.4" fill="url(#cBrass)" opacity=".92"></ellipse>
+<path d="M34 146 L36.5 131 H63.5 L66 146 Z" fill="url(#cBrass)"></path>
+<ellipse cx="50" cy="131.2" rx="13.6" ry="3" fill="#7a5a28"></ellipse>
+<path d="M37 132 V64 Q37 60 41 60 H59 Q63 60 63 64 V132 Z" fill="url(#cWax)"></path>
+<path d="M37 64 V132 H63 V64 Z" fill="url(#cWaxLit)"></path>
+<path d="M40.8 61 C 40 70 42 78 40.4 86 C 39.8 90.4 43.8 90.8 43.5 86 C 43 78 45.2 70 44.6 62 Z" fill="#f6ecd4"></path>
+<path d="M56.2 61 C 57.2 66 55.6 71 57 76 C 57.6 79.2 60.4 78.8 59.8 75.2 C 59 70 60.6 66 59.6 61 Z" fill="#efe3c6"></path>
+<ellipse cx="50" cy="61" rx="13" ry="3.4" fill="#f7eed8"></ellipse>
+<ellipse cx="50" cy="61.3" rx="10" ry="2.3" fill="url(#cPool)"></ellipse>
+<path d="M50 61 C 50 57 49.4 54 50.6 50" stroke="#1a1008" stroke-width="1.6" fill="none" stroke-linecap="round"></path>
+<circle cx="50.7" cy="50" r="1.3" fill="#ff8a2a"></circle>
+<g class="haloG"><circle cx="50" cy="38" r="36" fill="url(#cHalo)"></circle></g>
+<g class="flameG">
+<path d="M50 54.5 C 39.5 46 40.5 31 50 9 C 59.5 31 60.5 46 50 54.5 Z" fill="url(#cFlame)" filter="url(#cSoft)"></path>
+<g class="coreG"><path d="M50 52.5 C 44.6 47 45 38 50 25.5 C 55 38 55.4 47 50 52.5 Z" fill="url(#cCore)"></path></g>
+<ellipse cx="50" cy="50.6" rx="4.2" ry="3.2" fill="url(#cBlue)"></ellipse>
+</g>
+</svg>
+<div style="position: absolute; left: 36px; top: 170px; width: 1368px; height: 706px; border-radius: 24px; background: radial-gradient(ellipse at 50% 38%, #172a52 0%, #0e1a36 55%, #070d1e 100%); box-shadow: 0 30px 60px rgba(0,0,0,.6), inset 0 0 90px rgba(0,0,0,.55), inset 0 0 0 2px rgba(0,0,0,.4)">
+<svg style="position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 24px; opacity: .22; mix-blend-mode: overlay" preserveAspectRatio="none" aria-hidden="true"><rect width="100%" height="100%" filter="url(#noise)"></rect></svg>
+<div style="position: absolute; inset: 12px; border-radius: 16px; border: 1.5px dashed rgba(213,176,112,.28)"></div>
+</div>
+
+<div style="position: absolute; left: 180px; top: 34px; right: 60px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px">
+<div>
+<nav aria-label="Steps" style="display: flex; gap: 14px; align-items: center"><span style="display: flex; align-items: center; gap: 6px; color: #f3deb0"><span class="tx-cinzel" style="width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; background: linear-gradient(160deg,#f6e3b8,#a9823f); color: #1a1206">1</span><span class="tx-cinzel" style="font-size: 12px; letter-spacing: .14em; font-weight: 700">CAMPAIGN</span></span><span style="color: rgba(234,238,250,.4)">›</span><span style="display: flex; align-items: center; gap: 6px; color: rgba(234,238,250,.62)"><span class="tx-cinzel" style="width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; border: 1px solid rgba(234,238,250,.4)">2</span><span class="tx-cinzel" style="font-size: 12px; letter-spacing: .14em; font-weight: 700">HERO</span></span><span style="color: rgba(234,238,250,.4)">›</span><span style="display: flex; align-items: center; gap: 6px; color: rgba(234,238,250,.62)"><span class="tx-cinzel" style="width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; border: 1px solid rgba(234,238,250,.4)">3</span><span class="tx-cinzel" style="font-size: 12px; letter-spacing: .14em; font-weight: 700">PLAY</span></span></nav>
+<h1 class="tx-cinzel" style="margin: 10px 0 0; font-size: 40px; font-weight: 700; color: #f3deb0; line-height: 1.1">Choose your adventure</h1>
+<p style="margin: 6px 0 0; font-size: 18px; color: #f1e6cb; max-width: 62ch">Every campaign starts at level 1 with ready-made heroes. No setup. You can start another one later.</p>
+</div>
+</div>
+
+<div role="radiogroup" aria-label="Campaigns" style="position: absolute; left: 80px; top: 214px; width: 1280px; display: flex; justify-content: center; gap: 44px; align-items: flex-start">
+<sc-for list="{{camps}}" as="c" hint-placeholder-count="3">
+<button type="button" role="radio" aria-checked="{{c.checked}}" class="box {{c.cls}}" onClick="{{c.pick}}" style="position: relative; width: 364px; transform: rotate({{c.rot}}deg); filter: drop-shadow(0 22px 26px rgba(0,0,0,.6))">
+<div style="position: relative; border-radius: 6px; overflow: hidden; background: #0b1020; box-shadow: 0 0 0 2px #0a0f1c, 0 0 0 4px {{c.ring}}, 0 0 0 5px #0a0f1c">
+<div style="position: relative; height: 236px; overflow: hidden">
+<img src="{{c.img}}" alt="" style="display: block; width: 100%; height: 100%; object-fit: cover; object-position: {{c.pos}}">
+<div style="position: absolute; inset: 0; background: linear-gradient(180deg, transparent 45%, rgba(7,11,20,.92) 100%)"></div>
+<div style="position: absolute; left: 12px; top: 12px; display: flex; gap: 6px">
+<sc-for list="{{c.tags}}" as="t" hint-placeholder-count="2"><span style="padding: 3px 9px; border-radius: 5px; background: rgba(7,11,20,.8); border: 1px solid rgba(234,238,250,.35); font-family: 'Cinzel', serif; font-size: 11px; letter-spacing: .08em; color: #eaeefa">{{t}}</span></sc-for>
+</div>
+<span style="position: absolute; right: 12px; top: 12px; padding: 3px 9px; border-radius: 5px; background: rgba(7,11,20,.8); border: 1px solid {{c.diffColor}}; color: {{c.diffColor}}; font-family: 'Cinzel', serif; font-size: 11px; font-weight: 700; letter-spacing: .08em">{{c.diff}}</span>
+<div class="tx-cinzel" style="position: absolute; left: 16px; right: 16px; bottom: 12px; font-size: 26px; font-weight: 700; color: #f3deb0; line-height: 1.1; text-shadow: 0 2px 6px #000">{{c.title}}</div>
+</div>
+<div style="position: relative; padding: 14px 16px 16px; background: linear-gradient(175deg, #f2e7cd 0%, #e2cfa4 100%); color: #2a1a0c; display: flex; flex-direction: column; gap: 8px; min-height: 176px; box-sizing: border-box">
+<p style="margin: 0; font-size: 17px; line-height: 1.45">{{c.hook}}</p>
+<div style="margin-top: auto; display: flex; justify-content: space-between; align-items: center; font-size: 15px; color: #5b4630"><span>Level 1 · Ready-made heroes</span><span class="tx-cinzel" style="font-size: 12px; font-weight: 700; letter-spacing: .1em; color: #8b5a1f">{{c.state}}</span></div>
+</div>
+</div>
+</button>
+</sc-for>
+</div>
+
+<div style="position: absolute; left: 0; right: 0; top: 770px; display: flex; flex-direction: column; align-items: center; gap: 8px">
+<sc-if value="{{canGo}}" hint-placeholder-val="{{ true }}">
+<a href="Heroes.dc.html" class="brass" style="position: relative; display: flex; align-items: center; justify-content: center; min-width: 380px; height: 54px; padding: 0 28px; border-radius: 10px; text-decoration: none; font-family: 'Cinzel', serif; font-size: 17px; font-weight: 700; letter-spacing: .08em">{{cta}}<span class="sheen"></span></a>
+</sc-if>
+<sc-if value="{{cantGo}}" hint-placeholder-val="{{ false }}">
+<div style="min-width: 380px; height: 54px; display: flex; align-items: center; justify-content: center; border-radius: 10px; border: 1px dashed rgba(243,222,176,.5); color: #f3deb0; font-style: italic; font-size: 17px; padding: 0 24px">This prototype has hero cards for Abyssal Descent only.</div>
+</sc-if>
+<p style="margin: 4px 0 0; max-width: 760px; text-align: center; font-style: italic; font-size: 16px; line-height: 1.4; color: #f3deb0">{{targetsLine}}</p>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { picked: 'abyssal' }; }
+  renderVals() {
+    var self = this, p = this.state.picked;
+    var C = [
+      { id: 'feast', title: 'The Eternal Feast', img: '/_blob/0082a22301a2497c67af37e00a58b96b', pos: '50% 40%', tags: ['FANTASY'], diff: 'MEDIUM', diffColor: '#f3deb0', rot: -2.5,
+        hook: 'The Eternal Feast is a legendary restaurant that exists between dimensions, reached from any world through hidden doorways that appear to those who truly need a good meal.' },
+      { id: 'abyssal', title: 'Abyssal Descent', img: '/_blob/157200b9099918a34801b5fec34f74dd', pos: '50% 30%', tags: ['HORROR', 'SURVIVAL'], diff: 'HARD', diffColor: '#ef6b6b', rot: 0,
+        hook: 'The party joins an expedition to descend the Infinite Chasm, a vertical cave system that supposedly reaches the center of the earth.' },
+      { id: 'academy', title: 'Academy of Arcane Gastronomy', img: '/_blob/4cce05fdb1b0cc897b282913e3c17db4', pos: '30% 40%', tags: ['FANTASY'], diff: 'MEDIUM', diffColor: '#f3deb0', rot: 2.5,
+        hook: 'The Academy of Arcane Gastronomy is the most prestigious culinary school in the realm.' }
+    ];
+    var cur = C.filter(function (c) { return c.id === p; })[0];
+    return {
+      camps: C.map(function (c) { var on = c.id === p; return { id: c.id, title: c.title, img: c.img, pos: c.pos, tags: c.tags, diff: c.diff, diffColor: c.diffColor, rot: c.rot, hook: c.hook,
+        cls: on ? 'is-on' : '', checked: on ? 'true' : 'false', ring: on ? '#f3deb0' : 'rgba(213,176,112,.55)', state: on ? 'CHOSEN' : 'TAP TO CHOOSE',
+        pick: function () { self.setState({ picked: c.id }); } }; }),
+      canGo: p === 'abyssal', cantGo: p !== 'abyssal',
+      cta: 'SEE THE HEROES OF ' + cur.title.toUpperCase(),
+      targetsLine: cur.diff === 'HARD'
+        ? 'Hard campaign: target numbers (DC and AC) start hidden. You can show them in Settings → Table.'
+        : (cur.diff === 'EASY' ? 'Easy' : 'Medium') + ' campaign: target numbers (DC and AC) start shown. You can hide them in Settings → Table.'
+    };
+  }
+}
+</script>
+</body>
+</html>

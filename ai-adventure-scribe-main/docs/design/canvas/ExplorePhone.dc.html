@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Exploring on a phone</title>
+<script src="./support.js"></script>
+<script src="/_blob/552d7293f55fa9208db0a3c9952d959f"></script>
+<script src="/_blob/4e94deabf38273660f0307a29bd9fae5"></script>
+<script src="/_blob/fff2e6f357dad1bd48d77f014cbc840d"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&amp;family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&amp;family=Caveat:wght@500;700&amp;display=swap">
+<style>
+body{margin:0;background:#120a05}
+.tx-cinzel{font-family:'Cinzel',Georgia,serif}
+.tx-hand{font-family:'Caveat','Segoe Print',cursive}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+button:focus-visible,input:focus-visible{outline:2px solid #f3deb0;outline-offset:3px}
+@keyframes flicker{0%,100%{opacity:.9}18%{opacity:.7}37%{opacity:1}55%{opacity:.8}78%{opacity:.95}}
+@keyframes stamp{0%{transform:scale(2.4) rotate(-16deg);opacity:0}55%{transform:scale(.9) rotate(-9deg);opacity:1}100%{transform:scale(1) rotate(-9deg);opacity:1}}
+@keyframes inkIn{from{clip-path:inset(0 100% 0 0);opacity:.4}to{clip-path:inset(0 0 0 0);opacity:1}}
+@keyframes rise{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+@keyframes dots{0%,80%,100%{opacity:.25}40%{opacity:1}}
+@keyframes sheen{0%{transform:translateX(-120%) skewX(-18deg)}100%{transform:translateX(220%) skewX(-18deg)}}
+@keyframes sheetUp{from{transform:translateY(105%)}to{transform:none}}
+@keyframes coinGlow{0%,100%{filter:drop-shadow(0 0 3px rgba(243,222,176,.5))}50%{filter:drop-shadow(0 0 12px rgba(255,214,140,1))}}
+.flicker{animation:flicker 3.2s ease-in-out infinite}
+.stamp{animation:stamp .55s cubic-bezier(.2,.9,.25,1.2) both}
+.ink{animation:inkIn 2.2s steps(40,end) both}
+.rise{animation:rise .45s ease-out both}
+.dot{display:inline-block;width:4px;height:4px;border-radius:50%;background:#d5b070;margin-left:3px;animation:dots 1.2s infinite}
+.sheetUp{animation:sheetUp .5s cubic-bezier(.2,.9,.25,1) both}
+.brass{background:linear-gradient(160deg,#f6e3b8 0%,#d5b070 38%,#a9823f 70%,#6e5226 100%);color:#1a1206;border:1px solid #f3deb0;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -2px 0 rgba(0,0,0,.25),0 5px 12px rgba(0,0,0,.45)}
+.brass[disabled]{filter:grayscale(.6) brightness(.7);cursor:not-allowed}
+.sheen{position:absolute;inset:0;overflow:hidden;border-radius:inherit;pointer-events:none}
+.sheen::after{content:"";position:absolute;top:0;bottom:0;width:40%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.45),transparent);animation:sheen 3.6s ease-in-out infinite}
+.row{scrollbar-width:none}.row::-webkit-scrollbar{display:none}
+.fadeTop{-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 50px);mask-image:linear-gradient(180deg,transparent 0,#000 50px)}
+.inspBtn.armed .coin{animation:coinGlow 1.6s ease-in-out infinite}
+.inspBtn.spent{opacity:.55;cursor:default}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; background: linear-gradient(180deg, #3b2616 0%, #2b1a0e 52%, #1b1008 100%); font-family: 'EB Garamond', Georgia, serif; color: #eaeefa">
+<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+<defs>
+<filter id="pwood" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.004 0.12" numOctaves="4" seed="7"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.10  0 0 0 0 0.055  0 0 0 0 0.025  1.35 0 0 0 -0.42"></feColorMatrix></filter>
+<filter id="pnoise" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"></feTurbulence><feColorMatrix type="saturate" values="0"></feColorMatrix></filter>
+<filter id="pstain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.025" numOctaves="5" seed="4"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.42  0 0 0 0 0.27  0 0 0 0 0.10  0.95 0 0 0 -0.43"></feColorMatrix></filter>
+<filter id="pdeckle" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="3" seed="11"></feTurbulence><feDisplacementMap in="SourceGraphic" scale="7" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap></filter>
+<linearGradient id="dieFace" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f6e3b8"></stop><stop offset=".45" stop-color="#d5b070"></stop><stop offset="1" stop-color="#7a5a2a"></stop></linearGradient>
+<radialGradient id="coinG" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#fff3cf"></stop><stop offset=".35" stop-color="#e2c07a"></stop><stop offset=".75" stop-color="#a9823f"></stop><stop offset="1" stop-color="#5a4020"></stop></radialGradient>
+</defs>
+</svg>
+<svg style="position: absolute; left: 0; top: 0; width: 390px; height: 844px" viewBox="0 0 390 844" preserveAspectRatio="none" aria-hidden="true"><rect width="390" height="844" filter="url(#pwood)"></rect></svg>
+<div class="flicker" style="position: absolute; left: -160px; top: -170px; width: 440px; height: 440px; border-radius: 50%; background: radial-gradient(circle, rgba(255,186,96,.26) 0%, rgba(255,160,70,.1) 38%, transparent 68%); pointer-events: none"></div>
+
+<div style="position: absolute; left: 12px; top: 12px; width: 366px; height: 100px; border-radius: 10px; background: linear-gradient(170deg, #1d2e55 0%, #0e1832 70%, #0a1226 100%); box-shadow: inset 0 0 0 2px #0a0f1c, inset 0 0 0 4px #d5b070, inset 0 0 0 5px #0a0f1c, inset 0 0 36px rgba(0,0,0,.55), 0 12px 22px rgba(0,0,0,.55); box-sizing: border-box; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<div class="brass" style="padding: 2px 10px; border-radius: 3px; font-family: 'Cinzel', serif; font-size: 11px; font-weight: 700; letter-spacing: .16em">{{plaque}}</div>
+<div style="font-size: 15px; font-variant-numeric: lining-nums tabular-nums">HP <b style="color: {{hpColor}}">{{hp}} / 12</b></div>
+</div>
+<div style="display: flex; align-items: center; gap: 10px"><img src="/_blob/ee3af033890a4012a5a6503b00c85bd2" alt="The Veteran" style="width: 30px; height: 30px; box-sizing: border-box; border-radius: 50%; object-fit: cover; border: 2px solid #f3deb0"><div class="tx-cinzel" style="font-size: 23px; font-weight: 900; color: #f3deb0; line-height: 1">The Rope Ledge</div></div>
+<sc-if value="{{writing}}" hint-placeholder-val="{{ false }}">
+<div style="font-style: italic; font-size: 15px; color: #f3deb0">The Dungeon Master is writing<span class="dot"></span><span class="dot" style="animation-delay: .15s"></span><span class="dot" style="animation-delay: .3s"></span></div>
+</sc-if>
+<sc-if value="{{notWriting}}" hint-placeholder-val="{{ true }}">
+<div style="font-style: italic; font-size: 15px; color: rgba(234,238,250,.78)">{{screenSub}}</div>
+</sc-if>
+</div>
+
+<div style="position: absolute; left: 12px; top: 124px; width: 366px; height: 516px; filter: drop-shadow(0 12px 16px rgba(0,0,0,.5))">
+<div style="position: absolute; inset: 0; background: linear-gradient(175deg, #f2e7cd 0%, #e8d8b4 60%, #dcc79c 100%); filter: url(#pdeckle); border-radius: 3px"></div>
+<svg style="position: absolute; inset: 0; width: 366px; height: 516px; mix-blend-mode: multiply; opacity: .85" viewBox="0 0 366 516" preserveAspectRatio="none" aria-hidden="true"><rect width="366" height="516" filter="url(#pstain)"></rect></svg>
+<div class="fadeTop" role="log" aria-label="Story" aria-live="polite" style="position: relative; height: 100%; box-sizing: border-box; padding: 16px 18px; color: #2a1a0c; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; overflow: hidden">
+<p style="margin: 0; font-size: 17px; line-height: 1.5">The rope ledge is a shelf of wet basalt no wider than a table. Your torch shows the rope running down into the black. The expedition's camp is gone. Only one boot print remains, and it points down.</p>
+<sc-for list="{{log}}" as="m" hint-placeholder-count="0">
+<sc-if value="{{m.isYou}}" hint-placeholder-val="{{ false }}">
+<div class="rise" style="align-self: flex-end; position: relative; max-width: 280px; background: #fbf7ea; padding: 7px 12px; transform: rotate(-1.2deg); box-shadow: 0 5px 10px rgba(60,40,15,.25); border-radius: 2px">
+<div style="position: absolute; left: 50%; top: -6px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #ff9a8a, #9b1c24)"></div>
+<div class="tx-hand" style="font-size: 21px; line-height: 1.1; color: #1f3a6b">{{m.text}}</div>
+</div>
+</sc-if>
+<sc-if value="{{m.isDm}}" hint-placeholder-val="{{ false }}">
+<p class="{{m.cls}}" style="margin: 0; font-size: 17px; line-height: 1.5">{{m.text}}</p>
+</sc-if>
+<sc-if value="{{m.isAsk}}" hint-placeholder-val="{{ false }}">
+<div class="rise" style="font-size: 15px; color: #5b4630; border-top: 1px dashed rgba(107,77,39,.5); padding-top: 8px"><b style="color: #2a1a0c">The DM asks for a Strength (Athletics) check.</b></div>
+</sc-if>
+<sc-if value="{{m.isEngine}}" hint-placeholder-val="{{ false }}">
+<div class="rise" style="display: flex; align-items: center; gap: 10px; border-top: 1px solid rgba(107,77,39,.45); border-bottom: 1px solid rgba(107,77,39,.45); padding: 8px 2px; background: rgba(139,90,31,.07)">
+<div style="flex: 1">
+<div class="tx-cinzel" style="font-size: 10px; letter-spacing: .14em; color: #6b4d27">RULES ENGINE · ATHLETICS</div>
+<div style="font-size: 15px; font-variant-numeric: lining-nums tabular-nums"><b>{{m.sum}}</b> <span style="color: #5b4630">{{m.rest}}</span></div>
+</div>
+<div class="stamp" style="width: 58px; height: 58px; flex: 0 0 58px; border-radius: 50%; background: {{m.sealBg}}; box-shadow: 0 3px 6px rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; color: {{m.sealInk}}; font-family: 'Cinzel', serif; font-weight: 900; font-size: 9px; letter-spacing: .06em">{{m.word}}</div>
+</div>
+</sc-if>
+</sc-for>
+</div>
+</div>
+
+<div class="row" role="group" aria-label="Ideas" style="position: absolute; left: 0; right: 0; top: 650px; height: 70px; overflow-x: auto; display: flex; gap: 10px; padding: 4px 12px; box-sizing: border-box">
+<sc-for list="{{ideas}}" as="i" hint-placeholder-count="3">
+<button type="button" onClick="{{i.pick}}" disabled="{{busy}}" style="flex: 0 0 auto; max-width: 180px; text-align: left; min-height: 56px; padding: 6px 12px; border: 0; border-radius: 2px; background: #efe3c6; color: #1f3a6b; box-shadow: 0 5px 10px rgba(0,0,0,.4); transform: rotate({{i.rot}}deg); font-family: 'Caveat', cursive; font-size: 20px; line-height: 1.05; cursor: pointer">{{i.label}}</button>
+</sc-for>
+</div>
+
+<div style="position: absolute; left: 12px; right: 12px; top: 730px; height: 48px; display: flex; gap: 8px; align-items: center">
+<div style="position: relative; flex: 1; min-width: 0; height: 48px">
+<div style="position: absolute; inset: 0; background: linear-gradient(180deg, #efe3c6, #e2cfa4); filter: url(#pdeckle); border-radius: 3px; box-shadow: 0 6px 12px rgba(0,0,0,.45)"></div>
+<label for="xpsay" class="sr">Say or do something</label>
+<input id="xpsay" type="text" value="{{draft}}" onChange="{{typing}}" onKeyDown="{{keyDown}}" placeholder="Speak to the table…" style="position: relative; width: 100%; height: 48px; box-sizing: border-box; background: transparent; border: 0; padding: 0 14px; font-family: 'EB Garamond', Georgia, serif; font-style: italic; font-size: 18px; color: #2a1a0c">
+</div>
+<button type="button" class="brass" onClick="{{sendDraft}}" disabled="{{busy}}" aria-label="Send" style="flex: 0 0 48px; width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer">
+<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 3 C 12 4 7 9 5 17 L4 21 L8 19 C 14 17 19 11 20 3 Z" fill="none" stroke="#1a1206" stroke-width="1.8"></path><path d="M5 17 L13 9" stroke="#1a1206" stroke-width="1.4"></path></svg>
+</button>
+</div>
+<div style="position: absolute; left: 0; right: 0; top: 792px; display: flex; justify-content: center; gap: 18px; font-size: 14px; font-style: italic; color: rgba(251,238,221,.72)"><span>Sheet · Map · Journal in the drawer ☰</span><button type="button" onClick="{{restart}}" style="background: none; border: 0; color: #d5b070; font: inherit; text-decoration: underline; cursor: pointer; min-height: 44px; margin-top: -12px">Play again</button></div>
+
+<div class="{{sheetClass}}" role="dialog" aria-label="Ability check" style="position: absolute; left: 0; right: 0; top: 388px; bottom: 0; display: {{sheetDisplay}}; border-radius: 18px 18px 0 0; background: linear-gradient(160deg, #6a4526 0%, #4a2e18 55%, #34200f 100%); box-shadow: 0 -14px 30px rgba(0,0,0,.6), inset 0 2px 0 rgba(255,220,170,.2)">
+<svg style="position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 18px 18px 0 0; opacity: .75" preserveAspectRatio="none" aria-hidden="true"><rect width="100%" height="100%" filter="url(#pwood)"></rect></svg>
+<div style="position: absolute; left: 50%; top: 6px; width: 44px; height: 4px; margin-left: -22px; border-radius: 2px; background: rgba(251,238,221,.45)"></div>
+<div style="position: absolute; left: 12px; right: 12px; top: 16px; height: 222px">
+<div style="position: absolute; inset: 0; background: linear-gradient(170deg, #f4ead2 0%, #e4d2a8 100%); filter: url(#pdeckle); border-radius: 3px"></div>
+<div style="position: relative; padding: 12px 14px; color: #2a1a0c; display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px">
+<div>
+<div class="tx-cinzel" style="font-size: 10px; letter-spacing: .16em; color: #8b5a1f">THE DM ASKS FOR A CHECK</div>
+<div class="tx-cinzel" style="font-size: 20px; font-weight: 700; line-height: 1.1">Strength (Athletics)</div>
+<div style="font-style: italic; font-size: 15px; color: #5b4630">Climb down the wet rope.</div>
+</div>
+<sc-if value="{{sealOn}}" hint-placeholder-val="{{ false }}">
+<div class="stamp" style="width: 66px; height: 66px; flex: 0 0 66px; border-radius: 50%; background: {{sealBg}}; box-shadow: 0 4px 8px rgba(0,0,0,.45); display: flex; flex-direction: column; align-items: center; justify-content: center; color: {{sealInk}}; font-family: 'Cinzel', serif; font-weight: 900; line-height: 1.05"><span style="font-size: 19px">{{checkTotal}}</span><span style="font-size: 9px">{{sealWord}}</span></div>
+</sc-if>
+</div>
+<div style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap; font-size: 15px; font-variant-numeric: lining-nums">
+<span style="padding: 2px 8px; border-radius: 5px; background: #2a1a0c; color: #f3deb0; font-family: 'Cinzel', serif; font-weight: 700">{{diceChip}}</span>+<span style="padding: 2px 7px; border-radius: 5px; border: 1px solid #8b5a1f">STR +3</span>+<span style="padding: 2px 7px; border-radius: 5px; border: 1px solid #8b5a1f">Prof +2</span>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: -4px">
+<span style="font-size: 16px"><b class="tx-cinzel">{{dcText}}</b></span><button type="button" role="switch" aria-checked="{{dcChecked}}" onClick="{{toggleDC}}" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0; background: none; border: 0; cursor: pointer; font-family: 'EB Garamond', Georgia, serif; font-size: 15px; color: #5b4630"><span style="position: relative; display: inline-block; width: 36px; height: 20px; border-radius: 10px; background: {{dcTrack}}; box-shadow: inset 0 0 0 1px rgba(107,77,39,.6)"><span style="position: absolute; top: 2px; left: {{dcKnob}}; width: 16px; height: 16px; border-radius: 50%; background: #fbf7ea; box-shadow: 0 1px 2px rgba(0,0,0,.45)"></span></span>Show target numbers</button>
+</div>
+<button type="button" class="inspBtn {{inspClass}}" onClick="{{toggleInsp}}" aria-pressed="{{inspPressed}}" disabled="{{inspDisabled}}" style="display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 4px 8px; border-radius: 8px; border: 1px dashed rgba(139,90,31,.6); background: {{inspBg}}; color: #2a1a0c; cursor: pointer; text-align: left; font-family: 'EB Garamond', Georgia, serif; font-size: 15px">
+<svg class="coin" width="26" height="26" viewBox="0 0 72 72" aria-hidden="true"><circle cx="36" cy="36" r="31" fill="#5a4020"></circle><circle cx="36" cy="35" r="30" fill="url(#coinG)"></circle><polygon points="36,21 39.4,30.2 49.4,30.6 41.5,36.9 44.2,46.5 36,40.9 27.8,46.5 30.5,36.9 22.6,30.6 32.6,30.2" fill="#6e5226"></polygon></svg>
+<span>{{inspLine}}</span>
+</button>
+</div>
+</div>
+<div style="position: absolute; left: 12px; right: 12px; top: 246px; height: 100px; border-radius: 10px; overflow: hidden; background: radial-gradient(ellipse at 50% 45%, #5e1a20 0%, #3e0f14 60%, #2a0a0d 100%); box-shadow: inset 0 5px 14px rgba(0,0,0,.7), inset 0 0 0 1px rgba(0,0,0,.6)">
+<svg style="position: absolute; inset: 0; width: 100%; height: 100%; opacity: .26; mix-blend-mode: overlay" preserveAspectRatio="none" aria-hidden="true"><rect width="100%" height="100%" filter="url(#pnoise)"></rect></svg>
+<canvas ref="{{setCanvas}}" data-dice="explore-phone" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%; display: block"></canvas>
+</div>
+<div style="position: absolute; left: 12px; right: 12px; top: 354px; display: flex; flex-direction: column; align-items: stretch; gap: 0">
+<sc-if value="{{canRoll}}" hint-placeholder-val="{{ true }}">
+<button class="brass" type="button" onClick="{{roll}}" disabled="{{rollDisabled}}" style="position: relative; height: 48px; border-radius: 8px; font-family: 'Cinzel', serif; font-size: 16px; font-weight: 700; letter-spacing: .08em; cursor: pointer">{{rollLabel}}<span class="sheen"></span></button>
+<button type="button" onClick="{{cancel}}" disabled="{{rollDisabled}}" style="align-self: center; background: none; border: 0; min-height: 44px; color: #f3deb0; text-decoration: underline; font-family: 'EB Garamond', serif; font-size: 15px; cursor: pointer">Do something else</button>
+</sc-if>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"preset":{"editor":"enum","options":["story","check"],"default":"story","section":"State"},"difficulty":{"editor":"enum","options":["Easy","Medium","Hard"],"default":"Hard","section":"Settings"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = this.initial(props && props.preset === 'check');
+    this.timers = [];
+    this.dice = null;
+    this.setCanvas = this.setCanvas.bind(this);
+  }
+  initial(check) {
+    var base = { phase: 'story', writing: false, log: [], draft: '', insp: 'ready', hp: 12, climbed: false, rolls: [], kept: 0, total: 0, success: null, lid: 'closed', targets: null };
+    if (check) {
+      base.phase = 'check'; base.lid = 'open';
+      base.log = [
+        { who: 'you', text: 'I test the rope, then climb down to the next ledge.' },
+        { who: 'dm', text: 'The rope is slick with cold water. The next ledge is thirty feet down, and the wall is too smooth for your boots.' },
+        { who: 'ask', text: 'Climb down the wet rope.' }
+      ];
+    }
+    return base;
+  }
+  componentDidMount() { if (!this.dice) { var el = document.querySelector('canvas[data-dice="explore-phone"]'); if (el) this.setCanvas(el); } }
+  componentWillUnmount() { this.clear(); if (this.dice) { this.dice.destroy(); this.dice = null; } }
+  clear() { this.timers.forEach(function (t) { clearTimeout(t); }); this.timers = []; }
+  showTargets() {
+    var t = this.state && this.state.targets;
+    if (t === true || t === false) return t;
+    var d = String((this.props && this.props.difficulty) || 'Hard').toLowerCase();
+    return d === 'easy' || d === 'medium';
+  }
+  setCanvas(el) { if (el && !this.dice && window.RealmsDice) this.dice = window.RealmsDice.create(el, { theme: 'brass', dieScale: 0.95 }); }
+  later(ms, fn) { this.timers.push(setTimeout(fn, ms)); }
+  push(entries) { this.setState({ log: this.state.log.concat(entries).slice(-5) }); }
+  renderVals() {
+    var self = this, s = this.state;
+    var showT = this.showTargets();
+    var R = function (a, b) { return window.RealmsDice ? window.RealmsDice.randInt(a, b) : a + Math.floor(Math.random() * (b - a + 1)); };
+    var checking = s.phase === 'check' || s.phase === 'rolling' || s.phase === 'result';
+    var busy = s.phase !== 'story' || s.writing;
+    var REPLIES = {
+      call: 'Your voice rolls down the chasm and comes back thin. Far below, something answers — the dry click of too many joints.',
+      anchor: 'The iron piton is new, hammered in by the last expedition. Someone meant to come back up this way.',
+      search: 'In a crack in the rock you find a torn page from a surveyor’s book: “Day 9. The ropes were cut from below.”',
+      look: 'Your torch reaches forty feet, then gives up. The dark below is not empty. It is waiting.',
+      rest: 'You catch your breath. Your palms sting, but your grip holds. Short rests happen here, not in the dark below.',
+      other: 'The chasm swallows the sound. The only way on is down.'
+    };
+    var send = function (text, key) {
+      if (self.state.phase !== 'story' || self.state.writing || !text) return;
+      var climb = !self.state.climbed && (key === 'climb' || (!key && /climb|down|rope|descend/i.test(text)));
+      self.clear();
+      self.setState({ writing: true, draft: '', log: self.state.log.concat([{ who: 'you', text: text }]).slice(-5) });
+      self.later(1700, function () {
+        if (climb) {
+          self.push([{ who: 'dm', text: 'The rope is slick with cold water. The next ledge is thirty feet down, and the wall is too smooth for your boots.' }, { who: 'ask', text: 'Climb down the wet rope.' }]);
+          self.setState({ writing: false, phase: 'check', lid: 'open' });
+        } else {
+          self.push([{ who: 'dm', text: REPLIES[key] || REPLIES.other }]);
+          self.setState({ writing: false });
+        }
+      });
+    };
+    var ideas = s.climbed
+      ? [{ label: 'Search the lower ledge', key: 'search', rot: -1 }, { label: 'Look into the dark below', key: 'look', rot: 1.2 }, { label: 'Rest a moment', key: 'rest', rot: -.6 }]
+      : [{ label: 'Climb down the rope', key: 'climb', rot: -1 }, { label: 'Call out into the dark', key: 'call', rot: 1.2 }, { label: 'Check the rope’s anchor', key: 'anchor', rot: -.6 }];
+    var last = s.log.length - 1;
+    return {
+      log: s.log.map(function (m, i) {
+        return {
+          isYou: m.who === 'you', isDm: m.who === 'dm', isAsk: m.who === 'ask', isEngine: m.who === 'engine',
+          text: m.text, cls: i === last && m.who === 'dm' ? 'ink' : '',
+          face: m.face, sum: m.sum, rest: m.rest, word: m.word, sealBg: m.sealBg, sealInk: m.sealInk
+        };
+      }),
+      ideas: ideas.map(function (i) { return { label: i.label, rot: i.rot, pick: function () { send(i.label, i.key); } }; }),
+      busy: busy,
+      showIdeas: !checking, showCheck: checking, sheetDisplay: checking ? 'block' : 'none', sheetClass: checking ? 'sheetUp' : '',
+      writing: s.writing, notWriting: !s.writing,
+      plaque: checking ? 'ABILITY CHECK' : 'EXPLORING',
+      screenSub: checking ? 'The DM waits for your roll' : 'Take your time · no one is rushing you',
+      hp: s.hp, hpPct: Math.round(s.hp / 12 * 100), hpColor: s.hp < 12 ? '#e9a95a' : '#6cc494', hpInk: s.hp < 12 ? '#8b1e24' : '#2a1a0c',
+      hearts: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(function (i) { return { fill: i < s.hp ? '#8b1e24' : 'rgba(139,30,36,.12)' }; }),
+      strBorder: checking ? '#8b5a1f' : '#6b4d27', strBg: checking ? 'rgba(213,176,112,.35)' : 'transparent',
+      athWeight: checking ? '700' : '400', athBg: checking ? 'rgba(213,176,112,.35)' : 'transparent',
+      coinFilter: s.insp === 'spent' ? 'grayscale(.8) brightness(.6)' : 'none',
+      coinText: s.insp === 'spent' ? 'Spent. The DM can award it again.' : (s.insp === 'armed' ? 'Ready for this roll' : 'Spend it on one attack, save or check'),
+      dcText: showT ? 'DC 12' : 'DC hidden', dcNote: showT ? 'set by the DM' : 'the DM knows the number',
+      dcChecked: showT ? 'true' : 'false', dcTrack: showT ? '#8b5a1f' : 'rgba(107,77,39,.18)', dcKnob: showT ? '18px' : '2px',
+      toggleDC: function () { self.setState({ targets: !self.showTargets() }); },
+
+      diceChip: s.insp === 'armed' ? '2d20 · higher' : 'd20',
+      inspClass: s.insp, inspPressed: s.insp === 'armed' ? 'true' : 'false', inspDisabled: s.phase !== 'check' || s.insp === 'spent',
+      inspBg: s.insp === 'armed' ? 'rgba(213,176,112,.35)' : 'transparent',
+      inspLine: s.insp === 'spent' ? 'Inspiration spent on this roll.' : (s.insp === 'armed' ? 'Inspiration on: roll 2d20, keep the higher.' : 'Spend Inspiration for advantage (roll 2d20, keep the higher).'),
+      toggleInsp: function () { var st = self.state; if (st.phase !== 'check' || st.insp === 'spent') return; self.setState({ insp: st.insp === 'armed' ? 'ready' : 'armed' }); },
+      canRoll: s.phase === 'check' || s.phase === 'rolling',
+      rollDisabled: s.phase !== 'check',
+      rollLabel: s.phase === 'rolling' ? 'ROLLING…' : (s.insp === 'armed' ? 'ROLL 2D20 + 5' : 'ROLL D20 + 5'),
+      sealOn: s.phase === 'result',
+      checkTotal: s.total,
+      sealWord: s.success ? 'SUCCESS' : 'FAILED',
+      sealBg: s.success ? 'radial-gradient(circle at 40% 35%, #f6e3b8, #d5b070 45%, #8a6a30 80%)' : 'radial-gradient(circle at 40% 35%, #c2323a, #7a1016 70%)',
+      sealInk: s.success ? '#3a2508' : '#ffe9d6',
+      lidClass: s.lid === 'open' ? 'open' : '',
+      trayLabel: checking ? 'YOUR ROLL · STRENGTH (ATHLETICS)' : '',
+      draft: s.draft,
+      typing: function (e) { self.setState({ draft: e && e.target ? e.target.value : '' }); },
+      keyDown: function (e) { if (e && e.key === 'Enter') send((self.state.draft || '').trim(), null); },
+      sendDraft: function () { send((self.state.draft || '').trim(), null); },
+      setCanvas: this.setCanvas,
+      roll: function () {
+        var st = self.state;
+        if (st.phase !== 'check') return;
+        var adv = st.insp === 'armed';
+        var rolls = adv ? [R(1, 20), R(1, 20)] : [R(1, 20)];
+        var kept = Math.max.apply(null, rolls), keptIdx = rolls.indexOf(kept), total = kept + 5, success = total >= 12;
+        var fall = success ? 0 : R(1, 6);
+        self.clear();
+        self.setState({ phase: 'rolling', rolls: rolls, kept: kept, total: total, success: success, insp: adv ? 'spent' : st.insp });
+        var done = function () {
+          if (self.dice) {
+            if (rolls.length > 1) self.dice.dim([1 - keptIdx]);
+            if (kept === 20) self.dice.effect('crit', keptIdx);
+            if (kept === 1) self.dice.effect('fumble', keptIdx);
+          }
+          var hp = Math.max(0, self.state.hp - fall);
+          var sum = (rolls.length > 1 ? 'Advantage ' + rolls[0] + ' and ' + rolls[1] + ', keep ' + kept + ' · ' : '') + kept + ' + 5 = ' + total;
+          var vs = self.showTargets() ? 'vs DC 12 · ' : 'vs the DM’s DC · ';
+          var rest = vs + (success ? 'you reach the ledge' : 'you slip: fall damage 1d6 = ' + fall + ' · HP 12 → ' + hp);
+          if (kept === 20) rest = vs + 'natural 20 · you reach the ledge';
+          if (kept === 1) rest = vs + 'natural 1 · fall damage 1d6 = ' + fall + ' · HP 12 → ' + hp;
+          self.setState({ phase: 'result', hp: hp });
+          self.push([{ who: 'engine', face: kept, sum: sum, rest: rest, word: success ? 'SUCCESS' : 'FAILED', sealBg: success ? 'radial-gradient(circle at 40% 35%, #f6e3b8, #d5b070 45%, #8a6a30 80%)' : 'radial-gradient(circle at 40% 35%, #c2323a, #7a1016 70%)', sealInk: success ? '#3a2508' : '#ffe9d6' }]);
+          self.later(900, function () { self.setState({ writing: true }); });
+          self.later(3000, function () {
+            self.push([{ who: 'dm', text: success
+              ? (kept === 20 ? 'You go down the rope like you were born on it. At the bottom, your torch finds something the others missed: fresh scratches on the rock, leading into a crack in the wall.' : 'Hand over hand, you ease down the wet rope. Your boots find the lower ledge. Above you, the rope sways once and goes still.')
+              : 'The rope burns through your grip. You slide the last ten feet and land hard on the ledge. You are down, bruised, and not alone: something above you shifts on the wall.' }]);
+            self.setState({ phase: 'story', writing: false, lid: 'closed', climbed: true });
+            if (self.dice) self.later(700, function () { self.dice.clear(); });
+          });
+        };
+        if (self.dice) self.dice.roll(rolls.map(function (v) { return { kind: 'd20', value: v }; })).then(done); else done();
+      },
+      cancel: function () {
+        if (self.state.phase !== 'check') return;
+        self.push([{ who: 'dm', text: 'You step back from the edge. The rope will wait.' }]);
+        self.setState({ phase: 'story', lid: 'closed', insp: self.state.insp === 'armed' ? 'ready' : self.state.insp });
+      },
+      restart: function () { var keep = self.state.targets; self.clear(); if (self.dice) self.dice.clear(); var st = self.initial(false); st.targets = keep; self.setState(st); }
+    };
+  }
+}
+</script>
+</body>
+</html>

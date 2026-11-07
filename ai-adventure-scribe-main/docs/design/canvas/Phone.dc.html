@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The table on a phone</title>
+<script src="./support.js"></script>
+<script src="/_blob/552d7293f55fa9208db0a3c9952d959f"></script>
+<script src="/_blob/4e94deabf38273660f0307a29bd9fae5"></script>
+<script src="/_blob/fff2e6f357dad1bd48d77f014cbc840d"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&amp;family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&amp;family=Caveat:wght@500;700&amp;display=swap">
+<style>
+body{margin:0;background:#120a05}
+.tx-cinzel{font-family:'Cinzel',Georgia,serif}
+.tx-hand{font-family:'Caveat','Segoe Print',cursive}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+button:focus-visible,input:focus-visible{outline:2px solid #f3deb0;outline-offset:3px}
+@keyframes flicker{0%,100%{opacity:.9}18%{opacity:.7}37%{opacity:1}55%{opacity:.8}78%{opacity:.95}}
+@keyframes stamp{0%{transform:scale(2.4) rotate(-16deg);opacity:0}55%{transform:scale(.9) rotate(-9deg);opacity:1}100%{transform:scale(1) rotate(-9deg);opacity:1}}
+@keyframes inkIn{from{clip-path:inset(0 100% 0 0);opacity:.4}to{clip-path:inset(0 0 0 0);opacity:1}}
+@keyframes rise{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+@keyframes pulseGold{0%,100%{box-shadow:0 0 0 1px rgba(243,222,176,.55),0 0 10px rgba(213,176,112,.35)}50%{box-shadow:0 0 0 1px rgba(243,222,176,.9),0 0 18px rgba(213,176,112,.7)}}
+@keyframes dots{0%,80%,100%{opacity:.25}40%{opacity:1}}
+@keyframes sheen{0%{transform:translateX(-120%) skewX(-18deg)}100%{transform:translateX(220%) skewX(-18deg)}}
+@keyframes hitShake{0%{transform:translateX(0)}20%{transform:translateX(-5px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}100%{transform:none}}
+@keyframes hitFlash{0%{filter:brightness(1.9) sepia(1) saturate(5) hue-rotate(-35deg)}100%{filter:none}}
+.flicker{animation:flicker 3.2s ease-in-out infinite}
+.stamp{animation:stamp .55s cubic-bezier(.2,.9,.25,1.2) both}
+.ink{animation:inkIn 2.2s steps(40,end) both}
+.rise{animation:rise .45s ease-out both}
+.now{animation:pulseGold 2.4s ease-in-out infinite}
+.dot{display:inline-block;width:4px;height:4px;border-radius:50%;background:#d5b070;margin-left:3px;animation:dots 1.2s infinite}
+.act{flex:0 0 auto;cursor:pointer;scroll-snap-align:start;transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s,border-color .25s}
+.act.is-on{transform:translateY(-6px)!important;border-color:#f3deb0!important;box-shadow:0 10px 18px rgba(0,0,0,.55),0 0 16px rgba(213,176,112,.45)!important}
+.brass{background:linear-gradient(160deg,#f6e3b8 0%,#d5b070 38%,#a9823f 70%,#6e5226 100%);color:#1a1206;border:1px solid #f3deb0;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -2px 0 rgba(0,0,0,.25),0 5px 12px rgba(0,0,0,.45)}
+.brass[disabled]{filter:grayscale(.6) brightness(.7);cursor:not-allowed}
+.sheen{position:absolute;inset:0;overflow:hidden;border-radius:inherit;pointer-events:none}
+.sheen::after{content:"";position:absolute;top:0;bottom:0;width:40%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.45),transparent);animation:sheen 3.6s ease-in-out infinite}
+.cards{scrollbar-width:none}.cards::-webkit-scrollbar{display:none}
+.fadeTop{-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 40px);mask-image:linear-gradient(180deg,transparent 0,#000 40px)}
+.is-hit{animation:hitShake .5s ease-out,hitFlash .9s ease-out}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; background: linear-gradient(180deg, #3b2616 0%, #2b1a0e 52%, #1b1008 100%); font-family: 'EB Garamond', Georgia, serif; color: #eaeefa">
+
+<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+<defs>
+<filter id="pwood" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.004 0.12" numOctaves="4" seed="7"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.10  0 0 0 0 0.055  0 0 0 0 0.025  1.35 0 0 0 -0.42"></feColorMatrix></filter>
+<filter id="pnoise" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"></feTurbulence><feColorMatrix type="saturate" values="0"></feColorMatrix></filter>
+<filter id="pstain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.025" numOctaves="5" seed="4"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.42  0 0 0 0 0.27  0 0 0 0 0.10  0.95 0 0 0 -0.43"></feColorMatrix></filter>
+<filter id="pdeckle" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="3" seed="11"></feTurbulence><feDisplacementMap in="SourceGraphic" scale="7" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap></filter>
+</defs>
+</svg>
+
+<svg style="position: absolute; left: 0; top: 0; width: 390px; height: 844px" viewBox="0 0 390 844" preserveAspectRatio="none" aria-hidden="true"><rect width="390" height="844" filter="url(#pwood)"></rect></svg>
+<div class="flicker" style="position: absolute; left: -160px; top: -170px; width: 440px; height: 440px; border-radius: 50%; background: radial-gradient(circle, rgba(255,186,96,.26) 0%, rgba(255,160,70,.1) 38%, transparent 68%); pointer-events: none"></div>
+
+<div style="position: absolute; left: 12px; top: 12px; width: 366px; height: 116px; border-radius: 10px; background: linear-gradient(170deg, #1d2e55 0%, #0e1832 70%, #0a1226 100%); box-shadow: inset 0 0 0 2px #0a0f1c, inset 0 0 0 4px #d5b070, inset 0 0 0 5px #0a0f1c, inset 0 0 36px rgba(0,0,0,.55), 0 12px 22px rgba(0,0,0,.55); box-sizing: border-box; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<div class="brass" style="padding: 2px 10px; border-radius: 3px; font-family: 'Cinzel', serif; font-size: 11px; font-weight: 700; letter-spacing: .16em">ROUND 2</div>
+<div style="display: flex; gap: 6px" aria-label="Turn order">
+<div class="now" style="padding: 2px 8px; border-radius: 4px; background: linear-gradient(180deg, #f3deb0, #d5b070); color: #1a1206; font-size: 13px; font-weight: 600"><span class="tx-cinzel" style="font-weight: 900">9</span> Veteran</div>
+<div style="padding: 2px 8px; border-radius: 4px; background: linear-gradient(180deg, #bdebf0, #4fb6c4); color: #06181b; font-size: 13px; font-weight: 600"><span class="tx-cinzel" style="font-weight: 900">18</span> Spider</div>
+</div>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+<div style="display: flex; align-items: center; gap: 10px"><img src="/_blob/ee3af033890a4012a5a6503b00c85bd2" alt="The Veteran" style="width: 32px; height: 32px; box-sizing: border-box; border-radius: 50%; object-fit: cover; border: 2px solid #f3deb0"><div class="tx-cinzel" style="font-size: 26px; font-weight: 900; color: {{turnColor}}; text-shadow: 0 0 14px rgba(213,176,112,.5); line-height: 1">{{turnTitle}}</div></div>
+<div style="font-size: 15px; font-variant-numeric: lining-nums tabular-nums">HP <b style="color: #6cc494">12 / 12</b></div>
+</div>
+<sc-if value="{{writing}}" hint-placeholder-val="{{ false }}">
+<div style="font-style: italic; font-size: 15px; color: #f3deb0">The Dungeon Master is writing<span class="dot"></span><span class="dot" style="animation-delay: .15s"></span><span class="dot" style="animation-delay: .3s"></span></div>
+</sc-if>
+<sc-if value="{{notWriting}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; justify-content: space-between; align-items: center; font-size: 15px; color: rgba(234,238,250,.78)"><span style="display: flex; align-items: center; gap: 8px; font-style: italic"><img src="/_blob/6eaee8a18f6b5fdb3df7930c480d8f11" alt="" class="{{spiderImgClass}}" style="width: 22px; height: 22px; box-sizing: border-box; border-radius: 50%; object-fit: cover; border: 1.5px solid #4fb6c4">Vitruvian Spider · 15 ft</span><span style="font-family: 'Cinzel', serif; font-size: 12px; font-weight: 700; letter-spacing: .08em; color: {{spiderTierColor}}">{{spiderTierCaps}}</span></div>
+</sc-if>
+</div>
+
+<div style="position: absolute; left: 12px; top: 140px; width: 366px; height: 304px; filter: drop-shadow(0 12px 16px rgba(0,0,0,.5))">
+<div style="position: absolute; inset: 0; background: linear-gradient(175deg, #f2e7cd 0%, #e8d8b4 60%, #dcc79c 100%); filter: url(#pdeckle); border-radius: 3px"></div>
+<svg style="position: absolute; inset: 0; width: 366px; height: 304px; mix-blend-mode: multiply; opacity: .85" viewBox="0 0 366 304" preserveAspectRatio="none" aria-hidden="true"><rect width="366" height="304" filter="url(#pstain)"></rect></svg>
+<div class="fadeTop" role="log" aria-label="Story" style="position: relative; height: 100%; box-sizing: border-box; padding: 16px 18px; color: #2a1a0c; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; overflow: hidden">
+<p style="margin: 0; font-size: 17px; line-height: 1.5">The pale thing unfolds from the rock wall and drops onto the ledge fifteen feet below you. It turns its blind face toward your lantern.</p>
+<div style="align-self: flex-end; position: relative; max-width: 270px; background: #fbf7ea; padding: 7px 12px; transform: rotate(-1.2deg); box-shadow: 0 5px 10px rgba(60,40,15,.25); border-radius: 2px">
+<div style="position: absolute; left: 50%; top: -6px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #ff9a8a, #9b1c24)"></div>
+<div class="tx-hand" style="font-size: 21px; line-height: 1.1; color: #1f3a6b">I climb toward the spider and swing my longsword.</div>
+</div>
+<sc-if value="{{pending}}" hint-placeholder-val="{{ true }}">
+<div style="font-style: italic; font-size: 15px; color: #5b4630; border-top: 1px dashed rgba(107,77,39,.5); padding-top: 8px">{{pendingText}}</div>
+</sc-if>
+<sc-if value="{{showResult}}" hint-placeholder-val="{{ false }}">
+<div class="rise" style="display: flex; align-items: center; gap: 10px; border-top: 1px solid rgba(107,77,39,.45); border-bottom: 1px solid rgba(107,77,39,.45); padding: 8px 2px; background: rgba(139,90,31,.07)">
+<div style="flex: 1">
+<div class="tx-cinzel" style="font-size: 10px; letter-spacing: .14em; color: #6b4d27">RULES ENGINE · LONGSWORD</div>
+<div style="font-size: 16px; font-variant-numeric: lining-nums tabular-nums"><b>{{kept}} + 5 = {{total}}</b> <span style="color: #5b4630">{{ledgerRest}}</span></div>
+</div>
+<div class="stamp" style="width: 56px; height: 56px; flex: 0 0 56px; border-radius: 50%; background: {{stampBg}}; box-shadow: 0 3px 6px rgba(0,0,0,.45); display: flex; flex-direction: column; align-items: center; justify-content: center; color: {{stampInk}}; font-family: 'Cinzel', serif; font-weight: 900; line-height: 1"><span style="font-size: 15px">{{stampTop}}</span><span style="font-size: 9px; letter-spacing: .1em">{{stampBottom}}</span></div>
+</div>
+</sc-if>
+<sc-if value="{{narrated}}" hint-placeholder-val="{{ false }}">
+<p class="ink" style="margin: 0; font-size: 17px; line-height: 1.5">{{narration}}</p>
+</sc-if>
+</div>
+</div>
+
+<div style="position: absolute; left: 0; right: 0; top: 456px; bottom: 0; border-radius: 18px 18px 0 0; background: linear-gradient(160deg, #6a4526 0%, #4a2e18 55%, #34200f 100%); box-shadow: 0 -10px 24px rgba(0,0,0,.55), inset 0 2px 0 rgba(255,220,170,.2)">
+<svg style="position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 18px 18px 0 0; opacity: .75" preserveAspectRatio="none" aria-hidden="true"><rect width="100%" height="100%" filter="url(#pwood)"></rect></svg>
+<div style="position: absolute; left: 50%; top: 6px; width: 44px; height: 4px; margin-left: -22px; border-radius: 2px; background: rgba(251,238,221,.45)"></div>
+
+<div style="position: absolute; left: 12px; right: 12px; top: 16px; height: 142px; border-radius: 10px; overflow: hidden; background: radial-gradient(ellipse at 50% 45%, #5e1a20 0%, #3e0f14 60%, #2a0a0d 100%); box-shadow: inset 0 5px 14px rgba(0,0,0,.7), inset 0 0 0 1px rgba(0,0,0,.6)">
+<svg style="position: absolute; inset: 0; width: 100%; height: 100%; opacity: .26; mix-blend-mode: overlay" preserveAspectRatio="none" aria-hidden="true"><rect width="100%" height="100%" filter="url(#pnoise)"></rect></svg>
+<canvas ref="{{setCanvas}}" data-dice="phone" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%; display: block"></canvas>
+<div style="position: absolute; left: 12px; top: 8px; right: 12px; display: flex; justify-content: space-between; align-items: baseline; pointer-events: none">
+<span class="tx-cinzel" style="font-size: 10px; letter-spacing: .16em; color: #f3deb0">YOUR ROLL</span>
+<span style="font-size: 14px; color: rgba(251,238,221,.85); font-variant-numeric: lining-nums">{{traySub}}</span>
+</div>
+</div>
+
+<div style="position: absolute; left: 12px; right: 12px; top: 166px; height: 46px">
+<sc-if value="{{canRoll}}" hint-placeholder-val="{{ true }}">
+<button class="brass" type="button" onClick="{{roll}}" disabled="{{rollDisabled}}" style="position: relative; width: 100%; height: 46px; border-radius: 8px; font-family: 'Cinzel', serif; font-size: 15px; font-weight: 700; letter-spacing: .08em; cursor: pointer">{{rollLabel}}<span class="sheen"></span></button>
+</sc-if>
+<sc-if value="{{showResult}}" hint-placeholder-val="{{ false }}">
+<div class="rise" style="display: flex; align-items: center; justify-content: space-between; height: 46px; padding: 0 4px 0 12px; border-radius: 8px; background: rgba(0,0,0,.4); border: 1px solid rgba(243,222,176,.35)">
+<span style="font-size: 16px; color: #fbeedd; font-variant-numeric: lining-nums"><b>{{total}}</b> · {{outcomeWord}}</span>
+<button type="button" onClick="{{reset}}" style="background: none; border: 0; color: #f3deb0; font-family: 'EB Garamond', serif; font-size: 15px; text-decoration: underline; cursor: pointer; min-height: 44px; min-width: 44px">Roll again</button>
+</div>
+</sc-if>
+</div>
+
+<div class="cards" role="toolbar" aria-label="Your actions" style="position: absolute; left: 0; right: 0; top: 220px; height: 90px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; display: flex; gap: 10px; align-items: flex-end; padding: 0 12px 6px; box-sizing: border-box">
+<sc-for list="{{actions}}" as="a" hint-placeholder-count="5">
+<button type="button" class="act {{a.cls}}" onClick="{{a.pick}}" aria-pressed="{{a.pressed}}" style="width: 104px; height: 72px; border-radius: 8px; border: 1.5px solid rgba(213,176,112,.55); background: linear-gradient(170deg, #1d2e55, #0b1328); color: #f3deb0; box-shadow: 0 8px 14px rgba(0,0,0,.5); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px">
+<span class="tx-cinzel" style="font-size: 14px; font-weight: 700">{{a.label}}</span>
+<span style="font-size: 13px; font-style: italic; color: rgba(234,238,250,.72)">{{a.sub}}</span>
+</button>
+</sc-for>
+</div>
+
+<div style="position: absolute; left: 12px; right: 12px; top: 318px; height: 48px; display: flex; gap: 8px; align-items: center">
+<div style="position: relative; flex: 1; min-width: 0; height: 48px">
+<div style="position: absolute; inset: 0; background: linear-gradient(180deg, #efe3c6, #e2cfa4); filter: url(#pdeckle); border-radius: 3px; box-shadow: 0 6px 12px rgba(0,0,0,.45)"></div>
+<label for="psay" class="sr">Say or do something</label>
+<input id="psay" type="text" placeholder="Speak to the table…" style="position: relative; width: 100%; height: 48px; box-sizing: border-box; background: transparent; border: 0; padding: 0 14px; font-family: 'EB Garamond', Georgia, serif; font-style: italic; font-size: 18px; color: #2a1a0c">
+</div>
+<button type="button" class="brass" aria-label="Send" style="flex: 0 0 48px; width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer">
+<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 3 C 12 4 7 9 5 17 L4 21 L8 19 C 14 17 19 11 20 3 Z" fill="none" stroke="#1a1206" stroke-width="1.8"></path><path d="M5 17 L13 9" stroke="#1a1206" stroke-width="1.4"></path></svg>
+</button>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"difficulty":{"editor":"enum","options":["Easy","Medium","Hard"],"default":"Hard","section":"Settings"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { phase: 'ready', selected: 'Attack', kept: 0, total: 0, dmg: 0, outcome: null, writing: false, narrated: false };
+    this.timers = [];
+    this.dice = null;
+    this.setCanvas = this.setCanvas.bind(this);
+  }
+  componentDidMount() { if (!this.dice) { var el = document.querySelector('canvas[data-dice="phone"]'); if (el) this.setCanvas(el); } }
+  componentWillUnmount() { this.clear(); if (this.dice) { this.dice.destroy(); this.dice = null; } }
+  clear() { this.timers.forEach(function (t) { clearTimeout(t); }); this.timers = []; }
+  showTargets() {
+    var t = this.state && this.state.targets;
+    if (t === true || t === false) return t;
+    var d = String((this.props && this.props.difficulty) || 'Hard').toLowerCase();
+    return d === 'easy' || d === 'medium';
+  }
+  setCanvas(el) { if (el && !this.dice && window.RealmsDice) this.dice = window.RealmsDice.create(el, { theme: 'brass', dieScale: 0.9 }); }
+  renderVals() {
+    var self = this, s = this.state, res = s.phase === 'result', o = s.outcome, attack = s.selected === 'Attack';
+    var showT = this.showTargets(), vsAC = showT ? 'vs AC 15' : 'vs the spider’s AC';
+    var R = function (a, b) { return window.RealmsDice ? window.RealmsDice.randInt(a, b) : a + Math.floor(Math.random() * (b - a + 1)); };
+    var O = {
+      hit: { word: 'Hit', bg: 'radial-gradient(circle at 40% 35%, #c2323a, #7a1016 70%)', ink: '#ffe9d6', top: 'HIT', bottom: '', rest: vsAC + ' · ' + s.dmg + ' slashing', tier: 'BLOODIED', color: '#ef6b6b', text: 'Your blade bites through a seam of grey flesh. The spider shrieks and scrambles back, one leg dragging.' },
+      crit: { word: 'Critical hit', bg: 'radial-gradient(circle at 40% 35%, #f6e3b8, #d5b070 45%, #8a6a30 80%)', ink: '#3a2508', top: '20', bottom: 'CRIT', rest: 'natural 20 · ' + s.dmg + ' slashing', tier: 'NEAR DEATH', color: '#ef6b6b', text: 'The longsword goes in to the hilt. Three legs fold at once, and the spider hangs from one thread of silk.' },
+      miss: { word: 'Miss', bg: 'radial-gradient(circle at 40% 35%, #5d6680, #2b3246 70%)', ink: '#e6e9f2', top: 'MISS', bottom: '', rest: vsAC + ' · no damage', tier: 'HEALTHY', color: '#6cc494', text: 'Your swing rings off the rock. The spider skitters sideways along the wall and waits.' },
+      fumble: { word: 'Natural 1', bg: 'radial-gradient(circle at 40% 35%, #2a2f3d, #0b0d13 70%)', ink: '#ef6b6b', top: '1', bottom: 'MISS', rest: 'natural 1 · you slip', tier: 'HEALTHY', color: '#6cc494', text: 'Your boot slips on the wet basalt. The blade bites only stone.' }
+    }[o] || {};
+    var labels = [
+      { label: 'Attack', sub: 'Longsword +5' }, { label: 'Move', sub: '30 ft' }, { label: 'Dodge', sub: 'foes at a loss' }, { label: 'Use item', sub: 'potion, rope' }, { label: 'End turn', sub: 'to the spider' }
+    ];
+    return {
+      kept: s.kept, total: s.total,
+      pending: !res, pendingText: s.phase === 'rolling' ? 'The dice are on the table…' : 'The rules engine waits for your roll · d20 + 5 ' + vsAC,
+      showResult: res, canRoll: !res,
+      rollDisabled: s.phase !== 'ready' || !attack,
+      rollLabel: s.phase === 'rolling' ? 'ROLLING…' : (attack ? 'ROLL THE D20' : 'PICK ATTACK TO ROLL'),
+      narrated: s.narrated, narration: O.text || '', writing: s.writing, notWriting: !s.writing,
+      turnTitle: res && o === 'crit' ? 'Critical hit!' : (res && o === 'fumble' ? 'Natural 1' : 'Your turn'),
+      turnColor: res && o === 'fumble' ? '#ef6b6b' : '#f3deb0',
+      traySub: attack ? (showT ? 'd20 + 5 · beat AC 15' : 'd20 + 5 · beat its AC') : s.selected + ' · no roll',
+      ledgerRest: O.rest || '', stampBg: O.bg || 'none', stampInk: O.ink || '#000', stampTop: O.top || '', stampBottom: O.bottom || '',
+      outcomeWord: O.word || '',
+      spiderTierCaps: res ? O.tier : 'HEALTHY', spiderTierColor: res ? O.color : '#6cc494',
+      spiderImgClass: res && (o === 'hit' || o === 'crit') ? 'is-hit' : '',
+      actions: labels.map(function (a) { var on = s.selected === a.label; return { label: a.label, sub: a.sub, cls: on ? 'is-on' : '', pressed: on ? 'true' : 'false', pick: function () { if (self.state.phase === 'ready') self.setState({ selected: a.label }); } }; }),
+      setCanvas: this.setCanvas,
+      roll: function () {
+        var st = self.state;
+        if (st.phase !== 'ready' || st.selected !== 'Attack') return;
+        var kept = R(1, 20), total = kept + 5;
+        var outcome = kept === 20 ? 'crit' : (kept === 1 ? 'fumble' : (total >= 15 ? 'hit' : 'miss'));
+        var dmg = outcome === 'crit' ? R(1, 8) + R(1, 8) + 3 : R(1, 8) + 3;
+        self.clear();
+        self.setState({ phase: 'rolling', kept: kept, total: total, dmg: dmg, outcome: outcome, writing: false, narrated: false });
+        var done = function () {
+          if (self.dice && outcome === 'crit') self.dice.effect('crit', 0);
+          if (self.dice && outcome === 'fumble') self.dice.effect('fumble', 0);
+          self.setState({ phase: 'result' });
+          self.timers.push(setTimeout(function () { self.setState({ writing: true }); }, 600));
+          self.timers.push(setTimeout(function () { self.setState({ writing: false, narrated: true }); }, 2800));
+        };
+        if (self.dice) self.dice.roll([{ kind: 'd20', value: kept }]).then(done); else done();
+      },
+      reset: function () { self.clear(); if (self.dice) self.dice.clear(); self.setState({ phase: 'ready', kept: 0, total: 0, dmg: 0, outcome: null, writing: false, narrated: false }); }
+    };
+  }
+}
+</script>
+</body>
+</html>
