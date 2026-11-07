@@ -32,6 +32,7 @@ import {
   levelProgression,
 } from '../../../../../db/schema/index';
 import fighterChoices from '../../../../../shared/test-fixtures/fighter-package-choices.json';
+import sheetStartingPackagePut from '../../../../../shared/test-fixtures/sheet-starting-package-put.json';
 import {
   closeRealDb,
   describeWithDb,
@@ -1975,5 +1976,93 @@ describeWithDb('package-click wizard body reaches the session (#1354)', () => {
     expect(loaded.find((row) => row.item_name === 'Longsword')).toBeTruthy();
     expect(loaded.find((row) => row.item_name === 'Crossbow Bolts (20)')?.equipped).toBe(false);
     expect(loaded.some((row) => row.equipped === true)).toBe(true);
+  });
+});
+
+/**
+ * #1402: a hero with no equipment rows (created with the wizard's Equipment step skipped)
+ * gets its starting package from the sheet. The body is the wire body the sheet's
+ * chooser saves (shared/test-fixtures/sheet-starting-package-put.json, pinned by
+ * src/features/character/components/sheet/tabs/inventory/__tests__/starting-equipment-chooser.test.tsx).
+ * The PUT must write the rows and the purse, and the read paths must return them.
+ */
+describeWithDb('sheet starting package for a hero with no equipment rows (#1402)', () => {
+  let app: { handle: (request: Request) => Promise<Response> };
+  let db: ReturnType<typeof realDb>;
+  const createdIds: string[] = [];
+
+  beforeAll(async () => {
+    userId = testId('user-1402');
+    db = realDb();
+    const pipeline = await importWithRealDb(async () => {
+      const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');
+      const { charactersRoutes } = await import('../characters.ts');
+      const { issue1784DataRoutes } = await import('../issue-1784-data.ts');
+      return { createRequestPipelineApp, charactersRoutes, issue1784DataRoutes };
+    });
+    app = pipeline
+      .createRequestPipelineApp()
+      .use(pipeline.charactersRoutes)
+      .use(pipeline.issue1784DataRoutes);
+  });
+
+  afterAll(async () => {
+    for (const id of createdIds) {
+      await db
+        .delete(characters)
+        .where(eq(characters.id, id))
+        .catch(() => {});
+    }
+    await closeRealDb();
+  });
+
+  it('PUT of the sheet package body writes the equipment rows and the gold', async () => {
+    const { equipment: _skipped, ...noGearBody } = criminalRoguePayload971;
+    const created = await app.handle(
+      new Request('http://localhost/v1/characters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(noGearBody),
+      }),
+    );
+    const createdText = await created.text();
+    expect(created.status, createdText.slice(0, 400)).toBe(201);
+    const { id } = JSON.parse(createdText) as { id: string };
+    createdIds.push(id);
+
+    const before = await db
+      .select()
+      .from(characterEquipment)
+      .where(eq(characterEquipment.characterId, id));
+    expect(before).toHaveLength(0);
+
+    const put = await app.handle(
+      new Request(`http://localhost/v1/characters/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sheetStartingPackagePut),
+      }),
+    );
+    const putText = await put.text();
+    expect(put.status, putText.slice(0, 400)).toBe(200);
+
+    const rows = await db
+      .select()
+      .from(characterEquipment)
+      .where(eq(characterEquipment.characterId, id));
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.map((row) => row.itemName).sort()).toEqual(
+      sheetStartingPackagePut.equipment.map((row) => row.item_name).sort(),
+    );
+    expect(rows.find((row) => row.itemName === 'Dagger')?.equipped).toBe(true);
+
+    const [charRow] = await db.select().from(characters).where(eq(characters.id, id));
+    expect(charRow?.goldPieces).toBe(sheetStartingPackagePut.gold_pieces);
+
+    // The sheet reads the rows back from the equipment route.
+    const read = await app.handle(new Request(`http://localhost/v1/characters/${id}/equipment`));
+    expect(read.status).toBe(200);
+    const loaded = (await read.json()) as Array<{ item_name: string }>;
+    expect(loaded.length).toBe(rows.length);
   });
 });

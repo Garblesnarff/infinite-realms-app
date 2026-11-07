@@ -1,14 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 import { AttunementSection } from './inventory/AttunementSection';
 import { CurrencyCard, type Currency } from './inventory/CurrencyCard';
 import { EquipmentSection } from './inventory/EquipmentSection';
+import { StartingEquipmentChooser } from './inventory/StartingEquipmentChooser';
 import { WeightCard } from './inventory/WeightCard';
 
 import type { Character } from '@/types/character';
 
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useMagicItemAttunement } from '@/hooks/use-magic-item-attunement';
-
 
 interface InventoryTabProps {
   character: Character;
@@ -31,6 +39,8 @@ const InventoryTab: React.FC<InventoryTabProps> = ({ character, onUpdate }) => {
 
   const { attuneToItem, removeAttunement, getAttunementSummary, isAttuning } =
     useMagicItemAttunement(character, onUpdate);
+  const [chooserOpen, setChooserOpen] = useState(false);
+  const hasNoEquipment = !character.inventory || character.inventory.length === 0;
 
   const toggleEquipped = (itemId: string) => {
     const updatedCharacter = {
@@ -65,6 +75,31 @@ const InventoryTab: React.FC<InventoryTabProps> = ({ character, onUpdate }) => {
         <CurrencyCard currency={currency} />
         <WeightCard character={character} currency={currency} />
       </div>
+
+      {/* A hero with no equipment rows (e.g. created with the Equipment step skipped, #1402) can pick a package here. */}
+      {hasNoEquipment && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+          <p className="text-sm text-muted-foreground">
+            No starting equipment is saved for this hero.
+          </p>
+          <Button onClick={() => setChooserOpen(true)}>Choose starting equipment</Button>
+        </div>
+      )}
+      <Dialog open={chooserOpen} onOpenChange={setChooserOpen}>
+        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Choose starting equipment</DialogTitle>
+            <DialogDescription>
+              Pick the class equipment package or starting gold. It is saved to this hero.
+            </DialogDescription>
+          </DialogHeader>
+          <StartingEquipmentChooser
+            character={character}
+            onSave={onUpdate}
+            onDone={() => setChooserOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* Equipment */}
       <EquipmentSection
