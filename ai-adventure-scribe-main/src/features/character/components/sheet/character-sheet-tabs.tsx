@@ -30,6 +30,8 @@ interface CharacterSheetTabsProps {
   character: Character;
   // #2701: the sheet save path — persists the edit, then refreshes silently.
   onCharacterUpdate: CharacterSheetUpdateFn;
+  // #1402: the equipment request failed; the Equipment tab must not offer a starting package.
+  equipmentUnavailable?: boolean;
 }
 
 const FOCUSABLE_DESCENDANT =
@@ -94,6 +96,7 @@ SheetTabsContent.displayName = 'SheetTabsContent';
 const CharacterSheetTabs: React.FC<CharacterSheetTabsProps> = ({
   character,
   onCharacterUpdate,
+  equipmentUnavailable,
 }) => {
   const [activeTab, setActiveTab] = useState('main');
 
@@ -220,7 +223,11 @@ const CharacterSheetTabs: React.FC<CharacterSheetTabsProps> = ({
           </SheetTabsContent>
 
           <SheetTabsContent value="inventory" className="space-y-4">
-            <InventoryTab character={character} onUpdate={onCharacterUpdate} />
+            <InventoryTab
+              character={character}
+              onUpdate={onCharacterUpdate}
+              equipmentUnavailable={equipmentUnavailable}
+            />
           </SheetTabsContent>
 
           <SheetTabsContent value="features" className="space-y-4">

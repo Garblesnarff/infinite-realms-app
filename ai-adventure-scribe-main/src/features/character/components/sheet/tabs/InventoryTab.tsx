@@ -21,13 +21,19 @@ import { useMagicItemAttunement } from '@/hooks/use-magic-item-attunement';
 interface InventoryTabProps {
   character: Character;
   onUpdate: (updatedCharacter: Character) => void;
+  /** #1402: the equipment request failed, so an empty list does not mean the hero has no rows. */
+  equipmentUnavailable?: boolean;
 }
 
 /**
  * Inventory & Equipment tab with weight tracking and currency management
  * Refactored to use sub-components for improved maintainability.
  */
-const InventoryTab: React.FC<InventoryTabProps> = ({ character, onUpdate }) => {
+const InventoryTab: React.FC<InventoryTabProps> = ({
+  character,
+  onUpdate,
+  equipmentUnavailable = false,
+}) => {
   // Extract currency from character or use defaults
   const currency: Currency = {
     cp: character.currency?.cp || 0,
@@ -40,7 +46,8 @@ const InventoryTab: React.FC<InventoryTabProps> = ({ character, onUpdate }) => {
   const { attuneToItem, removeAttunement, getAttunementSummary, isAttuning } =
     useMagicItemAttunement(character, onUpdate);
   const [chooserOpen, setChooserOpen] = useState(false);
-  const hasNoEquipment = !character.inventory || character.inventory.length === 0;
+  const hasNoEquipment =
+    !equipmentUnavailable && Array.isArray(character.inventory) && character.inventory.length === 0;
 
   const toggleEquipped = (itemId: string) => {
     const updatedCharacter = {

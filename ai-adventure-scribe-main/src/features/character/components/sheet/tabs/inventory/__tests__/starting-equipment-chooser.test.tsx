@@ -16,6 +16,7 @@ import type { Character } from '@/types/character';
 
 import { backgrounds } from '@/data/backgroundOptions';
 import { monk } from '@/data/classes/monk';
+import { startingGoldByClass } from '@/data/equipmentOptions';
 import { buildSheetUpdatePayload } from '@/hooks/use-character-data';
 import { prepareCharacterPayload } from '@/services/user-data-payload-helpers';
 
@@ -52,5 +53,20 @@ describe('sheet starting-equipment chooser (#1402)', () => {
     const put = prepareCharacterPayload(buildSheetUpdatePayload(sheetHero, updated));
     expect(put).toEqual(wireBody);
     expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('saves the Starting Gold choice as gold, with no package items', async () => {
+    const onSave = vi.fn();
+    render(<StartingEquipmentChooser character={sheetHero} onSave={onSave} onDone={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Starting Gold/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save starting equipment' }));
+
+    const updated = onSave.mock.calls[0][0] as Character;
+    const averageGold = Math.floor(startingGoldByClass[monk.id].average);
+    // Outlander's bare '10 gp' is purse gold, so it adds to the Starting Gold roll.
+    expect(updated.currency?.gp).toBe(averageGold + 10);
+    const names = (updated.inventory ?? []).map((item) => item.itemName ?? item.itemId);
+    expect(names).not.toContain('Dagger');
+    expect(names.some((name) => /gp$/i.test(name))).toBe(false);
   });
 });
