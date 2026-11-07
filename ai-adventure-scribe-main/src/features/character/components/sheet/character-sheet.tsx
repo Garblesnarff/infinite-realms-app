@@ -170,7 +170,11 @@ const CharacterSheet: React.FC = () => {
         </Alert>
       )}
       <IRPanel className="p-6">
-        <CharacterSheetTabs character={character} onCharacterUpdate={persistCharacterUpdate} />
+        <CharacterSheetTabs
+          character={character}
+          onCharacterUpdate={persistCharacterUpdate}
+          equipmentUnavailable={equipmentUnavailable}
+        />
       </IRPanel>
     </div>
   );

@@ -8,6 +8,7 @@ import {
   withStartingPackageEquipped,
 } from '../../../../shared/creation-armor-class';
 import { CharacterPreviewAbilityScores } from '../shared/CharacterPreviewAbilityScores';
+import { describeStartingEquipment } from './equipment-selection/starting-equipment';
 import { getCharacterNameError } from '../wizard/validation-rules';
 
 import { Button } from '@/components/ui/button';
@@ -147,6 +148,9 @@ const CharacterFinalization: React.FC = () => {
           </div>
           <div>
             <strong>Level:</strong> {state.character?.level || 1}
+          </div>
+          <div className="md:col-span-2">
+            <strong>Equipment:</strong> {describeStartingEquipment(state.character)}
           </div>
         </div>
       </div>

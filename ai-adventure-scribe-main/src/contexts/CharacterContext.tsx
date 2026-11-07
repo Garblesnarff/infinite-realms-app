@@ -51,8 +51,22 @@ const CharacterContext = createContext<{
  * Provider component that wraps the application to provide character state
  * Initializes the reducer and provides context values to children
  */
-export function CharacterProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(characterReducer, initialState);
+export function CharacterProvider({
+  children,
+  initialCharacter,
+}: {
+  children: ReactNode;
+  /** Seeds a nested provider (the sheet's starting-equipment chooser). The app-level provider omits it. */
+  initialCharacter?: Partial<NonNullable<CharacterState['character']>>;
+}) {
+  const [state, dispatch] = useReducer(characterReducer, initialState, (base) =>
+    initialCharacter
+      ? {
+          ...base,
+          character: { ...base.character, ...initialCharacter } as CharacterState['character'],
+        }
+      : base,
+  );
   const { toast: _toast } = useToast();
 
   // ⚡ Bolt: Stabilize context value to prevent unnecessary re-renders of consumers
