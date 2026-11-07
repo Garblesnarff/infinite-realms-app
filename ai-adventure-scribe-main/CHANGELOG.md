@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.40.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.39.0...v0.40.0) (2026-11-07)
+
+
+### Features
+
+* **table:** spell-attack label and journal links ([#92](https://github.com/Garblesnarff/infinite-realms-app/issues/92)) ([113331f](https://github.com/Garblesnarff/infinite-realms-app/commit/113331f98171b0de3c61fda843fc633afad9d241))
+
+
+### Bug Fixes
+
+* **combat:** one seating line per confirm ([#1420](https://github.com/Garblesnarff/infinite-realms-app/issues/1420)) ([089af22](https://github.com/Garblesnarff/infinite-realms-app/commit/089af223e532a4c99e3cfe8c62569d473deb53a3))
+* **death:** table 11 end screen and dying panel ([#1431](https://github.com/Garblesnarff/infinite-realms-app/issues/1431)) ([e763ef9](https://github.com/Garblesnarff/infinite-realms-app/commit/e763ef98f0adbe9c17bd57054f59c3395fd44e45))
+
+
+### Documentation
+
+* **design:** the Table canvas boards as reference HTML ([#92](https://github.com/Garblesnarff/infinite-realms-app/issues/92)) ([bffc1e6](https://github.com/Garblesnarff/infinite-realms-app/commit/bffc1e66a196ccbed50da3d12fecd6681ced3ff7))
+
 ## [0.39.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.38.3...v0.39.0) (2026-11-06)
 
 
