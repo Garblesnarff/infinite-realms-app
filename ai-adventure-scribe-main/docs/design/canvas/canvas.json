@@ -1,0 +1,507 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Campaigns.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Start · choose a campaign",
+      "w": 1440,
+      "x": 0,
+      "y": 2640
+    },
+    "Check.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Chat mode · ability check pop-up",
+      "w": 1440,
+      "x": 1520,
+      "y": 1320
+    },
+    "Chronicle.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Chronicle · shared page (logged out)",
+      "w": 1440,
+      "x": 0,
+      "y": 10020
+    },
+    "ChronicleFree.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Chronicle · free plan",
+      "w": 1440,
+      "x": 3040,
+      "y": 10020
+    },
+    "ChronicleOwner.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Chronicle · in game, with Share",
+      "w": 1440,
+      "x": 1520,
+      "y": 10020
+    },
+    "Critical.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Combat · natural 20 (same board, crit state)",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "Death.dc.html": {
+      "h": 1340,
+      "is_interactive": true,
+      "title": "End of story · desktop (shown full length)",
+      "w": 1440,
+      "x": 0,
+      "y": 15900
+    },
+    "DeathPhone.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "Phone · end screen, restored (reload)",
+      "w": 390,
+      "x": 480,
+      "y": 17400
+    },
+    "DeathPhoneLive.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "Phone · play the death: dying → third failed save → end screen",
+      "w": 390,
+      "x": 0,
+      "y": 17400
+    },
+    "DeathPhoneNoData.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "Phone · data missing (no portrait, cards, stats)",
+      "w": 390,
+      "x": 1440,
+      "y": 17400
+    },
+    "DeathPhoneStory.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "Phone · read the story so far",
+      "w": 390,
+      "x": 960,
+      "y": 17400
+    },
+    "DeathReload.dc.html": {
+      "h": 1040,
+      "is_interactive": true,
+      "title": "Reload state · today vs proposed",
+      "w": 1440,
+      "x": 0,
+      "y": 18480
+    },
+    "DeathStory.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "End of story · “Read the story so far” (Log, Chronicle)",
+      "w": 1440,
+      "x": 1520,
+      "y": 15900
+    },
+    "DyingStates.dc.html": {
+      "h": 1160,
+      "is_interactive": true,
+      "title": "Dying panel · every state (#2518)",
+      "w": 1440,
+      "x": 1520,
+      "y": 18480
+    },
+    "Explore.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Chat mode · exploring (desktop, playable)",
+      "w": 1440,
+      "x": 0,
+      "y": 1320
+    },
+    "ExplorePhone.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "Chat mode · phone 390 (playable)",
+      "w": 390,
+      "x": 3040,
+      "y": 1320
+    },
+    "Fight.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Combat · read the fight (desktop, playable)",
+      "w": 1440,
+      "x": 0,
+      "y": 11420
+    },
+    "FightCasting.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Combat · casting from the sheet (today: 45 s wait)",
+      "w": 1440,
+      "x": 1520,
+      "y": 11420
+    },
+    "FightDone.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Combat · result stays in view",
+      "w": 1440,
+      "x": 4560,
+      "y": 11420
+    },
+    "FightPhone.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "Combat · read the fight (phone 390)",
+      "w": 390,
+      "x": 0,
+      "y": 12440
+    },
+    "FightPhoneCast.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "Phone · casting, sheet at 42%",
+      "w": 390,
+      "x": 480,
+      "y": 12440
+    },
+    "FightPhoneDone.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "Phone · result in view",
+      "w": 390,
+      "x": 1440,
+      "y": 12440
+    },
+    "FightPhoneSave.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "Phone · Target saves card",
+      "w": 390,
+      "x": 960,
+      "y": 12440
+    },
+    "FightSave.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Combat · “Target saves” card",
+      "w": 1440,
+      "x": 3040,
+      "y": 11420
+    },
+    "Heroes.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Start · choose a hero",
+      "w": 1440,
+      "x": 1520,
+      "y": 2640
+    },
+    "Landing.dc.html": {
+      "h": 3100,
+      "is_interactive": true,
+      "title": "Public · landing (desktop)",
+      "w": 1440,
+      "x": 0,
+      "y": 5480
+    },
+    "LandingPhone.dc.html": {
+      "h": 3020,
+      "is_interactive": true,
+      "title": "Public · landing (phone 390)",
+      "w": 390,
+      "x": 4560,
+      "y": 5480
+    },
+    "Main.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Combat · your turn (desktop, playable)",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Materials.dc.html": {
+      "h": 1000,
+      "title": "Materials kit",
+      "w": 1440,
+      "x": 0,
+      "y": 3960
+    },
+    "Panels.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Game panels · memory, journal, voice (desktop)",
+      "w": 1440,
+      "x": 0,
+      "y": 9020
+    },
+    "PanelsPhone.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "Game panels · phone 390",
+      "w": 390,
+      "x": 3040,
+      "y": 9020
+    },
+    "PanelsPhoneSheet.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "Game panels · phone, memory sheet open",
+      "w": 390,
+      "x": 3520,
+      "y": 9020
+    },
+    "PanelsSettings.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Game panels · settings sheet",
+      "w": 1440,
+      "x": 1520,
+      "y": 9020
+    },
+    "Phone.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "Combat · phone 390 (playable)",
+      "w": 390,
+      "x": 3040,
+      "y": 0
+    },
+    "PublicCampaign.dc.html": {
+      "h": 1100,
+      "is_interactive": true,
+      "title": "Public · campaign page",
+      "w": 1440,
+      "x": 3040,
+      "y": 5480
+    },
+    "PublicExplore.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Public · /explore",
+      "w": 1440,
+      "x": 1520,
+      "y": 5480
+    },
+    "Results.dc.html": {
+      "h": 1980,
+      "is_interactive": true,
+      "title": "Engine result cards (9 cases, today vs proposed)",
+      "w": 1440,
+      "x": 0,
+      "y": 13480
+    },
+    "Rounds.dc.html": {
+      "h": 720,
+      "is_interactive": true,
+      "title": "Round and turn — wrap demo",
+      "w": 1440,
+      "x": 1520,
+      "y": 13480
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-09-25T05:12:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "noteOrder": [
+    "howto",
+    "title",
+    "rowChat",
+    "chatHow",
+    "rowStart",
+    "startHow",
+    "rowKit",
+    "rowPublic",
+    "publicHow",
+    "rowPanels",
+    "panelsHow",
+    "rowFight",
+    "fightHow",
+    "fightPhoneHow",
+    "rowDeath",
+    "deathHow",
+    "deathPhoneHow"
+  ],
+  "notes": {
+    "chatHow": {
+      "size": 24,
+      "text": "Chat mode has no initiative and no action cards. Tap an idea card or write your own line.\n\nTap “Climb down the rope”: the DM asks for a Strength (Athletics) check. The check card slides out from the DM screen, and the dice-tray lid opens.\n\nThe card shows the math (d20 + STR + proficiency), the DC and the Inspiration option (2014 rule: advantage on one roll). “Show target numbers” is one player setting for the DC and the enemy AC. It starts on in Easy and Medium campaigns and off in Hard ones, so this card starts with “DC hidden”. The switch on the card changes it; Tweaks → Settings → Difficulty changes the default.\n\nAfter the roll, a wax seal says Success or Failed, and a failed climb costs HP.",
+      "w": 360,
+      "x": 3520,
+      "y": 1320
+    },
+    "deathHow": {
+      "size": 24,
+      "text": "Full-screen takeover, not an overlay or a dimmed game. The page reads one value: the saved dead flag.\n\nSample: The Scholar (Human Wizard, HP 7, AC 11) against Captain Sarah Reeves, as in stranger run 16. Numbers in “The run” are examples. The server has no run-summary field yet (see the spec). Until it has, the block is hidden.\n\nThe DM paragraph is sample text. The screen works without it.\n\nTry it: on the desktop board press “Read the story so far”, then Chronicle, then “Write the chronicle”. Tweaks → State: phase (live, restored, data missing), view, tab.\n\nDeath is not red. Gold and grey frame the page. Red appears only on HIT and FAILED badges and the failure pips.",
+      "w": 360,
+      "x": 3040,
+      "y": 15900
+    },
+    "deathPhoneHow": {
+      "size": 24,
+      "text": "Phone 390. Press “Roll death save” on the first board. Saves: 14 (success), then Captain Sarah Reeves hits the unconscious Scholar (critical: two failures), then a 2 (third failure). The end screen then fades in, and the DM line arrives after 3 s. “Replay” resets. If you do nothing, the auto-roll fires at 0 s (45 s here; the real time comes from #2504).\n\nThe primary button is a sticky bar. Scroll the end screen to see Explore other campaigns and Back to your realm after it. Tab order: story, new hero, explore, realm.\n\nThe “Replay” button and the dashed demo box are for this canvas only.",
+      "w": 360,
+      "x": 1920,
+      "y": 17400
+    },
+    "fightHow": {
+      "size": 24,
+      "text": "Data is from stranger run 16: The Scholar (Human Wizard, HP 7, AC 11, +6 spell attack, DC 14) against Captain Sarah Reeves.\n\nTweaks: Moment (which turn), Stage (idle, casting, save, resolving, done), Sheet (open or closed), Order (today = the cast waits 40 s before the Target saves card; fixed = the card comes at once, #2392), Difficulty (Medium by default, as in the runs; Hard hides AC and DC).\n\nTry it: on the desktop board open the sheet, press Cast on Acid Splash. The demo runs 5 s per second. Replay from the start resets.\n\nThe round goes up only when the first actor in the order acts again. See the Rounds board.\n\nBadge colour: gold helps you, red hurts you, grey changes nothing. Every badge also has a word and a shape.",
+      "w": 360,
+      "x": 6080,
+      "y": 11420
+    },
+    "fightPhoneHow": {
+      "size": 24,
+      "text": "Phone 390. The sheet is a bottom sheet, not a full cover. The chat and the newest result stay above it (sheet height: 68% idle, 42% casting, 36% with the save card, 58% after). The tray slot keeps the Target saves card.",
+      "w": 360,
+      "x": 1920,
+      "y": 12440
+    },
+    "howto": {
+      "size": 24,
+      "text": "Combat. Main and Phone are playable with real 3D dice: pick Attack, press Roll. The die lands on the number the rules engine picked. A natural 20 fills the tray with gold light; a natural 1 gets a dark ribbon.\n\nTap the Inspiration token (top right) before you roll: you roll 2d20 and keep the higher.\n\nNatural 20 is the same board in its crit state (Tweaks → State).\n\nAbyssal Descent is a Hard campaign, so the spider’s AC starts hidden (“AC ?”, “vs the spider’s AC”). Tweaks → Settings → Difficulty: pick Easy or Medium to see “AC 15”.",
+      "w": 360,
+      "x": 3520,
+      "y": 0
+    },
+    "panelsHow": {
+      "size": 24,
+      "text": "Panels use only data the code has: memory categories, content, metadata, importance and time; DM handouts; the chronicle.\n\nTry it: Memory tab → search, pick a filter, press “That’s wrong” on a card. Listen button: Tweaks → State → Voice demo shows idle, preparing, playing, error and limit. Gear button opens Settings. “Show target numbers” follows the difficulty (Tweaks → Settings).\n\n“That’s wrong” (edit and forget) needs an API. It is a decision for Rob (see the issue).\n\nThe Chronicle boards: logged-out reader, the in-game dialog with Share, and the free-plan version. The public share page needs a route in the app first.",
+      "w": 360,
+      "x": 4000,
+      "y": 9020
+    },
+    "publicHow": {
+      "size": 24,
+      "text": "These pages use the same navy, gold and teal as the game, with Cinzel, DM Sans and EB Garamond.\n\nAll copy and art are real (from the live pages and the campaign data). Text in [brackets] is a placeholder for a value the code does not give yet.\n\nThe product picture on the landing page is a stand-in. A real capture of the game replaces it.\n\nTry it: on the landing page press Play in the Voice block. On /explore, each card is one link. On the campaign page, pick a hero and press “Read more”.\n\nHard campaigns start with target numbers hidden. The campaign page says so, and where to change it.",
+      "w": 360,
+      "x": 1520,
+      "y": 6460
+    },
+    "rowChat": {
+      "kind": "title1",
+      "maxW": 3430,
+      "text": "Chat mode — exploring, and the ability check",
+      "w": 240,
+      "x": 0,
+      "y": 1060
+    },
+    "rowDeath": {
+      "kind": "title1",
+      "maxW": 5600,
+      "text": "End of story — a solo character dies (#2520), with the dying state (#2518)",
+      "w": 240,
+      "x": 0,
+      "y": 15620
+    },
+    "rowFight": {
+      "kind": "title1",
+      "maxW": 6000,
+      "text": "Combat readability — turn bar, result cards, cast progress, target saves (stranger runs 15 and 16)",
+      "w": 240,
+      "x": 0,
+      "y": 11180
+    },
+    "rowKit": {
+      "kind": "title1",
+      "maxW": 1440,
+      "text": "Build kit",
+      "w": 240,
+      "x": 0,
+      "y": 3700
+    },
+    "rowPanels": {
+      "kind": "title1",
+      "maxW": 4400,
+      "text": "Game panels — memory, journal, voice, settings, chronicle",
+      "w": 240,
+      "x": 0,
+      "y": 8780
+    },
+    "rowPublic": {
+      "kind": "title1",
+      "maxW": 4950,
+      "text": "Public pages — landing, /explore, campaign page (one brand: navy and gold)",
+      "w": 240,
+      "x": 0,
+      "y": 5240
+    },
+    "rowStart": {
+      "kind": "title1",
+      "maxW": 2960,
+      "text": "Start — choose a campaign, then a hero",
+      "w": 240,
+      "x": 0,
+      "y": 2380
+    },
+    "startHow": {
+      "size": 24,
+      "text": "Real covers and hero cards from the campaigns.\n\nChoose a campaign, then a hero; “Play as …” opens chat mode. Only Abyssal Descent has hero cards in this prototype.\n\nThe line under the button tells the player if target numbers (DC and AC) start shown or hidden for that campaign.",
+      "w": 360,
+      "x": 3040,
+      "y": 2640
+    },
+    "title": {
+      "kind": "title1",
+      "maxW": 3430,
+      "text": "The Table — play at a DM screen, not in a chat app",
+      "w": 240,
+      "x": 0,
+      "y": -300
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Critical.dc.html",
+    "Phone.dc.html",
+    "Explore.dc.html",
+    "Check.dc.html",
+    "ExplorePhone.dc.html",
+    "Campaigns.dc.html",
+    "Heroes.dc.html",
+    "Materials.dc.html",
+    "Landing.dc.html",
+    "PublicExplore.dc.html",
+    "PublicCampaign.dc.html",
+    "LandingPhone.dc.html",
+    "Panels.dc.html",
+    "PanelsSettings.dc.html",
+    "PanelsPhone.dc.html",
+    "PanelsPhoneSheet.dc.html",
+    "Chronicle.dc.html",
+    "ChronicleOwner.dc.html",
+    "ChronicleFree.dc.html",
+    "Fight.dc.html",
+    "FightCasting.dc.html",
+    "FightSave.dc.html",
+    "FightDone.dc.html",
+    "FightPhone.dc.html",
+    "FightPhoneCast.dc.html",
+    "FightPhoneSave.dc.html",
+    "FightPhoneDone.dc.html",
+    "Results.dc.html",
+    "Rounds.dc.html",
+    "Death.dc.html",
+    "DeathStory.dc.html",
+    "DeathPhoneLive.dc.html",
+    "DeathPhone.dc.html",
+    "DeathPhoneStory.dc.html",
+    "DeathPhoneNoData.dc.html",
+    "DeathReload.dc.html",
+    "DyingStates.dc.html"
+  ],
+  "pages": [],
+  "title": "The Table — DM Screen Concept"
+}

@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Combat readability</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&amp;family=DM+Sans:wght@400;500;700&amp;family=EB+Garamond:ital,wght@0,400;0,500;1,400&amp;display=swap">
+<style>
+body{margin:0;background:#070b14}
+a{color:#d5b070}a:hover{color:#f3deb0}
+[hidden]{display:none!important}
+.tx-cinzel{font-family:'Cinzel',Georgia,serif}
+.tx-gar{font-family:'EB Garamond',Georgia,serif}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid #f3deb0;outline-offset:2px}
+button{font-family:'DM Sans',system-ui,sans-serif}
+.brass{background:linear-gradient(160deg,#f6e3b8 0%,#d5b070 38%,#a9823f 70%,#6e5226 100%);color:#1a1206;border:1px solid #f3deb0;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -2px 0 rgba(0,0,0,.25),0 6px 14px rgba(0,0,0,.45);cursor:pointer}
+.brass:hover{filter:brightness(1.07)}
+.gbtn{cursor:pointer;min-height:44px;padding:0 14px;border-radius:10px;border:1px solid rgba(213,176,112,.45);background:#0c1220;color:#eaeefa;font-size:15px;font-weight:700}
+.gbtn:hover{border-color:#f3deb0}
+.cast{cursor:pointer;min-width:84px;min-height:44px;padding:0 14px;border-radius:10px;border:1px solid #d5b070;background:#121b30;color:#f3deb0;font-size:15px;font-weight:700}
+.cast:hover{background:#1c2742}
+.cast[aria-disabled="true"]{cursor:not-allowed;opacity:.5}
+.scroll{overflow-y:auto;scrollbar-color:#3a4566 transparent}
+@keyframes dots{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
+.dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#d5b070;margin-left:5px;animation:dots 1.2s infinite}
+.dot:nth-child(2){animation-delay:.2s}.dot:nth-child(3){animation-delay:.4s}
+@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
+.bar{position:relative;height:6px;border-radius:3px;background:#1c2742;overflow:hidden}
+.bar i{position:absolute;left:0;top:0;height:6px;width:40%;border-radius:3px;background:#d5b070;animation:slide 1.6s ease-in-out infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{animation:spin 1s linear infinite}
+@keyframes rise{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+.rise{animation:rise .35s ease-out both}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.bar i{width:40%}}
+
+</style>
+</helmet>
+<div style="position: relative; width: 1440px; height: 900px; overflow: hidden; background: #070b14; font-family: 'DM Sans', system-ui, sans-serif; color: #eaeefa">
+
+<header style="position: absolute; left: 0; top: 0; width: 1440px; height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 20px; box-sizing: border-box; background: #0a0f1c; border-bottom: 1px solid rgba(213,176,112,.2)">
+<div style="display: flex; align-items: center; gap: 16px"><span style="font-size: 15px; color: #aab3cc">Menu</span><span class="tx-cinzel" style="font-size: 18px; color: #f3deb0; letter-spacing: .04em">Abyssal Descent</span><span style="font-size: 14px; color: #aab3cc">Session 1</span></div>
+<button type="button" onClick="{{doReset}}" class="gbtn" style="font-size: 14px">Replay from the start</button>
+</header>
+
+<div style="position: absolute; left: 0; top: 56px; width: 1440px; height: 844px; display: flex">
+
+<aside aria-label="Encounter tracker" style="flex: none; width: 250px; box-sizing: border-box; padding: 20px 16px; background: #0a0f1c; border-right: 1px solid rgba(213,176,112,.2)">
+<div class="tx-cinzel" style="font-size: 12px; letter-spacing: .16em; color: #aab3cc">ENCOUNTER TRACKER</div>
+<div class="tx-cinzel" style="margin-top: 6px; font-size: 36px; font-weight: 700; color: #f3deb0; line-height: 1">{{roundLabel}}</div>
+<div style="margin-top: 6px; font-size: 14px; color: #aab3cc">{{actedText}}</div>
+<ul style="margin: 16px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px">
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="2">
+<li style="display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 8px 10px; border-radius: 12px; background: #0c1220; box-shadow: 0 0 0 2px {{r.ring}}; opacity: {{r.op}}">
+<span aria-hidden="true" style="flex: none; width: 4px; align-self: stretch; border-radius: 2px; background: {{r.side}}"></span>
+<span class="tx-cinzel" style="flex: none; width: 24px; font-size: 18px; font-weight: 700; color: #f3deb0">{{r.init}}</span>
+<span style="flex: 1; min-width: 0"><span style="display: block; font-size: 15px; font-weight: 700; line-height: 1.25">{{r.name}}</span><span style="display: inline-block; margin-top: 4px; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #1c2742; color: #d4dbef">{{r.st}}</span></span>
+</li>
+</sc-for>
+</ul>
+<p style="margin: 16px 0 0; font-size: 14px; line-height: 1.5; color: #aab3cc">A round ends when everyone has acted once. Then the next round starts.</p>
+</aside>
+
+<main style="flex: 1; min-width: 0; display: flex; flex-direction: column; background: radial-gradient(ellipse at 50% 0%, rgba(79,182,196,.06), transparent 55%), #070b14">
+<div style="flex: none; height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; border-bottom: 1px solid rgba(213,176,112,.15)">
+<span class="tx-cinzel" style="font-size: 16px; color: #eaeefa">The Infinite Chasm</span>
+<div style="display: flex; gap: 8px"><button type="button" class="gbtn">Map</button><button type="button" class="gbtn" aria-pressed="{{sheetOpen}}" onClick="{{toggleSheet}}">{{sheetLabel}}</button></div>
+</div>
+
+<div role="status" aria-label="{{turnAria}}" style="flex: none; display: flex; align-items: center; gap: 16px; padding: 10px 24px; background: #0a0f1c; border-bottom: 1px solid rgba(213,176,112,.25)">
+<div style="flex: none"><div class="tx-cinzel" style="font-size: 11px; letter-spacing: .16em; color: #aab3cc">THE FIGHT</div><div class="tx-cinzel" style="font-size: 28px; font-weight: 700; color: #f3deb0; line-height: 1.05">{{roundLabel}}</div></div>
+<div aria-hidden="true" style="flex: none; width: 1px; height: 44px; background: rgba(213,176,112,.3)"></div>
+<ol style="margin: 0; padding: 0; list-style: none; display: flex; align-items: center; gap: 8px">
+<sc-for list="{{chips}}" as="c" hint-placeholder-count="2">
+<li style="display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px 0 10px; border-radius: 999px; background: {{c.bg}}; box-shadow: 0 0 0 2px {{c.ring}}; opacity: {{c.op}}">
+<span class="tx-cinzel" style="font-size: 13px; color: #aab3cc; font-weight: 700">{{c.num}}</span>
+<span style="font-size: 15px; font-weight: 700">{{c.name}}</span>
+<sc-if value="{{c.isDone}}" hint-placeholder-val="{{ false }}"><span style="display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: #aab3cc"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path></svg>Acted</span></sc-if>
+<sc-if value="{{c.isNow}}" hint-placeholder-val="{{ false }}"><span class="brass" style="padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; cursor: default">Now</span></sc-if>
+</li>
+</sc-for>
+<li style="display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; border-radius: 999px; border: 1px dashed rgba(170,179,204,.5); font-size: 13px; color: #aab3cc"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M18 3v4h-4M6 21v-4h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>then {{nextRoundLabel}}</li>
+</ol>
+<div style="flex: 1; min-width: 0; text-align: right; font-size: 16px; font-weight: 700; color: #eaeefa; white-space: nowrap">{{turnShort}}</div>
+</div>
+
+<div id="feedscroll" class="scroll" style="flex: 1; min-height: 0; padding: 22px 24px">
+<div style="width: 730px; max-width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 14px">
+<sc-for list="{{feed}}" as="f" hint-placeholder-count="4">
+<div>
+<sc-if value="{{f.isDiv}}" hint-placeholder-val="{{ false }}"><div style="display: flex; align-items: center; gap: 12px; margin-top: 4px"><span aria-hidden="true" style="flex: 1; height: 1px; background: rgba(213,176,112,.3)"></span><span class="tx-cinzel" style="font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: #f3deb0; font-weight: 700; text-align: center">{{f.label}}</span><span aria-hidden="true" style="flex: 1; height: 1px; background: rgba(213,176,112,.3)"></span></div></sc-if>
+<sc-if value="{{f.isInit}}" hint-placeholder-val="{{ false }}"><div style="padding: 10px 14px; border-radius: 10px; background: #0c1220; box-shadow: 0 0 0 1px rgba(213,176,112,.2); font-size: 15px; color: #d4dbef"><b style="color: #f3deb0">Initiative.</b> {{f.text}}</div></sc-if>
+<sc-if value="{{f.isCard}}" hint-placeholder-val="{{ false }}">
+<article aria-label="{{f.aria}}" class="rise" style="display: flex; border-radius: 12px; overflow: hidden; background: #0c1220; box-shadow: 0 0 0 1px rgba(213,176,112,.22), 0 8px 18px rgba(0,0,0,.4)">
+<span aria-hidden="true" style="flex: none; width: 5px; background: {{f.stripe}}"></span>
+<div style="flex: 1; min-width: 0; padding: 14px 18px">
+<div style="display: flex; flex-direction: row; gap: 10px; align-items: flex-start">
+<div style="flex: 1; font-size: 17px; font-weight: 700; line-height: 1.35; color: #eaeefa">{{f.title}}</div>
+<span style="flex: none; display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border-radius: 8px; background: {{f.bBg}}; color: {{f.bFg}}; box-shadow: 0 0 0 1px {{f.bBd}}; font-family: 'Cinzel', Georgia, serif; font-size: 15px; font-weight: 700; letter-spacing: .06em">
+<sc-if value="{{f.iCheck}}"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+<sc-if value="{{f.iAlert}}"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3zM12 10v4M12 17v.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+<sc-if value="{{f.iDash}}"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path></svg></sc-if>
+{{f.badge}}</span>
+</div>
+<div style="margin-top: 8px; font-size: 15px; color: #d4dbef; font-variant-numeric: tabular-nums">{{f.math}}</div>
+<div style="margin-top: 2px; font-size: 15px; color: #eaeefa; font-weight: 700">{{f.effect}}</div>
+<sc-if value="{{f.hasEnemyHp}}" hint-placeholder-val="{{ false }}"><div style="margin-top: 4px; font-size: 14px; color: #aab3cc">{{f.enemyHp}}</div></sc-if>
+<sc-if value="{{f.hasHp}}" hint-placeholder-val="{{ false }}">
+<div style="margin-top: 10px">
+<div style="display: flex; justify-content: space-between; gap: 8px; font-size: 14px; color: #d4dbef"><span>{{f.hpName}} · HP {{f.hpFrom}} → {{f.hpTo}} of {{f.hpMax}}</span><b style="color: #ef8a8a">−{{f.hpLoss}}</b></div>
+<div style="position: relative; margin-top: 6px; height: 8px; border-radius: 4px; background: #1c2742; overflow: hidden"><span style="position: absolute; left: 0; top: 0; height: 8px; width: {{f.hpFromPct}}; background: #7a1016"></span><span style="position: absolute; left: 0; top: 0; height: 8px; width: {{f.hpToPct}}; background: #d5b070"></span></div>
+</div>
+</sc-if>
+</div>
+</article>
+<p class="tx-gar" style="margin: 10px 4px 0; font-size: 21px; line-height: 1.55; color: #eaeefa">{{f.dm}}</p>
+</sc-if>
+<sc-if value="{{f.isPending}}" hint-placeholder-val="{{ false }}"><div role="status" style="display: inline-flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 999px; background: #0c1220; box-shadow: 0 0 0 1px rgba(213,176,112,.3); font-size: 15px; color: #d4dbef"><b class="tx-cinzel" style="color: #4fb6c4; font-size: 12px; letter-spacing: .14em">DM</b>The Dungeon Master is working<span aria-hidden="true"><i class="dot"></i><i class="dot"></i><i class="dot"></i></span></div></sc-if>
+</div>
+</sc-for>
+
+</div>
+</div>
+
+<div style="flex: none; padding: 0 24px"><div style="width: 730px; max-width: 100%; margin: 0 auto">
+<sc-if value="{{isSave}}" hint-placeholder-val="{{ false }}">
+<section role="alert" aria-labelledby="svt" class="rise" style="margin-bottom: 12px; padding: 16px 18px; border-radius: 14px; border: 2px solid #d5b070; background: #0c1220; box-shadow: 0 16px 34px rgba(0,0,0,.55)">
+<div id="svt" class="tx-cinzel" style="font-size: 20px; font-weight: 700; color: #f3deb0">{{targetName}} must save</div>
+<p style="margin: 6px 0 0; font-size: 16px; line-height: 1.5; color: #d4dbef">{{targetName}} makes a Dexterity saving throw against {{spellName}}.</p>
+<p style="margin: 4px 0 0; font-size: 16px; color: #eaeefa"><b>Save DC 14.</b> You do not roll.</p>
+<button type="button" class="brass tx-cinzel" onClick="{{doProceed}}" style="margin-top: 12px; width: auto; min-height: 52px; padding: 0 28px; border-radius: 12px; font-size: 17px; font-weight: 700; letter-spacing: .06em">Continue</button>
+</section>
+</sc-if>
+
+</div></div>
+
+<div style="flex: none; padding: 14px 24px 18px; background: #0a0f1c; border-top: 1px solid rgba(213,176,112,.2)">
+<div style="width: 730px; max-width: 100%; margin: 0 auto; display: flex; gap: 12px">
+<label for="say" class="sr">What do you do?</label>
+<input id="say" type="text" value="{{draft}}" onChange="{{typing}}" placeholder="What do you do?" style="flex: 1; height: 52px; box-sizing: border-box; padding: 0 16px; border-radius: 12px; border: 1px solid rgba(213,176,112,.4); background: #0c1220; color: #eaeefa; font-family: 'EB Garamond', Georgia, serif; font-size: 19px">
+<button type="button" class="brass tx-cinzel" style="min-width: 100px; height: 52px; border-radius: 12px; font-size: 16px; font-weight: 700; letter-spacing: .08em">Send</button>
+</div></div>
+</main>
+
+<sc-if value="{{sheetOpen}}" hint-placeholder-val="{{ false }}">
+<aside aria-label="Character panel" style="flex: none; width: 340px; display: flex; flex-direction: column; background: #0c1220; border-left: 1px solid rgba(213,176,112,.25)">
+<div role="tablist" aria-label="Game panel" style="display: flex; padding: 0 6px; border-bottom: 1px solid rgba(213,176,112,.2); flex: none">
+<span role="tab" aria-selected="true" style="padding: 14px 10px 11px; font-size: 14px; font-weight: 700; color: #f3deb0; border-bottom: 3px solid #d5b070">Sheet</span>
+<span role="tab" aria-selected="false" style="padding: 14px 10px 11px; font-size: 14px; font-weight: 700; color: #aab3cc">Memory</span>
+<span role="tab" aria-selected="false" style="padding: 14px 10px 11px; font-size: 14px; font-weight: 700; color: #aab3cc">Journal</span>
+<span role="tab" aria-selected="false" style="padding: 14px 10px 11px; font-size: 14px; font-weight: 700; color: #aab3cc">Combat</span>
+</div>
+<div class="scroll" style="flex: 1; min-height: 0; padding: 16px">
+<sc-if value="{{dockOpen}}" hint-placeholder-val="{{ false }}">
+<section aria-label="Cast progress" style="margin-bottom: 14px; padding: 14px; border-radius: 12px; background: #121b30; box-shadow: 0 0 0 1px rgba(213,176,112,.5)">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+<div class="tx-cinzel" style="font-size: 16px; font-weight: 700; color: #f3deb0">{{dockTitle}}</div>
+<sc-if value="{{hasElapsed}}" hint-placeholder-val="{{ false }}"><span style="font-size: 14px; color: #aab3cc; font-variant-numeric: tabular-nums">{{elapsed}}</span></sc-if>
+</div>
+<div role="status" aria-live="polite" style="margin-top: 8px; font-size: 15px; line-height: 1.45; color: #eaeefa">{{status}}</div>
+<sc-if value="{{castingOrResolving}}" hint-placeholder-val="{{ false }}"><div aria-hidden="true" class="bar" style="margin-top: 10px"><i></i></div></sc-if>
+<sc-if value="{{hasHint}}" hint-placeholder-val="{{ false }}"><div style="margin-top: 8px; font-size: 14px; color: #aab3cc">{{hint}}</div></sc-if>
+<sc-if value="{{isDone}}" hint-placeholder-val="{{ false }}">
+<div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px">
+<span style="align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px; border-radius: 8px; background: linear-gradient(160deg,#f6e3b8,#d5b070 45%,#a9823f); color: #1a1206; font-family: 'Cinzel', Georgia, serif; font-size: 14px; font-weight: 700; letter-spacing: .06em"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path></svg>TARGET FAILED</span>
+<div style="font-size: 15px; line-height: 1.45; color: #d4dbef">DEX save 6 vs DC 14 · 2 acid damage. Captain Sarah Reeves is now at 9 HP.</div>
+<button type="button" class="gbtn" onClick="{{dismiss}}">Dismiss</button>
+</div>
+</sc-if>
+<ol aria-label="Steps" style="margin: 12px 0 0; padding: 0; list-style: none; display: flex; gap: 6px; flex-wrap: wrap">
+<sc-for list="{{steps}}" as="x" hint-placeholder-count="4"><li style="padding: 3px 10px; border-radius: 999px; background: {{x.bg}}; color: {{x.fg}}; font-size: 12px; font-weight: 700">{{x.k}}</li></sc-for>
+</ol>
+</section>
+</sc-if>
+
+<div style="display: flex; gap: 12px; align-items: center">
+<img src="/_blob/c9f915c5930b143fcbe655a8ed1755d6" alt="" style="width: 52px; height: 52px; border-radius: 12px; object-fit: cover; box-shadow: 0 0 0 2px #d5b070">
+<div><h2 class="tx-cinzel" style="margin: 0; font-size: 19px; color: #f3deb0">The Scholar</h2><div style="font-size: 14px; color: #aab3cc">Human Wizard · Level 1</div></div>
+</div>
+<div style="margin-top: 12px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px">
+<div style="padding: 8px 4px; border-radius: 10px; background: #121b30; text-align: center; box-shadow: 0 0 0 1px rgba(239,138,138,.5)"><div style="font-size: 12px; letter-spacing: .1em; color: #aab3cc; font-weight: 700">HP</div><div class="tx-cinzel" style="font-size: 20px; font-weight: 700; color: #ef8a8a">4/7</div></div>
+<div style="padding: 8px 4px; border-radius: 10px; background: #121b30; text-align: center"><div style="font-size: 12px; letter-spacing: .1em; color: #aab3cc; font-weight: 700">AC</div><div class="tx-cinzel" style="font-size: 20px; font-weight: 700; color: #f3deb0">11</div></div>
+<div style="padding: 8px 4px; border-radius: 10px; background: #121b30; text-align: center"><div style="font-size: 12px; letter-spacing: .1em; color: #aab3cc; font-weight: 700">INIT</div><div class="tx-cinzel" style="font-size: 20px; font-weight: 700; color: #f3deb0">+1</div></div>
+<div style="padding: 8px 4px; border-radius: 10px; background: #121b30; text-align: center"><div style="font-size: 12px; letter-spacing: .1em; color: #aab3cc; font-weight: 700">SPD</div><div class="tx-cinzel" style="font-size: 20px; font-weight: 700; color: #f3deb0">30</div></div>
+</div>
+<div style="margin-top: 14px; font-size: 12px; font-weight: 700; letter-spacing: .14em; color: #aab3cc">SPELLS · ATTACK +6 · SAVE DC 14</div>
+<div style="margin-top: 8px; font-size: 13px; font-weight: 700; color: #4fb6c4">CANTRIPS</div>
+<ul style="margin: 6px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px">
+<li style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 12px; border-radius: 10px; background: #121b30"><span><b style="display: block; font-size: 16px">Acid Splash</b><span style="font-size: 13px; color: #aab3cc">Cantrip · Conjuration · DEX save</span></span>
+<button type="button" class="cast" aria-label="Cast Acid Splash" aria-disabled="{{castDisabledOther}}" onClick="{{doCast}}" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px">
+<sc-if value="{{isBusy}}" hint-placeholder-val="{{ false }}"><svg class="spin" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="3" stroke-dasharray="40 20" stroke-linecap="round"></circle></svg></sc-if>{{castLabel}}</button></li>
+<li style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 12px; border-radius: 10px; background: #121b30"><span><b style="display: block; font-size: 16px">Chill Touch</b><span style="font-size: 13px; color: #aab3cc">Cantrip · Necromancy · Spell attack</span></span>
+<button type="button" class="cast" aria-label="Cast Chill Touch" aria-disabled="{{castDisabledOther}}">Cast</button></li>
+</ul>
+<div style="margin-top: 12px; font-size: 13px; font-weight: 700; color: #4fb6c4">LEVEL 1 · SLOTS 2 OF 2</div>
+<ul style="margin: 6px 0 0; padding: 0; list-style: none">
+<li style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 12px; border-radius: 10px; background: #121b30"><span><b style="display: block; font-size: 16px">Burning Hands</b><span style="font-size: 13px; color: #aab3cc">Level 1 · Evocation · DEX save</span></span>
+<button type="button" class="cast" aria-label="Cast Burning Hands" aria-disabled="{{castDisabledOther}}">Cast</button></li>
+</ul>
+
+</div>
+</aside>
+</sc-if>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"moment":{"editor":"enum","options":["R1 Scholar","R1 Reeves","R2 Scholar","R2 Reeves","R3 Scholar"],"default":"R2 Scholar","section":"State"},"stage":{"editor":"enum","options":["idle","casting","save","resolving","done"],"default":"idle","section":"State"},"sheet":{"editor":"enum","options":["closed","open"],"default":"closed","section":"State"},"order":{"editor":"enum","options":["today","fixed"],"default":"today","section":"State"},"difficulty":{"editor":"enum","options":["Easy","Medium","Hard"],"default":"Medium","section":"Settings"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { stage: null, moment: null, t: 0, rt: 0, sheet: null, dismissed: false, draft: '' };
+    this.timer = null;
+  }
+  componentWillUnmount() { clearInterval(this.timer); }
+  componentDidMount() { setTimeout(function () { var el = document.getElementById('feedscroll'); if (el) el.scrollTop = el.scrollHeight; }, 400); }
+  componentDidUpdate() { setTimeout(function () { var el = document.getElementById('feedscroll'); if (el) el.scrollTop = el.scrollHeight; }, 40); }
+  showTargets() {
+    var d = String((this.props && this.props.difficulty) || 'Medium').toLowerCase();
+    return d === 'easy' || d === 'medium';
+  }
+  cast() {
+    var self = this;
+    var eff = this.state.stage || this.props.stage || 'idle';
+    if (eff !== 'idle' && eff !== 'done') return;
+    clearInterval(this.timer);
+    this.setState({ stage: 'casting', t: 0, rt: 0, dismissed: false });
+    var fixed = String(this.props.order || 'today') === 'fixed';
+    this.timer = setInterval(function () {
+      var s = self.state, st = s.stage, t = s.t + 5;
+      if (st === 'casting') {
+        if (t >= (fixed ? 5 : 40)) self.setState({ stage: 'save', t: t }); else self.setState({ t: t });
+      } else if (st === 'resolving') {
+        if (t - s.rt >= 15) { clearInterval(self.timer); self.setState({ stage: 'done', t: t }); } else self.setState({ t: t });
+      } else { clearInterval(self.timer); }
+    }, 1000);
+  }
+  proceed() { this.setState({ stage: 'resolving', rt: this.state.t }); }
+  reset() { clearInterval(this.timer); this.setState({ stage: 'idle', moment: 'R2 Scholar', t: 0, rt: 0, dismissed: false }); }
+  model() {
+    var self = this, s = this.state, p = this.props || {};
+    var showT = this.showTargets();
+    var stage = s.stage || p.stage || 'idle';
+    var MOM = [
+      { key: 'R1 Scholar', round: 1, idx: 0, n: 1 }, { key: 'R1 Reeves', round: 1, idx: 1, n: 2 },
+      { key: 'R2 Scholar', round: 2, idx: 0, n: 3 }, { key: 'R2 Reeves', round: 2, idx: 1, n: 4 },
+      { key: 'R3 Scholar', round: 3, idx: 0, n: 5 }
+    ];
+    var mkey = s.moment || p.moment || 'R2 Scholar';
+    var mi = 2;
+    MOM.forEach(function (m, i) { if (m.key === mkey) mi = i; });
+    if (stage === 'done') mi = 4; else if (stage !== 'idle') mi = 2;
+    var cur = MOM[mi];
+    var ALL = [
+      { kind: 'init', turn: '', text: 'The Scholar 9 · Captain Sarah Reeves 4. The Scholar acts first.' },
+      { kind: 'res', dm: 'The chill slides off the rock she crouches behind. Captain Sarah Reeves draws her longsword.', turn: 'Round 1 · The Scholar', side: 'you', title: 'The Scholar casts Chill Touch at Captain Sarah Reeves', badge: 'MISS', tone: 'neutral',
+        math: 'Spell attack: d20 2 + 6 = 8 vs ' + (showT ? 'AC 14 (12 + 2 half cover)' : 'AC ?'), effect: 'No damage.' },
+      { kind: 'res', dm: 'Her blade catches you across the arm. It burns, then goes numb.', turn: 'Round 1 · Captain Sarah Reeves', side: 'enemy', title: 'Captain Sarah Reeves attacks The Scholar with Longsword', badge: 'HIT', tone: 'bad',
+        math: 'd20 14 + 0 = 14 vs your AC 11', effect: '3 slashing damage', hp: { name: 'The Scholar', from: 7, to: 4, max: 7 } },
+      { kind: 'res', dm: 'The acid strikes her sleeve with a hiss. Captain Sarah Reeves grits her teeth and steps in.', turn: 'Round 2 · The Scholar', side: 'you', title: 'The Scholar casts Acid Splash at Captain Sarah Reeves', badge: 'TARGET FAILED', tone: 'good',
+        math: 'DEX save 6 vs DC 14', effect: '2 acid damage', enemyHp: 'Captain Sarah Reeves is now at 9 HP' },
+      { kind: 'res', dm: 'She lunges. The blade slices the air where you stood.', turn: 'Round 2 · Captain Sarah Reeves', side: 'enemy', title: 'Captain Sarah Reeves attacks The Scholar with Longsword', badge: 'MISS', tone: 'neutral',
+        math: 'd20 3 + 0 = 3 vs your AC 11', effect: 'No damage.' }
+    ];
+    var TONE = {
+      good: { bg: 'linear-gradient(160deg,#f6e3b8,#d5b070 45%,#a9823f)', fg: '#1a1206', bd: '#f3deb0', icon: 'check' },
+      bad: { bg: 'linear-gradient(160deg,#c2323a,#7a1016)', fg: '#ffe9d6', bd: '#ef8a8a', icon: 'alert' },
+      neutral: { bg: '#121b30', fg: '#d4dbef', bd: 'rgba(212,219,239,.5)', icon: 'dash' }
+    };
+    var feed = [];
+    ALL.slice(0, cur.n).forEach(function (c, i) {
+      var prev = i > 0 ? ALL[i - 1] : null;
+      var showDiv = c.turn && (!prev || prev.turn !== c.turn);
+      if (showDiv) feed.push({ isDiv: true, isCard: false, isInit: false, isPending: false, label: c.turn });
+      if (c.kind === 'init') { feed.push({ isDiv: false, isCard: false, isInit: true, isPending: false, text: c.text }); return; }
+      var t = TONE[c.tone];
+      var hp = c.hp || null;
+      feed.push({
+        isDiv: false, isInit: false, isPending: false, isCard: true,
+        stripe: c.side === 'you' ? '#4fb6c4' : '#ef8a8a', title: c.title, badge: c.badge, bBg: t.bg, bFg: t.fg, bBd: t.bd,
+        iCheck: t.icon === 'check', iAlert: t.icon === 'alert', iDash: t.icon === 'dash',
+        dm: c.dm, math: c.math, effect: c.effect, hpLoss: hp ? (hp.from - hp.to) : 0, hasHp: !!hp, hasEnemyHp: !!c.enemyHp, enemyHp: c.enemyHp || '',
+        hpName: hp ? hp.name : '', hpFrom: hp ? hp.from : 0, hpTo: hp ? hp.to : 0, hpMax: hp ? hp.max : 0,
+        hpFromPct: hp ? Math.round(100 * hp.from / hp.max) + '%' : '0%', hpToPct: hp ? Math.round(100 * hp.to / hp.max) + '%' : '0%',
+        aria: c.title + '. ' + c.badge + '. ' + c.math + '. ' + c.effect
+      });
+    });
+    var busy = stage === 'casting' || stage === 'resolving' || stage === 'save';
+    if (stage === 'casting' || stage === 'resolving') feed.push({ isDiv: false, isCard: false, isInit: false, isPending: true });
+    var ORDER = [{ name: 'The Scholar', init: 9 }, { name: 'Captain Sarah Reeves', init: 4 }];
+    var rows = ORDER.map(function (o, i) {
+      var st = i < cur.idx ? 'Acted' : (i === cur.idx ? 'Now' : 'Waiting');
+      return { name: o.name, init: o.init, st: st, isNow: st === 'Now', isDone: st === 'Acted', isWait: st === 'Waiting',
+        ring: st === 'Now' ? '#f3deb0' : 'rgba(213,176,112,.18)', op: st === 'Waiting' ? '.72' : '1', side: i === 0 ? '#4fb6c4' : '#ef8a8a' };
+    });
+    var acted = cur.idx;
+    var youNow = cur.idx === 0;
+    var turnText = busy ? 'Your turn · casting Acid Splash' : (youNow ? 'Your turn. Cast a spell or type what you do.' : 'Captain Sarah Reeves is acting…');
+    // cast flow
+    var fixed = String(p.order || 'today') === 'fixed';
+    var steps = fixed
+      ? [{ k: 'Sent', on: stage !== 'idle' }, { k: 'Save', on: stage === 'save' || stage === 'resolving' || stage === 'done' }, { k: 'Result', on: stage === 'done' }]
+      : [{ k: 'Sent', on: stage !== 'idle' }, { k: 'DM reads', on: stage === 'save' || stage === 'resolving' || stage === 'done' }, { k: 'Save', on: stage === 'resolving' || stage === 'done' }, { k: 'Result', on: stage === 'done' }];
+    var status = '', hint = '';
+    if (stage === 'casting') {
+      status = s.t < 5 ? 'Sending your spell to the DM' : 'The DM is reading the scene';
+      hint = s.t >= 20 ? 'This can take up to a minute.' : '';
+    } else if (stage === 'save') { status = 'Press Continue below.'; }
+    else if (stage === 'resolving') { status = (s.t - s.rt) < 10 ? 'Rolling for Captain Sarah Reeves' : 'The DM is writing what happens'; }
+    
+    var out = {
+      stage: stage, isIdle: stage === 'idle', isBusy: busy, isCasting: stage === 'casting', isSave: stage === 'save', isResolving: stage === 'resolving', isDone: stage === 'done',
+      castingOrResolving: stage === 'casting' || stage === 'resolving',
+      round: cur.round, roundLabel: 'Round ' + cur.round, feed: feed, rows: rows, actedText: acted + ' of 2 have acted this round',
+      youNow: youNow, notYouNow: !youNow, turnText: turnText,
+      chips: ORDER.map(function (o, i) {
+        var st = i < cur.idx ? 'done' : (i === cur.idx ? 'now' : 'wait');
+        return { num: i + 1, initials: i === 0 ? 'TS' : 'CR', showName: st === 'now', name: o.name, isDone: st === 'done', isNow: st === 'now', isWait: st === 'wait', ring: st === 'now' ? '#f3deb0' : 'rgba(213,176,112,.25)', bg: st === 'now' ? '#1c2742' : '#0c1220', op: st === 'wait' ? '.75' : '1', init: o.init };
+      }),
+      nextRoundLabel: 'Round ' + (cur.round + 1), turnShort: busy ? 'Casting…' : (youNow ? 'Your turn' : 'Captain Sarah Reeves is acting…'),
+      sheetH: { idle: '68%', casting: '42%', resolving: '42%', save: '36%', done: '58%' }[stage],
+      feedBottom: ((s.sheet === null ? p.sheet === 'open' : s.sheet) ? { idle: '68%', casting: '42%', resolving: '42%', save: '36%', done: '58%' }[stage] : '0'),
+      turnAria: 'Round ' + cur.round + '. ' + (youNow ? 'Your turn.' : 'Captain Sarah Reeves is acting.'),
+      steps: steps.map(function (x) { return { k: x.k, bg: x.on ? '#d5b070' : '#1c2742', fg: x.on ? '#1a1206' : '#aab3cc' }; }),
+      status: status, hint: hint, hasHint: !!hint, elapsed: s.t >= 5 && (stage === 'casting' || stage === 'resolving') ? (stage === 'casting' ? s.t : s.t - s.rt) + ' s' : '',
+      hasElapsed: s.t >= 5 && (stage === 'casting' || stage === 'resolving'),
+      targetName: 'Captain Sarah Reeves', spellName: 'Acid Splash',
+      doCast: function () { self.cast(); }, doProceed: function () { self.proceed(); }, doReset: function () { self.reset(); },
+      dockOpen: stage !== 'idle' && !s.dismissed, dismiss: function () { self.setState({ dismissed: true }); },
+      sheetOpen: (s.sheet === null ? p.sheet === 'open' : s.sheet), toggleSheet: function () { self.setState({ sheet: !(self.state.sheet === null ? p.sheet === 'open' : self.state.sheet) }); },
+      sheetLabel: (s.sheet === null ? p.sheet === 'open' : s.sheet) ? 'Hide Character' : 'Show Character',
+      draft: s.draft, typing: function (e) { self.setState({ draft: e && e.target ? e.target.value : '' }); },
+      dockTitle: stage === 'done' ? 'Acid Splash · result' : (stage === 'save' ? 'Acid Splash · waiting for you' : 'Casting Acid Splash'),
+      castLabel: busy ? 'Casting…' : 'Cast',
+      castDisabledOther: busy
+    };
+    return out;
+  }
+
+  renderVals() { return this.model(); }
+}
+</script>
+</body>
+</html>

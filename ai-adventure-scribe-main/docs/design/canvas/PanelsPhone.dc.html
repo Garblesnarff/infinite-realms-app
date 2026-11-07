@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Game panels, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&amp;family=DM+Sans:wght@400;500;700&amp;family=EB+Garamond:ital,wght@0,400;0,500;1,400&amp;display=swap">
+<style>
+body{margin:0;background:#070b14}
+a{color:#d5b070}
+[hidden]{display:none!important}
+[data-show="false"]{display:none!important}
+.tx-cinzel{font-family:'Cinzel',Georgia,serif}
+.tx-gar{font-family:'EB Garamond',Georgia,serif}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{outline:2px solid #f3deb0;outline-offset:2px}
+button{font-family:'DM Sans',system-ui,sans-serif}
+.brass{background:linear-gradient(160deg,#f6e3b8 0%,#d5b070 38%,#a9823f 70%,#6e5226 100%);color:#1a1206;border:1px solid #f3deb0;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -2px 0 rgba(0,0,0,.25);cursor:pointer}
+.tab{cursor:pointer;border:0;background:none;color:#aab3cc;font-size:15px;font-weight:700;min-height:48px;flex:1;border-bottom:3px solid transparent}
+.tab[aria-selected="true"]{color:#f3deb0;border-bottom-color:#d5b070}
+.chip{cursor:pointer;min-height:44px;padding:0 10px;border-radius:999px;border:1px solid rgba(213,176,112,.35);background:#0c1220;color:#d4dbef;font-size:13px;font-weight:700}
+.chip[aria-pressed="true"]{background:#d5b070;color:#1a1206;border-color:#f3deb0}
+.lnk{cursor:pointer;background:none;border:0;color:#d5b070;font-size:14px;font-weight:700;text-decoration:underline;min-height:44px;padding:0 4px}
+.scroll{overflow-y:auto}
+@keyframes eq{0%,100%{height:5px}50%{height:16px}}
+.eq i{display:inline-block;width:3px;background:#d5b070;margin-right:2px;border-radius:2px;animation:eq .9s ease-in-out infinite}
+.eq i:nth-child(2){animation-delay:.2s}.eq i:nth-child(3){animation-delay:.4s}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{animation:spin 1s linear infinite}
+input[type=range]{accent-color:#d5b070;width:100%;height:44px;margin:0}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; background: #070b14; font-family: 'DM Sans', system-ui, sans-serif; color: #eaeefa">
+
+<header style="position: absolute; left: 0; top: 0; width: 390px; height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 16px; box-sizing: border-box; background: #0a0f1c; border-bottom: 1px solid rgba(213,176,112,.2)">
+<div style="min-width: 0"><div class="tx-cinzel" style="font-size: 16px; color: #f3deb0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Abyssal Descent</div><div style="font-size: 12px; color: #aab3cc">Session 3</div></div>
+<button type="button" onClick="{{openSettings}}" aria-haspopup="dialog" aria-label="Settings" style="width: 44px; height: 44px; border-radius: 10px; border: 1px solid rgba(213,176,112,.35); background: #0c1220; cursor: pointer; display: inline-flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10" stroke="#d5b070" stroke-width="2" stroke-linecap="round" fill="none"></path><circle cx="16" cy="7" r="2.4" fill="#0c1220" stroke="#d5b070" stroke-width="2"></circle><circle cx="8" cy="17" r="2.4" fill="#0c1220" stroke="#d5b070" stroke-width="2"></circle></svg>
+</button>
+</header>
+
+<main class="scroll" style="position: absolute; left: 0; top: 56px; width: 390px; height: 628px; padding: 16px 16px 12px; box-sizing: border-box">
+<figure style="position: relative; margin: 0; width: 358px; height: 200px; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 1px rgba(213,176,112,.3)">
+<img src="/_blob/acde7b72e68f30f0e854f12f8d58753f" alt="Illustration of the spider that waits below the ledge." style="display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%">
+<div style="position: absolute; inset: 0; background: linear-gradient(180deg, transparent 40%, rgba(7,11,20,.88))"></div>
+<figcaption style="position: absolute; left: 12px; bottom: 8px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #f3deb0">Scene · The ledge</figcaption>
+</figure>
+<div style="margin-top: 16px">
+<div class="tx-cinzel" style="font-size: 11px; letter-spacing: .16em; color: #4fb6c4; font-weight: 700">DUNGEON MASTER</div>
+<p class="tx-gar" style="margin: 6px 0 0; font-size: 20px; line-height: 1.55; color: #eaeefa">The rope goes slack in your hands. Below you, something wet drags across stone. The ledge is thirty feet down, and it is not empty.</p>
+<div style="margin-top: 8px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+<button type="button" onClick="{{vClick}}" aria-label="{{vAria}}" aria-busy="{{vBusy}}" style="display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 18px 0 14px; border-radius: 999px; background: #0c1220; border: 1px solid {{vColor}}; color: {{vColor}}; font-size: 15px; font-weight: 700; cursor: pointer">
+<sc-if value="{{isIdle}}" hint-placeholder-val="{{ true }}"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l13-7.5z" fill="currentColor"></path></svg></sc-if>
+<sc-if value="{{isPrep}}" hint-placeholder-val="{{ false }}"><svg class="spin" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="3" stroke-dasharray="40 20" stroke-linecap="round"></circle></svg></sc-if>
+<sc-if value="{{isPlay}}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4.5" width="4.4" height="15" rx="1" fill="currentColor"></rect><rect x="13.6" y="4.5" width="4.4" height="15" rx="1" fill="currentColor"></rect></svg></sc-if>
+<sc-if value="{{isErr}}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 3-6.2M4 4v5h5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+<sc-if value="{{isQuota}}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9v6h4l5 4V5L9 9zM17 9l4 6M21 9l-4 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+<span>{{vLabel}}</span>
+</button>
+<sc-if value="{{isPlay}}" hint-placeholder-val="{{ false }}"><span class="eq" aria-hidden="true" style="display: inline-flex; align-items: flex-end; height: 18px"><i></i><i></i><i></i></span><span style="font-size: 14px; color: #aab3cc">0:12 / 0:31</span></sc-if>
+<sc-if value="{{isQuota}}" hint-placeholder-val="{{ false }}"><span style="font-size: 14px; color: #aab3cc">The text still works.</span></sc-if>
+<sc-if value="{{isErr}}" hint-placeholder-val="{{ false }}"><span style="font-size: 14px; color: #ef8a8a">The voice could not load.</span></sc-if>
+</div>
+</div>
+<div style="margin: 18px 0 0 40px; padding: 12px 14px; border-radius: 14px 14px 4px 14px; background: #16223d; box-shadow: 0 0 0 1px rgba(79,182,196,.35)">
+<div style="font-size: 11px; letter-spacing: .14em; font-weight: 700; color: #4fb6c4">THE VETERAN</div>
+<p class="tx-gar" style="margin: 4px 0 0; font-size: 19px; line-height: 1.45">I draw my sword and lower myself down the wet rope.</p>
+</div>
+<div style="margin-top: 14px; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: #0c1220; box-shadow: 0 0 0 1px rgba(213,176,112,.35)">
+<span class="tx-cinzel" style="flex: none; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 10px; background: #121b30; box-shadow: 0 0 0 1px rgba(243,222,176,.5); font-size: 20px; font-weight: 700; color: #f3deb0">14</span>
+<div style="flex: 1; min-width: 0"><div style="font-size: 11px; letter-spacing: .14em; font-weight: 700; color: #aab3cc">ATHLETICS CHECK</div><div style="font-size: 15px; line-height: 1.35">14 + 5 = 19 · {{vs}} · you reach the ledge</div></div>
+</div>
+</main>
+
+<div style="position: absolute; left: 0; top: 684px; width: 390px; height: 160px; background: #0a0f1c; border-top: 1px solid rgba(213,176,112,.2)">
+<div style="display: flex; gap: 8px; padding: 10px 12px 0">
+<label for="say" class="sr">What do you do?</label>
+<input id="say" type="text" value="{{draft}}" onChange="{{typing}}" placeholder="What do you do?" style="flex: 1; min-width: 0; height: 48px; box-sizing: border-box; padding: 0 14px; border-radius: 12px; border: 1px solid rgba(213,176,112,.4); background: #0c1220; color: #eaeefa; font-family: 'EB Garamond', Georgia, serif; font-size: 18px">
+<button type="button" class="brass tx-cinzel" style="min-width: 76px; height: 48px; border-radius: 12px; font-size: 15px; font-weight: 700">Send</button>
+</div>
+<nav aria-label="Panels" style="display: flex; margin-top: 10px; padding: 0 12px; gap: 8px">
+<sc-for list="{{bottom}}" as="b" hint-placeholder-count="3"><button type="button" onClick="{{b.open}}" aria-haspopup="dialog" style="flex: 1; min-height: 52px; border-radius: 12px; border: 1px solid rgba(213,176,112,.3); background: #0c1220; color: #eaeefa; font-size: 15px; font-weight: 700; cursor: pointer">{{b.label}}</button></sc-for>
+</nav>
+</div>
+
+<!-- bottom sheet -->
+<div data-show="{{sheetOpen}}" style="position: absolute; left: 0; top: 0; width: 390px; height: 844px">
+<div onClick="{{closeSheet}}" style="position: absolute; inset: 0; background: rgba(4,7,14,.6)"></div>
+<section role="dialog" aria-modal="true" aria-label="Game panel" style="position: absolute; left: 0; top: 127px; width: 390px; height: 717px; border-radius: 18px 18px 0 0; background: #0c1220; box-shadow: 0 -1px 0 rgba(213,176,112,.4), 0 -20px 40px rgba(0,0,0,.6); display: flex; flex-direction: column">
+<div aria-hidden="true" style="flex: none; width: 40px; height: 4px; border-radius: 2px; background: #3a4566; margin: 8px auto 0"></div>
+<div style="display: flex; align-items: center; padding: 0 8px 0 4px; border-bottom: 1px solid rgba(213,176,112,.2); flex: none">
+<div role="tablist" aria-label="Game panel" style="flex: 1; display: flex">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="3"><button type="button" role="tab" aria-selected="{{t.sel}}" onClick="{{t.pick}}" class="tab" style="margin-top: 6px">{{t.label}}</button></sc-for>
+</div>
+<button type="button" onClick="{{closeSheet}}" aria-label="Close panel" style="width: 44px; height: 44px; border: 0; background: none; cursor: pointer"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="#eaeefa" stroke-width="2.2" stroke-linecap="round"></path></svg></button>
+</div>
+
+<div role="tabpanel" data-show="{{isMemory}}" class="scroll" style="flex: 1; min-height: 0; padding: 14px 16px 24px">
+<div style="display: flex; align-items: baseline; justify-content: space-between"><h2 class="tx-cinzel" style="margin: 0; font-size: 18px; color: #f3deb0">What the DM remembers</h2></div>
+<p style="margin: 4px 0 0; font-size: 14px; color: #aab3cc">The DM remembers {{memCount}} about this story.</p>
+<label for="msearch" class="sr">Search memories</label>
+<input id="msearch" type="search" value="{{q}}" onChange="{{setQ}}" placeholder="Search memories" style="margin-top: 10px; width: 100%; height: 44px; box-sizing: border-box; padding: 0 14px; border-radius: 10px; border: 1px solid rgba(213,176,112,.35); background: #070b14; color: #eaeefa; font-size: 15px">
+<div style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{filters}}" as="c" hint-placeholder-count="5"><button type="button" class="chip" aria-pressed="{{c.on}}" onClick="{{c.pick}}">{{c.label}} {{c.n}}</button></sc-for>
+</div>
+<div style="margin-top: 12px; display: flex; flex-direction: column; gap: 10px">
+<sc-if value="{{noMem}}" hint-placeholder-val="{{ false }}"><p style="margin: 8px 0; font-size: 15px; color: #aab3cc">No memories match. Try another word.</p></sc-if>
+<sc-for list="{{mems}}" as="m" hint-placeholder-count="4">
+<sc-if value="{{m.isHead}}" hint-placeholder-val="{{ false }}"><h3 style="margin: 8px 0 0; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #aab3cc">{{m.head}}</h3></sc-if>
+<sc-if value="{{m.isCard}}" hint-placeholder-val="{{ true }}">
+<article style="padding: 12px 14px 2px; border-radius: 12px; background: #121b30; box-shadow: 0 0 0 1px rgba(213,176,112,.2)">
+<div style="display: flex; align-items: center; justify-content: space-between"><span style="font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: {{m.color}}">{{m.kind}}</span><span role="img" aria-label="{{m.impAria}}" style="display: inline-flex; gap: 3px"><span style="width: 7px; height: 7px; border-radius: 50%; background: {{m.p1}}"></span><span style="width: 7px; height: 7px; border-radius: 50%; background: {{m.p2}}"></span><span style="width: 7px; height: 7px; border-radius: 50%; background: {{m.p3}}"></span></span></div>
+<p style="margin: 3px 0 0; font-size: 16px; line-height: 1.45">{{m.text}}</p>
+<sc-if value="{{m.hasMeta}}" hint-placeholder-val="{{ false }}"><p style="margin: 4px 0 0; font-size: 13px; color: #98a3c2">{{m.meta}}</p></sc-if>
+<div style="display: flex; align-items: center; gap: 10px; min-height: 44px">
+<span style="font-size: 13px; color: #98a3c2">{{m.when}}</span>
+<button type="button" class="lnk" style="margin-left: auto">That’s wrong</button>
+</div>
+</article>
+</sc-if>
+</sc-for>
+</div>
+</div>
+
+<div role="tabpanel" data-show="{{isJournal}}" class="scroll" style="flex: 1; min-height: 0; padding: 14px 16px 24px">
+<h2 class="tx-cinzel" style="margin: 0; font-size: 18px; color: #f3deb0">Journal</h2>
+<div style="margin-top: 12px; padding: 14px; border-radius: 6px; background: linear-gradient(170deg, #efe3c6, #dfcfa6); color: #2a1d0c; box-shadow: 0 8px 18px rgba(0,0,0,.5); transform: rotate(-1deg)">
+<div class="tx-cinzel" style="font-size: 12px; letter-spacing: .12em; color: #6b4d27; font-weight: 700">TORN PAGE</div>
+<p class="tx-gar" style="margin: 6px 0 0; font-size: 20px; line-height: 1.4; font-style: italic">“Day 9. The ropes were cut from below.”</p>
+<div style="margin-top: 6px; font-size: 13px; color: #5b4630">Given by the DM · Session 2</div>
+</div>
+<label for="notes" style="display: block; margin-top: 20px; font-size: 12px; font-weight: 700; letter-spacing: .14em; color: #aab3cc">MY NOTES</label>
+<textarea id="notes" rows="4" value="{{notes}}" onChange="{{setNotes}}" style="margin-top: 8px; width: 100%; box-sizing: border-box; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(213,176,112,.35); background: #070b14; color: #eaeefa; font-family: 'EB Garamond', Georgia, serif; font-size: 18px; line-height: 1.45"></textarea>
+<a href="Chronicle.dc.html" style="margin-top: 16px; display: flex; align-items: center; justify-content: space-between; min-height: 64px; padding: 10px 14px; box-sizing: border-box; border-radius: 12px; background: #121b30; box-shadow: 0 0 0 1px rgba(213,176,112,.3); color: #eaeefa; text-decoration: none"><span><span style="display: block; font-size: 16px; font-weight: 700">Read the chronicle</span><span style="display: block; font-size: 14px; color: #aab3cc">Story so far · Share it</span></span><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="#d5b070" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
+</div>
+
+<div role="tabpanel" data-show="{{isSheet}}" class="scroll" style="flex: 1; min-height: 0; padding: 14px 16px 24px">
+<div style="display: flex; gap: 12px; align-items: center"><img src="/_blob/c9f915c5930b143fcbe655a8ed1755d6" alt="The Veteran" style="width: 56px; height: 56px; border-radius: 12px; object-fit: cover; box-shadow: 0 0 0 2px #d5b070"><div><h2 class="tx-cinzel" style="margin: 0; font-size: 19px; color: #f3deb0">The Veteran</h2><div style="font-size: 14px; color: #aab3cc">Human Fighter · Level 1</div></div></div>
+<div style="margin-top: 14px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px">
+<sc-for list="{{vitals}}" as="v" hint-placeholder-count="4"><div style="padding: 8px 4px; border-radius: 10px; background: #121b30; text-align: center; box-shadow: 0 0 0 1px rgba(213,176,112,.25)"><div style="font-size: 12px; letter-spacing: .1em; color: #aab3cc; font-weight: 700">{{v.k}}</div><div class="tx-cinzel" style="font-size: 20px; font-weight: 700; color: #f3deb0">{{v.v}}</div></div></sc-for>
+</div>
+<div style="margin-top: 14px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px">
+<sc-for list="{{abil}}" as="a" hint-placeholder-count="6"><div style="padding: 8px 4px; border-radius: 10px; background: #121b30; text-align: center"><div style="font-size: 12px; letter-spacing: .1em; color: #aab3cc; font-weight: 700">{{a.k}}</div><div style="font-size: 18px; font-weight: 700">{{a.mod}} <span style="font-size: 13px; font-weight: 400; color: #98a3c2">({{a.v}})</span></div></div></sc-for>
+</div>
+<ul style="margin: 14px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px">
+<sc-for list="{{attacks}}" as="w" hint-placeholder-count="2"><li style="display: flex; justify-content: space-between; padding: 10px 12px; border-radius: 10px; background: #121b30; font-size: 15px"><b>{{w.n}}</b><span style="color: #d4dbef">{{w.d}}</span></li></sc-for>
+</ul>
+</div>
+</section>
+</div>
+
+<!-- settings -->
+<div data-show="{{settingsOpen}}" style="position: absolute; left: 0; top: 0; width: 390px; height: 844px">
+<section role="dialog" aria-modal="true" aria-labelledby="sett" class="scroll" style="position: absolute; inset: 0; box-sizing: border-box; padding: 12px 20px 24px; background: #0c1220">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<h2 id="sett" class="tx-cinzel" style="margin: 0; font-size: 24px; color: #f3deb0">Settings</h2>
+<button type="button" onClick="{{closeSettings}}" style="min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid rgba(213,176,112,.4); background: #121b30; color: #eaeefa; font-size: 15px; font-weight: 700; cursor: pointer">Close</button>
+</div>
+<div style="margin-top: 12px; font-size: 12px; font-weight: 700; letter-spacing: .14em; color: #4fb6c4">TABLE</div>
+<sc-for list="{{tableSw}}" as="s" hint-placeholder-count="3">
+<button type="button" role="switch" aria-checked="{{s.on}}" onClick="{{s.tog}}" style="width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 60px; padding: 8px 0; background: none; border: 0; border-bottom: 1px solid rgba(213,176,112,.15); cursor: pointer; text-align: left; color: #eaeefa">
+<span><span style="display: block; font-size: 16px; font-weight: 700">{{s.label}}</span><span style="display: block; margin-top: 2px; font-size: 14px; line-height: 1.4; color: #aab3cc">{{s.desc}}</span></span>
+<span aria-hidden="true" style="flex: none; position: relative; width: 46px; height: 26px; border-radius: 13px; background: {{s.track}}; box-shadow: inset 0 0 0 1px rgba(213,176,112,.5)"><span style="position: absolute; top: 3px; left: {{s.knob}}; width: 20px; height: 20px; border-radius: 50%; background: #f3deb0"></span></span>
+</button>
+</sc-for>
+<div style="margin-top: 18px; font-size: 12px; font-weight: 700; letter-spacing: .14em; color: #4fb6c4">NARRATION</div>
+<sc-for list="{{narrSw}}" as="s" hint-placeholder-count="1">
+<button type="button" role="switch" aria-checked="{{s.on}}" onClick="{{s.tog}}" style="width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 60px; padding: 8px 0; background: none; border: 0; border-bottom: 1px solid rgba(213,176,112,.15); cursor: pointer; text-align: left; color: #eaeefa">
+<span><span style="display: block; font-size: 16px; font-weight: 700">{{s.label}}</span><span style="display: block; margin-top: 2px; font-size: 14px; line-height: 1.4; color: #aab3cc">{{s.desc}}</span></span>
+<span aria-hidden="true" style="flex: none; position: relative; width: 46px; height: 26px; border-radius: 13px; background: {{s.track}}; box-shadow: inset 0 0 0 1px rgba(213,176,112,.5)"><span style="position: absolute; top: 3px; left: {{s.knob}}; width: 20px; height: 20px; border-radius: 50%; background: #f3deb0"></span></span>
+</button>
+</sc-for>
+<div style="margin-top: 10px">
+<label for="vol" style="display: flex; justify-content: space-between; font-size: 16px; font-weight: 700"><span>Volume</span><span style="color: #aab3cc; font-weight: 400">{{vol}}%</span></label>
+<input id="vol" type="range" min="0" max="100" value="{{vol}}" onChange="{{setVol}}">
+</div>
+<div id="spd" style="margin-top: 6px; font-size: 16px; font-weight: 700">Speed</div>
+<div role="radiogroup" aria-labelledby="spd" style="margin-top: 6px; display: flex; gap: 8px">
+<sc-for list="{{speeds}}" as="p" hint-placeholder-count="3"><button type="button" role="radio" aria-checked="{{p.on}}" onClick="{{p.pick}}" class="chip" aria-pressed="{{p.on}}" style="flex: 1; border-radius: 10px">{{p.label}}</button></sc-for>
+</div>
+</section>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"panel":{"editor":"enum","options":["closed","memory","journal","sheet"],"default":"closed","section":"State"},"voiceDemo":{"editor":"enum","options":["idle","preparing","playing","error","quota"],"default":"idle","section":"State"},"settings":{"editor":"enum","options":["closed","open"],"default":"closed","section":"State"},"difficulty":{"editor":"enum","options":["Easy","Medium","Hard"],"default":"Hard","section":"Settings"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { panel: null, tab: null, voice: null, q: '', kind: 'all', settings: null, targets: null, sound: true, motion: false, autoplay: false, vol: 80, speed: '1x', notes: 'The rope was wet before I touched it. Ask about the piton.', draft: '' };
+  }
+  showTargets() {
+    var t = this.state.targets;
+    if (t === true || t === false) return t;
+    var d = String((this.props && this.props.difficulty) || 'Hard').toLowerCase();
+    return d === 'easy' || d === 'medium';
+  }
+  renderVals() {
+    var self = this, s = this.state, p = this.props || {};
+    var panel = s.panel === null ? (p.panel && p.panel !== 'closed' ? p.panel : null) : (s.panel === 'none' ? null : s.panel);
+    var open = s.settings === null ? p.settings === 'open' : s.settings;
+    var showT = this.showTargets();
+    var diff = String(p.difficulty || 'Hard');
+    var defOn = diff === 'Easy' || diff === 'Medium';
+    var st = s.voice || p.voiceDemo || 'idle';
+    var out = {
+      isIdle: st === 'idle', isPrep: st === 'preparing', isPlay: st === 'playing', isErr: st === 'error', isQuota: st === 'quota',
+      vLabel: { idle: 'Listen', preparing: 'Preparing voice…', playing: 'Pause', error: 'Try again', quota: 'Voice limit reached' }[st],
+      vAria: { idle: 'Listen to this message', preparing: 'Preparing the voice', playing: 'Pause the voice', error: 'The voice failed. Try again', quota: 'Voice limit reached' }[st],
+      vColor: st === 'error' ? '#ef8a8a' : st === 'quota' ? '#aab3cc' : '#f3deb0',
+      vBusy: st === 'preparing' ? 'true' : 'false',
+      vClick: function () { if (st === 'idle' || st === 'error') self.setState({ voice: 'playing' }); else if (st === 'playing') self.setState({ voice: 'idle' }); },
+      vs: showT ? 'vs DC 12' : 'vs the DM’s DC',
+      draft: s.draft, typing: function (e) { self.setState({ draft: e && e.target ? e.target.value : '' }); }
+    };
+    var M = [
+      { kind: 'location', text: 'The ledge is thirty feet below the piton. Its stone is wet.', when: 'Session 3 · just now', imp: 3, meta: 'depth: thirty feet · surface: wet stone' },
+      { kind: 'item', text: 'A piton, hammered in by the last expedition, holds the rope.', when: 'Session 3 · 4 min ago', imp: 2, meta: 'placed by: the last expedition' },
+      { kind: 'character', text: 'The spider is stitched from the dead of the last expedition.', when: 'Session 3 · 9 min ago', imp: 3 },
+      { kind: 'event', text: 'Day 9. The ropes were cut from below.', when: 'Session 2 · yesterday', imp: 3, meta: 'source: torn page' },
+      { kind: 'event', text: 'The rope was wet before you touched it.', when: 'Session 2 · yesterday', imp: 1 }
+    ];
+    var K = { location: { label: 'Locations', one: 'Location', color: '#4fb6c4' }, character: { label: 'Characters', one: 'Character', color: '#ef8a8a' }, event: { label: 'Events', one: 'Event', color: '#c9b6f0' }, item: { label: 'Items', one: 'Item', color: '#d5b070' } };
+    var q = s.q.trim().toLowerCase();
+    var shown = M.filter(function (m) { return (s.kind === 'all' || m.kind === s.kind) && (!q || m.text.toLowerCase().indexOf(q) >= 0); });
+    var cnt = function (k) { return M.filter(function (m) { return k === 'all' || m.kind === k; }).length; };
+    var sw = function (id, label, desc, on) {
+      return { label: label, desc: desc, on: on ? 'true' : 'false', track: on ? '#8a6a30' : '#1c2742', knob: on ? '23px' : '3px', tog: function () { var o = {}; o[id] = !on; self.setState(o); } };
+    };
+    var toCard = function (m) { var pip = function (i) { return m.imp >= i ? '#d5b070' : '#2a3556'; }; return { isCard: true, isHead: false, head: '', hasMeta: !!m.meta, meta: m.meta || '', kind: K[m.kind].one, color: K[m.kind].color, text: m.text, when: m.when, impAria: 'Importance ' + m.imp + ' of 3', p1: pip(1), p2: pip(2), p3: pip(3) }; };
+    var mems = [];
+    if (s.kind === 'all' && !q) {
+      ['location', 'character', 'event', 'item'].forEach(function (g) {
+        var grp = shown.filter(function (m) { return m.kind === g; });
+        if (grp.length) { mems.push({ isHead: true, isCard: false, head: K[g].label + ' · ' + grp.length }); grp.forEach(function (m) { mems.push(toCard(m)); }); }
+      });
+    } else { mems = shown.map(toCard); }
+    var tab = panel;
+    var R = Object.assign(out, {
+      openSettings: function () { self.setState({ settings: true }); }, closeSettings: function () { self.setState({ settings: false }); }, settingsOpen: open,
+      bottom: [{ id: 'sheet', label: 'Sheet' }, { id: 'memory', label: 'Memory' }, { id: 'journal', label: 'Journal' }].map(function (b) { return { label: b.label, open: function () { self.setState({ panel: b.id }); } }; }),
+      sheetOpen: !!panel, closeSheet: function () { self.setState({ panel: 'none' }); },
+      tabs: [{ id: 'sheet', label: 'Sheet' }, { id: 'memory', label: 'Memory' }, { id: 'journal', label: 'Journal' }].map(function (t) { return { label: t.label, sel: tab === t.id ? 'true' : 'false', pick: function () { self.setState({ panel: t.id }); } }; }),
+      isMemory: tab === 'memory', isJournal: tab === 'journal', isSheet: tab === 'sheet',
+      memCount: M.length + ' things', q: s.q, setQ: function (e) { self.setState({ q: e && e.target ? e.target.value : '' }); },
+      filters: ['all', 'location', 'character', 'event', 'item'].map(function (k) { return { label: k === 'all' ? 'All' : K[k].label, n: cnt(k), on: s.kind === k ? 'true' : 'false', pick: function () { self.setState({ kind: k }); } }; }),
+      mems: mems,
+      noMem: shown.length === 0,
+      notes: s.notes, setNotes: function (e) { self.setState({ notes: e && e.target ? e.target.value : '' }); },
+      vitals: [{ k: 'HP', v: '12' }, { k: 'AC', v: '18' }, { k: 'INIT', v: '+1' }, { k: 'SPD', v: '30' }],
+      abil: [{ k: 'STR', mod: '+3', v: 16 }, { k: 'DEX', mod: '+1', v: 12 }, { k: 'CON', mod: '+2', v: 14 }, { k: 'INT', mod: '+0', v: 10 }, { k: 'WIS', mod: '+1', v: 12 }, { k: 'CHA', mod: '−1', v: 8 }],
+      attacks: [{ n: 'Longsword', d: '+5 · 1d8+3' }, { n: 'Light crossbow', d: '+3 · 1d8+1' }],
+      tableSw: [
+        { label: 'Show target numbers', desc: 'Shows the DC and AC. Default for this campaign: ' + (defOn ? 'on' : 'off') + ' (' + diff + ').', on: showT ? 'true' : 'false', track: showT ? '#8a6a30' : '#1c2742', knob: showT ? '23px' : '3px', tog: function () { self.setState({ targets: !showT }); } },
+        sw('sound', 'Dice sound', 'Plays a sound when the dice land.', s.sound),
+        sw('motion', 'Reduce motion', 'Dice show the result at once.', s.motion)
+      ],
+      narrSw: [sw('autoplay', 'Read new DM messages aloud', 'Starts the voice when a message arrives.', s.autoplay)],
+      vol: s.vol, setVol: function (e) { self.setState({ vol: Number(e && e.target ? e.target.value : 80) }); },
+      speeds: ['0.75x', '1x', '1.25x'].map(function (x) { return { label: x.replace('x', '×'), on: s.speed === x ? 'true' : 'false', pick: function () { self.setState({ speed: x }); } }; })
+    });
+    ['isMemory', 'isJournal', 'isSheet', 'sheetOpen', 'settingsOpen'].forEach(function (k) { R[k] = R[k] ? 'true' : 'false'; });
+    return R;
+  }
+}
+</script>
+</body>
+</html>

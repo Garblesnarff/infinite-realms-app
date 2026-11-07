@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Game panels</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&amp;family=DM+Sans:wght@400;500;700&amp;family=EB+Garamond:ital,wght@0,400;0,500;1,400&amp;display=swap">
+<style>
+body{margin:0;background:#070b14}
+a{color:#d5b070}a:hover{color:#f3deb0}
+[hidden]{display:none!important}
+[data-show="false"]{display:none!important}
+.tx-cinzel{font-family:'Cinzel',Georgia,serif}
+.tx-gar{font-family:'EB Garamond',Georgia,serif}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{outline:2px solid #f3deb0;outline-offset:2px}
+button{font-family:'DM Sans',system-ui,sans-serif}
+.brass{background:linear-gradient(160deg,#f6e3b8 0%,#d5b070 38%,#a9823f 70%,#6e5226 100%);color:#1a1206;border:1px solid #f3deb0;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -2px 0 rgba(0,0,0,.25),0 6px 14px rgba(0,0,0,.45);cursor:pointer}
+.brass:hover{filter:brightness(1.07)}
+.tab{cursor:pointer;border:0;background:none;color:#aab3cc;font-size:15px;font-weight:700;min-height:48px;padding:0 14px;border-bottom:3px solid transparent}
+.tab[aria-selected="true"]{color:#f3deb0;border-bottom-color:#d5b070}
+.tab:hover{color:#eaeefa}
+.chip{cursor:pointer;min-height:44px;padding:0 10px;border-radius:999px;border:1px solid rgba(213,176,112,.35);background:#0c1220;color:#d4dbef;font-size:13px;font-weight:700}
+.chip[aria-pressed="true"]{background:#d5b070;color:#1a1206;border-color:#f3deb0}
+.lnk{cursor:pointer;background:none;border:0;color:#d5b070;font-size:14px;font-weight:700;text-decoration:underline;min-height:44px;padding:0 4px}
+.lnk:hover{color:#f3deb0}
+.eq i{display:inline-block;width:3px;background:#d5b070;margin-right:2px;border-radius:2px;animation:eq 0.9s ease-in-out infinite}
+.eq i:nth-child(2){animation-delay:.2s}.eq i:nth-child(3){animation-delay:.4s}
+@keyframes eq{0%,100%{height:5px}50%{height:16px}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{animation:spin 1s linear infinite}
+input[type=range]{accent-color:#d5b070;width:100%;height:44px;margin:0}
+.scroll{overflow-y:auto;scrollbar-color:#3a4566 transparent}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="position: relative; width: 1440px; height: 900px; overflow: hidden; background: #070b14; font-family: 'DM Sans', system-ui, sans-serif; color: #eaeefa">
+
+<!-- top bar -->
+<header style="position: absolute; left: 0; top: 0; width: 1440px; height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 20px; box-sizing: border-box; background: #0a0f1c; border-bottom: 1px solid rgba(213,176,112,.2)">
+<div style="display: flex; align-items: center; gap: 16px">
+<a href="Campaigns.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; color: #aab3cc; text-decoration: none; font-size: 15px">Menu</a>
+<span class="tx-cinzel" style="font-size: 18px; color: #f3deb0; letter-spacing: .04em">Abyssal Descent</span>
+<span style="font-size: 14px; color: #aab3cc">Session 3</span>
+</div>
+<button type="button" onClick="{{openSettings}}" aria-haspopup="dialog" aria-label="Settings" style="width: 44px; height: 44px; border-radius: 10px; border: 1px solid rgba(213,176,112,.35); background: #0c1220; cursor: pointer; display: inline-flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10" stroke="#d5b070" stroke-width="2" stroke-linecap="round" fill="none"></path><circle cx="16" cy="7" r="2.4" fill="#0c1220" stroke="#d5b070" stroke-width="2"></circle><circle cx="8" cy="17" r="2.4" fill="#0c1220" stroke="#d5b070" stroke-width="2"></circle></svg>
+</button>
+</header>
+
+<!-- story column -->
+<main style="position: absolute; left: 0; top: 56px; width: 1100px; height: 844px; background: radial-gradient(ellipse at 50% 0%, rgba(79,182,196,.07), transparent 55%), #070b14">
+<div id="feedscroll" class="scroll" style="position: absolute; left: 0; top: 0; width: 1100px; height: 748px; padding: 28px 0 36px; box-sizing: border-box">
+<div style="width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px">
+<sc-for list="{{feed}}" as="f" hint-placeholder-count="4">
+<div>
+<sc-if value="{{f.isScene}}" hint-placeholder-val="{{ true }}">
+<figure style="position: relative; margin: 0; width: 720px; height: 240px; border-radius: 14px; overflow: hidden; box-shadow: 0 0 0 1px rgba(213,176,112,.3), 0 10px 24px rgba(0,0,0,.5)">
+<img src="/_blob/acde7b72e68f30f0e854f12f8d58753f" alt="Illustration of the spider that waits below the ledge." style="display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%">
+<div style="position: absolute; inset: 0; background: linear-gradient(180deg, transparent 45%, rgba(7,11,20,.85))"></div>
+<figcaption style="position: absolute; left: 16px; bottom: 12px; font-size: 14px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #f3deb0">Scene · The ledge below the piton</figcaption>
+</figure>
+</sc-if>
+<sc-if value="{{f.isDm}}" hint-placeholder-val="{{ false }}">
+<div style="margin-top: {{f.gap}}">
+<div class="tx-cinzel" style="font-size: 12px; letter-spacing: .16em; color: #4fb6c4; font-weight: 700">DUNGEON MASTER</div>
+<p class="tx-gar" style="margin: 8px 0 0; font-size: 22px; line-height: 1.6; color: #eaeefa">{{f.text}}</p>
+<div style="margin-top: 10px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap">
+<button type="button" onClick="{{f.vClick}}" aria-label="{{f.vAria}}" aria-busy="{{f.vBusy}}" style="display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 18px 0 14px; border-radius: 999px; background: #0c1220; border: 1px solid {{f.vColor}}; color: {{f.vColor}}; font-size: 15px; font-weight: 700; cursor: pointer">
+<sc-if value="{{f.isIdle}}"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l13-7.5z" fill="currentColor"></path></svg></sc-if>
+<sc-if value="{{f.isPrep}}"><svg class="spin" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="3" stroke-dasharray="40 20" stroke-linecap="round"></circle></svg></sc-if>
+<sc-if value="{{f.isPlay}}"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4.5" width="4.4" height="15" rx="1" fill="currentColor"></rect><rect x="13.6" y="4.5" width="4.4" height="15" rx="1" fill="currentColor"></rect></svg></sc-if>
+<sc-if value="{{f.isErr}}"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 3-6.2M4 4v5h5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+<sc-if value="{{f.isQuota}}"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9v6h4l5 4V5L9 9zM17 9l4 6M21 9l-4 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+<span>{{f.vLabel}}</span>
+</button>
+<sc-if value="{{f.isPlay}}">
+<span class="eq" aria-hidden="true" style="display: inline-flex; align-items: flex-end; height: 18px"><i></i><i></i><i></i></span>
+<span style="display: inline-flex; align-items: center; gap: 10px; font-size: 14px; color: #aab3cc"><span aria-hidden="true" style="position: relative; display: inline-block; width: 160px; height: 4px; border-radius: 2px; background: #1c2742"><span style="position: absolute; left: 0; top: 0; height: 4px; width: 38%; border-radius: 2px; background: #d5b070"></span></span>0:12 / 0:31</span>
+</sc-if>
+<sc-if value="{{f.isQuota}}"><span style="font-size: 14px; color: #aab3cc">The text still works.</span><a href="Campaigns.dc.html" style="font-size: 14px; font-weight: 700; display: inline-flex; align-items: center; min-height: 44px">See plans</a></sc-if>
+<sc-if value="{{f.isErr}}"><span style="font-size: 14px; color: #ef8a8a">The voice could not load.</span></sc-if>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{f.isMe}}" hint-placeholder-val="{{ false }}">
+<div style="align-self: flex-end; margin-left: 120px; padding: 14px 18px; border-radius: 14px 14px 4px 14px; background: #16223d; box-shadow: 0 0 0 1px rgba(79,182,196,.35)">
+<div style="font-size: 12px; letter-spacing: .14em; font-weight: 700; color: #4fb6c4">THE VETERAN</div>
+<p class="tx-gar" style="margin: 4px 0 0; font-size: 20px; line-height: 1.5; color: #eaeefa">{{f.text}}</p>
+</div>
+</sc-if>
+<sc-if value="{{f.isEngine}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: 12px; background: #0c1220; box-shadow: 0 0 0 1px rgba(213,176,112,.35)">
+<span style="display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 46px; border-radius: 10px; background: #121b30; box-shadow: 0 0 0 1px rgba(243,222,176,.5)" class="tx-cinzel"><b style="font-size: 22px; color: #f3deb0">14</b></span>
+<div style="flex: 1">
+<div style="font-size: 12px; letter-spacing: .14em; font-weight: 700; color: #aab3cc">ATHLETICS CHECK</div>
+<div style="font-size: 17px; color: #eaeefa">14 + 5 = 19 · {{f.vs}} · you reach the ledge</div>
+</div>
+<span class="brass tx-cinzel" style="padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; letter-spacing: .12em; cursor: default">SUCCESS</span>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="position: absolute; left: 0; bottom: 0; width: 1100px; height: 96px; border-top: 1px solid rgba(213,176,112,.2); background: #0a0f1c">
+<div style="position: absolute; left: 190px; top: 20px; width: 720px; display: flex; gap: 12px">
+<label for="say" class="sr">What do you do?</label>
+<input id="say" type="text" value="{{draft}}" onChange="{{typing}}" placeholder="What do you do?" style="flex: 1; height: 56px; box-sizing: border-box; padding: 0 18px; border-radius: 12px; border: 1px solid rgba(213,176,112,.4); background: #0c1220; color: #eaeefa; font-family: 'EB Garamond', Georgia, serif; font-size: 20px">
+<button type="button" class="brass tx-cinzel" style="min-width: 110px; height: 56px; border-radius: 12px; font-size: 16px; font-weight: 700; letter-spacing: .08em">Send</button>
+</div>
+</div>
+</main>
+
+<!-- right panel -->
+<aside aria-label="Game panel" style="position: absolute; left: 1100px; top: 56px; width: 340px; height: 844px; background: #0c1220; border-left: 1px solid rgba(213,176,112,.25); display: flex; flex-direction: column">
+<div role="tablist" aria-label="Game panel" style="display: flex; padding: 0 6px; border-bottom: 1px solid rgba(213,176,112,.2); flex: none">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="3">
+<button type="button" role="tab" aria-selected="{{t.sel}}" onClick="{{t.pick}}" class="tab">{{t.label}}</button>
+</sc-for>
+</div>
+
+<!-- MEMORY -->
+<div role="tabpanel" data-show="{{isMemory}}" style="flex: 1; min-height: 0; display: flex; flex-direction: column">
+<div style="padding: 16px 16px 8px; flex: none">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<h2 class="tx-cinzel" style="margin: 0; font-size: 19px; color: #f3deb0">What the DM remembers</h2>
+
+</div>
+<p style="margin: 6px 0 0; font-size: 14px; line-height: 1.45; color: #aab3cc">The DM remembers {{memCount}} about this story. If one is wrong, fix it.</p>
+<label for="msearch" class="sr">Search memories</label>
+<input id="msearch" type="search" value="{{q}}" onChange="{{setQ}}" placeholder="Search memories" style="margin-top: 10px; width: 100%; height: 44px; box-sizing: border-box; padding: 0 14px; border-radius: 10px; border: 1px solid rgba(213,176,112,.35); background: #070b14; color: #eaeefa; font-size: 15px">
+<div style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{filters}}" as="c" hint-placeholder-count="5">
+<button type="button" class="chip" aria-pressed="{{c.on}}" onClick="{{c.pick}}">{{c.label}} {{c.n}}</button>
+</sc-for>
+</div>
+</div>
+<div class="scroll" style="flex: 1; min-height: 0; padding: 4px 16px 20px; display: flex; flex-direction: column; gap: 10px">
+<sc-if value="{{noMem}}" hint-placeholder-val="{{ false }}"><p style="margin: 16px 0; font-size: 15px; color: #aab3cc">No memories match. Try another word.</p></sc-if>
+<sc-for list="{{mems}}" as="m" hint-placeholder-count="4">
+<sc-if value="{{m.isHead}}" hint-placeholder-val="{{ false }}"><h3 style="margin: 10px 0 0; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #aab3cc">{{m.head}}</h3></sc-if>
+<sc-if value="{{m.isCard}}" hint-placeholder-val="{{ true }}">
+<article style="padding: 12px 14px 4px; border-radius: 12px; background: #121b30; box-shadow: 0 0 0 1px rgba(213,176,112,.2)">
+<div style="display: flex; gap: 12px">
+<span aria-hidden="true" style="flex: none; width: 32px; height: 32px; border-radius: 50%; background: #0c1220; box-shadow: 0 0 0 1px {{m.color}}; display: inline-flex; align-items: center; justify-content: center; color: {{m.color}}; font-size: 14px; font-weight: 700">{{m.glyph}}</span>
+<div style="flex: 1; min-width: 0">
+<div style="display: flex; align-items: center; justify-content: space-between"><span style="font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: {{m.color}}">{{m.kind}}</span><span role="img" aria-label="{{m.impAria}}" style="display: inline-flex; gap: 3px"><span style="width: 7px; height: 7px; border-radius: 50%; background: {{m.p1}}"></span><span style="width: 7px; height: 7px; border-radius: 50%; background: {{m.p2}}"></span><span style="width: 7px; height: 7px; border-radius: 50%; background: {{m.p3}}"></span></span></div>
+<p style="margin: 3px 0 0; font-size: 16px; line-height: 1.45; color: #eaeefa">{{m.text}}</p>
+<sc-if value="{{m.hasMeta}}" hint-placeholder-val="{{ false }}"><p style="margin: 4px 0 0; font-size: 13px; line-height: 1.4; color: #98a3c2">{{m.meta}}</p></sc-if>
+</div>
+</div>
+<sc-if value="{{m.editing}}" hint-placeholder-val="{{ false }}">
+<div style="margin-top: 10px">
+<label for="medit" style="display: block; font-size: 14px; font-weight: 700; color: #d4dbef">Correct this memory</label>
+<textarea id="medit" value="{{m.draft}}" onChange="{{setEdit}}" rows="3" style="margin-top: 6px; width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(213,176,112,.5); background: #070b14; color: #eaeefa; font-family: 'DM Sans', system-ui, sans-serif; font-size: 15px; line-height: 1.4"></textarea>
+<div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px">
+<button type="button" onClick="{{m.save}}" class="brass" style="min-height: 44px; padding: 0 18px; border-radius: 10px; font-size: 15px; font-weight: 700">Save</button>
+<button type="button" onClick="{{m.cancel}}" class="lnk" style="text-decoration: none; color: #d4dbef">Cancel</button>
+<button type="button" onClick="{{m.forget}}" class="lnk" style="color: #ef8a8a; margin-left: auto">Forget this</button>
+</div>
+</div>
+</sc-if>
+<div style="display: flex; align-items: center; gap: 10px; min-height: 44px">
+<span style="font-size: 13px; color: #98a3c2; white-space: nowrap">{{m.when}}</span>
+<button type="button" class="lnk" onClick="{{m.edit}}" aria-expanded="{{m.expanded}}" style="margin-left: auto">That’s wrong</button>
+</div>
+</article>
+</sc-if>
+</sc-for>
+</div>
+</div>
+
+<!-- JOURNAL -->
+<div role="tabpanel" data-show="{{isJournal}}" class="scroll" style="flex: 1; min-height: 0; padding: 16px">
+<h2 class="tx-cinzel" style="margin: 0; font-size: 19px; color: #f3deb0">Journal</h2>
+<div style="margin-top: 14px; font-size: 12px; font-weight: 700; letter-spacing: .14em; color: #aab3cc">HANDOUTS</div>
+<div style="margin-top: 8px; padding: 16px 16px 14px; border-radius: 6px; background: linear-gradient(170deg, #efe3c6, #dfcfa6); color: #2a1d0c; box-shadow: 0 8px 18px rgba(0,0,0,.5); transform: rotate(-1.2deg)">
+<div class="tx-cinzel" style="font-size: 12px; letter-spacing: .12em; color: #6b4d27; font-weight: 700">TORN PAGE</div>
+<p class="tx-gar" style="margin: 6px 0 0; font-size: 20px; line-height: 1.4; font-style: italic">“Day 9. The ropes were cut from below.”</p>
+<div style="margin-top: 8px; font-size: 13px; color: #5b4630">Given by the DM · Session 2</div>
+</div>
+<label for="notes" style="display: block; margin-top: 22px; font-size: 12px; font-weight: 700; letter-spacing: .14em; color: #aab3cc">MY NOTES</label>
+<textarea id="notes" rows="5" value="{{notes}}" onChange="{{setNotes}}" style="margin-top: 8px; width: 100%; box-sizing: border-box; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(213,176,112,.35); background: #070b14; color: #eaeefa; font-family: 'EB Garamond', Georgia, serif; font-size: 18px; line-height: 1.45"></textarea>
+<div style="margin-top: 4px; font-size: 13px; color: #98a3c2">Saved. Only you can see your notes.</div>
+<div style="margin-top: 20px; font-size: 12px; font-weight: 700; letter-spacing: .14em; color: #aab3cc">STORY SO FAR</div>
+<a href="Chronicle.dc.html" style="margin-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 64px; padding: 10px 14px; box-sizing: border-box; border-radius: 12px; background: #121b30; box-shadow: 0 0 0 1px rgba(213,176,112,.3); color: #eaeefa; text-decoration: none">
+<span><span style="display: block; font-size: 16px; font-weight: 700">Read the chronicle</span><span style="display: block; margin-top: 2px; font-size: 14px; color: #aab3cc">Sessions 1 to 3 · Share it with friends</span></span>
+<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="#d5b070" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+</a>
+</div>
+
+<!-- SHEET -->
+<div role="tabpanel" data-show="{{isSheet}}" class="scroll" style="flex: 1; min-height: 0; padding: 16px">
+<div style="display: flex; gap: 12px; align-items: center">
+<img src="/_blob/c9f915c5930b143fcbe655a8ed1755d6" alt="The Veteran" style="width: 64px; height: 64px; border-radius: 12px; object-fit: cover; box-shadow: 0 0 0 2px #d5b070">
+<div><h2 class="tx-cinzel" style="margin: 0; font-size: 20px; color: #f3deb0">The Veteran</h2><div style="font-size: 14px; color: #aab3cc">Human Fighter · Level 1</div></div>
+</div>
+<div style="margin-top: 14px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px">
+<sc-for list="{{vitals}}" as="v" hint-placeholder-count="4"><div style="padding: 8px 4px; border-radius: 10px; background: #121b30; text-align: center; box-shadow: 0 0 0 1px rgba(213,176,112,.25)"><div style="font-size: 12px; letter-spacing: .1em; color: #aab3cc; font-weight: 700">{{v.k}}</div><div class="tx-cinzel" style="font-size: 20px; font-weight: 700; color: #f3deb0">{{v.v}}</div></div></sc-for>
+</div>
+<div style="margin-top: 16px; font-size: 12px; font-weight: 700; letter-spacing: .14em; color: #aab3cc">ABILITIES</div>
+<div style="margin-top: 8px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px">
+<sc-for list="{{abil}}" as="a" hint-placeholder-count="6"><div style="padding: 8px 4px; border-radius: 10px; background: #121b30; text-align: center"><div style="font-size: 12px; letter-spacing: .1em; color: #aab3cc; font-weight: 700">{{a.k}}</div><div style="font-size: 18px; font-weight: 700; color: #eaeefa">{{a.mod}} <span style="font-size: 13px; font-weight: 400; color: #98a3c2">({{a.v}})</span></div></div></sc-for>
+</div>
+<div style="margin-top: 16px; font-size: 12px; font-weight: 700; letter-spacing: .14em; color: #aab3cc">ATTACKS</div>
+<ul style="margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px">
+<sc-for list="{{attacks}}" as="w" hint-placeholder-count="2"><li style="display: flex; justify-content: space-between; padding: 10px 12px; border-radius: 10px; background: #121b30; font-size: 15px"><b>{{w.n}}</b><span style="color: #d4dbef">{{w.d}}</span></li></sc-for>
+</ul>
+<div style="margin-top: 16px; font-size: 12px; font-weight: 700; letter-spacing: .14em; color: #aab3cc">EQUIPMENT</div>
+<p style="margin: 8px 0 0; font-size: 15px; line-height: 1.5; color: #d4dbef">Chain mail, shield, longsword, light crossbow, 20 bolts, rope (50 ft), 3 torches.</p>
+</div>
+
+<!-- COMBAT -->
+<div role="tabpanel" data-show="{{isCombat}}" style="flex: 1; min-height: 0; padding: 16px">
+<h2 class="tx-cinzel" style="margin: 0; font-size: 19px; color: #f3deb0">Combat · Round 2</h2>
+<ul style="margin: 12px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px">
+<sc-for list="{{order}}" as="o" hint-placeholder-count="3"><li style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; background: #121b30; box-shadow: 0 0 0 {{o.ring}} #f3deb0"><b class="tx-cinzel" style="width: 28px; color: #f3deb0; font-size: 18px">{{o.i}}</b><span style="flex: 1; font-size: 16px">{{o.n}}</span><span style="font-size: 14px; color: #aab3cc">{{o.hp}}</span></li></sc-for>
+</ul>
+</div>
+</aside>
+
+<!-- settings dialog -->
+<div data-show="{{settingsOpen}}" style="position: absolute; left: 0; top: 56px; width: 1440px; height: 844px">
+<div onClick="{{closeSettings}}" style="position: absolute; inset: 0; background: rgba(4,7,14,.62)"></div>
+<section role="dialog" aria-modal="true" aria-labelledby="sett" style="position: absolute; right: 12px; top: 8px; width: 420px; max-height: 820px; overflow-y: auto; box-sizing: border-box; padding: 20px 22px 22px; border-radius: 16px; background: #0c1220; box-shadow: 0 0 0 1px rgba(213,176,112,.4), 0 30px 60px rgba(0,0,0,.65)">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<h2 id="sett" class="tx-cinzel" style="margin: 0; font-size: 24px; color: #f3deb0">Settings</h2>
+<button type="button" onClick="{{closeSettings}}" style="min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid rgba(213,176,112,.4); background: #121b30; color: #eaeefa; font-size: 15px; font-weight: 700; cursor: pointer">Close</button>
+</div>
+<div style="margin-top: 14px; font-size: 12px; font-weight: 700; letter-spacing: .14em; color: #4fb6c4">TABLE</div>
+<sc-for list="{{tableSw}}" as="s" hint-placeholder-count="3">
+<button type="button" role="switch" aria-checked="{{s.on}}" onClick="{{s.tog}}" style="width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 60px; padding: 8px 0; background: none; border: 0; border-bottom: 1px solid rgba(213,176,112,.15); cursor: pointer; text-align: left; color: #eaeefa">
+<span><span style="display: block; font-size: 16px; font-weight: 700">{{s.label}}</span><span style="display: block; margin-top: 2px; font-size: 14px; line-height: 1.4; color: #aab3cc">{{s.desc}}</span></span>
+<span aria-hidden="true" style="flex: none; position: relative; width: 46px; height: 26px; border-radius: 13px; background: {{s.track}}; box-shadow: inset 0 0 0 1px rgba(213,176,112,.5)"><span style="position: absolute; top: 3px; left: {{s.knob}}; width: 20px; height: 20px; border-radius: 50%; background: #f3deb0; box-shadow: 0 1px 3px rgba(0,0,0,.5)"></span></span>
+</button>
+</sc-for>
+<div style="margin-top: 18px; font-size: 12px; font-weight: 700; letter-spacing: .14em; color: #4fb6c4">NARRATION</div>
+<sc-for list="{{narrSw}}" as="s" hint-placeholder-count="1">
+<button type="button" role="switch" aria-checked="{{s.on}}" onClick="{{s.tog}}" style="width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 60px; padding: 8px 0; background: none; border: 0; border-bottom: 1px solid rgba(213,176,112,.15); cursor: pointer; text-align: left; color: #eaeefa">
+<span><span style="display: block; font-size: 16px; font-weight: 700">{{s.label}}</span><span style="display: block; margin-top: 2px; font-size: 14px; line-height: 1.4; color: #aab3cc">{{s.desc}}</span></span>
+<span aria-hidden="true" style="flex: none; position: relative; width: 46px; height: 26px; border-radius: 13px; background: {{s.track}}; box-shadow: inset 0 0 0 1px rgba(213,176,112,.5)"><span style="position: absolute; top: 3px; left: {{s.knob}}; width: 20px; height: 20px; border-radius: 50%; background: #f3deb0; box-shadow: 0 1px 3px rgba(0,0,0,.5)"></span></span>
+</button>
+</sc-for>
+<div style="margin-top: 10px">
+<label for="vol" style="display: flex; justify-content: space-between; font-size: 16px; font-weight: 700"><span>Volume</span><span style="color: #aab3cc; font-weight: 400">{{vol}}%</span></label>
+<input id="vol" type="range" min="0" max="100" value="{{vol}}" onChange="{{setVol}}">
+</div>
+<div style="margin-top: 6px; font-size: 16px; font-weight: 700" id="spd">Speed</div>
+<div role="radiogroup" aria-labelledby="spd" style="margin-top: 6px; display: flex; gap: 8px">
+<sc-for list="{{speeds}}" as="p" hint-placeholder-count="3"><button type="button" role="radio" aria-checked="{{p.on}}" onClick="{{p.pick}}" class="chip" aria-pressed="{{p.on}}" style="flex: 1; border-radius: 10px">{{p.label}}</button></sc-for>
+</div>
+</section>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"tab":{"editor":"enum","options":["memory","journal","sheet"],"default":"memory","section":"State"},"voiceDemo":{"editor":"enum","options":["idle","preparing","playing","error","quota"],"default":"idle","section":"State"},"settings":{"editor":"enum","options":["closed","open"],"default":"closed","section":"State"},"inCombat":{"editor":"enum","options":["No","Yes"],"default":"No","section":"State"},"difficulty":{"editor":"enum","options":["Easy","Medium","Hard"],"default":"Hard","section":"Settings"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: null, voice1: null, voice2: null, q: '', kind: 'all', editing: null, edits: {}, gone: {}, settings: null, targets: null, sound: true, motion: false, autoplay: false, vol: 80, speed: '1x', notes: 'The rope was wet before I touched it. Ask about the piton.', draft: '' };
+  }
+  componentDidMount() { setTimeout(function () { var el = document.getElementById('feedscroll'); if (el) el.scrollTop = el.scrollHeight; }, 600); }
+  showTargets() {
+    var t = this.state.targets;
+    if (t === true || t === false) return t;
+    var d = String((this.props && this.props.difficulty) || 'Hard').toLowerCase();
+    return d === 'easy' || d === 'medium';
+  }
+  renderVals() {
+    var self = this, s = this.state, p = this.props || {};
+    var tab = s.tab || p.tab || 'memory';
+    var combat = p.inCombat === 'Yes';
+    if (tab === 'combat' && !combat) tab = 'memory';
+    var open = s.settings === null ? p.settings === 'open' : s.settings;
+    var showT = this.showTargets();
+    var diff = String(p.difficulty || 'Hard');
+    var defOn = diff === 'Easy' || diff === 'Medium';
+
+    // voice
+    var voiceView = function (st, set) {
+      var v = { isIdle: st === 'idle', isPrep: st === 'preparing', isPlay: st === 'playing', isErr: st === 'error', isQuota: st === 'quota' };
+      v.vLabel = { idle: 'Listen', preparing: 'Preparing voice…', playing: 'Pause', error: 'Try again', quota: 'Voice limit reached' }[st];
+      v.vAria = { idle: 'Listen to this message', preparing: 'Preparing the voice', playing: 'Pause the voice', error: 'The voice failed. Try again', quota: 'Voice limit reached' }[st];
+      v.vColor = st === 'error' ? '#ef8a8a' : st === 'quota' ? '#aab3cc' : '#f3deb0';
+      v.vBusy = st === 'preparing' ? 'true' : 'false';
+      v.vClick = function () { if (st === 'idle' || st === 'error') set('playing'); else if (st === 'playing') set('idle'); };
+      return v;
+    };
+    var v1 = voiceView(s.voice1 || 'idle', function (x) { self.setState({ voice1: x }); });
+    var v2 = voiceView(s.voice2 || p.voiceDemo || 'idle', function (x) { self.setState({ voice2: x }); });
+    var base = { isScene: false, isDm: false, isMe: false, isEngine: false };
+    var mk = function (o) { return Object.assign({}, base, o); };
+    var feed = [
+      mk(Object.assign({ isDm: true, gap: '0px', text: 'The rope goes slack in your hands. Below you, something wet drags across stone. The ledge is thirty feet down, and it is not empty.' }, v1)),
+      mk({ isMe: true, text: 'I draw my sword and lower myself down the wet rope.' }),
+      mk({ isEngine: true, vs: showT ? 'vs DC 12' : 'vs the DM’s DC' }),
+      mk({ isScene: true }),
+      mk(Object.assign({ isDm: true, gap: '0px', text: 'Hand over hand, you ease down. Your boots find the ledge. Above you, the old piton groans once and holds. In the dark, eight small lights open and turn toward you.' }, v2))
+    ];
+
+    // memory
+    var M = [
+      { id: 'm1', kind: 'location', text: 'The ledge is thirty feet below the piton. Its stone is wet.', sess: 3, when: 'Session 3 · just now', imp: 3, meta: 'depth: thirty feet · surface: wet stone' },
+      { id: 'm2', kind: 'item', text: 'A piton, hammered in by the last expedition, holds the rope.', sess: 3, when: 'Session 3 · 4 min ago', imp: 2, meta: 'placed by: the last expedition' },
+      { id: 'm3', kind: 'character', text: 'The spider is stitched from the dead of the last expedition.', sess: 3, when: 'Session 3 · 9 min ago', imp: 3 },
+      { id: 'm4', kind: 'event', text: 'Day 9. The ropes were cut from below.', sess: 2, when: 'Session 2 · yesterday', imp: 3, meta: 'source: torn page' },
+      { id: 'm5', kind: 'event', text: 'The rope was wet before you touched it.', sess: 2, when: 'Session 2 · yesterday', imp: 1 }
+    ].filter(function (m) { return !s.gone[m.id]; });
+    var K = { location: { label: 'Locations', one: 'Location', color: '#4fb6c4', glyph: 'L' }, character: { label: 'Characters', one: 'Character', color: '#ef8a8a', glyph: 'C' }, event: { label: 'Events', one: 'Event', color: '#c9b6f0', glyph: 'E' }, item: { label: 'Items', one: 'Item', color: '#d5b070', glyph: 'I' } };
+    var q = s.q.trim().toLowerCase();
+    var shown = M.filter(function (m) {
+      var text = s.edits[m.id] || m.text;
+      return (s.kind === 'all' || m.kind === s.kind) && (!q || text.toLowerCase().indexOf(q) >= 0);
+    });
+    var cnt = function (k) { return M.filter(function (m) { return k === 'all' || m.kind === k; }).length; };
+    var filters = ['all', 'location', 'character', 'event', 'item'].map(function (k) {
+      return { label: k === 'all' ? 'All' : K[k].label, n: cnt(k), on: s.kind === k ? 'true' : 'false', pick: function () { self.setState({ kind: k }); } };
+    });
+    var toCard = function (m) {
+      var k = K[m.kind], text = s.edits[m.id] || m.text, on = s.editing === m.id;
+      var pip = function (i) { return m.imp >= i ? '#d5b070' : '#2a3556'; };
+      return {
+        isCard: true, isHead: false, head: '', hasMeta: !!m.meta, meta: m.meta || '', draft: (s.draftEdit == null ? text : s.draftEdit), kind: k.one, color: k.color, glyph: k.glyph, text: text, when: m.when, editing: on, expanded: on ? 'true' : 'false',
+        impAria: 'Importance ' + m.imp + ' of 3', p1: pip(1), p2: pip(2), p3: pip(3),
+        edit: function () { self.setState({ editing: on ? null : m.id, draftEdit: text }); },
+        cancel: function () { self.setState({ editing: null }); },
+        save: function () { var e = Object.assign({}, self.state.edits); if (self.state.draftEdit) e[m.id] = self.state.draftEdit; self.setState({ edits: e, editing: null }); },
+        forget: function () { var g = Object.assign({}, self.state.gone); g[m.id] = true; self.setState({ gone: g, editing: null }); }
+      };
+    };
+    var mems = [];
+    if (s.kind === 'all' && !q) {
+      ['location', 'character', 'event', 'item'].forEach(function (g) {
+        var grp = shown.filter(function (m) { return m.kind === g; });
+        if (grp.length) { mems.push({ isHead: true, isCard: false, head: K[g].label + ' · ' + grp.length }); grp.forEach(function (m) { mems.push(toCard(m)); }); }
+      });
+    } else { mems = shown.map(toCard); }
+
+    var tabs = [{ id: 'sheet', label: 'Sheet' }, { id: 'memory', label: 'Memory' }, { id: 'journal', label: 'Journal' }];
+    if (combat) tabs.push({ id: 'combat', label: 'Combat' });
+
+    var sw = function (id, label, desc, on) {
+      return { label: label, desc: desc, on: on ? 'true' : 'false', track: on ? '#8a6a30' : '#1c2742', knob: on ? '23px' : '3px', tog: function () { var o = {}; o[id] = !on; self.setState(o); } };
+    };
+    var tableSw = [
+      { label: 'Show target numbers', desc: 'Shows the DC and AC on checks and attacks. Default for this campaign: ' + (defOn ? 'on' : 'off') + ' (' + diff + ').', on: showT ? 'true' : 'false', track: showT ? '#8a6a30' : '#1c2742', knob: showT ? '23px' : '3px', tog: function () { self.setState({ targets: !showT }); } },
+      sw('sound', 'Dice sound', 'Plays a sound when the dice land.', s.sound),
+      sw('motion', 'Reduce motion', 'Dice show the result at once. Your device setting also applies.', s.motion)
+    ];
+    var narrSw = [sw('autoplay', 'Read new DM messages aloud', 'Starts the voice when a message arrives.', s.autoplay)];
+    var speeds = ['0.75x', '1x', '1.25x'].map(function (x) { return { label: x.replace('x', '×'), on: s.speed === x ? 'true' : 'false', pick: function () { self.setState({ speed: x }); } }; });
+
+    var R = {
+      feed: feed, draft: s.draft, typing: function (e) { self.setState({ draft: e && e.target ? e.target.value : '' }); },
+      openSettings: function () { self.setState({ settings: true }); }, closeSettings: function () { self.setState({ settings: false }); }, settingsOpen: open,
+      tabs: tabs.map(function (t) { return { label: t.label, sel: tab === t.id ? 'true' : 'false', pick: function () { self.setState({ tab: t.id }); } }; }),
+      isMemory: tab === 'memory', isJournal: tab === 'journal', isSheet: tab === 'sheet', isCombat: tab === 'combat',
+      memCount: M.length + (M.length === 1 ? ' thing' : ' things'), q: s.q, setQ: function (e) { self.setState({ q: e && e.target ? e.target.value : '' }); },
+      filters: filters, mems: mems, noMem: shown.length === 0,
+      setEdit: function (e) { self.setState({ draftEdit: e && e.target ? e.target.value : '' }); },
+      notes: s.notes, setNotes: function (e) { self.setState({ notes: e && e.target ? e.target.value : '' }); },
+      vitals: [{ k: 'HP', v: '12' }, { k: 'AC', v: '18' }, { k: 'INIT', v: '+1' }, { k: 'SPD', v: '30' }],
+      abil: [{ k: 'STR', mod: '+3', v: 16 }, { k: 'DEX', mod: '+1', v: 12 }, { k: 'CON', mod: '+2', v: 14 }, { k: 'INT', mod: '+0', v: 10 }, { k: 'WIS', mod: '+1', v: 12 }, { k: 'CHA', mod: '−1', v: 8 }],
+      attacks: [{ n: 'Longsword', d: '+5 · 1d8+3' }, { n: 'Light crossbow', d: '+3 · 1d8+1' }],
+      order: [{ i: 13, n: 'The Veteran (you)', hp: 'HP 12/12', ring: '2px' }, { i: 12, n: 'Giant spider', hp: 'Hurt', ring: '0px' }, { i: 7, n: 'Swarm of webs', hp: '', ring: '0px' }],
+      tableSw: tableSw, narrSw: narrSw, vol: s.vol, setVol: function (e) { self.setState({ vol: Number(e && e.target ? e.target.value : 80) }); }, speeds: speeds
+    };
+    ['isMemory', 'isJournal', 'isSheet', 'isCombat', 'settingsOpen'].forEach(function (k) { R[k] = R[k] ? 'true' : 'false'; });
+    return R;
+  }
+}
+</script>
+</body>
+</html>

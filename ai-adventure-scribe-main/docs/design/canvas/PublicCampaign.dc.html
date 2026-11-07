@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Campaign page</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&amp;family=DM+Sans:wght@400;500;700&amp;family=EB+Garamond:ital,wght@0,400;0,500;1,400&amp;display=swap">
+<style>
+body{margin:0;background:#070b14}
+a{color:#d5b070}a:hover{color:#f3deb0}
+.tx-cinzel{font-family:'Cinzel',Georgia,serif}
+button:focus-visible,a:focus-visible{outline:2px solid #f3deb0;outline-offset:3px}
+.brass{background:linear-gradient(160deg,#f6e3b8 0%,#d5b070 38%,#a9823f 70%,#6e5226 100%);color:#1a1206;border:1px solid #f3deb0;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -2px 0 rgba(0,0,0,.25),0 6px 14px rgba(0,0,0,.45);cursor:pointer;text-decoration:none}
+.brass:hover{filter:brightness(1.07);color:#1a1206}
+.hero{border:0;padding:0;background:none;cursor:pointer;font:inherit;color:inherit;text-align:center;transition:transform .2s}
+.hero:hover{transform:translateY(-3px)}
+.clampS{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="position: relative; width: 1440px; height: 1100px; overflow: hidden; background: #070b14; font-family: 'DM Sans', system-ui, sans-serif; color: #eaeefa">
+
+<div style="position: absolute; left: 0; top: 0; width: 1440px; height: 470px; overflow: hidden; background: linear-gradient(90deg, #070b14 0%, #0c1220 100%)">
+<div style="position: absolute; right: 0; top: 0; width: 860px; height: 470px; -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 45%); mask-image: linear-gradient(90deg, transparent 0%, #000 45%)">
+<img src="/_blob/157200b9099918a34801b5fec34f74dd" alt="A figure sits calm inside a ring of floating black rocks lit from below by orange light." style="display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 38%">
+</div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 120px; background: linear-gradient(180deg, transparent, #070b14)"></div>
+</div>
+
+<a href="PublicExplore.dc.html" style="position: absolute; left: 80px; top: 14px; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border-radius: 10px; background: rgba(7,11,20,.7); color: #eaeefa; text-decoration: none; font-size: 16px">
+<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H5M11 6l-6 6 6 6" fill="none" stroke="#d5b070" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>Back to adventures</a>
+
+<div style="position: absolute; left: 112px; top: 150px; width: 780px">
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{chips}}" as="c" hint-placeholder-count="6"><span style="padding: 5px 12px; border-radius: 999px; background: #070b14; border: 1px solid {{c.color}}; color: {{c.color}}; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase">{{c.label}}</span></sc-for>
+</div>
+<h1 class="tx-cinzel" style="margin: 18px 0 0; font-size: 66px; font-weight: 900; line-height: 1.04; color: #f3deb0; letter-spacing: .01em">Abyssal Descent</h1>
+<p style="margin: 14px 0 0; font-size: 20px; color: #d4dbef">Terrifying · Claustrophobic · Sanity-breaking</p>
+</div>
+
+<div style="position: absolute; left: 112px; top: 540px; width: 640px">
+<h2 class="tx-cinzel" style="margin: 0; font-size: 30px; font-weight: 700; color: #f3deb0">The story</h2>
+<p class="{{clampCls}}" style="margin: 16px 0 0; font-size: 19px; line-height: 1.65; color: #d4dbef">The party joins an expedition to descend the Infinite Chasm, a vertical cave system that supposedly reaches the center of the earth. What begins as scientific exploration becomes a nightmare as the depths reveal horrors that shatter sanity: impossible geometry, creatures that exist outside normal reality, and the crushing realization that something at the bottom is calling them down. Equipment fails, party members disappear or go mad, and the only way out is through.</p>
+<button type="button" onClick="{{toggleMore}}" aria-expanded="{{expanded}}" style="margin-top: 6px; min-height: 44px; padding: 0; border: 0; background: none; cursor: pointer; font-family: 'DM Sans', system-ui, sans-serif; font-size: 17px; font-weight: 700; color: #d5b070">{{moreLabel}}</button>
+<div style="margin-top: 22px; padding: 16px 18px; border-radius: 12px; background: #0c1220; box-shadow: 0 0 0 1px rgba(213,176,112,.22); display: flex; gap: 12px; align-items: flex-start">
+<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" style="flex: none; margin-top: 2px"><circle cx="12" cy="12" r="10" fill="none" stroke="#4fb6c4" stroke-width="1.6"></circle><path d="M12 11v6M12 7.5v.5" stroke="#4fb6c4" stroke-width="2" stroke-linecap="round"></path></svg>
+<p style="margin: 0; font-size: 16px; line-height: 1.55; color: #d4dbef">Hard campaign: target numbers (DC and AC) start hidden. You can show them in Settings.</p>
+</div>
+</div>
+
+<section aria-labelledby="pick" style="position: absolute; left: 830px; top: 520px; width: 500px; padding: 26px 28px 28px; box-sizing: border-box; border-radius: 18px; background: #0c1220; box-shadow: 0 0 0 1px rgba(213,176,112,.3), 0 26px 54px rgba(0,0,0,.55)">
+<h2 id="pick" class="tx-cinzel" style="margin: 0; font-size: 26px; font-weight: 700; color: #f3deb0">Choose your hero</h2>
+<div role="radiogroup" aria-label="Heroes" style="margin-top: 18px; display: flex; gap: 10px">
+<sc-for list="{{heroes}}" as="h" hint-placeholder-count="5">
+<button type="button" role="radio" aria-checked="{{h.checked}}" aria-label="{{h.name}}" onClick="{{h.pick}}" class="hero" style="flex: 1; min-width: 0">
+<div style="position: relative; width: 100%; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden; box-shadow: 0 0 0 {{h.ringW}} #f3deb0, 0 6px 12px rgba(0,0,0,.5); opacity: {{h.op}}"><img src="{{h.img}}" alt="" style="display: block; width: 100%; height: 100%; object-fit: cover"></div>
+</button>
+</sc-for>
+</div>
+<div style="margin-top: 20px; min-height: 96px">
+<div class="tx-cinzel" style="font-size: 24px; font-weight: 700; color: #eaeefa">{{name}}</div>
+<div style="margin-top: 2px; font-size: 16px; color: #4fb6c4; font-weight: 700">{{klass}}</div>
+<p style="margin: 8px 0 0; font-size: 17px; line-height: 1.5; color: #d4dbef">{{tagline}}</p>
+</div>
+<a href="Explore.dc.html" class="brass" style="position: relative; margin-top: 18px; display: flex; align-items: center; justify-content: center; min-height: 58px; border-radius: 12px; font-family: 'Cinzel', Georgia, serif; font-size: 18px; font-weight: 700; letter-spacing: .06em">{{playLabel}}</a>
+<div style="margin-top: 10px; text-align: center"><a href="Heroes.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 16px; font-weight: 700">Create a custom character</a></div>
+</section>
+
+<footer style="position: absolute; left: 0; top: 1036px; width: 1440px; height: 64px; display: flex; align-items: center; justify-content: center; border-top: 1px solid rgba(213,176,112,.18); font-size: 14px; color: #8f9ab8">© 2026 InfiniteRealms. All rights reserved.</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1100}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { picked: 'the-veteran', more: false }; }
+  renderVals() {
+    var self = this, s = this.state;
+    var H = [
+      { id: 'the-scholar', name: 'The Scholar', klass: 'Human Wizard', tagline: 'Academic obsessed with forbidden knowledge', img: '/_blob/dd579e73f3758868b0769fecdbb63c91' },
+      { id: 'the-hunter', name: 'The Hunter', klass: 'Human Ranger', tagline: 'Monster hunter with a personal code', img: '/_blob/cd1fef5765a3fce63a1d244f971142f0' },
+      { id: 'the-veteran', name: 'The Veteran', klass: 'Human Fighter', tagline: 'Seasoned soldier haunted by past battles', img: '/_blob/08b960306328b6c2703f96dc5b709a48' },
+      { id: 'the-pact-bound', name: 'The Pact-Bound', klass: 'Tiefling Warlock', tagline: 'Made deals for power, comfortable with darkness', img: '/_blob/0643943f462d182f22ead5c3b3f77322' },
+      { id: 'the-exile', name: 'The Exile', klass: 'Elf Druid', tagline: 'Drow who rejected cruelty, at home in darkness', img: '/_blob/6f571bd5172d354c2955468c3a77a789' }
+    ];
+    var cur = H.filter(function (h) { return h.id === s.picked; })[0];
+    return {
+      chips: [
+        { label: 'Horror', color: '#eaeefa' }, { label: 'Survival', color: '#eaeefa' }, { label: 'Psychological terror', color: '#eaeefa' },
+        { label: 'Hard', color: '#ef8a8a' }, { label: 'Level 1', color: '#f3deb0' }, { label: '10–15 sessions', color: '#f3deb0' }
+      ],
+      clampCls: s.more ? '' : 'clampS', expanded: s.more ? 'true' : 'false', moreLabel: s.more ? 'Show less' : 'Read more',
+      toggleMore: function () { self.setState({ more: !self.state.more }); },
+      heroes: H.map(function (h) { var on = h.id === s.picked; return { name: h.name, img: h.img, checked: on ? 'true' : 'false', ringW: on ? '3px' : '0px', op: on ? '1' : '.72', pick: function () { self.setState({ picked: h.id }); } }; }),
+      playLabel: 'Play as ' + cur.name, name: cur.name, klass: cur.klass, tagline: cur.tagline
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chronicle</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&amp;family=DM+Sans:wght@400;500;700&amp;family=EB+Garamond:ital,wght@0,400;0,500;1,400&amp;display=swap">
+<style>
+body{margin:0;background:#070b14}
+a{color:#d5b070}a:hover{color:#f3deb0}
+[hidden]{display:none!important}
+[data-show="false"]{display:none!important}
+.tx-cinzel{font-family:'Cinzel',Georgia,serif}
+.tx-gar{font-family:'EB Garamond',Georgia,serif}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #f3deb0;outline-offset:3px}
+button{font-family:'DM Sans',system-ui,sans-serif}
+.brass{background:linear-gradient(160deg,#f6e3b8 0%,#d5b070 38%,#a9823f 70%,#6e5226 100%);color:#1a1206;border:1px solid #f3deb0;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -2px 0 rgba(0,0,0,.25),0 6px 14px rgba(0,0,0,.45);cursor:pointer;text-decoration:none}
+.brass:hover{filter:brightness(1.07);color:#1a1206}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="position: relative; width: 1440px; height: 900px; overflow: hidden; background: #070b14; font-family: 'DM Sans', system-ui, sans-serif; color: #eaeefa">
+
+<!-- ============ READER: public /chronicle/:token ============ -->
+<div data-show="{{isReader}}" style="position: absolute; inset: 0">
+<header style="position: absolute; left: 0; top: 0; width: 1440px; height: 72px; display: flex; align-items: center; justify-content: space-between; padding: 0 80px; box-sizing: border-box; border-bottom: 1px solid rgba(213,176,112,.18); background: #0a0f1c">
+<a href="Landing.dc.html" aria-label="Infinite Realms, home" style="display: inline-flex; align-items: center; gap: 12px; text-decoration: none">
+<svg width="34" height="34" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="16.5" fill="#0c1220" stroke="#4fb6c4" stroke-width="1.5"></circle><path d="M18 8 L20.2 15.8 L28 18 L20.2 20.2 L18 28 L15.8 20.2 L8 18 L15.8 15.8 Z" fill="#4fb6c4"></path></svg>
+<span class="tx-cinzel" style="font-size: 20px; letter-spacing: .2em; color: #eaeefa">INFINITE <span style="color: #d5b070">REALMS</span></span></a>
+<a href="PublicExplore.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 16px; font-weight: 700; text-decoration: none">Explore adventures</a>
+</header>
+<article style="position: absolute; left: 80px; top: 112px; width: 760px">
+<div style="font-size: 13px; font-weight: 700; letter-spacing: .16em; color: #4fb6c4">CHRONICLE · ABYSSAL DESCENT · SESSION 3</div>
+<h1 class="tx-cinzel" style="margin: 12px 0 0; font-size: 52px; line-height: 1.08; font-weight: 900; color: #f3deb0">Ropes Cut from Below</h1>
+<figure style="margin: 24px 0 0; width: 760px; height: 230px; border-radius: 14px; overflow: hidden; box-shadow: 0 0 0 1px rgba(213,176,112,.3), 0 14px 30px rgba(0,0,0,.5)"><img src="/_blob/acde7b72e68f30f0e854f12f8d58753f" alt="Illustration of the spider that waits below the ledge." style="display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%"></figure>
+<p class="tx-gar" style="margin: 26px 0 0; font-size: 22px; line-height: 1.65; color: #eaeefa">The expedition reached the eleventh ledge at dusk, if dusk still meant anything this far down. The rope held. The piton, hammered in by those who came before, groaned once and held too. It was the torn page that troubled the Veteran: “Day 9. The ropes were cut from below.”</p>
+<p class="tx-gar" style="margin: 16px 0 0; font-size: 22px; line-height: 1.65; color: #eaeefa">He went down anyway, hand over hand, sword drawn, boots slick on wet stone. On the ledge, eight small lights opened in the dark and turned toward him.</p>
+</article>
+<aside aria-label="Play this campaign" style="position: absolute; left: 940px; top: 172px; width: 420px; border-radius: 18px; overflow: hidden; background: #0c1220; box-shadow: 0 0 0 1px rgba(213,176,112,.35), 0 26px 54px rgba(0,0,0,.55)">
+<div style="position: relative; height: 200px"><img src="/_blob/157200b9099918a34801b5fec34f74dd" alt="" style="display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 38%"><div style="position: absolute; inset: 0; background: linear-gradient(180deg, transparent 40%, #0c1220)"></div></div>
+<div style="padding: 0 26px 26px; margin-top: -30px; position: relative">
+<h2 class="tx-cinzel" style="margin: 0; font-size: 28px; color: #f3deb0">Abyssal Descent</h2>
+<p style="margin: 8px 0 0; font-size: 17px; line-height: 1.5; color: #d4dbef">A horror expedition into the Infinite Chasm. You play the hero. An AI Dungeon Master tells the story.</p>
+<a href="PublicCampaign.dc.html" class="brass tx-cinzel" style="margin-top: 20px; display: flex; align-items: center; justify-content: center; min-height: 56px; border-radius: 12px; font-size: 18px; font-weight: 700; letter-spacing: .06em">Play this campaign</a>
+<div style="margin-top: 8px; text-align: center"><a href="PublicExplore.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 16px; font-weight: 700">See other adventures</a></div>
+</div>
+</aside>
+<footer style="position: absolute; left: 0; top: 836px; width: 1440px; height: 64px; display: flex; align-items: center; justify-content: center; border-top: 1px solid rgba(213,176,112,.18); font-size: 14px; color: #8f9ab8">© 2026 InfiniteRealms. All rights reserved.</footer>
+</div>
+
+<!-- ============ OWNER / FREE: in-game dialog ============ -->
+<div data-show="{{notReader}}" style="position: absolute; inset: 0">
+<div style="position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 0%, rgba(79,182,196,.08), transparent 55%), #070b14"></div>
+<div style="position: absolute; inset: 0; background: rgba(4,7,14,.55)"></div>
+<section role="dialog" aria-modal="true" aria-labelledby="ct" style="position: absolute; left: 310px; top: 44px; width: 820px; box-sizing: border-box; padding: 26px 34px 28px; border-radius: 18px; background: #0c1220; box-shadow: 0 0 0 1px rgba(213,176,112,.4), 0 30px 70px rgba(0,0,0,.7)">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<div class="tx-cinzel" style="font-size: 13px; letter-spacing: .16em; color: #4fb6c4; font-weight: 700">SESSION CHRONICLE · SESSION 3</div>
+<a href="Panels.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid rgba(213,176,112,.4); background: #121b30; color: #eaeefa; font-size: 15px; font-weight: 700; text-decoration: none">Close</a>
+</div>
+<h1 id="ct" class="tx-cinzel" style="margin: 8px 0 0; font-size: 40px; line-height: 1.1; font-weight: 700; color: #f3deb0">Ropes Cut from Below</h1>
+<figure style="margin: 18px 0 0; width: 752px; height: 230px; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 1px rgba(213,176,112,.3)"><img src="/_blob/acde7b72e68f30f0e854f12f8d58753f" alt="Illustration of the spider that waits below the ledge." style="display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%"></figure>
+
+<div data-show="{{notFree}}">
+<p class="tx-gar" style="margin: 20px 0 0; font-size: 21px; line-height: 1.6; color: #eaeefa">The expedition reached the eleventh ledge at dusk, if dusk still meant anything this far down. The rope held. The piton, hammered in by those who came before, groaned once and held too. It was the torn page that troubled the Veteran: “Day 9. The ropes were cut from below.”</p>
+<p class="tx-gar" style="margin: 12px 0 0; font-size: 21px; line-height: 1.6; color: #eaeefa">He went down anyway, hand over hand, sword drawn, boots slick on wet stone. On the ledge, eight small lights opened in the dark and turned toward him.</p>
+<div style="margin-top: 22px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+<button type="button" onClick="{{copy}}" class="brass tx-cinzel" style="min-height: 52px; padding: 0 26px; border-radius: 12px; font-size: 17px; font-weight: 700; letter-spacing: .06em">Share this chronicle</button>
+<span role="status" aria-live="polite" style="font-size: 16px; font-weight: 700; color: #4fb6c4">{{copiedMsg}}</span>
+</div>
+<div style="margin-top: 12px; padding: 12px 16px; border-radius: 10px; background: #121b30; box-shadow: 0 0 0 1px rgba(213,176,112,.22); font-size: 15px; line-height: 1.5; color: #d4dbef">Anyone with the link can read this chronicle. They see the story and the art. They do not see your notes or your sheet. You can turn the link off in the campaign menu.</div>
+</div>
+
+<div data-show="{{isFree}}">
+<p class="tx-gar" style="margin: 20px 0 0; font-size: 21px; line-height: 1.6; color: #eaeefa">The Veteran lowered himself down the wet rope to a ledge thirty feet below. Something waited there.</p>
+<div style="margin-top: 20px; padding: 20px 22px; border-radius: 14px; background: #121b30; box-shadow: 0 0 0 1px rgba(213,176,112,.4); display: flex; align-items: center; justify-content: space-between; gap: 20px">
+<div><div class="tx-cinzel" style="font-size: 20px; color: #f3deb0; font-weight: 700">Read the full chronicle</div><p style="margin: 6px 0 0; font-size: 16px; line-height: 1.5; color: #d4dbef">The Pro plan writes the full story of each session, with an illustration, and lets you share it.</p></div>
+<a href="Campaigns.dc.html" class="brass tx-cinzel" style="flex: none; display: inline-flex; align-items: center; min-height: 52px; padding: 0 24px; border-radius: 12px; font-size: 16px; font-weight: 700; letter-spacing: .06em">Upgrade to Pro</a>
+</div>
+</div>
+</section>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"view":{"editor":"enum","options":["reader","owner","free"],"default":"reader","section":"State"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { copied: false }; }
+  renderVals() {
+    var self = this, v = String((this.props && this.props.view) || 'reader');
+    return {
+      isReader: v === 'reader' ? 'true' : 'false', notReader: v === 'reader' ? 'false' : 'true', isFree: v === 'free' ? 'true' : 'false', notFree: v === 'free' ? 'false' : 'true',
+      copy: function () { self.setState({ copied: true }); },
+      copiedMsg: this.state.copied ? 'Link copied!' : ''
+    };
+  }
+}
+</script>
+</body>
+</html>
