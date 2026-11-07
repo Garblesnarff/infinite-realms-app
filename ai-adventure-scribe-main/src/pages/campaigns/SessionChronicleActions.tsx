@@ -25,27 +25,43 @@ export const SessionChronicleActions: React.FC<SessionChronicleActionsProps> = (
   const chronicle = session.session_chronicles?.[0];
   const isPro = planHasPaidFeatures(userPlan);
   const [shareStatus, setShareStatus] = React.useState('');
+  const [revoked, setRevoked] = React.useState(false);
+  const [isMutating, setIsMutating] = React.useState(false);
 
   const handleShareLink = async (): Promise<void> => {
-    if (!chronicle) return;
+    if (!chronicle || isMutating) return;
+    setIsMutating(true);
     try {
       const token = await shareChronicle(chronicle.id);
       await navigator.clipboard.writeText(`${window.location.origin}/chronicle/${token}`);
       setShareStatus('Link copied!');
-    } catch {
-      setShareStatus('Could not share. Try again.');
+    } catch (error) {
+      if ((error as { status?: number } | undefined)?.status === 409) {
+        setShareStatus('Write the full chronicle before sharing.');
+      } else {
+        setShareStatus('Could not share. Try again.');
+      }
+    } finally {
+      setIsMutating(false);
     }
   };
 
   const handleTurnLinkOff = async (): Promise<void> => {
-    if (!chronicle) return;
+    if (!chronicle || isMutating) return;
+    setIsMutating(true);
     try {
       await unshareChronicle(chronicle.id);
+      setRevoked(true);
       setShareStatus('Link turned off');
     } catch {
       setShareStatus('Could not turn the link off. Try again.');
+    } finally {
+      setIsMutating(false);
     }
   };
+
+  const showShare = isPro;
+  const showTurn = !revoked && (isPro || !!chronicle?.share_token);
 
   return (
     <div className="mt-3 pt-3 border-t border-border">
@@ -59,27 +75,29 @@ export const SessionChronicleActions: React.FC<SessionChronicleActionsProps> = (
           >
             📖 Read Chronicle
           </Button>
-          {isPro && (
+          {showShare && (
             <Button
               size="sm"
               variant="ghost"
               className="text-muted-foreground h-11 px-2 text-xs"
               onClick={handleShareLink}
+              disabled={isMutating}
             >
               Share link
             </Button>
           )}
-          {isPro && (
+          {showTurn && (
             <Button
               size="sm"
               variant="ghost"
               className="text-muted-foreground h-11 px-2 text-xs"
               onClick={handleTurnLinkOff}
+              disabled={isMutating}
             >
               Turn link off
             </Button>
           )}
-          {isPro && (
+          {(showShare || showTurn || shareStatus) && (
             <span role="status" aria-live="polite" className="text-xs text-muted-foreground">
               {shareStatus}
             </span>

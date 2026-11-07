@@ -110,13 +110,7 @@ body.ir-table-look .ir-chronicle-dialog .ir-chronicle-share {
   min-height: 52px;
   padding: 0 26px;
   border-radius: 12px;
-  background: linear-gradient(
-    160deg,
-    var(--ir-brass-1) 0%,
-    var(--ir-brass-2) 38%,
-    var(--ir-brass-3) 70%,
-    var(--ir-brass-4) 100%
-  );
+  background: linear-gradient(160deg, var(--ir-brass-1) 0%, #e6c98f 55%, var(--ir-brass-2) 100%);
   color: var(--ir-brass-ink);
   border: 1px solid #f3deb0;
   box-shadow:
@@ -135,6 +129,35 @@ body.ir-table-look .ir-chronicle-dialog .ir-chronicle-share:hover {
   color: var(--ir-brass-ink);
 }
 body.ir-table-look .ir-chronicle-dialog .ir-chronicle-share:disabled {
+  cursor: default;
+  filter: none;
+}
+body.ir-table-look .ir-chronicle-dialog .ir-chronicle-write {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 0 26px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, var(--ir-brass-1) 0%, #e6c98f 55%, var(--ir-brass-2) 100%);
+  color: var(--ir-brass-ink);
+  border: 1px solid #f3deb0;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.25),
+    0 6px 14px rgba(0, 0, 0, 0.45);
+  font-family: 'Cinzel', Georgia, serif;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+body.ir-table-look .ir-chronicle-dialog .ir-chronicle-write:hover {
+  filter: brightness(1.07);
+  color: var(--ir-brass-ink);
+}
+body.ir-table-look .ir-chronicle-dialog .ir-chronicle-write:disabled {
   cursor: default;
   filter: none;
 }
@@ -193,13 +216,7 @@ body.ir-table-look .ir-chronicle-dialog .ir-chronicle-upgrade-button {
   min-height: 52px;
   padding: 0 24px;
   border-radius: 12px;
-  background: linear-gradient(
-    160deg,
-    var(--ir-brass-1) 0%,
-    var(--ir-brass-2) 38%,
-    var(--ir-brass-3) 70%,
-    var(--ir-brass-4) 100%
-  );
+  background: linear-gradient(160deg, var(--ir-brass-1) 0%, #e6c98f 55%, var(--ir-brass-2) 100%);
   color: var(--ir-brass-ink);
   border: 1px solid #f3deb0;
   box-shadow:
@@ -222,7 +239,7 @@ body.ir-table-look .ir-chronicle-dialog :is(button, a):focus-visible {
   outline: 2px solid #f3deb0;
   outline-offset: 3px;
 }
-.ir-chronicle-page {
+body.ir-table-look .ir-chronicle-page {
   min-height: 100vh;
   background: #070b14;
   color: #eaeefa;
@@ -233,7 +250,7 @@ body.ir-table-look .ir-chronicle-dialog :is(button, a):focus-visible {
   box-sizing: border-box;
   overflow-wrap: anywhere;
 }
-.ir-chronicle-page .ir-chronicle-header {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-header {
   height: 72px;
   min-height: 72px;
   display: flex;
@@ -246,7 +263,7 @@ body.ir-table-look .ir-chronicle-dialog :is(button, a):focus-visible {
   background: #0a0f1c;
   max-width: 100%;
 }
-.ir-chronicle-page .ir-chronicle-home {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-home {
   display: inline-flex;
   align-items: center;
   gap: 12px;
@@ -254,16 +271,16 @@ body.ir-table-look .ir-chronicle-dialog :is(button, a):focus-visible {
   min-height: 44px;
   box-sizing: border-box;
 }
-.ir-chronicle-page .ir-chronicle-logo {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-logo {
   font-family: 'Cinzel', Georgia, serif;
   font-size: 20px;
   letter-spacing: 0.2em;
   color: #eaeefa;
 }
-.ir-chronicle-page .ir-chronicle-logo-accent {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-logo-accent {
   color: #d5b070;
 }
-.ir-chronicle-page .ir-chronicle-nav-link {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-nav-link {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
@@ -273,10 +290,10 @@ body.ir-table-look .ir-chronicle-dialog :is(button, a):focus-visible {
   text-decoration: none;
   box-sizing: border-box;
 }
-.ir-chronicle-page .ir-chronicle-nav-link:hover {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-nav-link:hover {
   color: #f3deb0;
 }
-.ir-chronicle-page .ir-chronicle-main {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-main {
   flex: 1;
   display: grid;
   grid-template-columns: minmax(0, 760px) minmax(0, 420px);
@@ -287,20 +304,20 @@ body.ir-table-look .ir-chronicle-dialog :is(button, a):focus-visible {
   box-sizing: border-box;
   padding: 40px 80px 48px;
 }
-.ir-chronicle-page .ir-chronicle-article {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-article {
   width: 100%;
   max-width: 760px;
   box-sizing: border-box;
   min-width: 0;
 }
-.ir-chronicle-page .ir-chronicle-eyebrow {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-eyebrow {
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.16em;
   color: #4fb6c4;
   overflow-wrap: anywhere;
 }
-.ir-chronicle-page .ir-chronicle-article-title {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-article-title {
   margin: 12px 0 0;
   font-family: 'Cinzel', Georgia, serif;
   font-size: 52px;
@@ -309,7 +326,7 @@ body.ir-table-look .ir-chronicle-dialog :is(button, a):focus-visible {
   color: #f3deb0;
   overflow-wrap: anywhere;
 }
-.ir-chronicle-page .ir-chronicle-article-figure {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-article-figure {
   margin: 24px 0 0;
   width: 100%;
   height: 230px;
@@ -320,7 +337,7 @@ body.ir-table-look .ir-chronicle-dialog :is(button, a):focus-visible {
     0 14px 30px rgba(0, 0, 0, 0.5);
   box-sizing: border-box;
 }
-.ir-chronicle-page .ir-chronicle-article-figure img {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-article-figure img {
   display: block;
   width: 100%;
   height: 100%;
@@ -328,7 +345,7 @@ body.ir-table-look .ir-chronicle-dialog :is(button, a):focus-visible {
   object-fit: cover;
   object-position: 50% 30%;
 }
-.ir-chronicle-page .ir-chronicle-article-story {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-article-story {
   margin: 26px 0 0;
   font-family: 'EB Garamond', Georgia, serif;
   font-size: 22px;
@@ -336,10 +353,10 @@ body.ir-table-look .ir-chronicle-dialog :is(button, a):focus-visible {
   color: #eaeefa;
   overflow-wrap: anywhere;
 }
-.ir-chronicle-page .ir-chronicle-article-story + .ir-chronicle-article-story {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-article-story + .ir-chronicle-article-story {
   margin-top: 16px;
 }
-.ir-chronicle-page .ir-chronicle-aside {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-aside {
   width: 100%;
   max-width: 420px;
   border-radius: 18px;
@@ -351,13 +368,13 @@ body.ir-table-look .ir-chronicle-dialog :is(button, a):focus-visible {
   box-sizing: border-box;
   min-width: 0;
 }
-.ir-chronicle-page .ir-chronicle-aside-image {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-aside-image {
   position: relative;
   height: 200px;
   overflow: hidden;
   box-sizing: border-box;
 }
-.ir-chronicle-page .ir-chronicle-aside-image img {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-aside-image img {
   display: block;
   width: 100%;
   height: 100%;
@@ -365,40 +382,40 @@ body.ir-table-look .ir-chronicle-dialog :is(button, a):focus-visible {
   object-fit: cover;
   object-position: 50% 38%;
 }
-.ir-chronicle-page .ir-chronicle-aside-image::after {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-aside-image::after {
   content: '';
   position: absolute;
   inset: 0;
   background: linear-gradient(180deg, transparent 40%, #0c1220);
 }
-.ir-chronicle-page .ir-chronicle-aside-body {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-aside-body {
   padding: 0 26px 26px;
   margin-top: -30px;
   position: relative;
   box-sizing: border-box;
 }
-.ir-chronicle-page .ir-chronicle-aside-title {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-aside-title {
   margin: 0;
   font-family: 'Cinzel', Georgia, serif;
   font-size: 28px;
   color: #f3deb0;
   overflow-wrap: anywhere;
 }
-.ir-chronicle-page .ir-chronicle-aside-copy {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-aside-copy {
   margin: 8px 0 0;
   font-size: 17px;
   line-height: 1.5;
   color: #d4dbef;
   overflow-wrap: anywhere;
 }
-.ir-chronicle-page .ir-chronicle-aside-play {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-aside-play {
   margin-top: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 56px;
   border-radius: 12px;
-  background: linear-gradient(160deg, #f6e3b8 0%, #d5b070 38%, #a9823f 70%, #6e5226 100%);
+  background: linear-gradient(160deg, var(--ir-brass-1) 0%, #e6c98f 55%, var(--ir-brass-2) 100%);
   color: #1a1206;
   border: 1px solid #f3deb0;
   box-shadow:
@@ -412,15 +429,15 @@ body.ir-table-look .ir-chronicle-dialog :is(button, a):focus-visible {
   text-decoration: none;
   box-sizing: border-box;
 }
-.ir-chronicle-page .ir-chronicle-aside-play:hover {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-aside-play:hover {
   filter: brightness(1.07);
   color: #1a1206;
 }
-.ir-chronicle-page .ir-chronicle-aside-others {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-aside-others {
   margin-top: 8px;
   text-align: center;
 }
-.ir-chronicle-page .ir-chronicle-aside-others-link {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-aside-others-link {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
@@ -430,10 +447,10 @@ body.ir-table-look .ir-chronicle-dialog :is(button, a):focus-visible {
   text-decoration: none;
   box-sizing: border-box;
 }
-.ir-chronicle-page .ir-chronicle-aside-others-link:hover {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-aside-others-link:hover {
   color: #f3deb0;
 }
-.ir-chronicle-page .ir-chronicle-footer {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-footer {
   min-height: 64px;
   height: 64px;
   display: flex;
@@ -447,7 +464,7 @@ body.ir-table-look .ir-chronicle-dialog :is(button, a):focus-visible {
   padding: 0 20px;
   overflow-wrap: anywhere;
 }
-.ir-chronicle-page .ir-chronicle-message {
+body.ir-table-look .ir-chronicle-page .ir-chronicle-message {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -458,32 +475,32 @@ body.ir-table-look .ir-chronicle-dialog :is(button, a):focus-visible {
   box-sizing: border-box;
   overflow-wrap: anywhere;
 }
-.ir-chronicle-page :is(a, button):focus-visible {
+body.ir-table-look .ir-chronicle-page :is(a, button):focus-visible {
   outline: 2px solid #f3deb0;
   outline-offset: 3px;
 }
 @media (max-width: 900px) {
-  .ir-chronicle-page .ir-chronicle-header {
+  body.ir-table-look .ir-chronicle-page .ir-chronicle-header {
     padding: 0 20px;
   }
-  .ir-chronicle-page .ir-chronicle-main {
+  body.ir-table-look .ir-chronicle-page .ir-chronicle-main {
     grid-template-columns: minmax(0, 1fr);
     gap: 28px;
     padding: 24px 20px 40px;
     justify-items: stretch;
   }
-  .ir-chronicle-page .ir-chronicle-article,
-  .ir-chronicle-page .ir-chronicle-aside {
+  body.ir-table-look .ir-chronicle-page .ir-chronicle-article,
+  body.ir-table-look .ir-chronicle-page .ir-chronicle-aside {
     max-width: 100%;
     width: 100%;
   }
-  .ir-chronicle-page .ir-chronicle-article-title {
+  body.ir-table-look .ir-chronicle-page .ir-chronicle-article-title {
     font-size: clamp(32px, 10vw, 52px);
   }
-  .ir-chronicle-page .ir-chronicle-article-figure {
+  body.ir-table-look .ir-chronicle-page .ir-chronicle-article-figure {
     width: 100%;
   }
-  .ir-chronicle-page .ir-chronicle-article-story {
+  body.ir-table-look .ir-chronicle-page .ir-chronicle-article-story {
     font-size: 20px;
   }
   body.ir-table-look .ir-chronicle-dialog {
@@ -499,10 +516,11 @@ body.ir-table-look .ir-chronicle-dialog :is(button, a):focus-visible {
 }
 @media (prefers-reduced-motion: reduce) {
   body.ir-table-look .ir-chronicle-dialog .ir-chronicle-share,
+  body.ir-table-look .ir-chronicle-dialog .ir-chronicle-write,
   body.ir-table-look .ir-chronicle-dialog .ir-chronicle-upgrade-button,
   body.ir-table-look .ir-chronicle-dialog .ir-chronicle-close,
-  .ir-chronicle-page .ir-chronicle-aside-play,
-  .ir-chronicle-page :is(a, button) {
+  body.ir-table-look .ir-chronicle-page .ir-chronicle-aside-play,
+  body.ir-table-look .ir-chronicle-page :is(a, button) {
     animation: none !important;
     transition: none !important;
   }

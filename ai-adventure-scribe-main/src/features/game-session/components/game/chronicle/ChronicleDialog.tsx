@@ -43,6 +43,8 @@ const ChronicleDialog: React.FC<ChronicleDialogProps> = ({ sessionId, open, onCl
     },
   );
 
+  const generateMutation = trpc.chronicles.generate.useMutation();
+
   useEffect(() => {
     setShareStatus('');
     setSharing(false);
@@ -50,8 +52,7 @@ const ChronicleDialog: React.FC<ChronicleDialogProps> = ({ sessionId, open, onCl
 
   const isPro = planHasPaidFeatures(userPlan);
   const title = chronicle?.chapterTitle ?? null;
-  const sessionNumber =
-    (chronicle as { sessionNumber?: number | null } | null)?.sessionNumber ?? null;
+  const sessionNumber = chronicle?.sessionNumber ?? null;
   const eyebrow =
     sessionNumber != null ? `SESSION CHRONICLE · SESSION ${sessionNumber}` : 'SESSION CHRONICLE';
   const paragraphs = splitParagraphs(chronicle?.chronicleText);
@@ -70,11 +71,23 @@ const ChronicleDialog: React.FC<ChronicleDialogProps> = ({ sessionId, open, onCl
         setShareStatus(`Copy this link: ${url}`);
       }
       void refetch();
-    } catch {
-      setShareStatus('Could not share. Try again.');
+    } catch (error) {
+      if ((error as { status?: number } | undefined)?.status === 409) {
+        setShareStatus('Write the full chronicle before sharing.');
+      } else {
+        setShareStatus('Could not share. Try again.');
+      }
     } finally {
       setSharing(false);
     }
+  };
+
+  const handleWriteFull = (): void => {
+    const targetSessionId = sessionId ?? chronicle?.sessionId;
+    if (!targetSessionId) return;
+    setShareStatus('');
+    generateMutation.mutate({ sessionId: targetSessionId });
+    void refetch();
   };
 
   const renderContent = (): React.ReactNode => {
@@ -96,6 +109,44 @@ const ChronicleDialog: React.FC<ChronicleDialogProps> = ({ sessionId, open, onCl
 
     if (chronicle.status === 'ready') {
       if (isPro) {
+        if (chronicle.chapterTitle == null) {
+          return (
+            <div>
+              {chronicle.illustrationUrl ? (
+                <figure className="ir-chronicle-figure mt-4 overflow-hidden rounded-md">
+                  <img
+                    src={chronicle.illustrationUrl}
+                    alt={`Illustration for ${title ?? 'Chronicle'}.`}
+                    className="block h-auto w-full max-h-[230px] object-cover"
+                  />
+                </figure>
+              ) : null}
+              {paragraphs.map((paragraph, index) => (
+                <p key={index} className="ir-chronicle-story mt-4 text-base leading-relaxed">
+                  {paragraph}
+                </p>
+              ))}
+              <div className="ir-chronicle-share-row">
+                <button
+                  type="button"
+                  onClick={handleWriteFull}
+                  disabled={generateMutation.isPending}
+                  className="ir-chronicle-write inline-flex min-h-11 items-center justify-center rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                >
+                  Write the full chronicle
+                </button>
+                <span
+                  role="status"
+                  aria-live="polite"
+                  className="ir-chronicle-status text-sm font-semibold"
+                >
+                  {shareStatus}
+                </span>
+              </div>
+            </div>
+          );
+        }
+
         return (
           <div>
             {chronicle.illustrationUrl ? (

@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 
 import { GameFeedbackButton } from './GameFeedbackButton';
+import { GameChronicleButton } from '../chronicle/GameChronicleButton';
 
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -86,6 +87,7 @@ export const GamePanelControls: React.FC<GamePanelControlsProps> = memo(
           </TooltipContent>
         </Tooltip>
 
+        <GameChronicleButton />
         <GameFeedbackButton />
       </div>
     );

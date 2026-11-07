@@ -2,7 +2,7 @@ import {
   CHRONICLE_SHARE_REQUEST,
   CHRONICLE_UNSHARE_REQUEST,
   PUBLIC_CHRONICLE_PATH,
-} from '../../../../../../shared/test-fixtures/chronicle-share-wire';
+} from '../../../../../../shared/chronicle-share-routes';
 
 import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 
@@ -14,6 +14,12 @@ export interface PublicChronicle {
   story: string;
   campaignName: string | null;
   sessionNumber: number | null;
+  publicCampaign: {
+    slug: string | null;
+    title: string | null;
+    tagline: string | null;
+    coverImageUrl: string | null;
+  } | null;
 }
 
 export async function shareChronicle(chronicleId: string): Promise<string> {
@@ -21,7 +27,9 @@ export async function shareChronicle(chronicleId: string): Promise<string> {
     method: CHRONICLE_SHARE_REQUEST.method,
   });
   if (!res.ok) {
-    throw new Error('Could not share. Try again.');
+    const error = new Error('Could not share. Try again.') as Error & { status?: number };
+    error.status = res.status;
+    throw error;
   }
   const data = (await res.json()) as { shareToken?: unknown };
   if (typeof data.shareToken !== 'string' || !data.shareToken) {

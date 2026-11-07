@@ -2,7 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { CHRONICLE_SHARE_REQUEST } from '../../../../../../../shared/test-fixtures/chronicle-share-wire';
+import { CHRONICLE_SHARE_REQUEST } from '../../../../../../../shared/chronicle-share-routes';
 import ChronicleDialog from '../ChronicleDialog';
 
 import type { AppRouter } from '@/infrastructure/api/trpc-types';
@@ -32,6 +32,9 @@ vi.mock('@/infrastructure/api', () => ({
     chronicles: {
       getBySessionId: {
         useQuery: vi.fn(),
+      },
+      generate: {
+        useMutation: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
       },
     },
   },
@@ -84,6 +87,7 @@ const mockProChronicle: ChronicleRow = {
   id: 'chron-1',
   sessionId: 'sess-1',
   userId: 'user-1',
+  sessionNumber: 3,
   status: 'ready',
   chronicleText: 'First paragraph of the story.\n\nSecond paragraph of the story.',
   chapterTitle: 'Chapter I: Dragon Battle',
@@ -101,6 +105,7 @@ const mockFreeChronicle: ChronicleRow = {
   id: 'chron-2',
   sessionId: 'sess-1',
   userId: 'user-1',
+  sessionNumber: 3,
   status: 'ready',
   chronicleText: 'First paragraph only.\n\nSecond paragraph hidden.',
   chapterTitle: 'Free Chapter',
@@ -186,13 +191,28 @@ describe('ChronicleDialog', () => {
     vi.mocked(trpc.chronicles.getBySessionId.useQuery).mockReturnValue(
       mockSuccessResult(mockProChronicle),
     );
-    mockFetchWithAuth.mockResolvedValue({ ok: false, status: 409, json: async () => ({}) });
+    mockFetchWithAuth.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
 
     renderComponent();
 
     fireEvent.click(screen.getByRole('button', { name: 'Share this chronicle' }));
 
     expect(await screen.findByText('Could not share. Try again.')).toBeInTheDocument();
+    expect(writeTextMock).not.toHaveBeenCalled();
+  });
+
+  it('share 409 shows Write the full chronicle before sharing.', async () => {
+    mockUseAuth.mockReturnValue({ userPlan: 'pro' });
+    vi.mocked(trpc.chronicles.getBySessionId.useQuery).mockReturnValue(
+      mockSuccessResult(mockProChronicle),
+    );
+    mockFetchWithAuth.mockResolvedValue({ ok: false, status: 409, json: async () => ({}) });
+
+    renderComponent();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Share this chronicle' }));
+
+    expect(await screen.findByText('Write the full chronicle before sharing.')).toBeInTheDocument();
     expect(writeTextMock).not.toHaveBeenCalled();
   });
 
@@ -217,5 +237,48 @@ describe('ChronicleDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Upgrade to Pro' }));
     expect(mockNavigate).toHaveBeenCalledWith('/account');
+  });
+
+  it('eyebrow shows session number from the typed query', () => {
+    mockUseAuth.mockReturnValue({ userPlan: 'pro' });
+    vi.mocked(trpc.chronicles.getBySessionId.useQuery).mockReturnValue(
+      mockSuccessResult(mockProChronicle),
+    );
+
+    renderComponent();
+
+    expect(screen.getByText('SESSION CHRONICLE · SESSION 3')).toBeInTheDocument();
+  });
+
+  it('summary-only paid owner sees Write the full chronicle and no Share', () => {
+    const summaryChronicle: ChronicleRow = {
+      ...mockProChronicle,
+      id: 'chron-summary',
+      chapterTitle: null,
+      chronicleText: 'Summary paragraph only.',
+      illustrationUrl: null,
+    };
+    const refetchMock = vi.fn();
+    const mutateMock = vi.fn();
+    mockUseAuth.mockReturnValue({ userPlan: 'pro' });
+    vi.mocked(trpc.chronicles.getBySessionId.useQuery).mockReturnValue({
+      ...mockSuccessResult(summaryChronicle),
+      refetch: refetchMock,
+    });
+    vi.mocked(trpc.chronicles.generate.useMutation).mockReturnValue({
+      mutate: mutateMock,
+      isPending: false,
+    } as unknown as ReturnType<typeof trpc.chronicles.generate.useMutation>);
+
+    renderComponent();
+
+    expect(screen.getByText('Summary paragraph only.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Share this chronicle' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Write the full chronicle' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Write the full chronicle' }));
+
+    expect(mutateMock).toHaveBeenCalledWith({ sessionId: 'sess-1' });
+    expect(refetchMock).toHaveBeenCalled();
   });
 });

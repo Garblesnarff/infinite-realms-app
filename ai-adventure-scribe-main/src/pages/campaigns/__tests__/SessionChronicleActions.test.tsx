@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CHRONICLE_SHARE_REQUEST,
   CHRONICLE_UNSHARE_REQUEST,
-} from '../../../../shared/test-fixtures/chronicle-share-wire';
+} from '../../../../shared/chronicle-share-routes';
 import { SessionChronicleActions } from '../SessionChronicleActions';
 
 import type { SessionListItem } from '../SessionCard';
@@ -102,5 +102,81 @@ describe('SessionChronicleActions', () => {
     expect(unshareUrl.endsWith(CHRONICLE_UNSHARE_REQUEST.path('chron-1'))).toBe(true);
     expect(unshareOptions.method).toBe(CHRONICLE_UNSHARE_REQUEST.method);
     expect(unshareOptions.body).toBeUndefined();
+    expect(screen.queryByRole('button', { name: 'Turn link off' })).not.toBeInTheDocument();
+  });
+
+  it('free owner with a live link sees Turn link off but no Share link', async () => {
+    mockFetchWithAuth.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ shareEnabled: false }),
+    });
+    const downgradedSession = {
+      ...sessionWithChronicle,
+      session_chronicles: [
+        {
+          id: 'chron-1',
+          status: 'ready',
+          chapter_title: 'Chapter I',
+          share_token: 'live-token',
+        },
+      ],
+    } as SessionListItem;
+
+    render(<SessionChronicleActions session={downgradedSession} userPlan="free" />);
+
+    expect(screen.getByRole('button', { name: 'Turn link off' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Share link' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn link off' }));
+
+    expect(await screen.findByText('Link turned off')).toBeInTheDocument();
+    expect(mockFetchWithAuth).toHaveBeenCalledTimes(1);
+    const [unshareUrl, unshareOptions] = mockFetchWithAuth.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(unshareUrl.endsWith(CHRONICLE_UNSHARE_REQUEST.path('chron-1'))).toBe(true);
+    expect(unshareOptions.method).toBe(CHRONICLE_UNSHARE_REQUEST.method);
+    expect(screen.queryByRole('button', { name: 'Turn link off' })).not.toBeInTheDocument();
+  });
+
+  it('disables both buttons while a request is pending', async () => {
+    let resolveRequest: ((value: unknown) => void) | undefined;
+    mockFetchWithAuth.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRequest = resolve;
+      }),
+    );
+
+    render(<SessionChronicleActions session={sessionWithChronicle} userPlan="pro" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Share link' }));
+
+    expect(screen.getByRole('button', { name: 'Share link' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Turn link off' })).toBeDisabled();
+
+    resolveRequest?.({
+      ok: true,
+      status: 200,
+      json: async () => ({ shareToken: 'token-abc' }),
+    });
+
+    expect(await screen.findByText('Link copied!')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Share link' })).not.toBeDisabled();
+  });
+
+  it('share 409 shows Write the full chronicle before sharing.', async () => {
+    mockFetchWithAuth.mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({ error: 'Write the full chronicle before sharing' }),
+    });
+
+    render(<SessionChronicleActions session={sessionWithChronicle} userPlan="pro" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Share link' }));
+
+    expect(await screen.findByText('Write the full chronicle before sharing.')).toBeInTheDocument();
   });
 });
