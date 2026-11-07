@@ -18,6 +18,7 @@ vi.mock('@/contexts/CombatContext', () => ({
 }));
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: vi.fn(() => ({ state: { campaign: { genre: 'high-fantasy' } } })),
+  useOptionalCampaign: vi.fn(() => undefined),
 }));
 
 // Mock usePanelResize hook
@@ -148,7 +149,7 @@ describe('GameSidePanel', () => {
     (usePanelResize as any).mockReturnValue({
       isExpanded: true,
       setIsExpanded: vi.fn(),
-      activeTab: 'memory',
+      activeTab: 'journal',
       setActiveTab: vi.fn(),
       panelWidth: '340px',
       panelRef: { current: null },
@@ -307,7 +308,7 @@ describe('GameSidePanel', () => {
     (usePanelResize as any).mockReturnValue({
       isExpanded: true,
       setIsExpanded: vi.fn(),
-      activeTab: 'memory',
+      activeTab: 'journal',
       setActiveTab: vi.fn(),
       panelWidth: '340px',
       panelRef: { current: null },
@@ -369,7 +370,7 @@ describe('GameSidePanel', () => {
     (usePanelResize as any).mockReturnValue({
       isExpanded: true,
       setIsExpanded: vi.fn(),
-      activeTab: 'memory',
+      activeTab: 'journal',
       setActiveTab: vi.fn(),
       panelWidth: '340px',
       panelRef: { current: null },
@@ -385,11 +386,11 @@ describe('GameSidePanel', () => {
     // Character tab is default in Content too
     expect(await screen.findByRole('tab', { name: 'Sheet' })).toBeInTheDocument();
 
-    // Switch to memory
-    const memoriesTab = screen.getByRole('tab', { name: 'Memory' });
-    fireEvent.click(memoriesTab);
+    // Switch to journal: session notes live on the Journal tab (#1429)
+    const journalTab = screen.getByRole('tab', { name: 'Journal' });
+    fireEvent.click(journalTab);
 
-    // Wait for the memory tab content to be visible
+    // Wait for the journal tab content to be visible
     await waitFor(() => {
       expect(screen.getByPlaceholderText(/Session notes.../i)).toBeInTheDocument();
     });

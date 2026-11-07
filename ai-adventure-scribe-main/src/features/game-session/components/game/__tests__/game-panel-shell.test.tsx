@@ -16,6 +16,7 @@ vi.mock('@/contexts/CombatContext', () => ({
 }));
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: vi.fn(() => ({ state: { campaign: { genre: 'high-fantasy' } } })),
+  useOptionalCampaign: vi.fn(() => undefined),
 }));
 vi.mock('@/features/game-session/hooks/use-panel-resize', () => ({
   usePanelResize: vi.fn(() => ({

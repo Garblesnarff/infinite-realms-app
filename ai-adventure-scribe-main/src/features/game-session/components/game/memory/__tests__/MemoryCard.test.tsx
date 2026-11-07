@@ -55,6 +55,25 @@ describe('MemoryCard (#1236 section B)', () => {
     expect(container.querySelectorAll('.bg-infinite-gold')).toHaveLength(1);
   });
 
+  it('labels the kind with the board glyph and singular name, and the pips with their count', () => {
+    const { container } = render(<MemoryCard memory={base({ type: 'npc', importance: 9 })} />);
+    expect(screen.getByText('Character')).toBeInTheDocument();
+    expect(container.querySelector('.h-8.w-8')?.textContent).toBe('C');
+    expect(screen.getByRole('img', { name: 'Importance 3 of 3' })).toBeInTheDocument();
+
+    const { container: locationContainer } = render(
+      <MemoryCard memory={base({ type: 'location', importance: 2 })} />,
+    );
+    expect(screen.getByText('Location')).toBeInTheDocument();
+    expect(locationContainer.querySelector('.h-8.w-8')?.textContent).toBe('L');
+    expect(screen.getByRole('img', { name: 'Importance 1 of 3' })).toBeInTheDocument();
+  });
+
+  it('falls back to the category label and first letter for kinds the board does not draw', () => {
+    render(<MemoryCard memory={base({ type: 'atmosphere', importance: 5 })} />);
+    expect(screen.getByText('Atmosphere')).toBeInTheDocument();
+  });
+
   it('clamps content to two lines and expands on tap', () => {
     render(<MemoryCard memory={base({})} />);
     const text = screen.getByText('The innkeeper owes the party a favour.');

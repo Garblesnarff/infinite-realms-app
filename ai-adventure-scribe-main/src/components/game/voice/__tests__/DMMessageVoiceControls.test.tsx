@@ -143,6 +143,21 @@ describe('DMMessageVoiceControls', () => {
     expect(screen.queryByRole('button', { name: /listen to this message/i })).toBeNull();
   });
 
+  it('marks the preparing control busy with the board aria label', () => {
+    (useVoiceContext as any).mockReturnValue({
+      ...mockVoiceContext,
+      currentPlayingId: 'msg-123',
+      isPlaying: false,
+      isProcessing: true,
+    });
+
+    render(<DMMessageVoiceControls {...defaultProps} />);
+
+    const preparing = screen.getByRole('button', { name: 'Preparing the voice' });
+    expect(preparing).toHaveAttribute('aria-busy', 'true');
+    expect(preparing).toBeDisabled();
+  });
+
   it('lets the player cancel a clip that is still being prepared', () => {
     const stopMessage = vi.fn();
     (useVoiceContext as any).mockReturnValue({
@@ -161,7 +176,7 @@ describe('DMMessageVoiceControls', () => {
     expect(stopMessage).toHaveBeenCalledTimes(1);
   });
 
-  it('shows the failure and a Retry that plays the message again', () => {
+  it('shows the failure and a Try again that plays the message again', () => {
     const retryMessage = vi.fn();
     (useVoiceContext as any).mockReturnValue({
       ...mockVoiceContext,
@@ -174,9 +189,36 @@ describe('DMMessageVoiceControls', () => {
 
     render(<DMMessageVoiceControls {...defaultProps} />);
 
-    expect(screen.getByText('Voice unavailable')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry voice for this message' }));
+    expect(screen.getByText('The voice could not load.')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('The voice could not load.');
+    fireEvent.click(screen.getByRole('button', { name: 'The voice failed. Try again' }));
     expect(retryMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the limit state, with no retry, when the error names a limit', () => {
+    (useVoiceContext as any).mockReturnValue({
+      ...mockVoiceContext,
+      currentPlayingId: 'msg-123',
+      isPlaying: false,
+      isProcessing: false,
+      playbackError: 'Voice limit reached for this session',
+    });
+
+    render(<DMMessageVoiceControls {...defaultProps} />);
+
+    expect(screen.getByRole('button', { name: 'Voice limit reached' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Voice limit reached' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByText('The text still works.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'See plans' })).toHaveAttribute(
+      'href',
+      '/pricing',
+    );
+    expect(
+      screen.queryByRole('button', { name: 'The voice failed. Try again' }),
+    ).not.toBeInTheDocument();
   });
 
   it('does not show an error for a different message', () => {
@@ -189,7 +231,7 @@ describe('DMMessageVoiceControls', () => {
 
     render(<DMMessageVoiceControls {...defaultProps} />);
 
-    expect(screen.queryByText('Voice unavailable')).toBeNull();
+    expect(screen.queryByText('The voice could not load.')).toBeNull();
     expect(screen.getByRole('button', { name: /listen to this message/i })).toBeInTheDocument();
   });
 
@@ -210,11 +252,14 @@ describe('DMMessageVoiceControls', () => {
 
     render(<DMMessageVoiceControls {...defaultProps} />);
 
-    const pauseButton = screen.getByRole('button', { name: /pause this message/i });
+    const pauseButton = screen.getByRole('button', { name: /pause the voice/i });
     expect(pauseButton).toBeInTheDocument();
     expect(screen.getByTestId('pause-icon')).toBeInTheDocument();
     // Use a more specific matcher for "Playing" text to avoid matches in sr-only
     expect(screen.getByText(/^Playing$/)).toBeInTheDocument();
+    // Board equalizer: three bars beside the Playing label
+    const playing = screen.getByLabelText('Currently playing message');
+    expect(playing.querySelectorAll('.animate-pulse')).toHaveLength(3);
   });
 
   it('calls playMessage when play button is clicked', () => {
@@ -236,7 +281,7 @@ describe('DMMessageVoiceControls', () => {
 
     render(<DMMessageVoiceControls {...defaultProps} />);
 
-    const pauseButton = screen.getByRole('button', { name: /pause this message/i });
+    const pauseButton = screen.getByRole('button', { name: /pause the voice/i });
     fireEvent.click(pauseButton);
 
     expect(mockVoiceContext.pauseMessage).toHaveBeenCalled();
