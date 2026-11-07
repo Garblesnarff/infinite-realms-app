@@ -17,6 +17,9 @@ export * from './usage';
 // Export all blog tables and types
 export * from './blog';
 
+// Export DM reply persistence records (#1416)
+export * from './dm-reply-records';
+
 // Export all game tables and types
 export * from './game';
 

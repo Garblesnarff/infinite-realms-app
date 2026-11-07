@@ -371,19 +371,33 @@ export async function rememberDeliveredCombatEntry(
  * for different actors must not inherit this turn's narration. Returns
  * false when nothing was waiting for these actors.
  */
+export type HeldReplyAttachResult =
+  | { attached: true }
+  | {
+      attached: false;
+      reason: 'invalid_pending' | 'no_pending_entry' | 'entry_expired' | 'actor_mismatch';
+    };
+
+/**
+ * #1416: says why nothing was attached, so the log line can name the cause. `no_pending_entry`
+ * (nothing stored) and `actor_mismatch` (a different turn's fight) are normal; `entry_expired`
+ * means the player took too long to answer the offer.
+ */
 export async function attachHeldReplyToPendingEntry(
   sessionId: string,
   pending: CombatEntryPending,
   heldReply: { messageId: string; text: string },
-): Promise<boolean> {
-  if (!pending || !Array.isArray(pending.combatants)) return false;
+): Promise<HeldReplyAttachResult> {
+  if (!pending || !Array.isArray(pending.combatants))
+    return { attached: false, reason: 'invalid_pending' };
   // readStored, not readPendingCombatEntry: an expired entry attaches nothing,
   // and this must not fire the expired line in the middle of a generate turn.
   const stored = await readStored(sessionId);
-  if (!stored || expired(stored)) return false;
-  if (stored.actorKey !== actorKeyOf(pending)) return false;
+  if (!stored) return { attached: false, reason: 'no_pending_entry' };
+  if (expired(stored)) return { attached: false, reason: 'entry_expired' };
+  if (stored.actorKey !== actorKeyOf(pending)) return { attached: false, reason: 'actor_mismatch' };
   await writeStored(sessionId, { ...stored, heldReply });
-  return true;
+  return { attached: true };
 }
 
 /**
