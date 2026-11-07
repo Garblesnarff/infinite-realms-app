@@ -742,7 +742,18 @@ export function scheduleDmReplyWatchdog(params: DmReplyWatchdogParams): Promise<
           // #1416: a held combat-entry reply has a durable record. A `ready` record is
           // published whether or not a fight is still live: seating already confirmed it.
           if (store) {
-            const record = await store.read(params.messageId);
+            let record: DmReplyRecord | null = null;
+            try {
+              record = await store.read(params.messageId);
+            } catch (error) {
+              // A failed lookup fails open to the legacy fallback below, not to a dropped reply.
+              logger.warn({
+                msg: 'DM_REPLY_RECORD_LOOKUP_FAILED',
+                sessionId: params.sessionId,
+                messageId: params.messageId,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
             if (record?.state === 'ready') {
               const outcome = await publishReadyDmReply(record, store, params.writeReplyRow);
               logger.warn({

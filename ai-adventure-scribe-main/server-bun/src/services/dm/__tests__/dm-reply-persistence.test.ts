@@ -1023,3 +1023,33 @@ describe('#1416 watchdog on a ready record', () => {
     expect(store.rows.get(ID)?.state).toBe('persisted');
   });
 });
+
+// #1416 review: a failed record lookup fails open to the legacy fallback rather than dropping it.
+describe('#1416 watchdog record lookup failure', () => {
+  test('still runs the legacy fallback when the record read throws', async () => {
+    const failingStore = {
+      read: async () => {
+        throw new Error('record store unavailable');
+      },
+      insertHeld: async () => {},
+      transition: async () => ({ ok: false as const, reason: 'no_record' as const }),
+    };
+    await scheduleDmReplyWatchdog({
+      sessionId: 'session-1',
+      messageId: '66666666-7777-4888-8999-000000000416',
+      reason: 'roll_requests',
+      generatedAt: new Date(),
+      userId: 'user-1',
+      envelope: {
+        text: 'The door creaks open.',
+        roll_requests: [{ type: 'check', formula: '1d20', purpose: 'Listen at the door', dc: 10 }],
+        combat_transition: 'none',
+      },
+      delayMs: 0,
+      hasDmRow: async () => false,
+      replyRecords: failingStore,
+    });
+    expect(addMessageCalls).toHaveLength(1);
+    expect(warnings.some((w) => w['msg'] === 'DM_REPLY_RECORD_LOOKUP_FAILED')).toBe(true);
+  });
+});

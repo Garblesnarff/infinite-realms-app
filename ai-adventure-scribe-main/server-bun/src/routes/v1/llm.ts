@@ -2149,6 +2149,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
                   { messageId: dmReply.messageId, text },
                 );
                 if (!attach.attached) {
+                  // Seating can no longer reach this reply, so the record is settled now and
+                  // does not shadow the watchdog's legacy fallback.
+                  await postgresDmReplyRecordStore.transition(dmReply.messageId, 'cancelled');
                   logger.info({
                     msg: 'DM_REPLY_HELD_NOT_ATTACHED',
                     sessionId: dmSessionId,
