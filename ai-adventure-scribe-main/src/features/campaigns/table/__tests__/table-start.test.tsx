@@ -70,11 +70,34 @@ describe('Table start screens', () => {
     expect(screen.getByText('A descent.')).toBeInTheDocument();
     fireEvent.error(screen.getByAltText('The Chasm cover art'));
     expect(screen.getByRole('img', { name: 'The Chasm artwork coming soon' })).toBeInTheDocument();
-    expect(screen.getByText(/target numbers \(DC and AC\) start hidden/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Hard campaign: target numbers (DC and AC) start hidden. You can show them in Settings → Table.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Explore The Chasm campaign' })).toHaveAttribute(
       'href',
       '/explore/test',
     );
+  });
+
+  it.each([
+    ['easy', 'Easy', 'shown', 'hide'],
+    ['Medium', 'Medium', 'shown', 'hide'],
+    ['HARD', 'Hard', 'hidden', 'show'],
+    ['deadly', 'Deadly', 'hidden', 'show'],
+    ['unknown', 'Medium', 'shown', 'hide'],
+  ])('words %s difficulty consistently', (difficulty, label, state, action) => {
+    render(
+      <MemoryRouter>
+        <BoxedCampaign campaign={{ ...campaign, difficulty }} />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByText(
+        `${label} campaign: target numbers (DC and AC) start ${state}. You can ${action} them in Settings → Table.`,
+      ),
+    ).toBeInTheDocument();
   });
 
   it('moves the hero selection with arrows and starts the selected hero once', () => {
@@ -95,11 +118,16 @@ describe('Table start screens', () => {
     fireEvent.error(choice.querySelector('img')!);
     expect(choice.querySelector('img')).toBeNull();
     expect(choice).toHaveAttribute('aria-pressed', 'true');
+    expect(choice).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('button', { name: 'Choose Two' })).toHaveAttribute('tabindex', '-1');
     fireEvent.keyDown(choice, { key: 'ArrowRight' });
     expect(screen.getByRole('button', { name: 'Choose Two' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
+    expect(screen.getByRole('button', { name: 'Choose Two' })).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('button', { name: 'Choose Two' })).toHaveFocus();
+    expect(choice).toHaveAttribute('tabindex', '-1');
     fireEvent.click(screen.getByRole('button', { name: 'Play as Two' }));
     expect(onPlay).toHaveBeenCalledTimes(1);
     expect(onPlay).toHaveBeenCalledWith(second);
