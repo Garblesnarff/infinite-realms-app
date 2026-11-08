@@ -13,6 +13,16 @@ export const BoxedCampaign: React.FC<{ campaign: StarterCampaign; isFirst?: bool
 }) => {
   const cover = tableImageUrl(campaign.coverImageUrl, 640, 800);
   const shown = showTargetNumbersByDefault(campaign.difficulty);
+  const difficulty = campaign.difficulty?.trim().toLowerCase() ?? '';
+  const difficultyLabel = difficulty.includes('medium')
+    ? 'Medium'
+    : difficulty.includes('hard')
+      ? 'Hard'
+      : difficulty.includes('deadly')
+        ? 'Deadly'
+        : difficulty.includes('easy')
+          ? 'Easy'
+          : 'Medium';
   return (
     <article className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[color:var(--infinite-surface)] [body.ir-table-look_&]:border-[#a9823f] [body.ir-table-look_&]:shadow-xl">
       <Link
@@ -49,8 +59,9 @@ export const BoxedCampaign: React.FC<{ campaign: StarterCampaign; isFirst?: bool
             Open the box
           </span>
           <p className="text-xs text-muted-foreground">
-            {campaign.difficulty || 'Medium'} campaign: target numbers (DC and AC) start{' '}
-            {shown ? 'shown' : 'hidden'}. You can change them in Settings → Table.
+            {difficultyLabel} campaign: target numbers (DC and AC) start{' '}
+            {shown ? 'shown' : 'hidden'}. You can {shown ? 'hide' : 'show'} them in Settings →
+            Table.
           </p>
         </div>
       </Link>

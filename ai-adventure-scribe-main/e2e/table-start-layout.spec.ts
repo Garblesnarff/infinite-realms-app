@@ -80,7 +80,20 @@ for (const width of [1280, 390]) {
       await page.goto(new URL(path, layoutUrl).toString());
       await expect(page.getByText('The Chasm').first()).toBeVisible();
       if (path === '/explore') await expect(page.getByText('Open the box')).toBeVisible();
-      else await expect(page.getByRole('button', { name: 'Choose One' })).toBeVisible();
+      else {
+        const first = page.getByRole('button', { name: 'Choose One' });
+        const second = page.getByRole('button', { name: 'Choose Two' });
+        await expect(first).toBeVisible();
+        await expect(first).toHaveAttribute('tabindex', '0');
+        await expect(second).toHaveAttribute('tabindex', '-1');
+        await first.focus();
+        await page.keyboard.press('ArrowRight');
+        await expect(second).toBeFocused();
+        await expect(second).toHaveAttribute('tabindex', '0');
+        const play = await page.getByRole('button', { name: /play as two/i }).boundingBox();
+        expect(play!.width).toBeGreaterThanOrEqual(44);
+        expect(play!.height).toBeGreaterThanOrEqual(44);
+      }
       const geometry = await page.evaluate(() => ({
         viewport: document.documentElement.clientWidth,
         width: document.documentElement.scrollWidth,
@@ -93,7 +106,17 @@ for (const width of [1280, 390]) {
       const box = await target.boundingBox();
       expect(box!.width).toBeGreaterThanOrEqual(44);
       expect(box!.height).toBeGreaterThanOrEqual(44);
-      await page.screenshot({ path: test.info().outputPath('screen.png') });
+      if (path !== '/explore' && width === 1280) {
+        await page.getByRole('button', { name: 'Choose Two' }).scrollIntoViewIfNeeded();
+        await expect(page.getByRole('button', { name: 'Choose Two' })).toBeVisible();
+      }
+      if (width === 1280)
+        await page.screenshot({
+          path: test.info().outputPath('screen.png'),
+          animations: 'disabled',
+          fullPage: true,
+        });
+      await expect(page.getByText('The Chasm').first()).toBeAttached();
     });
   }
 }

@@ -51,6 +51,7 @@ export const HeroFan: React.FC<{
               }}
               type="button"
               aria-pressed={active}
+              tabIndex={active ? 0 : -1}
               aria-label={`Choose ${template.name}`}
               onClick={() => setSelectedId(template.id)}
               onKeyDown={(event) => move(event, index)}
@@ -93,7 +94,7 @@ export const HeroFan: React.FC<{
         {selected.tagline && <p>{selected.tagline}</p>}
         <button
           type="button"
-          className="ir-brass-btn mt-3 rounded px-4"
+          className="ir-brass-btn mt-3 min-h-11 min-w-11 rounded px-4"
           disabled={disabled}
           onClick={() => onPlay(selected)}
         >
