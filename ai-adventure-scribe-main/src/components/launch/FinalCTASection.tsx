@@ -9,8 +9,6 @@ import { ArrowRight } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { WaitlistForm } from './WaitlistForm';
-
 import { Z_INDEX } from '@/constants/z-index';
 import { launchPageContent } from '@/data/launchPageContent';
 
@@ -85,15 +83,8 @@ export const FinalCTASection: React.FC = () => {
             <ArrowRight className="w-8 h-8" />
           </Link>
 
-          <div className="max-w-2xl mx-auto mt-16">
-            <div className="mb-8 text-center">
-              <h3 className="text-3xl font-bold text-white mb-3">Get news and updates</h3>
-              <p className="text-gray-300 text-lg">
-                Get an email when a new feature ships. You do not need it to play.
-              </p>
-            </div>
-            <WaitlistForm variant="section" />
-          </div>
+          {/* The email form lived here until #1432 item 4 deleted WaitlistForm;
+              this section is orphaned (nothing renders it) and its fate is #1440's. */}
         </div>
 
         {/* What Happens Next - Simplified */}

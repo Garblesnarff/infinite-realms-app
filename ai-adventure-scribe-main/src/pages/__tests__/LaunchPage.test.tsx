@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { HelmetProvider } from 'react-helmet-async';
 import { MemoryRouter } from 'react-router-dom';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import LaunchPage from '../LaunchPage';
 import PricingPage from '../PricingPage';
@@ -30,22 +30,6 @@ const renderPage = (): ReturnType<typeof render> => renderIn(<LaunchPage />);
 const renderPricing = (): ReturnType<typeof render> => renderIn(<PricingPage />);
 
 describe('LaunchPage', () => {
-  beforeAll(() => {
-    // The Radix checkbox in WaitlistForm measures itself; jsdom has no ResizeObserver.
-    vi.stubGlobal(
-      'ResizeObserver',
-      class {
-        observe(): void {}
-        unobserve(): void {}
-        disconnect(): void {}
-      },
-    );
-  });
-
-  afterAll(() => {
-    vi.unstubAllGlobals();
-  });
-
   it('offers the play CTA at /explore in the hero, and keeps Sign in', () => {
     renderPage();
 
@@ -91,11 +75,24 @@ describe('LaunchPage', () => {
     expect(faqLinks).toHaveLength(1);
   });
 
-  it('puts the email-list form after the play CTA on the landing page', () => {
+  it('keeps the "No waitlist" hero pill', () => {
+    renderPage();
+    expect(screen.getByText('Open beta · Free to play · No waitlist')).toBeInTheDocument();
+  });
+
+  it('has no email form on the landing page; the Join section sends visitors to /explore', () => {
     const { container } = renderPage();
+    expect(screen.queryAllByRole('form')).toHaveLength(0);
+    // queryAllByRole('form') only counts forms with an accessible name; a
+    // nameless <form> would slip past it, so check the DOM directly too.
+    expect(container.querySelector('form')).toBeNull();
+    expect(container.textContent).not.toMatch(/get updates by email/i);
+    expect(screen.getByText('Be a founding adventurer')).toBeInTheDocument();
     const play = container.querySelector('[data-track-cta="play_free"]') as Node;
-    const form = screen.getAllByRole('form', { name: /get updates by email/i })[0] as Node;
-    expect(play.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const join = screen.getByRole('link', { name: 'Join the beta' });
+    expect(join).toHaveAttribute('href', '/explore');
+    expect(join).toHaveAttribute('data-track-cta', 'play_free_join');
+    expect(play.compareDocumentPosition(join) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('keeps the legal links and the FAQ link in the footer', () => {
@@ -119,9 +116,9 @@ describe('LaunchPage', () => {
     ).toBeInTheDocument();
   });
 
-  it('has exactly one signup form on the page', () => {
+  it('has no signup form on the page', () => {
     renderPage();
-    expect(screen.getAllByRole('form')).toHaveLength(1);
+    expect(screen.queryAllByRole('form')).toHaveLength(0);
   });
 
   it('carries none of the retired beta story strings', () => {
