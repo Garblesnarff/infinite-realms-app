@@ -124,6 +124,7 @@ export interface EngineDeathSave {
   isStabilized?: boolean;
   isDead?: boolean;
   wasRevived?: boolean;
+  newCurrentHp?: number;
 }
 
 type EngineParticipant = {
@@ -547,6 +548,13 @@ export function formatCombatEngineOutcome(
 }
 
 /**
+ * SRD 5.1 death-save threshold as static rules copy on the card. The server does not
+ * provide a DC field on the wire (`EngineDeathSave` has none); the card displays this
+ * value without comparing, and never claims it was engine-supplied.
+ */
+const DEATH_SAVE_DC = 10;
+
+/**
  * One death-save card. The NPC-turn card covers the line the server already printed;
  * the single-action card carries the line itself.
  */
@@ -556,13 +564,34 @@ function deathSaveCard(
   line: string,
   covers?: string[],
 ): EngineResultCard {
+  const revivedHp =
+    typeof save.newCurrentHp === 'number' && Number.isFinite(save.newCurrentHp)
+      ? save.newCurrentHp
+      : null;
   const detail = save.wasRevived
-    ? `Rolled a natural 20: ${name} is back on their feet at 1 HP.`
+    ? revivedHp !== null
+      ? `Rolled a natural 20: ${name} is back on their feet at ${revivedHp} HP.`
+      : `Rolled a natural 20: ${name} is back on their feet.`
     : save.isDead
       ? `Rolled ${save.roll}: the third failure. ${name} is dead.`
       : save.isStabilized
         ? `Rolled ${save.roll}: the third success. ${name} is stable.`
         : `Rolled ${save.roll}.`;
+  const successes = save.successes ?? 0;
+  const failures = save.failures ?? 0;
+  const effect = save.wasRevived
+    ? revivedHp !== null
+      ? `You wake with ${revivedHp} HP`
+      : undefined
+    : save.isDead
+      ? `${name} is dead.`
+      : save.isStabilized
+        ? `${name} is stable.`
+        : save.roll === 1 && save.isCritical === true
+          ? 'Two death-save failures'
+          : save.isSuccess
+            ? `${successes} of 3 successes`
+            : `${failures} of 3 failures`;
   return {
     kind: 'death_save',
     side: 'party',
@@ -570,8 +599,10 @@ function deathSaveCard(
     ...(covers ? { covers } : {}),
     title: `${name} makes a death saving throw`,
     badge: engineBadge(save.isSuccess ? 'death-save-passed' : 'death-save-failed', 'party'),
+    math: { kind: 'save' as const, ability: 'death', roll: save.roll as number, dc: DEATH_SAVE_DC },
+    ...(effect !== undefined ? { effect } : {}),
     detail,
-    deathSave: { successes: save.successes ?? 0, failures: save.failures ?? 0 },
+    deathSave: { successes, failures },
   };
 }
 
