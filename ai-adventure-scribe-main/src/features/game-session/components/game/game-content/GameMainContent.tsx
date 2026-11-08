@@ -479,6 +479,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                     no height to the story column and can never reach the composer dock below. */}
                 <BuildSessionStatus sessionId={sessionId} />
                 <GamePanelControls
+                  sessionId={sessionId}
                   isLeftCollapsed={isLeftCollapsed}
                   isRightCollapsed={isRightCollapsed}
                   showSceneBlurb={showSceneBlurb}
