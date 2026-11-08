@@ -436,7 +436,7 @@ export const chroniclesRouter = router({
    * Returns safe public data for a shared chronicle.
    */
   getByShareToken: publicProcedure
-    .input(z.object({ token: z.string().min(32).max(32) }))
+    .input(z.object({ token: z.string().min(1) }))
     .query(async ({ input, ctx }) => {
       // ⚡ Bolt: Combined chronicle, session, and campaign queries into a single joined query
       // to eliminate the 1+1 query pattern and reduce database round-trips for public views.

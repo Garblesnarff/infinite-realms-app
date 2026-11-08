@@ -27,7 +27,7 @@ body.ir-table-look .ir-chronicle-dialog .ir-chronicle-eyebrow {
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.16em;
-  color: #4fb6c4;
+  color: var(--ir-steel-text);
 }
 body.ir-table-look .ir-chronicle-dialog .ir-chronicle-close {
   display: inline-flex;
@@ -38,7 +38,7 @@ body.ir-table-look .ir-chronicle-dialog .ir-chronicle-close {
   padding: 0 14px;
   border-radius: 10px;
   border: 1px solid rgba(213, 176, 112, 0.4);
-  background: #121b30;
+  background: var(--ir-felt-1);
   color: #eaeefa;
   font-family: 'DM Sans', system-ui, sans-serif;
   font-size: 15px;
@@ -110,7 +110,7 @@ body.ir-table-look .ir-chronicle-dialog .ir-chronicle-share {
   min-height: 52px;
   padding: 0 26px;
   border-radius: 12px;
-  background: linear-gradient(160deg, var(--ir-brass-1) 0%, #e6c98f 55%, var(--ir-brass-2) 100%);
+  background: linear-gradient(160deg, var(--ir-brass-1) 0%, var(--ir-brass-2) 100%);
   color: var(--ir-brass-ink);
   border: 1px solid #f3deb0;
   box-shadow:
@@ -139,7 +139,7 @@ body.ir-table-look .ir-chronicle-dialog .ir-chronicle-write {
   min-height: 52px;
   padding: 0 26px;
   border-radius: 12px;
-  background: linear-gradient(160deg, var(--ir-brass-1) 0%, #e6c98f 55%, var(--ir-brass-2) 100%);
+  background: linear-gradient(160deg, var(--ir-brass-1) 0%, var(--ir-brass-2) 100%);
   color: var(--ir-brass-ink);
   border: 1px solid #f3deb0;
   box-shadow:
@@ -165,14 +165,14 @@ body.ir-table-look .ir-chronicle-dialog .ir-chronicle-status {
   font-family: 'DM Sans', system-ui, sans-serif;
   font-size: 16px;
   font-weight: 700;
-  color: #4fb6c4;
+  color: var(--ir-steel-text);
   overflow-wrap: anywhere;
 }
 body.ir-table-look .ir-chronicle-dialog .ir-chronicle-privacy {
   margin-top: 12px;
   padding: 12px 16px;
   border-radius: 10px;
-  background: #121b30;
+  background: var(--ir-felt-1);
   box-shadow: 0 0 0 1px rgba(213, 176, 112, 0.22);
   font-family: 'DM Sans', system-ui, sans-serif;
   font-size: 15px;
@@ -185,7 +185,7 @@ body.ir-table-look .ir-chronicle-dialog .ir-chronicle-upgrade {
   margin-top: 20px;
   padding: 20px 22px;
   border-radius: 14px;
-  background: #121b30;
+  background: var(--ir-felt-1);
   box-shadow: 0 0 0 1px rgba(213, 176, 112, 0.4);
   display: flex;
   align-items: center;
@@ -216,7 +216,7 @@ body.ir-table-look .ir-chronicle-dialog .ir-chronicle-upgrade-button {
   min-height: 52px;
   padding: 0 24px;
   border-radius: 12px;
-  background: linear-gradient(160deg, var(--ir-brass-1) 0%, #e6c98f 55%, var(--ir-brass-2) 100%);
+  background: linear-gradient(160deg, var(--ir-brass-1) 0%, var(--ir-brass-2) 100%);
   color: var(--ir-brass-ink);
   border: 1px solid #f3deb0;
   box-shadow:
@@ -314,7 +314,7 @@ body.ir-table-look .ir-chronicle-page .ir-chronicle-eyebrow {
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.16em;
-  color: #4fb6c4;
+  color: var(--ir-steel-text);
   overflow-wrap: anywhere;
 }
 body.ir-table-look .ir-chronicle-page .ir-chronicle-article-title {
@@ -415,7 +415,7 @@ body.ir-table-look .ir-chronicle-page .ir-chronicle-aside-play {
   justify-content: center;
   min-height: 56px;
   border-radius: 12px;
-  background: linear-gradient(160deg, var(--ir-brass-1) 0%, #e6c98f 55%, var(--ir-brass-2) 100%);
+  background: linear-gradient(160deg, var(--ir-brass-1) 0%, var(--ir-brass-2) 100%);
   color: #1a1206;
   border: 1px solid #f3deb0;
   box-shadow:

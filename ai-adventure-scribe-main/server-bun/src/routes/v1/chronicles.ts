@@ -26,7 +26,7 @@ const chronicleIdParams = t.Object({
 });
 
 const publicTokenParams = t.Object({
-  token: t.String({ minLength: 1, maxLength: 255 }),
+  token: t.String({ minLength: 1 }),
 });
 
 const shareRoutes = new Elysia({ prefix: '/v1/chronicles' })
@@ -135,6 +135,10 @@ const shareRoutes = new Elysia({ prefix: '/v1/chronicles' })
 const publicRoutes = new Elysia({ prefix: '/v1/public/chronicles' }).get(
   '/:token',
   async ({ params, set }) => {
+    if (params.token.length > 255) {
+      set.status = 404;
+      return { error: 'Chronicle not found' };
+    }
     const rows = await db
       .select({
         chapterTitle: sessionChronicles.chapterTitle,

@@ -85,9 +85,18 @@ describe('chronicle.css', () => {
         for (const banned of BANNED_IN_BACKGROUND) {
           expect(declaration).not.toContain(banned);
         }
+        expect(declaration).toContain('var(--ir-brass-1)');
+        expect(declaration).toContain('var(--ir-brass-2)');
       }
     }
     expect(found).toBeGreaterThan(0);
-    expect(css).toContain('#e6c98f');
+  });
+
+  it('uses existing --ir-* tokens instead of hardcoded hexes', () => {
+    expect(css).not.toContain('#e6c98f');
+    expect(css).not.toContain('#121b30');
+    expect(css).not.toContain('#4fb6c4');
+    expect(css).toContain('var(--ir-felt-1)');
+    expect(css).toContain('var(--ir-steel-text)');
   });
 });
