@@ -256,6 +256,7 @@ test('all claim-based legal actions require a version', () => {
 describe('getLegalCombatActions', () => {
   afterEach(() => {
     profile = NO_SPELLS;
+    slotRemaining = null;
     player.actionUsed = false;
     player.bonusActionUsed = false;
     player.status.currentHp = 20;
@@ -750,6 +751,108 @@ describe('getLegalCombatActions', () => {
     ];
     const multiclass = await getLegalCombatActions('encounter-1', 'user-1');
     expect(multiclass.actions).toContainEqual({ type: 'divine_sense', label: 'Divine Sense' });
+  });
+
+  // #1362: Divine Smite is a choice declared with a melee weapon attack, before the roll.
+  // Each test puts the monster adjacent to the player so the quarterstaff can hit it now.
+  const placeMonsterAdjacent = () => {
+    map.entities[0].x = 6;
+    map.entities[0].y = 6;
+    map.entities[0].movementRemaining = 0;
+    map.entities[1].x = 6;
+    map.entities[1].y = 7;
+  };
+  // 'divine_smite' is not in LEGAL_ACTION_TYPES yet (see combat-intent-service.ts), so the
+  // helper reads it as a plain record.
+  const smiteActions = (actions: Array<Record<string, unknown>>): Array<Record<string, unknown>> =>
+    actions.filter((action) => action.type === 'divine_smite');
+
+  test('offers one Divine Smite per slot level a Paladin has after a melee attack (#1362)', async () => {
+    placeMonsterAdjacent();
+    slotRemaining = new Map([
+      [1, 2],
+      [2, 1],
+      [3, 0],
+    ]);
+
+    const result = await getLegalCombatActions('encounter-1', 'user-1');
+    const smites = smiteActions(result.actions);
+
+    expect(smites).toEqual([
+      {
+        type: 'divine_smite',
+        label: 'Attack with Quarterstaff and Divine Smite (level 1 slot)',
+        weaponId: 'quarterstaff',
+        targetIds: ['monster-1'],
+        slotLevel: 1,
+      },
+      {
+        type: 'divine_smite',
+        label: 'Attack with Quarterstaff and Divine Smite (level 2 slot)',
+        weaponId: 'quarterstaff',
+        targetIds: ['monster-1'],
+        slotLevel: 2,
+      },
+    ]);
+    // The plain attack is still offered beside the Smite choice.
+    expect(result.actions).toContainEqual(
+      expect.objectContaining({ type: 'attack', weaponId: 'quarterstaff' }),
+    );
+  });
+
+  test('offers no Divine Smite to a non-Paladin, with no slot left, or with no ledger (#1362)', async () => {
+    placeMonsterAdjacent();
+    slotRemaining = new Map([[1, 3]]);
+    player.characterClass = 'Fighter';
+    player.characterClassLevels = [{ className: 'Fighter', level: 6 }];
+    const fighter = await getLegalCombatActions('encounter-1', 'user-1');
+    expect(smiteActions(fighter.actions)).toEqual([]);
+
+    player.characterClass = 'Paladin';
+    player.characterClassLevels = [{ className: 'Paladin', level: 6 }];
+    slotRemaining = new Map([
+      [1, 0],
+      [2, 0],
+    ]);
+    const exhausted = await getLegalCombatActions('encounter-1', 'user-1');
+    expect(smiteActions(exhausted.actions)).toEqual([]);
+
+    slotRemaining = null;
+    const noLedger = await getLegalCombatActions('encounter-1', 'user-1');
+    expect(smiteActions(noLedger.actions)).toEqual([]);
+  });
+
+  test('offers no Divine Smite once the Action is spent, by a hit or a miss (#1362)', async () => {
+    // A roll is not in the legal-actions read. A miss and a hit both spend the Action, so the
+    // Smite choice ends with the attack: nothing is offered after either.
+    placeMonsterAdjacent();
+    slotRemaining = new Map([[1, 2]]);
+    player.actionUsed = true;
+
+    const result = await getLegalCombatActions('encounter-1', 'user-1');
+
+    expect(smiteActions(result.actions)).toEqual([]);
+  });
+
+  test('offers no Divine Smite without a melee weapon in reach (#1362)', async () => {
+    slotRemaining = new Map([[1, 2]]);
+    // Out of reach: the monster is two squares away and the quarterstaff reaches one.
+    placeMonsterAdjacent();
+    map.entities[1].x = 8;
+    map.entities[1].y = 8;
+    const outOfReach = await getLegalCombatActions('encounter-1', 'user-1');
+    expect(smiteActions(outOfReach.actions)).toEqual([]);
+
+    // Ranged only: a Smite needs a melee weapon attack.
+    placeMonsterAdjacent();
+    const savedWeapons = equippedWeapons;
+    equippedWeapons = [{ ...savedWeapons[0], id: 'shortbow', name: 'Shortbow', ranged: true }];
+    try {
+      const ranged = await getLegalCombatActions('encounter-1', 'user-1');
+      expect(smiteActions(ranged.actions)).toEqual([]);
+    } finally {
+      equippedWeapons = savedWeapons;
+    }
   });
 
   // #1148: weapon targets already skipped the dead (#314 CB-074); attack-roll

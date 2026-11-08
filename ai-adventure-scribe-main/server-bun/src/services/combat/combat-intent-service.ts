@@ -2318,6 +2318,36 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
         return { targetId: target.id, legal: rules.legal, refusal: rules.refusal };
       });
     actions.push(...buildCombatWeaponOptions(weapons, targetsForWeapon, { canCloseDistance }));
+    // #1362: Divine Smite is declared with a melee weapon attack, before the roll: the rider
+    // spends the slot only on a hit. One option per melee weapon and slot level the Paladin
+    // still has, against the targets that weapon can reach now (no move-first). The client
+    // sends the attack intent with divineSmiteSlotLevel; combat-attack-service refuses it
+    // again before the roll if the class or slot no longer holds.
+    if (actor.characterId && actor.characterClass?.toLowerCase().includes('paladin')) {
+      const remaining = await remainingSpellSlots(actor.characterId);
+      const slotLevels = [...(remaining?.entries() ?? [])]
+        .filter(([, count]) => count > 0)
+        .map(([level]) => level)
+        .sort((left, right) => left - right);
+      for (const weapon of equippedWeapons.filter((candidate) => !candidate.ranged)) {
+        const reachableTargetIds = targetsForWeapon(weapon)
+          .filter((target) => target.legal)
+          .map((target) => target.targetId);
+        if (!reachableTargetIds.length) continue;
+        for (const slotLevel of slotLevels) {
+          // Typed through a cast: 'divine_smite' is not in LEGAL_ACTION_TYPES yet, because the
+          // client's placement test requires every type to be placed (CombatActionBar.tsx is
+          // the client half and waits for #1438). The client renders unknown types in More.
+          actions.push({
+            type: 'divine_smite',
+            label: `Attack with ${weapon.name} and Divine Smite (level ${slotLevel} slot)`,
+            weaponId: weapon.id,
+            targetIds: reachableTargetIds,
+            slotLevel,
+          } as unknown as { type: LegalActionType } & Record<string, unknown>);
+        }
+      }
+    }
     // #1059: a carried ranged weapon the package left unequipped (the
     // shortbow, the light crossbow) while a melee weapon holds the main
     // hand is offered as 'Equip and attack': the client equips it — the
