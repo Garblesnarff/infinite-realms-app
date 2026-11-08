@@ -486,6 +486,19 @@ describeWithDb('chronicle sharing is private until the owner shares (#1430)', ()
       .where(eq(sessionChronicles.id, freeChronicleId));
     expect(freeRow[0].shareEnabled).toBe(false);
   });
+
+  test('over-long public token returns 404 like an unknown token, not 422', async () => {
+    if (!hasRealDb || !app) return;
+    const handle = (app as unknown as { handle: (r: Request) => Promise<Response> }).handle.bind(
+      app as unknown as { handle: (r: Request) => Promise<Response> },
+    );
+    const longToken = 'a'.repeat(256);
+    const res = await handle(
+      new Request(`http://localhost${PUBLIC_CHRONICLE_PATH(longToken)}`, { method: 'GET' }),
+    );
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'Chronicle not found' });
+  });
 });
 
 describeWithDb('chronicle share race and concurrent first share (#1430 review FIX1)', () => {
