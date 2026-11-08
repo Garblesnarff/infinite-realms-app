@@ -417,6 +417,7 @@ export const sessionChronicles = pgTable(
     previouslyOn: text('previously_on'),
     illustrationUrl: text('illustration_url'),
     shareToken: text('share_token').unique(),
+    shareEnabled: boolean('share_enabled').notNull().default(false),
     generatedAt: timestamp('generated_at', { withTimezone: true, mode: 'date' }),
     errorMessage: text('error_message'),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),

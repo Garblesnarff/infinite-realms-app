@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -196,11 +197,21 @@ vi.mock('@/components/safety/SafetyBanner', () => ({ SafetyBanner: () => <div>Sa
 // #2456: DeathScreen uses useNavigate; mock it for terminal-state tests.
 // #1215: one shared mock, so a test can assert where the hero pick goes.
 const routerMock = vi.hoisted(() => ({ navigate: vi.fn() }));
-vi.mock('react-router-dom', () => ({
-  useNavigate: () => routerMock.navigate,
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<Record<string, unknown>>('react-router-dom');
+  return {
+    ...actual,
+    useNavigate: () => routerMock.navigate,
+  };
+});
+const gamePanelControlsMock = vi.hoisted(() => ({
+  calls: [] as Array<{ sessionId?: string | null }>,
 }));
 vi.mock('../game-content/GamePanelControls', () => ({
-  GamePanelControls: () => <div>Panel controls</div>,
+  GamePanelControls: (props: { sessionId?: string | null }) => {
+    gamePanelControlsMock.calls.push(props);
+    return <div>Panel controls</div>;
+  },
 }));
 
 const sendMessage = vi.fn();
@@ -850,5 +861,25 @@ describe('GameMainContent overhaul behavior contract', () => {
     expect(screen.getByText('The spider’s fangs find the gap in your guard.')).toBeInTheDocument();
     // And the end state still owns the page: no composer comes back.
     expect(screen.queryByTestId('chat-input')).not.toBeInTheDocument();
+  });
+
+  it('forwards the resolved sessionId to GamePanelControls on a continuation URL with no session query', () => {
+    gamePanelControlsMock.calls.length = 0;
+    render(
+      <MemoryRouter initialEntries={['/app/game/c1?character=h1']}>
+        <GameMainContent
+          {...baseProps}
+          sessionId="resolved-session-uuid"
+          sessionData={
+            {
+              ...(baseProps.sessionData as unknown as Record<string, unknown>),
+              id: 'resolved-session-uuid',
+            } as never
+          }
+        />
+      </MemoryRouter>,
+    );
+
+    expect(gamePanelControlsMock.calls.at(-1)?.sessionId).toBe('resolved-session-uuid');
   });
 });

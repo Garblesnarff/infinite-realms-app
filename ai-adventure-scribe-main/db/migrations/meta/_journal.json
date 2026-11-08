@@ -218,6 +218,13 @@
       "when": 1793425245936,
       "tag": "0032_creature_type",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1794021070563,
+      "tag": "0033_session_chronicle_share_enabled",
+      "breakpoints": true
     }
   ]
 }

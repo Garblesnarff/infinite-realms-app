@@ -134,6 +134,8 @@ const mockProChronicle: ChronicleRow = {
   previouslyOn: 'The party entered the cave.',
   illustrationUrl: 'https://example.com/dragon.jpg',
   shareToken: 'token-12345678901234567890123456',
+  shareEnabled: false,
+  sessionNumber: 1,
   generatedAt: '2026-10-12T12:00:00.000Z',
   errorMessage: null,
   createdAt: '2026-10-12T12:00:00.000Z',
@@ -150,6 +152,8 @@ const mockFreeChronicle: ChronicleRow = {
   previouslyOn: null,
   illustrationUrl: null,
   shareToken: null,
+  shareEnabled: false,
+  sessionNumber: 1,
   generatedAt: '2026-10-12T12:00:00.000Z',
   errorMessage: null,
   createdAt: '2026-10-12T12:00:00.000Z',
@@ -166,6 +170,8 @@ const mockGeneratingChronicle: ChronicleRow = {
   previouslyOn: null,
   illustrationUrl: null,
   shareToken: null,
+  shareEnabled: false,
+  sessionNumber: 1,
   generatedAt: null,
   errorMessage: null,
   createdAt: '2026-10-12T12:00:00.000Z',
@@ -182,6 +188,8 @@ const mockFailedChronicle: ChronicleRow = {
   previouslyOn: null,
   illustrationUrl: null,
   shareToken: null,
+  shareEnabled: false,
+  sessionNumber: 1,
   generatedAt: null,
   errorMessage: 'LLM error',
   createdAt: '2026-10-12T12:00:00.000Z',
@@ -258,9 +266,7 @@ describe('ChronicleViewer', () => {
 
     expect(screen.getByText('Chapter I: Dragon Battle')).toBeInTheDocument();
     expect(
-      screen.getByText(
-        'The brave heroes fought valiantly against the dragon in the deep cavern.',
-      ),
+      screen.getByText('The brave heroes fought valiantly against the dragon in the deep cavern.'),
     ).toBeInTheDocument();
 
     const img = screen.getByRole('img');

@@ -32,6 +32,7 @@ const CampaignDetailPage = lazy(() => import('./pages/CampaignDetailPage'));
 const ExploreGalleryPage = lazy(() => import('./pages/ExploreGalleryPage'));
 const StarterCharacterSelectionPage = lazy(() => import('./pages/StarterCharacterSelectionPage'));
 const PricingPage = lazy(() => import('./pages/PricingPage'));
+const PublicChroniclePage = lazy(() => import('./pages/PublicChroniclePage'));
 
 /** Public route table. Exported so tests can render it under MemoryRouter. */
 export function AppRoutes() {
@@ -65,6 +66,8 @@ export function AppRoutes() {
         path="/explore/:slug/choose-character"
         element={withRouteSuspense(<StarterCharacterSelectionPage />)}
       />
+
+      <Route path="/chronicle/:token" element={withRouteSuspense(<PublicChroniclePage />)} />
 
       {/* Blog Admin Login (public - separate from WorkOS auth) */}
       <Route path="/admin/blog/login" element={withRouteSuspense(<BlogAdminLogin />)} />

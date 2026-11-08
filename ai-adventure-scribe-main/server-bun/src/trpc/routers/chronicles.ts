@@ -11,7 +11,7 @@
  */
 
 import { TRPCError } from '@trpc/server';
-import { and, eq, isNull, or } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, or } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '../../../../db/client';
@@ -106,6 +106,8 @@ export const chroniclesRouter = router({
           previouslyOn: sessionChronicles.previouslyOn,
           illustrationUrl: sessionChronicles.illustrationUrl,
           shareToken: sessionChronicles.shareToken,
+          shareEnabled: sessionChronicles.shareEnabled,
+          sessionNumber: gameSessions.sessionNumber,
           generatedAt: sessionChronicles.generatedAt,
           errorMessage: sessionChronicles.errorMessage,
           createdAt: sessionChronicles.createdAt,
@@ -160,6 +162,7 @@ export const chroniclesRouter = router({
         .select({
           id: sessionChronicles.id,
           status: sessionChronicles.status,
+          chapterTitle: sessionChronicles.chapterTitle,
         })
         .from(sessionChronicles)
         .where(
@@ -173,7 +176,23 @@ export const chroniclesRouter = router({
       const existingRow = existing[0];
 
       if (existingRow?.status === 'ready') {
-        return { chronicleId: existingRow.id, alreadyExists: true };
+        if (existingRow.chapterTitle != null) {
+          return { chronicleId: existingRow.id, alreadyExists: true };
+        }
+        // Summary-only row from the free producer: a paid owner upgrades it
+        // to a full Pro chronicle instead of keeping the summary.
+        let upgradePlan: string;
+        try {
+          upgradePlan = await resolveUserPlanStrict(ctx.user.userId);
+        } catch {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Plan lookup unavailable',
+          });
+        }
+        if (!planHasPaidFeatures(upgradePlan)) {
+          return { chronicleId: existingRow.id, alreadyExists: true };
+        }
       }
 
       if (existingRow?.status === 'generating') {
@@ -427,8 +446,6 @@ export const chroniclesRouter = router({
           chronicleText: sessionChronicles.chronicleText,
           illustrationUrl: sessionChronicles.illustrationUrl,
           generatedAt: sessionChronicles.generatedAt,
-          sessionId: sessionChronicles.sessionId,
-          previouslyOn: sessionChronicles.previouslyOn,
           sessionNumber: gameSessions.sessionNumber,
           campaignName: campaigns.name,
         })
@@ -436,7 +453,12 @@ export const chroniclesRouter = router({
         .leftJoin(gameSessions, eq(sessionChronicles.sessionId, gameSessions.id))
         .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
         .where(
-          and(eq(sessionChronicles.shareToken, input.token), eq(sessionChronicles.status, 'ready')),
+          and(
+            eq(sessionChronicles.shareToken, input.token),
+            eq(sessionChronicles.shareEnabled, true),
+            eq(sessionChronicles.status, 'ready'),
+            isNotNull(sessionChronicles.chapterTitle),
+          ),
         )
         .limit(1);
 
@@ -451,7 +473,6 @@ export const chroniclesRouter = router({
         chronicleText: chronicle.chronicleText,
         illustrationUrl: chronicle.illustrationUrl,
         generatedAt: chronicle.generatedAt,
-        previouslyOn: chronicle.previouslyOn,
         sessionNumber: chronicle.sessionNumber ?? null,
         campaignName: chronicle.campaignName ?? null,
       };

@@ -197,6 +197,8 @@ describe('Chronicles Security', () => {
           ]),
         }),
       );
+      const selectArg = mockCtx.db.select.mock.calls.at(-1)?.[0];
+      expect(selectArg).toHaveProperty('sessionNumber');
     });
 
     it('generate should filter by userId when checking existing chronicles', async () => {
@@ -443,6 +445,51 @@ describe('Chronicles Security', () => {
           ]),
         }),
       );
+    });
+
+    it('getByShareToken filters on share_enabled and never returns previouslyOn', async () => {
+      const caller = chroniclesRouter.createCaller(mockCtx);
+      const mockToken = '12345678901234567890123456789012';
+
+      const qb = mockCtx.db.select();
+      mockCtx.db.select.mockReturnValue(qb);
+      mockCtx.db.select.mockClear();
+
+      qb.then = vi.fn(function (this: any, resolve: any) {
+        return Promise.resolve([
+          {
+            chapterTitle: 'Shared Title',
+            chronicleText: 'Story',
+            illustrationUrl: null,
+            generatedAt: null,
+            sessionNumber: 2,
+            campaignName: 'Campaign',
+          },
+        ]).then(resolve);
+      });
+
+      const result = await caller.getByShareToken({ token: mockToken });
+
+      const selectArg = mockCtx.db.select.mock.calls[0]?.[0];
+      expect(selectArg).not.toHaveProperty('previouslyOn');
+      expect(selectArg).not.toHaveProperty('sessionId');
+      expect(qb.where).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'and',
+          args: expect.arrayContaining([
+            expect.objectContaining({ type: 'eq', a: expect.anything(), b: true }),
+          ]),
+        }),
+      );
+      expect(result).not.toHaveProperty('previouslyOn');
+      expect(Object.keys(result).sort()).toEqual([
+        'campaignName',
+        'chapterTitle',
+        'chronicleText',
+        'generatedAt',
+        'illustrationUrl',
+        'sessionNumber',
+      ]);
     });
   });
 });

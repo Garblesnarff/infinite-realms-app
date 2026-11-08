@@ -4,6 +4,10 @@ import { type SessionListItem } from './SessionCard';
 import { planHasPaidFeatures } from '../../../shared/plan-features';
 
 import { Button } from '@/components/ui/button';
+import {
+  shareChronicle,
+  unshareChronicle,
+} from '@/features/game-session/components/game/chronicle/chronicleShareApi';
 
 interface SessionChronicleActionsProps {
   session: SessionListItem;
@@ -20,6 +24,50 @@ export const SessionChronicleActions: React.FC<SessionChronicleActionsProps> = (
 }) => {
   const chronicle = session.session_chronicles?.[0];
   const isPro = planHasPaidFeatures(userPlan);
+  const [shareStatus, setShareStatus] = React.useState('');
+  const [revoked, setRevoked] = React.useState(false);
+  const [isMutating, setIsMutating] = React.useState(false);
+
+  const handleShareLink = async (): Promise<void> => {
+    if (!chronicle || isMutating) return;
+    setIsMutating(true);
+    try {
+      const token = await shareChronicle(chronicle.id);
+      setRevoked(false);
+      const url = `${window.location.origin}/chronicle/${token}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        setShareStatus('Link copied!');
+      } catch {
+        setShareStatus(`Copy this link: ${url}`);
+      }
+    } catch (error) {
+      if ((error as { status?: number } | undefined)?.status === 409) {
+        setShareStatus('Write the full chronicle before sharing.');
+      } else {
+        setShareStatus('Could not share. Try again.');
+      }
+    } finally {
+      setIsMutating(false);
+    }
+  };
+
+  const handleTurnLinkOff = async (): Promise<void> => {
+    if (!chronicle || isMutating) return;
+    setIsMutating(true);
+    try {
+      await unshareChronicle(chronicle.id);
+      setRevoked(true);
+      setShareStatus('Link turned off');
+    } catch {
+      setShareStatus('Could not turn the link off. Try again.');
+    } finally {
+      setIsMutating(false);
+    }
+  };
+
+  const showShare = isPro;
+  const showTurn = !revoked && (isPro || !!chronicle?.share_token);
 
   return (
     <div className="mt-3 pt-3 border-t border-border">
@@ -33,19 +81,32 @@ export const SessionChronicleActions: React.FC<SessionChronicleActionsProps> = (
           >
             📖 Read Chronicle
           </Button>
-          {chronicle.share_token && isPro && (
+          {showShare && (
             <Button
               size="sm"
               variant="ghost"
-              className="text-muted-foreground h-7 px-2 text-xs"
-              onClick={() => {
-                navigator.clipboard.writeText(
-                  `${window.location.origin}/chronicle/${chronicle.share_token}`,
-                );
-              }}
+              className="text-muted-foreground h-11 px-2 text-xs"
+              onClick={handleShareLink}
+              disabled={isMutating}
             >
-              Share ↗
+              Share link
             </Button>
+          )}
+          {showTurn && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-muted-foreground h-11 px-2 text-xs"
+              onClick={handleTurnLinkOff}
+              disabled={isMutating}
+            >
+              Turn link off
+            </Button>
+          )}
+          {(showShare || showTurn || shareStatus) && (
+            <span role="status" aria-live="polite" className="text-xs text-muted-foreground">
+              {shareStatus}
+            </span>
           )}
         </div>
       ) : chronicle?.status === 'generating' ? (

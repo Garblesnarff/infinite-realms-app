@@ -5,23 +5,24 @@
  * No authentication required — access is controlled by the share token.
  */
 
-import { eq } from 'drizzle-orm';
+import { and, eq, isNotNull } from 'drizzle-orm';
 import { Elysia } from 'elysia';
 
 import { db } from '../../../db/client';
 import { sessionChronicles, gameSessions, campaigns } from '../../../db/schema/game.js';
+import { getSiteConfig } from '../config/site.js';
 import { logger } from '../lib/logger.js';
 import { streamReactResponse } from '../utils/react-stream.js';
 import { ChronicleSharePage } from '../views/chronicle/share.js';
 
 /**
  * Cache headers for the public chronicle share page.
- * Chronicles are immutable once generated — cache aggressively.
+ * Revocation must take effect at once, so nothing is cached.
  */
 const CHRONICLE_CACHE_HEADERS = {
-  'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
-  'CDN-Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
-  'Surrogate-Control': 'public, max-age=3600, stale-while-revalidate=86400',
+  'Cache-Control': 'no-store',
+  'CDN-Cache-Control': 'no-store',
+  'Surrogate-Control': 'no-store',
   Vary: 'Accept-Encoding, Accept-Language',
 } as const;
 
@@ -33,7 +34,7 @@ const CHRONICLE_CACHE_HEADERS = {
  */
 export const chronicleRoutes = new Elysia({ prefix: '/chronicle' })
   // Public share page — accessed via share token
-  .get('/:token', async ({ params, set }) => {
+  .get('/:token', async ({ params, set, request }) => {
     const { token } = params;
 
     try {
@@ -54,7 +55,14 @@ export const chronicleRoutes = new Elysia({ prefix: '/chronicle' })
         .from(sessionChronicles)
         .leftJoin(gameSessions, eq(sessionChronicles.sessionId, gameSessions.id))
         .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-        .where(eq(sessionChronicles.shareToken, token))
+        .where(
+          and(
+            eq(sessionChronicles.shareToken, token),
+            eq(sessionChronicles.shareEnabled, true),
+            eq(sessionChronicles.status, 'ready'),
+            isNotNull(sessionChronicles.chapterTitle),
+          ),
+        )
         .limit(1);
 
       const row = rows[0];
@@ -64,7 +72,26 @@ export const chronicleRoutes = new Elysia({ prefix: '/chronicle' })
         set.status = 404;
         return new Response('Chronicle not found', {
           status: 404,
-          headers: { 'Content-Type': 'text/plain' },
+          headers: { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' },
+        });
+      }
+
+      const appOrigin = process.env.CORS_ORIGIN?.split(',')[0]?.trim() || getSiteConfig().url;
+      let appHost: string | null = null;
+      try {
+        appHost = new URL(appOrigin).host;
+      } catch {
+        appHost = null;
+      }
+      const requestHost = request.headers.get('host');
+      if (appHost && appHost !== requestHost) {
+        set.status = 302;
+        return new Response(null, {
+          status: 302,
+          headers: {
+            Location: `${appOrigin}/chronicle/${encodeURIComponent(token)}`,
+            'Cache-Control': 'no-store',
+          },
         });
       }
 
