@@ -2,6 +2,11 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { buildNpcEngineMessage } from '../../../../../../../shared/npc-engine-message';
+import {
+  ENEMY_STRIKES_DOWNED_PLAYER,
+  REEVES,
+  SCHOLAR,
+} from '../../../../../../../shared/test-fixtures/engine-results';
 import { FallenStoryLog } from '../DeathScreen';
 
 import type { ChatMessage } from '@/types/game';
@@ -245,6 +250,27 @@ describe('FallenStoryLog (#464)', () => {
     expect(log).toHaveTextContent('Spider attacks The Apprentice');
     expect(log).toHaveTextContent('The Apprentice is dead.');
     expect(log).not.toHaveTextContent('Engine:');
+    state.messages = [{ id: 'm1', sender: 'dm', text: DM_TEXT }];
+  });
+
+  it('#1431: a combined downed strike keeps its damage and failure facts in one card', () => {
+    const combined = buildNpcEngineMessage(
+      [
+        { id: REEVES.id, name: REEVES.name, participantType: 'monster', maxHp: 12 },
+        { id: SCHOLAR.id, name: SCHOLAR.name, participantType: 'player', maxHp: 7 },
+      ],
+      4,
+      { type: 'attack', actorId: REEVES.id, targetId: SCHOLAR.id },
+      ENEMY_STRIKES_DOWNED_PLAYER,
+    );
+    state.messages = [{ id: 'combined-downed-strike', sender: 'system', ...combined }];
+    render(<FallenStoryLog />);
+    const log = screen.getByTestId('death-screen-story-log');
+    expect(log).toHaveTextContent('automatic critical hit');
+    expect(log).toHaveTextContent('Two death-save failures');
+    expect(log).toHaveTextContent('6 slashing damage');
+    expect(log).toHaveTextContent('The Scholar is unconscious.');
+    expect(log.children).toHaveLength(1);
     state.messages = [{ id: 'm1', sender: 'dm', text: DM_TEXT }];
   });
 
