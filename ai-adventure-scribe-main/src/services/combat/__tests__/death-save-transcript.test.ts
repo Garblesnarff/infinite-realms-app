@@ -67,17 +67,14 @@ describe('damage at 0 HP in the player transcript (#2457)', () => {
     );
     expect(parts).toHaveLength(1);
     const combined = parts[0];
-    // The Engine: prefix marks this as engine fact, not DM fiction (#2457).
-    expect(combined.line.startsWith('⚙️ Engine:')).toBe(true);
-    expect(combined.line).toContain(
-      'rolled 14 + 0 = 14 vs AC 11 against The Scholar with Longsword — CRITICAL HIT.',
+    // The legacy persisted text is two complete Engine paragraphs, each with its own
+    // prefix: one card must not concatenate them into a single sentence (#1431).
+    expect(combined.line).toBe(
+      [
+        '⚙️ Engine: Captain Sarah Reeves rolled 14 + 0 = 14 vs AC 11 against The Scholar with Longsword — CRITICAL HIT. 6 slashing damage. The Scholar is now at 0 HP and is unconscious.',
+        '⚙️ Engine: Captain Sarah Reeves strikes the unconscious The Scholar — automatic critical hit. Two death-save failures. ✕✕○',
+      ].join('\n\n'),
     );
-    expect(combined.line).toContain('6 slashing damage.');
-    expect(
-      combined.line.endsWith(
-        'strikes the unconscious The Scholar — automatic critical hit. Two death-save failures. ✕✕○',
-      ),
-    ).toBe(true);
     expect(combined.card.kind).toBe('death_save');
     expect(combined.card.badge).toMatchObject({ word: 'CRITICAL HIT' });
     expect(combined.card.math).toMatchObject({ kind: 'attack', d20: 14, bonus: 0, total: 14 });

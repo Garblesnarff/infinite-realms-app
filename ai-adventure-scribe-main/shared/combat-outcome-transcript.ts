@@ -335,7 +335,7 @@ export function formatCombatEngineParts(
   // terminal card because it has no failure tally.
   const damageAtZero = damageAtZeroHpPart(result, target, actor);
   if (damageAtZero && result.hit && result.instantDeath !== true) {
-    const combinedLine = `${line} ${damageAtZero.line.replace(/^⚙️ Engine: /, '')}`;
+    const combinedLine = `${line}\n\n${damageAtZero.line}`;
     parts.push({
       line: combinedLine,
       card: {
