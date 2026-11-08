@@ -13,6 +13,10 @@ createRoot(document.getElementById('root')!).render(
         <h2 className="mb-2 text-xl">Strength (Athletics)</h2>
         <DiceRollResultFlash die={10} modifier={2} total={12} checkSuccess />
       </section>
+      <section aria-label="Failed narrative check">
+        <h2 className="mb-2 text-xl">Strength check failed</h2>
+        <DiceRollResultFlash die={4} modifier={2} total={6} checkSuccess={false} />
+      </section>
       <section aria-label="Resolved engine attack">
         <h2 className="mb-2 text-xl">Longsword attack</h2>
         <DiceRollResultFlash

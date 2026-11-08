@@ -31,22 +31,21 @@ export const DiceRollResultFlash: React.FC<DiceRollResultFlashProps> = React.mem
     const critical = outcome?.hit === true && outcome.isCritical === true;
     const waiting = tableLook && awaitingEngine && !outcome;
     const isCheck = outcome?.kind === 'check' || typeof checkSuccess === 'boolean';
-    const label =
-      outcome?.kind === 'check'
-        ? outcome.success
-          ? 'SUCCESS'
-          : 'FAILED'
-        : critical
-          ? outcome.d20 === 20
-            ? '20 CRIT'
-            : 'CRIT'
-          : outcome
-            ? outcome.hit
-              ? 'HIT'
-              : 'MISS'
-            : checkSuccess
-              ? 'SUCCESS'
-              : 'FAILED';
+    let label = checkSuccess ? 'SUCCESS' : 'FAILED';
+    let sealTone: 'gold' | 'red' | 'slate' = checkSuccess ? 'gold' : 'red';
+    if (outcome?.kind === 'check') {
+      label = outcome.success ? 'SUCCESS' : 'FAILED';
+      sealTone = outcome.success ? 'gold' : 'red';
+    } else if (outcome) {
+      label = critical ? (outcome.d20 === 20 ? '20 CRIT' : 'CRIT') : outcome.hit ? 'HIT' : 'MISS';
+      sealTone = critical ? 'gold' : outcome.hit ? 'red' : 'slate';
+    }
+    const sealBackground =
+      sealTone === 'gold'
+        ? '#6e4a16'
+        : sealTone === 'red'
+          ? 'var(--ir-wax-red-2)'
+          : 'var(--ir-wax-slate)';
     const signedModifier =
       shownModifier >= 0 ? `+ ${shownModifier}` : `- ${Math.abs(shownModifier)}`;
     return (
@@ -76,7 +75,8 @@ export const DiceRollResultFlash: React.FC<DiceRollResultFlashProps> = React.mem
           {(outcome || (tableLook && typeof checkSuccess === 'boolean')) && (
             <span
               data-testid="engine-roll-seal"
-              className={`ir-wax-seal ${critical ? 'ir-wax-seal--gold [body.ir-table-look_&]:shadow-[0_0_24px_rgba(246,227,184,0.75)]' : outcome ? (outcome.kind === 'check' ? (outcome.success ? 'ir-wax-seal--gold' : 'ir-wax-seal--red') : outcome.hit ? 'ir-wax-seal--red' : 'ir-wax-seal--slate') : checkSuccess ? 'ir-wax-seal--gold' : 'ir-wax-seal--red'} ml-auto px-3 py-2 font-bold`}
+              className={`ir-wax-seal ir-wax-seal--${sealTone} ${critical ? '[body.ir-table-look_&]:shadow-[0_0_24px_rgba(246,227,184,0.75)]' : ''} ml-auto px-3 py-2 font-bold`}
+              style={tableLook ? { background: sealBackground } : undefined}
             >
               {label}
             </span>

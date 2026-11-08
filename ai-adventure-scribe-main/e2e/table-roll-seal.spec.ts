@@ -21,6 +21,35 @@ for (const width of [1280, 390]) {
     await expect(
       page.getByLabel('Missed engine attack').getByTestId('engine-roll-seal'),
     ).toHaveText('MISS');
+    const sections = ['Resolved narrative check', 'Failed narrative check', 'Missed engine attack'];
+    for (const section of sections) {
+      const ratio = await page
+        .getByLabel(section)
+        .getByTestId('engine-roll-seal')
+        .evaluate((element) => {
+          const css = getComputedStyle(element);
+          const luminance = (color: string): number => {
+            const components = color
+              .match(/[\d.]+/g)
+              ?.slice(0, 3)
+              .map(Number);
+            if (!components || components.length !== 3)
+              throw new Error(`Unexpected color: ${color}`);
+            const channels = components
+              .map((value) => value / 255)
+              .map((value) =>
+                value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4,
+              );
+            return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+          };
+          const foreground = luminance(css.color);
+          const background = luminance(css.backgroundColor);
+          return (
+            (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05)
+          );
+        });
+      expect(ratio, `${section} seal contrast`).toBeGreaterThanOrEqual(7);
+    }
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
