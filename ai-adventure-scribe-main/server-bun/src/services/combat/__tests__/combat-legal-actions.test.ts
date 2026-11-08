@@ -781,17 +781,19 @@ describe('getLegalCombatActions', () => {
     expect(smites).toEqual([
       {
         type: 'divine_smite',
-        label: 'Attack with Quarterstaff and Divine Smite (level 1 slot)',
+        label: 'Attack with Quarterstaff and Divine Smite 2d8 (level 1 slot)',
         weaponId: 'quarterstaff',
         targetIds: ['monster-1'],
         slotLevel: 1,
+        smiteDice: 2,
       },
       {
         type: 'divine_smite',
-        label: 'Attack with Quarterstaff and Divine Smite (level 2 slot)',
+        label: 'Attack with Quarterstaff and Divine Smite 3d8 (level 2 slot)',
         weaponId: 'quarterstaff',
         targetIds: ['monster-1'],
         slotLevel: 2,
+        smiteDice: 3,
       },
     ]);
     // The plain attack is still offered beside the Smite choice.
@@ -800,7 +802,7 @@ describe('getLegalCombatActions', () => {
     );
   });
 
-  test('offers no Divine Smite to a non-Paladin, with no slot left, or with no ledger (#1362)', async () => {
+  test('offers no Divine Smite to a non-Paladin or with every slot spent (#1362)', async () => {
     placeMonsterAdjacent();
     slotRemaining = new Map([[1, 3]]);
     player.characterClass = 'Fighter';
@@ -816,10 +818,52 @@ describe('getLegalCombatActions', () => {
     ]);
     const exhausted = await getLegalCombatActions('encounter-1', 'user-1');
     expect(smiteActions(exhausted.actions)).toEqual([]);
+  });
 
+  test('a premade Paladin with no slot rows is offered its class-granted slots (#1362)', async () => {
+    // The live symptom: a level-3 premade with 3/3 level-1 slots and no seeded
+    // character_spell_slots rows. remainingSpellSlots returns null here; the slots come from
+    // class progression, as ensureSpellSlotRow seeds them when the attack runs.
+    placeMonsterAdjacent();
     slotRemaining = null;
-    const noLedger = await getLegalCombatActions('encounter-1', 'user-1');
-    expect(smiteActions(noLedger.actions)).toEqual([]);
+    const savedLevel = player.characterLevel;
+    const savedClassLevels = player.characterClassLevels;
+    player.characterLevel = 3;
+    player.characterClassLevels = [{ className: 'Paladin', level: 3 }];
+    try {
+      const premade = await getLegalCombatActions('encounter-1', 'user-1');
+      expect(smiteActions(premade.actions)).toEqual([
+        {
+          type: 'divine_smite',
+          label: 'Attack with Quarterstaff and Divine Smite 2d8 (level 1 slot)',
+          weaponId: 'quarterstaff',
+          targetIds: ['monster-1'],
+          slotLevel: 1,
+          smiteDice: 2,
+        },
+      ]);
+    } finally {
+      player.characterLevel = savedLevel;
+      player.characterClassLevels = savedClassLevels;
+    }
+  });
+
+  test('a stored row at zero hides its level even when class progression grants it (#1362)', async () => {
+    // Rows win over derivation: a level-1 row with nothing left is not re-offered from the class
+    // table, because the attack path reads the same row and would refuse it.
+    placeMonsterAdjacent();
+    slotRemaining = new Map([[1, 0]]);
+    const savedLevel = player.characterLevel;
+    const savedClassLevels = player.characterClassLevels;
+    player.characterLevel = 3;
+    player.characterClassLevels = [{ className: 'Paladin', level: 3 }];
+    try {
+      const spent = await getLegalCombatActions('encounter-1', 'user-1');
+      expect(smiteActions(spent.actions)).toEqual([]);
+    } finally {
+      player.characterLevel = savedLevel;
+      player.characterClassLevels = savedClassLevels;
+    }
   });
 
   test('offers no Divine Smite once the Action is spent, by a hit or a miss (#1362)', async () => {

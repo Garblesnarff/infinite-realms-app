@@ -381,6 +381,54 @@ describe('useCombatLegalActions spell cast (#1185)', () => {
     expect(combatHolder.current.refreshCombatState).toHaveBeenCalled();
   });
 
+  it('sends a Divine Smite chip as the attack with its slot level, and a plain attack without one (#1362)', async () => {
+    movementHolder.remaining.mockResolvedValue(0);
+    const attack = {
+      type: 'attack',
+      label: 'Attack with Quarterstaff',
+      weaponId: 'quarterstaff',
+      targetIds: ['monster-1'],
+    };
+    const smite = {
+      type: 'divine_smite',
+      label: 'Attack with Quarterstaff and Divine Smite 2d8 (level 1 slot)',
+      weaponId: 'quarterstaff',
+      targetIds: ['monster-1'],
+      slotLevel: 1,
+      smiteDice: 2,
+    };
+    const fetchSpy = routeFetch([attack, smite]);
+    const { result } = renderHook(() =>
+      useCombatLegalActions({ enabled: true, onSendMessage: vi.fn(), onSendText: vi.fn() }),
+    );
+    await waitFor(() => expect(result.current.actions).toHaveLength(2));
+
+    await act(async () => {
+      await result.current.runAction(smite as never);
+    });
+    // With no movement left the hook ends the turn after each attack, so only the attack posts count.
+    const attackPosts = () =>
+      intentCalls(fetchSpy).filter((call) => call.body.intent.type === 'attack');
+    const smiteIntents = attackPosts();
+    expect(smiteIntents).toHaveLength(1);
+    // The Smite chip commits the existing attack intent, with the slot it spends on a hit.
+    expect(smiteIntents[0].body.intent).toMatchObject({
+      type: 'attack',
+      actorId: 'pc-1',
+      targetId: 'monster-1',
+      weaponId: 'quarterstaff',
+      divineSmiteSlotLevel: 1,
+      d20: 17,
+    });
+
+    await act(async () => {
+      await result.current.runAction(attack as never);
+    });
+    const plainIntent = attackPosts()[1];
+    expect(plainIntent.body.intent).toMatchObject({ type: 'attack', targetId: 'monster-1' });
+    expect(plainIntent.body.intent).not.toHaveProperty('divineSmiteSlotLevel');
+  });
+
   it('sends the slot the chip names for an upcast cast (#1206)', async () => {
     movementHolder.remaining.mockResolvedValue(5);
     const upcastChip = { ...castAction, label: 'Cast Acid Arrow (3rd-level slot)', slotLevel: 3 };

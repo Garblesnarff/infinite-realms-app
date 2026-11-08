@@ -56,6 +56,8 @@ export interface StructuredCombatAction {
   spell_id: string | null;
   slot_level: number | null;
   movement_feet: number;
+  /** #1362: for an attack, the Paladin's Divine Smite slot level, spent only if the attack hits. */
+  divine_smite_slot_level?: number;
   x?: number;
   y?: number;
 }
@@ -383,6 +385,9 @@ export async function executeStructuredCombatActionWithBoundary(
         weaponId: action.weapon_id || undefined,
         d20: providedD20,
         ...(providedD20Rolls ? { d20Rolls: providedD20Rolls } : {}),
+        ...(typeof action.divine_smite_slot_level === 'number'
+          ? { divineSmiteSlotLevel: action.divine_smite_slot_level }
+          : {}),
       },
       'dm',
       dmStartedAt,

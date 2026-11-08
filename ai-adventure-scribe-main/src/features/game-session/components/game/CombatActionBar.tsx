@@ -67,6 +67,8 @@ export interface CombatActionBarProps {
  */
 export const LEGAL_ACTION_PLACEMENT = {
   attack: 'button',
+  // #1362: a Smite is an attack chip with its slot level and dice.
+  divine_smite: 'button',
   spell: 'cast',
   move: 'move',
   dodge: 'button',
@@ -151,7 +153,11 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
   onAction,
   onMove,
 }) => {
-  const attacks = choicesFor(actions.filter((action) => action.type === 'attack'));
+  // The primary Attack is the first attack in server order, so a Smite chip (listed after the
+  // plain attack for the same weapon) never becomes the default.
+  const attacks = choicesFor(
+    actions.filter((action) => action.type === 'attack' || action.type === 'divine_smite'),
+  );
   const spells = choicesFor(
     actions.filter((action) => action.type === 'spell' && !action.narrated),
   );

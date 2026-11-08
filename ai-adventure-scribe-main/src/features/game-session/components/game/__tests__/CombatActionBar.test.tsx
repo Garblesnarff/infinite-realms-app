@@ -17,6 +17,15 @@ const attackAction: LegalAction = {
   weaponId: 'longsword',
   targetIds: ['goblin-1'],
 };
+// #1362: the Smite chip the server emits beside the plain attack for the same weapon and target.
+const smiteAction: LegalAction = {
+  type: 'divine_smite',
+  label: 'Attack with Longsword and Divine Smite 2d8 (level 1 slot)',
+  weaponId: 'longsword',
+  targetIds: ['goblin-1'],
+  slotLevel: 1,
+  smiteDice: 2,
+};
 const dashAction: LegalAction = { type: 'dash', label: 'Dash' };
 const dodgeAction: LegalAction = { type: 'dodge', label: 'Dodge' };
 const disengageAction: LegalAction = { type: 'disengage', label: 'Disengage' };
@@ -381,6 +390,31 @@ describe('CombatActionBar', () => {
     expect(onAction).not.toHaveBeenCalled();
   });
 
+  it('lists a Divine Smite chip beside the plain attack, and the plain attack stays the primary (#1362)', async () => {
+    const user = userEvent.setup();
+    const onAction = vi.fn();
+    render(
+      <CombatActionBar
+        {...defaultProps}
+        actions={[attackAction, smiteAction]}
+        onAction={onAction}
+        onMove={vi.fn()}
+      />,
+    );
+    const toolbar = screen.getByRole('toolbar', { name: 'Your actions' });
+
+    await user.click(within(toolbar).getByRole('button', { name: /^Attack/ }));
+    expect(onAction).toHaveBeenLastCalledWith(attackAction);
+
+    await user.click(within(toolbar).getByRole('button', { name: 'Other weapons and targets' }));
+    // The item reads "<label> → <target name>", so match the label as a prefix.
+    const smiteItem = await screen.findByRole('menuitem', {
+      name: /^Attack with Longsword and Divine Smite 2d8 \(level 1 slot\)/,
+    });
+    await user.click(smiteItem);
+    expect(onAction).toHaveBeenLastCalledWith(smiteAction);
+  });
+
   describe('legal-action coverage (#1143)', () => {
     // The server exports the list of legal action types it can return; every one must be placed.
     const serverLegalActionTypes = (): string[] => [...LEGAL_ACTION_TYPES].sort();
@@ -413,6 +447,7 @@ describe('CombatActionBar', () => {
         second_wind: secondWindAction,
         action_surge: actionSurgeAction,
         divine_sense: { type: 'divine_sense', label: 'Divine Sense' },
+        divine_smite: smiteAction,
         flee: fleeAction,
         yield: yieldAction,
         use_item: useItemAction,
@@ -434,7 +469,12 @@ describe('CombatActionBar', () => {
         );
         const toolbar = screen.getByRole('toolbar', { name: 'Your actions' });
         if (placement === 'button') {
-          const name = { attack: /^Attack/, dodge: /^Dodge/, end_turn: /^End turn/ }[type]!;
+          const name = {
+            attack: /^Attack/,
+            divine_smite: /^Attack/,
+            dodge: /^Dodge/,
+            end_turn: /^End turn/,
+          }[type]!;
           await user.click(within(toolbar).getByRole('button', { name }));
           expect(onAction).toHaveBeenCalledWith(action);
         } else if (placement === 'cast' || placement === 'more') {
