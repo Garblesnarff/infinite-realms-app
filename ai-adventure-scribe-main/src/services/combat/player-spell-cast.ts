@@ -23,6 +23,7 @@ export interface PlayerSpellCastParams {
 
 export interface PlayerSpellCastResult {
   d20?: number;
+  rollId?: string;
   /** Both d20 faces `[kept, dropped]` when the spell popup rolled two (#263 CB-028). */
   d20Rolls?: [number, number];
   autoRolled: boolean;
@@ -177,7 +178,13 @@ export async function askPlayerForSpellCast(
         ...(outcome.timedOut === true ? { timedOut: true } : {}),
       };
     }
-    return { d20: outcome.d20, d20Rolls: outcome.d20Rolls, autoRolled: false, movementOnly: false };
+    return {
+      d20: outcome.d20,
+      d20Rolls: outcome.d20Rolls,
+      autoRolled: false,
+      movementOnly: false,
+      ...(outcome.rollId ? { rollId: outcome.rollId } : {}),
+    };
   } catch (error) {
     if (error instanceof SessionExpiredError) throw error;
     logger.warn('[SpellAttack] popup failed; the engine rolls this spell', error);

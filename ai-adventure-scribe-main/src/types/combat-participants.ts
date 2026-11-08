@@ -167,6 +167,8 @@ export interface DiceRoll {
   disadvantage?: boolean;
   critical?: boolean;
   naturalRoll?: number; // The natural die result before modifiers (for critical detection)
+  /** Existing narrative-roll verdict, when a DC was supplied. */
+  checkSuccess?: boolean;
   isRageBonus?: boolean; // Marks a roll that already includes a Barbarian rage bonus
 }
 

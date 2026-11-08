@@ -390,6 +390,9 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
               die={completedRoll.die}
               modifier={completedRoll.modifier}
               total={completedRoll.total}
+              engineOutcome={completedRoll.engineOutcome}
+              checkSuccess={completedRoll.checkSuccess}
+              awaitingEngine={Boolean(completedRoll.rollId && !completedRoll.engineOutcome)}
             />
           </RollTray>
         )}

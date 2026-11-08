@@ -25,6 +25,7 @@ import {
   setPlayerRollHost,
   settlePendingPlayerRoll,
 } from '@/services/combat/player-roll-bridge';
+import { publishEngineRollOutcome } from '@/services/combat/roll-outcome-display';
 import { DiceEngine } from '@/services/dice/DiceEngine';
 
 const { gameRef } = vi.hoisted(() => ({
@@ -165,7 +166,7 @@ describe('attack roll commit (#2200)', () => {
     // The player's own natural 13 settled the attack — before #2200 this resolved `{ d20: null }`
     // and the engine rolled its own. It is the bare face, not the popup's 1d20+5 total of 18: the
     // engine adds the bonus itself (#2210).
-    await expect(attackPrompt).resolves.toEqual({ d20: 13 });
+    await expect(attackPrompt).resolves.toEqual({ d20: 13, rollId: expect.any(String) });
     expect(settledWith?.d20).not.toBeNull();
     // The die went to the engine, never to the DM as a player message.
     expect(onSendFullMessage).not.toHaveBeenCalled();
@@ -196,7 +197,7 @@ describe('attack roll commit (#2200)', () => {
     });
 
     // DiceEngine rolled 1d20+5 = 18 on a natural 13. 18 here would become 18 + 5 = 23.
-    await expect(attackPrompt).resolves.toEqual({ d20: 13 });
+    await expect(attackPrompt).resolves.toEqual({ d20: 13, rollId: expect.any(String) });
     expect(onSendFullMessage).not.toHaveBeenCalled();
     expect(onSendMessage).not.toHaveBeenCalled();
   });
@@ -262,5 +263,40 @@ describe('attack roll commit (#2200)', () => {
       await vi.advanceTimersByTimeAsync(1_000);
     });
     expect(screen.queryByTestId('roll-auto-countdown')).toBeNull();
+  });
+  it('keeps the matching flash across real queue cleanup until the engine verdict arrives', async () => {
+    document.body.classList.add('ir-table-look');
+    const view = render(<Harness />);
+    let pending: Promise<{ d20: number | null; rollId?: string }> | undefined;
+    await act(async () => {
+      pending = requestPlayerAttackRoll(ATTACK_SPEC);
+    });
+    await act(async () => {
+      screen.getByLabelText(/^Roll 1d20\+5 for/).click();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2500);
+    });
+    const outcome = await pending!;
+    expect(outcome.rollId).toEqual(expect.any(String));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2100);
+    });
+    expect(screen.getByTestId('dice-roll-result')).toBeInTheDocument();
+    await act(async () => {
+      publishEngineRollOutcome(outcome.rollId, {
+        d20: 13,
+        attackBonus: 5,
+        totalAttackRoll: 18,
+        hit: true,
+        isCritical: false,
+      });
+    });
+    expect(screen.getByTestId('engine-roll-seal')).toHaveTextContent('HIT');
+    view.unmount();
+    document.body.classList.remove('ir-table-look');
   });
 });

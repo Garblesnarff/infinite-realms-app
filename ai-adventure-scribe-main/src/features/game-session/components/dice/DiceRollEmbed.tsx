@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { HexagonalBadge } from '@/components/ui/hexagonal-badge';
+import { useTableLookActive } from '@/features/campaigns/table/useTableLookActive';
 import { useDiceSoundEnabled } from '@/features/settings/useDiceSoundEnabled';
 import logger from '@/lib/logger';
 import { DiceEngine, type DiceRollResult } from '@/services/dice/DiceEngine';
@@ -99,6 +100,7 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
   const diceSound = useRef<Howl | null>(null);
   // Reads the signed-in user's Table > Dice sound setting (default on).
   const diceSoundOn = useDiceSoundEnabled();
+  const tableLook = useTableLookActive();
 
   const handleRoll = useCallback(async () => {
     if (isRolling) return;
@@ -195,6 +197,8 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
   }, [autoRoll, hasRolled, handleRoll]);
 
   const getCriticalityBadge = (result: DiceRollResult) => {
+    // The combat engine has not confirmed an attack outcome at this point.
+    if (tableLook && isAttack) return null;
     if (result.critical) {
       // Only attacks critically hit; a natural 20 on a check or save is a
       // "Natural 20" (#2343 item 9).

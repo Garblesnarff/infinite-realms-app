@@ -137,7 +137,7 @@ describe('usePlayerRollHost teardown', () => {
 
     expect(settleCombatAttackRoll('attack-roll-1', 8, { d20Rolls: [8, 14] })).toBe(true);
 
-    await expect(pending).resolves.toEqual({ d20: 8, d20Rolls: [8, 14] });
+    await expect(pending).resolves.toEqual({ d20: 8, d20Rolls: [8, 14], rollId: 'attack-roll-1' });
     expect(hasPendingPlayerRoll()).toBe(false);
   });
 
