@@ -225,17 +225,18 @@ for (const mode of ['explore', 'combat'] as const) {
       await expect(character).toBeVisible();
       await page.getByLabel('Table controls').click();
       await page.getByRole('button', { name: 'Memory', exact: true }).click();
-      await expect(page.getByRole('tab', { name: /Memory/i }).first()).toHaveAttribute(
+      await expect(page.getByRole('tablist')).toHaveCount(1);
+      await expect(page.getByRole('tab', { name: /Memory/i })).toHaveAttribute(
         'data-state',
         'active',
       );
-      await page.getByRole('tab', { name: 'Sheet' }).first().click();
-      await expect(page.getByRole('tab', { name: 'Sheet' }).first()).toHaveAttribute(
+      await page.getByRole('tab', { name: 'Sheet' }).click();
+      await expect(page.getByRole('tab', { name: 'Sheet' })).toHaveAttribute(
         'data-state',
         'active',
       );
       await page.getByRole('button', { name: 'Memory', exact: true }).click();
-      await expect(page.getByRole('tab', { name: /Memory/i }).first()).toHaveAttribute(
+      await expect(page.getByRole('tab', { name: /Memory/i })).toHaveAttribute(
         'data-state',
         'active',
       );

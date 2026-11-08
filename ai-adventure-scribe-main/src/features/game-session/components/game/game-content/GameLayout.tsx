@@ -350,7 +350,9 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
               {/* A rail opened on a narrow screen: over the story, above the dock. */}
               {!isFallen &&
                 portalToStory &&
-                (tableLook ? tableDrawerOpen : !isLeftCollapsed || !isRightCollapsed) &&
+                (tableLook
+                  ? overStory && tableDrawerOpen
+                  : !isLeftCollapsed || !isRightCollapsed) &&
                 createPortal(
                   <RailOverStoryLayer
                     key={tableLook || isLeftCollapsed ? 'right' : 'left'}
