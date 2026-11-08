@@ -45,7 +45,8 @@ export function fleeProvokerOf(label: string): string | null {
 }
 
 export type LegalAction = {
-  type: ClientCombatIntent['type'];
+  /** `divine_smite` (#1362) is a melee attack chip that declares the slot, sent as an attack. */
+  type: ClientCombatIntent['type'] | 'divine_smite';
   label: string;
   weaponId?: string;
   spellId?: string;
@@ -53,9 +54,12 @@ export type LegalAction = {
   itemId?: string;
   /**
    * #1206: the slot a leveled spell chip spends: the lowest remaining slot at or above the
-   * spell's level. Absent when the engine has no slot ledger for the character.
+   * spell's level. Absent when the engine has no slot ledger for the character. For a
+   * `divine_smite` chip, the slot the Smite spends if the attack hits (#1362).
    */
   slotLevel?: number;
+  /** #1362: the Divine Smite dice for a `divine_smite` chip at its slot level (2d8 at 1st). */
+  smiteDice?: number;
   targetIds?: string[];
   x?: number;
   y?: number;
@@ -412,7 +416,10 @@ export function useCombatLegalActions(input: {
             }
           }
           await refreshCombatState();
-        } else if (action.type === 'attack' && action.targetIds?.[0]) {
+        } else if (
+          (action.type === 'attack' || action.type === 'divine_smite') &&
+          action.targetIds?.[0]
+        ) {
           // #1059: an 'Equip and attack' choice readies the weapon first —
           // the same equip write the sheet's Equip control makes (drawing is
           // the turn's free object interaction) — so the commit below finds
@@ -439,6 +446,7 @@ export function useCombatLegalActions(input: {
           // envelope carried the swing but nothing ever rolled it — no dialog, no
           // intent — and the fight closed on narration. The engine legal-action chip
           // already knows the actor, weapon and target, so it declares directly.
+          // #1362: a Divine Smite chip sends the same attack, with the slot it spends on a hit.
           const structuredAction: StructuredCombatAction = {
             actor_id: actorId,
             action_type: 'attack',
@@ -447,6 +455,9 @@ export function useCombatLegalActions(input: {
             spell_id: null,
             slot_level: null,
             movement_feet: 0,
+            ...(action.type === 'divine_smite' && action.slotLevel !== undefined
+              ? { divine_smite_slot_level: action.slotLevel }
+              : {}),
           };
           const actor = encounter.participants.find((participant) => participant.id === actorId);
           const die = await askPlayerForAttackDie({

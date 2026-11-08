@@ -13,6 +13,7 @@ export const LEGAL_ACTION_TYPES = [
   'second_wind',
   'action_surge',
   'divine_sense',
+  'divine_smite',
   'use_item',
   'flee',
   'yield',

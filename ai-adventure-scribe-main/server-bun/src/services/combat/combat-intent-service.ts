@@ -14,6 +14,21 @@ import { trackCombatEvent } from './combat-events.js';
 import { resolveCombatIntentRefsWithRetry } from './combat-intent-refs.js';
 import { assertActorTurn } from './combat-intent-turn.js';
 import { resolveUseItem, type ResolveUseItemResult } from './combat-item-service.js';
+import { resolveWeaponName } from '../../../../shared/equipment-weapon-resolver';
+import { slotOrdinal } from '../../../../shared/slot-ordinal';
+import { chooseSpellSlotLevel } from '../../../../shared/spell-slot-choice';
+import { logger } from '../../lib/logger.js';
+import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
+import { CombatInitiativeService } from '../combat-initiative-service.js';
+import { resolveAttackRules, type WeaponRuleProfile } from './combat-rules.js';
+import { publishCombatState } from './combat-sync-service.js';
+import {
+  claimTurnActionAndResolve,
+  claimTurnBonusActionAndResolve,
+  claimTurnVersion,
+  setDefensiveAction,
+} from './combat-turn-resources.js';
+import { buildCombatWeaponOptions, type WeaponTargetResolution } from './combat-weapon-options.js';
 import {
   getParticipantAbilityProfile,
   getActiveConditionNames,
@@ -32,32 +47,6 @@ import {
   type VitalsInput,
   type WakeOutcome,
 } from './death-saves-service.js';
-import { grantTacticalDash, resetTacticalMovementForTurn } from './tactical-combat-lifecycle.js';
-import {
-  catalogWeaponIsRanged,
-  findCatalogWeapon,
-  normalizeWeaponName,
-  weaponProfileMatches,
-  findMagicBaseWeapon,
-  isUnarmedWeaponClaim,
-  UNARMED_STRIKE,
-} from './weapon-catalog.js';
-import { groundRequestedWeapon, type GroundedWeapon } from './weapon-grounding.js';
-import { resolveWeaponName } from '../../../../shared/equipment-weapon-resolver';
-import { slotOrdinal } from '../../../../shared/slot-ordinal';
-import { chooseSpellSlotLevel } from '../../../../shared/spell-slot-choice';
-import { logger } from '../../lib/logger.js';
-import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
-import { CombatInitiativeService } from '../combat-initiative-service.js';
-import { resolveAttackRules, type WeaponRuleProfile } from './combat-rules.js';
-import { publishCombatState } from './combat-sync-service.js';
-import {
-  claimTurnActionAndResolve,
-  claimTurnBonusActionAndResolve,
-  claimTurnVersion,
-  setDefensiveAction,
-} from './combat-turn-resources.js';
-import { buildCombatWeaponOptions, type WeaponTargetResolution } from './combat-weapon-options.js';
 import {
   fighterFeatureUses,
   resolveActionSurge,
@@ -76,7 +65,18 @@ import {
 import { loadSessionEntityIndex, type SessionEntityIndex } from './session-entity-index.js';
 import { showTargetNumbersForSession } from './session-target-numbers.js';
 import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-service.js';
+import { grantTacticalDash, resetTacticalMovementForTurn } from './tactical-combat-lifecycle.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
+import {
+  catalogWeaponIsRanged,
+  findCatalogWeapon,
+  normalizeWeaponName,
+  weaponProfileMatches,
+  findMagicBaseWeapon,
+  isUnarmedWeaponClaim,
+  UNARMED_STRIKE,
+} from './weapon-catalog.js';
+import { groundRequestedWeapon, type GroundedWeapon } from './weapon-grounding.js';
 import {
   describeDamageAtZeroHp,
   describeInstantDeath,
@@ -88,6 +88,7 @@ import {
   playerFacingWeaponName,
   type EngineRosterEntry,
 } from '../../../../shared/engine-display-name';
+import { divineSmiteDice } from '../../../../shared/limited-feature-counts';
 import {
   playerTextDeclares,
   playerTextDeclaresLeaving,
@@ -97,6 +98,7 @@ import { BusinessLogicError, NotFoundError, ValidationError } from '../../lib/er
 import { planApproach } from '../../tactical/approach.js';
 import { entitySlug, resolveEntityRef, slugify } from '../../tactical/identity.js';
 import { paladinLevelOf } from '../progression/paladin-features-service.js';
+import { SpellSlotMechanics } from '../spell-slots/spell-slot-mechanics.js';
 
 import type { CombatAttackService as CombatAttackServiceType } from './combat-attack-service.js';
 import type { LegalActionType } from '../../../../shared/combat-legal-action-types';
@@ -289,6 +291,9 @@ export const VERSIONED_INTENT_TYPES = new Set([
   'second_wind',
   'action_surge',
   'divine_sense',
+  // #1362: a divine_smite legal option submits an 'attack' intent (divineSmiteSlotLevel), so it
+  // is claim-based too. Listed so the legal-action version test holds; no intent carries this type.
+  'divine_smite',
   'use_item',
 ]);
 
@@ -2193,6 +2198,34 @@ export async function executeCombatIntent(
   }
 }
 
+/**
+ * #1362: the spell slots a Paladin can spend on Divine Smite, keyed by slot level. Stored rows
+ * win. A level with no row is granted from class progression, the way ensureSpellSlotRow seeds
+ * it when the attack runs, so a premade with no seeded rows is still offered its slots.
+ */
+async function smiteSlotLedger(
+  characterId: string,
+  actor: {
+    characterClass?: string | null;
+    characterLevel?: number | null;
+    characterClassLevels?: unknown;
+  },
+): Promise<Map<number, number>> {
+  const stored = (await remainingSpellSlots(characterId)) ?? new Map<number, number>();
+  const ledger = new Map<number, number>();
+  for (const row of SpellSlotMechanics.seedRowsForCharacter(
+    actor.characterClass,
+    actor.characterLevel ?? 0,
+    actor.characterClassLevels,
+  )) {
+    ledger.set(row.spellLevel, stored.get(row.spellLevel) ?? row.totalSlots);
+  }
+  for (const [level, count] of stored) {
+    if (!ledger.has(level)) ledger.set(level, count);
+  }
+  return ledger;
+}
+
 export async function getLegalCombatActions(encounterId: string, userId: string) {
   const state = await CombatEncounterService.getCombatState(encounterId, userId, {
     includeCharacterClass: true,
@@ -2318,6 +2351,35 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
         return { targetId: target.id, legal: rules.legal, refusal: rules.refusal };
       });
     actions.push(...buildCombatWeaponOptions(weapons, targetsForWeapon, { canCloseDistance }));
+    // #1362: Divine Smite is declared with a melee weapon attack, before the roll: the rider
+    // spends the slot only on a hit. One option per melee weapon and slot level the Paladin can
+    // still spend, against the targets that weapon can reach now (no move-first). The client
+    // sends the attack intent with divineSmiteSlotLevel; combat-attack-service refuses it again
+    // before the roll if the class or slot no longer holds.
+    if (actor.characterId && actor.characterClass?.toLowerCase().includes('paladin')) {
+      const ledger = await smiteSlotLedger(actor.characterId, actor);
+      const slotLevels = [...ledger.entries()]
+        .filter(([, count]) => count > 0)
+        .map(([level]) => level)
+        .sort((left, right) => left - right);
+      for (const weapon of equippedWeapons.filter((candidate) => !candidate.ranged)) {
+        const reachableTargetIds = targetsForWeapon(weapon)
+          .filter((target) => target.legal)
+          .map((target) => target.targetId);
+        if (!reachableTargetIds.length) continue;
+        for (const slotLevel of slotLevels) {
+          const smiteDice = divineSmiteDice(slotLevel);
+          actions.push({
+            type: 'divine_smite',
+            label: `Attack with ${weapon.name} and Divine Smite ${smiteDice}d8 (level ${slotLevel} slot)`,
+            weaponId: weapon.id,
+            targetIds: reachableTargetIds,
+            slotLevel,
+            smiteDice,
+          });
+        }
+      }
+    }
     // #1059: a carried ranged weapon the package left unequipped (the
     // shortbow, the light crossbow) while a melee weapon holds the main
     // hand is offered as 'Equip and attack': the client equips it — the
