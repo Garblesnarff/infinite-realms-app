@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.41.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.40.0...v0.41.0) (2026-11-08)
+
+
+### Features
+
+* **chronicle:** share dialog, free version and public page ([#1430](https://github.com/Garblesnarff/infinite-realms-app/issues/1430)) ([3ba093a](https://github.com/Garblesnarff/infinite-realms-app/commit/3ba093a4854514a1bc51a9ac6cfaab6c0db5f662))
+* **combat:** offer Divine Smite as a legal action after a melee hit ([#1362](https://github.com/Garblesnarff/infinite-realms-app/issues/1362)) ([c65f392](https://github.com/Garblesnarff/infinite-realms-app/commit/c65f39274a305e2325870ffb6c5c2fa35b636613))
+
+
+### Bug Fixes
+
+* **chronicle:** use design tokens and 404 long share tokens ([#1430](https://github.com/Garblesnarff/infinite-realms-app/issues/1430)) ([8075c64](https://github.com/Garblesnarff/infinite-realms-app/commit/8075c6422aa842467304abe8f2a6fc9d278eef97))
+* **dm:** durable record for held combat-entry replies ([#1416](https://github.com/Garblesnarff/infinite-realms-app/issues/1416)) ([778be22](https://github.com/Garblesnarff/infinite-realms-app/commit/778be229639d55dce7da1f789f776ae04c2216f1)), closes [#1422](https://github.com/Garblesnarff/infinite-realms-app/issues/1422)
+* **landing:** remove the waitlist form, reserve campaign height ([#1432](https://github.com/Garblesnarff/infinite-realms-app/issues/1432)) ([0e324b5](https://github.com/Garblesnarff/infinite-realms-app/commit/0e324b57bdb54a0c5ce6fffab6564a8d05a22fe6))
+
 ## [0.40.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.39.0...v0.40.0) (2026-11-08)
 
 
