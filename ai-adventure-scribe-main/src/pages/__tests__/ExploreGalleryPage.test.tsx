@@ -73,7 +73,9 @@ describe('ExploreGalleryPage (#2343 item 16)', () => {
       'grid-cols-1',
       'lg:grid-cols-3',
     );
-    expect(screen.getByRole('heading', { level: 1, name: 'Pick a campaign' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Explore adventures' }),
+    ).toBeInTheDocument();
   });
 
   it('shows the error banner with a Try again button (#2259)', () => {

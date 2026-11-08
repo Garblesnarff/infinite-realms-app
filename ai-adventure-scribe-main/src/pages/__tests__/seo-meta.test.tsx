@@ -25,7 +25,12 @@ import PricingPage from '../PricingPage';
 
 // Same mocks the existing page tests use.
 vi.mock('@/hooks/use-starter-campaigns', () => ({
-  useStarterCampaigns: () => ({ campaigns: [], isLoading: false, error: null }),
+  useStarterCampaigns: () => ({
+    campaigns: [],
+    featuredCampaigns: [],
+    isLoading: false,
+    error: null,
+  }),
 }));
 vi.mock('@/components/campaigns/StarterCampaignCard', () => ({
   StarterCampaignCard: () => <div data-testid="campaign-card" />,

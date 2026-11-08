@@ -136,7 +136,7 @@ export const StarterCampaignCard: React.FC<StarterCampaignCardProps> = ({
           )}
         </p>
         <span className="text-sm font-semibold text-infinite-gold">
-          See the heroes <span aria-hidden="true">→</span>
+          Begin your journey <span aria-hidden="true">→</span>
         </span>
       </div>
     </Link>
